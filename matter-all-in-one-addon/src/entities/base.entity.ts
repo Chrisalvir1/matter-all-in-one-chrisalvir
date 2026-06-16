@@ -57,6 +57,14 @@ export class BaseEntity {
       mode: undefined,
     });
 
+    this.endpoint.createDefaultBridgedDeviceBasicInformationClusterServer(
+      name.substring(0, 32),
+      this.entityId.replace('.', '_').substring(0, 32),
+      0xfff1,
+      'Home Assistant',
+      domain.charAt(0).toUpperCase() + domain.slice(1)
+    );
+
     const clusters = this.getRequiredClusterIds();
     if (clusters.length > 0) {
       this.endpoint.addClusterServers(clusters);
