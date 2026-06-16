@@ -12,7 +12,10 @@ RUN npm install --no-fund --no-audit
 # ── Layer 2: Copy source and build TypeScript ─────────────────────────────────
 COPY tsconfig*.json ./
 COPY src/ ./src/
+# Install matterbridge 'ghostly' just for typescript types to compile, without saving to package.json
+RUN npm install matterbridge@^3.9.0 --no-save --no-fund --no-audit
 RUN npm run build
+# Prune all dev dependencies including the ghostly matterbridge installation
 RUN npm prune --production
 
 # ── Layer 3: Install matterbridge globally and register plugin ────────────────
