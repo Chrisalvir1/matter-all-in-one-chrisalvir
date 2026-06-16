@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.3] - 2026-06-16
+### Fixed
+- Restored original add-on directory structure to allow standard updates in Home Assistant.
+
 ## [1.0.2] - 2026-06-16
 ### Changed
 - Cleaned up legacy repository branding and references.
