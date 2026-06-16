@@ -18,7 +18,8 @@ import { getDeviceTypeForEntity, MatterDeviceTypes } from './device-registry.js'
 import { BaseEntity } from './entities/base.entity.js';
 import { ClosureEntity } from './entities/closure.entity.js';
 import { CameraEntity } from './entities/camera.entity.js';
-import { SoilEntity } from './entities/soil.entity.js';
+import { SoilSensorEntity } from './entities/soil_sensor.entity.js';
+import { EnergyTariffEntity } from './entities/energy_tariff.entity.js';
 import { VacuumEntity } from './entities/vacuum.entity.js';
 
 
@@ -206,7 +207,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
     // Strict device_class whitelist for sensors to avoid exporting system/energy sensors
     const deviceClass = state.attributes.device_class;
-    if (domain === 'sensor' && !['temperature', 'humidity', 'illuminance', 'moisture', 'pressure', 'flow'].includes(deviceClass ?? '')) return;
+    if (domain === 'sensor' && !['temperature', 'humidity', 'illuminance', 'moisture', 'pressure', 'flow', 'monetary'].includes(deviceClass ?? '')) return;
     if (domain === 'binary_sensor' && !['door', 'window', 'opening', 'motion', 'occupancy', 'contact', 'smoke', 'co'].includes(deviceClass ?? '')) return;
 
     if (this.config.excludeEntities?.includes(entityId)) return;
@@ -236,7 +237,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     } else if (domain === 'camera') {
       entityInstance = new CameraEntity(this, state, deviceType);
     } else if (domain === 'sensor' && deviceClass === 'moisture') {
-      entityInstance = new SoilEntity(this, state, deviceType);
+      entityInstance = new SoilSensorEntity(this, state, deviceType);
+    } else if (domain === 'sensor' && deviceClass === 'monetary') {
+      entityInstance = new EnergyTariffEntity(this, state, deviceType);
     } else if (domain === 'vacuum') {
       entityInstance = new VacuumEntity(this, state, deviceType);
     } else {
@@ -446,7 +449,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             if (!allowedDomains.includes(domain)) continue;
 
             const deviceClass = haState.attributes.device_class;
-            if (domain === 'sensor' && !['temperature', 'humidity', 'illuminance', 'moisture', 'pressure', 'flow'].includes(deviceClass ?? '')) continue;
+            if (domain === 'sensor' && !['temperature', 'humidity', 'illuminance', 'moisture', 'pressure', 'flow', 'monetary'].includes(deviceClass ?? '')) continue;
             if (domain === 'binary_sensor' && !['door', 'window', 'opening', 'motion', 'occupancy', 'contact', 'smoke', 'co'].includes(deviceClass ?? '')) continue;
 
             if (this.config.excludeEntities?.includes(entityId)) continue;
