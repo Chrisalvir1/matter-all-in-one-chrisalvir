@@ -324,49 +324,91 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         }
 
         if (req.method === 'GET' && pathname === '/api/custom/status') {
+          let qrPairingCode = '';
+          let manualPairingCode = '';
+          let commissioned = false;
+          let pairedFabrics: any[] = [];
+
+          // Strategy 1: Try /api/plugins (real Matterbridge endpoint)
           try {
-            const bridgeRes = await fetch('http://127.0.0.1:8284/api/bridge');
-            const bridgeData = await bridgeRes.json() as any;
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 3000);
+            const pluginsRes = await fetch('http://127.0.0.1:8284/api/plugins', { signal: controller.signal });
+            clearTimeout(timeout);
+            const contentType = pluginsRes.headers.get('content-type') || '';
+            if (pluginsRes.ok && contentType.includes('application/json')) {
+              const pluginsData = await pluginsRes.json() as any;
+              // /api/plugins returns an array of plugin objects
+              const plugins = Array.isArray(pluginsData) ? pluginsData : [];
+              const bridgePlugin = plugins.find((p: any) => p.qrPairingCode) || plugins[0];
+              if (bridgePlugin) {
+                qrPairingCode = bridgePlugin.qrPairingCode || '';
+                manualPairingCode = bridgePlugin.manualPairingCode || '';
+                commissioned = bridgePlugin.paired === true || bridgePlugin.commissioned === true;
+                pairedFabrics = bridgePlugin.fabricInformations || [];
+              }
+              this.log.debug('[UI Server] Got bridge data from /api/plugins');
+            } else {
+              throw new Error(`Unexpected response from /api/plugins: ${pluginsRes.status}`);
+            }
+          } catch (apiErr) {
+            this.log.debug('[UI Server] /api/plugins failed, trying /api/settings: ' + (apiErr instanceof Error ? apiErr.message : apiErr));
 
-            const systemRes = await fetch('http://127.0.0.1:8284/api/system-info');
-            const systemData = await systemRes.json() as any;
+            // Strategy 2: Try /api/settings
+            try {
+              const controller = new AbortController();
+              const timeout = setTimeout(() => controller.abort(), 3000);
+              const settingsRes = await fetch('http://127.0.0.1:8284/api/settings', { signal: controller.signal });
+              clearTimeout(timeout);
+              const contentType = settingsRes.headers.get('content-type') || '';
+              if (settingsRes.ok && contentType.includes('application/json')) {
+                const settingsData = await settingsRes.json() as any;
+                qrPairingCode = settingsData.qrPairingCode || '';
+                manualPairingCode = settingsData.manualPairingCode || '';
+                commissioned = settingsData.commissioned === true || settingsData.paired === true;
+                pairedFabrics = settingsData.pairedFabrics || settingsData.fabricInformations || [];
+                this.log.debug('[UI Server] Got bridge data from /api/settings');
+              } else {
+                throw new Error(`Unexpected response from /api/settings: ${settingsRes.status}`);
+              }
+            } catch (settingsErr) {
+              this.log.debug('[UI Server] /api/settings failed, reading matterbridge.json from disk: ' + (settingsErr instanceof Error ? settingsErr.message : settingsErr));
 
-            const status = bridgeData.commissioned ? 'vinculado' : 'esperando';
-            res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-            res.end(JSON.stringify({
-              status,
-              qrPairingCode: bridgeData.qrPairingCode || '',
-              manualPairingCode: bridgeData.manualPairingCode || '',
-              commissioned: bridgeData.commissioned || false,
-              pairedFabrics: bridgeData.pairedFabrics || [],
-              systemInfo: {
-                os: systemData.os || 'Linux',
-                nodeVersion: systemData.nodeVersion || '',
-                uptime: systemData.uptime || '',
-                cpu: systemData.cpu || '0.00 %',
-                memory: systemData.memory || ''
-              },
-              haStatus: this.ha.connected ? 'conectado' : 'desconectado'
-            }));
-          } catch (err) {
-            this.log.error('[UI Server] API fetch error for QR code: ' + (err instanceof Error ? err.message : err));
-            res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-            res.end(JSON.stringify({
-              status: 'iniciando',
-              qrPairingCode: '',
-              manualPairingCode: '',
-              commissioned: false,
-              pairedFabrics: [],
-              systemInfo: {
-                os: 'Linux',
-                nodeVersion: '',
-                uptime: '0s',
-                cpu: '0.00 %',
-                memory: '0.00 GB'
-              },
-              haStatus: this.ha.connected ? 'conectado' : 'desconectado'
-            }));
+              // Strategy 3: Read matterbridge.json directly from filesystem
+              try {
+                const mbJsonPath = '/root/.matterbridge/matterbridge.json';
+                const mbRaw = await fs.readFile(mbJsonPath, 'utf8');
+                const mbData = JSON.parse(mbRaw);
+                // Structure: { qrPairingCode, manualPairingCode, commissioned, ... }
+                qrPairingCode = mbData.qrPairingCode || mbData.qrcode || '';
+                manualPairingCode = mbData.manualPairingCode || mbData.manualCode || '';
+                commissioned = mbData.commissioned === true;
+                pairedFabrics = mbData.pairedFabrics || mbData.fabricInformations || [];
+                this.log.debug('[UI Server] Got bridge data from matterbridge.json on disk');
+              } catch (fsErr) {
+                this.log.warn('[UI Server] Could not read matterbridge.json: ' + (fsErr instanceof Error ? fsErr.message : fsErr));
+                // Final fallback: empty values — bridge is still initializing
+              }
+            }
           }
+
+          const status = commissioned ? 'vinculado' : (qrPairingCode ? 'esperando' : 'iniciando');
+          res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({
+            status,
+            qrPairingCode,
+            manualPairingCode,
+            commissioned,
+            pairedFabrics,
+            systemInfo: {
+              os: 'Linux',
+              nodeVersion: process.version,
+              uptime: `${Math.floor(process.uptime())}s`,
+              cpu: '—',
+              memory: `${(process.memoryUsage().rss / 1024 / 1024).toFixed(0)} MB`
+            },
+            haStatus: this.ha.connected ? 'conectado' : 'desconectado'
+          }));
           return;
         }
 

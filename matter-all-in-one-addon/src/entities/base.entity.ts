@@ -50,7 +50,16 @@ export class BaseEntity {
    * Create and register the MatterbridgeEndpoint.
    */
   public async createEndpoint(): Promise<MatterbridgeEndpoint> {
-    const name = this.state.attributes.friendly_name ?? this.entityId;
+    const rawName = this.state.attributes.friendly_name ?? this.entityId;
+
+    // Build a unique device name: use friendly name truncated to 24 chars + short entity suffix
+    // This avoids the "Device already registered" error when multiple devices share the same area prefix
+    const entityPart = this.entityId.replace(/[^a-zA-Z0-9]/g, '').slice(-6);
+    const displayName = rawName.length > 24
+      ? rawName.substring(0, 24).trim() + ' ' + entityPart
+      : rawName + (rawName.length < 28 ? ' ' + entityPart : '');
+    // Final safety truncate to 32 chars (Matter spec limit)
+    const uniqueName = displayName.substring(0, 32).trim();
 
     this.endpoint = new MatterbridgeEndpoint([this.deviceType], {
       id: this.entityId.replace('.', '_'),
@@ -59,7 +68,7 @@ export class BaseEntity {
 
     const [domain] = this.entityId.split('.');
     this.endpoint.createDefaultBridgedDeviceBasicInformationClusterServer(
-      name.substring(0, 32),
+      uniqueName,
       this.entityId.replace('.', '_').substring(0, 32),
       0xfff1,
       'Home Assistant',
