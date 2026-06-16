@@ -349,6 +349,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               haStatus: this.ha.connected ? 'conectado' : 'desconectado'
             }));
           } catch (err) {
+            this.log.error('[UI Server] API fetch error for QR code: ' + (err instanceof Error ? err.message : err));
             res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
             res.end(JSON.stringify({
               status: 'iniciando',
