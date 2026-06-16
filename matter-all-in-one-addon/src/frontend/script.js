@@ -6,7 +6,7 @@
 'use strict';
 
 // ── API Base ──────────────────────────────────────────────────
-const API = '/api/custom';
+const API = './api/custom';
 
 // ── State ─────────────────────────────────────────────────────
 let bridgeQrCode = '';
