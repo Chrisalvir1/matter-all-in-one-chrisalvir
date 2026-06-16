@@ -1,8 +1,8 @@
-/**
- * Device registry mapping Home Assistant domains and device classes to Matter 1.5 device types.
- */
+import { DeviceTypeDefinition } from 'matterbridge';
+import { homekitSupported } from './homekit.compat.js';
+
+// We import the MatterDeviceTypes we exported previously, or we redefine them here
 import {
-  DeviceTypeDefinition,
   onOffLight,
   dimmableLight,
   colorTemperatureLight,
@@ -21,9 +21,7 @@ import {
   lightSensor,
 } from 'matterbridge';
 
-// Matter 1.5 Device Types (represented as custom descriptors if not directly exported by matterbridge version)
 export const MatterDeviceTypes = {
-  // Standard
   onOffLight,
   dimmableLight,
   colorTemperatureLight,
@@ -41,7 +39,6 @@ export const MatterDeviceTypes = {
   flowSensor,
   lightSensor,
 
-  // Matter 1.5 New Device Types
   camera: {
     code: 0x0510,
     name: 'Camera',
@@ -50,32 +47,26 @@ export const MatterDeviceTypes = {
   } as any as DeviceTypeDefinition,
 
   closure: {
-    code: 0x000d, // Matter Closure Unified
+    code: 0x000d,
     name: 'Closure',
     deviceClass: 'Simple',
     category: 'Closure',
   } as any as DeviceTypeDefinition,
 
   soilSensor: {
-    code: 0x000c, // Custom or Soil moisture sensor type code
+    code: 0x000c,
     name: 'SoilSensor',
     deviceClass: 'Simple',
     category: 'Sensor',
   } as any as DeviceTypeDefinition,
 
   energyTariff: {
-    code: 0x000e, // Custom energy conditions
+    code: 0x000e,
     name: 'EnergyTariff',
     deviceClass: 'Simple',
     category: 'Utility',
   } as any as DeviceTypeDefinition,
 
-  /**
-   * Matter 1.4 Robotic Vacuum Cleaner (RVC) — device type 0x0074
-   * Apple Home recognises this natively since iOS 18.4.
-   * Works with Tuya, Smart Life, Roborock, iRobot, Dreame, etc.
-   * via Home Assistant's vacuum.* domain.
-   */
   roboticVacuumCleaner: {
     code: 0x0074,
     name: 'RoboticVacuumCleaner',
@@ -84,77 +75,45 @@ export const MatterDeviceTypes = {
   } as any as DeviceTypeDefinition,
 };
 
-export interface DeviceMapping {
-  deviceType: DeviceTypeDefinition;
-  homekitCompatible: boolean;
+export interface DeviceRegistryEntry {
+  matterType: DeviceTypeDefinition;
+  homekitSupported: boolean;
 }
 
-/**
- * Registry mapping logic.
- */
+export const DEVICE_REGISTRY: Record<string, DeviceRegistryEntry> = {
+  camera: { matterType: MatterDeviceTypes.camera, homekitSupported: homekitSupported.camera },
+  cover: { matterType: MatterDeviceTypes.closure, homekitSupported: homekitSupported.closure }, // Note: unified cover
+  climate: { matterType: MatterDeviceTypes.thermostat, homekitSupported: homekitSupported.thermostat },
+  lock: { matterType: MatterDeviceTypes.doorLock, homekitSupported: homekitSupported.doorLock },
+  light: { matterType: MatterDeviceTypes.dimmableLight, homekitSupported: homekitSupported.dimmableLight },
+  switch: { matterType: MatterDeviceTypes.onOffPlugInUnit, homekitSupported: homekitSupported.onOffPlugInUnit },
+  vacuum: { matterType: MatterDeviceTypes.roboticVacuumCleaner, homekitSupported: homekitSupported.roboticVacuumCleaner },
+  // Domain-level fallback mapping; specific device_classes logic may still need to be handled if required
+  binary_sensor: { matterType: MatterDeviceTypes.contactSensor, homekitSupported: homekitSupported.contactSensor },
+  sensor: { matterType: MatterDeviceTypes.temperatureSensor, homekitSupported: homekitSupported.temperatureSensor },
+};
+
+// Add specific classes mapping for binary_sensor
+export const DEVICE_CLASS_REGISTRY: Record<string, Record<string, DeviceRegistryEntry>> = {
+  binary_sensor: {
+    motion: { matterType: MatterDeviceTypes.occupancySensor, homekitSupported: homekitSupported.occupancySensor },
+    occupancy: { matterType: MatterDeviceTypes.occupancySensor, homekitSupported: homekitSupported.occupancySensor },
+    door: { matterType: MatterDeviceTypes.contactSensor, homekitSupported: homekitSupported.contactSensor },
+    window: { matterType: MatterDeviceTypes.contactSensor, homekitSupported: homekitSupported.contactSensor },
+    opening: { matterType: MatterDeviceTypes.contactSensor, homekitSupported: homekitSupported.contactSensor },
+  },
+  sensor: {
+    temperature: { matterType: MatterDeviceTypes.temperatureSensor, homekitSupported: homekitSupported.temperatureSensor },
+    humidity: { matterType: MatterDeviceTypes.humiditySensor, homekitSupported: homekitSupported.humiditySensor },
+    illuminance: { matterType: MatterDeviceTypes.lightSensor, homekitSupported: homekitSupported.illuminanceSensor },
+    moisture: { matterType: MatterDeviceTypes.soilSensor, homekitSupported: homekitSupported.soilSensor },
+    monetary: { matterType: MatterDeviceTypes.energyTariff, homekitSupported: homekitSupported.energyTariff },
+  }
+};
+
 export function getDeviceTypeForEntity(domain: string, deviceClass?: string): DeviceTypeDefinition {
-  if (domain === 'camera') {
-    return MatterDeviceTypes.camera;
+  if (deviceClass && DEVICE_CLASS_REGISTRY[domain]?.[deviceClass]) {
+    return DEVICE_CLASS_REGISTRY[domain][deviceClass].matterType;
   }
-
-  if (domain === 'cover') {
-    // Closure unified covers
-    const closureClasses = ['garage_door', 'gate', 'blind', 'shade', 'curtain', 'awning'];
-    if (deviceClass && closureClasses.includes(deviceClass)) {
-      return MatterDeviceTypes.closure;
-    }
-    return MatterDeviceTypes.windowCovering;
-  }
-
-  if (domain === 'climate') {
-    return MatterDeviceTypes.thermostat;
-  }
-
-  if (domain === 'lock') {
-    return MatterDeviceTypes.doorLock;
-  }
-
-  if (domain === 'light') {
-    return MatterDeviceTypes.dimmableLight; // Default to dimmable, refined by attributes
-  }
-
-  if (domain === 'switch') {
-    return MatterDeviceTypes.onOffPlugInUnit;
-  }
-
-  if (domain === 'binary_sensor') {
-    if (deviceClass === 'motion' || deviceClass === 'occupancy') {
-      return MatterDeviceTypes.occupancySensor;
-    }
-    if (deviceClass === 'door' || deviceClass === 'window' || deviceClass === 'opening') {
-      return MatterDeviceTypes.contactSensor;
-    }
-    return MatterDeviceTypes.contactSensor; // Fallback
-  }
-
-  if (domain === 'sensor') {
-    if (deviceClass === 'temperature') {
-      return MatterDeviceTypes.temperatureSensor;
-    }
-    if (deviceClass === 'humidity') {
-      return MatterDeviceTypes.humiditySensor;
-    }
-    if (deviceClass === 'illuminance') {
-      return MatterDeviceTypes.lightSensor;
-    }
-    if (deviceClass === 'moisture') {
-      // moisture sensor is treated as Soil Sensor under Matter 1.5
-      return MatterDeviceTypes.soilSensor;
-    }
-    if (deviceClass === 'monetary') {
-      return MatterDeviceTypes.energyTariff;
-    }
-  }
-
-  if (domain === 'vacuum') {
-    return MatterDeviceTypes.roboticVacuumCleaner;
-  }
-
-  // Fallback to simple on/off plug
-  return MatterDeviceTypes.onOffPlugInUnit;
+  return DEVICE_REGISTRY[domain]?.matterType || MatterDeviceTypes.onOffPlugInUnit;
 }

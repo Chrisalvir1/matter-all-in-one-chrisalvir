@@ -1,9 +1,11 @@
-/**
- * HomeKit compatibility map for Matter 1.0-1.5 device types.
- * Helps determine routing and warning levels for HomeKit integration.
- */
-export const homekitSupportedDeviceTypes = {
-  // Matter 1.0-1.3 (totalmente soportados)
+export const homekitSupported = {
+  camera: true,
+  closure: true,
+  soilSensor: true,
+  waterHeater: false,
+  evse: false,
+  solarPanel: false,
+  // Other defaults can be true or false depending on Matter 1.4+ vs HomeKit support
   onOffLight: true,
   dimmableLight: true,
   colorTemperatureLight: true,
@@ -12,24 +14,14 @@ export const homekitSupportedDeviceTypes = {
   dimmablePlugInUnit: true,
   doorLock: true,
   thermostat: true,
-  windowCovering: true,  // legacy, usar closure
+  windowCovering: true,
   contactSensor: true,
   occupancySensor: true,
   temperatureSensor: true,
   humiditySensor: true,
   illuminanceSensor: true,
-  
-  // Matter 1.4 (HomeKit aún NO soporta)
-  waterHeater: false,
-  evse: false,           // EV Charger
-  solarPanel: false,
-  heatPump: false,
-  
-  // Matter 1.5 (HomeKit SÍ soporta - 2025/2026)
-  camera: true,          // ⭐ Nuevo
-  closure: true,         // ⭐ Reemplaza WindowCovering
-  soilSensor: true,      // ⭐ Nuevo
-  energyTariff: false,   // ⚠️ Parcial
+  energyTariff: false,
+  roboticVacuumCleaner: true
 } as const;
 
-export type HomeKitSupportedDeviceType = keyof typeof homekitSupportedDeviceTypes;
+export type HomeKitSupportedDeviceType = keyof typeof homekitSupported;
