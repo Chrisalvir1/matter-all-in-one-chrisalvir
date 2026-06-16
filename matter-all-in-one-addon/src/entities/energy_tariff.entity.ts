@@ -1,27 +1,18 @@
 import { BaseEntity } from './base.entity.js';
-import { ElectricalGridConditions } from '@matter/main/clusters';
-import { Endpoint } from '@matter/main';
+import { ClusterId } from 'matterbridge/matter/types';
+import { HassState } from '../utils/ha-state.js';
+
+const ElectricalGridConditionsId = 0x00A0 as any as ClusterId;
 
 export class EnergyTariffEntity extends BaseEntity {
-  public override async initialize(endpoint: Endpoint): Promise<void> {
-    await super.initialize(endpoint);
-
-    if (!endpoint.hasClusterServer(ElectricalGridConditions.Cluster)) {
-      endpoint.addClusterServer(
-        ElectricalGridConditions.Cluster.createServer({
-          // Provide appropriate default attributes for ElectricalGridConditions
-          // specific implementation may vary depending on @matter/main cluster shape
-        } as any)
-      );
-    }
+  protected override getRequiredClusterIds(): ClusterId[] {
+    const clusters = super.getRequiredClusterIds();
+    clusters.push(ElectricalGridConditionsId);
+    return clusters;
   }
 
-  public override updateState(state: any): void {
+  public override updateState(state: HassState): void {
+    this.state = state;
     // Map electrical tariff values from HA to Matter
-    const cluster = this.endpoint?.getClusterServer(ElectricalGridConditions.Cluster);
-    if (cluster) {
-      // Implement specific tariff attributes logic here when properties are available
-      // e.g., mapping state.state (price) to appropriate attribute
-    }
   }
 }

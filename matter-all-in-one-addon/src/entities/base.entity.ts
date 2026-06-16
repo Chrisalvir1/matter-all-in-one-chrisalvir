@@ -81,10 +81,20 @@ export class BaseEntity {
     }
     this.endpoint.addRequiredClusterServers();
 
+    // Add custom cluster servers for subclasses before registering handlers and syncing state
+    await this.addCustomClusterServers();
+
     this.registerCommandHandlers();
     this.syncInitialState();
 
     return this.endpoint;
+  }
+
+  /**
+   * Hook for subclasses to add custom cluster servers before registering handlers/syncing state.
+   */
+  protected addCustomClusterServers(): void | Promise<void> {
+    return;
   }
 
   /**

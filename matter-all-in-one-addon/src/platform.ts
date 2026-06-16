@@ -229,7 +229,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
     this.log.debug(`Mapping ${entityId} to Matter device type ${deviceType.name} (0x${deviceType.code.toString(16)})`);
 
-    let entityInstance: BaseEntity | null = null;
+    let entityInstance: BaseEntity;
 
     // Instantiation based on mapped device type
     if (domain === 'cover' && ['garage_door', 'gate', 'blind', 'shade', 'curtain', 'awning'].includes(deviceClass ?? '')) {

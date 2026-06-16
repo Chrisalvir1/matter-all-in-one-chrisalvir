@@ -23,7 +23,6 @@
  * @see https://github.com/project-chip/connectedhomeip/blob/master/docs/clusters/RoboticVacuumCleaner.md
  */
 
-import type { MatterbridgeEndpoint } from 'matterbridge';
 import type { HassState } from '../utils/ha-state.js';
 
 // ─── Matter RVC Cluster IDs ────────────────────────────────────────────────
@@ -286,7 +285,7 @@ export interface VacuumMatterUpdate {
   attributes: VacuumAttributes;
 }
 
-export function buildVacuumUpdate(entity: HassEntity): VacuumMatterUpdate {
+export function buildVacuumUpdate(entity: HassState): VacuumMatterUpdate {
   const attrs = extractVacuumAttributes(entity);
   return {
     operationalState: haVacuumStateToMatter(entity.state),

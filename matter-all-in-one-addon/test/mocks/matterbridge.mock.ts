@@ -8,7 +8,7 @@ export class MockMatterbridgeEndpoint {
   public options: any;
   public clusterServers = new Set<number>();
   public attributes = new Map<string, any>();
-  public commandHandlers = new Map<string, Function>();
+  public commandHandlers = new Map<string, (...args: any[]) => any>();
 
   constructor(deviceTypes: any[], options: any) {
     this.deviceTypes = deviceTypes;
@@ -20,6 +20,33 @@ export class MockMatterbridgeEndpoint {
   }
 
   public addRequiredClusterServers() {}
+
+  public hasClusterServer(cluster: any): boolean {
+    return this.clusterServers.has(cluster.id);
+  }
+
+  public addClusterServer(clusterServer: any) {
+    if (clusterServer && clusterServer.id) {
+      this.clusterServers.add(clusterServer.id);
+    }
+  }
+
+  public getClusterServer(cluster: any): any {
+    if (this.clusterServers.has(cluster.id)) {
+      return {
+        addCommandHandler: (commandName: string, callback: (...args: any[]) => any) => {
+          this.commandHandlers.set(commandName, callback);
+        },
+        setBarrierPositionAttribute: (value: any) => {
+          this.attributes.set(`${cluster.id}:barrierPosition`, value);
+        },
+        setMeasuredValueAttribute: (value: any) => {
+          this.attributes.set(`${cluster.id}:measuredValue`, value);
+        }
+      };
+    }
+    return undefined;
+  }
 
   public hasAttributeServer(clusterId: number, attributeName: string): boolean {
     return true;
@@ -33,7 +60,7 @@ export class MockMatterbridgeEndpoint {
     this.attributes.set(`${clusterId}:${attributeName}`, value);
   }
 
-  public addCommandHandler(commandName: string, callback: Function) {
+  public addCommandHandler(commandName: string, callback: (...args: any[]) => any) {
     this.commandHandlers.set(commandName, callback);
   }
 

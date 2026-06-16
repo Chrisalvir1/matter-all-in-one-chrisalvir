@@ -40,9 +40,8 @@ export class VacuumEntity extends BaseEntity {
 
   // ─── Endpoint creation ─────────────────────────────────────────────
 
-  override async createEndpoint(): Promise<MatterbridgeEndpoint | null> {
+  override async createEndpoint(): Promise<MatterbridgeEndpoint> {
     const endpoint = await super.createEndpoint();
-    if (!endpoint) return null;
 
     // Apply initial state
     await this.syncState(endpoint, this.state);

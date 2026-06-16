@@ -1,34 +1,20 @@
 import { BaseEntity } from './base.entity.js';
-import { CameraAvStreamManagement, WebRTCTransportProvider } from '@matter/main/clusters';
-import { Endpoint } from '@matter/main';
+import { ClusterId } from 'matterbridge/matter/types';
+import { HassState } from '../utils/ha-state.js';
+
+const CameraAvStreamManagementId = 0x0551 as any as ClusterId;
+const WebRtcTransportProviderId = 0x0553 as any as ClusterId;
 
 export class CameraEntity extends BaseEntity {
-  public override async initialize(endpoint: Endpoint): Promise<void> {
-    await super.initialize(endpoint);
-
-    // Add required Matter 1.5 Camera clusters for HomeKit Secure Video compatibility
-    if (!endpoint.hasClusterServer(CameraAvStreamManagement.Cluster)) {
-      endpoint.addClusterServer(
-        CameraAvStreamManagement.Cluster.with(CameraAvStreamManagement.Feature.Video).createServer({
-          supportedVideoFormats: [],
-          supportedAudioFormats: [],
-        })
-      );
-    }
-
-    if (!endpoint.hasClusterServer(WebRTCTransportProvider.Cluster)) {
-      endpoint.addClusterServer(
-        WebRTCTransportProvider.Cluster.createServer({
-          supportedSdpTypes: [],
-        })
-      );
-    }
+  protected override getRequiredClusterIds(): ClusterId[] {
+    const clusters = super.getRequiredClusterIds();
+    clusters.push(CameraAvStreamManagementId);
+    clusters.push(WebRtcTransportProviderId);
+    return clusters;
   }
 
-  public override updateState(state: any): void {
+  public override updateState(state: HassState): void {
+    this.state = state;
     // Implement state mapping logic from HA camera to Matter Camera clusters
-    // Example: update streaming state if recording
-    const isStreaming = state.state === 'recording';
-    // Update CameraAvStreamManagement or WebRTCTransportProvider logic here
   }
 }
