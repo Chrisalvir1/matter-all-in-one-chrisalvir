@@ -1199,20 +1199,23 @@ export class HomeAssistant extends EventEmitter {
   /**
    * Creates an instance of the HomeAssistant class.
    *
-   * @param {string} url - The WebSocket URL for connecting to Home Assistant (i.e. ws://localhost:8123 or wss://localhost:8123).
-   * @param {string} accessToken - The access token for authenticating with Home Assistant.
-   * @param {number} [reconnectTimeoutTime] - The timeout duration for reconnect attempts in seconds. Defaults to 60 seconds.
-   * @param {number} [reconnectRetries] - The number of reconnection attempts to make before giving up. Defaults to 10 attempts.
-   * @param {string | undefined} [certificatePath] - The path to the CA certificate for secure WebSocket connections. Defaults to undefined.
-   * @param {boolean | undefined} [rejectUnauthorized] - Whether to reject unauthorized certificates. Defaults to undefined.
+   * @param {string} url - The WebSocket URL for connecting to Home Assistant (i.e. ws://192.168.x.x:8123 or wss://...).
+   *   Auto-detected from the network if not provided. Protocol prefix ws:// or wss:// is normalised automatically.
+   * @param {string} [accessToken] - The access token for authenticating with Home Assistant.
+   *   Optional: when running as HA add-on the SUPERVISOR_TOKEN env var is used automatically.
+   *   When HA has trusted_networks configured for the local subnet, an empty token is accepted.
+   * @param {number} [reconnectTimeoutTime] - Timeout in seconds between reconnect attempts. Defaults to 60.
+   * @param {number} [reconnectRetries] - Max reconnection attempts before giving up. Defaults to 10.
+   * @param {string | undefined} [certificatePath] - Path to CA certificate for secure WebSocket. Defaults to undefined.
+   * @param {boolean | undefined} [rejectUnauthorized] - Reject unauthorized TLS certs. Defaults to false (allow LAN self-signed).
    */
   constructor(
     url: string,
-    accessToken: string,
+    accessToken: string = '',   // empty string = trust-local / supervisor mode
     reconnectTimeoutTime: number = 60,
     reconnectRetries: number = 10,
     certificatePath: string | undefined = undefined,
-    rejectUnauthorized: boolean | undefined = undefined,
+    rejectUnauthorized: boolean | undefined = false, // allow self-signed certs on LAN
   ) {
     super();
     this.wsUrl = url;
@@ -1446,14 +1449,39 @@ export class HomeAssistant extends EventEmitter {
           // console.log(`Received WebSocket message:`, response);
           // istanbul ignore else
           if (response.type === 'auth_required') {
+            // ── Auth handler ──────────────────────────────────────────────
+            // We always send the auth message, even when the token is empty.
+            // HA will respond with auth_ok if:
+            //   a) The token is valid, OR
+            //   b) The connection IP is in HA's trusted_networks list, OR
+            //   c) We are inside the HA OS supervisor (token injected via env)
+            // ──────────────────────────────────────────────────────────────
             this.log.debug(`Authentication required: ${debugStringify(response)}`);
-            this.log.debug('Authentication required. Sending auth message...');
+            if (this.wsAccessToken) {
+              this.log.debug('Sending auth token...');
+            } else {
+              this.log.debug('No token configured — attempting trust-local / supervisor auth...');
+            }
             this.ws?.send(
               JSON.stringify({
                 type: 'auth',
                 access_token: this.wsAccessToken,
               } as HassWebSocketRequestAuth),
             );
+          } else if (response.type === 'auth_invalid') {
+            // ── Auth rejected by HA ───────────────────────────────────────
+            // Only hard-fail if the user actually supplied a token (wrong token).
+            // If no token was supplied the host is probably not in trusted_networks.
+            // ──────────────────────────────────────────────────────────────
+            const msg = (response as unknown as { message?: string }).message ?? 'auth_invalid';
+            if (this.wsAccessToken) {
+              return reject(new Error(`Home Assistant rejected the access token: ${msg}. Check your token in the plugin config.`));
+            } else {
+              return reject(new Error(
+                `Home Assistant requires authentication but no token was provided and the host IP is not in trusted_networks. ` +
+                `Either add a Long-Lived Access Token to the plugin config, or add this host to trusted_networks in HA's configuration.yaml.`
+              ));
+            }
           } else if (response.type === 'auth_ok') {
             // Handle successful authentication
             this.log.debug(`Authenticated successfully: ${debugStringify(response)}`);

@@ -13,6 +13,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { HomeAssistant } from './homeAssistant.js';
 import { HassState } from './utils/ha-state.js';
+import { discoverHassUrl, toWsUrl } from './utils/ha-discovery.js';
 import { getDeviceTypeForEntity, MatterDeviceTypes } from './device-registry.js';
 import { BaseEntity } from './entities/base.entity.js';
 import { ClosureEntity } from './entities/closure.entity.js';
@@ -21,8 +22,8 @@ import { SoilEntity } from './entities/soil.entity.js';
 
 
 export interface HomeAssistantPlatformConfig extends PlatformConfig {
-  host: string;
-  token: string;
+  host?: string;       // Optional: auto-detected from network/supervisor if not set
+  token?: string;      // Optional: not required when running as HA add-on (SUPERVISOR_TOKEN) or with trust-local mode
   includeEntities?: string[];
   excludeEntities?: string[];
 }
@@ -33,6 +34,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   public matterbridgeDevices = new Map<string, MatterbridgeEndpoint>();
   public deviceOverrides: Record<string, string> = {};
   private uiServer?: http.Server;
+  /** Raw host from config (may be undefined — triggers network auto-discovery) */
+  private _configHost?: string;
+  /** Resolved token (may be empty string for trust-local / supervisor mode) */
+  private _configToken: string = '';
 
   constructor(
     matterbridge: PlatformMatterbridge,
@@ -42,21 +47,30 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     super(matterbridge, log, config);
     this.log.info(`Initializing ${CYAN}${this.config.name}${nf} platform...`);
 
-    // Automatic detection of Host and Token for Home Assistant OS / Supervisor environments
-    const host = config.host || process.env.HA_URL || 'http://supervisor/core';
+    // ── Token / Auth resolution ─────────────────────────────────────────────
+    // Priority: config.token → SUPERVISOR_TOKEN env (HA OS add-on) → empty
+    // An empty token works when:
+    //   a) Running as HA add-on (supervisor grants access automatically), OR
+    //   b) HA has trusted_networks configured for this host's subnet.
     const token = config.token || process.env.SUPERVISOR_TOKEN || '';
 
-    this.log.info(`Connecting to Home Assistant at ${host}`);
+    // ── Host resolution: deferred to onStart() for async network scan ───────
+    // We need to await discoverHassUrl() which probes the network, so we store
+    // the raw config values here and complete the HA instance init in onStart().
+    this._configHost = config.host;
+    this._configToken = token;
 
-    // Initialize the Home Assistant connection manager
+    // Temporary placeholder — replaced with correct URL inside onStart()
     this.ha = new HomeAssistant(
-      host,
+      'ws://homeassistant.local:8123',
       token,
-      60, // reconnectTimeout
-      10, // reconnectRetries
-      '', // certificatePath
-      true // rejectUnauthorized
+      60,        // reconnectTimeoutSeconds
+      10,        // reconnectRetries
+      undefined, // certificatePath
+      false      // rejectUnauthorized — allow self-signed certs on LAN
     );
+
+    this.log.info(`Platform initialised — host will be resolved on start (token: ${token ? 'provided' : 'none / trust-local'}).`);
 
     // Register events from HA WebSocket Client
     this.ha.on('connected', (version) => {
@@ -81,6 +95,55 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   override async onStart(reason?: string) {
     this.log.info(`Starting HomeAssistant platform: ${reason ?? ''}`);
     this.startUiServer();
+
+    // ── Resolve Home Assistant URL ─────────────────────────────────────────
+    // If the user didn’t set config.host we run the network discovery:
+    //   1. Probe well-known hostnames (homeassistant.local, supervisor...)
+    //   2. Scan local LAN subnets for port 8123
+    let rawHost = this._configHost;
+    if (!rawHost) {
+      this.log.info('No host configured — auto-discovering Home Assistant on the network...');
+      const discovered = await discoverHassUrl((msg) => this.log.debug(msg));
+      if (discovered) {
+        rawHost = discovered;
+        this.log.notice(`Auto-discovered Home Assistant at ${CYAN}${rawHost}${nf}`);
+      } else {
+        this.log.error(
+          'Could not find Home Assistant on the network. ' +
+          'Set the "host" field in the plugin config (e.g. http://192.168.1.100:8123) and restart.'
+        );
+        return;
+      }
+    }
+
+    // Normalise to ws:// / wss:// for the WebSocket client
+    const wsHost = toWsUrl(rawHost);
+    this.log.info(`Connecting to Home Assistant at ${CYAN}${wsHost}${nf} (token: ${this._configToken ? 'provided' : 'none / trust-local'})`);
+
+    // Re-create the HA client with the resolved URL
+    // (events registered in the constructor stay because we re-register them below)
+    this.ha = new HomeAssistant(
+      wsHost,
+      this._configToken,
+      60,
+      10,
+      undefined,
+      false,
+    );
+
+    // Re-register HA events on the new instance
+    this.ha.on('connected', (version) => {
+      this.log.notice(`Connected to Home Assistant ${version}`);
+      void this.discoverAndSync();
+    });
+    this.ha.on('disconnected', () => {
+      this.log.warn('Disconnected from Home Assistant');
+    });
+    this.ha.on('event', (_deviceId, entityId, _oldState, newState) => {
+      if (newState) this.handleEntityStateChange(entityId, newState);
+    });
+    // ──────────────────────────────────────────────────────────────
+
     try {
       await this.ha.connect();
     } catch (err) {
