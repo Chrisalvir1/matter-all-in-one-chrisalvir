@@ -7,7 +7,7 @@ WORKDIR /app
 
 # ── Layer 1: Install production + dev deps (cached unless package-lock changes) ──
 COPY package.json package-lock.json ./
-RUN npm ci --no-fund --no-audit
+RUN npm install --no-fund --no-audit
 
 # ── Layer 2: Copy source and build TypeScript ─────────────────────────────────
 COPY tsconfig*.json ./
