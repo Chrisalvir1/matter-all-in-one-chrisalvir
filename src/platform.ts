@@ -36,14 +36,16 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     super(matterbridge, log, config);
     this.log.info(`Initializing ${CYAN}${this.config.name}${nf} platform...`);
 
-    if (!config.host || !config.token) {
-      throw new Error('Host and Token must be configured for Home Assistant connection.');
-    }
+    // Automatic detection of Host and Token for Home Assistant OS / Supervisor environments
+    const host = config.host || process.env.HA_URL || 'http://supervisor/core';
+    const token = config.token || process.env.SUPERVISOR_TOKEN || '';
+
+    this.log.info(`Connecting to Home Assistant at ${host}`);
 
     // Initialize the Home Assistant connection manager
     this.ha = new HomeAssistant(
-      config.host,
-      config.token,
+      host,
+      token,
       60, // reconnectTimeout
       10, // reconnectRetries
       '', // certificatePath
@@ -84,7 +86,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
    */
   override async onShutdown(reason?: string) {
     this.log.warn(`Shutting down platform: ${reason ?? ''}`);
-    await this.ha.disconnect();
+    await this.ha.close();
   }
 
   /**

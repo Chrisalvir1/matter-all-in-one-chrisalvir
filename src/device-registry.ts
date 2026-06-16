@@ -1,8 +1,8 @@
 /**
  * Device registry mapping Home Assistant domains and device classes to Matter 1.5 device types.
  */
-import { DeviceTypeDefinition } from 'matterbridge';
 import {
+  DeviceTypeDefinition,
   onOffLight,
   dimmableLight,
   colorTemperatureLight,
@@ -19,7 +19,7 @@ import {
   pressureSensor,
   flowSensor,
   lightSensor,
-} from 'matterbridge/matter/clusters';
+} from 'matterbridge';
 
 // Matter 1.5 Device Types (represented as custom descriptors if not directly exported by matterbridge version)
 export const MatterDeviceTypes = {
@@ -47,28 +47,28 @@ export const MatterDeviceTypes = {
     name: 'Camera',
     deviceClass: 'Simple',
     category: 'Security',
-  } as DeviceTypeDefinition,
+  } as any as DeviceTypeDefinition,
 
   closure: {
     code: 0x000d, // Matter Closure Unified
     name: 'Closure',
     deviceClass: 'Simple',
     category: 'Closure',
-  } as DeviceTypeDefinition,
+  } as any as DeviceTypeDefinition,
 
   soilSensor: {
     code: 0x000c, // Custom or Soil moisture sensor type code
     name: 'SoilSensor',
     deviceClass: 'Simple',
     category: 'Sensor',
-  } as DeviceTypeDefinition,
+  } as any as DeviceTypeDefinition,
 
   energyTariff: {
     code: 0x000e, // Custom energy conditions
     name: 'EnergyTariff',
     deviceClass: 'Simple',
     category: 'Utility',
-  } as DeviceTypeDefinition,
+  } as any as DeviceTypeDefinition,
 };
 
 export interface DeviceMapping {

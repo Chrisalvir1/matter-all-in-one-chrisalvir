@@ -32,7 +32,7 @@ export class ClosureEntity extends BaseEntity {
   public override async createEndpoint(): Promise<MatterbridgeEndpoint> {
     this.endpoint = new MatterbridgeEndpoint([this.deviceType], {
       id: this.entityId.replace('.', '_'),
-      mode: 'child',
+      mode: undefined,
     });
 
     const clusters = this.getRequiredClusterIds();
@@ -64,7 +64,7 @@ export class ClosureEntity extends BaseEntity {
 
     // Support position control (0..100%) for blinds/shades/curtains
     if (this.endpoint.hasAttributeServer(ClosureDimensionClusterId, 'currentPosition')) {
-      this.endpoint.addCommandHandler('moveToPosition', async (data: any) => {
+      this.endpoint.addCommandHandler('moveToPosition' as any, async (data: any) => {
         const position = data.position; // 0..100
         this.platform.log.debug(`Matter MoveToPosition commanded for ${this.entityId}: position=${position}`);
         await this.platform.ha.callService('cover', 'set_cover_position', this.entityId, {

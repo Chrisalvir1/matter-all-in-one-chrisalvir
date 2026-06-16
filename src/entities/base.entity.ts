@@ -54,7 +54,7 @@ export class BaseEntity {
 
     this.endpoint = new MatterbridgeEndpoint([this.deviceType], {
       id: this.entityId.replace('.', '_'),
-      mode: 'child',
+      mode: undefined,
     });
 
     const clusters = this.getRequiredClusterIds();

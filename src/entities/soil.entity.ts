@@ -27,7 +27,7 @@ export class SoilEntity extends BaseEntity {
   public override async createEndpoint(): Promise<MatterbridgeEndpoint> {
     this.endpoint = new MatterbridgeEndpoint([this.deviceType], {
       id: this.entityId.replace('.', '_'),
-      mode: 'child',
+      mode: undefined,
     });
 
     const clusters = this.getRequiredClusterIds();

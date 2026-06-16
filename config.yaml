@@ -13,9 +13,7 @@ ports_description:
 hassio_api: true
 homeassistant_api: true
 hassio_role: admin
-options:
-  host: "http://supervisor/core"
-  token: ""
+options: {}
 schema:
-  host: str
+  host: str?
   token: str?

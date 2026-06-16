@@ -31,7 +31,7 @@ export class CameraEntity extends BaseEntity {
   public override async createEndpoint(): Promise<MatterbridgeEndpoint> {
     this.endpoint = new MatterbridgeEndpoint([this.deviceType], {
       id: this.entityId.replace('.', '_'),
-      mode: 'child',
+      mode: undefined,
     });
 
     const clusters = this.getRequiredClusterIds();
@@ -90,7 +90,7 @@ export class CameraEntity extends BaseEntity {
 
   protected override registerCommandHandlers() {
     // Listen for streaming request commands from Apple HomeKit / Matter controller
-    this.endpoint.addCommandHandler('startStream', async (data: any) => {
+    this.endpoint.addCommandHandler('startStream' as any, async (data: any) => {
       this.platform.log.info(`Matter controller requested live stream start for ${this.entityId}`);
       // Return WebRTC/RTSP details to the controller
       return {
@@ -99,7 +99,7 @@ export class CameraEntity extends BaseEntity {
       };
     });
 
-    this.endpoint.addCommandHandler('stopStream', async (data: any) => {
+    this.endpoint.addCommandHandler('stopStream' as any, async (data: any) => {
       this.platform.log.info(`Matter controller requested live stream stop for ${this.entityId}`);
       return { status: 0 };
     });
