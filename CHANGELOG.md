@@ -1,0 +1,1145 @@
+<!-- eslint-disable markdown/no-missing-label-refs -->
+
+# <img src="https://matterbridge.io/assets/matterbridge.svg" alt="Matterbridge Logo" width="64px" height="64px">&nbsp;&nbsp;&nbsp;Matterbridge hass plugin changelog
+
+All notable changes to this project will be documented in this file.
+
+If you like this project and find it useful, please consider giving it a **star** on [GitHub](https://github.com/Luligu/matterbridge-hass) and **sponsoring** it.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="120"></a>
+
+## Possible issue upgrading the plugin
+
+> WARNING: The domains button, remote and media_player include an OnOff cluster. This will not make it possible to merge the entities on the same endpoint: if you have Alexa or Google you may want to either black list those domains or to split their entities.
+
+## [1.3.1] - 2026-06-07
+
+### Fixed
+
+- [matterbridge]: Fix compatibility with matterbridge v.3.8.0 and v.3.8.1. Thanks Tamer for spotting the issue.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+## [1.3.0] - 2026-06-06
+
+### Breaking changes
+
+- [matterbridge]: Require matterbridge v.3.8.0 with matter v.1.5.1 and matter.js v.0.17.1.
+
+### Added
+
+- [platform]: The too long names check and warning is now only for registered devices/entities. Thanks thecurrymuncher.
+- [codecov]: Add merge of Jest and Vitest coverage reports. This allows to run both Jest and Vitest tests in the same package and have a unified coverage report in Codecov.
+
+### Changed
+
+- [package]: Update dependencies.
+- [package]: Bump package to `automator` v.3.1.11.
+
+- [package]: Bump `@eslint/json` to v.2.0.0.
+- [package]: Bump `@eslint/markdown` to v.8.0.2.
+- [package]: Bump `@types/node` to v.25.9.2.
+- [package]: Bump `@vitest/coverage-istanbul` to v.4.1.8.
+- [package]: Bump `@vitest/eslint-plugin` to v.1.6.19.
+- [package]: Bump `eslint` to v.10.4.1.
+- [package]: Bump `eslint-plugin-jsdoc` to v.63.0.2.
+- [package]: Bump `eslint-plugin-prettier` to v.5.5.6.
+- [package]: Bump `npm-check-updates` to v.22.2.3.
+- [package]: Bump `ts-jest` to v.29.4.11.
+- [package]: Bump `typescript-eslint` to v.8.60.2.
+- [package]: Bump `vitest` to v.4.1.8.
+
+- [oxlint]: Bump `oxlint` config to v.1.0.2.
+- [oxfmt]: Bump `oxfmt` config to v.1.0.2.
+- [jest]: Bump `jest` config to v.2.0.2.
+- [vitest]: Bump `vitest` config to v.2.0.5.
+- [eslint]: Bump `eslint` config to v.2.0.6.
+- [prettier]: Bump `.prettierignore` config to v.1.0.1.
+- [package]: Bump `.devcontainer/devcontainer.json` config to v.1.0.1.
+- [package]: Bump `.vscode/settings.json` config to v.1.0.1.
+- [package]: Bump `.vscode/extensions.json` config to v.1.0.1.
+- [workflow]: Bump `.github\workflows\build.yml` config to v.2.0.4.
+- [workflow]: Bump `.github\workflows\codecov.yml` config to v.2.0.4.
+- [workflow]: Bump `.github\workflows\publish.yml` config to v.2.0.4.
+
+- [claude]: Move CLAUDE.md in the repo root.
+- [claude]: Add .claude/settings.json with permissions configuration.
+
+### Fixed
+
+- [platform]: The unavailable entities on startup are set unreachable. Thanks thecurrymuncher.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+## [1.2.2] - 2026-05-15
+
+### Changed
+
+- [package]: Update dependencies.
+- [package]: Bump package to `automator` v.3.1.9.
+- [package]: Bump `typescript-eslint` to v.8.59.3.
+- [package]: Bump `eslint-plugin-n` to v.18.0.1.
+- [package]: Bump `jest` to v.30.4.2.
+- [eslint]: Add `eslint` v.2.0.4 config.
+- [jest]: Add `jest` v.2.0.1 config.
+- [package]: Add Node.js 26 to package `engines` field.
+- [workflows]: Add Node.js 26 to `build.yml` Node matrix and remove Node.js 20.
+- [package]: Refactor `scripts`.
+- [package]: Add package script `typecheck`.
+- [agent]: Update `agent instructions`.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+## [1.2.1] - 2026-05-01
+
+### Added
+
+- [light]: Add discovery of dimmer lights when they are `unavailable` in Home Assistant. Thanks DrFate09.
+- [cache]: Add `StateCache` class to store the device states when they turn to unavailable in Home Assistant. This allows to create correct lights even if they are unavailable on Home Assistant.
+- [eslint]: Enforce @typescript-eslint promise rules.
+
+### Changed
+
+- [package]: Update dependencies.
+- [package]: Bump package to `automator` v.3.1.7.
+- [package]: Bump `eslint` to v.10.3.0.
+- [package]: Bump `typescript-eslint` to v.8.59.1.
+- [eslint]: Remove `eslint-plugin-promise` (not actively maintained) and add optional @typescript-eslint promise rules.
+- [package]: Remove `overrides` that was necessary for eslint-plugin-promise.
+- [package]: Remove unused Vitest setup.
+- [eslint]: Add `eslint` v.2.0.0 config.
+- [prettier]: Add `prettier` v.2.0.0 config.
+- [jest]: Add `jest` v.2.0.0 config.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+## [1.2.0] - 2026-04-24
+
+### Breaking Changes
+
+- [domains]: Domains `remote`, `select`, `input_select` and `media_player` are now supported. You may want to either use them with [filter](README.md#filter-by-label) and [select](README.md#device-entity-blacklist) or [exclude](README.md#domain-blacklist) all these domains if you don't need their entities or your controller doesn't support them. It is also possible to split them.
+- [Split Entities]: The `Split Entities` config option is deprecated. Use `Split By Label`.
+
+### Added
+
+- [test]: Refactor tests to use the updated matterbridge test module.
+- [remote]: Add `remote` domain.
+- [select]: Add `select` domain.
+- [input_select]: Add `input_select` domain.
+- [media_player]: Add `media_player` domain.
+- [Virtual Control]: Add the [Virtual Control Label](README.md#virtual-control-label) for accessibility controls (voice-friendly switches) on supported entities such as `select`, `input_select` and `media_player`.
+
+### Changed
+
+- [package]: Preliminary compatibility update to `matterbridge 3.8.0`, matter 1.5.1 and matter.js 0.17.0.
+- [package]: Update dependencies.
+- [package]: Bump `typescript` to v.6.0.3.
+- [package]: Bump `eslint` to v.10.2.1.
+- [package]: Bump `typescript-eslint` to v.8.59.0.
+- [package]: Add `.vscode\settings.json`.
+- [devcontainer]: Add `Claude Code for VS Code extension` to Dev Container.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+## [1.1.1] - 2026-04-17
+
+### Breaking Changes
+
+- [binary_sensor]: The default implementation without device_class is a contact sensor. This will expose new entities.
+- [hidden]: All entities that are hidden are discarded unless `discardHiddenEntities` options is unchecked (reworked 1.0.4). Thanks kristian (https://github.com/Luligu/matterbridge-hass/issues/213).
+
+### Added
+
+- [package]: Preliminary compatibility update to `matterbridge 3.8.0`, matter 1.5.1 and matter.js 0.17.0.
+- [report]: Update the `report` to show the hidden entities.
+- [readme]: Changed config headers in the [README](README.md#config) to reflect schema titles.
+- [select]: Add definitions for `select` and `input_select` domain.
+- [media_player]: Add definitions for `media_player` domain.
+
+### Changed
+
+- [package]: Update dependencies.
+- [package]: Bump package to `automator` v.3.1.6.
+- [package]: Bump `typescript-eslint` to v.8.58.2.
+- [agent]: Add `.github\copilot-instructions.md` for copilot.
+- [agent]: Add `.claude\CLAUDE.md` for claude.
+- [agent]: Add agent custom instructions (`testing`) for copilot and claude.
+- [agent]: Add agent custom instructions (`matterbridge`) for copilot and claude.
+
+### Fixed
+
+- [reconnect]: Prevent unhandled promise rejection during reconnect attempts. Thanks UltronOfSpace (https://github.com/Luligu/matterbridge-hass/issues/211).
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+## [1.1.0] - 2026-04-10
+
+### Breaking Changes
+
+- [domains] Add `Domain Whitelist` and `Domain Blacklist`.
+
+### Added
+
+- [helpers]: Add `helpers module` to make the platform code easier to read and maintain.
+- [helpers]: Add `payload module` to make the platform code easier to read and maintain.
+- [helpers]: Add `report module` to make the platform code easier to read and maintain.
+- [scripts]: Add script to prune GitHub releases based on tag prefix.
+
+### Changed
+
+- [package]: Update dependencies.
+- [package]: Bump package to `automator` v.3.1.5.
+- [package]: Bump `eslint` to v.10.2.0.
+- [package]: Bump `prettier` to v.3.8.2.
+- [package]: Bump `typescript-eslint` to v.8.58.1.
+- [devcontainer]: Update VS Code settings.
+- [scripts]: Update mb-run script.
+- [entity]: Refactor entity helper signatures to be uniform across all helpers.
+
+### Fixed
+
+- [schema]: Fix controllerStrategy schema.
+- [devcontainer]: Fix pull of new image.
+- [devcontainer]: Fix matterbridge scripts.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+## [1.0.12] - 2026-04-02
+
+### Breaking Changes
+
+- [button]: The domain `button` (added in 1.0.11) can cause the lights to not be anymore on the root endpoint. You can filter out or unselect the button entity (or split it) in that case (for Alexa). Thanks Rogibaer (https://github.com/Luligu/matterbridge-hass/issues/205);
+
+### Added
+
+- [rvc]: Add warning when enableServerRvc is true and the rvc has more entities. With Apple Home the rvc must be the unique device type: filter out, unselect or split all other entities that belong to the rvc device. Thanks hoppel118.
+- [splitByLabel]: Split device entities by label (use label name). All device entities with this label will be split. See the [readme](./README.md#splitbylabel) for more informations.
+- [split]: Split device entities have the link to the main device and composed type "Hass Split".
+- [controllerStrategy]: Add `controllerStrategy` config option. 'Merge' will merge each not overlapping device types on the main endpoint. 'Matter' will create a separate endpoint for each device type. Use Merge strategy for legacy controller. Change this setting may require to pair again the controller. See the [readme](./README.md#controllerstrategy) for more informations.
+
+### Changed
+
+- [package]: Update dependencies.
+- [package]: Bump package to `automator` v.3.1.4.
+- [package]: Bump `typescript` to v.6.0.2.
+- [package]: Bump `typescript-eslint` to v.8.58.0.
+- [package]: Add `CODE_OF_CONDUCT.md`.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+## [1.0.11] - 2026-03-21
+
+### Added
+
+- [helpers]: Add support for helpers domains (`automation`, `scene`, `script`, `input_boolean`, `input_button`) in device entities and split entities.
+- [button]: Add domain `button` in individual entities, device entities and split entities.
+
+### Changed
+
+- [platform]: Require Matterbridge v.3.7.0.
+- [package]: Update dependencies.
+- [package]: Bump package to `automator` v.3.1.3.
+- [package]: Bump `typescript-eslint` to v.8.57.1.
+- [devcontainer]: Update `Dev Container` configuration.
+- [devcontainer]: Add postStartCommand to the `Dev Container` configuration.
+- [package]: Refactor `build.yml` to use matterbridge dev branch for push and main for pull requests.
+- [package]: Add `type checking` script for Jest tests.
+- [package]: Update actions versions in workflows.
+- [package]: Bump `eslint` to v.10.1.0.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+## [1.0.10] - 2026-03-09
+
+### Breaking Changes
+
+- [split]: The names of split entities may now be chosen using this logic:
+  - `Friendly name` => `Name` => `Original name` (i.e. Computer Plug Child Lock). This avoids most duplicate-name issues, but the name will probably be truncated to 32 characters.
+  - `Name` => `Original name` => `Friendly name` (i.e. Child Lock). This will probably create duplicate-name issues unless you change the name.
+
+  If you change this option, check the whiteList and blackList if you use them.
+
+### Added
+
+- [report]: A new file `report.log` is generated in the `Matterbridge/matterbridge-hass` directory. It contains the list of devices and entities, highlighting whether they are in filterByArea, have filterByLabel, or are in splitEntities.
+- [config]: Add the `splitNameStrategy` config option to select the naming strategy for split entities: `Entity name` (i.e. Child Lock) or `Friendly name` (i.e. Computer Plug Child Lock).
+
+### Changed
+
+- [package]: Update dependencies.
+- [package]: Bump package to `automator` v.3.1.2.
+- [package]: Bump `eslint` to v.10.0.3.
+
+### Fixed
+
+- [mireds]: Fix the maximum mireds value. Thanks jvmahon (https://github.com/Luligu/matterbridge/issues/523).
+- [split]: Fix the name priority for split entities.
+- [filter]: Ignore area for device entities and split entities.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+## [1.0.9] - 2026-03-06
+
+### Breaking Changes
+
+- [applyFiltersToDeviceEntities]: Remove applyFiltersToDeviceEntities config option and use unified logic. A device is exposed if it is in a valid area or has a valid label or has any entities that are in a valid area or have a valid label. Thanks trilu2000, Trushna and itsgreat2misha (https://github.com/Luligu/matterbridge-hass/issues/171).
+
+  If you want to expose all entities, use the filters on the device and don't use them on its entities.
+
+  If you want to expose only some entities, don't use the filters on the device and apply them only to the entities you want to expose.
+
+- [logger]: The logger is no more in debug mode as default: you need to set debug for the plugin in the config to have a log suitable for debug.
+
+### Changed
+
+- [package]: Update dependencies.
+- [package]: Bump package to `automator` v.3.1.1.
+- [package]: Add `@eslint/json`.
+- [package]: Add `@eslint/markdown`.
+- [package]: Add `CONTRIBUTING.md`.
+- [package]: Add `STYLEGUIDE.md`.
+
+### Fixed
+
+- [logger]: Fix logger level. Thanks Reimer Prochnow (https://github.com/Luligu/matterbridge/issues/521).
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+## [1.0.8] - 2026-02-27
+
+### Dev Breaking Changes
+
+- [devContainer]: Add the new [dev container setup](https://matterbridge.io/reflector/MatterbridgeDevContainer.html).
+- [devContainer]: Add the new [reflector dev container setup](https://matterbridge.io/reflector/Reflector.html).
+- [devContainer]: Add the guide to [pair Matterbridge with Dev Container](https://matterbridge.io/README-DEV.html#how-to-pair-matterbridge-in-dev-containers)
+
+### Added
+
+- [adaptive]: Add logic to send attributes updates in turn_on only when the controller may (!) have modified them while the light was off. Thanks nixpare and itsgreat2misha (https://github.com/Luligu/matterbridge-hass/pull/169).
+
+### Changed
+
+- [package]: Update dependencies.
+- [package]: Bump package to `automator` v.3.1.0.
+- [package]: Bump `eslint` to v.10.0.2.
+- [package]: Bump `typescript-eslint` to v.8.56.1.
+- [package]: Replace `eslint-plugin-import` with `eslint-plugin-simple-import-sort`.
+- [eslint]: Use minimatch in ignores.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+## [1.0.7] - 2026-02-19
+
+### Added
+
+- [guide]: Add a guide about using filters and select [here](https://github.com/Luligu/matterbridge-hass/discussions/186).
+- [names]: Add a warning message in the logs and on the frontend with the total number of devices and entities discarded due to `duplicate names`.
+- [names]: Add a warning message in the logs and on the frontend with the total number of devices and entities whose name exceeds Matter’s `32-character limit`.
+- [create]: Add an error message in the logs and on the frontend with the total number of devices and entities that `failed` to be created.
+- [group]: Add the link on the frontend for `group` helpers (platform = group).
+- [unavailable]: Add check for `not provided` entities (state = unavailable, restored = true): they are ignored.
+- [config]: Check if all `splitEntities` in the config exist.
+- [update]: Add queue to fast updates: a new update stops the older ones that are still executing.
+
+### Changed
+
+- [package]: Update dependencies.
+- [package]: Bump package to `automator` v.3.0.8.
+- [package]: Bump `node-ansi-logger` to v.3.2.0.
+- [package]: Bump `node-persist-manager` to v.2.0.1.
+- [package]: Bump `eslint` to v.10.0.0.
+- [config]: Improve descriptions of fields in the config.
+
+### Fixed
+
+- [create]: When a device creation fails, the device is now removed from the select (Devices panel on the Home page).
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+## [1.0.6] - 2026-02-10
+
+### Changed
+
+- [package]: Updated dependencies.
+
+### Fixed
+
+- [moveToLevelWithOnOff]: Fixed the case when a light is turned on with moveToLevelWithOnOff. Now takes the level from the request.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+## [1.0.5] - 2026-02-07
+
+### Breaking changes
+
+- [filters]: The filterByLabel must be the label name.
+
+### Added
+
+- [select]: Added confirmation message on the frontend with the total number of devices and entities discarded by the select (whiteList, blackList and deviceEntityBlackList).
+
+### Changed
+
+- [package]: Updated dependencies.
+- [package]: Bumped package to automator v.3.0.6.
+- [package]: Bumped node-ansi-logger to v.3.2.0.
+- [vite]: Added cache under .cache/vite.
+- [workflow]: Migrated to trusted publishing / OIDC. Since you can authorize only one workflow with OIDC, publish.yml now does both the publishing with tag latest (on release) and with tag dev (on schedule or manual trigger).
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+## [1.0.4] - 2026-02-04
+
+### Breaking changes
+
+- [disabled]: All devices and entities that are disabled are discarded (https://github.com/Luligu/matterbridge-hass/issues/141).
+- [hidden]: All entities that are hidden are discarded (https://github.com/Luligu/matterbridge-hass/issues/141).
+- [filter]: The filters (filterByLabel and filterByArea) are now applied before adding the devices and entities to the select (white list and black list). You will not find anymore devices and entities that are filtered in the Devices panel. Thanks GLSSoftware (https://github.com/Luligu/matterbridge-hass/issues/167).
+
+### Added
+
+- [publish]: Migrated publish workflow to trusted publishing / OIDC.
+- [label]: Added warning message on the frontend when the label set in **filterByLabel** is not valid.
+- [label]: Added confirmation message on the frontend when the filter set in **filterByLabel** is active.
+- [area]: Added warning message on the frontend when the area set in **filterByArea** is not valid.
+- [area]: Added confirmation message on the frontend when the filter set in **filterByArea** is active.
+- [filter]: Added confirmation message on the frontend with the total number of devices and entities discarded by filters (filterByArea and filterByLabel).
+
+### Changed
+
+- [package]: Updated dependencies.
+- [package]: Bumped package to automator v.3.0.4.
+- [workflows]: Migrated to node 24.x.
+
+### Fixed
+
+- [ligthning]: Fixed on commands received while the light is off => turn on the light with attributes. Thanks S1146468 and nixpare (https://github.com/Luligu/matterbridge-hass/issues/162).
+- [converter]: Fixed conversion of colorXY HA => Matter. Thanks S1146468 and nixpare (https://github.com/Luligu/matterbridge-hass/issues/162).
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+## [1.0.3] - 2026-01-23
+
+### Breaking changes for Apple Home users
+
+- [rvc]: I want to thanks skanzoa85 that discovered another bug in the rvc implementation on the Apple Home app (https://github.com/Luligu/matterbridge-hass/issues/118). In addition to the other well known bugs, the rvc must be a single device, it cannot have any other device types like switch or whatever. So if your integration adds any other device types, blacklist them.
+
+### Added
+
+- [config]: Improved description in applyFiltersToDeviceEntities and splitEntities.
+- [readme]: Improved explanation in splitEntities.
+- [log]: Changed level to info when devices and entities are skipped for filters.
+- [subscribe]: Removed matter.js deprecated check of context.offline in favor of context.fabric.
+- [pressure]: Added psi to hPa conversion.
+
+### Changed
+
+- [package]: Updated dependencies.
+- [package]: Updated package to automator v. 3.0.1.
+- [package]: Refactored Dev Container to use Matterbridge mDNS reflector.
+
+### Fixed
+
+- [mireds]: Fixed the call service turn_on with color_temp_kelvin when the light is off (Adaptive Lighting). Thanks serlinGi and CadillacCab for https://github.com/Luligu/matterbridge-hass/issues/146.
+- [mireds]: Fixed the call service set_temperature when the thermostat is in heat_cool mode. Thanks Eric Qian and DarkSuperT for https://github.com/Luligu/matterbridge-hass/issues/134.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+## [1.0.2] - 2026-01-20
+
+### Added
+
+- [matter]: Conformance to Matter 1.4.2 and matterbridge 3.5.x.
+- [mutableDevice]: Updated MutableDevice to v. 1.3.2.
+- [smokeCoAlarm]: Conformance to Matter 1.4.2.
+- [rvc]: Conformance to Matter 1.4.2.
+- [thermostat]: Conformance to Matter 1.4.2.
+
+### Changed
+
+- [package]: Updated dependencies.
+- [package]: Updated package to automator v. 3.0.0.
+- [package]: Refactored Dev Container to use Matterbridge mDNS reflector.
+- [package]: Requires Matterbridge v.3.5.0.
+
+### Fixed
+
+- [mutableDevice]: Fixed parsing number of matterbridge dev version.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+## [1.0.1] - 2025-12-12
+
+### Added
+
+- [homeAssistant]: Added timeout to Home Assistant core state check.
+- [homeAssistant]: Add types for HassUnitSystem.
+- [climate]: Added configuration when climate has heat and cool but no heat_cool.
+- [climate]: Added `auto` conversion to domain climate (beta). Thanks schkodi (https://github.com/Luligu/matterbridge-hass/issues/124).
+
+### Changed
+
+- [package]: Updated dependencies.
+- [config]: Changed default rejectUnauthorized to false. Unless needed leave it to false.
+- [platform]: Use ws api to check if HomeAssistant is running (startup is finished) before fetching the data. The rest api has been removed.
+
+### Fixed
+
+- [climate]: Fixed thermostat configuration when unit system is UnitOfTemperature.FAHRENHEIT. Thanks Badgersi (https://github.com/Luligu/matterbridge-hass/issues/125).
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+## [1.0.0] - 2025-12-05
+
+### Breaking changes
+
+Since the domain [event](https://github.com/Luligu/matterbridge-hass?tab=readme-ov-file#supported-events) is now supported, please check your filters and/or whiteList.
+
+### Race condition
+
+We have a race condition when, after a blackout or with docker compose or with other systems that start more then one process, Matterbridge starts before other required system or network components.
+
+Race condition can cause missing configuration or missed devices on the controller side.
+
+Added a fail safe check for Home Assistant core state RUNNING. The plugin and so the bridge will not start before the Home Assistant core is RUNNING (fully started).
+
+The plugin will fetch all data only after the Home Assistant core is fully started.
+
+### Added
+
+- [platform]: Added domain [event](https://github.com/Luligu/matterbridge-hass?tab=readme-ov-file#supported-events).
+- [platform]: Added rest api to check if HomeAssistant is running (startup is finished) before fetching the data. This avoid to start the plugin with incomplete data.
+- [platform]: Added platform memory cleanup before throwing error for host and token missed.
+- [platform]: Added snackbar message on the frontend when Home Assistant disconnect and reconnect.
+- [platform]: Added restart required when Home Assistant reconnect. If the configuration changed you need to restart the plugin.
+- [homeAssistant]: Added HomeAssistantLightColorMode enum, DEFAULT_MIN_KELVIN and DEFAULT_MAX_KELVIN.
+- [homeAssistant]: Added HassStateEventAttributes type.
+- [homeAssistant]: Added Home Assistant core state check.
+- [converters]: Added hassDomainEventConverter.
+- [converters]: Use HomeAssistantLightColorMode enum.
+
+### Changed
+
+- [package]: Updated dependencies.
+- [package]: Updated to the current Matterbridge signatures.
+- [package]: Requires Matterbridge v.3.4.0.
+- [package]: Updated tests to use the Matterbridge Jest module.
+- [package]: Bumped package to automator v.2.1.0.
+- [platform]: Changed savePayload() to async.
+- [converters]: Bumped `Converters` to v.1.2.0.
+- [homeAssistant]: Bumped `HomeAssistant` to v.1.2.0.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+## [0.5.1] - 2025-11-14
+
+### Added
+
+- [homeassistant]: The logger level of the HomeAssistant class follows the one from the plugin.
+
+### Changed
+
+- [package]: Updated dependencies.
+- [package]: Bumped package to automator v.2.0.12.
+- [package]: Updated to the current Matterbridge signatures.
+- [jest]: Updated jestHelpers to v.1.0.12.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+## [0.5.0] - 2025-10-31
+
+### Added
+
+- [config]: Added sanity check for old configs. The user should open the config and save it each major or minor upgrade.
+- [light]: Added conversion from mireds to kelvin. Home Assistant will remove mireds in 2026 but the color temperature in matter is in mireds. This may generate a not perfect conversion.
+
+### Changed
+
+- [platform]: Bumped platform to v.1.6.0.
+- [config]: Update default config.
+- [schema]: Clarified applyFiltersToDeviceEntities use.
+- [package]: Bumped package to automator v.2.0.10.
+- [jest]: Updated jestHelpers to v.1.0.10.
+- [workflows]: Use shallow clones for faster builds.
+- [fan]: Changed turn_on with percentage 0 to turn_off. Thanks Hoppel (https://github.com/Luligu/matterbridge-hass/issues/109).
+
+### Fixed
+
+- [fan]: Fixed wrong detection of direction and oscillating attributes. Thanks Hoppel (https://github.com/Luligu/matterbridge-hass/issues/110).
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+## [0.4.3] - 2025-10-16
+
+### Added
+
+- [package]: Requires matterbridge v. 3.3.0.
+- [package]: Update to matterbridge v. 3.3.0 new platform signature.
+
+### Changed
+
+- [package]: Bumped package to automator version 2.0.7
+- [workflows]: Ignore any .md in build.yaml.
+- [workflows]: Ignore any .md in codeql.yaml.
+- [workflows]: Ignore any .md in codecov.yaml.
+- [template]: Updated bug_report.md.
+- [jest]: Updated jestHelpers to v. 1.0.7.
+- [workflows]: Improved speed on Node CI.
+- [devcontainer]: Added the plugin name to the container.
+- [devcontainer]: Improved performance of first build with shallow clone.
+- [package]: Updated dependencies.
+- [cover]: When goToLiftPercentage is called with 0, we call the open service and when called with 10000 we call the close service. (https://github.com/Luligu/matterbridge-hass/pull/106)
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+## [0.4.2] - 2025-09-09
+
+### Breaking changes
+
+Added support for **Apple Home Adaptive Lighting**. See https://github.com/Luligu/matterbridge/discussions/390. Now the lights don't turn on when the controller sends a command to be executed when the light is off (In Home Assistant, changing brightness or color (all modes) without affecting the on/off state of a light is not possible.).
+
+See also the breaking changes of the releases 0.4.0 and 0.3.0 please.
+
+### Added
+
+- [adaptiveLighting]: Added support for **Apple Home Adaptive Lighting**. Also fix https://github.com/Luligu/matterbridge-hass/issues/91.
+- [transition]: Added support for **transitionTime** in command handler.
+- [converters]: Added convertMatterXYToHA and convertHAXYToMatter converters.
+
+### Changed
+
+- [package]: Updated dependencies.
+- [package]: Automator: update package v. 2.0.6.
+- [jest]: Updated jest helper module to v. 1.0.5.
+- [workflows]: Ignore any .md anywhere.
+
+### Fixed
+
+- [update]: The attributes update is skipped when state is off only for the domains light and fan (https://github.com/Luligu/matterbridge-hass/issues/93).
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+## [0.4.1] - 2025-09-06
+
+### Breaking changes
+
+See the breaking changes of the releases 0.4.0 and 0.3.0 please.
+
+### Added
+
+- [battery]: Added support for battery type individual and split entities (battery low, battery level and battery voltage).
+- [select]: Added select to splitEntities. It is possibile to pick up from the list of entities.
+- [readme]: Improved the readme.
+- [jest]: Added an helper to make all tests standard and more efficient.
+- [platform]: Typed HomeAssistantPlatformConfig.
+
+### Changed
+
+- [package]: Updated dependencies.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+## [0.4.0] - 2025-09-02
+
+### Breaking changes
+
+**The 'remap' has been activated for the device entities too. This will cause the resulting Matter devices to be differently composed, so the controller can have issues to show the changed devices.**
+
+Since in Matter there is no official way to change an existing endpoint (only Matter 1.4.2 introduces it),
+
+**if the controller has issues to show the new device composition, try to power it off, wait 5 minutes, then power it again.**
+
+On the Matterbridge log you should see after a while this line.
+
+[22:35:38.583] [ServerSubscription] Sending update failed 3 times in a row, canceling subscription 3926576955 and let controller subscribe again.
+
+When you see this message in the log, you can power again the controller (or maybe just wait the 5 minutes).
+
+**If this still doesn't solve the issue, you may need to reset all the registered devices (from the frontend) or repair the bridge.**
+
+See also the breaking changes of the release 0.3.0 please.
+
+### Added
+
+- [MutableDevice]: Bumped MutableDevice to v. 1.3.1.
+- [MutableDevice]: Optimize memory with destroy().
+- [Platform]: Optimize memory calling destroy() on MutableDevice.
+- [MutableDevice]: Added automatic 'remap' ability in MutableDevice for devicee entities: this remaps the not overlapping child endpoints to the device main endpoint.
+- [config]: Added splitEntities. The device entities in the list will be exposed like an independent device and removed from their device.
+- [platform]: Bumped HomeAssistantPlatform to v. 1.5.0.
+
+### Changed
+
+- [package]: Updated dependencies.
+
+### Fixed
+
+- [vacuum]: Fix bug causing the plugin not to load when the vaccum is a device entitiy and has no battery and enableServerRvc is enabled (https://github.com/Luligu/matterbridge-hass/issues/88).
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+## [0.3.0] - 2025-08-28
+
+### Breaking changes
+
+With this release, all supported domains are available also in the single entities. This will bring in a lot of new Matter devices. I suggest to check carefully the whiteList and the blackList and also the log for duplicated names.
+
+The vacuum domain have been added. When pairing to Apple Home always enable enableServerRvc in the config (default to true).
+
+### Added
+
+- [fan]: Added rock direction attributes to fan domain. Creates a complete fan with feature Rocking, AirflowDirection.
+- [MutableDevice]: Added automatic 'remap' ability in MutableDevice for single entities: this remaps the not overlapping child endpoints to the device main endpoint.
+- [SingleEntities]: Added support in single entities for the domains supported in the device entities.
+- [HomeAssistant]: Bumped HomeAssistant to v. 1.1.2.
+- [MutableDevice]: Bumped MutableDevice to v. 1.3.0.
+- [converters]: Bumped converters to v. 1.1.2.
+- [binary_sensor]: Added addBinarySensorEntity function to handle binary_sensor domain in single entities and device entities.
+- [sensor]: Added addSensorEntity function to handle sensor domain in single entities and device entities.
+- [control]: Added addControlEntity function to handle all core domains in single entities and device entities.
+- [valve]: Added valve domain.
+- [platform]: Bumped HomeAssistantPlatform to v. 1.3.0.
+- [configure]: Optimized configure loop.
+- [update]: Optimized updateHandler.
+- [vacuum]: Added vacuum domain.
+- [config]: Added enableServerRvc to the config for the Apple Home issue with the rvc.
+
+### Changed
+
+- [package]: Updated dependencies.
+- [package]: Requires matterbridge v. 3.2.4.
+- [package]: Automator: update package v. 2.0.4.
+- [package]: Updated to Automator v. 2.0.5.
+- [devContainer]: Updated devContainer with repository name for the container and shallow clone matterbridge for speed and memory optimization.
+
+### Fixed
+
+- [domain]: Unsupported domain entities are no more in the select. Thanks David Spivey.
+- [battery]: Fix battery voltage conversion.
+- [domain]: Fix wrong pickup for carbon_monoxide.
+- [remap]: Add edge cases to remap.
+- [climate]: Fix auto -> heat_cool.
+- [fan]: Fix subscribe for fan complete.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+## [0.2.1] - 2025-07-26
+
+### Breaking changes
+
+- [helpers]: All single entities are no more composed devices. This helps the controllers that have issues with composed devices (i.e. Alexa).
+
+### Added
+
+- [airquality]: Refactor the airQuality converter to allow conversion from numbers in the range 0-500 and strings like 'good', 'fair' etc.
+
+### Changed
+
+- [package]: Updated dependencies.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+## [0.2.0] - 2025-07-14
+
+### Breaking changes
+
+- [helpers]: All single entities are no more composed devices. This helps the controllers that have issues with composed devices (i.e. Alexa).
+
+### Added
+
+- [platform]: Added the ability to merge HA entities in a single Matter device.
+- [temperature]: Added conversion from Fahrenheit to Celsius on single entity state for domain climate.
+- [pressure]: Added conversion from kPa and inHg to hPa.
+- [sensor]: Added domain sensor with deviceClass 'voltage' unit 'mV'. It sets the battery voltage of the Power Source cluster.
+- [sensor]: Added domain sensor with deviceClass 'voltage' unit 'V'. It sets the voltage of the Electrical Sensor cluster.
+- [sensor]: Added domain sensor with deviceClass 'current' unit 'A'. It sets the activeCurrent of the Electrical Sensor cluster.
+- [sensor]: Added domain sensor with deviceClass 'power' unit 'W'. It sets the activePower of the Electrical Sensor cluster.
+- [sensor]: Added domain sensor with deviceClass 'energy' unit 'kWh'. It sets the energy of the Electrical Sensor cluster.
+- [sensor]: Added domain sensor with deviceClass 'aqi' for the Air Quality clusters.
+- [sensor]: Added domain sensor with deviceClass 'volatile_organic_compounds' for the Air Quality clusters.
+- [sensor]: Added domain sensor with deviceClass 'carbon_dioxide' for the Air Quality clusters.
+- [sensor]: Added domain sensor with deviceClass 'carbon_monoxide' for the Air Quality clusters.
+- [sensor]: Added domain sensor with deviceClass 'nitrogen_dioxide' for the Air Quality clusters.
+- [sensor]: Added domain sensor with deviceClass 'ozone' for the Air Quality clusters.
+- [sensor]: Added domain sensor with deviceClass 'formaldehyde' for the Air Quality clusters.
+- [sensor]: Added domain sensor with deviceClass 'radon' for the Air Quality clusters.
+- [sensor]: Added domain sensor with deviceClass 'pm1' for the Air Quality clusters.
+- [sensor]: Added domain sensor with deviceClass 'pm25' for the Air Quality clusters.
+- [sensor]: Added domain sensor with deviceClass 'pm10' for the Air Quality clusters.
+- [airquality]: Added airQualityRegex to the config to match not standard air quality sensors entities (e.g., '^sensor\..\*\_air_quality$'). See the README.md.
+
+### Changed
+
+- [package]: Updated dependencies.
+- [storage]: Bumped `MutableDevice` to 1.2.3.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+## [0.1.5] - 2025-07-07
+
+### Added
+
+- [converters]: Added endpoint to sensor and binary_sensor converters to merge HA entities.
+- [platform]: Add subscribeHandler.
+- [platform]: Refactor commandHandler with new Matterbridge API.
+- [temperature]: Added conversion from Fahrenheit to Celsius on single entity state for domain sensor and device class temperature.
+
+### Changed
+
+- [PowerSource]: Moved PowerSource cluster to the main endpoint.
+- [package]: Updated dependencies.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+## [0.1.4] - 2025-06-28
+
+### Added
+
+- [homeassistant]: Added HassLabel.
+- [homeassistant]: Added core_config_updated message handler to fetch the new config.
+- [homeassistant]: Add queue for fetching updates.
+- [config]: Added applyFiltersToDeviceEntities option to schema.
+- [config]: Improved filtering logic for label. Now is possible to use the label id or the label name in the label filter.
+- [DevContainer]: Added support for the [**Matterbridge Plugin Dev Container**](https://github.com/Luligu/matterbridge/blob/dev/README-DEV.md#matterbridge-plugin-dev-container) with optimized named volumes for `matterbridge` and `node_modules`.
+- [GitHub]: Added GitHub issue templates for bug reports and feature requests.
+- [ESLint]: Refactored the flat config.
+- [ESLint]: Added the plugins `eslint-plugin-promise`, `eslint-plugin-jsdoc`, and `@vitest/eslint-plugin`.
+- [Jest]: Refactored the flat config.
+- [Vitest]: Added Vitest for TypeScript project testing. It will replace Jest, which does not work correctly with ESM module mocks.
+- [JSDoc]: Added missing JSDoc comments, including `@param` and `@returns` tags.
+- [CodeQL]: Added CodeQL badge in the readme.
+- [Codecov]: Added Codecov badge in the readme.
+
+### Changed
+
+- [package]: Updated package to Automator v. 2.0.1.
+- [package]: Update dependencies.
+- [storage]: Bumped `node-storage-manager` to 2.0.0.
+- [logger]: Bumped `node-ansi-logger` to 3.1.1.
+- [package]: Requires matterbridge 3.1.0.
+- [worflows]: Removed workflows running on node 18 since it reached the end-of-life in April 2025.
+
+### Fixed
+
+- [state]: Fix state update when both old and new state are unavailable.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+## [0.1.3] - 2025-06-13
+
+### Added
+
+- [binary_sensor]: Added domain binary_sensor with deviceClass 'presence'. It creates an occupancySensor with OccupancySensing cluster.
+- [binary_sensor]: Added domain binary_sensor with deviceClass 'carbon_monoxide'. It creates a smokeCoAlarm with SmokeCoAlarm cluster and feature CoAlarm.
+- [sensor]: Added domain sensor with deviceClass 'atmospheric_pressure'. It creates a pressureSensor with PressureMeasurement cluster.
+- [sensor]: Added domain sensor with deviceClass 'battery'. It creates a powerSource with PowerSource cluster.
+- [binary_sensor]: Added domain sensor with deviceClass 'battery'. It creates a powerSource with PowerSource cluster.
+
+### Changed
+
+- [package]: Update package.
+- [package]: Update dependencies.
+
+### Fixed
+
+- [select]: Fixed ghost devices in the Device Home page.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+## [0.1.2] - 2025-06-07
+
+### Added
+
+- [homeassistant]: Typed HassWebSocketResponses and HassWebSocketRequests.
+- [homeassistant]: Added subscribe() and Jest test.
+- [homeassistant]: Added unsubscribe() and Jest test.
+- [binary_sensor]: Added domain binary_sensor with deviceClass 'garage_door'. It creates a contactSensor with BooleanState cluster.
+- [binary_sensor]: Added domain binary_sensor with deviceClass 'window'. It creates a contactSensor with BooleanState cluster.
+- [jest]: Added real Jest test to test the HomeAssistant api with a real Home Assistant setup.
+
+### Changed
+
+- [config]: Enhanced reconnect config description and set minimum value to 30 secs for reconnectTimeout.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+## [0.1.1] - 2025-06-04
+
+### Added
+
+- [binary_sensor]: Added domain binary_sensor with deviceClass 'smoke'. It creates a smokeCoAlarm with SmokeCoAlarm cluster and feature SmokeAlarm.
+
+### Changed
+
+- [readme]: Updated readme for clarity.
+- [package]: Update package.
+- [package]: Update dependencies.
+
+### Fixed
+
+- [reconnect]: Added missed call to fetchData and subscribe on reconnect.
+- [startup]: Added the value from state for BooleanState cluster to avoid controller alarms.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+## [0.1.0] - 2025-06-02
+
+### Added
+
+- [npm]: The dev of matterbridge-hass is published with tag **dev** on **npm** each day at 00:00 UTC if there is a new commit.
+- [input_button]: Added domain input_button for individual entities.
+- [switch]: Added domain switch for template individual entities.
+- [binary_sensor]: Added domain binary_sensor with deviceClass 'door'. It creates a contactSensor with BooleanState cluster.
+- [binary_sensor]: Added domain binary_sensor with deviceClass 'vibration'. It creates a contactSensor with BooleanState cluster.
+- [binary_sensor]: Added domain binary_sensor with deviceClass 'motion'. It creates an occupancySensor with OccupancySensing cluster.
+- [binary_sensor]: Added domain binary_sensor with deviceClass 'occupancy'. It creates an occupancySensor with OccupancySensing cluster.
+- [binary_sensor]: Added domain binary_sensor with deviceClass 'cold'. It creates a waterFreezeDetector with BooleanState cluster.
+- [binary_sensor]: Added domain binary_sensor with deviceClass 'moisture'. It creates a waterLeakDetector with BooleanState cluster.
+- [online]: Added online / offline setting based on unavailable state.
+- [filterByArea]: Added filter of individual entities and devices by Area.
+- [filterByLabel]: Added filter of individual entities and devices by Label.
+- [HomeAssistant]: Bump HomeAssistant class to v. 1.0.2. Fully async and promise based.
+
+### Changed
+
+- [update]: Skip attributes update when state is off. Provisional!
+- [config]: Removed individualEntityWhiteList and individualEntityBlackList. Use the normal white and black lists.
+- [config]: Changed serialPostfix to postfix.
+
+### Fixed
+
+- [colorControl]: Fixed possibly missed attributes in the cluster creation (#39).
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+## [0.0.11] - 2025-05-29
+
+### Added
+
+- [homeassistant]: Updated interfaces for Entities and States.
+- [homeassistant]: Updated Jest tests.
+- [areas]: Added HassArea interface and fetch areas.
+- [reconnectRetries]: Added reconnectRetries in the config.
+- [ssl]: Added the possibility to use ssl WebSocket connection to Home Assistant (i.e. wss://homeassistant:8123).
+- [ssl]: Added certificatePath to the config: enter the fully qualified path to the SSL ca certificate file. This is only needed if you use a self-signed certificate and rejectUnauthorized is enabled.
+- [ssl]: Added rejectUnauthorized to the config: it ignores SSL certificate validation errors if enabled. It allows to connect to Home Assistant with self-signed certificates.
+
+### Changed
+
+- [package]: Update package.
+- [package]: Update dependencies.
+- [package]: Requires matterbridge 3.0.4.
+- [platform]: Changed the timeout of the first connection to 30 seconds.
+
+### Fixed
+
+- [reconnect]: Fixed reconnection loop. Now when Home Assistant reboots, the connection is reeastablished correctly if reconnectTimeout and/or reconnectRetries are enabled.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+## [0.0.10] - 2025-04-04
+
+### Added
+
+- [select]: Added calls to select API.
+
+### Changed
+
+- [package]: Update package.
+- [package]: Update dependencies.
+- [package]: Requires matterbridge 2.2.6.
+
+### Fixed
+
+- [device]: Fixed case where current_temperature is not available on thermostats.
+- [device]: Fixed case with device name empty.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+## [0.0.9] - 2025-02-07
+
+### Added
+
+- [hass]: Added support for helpers with domain input_boolean.
+- [plugin]: Added check for duplicated device and individual entity names.
+
+### Changed
+
+- [package]: Updated dependencies.
+- [package]: Requires matterbridge 2.1.4.
+
+### Fixed
+
+- [cover]: Fixed state closed on domain cover.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+## [0.0.8] - 2025-02-02
+
+### Added
+
+- [config]: Added uniqueItems flag to the lists.
+- [readme]: Clarified in the README the difference between single entities and device entities.
+
+### Changed
+
+- [package]: Update package.
+- [package]: Update dependencies.
+- [package]: Requires matterbridge 2.1.0.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+## [0.0.7] - 2025-01-08
+
+### Added
+
+- [selectDevice]: Added selectDevice to get the device names from a list in the config editor.
+- [selectDevice]: Added selectEntity to get the entity names from a list in the config editor (requires matterbridge >= 1.7.2).
+- [config]: Added the possibility to validate individual entity in the white and black list by entity_id.
+- [config]: Added the possibility to postfix also the Matter device name to avoid collision with other instances.
+- [package]: Requires matterbridge 1.7.1.
+
+### Changed
+
+- [package]: Update dependencies.
+
+### Fixed
+
+- [config]: Fix the Matter serial number postfix.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+## [0.0.6] - 2024-12-24
+
+### Added
+
+- [entity]: Added individual entity of domain automation, scene and script.
+- [config]: Added individual entity white and black list.
+
+### Changed
+
+- [package]: Update package.
+- [package]: Update dependencies.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+## [0.0.5] - 2024-12-16
+
+### Added
+
+- [package]: Verified to work with Matterbridege edge.
+- [package]: Jest coverage 91%.
+- [homeassistant]: Added Jest test.
+
+### Changed
+
+- [package]: Requires Matterbridege 1.6.6.
+- [package]: Update dependencies.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+## [0.0.4] - 2024-12-12
+
+### Added
+
+- [homeassistant]: Add the possibility to white and black list a device with its name or its device id.
+- [homeassistant]: Add the possibility to black list one or more device entities with their entity id globally or on a device base.
+- [homeassistant]: Add sensor domain with temperature, humidity, pressure and illuminance.
+
+### Changed
+
+- [package]: Requires Matterbridege 1.6.6.
+- [package]: Update dependencies.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+## [0.0.3] - 2024-12-07
+
+### Added
+
+- [climate]: Add state heat_cool and attributes target_temp_low target_temp_high to domain climate.
+
+### Changed
+
+- [homeassistant]: Changed to debug the log of processing event.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+## [0.0.2] - 2024-12-06
+
+### Added
+
+- [climate]: Add domain climate.
+
+### Changed
+
+- [fan]: Update domain fan.
+- [command]: Jest on hassCommandConverter.
+- [command]: Refactor hassCommandConverter.
+- [homeassistant]: Refactor HomeAssistant.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+## [0.0.1-dev.6] - 2024-12-05
+
+### Added
+
+- [homeassistant]: Add event processing for device_registry_updated and entity_registry_updated.
+- [homeassistant]: Refactor validateDeviceWhiteBlackList and added validateEntityBlackList.
+- [homeassistant]: Add reconnectTimeout configuration.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+## [0.0.1-dev.5] - 2024-12-05
+
+### Added
+
+- [homeassistant]: Add cover domain to supported devices.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+## [0.0.1-dev.4] - 2024-12-04
+
+### Changed
+
+- [homeassistant]: Change reconnect timeout to 60 seconds.
+- [homeassistant]: Add callServiceAsync and reconnect timeout.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+## [0.0.1-dev.2] - 2024-12-03
+
+First published release.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
+<!-- Commented out section
+## [1.1.2] - 2024-03-08
+
+### Added
+
+- [Feature 1]: Description of the feature.
+- [Feature 2]: Description of the feature.
+
+### Changed
+
+- [Feature 3]: Description of the change.
+- [Feature 4]: Description of the change.
+
+### Deprecated
+
+- [Feature 5]: Description of the deprecation.
+
+### Removed
+
+- [Feature 6]: Description of the removal.
+
+### Fixed
+
+- [Bug 1]: Description of the bug fix.
+- [Bug 2]: Description of the bug fix.
+
+### Security
+
+- [Security 1]: Description of the security improvement.
+-->
