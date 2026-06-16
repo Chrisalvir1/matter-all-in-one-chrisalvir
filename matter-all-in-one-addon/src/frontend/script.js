@@ -64,7 +64,8 @@ const HK_TYPES = {
     { id: 'onOffPlugInUnit',         name: '🌀 Ventilador Simple',            desc: 'Ventilador como enchufe On/Off. Para ventiladores sin control de velocidad.' },
   ],
   vacuum: [
-    { id: 'onOffPlugInUnit',         name: '🤖 Aspiradora Robot (básico)',    desc: 'Exponer la aspiradora como enchufe On/Off para control de inicio/pausa simple.' },
+    { id: 'roboticVacuumCleaner',    name: '🤖 Aspiradora Robot (Matter RVC)', desc: 'Robotic Vacuum Cleaner (Matter 1.4 · device type 0x0074). Apple Home reconoce start/pause/stop/return-to-base y nivel de batería. Compatible con Tuya, Smart Life, Roborock, iRobot, Dreame.' },
+    { id: 'onOffPlugInUnit',         name: '🔌 Aspiradora (On/Off básico)',    desc: 'Fallback: expone la aspiradora como enchufe On/Off simple. Usar solo si RVC no funciona con tu modelo.' },
   ],
   media_player: [
     { id: 'onOffPlugInUnit',         name: '📺 Media Player (On/Off)',        desc: 'Exponer el reproductor multimedia como enchufe inteligente para control de energía.' },

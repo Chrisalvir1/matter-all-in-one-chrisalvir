@@ -69,6 +69,19 @@ export const MatterDeviceTypes = {
     deviceClass: 'Simple',
     category: 'Utility',
   } as any as DeviceTypeDefinition,
+
+  /**
+   * Matter 1.4 Robotic Vacuum Cleaner (RVC) — device type 0x0074
+   * Apple Home recognises this natively since iOS 18.4.
+   * Works with Tuya, Smart Life, Roborock, iRobot, Dreame, etc.
+   * via Home Assistant's vacuum.* domain.
+   */
+  roboticVacuumCleaner: {
+    code: 0x0074,
+    name: 'RoboticVacuumCleaner',
+    deviceClass: 'Simple',
+    category: 'Appliance',
+  } as any as DeviceTypeDefinition,
 };
 
 export interface DeviceMapping {
@@ -136,6 +149,10 @@ export function getDeviceTypeForEntity(domain: string, deviceClass?: string): De
     if (deviceClass === 'monetary') {
       return MatterDeviceTypes.energyTariff;
     }
+  }
+
+  if (domain === 'vacuum') {
+    return MatterDeviceTypes.roboticVacuumCleaner;
   }
 
   // Fallback to simple on/off plug

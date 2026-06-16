@@ -11,3 +11,4 @@ export * from './fan.converter.js';
 export * from './camera.converter.js';
 export * from './soil_sensor.converter.js';
 export * from './energy_tariff.converter.js';
+export * from './vacuum.converter.js';

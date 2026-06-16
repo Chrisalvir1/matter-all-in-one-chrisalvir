@@ -19,6 +19,7 @@ import { BaseEntity } from './entities/base.entity.js';
 import { ClosureEntity } from './entities/closure.entity.js';
 import { CameraEntity } from './entities/camera.entity.js';
 import { SoilEntity } from './entities/soil.entity.js';
+import { VacuumEntity } from './entities/vacuum.entity.js';
 
 
 export interface HomeAssistantPlatformConfig extends PlatformConfig {
@@ -236,6 +237,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       entityInstance = new CameraEntity(this, state, deviceType);
     } else if (domain === 'sensor' && deviceClass === 'moisture') {
       entityInstance = new SoilEntity(this, state, deviceType);
+    } else if (domain === 'vacuum') {
+      entityInstance = new VacuumEntity(this, state, deviceType);
     } else {
       // General base fallback or standard converters will wrap this
       entityInstance = new BaseEntity(this, state, deviceType);
