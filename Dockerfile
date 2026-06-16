@@ -1,20 +1,27 @@
-ARG BUILD_FROM=alpine:latest
-FROM $BUILD_FROM
+FROM node:22-alpine
 
-# Install nodejs, npm, git and jq
-RUN apk add --no-cache nodejs npm git jq
+# Install git and jq
+RUN apk add --no-cache git jq
 
 WORKDIR /app
 
-# Copy the plugin files
-COPY . .
+# Copy package files first to leverage Docker cache
+COPY package*.json tsconfig*.json ./
 
-# Build the plugin
+# Install dependencies (including typescript for compilation)
 RUN npm install --no-fund --no-audit
+
+# Copy the rest of the application source
+COPY src/ ./src/
+
+# Build/compile the typescript code
 RUN npm run build
 
-# Install matterbridge globally
+# Install matterbridge globally (peer dependency runtime)
 RUN npm install -g matterbridge --no-fund --no-audit
+
+# Register the plugin globally in matterbridge
+RUN matterbridge -add /app || true
 
 # Copy run script
 COPY run.sh /run.sh
