@@ -57,6 +57,7 @@ export class BaseEntity {
       mode: undefined,
     });
 
+    const [domain] = this.entityId.split('.');
     this.endpoint.createDefaultBridgedDeviceBasicInformationClusterServer(
       name.substring(0, 32),
       this.entityId.replace('.', '_').substring(0, 32),
