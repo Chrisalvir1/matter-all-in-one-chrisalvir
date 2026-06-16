@@ -32,11 +32,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
-          cache: 'npm'
-          cache-dependency-path: './matter-all-in-one-addon/package-lock.json'
 
       - name: Install dependencies
-        run: npm ci --no-fund --no-audit
+        run: npm install --no-fund --no-audit
 
       - name: Build plugin
         run: npm run build
