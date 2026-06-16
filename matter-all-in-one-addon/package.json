@@ -1,6 +1,6 @@
 {
   "name": "matter-all-in-one-chrisalvir",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "description": "Matter 1.5 All-in-One bridge for Home Assistant - Full HomeKit compatibility",
   "author": "chrisalvir",
   "license": "Apache-2.0",
@@ -8,6 +8,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "devDependencies": {
+    "matterbridge": "^2.3.0",
     "typescript": "^5.8.0",
     "vitest": "^3.0.0",
     "@types/node": "^22.0.0",
@@ -30,7 +31,7 @@
   ],
   "matterbridge": {
     "name": "matter-all-in-one-chrisalvir",
-    "version": "1.0.10",
+    "version": "1.0.11",
     "author": "chrisalvir",
     "description": "Matter 1.5 All-in-One for Home Assistant"
   }

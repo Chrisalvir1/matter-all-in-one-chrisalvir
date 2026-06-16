@@ -13,6 +13,7 @@ RUN npm install --no-fund --no-audit
 COPY tsconfig*.json ./
 COPY src/ ./src/
 RUN npm run build
+RUN npm prune --production
 
 # ── Layer 3: Install matterbridge globally and register plugin ────────────────
 RUN npm install -g matterbridge --no-fund --no-audit
