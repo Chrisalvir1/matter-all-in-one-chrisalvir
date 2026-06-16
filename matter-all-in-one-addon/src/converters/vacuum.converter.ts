@@ -23,8 +23,8 @@
  * @see https://github.com/project-chip/connectedhomeip/blob/master/docs/clusters/RoboticVacuumCleaner.md
  */
 
-import type { MatterbridgeDevice, MatterbridgeEndpoint } from 'matterbridge';
-import type { HassEntity } from '../homeAssistant.js';
+import type { MatterbridgeEndpoint } from 'matterbridge';
+import type { HassState } from '../utils/ha-state.js';
 
 // ─── Matter RVC Cluster IDs ────────────────────────────────────────────────
 
@@ -182,7 +182,7 @@ export interface VacuumAttributes {
   error_code: number | null;        // error code from device
 }
 
-export function extractVacuumAttributes(entity: HassEntity): VacuumAttributes {
+export function extractVacuumAttributes(entity: HassState): VacuumAttributes {
   const a = entity.attributes ?? {};
   return {
     battery_level:
@@ -220,7 +220,7 @@ export interface VacuumMatterMeta {
  * Builds the Matter metadata record for a vacuum entity.
  * The `platform_id` attribute (set by most integrations) is used as a vendor hint.
  */
-export function buildVacuumMatterMeta(entity: HassEntity): VacuumMatterMeta {
+export function buildVacuumMatterMeta(entity: HassState): VacuumMatterMeta {
   const integrationId =
     (entity.attributes?.['integration'] as string | undefined)?.toLowerCase() ?? '';
 
@@ -249,7 +249,7 @@ export function buildVacuumMatterMeta(entity: HassEntity): VacuumMatterMeta {
  * Determines whether a HA entity should be handled by this converter.
  * Only matches `vacuum.*` domain entities.
  */
-export function isVacuumEntity(entity: HassEntity): boolean {
+export function isVacuumEntity(entity: HassState): boolean {
   return entity.entity_id.startsWith('vacuum.');
 }
 
