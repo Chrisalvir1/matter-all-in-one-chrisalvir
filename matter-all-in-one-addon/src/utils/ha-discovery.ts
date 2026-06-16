@@ -138,19 +138,26 @@ export async function discoverHassUrl(log?: (msg: string) => void): Promise<stri
   return null;
 }
 
-/**
- * Convert an HTTP/HTTPS URL to the ws:// or wss:// equivalent needed by the
- * HomeAssistant WebSocket class. Also strips the /core supervisor suffix.
- *
- * @example
- *   toWsUrl('http://192.168.1.100:8123')   // 'ws://192.168.1.100:8123'
- *   toWsUrl('https://ha.example.com')       // 'wss://ha.example.com'
- *   toWsUrl('http://supervisor/core')       // 'ws://supervisor'
- */
 export function toWsUrl(url: string): string {
-  return url
+  let parsedUrl = url
     .replace(/^\/core\/?$/, '')          // bare /core path
-    .replace(/\/core\/?$/, '')           // trailing /core
+    .replace(/\/core\/?$/, '');          // trailing /core
+
+  // If the user just typed an IP or hostname without protocol, assume http (which becomes ws)
+  if (!parsedUrl.includes('://')) {
+    parsedUrl = 'http://' + parsedUrl;
+  }
+
+  // Convert http/https to ws/wss
+  parsedUrl = parsedUrl
     .replace(/^https:\/\//, 'wss://')
     .replace(/^http:\/\//, 'ws://');
+
+  // If it's a standard ws:// connection without a port, append the default HA port 8123
+  // (We skip this for wss:// as standard HTTPS ports are 443, usually handled by proxies)
+  if (parsedUrl.startsWith('ws://') && !parsedUrl.match(/:\d+(\/.*)?$/)) {
+    parsedUrl = parsedUrl.replace(/(ws:\/\/[^/]+)/, '$1:8123');
+  }
+
+  return parsedUrl;
 }
