@@ -3,6 +3,8 @@ description: "Expose Home Assistant entities to Matter 1.5 with HomeKit compatib
 version: "1.0.0"
 slug: "matter_all_in_one_bridge"
 init: false
+ingress: true
+ingress_port: 8283
 arch:
   - amd64
   - aarch64
