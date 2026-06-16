@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.5] - 2026-06-16
+### Changed
+- Completely rebuilt UI: nueva interfaz en español con diseño Liquid Glass premium (sidebar, tarjetas de dispositivos, y fondo con orbes animados).
+- Los dispositivos se muestran como tarjetas clickeables. Al hacer clic en un dispositivo se abre un panel de detalles con:
+  - Selector de tipo HomeKit 2026 con descripción de cada categoría compatible.
+  - Código QR y código manual de vinculación del puente.
+  - Información completa de la entidad (dominio, tipo Matter, estado HA).
+- Nuevo endpoint API `/api/custom/device-override` para persistir overrides de tipo Matter por entidad.
+- Eliminadas todas las referencias a instalación de plugins (el puente ya los incorpora internamente).
+- Optimizado Dockerfile: separación de capas para mayor velocidad de actualización en Home Assistant.
+
 ## [1.0.4] - 2026-06-16
 ### Added
 - Replaced the default cockpit/dashboard with a premium, fully local, custom Spanish "Liquid Glass" (glassmorphism) Web UI on port 8283.

@@ -304,6 +304,32 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           return;
         }
 
+        if (req.method === 'POST' && pathname === '/api/custom/device-override') {
+          let body = '';
+          req.on('data', (chunk: any) => { body += chunk.toString(); });
+          await new Promise<void>((resolve) => req.on('end', resolve));
+          try {
+            const { entityId, matterType } = JSON.parse(body);
+            if (!entityId || !matterType) throw new Error('Missing fields');
+            // Persist overrides to a JSON file in /data
+            const overridesPath = '/data/device-overrides.json';
+            let overrides: Record<string, string> = {};
+            try {
+              const raw = await fs.readFile(overridesPath, 'utf8');
+              overrides = JSON.parse(raw);
+            } catch { /* first time */ }
+            overrides[entityId] = matterType;
+            await fs.writeFile(overridesPath, JSON.stringify(overrides, null, 2), 'utf8');
+            this.log.info(`[UI] Device override saved: ${entityId} → ${matterType}`);
+            res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify({ success: true }));
+          } catch (parseErr) {
+            res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify({ error: 'Invalid request body' }));
+          }
+          return;
+        }
+
         if (req.method === 'POST' && pathname === '/api/custom/factoryreset') {
           res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
           res.end(JSON.stringify({ success: true, message: 'Restableciendo de fábrica...' }));

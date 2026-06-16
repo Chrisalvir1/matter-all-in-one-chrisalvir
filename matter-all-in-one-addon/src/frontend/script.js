@@ -1,317 +1,524 @@
-// API Base URL (Relative since frontend is served on the same host & port 8283)
-const API_BASE = '/api/custom';
+/**
+ * Matter 1.5 Bridge · Liquid Glass UI · script.js
+ * Frontend logic: polling, device cards, HomeKit 2026 type modal, QR code.
+ */
 
-// State Variables
-let currentQrCode = '';
-let qrcodeInstance = null;
-let activeTab = 'bridge-tab';
+'use strict';
+
+// ── API Base ──────────────────────────────────────────────────
+const API = '/api/custom';
+
+// ── State ─────────────────────────────────────────────────────
+let bridgeQrCode = '';
+let bridgeManualCode = '';
+let qrBridgeRendered = false;
+let modalQrRendered = false;
 let devicesList = [];
-let updateInterval = null;
+let activeDevice = null;
+let pendingConfirm = null;
 
-// DOM Elements
-const tabButtons = document.querySelectorAll('.tab-btn');
-const tabContents = document.querySelectorAll('.tab-content');
-const searchInput = document.getElementById('device-search');
-const devicesTbody = document.getElementById('devices-tbody');
-const copyBtn = document.getElementById('copy-btn');
-const manualCodeText = document.getElementById('manual-code');
-const haBadge = document.getElementById('ha-badge');
-const haBadgeText = document.getElementById('ha-badge-text');
-const pulseDot = haBadge.querySelector('.pulse-dot');
+// ── HomeKit 2026 Type Map ──────────────────────────────────────
+const HK_TYPES = {
+  light: [
+    { id: 'dimmableLight',           name: '💡 Luz Regulable',              desc: 'Luz con control de On/Off y brillo (Dimmable Light). Compatible con escenas y automatizaciones.' },
+    { id: 'colorTemperatureLight',   name: '💡 Luz de Temperatura de Color', desc: 'Brillo + temperatura de color (2700K–6500K). Ideal para tiras LED blancas y bombillas CCT.' },
+    { id: 'extendedColorLight',      name: '💡 Luz RGBW Completa',          desc: 'Control total RGB + blanco cálido/frío. Máxima compatibilidad con luz de color.' },
+    { id: 'onOffLight',              name: '💡 Luz Simple On/Off',           desc: 'Solo encendido y apagado. Sin regulación de brillo. Para luces de interruptor simples.' },
+  ],
+  switch: [
+    { id: 'onOffPlugInUnit',         name: '🔌 Enchufe Inteligente',         desc: 'Exponer como enchufe enchufable On/Off. Aparece en la sección "Enchufes" de Apple Home.' },
+    { id: 'onOffLight',              name: '💡 Interruptor como Luz',        desc: 'Exponer el switch como una luz simple. Útil para interruptores de tira LED sin dimmer.' },
+  ],
+  cover: [
+    { id: 'windowCovering',          name: '🪟 Persiana / Cortina',          desc: 'Window Covering (Matter 1.5): control de posición y tilt. Compatible con persianas, estores y cortinas motorizadas.' },
+    { id: 'closure',                 name: '🚪 Cerramiento Unificado',       desc: 'Closure Unified (Matter 1.5): puertas de garaje, puertas de entrada, verjas automatizadas.' },
+  ],
+  lock: [
+    { id: 'doorLock',                name: '🔒 Cerradura de Puerta',         desc: 'Door Lock con soporte de credenciales PIN y acceso temporal. Fully compatible HomeKit 2026.' },
+  ],
+  climate: [
+    { id: 'thermostat',              name: '❄️ Termostato HVAC',             desc: 'Control de temperatura, modo calor/frío/auto y humedad. Compatible con todos los termostatos Matter.' },
+  ],
+  sensor: [
+    { id: 'temperatureSensor',       name: '🌡️ Sensor de Temperatura',      desc: 'Temperature Sensor (Matter 1.5). Reporta grados Celsius en tiempo real.' },
+    { id: 'humiditySensor',          name: '💧 Sensor de Humedad Relativa',  desc: 'Relative Humidity Sensor. Muestra porcentaje de humedad en Apple Home / Google Home.' },
+    { id: 'lightSensor',             name: '☀️ Sensor de Luminosidad',       desc: 'Light Sensor (Lux). Permite automatizaciones basadas en nivel de luz ambiente.' },
+    { id: 'pressureSensor',          name: '📊 Sensor de Presión',           desc: 'Pressure Sensor (hPa). Para estaciones meteorológicas y sensores de aire.' },
+    { id: 'flowSensor',              name: '💧 Sensor de Flujo de Agua',     desc: 'Flow Sensor. Medición de caudal de agua en sistemas de riego y fontanería.' },
+    { id: 'occupancySensor',         name: '👤 Sensor de Presencia/Ocupación', desc: 'Occupancy Sensor. Detección de presencia para automatizaciones de iluminación.' },
+  ],
+  binary_sensor: [
+    { id: 'contactSensor',           name: '🚪 Sensor de Contacto',          desc: 'Detecta apertura y cierre de puertas, ventanas y cajones. Activa automatizaciones.' },
+    { id: 'occupancySensor',         name: '👤 Sensor de Movimiento/Presencia', desc: 'Motion / Occupancy Sensor. Para detectar presencia en habitaciones y zonas.' },
+  ],
+  camera: [
+    { id: 'camera',                  name: '📹 Cámara de Red',               desc: 'Network Camera (Matter 1.5). Visualización de vídeo en tiempo real en Apple Home y Google Home.' },
+  ],
+  input_boolean: [
+    { id: 'onOffPlugInUnit',         name: '🔌 Interruptor Virtual (Enchufe)', desc: 'Exponer el input_boolean como un enchufe virtual On/Off.' },
+    { id: 'onOffLight',              name: '💡 Interruptor Virtual (Luz)',    desc: 'Exponer el input_boolean como una luz simple On/Off.' },
+  ],
+  fan: [
+    { id: 'onOffPlugInUnit',         name: '🌀 Ventilador Simple',            desc: 'Ventilador como enchufe On/Off. Para ventiladores sin control de velocidad.' },
+  ],
+  vacuum: [
+    { id: 'onOffPlugInUnit',         name: '🤖 Aspiradora Robot (básico)',    desc: 'Exponer la aspiradora como enchufe On/Off para control de inicio/pausa simple.' },
+  ],
+  media_player: [
+    { id: 'onOffPlugInUnit',         name: '📺 Media Player (On/Off)',        desc: 'Exponer el reproductor multimedia como enchufe inteligente para control de energía.' },
+  ],
+};
 
-// Status ring elements
-const statusRing = document.getElementById('status-ring');
-const statusBadge = document.getElementById('status-badge');
-const statusTitle = document.getElementById('status-title');
-const statusDesc = document.getElementById('status-desc');
+const DOMAIN_ICONS = {
+  light: '💡', switch: '🔌', cover: '🪟', lock: '🔒', climate: '❄️',
+  sensor: '🌡️', binary_sensor: '🚨', camera: '📹', fan: '🌀',
+  input_boolean: '🔘', vacuum: '🤖', media_player: '📺',
+  automation: '⚡', script: '📜', scene: '🎨',
+};
+const DEFAULT_ICON = '🔧';
 
-// System Info
-const sysOs = document.getElementById('sys-os');
-const sysNode = document.getElementById('sys-node');
-const sysUptime = document.getElementById('sys-uptime');
-const sysCpu = document.getElementById('sys-cpu');
-const sysMem = document.getElementById('sys-mem');
+function domainIcon(domain) {
+  return DOMAIN_ICONS[domain] || DEFAULT_ICON;
+}
 
-// Action buttons
-const restartBtn = document.getElementById('restart-btn');
-const factoryResetBtn = document.getElementById('factoryreset-btn');
+// ── DOM References ─────────────────────────────────────────────
+const $ = (id) => document.getElementById(id);
 
-// Modal Elements
-const modal = document.getElementById('modal-container');
-const modalTitle = document.getElementById('modal-title');
-const modalDesc = document.getElementById('modal-desc');
-const modalConfirm = document.getElementById('modal-confirm');
-const modalCancel = document.getElementById('modal-cancel');
-let pendingAction = null;
+// Sidebar nav
+const navItems = document.querySelectorAll('.nav-item');
+const tabPanels = document.querySelectorAll('.tab-panel');
 
-// Tab Navigation
-tabButtons.forEach(btn => {
+// Bridge tab
+const qrCanvas       = $('qrcode-canvas');
+const qrLoading      = $('qr-loading');
+const manualCode     = $('manual-code');
+const copyBtn        = $('copy-btn');
+const commBanner     = $('commissioned-banner');
+const statusOrb      = $('status-orb');
+const statusTitle    = $('status-title');
+const statusDesc     = $('status-desc');
+const haDot          = $('ha-dot');
+const haStatusText   = $('ha-status-text');
+const fabricCount    = $('fabric-count');
+const sysOs          = $('sys-os');
+const sysNode        = $('sys-node');
+const sysUptime      = $('sys-uptime');
+const sysCpu         = $('sys-cpu');
+const sysMem         = $('sys-mem');
+
+// Devices tab
+const deviceGrid     = $('device-grid');
+const deviceSearch   = $('device-search');
+const deviceBadge    = $('device-count-badge');
+
+// Device modal
+const deviceModal    = $('device-modal');
+const modalClose     = $('modal-close');
+const modalIcon      = $('modal-icon');
+const modalName      = $('modal-device-name');
+const modalEntityId  = $('modal-entity-id');
+const modalStatePill = $('modal-state');
+const modalDomain    = $('modal-domain');
+const modalMatterType = $('modal-matter-type');
+const modalHaState   = $('modal-ha-state');
+const hkSelect       = $('hk-type-select');
+const hkTypeInfo     = $('hk-type-info');
+const saveTypeBtn    = $('save-type-btn');
+const saveFeedback   = $('save-feedback');
+const modalQrEl      = $('modal-qrcode');
+const modalQrPh      = $('modal-qr-placeholder');
+const modalManual    = $('modal-manual-code');
+const modalCopyBtn   = $('modal-copy-btn');
+
+// Confirm modal
+const confirmModal   = $('confirm-modal');
+const confirmTitle   = $('confirm-title');
+const confirmDesc    = $('confirm-desc');
+const confirmOk      = $('confirm-ok');
+const confirmCancel  = $('confirm-cancel');
+
+// Settings
+const restartBtn     = $('restart-btn');
+const factoryBtn     = $('factoryreset-btn');
+
+// ── Tab Navigation ─────────────────────────────────────────────
+navItems.forEach(btn => {
   btn.addEventListener('click', () => {
-    const targetTab = btn.getAttribute('data-tab');
-    
-    tabButtons.forEach(b => b.classList.remove('active'));
-    tabContents.forEach(c => c.classList.remove('active'));
-    
+    const targetTab = btn.dataset.tab;
+    navItems.forEach(b => b.classList.remove('active'));
+    tabPanels.forEach(p => p.classList.remove('active'));
     btn.classList.add('active');
-    document.getElementById(targetTab).classList.add('active');
-    activeTab = targetTab;
-    
-    if (activeTab === 'devices-tab') {
-      fetchDevices();
-    }
+    const panel = document.getElementById(targetTab);
+    if (panel) panel.classList.add('active');
+    if (targetTab === 'tab-devices') fetchDevices();
   });
 });
 
-// Periodic Status Polling
+// ── QR Rendering ───────────────────────────────────────────────
+function renderQR(container, text, size = 180) {
+  container.innerHTML = '';
+  if (!text || typeof QRCode === 'undefined') return false;
+  try {
+    new QRCode(container, {
+      text,
+      width: size, height: size,
+      colorDark: '#0a0c18',
+      colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.M,
+    });
+    return true;
+  } catch(e) {
+    console.error('QR render error:', e);
+    return false;
+  }
+}
+
+// ── Status Polling ─────────────────────────────────────────────
 async function fetchStatus() {
   try {
-    const res = await fetch(`${API_BASE}/status`);
-    if (!res.ok) throw new Error('API error');
-    const data = await res.json();
-    
-    // Update Home Assistant Connection Badge
-    if (data.haStatus === 'conectado') {
-      haBadgeText.textContent = 'Home Assistant: Conectado';
-      pulseDot.classList.add('active');
+    const res = await fetch(`${API}/status`);
+    if (!res.ok) throw new Error('status error');
+    const d = await res.json();
+
+    // HA badge
+    const connected = d.haStatus === 'conectado';
+    haDot.className = 'status-dot ' + (connected ? 'connected' : 'disconnected');
+    haStatusText.textContent = connected ? 'HA Conectado' : 'HA Desconectado';
+
+    // QR
+    if (d.qrPairingCode && d.qrPairingCode !== bridgeQrCode) {
+      bridgeQrCode = d.qrPairingCode;
+      qrBridgeRendered = false;
+    }
+    bridgeManualCode = d.manualPairingCode || '';
+    manualCode.textContent = bridgeManualCode || '---- --- ----';
+
+    if (!qrBridgeRendered && bridgeQrCode) {
+      const ok = renderQR(qrCanvas, bridgeQrCode, 198);
+      if (ok) {
+        qrLoading.style.display = 'none';
+        qrCanvas.style.display = 'block';
+        qrBridgeRendered = true;
+      }
+    }
+
+    // Commissioned banner
+    if (d.commissioned) {
+      commBanner.style.display = 'flex';
     } else {
-      haBadgeText.textContent = 'Home Assistant: Desconectado';
-      pulseDot.classList.remove('active');
+      commBanner.style.display = 'none';
     }
-    
-    // Update Pairing QR Code & Manual Code
-    if (data.qrPairingCode && data.qrPairingCode !== currentQrCode) {
-      currentQrCode = data.qrPairingCode;
-      renderQRCode(data.qrPairingCode);
-    }
-    
-    if (data.manualPairingCode) {
-      manualCodeText.textContent = data.manualPairingCode;
+
+    // Fabric count
+    const fc = Array.isArray(d.pairedFabrics) ? d.pairedFabrics.length : 0;
+    fabricCount.textContent = fc;
+
+    // Status orb
+    statusOrb.className = 'status-orb ' + (d.commissioned ? 'connected' : (d.status === 'esperando' ? 'waiting' : ''));
+    statusOrb.querySelector('#status-orb-label').textContent = d.commissioned ? 'OK' : (d.status === 'esperando' ? 'Pair' : '…');
+    if (d.commissioned) {
+      statusTitle.textContent = 'Puente Vinculado';
+      statusDesc.textContent = 'El puente está emparejado y funcionando con normalidad.';
+    } else if (d.status === 'esperando') {
+      statusTitle.textContent = 'Esperando Vinculación';
+      statusDesc.textContent = 'Listo para emparejar. Escanea el código QR de la izquierda.';
     } else {
-      manualCodeText.textContent = '---- --- ----';
+      statusTitle.textContent = 'Iniciando Servicio';
+      statusDesc.textContent = 'El puente Matter se está iniciando. Por favor espera...';
     }
-    
-    // Update Bridge Status Badge & Info
-    updateStatusCard(data);
-    
-    // Update System Info
-    sysOs.textContent = data.systemInfo.os || '-';
-    sysNode.textContent = data.systemInfo.nodeVersion || '-';
-    sysUptime.textContent = data.systemInfo.uptime || '-';
-    sysCpu.textContent = data.systemInfo.cpu || '-';
-    sysMem.textContent = data.systemInfo.memory || '-';
-    
-  } catch (err) {
-    console.error('Failed to poll status:', err);
-    // Display starting/offline state
-    haBadgeText.textContent = 'Home Assistant: Sin conexión';
-    pulseDot.classList.remove('active');
+
+    // System info
+    sysOs.textContent     = d.systemInfo?.os          || 'Linux';
+    sysNode.textContent   = d.systemInfo?.nodeVersion  || '-';
+    sysUptime.textContent = d.systemInfo?.uptime       || '-';
+    sysCpu.textContent    = d.systemInfo?.cpu          || '-';
+    sysMem.textContent    = d.systemInfo?.memory       || '-';
+
+  } catch(e) {
+    haDot.className = 'status-dot disconnected';
+    haStatusText.textContent = 'Sin conexión';
   }
 }
 
-// Update Status Card UI based on state
-function updateStatusCard(data) {
-  statusRing.className = 'status-ring';
-  statusBadge.className = 'status-inner';
-  
-  if (data.status === 'vinculado' || data.commissioned) {
-    statusRing.classList.add('vinculado');
-    statusBadge.classList.add('vinculado');
-    statusBadge.textContent = 'OK';
-    statusTitle.textContent = 'Puente Vinculado';
-    statusDesc.textContent = 'El puente está emparejado y funcionando con normalidad.';
-  } else if (data.status === 'esperando') {
-    statusRing.classList.add('esperando');
-    statusBadge.classList.add('esperando');
-    statusBadge.textContent = 'Pair';
-    statusTitle.textContent = 'Esperando Vinculación';
-    statusDesc.textContent = 'Listo para emparejar. Escanea el código QR de la izquierda.';
-  } else {
-    statusBadge.textContent = 'Wait';
-    statusTitle.textContent = 'Iniciando Servicio';
-    statusDesc.textContent = 'El puente de Matter se está iniciando. Por favor, espera...';
-  }
-}
-
-// Render QR Code using QRCode.js
-function renderQRCode(qrText) {
-  const qrDisplay = document.getElementById('qrcode-display');
-  const qrPlaceholder = document.getElementById('qr-placeholder');
-  
-  qrDisplay.innerHTML = '';
-  
-  try {
-    if (qrText && typeof QRCode !== 'undefined') {
-      qrPlaceholder.style.display = 'none';
-      qrDisplay.style.display = 'block';
-      
-      new QRCode(qrDisplay, {
-        text: qrText,
-        width: 180,
-        height: 180,
-        colorDark: '#0b0f19',
-        colorLight: '#ffffff',
-        correctLevel: QRCode.CorrectLevel.M
-      });
-    } else {
-      qrPlaceholder.style.display = 'block';
-      qrDisplay.style.display = 'none';
-      qrPlaceholder.textContent = 'Esperando código...';
-    }
-  } catch (err) {
-    console.error('QR rendering error:', err);
-    qrPlaceholder.style.display = 'block';
-    qrDisplay.style.display = 'none';
-    qrPlaceholder.textContent = 'Error al generar código QR';
-  }
-}
-
-// Fetch Bridged Devices List
+// ── Devices ───────────────────────────────────────────────────
 async function fetchDevices() {
   try {
-    const res = await fetch(`${API_BASE}/devices`);
-    if (!res.ok) throw new Error('API error');
+    const res = await fetch(`${API}/devices`);
+    if (!res.ok) throw new Error('devices error');
     devicesList = await res.json();
-    renderDevices(devicesList);
-  } catch (err) {
-    console.error('Failed to fetch devices:', err);
-    devicesTbody.innerHTML = `<tr><td colspan="5" class="table-loading" style="color: var(--accent-danger)">Error al cargar la lista de dispositivos.</td></tr>`;
+    renderDeviceCards(devicesList);
+    // update badge
+    deviceBadge.textContent = devicesList.length;
+    deviceBadge.classList.toggle('show', devicesList.length > 0);
+  } catch(e) {
+    deviceGrid.innerHTML = `<div class="devices-empty"><p style="color:var(--accent-r)">Error al cargar dispositivos.</p></div>`;
   }
 }
 
-// Render Devices list to Table
-function renderDevices(devices) {
-  if (devices.length === 0) {
-    devicesTbody.innerHTML = `<tr><td colspan="5" class="table-loading">No se encontraron dispositivos enlazados. Asegúrate de que tienes entidades compatibles en Home Assistant.</td></tr>`;
+function stateClass(state) {
+  const s = (state || '').toLowerCase();
+  if (s === 'on' || s === 'home' || s === 'open' || s === 'unlocked' || s === 'playing') return 'on';
+  if (s === 'off' || s === 'away' || s === 'closed' || s === 'locked' || s === 'idle') return 'off';
+  return '';
+}
+
+function renderDeviceCards(list) {
+  if (!list || list.length === 0) {
+    deviceGrid.innerHTML = `<div class="devices-empty"><p>No se encontraron dispositivos. Asegúrate de que Home Assistant esté conectado y tenga entidades compatibles.</p></div>`;
     return;
   }
-  
-  devicesTbody.innerHTML = '';
-  devices.forEach(device => {
-    const tr = document.createElement('tr');
-    
-    // Domain icon or class mapping
-    let domainIcon = '🔌';
-    if (device.domain === 'light') domainIcon = '💡';
-    else if (device.domain === 'cover') domainIcon = '🏁';
-    else if (device.domain === 'camera') domainIcon = '📹';
-    else if (device.domain === 'sensor') domainIcon = '🌡️';
-    else if (device.domain === 'lock') domainIcon = '🔒';
-    else if (device.domain === 'fan') domainIcon = '🌀';
-    else if (device.domain === 'climate') domainIcon = '❄️';
-
-    tr.innerHTML = `
-      <td><strong>${domainIcon} ${escapeHtml(device.friendlyName)}</strong></td>
-      <td><code>${escapeHtml(device.entityId)}</code></td>
-      <td><span class="badge domain">${escapeHtml(device.matterType)}</span></td>
-      <td><span class="badge state">${escapeHtml(device.state)}</span></td>
-      <td><span class="badge status-active">${escapeHtml(device.status)}</span></td>
+  deviceGrid.innerHTML = '';
+  list.forEach(device => {
+    const card = document.createElement('button');
+    card.className = 'device-card';
+    card.setAttribute('aria-label', `Ver detalles de ${device.friendlyName}`);
+    const icon = domainIcon(device.domain);
+    const sc   = stateClass(device.state);
+    card.innerHTML = `
+      <div class="dc-icon">${icon}</div>
+      <div class="dc-name">${esc(device.friendlyName)}</div>
+      <div class="dc-entity">${esc(device.entityId)}</div>
+      <div class="dc-footer">
+        <span class="dc-state-pill ${sc}">${esc(device.state)}</span>
+        <span class="dc-type-pill">${esc(device.matterType || 'Matter')}</span>
+      </div>
+      <span class="dc-arrow">›</span>
     `;
-    devicesTbody.appendChild(tr);
+    card.addEventListener('click', () => openDeviceModal(device));
+    deviceGrid.appendChild(card);
   });
 }
 
-// Helper to escape HTML characters
-function escapeHtml(str) {
-  if (!str) return '';
-  return str.replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;")
-            .replace(/'/g, "&#039;");
-}
-
-// Search and Filter Devices
-searchInput.addEventListener('input', (e) => {
-  const query = e.target.value.toLowerCase().trim();
-  const filtered = devicesList.filter(device => 
-    device.friendlyName.toLowerCase().includes(query) ||
-    device.entityId.toLowerCase().includes(query) ||
-    device.matterType.toLowerCase().includes(query)
+// Search filter
+deviceSearch.addEventListener('input', (e) => {
+  const q = e.target.value.toLowerCase().trim();
+  if (!q) { renderDeviceCards(devicesList); return; }
+  const filtered = devicesList.filter(d =>
+    d.friendlyName.toLowerCase().includes(q) ||
+    d.entityId.toLowerCase().includes(q) ||
+    (d.matterType || '').toLowerCase().includes(q)
   );
-  renderDevices(filtered);
+  renderDeviceCards(filtered);
 });
 
-// Copy Manual Pairing Code to Clipboard
-copyBtn.addEventListener('click', () => {
-  const code = manualCodeText.textContent;
+// ── Device Detail Modal ────────────────────────────────────────
+function openDeviceModal(device) {
+  activeDevice = device;
+  modalQrRendered = false;
+
+  // Populate header
+  const icon = domainIcon(device.domain);
+  modalIcon.textContent = icon;
+  modalName.textContent = device.friendlyName;
+  modalEntityId.textContent = device.entityId;
+  const sc = stateClass(device.state);
+  modalStatePill.textContent = device.state;
+  modalStatePill.className = `modal-state-pill ${sc}`;
+
+  // Info rows
+  modalDomain.textContent    = device.domain;
+  modalMatterType.textContent = device.matterType || '-';
+  modalHaState.textContent   = device.state;
+
+  // Build HomeKit 2026 type dropdown
+  const types = HK_TYPES[device.domain] || [];
+  hkSelect.innerHTML = '';
+  if (types.length === 0) {
+    hkSelect.innerHTML = '<option value="">— Tipo no configurable para este dominio —</option>';
+    hkSelect.disabled = true;
+    saveTypeBtn.disabled = true;
+  } else {
+    hkSelect.disabled = false;
+    saveTypeBtn.disabled = false;
+    types.forEach((t, i) => {
+      const opt = document.createElement('option');
+      opt.value = t.id;
+      opt.textContent = t.name;
+      // Try to pre-select the current matter type
+      if (device.matterType && device.matterType.toLowerCase() === t.id.toLowerCase()) {
+        opt.selected = true;
+      } else if (i === 0 && !types.some(x => x.id.toLowerCase() === (device.matterType||'').toLowerCase())) {
+        opt.selected = true;
+      }
+      hkSelect.appendChild(opt);
+    });
+    updateHkTypeInfo();
+  }
+
+  // QR in modal
+  modalQrEl.innerHTML = '';
+  if (bridgeQrCode) {
+    modalQrPh.style.display = 'none';
+    modalQrEl.style.display = 'block';
+    const ok = renderQR(modalQrEl, bridgeQrCode, 168);
+    if (!ok) {
+      modalQrPh.style.display = 'flex';
+      modalQrEl.style.display = 'none';
+    } else {
+      modalQrRendered = true;
+    }
+  } else {
+    modalQrPh.style.display = 'flex';
+    modalQrEl.style.display = 'none';
+  }
+  modalManual.textContent = bridgeManualCode || '---- --- ----';
+
+  saveFeedback.textContent = '';
+  saveFeedback.className = 'save-feedback';
+
+  // Open modal
+  deviceModal.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeDeviceModal() {
+  deviceModal.classList.remove('open');
+  document.body.style.overflow = '';
+  activeDevice = null;
+}
+
+function updateHkTypeInfo() {
+  const domain = activeDevice?.domain;
+  if (!domain) return;
+  const types = HK_TYPES[domain] || [];
+  const selected = types.find(t => t.id === hkSelect.value);
+  hkTypeInfo.textContent = selected ? selected.desc : 'Selecciona un tipo para ver la descripción.';
+}
+
+hkSelect.addEventListener('change', updateHkTypeInfo);
+
+modalClose.addEventListener('click', closeDeviceModal);
+deviceModal.addEventListener('click', (e) => {
+  if (e.target === deviceModal) closeDeviceModal();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeDeviceModal();
+});
+
+// Save HomeKit type override
+saveTypeBtn.addEventListener('click', async () => {
+  if (!activeDevice) return;
+  const selectedId = hkSelect.value;
+  if (!selectedId) return;
+
+  saveTypeBtn.disabled = true;
+  saveFeedback.textContent = 'Guardando...';
+  saveFeedback.className = 'save-feedback';
+
+  try {
+    const res = await fetch(`${API}/device-override`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ entityId: activeDevice.entityId, matterType: selectedId }),
+    });
+    if (res.ok) {
+      saveFeedback.textContent = '✅ Tipo guardado. Reinicia el puente para aplicar.';
+      saveFeedback.className = 'save-feedback success';
+      // Update local list so the card reflects the override
+      const idx = devicesList.findIndex(d => d.entityId === activeDevice.entityId);
+      if (idx !== -1) devicesList[idx].matterType = selectedId;
+    } else {
+      saveFeedback.textContent = '⚠️ No se pudo guardar. Intenta reiniciar el puente.';
+      saveFeedback.className = 'save-feedback error';
+    }
+  } catch(e) {
+    saveFeedback.textContent = '❌ Error de conexión al guardar el tipo.';
+    saveFeedback.className = 'save-feedback error';
+  } finally {
+    saveTypeBtn.disabled = false;
+  }
+});
+
+// Copy bridge QR code in modal
+modalCopyBtn.addEventListener('click', () => {
+  const code = modalManual.textContent;
   if (code && code !== '---- --- ----') {
     navigator.clipboard.writeText(code).then(() => {
-      copyBtn.textContent = '✓';
-      setTimeout(() => {
-        copyBtn.textContent = '📋';
-      }, 2000);
-    }).catch(err => {
-      console.error('Failed to copy code:', err);
+      modalCopyBtn.textContent = '✓';
+      setTimeout(() => { modalCopyBtn.textContent = '📋'; }, 2000);
     });
   }
 });
 
-// Modal Confirmation Dialog Handling
-function showConfirmation(title, desc, confirmCallback) {
-  modalTitle.textContent = title;
-  modalDesc.textContent = desc;
-  modal.classList.add('active');
-  pendingAction = confirmCallback;
+// Copy in bridge tab
+copyBtn.addEventListener('click', () => {
+  const code = manualCode.textContent;
+  if (code && code !== '---- --- ----') {
+    navigator.clipboard.writeText(code).then(() => {
+      copyBtn.textContent = '✓';
+      setTimeout(() => { copyBtn.textContent = '📋'; }, 2000);
+    });
+  }
+});
+
+// ── Confirm Dialog ─────────────────────────────────────────────
+function showConfirm(title, desc, onConfirm) {
+  confirmTitle.textContent = title;
+  confirmDesc.textContent = desc;
+  confirmModal.classList.add('open');
+  pendingConfirm = onConfirm;
+}
+confirmCancel.addEventListener('click', () => {
+  confirmModal.classList.remove('open');
+  pendingConfirm = null;
+});
+confirmOk.addEventListener('click', async () => {
+  confirmModal.classList.remove('open');
+  if (pendingConfirm) {
+    await pendingConfirm();
+    pendingConfirm = null;
+  }
+});
+
+// ── Restart / Factory Reset ────────────────────────────────────
+restartBtn.addEventListener('click', () => {
+  showConfirm(
+    '¿Reiniciar el Puente?',
+    'El complemento de Home Assistant se reiniciará limpiamente. Esto tarda unos segundos.',
+    async () => {
+      try {
+        const r = await fetch(`${API}/restart`, { method: 'POST' });
+        if (r.ok) {
+          setTimeout(() => window.location.reload(), 3000);
+        }
+      } catch(e) { console.error(e); }
+    }
+  );
+});
+
+factoryBtn.addEventListener('click', () => {
+  showConfirm(
+    '¿Restablecer de Fábrica?',
+    'Se borrarán PERMANENTEMENTE todos los emparejamientos Matter actuales. Tendrás que escanear el QR de nuevo para vincular Apple Home, Google Home o Alexa.',
+    async () => {
+      try {
+        const r = await fetch(`${API}/factoryreset`, { method: 'POST' });
+        if (r.ok) {
+          setTimeout(() => window.location.reload(), 4000);
+        }
+      } catch(e) { console.error(e); }
+    }
+  );
+});
+
+// ── Utility ───────────────────────────────────────────────────
+function esc(str) {
+  if (!str) return '';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
-modalCancel.addEventListener('click', () => {
-  modal.classList.remove('active');
-  pendingAction = null;
-});
-
-modalConfirm.addEventListener('click', async () => {
-  if (pendingAction) {
-    modal.classList.remove('active');
-    await pendingAction();
-    pendingAction = null;
-  }
-});
-
-// Restart complementary action
-restartBtn.addEventListener('click', () => {
-  showConfirmation(
-    '¿Reiniciar Puente?',
-    'Se reiniciará el complemento de Home Assistant de forma limpia y se reconectará a los controladores. Esto tomará unos segundos.',
-    async () => {
-      try {
-        const res = await fetch(`${API_BASE}/restart`, { method: 'POST' });
-        if (res.ok) {
-          alert('Petición de reinicio enviada. El complemento se volverá a iniciar ahora.');
-          window.location.reload();
-        }
-      } catch (err) {
-        console.error('Restart failed:', err);
-      }
-    }
-  );
-});
-
-// Factory Reset action
-factoryResetBtn.addEventListener('click', () => {
-  showConfirmation(
-    '¿Restablecer de Fábrica?',
-    'Esto borrará de forma permanente todas las vinculaciones y emparejamientos actuales de Apple Home, Google Home o Alexa. Tendrás que volver a enlazar el puente Matter escaneando un nuevo código QR.',
-    async () => {
-      try {
-        const res = await fetch(`${API_BASE}/factoryreset`, { method: 'POST' });
-        if (res.ok) {
-          alert('Puente restablecido con éxito. El complemento se reiniciará con una configuración nueva.');
-          window.location.reload();
-        }
-      } catch (err) {
-        console.error('Factory reset failed:', err);
-      }
-    }
-  );
-});
-
-// Initialization
+// ── Init & Polling ─────────────────────────────────────────────
 fetchStatus();
-updateInterval = setInterval(fetchStatus, 5000);
+setInterval(fetchStatus, 5000);
 
-// Fetch devices periodically if active
+// Preload devices when page loads
+fetchDevices();
 setInterval(() => {
-  if (activeTab === 'devices-tab') {
-    fetchDevices();
-  }
-}, 8000);
+  const devPanel = document.getElementById('tab-devices');
+  if (devPanel && devPanel.classList.contains('active')) fetchDevices();
+}, 10000);

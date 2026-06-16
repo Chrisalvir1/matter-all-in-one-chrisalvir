@@ -3,216 +3,345 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Puente Matter 1.5 - All-in-One</title>
-  <!-- Google Fonts Outfit -->
+  <title>Matter 1.5 Bridge · All-in-One</title>
+  <meta name="description" content="Puente Matter 1.5 All-in-One para Home Assistant. Expone tus entidades a Apple Home, Google Home y Alexa sin configuración.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
-  <!-- QRCode.js Library -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" integrity="sha512-CNgIRecGo7nOMRxLOZOGRG83274EIFSLtW1ApZo14keyzESipfnq1AMRsG25yg1n5VxDM1pTJL5oTO8t6FsgtT35w==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 </head>
 <body>
-  <div class="glass-bg"></div>
-  <div class="container">
-    <!-- Header -->
-    <header class="glass-header">
-      <div class="logo-area">
-        <div class="logo-icon">✨</div>
-        <div class="logo-text">
-          <h1>Matter 1.5</h1>
-          <p>All-in-One Bridge</p>
+
+  <!-- Ambient Background Orbs -->
+  <div class="bg-orb orb-1"></div>
+  <div class="bg-orb orb-2"></div>
+  <div class="bg-orb orb-3"></div>
+
+  <div class="app-shell">
+
+    <!-- ── SIDEBAR ──────────────────────────────────────────── -->
+    <aside class="sidebar glass">
+      <div class="sidebar-brand">
+        <div class="brand-icon">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="12" cy="12" r="10" stroke="url(#grad)" stroke-width="1.5"/>
+            <path d="M12 6v6l4 2" stroke="url(#grad)" stroke-width="1.5" stroke-linecap="round"/>
+            <defs>
+              <linearGradient id="grad" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#5e9bff"/>
+                <stop offset="1" stop-color="#a78bfa"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <span class="brand-name">Matter 1.5</span>
+          <span class="brand-sub">All-in-One Bridge</span>
         </div>
       </div>
-      <div class="auto-config-badge" id="ha-badge">
-        <span class="pulse-dot"></span>
-        <span id="ha-badge-text">Detectando Home Assistant...</span>
+
+      <nav class="sidebar-nav">
+        <button class="nav-item active" data-tab="tab-bridge" id="nav-bridge">
+          <span class="nav-icon">
+            <svg viewBox="0 0 20 20" fill="currentColor"><path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zm6-4a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zm6-3a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z"/></svg>
+          </span>
+          <span>Puente</span>
+        </button>
+        <button class="nav-item" data-tab="tab-devices" id="nav-devices">
+          <span class="nav-icon">
+            <svg viewBox="0 0 20 20" fill="currentColor"><path d="M9 3a1 1 0 012 0v1a1 1 0 01-2 0V3zM6.05 4.636a1 1 0 011.414 0l.707.707A1 1 0 016.757 6.76l-.707-.707a1 1 0 010-1.414zM3 9a1 1 0 010 2H2a1 1 0 110-2h1zm-.636 4.95a1 1 0 011.414 0l.707.707a1 1 0 01-1.414 1.414l-.707-.707a1 1 0 010-1.414zM9 16a1 1 0 012 0v1a1 1 0 01-2 0v-1zm4.95.636a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414l-.707.707zM17 9a1 1 0 012 0h1a1 1 0 110 2h-1a1 1 0 01-1-1zm.636-4.95a1 1 0 01-.707 1.414l-.707-.707a1 1 0 011.414-1.414l.707.707zM10 7a3 3 0 100 6 3 3 0 000-6z"/></svg>
+          </span>
+          <span>Dispositivos</span>
+          <span class="nav-badge" id="device-count-badge"></span>
+        </button>
+        <button class="nav-item" data-tab="tab-settings" id="nav-settings">
+          <span class="nav-icon">
+            <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"/></svg>
+          </span>
+          <span>Ajustes</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-status">
+        <div class="ha-status-pill" id="ha-status-pill">
+          <span class="status-dot" id="ha-dot"></span>
+          <span id="ha-status-text">Conectando...</span>
+        </div>
       </div>
-    </header>
+    </aside>
 
-    <!-- Navigation Tabs -->
-    <nav class="glass-tabs">
-      <button class="tab-btn active" data-tab="bridge-tab">
-        <span class="btn-icon">🌐</span> Puente
-      </button>
-      <button class="tab-btn" data-tab="devices-tab">
-        <span class="btn-icon">📱</span> Dispositivos
-      </button>
-      <button class="tab-btn" data-tab="settings-tab">
-        <span class="btn-icon">⚙️</span> Ajustes
-      </button>
-    </nav>
+    <!-- ── MAIN CONTENT ───────────────────────────────────────── -->
+    <main class="main-content">
 
-    <!-- Main Content Area -->
-    <main class="content-area">
-      <!-- Tab 1: Bridge Info -->
-      <section id="bridge-tab" class="tab-content active">
-        <div class="grid-2col">
-          <!-- QR Card -->
-          <div class="glass-card qr-card">
-            <h2>Emparejamiento Matter</h2>
-            <p class="subtitle">Escanea este código QR con Apple Home, Google Home o Alexa para vincular el puente.</p>
-            <div class="qr-container">
-              <div id="qrcode-display"></div>
-              <div id="qr-placeholder" class="qr-placeholder-text">Obteniendo código QR...</div>
+      <!-- ── TAB: PUENTE ──────────────────────────────────── -->
+      <section id="tab-bridge" class="tab-panel active">
+        <div class="page-header">
+          <h1 class="page-title">Puente Matter</h1>
+          <p class="page-desc">Escanea el código QR para vincular el puente con Apple Home, Google Home o Alexa.</p>
+        </div>
+
+        <div class="bridge-grid">
+
+          <!-- QR + Pairing Card -->
+          <div class="glass-card qr-big-card">
+            <div class="card-label">Código de Emparejamiento Matter</div>
+            <div class="qr-zone" id="qr-zone">
+              <div id="qrcode-canvas"></div>
+              <div id="qr-loading" class="qr-msg">
+                <div class="spinner"></div>
+                <span>Esperando código QR...</span>
+              </div>
             </div>
-            <div class="manual-code-area">
-              <span>Código manual de emparejamiento:</span>
-              <div class="manual-code-box">
+            <div class="manual-pair-row">
+              <div class="manual-pair-label">Código manual</div>
+              <div class="manual-pair-box">
                 <code id="manual-code">---- --- ----</code>
-                <button id="copy-btn" class="icon-btn" title="Copiar código">📋</button>
+                <button id="copy-btn" class="icon-pill" title="Copiar">📋</button>
               </div>
+            </div>
+            <div class="commissioned-banner" id="commissioned-banner" style="display:none;">
+              <span class="banner-icon">✅</span>
+              <span>Puente ya vinculado a un controlador Matter.</span>
             </div>
           </div>
 
-          <!-- Status & Info Card -->
-          <div class="glass-card status-card">
-            <h2>Estado del Puente</h2>
-            
-            <div class="status-indicator">
-              <div class="status-ring" id="status-ring">
-                <div class="status-inner" id="status-badge">...</div>
-              </div>
-              <div class="status-label">
-                <h3 id="status-title">Iniciando Puente</h3>
-                <p id="status-desc">El servicio de Matterbridge se está iniciando en segundo plano.</p>
-              </div>
-            </div>
-
-            <div class="divider"></div>
-
-            <div class="info-list">
-              <div class="info-item">
-                <span class="info-label">Sistema Operativo</span>
-                <span class="info-value" id="sys-os">-</span>
-              </div>
-              <div class="info-item">
-                <span class="info-label">Versión de Node.js</span>
-                <span class="info-value" id="sys-node">-</span>
-              </div>
-              <div class="info-item">
-                <span class="info-label">Tiempo Activo</span>
-                <span class="info-value" id="sys-uptime">-</span>
-              </div>
-              <div class="info-item">
-                <span class="info-label">Uso de CPU</span>
-                <span class="info-value" id="sys-cpu">-</span>
-              </div>
-              <div class="info-item">
-                <span class="info-label">Memoria Usada</span>
-                <span class="info-value" id="sys-mem">-</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Tab 2: Devices -->
-      <section id="devices-tab" class="tab-content">
-        <div class="glass-card full-width">
-          <div class="card-header-flex">
-            <div>
-              <h2>Dispositivos Enlazados</h2>
-              <p class="subtitle">Entidades de Home Assistant que están expuestas al protocolo Matter.</p>
-            </div>
-            <div class="search-box">
-              <span class="search-icon">🔍</span>
-              <input type="text" id="device-search" placeholder="Buscar dispositivo...">
-            </div>
-          </div>
-
-          <div class="table-container">
-            <table class="glass-table">
-              <thead>
-                <tr>
-                  <th>Nombre Amigable</th>
-                  <th>ID Entidad</th>
-                  <th>Tipo Matter</th>
-                  <th>Estado HA</th>
-                  <th>Estado Matter</th>
-                </tr>
-              </thead>
-              <tbody id="devices-tbody">
-                <tr>
-                  <td colspan="5" class="table-loading">Cargando dispositivos...</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <!-- Tab 3: Settings -->
-      <section id="settings-tab" class="tab-content">
-        <div class="grid-2col">
-          <!-- Auto Config Card -->
-          <div class="glass-card">
-            <h2>Configuración Automática</h2>
-            <p class="subtitle">Este complemento detecta automáticamente el entorno de Home Assistant Supervisor.</p>
-            
-            <div class="config-status-list">
-              <div class="config-status-item">
-                <div class="config-dot active"></div>
-                <div class="config-text">
-                  <h4>Detección de Host</h4>
-                  <p>Localizado en la red interna del Supervisor (http://supervisor/core).</p>
+          <!-- Bridge Status Card -->
+          <div class="bridge-right-col">
+            <div class="glass-card status-big-card">
+              <div class="status-header">
+                <div class="status-orb-wrap">
+                  <div class="status-orb" id="status-orb">
+                    <span id="status-orb-label">…</span>
+                  </div>
+                </div>
+                <div>
+                  <div class="status-main-title" id="status-title">Iniciando...</div>
+                  <div class="status-main-desc" id="status-desc">El puente está iniciando servicios.</div>
                 </div>
               </div>
-              <div class="config-status-item">
-                <div class="config-dot active"></div>
-                <div class="config-text">
-                  <h4>Token del Supervisor</h4>
-                  <p>Inyectado y autenticado correctamente en tiempo de ejecución.</p>
-                </div>
-              </div>
-              <div class="config-status-item">
-                <div class="config-dot active"></div>
-                <div class="config-text">
-                  <h4>Modo Ingress</h4>
-                  <p>Acceso directo habilitado para la barra lateral sin puertos expuestos públicamente.</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Actions Card -->
-          <div class="glass-card actions-card">
-            <h2>Mantenimiento y Control</h2>
-            <p class="subtitle">Operaciones avanzadas para gestionar el puente de Matter.</p>
-            
-            <div class="actions-buttons">
-              <div class="action-row">
-                <div class="action-desc">
-                  <h3>Reiniciar Puente</h3>
-                  <p>Reinicia el complemento de Home Assistant y recarga la configuración del puente.</p>
-                </div>
-                <button id="restart-btn" class="glass-btn primary">Reiniciar</button>
-              </div>
-              
               <div class="divider"></div>
-              
-              <div class="action-row">
-                <div class="action-desc">
-                  <h3>Restablecimiento de Fábrica</h3>
-                  <p class="warning-text">Elimina permanentemente los emparejamientos y fabrics actuales. Requiere volver a escanear el código QR.</p>
+              <div class="info-grid">
+                <div class="info-row">
+                  <span class="info-k">Sistema Operativo</span>
+                  <span class="info-v" id="sys-os">-</span>
                 </div>
-                <button id="factoryreset-btn" class="glass-btn danger">Restablecer</button>
+                <div class="info-row">
+                  <span class="info-k">Node.js</span>
+                  <span class="info-v" id="sys-node">-</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-k">Tiempo Activo</span>
+                  <span class="info-v" id="sys-uptime">-</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-k">CPU</span>
+                  <span class="info-v" id="sys-cpu">-</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-k">Memoria</span>
+                  <span class="info-v" id="sys-mem">-</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Paired Fabrics count -->
+            <div class="glass-card mini-stat-card">
+              <div class="mini-stat-icon">🔗</div>
+              <div class="mini-stat-body">
+                <div class="mini-stat-value" id="fabric-count">0</div>
+                <div class="mini-stat-label">Controladores Vinculados</div>
               </div>
             </div>
           </div>
+
         </div>
       </section>
+
+      <!-- ── TAB: DISPOSITIVOS ────────────────────────────── -->
+      <section id="tab-devices" class="tab-panel">
+        <div class="page-header-flex">
+          <div>
+            <h1 class="page-title">Dispositivos</h1>
+            <p class="page-desc">Entidades de Home Assistant expuestas a Matter. Toca un dispositivo para ver detalles y seleccionar su tipo HomeKit 2026.</p>
+          </div>
+          <div class="search-pill">
+            <svg class="search-icon-svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd"/></svg>
+            <input type="text" id="device-search" placeholder="Buscar...">
+          </div>
+        </div>
+
+        <div class="device-grid" id="device-grid">
+          <!-- Populated by JS -->
+          <div class="devices-empty" id="devices-loading">
+            <div class="spinner large"></div>
+            <p>Cargando dispositivos...</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── TAB: AJUSTES ──────────────────────────────────── -->
+      <section id="tab-settings" class="tab-panel">
+        <div class="page-header">
+          <h1 class="page-title">Ajustes</h1>
+          <p class="page-desc">Configuración automática del puente y controles de mantenimiento.</p>
+        </div>
+
+        <div class="settings-grid">
+
+          <div class="glass-card">
+            <div class="card-label">Configuración Automática</div>
+            <p class="card-sub">Este complemento detecta automáticamente el entorno de Home Assistant Supervisor. No necesitas ingresar tokens ni hosts manualmente.</p>
+            <div class="auto-config-list">
+              <div class="auto-item">
+                <div class="auto-dot on"></div>
+                <div>
+                  <div class="auto-title">Host Automático</div>
+                  <div class="auto-desc">Conexión interna vía Supervisor (http://supervisor/core)</div>
+                </div>
+              </div>
+              <div class="auto-item">
+                <div class="auto-dot on"></div>
+                <div>
+                  <div class="auto-title">Token Inyectado</div>
+                  <div class="auto-desc">Token del Supervisor inyectado automáticamente en tiempo de ejecución</div>
+                </div>
+              </div>
+              <div class="auto-item">
+                <div class="auto-dot on"></div>
+                <div>
+                  <div class="auto-title">Descubrimiento de Red</div>
+                  <div class="auto-desc">Detecta dispositivos en Ethernet y Wi-Fi sin configuración manual</div>
+                </div>
+              </div>
+              <div class="auto-item">
+                <div class="auto-dot on"></div>
+                <div>
+                  <div class="auto-title">Ingress Habilitado</div>
+                  <div class="auto-desc">Acceso directo desde la barra lateral de Home Assistant</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="glass-card">
+            <div class="card-label">Mantenimiento</div>
+            <p class="card-sub">Operaciones avanzadas para gestionar el puente.</p>
+            <div class="action-list">
+              <div class="action-item">
+                <div>
+                  <div class="action-title">Reiniciar Puente</div>
+                  <div class="action-desc">Recarga la configuración y reconecta a los controladores. Tarda unos segundos.</div>
+                </div>
+                <button id="restart-btn" class="pill-btn primary">Reiniciar</button>
+              </div>
+              <div class="divider"></div>
+              <div class="action-item">
+                <div>
+                  <div class="action-title">Restablecimiento de Fábrica</div>
+                  <div class="action-desc danger-txt">Elimina <strong>permanentemente</strong> todos los emparejamientos y fabrics actuales. Tendrás que escanear el QR de nuevo.</div>
+                </div>
+                <button id="factoryreset-btn" class="pill-btn danger">Restablecer</button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
     </main>
   </div>
 
-  <!-- Confirmation Modal -->
-  <div id="modal-container" class="modal-overlay">
-    <div class="glass-modal">
-      <h3 id="modal-title">¿Estás seguro?</h3>
-      <p id="modal-desc">Esta acción no se puede deshacer.</p>
-      <div class="modal-actions">
-        <button id="modal-cancel" class="glass-btn secondary">Cancelar</button>
-        <button id="modal-confirm" class="glass-btn primary">Confirmar</button>
+  <!-- ── DEVICE DETAIL MODAL ──────────────────────────────────── -->
+  <div class="modal-backdrop" id="device-modal" role="dialog" aria-modal="true" aria-labelledby="modal-device-name">
+    <div class="modal-sheet glass">
+      <button class="modal-close" id="modal-close" aria-label="Cerrar">
+        <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+      </button>
+
+      <div class="modal-body">
+        <div class="modal-left">
+          <div class="modal-device-header">
+            <div class="modal-device-icon" id="modal-icon">💡</div>
+            <div>
+              <h2 class="modal-device-name" id="modal-device-name">Dispositivo</h2>
+              <div class="modal-device-entity" id="modal-entity-id">entity.id</div>
+            </div>
+            <div class="modal-state-pill" id="modal-state">-</div>
+          </div>
+
+          <div class="modal-section">
+            <div class="modal-section-label">Tipo en HomeKit 2026</div>
+            <div class="modal-section-desc">Selecciona cómo se expondrá este dispositivo a Apple Home, Google Home y Alexa.</div>
+            <select class="hk-select" id="hk-type-select">
+              <!-- Populated by JS based on domain -->
+            </select>
+            <div class="hk-type-info glass-inset" id="hk-type-info">
+              <span id="hk-type-desc">Selecciona un tipo para ver la descripción.</span>
+            </div>
+            <button class="pill-btn primary full-w" id="save-type-btn">💾 Guardar Tipo</button>
+            <div class="save-feedback" id="save-feedback"></div>
+          </div>
+
+          <div class="modal-section">
+            <div class="modal-section-label">Información de la Entidad</div>
+            <div class="entity-info-list">
+              <div class="info-row">
+                <span class="info-k">Dominio</span>
+                <span class="info-v" id="modal-domain">-</span>
+              </div>
+              <div class="info-row">
+                <span class="info-k">Tipo Matter Actual</span>
+                <span class="info-v" id="modal-matter-type">-</span>
+              </div>
+              <div class="info-row">
+                <span class="info-k">Estado HA</span>
+                <span class="info-v" id="modal-ha-state">-</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-right">
+          <div class="modal-section">
+            <div class="modal-section-label">Código de Vinculación del Puente</div>
+            <div class="modal-section-desc">Escanea este código QR para agregar el puente completo (todos los dispositivos) a tu plataforma.</div>
+            <div class="modal-qr-wrap">
+              <div id="modal-qrcode"></div>
+              <div id="modal-qr-placeholder" class="modal-qr-ph">
+                <div class="spinner"></div>
+                <span>Cargando QR...</span>
+              </div>
+            </div>
+            <div class="modal-manual-row">
+              <span class="info-k">Código manual:</span>
+              <code id="modal-manual-code" class="manual-code-val">---- --- ----</code>
+              <button class="icon-pill" id="modal-copy-btn" title="Copiar código">📋</button>
+            </div>
+          </div>
+
+          <div class="modal-section">
+            <div class="modal-section-label">Compatibilidad HomeKit 2026</div>
+            <div class="compat-badges" id="compat-badges">
+              <span class="compat-badge apple">Apple Home</span>
+              <span class="compat-badge google">Google Home</span>
+              <span class="compat-badge alexa">Amazon Alexa</span>
+              <span class="compat-badge matter">Matter 1.5</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── CONFIRM MODAL ──────────────────────────────────── -->
+  <div class="modal-backdrop small" id="confirm-modal">
+    <div class="modal-sheet confirm-sheet glass">
+      <h3 id="confirm-title">¿Continuar?</h3>
+      <p id="confirm-desc">Esta acción no se puede deshacer.</p>
+      <div class="confirm-btns">
+        <button class="pill-btn secondary" id="confirm-cancel">Cancelar</button>
+        <button class="pill-btn primary" id="confirm-ok">Confirmar</button>
       </div>
     </div>
   </div>
