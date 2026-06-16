@@ -13,7 +13,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { HomeAssistant } from './homeAssistant.js';
 import { HassState } from './utils/ha-state.js';
-import { getDeviceTypeForEntity } from './device-registry.js';
+import { getDeviceTypeForEntity, MatterDeviceTypes } from './device-registry.js';
 import { BaseEntity } from './entities/base.entity.js';
 import { ClosureEntity } from './entities/closure.entity.js';
 import { CameraEntity } from './entities/camera.entity.js';
@@ -31,6 +31,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   public ha!: HomeAssistant;
   public entities = new Map<string, BaseEntity>();
   public matterbridgeDevices = new Map<string, MatterbridgeEndpoint>();
+  public deviceOverrides: Record<string, string> = {};
   private uiServer?: http.Server;
 
   constructor(
@@ -108,6 +109,15 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       await this.ha.fetchData();
       await this.ha.subscribe();
 
+      // Load device overrides
+      try {
+        const raw = await fs.readFile('/data/device-overrides.json', 'utf8');
+        this.deviceOverrides = JSON.parse(raw);
+        this.log.info(`Loaded ${Object.keys(this.deviceOverrides).length} device overrides.`);
+      } catch {
+        this.log.info('No device-overrides.json found, starting fresh.');
+      }
+
       const states = Array.from(this.ha.hassStates.values());
       this.log.info(`Fetched ${states.length} entity states. Registering matching devices...`);
 
@@ -126,13 +136,31 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     const entityId = state.entity_id;
     const [domain] = entityId.split('.');
 
-    // Filtering rules
+    // Filtering rules: Whitelist
+    const allowedDomains = ['light', 'switch', 'cover', 'lock', 'climate', 'fan', 'sensor', 'binary_sensor'];
+    if (!allowedDomains.includes(domain)) return;
+
+    // Strict device_class whitelist for sensors to avoid exporting system/energy sensors
+    const deviceClass = state.attributes.device_class;
+    if (domain === 'sensor' && !['temperature', 'humidity', 'illuminance', 'moisture', 'pressure', 'flow'].includes(deviceClass ?? '')) return;
+    if (domain === 'binary_sensor' && !['door', 'window', 'opening', 'motion', 'occupancy', 'contact', 'smoke', 'co'].includes(deviceClass ?? '')) return;
+
     if (this.config.excludeEntities?.includes(entityId)) return;
     if (this.config.includeEntities && !this.config.includeEntities.includes(entityId)) return;
 
+    // Check device override
+    const override = this.deviceOverrides[entityId];
+    if (override === '_DISABLED_') {
+      this.log.debug(`Skipping ${entityId} because it is disabled by override.`);
+      return;
+    }
+
     // Retrieve corresponding Matter Device Type
-    const deviceClass = state.attributes.device_class;
-    const deviceType = getDeviceTypeForEntity(domain, deviceClass);
+    let deviceType = getDeviceTypeForEntity(domain, deviceClass);
+    if (override && (MatterDeviceTypes as any)[override]) {
+      deviceType = (MatterDeviceTypes as any)[override];
+      this.log.info(`Applying override for ${entityId}: ${deviceType.name}`);
+    }
 
     this.log.debug(`Mapping ${entityId} to Matter device type ${deviceType.name} (0x${deviceType.code.toString(16)})`);
 
@@ -280,15 +308,40 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
         if (req.method === 'GET' && pathname === '/api/custom/devices') {
           const deviceList: any[] = [];
-          for (const [entityId, entity] of this.entities.entries()) {
-            const haState = this.ha.hassStates.get(entityId);
+          const allowedDomains = ['light', 'switch', 'cover', 'lock', 'climate', 'fan', 'sensor', 'binary_sensor'];
+
+          for (const haState of this.ha.hassStates.values()) {
+            const entityId = haState.entity_id;
+            const [domain] = entityId.split('.');
+
+            if (!allowedDomains.includes(domain)) continue;
+
+            const deviceClass = haState.attributes.device_class;
+            if (domain === 'sensor' && !['temperature', 'humidity', 'illuminance', 'moisture', 'pressure', 'flow'].includes(deviceClass ?? '')) continue;
+            if (domain === 'binary_sensor' && !['door', 'window', 'opening', 'motion', 'occupancy', 'contact', 'smoke', 'co'].includes(deviceClass ?? '')) continue;
+
+            if (this.config.excludeEntities?.includes(entityId)) continue;
+            if (this.config.includeEntities && !this.config.includeEntities.includes(entityId)) continue;
+
+            const override = this.deviceOverrides[entityId];
+            const exported = override !== '_DISABLED_';
+
+            let matterType = getDeviceTypeForEntity(domain, deviceClass).name;
+            if (override && override !== '_DISABLED_') {
+              if ((MatterDeviceTypes as any)[override]) {
+                matterType = (MatterDeviceTypes as any)[override].name;
+              } else {
+                matterType = override;
+              }
+            }
+
             deviceList.push({
               entityId,
-              friendlyName: haState?.attributes.friendly_name || entityId,
-              domain: entityId.split('.')[0],
-              matterType: entity.deviceType.name,
-              state: haState?.state || 'desconocido',
-              status: 'activo'
+              friendlyName: haState.attributes.friendly_name || entityId,
+              domain,
+              matterType,
+              state: haState.state || 'desconocido',
+              exported
             });
           }
           res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -309,8 +362,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           req.on('data', (chunk: any) => { body += chunk.toString(); });
           await new Promise<void>((resolve) => req.on('end', resolve));
           try {
-            const { entityId, matterType } = JSON.parse(body);
-            if (!entityId || !matterType) throw new Error('Missing fields');
+            const data = JSON.parse(body);
+            const entityId = data.entityId;
+            if (!entityId) throw new Error('Missing entityId');
+
             // Persist overrides to a JSON file in /data
             const overridesPath = '/data/device-overrides.json';
             let overrides: Record<string, string> = {};
@@ -318,9 +373,20 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               const raw = await fs.readFile(overridesPath, 'utf8');
               overrides = JSON.parse(raw);
             } catch { /* first time */ }
-            overrides[entityId] = matterType;
+
+            if (data.exported === false) {
+              overrides[entityId] = '_DISABLED_';
+            } else if (data.matterType) {
+              overrides[entityId] = data.matterType;
+            } else if (data.exported === true) {
+              if (overrides[entityId] === '_DISABLED_') {
+                delete overrides[entityId];
+              }
+            }
+
             await fs.writeFile(overridesPath, JSON.stringify(overrides, null, 2), 'utf8');
-            this.log.info(`[UI] Device override saved: ${entityId} → ${matterType}`);
+            this.deviceOverrides = overrides;
+            this.log.info(`[UI] Device override saved for ${entityId}`);
             res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
             res.end(JSON.stringify({ success: true }));
           } catch (parseErr) {

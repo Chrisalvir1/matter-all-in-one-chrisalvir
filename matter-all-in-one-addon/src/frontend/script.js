@@ -99,12 +99,6 @@ const statusTitle    = $('status-title');
 const statusDesc     = $('status-desc');
 const haDot          = $('ha-dot');
 const haStatusText   = $('ha-status-text');
-const fabricCount    = $('fabric-count');
-const sysOs          = $('sys-os');
-const sysNode        = $('sys-node');
-const sysUptime      = $('sys-uptime');
-const sysCpu         = $('sys-cpu');
-const sysMem         = $('sys-mem');
 
 // Devices tab
 const deviceGrid     = $('device-grid');
@@ -129,6 +123,7 @@ const modalQrEl      = $('modal-qrcode');
 const modalQrPh      = $('modal-qr-placeholder');
 const modalManual    = $('modal-manual-code');
 const modalCopyBtn   = $('modal-copy-btn');
+const modalQrDeviceName = $('modal-qr-device-name');
 
 // Confirm modal
 const confirmModal   = $('confirm-modal');
@@ -137,7 +132,10 @@ const confirmDesc    = $('confirm-desc');
 const confirmOk      = $('confirm-ok');
 const confirmCancel  = $('confirm-cancel');
 
-// Settings
+// Advanced / Settings
+const advancedBtn    = $('advanced-btn');
+const advancedModal  = $('advanced-modal');
+const advModalClose  = $('adv-modal-close');
 const restartBtn     = $('restart-btn');
 const factoryBtn     = $('factoryreset-btn');
 
@@ -209,10 +207,6 @@ async function fetchStatus() {
       commBanner.style.display = 'none';
     }
 
-    // Fabric count
-    const fc = Array.isArray(d.pairedFabrics) ? d.pairedFabrics.length : 0;
-    fabricCount.textContent = fc;
-
     // Status orb
     statusOrb.className = 'status-orb ' + (d.commissioned ? 'connected' : (d.status === 'esperando' ? 'waiting' : ''));
     statusOrb.querySelector('#status-orb-label').textContent = d.commissioned ? 'OK' : (d.status === 'esperando' ? 'Pair' : '…');
@@ -226,13 +220,6 @@ async function fetchStatus() {
       statusTitle.textContent = 'Iniciando Servicio';
       statusDesc.textContent = 'El puente Matter se está iniciando. Por favor espera...';
     }
-
-    // System info
-    sysOs.textContent     = d.systemInfo?.os          || 'Linux';
-    sysNode.textContent   = d.systemInfo?.nodeVersion  || '-';
-    sysUptime.textContent = d.systemInfo?.uptime       || '-';
-    sysCpu.textContent    = d.systemInfo?.cpu          || '-';
-    sysMem.textContent    = d.systemInfo?.memory       || '-';
 
   } catch(e) {
     haDot.className = 'status-dot disconnected';
@@ -269,8 +256,8 @@ function renderDeviceCards(list) {
   }
   deviceGrid.innerHTML = '';
   list.forEach(device => {
-    const card = document.createElement('button');
-    card.className = 'device-card';
+    const card = document.createElement('div');
+    card.className = 'device-card' + (device.exported ? '' : ' disabled-card');
     card.setAttribute('aria-label', `Ver detalles de ${device.friendlyName}`);
     const icon = domainIcon(device.domain);
     const sc   = stateClass(device.state);
@@ -282,9 +269,45 @@ function renderDeviceCards(list) {
         <span class="dc-state-pill ${sc}">${esc(device.state)}</span>
         <span class="dc-type-pill">${esc(device.matterType || 'Matter')}</span>
       </div>
+      <div class="dc-controls">
+        <label class="toggle-switch" title="Exportar a Matter">
+          <input type="checkbox" class="export-toggle" ${device.exported ? 'checked' : ''} data-id="${esc(device.entityId)}">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
       <span class="dc-arrow">›</span>
     `;
-    card.addEventListener('click', () => openDeviceModal(device));
+
+    // Click handler for modal (exclude toggle switch)
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('.toggle-switch')) return;
+      openDeviceModal(device);
+    });
+
+    // Toggle handler
+    const toggle = card.querySelector('.export-toggle');
+    toggle.addEventListener('change', async (e) => {
+      const isExported = e.target.checked;
+      card.classList.toggle('disabled-card', !isExported);
+      
+      try {
+        const res = await fetch(`${API}/device-override`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ entityId: device.entityId, exported: isExported }),
+        });
+        if (res.ok) {
+          device.exported = isExported;
+        } else {
+          e.target.checked = !isExported; // revert
+          card.classList.toggle('disabled-card', isExported);
+        }
+      } catch (err) {
+        e.target.checked = !isExported; // revert
+        card.classList.toggle('disabled-card', isExported);
+      }
+    });
+
     deviceGrid.appendChild(card);
   });
 }
@@ -319,6 +342,7 @@ function openDeviceModal(device) {
   modalDomain.textContent    = device.domain;
   modalMatterType.textContent = device.matterType || '-';
   modalHaState.textContent   = device.state;
+  modalQrDeviceName.textContent = device.friendlyName;
 
   // Build HomeKit 2026 type dropdown
   const types = HK_TYPES[device.domain] || [];
@@ -470,8 +494,25 @@ confirmOk.addEventListener('click', async () => {
   }
 });
 
-// ── Restart / Factory Reset ────────────────────────────────────
+// ── Advanced / Restart / Factory Reset ────────────────────────────────────
+if (advancedBtn) {
+  advancedBtn.addEventListener('click', () => {
+    advancedModal.classList.add('open');
+  });
+}
+if (advModalClose) {
+  advModalClose.addEventListener('click', () => {
+    advancedModal.classList.remove('open');
+  });
+}
+if (advancedModal) {
+  advancedModal.addEventListener('click', (e) => {
+    if (e.target === advancedModal) advancedModal.classList.remove('open');
+  });
+}
+
 restartBtn.addEventListener('click', () => {
+  advancedModal.classList.remove('open');
   showConfirm(
     '¿Reiniciar el Puente?',
     'El complemento de Home Assistant se reiniciará limpiamente. Esto tarda unos segundos.',
@@ -487,6 +528,7 @@ restartBtn.addEventListener('click', () => {
 });
 
 factoryBtn.addEventListener('click', () => {
+  advancedModal.classList.remove('open');
   showConfirm(
     '¿Restablecer de Fábrica?',
     'Se borrarán PERMANENTEMENTE todos los emparejamientos Matter actuales. Tendrás que escanear el QR de nuevo para vincular Apple Home, Google Home o Alexa.',

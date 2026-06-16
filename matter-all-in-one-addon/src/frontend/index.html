@@ -55,12 +55,7 @@
           <span>Dispositivos</span>
           <span class="nav-badge" id="device-count-badge"></span>
         </button>
-        <button class="nav-item" data-tab="tab-settings" id="nav-settings">
-          <span class="nav-icon">
-            <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"/></svg>
-          </span>
-          <span>Ajustes</span>
-        </button>
+
       </nav>
 
       <div class="sidebar-status">
@@ -121,36 +116,8 @@
                 </div>
               </div>
               <div class="divider"></div>
-              <div class="info-grid">
-                <div class="info-row">
-                  <span class="info-k">Sistema Operativo</span>
-                  <span class="info-v" id="sys-os">-</span>
-                </div>
-                <div class="info-row">
-                  <span class="info-k">Node.js</span>
-                  <span class="info-v" id="sys-node">-</span>
-                </div>
-                <div class="info-row">
-                  <span class="info-k">Tiempo Activo</span>
-                  <span class="info-v" id="sys-uptime">-</span>
-                </div>
-                <div class="info-row">
-                  <span class="info-k">CPU</span>
-                  <span class="info-v" id="sys-cpu">-</span>
-                </div>
-                <div class="info-row">
-                  <span class="info-k">Memoria</span>
-                  <span class="info-v" id="sys-mem">-</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Paired Fabrics count -->
-            <div class="glass-card mini-stat-card">
-              <div class="mini-stat-icon">🔗</div>
-              <div class="mini-stat-body">
-                <div class="mini-stat-value" id="fabric-count">0</div>
-                <div class="mini-stat-label">Controladores Vinculados</div>
+              <div class="bridge-actions">
+                <button id="advanced-btn" class="pill-btn secondary full-w">⚙ Ajustes Avanzados</button>
               </div>
             </div>
           </div>
@@ -180,74 +147,7 @@
         </div>
       </section>
 
-      <!-- ── TAB: AJUSTES ──────────────────────────────────── -->
-      <section id="tab-settings" class="tab-panel">
-        <div class="page-header">
-          <h1 class="page-title">Ajustes</h1>
-          <p class="page-desc">Configuración automática del puente y controles de mantenimiento.</p>
-        </div>
 
-        <div class="settings-grid">
-
-          <div class="glass-card">
-            <div class="card-label">Configuración Automática</div>
-            <p class="card-sub">Este complemento detecta automáticamente el entorno de Home Assistant Supervisor. No necesitas ingresar tokens ni hosts manualmente.</p>
-            <div class="auto-config-list">
-              <div class="auto-item">
-                <div class="auto-dot on"></div>
-                <div>
-                  <div class="auto-title">Host Automático</div>
-                  <div class="auto-desc">Conexión interna vía Supervisor (http://supervisor/core)</div>
-                </div>
-              </div>
-              <div class="auto-item">
-                <div class="auto-dot on"></div>
-                <div>
-                  <div class="auto-title">Token Inyectado</div>
-                  <div class="auto-desc">Token del Supervisor inyectado automáticamente en tiempo de ejecución</div>
-                </div>
-              </div>
-              <div class="auto-item">
-                <div class="auto-dot on"></div>
-                <div>
-                  <div class="auto-title">Descubrimiento de Red</div>
-                  <div class="auto-desc">Detecta dispositivos en Ethernet y Wi-Fi sin configuración manual</div>
-                </div>
-              </div>
-              <div class="auto-item">
-                <div class="auto-dot on"></div>
-                <div>
-                  <div class="auto-title">Ingress Habilitado</div>
-                  <div class="auto-desc">Acceso directo desde la barra lateral de Home Assistant</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="glass-card">
-            <div class="card-label">Mantenimiento</div>
-            <p class="card-sub">Operaciones avanzadas para gestionar el puente.</p>
-            <div class="action-list">
-              <div class="action-item">
-                <div>
-                  <div class="action-title">Reiniciar Puente</div>
-                  <div class="action-desc">Recarga la configuración y reconecta a los controladores. Tarda unos segundos.</div>
-                </div>
-                <button id="restart-btn" class="pill-btn primary">Reiniciar</button>
-              </div>
-              <div class="divider"></div>
-              <div class="action-item">
-                <div>
-                  <div class="action-title">Restablecimiento de Fábrica</div>
-                  <div class="action-desc danger-txt">Elimina <strong>permanentemente</strong> todos los emparejamientos y fabrics actuales. Tendrás que escanear el QR de nuevo.</div>
-                </div>
-                <button id="factoryreset-btn" class="pill-btn danger">Restablecer</button>
-              </div>
-            </div>
-          </div>
-
-        </div>
-      </section>
 
     </main>
   </div>
@@ -304,8 +204,8 @@
 
         <div class="modal-right">
           <div class="modal-section">
-            <div class="modal-section-label">Código de Vinculación del Puente</div>
-            <div class="modal-section-desc">Escanea este código QR para agregar el puente completo (todos los dispositivos) a tu plataforma.</div>
+            <div class="modal-section-label">Código de Vinculación</div>
+            <div class="modal-section-desc" style="text-align: center; font-weight: bold; color: var(--text-primary); margin-bottom: 12px;" id="modal-qr-device-name">Nombre del Dispositivo</div>
             <div class="modal-qr-wrap">
               <div id="modal-qrcode"></div>
               <div id="modal-qr-placeholder" class="modal-qr-ph">
@@ -342,6 +242,35 @@
       <div class="confirm-btns">
         <button class="pill-btn secondary" id="confirm-cancel">Cancelar</button>
         <button class="pill-btn primary" id="confirm-ok">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── ADVANCED MODAL ──────────────────────────────────── -->
+  <div class="modal-backdrop small" id="advanced-modal">
+    <div class="modal-sheet glass" style="max-width: 480px;">
+      <button class="modal-close" id="adv-modal-close" aria-label="Cerrar">
+        <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+      </button>
+      <h3 style="margin-bottom: 8px;">Ajustes Avanzados</h3>
+      <p class="modal-section-desc" style="margin-bottom: 24px;">Operaciones de mantenimiento del puente Matter.</p>
+      
+      <div class="action-list">
+        <div class="action-item">
+          <div>
+            <div class="action-title">Reiniciar Puente</div>
+            <div class="action-desc" style="font-size: 13px; color: var(--text-secondary);">Recarga la configuración. Tarda unos segundos.</div>
+          </div>
+          <button id="restart-btn" class="pill-btn primary">Reiniciar</button>
+        </div>
+        <div class="divider"></div>
+        <div class="action-item">
+          <div>
+            <div class="action-title" style="color: var(--danger);">Restablecimiento de Fábrica</div>
+            <div class="action-desc" style="font-size: 13px; color: var(--text-secondary);">Elimina <strong>permanentemente</strong> todos los emparejamientos actuales.</div>
+          </div>
+          <button id="factoryreset-btn" class="pill-btn danger">Restablecer</button>
+        </div>
       </div>
     </div>
   </div>
