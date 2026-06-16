@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.4] - 2026-06-16
+### Added
+- Replaced the default cockpit/dashboard with a premium, fully local, custom Spanish "Liquid Glass" (glassmorphism) Web UI on port 8283.
+- Completely zero-config: automatic environment detection for local Home Assistant host and Supervisor token.
+- Clean layout: display only critical bridge details, dynamic bridged devices list, and action tools (Restart/Factory Reset).
+
 ## [1.0.3] - 2026-06-16
 ### Fixed
 - Restored original add-on directory structure to allow standard updates in Home Assistant.

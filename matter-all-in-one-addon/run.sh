@@ -55,5 +55,6 @@ echo "[Info] Registering plugin..."
 matterbridge -add /app || true
 
 # Start Matterbridge
-echo "[Info] Launching Matterbridge..."
-exec matterbridge
+echo "[Info] Launching Matterbridge on port 8284..."
+exec matterbridge -frontend 8284
+

@@ -8,6 +8,9 @@ import {
   PlatformMatterbridge,
 } from 'matterbridge';
 import { AnsiLogger, CYAN, db, idn, nf, rs } from 'matterbridge/logger';
+import http from 'http';
+import fs from 'fs/promises';
+import path from 'path';
 import { HomeAssistant } from './homeAssistant.js';
 import { HassState } from './utils/ha-state.js';
 import { getDeviceTypeForEntity } from './device-registry.js';
@@ -15,6 +18,7 @@ import { BaseEntity } from './entities/base.entity.js';
 import { ClosureEntity } from './entities/closure.entity.js';
 import { CameraEntity } from './entities/camera.entity.js';
 import { SoilEntity } from './entities/soil.entity.js';
+
 
 export interface HomeAssistantPlatformConfig extends PlatformConfig {
   host: string;
@@ -27,6 +31,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   public ha!: HomeAssistant;
   public entities = new Map<string, BaseEntity>();
   public matterbridgeDevices = new Map<string, MatterbridgeEndpoint>();
+  private uiServer?: http.Server;
 
   constructor(
     matterbridge: PlatformMatterbridge,
@@ -74,6 +79,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
    */
   override async onStart(reason?: string) {
     this.log.info(`Starting HomeAssistant platform: ${reason ?? ''}`);
+    this.startUiServer();
     try {
       await this.ha.connect();
     } catch (err) {
@@ -86,6 +92,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
    */
   override async onShutdown(reason?: string) {
     this.log.warn(`Shutting down platform: ${reason ?? ''}`);
+    if (this.uiServer) {
+      this.uiServer.close();
+      this.log.info('Custom UI Server stopped.');
+    }
     await this.ha.close();
   }
 
@@ -163,4 +173,182 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       entity.updateState(newState);
     }
   }
+
+  /**
+   * Start custom HTTP server on port 8283 for Liquid Glass UI.
+   */
+  private startUiServer() {
+    const server = http.createServer(async (req, res) => {
+      // CORS headers
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+      if (req.method === 'OPTIONS') {
+        res.writeHead(204);
+        res.end();
+        return;
+      }
+
+      const urlObj = new URL(req.url ?? '', `http://${req.headers.host ?? 'localhost'}`);
+      const pathname = urlObj.pathname;
+
+      this.log.debug(`[UI Server] ${req.method} ${pathname}`);
+
+      try {
+        if (req.method === 'GET' && pathname === '/') {
+          const content = await this.readFrontendFile('index.html');
+          if (content) {
+            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+            res.end(content);
+          } else {
+            res.writeHead(404);
+            res.end('Not Found');
+          }
+          return;
+        }
+
+        if (req.method === 'GET' && pathname === '/style.css') {
+          const content = await this.readFrontendFile('style.css');
+          if (content) {
+            res.writeHead(200, { 'Content-Type': 'text/css; charset=utf-8' });
+            res.end(content);
+          } else {
+            res.writeHead(404);
+            res.end('Not Found');
+          }
+          return;
+        }
+
+        if (req.method === 'GET' && pathname === '/script.js') {
+          const content = await this.readFrontendFile('script.js');
+          if (content) {
+            res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8' });
+            res.end(content);
+          } else {
+            res.writeHead(404);
+            res.end('Not Found');
+          }
+          return;
+        }
+
+        if (req.method === 'GET' && pathname === '/api/custom/status') {
+          try {
+            const bridgeRes = await fetch('http://localhost:8284/api/bridge');
+            const bridgeData = await bridgeRes.json() as any;
+
+            const systemRes = await fetch('http://localhost:8284/api/system-info');
+            const systemData = await systemRes.json() as any;
+
+            const status = bridgeData.commissioned ? 'vinculado' : 'esperando';
+            res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify({
+              status,
+              qrPairingCode: bridgeData.qrPairingCode || '',
+              manualPairingCode: bridgeData.manualPairingCode || '',
+              commissioned: bridgeData.commissioned || false,
+              pairedFabrics: bridgeData.pairedFabrics || [],
+              systemInfo: {
+                os: systemData.os || 'Linux',
+                nodeVersion: systemData.nodeVersion || '',
+                uptime: systemData.uptime || '',
+                cpu: systemData.cpu || '0.00 %',
+                memory: systemData.memory || ''
+              },
+              haStatus: this.ha.connected ? 'conectado' : 'desconectado'
+            }));
+          } catch (err) {
+            res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify({
+              status: 'iniciando',
+              qrPairingCode: '',
+              manualPairingCode: '',
+              commissioned: false,
+              pairedFabrics: [],
+              systemInfo: {
+                os: 'Linux',
+                nodeVersion: '',
+                uptime: '0s',
+                cpu: '0.00 %',
+                memory: '0.00 GB'
+              },
+              haStatus: this.ha.connected ? 'conectado' : 'desconectado'
+            }));
+          }
+          return;
+        }
+
+        if (req.method === 'GET' && pathname === '/api/custom/devices') {
+          const deviceList: any[] = [];
+          for (const [entityId, entity] of this.entities.entries()) {
+            const haState = this.ha.hassStates.get(entityId);
+            deviceList.push({
+              entityId,
+              friendlyName: haState?.attributes.friendly_name || entityId,
+              domain: entityId.split('.')[0],
+              matterType: entity.deviceType.name,
+              state: haState?.state || 'desconocido',
+              status: 'activo'
+            });
+          }
+          res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify(deviceList));
+          return;
+        }
+
+        if (req.method === 'POST' && pathname === '/api/custom/restart') {
+          res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ success: true, message: 'Reiniciando el contenedor...' }));
+          this.log.warn('[UI Server] Restart requested, exiting process...');
+          setTimeout(() => process.exit(0), 1000);
+          return;
+        }
+
+        if (req.method === 'POST' && pathname === '/api/custom/factoryreset') {
+          res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ success: true, message: 'Restableciendo de fábrica...' }));
+          this.log.warn('[UI Server] Factory reset requested, wiping storage and exiting...');
+          setTimeout(async () => {
+            try {
+              const { rm } = await import('fs/promises');
+              await rm('/root/.matterbridge', { recursive: true, force: true });
+            } catch (err) {
+              this.log.error(`Failed to wipe storage: ${err}`);
+            }
+            process.exit(0);
+          }, 1000);
+          return;
+        }
+
+        res.writeHead(404);
+        res.end('Not Found');
+      } catch (err) {
+        this.log.error(`UI Server error handling request: ${err}`);
+        res.writeHead(500);
+        res.end('Internal Server Error');
+      }
+    });
+
+    server.listen(8283, '0.0.0.0', () => {
+      this.log.notice('Custom Liquid Glass UI Server listening on port 8283');
+    });
+
+    this.uiServer = server;
+  }
+
+  private async readFrontendFile(filename: string): Promise<string | null> {
+    const dir = import.meta.dirname;
+    const distPath = path.join(dir, 'frontend', filename);
+    const srcPath = path.join(dir, '../src/frontend', filename);
+    try {
+      return await fs.readFile(distPath, 'utf8');
+    } catch {
+      try {
+        return await fs.readFile(srcPath, 'utf8');
+      } catch {
+        return null;
+      }
+    }
+  }
 }
+
