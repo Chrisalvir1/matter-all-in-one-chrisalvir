@@ -17,7 +17,7 @@ RUN npm run build
 RUN npm install -g matterbridge --no-fund --no-audit
 
 # Copy run script
-COPY matter-all-in-one-addon/run.sh /run.sh
+COPY run.sh /run.sh
 RUN chmod a+x /run.sh
 
 CMD [ "/run.sh" ]
