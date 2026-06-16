@@ -329,11 +329,27 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           let commissioned = false;
           let pairedFabrics: any[] = [];
 
+          // ── Matterbridge auth token (needed for /api/plugins & /api/settings)
+          // Matterbridge ≥ 1.7 requires a Bearer token even for localhost requests.
+          // The token is stored in matterbridge.json under the "password" field
+          // (hashed with bcrypt), but the raw session cookie / API key is available
+          // via the MATTERBRIDGE_TOKEN env variable when running as an add-on, OR
+          // we skip strategies 1 & 2 and go straight to disk (strategy 3) which
+          // never generates blocked-access log noise.
+          const mbToken = process.env.MATTERBRIDGE_TOKEN || process.env.MATTERBRIDGE_API_KEY || '';
+          const authHeaders: Record<string, string> = mbToken
+            ? { Authorization: `Bearer ${mbToken}` }
+            : {};
+
           // Strategy 1: Try /api/plugins (real Matterbridge endpoint)
           try {
+            if (!mbToken) throw new Error('No MATTERBRIDGE_TOKEN — skipping network strategies to avoid blocked-access log spam');
             const controller = new AbortController();
             const timeout = setTimeout(() => controller.abort(), 3000);
-            const pluginsRes = await fetch('http://127.0.0.1:8284/api/plugins', { signal: controller.signal });
+            const pluginsRes = await fetch('http://127.0.0.1:8284/api/plugins', {
+              signal: controller.signal,
+              headers: authHeaders,
+            });
             clearTimeout(timeout);
             const contentType = pluginsRes.headers.get('content-type') || '';
             if (pluginsRes.ok && contentType.includes('application/json')) {
@@ -352,13 +368,17 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               throw new Error(`Unexpected response from /api/plugins: ${pluginsRes.status}`);
             }
           } catch (apiErr) {
-            this.log.debug('[UI Server] /api/plugins failed, trying /api/settings: ' + (apiErr instanceof Error ? apiErr.message : apiErr));
+            this.log.debug('[UI Server] /api/plugins unavailable, trying /api/settings: ' + (apiErr instanceof Error ? apiErr.message : apiErr));
 
             // Strategy 2: Try /api/settings
             try {
+              if (!mbToken) throw new Error('No MATTERBRIDGE_TOKEN — skipping to disk read');
               const controller = new AbortController();
               const timeout = setTimeout(() => controller.abort(), 3000);
-              const settingsRes = await fetch('http://127.0.0.1:8284/api/settings', { signal: controller.signal });
+              const settingsRes = await fetch('http://127.0.0.1:8284/api/settings', {
+                signal: controller.signal,
+                headers: authHeaders,
+              });
               clearTimeout(timeout);
               const contentType = settingsRes.headers.get('content-type') || '';
               if (settingsRes.ok && contentType.includes('application/json')) {
@@ -372,7 +392,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                 throw new Error(`Unexpected response from /api/settings: ${settingsRes.status}`);
               }
             } catch (settingsErr) {
-              this.log.debug('[UI Server] /api/settings failed, reading matterbridge.json from disk: ' + (settingsErr instanceof Error ? settingsErr.message : settingsErr));
+              this.log.debug('[UI Server] /api/settings unavailable, reading matterbridge.json from disk: ' + (settingsErr instanceof Error ? settingsErr.message : settingsErr));
 
               // Strategy 3: Read matterbridge.json directly from filesystem
               try {

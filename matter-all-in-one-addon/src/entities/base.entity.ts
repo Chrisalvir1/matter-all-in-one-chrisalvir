@@ -134,13 +134,50 @@ export class BaseEntity {
 
   /**
    * Set initial attribute values based on current Home Assistant state.
+   * NOTE: called BEFORE the endpoint is added to Matterbridge, so the
+   * endpoint is still in the "inactive" lifecycle state.  We must use
+   * setAttribute (not updateAttribute) and swallow the inactive-state
+   * error silently — Matterbridge will pick up the initial values when
+   * the endpoint transitions to active during commissioning setup.
    */
   protected syncInitialState() {
+    // Mark that we are in the pre-registration phase so safeSetAttribute
+    // suppresses the "inactive state" warning that floods the logs.
+    this._initializing = true;
     this.updateState(this.state);
+    this._initializing = false;
+  }
+
+  /** True while syncInitialState() is running (endpoint not yet active). */
+  private _initializing = false;
+
+  /**
+   * Clamp a level value to the LevelControl minLevel / maxLevel bounds
+   * reported by the endpoint cluster server.  Matter spec says currentLevel
+   * MUST satisfy the constraint "minLevel to maxLevel"; if we send 0 when
+   * minLevel=135 the transaction rolls back with an UnhandledRejection.
+   *
+   * Falls back to the raw value when the cluster is not present so this
+   * helper is safe to call unconditionally.
+   */
+  private clampLevel(rawLevel: number): number {
+    try {
+      const minLevel = (this.endpoint as any)
+        .getAttribute?.(LevelControl.id, 'minLevel') ?? 1;
+      const maxLevel = (this.endpoint as any)
+        .getAttribute?.(LevelControl.id, 'maxLevel') ?? 254;
+      // minLevel must be at least 1 per Matter spec (0 means "off")
+      const lo = Math.max(1, minLevel as number);
+      const hi = Math.min(254, maxLevel as number);
+      return Math.min(hi, Math.max(lo, rawLevel));
+    } catch {
+      return Math.min(254, Math.max(1, rawLevel));
+    }
   }
 
   /**
    * Sync a new Home Assistant state update to the Matter endpoint.
+   * Safe to call at any point in the endpoint lifecycle.
    */
   public updateState(newState: HassState) {
     this.state = newState;
@@ -148,11 +185,27 @@ export class BaseEntity {
 
     if (domain === 'light' || domain === 'switch') {
       const isOn = newState.state === 'on';
-      safeSetAttribute(this.endpoint, OnOff.id, 'onOff', isOn);
+
+      // Suppress "inactive state" noise during initial sync; the attribute
+      // will be committed once the endpoint becomes active.
+      if (!this._initializing) {
+        safeSetAttribute(this.endpoint, OnOff.id, 'onOff', isOn, this.platform.log);
+      } else {
+        safeSetAttribute(this.endpoint, OnOff.id, 'onOff', isOn);
+      }
 
       if (newState.attributes.brightness !== undefined) {
-        const level = Math.round((newState.attributes.brightness / 255) * 254);
-        safeSetAttribute(this.endpoint, LevelControl.id, 'currentLevel', level);
+        // HA brightness: 0-255  →  Matter currentLevel: 1-254
+        // Never send 0: it violates the minLevel constraint on dimmers
+        // (e.g. Govee minLevel=135).  Map 0-brightness to level 1 (off
+        // state is communicated via onOff cluster, not currentLevel=0).
+        const raw   = Math.round((newState.attributes.brightness / 255) * 254);
+        const level = this.clampLevel(Math.max(1, raw));
+        if (!this._initializing) {
+          safeSetAttribute(this.endpoint, LevelControl.id, 'currentLevel', level, this.platform.log);
+        } else {
+          safeSetAttribute(this.endpoint, LevelControl.id, 'currentLevel', level);
+        }
       }
     }
   }
