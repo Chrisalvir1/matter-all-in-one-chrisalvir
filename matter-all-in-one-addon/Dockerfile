@@ -5,18 +5,23 @@ RUN apk add --no-cache jq
 
 WORKDIR /app
 
-# ── Layer 1: Install production + dev deps (cached unless package-lock changes) ──
-COPY package.json package-lock.json ./
+# ── Layer 1: Install matterbridge globally (provides types for tsc + runtime) ─
+RUN npm install -g matterbridge --no-fund --no-audit
+
+# ── Layer 2: Install plugin dev deps (typescript, etc.) without matterbridge ──
+COPY package.json ./
 RUN npm install --no-fund --no-audit
 
-# ── Layer 2: Copy source and build TypeScript ─────────────────────────────────
+# ── Layer 3: Copy source and build TypeScript ──────────────────────────────────
 COPY tsconfig*.json ./
 COPY src/ ./src/
-RUN npm run build
+# NODE_PATH lets tsc resolve 'matterbridge' from the global node_modules
+RUN NODE_PATH=$(npm root -g) npm run build
+
+# ── Layer 4: Prune dev deps, keep only production artifacts ───────────────────
 RUN npm prune --production
 
-# ── Layer 3: Install matterbridge globally and register plugin ────────────────
-RUN npm install -g matterbridge --no-fund --no-audit
+# ── Layer 5: Register plugin with matterbridge ────────────────────────────────
 RUN matterbridge -add /app || true
 
 # ── Startup script ─────────────────────────────────────────────────────────────
