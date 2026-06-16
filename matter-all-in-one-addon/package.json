@@ -8,7 +8,11 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "dependencies": {
+    "matterbridge": "^3.0.0",
     "ws": "^8.18.0"
+  },
+  "peerDependencies": {
+    "matterbridge": ">=2.0.0"
   },
   "devDependencies": {
     "typescript": "^5.8.0",

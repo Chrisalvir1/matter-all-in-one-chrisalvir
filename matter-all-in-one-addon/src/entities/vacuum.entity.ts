@@ -103,7 +103,8 @@ export class VacuumEntity extends BaseEntity {
 
   // ─── Command handlers (Matter → HA) ───────────────────────────────────
 
-  private registerCommandHandlers(endpoint: MatterbridgeEndpoint): void {
+  protected override registerCommandHandlers(endpoint?: MatterbridgeEndpoint): void {
+    if (!endpoint) endpoint = this.endpoint;
     // start — issued by Apple Home when user taps ▶ "Clean"
     endpoint.addCommandHandler('start', async () => {
       await this.callHaService('vacuum.start');
@@ -133,9 +134,7 @@ export class VacuumEntity extends BaseEntity {
   private async callHaService(service: string): Promise<void> {
     try {
       const [domain, action] = service.split('.');
-      await this.platform.ha?.callService(domain, action, {
-        entity_id: this.state.entity_id,
-      });
+      await this.platform.ha?.callService(domain, action, this.state.entity_id);
       this.platform.log?.info?.(`[VacuumEntity] Called ${service} on ${this.state.entity_id}`);
     } catch (err) {
       this.platform.log?.error?.(`[VacuumEntity] Failed to call ${service}: ${err}`);

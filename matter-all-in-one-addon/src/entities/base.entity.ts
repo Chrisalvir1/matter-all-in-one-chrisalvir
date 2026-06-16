@@ -89,8 +89,9 @@ export class BaseEntity {
 
   /**
    * Setup command handlers from Matter to Home Assistant.
+   * @param endpoint - Optional endpoint override (used by subclasses like VacuumEntity).
    */
-  protected registerCommandHandlers() {
+  protected registerCommandHandlers(endpoint?: MatterbridgeEndpoint) {
     const [domain] = this.entityId.split('.');
 
     if (domain === 'light' || domain === 'switch') {
