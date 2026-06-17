@@ -139,6 +139,14 @@ export async function discoverHassUrl(log?: (msg: string) => void): Promise<stri
 }
 
 export function toWsUrl(url: string): string {
+  if (url.includes('supervisor')) {
+    let parsed = url.replace(/^https?:\/\//, 'ws://');
+    if (!parsed.startsWith('ws://')) {
+      parsed = 'ws://' + parsed;
+    }
+    return parsed;
+  }
+
   let parsedUrl = url
     .replace(/^\/core\/?$/, '')          // bare /core path
     .replace(/\/core\/?$/, '');          // trailing /core
