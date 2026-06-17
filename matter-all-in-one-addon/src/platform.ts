@@ -295,9 +295,37 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       }
 
       const urlObj = new URL(req.url ?? '', `http://${req.headers.host ?? 'localhost'}`);
-      const pathname = urlObj.pathname;
 
-      this.log.debug(`[UI Server] ${req.method} ${pathname}`);
+      // If requested at the base Ingress URL without a trailing slash,
+      // redirect to the same URL with a trailing slash.
+      // This is crucial so that browser relative links (like "./style.css")
+      // resolve correctly under the Ingress path.
+      const redirectRegex = /^\/api\/hassio_ingress\/[^/]+$/;
+      if (redirectRegex.test(urlObj.pathname)) {
+        res.writeHead(301, { Location: `${urlObj.pathname}/` });
+        res.end();
+        return;
+      }
+
+      let pathname = urlObj.pathname;
+
+      // Extract and strip Ingress path prefix if present
+      const ingressPath = req.headers['x-ingress-path'];
+      if (typeof ingressPath === 'string' && ingressPath && pathname.startsWith(ingressPath)) {
+        pathname = pathname.substring(ingressPath.length);
+      } else {
+        const ingressRegex = /^\/api\/hassio_ingress\/[^/]+/;
+        const match = pathname.match(ingressRegex);
+        if (match) {
+          pathname = pathname.substring(match[0].length);
+        }
+      }
+
+      if (pathname === '' || pathname === '//') {
+        pathname = '/';
+      }
+
+      this.log.debug(`[UI Server] ${req.method} ${pathname} (raw: ${urlObj.pathname})`);
 
       try {
         if (req.method === 'GET' && pathname === '/') {

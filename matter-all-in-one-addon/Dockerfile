@@ -19,7 +19,7 @@ RUN npm run build
 RUN npm prune --production
 
 # ── Layer 3: Install matterbridge globally and register plugin ────────────────
-RUN npm install -g matterbridge --no-fund --no-audit
+RUN npm install -g matterbridge@3.9.0 --no-fund --no-audit
 RUN matterbridge -add /app || true
 
 # ── Startup script ─────────────────────────────────────────────────────────────
