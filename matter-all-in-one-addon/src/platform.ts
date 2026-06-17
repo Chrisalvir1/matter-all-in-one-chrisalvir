@@ -84,6 +84,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       this.log.warn('Disconnected from Home Assistant');
     });
 
+    this.ha.on('error', (err) => {
+      this.log.error(`Home Assistant connection error: ${err}`);
+    });
+
     this.ha.on('event', (deviceId, entityId, oldState, newState) => {
       if (newState) {
         this.handleEntityStateChange(entityId, newState);
@@ -140,6 +144,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     });
     this.ha.on('disconnected', () => {
       this.log.warn('Disconnected from Home Assistant');
+    });
+    this.ha.on('error', (err) => {
+      this.log.error(`Home Assistant connection error: ${err}`);
     });
     this.ha.on('event', (_deviceId, entityId, _oldState, newState) => {
       if (newState) this.handleEntityStateChange(entityId, newState);
