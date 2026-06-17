@@ -1,5 +1,5 @@
-name: "Matter 1.5 All-in-One Bridge"
-description: "Expose Home Assistant entities to Matter 1.5 with HomeKit compatibility."
+name: "Matter 1.5.1 All-in-One Bridge"
+description: "Expose Home Assistant entities to Matter 1.5.1 with HomeKit compatibility."
 version: "1.1.0"
 slug: "matter_all_in_one_bridge"
 init: false

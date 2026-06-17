@@ -1,5 +1,5 @@
 /**
- * Matter 1.5 Bridge · Liquid Glass UI · script.js
+ * Matter 1.5.1 Bridge · Liquid Glass UI · script.js
  * v2 — Vista jerárquica: Dispositivo HA → Entidades seleccionables
  */
 
@@ -31,8 +31,8 @@ const HK_TYPES = {
     { id: 'onOffLight',              name: '💡 Interruptor como Luz',        desc: 'Exponer el switch como una luz simple. Útil para interruptores de tira LED sin dimmer.' },
   ],
   cover: [
-    { id: 'windowCovering',          name: '🪟 Persiana / Cortina',          desc: 'Window Covering (Matter 1.5): control de posición y tilt. Compatible con persianas, estores y cortinas motorizadas.' },
-    { id: 'closure',                 name: '🚪 Cerramiento Unificado',       desc: 'Closure Unified (Matter 1.5): puertas de garaje, puertas de entrada, verjas automatizadas.' },
+    { id: 'windowCovering',          name: '🪟 Persiana / Cortina',          desc: 'Window Covering (Matter 1.5.1): control de posición y tilt. Compatible con persianas, estores y cortinas motorizadas.' },
+    { id: 'closure',                 name: '🚪 Cerramiento Unificado',       desc: 'Closure Unified (Matter 1.5.1): puertas de garaje, puertas de entrada, verjas automatizadas.' },
   ],
   lock: [
     { id: 'doorLock',                name: '🔒 Cerradura de Puerta',         desc: 'Door Lock con soporte de credenciales PIN y acceso temporal. Compatible HomeKit 2026.' },
@@ -41,20 +41,20 @@ const HK_TYPES = {
     { id: 'thermostat',              name: '❄️ Termostato HVAC',             desc: 'Control de temperatura, modo calor/frío/auto y humedad. Compatible con todos los termostatos Matter.' },
   ],
   sensor: [
-    { id: 'temperatureSensor',       name: '🌡️ Sensor de Temperatura',      desc: 'Temperature Sensor (Matter 1.5). Reporta grados Celsius en tiempo real.' },
+    { id: 'temperatureSensor',       name: '🌡️ Sensor de Temperatura',      desc: 'Temperature Sensor (Matter 1.5.1). Reporta grados Celsius en tiempo real.' },
     { id: 'humiditySensor',          name: '💧 Sensor de Humedad Relativa',  desc: 'Relative Humidity Sensor. Muestra porcentaje de humedad en Apple Home / Google Home.' },
     { id: 'lightSensor',             name: '☀️ Sensor de Luminosidad',       desc: 'Light Sensor (Lux). Permite automatizaciones basadas en nivel de luz ambiente.' },
     { id: 'pressureSensor',          name: '📊 Sensor de Presión',           desc: 'Pressure Sensor (hPa). Para estaciones meteorológicas y sensores de aire.' },
     { id: 'flowSensor',              name: '💧 Sensor de Flujo de Agua',     desc: 'Flow Sensor. Medición de caudal de agua en sistemas de riego y fontanería.' },
     { id: 'occupancySensor',         name: '👤 Sensor de Presencia',         desc: 'Occupancy Sensor. Detección de presencia para automatizaciones de iluminación.' },
-    { id: 'soilMoistureSensor',      name: '🌱 Sensor de Humedad de Suelo',  desc: 'Soil Moisture Sensor (Matter 1.5). Para sistemas de riego automático y jardinería.' },
+    { id: 'soilMoistureSensor',      name: '🌱 Sensor de Humedad de Suelo',  desc: 'Soil Moisture Sensor (Matter 1.5.1). Para sistemas de riego automático y jardinería.' },
   ],
   binary_sensor: [
     { id: 'contactSensor',           name: '🚪 Sensor de Contacto',          desc: 'Detecta apertura y cierre de puertas, ventanas y cajones.' },
     { id: 'occupancySensor',         name: '👤 Sensor de Movimiento/Presencia', desc: 'Motion / Occupancy Sensor. Para detectar presencia en habitaciones y zonas.' },
   ],
   camera: [
-    { id: 'camera',                  name: '📹 Cámara de Red',               desc: 'Network Camera (Matter 1.5). Visualización de vídeo en tiempo real en Apple Home.' },
+    { id: 'camera',                  name: '📹 Cámara de Red',               desc: 'Network Camera (Matter 1.5.1). Visualización de vídeo en tiempo real en Apple Home.' },
   ],
   input_boolean: [
     { id: 'onOffPlugInUnit',         name: '🔌 Interruptor Virtual (Enchufe)', desc: 'Exponer el input_boolean como un enchufe virtual On/Off.' },

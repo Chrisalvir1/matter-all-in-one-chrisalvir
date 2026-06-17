@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -e
 
-echo "[Info] Starting Matter 1.5 All-in-One Bridge Add-on..."
+echo "[Info] Starting Matter 1.5.1 All-in-One Bridge Add-on..."
 
 # Read options from HA options file
 OPTIONS_FILE="/data/options.json"

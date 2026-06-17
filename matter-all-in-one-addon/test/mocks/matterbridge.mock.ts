@@ -21,6 +21,14 @@ export class MockMatterbridgeEndpoint {
 
   public addRequiredClusterServers() {}
 
+  public createDefaultBridgedDeviceBasicInformationClusterServer(
+    uniqueName: string,
+    serialNumber: string,
+    vendorId: number,
+    vendorName: string,
+    productLabel: string
+  ) {}
+
   public hasClusterServer(cluster: any): boolean {
     return this.clusterServers.has(cluster.id);
   }
@@ -73,7 +81,7 @@ export class MockMatterbridgeEndpoint {
 }
 
 export const mockMatterbridge = {
-  matterbridgeVersion: '3.8.0',
+  matterbridgeVersion: '3.9.0',
   systemInformation: { nodeVersion: 'v22.0.0' },
   matterbridgePluginDirectory: '/tmp/matterbridge-plugins',
   addBridgedEndpoint: vi.fn(),
@@ -90,6 +98,13 @@ export const mockLog = {
 };
 
 vi.mock('matterbridge', () => {
+  const makeMockDeviceType = (code: number, name: string) => ({
+    code,
+    name,
+    deviceClass: 'Simple',
+    category: 'Utility',
+  });
+
   return {
     MatterbridgeDynamicPlatform: class {
       public matterbridge: any;
@@ -105,5 +120,21 @@ vi.mock('matterbridge', () => {
       }
     },
     MatterbridgeEndpoint: MockMatterbridgeEndpoint,
+    onOffLight: makeMockDeviceType(0x0100, 'onOffLight'),
+    dimmableLight: makeMockDeviceType(0x0101, 'dimmableLight'),
+    colorTemperatureLight: makeMockDeviceType(0x010c, 'colorTemperatureLight'),
+    extendedColorLight: makeMockDeviceType(0x010d, 'extendedColorLight'),
+    onOffPlugInUnit: makeMockDeviceType(0x010a, 'onOffPlugInUnit'),
+    dimmablePlugInUnit: makeMockDeviceType(0x010b, 'dimmablePlugInUnit'),
+    doorLock: makeMockDeviceType(0x000a, 'doorLock'),
+    thermostat: makeMockDeviceType(0x0301, 'thermostat'),
+    windowCovering: makeMockDeviceType(0x0202, 'windowCovering'),
+    temperatureSensor: makeMockDeviceType(0x0302, 'temperatureSensor'),
+    humiditySensor: makeMockDeviceType(0x0307, 'humiditySensor'),
+    contactSensor: makeMockDeviceType(0x0015, 'contactSensor'),
+    occupancySensor: makeMockDeviceType(0x0107, 'occupancySensor'),
+    pressureSensor: makeMockDeviceType(0x0305, 'pressureSensor'),
+    flowSensor: makeMockDeviceType(0x0306, 'flowSensor'),
+    lightSensor: makeMockDeviceType(0x0106, 'lightSensor'),
   };
 });

@@ -1,3 +1,9 @@
+## Matter 1.5.1 baseline / preparación para Matter 1.6
+
+- Se establece **Matter 1.5.1** como baseline estable del proyecto.
+- Se mantienen las notas históricas de soporte Matter 1.4 y 1.5 como referencia funcional.
+- Se inicia la preparación de compatibilidad para **Matter 1.6** sin declarar aún migración completa.
+
 # Changelog
 
 All notable changes to this project will be documented in this file.

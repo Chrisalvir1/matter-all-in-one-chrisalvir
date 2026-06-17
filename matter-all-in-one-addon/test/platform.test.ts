@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import './mocks/matterbridge.mock.js';
 import './mocks/ha-api.mock.js';
 import { HomeAssistantPlatform } from '../src/platform.js';
@@ -19,6 +19,10 @@ describe('HomeAssistantPlatform', () => {
         token: 'fake-token',
       } as any
     );
+  });
+
+  afterEach(async () => {
+    await platform.onShutdown('test-teardown');
   });
 
   it('should initialize and connect to Home Assistant', async () => {

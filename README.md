@@ -1,13 +1,13 @@
 # matter-all-in-one-chrisalvir
 
-> **Matter 1.5 Bridge for Home Assistant**  
+> **Matter 1.5.1 Bridge for Home Assistant**  
 > Complete HomeKit (2025/2026) compatibility. Expose Home Assistant entities directly to the Matter protocol.
 
 ---
 
 ## 🌟 Key Features
 
-* **Complete HomeKit 2025/2026 Ready**: Native support for Apple HomeKit's upcoming Matter 1.5 specifications.
+* **Complete HomeKit 2025/2026 Ready**: Native support for Apple HomeKit's Matter 1.5.1 specifications.
 * **Unified Closure Support**: Cover entities (`cover.*`) mapped directly to the unified `ClosureDimension` and `ClosureControl` clusters.
 * **Secure IP Cameras**: Support for camera entities (`camera.*`) with RTSP, HLS, and WebRTC streaming using `CameraAvStreamManagement`.
 * **Soil Humidity Sensors**: Map sensor moisture measurements directly to standard Soil Moisture + Temperature endpoints.
@@ -17,7 +17,7 @@
 
 ## 📊 Supported Device Types
 
-| Device Type (Matter 1.5) | Home Assistant Domain | Primary Clusters | HomeKit Compatibility |
+| Device Type (Matter 1.5.1) | Home Assistant Domain | Primary Clusters | HomeKit Compatibility |
 | :--- | :--- | :--- | :--- |
 | **Camera** (0x0510) | `camera.*` | `CameraAvStreamManagement`, `WebRTCTransportProvider` | ✅ Native IP Camera (2025/2026) |
 | **Closure** (0x000d) | `cover.*` (garage, blind, curtain...) | `ClosureDimension`, `ClosureControl` | ✅ Native Closure (2025/2026) |

@@ -1,6 +1,6 @@
 # HomeKit Compatibility (2025/2026)
 
-This document provides a detailed overview of the compatibility of standard and new Matter 1.5 device types with Apple HomeKit (iOS 18+ and iOS 19/HomeKit 2025/2026 releases).
+This document provides a detailed overview of the compatibility of standard and new Matter 1.5.1 device types with Apple HomeKit (iOS 18+ and iOS 19/HomeKit 2025/2026 releases).
 
 ## Supported Device Type Mapping
 
@@ -28,7 +28,7 @@ export const homekitSupportedDeviceTypes = {
   solarPanel: false,
   heatPump: false,
   
-  // Matter 1.5 (HomeKit supported - 2025/2026)
+  // Matter 1.5.1 (HomeKit supported - 2025/2026)
   camera: true,          // Recognized as native IP video streams
   closure: true,         // Replaces legacy WindowCovering with Unified Closure behavior
   soilSensor: true,      // Native soil moisture reading

@@ -1,5 +1,5 @@
 /**
- * Converter utility for cover domain to Matter 1.5 Closure values.
+ * Converter utility for cover domain to Matter 1.5.1 Closure values.
  */
 import { HassState } from '../utils/ha-state.js';
 

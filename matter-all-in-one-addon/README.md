@@ -1,6 +1,6 @@
 # Matter All-in-One for Home Assistant
 
-Matter 1.5 All-in-One bridge for Home Assistant with full Apple HomeKit compatibility.
+Matter 1.5.1 All-in-One bridge for Home Assistant with full Apple HomeKit compatibility.
 
 ## Minimum Requirements
 - **iOS:** 18.4+
@@ -9,7 +9,7 @@ Matter 1.5 All-in-One bridge for Home Assistant with full Apple HomeKit compatib
 
 ## Supported Devices & HomeKit Compatibility
 
-With the transition to Matter 1.5, we support the following new device types alongside standard devices. Below is the HomeKit compatibility matrix:
+With Matter 1.5.1 as our stable baseline, we support the following new device types alongside standard devices. Below is the HomeKit compatibility matrix:
 
 | Device Type (Matter)       | HA Domain / Class | HomeKit Supported? |
 |----------------------------|-------------------|--------------------|

@@ -26,6 +26,10 @@ export class MockHomeAssistant extends EventEmitter {
     return Promise.resolve();
   }
 
+  public close() {
+    return this.disconnect();
+  }
+
   public fetchData() {
     // Populate mock states
     this.hassStates.set('light.living_room', {

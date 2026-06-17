@@ -31,7 +31,7 @@ export class ClosureEntity extends BaseEntity {
     if (!targetEndpoint) return;
 
     targetEndpoint.addCommandHandler('goToLiftPercentage', async (payload: any) => {
-      // Safely support both liftPercentageValue (Matter 1.3/1.4) and liftPercent100thsValue (Matter 1.5)
+      // Safely support both liftPercentageValue (Matter 1.3/1.4) and liftPercent100thsValue (Matter 1.5/1.5.1)
       let percent: number | undefined;
       if (payload.liftPercent100thsValue !== undefined) {
         percent = Math.round(payload.liftPercent100thsValue / 100);

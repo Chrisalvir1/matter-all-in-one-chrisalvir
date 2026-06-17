@@ -202,7 +202,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     const [domain] = entityId.split('.');
 
     // Filtering rules: Whitelist
-    const allowedDomains = ['light', 'switch', 'cover', 'lock', 'climate', 'fan', 'sensor', 'binary_sensor', 'vacuum', 'alarm_control_panel', 'water_heater', 'button', 'media_player'];
+    const allowedDomains = ['light', 'switch', 'cover', 'lock', 'climate', 'fan', 'sensor', 'binary_sensor', 'vacuum', 'alarm_control_panel', 'water_heater', 'button', 'media_player', 'camera'];
     if (!allowedDomains.includes(domain)) return;
 
     // Strict device_class whitelist for sensors to avoid exporting system/energy sensors
@@ -440,7 +440,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
         if (req.method === 'GET' && pathname === '/api/custom/devices') {
           const deviceList: any[] = [];
-          const allowedDomains = ['light', 'switch', 'cover', 'lock', 'climate', 'fan', 'sensor', 'binary_sensor', 'vacuum', 'alarm_control_panel', 'water_heater', 'button', 'media_player'];
+          const allowedDomains = ['light', 'switch', 'cover', 'lock', 'climate', 'fan', 'sensor', 'binary_sensor', 'vacuum', 'alarm_control_panel', 'water_heater', 'button', 'media_player', 'camera'];
 
           for (const haState of this.ha.hassStates.values()) {
             const entityId = haState.entity_id;

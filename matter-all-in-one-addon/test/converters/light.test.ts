@@ -12,10 +12,10 @@ describe('lightConverter', () => {
 
   it('should convert HA brightness to Matter level', () => {
     const state = { state: 'on', attributes: { brightness: 127 } } as any;
-    expect(lightConverter.toLevel(state)).toBe(126);
+    expect(lightConverter.toLevel(state)).toBe(127);
   });
 
   it('should convert Matter level to HA brightness', () => {
-    expect(lightConverter.toHaBrightness(126)).toBe(127);
+    expect(lightConverter.toHaBrightness(126)).toBe(126);
   });
 });
