@@ -1,8 +1,6 @@
 /**
  * Converter utility for climate (thermostat) domain.
  */
-import { HassState } from '../utils/ha-state.js';
-
 export const climateConverter = {
   /**
    * Convert Celsius temperature to Matter value (hundredths of a degree Celsius).
