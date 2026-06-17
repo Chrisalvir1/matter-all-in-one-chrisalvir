@@ -54,7 +54,12 @@ fi
 echo "[Info] Registering plugin..."
 matterbridge -add /app || true
 
+# Start Ingress proxy server
+echo "[Info] Starting proxy server on port 8283..."
+node /app/dist/proxy.js &
+
 # Start Matterbridge
 echo "[Info] Launching Matterbridge on port 8284..."
 exec matterbridge -frontend 8284
+
 

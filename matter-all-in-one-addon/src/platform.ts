@@ -279,7 +279,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   }
 
   /**
-   * Start custom HTTP server on port 8283 for Liquid Glass UI.
+   * Start custom HTTP server on port 8285 for Liquid Glass UI.
    */
   private startUiServer() {
     const server = http.createServer(async (req, res) => {
@@ -588,8 +588,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       }
     });
 
-    server.listen(8283, '0.0.0.0', () => {
-      this.log.notice('Custom Liquid Glass UI Server listening on port 8283');
+    server.listen(8285, '127.0.0.1', () => {
+      this.log.notice('Custom Liquid Glass UI Server listening on port 8285');
     });
 
     this.uiServer = server;
