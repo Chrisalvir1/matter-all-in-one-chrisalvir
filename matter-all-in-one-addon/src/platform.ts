@@ -7,7 +7,7 @@ import {
   PlatformConfig,
   PlatformMatterbridge,
 } from 'matterbridge';
-import { AnsiLogger, CYAN, db, idn, nf, rs } from 'matterbridge/logger';
+import { AnsiLogger, CYAN, idn, nf, rs } from 'matterbridge/logger';
 import http from 'http';
 import fs from 'fs/promises';
 import path from 'path';

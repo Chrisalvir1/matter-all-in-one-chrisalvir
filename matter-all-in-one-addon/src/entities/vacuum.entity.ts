@@ -15,16 +15,12 @@
  */
 
 import { MatterbridgeEndpoint, DeviceTypeDefinition } from 'matterbridge';
-import { AnsiLogger } from 'matterbridge/logger';
 import { BaseEntity } from './base.entity.js';
 import type { HassState } from '../utils/ha-state.js';
 import {
   buildVacuumUpdate,
   buildVacuumMatterMeta,
-  matterCommandToHaVacuum,
-  RvcOperationalStateId,
 } from '../converters/vacuum.converter.js';
-import type { HomeAssistantPlatformConfig } from '../platform.js';
 
 // Re-export so platform.ts can import from one place
 export { buildVacuumMatterMeta };
