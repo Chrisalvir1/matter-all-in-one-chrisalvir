@@ -85,7 +85,6 @@ export class BaseEntity {
     await this.addCustomClusterServers();
 
     this.registerCommandHandlers();
-    this.syncInitialState();
 
     return this.endpoint;
   }
@@ -151,16 +150,9 @@ export class BaseEntity {
    * error silently — Matterbridge will pick up the initial values when
    * the endpoint transitions to active during commissioning setup.
    */
-  protected syncInitialState() {
-    // Mark that we are in the pre-registration phase so safeSetAttribute
-    // suppresses the "inactive state" warning that floods the logs.
-    this._initializing = true;
-    this.updateState(this.state);
-    this._initializing = false;
+  public async syncInitialState(): Promise<void> {
+    await this.updateState(this.state);
   }
-
-  /** True while syncInitialState() is running (endpoint not yet active). */
-  private _initializing = false;
 
   /**
    * Clamp a level value to the LevelControl minLevel / maxLevel bounds
@@ -197,13 +189,7 @@ export class BaseEntity {
     if (domain === 'light' || domain === 'switch') {
       const isOn = newState.state === 'on';
 
-      // Suppress "inactive state" noise during initial sync; the attribute
-      // will be committed once the endpoint becomes active.
-      if (!this._initializing) {
-        safeSetAttribute(this.endpoint, OnOff.id, 'onOff', isOn, this.platform.log);
-      } else {
-        safeSetAttribute(this.endpoint, OnOff.id, 'onOff', isOn);
-      }
+      safeSetAttribute(this.endpoint, OnOff.id, 'onOff', isOn, this.platform.log);
 
       if (newState.attributes.brightness !== undefined) {
         // HA brightness: 0-255  →  Matter currentLevel: 1-254
@@ -212,11 +198,7 @@ export class BaseEntity {
         // state is communicated via onOff cluster, not currentLevel=0).
         const raw   = Math.round((newState.attributes.brightness / 255) * 254);
         const level = this.clampLevel(Math.max(1, raw));
-        if (!this._initializing) {
-          safeSetAttribute(this.endpoint, LevelControl.id, 'currentLevel', level, this.platform.log);
-        } else {
-          safeSetAttribute(this.endpoint, LevelControl.id, 'currentLevel', level);
-        }
+        safeSetAttribute(this.endpoint, LevelControl.id, 'currentLevel', level, this.platform.log);
       }
     }
   }

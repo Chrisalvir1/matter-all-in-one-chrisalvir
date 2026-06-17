@@ -260,6 +260,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         await this.registerDevice(endpoint);
         this.entities.set(entityId, entityInstance);
         this.matterbridgeDevices.set(entityId, endpoint);
+        await entityInstance.syncInitialState();
         this.log.info(`Successfully registered device ${idn}${entityId}${rs} as Matter endpoint.`);
       }
     } catch (err) {

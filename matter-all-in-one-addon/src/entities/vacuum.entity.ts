@@ -39,9 +39,6 @@ export class VacuumEntity extends BaseEntity {
   override async createEndpoint(): Promise<MatterbridgeEndpoint> {
     const endpoint = await super.createEndpoint();
 
-    // Apply initial state
-    await this.syncState(endpoint, this.state);
-
     // Register RVC command handlers
     this.registerCommandHandlers(endpoint);
 
@@ -51,9 +48,8 @@ export class VacuumEntity extends BaseEntity {
   // ─── State sync (HA → Matter) ─────────────────────────────────────────
 
   override async updateState(newState: HassState): Promise<void> {
-    const endpoint = this.platform.matterbridgeDevices?.get(this.state.entity_id);
-    if (!endpoint) return;
-    await this.syncState(endpoint, newState);
+    if (!this.endpoint) return;
+    await this.syncState(this.endpoint, newState);
     this.state = newState;
   }
 
