@@ -397,42 +397,43 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           let manualPairingCode = '';
           let commissioned = false;
           let pairedFabrics: any[] = [];
-          // Matterbridge 1.7+ protects internal APIs. We first authorize our loopback IP
-          // by sending an empty password to /api/login, then fetch /api/settings.
+          // === ESTRATEGIA DEFINITIVA ===
+          // Matterbridge expone un singleton estático: Matterbridge.instance
+          // Accedemos a él directamente en memoria usando createRequire para resolver
+          // el módulo global instalado en el contenedor.
           try {
-            // 1. Authorize localhost IP
-            await fetch('http://127.0.0.1:8284/api/login', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ password: '' })
-            });
+            const { createRequire } = await import('node:module');
+            // Rutas candidatas del módulo global de matterbridge en el contenedor
+            const candidatePaths = [
+              '/usr/local/lib/node_modules/matterbridge/node_modules/@matterbridge/core/dist/matterbridge.js',
+              '/usr/lib/node_modules/matterbridge/node_modules/@matterbridge/core/dist/matterbridge.js',
+              '/root/matterbridge/node_modules/@matterbridge/core/dist/matterbridge.js',
+            ];
+            let MatterbridgeClass: any = null;
+            for (const p of candidatePaths) {
+              try {
+                const r = createRequire(p);
+                const mod = r(p);
+                if (mod?.Matterbridge) { MatterbridgeClass = mod.Matterbridge; break; }
+              } catch { /* try next */ }
+            }
+            // Fallback: intentar require normal si el módulo está en la cadena de resolución
+            if (!MatterbridgeClass) {
+              const r = createRequire(import.meta.url);
+              try { MatterbridgeClass = r('@matterbridge/core/dist/matterbridge.js')?.Matterbridge; } catch { /* not found */ }
+            }
 
-            // 2. Fetch bridge state
-            const settingsRes = await fetch('http://127.0.0.1:8284/api/settings');
-            if (settingsRes.ok) {
-              const settingsData = await settingsRes.json() as any;
-              qrPairingCode = this.normalizeMatterQrCode(settingsData.qrPairingCode);
-              manualPairingCode = this.normalizeMatterManualCode(settingsData.manualPairingCode);
-              commissioned = settingsData.commissioned === true || settingsData.paired === true;
-              pairedFabrics = settingsData.pairedFabrics || settingsData.fabricInformations || [];
-              // this.log.debug('[UI Server] Got bridge data from /api/settings');
-            } else {
-              throw new Error(`Unexpected response from /api/settings: ${settingsRes.status}`);
+            const mb = MatterbridgeClass?.instance;
+            if (mb?.serverNode?.state?.commissioning?.pairingCodes) {
+              const codes = mb.serverNode.state.commissioning.pairingCodes;
+              qrPairingCode = this.normalizeMatterQrCode(codes.qrPairingCode);
+              manualPairingCode = this.normalizeMatterManualCode(codes.manualPairingCode);
+              commissioned = mb.serverNode.state.commissioning.commissioned === true;
+              const fabrics = mb.serverNode.state.commissioning.fabrics;
+              pairedFabrics = fabrics ? Object.values(fabrics) : [];
             }
           } catch (err) {
-            // Fallback to disk if the API is entirely offline (during startup)
-            try {
-              const mbJsonPath = '/root/.matterbridge/matterbridge.json';
-              const fs = await import('node:fs/promises');
-              const mbRaw = await fs.readFile(mbJsonPath, 'utf8');
-              const mbData = JSON.parse(mbRaw);
-              qrPairingCode = this.normalizeMatterQrCode(mbData.qrPairingCode || mbData.qrcode);
-              manualPairingCode = this.normalizeMatterManualCode(mbData.manualPairingCode || mbData.manualCode);
-              commissioned = mbData.commissioned === true;
-              pairedFabrics = mbData.pairedFabrics || mbData.fabricInformations || [];
-            } catch (fsErr) {
-              // bridge data not available yet
-            }
+            // bridge data not available yet — silently ignore during startup
           }
 
           const status = commissioned ? 'vinculado' : (qrPairingCode ? 'esperando' : 'iniciando');
