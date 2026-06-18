@@ -6,7 +6,7 @@ import { OnOff, LevelControl, ColorControl } from 'matterbridge/matter/clusters'
 import { ClusterId } from 'matterbridge/matter/types';
 import { HomeAssistantPlatform } from '../platform.js';
 import { HassState } from '../utils/ha-state.js';
-import { safeSetAttribute } from '../utils/matter-attributes.js';
+import { safeSetAttribute, safeUpdateAttribute } from '../utils/matter-attributes.js';
 
 export class BaseEntity {
   public platform: HomeAssistantPlatform;
@@ -38,7 +38,11 @@ export class BaseEntity {
       if (this.state.attributes.brightness !== undefined) {
         clusters.push(LevelControl.id);
       }
-      if (this.state.attributes.color_mode !== undefined) {
+      // Only add ColorControl if the light supports real color modes
+      const supportedModes: string[] = this.state.attributes.supported_color_modes ?? [];
+      const realColorModes = ['hs', 'xy', 'rgb', 'rgbw', 'rgbww', 'color_temp'];
+      const hasColorCapability = supportedModes.some(m => realColorModes.includes(m));
+      if (hasColorCapability) {
         clusters.push(ColorControl.id);
       }
     }
@@ -62,14 +66,14 @@ export class BaseEntity {
     const uniqueName = displayName.substring(0, 32).trim();
 
     this.endpoint = new MatterbridgeEndpoint([this.deviceType], {
-      id: this.entityId.replace('.', '_'),
+      id: this.entityId.replaceAll('.', '_'),
       mode: undefined,
     });
 
     const [domain] = this.entityId.split('.');
     this.endpoint.createDefaultBridgedDeviceBasicInformationClusterServer(
       uniqueName,
-      this.entityId.replace('.', '_').substring(0, 32),
+      this.entityId.replaceAll('.', '_').substring(0, 32),
       0xfff1,
       'Home Assistant',
       domain.charAt(0).toUpperCase() + domain.slice(1)
@@ -151,7 +155,7 @@ export class BaseEntity {
    * the endpoint transitions to active during commissioning setup.
    */
   public async syncInitialState(): Promise<void> {
-    await this.updateState(this.state);
+    await this.updateState(this.state, true);
   }
 
   /**
@@ -182,14 +186,18 @@ export class BaseEntity {
    * Sync a new Home Assistant state update to the Matter endpoint.
    * Safe to call at any point in the endpoint lifecycle.
    */
-  public updateState(newState: HassState) {
+  public updateState(newState: HassState, isInitialSync = false) {
     this.state = newState;
     const [domain] = this.entityId.split('.');
 
     if (domain === 'light' || domain === 'switch') {
       const isOn = newState.state === 'on';
 
-      safeSetAttribute(this.endpoint, OnOff.id, 'onOff', isOn, this.platform.log);
+      if (isInitialSync) {
+        safeSetAttribute(this.endpoint, OnOff.id, 'onOff', isOn, this.platform.log);
+      } else {
+        safeUpdateAttribute(this.endpoint, OnOff.id, 'onOff', isOn, this.platform.log);
+      }
 
       if (newState.attributes.brightness !== undefined) {
         // HA brightness: 0-255  →  Matter currentLevel: 1-254
@@ -198,7 +206,11 @@ export class BaseEntity {
         // state is communicated via onOff cluster, not currentLevel=0).
         const raw   = Math.round((newState.attributes.brightness / 255) * 254);
         const level = this.clampLevel(Math.max(1, raw));
-        safeSetAttribute(this.endpoint, LevelControl.id, 'currentLevel', level, this.platform.log);
+        if (isInitialSync) {
+          safeSetAttribute(this.endpoint, LevelControl.id, 'currentLevel', level, this.platform.log);
+        } else {
+          safeUpdateAttribute(this.endpoint, LevelControl.id, 'currentLevel', level, this.platform.log);
+        }
       }
     }
   }

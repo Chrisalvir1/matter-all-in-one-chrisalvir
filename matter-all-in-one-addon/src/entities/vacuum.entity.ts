@@ -21,6 +21,7 @@ import {
   buildVacuumUpdate,
   buildVacuumMatterMeta,
 } from '../converters/vacuum.converter.js';
+import { safeSetAttribute, safeUpdateAttribute } from '../utils/matter-attributes.js';
 
 // Re-export so platform.ts can import from one place
 export { buildVacuumMatterMeta };
@@ -34,58 +35,84 @@ export class VacuumEntity extends BaseEntity {
     super(platform, state, deviceType);
   }
 
-  // ─── Endpoint creation ─────────────────────────────────────────────
-
-  override async createEndpoint(): Promise<MatterbridgeEndpoint> {
-    const endpoint = await super.createEndpoint();
-
-    // Register RVC command handlers
-    this.registerCommandHandlers(endpoint);
-
-    return endpoint;
-  }
-
   // ─── State sync (HA → Matter) ─────────────────────────────────────────
 
-  override async updateState(newState: HassState): Promise<void> {
+  override async updateState(newState: HassState, isInitialSync = false): Promise<void> {
     if (!this.endpoint) return;
-    await this.syncState(this.endpoint, newState);
+    await this.syncState(this.endpoint, newState, isInitialSync);
     this.state = newState;
   }
 
-  private async syncState(endpoint: MatterbridgeEndpoint, state: HassState): Promise<void> {
+  private async syncState(endpoint: MatterbridgeEndpoint, state: HassState, isInitialSync = false): Promise<void> {
     const update = buildVacuumUpdate(state as any);
 
     try {
       // OnOff — true while cleaning
-      await endpoint.setAttribute('onOff', 'onOff', update.onOff, this.platform.log);
+      if (isInitialSync) {
+        safeSetAttribute(endpoint, 'onOff' as any, 'onOff', update.onOff, this.platform.log);
+      } else {
+        safeUpdateAttribute(endpoint, 'onOff' as any, 'onOff', update.onOff, this.platform.log);
+      }
 
       // RvcOperationalState.operationalState
-      await endpoint.setAttribute(
-        'rvcOperationalState',
-        'operationalState',
-        update.operationalState,
-        this.platform.log,
-      );
-
-      // Battery — Matter PowerSource uses 0-200 range (batPercentRemaining)
-      if (update.batteryLevel !== null) {
-        await endpoint.setAttribute(
-          'powerSource',
-          'batPercentRemaining',
-          Math.round(update.batteryLevel * 2),
+      if (isInitialSync) {
+        safeSetAttribute(
+          endpoint,
+          'rvcOperationalState' as any,
+          'operationalState',
+          update.operationalState,
+          this.platform.log,
+        );
+      } else {
+        safeUpdateAttribute(
+          endpoint,
+          'rvcOperationalState' as any,
+          'operationalState',
+          update.operationalState,
           this.platform.log,
         );
       }
 
+      // Battery — Matter PowerSource uses 0-200 range (batPercentRemaining)
+      if (update.batteryLevel !== null) {
+        if (isInitialSync) {
+          safeSetAttribute(
+            endpoint,
+            'powerSource' as any,
+            'batPercentRemaining',
+            Math.round(update.batteryLevel * 2),
+            this.platform.log,
+          );
+        } else {
+          safeUpdateAttribute(
+            endpoint,
+            'powerSource' as any,
+            'batPercentRemaining',
+            Math.round(update.batteryLevel * 2),
+            this.platform.log,
+          );
+        }
+      }
+
       // Fan / suction speed via FanControl.percentSetting (0-100)
       if (update.fanSpeedPercent !== null) {
-        await endpoint.setAttribute(
-          'fanControl',
-          'percentSetting',
-          update.fanSpeedPercent,
-          this.platform.log,
-        );
+        if (isInitialSync) {
+          safeSetAttribute(
+            endpoint,
+            'fanControl' as any,
+            'percentSetting',
+            update.fanSpeedPercent,
+            this.platform.log,
+          );
+        } else {
+          safeUpdateAttribute(
+            endpoint,
+            'fanControl' as any,
+            'percentSetting',
+            update.fanSpeedPercent,
+            this.platform.log,
+          );
+        }
       }
     } catch (err) {
       this.platform.log?.warn?.(`[VacuumEntity] syncState error for ${this.state.entity_id}: ${err}`);

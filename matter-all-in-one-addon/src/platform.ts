@@ -12,7 +12,7 @@ import http from 'http';
 import fs from 'fs/promises';
 import path from 'path';
 import { HomeAssistant } from './homeAssistant.js';
-import { HassState } from './utils/ha-state.js';
+import { HassState, isUnavailable } from './utils/ha-state.js';
 import { discoverHassUrl, toWsUrl } from './utils/ha-discovery.js';
 import { getDeviceTypeForEntity, MatterDeviceTypes } from './device-registry.js';
 import { BaseEntity } from './entities/base.entity.js';
@@ -97,19 +97,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     this._configHost = config.host;
     this._configToken = token;
 
-    // Temporary placeholder — replaced with correct URL inside onStart()
-    this.ha = new HomeAssistant(
-      'ws://homeassistant.local:8123',
-      token,
-      60,        // reconnectTimeoutSeconds
-      10,        // reconnectRetries
-      undefined, // certificatePath
-      false      // rejectUnauthorized — allow self-signed certs on LAN
-    );
+    this.log.info(`Platform initialised — host will be resolved on start.`);
+  }
 
-    this.log.info(`Platform initialised — host will be resolved on start (token: ${token ? 'provided' : 'none / trust-local'}).`);
-
-    // Register events from HA WebSocket Client
+  /** Register event listeners on the HA client instance — call once. */
+  private setupHaListeners() {
     this.ha.on('connected', (version) => {
       this.log.notice(`Connected to Home Assistant ${version}`);
       void this.discoverAndSync();
@@ -123,7 +115,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       this.log.error(`Home Assistant connection error: ${err}`);
     });
 
-    this.ha.on('event', (deviceId, entityId, oldState, newState) => {
+    this.ha.on('event', (_deviceId, entityId, _oldState, newState) => {
       if (newState) {
         this.handleEntityStateChange(entityId, newState);
       }
@@ -161,8 +153,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     const wsHost = toWsUrl(rawHost);
     this.log.info(`Connecting to Home Assistant at ${CYAN}${wsHost}${nf} (token: ${this._configToken ? 'provided' : 'none / trust-local'})`);
 
-    // Re-create the HA client with the resolved URL
-    // (events registered in the constructor stay because we re-register them below)
+    // Create the HA client with the resolved URL
     this.ha = new HomeAssistant(
       wsHost,
       this._configToken,
@@ -172,20 +163,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       false,
     );
 
-    // Re-register HA events on the new instance
-    this.ha.on('connected', (version) => {
-      this.log.notice(`Connected to Home Assistant ${version}`);
-      void this.discoverAndSync();
-    });
-    this.ha.on('disconnected', () => {
-      this.log.warn('Disconnected from Home Assistant');
-    });
-    this.ha.on('error', (err) => {
-      this.log.error(`Home Assistant connection error: ${err}`);
-    });
-    this.ha.on('event', (_deviceId, entityId, _oldState, newState) => {
-      if (newState) this.handleEntityStateChange(entityId, newState);
-    });
+    this.setupHaListeners();
     // ──────────────────────────────────────────────────────────────
 
     try {
@@ -241,6 +219,19 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
    */
   private async registerHAEntity(state: HassState) {
     const entityId = state.entity_id;
+
+    // Idempotency guard: if already registered, just update state
+    if (this.entities.has(entityId)) {
+      this.entities.get(entityId)!.updateState(state);
+      return;
+    }
+
+    // Skip unavailable / unknown entities
+    if (isUnavailable(state)) {
+      this.log.debug(`Skipping ${entityId} because it is unavailable/unknown.`);
+      return;
+    }
+
     const [domain] = entityId.split('.');
 
     // Filtering rules: Whitelist
@@ -292,10 +283,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     try {
       const endpoint = await entityInstance.createEndpoint();
       if (endpoint) {
-        await this.registerDevice(endpoint);
+        // Sync initial state BEFORE registering (endpoint is inactive → setAttribute is correct)
+        await entityInstance.syncInitialState();
         this.entities.set(entityId, entityInstance);
         this.matterbridgeDevices.set(entityId, endpoint);
-        await entityInstance.syncInitialState();
+        await this.registerDevice(endpoint);
         this.log.info(`Successfully registered device ${idn}${entityId}${rs} as Matter endpoint.`);
       }
     } catch (err) {
@@ -606,11 +598,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         if (req.method === 'POST' && pathname === '/api/custom/factoryreset') {
           res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
           res.end(JSON.stringify({ success: true, message: 'Restableciendo de fábrica...' }));
-          this.log.warn('[UI Server] Factory reset requested, wiping storage and exiting...');
+          this.log.warn('[UI Server] Factory reset requested, wiping plugin overrides and exiting...');
           setTimeout(async () => {
             try {
               const { rm } = await import('fs/promises');
-              await rm('/root/.matterbridge', { recursive: true, force: true });
+              await rm('/data/device-overrides.json', { force: true });
             } catch (err) {
               this.log.error(`Failed to wipe storage: ${err}`);
             }
