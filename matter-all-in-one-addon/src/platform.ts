@@ -392,6 +392,18 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           return;
         }
 
+        if (req.method === 'GET' && pathname === '/qrcode.min.js') {
+          const content = await this.readFrontendFile('qrcode.min.js');
+          if (content) {
+            res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8' });
+            res.end(content);
+          } else {
+            res.writeHead(404);
+            res.end('Not Found');
+          }
+          return;
+        }
+
         if (req.method === 'GET' && pathname === '/api/custom/status') {
           let qrPairingCode = '';
           let manualPairingCode = '';
