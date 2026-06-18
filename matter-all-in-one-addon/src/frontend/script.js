@@ -525,22 +525,7 @@ function openEntityModal(entity) {
     updateHkTypeDesc();
   }
 
-  // QR del bridge (compartido para todas las entidades)
-  modalQrPh.style.display  = 'flex';
-  modalQrEl.style.display  = 'none';
-  if (bridgeQrCode || bridgeManualCode) {
-    modalManual.textContent = bridgeManualCode || '---- --- ----';
-    if (bridgeQrCode) {
-      const ok = renderQR(modalQrEl, bridgeQrCode, 160);
-      if (ok) {
-        modalQrPh.style.display = 'none';
-        modalQrEl.style.display = 'block';
-        modalQrRendered = true;
-      }
-    }
-  } else {
-    modalManual.textContent = '---- --- ----';
-  }
+
 
   saveFeedback.textContent = '';
   saveFeedback.className   = 'save-feedback';
