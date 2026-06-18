@@ -397,32 +397,42 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           let manualPairingCode = '';
           let commissioned = false;
           let pairedFabrics: any[] = [];
-
-          // Get bridge data directly from the Matterbridge instance in memory
+          // Matterbridge 1.7+ protects internal APIs. We first authorize our loopback IP
+          // by sending an empty password to /api/login, then fetch /api/settings.
           try {
-            const mb = this.matterbridge as any;
-            if (mb && mb.serverNode && typeof mb.getServerNodeData === 'function') {
-              const nodeData = mb.getServerNodeData(mb.serverNode);
-              if (nodeData) {
-                qrPairingCode = this.normalizeMatterQrCode(nodeData.qrPairingCode);
-                manualPairingCode = this.normalizeMatterManualCode(nodeData.manualPairingCode);
-                commissioned = nodeData.commissioned === true;
-                pairedFabrics = nodeData.fabricInformations || [];
-                // this.log.debug('[UI Server] Got bridge data from internal Matterbridge state');
-              }
+            // 1. Authorize localhost IP
+            await fetch('http://127.0.0.1:8284/api/login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ password: '' })
+            });
+
+            // 2. Fetch bridge state
+            const settingsRes = await fetch('http://127.0.0.1:8284/api/settings');
+            if (settingsRes.ok) {
+              const settingsData = await settingsRes.json() as any;
+              qrPairingCode = this.normalizeMatterQrCode(settingsData.qrPairingCode);
+              manualPairingCode = this.normalizeMatterManualCode(settingsData.manualPairingCode);
+              commissioned = settingsData.commissioned === true || settingsData.paired === true;
+              pairedFabrics = settingsData.pairedFabrics || settingsData.fabricInformations || [];
+              // this.log.debug('[UI Server] Got bridge data from /api/settings');
             } else {
-              // Fallback to disk if serverNode is not yet initialized
+              throw new Error(`Unexpected response from /api/settings: ${settingsRes.status}`);
+            }
+          } catch (err) {
+            // Fallback to disk if the API is entirely offline (during startup)
+            try {
               const mbJsonPath = '/root/.matterbridge/matterbridge.json';
+              const fs = await import('node:fs/promises');
               const mbRaw = await fs.readFile(mbJsonPath, 'utf8');
               const mbData = JSON.parse(mbRaw);
               qrPairingCode = this.normalizeMatterQrCode(mbData.qrPairingCode || mbData.qrcode);
               manualPairingCode = this.normalizeMatterManualCode(mbData.manualPairingCode || mbData.manualCode);
               commissioned = mbData.commissioned === true;
               pairedFabrics = mbData.pairedFabrics || mbData.fabricInformations || [];
+            } catch (fsErr) {
+              // bridge data not available yet
             }
-          } catch (err) {
-            // normal during startup if files don't exist yet
-            // this.log.debug('[UI Server] Bridge data not available yet: ' + (err instanceof Error ? err.message : err));
           }
 
           const status = commissioned ? 'vinculado' : (qrPairingCode ? 'esperando' : 'iniciando');
