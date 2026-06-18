@@ -1,5 +1,5 @@
 /**
- * Matter 1.5.1 Bridge · Liquid Glass UI · script.js
+ * Matter 1.5.x Bridge · Liquid Glass UI · script.js
  * v2 — Vista jerárquica: Dispositivo HA → Entidades seleccionables
  */
 
@@ -31,8 +31,8 @@ const HK_TYPES = {
     { id: 'onOffLight',              name: '💡 Interruptor como Luz',        desc: 'Exponer el switch como una luz simple. Útil para interruptores de tira LED sin dimmer.' },
   ],
   cover: [
-    { id: 'windowCovering',          name: '🪟 Persiana / Cortina',          desc: 'Window Covering (Matter 1.5.1): control de posición y tilt. Compatible con persianas, estores y cortinas motorizadas.' },
-    { id: 'closure',                 name: '🚪 Cerramiento Unificado',       desc: 'Closure Unified (Matter 1.5.1): puertas de garaje, puertas de entrada, verjas automatizadas.' },
+    { id: 'windowCovering',          name: '🪟 Persiana / Cortina',          desc: 'Window Covering (Matter 1.5.x): control de posición y tilt. Compatible con persianas, estores y cortinas motorizadas.' },
+    { id: 'closure',                 name: '🚪 Cerramiento Unificado',       desc: 'Closure Unified (Matter 1.5.x): puertas de garaje, puertas de entrada, verjas automatizadas.' },
   ],
   lock: [
     { id: 'doorLock',                name: '🔒 Cerradura de Puerta',         desc: 'Door Lock con soporte de credenciales PIN y acceso temporal. Compatible HomeKit 2026.' },
@@ -41,20 +41,20 @@ const HK_TYPES = {
     { id: 'thermostat',              name: '❄️ Termostato HVAC',             desc: 'Control de temperatura, modo calor/frío/auto y humedad. Compatible con todos los termostatos Matter.' },
   ],
   sensor: [
-    { id: 'temperatureSensor',       name: '🌡️ Sensor de Temperatura',      desc: 'Temperature Sensor (Matter 1.5.1). Reporta grados Celsius en tiempo real.' },
+    { id: 'temperatureSensor',       name: '🌡️ Sensor de Temperatura',      desc: 'Temperature Sensor (Matter 1.5.x). Reporta grados Celsius en tiempo real.' },
     { id: 'humiditySensor',          name: '💧 Sensor de Humedad Relativa',  desc: 'Relative Humidity Sensor. Muestra porcentaje de humedad en Apple Home / Google Home.' },
     { id: 'lightSensor',             name: '☀️ Sensor de Luminosidad',       desc: 'Light Sensor (Lux). Permite automatizaciones basadas en nivel de luz ambiente.' },
     { id: 'pressureSensor',          name: '📊 Sensor de Presión',           desc: 'Pressure Sensor (hPa). Para estaciones meteorológicas y sensores de aire.' },
     { id: 'flowSensor',              name: '💧 Sensor de Flujo de Agua',     desc: 'Flow Sensor. Medición de caudal de agua en sistemas de riego y fontanería.' },
     { id: 'occupancySensor',         name: '👤 Sensor de Presencia',         desc: 'Occupancy Sensor. Detección de presencia para automatizaciones de iluminación.' },
-    { id: 'soilMoistureSensor',      name: '🌱 Sensor de Humedad de Suelo',  desc: 'Soil Moisture Sensor (Matter 1.5.1). Para sistemas de riego automático y jardinería.' },
+    { id: 'soilMoistureSensor',      name: '🌱 Sensor de Humedad de Suelo',  desc: 'Soil Moisture Sensor (Matter 1.5.x). Para sistemas de riego automático y jardinería.' },
   ],
   binary_sensor: [
     { id: 'contactSensor',           name: '🚪 Sensor de Contacto',          desc: 'Detecta apertura y cierre de puertas, ventanas y cajones.' },
     { id: 'occupancySensor',         name: '👤 Sensor de Movimiento/Presencia', desc: 'Motion / Occupancy Sensor. Para detectar presencia en habitaciones y zonas.' },
   ],
   camera: [
-    { id: 'camera',                  name: '📹 Cámara de Red',               desc: 'Network Camera (Matter 1.5.1). Visualización de vídeo en tiempo real en Apple Home.' },
+    { id: 'camera',                  name: '📹 Cámara de Red',               desc: 'Network Camera (Matter 1.5.x). Visualización de vídeo en tiempo real en Apple Home.' },
   ],
   input_boolean: [
     { id: 'onOffPlugInUnit',         name: '🔌 Interruptor Virtual (Enchufe)', desc: 'Exponer el input_boolean como un enchufe virtual On/Off.' },
@@ -136,6 +136,7 @@ const modalQrEl         = $('modal-qrcode');
 const modalQrPh         = $('modal-qr-placeholder');
 const modalManual       = $('modal-manual-code');
 const modalCopyBtn      = $('modal-copy-btn');
+const modalQrExportBtn  = $('modal-qr-export-btn');
 const modalQrDeviceName = $('modal-qr-device-name');
 
 // Confirm modal
@@ -242,9 +243,8 @@ function groupEntitiesByDevice(entities) {
   for (const entity of entities) {
     // El backend puede enviar device_id, device_name, area_name
     const devId   = entity.device_id || `__domain_${entity.domain}`;
-    const devName = entity.device_name || entity.device_id
-                    ? (entity.device_name || entity.device_id)
-                    : `${entity.domain.charAt(0).toUpperCase() + entity.domain.slice(1)}s`;
+    const devName = entity.device_name || entity.device_id ||
+                    `${entity.domain.charAt(0).toUpperCase() + entity.domain.slice(1)}s`;
     const area    = entity.area_name || '';
 
     if (!grouped.has(devId)) {
@@ -571,13 +571,14 @@ function openEntityTypeModal(entity, device) {
     updateHkTypeDesc();
   }
 
-  // QR del dispositivo
+  // QR del puente Matter asociado a esta entidad. Las entidades puenteadas
+  // comparten el mismo payload de emparejamiento del bridge.
   modalQrPh.style.display = 'flex';
   modalQrEl.style.display = 'none';
-  const code = bridgeManualCode;
-  if (code) {
-    modalManual.textContent = code;
-    const ok = renderQR(modalQrEl, code, 160);
+  const qrPayload = bridgeQrCode;
+  if (bridgeManualCode || qrPayload) {
+    modalManual.textContent = bridgeManualCode || '---- --- ----';
+    const ok = renderQR(modalQrEl, qrPayload || bridgeManualCode, 160);
     if (ok) {
       modalQrPh.style.display = 'none';
       modalQrEl.style.display = 'block';
@@ -670,6 +671,19 @@ modalCopyBtn && modalCopyBtn.addEventListener('click', () => {
     modalCopyBtn.textContent = '✅';
     setTimeout(() => { modalCopyBtn.textContent = '📋'; }, 1500);
   });
+});
+
+modalQrExportBtn && modalQrExportBtn.addEventListener('click', () => {
+  const canvas = modalQrEl.querySelector('canvas');
+  const img = modalQrEl.querySelector('img');
+  const dataUrl = canvas ? canvas.toDataURL('image/png') : img?.src;
+  if (!dataUrl || !activeDevice?.entity) return;
+  const link = document.createElement('a');
+  link.href = dataUrl;
+  link.download = `${activeDevice.entity.entityId.replace(/[^a-z0-9_-]+/gi, '_')}-matter-qr.png`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
 });
 
 // ── Búsqueda ──────────────────────────────────────────────────

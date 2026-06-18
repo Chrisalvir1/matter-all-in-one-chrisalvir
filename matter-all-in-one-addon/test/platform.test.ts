@@ -45,6 +45,26 @@ describe('HomeAssistantPlatform', () => {
     expect(platform.entities.has('sensor.garden_moisture')).toBe(true);
   });
 
+  it('should expose Home Assistant device registry metadata in the custom devices API', async () => {
+    await platform.onStart();
+    platform.ha.emit('connected', '2026.6.0');
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    const res = await fetch('http://127.0.0.1:8285/api/custom/devices');
+    expect(res.ok).toBe(true);
+
+    const devices = await res.json() as any[];
+    const livingRoomLight = devices.find(device => device.entityId === 'light.living_room');
+
+    expect(livingRoomLight).toMatchObject({
+      device_id: 'device-light-1',
+      device_name: 'Living Room Lamp',
+      area_name: 'Living Room',
+      entity_registry_id: 'entity-light-1',
+      platform: 'mock',
+    });
+  });
+
   it('should update entities state when a HA event occurs', async () => {
     await platform.onStart();
     platform.ha.emit('connected', '2026.6.0');

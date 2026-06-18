@@ -7,6 +7,9 @@ import { EventEmitter } from 'node:events';
 export class MockHomeAssistant extends EventEmitter {
   public connected = false;
   public hassStates = new Map<string, any>();
+  public hassDevices = new Map<string, any>();
+  public hassEntities = new Map<string, any>();
+  public hassAreas = new Map<string, any>();
   public hassConfig = {};
   public hassServices = {};
 
@@ -31,6 +34,30 @@ export class MockHomeAssistant extends EventEmitter {
   }
 
   public fetchData() {
+    this.hassAreas.set('living_room', {
+      area_id: 'living_room',
+      name: 'Living Room',
+    });
+
+    this.hassDevices.set('device-light-1', {
+      id: 'device-light-1',
+      name: 'Living Room Lamp',
+      name_by_user: null,
+      area_id: 'living_room',
+      manufacturer: 'Mock',
+      model: 'Lamp',
+    });
+
+    this.hassEntities.set('light.living_room', {
+      id: 'entity-light-1',
+      entity_id: 'light.living_room',
+      device_id: 'device-light-1',
+      area_id: null,
+      name: null,
+      original_name: 'Living Room Light',
+      platform: 'mock',
+    });
+
     // Populate mock states
     this.hassStates.set('light.living_room', {
       entity_id: 'light.living_room',

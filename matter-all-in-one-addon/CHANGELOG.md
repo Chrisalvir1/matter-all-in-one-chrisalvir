@@ -1,12 +1,21 @@
-## Matter 1.5.1 baseline / preparación para Matter 1.6
+## Matter 1.5.x baseline / preparación para Matter 1.6
 
-- Se establece **Matter 1.5.1** como baseline estable del proyecto.
+- Se establece **Matter 1.5.x / Matterbridge 3.9.0** como baseline estable del proyecto.
 - Se mantienen las notas históricas de soporte Matter 1.4 y 1.5 como referencia funcional.
 - Se inicia la preparación de compatibilidad para **Matter 1.6** sin declarar aún migración completa.
 
 # Changelog
 
 All notable changes to this project will be documented in this file.
+
+## [1.1.9] - 2026-06-18
+### Fixed
+- **Panel agrupado por dispositivos reales de Home Assistant:** La API `/api/custom/devices` ahora incluye `device_id`, `device_name`, `area_name`, fabricante, modelo y metadatos del entity registry. El frontend puede mostrar dispositivos reales y dejar sus entidades dentro de cada dispositivo.
+- **QR del modal de entidad:** El modal ahora renderiza el payload QR Matter real del bridge y mantiene el código manual como texto/copiar, evitando generar un QR inválido desde el código manual.
+- **Exportación de QR:** Se añadió botón para exportar el QR mostrado como PNG desde el modal.
+
+### Changed
+- **Versión del addon:** Se sube a `1.1.9` y se ajustan textos visibles a Matter `1.5.x`, porque `matterbridge@3.9.0` sigue siendo la última versión publicada estable; Matter 1.6 queda en preparación hasta que el SDK/base lo soporte explícitamente.
 
 ## [1.1.8] - 2026-06-17
 ### Fixed

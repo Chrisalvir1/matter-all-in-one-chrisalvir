@@ -41,6 +41,41 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   /** Resolved token (may be empty string for trust-local / supervisor mode) */
   private _configToken: string = '';
 
+  private getHaRegistryInfo(entityId: string) {
+    const entityRegistry = (this.ha as any).hassEntities?.get(entityId);
+    const deviceId = entityRegistry?.device_id ?? null;
+    const deviceRegistry = deviceId ? (this.ha as any).hassDevices?.get(deviceId) : undefined;
+    const areaId = entityRegistry?.area_id ?? deviceRegistry?.area_id ?? null;
+    const areaRegistry = areaId ? (this.ha as any).hassAreas?.get(areaId) : undefined;
+    const deviceName =
+      deviceRegistry?.name_by_user ||
+      deviceRegistry?.name ||
+      entityRegistry?.name ||
+      entityRegistry?.original_name ||
+      null;
+
+    return {
+      device_id: deviceId,
+      device_name: deviceName,
+      area_id: areaId,
+      area_name: areaRegistry?.name ?? null,
+      manufacturer: deviceRegistry?.manufacturer ?? null,
+      model: deviceRegistry?.model ?? deviceRegistry?.model_id ?? null,
+      entity_registry_id: entityRegistry?.id ?? null,
+      platform: entityRegistry?.platform ?? null,
+    };
+  }
+
+  private normalizeMatterQrCode(value: unknown): string {
+    const code = typeof value === 'string' ? value.trim() : '';
+    return code.startsWith('MT:') ? code : '';
+  }
+
+  private normalizeMatterManualCode(value: unknown): string {
+    const code = typeof value === 'string' ? value.replace(/[^0-9]/g, '') : '';
+    return code.length >= 11 ? code : '';
+  }
+
   constructor(
     matterbridge: PlatformMatterbridge,
     log: AnsiLogger,
@@ -400,8 +435,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               const plugins = Array.isArray(pluginsData) ? pluginsData : [];
               const bridgePlugin = plugins.find((p: any) => p.qrPairingCode) || plugins[0];
               if (bridgePlugin) {
-                qrPairingCode = bridgePlugin.qrPairingCode || '';
-                manualPairingCode = bridgePlugin.manualPairingCode || '';
+                qrPairingCode = this.normalizeMatterQrCode(bridgePlugin.qrPairingCode);
+                manualPairingCode = this.normalizeMatterManualCode(bridgePlugin.manualPairingCode);
                 commissioned = bridgePlugin.paired === true || bridgePlugin.commissioned === true;
                 pairedFabrics = bridgePlugin.fabricInformations || [];
               }
@@ -425,8 +460,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               const contentType = settingsRes.headers.get('content-type') || '';
               if (settingsRes.ok && contentType.includes('application/json')) {
                 const settingsData = await settingsRes.json() as any;
-                qrPairingCode = settingsData.qrPairingCode || '';
-                manualPairingCode = settingsData.manualPairingCode || '';
+                qrPairingCode = this.normalizeMatterQrCode(settingsData.qrPairingCode);
+                manualPairingCode = this.normalizeMatterManualCode(settingsData.manualPairingCode);
                 commissioned = settingsData.commissioned === true || settingsData.paired === true;
                 pairedFabrics = settingsData.pairedFabrics || settingsData.fabricInformations || [];
                 this.log.debug('[UI Server] Got bridge data from /api/settings');
@@ -442,8 +477,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                 const mbRaw = await fs.readFile(mbJsonPath, 'utf8');
                 const mbData = JSON.parse(mbRaw);
                 // Structure: { qrPairingCode, manualPairingCode, commissioned, ... }
-                qrPairingCode = mbData.qrPairingCode || mbData.qrcode || '';
-                manualPairingCode = mbData.manualPairingCode || mbData.manualCode || '';
+                qrPairingCode = this.normalizeMatterQrCode(mbData.qrPairingCode || mbData.qrcode);
+                manualPairingCode = this.normalizeMatterManualCode(mbData.manualPairingCode || mbData.manualCode);
                 commissioned = mbData.commissioned === true;
                 pairedFabrics = mbData.pairedFabrics || mbData.fabricInformations || [];
                 this.log.debug('[UI Server] Got bridge data from matterbridge.json on disk');
@@ -503,13 +538,17 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               }
             }
 
+            const registryInfo = this.getHaRegistryInfo(entityId);
+
             deviceList.push({
               entityId,
               friendlyName: haState.attributes.friendly_name || entityId,
               domain,
+              deviceClass,
               matterType,
               state: haState.state || 'desconocido',
-              exported
+              exported,
+              ...registryInfo,
             });
           }
           res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -611,4 +650,3 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     }
   }
 }
-
