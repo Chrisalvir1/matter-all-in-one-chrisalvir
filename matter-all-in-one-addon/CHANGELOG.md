@@ -8,6 +8,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.20] - 2026-06-18
+### Fixed
+- **Visibilidad del Icono de Engranaje (⚙️):** Se corrigió un problema por el cual el botón de configuración (engranaje) no se mostraba para dispositivos sin tipos personalizados de HomeKit en el panel (como las aspiradoras). Ahora el botón se muestra siempre permitiendo ver el código QR y manual de Matter individual.
+
 ## [1.1.10] - 2026-06-18
 ### Fixed
 - **Actualización de Estados en Apple Home/Google Home:** Se implementó `safeUpdateAttribute` (que llama a `updateAttribute`) en lugar de `safeSetAttribute` para notificar en tiempo real los cambios a los fabrics suscritos.

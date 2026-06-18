@@ -427,10 +427,7 @@ function buildEntityRow(entity, device) {
       }
     </div>
     <div class="er-controls">
-      ${hasCfg
-        ? `<button class="er-config-btn" title="Configurar tipo Matter" data-entity-id="${esc(entity.entityId)}">⚙️</button>`
-        : ''
-      }
+      <button class="er-config-btn" title="Configurar / Ver QR" data-entity-id="${esc(entity.entityId)}">⚙️</button>
       <label class="toggle-switch" title="Exportar a Matter">
         <input type="checkbox" class="export-toggle" ${entity.exported ? 'checked' : ''} data-id="${esc(entity.entityId)}">
         <span class="toggle-slider"></span>

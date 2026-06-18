@@ -1,6 +1,6 @@
 {
   "name": "matter-all-in-one-chrisalvir",
-  "version": "1.1.19",
+  "version": "1.1.20",
   "description": "Matter 1.5.x All-in-One bridge for Home Assistant - HomeKit compatible mappings",
   "author": "chrisalvir",
   "license": "Apache-2.0",
