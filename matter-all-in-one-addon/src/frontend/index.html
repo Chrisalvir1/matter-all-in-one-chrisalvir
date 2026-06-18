@@ -45,33 +45,14 @@
         </div>
       </div>
 
-      <!-- Bridge Status Card en sidebar -->
+      <!-- Mode Indicator -->
       <div class="sidebar-bridge-status glass-card-sm">
         <div class="sbs-orb-row">
-          <div class="sbs-orb" id="sbs-orb"></div>
+          <div class="sbs-orb connected" id="sbs-orb"></div>
           <div>
-            <div class="sbs-title" id="sbs-title">Iniciando...</div>
-            <div class="sbs-desc" id="sbs-desc">Conectando servicios</div>
+            <div class="sbs-title">Modo Accesorio</div>
+            <div class="sbs-desc" style="font-size:11px; margin-top:4px;">QRs individuales por dispositivo</div>
           </div>
-        </div>
-      </div>
-
-      <!-- QR compacto en sidebar -->
-      <div class="sidebar-qr-section" id="sidebar-qr-section">
-        <div class="sqr-label">Código de Emparejamiento</div>
-        <div class="sqr-zone" id="sidebar-qr-zone">
-          <div id="sidebar-qrcode"></div>
-          <div class="sqr-loading" id="sqr-loading">
-            <div class="spinner"></div>
-            <span>Cargando QR...</span>
-          </div>
-        </div>
-        <div class="sqr-manual-row">
-          <code id="sidebar-manual-code">---- --- ----</code>
-          <button class="icon-pill" id="sidebar-copy-btn" title="Copiar código">📋</button>
-        </div>
-        <div class="commissioned-banner-sm" id="commissioned-banner-sm" style="display:none;">
-          ✅ Bridge emparejado
         </div>
       </div>
 
@@ -84,7 +65,7 @@
           <span class="status-dot" id="ha-dot"></span>
           <span id="ha-status-text">Conectando...</span>
         </div>
-        <div class="version-pill">v1.1.18</div>
+        <div class="version-pill">v1.1.19</div>
       </div>
     </aside>
 
@@ -169,7 +150,20 @@
           </div>
 
           <div class="em-right">
-
+            <div class="em-section" id="em-qr-section" style="display:none;">
+              <div class="em-section-label">Emparejamiento Matter</div>
+              <div class="em-section-desc">Escanea el código para emparejar este accesorio de manera independiente.</div>
+              <div class="sqr-zone" style="margin-top: 12px; background: rgba(0,0,0,0.2); padding: 16px; border-radius: 12px;">
+                <div id="modal-qrcode"></div>
+                <div class="sqr-loading" id="modal-qr-loading" style="display:none;">
+                  <div class="spinner"></div>
+                  <span>Generando QR...</span>
+                </div>
+              </div>
+              <div class="sqr-manual-row" style="margin-top: 12px; justify-content: center;">
+                <code id="modal-manual-code">---- --- ----</code>
+              </div>
+            </div>
 
             <div class="em-section">
               <div class="em-section-label">Compatibilidad HomeKit 2026</div>

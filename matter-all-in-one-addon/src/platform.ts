@@ -2,7 +2,7 @@
  * Core platform class for matter-all-in-one-chrisalvir.
  */
 import {
-  MatterbridgeDynamicPlatform,
+  MatterbridgeAccessoryPlatform,
   MatterbridgeEndpoint,
   PlatformConfig,
   PlatformMatterbridge,
@@ -31,7 +31,7 @@ export interface HomeAssistantPlatformConfig extends PlatformConfig {
   excludeEntities?: string[];
 }
 
-export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
+export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
   public ha!: HomeAssistant;
   public entities = new Map<string, BaseEntity>();
   public matterbridgeDevices = new Map<string, MatterbridgeEndpoint>();
@@ -41,6 +41,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   private _configHost?: string;
   /** Resolved token (may be empty string for trust-local / supervisor mode) */
   private _configToken: string = '';
+
+  /** Set of entity IDs that the user has explicitly requested to export as accessories */
+  public exportedDevices: Set<string> = new Set();
 
   private getHaRegistryInfo(entityId: string) {
     const entityRegistry = (this.ha as any).hassEntities?.get(entityId);
@@ -204,6 +207,18 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         this.log.info('No device-overrides.json found, starting fresh.');
       }
 
+      // Load exported devices for Accessory Mode
+      try {
+        const rawExported = await fs.readFile('/data/exported-devices.json', 'utf8');
+        const exportedList = JSON.parse(rawExported);
+        if (Array.isArray(exportedList)) {
+          this.exportedDevices = new Set(exportedList);
+        }
+        this.log.info(`Loaded ${this.exportedDevices.size} manually exported devices.`);
+      } catch {
+        this.log.info('No exported-devices.json found. No accessories will be started automatically.');
+      }
+
       const states = Array.from(this.ha.hassStates.values());
       this.log.info(`Fetched ${states.length} entity states. Registering matching devices...`);
 
@@ -290,11 +305,65 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         await entityInstance.syncInitialState();
         this.entities.set(entityId, entityInstance);
         this.matterbridgeDevices.set(entityId, endpoint);
-        await this.registerDevice(endpoint);
-        this.log.info(`Successfully registered device ${idn}${entityId}${rs} as Matter endpoint.`);
+
+        if (this.exportedDevices.has(entityId)) {
+          this.log.info(`Auto-starting Accessory Server for ${idn}${entityId}${rs}...`);
+          await this.registerDevice(endpoint);
+        } else {
+          this.log.debug(`Entity ${entityId} is discovered but not exported. Skipping Accessory Server creation.`);
+        }
       }
     } catch (err) {
       this.log.error(`Failed to register entity ${entityId}: ${err}`);
+    }
+  }
+
+  /**
+   * Manually export an entity as an Accessory and save to config.
+   */
+  public async manualRegister(entityId: string): Promise<{ success: boolean; error?: string }> {
+    if (!this.matterbridgeDevices.has(entityId)) {
+      return { success: false, error: 'Device not found in discovery.' };
+    }
+    try {
+      this.exportedDevices.add(entityId);
+      await this.saveExportedDevices();
+      const endpoint = this.matterbridgeDevices.get(entityId)!;
+      // If it's already registered, matterbridge handles it gracefully
+      await this.registerDevice(endpoint);
+      this.log.notice(`Manually started Accessory Server for ${entityId}`);
+      return { success: true };
+    } catch (err) {
+      this.log.error(`Failed to manually register ${entityId}: ${err}`);
+      return { success: false, error: String(err) };
+    }
+  }
+
+  /**
+   * Manually unregister an Accessory and save to config.
+   */
+  public async manualUnregister(entityId: string): Promise<{ success: boolean; error?: string }> {
+    if (!this.matterbridgeDevices.has(entityId)) {
+      return { success: false, error: 'Device not found.' };
+    }
+    try {
+      this.exportedDevices.delete(entityId);
+      await this.saveExportedDevices();
+      const endpoint = this.matterbridgeDevices.get(entityId)!;
+      await this.unregisterDevice(endpoint);
+      this.log.notice(`Manually stopped Accessory Server for ${entityId}`);
+      return { success: true };
+    } catch (err) {
+      this.log.error(`Failed to manually unregister ${entityId}: ${err}`);
+      return { success: false, error: String(err) };
+    }
+  }
+
+  private async saveExportedDevices() {
+    try {
+      await fs.writeFile('/data/exported-devices.json', JSON.stringify(Array.from(this.exportedDevices)), 'utf8');
+    } catch (err) {
+      this.log.error(`Failed to save exported-devices.json: ${err}`);
     }
   }
 
@@ -472,49 +541,59 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         }
 
         if (req.method === 'GET' && pathname === '/api/custom/devices') {
-          const deviceList: any[] = [];
-          const allowedDomains = ['light', 'switch', 'cover', 'lock', 'climate', 'fan', 'sensor', 'binary_sensor', 'vacuum', 'alarm_control_panel', 'water_heater', 'button', 'media_player', 'camera'];
+          const result = Array.from(this.entities.values()).map(e => {
+            const endpoint = this.matterbridgeDevices.get(e.entityId);
+            const serverNode = (endpoint as any)?.serverNode;
+            let pairingCode = null;
+            let commissioned = false;
+            let fabric = null;
 
-          for (const haState of this.ha.hassStates.values()) {
-            const entityId = haState.entity_id;
-            const [domain] = entityId.split('.');
-
-            if (!allowedDomains.includes(domain)) continue;
-
-            const deviceClass = haState.attributes.device_class;
-            if (domain === 'sensor' && !['temperature', 'humidity', 'illuminance', 'moisture', 'pressure', 'flow', 'monetary'].includes(deviceClass ?? '')) continue;
-            if (domain === 'binary_sensor' && !['door', 'window', 'opening', 'motion', 'occupancy', 'contact', 'smoke', 'co'].includes(deviceClass ?? '')) continue;
-
-            if (this.config.excludeEntities?.includes(entityId)) continue;
-            if (this.config.includeEntities && !this.config.includeEntities.includes(entityId)) continue;
-
-            const override = this.deviceOverrides[entityId];
-            const exported = override !== '_DISABLED_';
-
-            let matterType = getDeviceTypeForEntity(domain, deviceClass).name;
-            if (override && override !== '_DISABLED_') {
-              if ((MatterDeviceTypes as any)[override]) {
-                matterType = (MatterDeviceTypes as any)[override].name;
-              } else {
-                matterType = override;
+            if (serverNode?.state?.commissioning?.pairingCodes) {
+              pairingCode = serverNode.state.commissioning.pairingCodes.qrPairingCode;
+            }
+            if (serverNode?.state?.operational?.commissioned !== undefined) {
+              commissioned = serverNode.state.operational.commissioned;
+              const fabrics = serverNode.state.operational.fabrics;
+              if (fabrics && fabrics.length > 0) {
+                fabric = fabrics[0].rootVendorId !== undefined ? `Vendor ${fabrics[0].rootVendorId}` : 'Apple Home / Alexa';
               }
             }
 
-            const registryInfo = this.getHaRegistryInfo(entityId);
-
-            deviceList.push({
-              entityId,
-              friendlyName: haState.attributes.friendly_name || entityId,
-              domain,
-              deviceClass,
-              matterType,
-              state: haState.state || 'desconocido',
-              exported,
-              ...registryInfo,
-            });
-          }
+            return {
+              entityId: e.entityId, // Frontend expects entityId
+              state: e.state.state,
+              attributes: e.state.attributes,
+              deviceTypeLabel: (e.constructor as any).matterTypeLabel || 'Generic',
+              matterType: e.deviceType.name,
+              // Registry info
+              ...this.getHaRegistryInfo(e.entityId),
+              // Accessory status
+              exported: this.exportedDevices.has(e.entityId),
+              pairingCode: pairingCode,
+              commissioned: commissioned,
+              fabric: fabric,
+            };
+          });
           res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-          res.end(JSON.stringify(deviceList));
+          res.end(JSON.stringify(result));
+          return;
+        }
+
+        // POST /api/custom/register/:entityId
+        if (req.method === 'POST' && pathname.startsWith('/api/custom/register/')) {
+          const entityId = decodeURIComponent(pathname.substring('/api/custom/register/'.length));
+          const result = await this.manualRegister(entityId);
+          res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify(result));
+          return;
+        }
+
+        // POST /api/custom/unregister/:entityId
+        if (req.method === 'POST' && pathname.startsWith('/api/custom/unregister/')) {
+          const entityId = decodeURIComponent(pathname.substring('/api/custom/unregister/'.length));
+          const result = await this.manualUnregister(entityId);
+          res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify(result));
           return;
         }
 

@@ -442,11 +442,10 @@ function buildEntityRow(entity, device) {
   const toggle = row.querySelector('.export-toggle');
   toggle.addEventListener('change', async (e) => {
     const isExported = e.target.checked;
+    const action = isExported ? 'register' : 'unregister';
     try {
-      const res = await fetch(`${API}/device-override`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ entityId: entity.entityId, exported: isExported }),
+      const res = await fetch(`${API}/${action}/${encodeURIComponent(entity.entityId)}`, {
+        method: 'POST'
       });
       if (res.ok) {
         entity.exported = isExported;
@@ -533,6 +532,36 @@ function openEntityModal(entity) {
 
   saveFeedback.textContent = '';
   saveFeedback.className   = 'save-feedback';
+
+  // ── Render Accessory QR Si Exportado ──────────────────
+  const qrSection = document.getElementById('em-qr-section');
+  const qrCodeDiv = document.getElementById('modal-qrcode');
+  const manualCodeEl = document.getElementById('modal-manual-code');
+  const qrLoading = document.getElementById('modal-qr-loading');
+  
+  if (qrSection && qrCodeDiv && manualCodeEl && qrLoading) {
+    if (entity.exported) {
+      qrSection.style.display = 'block';
+      if (entity.commissioned) {
+        qrCodeDiv.innerHTML = `<div style="text-align:center; padding:20px; font-weight:bold; color:var(--accent-g)">✅ Vinculado a ${esc(entity.fabric || 'Casa')}</div>`;
+        manualCodeEl.textContent = 'Vinculado';
+      } else if (entity.pairingCode) {
+        qrLoading.style.display = 'none';
+        qrCodeDiv.style.display = 'block';
+        if (!modalQrRendered) {
+          renderQR(qrCodeDiv, entity.pairingCode, 160);
+          modalQrRendered = true;
+        }
+        manualCodeEl.textContent = '---- --- ----'; // We don't have manual code exported in list yet
+      } else {
+        qrCodeDiv.style.display = 'none';
+        qrLoading.style.display = 'flex';
+        manualCodeEl.textContent = 'Generando...';
+      }
+    } else {
+      qrSection.style.display = 'none';
+    }
+  }
 
   entityModal.classList.add('open');
   document.body.style.overflow = 'hidden';
