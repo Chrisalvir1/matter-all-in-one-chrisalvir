@@ -21,6 +21,7 @@ import { CameraEntity } from './entities/camera.entity.js';
 import { SoilSensorEntity } from './entities/soil_sensor.entity.js';
 import { EnergyTariffEntity } from './entities/energy_tariff.entity.js';
 import { VacuumEntity } from './entities/vacuum.entity.js';
+import { PetFeederEntity } from './entities/pet_feeder.entity.js';
 
 
 export interface HomeAssistantPlatformConfig extends PlatformConfig {
@@ -275,6 +276,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       entityInstance = new EnergyTariffEntity(this, state, deviceType);
     } else if (domain === 'vacuum') {
       entityInstance = new VacuumEntity(this, state, deviceType);
+    } else if (override === 'PetFeeder') {
+      entityInstance = new PetFeederEntity(this, state, deviceType);
     } else {
       // General base fallback or standard converters will wrap this
       entityInstance = new BaseEntity(this, state, deviceType);

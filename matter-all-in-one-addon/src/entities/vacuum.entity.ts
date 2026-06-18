@@ -12,6 +12,14 @@
  *
  * Compatible with any vacuum supported by HA:
  *   Tuya, Smart Life, Roborock, iRobot, Dreame, Ecovacs, Xiaomi, etc.
+ *
+ * RvcRunMode required modes (Matter spec §7.2):
+ *   - At least one mode tagged Idle  (0x4000 = 16384)
+ *   - At least one mode tagged Cleaning (0x4001 = 16385)
+ *
+ * RvcOperationalState required states (Matter spec §9.10):
+ *   - Must expose at minimum: Stopped(0), Running(1), Paused(2), Error(3)
+ *   - RVC extended: SeekingCharger(64), Charging(65), Docked(66)
  */
 
 import { MatterbridgeEndpoint, DeviceTypeDefinition } from 'matterbridge';
@@ -20,11 +28,20 @@ import type { HassState } from '../utils/ha-state.js';
 import {
   buildVacuumUpdate,
   buildVacuumMatterMeta,
+  RvcOperationalStateId,
 } from '../converters/vacuum.converter.js';
-import { safeSetAttribute, safeUpdateAttribute } from '../utils/matter-attributes.js';
+import { safeUpdateAttribute } from '../utils/matter-attributes.js';
 
 // Re-export so platform.ts can import from one place
 export { buildVacuumMatterMeta };
+
+// ─── RVC Mode tag constants (Matter spec §7.2.7.1) ────────────────────────
+const RVC_RUN_MODE_TAG_IDLE     = 0x4000; // 16384
+const RVC_RUN_MODE_TAG_CLEANING = 0x4001; // 16385
+
+// Mode IDs used as currentMode values
+const RUN_MODE_ID_IDLE     = 0;
+const RUN_MODE_ID_CLEANING = 1;
 
 export class VacuumEntity extends BaseEntity {
   constructor(
@@ -35,84 +52,107 @@ export class VacuumEntity extends BaseEntity {
     super(platform, state, deviceType);
   }
 
+  // ─── Custom cluster initialisation ────────────────────────────────────
+
+  /**
+   * Override addCustomClusterServers to inject RvcRunMode and
+   * RvcOperationalState clusters with proper initial state tables.
+   * This MUST happen before addRequiredClusterServers() runs.
+   */
+  protected override async addCustomClusterServers(): Promise<void> {
+    try {
+      // ── RvcRunMode cluster ──────────────────────────────────────────
+      // Matter spec mandates at least one Idle and one Cleaning mode entry.
+      this.endpoint.createDefaultIdentifyClusterServer();
+      (this.endpoint as any).addClusterServer({
+        id: 0x0054, // RvcRunMode
+        name: 'RvcRunMode',
+        supportedModes: [
+          {
+            label: 'Idle',
+            mode: RUN_MODE_ID_IDLE,
+            modeTags: [{ value: RVC_RUN_MODE_TAG_IDLE }],
+          },
+          {
+            label: 'Cleaning',
+            mode: RUN_MODE_ID_CLEANING,
+            modeTags: [{ value: RVC_RUN_MODE_TAG_CLEANING }],
+          },
+        ],
+        currentMode: RUN_MODE_ID_IDLE,
+      });
+
+      // ── RvcOperationalState cluster ─────────────────────────────────
+      // Must expose Stopped, Running, Paused, Error + RVC extended states.
+      (this.endpoint as any).addClusterServer({
+        id: 0x0061, // RvcOperationalState
+        name: 'RvcOperationalState',
+        operationalStateList: [
+          { operationalStateId: 0x00, operationalStateLabel: 'Stopped' },
+          { operationalStateId: 0x01, operationalStateLabel: 'Running' },
+          { operationalStateId: 0x02, operationalStateLabel: 'Paused'  },
+          { operationalStateId: 0x03, operationalStateLabel: 'Error'   },
+          { operationalStateId: 0x40, operationalStateLabel: 'SeekingCharger' },
+          { operationalStateId: 0x41, operationalStateLabel: 'Charging' },
+          { operationalStateId: 0x42, operationalStateLabel: 'Docked'  },
+        ],
+        operationalState: 0x00, // Stopped
+        operationalError: { errorStateId: 0x00 }, // NoError
+      });
+
+      // ── PowerSource — rechargeable battery ─────────────────────────
+      const attrs = this.state.attributes as any;
+      const batteryPct = attrs?.battery_level ?? attrs?.battery ?? null;
+      const batPercentRemaining = batteryPct !== null ? Math.round(batteryPct * 2) : 200;
+      this.endpoint.createDefaultPowerSourceRechargeableBatteryClusterServer(
+        batPercentRemaining,
+      );
+
+    } catch (err) {
+      this.platform.log?.warn?.(`[VacuumEntity] addCustomClusterServers error for ${this.entityId}: ${err}`);
+    }
+  }
+
   // ─── State sync (HA → Matter) ─────────────────────────────────────────
 
-  override async updateState(newState: HassState, isInitialSync = false): Promise<void> {
+  override async updateState(newState: HassState, _isInitialSync = false): Promise<void> {
     if (!this.endpoint) return;
-    await this.syncState(this.endpoint, newState, isInitialSync);
+    await this.syncState(this.endpoint, newState);
     this.state = newState;
   }
 
-  private async syncState(endpoint: MatterbridgeEndpoint, state: HassState, isInitialSync = false): Promise<void> {
+  private async syncState(endpoint: MatterbridgeEndpoint, state: HassState): Promise<void> {
     const update = buildVacuumUpdate(state as any);
 
     try {
-      // OnOff — true while cleaning
-      if (isInitialSync) {
-        safeSetAttribute(endpoint, 'onOff' as any, 'onOff', update.onOff, this.platform.log);
-      } else {
-        safeUpdateAttribute(endpoint, 'onOff' as any, 'onOff', update.onOff, this.platform.log);
-      }
-
       // RvcOperationalState.operationalState
-      if (isInitialSync) {
-        safeSetAttribute(
-          endpoint,
-          'rvcOperationalState' as any,
-          'operationalState',
-          update.operationalState,
-          this.platform.log,
-        );
-      } else {
-        safeUpdateAttribute(
-          endpoint,
-          'rvcOperationalState' as any,
-          'operationalState',
-          update.operationalState,
-          this.platform.log,
-        );
-      }
+      safeUpdateAttribute(
+        endpoint,
+        'rvcOperationalState' as any,
+        'operationalState',
+        update.operationalState,
+        this.platform.log,
+      );
+
+      // RvcRunMode.currentMode — Idle(0) or Cleaning(1)
+      const runMode = update.onOff ? RUN_MODE_ID_CLEANING : RUN_MODE_ID_IDLE;
+      safeUpdateAttribute(
+        endpoint,
+        'rvcRunMode' as any,
+        'currentMode',
+        runMode,
+        this.platform.log,
+      );
 
       // Battery — Matter PowerSource uses 0-200 range (batPercentRemaining)
       if (update.batteryLevel !== null) {
-        if (isInitialSync) {
-          safeSetAttribute(
-            endpoint,
-            'powerSource' as any,
-            'batPercentRemaining',
-            Math.round(update.batteryLevel * 2),
-            this.platform.log,
-          );
-        } else {
-          safeUpdateAttribute(
-            endpoint,
-            'powerSource' as any,
-            'batPercentRemaining',
-            Math.round(update.batteryLevel * 2),
-            this.platform.log,
-          );
-        }
-      }
-
-      // Fan / suction speed via FanControl.percentSetting (0-100)
-      if (update.fanSpeedPercent !== null) {
-        if (isInitialSync) {
-          safeSetAttribute(
-            endpoint,
-            'fanControl' as any,
-            'percentSetting',
-            update.fanSpeedPercent,
-            this.platform.log,
-          );
-        } else {
-          safeUpdateAttribute(
-            endpoint,
-            'fanControl' as any,
-            'percentSetting',
-            update.fanSpeedPercent,
-            this.platform.log,
-          );
-        }
+        safeUpdateAttribute(
+          endpoint,
+          'powerSource' as any,
+          'batPercentRemaining',
+          Math.round(update.batteryLevel * 2),
+          this.platform.log,
+        );
       }
     } catch (err) {
       this.platform.log?.warn?.(`[VacuumEntity] syncState error for ${this.state.entity_id}: ${err}`);
@@ -123,27 +163,33 @@ export class VacuumEntity extends BaseEntity {
 
   protected override registerCommandHandlers(endpoint?: MatterbridgeEndpoint): void {
     if (!endpoint) endpoint = this.endpoint;
-    // start — issued by Apple Home when user taps ▶ "Clean"
-    endpoint.addCommandHandler('start', async () => {
+
+    // RvcOperationalState commands (used by Apple Home RVC UI)
+    endpoint.addCommandHandler('RvcOperationalState.resume', async () => {
       await this.callHaService('vacuum.start');
     });
 
-    // stop — issued when user taps ⏹ "Stop"
-    endpoint.addCommandHandler('stop', async () => {
-      await this.callHaService('vacuum.stop');
-    });
-
-    // pause — issued when user taps ⏸ "Pause"
-    endpoint.addCommandHandler('pause', async () => {
+    endpoint.addCommandHandler('RvcOperationalState.pause', async () => {
       await this.callHaService('vacuum.pause');
     });
 
-    // goHome / returnToBase — issued when user taps 🏠 "Return to Base"
     endpoint.addCommandHandler('goHome', async () => {
       await this.callHaService('vacuum.return_to_base');
     });
 
-    // resume (same as start in HA)
+    // Legacy / fallback command names
+    endpoint.addCommandHandler('start', async () => {
+      await this.callHaService('vacuum.start');
+    });
+
+    endpoint.addCommandHandler('stop', async () => {
+      await this.callHaService('vacuum.stop');
+    });
+
+    endpoint.addCommandHandler('pause', async () => {
+      await this.callHaService('vacuum.pause');
+    });
+
     endpoint.addCommandHandler('resume', async () => {
       await this.callHaService('vacuum.start');
     });
@@ -159,12 +205,5 @@ export class VacuumEntity extends BaseEntity {
     }
   }
 
-  // ─── QR picker metadata ───────────────────────────────────────────────
-
-  /**
-   * Returns the Matter type label shown in the QR entity picker.
-   * The frontend uses `matterType` to group/filter entities and
-   * to render the correct device icon.
-   */
   static matterTypeLabel = 'RoboticVacuumCleaner' as const;
 }

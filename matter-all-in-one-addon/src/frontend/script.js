@@ -67,17 +67,21 @@ const HK_TYPES = {
   media_player: [
     { id: 'onOffPlugInUnit',         name: '📺 Media Player (On/Off)',           desc: 'Exponer el reproductor multimedia como enchufe inteligente.' },
   ],
+  button: [
+    { id: 'PetFeeder',               name: '🐾 Alimentador de Mascotas',         desc: 'Expone el botón de dispensar comida como un accesorio nombrado. Al activarlo desde Apple Home, envía el comando de alimentación a tu Tuya/Smart Life.' },
+    { id: 'onOffPlugInUnit',         name: '🔌 Botón como Enchufe',              desc: 'Fallback: expone el botón como un enchufe on/off genérico.' },
+  ],
 };
 
 const DOMAIN_ICONS = {
   light: '💡', switch: '🔌', cover: '🪟', lock: '🔒', climate: '❄️',
   sensor: '🌡️', binary_sensor: '🚨', camera: '📹', fan: '🌀',
-  vacuum: '🤖', media_player: '📺',
+  vacuum: '🤖', media_player: '📺', button: '🐾',
 };
 
 const DOMAIN_PRIORITY = [
   'light','switch','cover','lock','climate','camera',
-  'fan','vacuum','media_player','binary_sensor','sensor',
+  'fan','vacuum','media_player','button','binary_sensor','sensor',
 ];
 
 function domainIcon(domain) {
