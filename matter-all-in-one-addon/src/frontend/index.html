@@ -1,3 +1,7 @@
+/**
+ * Matter 1.5.x Bridge · Liquid Glass UI · index.html
+ * Layout: Sidebar + Panel principal de dispositivos
+ */
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -26,7 +30,7 @@
         <div class="brand-icon">
           <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <circle cx="12" cy="12" r="10" stroke="url(#grad)" stroke-width="1.5"/>
-            <path d="M12 6v6l4 2" stroke="url(#grad)" stroke-width="1.5" stroke-linecap="round"/>
+            <path d="M8 12h8M12 8l4 4-4 4" stroke="url(#grad)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
             <defs>
               <linearGradient id="grad" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
                 <stop stop-color="#5e9bff"/>
@@ -41,193 +45,156 @@
         </div>
       </div>
 
-      <nav class="sidebar-nav">
-        <button class="nav-item active" data-tab="tab-bridge" id="nav-bridge">
-          <span class="nav-icon">
-            <svg viewBox="0 0 20 20" fill="currentColor"><path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zm6-4a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zm6-3a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z"/></svg>
-          </span>
-          <span>Puente</span>
-        </button>
-        <button class="nav-item" data-tab="tab-devices" id="nav-devices">
-          <span class="nav-icon">
-            <svg viewBox="0 0 20 20" fill="currentColor"><path d="M9 3a1 1 0 012 0v1a1 1 0 01-2 0V3zM6.05 4.636a1 1 0 011.414 0l.707.707A1 1 0 016.757 6.76l-.707-.707a1 1 0 010-1.414zM3 9a1 1 0 010 2H2a1 1 0 110-2h1zm-.636 4.95a1 1 0 011.414 0l.707.707a1 1 0 01-1.414 1.414l-.707-.707a1 1 0 010-1.414zM9 16a1 1 0 012 0v1a1 1 0 01-2 0v-1zm4.95.636a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414l-.707.707zM17 9a1 1 0 012 0h1a1 1 0 110 2h-1a1 1 0 01-1-1zm.636-4.95a1 1 0 01-.707 1.414l-.707-.707a1 1 0 011.414-1.414l.707.707zM10 7a3 3 0 100 6 3 3 0 000-6z"/></svg>
-          </span>
-          <span>Dispositivos</span>
-          <span class="nav-badge" id="device-count-badge"></span>
-        </button>
+      <!-- Bridge Status Card en sidebar -->
+      <div class="sidebar-bridge-status glass-card-sm">
+        <div class="sbs-orb-row">
+          <div class="sbs-orb" id="sbs-orb"></div>
+          <div>
+            <div class="sbs-title" id="sbs-title">Iniciando...</div>
+            <div class="sbs-desc" id="sbs-desc">Conectando servicios</div>
+          </div>
+        </div>
+      </div>
 
-      </nav>
+      <!-- QR compacto en sidebar -->
+      <div class="sidebar-qr-section" id="sidebar-qr-section">
+        <div class="sqr-label">Código de Emparejamiento</div>
+        <div class="sqr-zone" id="sidebar-qr-zone">
+          <div id="sidebar-qrcode"></div>
+          <div class="sqr-loading" id="sqr-loading">
+            <div class="spinner"></div>
+            <span>Cargando QR...</span>
+          </div>
+        </div>
+        <div class="sqr-manual-row">
+          <code id="sidebar-manual-code">---- --- ----</code>
+          <button class="icon-pill" id="sidebar-copy-btn" title="Copiar código">📋</button>
+        </div>
+        <div class="commissioned-banner-sm" id="commissioned-banner-sm" style="display:none;">
+          ✅ Bridge emparejado
+        </div>
+      </div>
 
-      <div class="sidebar-status">
+      <div class="sidebar-actions">
+        <button id="advanced-btn" class="pill-btn secondary full-w sm">⚙ Ajustes</button>
+      </div>
+
+      <div class="sidebar-footer">
         <div class="ha-status-pill" id="ha-status-pill">
           <span class="status-dot" id="ha-dot"></span>
           <span id="ha-status-text">Conectando...</span>
         </div>
+        <div class="version-pill">v1.1.11</div>
       </div>
     </aside>
 
     <!-- ── MAIN CONTENT ───────────────────────────────────────── -->
     <main class="main-content">
 
-      <!-- ── TAB: PUENTE ──────────────────────────────────── -->
-      <section id="tab-bridge" class="tab-panel active">
-        <div class="page-header">
-          <h1 class="page-title">Puente Matter</h1>
-          <p class="page-desc">Escanea el código QR para vincular el puente con Apple Home, Google Home o Alexa.</p>
+      <!-- Header de dispositivos -->
+      <div class="devices-header">
+        <div>
+          <h1 class="page-title">Dispositivos</h1>
+          <p class="page-desc">Entidades de Home Assistant expuestas a Matter. Expande un dispositivo para configurar sus entidades.</p>
         </div>
-
-        <div class="bridge-grid">
-
-          <!-- QR + Pairing Card -->
-          <div class="glass-card qr-big-card">
-            <div class="card-label">Código de Emparejamiento Matter</div>
-            <div class="qr-zone" id="qr-zone">
-              <div id="qrcode-canvas"></div>
-              <div id="qr-loading" class="qr-msg">
-                <div class="spinner"></div>
-                <span>Esperando código QR...</span>
-              </div>
-            </div>
-            <div class="manual-pair-row">
-              <div class="manual-pair-label">Código manual</div>
-              <div class="manual-pair-box">
-                <code id="manual-code">---- --- ----</code>
-                <button id="copy-btn" class="icon-pill" title="Copiar">📋</button>
-              </div>
-            </div>
-            <div class="commissioned-banner" id="commissioned-banner" style="display:none;">
-              <span class="banner-icon">✅</span>
-              <span>Puente ya vinculado a un controlador Matter.</span>
-            </div>
-          </div>
-
-          <!-- Bridge Status Card -->
-          <div class="bridge-right-col">
-            <div class="glass-card status-big-card">
-              <div class="status-header">
-                <div class="status-orb-wrap">
-                  <div class="status-orb" id="status-orb">
-                    <span id="status-orb-label">…</span>
-                  </div>
-                </div>
-                <div>
-                  <div class="status-main-title" id="status-title">Iniciando...</div>
-                  <div class="status-main-desc" id="status-desc">El puente está iniciando servicios.</div>
-                </div>
-              </div>
-              <div class="divider"></div>
-              <div class="bridge-actions">
-                <button id="advanced-btn" class="pill-btn secondary full-w">⚙ Ajustes Avanzados</button>
-              </div>
-            </div>
-          </div>
-
-        </div>
-      </section>
-
-      <!-- ── TAB: DISPOSITIVOS ────────────────────────────── -->
-      <section id="tab-devices" class="tab-panel">
-        <div class="page-header-flex">
-          <div>
-            <h1 class="page-title">Dispositivos</h1>
-            <p class="page-desc">Entidades de Home Assistant expuestas a Matter. Toca un dispositivo para ver detalles y seleccionar su tipo HomeKit 2026.</p>
-          </div>
+        <div class="devices-header-controls">
           <div class="search-pill">
             <svg class="search-icon-svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd"/></svg>
-            <input type="text" id="device-search" placeholder="Buscar...">
+            <input type="text" id="device-search" placeholder="Buscar dispositivo...">
           </div>
+          <span class="device-count-badge" id="device-count-badge"></span>
         </div>
+      </div>
 
-        <div class="device-grid" id="device-grid">
-          <!-- Populated by JS -->
-          <div class="devices-empty" id="devices-loading">
-            <div class="spinner large"></div>
-            <p>Cargando dispositivos...</p>
-          </div>
+      <!-- Grid de dispositivos -->
+      <div class="device-list" id="device-list">
+        <div class="devices-empty" id="devices-loading">
+          <div class="spinner large"></div>
+          <p>Cargando dispositivos desde Home Assistant...</p>
         </div>
-      </section>
-
-
+      </div>
 
     </main>
   </div>
 
-  <!-- ── DEVICE DETAIL MODAL ──────────────────────────────────── -->
-  <div class="modal-backdrop" id="device-modal" role="dialog" aria-modal="true" aria-labelledby="modal-device-name">
+  <!-- ── ENTITY CONFIG MODAL ──────────────────────────────────── -->
+  <div class="modal-backdrop" id="entity-modal" role="dialog" aria-modal="true" aria-labelledby="entity-modal-name">
     <div class="modal-sheet glass">
-      <button class="modal-close" id="modal-close" aria-label="Cerrar">
+      <button class="modal-close" id="entity-modal-close" aria-label="Cerrar">
         <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
       </button>
 
-      <div class="modal-body">
-        <div class="modal-left">
-          <div class="modal-device-header">
-            <div class="modal-device-icon" id="modal-icon">💡</div>
-            <div>
-              <h2 class="modal-device-name" id="modal-device-name">Dispositivo</h2>
-              <div class="modal-device-entity" id="modal-entity-id">entity.id</div>
-            </div>
-            <div class="modal-state-pill" id="modal-state">-</div>
+      <div class="entity-modal-body">
+        <div class="em-header">
+          <span class="em-icon" id="em-icon">💡</span>
+          <div>
+            <h2 class="em-name" id="entity-modal-name">Entidad</h2>
+            <div class="em-id" id="em-id">entity.id</div>
           </div>
-
-          <div class="modal-section">
-            <div class="modal-section-label">Tipo en HomeKit 2026</div>
-            <div class="modal-section-desc">Selecciona cómo se expondrá este dispositivo a Apple Home, Google Home y Alexa.</div>
-            <select class="hk-select" id="hk-type-select">
-              <!-- Populated by JS based on domain -->
-            </select>
-            <div class="hk-type-info glass-inset" id="hk-type-info">
-              <span id="hk-type-desc">Selecciona un tipo para ver la descripción.</span>
-            </div>
-            <button class="pill-btn primary full-w" id="save-type-btn">💾 Guardar Tipo</button>
-            <div class="save-feedback" id="save-feedback"></div>
-          </div>
-
-          <div class="modal-section">
-            <div class="modal-section-label">Información de la Entidad</div>
-            <div class="entity-info-list">
-              <div class="info-row">
-                <span class="info-k">Dominio</span>
-                <span class="info-v" id="modal-domain">-</span>
-              </div>
-              <div class="info-row">
-                <span class="info-k">Tipo Matter Actual</span>
-                <span class="info-v" id="modal-matter-type">-</span>
-              </div>
-              <div class="info-row">
-                <span class="info-k">Estado HA</span>
-                <span class="info-v" id="modal-ha-state">-</span>
-              </div>
-            </div>
-          </div>
+          <div class="em-state-pill" id="em-state">—</div>
         </div>
 
-        <div class="modal-right">
-          <div class="modal-section">
-            <div class="modal-section-label">Código de Vinculación</div>
-            <div class="modal-section-desc" style="text-align: center; font-weight: bold; color: var(--text-primary); margin-bottom: 12px;" id="modal-qr-device-name">Nombre del Dispositivo</div>
-            <div class="modal-qr-wrap">
-              <div id="modal-qrcode"></div>
-              <div id="modal-qr-placeholder" class="modal-qr-ph">
-                <div class="spinner"></div>
-                <span>Cargando QR...</span>
+        <div class="em-grid">
+          <div class="em-left">
+            <div class="em-section">
+              <div class="em-section-label">Tipo en HomeKit 2026</div>
+              <div class="em-section-desc">Selecciona cómo se expondrá este dispositivo a Apple Home, Google Home y Alexa.</div>
+              <select class="hk-select" id="hk-type-select">
+                <!-- Populated by JS -->
+              </select>
+              <div class="hk-type-info glass-inset" id="hk-type-info">
+                <span id="hk-type-desc">Selecciona un tipo para ver la descripción.</span>
               </div>
+              <button class="pill-btn primary full-w" id="save-type-btn">💾 Guardar Tipo</button>
+              <div class="save-feedback" id="save-feedback"></div>
             </div>
-            <div class="modal-manual-row">
-              <span class="info-k">Código manual:</span>
-              <code id="modal-manual-code" class="manual-code-val">---- --- ----</code>
-              <button class="icon-pill" id="modal-copy-btn" title="Copiar código">📋</button>
-              <button class="icon-pill" id="modal-qr-export-btn" title="Exportar QR">⬇</button>
+
+            <div class="em-section">
+              <div class="em-section-label">Información</div>
+              <div class="info-grid">
+                <div class="info-row">
+                  <span class="info-k">Dominio</span>
+                  <span class="info-v" id="em-domain">—</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-k">Tipo Matter actual</span>
+                  <span class="info-v" id="em-matter-type">—</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-k">Estado HA</span>
+                  <span class="info-v" id="em-ha-state">—</span>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div class="modal-section">
-            <div class="modal-section-label">Compatibilidad HomeKit 2026</div>
-            <div class="compat-badges" id="compat-badges">
-              <span class="compat-badge apple">Apple Home</span>
-              <span class="compat-badge google">Google Home</span>
-              <span class="compat-badge alexa">Amazon Alexa</span>
-              <span class="compat-badge matter">Matter 1.5.x</span>
+          <div class="em-right">
+            <div class="em-section">
+              <div class="em-section-label">Código de Vinculación del Puente</div>
+              <div class="em-section-desc" id="em-qr-device-label" style="text-align:center; font-weight:600; color: var(--t1);">Nombre del Dispositivo</div>
+              <div class="modal-qr-wrap">
+                <div id="modal-qrcode"></div>
+                <div class="modal-qr-ph" id="modal-qr-ph">
+                  <div class="spinner"></div>
+                  <span>Cargando QR...</span>
+                </div>
+              </div>
+              <div class="modal-manual-row">
+                <span class="info-k">Código:</span>
+                <code id="modal-manual-code" class="manual-code-val">---- --- ----</code>
+                <button class="icon-pill" id="modal-copy-btn" title="Copiar">📋</button>
+                <button class="icon-pill" id="modal-qr-export-btn" title="Exportar QR como PNG">⬇</button>
+              </div>
+            </div>
+
+            <div class="em-section">
+              <div class="em-section-label">Compatibilidad HomeKit 2026</div>
+              <div class="compat-badges" id="compat-badges">
+                <span class="compat-badge apple">Apple Home</span>
+                <span class="compat-badge google">Google Home</span>
+                <span class="compat-badge alexa">Amazon Alexa</span>
+                <span class="compat-badge matter">Matter 1.5.x</span>
+              </div>
             </div>
           </div>
         </div>
@@ -249,26 +216,25 @@
 
   <!-- ── ADVANCED MODAL ──────────────────────────────────── -->
   <div class="modal-backdrop small" id="advanced-modal">
-    <div class="modal-sheet glass" style="max-width: 480px;">
+    <div class="modal-sheet glass" style="max-width: 440px;">
       <button class="modal-close" id="adv-modal-close" aria-label="Cerrar">
         <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
       </button>
       <h3 style="margin-bottom: 8px;">Ajustes Avanzados</h3>
-      <p class="modal-section-desc" style="margin-bottom: 24px;">Operaciones de mantenimiento del puente Matter.</p>
-      
+      <p class="em-section-desc" style="margin-bottom: 24px;">Operaciones de mantenimiento del puente Matter.</p>
       <div class="action-list">
         <div class="action-item">
           <div>
             <div class="action-title">Reiniciar Puente</div>
-            <div class="action-desc" style="font-size: 13px; color: var(--text-secondary);">Recarga la configuración. Tarda unos segundos.</div>
+            <div class="action-desc">Recarga la configuración y reinicia los servicios. Tarda unos segundos.</div>
           </div>
           <button id="restart-btn" class="pill-btn primary">Reiniciar</button>
         </div>
         <div class="divider"></div>
         <div class="action-item">
           <div>
-            <div class="action-title" style="color: var(--danger);">Restablecimiento de Fábrica</div>
-            <div class="action-desc" style="font-size: 13px; color: var(--text-secondary);">Elimina <strong>permanentemente</strong> todos los emparejamientos actuales.</div>
+            <div class="action-title" style="color: var(--accent-r);">Restablecimiento de Fábrica</div>
+            <div class="action-desc">Elimina <strong>permanentemente</strong> todos los emparejamientos actuales.</div>
           </div>
           <button id="factoryreset-btn" class="pill-btn danger">Restablecer</button>
         </div>

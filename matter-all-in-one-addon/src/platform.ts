@@ -398,87 +398,31 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           let commissioned = false;
           let pairedFabrics: any[] = [];
 
-          // ── Matterbridge auth token (needed for /api/plugins & /api/settings)
-          // Matterbridge ≥ 1.7 requires a Bearer token even for localhost requests.
-          // The token is stored in matterbridge.json under the "password" field
-          // (hashed with bcrypt), but the raw session cookie / API key is available
-          // via the MATTERBRIDGE_TOKEN env variable when running as an add-on, OR
-          // we skip strategies 1 & 2 and go straight to disk (strategy 3) which
-          // never generates blocked-access log noise.
-          const mbToken = process.env.MATTERBRIDGE_TOKEN || process.env.MATTERBRIDGE_API_KEY || '';
-          const authHeaders: Record<string, string> = mbToken
-            ? { Authorization: `Bearer ${mbToken}` }
-            : {};
-
-          // Strategy 1: Try /api/plugins (real Matterbridge endpoint)
+          // Get bridge data directly from the Matterbridge instance in memory
           try {
-            if (!mbToken) throw new Error('No MATTERBRIDGE_TOKEN — skipping network strategies to avoid blocked-access log spam');
-            const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 3000);
-            const pluginsRes = await fetch('http://127.0.0.1:8284/api/plugins', {
-              signal: controller.signal,
-              headers: authHeaders,
-            });
-            clearTimeout(timeout);
-            const contentType = pluginsRes.headers.get('content-type') || '';
-            if (pluginsRes.ok && contentType.includes('application/json')) {
-              const pluginsData = await pluginsRes.json() as any;
-              // /api/plugins returns an array of plugin objects
-              const plugins = Array.isArray(pluginsData) ? pluginsData : [];
-              const bridgePlugin = plugins.find((p: any) => p.qrPairingCode) || plugins[0];
-              if (bridgePlugin) {
-                qrPairingCode = this.normalizeMatterQrCode(bridgePlugin.qrPairingCode);
-                manualPairingCode = this.normalizeMatterManualCode(bridgePlugin.manualPairingCode);
-                commissioned = bridgePlugin.paired === true || bridgePlugin.commissioned === true;
-                pairedFabrics = bridgePlugin.fabricInformations || [];
+            const mb = this.matterbridge as any;
+            if (mb && mb.serverNode && typeof mb.getServerNodeData === 'function') {
+              const nodeData = mb.getServerNodeData(mb.serverNode);
+              if (nodeData) {
+                qrPairingCode = this.normalizeMatterQrCode(nodeData.qrPairingCode);
+                manualPairingCode = this.normalizeMatterManualCode(nodeData.manualPairingCode);
+                commissioned = nodeData.commissioned === true;
+                pairedFabrics = nodeData.fabricInformations || [];
+                // this.log.debug('[UI Server] Got bridge data from internal Matterbridge state');
               }
-              this.log.debug('[UI Server] Got bridge data from /api/plugins');
             } else {
-              throw new Error(`Unexpected response from /api/plugins: ${pluginsRes.status}`);
+              // Fallback to disk if serverNode is not yet initialized
+              const mbJsonPath = '/root/.matterbridge/matterbridge.json';
+              const mbRaw = await fs.readFile(mbJsonPath, 'utf8');
+              const mbData = JSON.parse(mbRaw);
+              qrPairingCode = this.normalizeMatterQrCode(mbData.qrPairingCode || mbData.qrcode);
+              manualPairingCode = this.normalizeMatterManualCode(mbData.manualPairingCode || mbData.manualCode);
+              commissioned = mbData.commissioned === true;
+              pairedFabrics = mbData.pairedFabrics || mbData.fabricInformations || [];
             }
-          } catch (apiErr) {
-            this.log.debug('[UI Server] /api/plugins unavailable, trying /api/settings: ' + (apiErr instanceof Error ? apiErr.message : apiErr));
-
-            // Strategy 2: Try /api/settings
-            try {
-              if (!mbToken) throw new Error('No MATTERBRIDGE_TOKEN — skipping to disk read');
-              const controller = new AbortController();
-              const timeout = setTimeout(() => controller.abort(), 3000);
-              const settingsRes = await fetch('http://127.0.0.1:8284/api/settings', {
-                signal: controller.signal,
-                headers: authHeaders,
-              });
-              clearTimeout(timeout);
-              const contentType = settingsRes.headers.get('content-type') || '';
-              if (settingsRes.ok && contentType.includes('application/json')) {
-                const settingsData = await settingsRes.json() as any;
-                qrPairingCode = this.normalizeMatterQrCode(settingsData.qrPairingCode);
-                manualPairingCode = this.normalizeMatterManualCode(settingsData.manualPairingCode);
-                commissioned = settingsData.commissioned === true || settingsData.paired === true;
-                pairedFabrics = settingsData.pairedFabrics || settingsData.fabricInformations || [];
-                this.log.debug('[UI Server] Got bridge data from /api/settings');
-              } else {
-                throw new Error(`Unexpected response from /api/settings: ${settingsRes.status}`);
-              }
-            } catch (settingsErr) {
-              this.log.debug('[UI Server] /api/settings unavailable, reading matterbridge.json from disk: ' + (settingsErr instanceof Error ? settingsErr.message : settingsErr));
-
-              // Strategy 3: Read matterbridge.json directly from filesystem
-              try {
-                const mbJsonPath = '/root/.matterbridge/matterbridge.json';
-                const mbRaw = await fs.readFile(mbJsonPath, 'utf8');
-                const mbData = JSON.parse(mbRaw);
-                // Structure: { qrPairingCode, manualPairingCode, commissioned, ... }
-                qrPairingCode = this.normalizeMatterQrCode(mbData.qrPairingCode || mbData.qrcode);
-                manualPairingCode = this.normalizeMatterManualCode(mbData.manualPairingCode || mbData.manualCode);
-                commissioned = mbData.commissioned === true;
-                pairedFabrics = mbData.pairedFabrics || mbData.fabricInformations || [];
-                this.log.debug('[UI Server] Got bridge data from matterbridge.json on disk');
-              } catch (fsErr) {
-                this.log.warn('[UI Server] Could not read matterbridge.json: ' + (fsErr instanceof Error ? fsErr.message : fsErr));
-                // Final fallback: empty values — bridge is still initializing
-              }
-            }
+          } catch (err) {
+            // normal during startup if files don't exist yet
+            // this.log.debug('[UI Server] Bridge data not available yet: ' + (err instanceof Error ? err.message : err));
           }
 
           const status = commissioned ? 'vinculado' : (qrPairingCode ? 'esperando' : 'iniciando');

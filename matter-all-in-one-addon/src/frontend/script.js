@@ -1,6 +1,9 @@
 /**
- * Matter 1.5.x Bridge · Liquid Glass UI · script.js
- * v2 — Vista jerárquica: Dispositivo HA → Entidades seleccionables
+ * Matter 1.5.x Bridge · Liquid Glass UI · script.js v3
+ * - Carga dispositivos automáticamente al iniciar
+ * - Agrupa entidades por dispositivo HA real
+ * - Modal de configuración de tipo Matter por entidad
+ * - QR del bridge en sidebar (siempre visible)
  */
 
 'use strict';
@@ -9,79 +12,72 @@
 const API = './api/custom';
 
 // ── State ─────────────────────────────────────────────────────
-let bridgeQrCode      = '';
-let bridgeManualCode  = '';
-let qrBridgeRendered  = false;
-let modalQrRendered   = false;
-let allEntities       = [];   // lista plana de entidades desde API
-let deviceMap         = {};   // { deviceId: { name, area, entities[] } }
-let activeDevice      = null; // dispositivo HA activo en modal
-let pendingConfirm    = null;
+let bridgeQrCode     = '';
+let bridgeManualCode = '';
+let qrSidebarRendered = false;
+let modalQrRendered  = false;
+let allEntities      = [];
+let activeEntity     = null;
+let pendingConfirm   = null;
 
 // ── HomeKit 2026 Type Map ──────────────────────────────────────
 const HK_TYPES = {
   light: [
-    { id: 'dimmableLight',           name: '💡 Luz Regulable',              desc: 'Luz con control de On/Off y brillo (Dimmable Light). Compatible con escenas y automatizaciones.' },
-    { id: 'colorTemperatureLight',   name: '💡 Luz de Temperatura de Color', desc: 'Brillo + temperatura de color (2700K–6500K). Ideal para tiras LED blancas y bombillas CCT.' },
-    { id: 'extendedColorLight',      name: '💡 Luz RGBW Completa',          desc: 'Control total RGB + blanco cálido/frío. Máxima compatibilidad con luz de color.' },
-    { id: 'onOffLight',              name: '💡 Luz Simple On/Off',           desc: 'Solo encendido y apagado. Sin regulación de brillo. Para luces de interruptor simples.' },
+    { id: 'dimmableLight',           name: '💡 Luz Regulable (Dimmable)',        desc: 'Luz con control de On/Off y brillo. Compatible con escenas y automatizaciones de Apple Home.' },
+    { id: 'colorTemperatureLight',   name: '💡 Luz Temperatura de Color (CCT)',  desc: 'Brillo + temperatura de color (2700K–6500K). Ideal para tiras LED blancas y bombillas CCT.' },
+    { id: 'extendedColorLight',      name: '💡 Luz RGB Completa (RGBW)',         desc: 'Control total RGB + blanco cálido/frío. Máxima compatibilidad con luz de color.' },
+    { id: 'onOffLight',              name: '💡 Luz Simple (On/Off)',             desc: 'Solo encendido y apagado. Sin regulación de brillo. Para luces de interruptor simples.' },
   ],
   switch: [
-    { id: 'onOffPlugInUnit',         name: '🔌 Enchufe Inteligente',         desc: 'Exponer como enchufe enchufable On/Off. Aparece en la sección "Enchufes" de Apple Home.' },
-    { id: 'onOffLight',              name: '💡 Interruptor como Luz',        desc: 'Exponer el switch como una luz simple. Útil para interruptores de tira LED sin dimmer.' },
+    { id: 'onOffPlugInUnit',         name: '🔌 Enchufe Inteligente',             desc: 'Exponer como enchufe On/Off. Aparece en la sección Enchufes de Apple Home.' },
+    { id: 'onOffLight',              name: '💡 Interruptor como Luz',            desc: 'Exponer el switch como una luz simple. Útil para interruptores de tira LED sin dimmer.' },
   ],
   cover: [
-    { id: 'windowCovering',          name: '🪟 Persiana / Cortina',          desc: 'Window Covering (Matter 1.5.x): control de posición y tilt. Compatible con persianas, estores y cortinas motorizadas.' },
-    { id: 'closure',                 name: '🚪 Cerramiento Unificado',       desc: 'Closure Unified (Matter 1.5.x): puertas de garaje, puertas de entrada, verjas automatizadas.' },
+    { id: 'windowCovering',          name: '🪟 Persiana / Cortina',              desc: 'Window Covering: control de posición y tilt. Compatible con persianas, estores y cortinas motorizadas.' },
+    { id: 'closure',                 name: '🚪 Cerramiento Unificado',           desc: 'Closure Unified: puertas de garaje, puertas de entrada, verjas automatizadas.' },
   ],
   lock: [
-    { id: 'doorLock',                name: '🔒 Cerradura de Puerta',         desc: 'Door Lock con soporte de credenciales PIN y acceso temporal. Compatible HomeKit 2026.' },
+    { id: 'doorLock',                name: '🔒 Cerradura de Puerta',             desc: 'Door Lock con soporte de credenciales PIN y acceso temporal.' },
   ],
   climate: [
-    { id: 'thermostat',              name: '❄️ Termostato HVAC',             desc: 'Control de temperatura, modo calor/frío/auto y humedad. Compatible con todos los termostatos Matter.' },
+    { id: 'thermostat',              name: '❄️ Termostato HVAC',                 desc: 'Control de temperatura, modo calor/frío/auto y humedad.' },
   ],
   sensor: [
-    { id: 'temperatureSensor',       name: '🌡️ Sensor de Temperatura',      desc: 'Temperature Sensor (Matter 1.5.x). Reporta grados Celsius en tiempo real.' },
-    { id: 'humiditySensor',          name: '💧 Sensor de Humedad Relativa',  desc: 'Relative Humidity Sensor. Muestra porcentaje de humedad en Apple Home / Google Home.' },
-    { id: 'lightSensor',             name: '☀️ Sensor de Luminosidad',       desc: 'Light Sensor (Lux). Permite automatizaciones basadas en nivel de luz ambiente.' },
-    { id: 'pressureSensor',          name: '📊 Sensor de Presión',           desc: 'Pressure Sensor (hPa). Para estaciones meteorológicas y sensores de aire.' },
-    { id: 'flowSensor',              name: '💧 Sensor de Flujo de Agua',     desc: 'Flow Sensor. Medición de caudal de agua en sistemas de riego y fontanería.' },
-    { id: 'occupancySensor',         name: '👤 Sensor de Presencia',         desc: 'Occupancy Sensor. Detección de presencia para automatizaciones de iluminación.' },
-    { id: 'soilMoistureSensor',      name: '🌱 Sensor de Humedad de Suelo',  desc: 'Soil Moisture Sensor (Matter 1.5.x). Para sistemas de riego automático y jardinería.' },
+    { id: 'temperatureSensor',       name: '🌡️ Sensor de Temperatura',           desc: 'Temperature Sensor. Reporta grados Celsius en tiempo real.' },
+    { id: 'humiditySensor',          name: '💧 Sensor de Humedad Relativa',      desc: 'Relative Humidity Sensor. Muestra porcentaje de humedad.' },
+    { id: 'lightSensor',             name: '☀️ Sensor de Luminosidad',           desc: 'Light Sensor (Lux). Para automatizaciones basadas en nivel de luz.' },
+    { id: 'pressureSensor',          name: '📊 Sensor de Presión',               desc: 'Pressure Sensor (hPa). Para estaciones meteorológicas.' },
+    { id: 'flowSensor',              name: '💧 Sensor de Flujo de Agua',         desc: 'Flow Sensor. Para sistemas de riego y fontanería.' },
+    { id: 'occupancySensor',         name: '👤 Sensor de Presencia',             desc: 'Occupancy Sensor. Para automatizaciones de iluminación.' },
   ],
   binary_sensor: [
-    { id: 'contactSensor',           name: '🚪 Sensor de Contacto',          desc: 'Detecta apertura y cierre de puertas, ventanas y cajones.' },
-    { id: 'occupancySensor',         name: '👤 Sensor de Movimiento/Presencia', desc: 'Motion / Occupancy Sensor. Para detectar presencia en habitaciones y zonas.' },
+    { id: 'contactSensor',           name: '🚪 Sensor de Contacto',              desc: 'Detecta apertura y cierre de puertas, ventanas y cajones.' },
+    { id: 'occupancySensor',         name: '👤 Sensor de Movimiento/Presencia',  desc: 'Motion / Occupancy Sensor. Para detectar presencia en habitaciones.' },
   ],
   camera: [
-    { id: 'camera',                  name: '📹 Cámara de Red',               desc: 'Network Camera (Matter 1.5.x). Visualización de vídeo en tiempo real en Apple Home.' },
-  ],
-  input_boolean: [
-    { id: 'onOffPlugInUnit',         name: '🔌 Interruptor Virtual (Enchufe)', desc: 'Exponer el input_boolean como un enchufe virtual On/Off.' },
-    { id: 'onOffLight',              name: '💡 Interruptor Virtual (Luz)',    desc: 'Exponer el input_boolean como una luz simple On/Off.' },
+    { id: 'camera',                  name: '📹 Cámara de Red',                   desc: 'Network Camera. Visualización de vídeo en Apple Home.' },
   ],
   fan: [
-    { id: 'onOffPlugInUnit',         name: '🌀 Ventilador Simple',            desc: 'Ventilador como enchufe On/Off. Para ventiladores sin control de velocidad.' },
+    { id: 'onOffPlugInUnit',         name: '🌀 Ventilador Simple',               desc: 'Ventilador como enchufe On/Off simple.' },
   ],
   vacuum: [
-    { id: 'roboticVacuumCleaner',    name: '🤖 Aspiradora Robot (Matter RVC)', desc: 'Robotic Vacuum Cleaner (Matter 1.4 · device type 0x0074). Apple Home reconoce start/pause/stop/return-to-base y nivel de batería. Compatible con Tuya, Smart Life, Roborock, iRobot, Dreame.' },
-    { id: 'onOffPlugInUnit',         name: '🔌 Aspiradora (On/Off básico)',    desc: 'Fallback: expone la aspiradora como enchufe On/Off simple. Usar solo si RVC no funciona con tu modelo.' },
+    { id: 'roboticVacuumCleaner',    name: '🤖 Aspiradora Robot (RVC)',          desc: 'Robotic Vacuum Cleaner (Matter RVC device type 0x0074). Apple Home reconoce start/pause/stop.' },
+    { id: 'onOffPlugInUnit',         name: '🔌 Aspiradora (On/Off básico)',       desc: 'Fallback: expone como enchufe On/Off simple.' },
   ],
   media_player: [
-    { id: 'onOffPlugInUnit',         name: '📺 Media Player (On/Off)',        desc: 'Exponer el reproductor multimedia como enchufe inteligente para control de energía.' },
+    { id: 'onOffPlugInUnit',         name: '📺 Media Player (On/Off)',           desc: 'Exponer el reproductor multimedia como enchufe inteligente.' },
   ],
 };
 
 const DOMAIN_ICONS = {
   light: '💡', switch: '🔌', cover: '🪟', lock: '🔒', climate: '❄️',
   sensor: '🌡️', binary_sensor: '🚨', camera: '📹', fan: '🌀',
-  vacuum: '🤖', media_player: '📺', input_boolean: '🎛️',
-  script: '⚡', automation: '🔄', scene: '🎨',
+  vacuum: '🤖', media_player: '📺',
 };
 
 const DOMAIN_PRIORITY = [
   'light','switch','cover','lock','climate','camera',
-  'fan','vacuum','media_player','binary_sensor','sensor','input_boolean',
+  'fan','vacuum','media_player','binary_sensor','sensor',
 ];
 
 function domainIcon(domain) {
@@ -98,76 +94,59 @@ function esc(str) {
 const $ = id => document.getElementById(id);
 
 // ── DOM refs ──────────────────────────────────────────────────
-const navItems   = document.querySelectorAll('.nav-item');
-const tabPanels  = document.querySelectorAll('.tab-panel');
+const deviceList     = $('device-list');
+const deviceSearch   = $('device-search');
+const deviceBadge    = $('device-count-badge');
 
-// Bridge tab
-const qrCanvas      = $('qrcode-canvas');
-const qrLoading     = $('qr-loading');
-const manualCode    = $('manual-code');
-const copyBtn       = $('copy-btn');
-const commBanner    = $('commissioned-banner');
-const statusOrb     = $('status-orb');
-const statusTitle   = $('status-title');
-const statusDesc    = $('status-desc');
-const haDot         = $('ha-dot');
-const haStatusText  = $('ha-status-text');
+// Sidebar bridge status
+const sbsOrb         = $('sbs-orb');
+const sbsTitle       = $('sbs-title');
+const sbsDesc        = $('sbs-desc');
+const haDot          = $('ha-dot');
+const haStatusText   = $('ha-status-text');
 
-// Devices tab
-const deviceGrid    = $('device-grid');
-const deviceSearch  = $('device-search');
-const deviceBadge   = $('device-count-badge');
+// Sidebar QR
+const sidebarQrEl    = $('sidebar-qrcode');
+const sqrLoading     = $('sqr-loading');
+const sidebarManual  = $('sidebar-manual-code');
+const sidebarCopyBtn = $('sidebar-copy-btn');
+const commBannerSm   = $('commissioned-banner-sm');
 
-// Device modal (entidades del dispositivo)
-const deviceModal       = $('device-modal');
-const modalClose        = $('modal-close');
-const modalIcon         = $('modal-icon');
-const modalName         = $('modal-device-name');
-const modalEntityId     = $('modal-entity-id');  // usaremos para área/modelo
-const modalStatePill    = $('modal-state');
-const modalDomain       = $('modal-domain');
-const modalMatterType   = $('modal-matter-type');
-const modalHaState      = $('modal-ha-state');
-const hkSelect          = $('hk-type-select');
-const hkTypeInfo        = $('hk-type-info');
-const saveTypeBtn       = $('save-type-btn');
-const saveFeedback      = $('save-feedback');
-const modalQrEl         = $('modal-qrcode');
-const modalQrPh         = $('modal-qr-placeholder');
-const modalManual       = $('modal-manual-code');
-const modalCopyBtn      = $('modal-copy-btn');
-const modalQrExportBtn  = $('modal-qr-export-btn');
-const modalQrDeviceName = $('modal-qr-device-name');
+// Entity modal
+const entityModal    = $('entity-modal');
+const emIcon         = $('em-icon');
+const emName         = $('entity-modal-name');
+const emId           = $('em-id');
+const emState        = $('em-state');
+const emDomain       = $('em-domain');
+const emMatterType   = $('em-matter-type');
+const emHaState      = $('em-ha-state');
+const emQrLabel      = $('em-qr-device-label');
+const hkSelect       = $('hk-type-select');
+const saveTypeBtn    = $('save-type-btn');
+const saveFeedback   = $('save-feedback');
+const modalQrEl      = $('modal-qrcode');
+const modalQrPh      = $('modal-qr-ph');
+const modalManual    = $('modal-manual-code');
+const modalCopyBtn   = $('modal-copy-btn');
+const modalQrExport  = $('modal-qr-export-btn');
 
 // Confirm modal
-const confirmModal  = $('confirm-modal');
-const confirmTitle  = $('confirm-title');
-const confirmDesc   = $('confirm-desc');
-const confirmOk     = $('confirm-ok');
-const confirmCancel = $('confirm-cancel');
+const confirmModal   = $('confirm-modal');
+const confirmTitle   = $('confirm-title');
+const confirmDesc    = $('confirm-desc');
+const confirmOk      = $('confirm-ok');
+const confirmCancel  = $('confirm-cancel');
 
-// Advanced / Settings
-const advancedBtn   = $('advanced-btn');
-const advancedModal = $('advanced-modal');
-const advModalClose = $('adv-modal-close');
-const restartBtn    = $('restart-btn');
-const factoryBtn    = $('factoryreset-btn');
-
-// ── Tab Navigation ────────────────────────────────────────────
-navItems.forEach(btn => {
-  btn.addEventListener('click', () => {
-    const targetTab = btn.dataset.tab;
-    navItems.forEach(b => b.classList.remove('active'));
-    tabPanels.forEach(p => p.classList.remove('active'));
-    btn.classList.add('active');
-    const panel = document.getElementById(targetTab);
-    if (panel) panel.classList.add('active');
-    if (targetTab === 'tab-devices') fetchDevices();
-  });
-});
+// Advanced modal
+const advancedBtn    = $('advanced-btn');
+const advancedModal  = $('advanced-modal');
+const advModalClose  = $('adv-modal-close');
+const restartBtn     = $('restart-btn');
+const factoryBtn     = $('factoryreset-btn');
 
 // ── QR Rendering ──────────────────────────────────────────────
-function renderQR(container, text, size = 180) {
+function renderQR(container, text, size = 160) {
   container.innerHTML = '';
   if (!text || typeof QRCode === 'undefined') return false;
   try {
@@ -190,84 +169,81 @@ async function fetchStatus() {
     if (!res.ok) throw new Error('status error');
     const d = await res.json();
 
+    // HA connection status
     const connected = d.haStatus === 'conectado';
     haDot.className = 'status-dot ' + (connected ? 'connected' : 'disconnected');
     haStatusText.textContent = connected ? 'HA Conectado' : 'HA Desconectado';
 
+    // Bridge status orb
+    if (d.commissioned) {
+      sbsOrb.className = 'sbs-orb connected';
+      sbsTitle.textContent = 'Puente Vinculado';
+      sbsDesc.textContent  = 'Emparejado y funcionando';
+    } else if (d.qrPairingCode) {
+      sbsOrb.className = 'sbs-orb waiting';
+      sbsTitle.textContent = 'Esperando Vinculación';
+      sbsDesc.textContent  = 'Escanea el QR del sidebar';
+    } else {
+      sbsOrb.className = 'sbs-orb';
+      sbsTitle.textContent = 'Iniciando...';
+      sbsDesc.textContent  = 'Cargando servicios';
+    }
+
+    // QR code
     if (d.qrPairingCode && d.qrPairingCode !== bridgeQrCode) {
       bridgeQrCode = d.qrPairingCode;
-      qrBridgeRendered = false;
+      qrSidebarRendered = false;
     }
     bridgeManualCode = d.manualPairingCode || '';
-    manualCode.textContent = bridgeManualCode || '---- --- ----';
+    sidebarManual.textContent = bridgeManualCode || '---- --- ----';
 
-    if (!qrBridgeRendered && bridgeQrCode) {
-      const ok = renderQR(qrCanvas, bridgeQrCode, 198);
+    if (!qrSidebarRendered && bridgeQrCode) {
+      const ok = renderQR(sidebarQrEl, bridgeQrCode, 150);
       if (ok) {
-        qrLoading.style.display = 'none';
-        qrCanvas.style.display = 'block';
-        qrBridgeRendered = true;
+        sqrLoading.style.display = 'none';
+        sidebarQrEl.style.display = 'block';
+        qrSidebarRendered = true;
       }
     }
 
-    commBanner.style.display = d.commissioned ? 'flex' : 'none';
-    statusOrb.className = 'status-orb ' + (d.commissioned ? 'connected' : (d.status === 'esperando' ? 'waiting' : ''));
-    statusOrb.querySelector('#status-orb-label').textContent = d.commissioned ? 'OK' : (d.status === 'esperando' ? 'Pair' : '…');
+    commBannerSm.style.display = d.commissioned ? 'block' : 'none';
 
-    if (d.commissioned) {
-      statusTitle.textContent = 'Puente Vinculado';
-      statusDesc.textContent  = 'El puente está emparejado y funcionando con normalidad.';
-    } else if (d.status === 'esperando') {
-      statusTitle.textContent = 'Esperando Vinculación';
-      statusDesc.textContent  = 'Listo para emparejar. Escanea el código QR de la izquierda.';
-    } else {
-      statusTitle.textContent = 'Iniciando Servicio';
-      statusDesc.textContent  = 'El puente Matter se está iniciando. Por favor espera...';
-    }
   } catch(e) {
     haDot.className = 'status-dot disconnected';
     haStatusText.textContent = 'Sin conexión';
   }
 }
 
-// ── Agrupación de entidades por dispositivo HA ────────────────
-/**
- * Toma la lista plana de entidades y las agrupa por device_id.
- * Si una entidad no tiene device_id, se agrupa por dominio.
- * Devuelve un Map ordenado: dispositivos reales primero,
- * luego grupos por dominio (entidades sin dispositivo HA).
- */
+// ── Agrupación por dispositivo HA ─────────────────────────────
 function groupEntitiesByDevice(entities) {
   const grouped = new Map();
 
   for (const entity of entities) {
-    // El backend puede enviar device_id, device_name, area_name
     const devId   = entity.device_id || `__domain_${entity.domain}`;
-    const devName = entity.device_name || entity.device_id ||
-                    `${entity.domain.charAt(0).toUpperCase() + entity.domain.slice(1)}s`;
+    const devName = entity.device_name ||
+                    `${entity.domain.charAt(0).toUpperCase() + entity.domain.slice(1)}`;
     const area    = entity.area_name || '';
 
     if (!grouped.has(devId)) {
-      // Determinar icono principal del dispositivo por la primera entidad
       grouped.set(devId, {
         id: devId,
         name: devName,
         area,
-        isVirtual: !entity.device_id,   // true = agrupado por dominio, sin dispositivo real
+        manufacturer: entity.manufacturer || '',
+        model: entity.model || '',
+        isVirtual: !entity.device_id,
         entities: [],
       });
     }
     grouped.get(devId).entities.push(entity);
   }
 
-  // Ordenar: dispositivos reales primero, luego virtuales; dentro por nombre
   return [...grouped.values()].sort((a, b) => {
     if (a.isVirtual !== b.isVirtual) return a.isVirtual ? 1 : -1;
     return a.name.localeCompare(b.name);
   });
 }
 
-// ── Icono representativo del dispositivo (dominio más relevante) ─
 function deviceRepresentativeIcon(device) {
   const domains = device.entities.map(e => e.domain);
   for (const p of DOMAIN_PRIORITY) {
@@ -276,130 +252,113 @@ function deviceRepresentativeIcon(device) {
   return domainIcon(domains[0]);
 }
 
-// ── Cuenta de entidades exportadas en un dispositivo ─────────
 function exportedCount(device) {
   return device.entities.filter(e => e.exported).length;
 }
 
+function stateClass(state) {
+  const s = (state || '').toLowerCase();
+  if (['on','home','open','unlocked','playing'].includes(s)) return 'on';
+  if (['off','away','closed','locked','idle'].includes(s)) return 'off';
+  return '';
+}
+
 // ── Fetch y render principal ──────────────────────────────────
 async function fetchDevices() {
-  deviceGrid.innerHTML = `<div class="devices-empty" id="devices-loading"><div class="spinner large"></div><p>Cargando dispositivos...</p></div>`;
+  deviceList.innerHTML = `<div class="devices-empty"><div class="spinner large"></div><p>Cargando dispositivos...</p></div>`;
   try {
     const res = await fetch(`${API}/devices`);
     if (!res.ok) throw new Error('devices error');
     allEntities = await res.json();
-    renderDeviceGroups(allEntities, '');
+    renderDeviceList(allEntities, '');
   } catch(e) {
-    deviceGrid.innerHTML = `<div class="devices-empty"><p style="color:var(--accent-r)">Error al cargar dispositivos. Verifica la conexión con Home Assistant.</p></div>`;
+    deviceList.innerHTML = `<div class="devices-empty"><p style="color:var(--accent-r)">❌ Error al cargar dispositivos. Verifica que Home Assistant esté conectado.</p></div>`;
   }
 }
 
-function stateClass(state) {
-  const s = (state || '').toLowerCase();
-  if (s === 'on' || s === 'home' || s === 'open' || s === 'unlocked' || s === 'playing') return 'on';
-  if (s === 'off' || s === 'away' || s === 'closed' || s === 'locked' || s === 'idle')   return 'off';
-  return '';
-}
-
 // ── Render lista de dispositivos agrupados ────────────────────
-function renderDeviceGroups(entities, searchQuery) {
+function renderDeviceList(entities, searchQuery) {
   const q = (searchQuery || '').toLowerCase().trim();
 
-  // Filtrar entidades si hay búsqueda
   const filtered = q
     ? entities.filter(e =>
-        e.friendlyName.toLowerCase().includes(q) ||
-        e.entityId.toLowerCase().includes(q) ||
+        (e.friendlyName || '').toLowerCase().includes(q) ||
+        (e.entityId || '').toLowerCase().includes(q) ||
         (e.device_name || '').toLowerCase().includes(q) ||
-        (e.area_name || '').toLowerCase().includes(q) ||
-        (e.matterType || '').toLowerCase().includes(q)
+        (e.area_name || '').toLowerCase().includes(q)
       )
     : entities;
 
   const devices = groupEntitiesByDevice(filtered);
 
-  // Actualizar badge con número de dispositivos reales
-  const realDeviceCount = devices.filter(d => !d.isVirtual).length;
   const totalDevices = devices.length;
-  deviceBadge.textContent = totalDevices;
-  deviceBadge.classList.toggle('show', totalDevices > 0);
+  deviceBadge.textContent = totalDevices > 0 ? `${totalDevices}` : '';
 
   if (devices.length === 0) {
-    deviceGrid.innerHTML = q
-      ? `<div class="devices-empty"><p>No se encontraron dispositivos para "${esc(q)}".</p></div>`
+    deviceList.innerHTML = q
+      ? `<div class="devices-empty"><p>No se encontraron dispositivos para "<strong>${esc(q)}</strong>".</p></div>`
       : `<div class="devices-empty"><p>No se encontraron dispositivos. Asegúrate de que Home Assistant esté conectado.</p></div>`;
     return;
   }
 
-  deviceGrid.innerHTML = '';
-
-  // Si hay búsqueda, mostrar contador de resultados
-  if (q) {
-    const info = document.createElement('div');
-    info.className = 'search-results-info';
-    info.textContent = `${devices.length} dispositivo${devices.length !== 1 ? 's' : ''} · ${filtered.length} entidad${filtered.length !== 1 ? 'es' : ''}`;
-    deviceGrid.appendChild(info);
-  }
+  deviceList.innerHTML = '';
 
   devices.forEach(device => {
-    const card = buildDeviceGroupCard(device);
-    deviceGrid.appendChild(card);
+    const card = buildDeviceCard(device);
+    deviceList.appendChild(card);
   });
 }
 
-// ── Construir card de dispositivo (con entidades colapsadas) ──
-function buildDeviceGroupCard(device) {
+// ── Card de dispositivo ───────────────────────────────────────
+function buildDeviceCard(device) {
   const wrapper = document.createElement('div');
-  wrapper.className = 'device-group-card glass-card';
+  wrapper.className = 'device-card glass-card';
   wrapper.dataset.deviceId = device.id;
 
   const exported  = exportedCount(device);
   const total     = device.entities.length;
-  const allOn     = device.entities.every(e => (e.state || '').toLowerCase() === 'on' ||
-                                               (e.state || '').toLowerCase() === 'home' ||
-                                               (e.state || '').toLowerCase() === 'open');
-  const anyOn     = device.entities.some(e => (e.state || '').toLowerCase() === 'on' ||
-                                              (e.state || '').toLowerCase() === 'open');
-  const stateHint = allOn ? 'on' : (anyOn ? 'partial' : 'off');
   const icon      = deviceRepresentativeIcon(device);
+  const anyOn     = device.entities.some(e =>
+    ['on','open','home','playing'].includes((e.state || '').toLowerCase())
+  );
+  const stateHint = anyOn ? 'on' : 'off';
 
-  // Dominios únicos para etiquetas
   const uniqueDomains = [...new Set(device.entities.map(e => e.domain))].slice(0, 3);
 
   wrapper.innerHTML = `
-    <div class="dgc-header">
-      <div class="dgc-icon-wrap ${stateHint}">
-        <span class="dgc-icon">${icon}</span>
+    <div class="dc-header">
+      <div class="dc-icon-wrap ${stateHint}">
+        <span class="dc-icon">${icon}</span>
       </div>
-      <div class="dgc-info">
-        <div class="dgc-name">${esc(device.name)}</div>
-        ${device.area ? `<div class="dgc-area">📍 ${esc(device.area)}</div>` : ''}
-        <div class="dgc-meta">
-          ${uniqueDomains.map(d => `<span class="dgc-domain-tag">${esc(d)}</span>`).join('')}
+      <div class="dc-info">
+        <div class="dc-name">${esc(device.name)}</div>
+        ${device.area ? `<div class="dc-area">📍 ${esc(device.area)}</div>` : ''}
+        ${device.manufacturer ? `<div class="dc-mfr">${esc(device.manufacturer)}${device.model ? ' · ' + esc(device.model) : ''}</div>` : ''}
+        <div class="dc-domains">
+          ${uniqueDomains.map(d => `<span class="dc-domain-tag">${esc(d)}</span>`).join('')}
         </div>
       </div>
-      <div class="dgc-right">
-        <div class="dgc-export-count ${exported > 0 ? 'active' : ''}">
+      <div class="dc-right">
+        <div class="dc-export-count ${exported > 0 ? 'active' : ''}">
           ${exported}/${total}
-          <span class="dgc-export-label">Matter</span>
+          <span class="dc-export-label">Matter</span>
         </div>
-        <div class="dgc-chevron">
+        <div class="dc-chevron">
           <svg viewBox="0 0 20 20" fill="currentColor" width="18" height="18">
             <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
           </svg>
         </div>
       </div>
     </div>
-    <div class="dgc-entities" style="display:none;">
-      <div class="dgc-entities-inner"></div>
+    <div class="dc-entities" style="display:none;">
+      <div class="dc-entities-inner"></div>
     </div>
   `;
 
-  // Click en header → expandir/colapsar entidades
-  const header      = wrapper.querySelector('.dgc-header');
-  const entitiesDiv = wrapper.querySelector('.dgc-entities');
-  const entitiesInner = wrapper.querySelector('.dgc-entities-inner');
-  const chevron     = wrapper.querySelector('.dgc-chevron');
+  const header        = wrapper.querySelector('.dc-header');
+  const entitiesDiv   = wrapper.querySelector('.dc-entities');
+  const entitiesInner = wrapper.querySelector('.dc-entities-inner');
+  const chevron       = wrapper.querySelector('.dc-chevron');
 
   header.addEventListener('click', () => {
     const isOpen = entitiesDiv.style.display !== 'none';
@@ -408,7 +367,6 @@ function buildDeviceGroupCard(device) {
       wrapper.classList.remove('expanded');
       chevron.style.transform = '';
     } else {
-      // Renderizar entidades la primera vez
       if (!entitiesInner.dataset.rendered) {
         renderEntityRows(entitiesInner, device);
         entitiesInner.dataset.rendered = '1';
@@ -422,9 +380,8 @@ function buildDeviceGroupCard(device) {
   return wrapper;
 }
 
-// ── Renderizar filas de entidades dentro del dispositivo ──────
+// ── Filas de entidades dentro del dispositivo ─────────────────
 function renderEntityRows(container, device) {
-  // Ordenar entidades: exportadas primero, luego por dominio priority, luego por nombre
   const sorted = [...device.entities].sort((a, b) => {
     if (a.exported !== b.exported) return a.exported ? -1 : 1;
     const pa = DOMAIN_PRIORITY.indexOf(a.domain);
@@ -439,16 +396,16 @@ function renderEntityRows(container, device) {
   });
 }
 
-// ── Construir fila de entidad individual ──────────────────────
+// ── Fila de entidad individual ────────────────────────────────
 function buildEntityRow(entity, device) {
   const row = document.createElement('div');
   row.className = 'entity-row' + (entity.exported ? ' exported' : ' not-exported');
   row.dataset.entityId = entity.entityId;
 
-  const icon = domainIcon(entity.domain);
-  const sc   = stateClass(entity.state);
-  const types = HK_TYPES[entity.domain] || [];
-  const hasConfig = types.length > 0;
+  const icon   = domainIcon(entity.domain);
+  const sc     = stateClass(entity.state);
+  const types  = HK_TYPES[entity.domain] || [];
+  const hasCfg = types.length > 0;
 
   row.innerHTML = `
     <div class="er-icon">${icon}</div>
@@ -466,7 +423,7 @@ function buildEntityRow(entity, device) {
       }
     </div>
     <div class="er-controls">
-      ${hasConfig
+      ${hasCfg
         ? `<button class="er-config-btn" title="Configurar tipo Matter" data-entity-id="${esc(entity.entityId)}">⚙️</button>`
         : ''
       }
@@ -494,70 +451,67 @@ function buildEntityRow(entity, device) {
         matterEl.innerHTML = isExported
           ? `<span class="er-matter-type">${esc(entity.matterType || 'Matter')}</span>`
           : `<span class="er-matter-disabled">No exportado</span>`;
-        // Actualizar contador del card padre
         updateDeviceCardCounter(device);
       } else {
         e.target.checked = !isExported;
       }
-    } catch (err) {
+    } catch {
       e.target.checked = !isExported;
     }
   });
 
-  // Botón configurar tipo Matter
+  // Botón configurar tipo
   const configBtn = row.querySelector('.er-config-btn');
   if (configBtn) {
     configBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      openEntityTypeModal(entity, device);
+      openEntityModal(entity);
     });
   }
 
   return row;
 }
 
-// ── Actualizar contador Matter del card de dispositivo ────────
+// ── Actualizar contador del card ──────────────────────────────
 function updateDeviceCardCounter(device) {
-  const card = document.querySelector(`.device-group-card[data-device-id="${CSS.escape(device.id)}"]`);
+  const card = document.querySelector(`.device-card[data-device-id="${CSS.escape(device.id)}"]`);
   if (!card) return;
   const exported = exportedCount(device);
   const total    = device.entities.length;
-  const countEl  = card.querySelector('.dgc-export-count');
+  const countEl  = card.querySelector('.dc-export-count');
   if (countEl) {
-    countEl.textContent = '';
-    countEl.innerHTML = `${exported}/${total}<span class="dgc-export-label">Matter</span>`;
+    countEl.innerHTML = `${exported}/${total}<span class="dc-export-label">Matter</span>`;
     countEl.classList.toggle('active', exported > 0);
   }
 }
 
-// ── Modal de configuración de tipo Matter para una entidad ────
-function openEntityTypeModal(entity, device) {
-  activeDevice = { entity, device };
+// ── Modal de configuración de tipo Matter ─────────────────────
+function openEntityModal(entity) {
+  activeEntity = entity;
   modalQrRendered = false;
 
-  const icon = domainIcon(entity.domain);
-  modalIcon.textContent = icon;
-  modalName.textContent = entity.friendlyName;
-  modalEntityId.textContent = entity.entityId;
+  emIcon.textContent = domainIcon(entity.domain);
+  emName.textContent = entity.friendlyName;
+  emId.textContent   = entity.entityId;
+  emQrLabel.textContent = entity.friendlyName;
 
   const sc = stateClass(entity.state);
-  modalStatePill.textContent = entity.state || '—';
-  modalStatePill.className = `modal-state-pill ${sc}`;
+  emState.textContent  = entity.state || '—';
+  emState.className    = `em-state-pill ${sc}`;
 
-  modalDomain.textContent     = entity.domain;
-  modalMatterType.textContent = entity.matterType || '-';
-  modalHaState.textContent    = entity.state || '-';
-  modalQrDeviceName.textContent = entity.friendlyName;
+  emDomain.textContent     = entity.domain;
+  emMatterType.textContent = entity.matterType || '—';
+  emHaState.textContent    = entity.state || '—';
 
-  // Dropdown de tipos HomeKit
+  // Dropdown HomeKit types
   const types = HK_TYPES[entity.domain] || [];
   hkSelect.innerHTML = '';
   if (types.length === 0) {
-    hkSelect.innerHTML = '<option value="">— Tipo no configurable —</option>';
-    hkSelect.disabled = true;
+    hkSelect.innerHTML = '<option value="">— Tipo no configurable para este dominio —</option>';
+    hkSelect.disabled  = true;
     saveTypeBtn.disabled = true;
   } else {
-    hkSelect.disabled = false;
+    hkSelect.disabled   = false;
     saveTypeBtn.disabled = false;
     types.forEach(t => {
       const opt = document.createElement('option');
@@ -571,18 +525,18 @@ function openEntityTypeModal(entity, device) {
     updateHkTypeDesc();
   }
 
-  // QR del puente Matter asociado a esta entidad. Las entidades puenteadas
-  // comparten el mismo payload de emparejamiento del bridge.
-  modalQrPh.style.display = 'flex';
-  modalQrEl.style.display = 'none';
-  const qrPayload = bridgeQrCode;
-  if (bridgeManualCode || qrPayload) {
+  // QR del bridge (compartido para todas las entidades)
+  modalQrPh.style.display  = 'flex';
+  modalQrEl.style.display  = 'none';
+  if (bridgeQrCode || bridgeManualCode) {
     modalManual.textContent = bridgeManualCode || '---- --- ----';
-    const ok = renderQR(modalQrEl, qrPayload || bridgeManualCode, 160);
-    if (ok) {
-      modalQrPh.style.display = 'none';
-      modalQrEl.style.display = 'block';
-      modalQrRendered = true;
+    if (bridgeQrCode) {
+      const ok = renderQR(modalQrEl, bridgeQrCode, 160);
+      if (ok) {
+        modalQrPh.style.display = 'none';
+        modalQrEl.style.display = 'block';
+        modalQrRendered = true;
+      }
     }
   } else {
     modalManual.textContent = '---- --- ----';
@@ -591,80 +545,78 @@ function openEntityTypeModal(entity, device) {
   saveFeedback.textContent = '';
   saveFeedback.className   = 'save-feedback';
 
-  deviceModal.classList.add('open');
+  entityModal.classList.add('open');
   document.body.style.overflow = 'hidden';
 }
 
 function updateHkTypeDesc() {
-  const sel = hkSelect.value;
-  const domain = activeDevice?.entity?.domain;
+  const sel    = hkSelect.value;
+  const domain = activeEntity?.domain;
   const types  = (domain && HK_TYPES[domain]) || [];
-  const t = types.find(x => x.id === sel);
+  const t      = types.find(x => x.id === sel);
   const descEl = $('hk-type-desc');
   if (descEl) descEl.textContent = t ? t.desc : 'Selecciona un tipo para ver la descripción.';
 }
 
 hkSelect && hkSelect.addEventListener('change', updateHkTypeDesc);
 
-// ── Guardar tipo Matter de la entidad ────────────────────────
+// ── Guardar tipo Matter ───────────────────────────────────────
 saveTypeBtn && saveTypeBtn.addEventListener('click', async () => {
-  if (!activeDevice) return;
-  const { entity } = activeDevice;
+  if (!activeEntity) return;
   const newType = hkSelect.value;
   if (!newType) return;
 
   saveTypeBtn.disabled = true;
   saveFeedback.textContent = 'Guardando...';
-  saveFeedback.className = 'save-feedback saving';
+  saveFeedback.className   = 'save-feedback saving';
 
   try {
     const res = await fetch(`${API}/device-override`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ entityId: entity.entityId, matterType: newType }),
+      body: JSON.stringify({ entityId: activeEntity.entityId, matterType: newType }),
     });
     if (res.ok) {
-      entity.matterType = newType;
-      modalMatterType.textContent = newType;
+      activeEntity.matterType = newType;
+      emMatterType.textContent = newType;
       saveFeedback.textContent = '✅ Guardado. Reinicia el puente para aplicar.';
-      saveFeedback.className = 'save-feedback success';
-      // Actualizar etiqueta en la fila
-      const entityRow = document.querySelector(`.entity-row[data-entity-id="${CSS.escape(entity.entityId)}"] .er-matter-type`);
+      saveFeedback.className   = 'save-feedback success';
+      // Actualizar fila
+      const entityRow = document.querySelector(`.entity-row[data-entity-id="${CSS.escape(activeEntity.entityId)}"] .er-matter-type`);
       if (entityRow) entityRow.textContent = newType;
     } else {
       saveFeedback.textContent = '❌ Error al guardar. Intenta de nuevo.';
-      saveFeedback.className = 'save-feedback error';
+      saveFeedback.className   = 'save-feedback error';
     }
-  } catch(e) {
+  } catch {
     saveFeedback.textContent = '❌ Sin conexión con el servidor.';
-    saveFeedback.className = 'save-feedback error';
+    saveFeedback.className   = 'save-feedback error';
   } finally {
     saveTypeBtn.disabled = false;
   }
 });
 
-// ── Cerrar modal ──────────────────────────────────────────────
-function closeDeviceModal() {
-  deviceModal.classList.remove('open');
+// ── Cerrar entity modal ───────────────────────────────────────
+function closeEntityModal() {
+  entityModal.classList.remove('open');
   document.body.style.overflow = '';
-  activeDevice = null;
+  activeEntity = null;
 }
 
-modalClose && modalClose.addEventListener('click', closeDeviceModal);
-
-deviceModal && deviceModal.addEventListener('click', (e) => {
-  if (e.target === deviceModal) closeDeviceModal();
+$('entity-modal-close') && $('entity-modal-close').addEventListener('click', closeEntityModal);
+entityModal && entityModal.addEventListener('click', (e) => {
+  if (e.target === entityModal) closeEntityModal();
 });
 
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') {
-    if (deviceModal.classList.contains('open')) closeDeviceModal();
-    if (confirmModal.classList.contains('open')) closeConfirm();
-    if (advancedModal.classList.contains('open')) advancedModal.classList.remove('open');
-  }
+// ── Copy QR & manual codes ────────────────────────────────────
+sidebarCopyBtn && sidebarCopyBtn.addEventListener('click', () => {
+  const code = sidebarManual.textContent;
+  navigator.clipboard.writeText(code).then(() => {
+    sidebarCopyBtn.textContent = '✅';
+    setTimeout(() => { sidebarCopyBtn.textContent = '📋'; }, 1500);
+  });
 });
 
-// ── Modal copy button ─────────────────────────────────────────
 modalCopyBtn && modalCopyBtn.addEventListener('click', () => {
   const code = modalManual.textContent;
   navigator.clipboard.writeText(code).then(() => {
@@ -673,14 +625,14 @@ modalCopyBtn && modalCopyBtn.addEventListener('click', () => {
   });
 });
 
-modalQrExportBtn && modalQrExportBtn.addEventListener('click', () => {
+modalQrExport && modalQrExport.addEventListener('click', () => {
   const canvas = modalQrEl.querySelector('canvas');
-  const img = modalQrEl.querySelector('img');
+  const img    = modalQrEl.querySelector('img');
   const dataUrl = canvas ? canvas.toDataURL('image/png') : img?.src;
-  if (!dataUrl || !activeDevice?.entity) return;
+  if (!dataUrl || !activeEntity) return;
   const link = document.createElement('a');
   link.href = dataUrl;
-  link.download = `${activeDevice.entity.entityId.replace(/[^a-z0-9_-]+/gi, '_')}-matter-qr.png`;
+  link.download = `matter-bridge-qr.png`;
   document.body.appendChild(link);
   link.click();
   link.remove();
@@ -688,16 +640,7 @@ modalQrExportBtn && modalQrExportBtn.addEventListener('click', () => {
 
 // ── Búsqueda ──────────────────────────────────────────────────
 deviceSearch && deviceSearch.addEventListener('input', (e) => {
-  renderDeviceGroups(allEntities, e.target.value);
-});
-
-// ── Copy main bridge code ─────────────────────────────────────
-copyBtn && copyBtn.addEventListener('click', () => {
-  const code = manualCode.textContent;
-  navigator.clipboard.writeText(code).then(() => {
-    copyBtn.textContent = '✅';
-    setTimeout(() => { copyBtn.textContent = '📋'; }, 1500);
-  });
+  renderDeviceList(allEntities, e.target.value);
 });
 
 // ── Confirm modal ─────────────────────────────────────────────
@@ -713,19 +656,12 @@ function closeConfirm() {
   pendingConfirm = null;
 }
 
-confirmOk && confirmOk.addEventListener('click', () => {
-  if (pendingConfirm) pendingConfirm();
-  closeConfirm();
-});
+confirmOk    && confirmOk.addEventListener('click', () => { if (pendingConfirm) pendingConfirm(); closeConfirm(); });
 confirmCancel && confirmCancel.addEventListener('click', closeConfirm);
 
-// ── Advanced / Settings modal ─────────────────────────────────
-advancedBtn && advancedBtn.addEventListener('click', () => {
-  advancedModal.classList.add('open');
-});
-advModalClose && advModalClose.addEventListener('click', () => {
-  advancedModal.classList.remove('open');
-});
+// ── Advanced modal ────────────────────────────────────────────
+advancedBtn    && advancedBtn.addEventListener('click', () => advancedModal.classList.add('open'));
+advModalClose  && advModalClose.addEventListener('click', () => advancedModal.classList.remove('open'));
 
 // ── Restart / Factory Reset ───────────────────────────────────
 restartBtn && restartBtn.addEventListener('click', () => {
@@ -733,7 +669,7 @@ restartBtn && restartBtn.addEventListener('click', () => {
     'Reiniciar Puente',
     '¿Deseas reiniciar el servicio Matter? Tardará unos segundos.',
     async () => {
-      try { await fetch(`${API}/restart`, { method: 'POST' }); } catch(e) {}
+      try { await fetch(`${API}/restart`, { method: 'POST' }); } catch {}
     }
   );
 });
@@ -746,16 +682,27 @@ factoryBtn && factoryBtn.addEventListener('click', () => {
       try {
         await fetch(`${API}/factoryreset`, { method: 'POST' });
         bridgeQrCode = '';
-        qrBridgeRendered = false;
-        qrCanvas.innerHTML = '';
-        qrCanvas.style.display = 'none';
-        qrLoading.style.display = 'flex';
-        manualCode.textContent = '---- --- ----';
-      } catch(e) {}
+        qrSidebarRendered = false;
+        sidebarQrEl.innerHTML = '';
+        sidebarQrEl.style.display = 'none';
+        sqrLoading.style.display = 'flex';
+        sidebarManual.textContent = '---- --- ----';
+      } catch {}
     }
   );
 });
 
+// ── Keyboard ──────────────────────────────────────────────────
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    if (entityModal.classList.contains('open')) closeEntityModal();
+    if (confirmModal.classList.contains('open')) closeConfirm();
+    if (advancedModal.classList.contains('open')) advancedModal.classList.remove('open');
+  }
+});
+
 // ── Init ──────────────────────────────────────────────────────
 fetchStatus();
+fetchDevices();
 setInterval(fetchStatus, 8000);
+setInterval(fetchDevices, 30000);
