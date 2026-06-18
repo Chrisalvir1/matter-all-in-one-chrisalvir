@@ -1,4 +1,4 @@
-FROM node:22-alpine
+FROM node:24-alpine
 
 # Install only what's needed at build/runtime
 RUN apk add --no-cache jq
