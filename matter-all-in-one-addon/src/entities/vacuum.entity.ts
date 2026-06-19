@@ -180,7 +180,7 @@ export class VacuumEntity extends BaseEntity {
           endpoint as any,
           'powerSource' as any,
           'batChargeState',
-          isCharging ? 1 : 2, // 1 = IsCharging, 2 = IsNotCharging (Matter spec §11.1.5.5)
+          isCharging ? 1 : 3, // 1 = IsCharging, 3 = IsNotCharging
           this.platform.log,
         );
       }

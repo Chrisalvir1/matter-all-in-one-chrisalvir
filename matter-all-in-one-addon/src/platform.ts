@@ -552,8 +552,14 @@ export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
               const codes = mb.serverNode.state.commissioning.pairingCodes;
               qrPairingCode = this.normalizeMatterQrCode(codes.qrPairingCode);
               manualPairingCode = this.normalizeMatterManualCode(codes.manualPairingCode);
+            }
+            if (mb?.serverNode?.lifecycle?.isCommissioned !== undefined) {
+              commissioned = mb.serverNode.lifecycle.isCommissioned;
+            } else if (mb?.serverNode?.state?.commissioning?.commissioned !== undefined) {
               commissioned = mb.serverNode.state.commissioning.commissioned === true;
-              const fabrics = mb.serverNode.state.commissioning.fabrics;
+            }
+            if (commissioned) {
+              const fabrics = mb?.serverNode?.state?.commissioning?.fabrics;
               pairedFabrics = fabrics ? Object.values(fabrics) : [];
             }
           } catch (err) {
@@ -596,9 +602,14 @@ export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
               pairingCode = serverNode.state.commissioning.pairingCodes.qrPairingCode;
               manualPairingCode = serverNode.state.commissioning.pairingCodes.manualPairingCode;
             }
-            if (serverNode?.state?.commissioning?.commissioned !== undefined) {
+            if (serverNode?.lifecycle?.isCommissioned !== undefined) {
+              commissioned = serverNode.lifecycle.isCommissioned;
+            } else if (serverNode?.state?.commissioning?.commissioned !== undefined) {
               commissioned = serverNode.state.commissioning.commissioned;
-              const fabrics = serverNode.state.commissioning.fabrics;
+            }
+            
+            if (commissioned) {
+              const fabrics = serverNode?.state?.commissioning?.fabrics;
               if (fabrics && Object.keys(fabrics).length > 0) {
                 const fabricList = Object.values(fabrics);
                 if (fabricList.length > 0) {
