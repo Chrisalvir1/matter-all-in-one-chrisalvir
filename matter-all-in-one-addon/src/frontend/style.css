@@ -851,7 +851,56 @@ body {
 .action-list { display: flex; flex-direction: column; gap: 16px; }
 .action-item { display: flex; justify-content: space-between; align-items: center; gap: 14px; }
 .action-title { font-size: 13px; font-weight: 500; }
-.action-desc { font-size: 11px; color: var(--t2); margin-top: 2px; line-height: 1.4; }
+
+/* Pending restart banner */
+.pending-restart-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 20px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(251, 191, 36, 0.25);
+  background: rgba(251, 191, 36, 0.05);
+  border-radius: 16px;
+  gap: 16px;
+  animation: slide-down 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.prb-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.prb-icon {
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-y);
+  animation: pulse-warn 2s infinite ease-in-out;
+}
+.prb-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--t1);
+}
+#banner-restart-btn {
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+#banner-restart-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(251, 191, 36, 0.2);
+}
+
+@keyframes slide-down {
+  from { transform: translateY(-10px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes pulse-warn {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.1); opacity: 0.8; }
+}
 
 /* ── Responsive ───────────────────────────────────────────── */
 @media (max-width: 720px) {

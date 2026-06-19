@@ -72,6 +72,15 @@
     <!-- ── MAIN CONTENT ───────────────────────────────────────── -->
     <main class="main-content">
 
+      <!-- Banner de cambios pendientes -->
+      <div class="pending-restart-banner glass-card" id="pending-restart-banner" style="display: none;">
+        <div class="prb-content">
+          <span class="prb-icon">⚠️</span>
+          <span class="prb-text">Tienes cambios guardados pendientes de aplicar. Reinicia el puente para aplicarlos a HomeKit.</span>
+        </div>
+        <button id="banner-restart-btn" class="pill-btn primary sm">🔄 Aplicar y Reiniciar</button>
+      </div>
+
       <!-- Header de dispositivos -->
       <div class="devices-header">
         <div>

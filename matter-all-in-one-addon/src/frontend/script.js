@@ -160,6 +160,10 @@ const advModalClose  = $('adv-modal-close');
 const restartBtn     = $('restart-btn');
 const factoryBtn     = $('factoryreset-btn');
 
+// Pending restart banner
+const pendingRestartBanner = $('pending-restart-banner');
+const bannerRestartBtn     = $('banner-restart-btn');
+
 // ── QR Rendering ──────────────────────────────────────────────
 function renderQR(container, text, size = 160) {
   container.innerHTML = '';
@@ -666,6 +670,13 @@ saveTypeBtn && saveTypeBtn.addEventListener('click', async () => {
       emMatterType.textContent = newType;
       saveFeedback.textContent = '✅ Guardado. Reinicia el puente para aplicar.';
       saveFeedback.className   = 'save-feedback success';
+      
+      // Mostrar banner de reinicio pendiente
+      localStorage.setItem('pendingRestart', 'true');
+      if (pendingRestartBanner) {
+        pendingRestartBanner.style.display = 'flex';
+      }
+
       // Actualizar fila
       const entityRow = document.querySelector(`.entity-row[data-entity-id="${CSS.escape(activeEntity.entityId)}"] .er-matter-type`);
       if (entityRow) entityRow.textContent = newType;
@@ -883,6 +894,40 @@ if (copyLogsBtn) {
         copyLogsBtn.textContent = '✅ Copiado';
         setTimeout(() => { copyLogsBtn.textContent = origText; }, 1500);
       });
+    }
+  });
+}
+
+
+// ── Pending Restart Banner Event & State Check ───────────────
+if (localStorage.getItem('pendingRestart') === 'true') {
+  if (pendingRestartBanner) pendingRestartBanner.style.display = 'flex';
+}
+
+if (bannerRestartBtn) {
+  bannerRestartBtn.addEventListener('click', async () => {
+    bannerRestartBtn.disabled = true;
+    const origText = bannerRestartBtn.innerHTML;
+    bannerRestartBtn.innerHTML = '🔄 Reiniciando...';
+    try {
+      const res = await fetch(`${API}/restart`, { method: 'POST' });
+      if (res.ok) {
+        localStorage.removeItem('pendingRestart');
+        setTimeout(() => {
+          if (pendingRestartBanner) pendingRestartBanner.style.display = 'none';
+          bannerRestartBtn.disabled = false;
+          bannerRestartBtn.innerHTML = origText;
+        }, 3000);
+      } else {
+        alert('Error al reiniciar el puente');
+        bannerRestartBtn.disabled = false;
+        bannerRestartBtn.innerHTML = origText;
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error de conexión al reiniciar el puente');
+      bannerRestartBtn.disabled = false;
+      bannerRestartBtn.innerHTML = origText;
     }
   });
 }

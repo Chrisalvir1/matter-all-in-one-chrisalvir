@@ -236,16 +236,27 @@ export class VacuumEntity extends BaseEntity {
       let domain = 'vacuum';
       let action = 'start';
       let entityId = this.state.entity_id;
+      let serviceData: Record<string, any> = {};
 
       if (service === 'vacuum.return_to_base') {
         const objectId = this.state.entity_id.split('.')[1];
         const btnEntityId = `button.${objectId}_volver_a_base`;
+        const selectEntityId = `select.${objectId}_modo`;
+        
         const hasBtn = this.platform.ha?.hassStates?.has(btnEntityId);
+        const hasSelect = this.platform.ha?.hassStates?.has(selectEntityId);
+
         if (hasBtn) {
           domain = 'button';
           action = 'press';
           entityId = btnEntityId;
           this.platform.log?.info?.(`[VacuumEntity] Redirecting return_to_base to button.press on ${btnEntityId}`);
+        } else if (hasSelect) {
+          domain = 'select';
+          action = 'select_option';
+          entityId = selectEntityId;
+          serviceData = { option: 'chargego' };
+          this.platform.log?.info?.(`[VacuumEntity] Redirecting return_to_base to select.select_option on ${selectEntityId} with option chargego`);
         } else {
           [domain, action] = service.split('.');
         }
@@ -253,8 +264,8 @@ export class VacuumEntity extends BaseEntity {
         [domain, action] = service.split('.');
       }
 
-      await this.platform.ha?.callService(domain, action, entityId);
-      this.platform.log?.info?.(`[VacuumEntity] Called ${domain}.${action} on ${entityId}`);
+      await this.platform.ha?.callService(domain, action, entityId, serviceData);
+      this.platform.log?.info?.(`[VacuumEntity] Called ${domain}.${action} on ${entityId} with ${JSON.stringify(serviceData)}`);
     } catch (err) {
       this.platform.log?.error?.(`[VacuumEntity] Failed to call ${service}: ${err}`);
     }
