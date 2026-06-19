@@ -183,10 +183,25 @@ export interface VacuumAttributes {
 
 export function extractVacuumAttributes(entity: HassState): VacuumAttributes {
   const a = entity.attributes ?? {};
+  
+  // Try to parse battery level from standard attributes
+  let battery = typeof a['battery_level'] === 'number' ? a['battery_level'] :
+                typeof a['battery'] === 'number' ? a['battery'] : null;
+
+  // Fallback: If not found, try to extract from raw_dps (common in Tuya/Smart Life integrations)
+  if (battery === null && a['raw_dps'] && typeof a['raw_dps'] === 'object') {
+    const rawDps = a['raw_dps'] as Record<string, unknown>;
+    const dps6 = rawDps['6'];
+    if (typeof dps6 === 'number') {
+      battery = dps6;
+    } else if (typeof dps6 === 'string') {
+      const parsed = parseInt(dps6, 10);
+      if (!isNaN(parsed)) battery = parsed;
+    }
+  }
+
   return {
-    battery_level:
-      typeof a['battery_level'] === 'number' ? a['battery_level'] :
-      typeof a['battery'] === 'number' ? a['battery'] : null,
+    battery_level: battery,
     fan_speed:
       typeof a['fan_speed'] === 'string' ? a['fan_speed'] :
       typeof a['suction'] === 'string' ? a['suction'] : undefined,

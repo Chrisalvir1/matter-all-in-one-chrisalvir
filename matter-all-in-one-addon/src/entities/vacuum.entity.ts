@@ -44,9 +44,9 @@ export class VacuumEntity extends BaseEntity {
       : rawName + (rawName.length < 28 ? ' ' + entityPart : '');
     const uniqueName = displayName.substring(0, 32).trim();
 
-    // V3 Suffix to force a completely new device pairing and QR Code in Matterbridge UI!
-    const v3Id = this.entityId.replaceAll('.', '_') + '_v3';
-    const serialNumber = v3Id + '_sn';
+    // V4 Suffix to force a completely new device pairing and QR Code in Matterbridge UI!
+    const v4Id = this.entityId.replaceAll('.', '_') + '_v4';
+    const serialNumber = v4Id + '_sn';
 
     // The official RoboticVacuumCleaner will auto-add:
     // - PowerSource (with valid defaults, 5900mV etc)
@@ -56,7 +56,7 @@ export class VacuumEntity extends BaseEntity {
     // - RvcOperationalState (with valid error states and complete behaviors)
     this.endpoint = new RoboticVacuumCleaner(
       uniqueName,
-      serialNumber, // serial with _v3 and _sn
+      serialNumber, // serial with _v4 and _sn
       'server',
       RUN_MODE_ID_IDLE, // currentRunMode
       undefined, // supportedRunModes
@@ -75,7 +75,7 @@ export class VacuumEntity extends BaseEntity {
     );
 
     this.endpoint.deviceType = this.deviceType.code;
-    this.endpoint.uniqueId = v3Id;
+    this.endpoint.uniqueId = v4Id;
     this.endpoint.vendorId = 0xfff1;
     this.endpoint.vendorName = 'Home Assistant';
     this.endpoint.productId = 0x8000;
@@ -123,6 +123,21 @@ export class VacuumEntity extends BaseEntity {
           'powerSource' as any,
           'batPercentRemaining',
           Math.round(update.batteryLevel * 2),
+          this.platform.log,
+        );
+
+        // Sync battery charge state (lightning bolt in HomeKit)
+        // In HA, state "docked" means it is at the base charging. 
+        // We can also check raw_dps["5"] === "charging" (Tuya charging status dps)
+        const rawDps = state.attributes?.raw_dps;
+        const isCharging = state.state === 'docked' || 
+                           (rawDps && (rawDps['5'] === 'charging' || rawDps['5'] === 'charge' || rawDps['3'] === 'charging'));
+        
+        syncFunc(
+          endpoint as any,
+          'powerSource' as any,
+          'batChargeState',
+          isCharging ? 1 : 2, // 1 = IsCharging, 2 = IsNotCharging (Matter spec §11.1.5.5)
           this.platform.log,
         );
       }
