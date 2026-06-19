@@ -43,7 +43,7 @@ export class VacuumEntity extends BaseEntity {
     const displayName = rawName.length > 24
       ? rawName.substring(0, 24).trim() + ' ' + entityPart
       : rawName + (rawName.length < 28 ? ' ' + entityPart : '');
-    const uniqueName = displayName.substring(0, 32).trim();
+    const uniqueName = (displayName.substring(0, 28) + ' v6').trim();
 
     // V6 Suffix to force a completely new device pairing and QR Code in Matterbridge UI!
     const v6Id = this.entityId.replaceAll('.', '_') + '_v6';
