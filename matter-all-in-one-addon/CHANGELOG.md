@@ -8,6 +8,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.22] - 2026-06-18
+### Fixed
+- **Inicialización de Aspiradora (RVC):** Se corrigió la excepción `TypeError: this.endpoint.addClusterServer is not a function` en la entidad `VacuumEntity` migrando al API correcto de Matterbridge v3.9+ (`this.endpoint.behaviors.require()`).
+- **Apertura de modal en el Frontend:** Se añadió una validación de seguridad en `script.js` al asignar el nombre al label del QR (`emQrLabel`), evitando errores por selectores inexistentes que bloqueaban el despliegue del modal de configuración.
+
 ## [1.1.21] - 2026-06-18
 ### Fixed
 - **Advertencias de Estado Inactivo (`inactive state`):** 

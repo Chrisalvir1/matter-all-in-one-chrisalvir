@@ -493,7 +493,9 @@ function openEntityModal(entity) {
   emIcon.textContent = domainIcon(entity.domain);
   emName.textContent = entity.friendlyName;
   emId.textContent   = entity.entityId;
-  emQrLabel.textContent = entity.friendlyName;
+  if (emQrLabel) {
+    emQrLabel.textContent = entity.friendlyName;
+  }
 
   const sc = stateClass(entity.state);
   emState.textContent  = entity.state || '—';

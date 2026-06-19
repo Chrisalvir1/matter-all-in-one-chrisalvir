@@ -23,6 +23,7 @@
  */
 
 import { MatterbridgeEndpoint, DeviceTypeDefinition } from 'matterbridge';
+import { RvcRunModeServer, RvcOperationalStateServer } from 'matterbridge/matter/behaviors';
 import { BaseEntity } from './base.entity.js';
 import type { HassState } from '../utils/ha-state.js';
 import {
@@ -47,7 +48,7 @@ export class VacuumEntity extends BaseEntity {
   constructor(
     platform: any,
     state: HassState,
-    deviceType: DeviceTypeDefinition,
+    deviceType: DeviceTypeDefinition
   ) {
     super(platform, state, deviceType);
   }
@@ -64,9 +65,7 @@ export class VacuumEntity extends BaseEntity {
       // ── RvcRunMode cluster ──────────────────────────────────────────
       // Matter spec mandates at least one Idle and one Cleaning mode entry.
       this.endpoint.createDefaultIdentifyClusterServer();
-      (this.endpoint as any).addClusterServer({
-        id: 0x0054, // RvcRunMode
-        name: 'RvcRunMode',
+      this.endpoint.behaviors.require(RvcRunModeServer, {
         supportedModes: [
           {
             label: 'Idle',
@@ -84,9 +83,7 @@ export class VacuumEntity extends BaseEntity {
 
       // ── RvcOperationalState cluster ─────────────────────────────────
       // Must expose Stopped, Running, Paused, Error + RVC extended states.
-      (this.endpoint as any).addClusterServer({
-        id: 0x0061, // RvcOperationalState
-        name: 'RvcOperationalState',
+      this.endpoint.behaviors.require(RvcOperationalStateServer, {
         operationalStateList: [
           { operationalStateId: 0x00, operationalStateLabel: 'Stopped' },
           { operationalStateId: 0x01, operationalStateLabel: 'Running' },
