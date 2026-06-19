@@ -4,22 +4,15 @@
  * Matterbridge entity for Home Assistant `vacuum.*` devices.
  * Exposes them as Matter 1.4 RVC (Robotic Vacuum Cleaner) — device type 0x0074.
  *
- * Apple Home recognises this since iOS 18.4 and shows:
+ * Apple Home recognises this natively starting in iOS 18.4 and shows:
  *   • Start / Pause / Stop / Return to Base controls
  *   • Battery level
  *   • Current cleaning status
  *   • Error state
  *
- * Compatible with any vacuum supported by HA:
- *   Tuya, Smart Life, Roborock, iRobot, Dreame, Ecovacs, Xiaomi, etc.
- *
  * RvcRunMode required modes (Matter spec §7.2):
  *   - At least one mode tagged Idle  (0x4000 = 16384)
  *   - At least one mode tagged Cleaning (0x4001 = 16385)
- *
- * RvcOperationalState required states (Matter spec §9.10):
- *   - Must expose at minimum: Stopped(0), Running(1), Paused(2), Error(3)
- *   - RVC extended: SeekingCharger(64), Charging(65), Docked(66)
  */
 
 import { MatterbridgeEndpoint, DeviceTypeDefinition } from 'matterbridge';
@@ -33,16 +26,26 @@ import {
 } from '../converters/vacuum.converter.js';
 import { safeSetAttribute, safeUpdateAttribute } from '../utils/matter-attributes.js';
 
-// Re-export so platform.ts can import from one place
 export { buildVacuumMatterMeta };
 
 // ─── RVC Mode tag constants (Matter spec §7.2.7.1) ────────────────────────
-const RVC_RUN_MODE_TAG_IDLE     = 0x4000; // 16384
-const RVC_RUN_MODE_TAG_CLEANING = 0x4001; // 16385
+const RVC_RUN_MODE_TAG_IDLE     = 0x4000;
+const RVC_RUN_MODE_TAG_CLEANING = 0x4001;
 
-// Mode IDs used as currentMode values
-const RUN_MODE_ID_IDLE     = 0;
-const RUN_MODE_ID_CLEANING = 1;
+// Mode IDs used as currentMode values (Apple HomeKit prefers non-zero IDs for modes)
+const RUN_MODE_ID_IDLE     = 1;
+const RUN_MODE_ID_CLEANING = 2;
+
+// We need to implement our own RvcRunModeServer to handle the changeToMode command
+export class CustomRvcRunModeServer extends RvcRunModeServer {
+  override async changeToMode(request: any) {
+    const { newMode } = request;
+    // We will emit an event or command that the VacuumEntity can catch,
+    // or we can handle it directly if we have a reference. 
+    // Matterbridge intercepts these via commandHandler.
+    return { status: 0 }; // Success status
+  }
+}
 
 export class VacuumEntity extends BaseEntity {
   constructor(
@@ -55,17 +58,12 @@ export class VacuumEntity extends BaseEntity {
 
   // ─── Custom cluster initialisation ────────────────────────────────────
 
-  /**
-   * Override addCustomClusterServers to inject RvcRunMode and
-   * RvcOperationalState clusters with proper initial state tables.
-   * This MUST happen before addRequiredClusterServers() runs.
-   */
   protected override async addCustomClusterServers(): Promise<void> {
     try {
-      // ── RvcRunMode cluster ──────────────────────────────────────────
-      // Matter spec mandates at least one Idle and one Cleaning mode entry.
       this.endpoint.createDefaultIdentifyClusterServer();
-      this.endpoint.behaviors.require(RvcRunModeServer, {
+      
+      // ── RvcRunMode cluster ──────────────────────────────────────────
+      this.endpoint.behaviors.require(CustomRvcRunModeServer, {
         supportedModes: [
           {
             label: 'Idle',
@@ -82,7 +80,6 @@ export class VacuumEntity extends BaseEntity {
       });
 
       // ── RvcOperationalState cluster ─────────────────────────────────
-      // Must expose Stopped, Running, Paused, Error + RVC extended states.
       this.endpoint.behaviors.require(RvcOperationalStateServer, {
         operationalStateList: [
           { operationalStateId: 0x00, operationalStateLabel: 'Stopped' },
@@ -123,7 +120,6 @@ export class VacuumEntity extends BaseEntity {
     const syncFunc = isInitialSync ? safeSetAttribute : safeUpdateAttribute;
 
     try {
-      // RvcOperationalState.operationalState
       syncFunc(
         endpoint,
         'rvcOperationalState' as any,
@@ -132,7 +128,6 @@ export class VacuumEntity extends BaseEntity {
         this.platform.log,
       );
 
-      // RvcRunMode.currentMode — Idle(0) or Cleaning(1)
       const runMode = update.onOff ? RUN_MODE_ID_CLEANING : RUN_MODE_ID_IDLE;
       syncFunc(
         endpoint,
@@ -142,7 +137,6 @@ export class VacuumEntity extends BaseEntity {
         this.platform.log,
       );
 
-      // Battery — Matter PowerSource uses 0-200 range (batPercentRemaining)
       if (update.batteryLevel !== null) {
         syncFunc(
           endpoint,
@@ -162,7 +156,18 @@ export class VacuumEntity extends BaseEntity {
   protected override registerCommandHandlers(endpoint?: MatterbridgeEndpoint): void {
     if (!endpoint) endpoint = this.endpoint;
 
-    // RvcOperationalState commands (used by Apple Home RVC UI)
+    // We must handle the standard RvcRunMode command
+    endpoint.addCommandHandler('RvcRunMode.changeToMode', async (data: any) => {
+      this.platform.log?.info?.(`[VacuumEntity] changeToMode commanded: ${JSON.stringify(data)}`);
+      const { request } = data;
+      if (request?.newMode === RUN_MODE_ID_CLEANING) {
+        await this.callHaService('vacuum.start');
+      } else if (request?.newMode === RUN_MODE_ID_IDLE) {
+        await this.callHaService('vacuum.return_to_base');
+      }
+    });
+
+    // RvcOperationalState commands
     endpoint.addCommandHandler('RvcOperationalState.resume', async () => {
       await this.callHaService('vacuum.start');
     });
@@ -171,25 +176,12 @@ export class VacuumEntity extends BaseEntity {
       await this.callHaService('vacuum.pause');
     });
 
-    endpoint.addCommandHandler('goHome', async () => {
-      await this.callHaService('vacuum.return_to_base');
-    });
-
-    // Legacy / fallback command names
-    endpoint.addCommandHandler('start', async () => {
-      await this.callHaService('vacuum.start');
-    });
-
-    endpoint.addCommandHandler('stop', async () => {
+    endpoint.addCommandHandler('RvcOperationalState.stop', async () => {
       await this.callHaService('vacuum.stop');
     });
 
-    endpoint.addCommandHandler('pause', async () => {
-      await this.callHaService('vacuum.pause');
-    });
-
-    endpoint.addCommandHandler('resume', async () => {
-      await this.callHaService('vacuum.start');
+    endpoint.addCommandHandler('goHome', async () => {
+      await this.callHaService('vacuum.return_to_base');
     });
   }
 
