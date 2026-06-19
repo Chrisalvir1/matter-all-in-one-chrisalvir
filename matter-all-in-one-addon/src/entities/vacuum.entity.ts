@@ -26,6 +26,7 @@ const RUN_MODE_ID_CLEANING = 2;
 
 export class VacuumEntity extends BaseEntity {
   public declare endpoint: RoboticVacuumCleaner;
+  private lastCommandTime = 0;
 
   constructor(
     platform: any,
@@ -137,22 +138,27 @@ export class VacuumEntity extends BaseEntity {
     const syncFunc = isInitialSync ? safeSetAttribute : safeUpdateAttribute;
 
     try {
-      syncFunc(
-        endpoint as any,
-        'rvcOperationalState' as any,
-        'operationalState',
-        update.operationalState,
-        this.platform.log,
-      );
+      const now = Date.now();
+      const commandCooldown = now - this.lastCommandTime < 15000;
 
-      const runMode = update.onOff ? RUN_MODE_ID_CLEANING : RUN_MODE_ID_IDLE;
-      syncFunc(
-        endpoint as any,
-        'rvcRunMode' as any,
-        'currentMode',
-        runMode,
-        this.platform.log,
-      );
+      if (!commandCooldown || isInitialSync) {
+        syncFunc(
+          endpoint as any,
+          'rvcOperationalState' as any,
+          'operationalState',
+          update.operationalState,
+          this.platform.log,
+        );
+
+        const runMode = update.onOff ? RUN_MODE_ID_CLEANING : RUN_MODE_ID_IDLE;
+        syncFunc(
+          endpoint as any,
+          'rvcRunMode' as any,
+          'currentMode',
+          runMode,
+          this.platform.log,
+        );
+      }
 
       if (update.batteryLevel !== null) {
         syncFunc(
@@ -189,6 +195,7 @@ export class VacuumEntity extends BaseEntity {
     if (!endpoint) endpoint = this.endpoint as unknown as MatterbridgeEndpoint;
 
     endpoint.addCommandHandler('RvcRunMode.changeToMode', async (data: any) => {
+      this.lastCommandTime = Date.now();
       this.platform.log?.info?.(`[VacuumEntity] changeToMode commanded: ${JSON.stringify(data)}`);
       const { request } = data;
       if (request?.newMode === RUN_MODE_ID_CLEANING) {
@@ -203,10 +210,12 @@ export class VacuumEntity extends BaseEntity {
     });
 
     endpoint.addCommandHandler('RvcOperationalState.resume', async () => {
+      this.lastCommandTime = Date.now();
       await this.callHaService('vacuum.start');
     });
 
     endpoint.addCommandHandler('RvcOperationalState.pause', async () => {
+      this.lastCommandTime = Date.now();
       const features = this.state.attributes.supported_features ?? 0;
       const SUPPORT_PAUSE = 4;
       if (!(features & SUPPORT_PAUSE)) {
@@ -218,10 +227,12 @@ export class VacuumEntity extends BaseEntity {
     });
 
     endpoint.addCommandHandler('RvcOperationalState.goHome', async () => {
+      this.lastCommandTime = Date.now();
       await this.callHaService('vacuum.return_to_base');
     });
     
     endpoint.addCommandHandler('goHome', async () => {
+      this.lastCommandTime = Date.now();
       await this.callHaService('vacuum.return_to_base');
     });
 

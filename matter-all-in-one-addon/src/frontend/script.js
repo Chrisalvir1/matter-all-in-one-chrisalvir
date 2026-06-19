@@ -802,11 +802,36 @@ if (clearLogsBtn) {
 if (copyLogsBtn) {
   copyLogsBtn.addEventListener('click', () => {
     if (modalLogsConsole) {
-      navigator.clipboard.writeText(modalLogsConsole.textContent).then(() => {
+      const text = modalLogsConsole.textContent;
+      const showCopied = () => {
         const origText = copyLogsBtn.textContent;
         copyLogsBtn.textContent = '✅ Copiado';
         setTimeout(() => { copyLogsBtn.textContent = origText; }, 1500);
-      });
+      };
+      
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(showCopied).catch(fallbackCopy);
+      } else {
+        fallbackCopy();
+      }
+
+      function fallbackCopy() {
+        try {
+          const textarea = document.createElement('textarea');
+          textarea.value = text;
+          textarea.style.position = 'fixed';
+          textarea.style.top = '0';
+          textarea.style.left = '0';
+          document.body.appendChild(textarea);
+          textarea.select();
+          document.execCommand('copy');
+          document.body.removeChild(textarea);
+          showCopied();
+        } catch (err) {
+          console.error('Fallback copy failed', err);
+          alert('Error al copiar logs. Selecciona el texto manualmente.');
+        }
+      }
     }
   });
 }
