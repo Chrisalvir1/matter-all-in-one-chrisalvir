@@ -134,6 +134,8 @@ const modalQrPh      = $('modal-qr-ph');
 const modalManual    = $('modal-manual-code');
 const modalCopyBtn   = $('modal-copy-btn');
 const modalQrExport  = $('modal-qr-export-btn');
+const decommissionContainer = $('decommission-container');
+const decommissionBtn       = $('decommission-btn');
 
 // Confirm modal
 const confirmModal   = $('confirm-modal');
@@ -544,6 +546,7 @@ function openEntityModal(entity) {
       if (entity.commissioned) {
         qrCodeDiv.innerHTML = `<div style="text-align:center; padding:20px; font-weight:bold; color:var(--accent-g)">✅ Vinculado a ${esc(entity.fabric || 'Casa')}</div>`;
         manualCodeEl.textContent = 'Vinculado';
+        if (decommissionContainer) decommissionContainer.style.display = 'block';
       } else if (entity.pairingCode) {
         qrLoading.style.display = 'none';
         qrCodeDiv.style.display = 'block';
@@ -552,13 +555,16 @@ function openEntityModal(entity) {
           modalQrRendered = true;
         }
         manualCodeEl.textContent = '---- --- ----'; // We don't have manual code exported in list yet
+        if (decommissionContainer) decommissionContainer.style.display = 'none';
       } else {
         qrCodeDiv.style.display = 'none';
         qrLoading.style.display = 'flex';
         manualCodeEl.textContent = 'Generando...';
+        if (decommissionContainer) decommissionContainer.style.display = 'none';
       }
     } else {
       qrSection.style.display = 'none';
+      if (decommissionContainer) decommissionContainer.style.display = 'none';
     }
   }
 
@@ -707,6 +713,36 @@ factoryBtn && factoryBtn.addEventListener('click', () => {
       } catch {}
     }
   );
+});
+
+// ── Desconectar de la casa ────────────────────────────────────
+decommissionBtn && decommissionBtn.addEventListener('click', async () => {
+  if (!activeEntity) return;
+  if (!confirm('¿Estás seguro de que deseas desconectar este dispositivo de su casa actual en HomeKit? Esto borrará la vinculación y permitirá emparejarlo de nuevo.')) {
+    return;
+  }
+  try {
+    decommissionBtn.disabled = true;
+    decommissionBtn.textContent = 'Desconectando...';
+    const res = await fetch(`${API}/decommission/${encodeURIComponent(activeEntity.entityId)}`, {
+      method: 'POST'
+    });
+    if (res.ok) {
+      activeEntity.commissioned = false;
+      activeEntity.fabric = null;
+      activeEntity.pairingCode = null;
+      // Refresh status/modal
+      openEntityModal(activeEntity);
+    } else {
+      alert('Error al desconectar el dispositivo');
+    }
+  } catch (err) {
+    console.error(err);
+    alert('Error al desconectar el dispositivo');
+  } finally {
+    decommissionBtn.disabled = false;
+    decommissionBtn.textContent = '❌ Desconectar de la casa';
+  }
 });
 
 // ── Keyboard ──────────────────────────────────────────────────

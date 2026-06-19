@@ -555,20 +555,26 @@ export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
             let pairingCode = null;
             let commissioned = false;
             let fabric = null;
+            const [domain] = e.entityId.split('.');
 
             if (serverNode?.state?.commissioning?.pairingCodes) {
               pairingCode = serverNode.state.commissioning.pairingCodes.qrPairingCode;
             }
-            if (serverNode?.state?.operational?.commissioned !== undefined) {
-              commissioned = serverNode.state.operational.commissioned;
-              const fabrics = serverNode.state.operational.fabrics;
-              if (fabrics && fabrics.length > 0) {
-                fabric = fabrics[0].rootVendorId !== undefined ? `Vendor ${fabrics[0].rootVendorId}` : 'Apple Home / Alexa';
+            if (serverNode?.state?.commissioning?.commissioned !== undefined) {
+              commissioned = serverNode.state.commissioning.commissioned;
+              const fabrics = serverNode.state.commissioning.fabrics;
+              if (fabrics && Object.keys(fabrics).length > 0) {
+                const fabricList = Object.values(fabrics);
+                if (fabricList.length > 0) {
+                  const f = fabricList[0] as any;
+                  fabric = f.label || f.vendorName || `Vendor ${f.vendorId}`;
+                }
               }
             }
 
             return {
               entityId: e.entityId, // Frontend expects entityId
+              domain: domain,       // Frontend expects domain
               state: e.state.state,
               attributes: e.state.attributes,
               deviceTypeLabel: (e.constructor as any).matterTypeLabel || 'Generic',
@@ -602,6 +608,31 @@ export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
           const result = await this.manualUnregister(entityId);
           res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
           res.end(JSON.stringify(result));
+          return;
+        }
+
+        // POST /api/custom/decommission/:entityId
+        if (req.method === 'POST' && pathname.startsWith('/api/custom/decommission/')) {
+          const entityId = decodeURIComponent(pathname.substring('/api/custom/decommission/'.length));
+          const endpoint = this.matterbridgeDevices.get(entityId);
+          const serverNode = (endpoint as any)?.serverNode;
+          if (serverNode) {
+            try {
+              this.log.notice(`Decommissioning server node for ${entityId}...`);
+              await serverNode.close();
+              await serverNode.erase();
+              await serverNode.start();
+              res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+              res.end(JSON.stringify({ success: true }));
+            } catch (err) {
+              this.log.error(`Failed to decommission ${entityId}: ${err}`);
+              res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+              res.end(JSON.stringify({ success: false, error: String(err) }));
+            }
+          } else {
+            res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify({ success: false, error: 'Server node not found' }));
+          }
           return;
         }
 

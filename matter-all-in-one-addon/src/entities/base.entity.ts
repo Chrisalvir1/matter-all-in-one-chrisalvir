@@ -67,16 +67,27 @@ export class BaseEntity {
 
     this.endpoint = new MatterbridgeEndpoint([this.deviceType], {
       id: this.entityId.replaceAll('.', '_'),
-      mode: undefined,
+      mode: 'server',
     });
 
     const [domain] = this.entityId.split('.');
+    
+    // Explicitly set metadata properties on the endpoint instance for createDeviceServerNode
+    this.endpoint.deviceType = this.deviceType.code;
+    this.endpoint.deviceName = uniqueName;
+    this.endpoint.uniqueId = this.entityId.replaceAll('.', '_');
+    this.endpoint.serialNumber = this.entityId.replaceAll('.', '_').substring(0, 32);
+    this.endpoint.vendorId = 0xfff1;
+    this.endpoint.vendorName = 'Home Assistant';
+    this.endpoint.productId = 0x8000;
+    this.endpoint.productName = domain.charAt(0).toUpperCase() + domain.slice(1);
+
     this.endpoint.createDefaultBridgedDeviceBasicInformationClusterServer(
       uniqueName,
-      this.entityId.replaceAll('.', '_').substring(0, 32),
+      this.endpoint.serialNumber,
       0xfff1,
       'Home Assistant',
-      domain.charAt(0).toUpperCase() + domain.slice(1)
+      this.endpoint.productName
     );
 
     const clusters = this.getRequiredClusterIds();
