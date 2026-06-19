@@ -44,9 +44,9 @@ export class VacuumEntity extends BaseEntity {
       : rawName + (rawName.length < 28 ? ' ' + entityPart : '');
     const uniqueName = displayName.substring(0, 32).trim();
 
-    // V4 Suffix to force a completely new device pairing and QR Code in Matterbridge UI!
-    const v4Id = this.entityId.replaceAll('.', '_') + '_v4';
-    const serialNumber = v4Id + '_sn';
+    // V5 Suffix to force a completely new device pairing and QR Code in Matterbridge UI!
+    const v5Id = this.entityId.replaceAll('.', '_') + '_v5';
+    const serialNumber = v5Id + '_sn';
 
     // The official RoboticVacuumCleaner will auto-add:
     // - PowerSource (with valid defaults, 5900mV etc)
@@ -56,7 +56,7 @@ export class VacuumEntity extends BaseEntity {
     // - RvcOperationalState (with valid error states and complete behaviors)
     this.endpoint = new RoboticVacuumCleaner(
       uniqueName,
-      serialNumber, // serial with _v4 and _sn
+      serialNumber, // serial with _v5 and _sn
       'server',
       RUN_MODE_ID_IDLE, // currentRunMode
       undefined, // supportedRunModes
@@ -75,12 +75,34 @@ export class VacuumEntity extends BaseEntity {
     );
 
     this.endpoint.deviceType = this.deviceType.code;
-    this.endpoint.uniqueId = v4Id;
+    this.endpoint.uniqueId = v5Id;
     this.endpoint.vendorId = 0xfff1;
-    this.endpoint.vendorName = 'Home Assistant';
+    this.endpoint.vendorName = 'ROPVACNIC by Chrisalvir';
     this.endpoint.productId = 0x8000;
-    const [domain] = this.entityId.split('.');
-    this.endpoint.productName = domain.charAt(0).toUpperCase() + domain.slice(1);
+    this.endpoint.productName = 'ROPVACNIC A1';
+
+    // Override Basic Information attributes for premium branding in HomeKit
+    safeSetAttribute(
+      this.endpoint as any,
+      'basicInformation' as any,
+      'vendorName',
+      'ROPVACNIC by Chrisalvir',
+      this.platform.log,
+    );
+    safeSetAttribute(
+      this.endpoint as any,
+      'basicInformation' as any,
+      'productName',
+      'ROPVACNIC A1',
+      this.platform.log,
+    );
+    safeSetAttribute(
+      this.endpoint as any,
+      'basicInformation' as any,
+      'softwareVersionString',
+      'V2.5.2 (MCU V1.4.0)',
+      this.platform.log,
+    );
 
     this.registerCommandHandlers();
 
