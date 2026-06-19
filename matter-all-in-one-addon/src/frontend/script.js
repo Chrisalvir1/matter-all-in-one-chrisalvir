@@ -578,13 +578,21 @@ function selectEntity(entity) {
   const manualCodeEl = document.getElementById('modal-manual-code');
   const qrLoading = document.getElementById('modal-qr-loading');
 
+  const fabricBadge = document.getElementById('modal-fabric-badge');
   if (entity.commissioned) {
     commissionedStatusCard.style.display = 'block';
     commissionedFabricName.textContent = `Vinculado a ${esc(entity.fabric || 'Casa')}`;
     qrPairingCard.style.display = 'none';
+    if (entity.id === activeMainEntity.id) {
+      fabricBadge.textContent = entity.fabric || 'Casa';
+      fabricBadge.style.display = 'block';
+    }
   } else {
     commissionedStatusCard.style.display = 'none';
     qrPairingCard.style.display = 'block';
+    if (entity.id === activeMainEntity.id) {
+      fabricBadge.style.display = 'none';
+    }
 
     if (entity.pairingCode) {
       qrLoading.style.display = 'none';
