@@ -16,7 +16,7 @@
  */
 
 import { MatterbridgeEndpoint, DeviceTypeDefinition } from 'matterbridge';
-import { RvcRunModeServer, RvcOperationalStateServer, RvcCleanModeServer } from 'matterbridge/matter/behaviors';
+import { RvcRunModeServer, RvcOperationalStateServer, RvcCleanModeServer, ServiceAreaServer } from 'matterbridge/matter/behaviors';
 import { BaseEntity } from './base.entity.js';
 import type { HassState } from '../utils/ha-state.js';
 import {
@@ -139,6 +139,8 @@ export class VacuumEntity extends BaseEntity {
       const batPercentRemaining = batteryPct !== null ? Math.round(batteryPct * 2) : 200;
       this.endpoint.createDefaultPowerSourceRechargeableBatteryClusterServer(
         batPercentRemaining,
+        0, // BatChargeLevel.Ok
+        0  // BatReplacementNeeded.No
       );
 
       // ── RvcCleanMode cluster (Apple HomeKit compliance) ──────────────
@@ -146,9 +148,32 @@ export class VacuumEntity extends BaseEntity {
         this.endpoint.behaviors.require(RvcCleanModeServer, {
           supportedModes: [
             { label: 'Vacuum', mode: 1, modeTags: [{ value: 0x4000 }] },
+            { label: 'Mop', mode: 2, modeTags: [{ value: 0x4001 }] }
           ],
           currentMode: 1,
         });
+      }
+
+      // ── ServiceArea cluster (Apple HomeKit compliance) ───────────────
+      // Apple HomeKit REQUIRES Service Area to render vacuum UI
+      if (ServiceAreaServer !== undefined) {
+        try {
+          this.endpoint.behaviors.require(ServiceAreaServer.with('Maps'), {
+            supportedAreas: [
+              {
+                areaId: 1,
+                mapId: null,
+                areaInfo: { locationInfo: { locationName: 'All', floorNumber: 0, areaType: 0 }, landmarkInfo: null },
+              }
+            ],
+            selectedAreas: [],
+            currentArea: 1,
+            supportedMaps: [],
+            estimatedEndTime: null,
+          });
+        } catch (e) {
+          this.platform.log?.warn?.(`[VacuumEntity] Failed to require ServiceAreaServer: ${e}`);
+        }
       }
 
     } catch (err) {
