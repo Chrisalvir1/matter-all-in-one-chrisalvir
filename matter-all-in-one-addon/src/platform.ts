@@ -561,9 +561,11 @@ export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
           }
 
           const status = commissioned ? 'vinculado' : (qrPairingCode ? 'esperando' : 'iniciando');
+          const version = await this.getPackageVersion();
           res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
           res.end(JSON.stringify({
             status,
+            version,
             qrPairingCode,
             manualPairingCode,
             commissioned,
@@ -775,5 +777,24 @@ export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
         return null;
       }
     }
+  }
+
+  private async getPackageVersion(): Promise<string> {
+    const dir = import.meta.dirname;
+    const paths = [
+      path.join(dir, '../package.json'),
+      path.join(dir, 'package.json'),
+      path.join(dir, '../../package.json'),
+    ];
+    for (const p of paths) {
+      try {
+        const content = await fs.readFile(p, 'utf8');
+        const pkg = JSON.parse(content);
+        if (pkg.version) return pkg.version;
+      } catch {
+        // try next
+      }
+    }
+    return '1.1.44';
   }
 }

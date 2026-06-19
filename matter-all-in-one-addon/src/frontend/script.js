@@ -186,22 +186,34 @@ async function fetchStatus() {
 
     // HA connection status
     const connected = d.haStatus === 'conectado';
-    haDot.className = 'status-dot ' + (connected ? 'connected' : 'disconnected');
-    haStatusText.textContent = connected ? 'HA Conectado' : 'HA Desconectado';
+    if (haDot) {
+      haDot.className = 'status-dot ' + (connected ? 'connected' : 'disconnected');
+    }
+    if (haStatusText) {
+      haStatusText.textContent = connected ? 'HA Conectado' : 'HA Desconectado';
+    }
+
+    // Dynamic version
+    const versionPill = $('version-pill');
+    if (versionPill && d.version) {
+      versionPill.textContent = `v${d.version}`;
+    }
 
     // Bridge status orb
-    if (d.commissioned) {
-      sbsOrb.className = 'sbs-orb connected';
-      sbsTitle.textContent = 'Puente Vinculado';
-      sbsDesc.textContent  = 'Emparejado y funcionando';
-    } else if (d.qrPairingCode) {
-      sbsOrb.className = 'sbs-orb waiting';
-      sbsTitle.textContent = 'Esperando Vinculación';
-      sbsDesc.textContent  = 'Escanea el QR del sidebar';
-    } else {
-      sbsOrb.className = 'sbs-orb';
-      sbsTitle.textContent = 'Iniciando...';
-      sbsDesc.textContent  = 'Cargando servicios';
+    if (sbsOrb) {
+      if (d.commissioned) {
+        sbsOrb.className = 'sbs-orb connected';
+        if (sbsTitle) sbsTitle.textContent = 'Puente Vinculado';
+        if (sbsDesc) sbsDesc.textContent  = 'Emparejado y funcionando';
+      } else if (d.qrPairingCode) {
+        sbsOrb.className = 'sbs-orb waiting';
+        if (sbsTitle) sbsTitle.textContent = 'Esperando Vinculación';
+        if (sbsDesc) sbsDesc.textContent  = 'Escanea el QR del sidebar';
+      } else {
+        sbsOrb.className = 'sbs-orb';
+        if (sbsTitle) sbsTitle.textContent = 'Iniciando...';
+        if (sbsDesc) sbsDesc.textContent  = 'Cargando servicios';
+      }
     }
 
     // QR code
@@ -210,22 +222,27 @@ async function fetchStatus() {
       qrSidebarRendered = false;
     }
     bridgeManualCode = d.manualPairingCode || '';
-    sidebarManual.textContent = bridgeManualCode || '---- --- ----';
+    if (sidebarManual) {
+      sidebarManual.textContent = bridgeManualCode || '---- --- ----';
+    }
 
-    if (!qrSidebarRendered && bridgeQrCode) {
+    if (!qrSidebarRendered && bridgeQrCode && sidebarQrEl) {
       const ok = renderQR(sidebarQrEl, bridgeQrCode, 150);
       if (ok) {
-        sqrLoading.style.display = 'none';
+        if (sqrLoading) sqrLoading.style.display = 'none';
         sidebarQrEl.style.display = 'block';
         qrSidebarRendered = true;
       }
     }
 
-    commBannerSm.style.display = d.commissioned ? 'block' : 'none';
+    if (commBannerSm) {
+      commBannerSm.style.display = d.commissioned ? 'block' : 'none';
+    }
 
   } catch(e) {
-    haDot.className = 'status-dot disconnected';
-    haStatusText.textContent = 'Sin conexión';
+    console.error('Error fetching status:', e);
+    if (haDot) haDot.className = 'status-dot disconnected';
+    if (haStatusText) haStatusText.textContent = 'Sin conexión';
   }
 }
 
@@ -248,9 +265,18 @@ function groupEntitiesByDevice(entities) {
         model: entity.model || '',
         isVirtual: !entity.device_id,
         entities: [],
+        commissioned: false,
+        fabric: null,
       });
     }
-    grouped.get(devId).entities.push(entity);
+    const dev = grouped.get(devId);
+    dev.entities.push(entity);
+    if (entity.exported && entity.commissioned) {
+      dev.commissioned = true;
+      if (entity.fabric) {
+        dev.fabric = entity.fabric;
+      }
+    }
   }
 
   return [...grouped.values()].sort((a, b) => {
@@ -307,7 +333,16 @@ function renderDeviceList(entities, searchQuery) {
   const devices = groupEntitiesByDevice(filtered);
 
   const totalDevices = devices.length;
-  deviceBadge.textContent = totalDevices > 0 ? `${totalDevices}` : '';
+  const commissionedDevices = devices.filter(d => d.commissioned).length;
+  if (totalDevices > 0) {
+    if (commissionedDevices > 0) {
+      deviceBadge.textContent = `${totalDevices} (${commissionedDevices} enlazado${commissionedDevices > 1 ? 's' : ''})`;
+    } else {
+      deviceBadge.textContent = `${totalDevices}`;
+    }
+  } else {
+    deviceBadge.textContent = '';
+  }
 
   if (devices.length === 0) {
     deviceList.innerHTML = q
@@ -327,7 +362,7 @@ function renderDeviceList(entities, searchQuery) {
 // ── Card de dispositivo ───────────────────────────────────────
 function buildDeviceCard(device) {
   const wrapper = document.createElement('div');
-  wrapper.className = 'device-card glass-card';
+  wrapper.className = 'device-card glass-card' + (device.commissioned ? ' connected-home' : '');
   wrapper.dataset.deviceId = device.id;
 
   const exported  = exportedCount(device);
@@ -339,6 +374,9 @@ function buildDeviceCard(device) {
   const stateHint = anyOn ? 'on' : 'off';
 
   const uniqueDomains = [...new Set(device.entities.map(e => e.domain))].slice(0, 3);
+  const fabricBadge = device.commissioned
+    ? `<div class="dc-fabric-badge"><span class="dot"></span>Enlazado a ${esc(device.fabric || 'Casa')}</div>`
+    : '';
 
   wrapper.innerHTML = `
     <div class="dc-header">
@@ -352,6 +390,7 @@ function buildDeviceCard(device) {
         <div class="dc-domains">
           ${uniqueDomains.map(d => `<span class="dc-domain-tag">${esc(d)}</span>`).join('')}
         </div>
+        ${fabricBadge}
       </div>
       <div class="dc-right">
         <div class="dc-export-count ${exported > 0 ? 'active' : ''}">
@@ -419,26 +458,28 @@ function buildEntityRow(entity, device) {
 
   const icon   = domainIcon(entity.domain);
   const sc     = stateClass(entity.state);
-  const types  = HK_TYPES[entity.domain] || [];
-  const hasCfg = types.length > 0;
 
   row.innerHTML = `
-    <div class="er-icon">${icon}</div>
-    <div class="er-info">
-      <div class="er-name">${esc(entity.friendlyName)}</div>
-      <div class="er-entity-id">${esc(entity.entityId)}</div>
+    <div class="er-top">
+      <div class="er-icon">${icon}</div>
+      <div class="er-info">
+        <div class="er-name" title="${esc(entity.friendlyName)}">${esc(entity.friendlyName)}</div>
+        <div class="er-entity-id" title="${esc(entity.entityId)}">${esc(entity.entityId)}</div>
+      </div>
     </div>
-    <div class="er-state">
-      <span class="er-state-pill ${sc}">${esc(entity.state || '—')}</span>
+    <div class="er-mid">
+      <div class="er-state">
+        <span class="er-state-pill ${sc}">${esc(entity.state || '—')}</span>
+      </div>
+      <div class="er-matter">
+        ${entity.exported
+          ? `<span class="er-matter-type">${esc(entity.matterType || 'Matter')}</span>`
+          : `<span class="er-matter-disabled">No exportado</span>`
+        }
+      </div>
     </div>
-    <div class="er-matter">
-      ${entity.exported
-        ? `<span class="er-matter-type">${esc(entity.matterType || 'Matter')}</span>`
-        : `<span class="er-matter-disabled">No exportado</span>`
-      }
-    </div>
-    <div class="er-controls">
-      <button class="er-config-btn" title="Configurar / Ver QR" data-entity-id="${esc(entity.entityId)}">⚙️</button>
+    <div class="er-actions">
+      <button class="er-config-btn" title="Configurar / Ver QR" data-entity-id="${esc(entity.entityId)}">⚙️ Configurar</button>
       <label class="toggle-switch" title="Exportar a Matter">
         <input type="checkbox" class="export-toggle" ${entity.exported ? 'checked' : ''} data-id="${esc(entity.entityId)}">
         <span class="toggle-slider"></span>
@@ -463,6 +504,7 @@ function buildEntityRow(entity, device) {
           ? `<span class="er-matter-type">${esc(entity.matterType || 'Matter')}</span>`
           : `<span class="er-matter-disabled">No exportado</span>`;
         updateDeviceCardCounter(device);
+        fetchDevices();
       } else {
         e.target.checked = !isExported;
       }
@@ -754,6 +796,7 @@ decommissionBtn && decommissionBtn.addEventListener('click', async () => {
       activeEntity.pairingCode = null;
       // Refresh status/modal
       openEntityModal(activeEntity);
+      fetchDevices();
     } else {
       alert('Error al desconectar el dispositivo');
     }
