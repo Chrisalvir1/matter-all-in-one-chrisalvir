@@ -16,7 +16,7 @@
  */
 
 import { MatterbridgeEndpoint, DeviceTypeDefinition } from 'matterbridge';
-import { RvcRunModeServer, RvcOperationalStateServer } from 'matterbridge/matter/behaviors';
+import { RvcRunModeServer, RvcOperationalStateServer, RvcCleanModeServer } from 'matterbridge/matter/behaviors';
 import { BaseEntity } from './base.entity.js';
 import type { HassState } from '../utils/ha-state.js';
 import {
@@ -36,7 +36,12 @@ const RVC_RUN_MODE_TAG_CLEANING = 0x4001;
 const RUN_MODE_ID_IDLE     = 1;
 const RUN_MODE_ID_CLEANING = 2;
 
-import { RoboticVacuumCleaner } from '@matterbridge/core/devices';
+export class CustomRvcRunModeServer extends RvcRunModeServer {
+  override async changeToMode(request: any) {
+    const { newMode } = request;
+    return { status: 0, statusText: 'OK' }; // Success status
+  }
+}
 
 export class VacuumEntity extends BaseEntity {
   constructor(
@@ -47,52 +52,65 @@ export class VacuumEntity extends BaseEntity {
     super(platform, state, deviceType);
   }
 
-  /**
-   * Override createEndpoint to use the core RoboticVacuumCleaner class from Matterbridge.
-   * This guarantees 100% compliance with Apple HomeKit by including the powerSource
-   * device type and all RVC optional clusters (ServiceArea, RvcCleanMode, etc) which
-   * Apple HomeKit implicitly expects for room-by-room cleaning support.
-   */
-  public override async createEndpoint(): Promise<MatterbridgeEndpoint> {
-    const rawName = this.state.attributes.friendly_name ?? this.entityId;
-    const entityPart = this.entityId.replace(/[^a-zA-Z0-9]/g, '').slice(-6);
-    const displayName = rawName.length > 24
-      ? rawName.substring(0, 24).trim() + ' ' + entityPart
-      : rawName + (rawName.length < 28 ? ' ' + entityPart : '');
-    const uniqueName = displayName.substring(0, 32).trim();
-    const serialNumber = this.entityId.replaceAll('.', '_').substring(0, 32);
-
-    this.platform.log?.debug(`[VacuumEntity] Instantiating native RoboticVacuumCleaner for ${this.entityId}`);
-
-    // Create the native Matterbridge RVC class which sets up RvcRunMode, RvcCleanMode,
-    // RvcOperationalState, ServiceArea, and PowerSource automatically with all Apple compliance.
-    this.endpoint = new RoboticVacuumCleaner(
-      uniqueName,
-      serialNumber,
-      'server',
-      RUN_MODE_ID_IDLE, // currentRunMode
-      undefined, // supportedRunModes (uses defaults)
-      1, // currentCleanMode (Vacuum)
-      undefined, // supportedCleanModes (uses defaults)
-    );
-
-    // Overwrite some basic info to identify as Home Assistant
-    this.endpoint.vendorId = 0xfff1;
-    this.endpoint.vendorName = 'Home Assistant';
-    this.endpoint.productId = 0x8000;
-    this.endpoint.productName = 'Vacuum';
-
-    // BaseEntity command handler registration and state sync
-    this.registerCommandHandlers();
-
-    return this.endpoint;
-  }
-
   // ─── Custom cluster initialisation ────────────────────────────────────
 
   protected override async addCustomClusterServers(): Promise<void> {
-    // No-op: The native RoboticVacuumCleaner class handles its own cluster creation in its constructor.
-    return;
+    try {
+      this.endpoint.createDefaultIdentifyClusterServer();
+      
+      // ── RvcRunMode cluster ──────────────────────────────────────────
+      this.endpoint.behaviors.require(CustomRvcRunModeServer, {
+        supportedModes: [
+          {
+            label: 'Idle',
+            mode: RUN_MODE_ID_IDLE,
+            modeTags: [{ value: RVC_RUN_MODE_TAG_IDLE }],
+          },
+          {
+            label: 'Cleaning',
+            mode: RUN_MODE_ID_CLEANING,
+            modeTags: [{ value: RVC_RUN_MODE_TAG_CLEANING }],
+          },
+        ],
+        currentMode: RUN_MODE_ID_IDLE,
+      });
+
+      // ── RvcOperationalState cluster ─────────────────────────────────
+      this.endpoint.behaviors.require(RvcOperationalStateServer, {
+        operationalStateList: [
+          { operationalStateId: 0x00, operationalStateLabel: 'Stopped' },
+          { operationalStateId: 0x01, operationalStateLabel: 'Running' },
+          { operationalStateId: 0x02, operationalStateLabel: 'Paused'  },
+          { operationalStateId: 0x03, operationalStateLabel: 'Error'   },
+          { operationalStateId: 0x40, operationalStateLabel: 'SeekingCharger' },
+          { operationalStateId: 0x41, operationalStateLabel: 'Charging' },
+          { operationalStateId: 0x42, operationalStateLabel: 'Docked'  },
+        ],
+        operationalState: 0x00, // Stopped
+        operationalError: { errorStateId: 0x00 }, // NoError
+      });
+
+      // ── PowerSource — rechargeable battery ─────────────────────────
+      const attrs = this.state.attributes as any;
+      const batteryPct = attrs?.battery_level ?? attrs?.battery ?? null;
+      const batPercentRemaining = batteryPct !== null ? Math.round(batteryPct * 2) : 200;
+      this.endpoint.createDefaultPowerSourceRechargeableBatteryClusterServer(
+        batPercentRemaining,
+      );
+
+      // ── RvcCleanMode cluster (Apple HomeKit compliance) ──────────────
+      if ((RvcCleanModeServer as any) !== undefined) {
+        this.endpoint.behaviors.require(RvcCleanModeServer, {
+          supportedModes: [
+            { label: 'Vacuum', mode: 1, modeTags: [{ value: 0x4000 }] },
+          ],
+          currentMode: 1,
+        });
+      }
+
+    } catch (err) {
+      this.platform.log?.warn?.(`[VacuumEntity] addCustomClusterServers error for ${this.entityId}: ${err}`);
+    }
   }
 
   // ─── State sync (HA → Matter) ─────────────────────────────────────────
@@ -144,7 +162,6 @@ export class VacuumEntity extends BaseEntity {
   protected override registerCommandHandlers(endpoint?: MatterbridgeEndpoint): void {
     if (!endpoint) endpoint = this.endpoint;
 
-    // Matterbridge interceptors for RoboticVacuumCleaner class
     endpoint.addCommandHandler('RvcRunMode.changeToMode', async (data: any) => {
       this.platform.log?.info?.(`[VacuumEntity] changeToMode commanded: ${JSON.stringify(data)}`);
       const { request } = data;
