@@ -306,6 +306,8 @@ export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
 
         if (this.exportedDevices.has(entityId)) {
           this.log.info(`Auto-starting Accessory Server for ${idn}${entityId}${rs}...`);
+          this.log.info(`DEBUG ENDPOINT MODE: ${endpoint.mode}`);
+          this.log.info(`DEBUG ENDPOINT Properties: type=${endpoint.deviceType}, name=${endpoint.deviceName}, vendor=${endpoint.vendorId}, product=${endpoint.productId}, name=${endpoint.productName}`);
           await this.registerDevice(endpoint);
           await entityInstance.syncInitialState();
         } else {

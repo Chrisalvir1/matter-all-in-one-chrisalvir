@@ -8,6 +8,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.24] - 2026-06-18
+### Added
+- **Logs de depuración adicionales:** Se inyectaron logs para imprimir las propiedades del endpoint justo antes de su registro, ayudando a diagnosticar por qué no se inicia el servidor Matter individual.
+
 ## [1.1.23] - 2026-06-18
 ### Fixed
 - **Generación de códigos QR / Servidores de accesorios independientes:** 
