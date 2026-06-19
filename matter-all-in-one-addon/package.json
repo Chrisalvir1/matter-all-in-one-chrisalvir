@@ -1,6 +1,6 @@
 {
   "name": "matter-all-in-one-chrisalvir",
-  "version": "1.1.36",
+  "version": "1.1.37",
   "description": "Matter 1.5.x All-in-One bridge for Home Assistant - HomeKit compatible mappings",
   "author": "chrisalvir",
   "license": "Apache-2.0",
@@ -14,10 +14,11 @@
     "matterbridge": ">=2.0.0"
   },
   "devDependencies": {
-    "matterbridge": "^3.9.0",
+    "@matter/nodejs": "^0.17.3",
     "@types/node": "^22.0.0",
     "@types/ws": "^8.5.10",
     "eslint": "^9.0.0",
+    "matterbridge": "^3.9.0",
     "prettier": "^3.0.0",
     "typescript": "^5.8.0",
     "typescript-eslint": "^8.61.1",
