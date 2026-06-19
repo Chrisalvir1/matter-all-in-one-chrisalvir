@@ -43,6 +43,8 @@ export class CustomRvcRunModeServer extends RvcRunModeServer {
   }
 }
 
+import { powerSource } from 'matterbridge';
+
 export class VacuumEntity extends BaseEntity {
   constructor(
     platform: any,
@@ -50,6 +52,47 @@ export class VacuumEntity extends BaseEntity {
     deviceType: DeviceTypeDefinition
   ) {
     super(platform, state, deviceType);
+  }
+
+  public override async createEndpoint(): Promise<MatterbridgeEndpoint> {
+    const rawName = this.state.attributes.friendly_name ?? this.entityId;
+
+    const entityPart = this.entityId.replace(/[^a-zA-Z0-9]/g, '').slice(-6);
+    const displayName = rawName.length > 24
+      ? rawName.substring(0, 24).trim() + ' ' + entityPart
+      : rawName + (rawName.length < 28 ? ' ' + entityPart : '');
+    const uniqueName = displayName.substring(0, 32).trim();
+
+    // Apple HomeKit REQUIRES the powerSource device type to be present alongside the roboticVacuumCleaner device type.
+    this.endpoint = new MatterbridgeEndpoint([this.deviceType, powerSource], {
+      id: this.entityId.replaceAll('.', '_'),
+      mode: 'server',
+    });
+
+    const [domain] = this.entityId.split('.');
+    
+    this.endpoint.deviceType = this.deviceType.code;
+    this.endpoint.deviceName = uniqueName;
+    this.endpoint.uniqueId = this.entityId.replaceAll('.', '_');
+    this.endpoint.serialNumber = this.entityId.replaceAll('.', '_').substring(0, 29) + '_G3';
+    this.endpoint.vendorId = 0xfff1;
+    this.endpoint.vendorName = 'Home Assistant';
+    this.endpoint.productId = 0x8000;
+    this.endpoint.productName = domain.charAt(0).toUpperCase() + domain.slice(1);
+
+    this.endpoint.createDefaultBasicInformationClusterServer(
+      uniqueName,
+      this.endpoint.serialNumber,
+      0xfff1,
+      'Home Assistant',
+      0x8000,
+      this.endpoint.productName
+    );
+
+    await this.addCustomClusterServers();
+    this.registerCommandHandlers();
+
+    return this.endpoint;
   }
 
   // ─── Custom cluster initialisation ────────────────────────────────────
