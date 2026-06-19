@@ -76,7 +76,7 @@ export class BaseEntity {
     this.endpoint.deviceType = this.deviceType.code;
     this.endpoint.deviceName = uniqueName;
     this.endpoint.uniqueId = this.entityId.replaceAll('.', '_');
-    this.endpoint.serialNumber = this.entityId.replaceAll('.', '_').substring(0, 32);
+    this.endpoint.serialNumber = this.entityId.replaceAll('.', '_').substring(0, 29) + '_G2';
     this.endpoint.vendorId = 0xfff1;
     this.endpoint.vendorName = 'Home Assistant';
     this.endpoint.productId = 0x8000;
