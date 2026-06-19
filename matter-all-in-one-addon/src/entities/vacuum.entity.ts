@@ -240,13 +240,20 @@ export class VacuumEntity extends BaseEntity {
 
       if (service === 'vacuum.return_to_base') {
         const objectId = this.state.entity_id.split('.')[1];
+        const btnEntityId2 = `button.${objectId}_volver_a_base_2`;
         const btnEntityId = `button.${objectId}_volver_a_base`;
         const selectEntityId = `select.${objectId}_modo`;
         
+        const hasBtn2 = this.platform.ha?.hassStates?.has(btnEntityId2);
         const hasBtn = this.platform.ha?.hassStates?.has(btnEntityId);
         const hasSelect = this.platform.ha?.hassStates?.has(selectEntityId);
 
-        if (hasBtn) {
+        if (hasBtn2) {
+          domain = 'button';
+          action = 'press';
+          entityId = btnEntityId2;
+          this.platform.log?.info?.(`[VacuumEntity] Redirecting return_to_base to button.press on ${btnEntityId2}`);
+        } else if (hasBtn) {
           domain = 'button';
           action = 'press';
           entityId = btnEntityId;
@@ -257,6 +264,31 @@ export class VacuumEntity extends BaseEntity {
           entityId = selectEntityId;
           serviceData = { option: 'chargego' };
           this.platform.log?.info?.(`[VacuumEntity] Redirecting return_to_base to select.select_option on ${selectEntityId} with option chargego`);
+        } else {
+          [domain, action] = service.split('.');
+        }
+      } else if (service === 'vacuum.start' || service === 'vacuum.stop' || service === 'vacuum.pause') {
+        const objectId = this.state.entity_id.split('.')[1];
+        const btnIniciar = `button.${objectId}_iniciar_limpieza`;
+        const btnDetener = `button.${objectId}_detener_limpieza`;
+        
+        const hasIniciar = this.platform.ha?.hassStates?.has(btnIniciar);
+        const hasDetener = this.platform.ha?.hassStates?.has(btnDetener);
+
+        if (service === 'vacuum.start' && hasIniciar) {
+          domain = 'button';
+          action = 'press';
+          entityId = btnIniciar;
+          this.platform.log?.info?.(`[VacuumEntity] Redirecting start to button.press on ${btnIniciar}`);
+        } else if ((service === 'vacuum.stop' || service === 'vacuum.pause') && hasDetener) {
+          domain = 'button';
+          action = 'press';
+          entityId = btnDetener;
+          this.platform.log?.info?.(`[VacuumEntity] Redirecting stop/pause to button.press on ${btnDetener}`);
+        } else if ((service === 'vacuum.stop' || service === 'vacuum.pause') && hasIniciar) {
+          // If there is no explicit stop button but there is a start button, we try to use the start button as a toggle, or fallback.
+          // For now, we fallback to default vacuum.stop so we don't accidentally start it if it doesn't act as a toggle.
+          [domain, action] = service.split('.');
         } else {
           [domain, action] = service.split('.');
         }
