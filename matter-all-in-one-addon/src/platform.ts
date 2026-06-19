@@ -340,14 +340,21 @@ export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
       this.exportedDevices.add(entityId);
       await this.saveExportedDevices();
       const endpoint = this.matterbridgeDevices.get(entityId)!;
-      // If it's already registered, matterbridge handles it gracefully
-      await this.registerDevice(endpoint);
+      try {
+        await this.registerDevice(endpoint);
+      } catch (err) {
+        this.log.warn(`Already registered or failed: ${err}`);
+      }
       
       // Force start the serverNode if it is not online yet
       const serverNode = (endpoint as any).serverNode;
       if (serverNode && !serverNode.lifecycle?.isOnline) {
         this.log.notice(`Explicitly starting server node for manually registered device ${entityId}...`);
-        await serverNode.start();
+        try {
+          await serverNode.start();
+        } catch (startErr) {
+          this.log.warn(`ServerNode start ignored: ${startErr}`);
+        }
       }
 
       const entity = this.entities.get(entityId);
@@ -599,8 +606,8 @@ export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
             const [domain] = e.entityId.split('.');
 
             if (serverNode?.state?.commissioning?.pairingCodes) {
-              pairingCode = serverNode.state.commissioning.pairingCodes.qrPairingCode;
-              manualPairingCode = serverNode.state.commissioning.pairingCodes.manualPairingCode;
+              pairingCode = this.normalizeMatterQrCode(serverNode.state.commissioning.pairingCodes.qrPairingCode);
+              manualPairingCode = this.normalizeMatterManualCode(serverNode.state.commissioning.pairingCodes.manualPairingCode);
             }
             if (serverNode?.lifecycle?.isCommissioned !== undefined) {
               commissioned = serverNode.lifecycle.isCommissioned;
