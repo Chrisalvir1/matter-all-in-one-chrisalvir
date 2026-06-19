@@ -44,31 +44,38 @@ export class VacuumEntity extends BaseEntity {
       : rawName + (rawName.length < 28 ? ' ' + entityPart : '');
     const uniqueName = displayName.substring(0, 32).trim();
 
-    // V2 Suffix to force a completely new device pairing and QR Code in Matterbridge UI!
-    const v2Id = this.entityId.replaceAll('.', '_') + '_v2';
-    const serialNumber = v2Id + '_sn';
+    // V3 Suffix to force a completely new device pairing and QR Code in Matterbridge UI!
+    const v3Id = this.entityId.replaceAll('.', '_') + '_v3';
+    const serialNumber = v3Id + '_sn';
 
     // The official RoboticVacuumCleaner will auto-add:
     // - PowerSource (with valid defaults, 5900mV etc)
-    // - ServiceArea (with default Map)
+    // - ServiceArea (configured empty here to disable room selection/infinite loading)
     // - RvcRunMode (with correct tags)
-    // - RvcCleanMode (Vacuum, Mop, DeepClean)
+    // - RvcCleanMode (Only Vacuum mode, removing Mop/DeepClean since A1 has no mop)
     // - RvcOperationalState (with valid error states and complete behaviors)
     this.endpoint = new RoboticVacuumCleaner(
       uniqueName,
-      serialNumber, // serial with _v2 and _sn
+      serialNumber, // serial with _v3 and _sn
       'server',
       RUN_MODE_ID_IDLE, // currentRunMode
       undefined, // supportedRunModes
       1, // currentCleanMode
-      undefined, // supportedCleanModes
+      [
+        { label: 'Vacuum', mode: 1, modeTags: [{ value: 16385 }] } // Only expose Vacuum mode (0x4001 = 16385)
+      ], // supportedCleanModes
       null, // currentPhase
       null, // phaseList
       0, // operationalState (Stopped)
+      undefined, // operationalStateList
+      [], // supportedAreas (empty array disables service areas in UI)
+      [], // selectedAreas
+      null, // currentArea
+      [], // supportedMaps
     );
 
     this.endpoint.deviceType = this.deviceType.code;
-    this.endpoint.uniqueId = v2Id;
+    this.endpoint.uniqueId = v3Id;
     this.endpoint.vendorId = 0xfff1;
     this.endpoint.vendorName = 'Home Assistant';
     this.endpoint.productId = 0x8000;
@@ -139,12 +146,23 @@ export class VacuumEntity extends BaseEntity {
       }
     });
 
+    endpoint.addCommandHandler('RvcCleanMode.changeToMode', async (data: any) => {
+      this.platform.log?.info?.(`[VacuumEntity] RvcCleanMode.changeToMode commanded: ${JSON.stringify(data)}`);
+    });
+
     endpoint.addCommandHandler('RvcOperationalState.resume', async () => {
       await this.callHaService('vacuum.start');
     });
 
     endpoint.addCommandHandler('RvcOperationalState.pause', async () => {
-      await this.callHaService('vacuum.pause');
+      const features = this.state.attributes.supported_features ?? 0;
+      const SUPPORT_PAUSE = 4;
+      if (!(features & SUPPORT_PAUSE)) {
+        this.platform.log?.info?.(`[VacuumEntity] pause command received but not supported, falling back to vacuum.stop`);
+        await this.callHaService('vacuum.stop');
+      } else {
+        await this.callHaService('vacuum.pause');
+      }
     });
 
     endpoint.addCommandHandler('RvcOperationalState.goHome', async () => {
