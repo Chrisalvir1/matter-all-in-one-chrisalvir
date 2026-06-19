@@ -44,9 +44,24 @@ export class VacuumEntity extends BaseEntity {
       : rawName + (rawName.length < 28 ? ' ' + entityPart : '');
     const uniqueName = displayName.substring(0, 32).trim();
 
-    // V5 Suffix to force a completely new device pairing and QR Code in Matterbridge UI!
-    const v5Id = this.entityId.replaceAll('.', '_') + '_v5';
-    const serialNumber = v5Id + '_sn';
+    // V6 Suffix to force a completely new device pairing and QR Code in Matterbridge UI!
+    const v6Id = this.entityId.replaceAll('.', '_') + '_v6';
+    const serialNumber = v6Id + '_sn';
+
+    const supportedRunModes = [
+      { label: 'Idle', mode: 1, modeTags: [{ value: 16384 }] },      // 0x4000 = 16384 (Idle)
+      { label: 'Cleaning', mode: 2, modeTags: [{ value: 16385 }] }  // 0x4001 = 16385 (Cleaning)
+    ];
+
+    const operationalStateList = [
+      { operationalStateId: 0 }, // Stopped
+      { operationalStateId: 1 }, // Running
+      { operationalStateId: 2 }, // Paused
+      { operationalStateId: 3 }, // Error
+      { operationalStateId: 64 }, // SeekingCharger
+      { operationalStateId: 65 }, // Charging
+      { operationalStateId: 66 }  // Docked
+    ];
 
     // The official RoboticVacuumCleaner will auto-add:
     // - PowerSource (with valid defaults, 5900mV etc)
@@ -56,10 +71,10 @@ export class VacuumEntity extends BaseEntity {
     // - RvcOperationalState (with valid error states and complete behaviors)
     this.endpoint = new RoboticVacuumCleaner(
       uniqueName,
-      serialNumber, // serial with _v5 and _sn
+      serialNumber, // serial with _v6 and _sn
       'server',
       RUN_MODE_ID_IDLE, // currentRunMode
-      undefined, // supportedRunModes
+      supportedRunModes, // supportedRunModes
       1, // currentCleanMode
       [
         { label: 'Vacuum', mode: 1, modeTags: [{ value: 16385 }] } // Only expose Vacuum mode (0x4001 = 16385)
@@ -67,7 +82,7 @@ export class VacuumEntity extends BaseEntity {
       null, // currentPhase
       null, // phaseList
       0, // operationalState (Stopped)
-      undefined, // operationalStateList
+      operationalStateList, // operationalStateList
       [], // supportedAreas (empty array disables service areas in UI)
       [], // selectedAreas
       null, // currentArea
@@ -75,7 +90,7 @@ export class VacuumEntity extends BaseEntity {
     );
 
     this.endpoint.deviceType = this.deviceType.code;
-    this.endpoint.uniqueId = v5Id;
+    this.endpoint.uniqueId = v6Id;
     this.endpoint.vendorId = 0xfff1;
     this.endpoint.vendorName = 'ROPVACNIC by Chrisalvir';
     this.endpoint.productId = 0x8000;
@@ -209,13 +224,37 @@ export class VacuumEntity extends BaseEntity {
     endpoint.addCommandHandler('goHome', async () => {
       await this.callHaService('vacuum.return_to_base');
     });
+
+    endpoint.addCommandHandler('identify', async () => {
+      this.platform.log?.info?.(`[VacuumEntity] identify (Play sound to locate) commanded`);
+      await this.callHaService('vacuum.locate');
+    });
   }
 
   private async callHaService(service: string): Promise<void> {
     try {
-      const [domain, action] = service.split('.');
-      await this.platform.ha?.callService(domain, action, this.state.entity_id);
-      this.platform.log?.info?.(`[VacuumEntity] Called ${service} on ${this.state.entity_id}`);
+      let domain = 'vacuum';
+      let action = 'start';
+      let entityId = this.state.entity_id;
+
+      if (service === 'vacuum.return_to_base') {
+        const objectId = this.state.entity_id.split('.')[1];
+        const btnEntityId = `button.${objectId}_volver_a_base`;
+        const hasBtn = this.platform.ha?.hassStates?.has(btnEntityId);
+        if (hasBtn) {
+          domain = 'button';
+          action = 'press';
+          entityId = btnEntityId;
+          this.platform.log?.info?.(`[VacuumEntity] Redirecting return_to_base to button.press on ${btnEntityId}`);
+        } else {
+          [domain, action] = service.split('.');
+        }
+      } else {
+        [domain, action] = service.split('.');
+      }
+
+      await this.platform.ha?.callService(domain, action, entityId);
+      this.platform.log?.info?.(`[VacuumEntity] Called ${domain}.${action} on ${entityId}`);
     } catch (err) {
       this.platform.log?.error?.(`[VacuumEntity] Failed to call ${service}: ${err}`);
     }
