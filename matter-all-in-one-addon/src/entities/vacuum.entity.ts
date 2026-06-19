@@ -43,7 +43,7 @@ export class CustomRvcRunModeServer extends RvcRunModeServer {
     // We will emit an event or command that the VacuumEntity can catch,
     // or we can handle it directly if we have a reference. 
     // Matterbridge intercepts these via commandHandler.
-    return { status: 0 }; // Success status
+    return { status: 0, statusText: 'OK' }; // Success status
   }
 }
 
@@ -174,10 +174,6 @@ export class VacuumEntity extends BaseEntity {
 
     endpoint.addCommandHandler('RvcOperationalState.pause', async () => {
       await this.callHaService('vacuum.pause');
-    });
-
-    endpoint.addCommandHandler('RvcOperationalState.stop', async () => {
-      await this.callHaService('vacuum.stop');
     });
 
     endpoint.addCommandHandler('goHome', async () => {
