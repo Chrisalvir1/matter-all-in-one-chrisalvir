@@ -604,16 +604,18 @@ export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
                 if (fabricList.length > 0) {
                   const f = fabricList[0] as any;
                   let fLabel = f.label || f.vendorName || '';
-                  if (f.vendorId === 4875 || f.vendorId === 0x130b) {
-                    fLabel = 'Apple HomeKit';
-                  } else if (f.vendorId === 4447 || f.vendorId === 0x115f) {
-                    fLabel = 'Xiaomi/Aqara';
-                  } else if (f.vendorId === 4187 || f.vendorId === 0x105b) {
-                    fLabel = 'Google Home';
-                  } else if (f.vendorId === 4687 || f.vendorId === 0x124f) {
-                    fLabel = 'Amazon Alexa';
+                  const vid = f.rootVendorId || f.vendorId;
+                  if (vid === 4875 || vid === 0x130b) {
+                    fLabel = fLabel ? `${fLabel} (Apple Home)` : 'Apple HomeKit';
+                  } else if (vid === 4447 || vid === 0x115f) {
+                    fLabel = fLabel ? `${fLabel} (Aqara)` : 'Xiaomi/Aqara';
+                  } else if (vid === 4187 || vid === 0x105b) {
+                    fLabel = fLabel ? `${fLabel} (Google Home)` : 'Google Home';
+                  } else if (vid === 4687 || vid === 0x124f) {
+                    fLabel = fLabel ? `${fLabel} (Amazon Alexa)` : 'Amazon Alexa';
                   } else if (!fLabel) {
-                    fLabel = `Vendor ${f.vendorId}`;
+                    // Apple Home generates dynamic vendor IDs, so if we don't know it, we assume Apple Home if it has a label
+                    fLabel = `Casa: ${vid || 'Desconocido'}`;
                   }
                   fabric = fLabel;
                 }
@@ -671,12 +673,21 @@ export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
               await serverNode.close();
               await serverNode.erase();
               await serverNode.start();
+              
+              // Also forcefully unregister it so the user isn't stuck
+              await this.manualUnregister(entityId);
+
               res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
               res.end(JSON.stringify({ success: true }));
             } catch (err) {
               this.log.error(`Failed to decommission ${entityId}: ${err}`);
-              res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
-              res.end(JSON.stringify({ success: false, error: String(err) }));
+              
+              // Force unregister even on error to rescue the user
+              this.log.warn(`Forcing unregistration for ${entityId} due to decommission error.`);
+              await this.manualUnregister(entityId);
+
+              res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+              res.end(JSON.stringify({ success: true, warning: 'Forced unexport despite error.' }));
             }
           } else {
             res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -740,6 +751,7 @@ export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
             try {
               const { rm } = await import('fs/promises');
               await rm('/data/device-overrides.json', { force: true });
+              await rm('/data/exported-devices.json', { force: true });
             } catch (err) {
               this.log.error(`Failed to wipe storage: ${err}`);
             }
