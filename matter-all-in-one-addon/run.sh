@@ -8,6 +8,7 @@ OPTIONS_FILE="/data/options.json"
 HOST=$(jq -r '.host // empty' "$OPTIONS_FILE")
 TOKEN=$(jq -r '.token // empty' "$OPTIONS_FILE")
 MDNSINTERFACE=$(jq -r '.mdnsinterface // empty' "$OPTIONS_FILE")
+IPV4_ONLY=$(jq -r '.ipv4_only // false' "$OPTIONS_FILE")
 
 # Fallback to supervisor API if defaults are used
 if [ -z "$HOST" ] || [ "$HOST" = "http://supervisor/core" ]; then
@@ -82,6 +83,11 @@ else
     else
         echo "[Warning] Could not detect active network interface and no override was configured. mDNS will start on all interfaces."
     fi
+fi
+
+if [ "$IPV4_ONLY" = "true" ]; then
+    echo "[Info] Forcing IPv4 only networking for Matterbridge due to addon config."
+    MDNS_PARAM="$MDNS_PARAM -ipv4"
 fi
 
 # Start Matterbridge
