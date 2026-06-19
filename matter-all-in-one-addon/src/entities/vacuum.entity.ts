@@ -9,7 +9,7 @@
  */
 
 import { MatterbridgeEndpoint, DeviceTypeDefinition } from 'matterbridge';
-import { RoboticVacuumCleaner } from '@matterbridge/core/devices';
+import { RoboticVacuumCleaner } from 'matterbridge/devices';
 import { BaseEntity } from './base.entity.js';
 import type { HassState } from '../utils/ha-state.js';
 import {
