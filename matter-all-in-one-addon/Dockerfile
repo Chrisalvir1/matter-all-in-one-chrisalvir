@@ -17,11 +17,12 @@ RUN npm install matterbridge@^3.9.0 --no-save --no-fund --no-audit
 RUN npm run build
 # Prune all dev dependencies including the ghostly matterbridge installation
 RUN npm prune --production
-# Strip matterbridge from dependencies/devDependencies/peerDependencies to prevent Matterbridge load failure
-RUN jq 'del(.dependencies.matterbridge, .devDependencies.matterbridge, .peerDependencies.matterbridge)' package.json > package.json.tmp && mv package.json.tmp package.json
+# Strip devDependencies and peerDependencies to prevent Matterbridge load validation failures
+RUN jq 'del(.devDependencies, .peerDependencies)' package.json > package.json.tmp && mv package.json.tmp package.json
 
 # ── Layer 3: Install matterbridge globally and register plugin ────────────────
 RUN npm install -g matterbridge@3.9.0 --no-fund --no-audit
+RUN ln -s /usr/local/lib/node_modules/matterbridge /app/node_modules/matterbridge
 RUN matterbridge -add /app || true
 
 # ── Startup script ─────────────────────────────────────────────────────────────
