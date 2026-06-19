@@ -309,6 +309,14 @@ export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
           this.log.info(`DEBUG ENDPOINT MODE: ${endpoint.mode}`);
           this.log.info(`DEBUG ENDPOINT Properties: type=${endpoint.deviceType}, name=${endpoint.deviceName}, vendor=${endpoint.vendorId}, product=${endpoint.productId}, name=${endpoint.productName}`);
           await this.registerDevice(endpoint);
+          
+          // Force start the serverNode if it is not online yet
+          const serverNode = (endpoint as any).serverNode;
+          if (serverNode && !serverNode.lifecycle?.isOnline) {
+            this.log.notice(`Explicitly starting server node for auto-started device ${entityId}...`);
+            await serverNode.start();
+          }
+
           await entityInstance.syncInitialState();
         } else {
           this.log.debug(`Entity ${entityId} is discovered but not exported. Skipping Accessory Server creation.`);
@@ -333,6 +341,13 @@ export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
       // If it's already registered, matterbridge handles it gracefully
       await this.registerDevice(endpoint);
       
+      // Force start the serverNode if it is not online yet
+      const serverNode = (endpoint as any).serverNode;
+      if (serverNode && !serverNode.lifecycle?.isOnline) {
+        this.log.notice(`Explicitly starting server node for manually registered device ${entityId}...`);
+        await serverNode.start();
+      }
+
       const entity = this.entities.get(entityId);
       if (entity) {
         await entity.syncInitialState();
@@ -555,12 +570,14 @@ export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
             const endpoint = this.matterbridgeDevices.get(e.entityId);
             const serverNode = (endpoint as any)?.serverNode;
             let pairingCode = null;
+            let manualPairingCode = null;
             let commissioned = false;
             let fabric = null;
             const [domain] = e.entityId.split('.');
 
             if (serverNode?.state?.commissioning?.pairingCodes) {
               pairingCode = serverNode.state.commissioning.pairingCodes.qrPairingCode;
+              manualPairingCode = serverNode.state.commissioning.pairingCodes.manualPairingCode;
             }
             if (serverNode?.state?.commissioning?.commissioned !== undefined) {
               commissioned = serverNode.state.commissioning.commissioned;
@@ -586,6 +603,7 @@ export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
               // Accessory status
               exported: this.exportedDevices.has(e.entityId),
               pairingCode: pairingCode,
+              manualPairingCode: manualPairingCode,
               commissioned: commissioned,
               fabric: fabric,
             };

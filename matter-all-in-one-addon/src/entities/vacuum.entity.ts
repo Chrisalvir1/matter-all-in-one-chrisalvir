@@ -31,7 +31,7 @@ import {
   buildVacuumMatterMeta,
   RvcOperationalStateId,
 } from '../converters/vacuum.converter.js';
-import { safeUpdateAttribute } from '../utils/matter-attributes.js';
+import { safeSetAttribute, safeUpdateAttribute } from '../utils/matter-attributes.js';
 
 // Re-export so platform.ts can import from one place
 export { buildVacuumMatterMeta };
@@ -112,18 +112,19 @@ export class VacuumEntity extends BaseEntity {
 
   // ─── State sync (HA → Matter) ─────────────────────────────────────────
 
-  override async updateState(newState: HassState, _isInitialSync = false): Promise<void> {
+  override async updateState(newState: HassState, isInitialSync = false): Promise<void> {
     if (!this.endpoint) return;
-    await this.syncState(this.endpoint, newState);
+    await this.syncState(this.endpoint, newState, isInitialSync);
     this.state = newState;
   }
 
-  private async syncState(endpoint: MatterbridgeEndpoint, state: HassState): Promise<void> {
+  private async syncState(endpoint: MatterbridgeEndpoint, state: HassState, isInitialSync = false): Promise<void> {
     const update = buildVacuumUpdate(state as any);
+    const syncFunc = isInitialSync ? safeSetAttribute : safeUpdateAttribute;
 
     try {
       // RvcOperationalState.operationalState
-      safeUpdateAttribute(
+      syncFunc(
         endpoint,
         'rvcOperationalState' as any,
         'operationalState',
@@ -133,7 +134,7 @@ export class VacuumEntity extends BaseEntity {
 
       // RvcRunMode.currentMode — Idle(0) or Cleaning(1)
       const runMode = update.onOff ? RUN_MODE_ID_CLEANING : RUN_MODE_ID_IDLE;
-      safeUpdateAttribute(
+      syncFunc(
         endpoint,
         'rvcRunMode' as any,
         'currentMode',
@@ -143,7 +144,7 @@ export class VacuumEntity extends BaseEntity {
 
       // Battery — Matter PowerSource uses 0-200 range (batPercentRemaining)
       if (update.batteryLevel !== null) {
-        safeUpdateAttribute(
+        syncFunc(
           endpoint,
           'powerSource' as any,
           'batPercentRemaining',

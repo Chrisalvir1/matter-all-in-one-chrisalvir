@@ -554,7 +554,7 @@ function openEntityModal(entity) {
           renderQR(qrCodeDiv, entity.pairingCode, 160);
           modalQrRendered = true;
         }
-        manualCodeEl.textContent = '---- --- ----'; // We don't have manual code exported in list yet
+        manualCodeEl.textContent = entity.manualPairingCode || '---- --- ----';
         if (decommissionContainer) decommissionContainer.style.display = 'none';
       } else {
         qrCodeDiv.style.display = 'none';
