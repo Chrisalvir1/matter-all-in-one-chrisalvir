@@ -199,8 +199,12 @@ export class VacuumEntity extends BaseEntity {
       this.platform.log?.info?.(`[VacuumEntity] changeToMode commanded: ${JSON.stringify(data)}`);
       const { request } = data;
       if (request?.newMode === RUN_MODE_ID_CLEANING) {
+        safeSetAttribute(endpoint as any, 'rvcOperationalState' as any, 'operationalState', 1, this.platform.log);
+        safeSetAttribute(endpoint as any, 'rvcRunMode' as any, 'currentMode', RUN_MODE_ID_CLEANING, this.platform.log);
         await this.callHaService('vacuum.start');
       } else if (request?.newMode === RUN_MODE_ID_IDLE) {
+        safeSetAttribute(endpoint as any, 'rvcOperationalState' as any, 'operationalState', 64, this.platform.log);
+        safeSetAttribute(endpoint as any, 'rvcRunMode' as any, 'currentMode', RUN_MODE_ID_IDLE, this.platform.log);
         await this.callHaService('vacuum.return_to_base');
       }
     });
@@ -211,11 +215,14 @@ export class VacuumEntity extends BaseEntity {
 
     endpoint.addCommandHandler('RvcOperationalState.resume', async () => {
       this.lastCommandTime = Date.now();
+      safeSetAttribute(endpoint as any, 'rvcOperationalState' as any, 'operationalState', 1, this.platform.log);
+      safeSetAttribute(endpoint as any, 'rvcRunMode' as any, 'currentMode', RUN_MODE_ID_CLEANING, this.platform.log);
       await this.callHaService('vacuum.start');
     });
 
     endpoint.addCommandHandler('RvcOperationalState.pause', async () => {
       this.lastCommandTime = Date.now();
+      safeSetAttribute(endpoint as any, 'rvcOperationalState' as any, 'operationalState', 2, this.platform.log);
       const features = this.state.attributes.supported_features ?? 0;
       const SUPPORT_PAUSE = 4;
       if (!(features & SUPPORT_PAUSE)) {
@@ -228,11 +235,15 @@ export class VacuumEntity extends BaseEntity {
 
     endpoint.addCommandHandler('RvcOperationalState.goHome', async () => {
       this.lastCommandTime = Date.now();
+      safeSetAttribute(endpoint as any, 'rvcOperationalState' as any, 'operationalState', 64, this.platform.log);
+      safeSetAttribute(endpoint as any, 'rvcRunMode' as any, 'currentMode', RUN_MODE_ID_IDLE, this.platform.log);
       await this.callHaService('vacuum.return_to_base');
     });
     
     endpoint.addCommandHandler('goHome', async () => {
       this.lastCommandTime = Date.now();
+      safeSetAttribute(endpoint as any, 'rvcOperationalState' as any, 'operationalState', 64, this.platform.log);
+      safeSetAttribute(endpoint as any, 'rvcRunMode' as any, 'currentMode', RUN_MODE_ID_IDLE, this.platform.log);
       await this.callHaService('vacuum.return_to_base');
     });
 
