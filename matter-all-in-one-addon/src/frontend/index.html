@@ -65,7 +65,7 @@
           <span class="status-dot" id="ha-dot"></span>
           <span id="ha-status-text">Conectando...</span>
         </div>
-        <div class="version-pill" id="version-pill">v1.1.38</div>
+        <div class="version-pill" id="version-pill">v1.1.49</div>
       </div>
     </aside>
 
@@ -107,59 +107,39 @@
     </main>
   </div>
 
-  <!-- ── ENTITY CONFIG MODAL ──────────────────────────────────── -->
-  <div class="modal-backdrop" id="entity-modal" role="dialog" aria-modal="true" aria-labelledby="entity-modal-name">
-    <div class="modal-sheet glass">
-      <button class="modal-close" id="entity-modal-close" aria-label="Cerrar">
+  <!-- ── DEVICE CONFIG MODAL ──────────────────────────────────── -->
+  <div class="modal-backdrop" id="device-modal" role="dialog" aria-modal="true" aria-labelledby="device-modal-name">
+    <div class="modal-sheet glass" style="max-width: 900px; width: 90vw;">
+      <button class="modal-close" id="device-modal-close" aria-label="Cerrar">
         <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
       </button>
 
-      <div class="entity-modal-body">
-        <div class="em-header">
-          <span class="em-icon" id="em-icon">💡</span>
-          <div>
-            <h2 class="em-name" id="entity-modal-name">Entidad</h2>
-            <div class="em-id" id="em-id">entity.id</div>
+      <div class="device-modal-body">
+        <div class="dm-header" style="margin-bottom: 20px; border-bottom: 1px solid var(--glass-bdr); padding-bottom: 16px;">
+          <div style="display: flex; align-items: center; gap: 16px;">
+            <span class="dm-icon" id="dm-icon" style="font-size: 32px;">💡</span>
+            <div>
+              <h2 class="dm-name" id="device-modal-name" style="margin: 0; font-size: 20px;">Dispositivo</h2>
+              <div class="dm-id" id="dm-id" style="font-size: 12px; color: var(--t2);">device.id</div>
+            </div>
           </div>
-          <div class="em-state-pill" id="em-state">—</div>
         </div>
 
-        <div class="em-grid">
-          <div class="em-left">
-            <div class="em-section">
-              <div class="em-section-label">Tipo en HomeKit 2026</div>
-              <div class="em-section-desc">Selecciona cómo se expondrá este dispositivo a Apple Home, Google Home y Alexa.</div>
-              <select class="hk-select" id="hk-type-select">
-                <!-- Populated by JS -->
-              </select>
-              <div class="hk-type-info glass-inset" id="hk-type-info">
-                <span id="hk-type-desc">Selecciona un tipo para ver la descripción.</span>
-              </div>
-              <button class="pill-btn primary full-w" id="save-type-btn">💾 Guardar Tipo</button>
-              <div class="save-feedback" id="save-feedback"></div>
-            </div>
-
-            <div class="em-section">
-              <div class="em-section-label">Información</div>
-              <div class="info-grid">
-                <div class="info-row">
-                  <span class="info-k">Dominio</span>
-                  <span class="info-v" id="em-domain">—</span>
-                </div>
-                <div class="info-row">
-                  <span class="info-k">Tipo Matter actual</span>
-                  <span class="info-v" id="em-matter-type">—</span>
-                </div>
-                <div class="info-row">
-                  <span class="info-k">Estado HA</span>
-                  <span class="info-v" id="em-ha-state">—</span>
-                </div>
-              </div>
+        <div class="dm-grid" style="display: grid; grid-template-columns: 1fr 340px; gap: 24px;">
+          <div class="dm-left" style="display: flex; flex-direction: column; gap: 16px;">
+            <div class="dm-section-label" style="font-size: 14px; font-weight: 600; color: var(--t1);">Entidades del Dispositivo</div>
+            <div class="dm-entities-list" id="dm-entities-list" style="display: flex; flex-direction: column; gap: 12px; overflow-y: auto; max-height: 50vh; padding-right: 8px;">
+              <!-- Entities populated by JS -->
             </div>
           </div>
 
-          <div class="em-right">
-            <div class="em-section" id="em-qr-section" style="display:none;">
+          <div class="dm-right">
+            <div id="dm-right-placeholder" style="display: flex; align-items: center; justify-content: center; height: 100%; color: var(--t2); text-align: center; font-size: 13px;">
+              Selecciona una entidad exportada para ver su código de emparejamiento.
+            </div>
+            
+            <div id="dm-right-content" style="display: none;">
+              <div class="dm-section" id="dm-qr-section">
               <div class="em-section-label">Emparejamiento Matter</div>
 
               <!-- Commissioned Status Card -->
@@ -193,15 +173,15 @@
             </div>
 
             <!-- Collapsible Pairing Logs Section -->
-            <div class="em-section" id="em-logs-section" style="display:none; padding-top: 20px; border-top: 1px solid var(--glass-bdr);">
+            <div class="dm-section" id="dm-logs-section" style="padding-top: 20px; border-top: 1px solid var(--glass-bdr);">
               <details id="logs-details" style="width: 100%;">
                 <summary style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--t3); cursor: pointer; user-select: none; display: flex; align-items: center; justify-content: space-between; outline: none;">
                   <span>📋 Registros del Emparejamiento (Logs)</span>
                   <span class="details-chevron" style="transition: transform 0.2s; font-size: 8px;">▼</span>
                 </summary>
                 <div style="margin-top: 12px;">
-                  <div class="em-section-desc">Registros del puente en tiempo real para diagnosticar errores de Apple y Matter.</div>
-                  <div class="logs-console glass-inset" id="modal-logs-console" style="margin-top: 12px; font-family: 'Courier New', monospace; font-size: 11px; padding: 12px; background: rgba(0,0,0,0.4); border-radius: 8px; height: 180px; overflow-y: auto; color: #a5f3fc; white-space: pre-wrap; word-break: break-all; border: 1px solid var(--glass-bdr);">
+                  <div class="dm-section-desc" style="font-size: 11px; color: var(--t2); margin-bottom: 8px;">Registros del puente en tiempo real para diagnosticar errores de Apple y Matter.</div>
+                  <div class="logs-console glass-inset" id="modal-logs-console" style="font-family: 'Courier New', monospace; font-size: 11px; padding: 12px; background: rgba(0,0,0,0.4); border-radius: 8px; height: 180px; overflow-y: auto; color: #a5f3fc; white-space: pre-wrap; word-break: break-all; border: 1px solid var(--glass-bdr);">
                     <!-- Logs populated by JS -->
                   </div>
                   <div style="display: flex; gap: 8px; margin-top: 10px;">
@@ -212,14 +192,15 @@
               </details>
             </div>
 
-            <div class="em-section">
-              <div class="em-section-label">Compatibilidad HomeKit 2026</div>
+            <div class="dm-section" style="margin-top: 16px;">
+              <div class="dm-section-label" style="font-size: 14px; font-weight: 600; color: var(--t1); margin-bottom: 8px;">Compatibilidad HomeKit 2026</div>
               <div class="compat-badges" id="compat-badges">
                 <span class="compat-badge apple">Apple Home</span>
                 <span class="compat-badge google">Google Home</span>
                 <span class="compat-badge alexa">Amazon Alexa</span>
                 <span class="compat-badge matter">Matter 1.5.x</span>
               </div>
+            </div>
             </div>
           </div>
         </div>

@@ -118,18 +118,14 @@ const sidebarCopyBtn = $('sidebar-copy-btn');
 const commBannerSm   = $('commissioned-banner-sm');
 
 // Entity modal
-const entityModal    = $('entity-modal');
-const emIcon         = $('em-icon');
-const emName         = $('entity-modal-name');
-const emId           = $('em-id');
-const emState        = $('em-state');
-const emDomain       = $('em-domain');
-const emMatterType   = $('em-matter-type');
-const emHaState      = $('em-ha-state');
-const emQrLabel      = $('em-qr-device-label');
-const hkSelect       = $('hk-type-select');
-const saveTypeBtn    = $('save-type-btn');
-const saveFeedback   = $('save-feedback');
+const deviceModal    = $('device-modal');
+const dmIcon         = $('dm-icon');
+const dmName         = $('device-modal-name');
+const dmId           = $('dm-id');
+const dmEntitiesList = $('dm-entities-list');
+const dmRightPlaceholder = $('dm-right-placeholder');
+const dmRightContent = $('dm-right-content');
+
 const modalQrEl      = $('modal-qrcode');
 const modalQrPh      = $('modal-qr-ph');
 const modalManual    = $('modal-manual-code');
@@ -140,7 +136,7 @@ const decommissionBtn       = $('decommission-btn');
 const commissionedStatusCard = $('commissioned-status-card');
 const commissionedFabricName = $('commissioned-fabric-name');
 const qrPairingCard          = $('qr-pairing-card');
-const emLogsSection          = $('em-logs-section');
+const dmLogsSection          = $('dm-logs-section');
 const modalLogsConsole       = $('modal-logs-console');
 const clearLogsBtn           = $('clear-logs-btn');
 const copyLogsBtn            = $('copy-logs-btn');
@@ -401,38 +397,14 @@ function buildDeviceCard(device) {
           ${exported}/${total}
           <span class="dc-export-label">Matter</span>
         </div>
-        <div class="dc-chevron">
-          <svg viewBox="0 0 20 20" fill="currentColor" width="18" height="18">
-            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
-          </svg>
-        </div>
+        <button class="pill-btn secondary sm dc-config-btn" style="margin-left: 12px;">⚙️ Configurar</button>
       </div>
-    </div>
-    <div class="dc-entities" style="display:none;">
-      <div class="dc-entities-inner"></div>
     </div>
   `;
 
-  const header        = wrapper.querySelector('.dc-header');
-  const entitiesDiv   = wrapper.querySelector('.dc-entities');
-  const entitiesInner = wrapper.querySelector('.dc-entities-inner');
-  const chevron       = wrapper.querySelector('.dc-chevron');
-
-  header.addEventListener('click', () => {
-    const isOpen = entitiesDiv.style.display !== 'none';
-    if (isOpen) {
-      entitiesDiv.style.display = 'none';
-      wrapper.classList.remove('expanded');
-      chevron.style.transform = '';
-    } else {
-      if (!entitiesInner.dataset.rendered) {
-        renderEntityRows(entitiesInner, device);
-        entitiesInner.dataset.rendered = '1';
-      }
-      entitiesDiv.style.display = 'block';
-      wrapper.classList.add('expanded');
-      chevron.style.transform = 'rotate(90deg)';
-    }
+  const configBtn = wrapper.querySelector('.dc-config-btn');
+  configBtn.addEventListener('click', () => {
+    openDeviceModal(device);
   });
 
   return wrapper;
@@ -454,15 +426,18 @@ function renderEntityRows(container, device) {
   });
 }
 
-// ── Fila de entidad individual ────────────────────────────────
-function buildEntityRow(entity, device) {
+// ── Fila de entidad individual en Modal ───────────────────────────────
+function buildModalEntityRow(entity, device) {
   const row = document.createElement('div');
   row.className = 'entity-row' + (entity.exported ? ' exported' : ' not-exported');
   row.dataset.entityId = entity.entityId;
+  row.style.cursor = 'pointer';
+  row.style.border = '1px solid transparent';
+  row.style.transition = 'border-color 0.2s';
 
   const icon   = domainIcon(entity.domain);
   const sc     = stateClass(entity.state);
-
+  
   row.innerHTML = `
     <div class="er-top">
       <div class="er-icon">${icon}</div>
@@ -483,8 +458,7 @@ function buildEntityRow(entity, device) {
       </div>
     </div>
     <div class="er-actions">
-      <button class="er-config-btn" title="Configurar / Ver QR" data-entity-id="${esc(entity.entityId)}">⚙️ Configurar</button>
-      <label class="toggle-switch" title="Exportar a Matter">
+      <label class="toggle-switch" title="Exportar a Matter" onclick="event.stopPropagation()">
         <input type="checkbox" class="export-toggle" ${entity.exported ? 'checked' : ''} data-id="${esc(entity.entityId)}">
         <span class="toggle-slider"></span>
       </label>
@@ -494,21 +468,23 @@ function buildEntityRow(entity, device) {
   // Toggle exportar
   const toggle = row.querySelector('.export-toggle');
   toggle.addEventListener('change', async (e) => {
+    e.stopPropagation();
     const isExported = e.target.checked;
     const action = isExported ? 'register' : 'unregister';
     try {
-      const res = await fetch(`${API}/${action}/${encodeURIComponent(entity.entityId)}`, {
-        method: 'POST'
-      });
+      const res = await fetch(`${API}/${action}/${encodeURIComponent(entity.entityId)}`, { method: 'POST' });
       if (res.ok) {
         entity.exported = isExported;
         row.className = 'entity-row' + (isExported ? ' exported' : ' not-exported');
-        const matterEl = row.querySelector('.er-matter');
-        matterEl.innerHTML = isExported
+        row.querySelector('.er-matter').innerHTML = isExported
           ? `<span class="er-matter-type">${esc(entity.matterType || 'Matter')}</span>`
           : `<span class="er-matter-disabled">No exportado</span>`;
         updateDeviceCardCounter(device);
         fetchDevices();
+        
+        if (activeEntity && activeEntity.entityId === entity.entityId) {
+          selectEntity(entity);
+        }
       } else {
         e.target.checked = !isExported;
       }
@@ -517,14 +493,11 @@ function buildEntityRow(entity, device) {
     }
   });
 
-  // Botón configurar tipo
-  const configBtn = row.querySelector('.er-config-btn');
-  if (configBtn) {
-    configBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      openEntityModal(entity);
-    });
-  }
+  row.addEventListener('click', () => {
+    document.querySelectorAll('.entity-row').forEach(r => r.style.borderColor = 'transparent');
+    row.style.borderColor = 'var(--accent-b)';
+    selectEntity(entity);
+  });
 
   return row;
 }
@@ -542,167 +515,107 @@ function updateDeviceCardCounter(device) {
   }
 }
 
-// ── Modal de configuración de tipo Matter ─────────────────────
-function openEntityModal(entity) {
+// ── Modal de dispositivo ──────────────────────────────────────────────
+function openDeviceModal(device) {
+  dmIcon.textContent = deviceRepresentativeIcon(device);
+  dmName.textContent = device.name;
+  dmId.textContent   = device.id;
+  
+  dmEntitiesList.innerHTML = '';
+  const sorted = [...device.entities].sort((a, b) => {
+    if (a.exported !== b.exported) return a.exported ? -1 : 1;
+    const pa = DOMAIN_PRIORITY.indexOf(a.domain);
+    const pb = DOMAIN_PRIORITY.indexOf(b.domain);
+    if (pa !== pb) return (pa === -1 ? 99 : pa) - (pb === -1 ? 99 : pb);
+    return (a.friendlyName || '').localeCompare(b.friendlyName || '');
+  });
+
+  sorted.forEach(entity => {
+    const row = buildModalEntityRow(entity, device);
+    dmEntitiesList.appendChild(row);
+  });
+
+  deviceModal.classList.add('open');
+  document.body.style.overflow = 'hidden';
+
+  // Seleccionar la primera entidad exportada, o la primera si no hay exportadas
+  const firstExported = sorted.find(e => e.exported);
+  if (firstExported) {
+    const row = dmEntitiesList.querySelector(`.entity-row[data-entity-id="${CSS.escape(firstExported.entityId)}"]`);
+    if (row) {
+      row.style.borderColor = 'var(--accent-b)';
+      selectEntity(firstExported);
+    }
+  } else if (sorted.length > 0) {
+    const row = dmEntitiesList.querySelector('.entity-row');
+    if (row) {
+      row.style.borderColor = 'var(--accent-b)';
+      selectEntity(sorted[0]);
+    }
+  } else {
+    dmRightPlaceholder.style.display = 'flex';
+    dmRightContent.style.display = 'none';
+  }
+}
+
+function selectEntity(entity) {
   activeEntity = entity;
   modalQrRendered = false;
 
-  emIcon.textContent = domainIcon(entity.domain);
-  emName.textContent = entity.friendlyName;
-  emId.textContent   = entity.entityId;
-  if (emQrLabel) {
-    emQrLabel.textContent = entity.friendlyName;
+  if (!entity.exported) {
+    dmRightPlaceholder.style.display = 'flex';
+    dmRightPlaceholder.textContent = 'Selecciona una entidad exportada para ver su código de emparejamiento.';
+    dmRightContent.style.display = 'none';
+    stopLogsPolling();
+    return;
   }
 
-  const sc = stateClass(entity.state);
-  emState.textContent  = entity.state || '—';
-  emState.className    = `em-state-pill ${sc}`;
+  dmRightPlaceholder.style.display = 'none';
+  dmRightContent.style.display = 'block';
 
-  emDomain.textContent     = entity.domain;
-  emMatterType.textContent = entity.matterType || '—';
-  emHaState.textContent    = entity.state || '—';
-
-  // Dropdown HomeKit types
-  const types = HK_TYPES[entity.domain] || [];
-  hkSelect.innerHTML = '';
-  if (types.length === 0) {
-    hkSelect.innerHTML = '<option value="">— Tipo no configurable para este dominio —</option>';
-    hkSelect.disabled  = true;
-    saveTypeBtn.disabled = true;
-  } else {
-    hkSelect.disabled   = false;
-    saveTypeBtn.disabled = false;
-    types.forEach(t => {
-      const opt = document.createElement('option');
-      opt.value = t.id;
-      opt.textContent = t.name;
-      if (entity.matterType && entity.matterType.toLowerCase().includes(t.id.toLowerCase())) {
-        opt.selected = true;
-      }
-      hkSelect.appendChild(opt);
-    });
-    updateHkTypeDesc();
-  }
-
-
-
-  saveFeedback.textContent = '';
-  saveFeedback.className   = 'save-feedback';
-
-  // ── Render Accessory QR Si Exportado ──────────────────
-  const qrSection = document.getElementById('em-qr-section');
+  const qrSection = document.getElementById('dm-qr-section');
   const qrCodeDiv = document.getElementById('modal-qrcode');
   const manualCodeEl = document.getElementById('modal-manual-code');
   const qrLoading = document.getElementById('modal-qr-loading');
-  
-  if (qrSection && qrCodeDiv && manualCodeEl && qrLoading) {
-    if (entity.exported) {
-      qrSection.style.display = 'block';
-      if (emLogsSection) emLogsSection.style.display = 'block';
 
-      if (entity.commissioned) {
-        if (commissionedStatusCard) commissionedStatusCard.style.display = 'block';
-        if (commissionedFabricName) commissionedFabricName.textContent = `Vinculado a ${esc(entity.fabric || 'Casa')}`;
-        if (qrPairingCard) qrPairingCard.style.display = 'none';
-      } else {
-        if (commissionedStatusCard) commissionedStatusCard.style.display = 'none';
-        if (qrPairingCard) qrPairingCard.style.display = 'block';
+  if (entity.commissioned) {
+    commissionedStatusCard.style.display = 'block';
+    commissionedFabricName.textContent = `Vinculado a ${esc(entity.fabric || 'Casa')}`;
+    qrPairingCard.style.display = 'none';
+  } else {
+    commissionedStatusCard.style.display = 'none';
+    qrPairingCard.style.display = 'block';
 
-        if (entity.pairingCode) {
-          qrLoading.style.display = 'none';
-          qrCodeDiv.style.display = 'block';
-          if (!modalQrRendered) {
-            renderQR(qrCodeDiv, entity.pairingCode, 160);
-            modalQrRendered = true;
-          }
-          manualCodeEl.textContent = entity.manualPairingCode || '---- --- ----';
-        } else {
-          qrCodeDiv.style.display = 'none';
-          qrLoading.style.display = 'flex';
-          manualCodeEl.textContent = 'Generando...';
-        }
+    if (entity.pairingCode) {
+      qrLoading.style.display = 'none';
+      qrCodeDiv.style.display = 'block';
+      if (!modalQrRendered) {
+        renderQR(qrCodeDiv, entity.pairingCode, 160);
+        modalQrRendered = true;
       }
-
-      // Start log polling if logs section is open
-      if (logsDetails && logsDetails.open) {
-        startLogsPolling();
-      }
+      manualCodeEl.textContent = entity.manualPairingCode || '---- --- ----';
     } else {
-      qrSection.style.display = 'none';
-      if (emLogsSection) emLogsSection.style.display = 'none';
-      stopLogsPolling();
+      qrCodeDiv.style.display = 'none';
+      qrLoading.style.display = 'flex';
+      manualCodeEl.textContent = 'Generando...';
     }
   }
 
-  entityModal.classList.add('open');
-  document.body.style.overflow = 'hidden';
-}
-
-function updateHkTypeDesc() {
-  const sel    = hkSelect.value;
-  const domain = activeEntity?.domain;
-  const types  = (domain && HK_TYPES[domain]) || [];
-  const t      = types.find(x => x.id === sel);
-  const descEl = $('hk-type-desc');
-  if (descEl) descEl.textContent = t ? t.desc : 'Selecciona un tipo para ver la descripción.';
-}
-
-hkSelect && hkSelect.addEventListener('change', updateHkTypeDesc);
-
-// ── Guardar tipo Matter ───────────────────────────────────────
-saveTypeBtn && saveTypeBtn.addEventListener('click', async () => {
-  if (!activeEntity) return;
-  const newType = hkSelect.value;
-  if (!newType) return;
-
-  saveTypeBtn.disabled = true;
-  saveFeedback.textContent = 'Guardando...';
-  saveFeedback.className   = 'save-feedback saving';
-
-  try {
-    const res = await fetch(`${API}/device-override`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ entityId: activeEntity.entityId, matterType: newType }),
-    });
-    if (res.ok) {
-      activeEntity.matterType = newType;
-      emMatterType.textContent = newType;
-      saveFeedback.textContent = '✅ Guardado. Reinicia el puente para aplicar.';
-      saveFeedback.className   = 'save-feedback success';
-      
-      // Mostrar banner de reinicio pendiente
-      localStorage.setItem('pendingRestart', 'true');
-      if (pendingRestartBanner) {
-        pendingRestartBanner.style.display = 'flex';
-      }
-
-      // Actualizar fila
-      const entityRow = document.querySelector(`.entity-row[data-entity-id="${CSS.escape(activeEntity.entityId)}"] .er-matter-type`);
-      if (entityRow) entityRow.textContent = newType;
-    } else {
-      saveFeedback.textContent = '❌ Error al guardar. Intenta de nuevo.';
-      saveFeedback.className   = 'save-feedback error';
-    }
-  } catch {
-    saveFeedback.textContent = '❌ Sin conexión con el servidor.';
-    saveFeedback.className   = 'save-feedback error';
-  } finally {
-    saveTypeBtn.disabled = false;
+  if (logsDetails && logsDetails.open) {
+    startLogsPolling();
   }
-});
+}
 
-// ── Cerrar entity modal ───────────────────────────────────────
-function closeEntityModal() {
-  entityModal.classList.remove('open');
+function closeDeviceModal() {
+  deviceModal.classList.remove('open');
   document.body.style.overflow = '';
   activeEntity = null;
   stopLogsPolling();
 }
 
-$('entity-modal-close') && $('entity-modal-close').addEventListener('click', closeEntityModal);
-entityModal && entityModal.addEventListener('click', (e) => {
-  if (e.target === entityModal) closeEntityModal();
+$('device-modal-close') && $('device-modal-close').addEventListener('click', closeDeviceModal);
+deviceModal && deviceModal.addEventListener('click', (e) => {
+  if (e.target === deviceModal) closeDeviceModal();
 });
 
 // ── Copy QR & manual codes ────────────────────────────────────
@@ -823,7 +736,7 @@ decommissionBtn && decommissionBtn.addEventListener('click', async () => {
 // ── Keyboard ──────────────────────────────────────────────────
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
-    if (entityModal.classList.contains('open')) closeEntityModal();
+    if (deviceModal && deviceModal.classList.contains('open')) closeDeviceModal();
     if (confirmModal.classList.contains('open')) closeConfirm();
     if (advancedModal.classList.contains('open')) advancedModal.classList.remove('open');
   }
