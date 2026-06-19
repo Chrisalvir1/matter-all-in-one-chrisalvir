@@ -936,4 +936,3 @@ if (bannerRestartBtn) {
 fetchStatus();
 fetchDevices();
 setInterval(fetchStatus, 8000);
-setInterval(fetchDevices, 30000);
