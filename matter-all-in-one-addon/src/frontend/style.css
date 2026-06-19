@@ -763,3 +763,24 @@ body {
   .devices-header { flex-direction: column; align-items: flex-start; }
   .search-pill { min-width: auto; width: 100%; }
 }
+
+/* ── Logs Accordion & Console Scrollbar ── */
+details#logs-details summary::-webkit-details-marker {
+  display: none;
+}
+details#logs-details summary {
+  list-style: none;
+}
+.logs-console::-webkit-scrollbar {
+  width: 6px;
+}
+.logs-console::-webkit-scrollbar-track {
+  background: transparent;
+}
+.logs-console::-webkit-scrollbar-thumb {
+  background: var(--glass-bdr);
+  border-radius: 4px;
+}
+.logs-console::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}

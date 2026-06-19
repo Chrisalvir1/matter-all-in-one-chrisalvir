@@ -7,6 +7,7 @@ echo "[Info] Starting Matter 1.5.x All-in-One Bridge Add-on..."
 OPTIONS_FILE="/data/options.json"
 HOST=$(jq -r '.host // empty' "$OPTIONS_FILE")
 TOKEN=$(jq -r '.token // empty' "$OPTIONS_FILE")
+MDNSINTERFACE=$(jq -r '.mdnsinterface // empty' "$OPTIONS_FILE")
 
 # Fallback to supervisor API if defaults are used
 if [ -z "$HOST" ] || [ "$HOST" = "http://supervisor/core" ]; then
@@ -58,7 +59,32 @@ matterbridge -add /app || true
 echo "[Info] Starting proxy server on port 8283..."
 node /app/dist/proxy.js &
 
+# Handle mDNS interface configuration
+MDNS_PARAM=""
+if [ -n "$MDNSINTERFACE" ]; then
+    echo "[Info] Using manually configured network interface for mDNS: $MDNSINTERFACE"
+    MDNS_PARAM="-mdnsinterface $MDNSINTERFACE"
+else
+    # Try dynamic auto-detection
+    ACTIVE_INTERFACE=""
+    if command -v ip >/dev/null 2>&1; then
+        ACTIVE_INTERFACE=$(ip route get 1.1.1.1 2>/dev/null | grep -oE "dev [^ ]+" | cut -d' ' -f2)
+        if [ -z "$ACTIVE_INTERFACE" ]; then
+            ACTIVE_INTERFACE=$(ip route show default 2>/dev/null | grep -oE "dev [^ ]+" | head -n1 | cut -d' ' -f2)
+        fi
+    fi
+    if [ -z "$ACTIVE_INTERFACE" ] && command -v route >/dev/null 2>&1; then
+        ACTIVE_INTERFACE=$(route -n 2>/dev/null | grep '^0.0.0.0' | awk '{print $8}' | head -n1)
+    fi
+    if [ -n "$ACTIVE_INTERFACE" ]; then
+        echo "[Info] Auto-detected active network interface for mDNS: $ACTIVE_INTERFACE"
+        MDNS_PARAM="-mdnsinterface $ACTIVE_INTERFACE"
+    else
+        echo "[Warning] Could not detect active network interface and no override was configured. mDNS will start on all interfaces."
+    fi
+fi
+
 # Start Matterbridge
-echo "[Info] Launching Matterbridge on port 8284..."
-exec matterbridge -frontend 8284
+echo "[Info] Launching Matterbridge on port 8284 with $MDNS_PARAM..."
+exec matterbridge -frontend 8284 $MDNS_PARAM
 

@@ -1,6 +1,8 @@
 /**
  * Core platform class for matter-all-in-one-chrisalvir.
  */
+import './utils/log-buffer.js';
+import { getLogs, clearLogs } from './utils/log-buffer.js';
 import {
   MatterbridgeAccessoryPlatform,
   MatterbridgeEndpoint,
@@ -501,6 +503,19 @@ export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
           return;
         }
 
+        if (req.method === 'GET' && pathname === '/api/custom/logs') {
+          res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ logs: getLogs() }));
+          return;
+        }
+
+        if (req.method === 'POST' && pathname === '/api/custom/logs/clear') {
+          clearLogs();
+          res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ success: true }));
+          return;
+        }
+
         if (req.method === 'GET' && pathname === '/api/custom/status') {
           let qrPairingCode = '';
           let manualPairingCode = '';
@@ -586,7 +601,19 @@ export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
                 const fabricList = Object.values(fabrics);
                 if (fabricList.length > 0) {
                   const f = fabricList[0] as any;
-                  fabric = f.label || f.vendorName || `Vendor ${f.vendorId}`;
+                  let fLabel = f.label || f.vendorName || '';
+                  if (f.vendorId === 4875 || f.vendorId === 0x130b) {
+                    fLabel = 'Apple HomeKit';
+                  } else if (f.vendorId === 4447 || f.vendorId === 0x115f) {
+                    fLabel = 'Xiaomi/Aqara';
+                  } else if (f.vendorId === 4187 || f.vendorId === 0x105b) {
+                    fLabel = 'Google Home';
+                  } else if (f.vendorId === 4687 || f.vendorId === 0x124f) {
+                    fLabel = 'Amazon Alexa';
+                  } else if (!fLabel) {
+                    fLabel = `Vendor ${f.vendorId}`;
+                  }
+                  fabric = fLabel;
                 }
               }
             }

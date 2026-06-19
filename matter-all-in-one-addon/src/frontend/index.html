@@ -152,20 +152,55 @@
           <div class="em-right">
             <div class="em-section" id="em-qr-section" style="display:none;">
               <div class="em-section-label">Emparejamiento Matter</div>
-              <div class="em-section-desc">Escanea el código para emparejar este accesorio de manera independiente.</div>
-              <div class="sqr-zone" style="margin-top: 12px; background: rgba(0,0,0,0.2); padding: 16px; border-radius: 12px;">
-                <div id="modal-qrcode"></div>
-                <div class="sqr-loading" id="modal-qr-loading" style="display:none;">
-                  <div class="spinner"></div>
-                  <span>Generando QR...</span>
+
+              <!-- Commissioned Status Card -->
+              <div id="commissioned-status-card" class="glass-card-sm" style="display: none; border: 1px solid rgba(52,211,153,0.3); background: rgba(52,211,153,0.06); padding: 16px; border-radius: 14px; margin-top: 12px;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <div class="status-indicator-green" style="width: 14px; height: 14px; border-radius: 50%; background: var(--accent-g); box-shadow: 0 0 10px var(--accent-g); flex-shrink: 0; animation: dot-pulse 1.8s ease-in-out infinite;"></div>
+                  <div>
+                    <div style="font-size: 13px; font-weight: 700; color: var(--t1);">Dispositivo Conectado</div>
+                    <div style="font-size: 11px; color: var(--t2); margin-top: 2px;" id="commissioned-fabric-name">Vinculado a Casa</div>
+                  </div>
+                </div>
+                <div style="margin-top: 16px;">
+                  <button class="pill-btn danger full-w sm" id="decommission-btn" style="font-size: 12px; padding: 8px;">❌ Desconectar de la casa</button>
                 </div>
               </div>
-              <div class="sqr-manual-row" style="margin-top: 12px; justify-content: center;">
-                <code id="modal-manual-code">---- --- ----</code>
+
+              <!-- QR Pairing Code Card -->
+              <div id="qr-pairing-card" style="display: block;">
+                <div class="em-section-desc">Escanea el código para emparejar este accesorio de manera independiente.</div>
+                <div class="sqr-zone" style="margin-top: 12px; background: rgba(0,0,0,0.2); padding: 16px; border-radius: 12px;">
+                  <div id="modal-qrcode"></div>
+                  <div class="sqr-loading" id="modal-qr-loading" style="display:none;">
+                    <div class="spinner"></div>
+                    <span>Generando QR...</span>
+                  </div>
+                </div>
+                <div class="sqr-manual-row" style="margin-top: 12px; justify-content: center;">
+                  <code id="modal-manual-code">---- --- ----</code>
+                </div>
               </div>
-              <div id="decommission-container" style="display: none; margin-top: 16px;">
-                <button class="pill-btn danger full-w" id="decommission-btn">❌ Desconectar de la casa</button>
-              </div>
+            </div>
+
+            <!-- Collapsible Pairing Logs Section -->
+            <div class="em-section" id="em-logs-section" style="display:none; padding-top: 20px; border-top: 1px solid var(--glass-bdr);">
+              <details id="logs-details" style="width: 100%;">
+                <summary style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--t3); cursor: pointer; user-select: none; display: flex; align-items: center; justify-content: space-between; outline: none;">
+                  <span>📋 Registros del Emparejamiento (Logs)</span>
+                  <span class="details-chevron" style="transition: transform 0.2s; font-size: 8px;">▼</span>
+                </summary>
+                <div style="margin-top: 12px;">
+                  <div class="em-section-desc">Registros del puente en tiempo real para diagnosticar errores de Apple y Matter.</div>
+                  <div class="logs-console glass-inset" id="modal-logs-console" style="margin-top: 12px; font-family: 'Courier New', monospace; font-size: 11px; padding: 12px; background: rgba(0,0,0,0.4); border-radius: 8px; height: 180px; overflow-y: auto; color: #a5f3fc; white-space: pre-wrap; word-break: break-all; border: 1px solid var(--glass-bdr);">
+                    <!-- Logs populated by JS -->
+                  </div>
+                  <div style="display: flex; gap: 8px; margin-top: 10px;">
+                    <button class="pill-btn secondary sm" id="clear-logs-btn" style="flex: 1; font-size: 11px; padding: 6px; justify-content: center;">Limpiar</button>
+                    <button class="pill-btn secondary sm" id="copy-logs-btn" style="flex: 1; font-size: 11px; padding: 6px; justify-content: center;">Copiar Logs</button>
+                  </div>
+                </div>
+              </details>
             </div>
 
             <div class="em-section">

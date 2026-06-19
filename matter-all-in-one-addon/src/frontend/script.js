@@ -19,6 +19,7 @@ let modalQrRendered  = false;
 let allEntities      = [];
 let activeEntity     = null;
 let pendingConfirm   = null;
+let logsInterval     = null;
 
 // ── HomeKit 2026 Type Map ──────────────────────────────────────
 const HK_TYPES = {
@@ -134,8 +135,16 @@ const modalQrPh      = $('modal-qr-ph');
 const modalManual    = $('modal-manual-code');
 const modalCopyBtn   = $('modal-copy-btn');
 const modalQrExport  = $('modal-qr-export-btn');
-const decommissionContainer = $('decommission-container');
 const decommissionBtn       = $('decommission-btn');
+
+const commissionedStatusCard = $('commissioned-status-card');
+const commissionedFabricName = $('commissioned-fabric-name');
+const qrPairingCard          = $('qr-pairing-card');
+const emLogsSection          = $('em-logs-section');
+const modalLogsConsole       = $('modal-logs-console');
+const clearLogsBtn           = $('clear-logs-btn');
+const copyLogsBtn            = $('copy-logs-btn');
+const logsDetails            = $('logs-details');
 
 // Confirm modal
 const confirmModal   = $('confirm-modal');
@@ -543,28 +552,39 @@ function openEntityModal(entity) {
   if (qrSection && qrCodeDiv && manualCodeEl && qrLoading) {
     if (entity.exported) {
       qrSection.style.display = 'block';
+      if (emLogsSection) emLogsSection.style.display = 'block';
+
       if (entity.commissioned) {
-        qrCodeDiv.innerHTML = `<div style="text-align:center; padding:20px; font-weight:bold; color:var(--accent-g)">✅ Vinculado a ${esc(entity.fabric || 'Casa')}</div>`;
-        manualCodeEl.textContent = 'Vinculado';
-        if (decommissionContainer) decommissionContainer.style.display = 'block';
-      } else if (entity.pairingCode) {
-        qrLoading.style.display = 'none';
-        qrCodeDiv.style.display = 'block';
-        if (!modalQrRendered) {
-          renderQR(qrCodeDiv, entity.pairingCode, 160);
-          modalQrRendered = true;
-        }
-        manualCodeEl.textContent = entity.manualPairingCode || '---- --- ----';
-        if (decommissionContainer) decommissionContainer.style.display = 'none';
+        if (commissionedStatusCard) commissionedStatusCard.style.display = 'block';
+        if (commissionedFabricName) commissionedFabricName.textContent = `Vinculado a ${esc(entity.fabric || 'Casa')}`;
+        if (qrPairingCard) qrPairingCard.style.display = 'none';
       } else {
-        qrCodeDiv.style.display = 'none';
-        qrLoading.style.display = 'flex';
-        manualCodeEl.textContent = 'Generando...';
-        if (decommissionContainer) decommissionContainer.style.display = 'none';
+        if (commissionedStatusCard) commissionedStatusCard.style.display = 'none';
+        if (qrPairingCard) qrPairingCard.style.display = 'block';
+
+        if (entity.pairingCode) {
+          qrLoading.style.display = 'none';
+          qrCodeDiv.style.display = 'block';
+          if (!modalQrRendered) {
+            renderQR(qrCodeDiv, entity.pairingCode, 160);
+            modalQrRendered = true;
+          }
+          manualCodeEl.textContent = entity.manualPairingCode || '---- --- ----';
+        } else {
+          qrCodeDiv.style.display = 'none';
+          qrLoading.style.display = 'flex';
+          manualCodeEl.textContent = 'Generando...';
+        }
+      }
+
+      // Start log polling if logs section is open
+      if (logsDetails && logsDetails.open) {
+        startLogsPolling();
       }
     } else {
       qrSection.style.display = 'none';
-      if (decommissionContainer) decommissionContainer.style.display = 'none';
+      if (emLogsSection) emLogsSection.style.display = 'none';
+      stopLogsPolling();
     }
   }
 
@@ -624,6 +644,7 @@ function closeEntityModal() {
   entityModal.classList.remove('open');
   document.body.style.overflow = '';
   activeEntity = null;
+  stopLogsPolling();
 }
 
 $('entity-modal-close') && $('entity-modal-close').addEventListener('click', closeEntityModal);
@@ -753,6 +774,75 @@ document.addEventListener('keydown', (e) => {
     if (advancedModal.classList.contains('open')) advancedModal.classList.remove('open');
   }
 });
+
+// ── Logs Console Helper Functions & Listeners ─────────────────
+async function fetchLogs() {
+  if (!activeEntity || !activeEntity.exported) return;
+  try {
+    const res = await fetch(`${API}/logs`);
+    if (!res.ok) throw new Error('logs error');
+    const d = await res.json();
+    if (modalLogsConsole && Array.isArray(d.logs)) {
+      const isAtBottom = modalLogsConsole.scrollHeight - modalLogsConsole.clientHeight <= modalLogsConsole.scrollTop + 20;
+      modalLogsConsole.textContent = d.logs.join('\n');
+      if (isAtBottom) {
+        modalLogsConsole.scrollTop = modalLogsConsole.scrollHeight;
+      }
+    }
+  } catch (e) {
+    console.error('Error fetching logs:', e);
+  }
+}
+
+function startLogsPolling() {
+  if (logsInterval) clearInterval(logsInterval);
+  fetchLogs();
+  logsInterval = setInterval(fetchLogs, 1500);
+}
+
+function stopLogsPolling() {
+  if (logsInterval) {
+    clearInterval(logsInterval);
+    logsInterval = null;
+  }
+}
+
+if (logsDetails) {
+  logsDetails.addEventListener('toggle', () => {
+    const chevron = logsDetails.querySelector('.details-chevron');
+    if (chevron) {
+      chevron.style.transform = logsDetails.open ? 'rotate(180deg)' : '';
+    }
+    if (logsDetails.open) {
+      startLogsPolling();
+    } else {
+      stopLogsPolling();
+    }
+  });
+}
+
+if (clearLogsBtn) {
+  clearLogsBtn.addEventListener('click', async () => {
+    try {
+      await fetch(`${API}/logs/clear`, { method: 'POST' });
+      if (modalLogsConsole) modalLogsConsole.textContent = '';
+    } catch (e) {
+      console.error('Error clearing logs:', e);
+    }
+  });
+}
+
+if (copyLogsBtn) {
+  copyLogsBtn.addEventListener('click', () => {
+    if (modalLogsConsole) {
+      navigator.clipboard.writeText(modalLogsConsole.textContent).then(() => {
+        const origText = copyLogsBtn.textContent;
+        copyLogsBtn.textContent = '✅ Copiado';
+        setTimeout(() => { copyLogsBtn.textContent = origText; }, 1500);
+      });
+    }
+  });
+}
 
 // ── Init ──────────────────────────────────────────────────────
 fetchStatus();
