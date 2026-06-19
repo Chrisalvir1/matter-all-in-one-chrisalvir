@@ -46,6 +46,7 @@ export class VacuumEntity extends BaseEntity {
 
     // V2 Suffix to force a completely new device pairing and QR Code in Matterbridge UI!
     const v2Id = this.entityId.replaceAll('.', '_') + '_v2';
+    const serialNumber = v2Id + '_sn';
 
     // The official RoboticVacuumCleaner will auto-add:
     // - PowerSource (with valid defaults, 5900mV etc)
@@ -55,7 +56,7 @@ export class VacuumEntity extends BaseEntity {
     // - RvcOperationalState (with valid error states and complete behaviors)
     this.endpoint = new RoboticVacuumCleaner(
       uniqueName,
-      v2Id, // serial with _v2
+      serialNumber, // serial with _v2 and _sn
       'server',
       RUN_MODE_ID_IDLE, // currentRunMode
       undefined, // supportedRunModes
