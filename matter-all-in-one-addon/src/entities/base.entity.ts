@@ -82,13 +82,24 @@ export class BaseEntity {
     this.endpoint.productId = 0x8000;
     this.endpoint.productName = domain.charAt(0).toUpperCase() + domain.slice(1);
 
-    this.endpoint.createDefaultBridgedDeviceBasicInformationClusterServer(
-      uniqueName,
-      this.endpoint.serialNumber,
-      0xfff1,
-      'Home Assistant',
-      this.endpoint.productName
-    );
+    if (this.endpoint.mode === 'server') {
+      this.endpoint.createDefaultBasicInformationClusterServer(
+        uniqueName,
+        this.endpoint.serialNumber,
+        0xfff1,
+        'Home Assistant',
+        0x8000,
+        this.endpoint.productName
+      );
+    } else {
+      this.endpoint.createDefaultBridgedDeviceBasicInformationClusterServer(
+        uniqueName,
+        this.endpoint.serialNumber,
+        0xfff1,
+        'Home Assistant',
+        this.endpoint.productName
+      );
+    }
 
     const clusters = this.getRequiredClusterIds();
     if (clusters.length > 0) {
