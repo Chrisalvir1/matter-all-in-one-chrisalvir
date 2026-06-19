@@ -119,6 +119,22 @@ vi.mock('matterbridge', () => {
         return Promise.resolve();
       }
     },
+    MatterbridgeAccessoryPlatform: class {
+      public matterbridge: any;
+      public log: any;
+      public config: any;
+      constructor(mb: any, log: any, config: any) {
+        this.matterbridge = mb;
+        this.log = log;
+        this.config = config;
+      }
+      registerDevice(endpoint: any) {
+        return Promise.resolve();
+      }
+      unregisterDevice(endpoint: any) {
+        return Promise.resolve();
+      }
+    },
     MatterbridgeEndpoint: MockMatterbridgeEndpoint,
     onOffLight: makeMockDeviceType(0x0100, 'onOffLight'),
     dimmableLight: makeMockDeviceType(0x0101, 'dimmableLight'),
@@ -136,5 +152,6 @@ vi.mock('matterbridge', () => {
     pressureSensor: makeMockDeviceType(0x0305, 'pressureSensor'),
     flowSensor: makeMockDeviceType(0x0306, 'flowSensor'),
     lightSensor: makeMockDeviceType(0x0106, 'lightSensor'),
+    roboticVacuumCleaner: makeMockDeviceType(0x0074, 'roboticVacuumCleaner'),
   };
 });

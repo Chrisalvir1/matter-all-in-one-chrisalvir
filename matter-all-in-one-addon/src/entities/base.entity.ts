@@ -167,7 +167,19 @@ export class BaseEntity {
    * Falls back to the raw value when the cluster is not present so this
    * helper is safe to call unconditionally.
    */
-  private clampLevel(rawLevel: number): number {
+  /**
+   * Clamp a level value to the LevelControl minLevel / maxLevel bounds
+   * reported by the endpoint cluster server.  Matter spec says currentLevel
+   * MUST satisfy the constraint "minLevel to maxLevel"; if we send 0 when
+   * minLevel=135 the transaction rolls back with an UnhandledRejection.
+   *
+   * Falls back to the raw value when the cluster is not present so this
+   * helper is safe to call unconditionally.
+   */
+  private clampLevel(rawLevel: number, isInitialSync = false): number {
+    if (isInitialSync) {
+      return Math.min(254, Math.max(1, rawLevel));
+    }
     try {
       const minLevel = (this.endpoint as any)
         .getAttribute?.(LevelControl.id, 'minLevel') ?? 1;
@@ -205,7 +217,7 @@ export class BaseEntity {
         // (e.g. Govee minLevel=135).  Map 0-brightness to level 1 (off
         // state is communicated via onOff cluster, not currentLevel=0).
         const raw   = Math.round((newState.attributes.brightness / 255) * 254);
-        const level = this.clampLevel(Math.max(1, raw));
+        const level = this.clampLevel(Math.max(1, raw), isInitialSync);
         if (isInitialSync) {
           safeSetAttribute(this.endpoint, LevelControl.id, 'currentLevel', level, this.platform.log);
         } else {

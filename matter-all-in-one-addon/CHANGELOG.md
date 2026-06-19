@@ -8,6 +8,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.21] - 2026-06-18
+### Fixed
+- **Advertencias de Estado Inactivo (`inactive state`):** 
+  - Se corrigió el flujo de sincronización inicial difiriendo `syncInitialState()` para ejecutarse solo después de que el dispositivo ha sido registrado y activado en Matterbridge.
+  - Se optimizó `clampLevel` para evitar llamadas a `getAttribute` durante la sincronización inicial.
+  - Se restringió el flujo de actualización de estados de Home Assistant (`handleEntityStateChange`) para sincronizar únicamente los dispositivos que están activamente exportados, eliminando por completo las advertencias y errores de consola sobre endpoints inactivos para entidades no exportadas.
+
 ## [1.1.20] - 2026-06-18
 ### Fixed
 - **Visibilidad del Icono de Engranaje (⚙️):** Se corrigió un problema por el cual el botón de configuración (engranaje) no se mostraba para dispositivos sin tipos personalizados de HomeKit en el panel (como las aspiradoras). Ahora el botón se muestra siempre permitiendo ver el código QR y manual de Matter individual.

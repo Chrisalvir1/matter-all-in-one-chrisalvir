@@ -301,14 +301,13 @@ export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
     try {
       const endpoint = await entityInstance.createEndpoint();
       if (endpoint) {
-        // Sync initial state BEFORE registering (endpoint is inactive → setAttribute is correct)
-        await entityInstance.syncInitialState();
         this.entities.set(entityId, entityInstance);
         this.matterbridgeDevices.set(entityId, endpoint);
 
         if (this.exportedDevices.has(entityId)) {
           this.log.info(`Auto-starting Accessory Server for ${idn}${entityId}${rs}...`);
           await this.registerDevice(endpoint);
+          await entityInstance.syncInitialState();
         } else {
           this.log.debug(`Entity ${entityId} is discovered but not exported. Skipping Accessory Server creation.`);
         }
@@ -331,6 +330,12 @@ export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
       const endpoint = this.matterbridgeDevices.get(entityId)!;
       // If it's already registered, matterbridge handles it gracefully
       await this.registerDevice(endpoint);
+      
+      const entity = this.entities.get(entityId);
+      if (entity) {
+        await entity.syncInitialState();
+      }
+
       this.log.notice(`Manually started Accessory Server for ${entityId}`);
       return { success: true };
     } catch (err) {
@@ -373,8 +378,11 @@ export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
   private handleEntityStateChange(entityId: string, newState: HassState) {
     const entity = this.entities.get(entityId);
     if (entity) {
-      this.log.debug(`Syncing state update for ${entityId} to Matter.`);
-      entity.updateState(newState);
+      entity.state = newState;
+      if (this.exportedDevices.has(entityId)) {
+        this.log.debug(`Syncing state update for ${entityId} to Matter.`);
+        entity.updateState(newState);
+      }
     }
   }
 
