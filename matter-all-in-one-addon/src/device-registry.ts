@@ -85,7 +85,7 @@ export const DEVICE_REGISTRY: Record<string, DeviceRegistryEntry> = {
   lock: { matterType: MatterDeviceTypes.doorLock, homekitSupported: homekitSupported.doorLock },
   light: { matterType: MatterDeviceTypes.dimmableLight, homekitSupported: homekitSupported.dimmableLight },
   switch: { matterType: MatterDeviceTypes.onOffPlugInUnit, homekitSupported: homekitSupported.onOffPlugInUnit },
-  vacuum: { matterType: MatterDeviceTypes.roboticVacuumCleaner, homekitSupported: homekitSupported.roboticVacuumCleaner },
+  vacuum: { matterType: MatterDeviceTypes.onOffPlugInUnit, homekitSupported: homekitSupported.onOffPlugInUnit },
   button: { matterType: MatterDeviceTypes.onOffPlugInUnit, homekitSupported: homekitSupported.onOffPlugInUnit },
   // Domain-level fallback mapping; specific device_classes logic may still need to be handled if required
   binary_sensor: { matterType: MatterDeviceTypes.contactSensor, homekitSupported: homekitSupported.contactSensor },
