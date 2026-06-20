@@ -25,6 +25,8 @@ import { EnergyTariffEntity } from './entities/energy_tariff.entity.js';
 import { VacuumEntity } from './entities/vacuum.entity.js';
 import { PetFeederEntity } from './entities/pet_feeder.entity.js';
 import { HumidifierEntity } from './entities/humidifier.entity.js';
+import { OvenEntity } from './entities/oven.entity.js';
+import { CooktopEntity } from './entities/cooktop.entity.js';
 
 
 export interface HomeAssistantPlatformConfig extends PlatformConfig {
@@ -298,6 +300,10 @@ export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
       entityInstance = new HumidifierEntity(this, state, deviceType);
     } else if (override === 'PetFeeder') {
       entityInstance = new PetFeederEntity(this, state, deviceType);
+    } else if (override === 'Oven' || deviceType.name === 'Oven') {
+      entityInstance = new OvenEntity(this, state, deviceType);
+    } else if (override === 'Cooktop' || deviceType.name === 'Cooktop') {
+      entityInstance = new CooktopEntity(this, state, deviceType);
     } else {
       // General base fallback or standard converters will wrap this
       entityInstance = new BaseEntity(this, state, deviceType);

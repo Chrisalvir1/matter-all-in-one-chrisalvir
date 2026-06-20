@@ -21,6 +21,8 @@ import {
   lightSensor,
   roboticVacuumCleaner,
   fan,
+  cooktop,
+  oven,
 } from 'matterbridge';
 
 export const MatterDeviceTypes = {
@@ -74,6 +76,10 @@ export const MatterDeviceTypes = {
   roboticVacuumCleaner,
 
   fan,
+
+  cooktop,
+
+  oven,
 };
 
 export interface DeviceRegistryEntry {
