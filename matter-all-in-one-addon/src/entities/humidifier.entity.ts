@@ -108,7 +108,7 @@ export class HumidifierEntity extends BaseEntity {
   /**
    * Synchronize Home Assistant state changes to Matter attributes.
    */
-  public override updateState(newState: HassState, isInitialSync = false): void {
+  public override async updateState(newState: HassState, isInitialSync = false): Promise<void> {
     this.state = newState;
     if (!this.endpoint) return;
 
@@ -116,7 +116,7 @@ export class HumidifierEntity extends BaseEntity {
     const isOn = newState.state === 'on';
 
     // Update OnOff
-    syncFunc(this.endpoint, OnOff.id, 'onOff', isOn, this.platform.log);
+    await syncFunc(this.endpoint, OnOff.id, 'onOff', isOn, this.platform.log);
 
     // Update FanControl attributes
     if (this.endpoint.hasAttributeServer(FanControl.id, 'percentSetting')) {
@@ -130,8 +130,8 @@ export class HumidifierEntity extends BaseEntity {
         percent = Math.min(100, Math.max(1, percent));
       }
 
-      syncFunc(this.endpoint, FanControl.id, 'percentSetting', percent, this.platform.log);
-      syncFunc(this.endpoint, FanControl.id, 'percentCurrent', percent, this.platform.log);
+      await syncFunc(this.endpoint, FanControl.id, 'percentSetting', percent, this.platform.log);
+      await syncFunc(this.endpoint, FanControl.id, 'percentCurrent', percent, this.platform.log);
     }
   }
 }

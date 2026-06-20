@@ -220,7 +220,7 @@ export class BaseEntity {
    * Sync a new Home Assistant state update to the Matter endpoint.
    * Safe to call at any point in the endpoint lifecycle.
    */
-  public updateState(newState: HassState, isInitialSync = false) {
+  public async updateState(newState: HassState, isInitialSync = false): Promise<void> {
     this.state = newState;
     const [domain] = this.entityId.split('.');
 
@@ -228,9 +228,9 @@ export class BaseEntity {
       const isOn = newState.state === 'on';
 
       if (isInitialSync) {
-        safeSetAttribute(this.endpoint, OnOff.id, 'onOff', isOn, this.platform.log);
+        await safeSetAttribute(this.endpoint, OnOff.id, 'onOff', isOn, this.platform.log);
       } else {
-        safeUpdateAttribute(this.endpoint, OnOff.id, 'onOff', isOn, this.platform.log);
+        await safeUpdateAttribute(this.endpoint, OnOff.id, 'onOff', isOn, this.platform.log);
       }
 
       if (newState.attributes.brightness !== undefined) {
@@ -241,9 +241,9 @@ export class BaseEntity {
         const raw   = Math.round((newState.attributes.brightness / 255) * 254);
         const level = this.clampLevel(Math.max(1, raw), isInitialSync);
         if (isInitialSync) {
-          safeSetAttribute(this.endpoint, LevelControl.id, 'currentLevel', level, this.platform.log);
+          await safeSetAttribute(this.endpoint, LevelControl.id, 'currentLevel', level, this.platform.log);
         } else {
-          safeUpdateAttribute(this.endpoint, LevelControl.id, 'currentLevel', level, this.platform.log);
+          await safeUpdateAttribute(this.endpoint, LevelControl.id, 'currentLevel', level, this.platform.log);
         }
       }
     }

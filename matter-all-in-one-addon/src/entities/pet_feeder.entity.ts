@@ -37,7 +37,7 @@ export class PetFeederEntity extends BaseEntity {
   override async updateState(newState: HassState, _isInitialSync = false): Promise<void> {
     if (!this.endpoint) return;
     const isOn = newState.state === 'on';
-    safeUpdateAttribute(this.endpoint, 'onOff' as any, 'onOff', isOn, this.platform.log);
+    await safeUpdateAttribute(this.endpoint, 'onOff' as any, 'onOff', isOn, this.platform.log);
     this.state = newState;
   }
 

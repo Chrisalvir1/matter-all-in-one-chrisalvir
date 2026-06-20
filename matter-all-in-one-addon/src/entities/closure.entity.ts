@@ -15,7 +15,7 @@ export class ClosureEntity extends BaseEntity {
     return clusters;
   }
 
-  public override updateState(state: HassState, isInitialSync = false): void {
+  public override async updateState(state: HassState, isInitialSync = false): Promise<void> {
     this.state = state;
     const position = state.attributes.current_position;
     if (position !== undefined && position !== null) {
@@ -23,9 +23,9 @@ export class ClosureEntity extends BaseEntity {
       // Matter: 0 (open) to 100 (closed)
       const liftPercentage = 100 - Math.round(position);
       if (isInitialSync) {
-        safeSetAttribute(this.endpoint, WindowCoveringId, 'currentPositionLiftPercentage', liftPercentage, this.platform.log);
+        await safeSetAttribute(this.endpoint, WindowCoveringId, 'currentPositionLiftPercentage', liftPercentage, this.platform.log);
       } else {
-        safeUpdateAttribute(this.endpoint, WindowCoveringId, 'currentPositionLiftPercentage', liftPercentage, this.platform.log);
+        await safeUpdateAttribute(this.endpoint, WindowCoveringId, 'currentPositionLiftPercentage', liftPercentage, this.platform.log);
       }
     }
   }

@@ -142,7 +142,7 @@ export class VacuumEntity extends BaseEntity {
       const commandCooldown = now - this.lastCommandTime < 15000;
 
       if (!commandCooldown || isInitialSync) {
-        syncFunc(
+        await syncFunc(
           endpoint as any,
           'rvcOperationalState' as any,
           'operationalState',
@@ -151,7 +151,7 @@ export class VacuumEntity extends BaseEntity {
         );
 
         const runMode = update.onOff ? RUN_MODE_ID_CLEANING : RUN_MODE_ID_IDLE;
-        syncFunc(
+        await syncFunc(
           endpoint as any,
           'rvcRunMode' as any,
           'currentMode',
@@ -161,7 +161,7 @@ export class VacuumEntity extends BaseEntity {
       }
 
       if (update.batteryLevel !== null) {
-        syncFunc(
+        await syncFunc(
           endpoint as any,
           'powerSource' as any,
           'batPercentRemaining',
@@ -176,7 +176,7 @@ export class VacuumEntity extends BaseEntity {
         const isCharging = state.state === 'docked' || 
                            (rawDps && (rawDps['5'] === 'charging' || rawDps['5'] === 'charge' || rawDps['3'] === 'charging'));
         
-        syncFunc(
+        await syncFunc(
           endpoint as any,
           'powerSource' as any,
           'batChargeState',

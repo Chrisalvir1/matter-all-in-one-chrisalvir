@@ -7,16 +7,16 @@ import { ClusterId } from 'matterbridge/matter/types';
 /**
  * Safely set an attribute value on a MatterbridgeEndpoint, updating it and catching errors.
  */
-export function safeSetAttribute(
+export async function safeSetAttribute(
   endpoint: MatterbridgeEndpoint,
   clusterId: ClusterId,
   attributeName: string,
   value: any,
   log?: any
-): boolean {
+): Promise<boolean> {
   try {
     if (endpoint.hasAttributeServer(clusterId, attributeName)) {
-      endpoint.setAttribute(clusterId, attributeName, value, log);
+      await endpoint.setAttribute(clusterId, attributeName, value, log);
       return true;
     }
   } catch (err) {
@@ -30,16 +30,16 @@ export function safeSetAttribute(
 /**
  * Safely update/notify of an attribute value on a MatterbridgeEndpoint.
  */
-export function safeUpdateAttribute(
+export async function safeUpdateAttribute(
   endpoint: MatterbridgeEndpoint,
   clusterId: ClusterId,
   attributeName: string,
   value: any,
   log?: any
-): boolean {
+): Promise<boolean> {
   try {
     if (endpoint.hasAttributeServer(clusterId, attributeName)) {
-      endpoint.updateAttribute(clusterId, attributeName, value, log);
+      await endpoint.updateAttribute(clusterId, attributeName, value, log);
       return true;
     }
   } catch (err) {

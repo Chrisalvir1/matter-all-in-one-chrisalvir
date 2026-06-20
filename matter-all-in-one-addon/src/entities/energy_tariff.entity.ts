@@ -11,7 +11,7 @@ export class EnergyTariffEntity extends BaseEntity {
     return clusters;
   }
 
-  public override updateState(state: HassState): void {
+  public override async updateState(state: HassState): Promise<void> {
     this.state = state;
     // Map electrical tariff values from HA to Matter
   }

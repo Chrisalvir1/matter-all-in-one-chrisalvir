@@ -124,7 +124,7 @@ export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
 
     this.ha.on('event', (_deviceId, entityId, _oldState, newState) => {
       if (newState) {
-        this.handleEntityStateChange(entityId, newState);
+        void this.handleEntityStateChange(entityId, newState);
       }
     });
   }
@@ -241,7 +241,7 @@ export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
 
     // Idempotency guard: if already registered, just update state
     if (this.entities.has(entityId)) {
-      this.entities.get(entityId)!.updateState(state);
+      await this.entities.get(entityId)!.updateState(state);
       return;
     }
 
@@ -416,13 +416,13 @@ export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
   /**
    * Real-time state synchronization from HA to Matter.
    */
-  private handleEntityStateChange(entityId: string, newState: HassState) {
+  private async handleEntityStateChange(entityId: string, newState: HassState) {
     const entity = this.entities.get(entityId);
     if (entity) {
       entity.state = newState;
       if (this.exportedDevices.has(entityId)) {
         this.log.debug(`Syncing state update for ${entityId} to Matter.`);
-        entity.updateState(newState);
+        await entity.updateState(newState);
       }
     }
   }

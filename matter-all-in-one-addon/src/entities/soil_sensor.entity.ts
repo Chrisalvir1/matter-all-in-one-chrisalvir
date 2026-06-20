@@ -14,7 +14,7 @@ export class SoilSensorEntity extends BaseEntity {
     return clusters;
   }
 
-  public override updateState(state: HassState, isInitialSync = false): void {
+  public override async updateState(state: HassState, isInitialSync = false): Promise<void> {
     this.state = state;
     const rawValue = parseFloat(state.state);
     if (isNaN(rawValue)) return;
@@ -25,17 +25,17 @@ export class SoilSensorEntity extends BaseEntity {
       // HA uses percentage 0..100, Matter uses hundredths of a percent 0..10000
       const mappedMoisture = Math.round(rawValue * 100);
       if (isInitialSync) {
-        safeSetAttribute(this.endpoint, RelativeHumidityMeasurementId, 'measuredValue', mappedMoisture, this.platform.log);
+        await safeSetAttribute(this.endpoint, RelativeHumidityMeasurementId, 'measuredValue', mappedMoisture, this.platform.log);
       } else {
-        safeUpdateAttribute(this.endpoint, RelativeHumidityMeasurementId, 'measuredValue', mappedMoisture, this.platform.log);
+        await safeUpdateAttribute(this.endpoint, RelativeHumidityMeasurementId, 'measuredValue', mappedMoisture, this.platform.log);
       }
     } else if (deviceClass === 'temperature') {
       // Matter uses hundredths of a degree Celsius
       const mappedTemp = Math.round(rawValue * 100);
       if (isInitialSync) {
-        safeSetAttribute(this.endpoint, TemperatureMeasurementId, 'measuredValue', mappedTemp, this.platform.log);
+        await safeSetAttribute(this.endpoint, TemperatureMeasurementId, 'measuredValue', mappedTemp, this.platform.log);
       } else {
-        safeUpdateAttribute(this.endpoint, TemperatureMeasurementId, 'measuredValue', mappedTemp, this.platform.log);
+        await safeUpdateAttribute(this.endpoint, TemperatureMeasurementId, 'measuredValue', mappedTemp, this.platform.log);
       }
     }
   }

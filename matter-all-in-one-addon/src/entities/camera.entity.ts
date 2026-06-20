@@ -13,7 +13,7 @@ export class CameraEntity extends BaseEntity {
     return clusters;
   }
 
-  public override updateState(state: HassState): void {
+  public override async updateState(state: HassState): Promise<void> {
     this.state = state;
     // Implement state mapping logic from HA camera to Matter Camera clusters
   }
