@@ -20,8 +20,18 @@ if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
     TOKEN="$SUPERVISOR_TOKEN"
 fi
 
-# Ensure Matterbridge config directory exists
-mkdir -p /root/.matterbridge
+# Ensure Matterbridge persistent config directory exists in HA data volume
+mkdir -p /data/.matterbridge
+
+# If /root/.matterbridge exists as a directory (and is not already a symlink), remove it
+if [ -d /root/.matterbridge ] && [ ! -L /root/.matterbridge ]; then
+    echo "[Info] Removing non-persistent /root/.matterbridge directory"
+    rm -rf /root/.matterbridge
+fi
+
+# Create symlink from /root/.matterbridge to /data/.matterbridge
+echo "[Info] Linking /root/.matterbridge to persistent volume /data/.matterbridge"
+ln -sfn /data/.matterbridge /root/.matterbridge
 
 # Write the plugin config file
 CONFIG_PATH="/root/.matterbridge/matter-all-in-one-chrisalvir.config.json"
