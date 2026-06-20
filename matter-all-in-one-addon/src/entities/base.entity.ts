@@ -33,7 +33,7 @@ export class BaseEntity {
     const [domain] = this.entityId.split('.');
     const clusters: ClusterId[] = [];
 
-    if (domain === 'light' || domain === 'switch') {
+    if (domain === 'light' || domain === 'switch' || domain === 'fan') {
       clusters.push(OnOff.id);
       if (this.state.attributes.brightness !== undefined) {
         clusters.push(LevelControl.id);
@@ -129,7 +129,7 @@ export class BaseEntity {
   protected registerCommandHandlers(_endpoint?: MatterbridgeEndpoint) {
     const [domain] = this.entityId.split('.');
 
-    if (domain === 'light' || domain === 'switch') {
+    if (domain === 'light' || domain === 'switch' || domain === 'fan') {
       // On/Off handlers
       this.endpoint.addCommandHandler('on', async () => {
         this.platform.log.debug(`Matter On commanded for ${this.entityId}`);
@@ -224,7 +224,7 @@ export class BaseEntity {
     this.state = newState;
     const [domain] = this.entityId.split('.');
 
-    if (domain === 'light' || domain === 'switch') {
+    if (domain === 'light' || domain === 'switch' || domain === 'fan') {
       const isOn = newState.state === 'on';
 
       if (isInitialSync) {

@@ -73,17 +73,19 @@ const HK_TYPES = {
     { id: 'PetFeeder',               name: '🐾 Alimentador de Mascotas',         desc: 'Expone el botón de dispensar comida como un accesorio nombrado. Al activarlo desde Apple Home, envía el comando de alimentación a tu Tuya/Smart Life.' },
     { id: 'onOffPlugInUnit',         name: '🔌 Botón como Enchufe',              desc: 'Fallback: expone el botón como un enchufe on/off genérico.' },
   ],
+  humidifier: [
+    { id: 'fan',                     name: '🌀 Ventilador (Mapeo de Humedad)',  desc: 'Exponer el humidificador como un ventilador Matter. El control de velocidad del ventilador ajustará el porcentaje de humedad deseado (target humidity) del humidificador.' },
+    { id: 'onOffPlugInUnit',         name: '🔌 Enchufe / Interruptor (On/Off)',  desc: 'Exponer como interruptor simple de encendido y apagado en Apple Home.' },
+  ],
 };
 
-const DOMAIN_ICONS = {
   light: '💡', switch: '🔌', cover: '🪟', lock: '🔒', climate: '❄️',
   sensor: '🌡️', binary_sensor: '🚨', camera: '📹', fan: '🌀',
-  vacuum: '🤖', media_player: '📺', button: '🐾',
+  vacuum: '🤖', media_player: '📺', button: '🐾', humidifier: '💧',
 };
 
-const DOMAIN_PRIORITY = [
   'light','switch','cover','lock','climate','camera',
-  'fan','vacuum','media_player','button','binary_sensor','sensor',
+  'fan','vacuum','media_player','button','binary_sensor','sensor','humidifier',
 ];
 
 function domainIcon(domain) {

@@ -20,6 +20,7 @@ import {
   flowSensor,
   lightSensor,
   roboticVacuumCleaner,
+  fan,
 } from 'matterbridge';
 
 export const MatterDeviceTypes = {
@@ -71,6 +72,8 @@ export const MatterDeviceTypes = {
   petFeeder: onOffPlugInUnit,
 
   roboticVacuumCleaner,
+
+  fan,
 };
 
 export interface DeviceRegistryEntry {
@@ -87,6 +90,8 @@ export const DEVICE_REGISTRY: Record<string, DeviceRegistryEntry> = {
   switch: { matterType: MatterDeviceTypes.onOffPlugInUnit, homekitSupported: homekitSupported.onOffPlugInUnit },
   vacuum: { matterType: MatterDeviceTypes.roboticVacuumCleaner, homekitSupported: homekitSupported.roboticVacuumCleaner },
   button: { matterType: MatterDeviceTypes.onOffPlugInUnit, homekitSupported: homekitSupported.onOffPlugInUnit },
+  fan: { matterType: MatterDeviceTypes.fan, homekitSupported: homekitSupported.fan },
+  humidifier: { matterType: MatterDeviceTypes.onOffPlugInUnit, homekitSupported: homekitSupported.humidifier },
   // Domain-level fallback mapping; specific device_classes logic may still need to be handled if required
   binary_sensor: { matterType: MatterDeviceTypes.contactSensor, homekitSupported: homekitSupported.contactSensor },
   sensor: { matterType: MatterDeviceTypes.temperatureSensor, homekitSupported: homekitSupported.temperatureSensor },

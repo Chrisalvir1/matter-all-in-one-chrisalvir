@@ -24,6 +24,7 @@ import { SoilSensorEntity } from './entities/soil_sensor.entity.js';
 import { EnergyTariffEntity } from './entities/energy_tariff.entity.js';
 import { VacuumEntity } from './entities/vacuum.entity.js';
 import { PetFeederEntity } from './entities/pet_feeder.entity.js';
+import { HumidifierEntity } from './entities/humidifier.entity.js';
 
 
 export interface HomeAssistantPlatformConfig extends PlatformConfig {
@@ -253,7 +254,7 @@ export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
     const [domain] = entityId.split('.');
 
     // Filtering rules: Whitelist
-    const allowedDomains = ['light', 'switch', 'cover', 'lock', 'climate', 'fan', 'sensor', 'binary_sensor', 'vacuum', 'alarm_control_panel', 'water_heater', 'button', 'media_player', 'camera'];
+    const allowedDomains = ['light', 'switch', 'cover', 'lock', 'climate', 'fan', 'sensor', 'binary_sensor', 'vacuum', 'alarm_control_panel', 'water_heater', 'button', 'media_player', 'camera', 'humidifier'];
     if (!allowedDomains.includes(domain)) return;
 
     // Strict device_class whitelist for sensors to avoid exporting system/energy sensors
@@ -293,6 +294,8 @@ export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
       entityInstance = new EnergyTariffEntity(this, state, deviceType);
     } else if (domain === 'vacuum') {
       entityInstance = new VacuumEntity(this, state, deviceType);
+    } else if (domain === 'humidifier') {
+      entityInstance = new HumidifierEntity(this, state, deviceType);
     } else if (override === 'PetFeeder') {
       entityInstance = new PetFeederEntity(this, state, deviceType);
     } else {
