@@ -20,6 +20,7 @@ let allEntities      = [];
 let activeEntity     = null;
 let pendingConfirm   = null;
 let logsInterval     = null;
+let entityPollingInterval = null;
 
 // ── HomeKit 2026 Type Map ──────────────────────────────────────
 const HK_TYPES = {
@@ -567,6 +568,7 @@ function selectEntity(entity) {
     dmRightPlaceholder.textContent = 'Selecciona una entidad exportada para ver su código de emparejamiento.';
     dmRightContent.style.display = 'none';
     stopLogsPolling();
+    stopEntityPolling();
     return;
   }
 
@@ -578,21 +580,14 @@ function selectEntity(entity) {
   const manualCodeEl = document.getElementById('modal-manual-code');
   const qrLoading = document.getElementById('modal-qr-loading');
 
-  const fabricBadge = document.getElementById('modal-fabric-badge');
   if (entity.commissioned) {
     commissionedStatusCard.style.display = 'block';
     commissionedFabricName.textContent = `Vinculado a ${esc(entity.fabric || 'Casa')}`;
     qrPairingCard.style.display = 'none';
-    if (entity.id === activeMainEntity.id) {
-      fabricBadge.textContent = entity.fabric || 'Casa';
-      fabricBadge.style.display = 'block';
-    }
+    stopEntityPolling();
   } else {
     commissionedStatusCard.style.display = 'none';
     qrPairingCard.style.display = 'block';
-    if (entity.id === activeMainEntity.id) {
-      fabricBadge.style.display = 'none';
-    }
 
     if (entity.pairingCode) {
       qrLoading.style.display = 'none';
@@ -602,10 +597,12 @@ function selectEntity(entity) {
         modalQrRendered = true;
       }
       manualCodeEl.textContent = entity.manualPairingCode || '---- --- ----';
+      stopEntityPolling();
     } else {
       qrCodeDiv.style.display = 'none';
       qrLoading.style.display = 'flex';
       manualCodeEl.textContent = 'Generando...';
+      startEntityPolling(entity.entityId);
     }
   }
 
@@ -619,6 +616,7 @@ function closeDeviceModal() {
   document.body.style.overflow = '';
   activeEntity = null;
   stopLogsPolling();
+  stopEntityPolling();
 }
 
 $('device-modal-close') && $('device-modal-close').addEventListener('click', closeDeviceModal);
@@ -723,12 +721,18 @@ decommissionBtn && decommissionBtn.addEventListener('click', async () => {
       method: 'POST'
     });
     if (res.ok) {
-      activeEntity.commissioned = false;
-      activeEntity.fabric = null;
-      activeEntity.pairingCode = null;
-      // Refresh status/modal
-      openEntityModal(activeEntity);
-      fetchDevices();
+      // Re-fetch the devices list
+      await fetchDevices();
+      
+      // Find the parent device and entity in the updated list to refresh the modal view
+      const parentDevice = groupEntitiesByDevice(allEntities).find(d => d.entities.some(e => e.entityId === activeEntity.entityId));
+      if (parentDevice) {
+        openDeviceModal(parentDevice);
+        const updatedEntity = parentDevice.entities.find(e => e.entityId === activeEntity.entityId);
+        if (updatedEntity) {
+          selectEntity(updatedEntity);
+        }
+      }
     } else {
       alert('Error al desconectar el dispositivo');
     }
@@ -779,6 +783,59 @@ function stopLogsPolling() {
   if (logsInterval) {
     clearInterval(logsInterval);
     logsInterval = null;
+  }
+}
+
+// ── Entity Pairing Code Polling Functions ──────────────────────
+function startEntityPolling(entityId) {
+  if (entityPollingInterval) clearInterval(entityPollingInterval);
+  entityPollingInterval = setInterval(async () => {
+    try {
+      const res = await fetch(`${API}/devices`);
+      if (!res.ok) return;
+      const devices = await res.json();
+      const updated = devices.find(e => e.entityId === entityId);
+      if (updated) {
+        // Update the entity in allEntities
+        const index = allEntities.findIndex(e => e.entityId === entityId);
+        if (index !== -1) {
+          allEntities[index] = updated;
+        }
+        
+        // If it's still the active entity, update the UI
+        if (activeEntity && activeEntity.entityId === entityId) {
+          if (updated.pairingCode !== activeEntity.pairingCode || updated.commissioned !== activeEntity.commissioned) {
+            activeEntity = updated;
+            
+            // Update the row in the modal list if open
+            const row = dmEntitiesList.querySelector(`.entity-row[data-entity-id="${CSS.escape(entityId)}"]`);
+            if (row) {
+              row.className = 'entity-row' + (updated.exported ? ' exported' : ' not-exported');
+              const statusPill = row.querySelector('.er-state-pill');
+              if (statusPill) {
+                statusPill.className = `er-state-pill ${stateClass(updated.state)}`;
+                statusPill.textContent = esc(updated.state || '—');
+              }
+            }
+            selectEntity(updated);
+          }
+        }
+      }
+      
+      // Stop polling once we have a pairing code or it is commissioned or no longer exported
+      if (updated && (updated.pairingCode || updated.commissioned || !updated.exported)) {
+        stopEntityPolling();
+      }
+    } catch (err) {
+      console.error('Error polling entity pairing code:', err);
+    }
+  }, 2000);
+}
+
+function stopEntityPolling() {
+  if (entityPollingInterval) {
+    clearInterval(entityPollingInterval);
+    entityPollingInterval = null;
   }
 }
 

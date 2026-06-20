@@ -382,6 +382,18 @@ export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
       await this.saveExportedDevices();
       const endpoint = this.matterbridgeDevices.get(entityId)!;
       await this.unregisterDevice(endpoint);
+      
+      // Stop the server node if it exists
+      const serverNode = (endpoint as any).serverNode;
+      if (serverNode) {
+        try {
+          this.log.notice(`Closing server node for unregistered device ${entityId}...`);
+          await serverNode.close();
+        } catch (closeErr) {
+          this.log.warn(`Failed to close server node for ${entityId}: ${closeErr}`);
+        }
+      }
+
       this.log.notice(`Manually stopped Accessory Server for ${entityId}`);
       return { success: true };
     } catch (err) {
@@ -690,7 +702,6 @@ export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
               this.log.notice(`Decommissioning server node for ${entityId}...`);
               await serverNode.close();
               await serverNode.erase();
-              await serverNode.start();
               
               // Also forcefully unregister it so the user isn't stuck
               await this.manualUnregister(entityId);
