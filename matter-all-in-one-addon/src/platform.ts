@@ -360,16 +360,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
     try {
       const endpoint = await entity.createEndpoint();
+      // registerDevice handles full lifecycle including starting the server node
       await this.registerDevice(endpoint);
       this.matterbridgeDevices.set(entityId, endpoint);
-
-      // Start the server node if registering dynamically
-      const serverNode = (endpoint as any).serverNode;
-      if (serverNode && this.isStarted) {
-        this.log.notice(`Starting standalone server node for entity ${entityId}`);
-        await (this.matterbridge as any).startServerNode(serverNode);
-      }
-
       await entity.syncInitialState();
       this.log.notice(`Exported bridged endpoint ${idn}${entityId}${rs}`);
     } catch (err) {
@@ -409,11 +402,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       this.exportedDevices.delete(entityId);
       const endpoint = this.matterbridgeDevices.get(entityId);
       if (endpoint) {
-        const serverNode = (endpoint as any).serverNode;
-        if (serverNode) {
-          this.log.notice(`Stopping standalone server node for entity ${entityId}`);
-          await (this.matterbridge as any).stopServerNode(serverNode);
-        }
+        // unregisterDevice handles full lifecycle including stopping the server node
         await this.unregisterDevice(endpoint);
         this.matterbridgeDevices.delete(entityId);
       }
@@ -634,9 +623,19 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             const [domain] = e.entityId.split('.');
             const endpoint = this.matterbridgeDevices.get(e.entityId) as any;
 
+            // Extract fabric (home) label if device is commissioned
+            const fabrics: Record<number, { label: string }> | undefined =
+              endpoint?.serverNode?.state?.commissioning?.fabrics;
+            const homeName = fabrics
+              ? Object.values(fabrics)
+                  .map((f: any) => f.label)
+                  .filter(Boolean)
+                  .join(', ') || null
+              : null;
+
             return {
-              entityId: e.entityId, // Frontend expects entityId
-              domain: domain,       // Frontend expects domain
+              entityId: e.entityId,
+              domain: domain,
               state: e.state.state,
               attributes: e.state.attributes,
               deviceTypeLabel: (e.constructor as any).matterTypeLabel || 'Generic',
@@ -652,7 +651,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               pairingCode: endpoint?.serverNode?.state?.commissioning?.pairingCodes?.qrPairingCode ?? null,
               manualPairingCode: endpoint?.serverNode?.state?.commissioning?.pairingCodes?.manualPairingCode ?? null,
               commissioned: endpoint?.serverNode?.state?.commissioning?.commissioned ?? false,
-              fabric: null,
+              homeName,
             };
           });
           res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });

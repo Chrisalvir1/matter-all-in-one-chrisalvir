@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.3] - 2026-06-21
+
+### Fixed
+- **Error crítico al desactivar dispositivo:** Eliminadas las llamadas a `this.matterbridge.stopServerNode()` y `this.matterbridge.startServerNode()` que no existen en la API real de `MatterbridgePlatform` y causaban `TypeError: this.matterbridge.stopServerNode is not a function` al intentar desactivar un accesorio. El ciclo de vida completo del nodo Matter (arranque y parada) es manejado internamente por los métodos heredados `registerDevice()` y `unregisterDevice()`.
+- **Nombre de la casa conectada visible:** El panel ahora muestra junto al nombre del dispositivo activo la casa o controlador Matter al que está emparejado (por ejemplo `🏠 Casa de Chris`) extraído del `label` del fabric de commissioning.
+- **Botón de código QR siempre visible:** El botón "Mostrar Código de Emparejamiento" ahora aparece para todos los accesorios exportados (no solo cuando hay `pairingCode` precargado). Si el código aún se está generando, el panel hace polling automático cada 2 segundos hasta obtenerlo.
+- **Estado de emparejamiento mejorado:** La descripción del dispositivo y el estado inferior distinguen claramente entre "pendiente de emparejar" y "ya emparejado · [nombre de la casa]".
+- **Conteo de dispositivos corregido:** El contador superior ahora muestra la cantidad correcta de dispositivos físicos (agrupados por `device_id`) y cuántos están activos en Matter.
+
 ## [1.2.2] - 2026-06-21
 
 ### Fixed

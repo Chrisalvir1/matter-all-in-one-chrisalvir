@@ -64,11 +64,22 @@ async function fetchStatus() {
   } finally { state.statusBusy = false; }
 }
 
+// Group entities by their HA device_id (physical device), not by entity
 function groupEntities(entities) {
   const groups = new Map();
   for (const entity of entities) {
+    // Use device_id if available, otherwise group by domain (virtual group)
     const id = entity.device_id || `virtual:${entity.domain}`;
-    if (!groups.has(id)) groups.set(id, { id, name: entity.device_name || entity.area_name || entity.domain, area: entity.area_name || '', manufacturer: entity.manufacturer || '', model: entity.model || '', entities: [] });
+    if (!groups.has(id)) {
+      groups.set(id, {
+        id,
+        name: entity.device_name || entity.area_name || entity.domain,
+        area: entity.area_name || '',
+        manufacturer: entity.manufacturer || '',
+        model: entity.model || '',
+        entities: [],
+      });
+    }
     groups.get(id).entities.push(entity);
   }
   return [...groups.values()].sort((a, b) => a.name.localeCompare(b.name));
@@ -76,12 +87,19 @@ function groupEntities(entities) {
 
 function renderDevices() {
   const query = els.deviceSearch.value.trim().toLowerCase();
-  const filtered = state.entities.filter((entity) => [displayName(entity), entity.entityId, entity.device_name, entity.area_name, entity.domain].some((value) => String(value || '').toLowerCase().includes(query)));
+  const filtered = state.entities.filter((entity) =>
+    [displayName(entity), entity.entityId, entity.device_name, entity.area_name, entity.domain].some((value) =>
+      String(value || '').toLowerCase().includes(query)
+    )
+  );
   const devices = groupEntities(filtered);
-  const exported = state.entities.filter((entity) => entity.exported).length;
-  els.deviceCount.textContent = `${devices.length} dispositivo${devices.length === 1 ? '' : 's'} · ${exported} entidad${exported === 1 ? '' : 'es'} publicada${exported === 1 ? '' : 's'}`;
+  const exportedCount = state.entities.filter((entity) => entity.exported).length;
+  els.deviceCount.textContent = `${devices.length} dispositivo${devices.length === 1 ? '' : 's'} · ${exportedCount} activo${exportedCount === 1 ? '' : 's'} en Matter`;
   els.deviceList.setAttribute('aria-busy', 'false');
-  if (!devices.length) { els.deviceList.innerHTML = '<div class="empty-state"><p>No hay dispositivos que coincidan con la búsqueda.</p></div>'; return; }
+  if (!devices.length) {
+    els.deviceList.innerHTML = '<div class="empty-state"><p>No hay dispositivos que coincidan con la búsqueda.</p></div>';
+    return;
+  }
   els.deviceList.replaceChildren(...devices.map(buildDeviceCard));
 }
 
@@ -99,9 +117,14 @@ async function fetchDevices() {
   if (state.devicesBusy) return;
   state.devicesBusy = true;
   els.deviceList.setAttribute('aria-busy', 'true');
-  try { state.entities = await request('/devices'); renderDevices(); }
-  catch { els.deviceList.setAttribute('aria-busy', 'false'); els.deviceList.innerHTML = '<div class="empty-state"><p>No se pudieron cargar las entidades. Verifica la conexión con Home Assistant.</p><button class="button button-secondary" type="button" id="retry-load">Reintentar</button></div>'; $('retry-load').addEventListener('click', fetchDevices); }
-  finally { state.devicesBusy = false; }
+  try {
+    state.entities = await request('/devices');
+    renderDevices();
+  } catch {
+    els.deviceList.setAttribute('aria-busy', 'false');
+    els.deviceList.innerHTML = '<div class="empty-state"><p>No se pudieron cargar las entidades. Verifica la conexión con Home Assistant.</p><button class="button button-secondary" type="button" id="retry-load">Reintentar</button></div>';
+    $('retry-load').addEventListener('click', fetchDevices);
+  } finally { state.devicesBusy = false; }
 }
 
 function openDevice(device) {
@@ -133,16 +156,91 @@ function buildEntityRow(entity) {
   return element;
 }
 
+function renderQrSection(entity) {
+  // Reset QR area
+  els.deviceQrContainer.style.display = 'none';
+  els.deviceQrCode.innerHTML = '';
+  els.deviceManualCode.textContent = '';
+  els.deviceQrButton.style.display = 'none';
+  els.deviceQrButton.textContent = 'Mostrar Código de Emparejamiento';
+
+  if (!entity || entity.auxiliary || !entity.exported) return;
+
+  // Always show the QR button for exported (active) entities
+  els.deviceQrButton.style.display = 'block';
+
+  if (entity.commissioned && entity.homeName) {
+    els.deviceQrButton.textContent = `Código Matter · Conectado: ${entity.homeName}`;
+  } else if (entity.commissioned) {
+    els.deviceQrButton.textContent = 'Código Matter · Ya emparejado';
+  } else if (entity.pairingCode) {
+    els.deviceQrButton.textContent = 'Mostrar Código de Emparejamiento';
+  } else {
+    // Exported but QR not ready yet (serverNode may still be starting)
+    els.deviceQrButton.textContent = '⏳ Generando código…';
+    els.deviceQrButton.disabled = true;
+    // Poll until pairingCode is available
+    pollForPairingCode(entity);
+  }
+}
+
+function pollForPairingCode(entity) {
+  let attempts = 0;
+  const interval = setInterval(async () => {
+    attempts++;
+    if (attempts > 20) { clearInterval(interval); els.deviceQrButton.textContent = 'Código no disponible'; return; }
+    try {
+      const fresh = await request('/devices');
+      const found = fresh.find((e) => e.entityId === entity.entityId);
+      if (found && found.pairingCode) {
+        clearInterval(interval);
+        // Update in state
+        const idx = state.entities.findIndex((e) => e.entityId === entity.entityId);
+        if (idx !== -1) state.entities[idx] = found;
+        // Only re-render if this entity is still selected
+        if (state.activeEntity && state.activeEntity.entityId === entity.entityId) {
+          state.activeEntity = found;
+          els.deviceQrButton.disabled = false;
+          els.deviceQrButton.textContent = 'Mostrar Código de Emparejamiento';
+        }
+      }
+    } catch { /* ignore */ }
+  }, 2000);
+}
+
 function selectEntity(entity) {
   state.activeEntity = entity;
   els.entityList.querySelectorAll('.entity-row').forEach((row) => row.classList.toggle('selected', row.dataset.entityId === entity?.entityId));
-  if (!entity) { els.selectionTitle.textContent = 'No hay entidades'; els.selectionDescription.textContent = ''; els.selectionMeta.innerHTML = ''; els.selectionStatus.textContent = ''; return; }
-  els.selectionTitle.textContent = displayName(entity);
+  if (!entity) {
+    els.selectionTitle.textContent = 'No hay entidades';
+    els.selectionDescription.textContent = '';
+    els.selectionMeta.innerHTML = '';
+    els.selectionStatus.textContent = '';
+    renderQrSection(null);
+    return;
+  }
+
+  // Title: device name + home name if commissioned
+  let titleText = displayName(entity);
+  els.selectionTitle.textContent = titleText;
+
+  // Home name badge next to title
+  let homeLabel = '';
+  if (entity.exported && entity.commissioned && entity.homeName) {
+    homeLabel = `<span class="home-badge" title="Casa conectada">🏠 ${escapeHtml(entity.homeName)}</span>`;
+  } else if (entity.exported && entity.commissioned) {
+    homeLabel = `<span class="home-badge commissioned" title="Emparejado">✓ Emparejado</span>`;
+  }
+  els.selectionTitle.innerHTML = `${escapeHtml(titleText)}${homeLabel ? ' ' + homeLabel : ''}`;
+
   els.selectionDescription.textContent = entity.auxiliary
     ? `Acción auxiliar de ${entity.primaryEntityId || 'su dispositivo principal'}. No se expone como accesorio Matter independiente.`
     : entity.exported
-      ? 'Esta entidad está publicada como un accesorio Matter independiente. Usa el código QR único para agregarla a tu casa inteligente (Apple Home, Google Home, etc.).'
-      : 'Actívala para publicar la entidad como accesorio Matter.';
+      ? (entity.commissioned
+          ? `Accesorio Matter activo${entity.homeName ? ` · Casa: ${entity.homeName}` : ''}. Usa el botón para ver el código QR si necesitas añadirlo a otra casa.`
+          : 'Accesorio Matter listo para emparejar. Usa el código QR único para agregarlo a Apple Home, Google Home u otro controlador.')
+      : 'Actívala para publicar la entidad como accesorio Matter independiente.';
+
   const profiles = Array.isArray(entity.profiles) ? entity.profiles : [];
   els.profileField.hidden = entity.auxiliary || profiles.length === 0;
   els.profileSelect.replaceChildren(...profiles.map((profile) => {
@@ -155,30 +253,19 @@ function selectEntity(entity) {
   const currentProfile = profiles.find((profile) => profile.id === (entity.profileId || entity.matterType)) || profiles[0];
   els.profileNote.textContent = currentProfile ? `${currentProfile.description} ${profileCompatibilityText(currentProfile.appleHome)}` : '';
   els.profileSelect.disabled = entity.auxiliary;
+
   els.selectionMeta.innerHTML = `<div><dt>Entidad</dt><dd>${escapeHtml(entity.entityId)}</dd></div><div><dt>Tipo Matter</dt><dd>${escapeHtml(entity.matterType || 'Predeterminado')}</dd></div><div><dt>Estado HA</dt><dd>${escapeHtml(stateLabel(entity.state))}</dd></div>`;
-  els.selectionStatus.className = `selection-status${entity.exported ? ' active' : ''}`;
+
+  els.selectionStatus.className = `selection-status${entity.exported ? ' active' : ''}${entity.commissioned ? ' commissioned' : ''}`;
   els.selectionStatus.textContent = entity.auxiliary
     ? 'Acción auxiliar: no se crea un mosaico ni un accesorio Matter separado.'
-    : entity.exported ? '✓ Publicada como accesorio Matter' : 'Aún no se publica en Matter';
+    : entity.exported
+      ? (entity.commissioned
+          ? `✓ Emparejado${entity.homeName ? ' · ' + entity.homeName : ''}`
+          : '✓ Publicada como accesorio Matter — pendiente de emparejar')
+      : 'Aún no se publica en Matter';
 
-  els.deviceQrContainer.style.display = 'none';
-  els.deviceQrCode.innerHTML = '';
-  els.deviceManualCode.textContent = '';
-  els.deviceQrButton.style.display = 'none';
-  els.deviceQrButton.textContent = 'Mostrar Código de Emparejamiento';
-
-  if (entity && !entity.auxiliary && entity.exported) {
-    if (entity.commissioned) {
-      els.selectionStatus.textContent = '✓ Conectado a un Controlador Matter (HomeKit/Google)';
-      els.selectionStatus.classList.add('commissioned');
-    } else {
-      els.selectionStatus.classList.remove('commissioned');
-    }
-
-    if (entity.pairingCode) {
-      els.deviceQrButton.style.display = 'block';
-    }
-  }
+  renderQrSection(entity);
 }
 
 function profileCompatibilityText(compatibility) {
@@ -209,7 +296,7 @@ async function toggleEntity(entity, checkbox) {
     entity.exported = next;
     showToast(next ? `${displayName(entity)} se publicó en Matter.` : `${displayName(entity)} se retiró de Matter.`);
     await fetchDevices();
-    const device = groupEntities(state.entities).find((item) => item.id === state.activeDevice.id);
+    const device = groupEntities(state.entities).find((item) => item.id === state.activeDevice?.id);
     if (device) openDevice(device); else setModalOpen(els.deviceModal, false);
   } catch (error) { checkbox.checked = !next; showToast(error.message || 'No se pudo actualizar la entidad.', true); }
   finally { checkbox.disabled = false; }
@@ -217,33 +304,59 @@ async function toggleEntity(entity, checkbox) {
 
 function openConfirm(title, description, action) { els.confirmTitle.textContent = title; els.confirmDescription.textContent = description; state.confirmAction = action; setModalOpen(els.confirmModal, true); }
 
+function showQrCode(entity) {
+  if (!entity || !entity.pairingCode) return;
+  els.deviceQrCode.innerHTML = '';
+  if (typeof QRCode !== 'undefined') {
+    new QRCode(els.deviceQrCode, {
+      text: entity.pairingCode,
+      width: 180,
+      height: 180,
+      colorDark: '#0b1020',
+      colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.M,
+    });
+  } else {
+    els.deviceQrCode.textContent = 'Librería QR no cargada.';
+  }
+  els.deviceManualCode.textContent = entity.manualPairingCode || entity.pairingCode;
+  els.deviceQrContainer.style.display = 'block';
+}
+
 els.deviceSearch.addEventListener('input', renderDevices);
 els.profileSelect.addEventListener('change', () => { if (state.activeEntity) void updateProfile(state.activeEntity, els.profileSelect.value); });
+
 els.deviceQrButton.addEventListener('click', () => {
-  if (els.deviceQrContainer.style.display === 'none') {
+  if (els.deviceQrContainer.style.display !== 'none') {
+    // Toggle off
+    els.deviceQrContainer.style.display = 'none';
+    const entity = state.activeEntity;
+    if (entity && entity.exported) {
+      if (entity.commissioned && entity.homeName) {
+        els.deviceQrButton.textContent = `Código Matter · Conectado: ${entity.homeName}`;
+      } else if (entity.commissioned) {
+        els.deviceQrButton.textContent = 'Código Matter · Ya emparejado';
+      } else {
+        els.deviceQrButton.textContent = 'Mostrar Código de Emparejamiento';
+      }
+    }
+    return;
+  }
+  // Toggle on: show QR
+  const entity = state.activeEntity;
+  if (!entity) return;
+
+  if (entity.pairingCode) {
+    showQrCode(entity);
+    els.deviceQrButton.textContent = 'Ocultar Código';
+  } else {
+    // No pairing code yet, show message and poll
+    els.deviceQrCode.innerHTML = '<p style="color:#888;font-size:0.85rem;">El código QR aún se está generando. Espera unos segundos…</p>';
     els.deviceQrContainer.style.display = 'block';
     els.deviceQrButton.textContent = 'Ocultar Código';
-    els.deviceQrCode.innerHTML = '';
-    if (state.activeEntity && state.activeEntity.pairingCode) {
-      if (typeof QRCode !== 'undefined') {
-        new QRCode(els.deviceQrCode, {
-          text: state.activeEntity.pairingCode,
-          width: 180,
-          height: 180,
-          colorDark : "#0b1020",
-          colorLight : "#ffffff",
-          correctLevel : QRCode.CorrectLevel.M
-        });
-      } else {
-        els.deviceQrCode.textContent = 'Librería QR no cargada.';
-      }
-      els.deviceManualCode.textContent = state.activeEntity.manualPairingCode || state.activeEntity.pairingCode;
-    }
-  } else {
-    els.deviceQrContainer.style.display = 'none';
-    els.deviceQrButton.textContent = 'Mostrar Código de Emparejamiento';
   }
 });
+
 els.refreshButton.addEventListener('click', async () => { await Promise.all([fetchStatus(), fetchDevices()]); showToast('Lista actualizada.'); });
 els.deviceModalClose.addEventListener('click', () => setModalOpen(els.deviceModal, false));
 els.settingsButton.addEventListener('click', () => setModalOpen(els.settingsModal, true));
