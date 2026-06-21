@@ -1,72 +1,60 @@
 # Estado de refactorización — matter-all-in-one-chrisalvir
 
-> Documento vivo. Última actualización: 2026-06-21 — versión 1.1.67.
+> Documento vivo. Última actualización: 2026-06-21 — versión 1.2.3.
 
-## Objetivo de arquitectura
+## Objetivo de arquitectura actual (v1.2.0+)
 
-Operar un único nodo Matter en modo `bridge` y publicar las entidades de Home
-Assistant seleccionadas como endpoints bridged. Home Assistant es la fuente de
-estado; el bridge no se conecta directamente a las IP de los dispositivos
-físicos.
+**Modo de Accesorios Independientes (Plan B)**:
+El add-on opera publicando cada entidad exportada de Home Assistant como un nodo servidor Matter independiente (`mode: 'server'` en `MatterbridgeEndpoint`). 
+- **NO se utiliza el modo Bridge global** para las entidades exportadas.
+- Cada dispositivo exportado se anuncia de forma independiente en la red local con su propio puerto de red mDNS y su propia identidad de comisión.
+- Esto permite que cada accesorio (por ejemplo, una Aspiradora o una Luz) tenga su propio código QR y código PIN de emparejamiento único en el panel de control.
 
-## Cambios aplicados
+---
 
-| Área | Estado | Implementación |
+## Cambios aplicados y estado actual
+
+| Área | Estado | Implementación / Detalles en v1.2.3 |
 | --- | --- | --- |
-| Ciclo de vida Matter | Hecho | Se eliminó `mode: 'server'` en endpoints genéricos y RVC. Ya no hay un servidor Matter por entidad. |
-| Modo Matterbridge | Hecho | `run.sh` migra `bridgeMode: dynamic` a `bridge` y arranca con `--bridge`. |
-| Exportación bajo demanda | Hecho | Los endpoints se construyen solamente al activar una entidad y se eliminan al desactivarla. |
-| Eventos HA | Hecho | Solo se suscribe a `state_changed`; se coalescen cambios por entidad antes de actualizar Matter. |
-| Cliente WebSocket HA | Hecho | Un dispatcher central de solicitudes, limpieza de solicitudes pendientes y reconexión exponencial sin límite. |
-| Interfaz | Hecho | Corregido el error de sintaxis que impedía ejecutar `script.js`; se eliminó el QR ficticio por entidad. |
-| Dependencias oficiales | Hecho | Matterbridge fijado en `3.9.1`; retirada dependencia directa duplicada de `@matter/nodejs`. |
-| Código privado de Matterbridge | Hecho | Se eliminó el acceso por rutas internas y `createRequire` al singleton de Matterbridge. |
-| Panel gráfico | Hecho | Reemplazado por un panel responsivo de selección de entidades, búsqueda, estado del bridge y acciones confirmadas de mantenimiento. |
-| Dispositivos compuestos | Hecho | Los `button.*` auxiliares de un dispositivo HA con entidad principal no se publican como accesorios Matter independientes. |
-| Perfil Matter | Hecho | El panel expone solo perfiles Matterbridge oficiales y muestra el alcance real de compatibilidad actual con Apple Home. |
-| QR / código manual | Hecho | La interfaz dirige al frontend oficial de Matterbridge; el bridge único es el propietario del QR y PIN reales. |
-| Identidad RVC | Hecho | Identificadores estables derivados de `entity_id`; se retiraron sufijos de versión que generaban accesorios nuevos. |
-| Publicación GitHub | Parcial | `main` y el tag anotado `v1.1.67` están publicados; falta crear la GitHub Release por ausencia de sesión/API autenticada. |
+| **Ciclo de Vida Matter** | Hecho | Cada accesorio es un `ServerNode` independiente. Se registran/desregistran mediante `registerDevice()` y `unregisterDevice()`. |
+| **Llamadas de control API** | Hecho | **Se eliminaron por completo las llamadas a `startServerNode()` y `stopServerNode()`** que no existen en `MatterbridgePlatform` y producían `TypeError` al deshabilitar dispositivos. |
+| **Extracción de Códigos QR** | Hecho | Se extraen directamente desde `endpoint?.serverNode?.state?.commissioning?.pairingCodes?.qrPairingCode` (y `manualPairingCode`). |
+| **Nombre de Casa (Fabric)** | Hecho | El backend extrae el nombre de la casa (ej: "Casa de Chris") desde `endpoint?.serverNode?.state?.commissioning?.fabrics` (propiedad `label`) y lo expone como `homeName` en la API `/api/custom/devices`. |
+| **Panel Gráfico (Liquid Glass)** | Hecho | El frontend agrupa entidades por **Dispositivo físico de HA** (`device_id`). El usuario interactúa con dispositivos físicos en la lista, no con un listado confuso de entidades sueltas. |
+| **Polling de Código QR** | Hecho | El botón de ver QR está siempre visible para entidades exportadas. Si el código QR aún no se ha generado en el arranque, el frontend realiza polling automático cada 2 segundos. |
+| **Versiones y Git** | Hecho | Versión 1.2.3 publicada en git, con tag `v1.2.3` y cambios descritos en `CHANGELOG.md`. |
 
-## Validación actual
+---
 
-- `npm run build`: correcto.
-- `npm run lint`: correcto.
-- `node --check src/frontend/script.js`: correcto.
-- `npm test`: 52 pruebas correctas.
-- `sh -n run.sh`: correcto.
+## Lecciones aprendidas e instrucciones CRÍTICAS para futuras IAs
 
-## Decisiones técnicas
+> [!IMPORTANT]
+> **No mezclar Dispositivos y Entidades en la vista principal del Panel.**
+> El panel agrupa las entidades por `device_id`. Si una entidad no tiene `device_id` (entidades virtuales), se agrupa en un contenedor virtual por dominio (ej: `virtual:light`). La UI debe mostrar los dispositivos físicos y permitir configurar sus entidades dentro del modal de configuración.
 
-### Emparejamiento y QR
+> [!IMPORTANT]
+> **¡NO USAR `this.matterbridge.startServerNode()` ni `this.matterbridge.stopServerNode()`!**
+> Estos métodos NO existen en la clase `MatterbridgePlatform`. El ciclo de vida de cada nodo Matter independiente en modo `server` es manejado de manera interna por `registerDevice()` y `unregisterDevice()`. Intentar llamarlos causa un crash fatal del add-on.
 
-Un endpoint bridged no tiene QR ni fabric propios. El QR pertenece al bridge,
-por lo que el emparejamiento inicial se realiza una vez desde el frontend
-oficial de Matterbridge. El botón de QR del panel abre dicho frontend sin leer
-estado privado ni fabricar códigos. Para añadir un segundo ecosistema se debe
-abrir una ventana de comisión temporal desde el controlador o el frontend
-oficial.
+> [!NOTE]
+> **El `pairingCode` puede ser nulo inicialmente.**
+> Cuando se registra un dispositivo mediante `registerDevice()`, el nodo tarda unos segundos en inicializarse y generar los códigos de emparejamiento. El frontend realiza polling automático al endpoint `/api/custom/devices` cada 2 segundos hasta obtener los códigos.
 
-No se regenerará el PIN inicial cada pocos minutos: esa credencial identifica
-al nodo y cambiarla no es una renovación segura compatible. La ventana de
-comisión temporal es el mecanismo Matter adecuado.
+> [!NOTE]
+> **Extracción del nombre de la casa vinculada:**
+> Para saber a qué ecosistema (Apple Home, Google Home, etc.) se ha emparejado un accesorio, se consulta la lista de fabrics en `endpoint?.serverNode?.state?.commissioning?.fabrics`. El nombre de la casa se guarda en la propiedad `label` de cada fabric.
 
-### IP y red
+---
 
-El addon usa `http://supervisor/core` en Home Assistant OS, evitando depender
-de una IP LAN de HA. Cambios de IP de dispositivos Wi-Fi/Thread los absorbe su
-integración de Home Assistant; este bridge continúa siguiendo el mismo
-`entity_id` mediante eventos `state_changed`.
+## APIs expuestas (Puerto 8285)
 
-## Pendientes para la siguiente iteración
-
-- [ ] Añadir pruebas de reconexión WebSocket, ráfagas de eventos y alta/baja repetida de endpoints.
-- [ ] Ejecutar prueba de integración en Home Assistant real con Apple Home, IPv6 y mDNS habilitados.
-- [ ] Auditar individualmente clusters no estándar (cámara, horno, cooktop y RVC) contra las capacidades vigentes de Apple Home.
-- [ ] Confirmar una versión oficial de Matterbridge/matter.js que anuncie soporte explícito para Matter 1.6 antes de declararlo compatible.
-
-## Despliegue requerido
-
-La migración cambia la identidad topológica de los accesorios. Antes de
-desplegar, seguir [production-migration.md](./production-migration.md), hacer
-copia de `/data/.matterbridge` y volver a emparejar una vez el bridge.
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/api/custom/devices` | Devuelve el listado de todas las entidades agrupadas con su estado Matter (incluye `pairingCode`, `manualPairingCode`, `commissioned`, `homeName`). |
+| POST | `/api/custom/register/:entityId` | Registra/exporta una entidad como accesorio Matter independiente. |
+| POST | `/api/custom/unregister/:entityId` | Desregistra/deshabilita una entidad. |
+| POST | `/api/custom/device-profile/:entityId` | Cambia el perfil Matter de la entidad. |
+| GET | `/api/custom/status` | Devuelve el estado general y la versión del addon. |
+| GET | `/api/custom/logs` | Devuelve logs para depuración. |
+| POST | `/api/custom/restart` | Reinicia Matterbridge. |
+| POST | `/api/custom/factoryreset` | Borra la base de datos de Matter y reinicia. |

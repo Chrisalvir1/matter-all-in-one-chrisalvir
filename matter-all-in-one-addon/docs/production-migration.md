@@ -1,57 +1,21 @@
-# Migración de producción: un bridge Matter estable
+# Migración de producción: Accesorios Matter Independientes (v1.2.0+)
 
 ## Qué cambia
 
-Este add-on usa ahora un único nodo Matter en modo `bridge`. Las entidades de
-Home Assistant son endpoints bridged y se crean únicamente después de que se
-activen desde la interfaz. No se crea un servidor Matter, puerto, almacén o
-anuncio mDNS por entidad.
+Este add-on expone ahora las entidades de Home Assistant en **Modo de Accesorios Independientes (Plan B)**. Cada entidad activada se publica como su propio nodo servidor Matter independiente (`mode: 'server'`).
 
-La consecuencia esperada es que el bridge se empareja una vez y Apple Home
-recibe todos los endpoints seleccionados. Un endpoint bridged no tiene un QR
-ni una tela/fabric independiente: en Matter se empareja un nodo, no un
-endpoint.
+**Consecuencias de la migración:**
+1. **Códigos QR individuales:** Cada accesorio tiene su propio código QR y código manual de emparejamiento. No se comparte un bridge único global.
+2. **Ciclo de vida aislado:** El encendido, apagado o emparejamiento de un accesorio no afecta a los demás.
+3. **Agrupación visual:** En la interfaz de configuración del add-on, los accesorios se muestran agrupados bajo sus correspondientes dispositivos físicos de Home Assistant, haciendo más limpia la gestión.
 
-## Despliegue
+## Instrucciones de Despliegue y Migración desde versiones < v1.2.0
 
-1. Haz una copia de `/data/.matterbridge` antes de actualizar el add-on.
-2. Actualiza la imagen y reinicia el add-on. El script migra el valor inválido
-   `bridgeMode: dynamic` a `bridge` y arranca Matterbridge con `--bridge`.
-3. En Apple Home, elimina los accesorios creados por la versión anterior. Eran
-   nodos Matter independientes y no pueden convertirse de forma segura en
-   endpoints bridged.
-4. Restablece la comisión de Matterbridge una vez, con el flujo oficial de
-   Matterbridge (`matterbridge --reset` con el servicio detenido, o desde su
-   frontend oficial).
-5. Arranca el add-on, selecciona las entidades que deseas exportar y empareja
-   el bridge una sola vez con el QR que muestra el frontend oficial de
-   Matterbridge.
-6. Espera a que el controlador redescubra los endpoints. No borres la carpeta
-   `/data/.matterbridge` después de este punto: contiene las credenciales y
-   los registros de telas Matter.
+Si vienes de una versión que usaba el modo Bridge único global (versiones 1.1.x o anteriores):
 
-## Emparejamiento y seguridad
-
-El PIN/QR de instalación inicial es una credencial persistente del nodo. No se
-debe regenerar cada cinco minutos: hacerlo invalida intentos de comisión y,
-en implementaciones que fuerzan el cambio, puede requerir un factory reset.
-
-Para añadir una segunda casa o ecosistema después de la primera comisión, usa
-la acción **Turn on pairing mode / Compartir** del controlador o del frontend
-oficial de Matterbridge. Eso abre la ventana de comisión temporal definida por
-Matter y genera las credenciales de adición apropiadas.
-
-## Red
-
-El add-on se conecta a Home Assistant mediante `http://supervisor/core` y el
-token del supervisor, por lo que no depende de una IP LAN de Home Assistant.
-La IP de cada dispositivo físico tampoco debe ser gestionada por este plugin:
-su integración de Home Assistant mantiene esa conexión y el add-on recibe los
-eventos `state_changed` por WebSocket. Si un dispositivo Wi-Fi/Thread cambia
-de dirección, HA vuelve a resolverlo y el mismo `entity_id` sigue actualizando
-el endpoint Matter.
-
-Para Matter/HomeKit, mantén IPv6 y multicast/mDNS disponibles entre HomePods,
-Apple TVs, iPhones y el host de Home Assistant. Selecciona `mdnsinterface` si
-el host tiene más de una interfaz LAN. No fuerces `ipv4_only` salvo que estés
-diagnosticando un entorno muy concreto.
+1. **Respaldar configuración:** Haz una copia de seguridad de la carpeta de datos `/data/.matterbridge`.
+2. **Actualizar el add-on:** Instala la última versión (v1.2.3 o superior).
+3. **Eliminar accesorios antiguos:** En tus ecosistemas domésticos (Apple Home, Google Home, etc.), elimina el puente "Matterbridge" antiguo si existía.
+4. **Registrar de nuevo:** Abre el panel gráfico del add-on (puerto 8285), busca los dispositivos físicos y activa las entidades individuales que quieras exponer a Matter.
+5. **Emparejar uno por uno:** Para cada entidad exportada, haz clic en `Configurar` y usa el botón de ver código QR. Escanea el código QR único generado para ese accesorio específico en tu aplicación de hogar (Apple Home, etc.).
+6. **Nombre de Casa:** Una vez emparejado un accesorio, el panel mostrará un badge con el nombre de la casa vinculada (ej: `🏠 Casa de Chris`), lo que te permite confirmar visualmente que el accesorio se ha registrado con éxito.
