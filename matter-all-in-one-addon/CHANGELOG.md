@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.67] - 2026-06-21
+
+### Added
+
+- **Perfil Matter por entidad principal:** el panel permite elegir únicamente tipos de dispositivo que existen en Matterbridge oficial. Incluye `RoboticVacuumCleaner` para aspiradoras y `BasicVideoPlayer` para reproductores/TV, además de perfiles compatibles de luz, enchufe, persiana, cerradura y termostato.
+- **Compatibilidad Apple Home visible:** cada perfil declara si está en la lista actual de categorías Matter de Apple Home, si es un tipo Matter oficial sin categoría Apple Home declarada, o si Apple Home no lo reconoce actualmente. Así no se promete compatibilidad inexistente para RVC o TV.
+- **Acceso al código de comisión real:** el panel ofrece el acceso al frontend nativo de Matterbridge, que es la única fuente del QR y código manual reales del bridge.
+
+### Changed
+
+- **Dispositivos compuestos:** una entidad `button.*` que pertenece al mismo dispositivo de Home Assistant que una entidad principal (por ejemplo una aspiradora) se clasifica como acción auxiliar y ya no puede exportarse como accesorio Matter independiente.
+- **Identidad RVC estable:** se eliminaron sufijos de versión y marcas/modelos fingidos del endpoint de aspiradora. El identificador Matter ahora deriva de forma estable del `entity_id`, evitando duplicados u objetos huérfanos en controladores.
+
+### Migration
+
+- Tras actualizar desde versiones que creaban accesorios RVC individuales, elimina las fichas antiguas y vuelve a emparejar el bridge si el controlador mantiene su caché. El QR es único para el bridge, no para cada entidad.
+
 ## [1.1.66] - 2026-06-21
 
 ### Changed

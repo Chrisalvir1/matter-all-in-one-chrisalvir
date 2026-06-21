@@ -4,8 +4,10 @@
  * Matterbridge entity for Home Assistant `vacuum.*` devices.
  * Exposes them as Matter 1.2 RVC (Robotic Vacuum Cleaner) — device type 0x0074.
  *
- * Uses the official RoboticVacuumCleaner from @matterbridge/core/devices for 100%
- * Apple HomeKit compliance on iOS 18.4 - iOS 26/27.
+ * Uses the official RoboticVacuumCleaner implementation provided by
+ * Matterbridge. Controller support is intentionally handled by the UI as an
+ * explicit compatibility choice; an official Matter device type does not by
+ * itself guarantee that every controller exposes all RVC controls.
  */
 
 import { MatterbridgeEndpoint, DeviceTypeDefinition } from 'matterbridge';
@@ -43,11 +45,13 @@ export class VacuumEntity extends BaseEntity {
     const displayName = rawName.length > 24
       ? rawName.substring(0, 24).trim() + ' ' + entityPart
       : rawName + (rawName.length < 28 ? ' ' + entityPart : '');
-    const uniqueName = (displayName.substring(0, 28) + ' v6').trim();
+    const uniqueName = displayName.substring(0, 32).trim();
 
-    // V6 Suffix to force a completely new device pairing and QR Code in Matterbridge UI!
-    const v6Id = this.entityId.replaceAll('.', '_') + '_v6';
-    const serialNumber = v6Id + '_sn';
+    // The endpoint identity must remain stable. Rotating this value creates a
+    // new bridged endpoint and is a common cause of duplicate/orphaned tiles
+    // in controllers after an add-on update.
+    const stableId = this.entityId.replaceAll('.', '_');
+    const serialNumber = `${stableId.slice(0, 28)}_rvc`;
 
     const supportedRunModes = [
       { label: 'Idle', mode: 1, modeTags: [{ value: 16384 }] },      // 0x4000 = 16384 (Idle)
@@ -91,32 +95,33 @@ export class VacuumEntity extends BaseEntity {
     );
 
     this.endpoint.deviceType = this.deviceType.code;
-    this.endpoint.uniqueId = v6Id;
+    this.endpoint.uniqueId = stableId;
     this.endpoint.vendorId = 0xfff1;
-    this.endpoint.vendorName = 'ROPVACNIC by Chrisalvir';
+    this.endpoint.vendorName = 'Home Assistant';
     this.endpoint.productId = 0x8000;
-    this.endpoint.productName = 'ROPVACNIC A1';
+    this.endpoint.productName = 'Robotic Vacuum Cleaner';
 
-    // Override Basic Information attributes for premium branding in HomeKit
+    // Keep Basic Information aligned with the bridge identity instead of
+    // impersonating a physical manufacturer or model.
     safeSetAttribute(
       this.endpoint as any,
       'basicInformation' as any,
       'vendorName',
-      'ROPVACNIC by Chrisalvir',
+      'Home Assistant',
       this.platform.log,
     );
     safeSetAttribute(
       this.endpoint as any,
       'basicInformation' as any,
       'productName',
-      'ROPVACNIC A1',
+      'Robotic Vacuum Cleaner',
       this.platform.log,
     );
     safeSetAttribute(
       this.endpoint as any,
       'basicInformation' as any,
       'softwareVersionString',
-      'V2.5.2 (MCU V1.4.0)',
+      'Matterbridge bridge endpoint',
       this.platform.log,
     );
 

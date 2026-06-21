@@ -27,6 +27,8 @@ import { PetFeederEntity } from './entities/pet_feeder.entity.js';
 import { HumidifierEntity } from './entities/humidifier.entity.js';
 import { OvenEntity } from './entities/oven.entity.js';
 import { CooktopEntity } from './entities/cooktop.entity.js';
+import { MediaPlayerEntity } from './entities/media-player.entity.js';
+import { getDefaultExportProfileId, getExportProfile, getExportProfiles } from './device-profiles.js';
 
 
 export interface HomeAssistantPlatformConfig extends PlatformConfig {
@@ -82,6 +84,23 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       entity_registry_id: entityRegistry?.id ?? null,
       platform: entityRegistry?.platform ?? null,
     };
+  }
+
+  private getPrimaryEntityId(entityId: string): string | undefined {
+    const deviceId = this.ha.hassEntities.get(entityId)?.device_id;
+    if (!deviceId) return undefined;
+    const priority = ['vacuum', 'media_player', 'climate', 'lock', 'cover', 'light', 'switch', 'fan', 'humidifier'];
+    const candidates = Array.from(this.entities.values())
+      .filter((entity) => this.ha.hassEntities.get(entity.entityId)?.device_id === deviceId)
+      .sort((left, right) => priority.indexOf(left.entityId.split('.')[0]) - priority.indexOf(right.entityId.split('.')[0]));
+    return candidates.find((entity) => priority.includes(entity.entityId.split('.')[0]))?.entityId;
+  }
+
+  private isAuxiliaryEntity(entityId: string): boolean {
+    const [domain] = entityId.split('.');
+    if (domain !== 'button') return false;
+    const primary = this.getPrimaryEntityId(entityId);
+    return primary !== undefined && primary !== entityId;
   }
 
   constructor(
@@ -281,6 +300,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
     // Check device override
     const override = this.deviceOverrides[entityId];
+    const effectiveProfile = override ?? getDefaultExportProfileId(domain);
     if (override === '_DISABLED_') {
       this.log.debug(`Skipping ${entityId} because it is disabled by override.`);
       return;
@@ -310,6 +330,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       entityInstance = new VacuumEntity(this, state, deviceType);
     } else if (domain === 'humidifier') {
       entityInstance = new HumidifierEntity(this, state, deviceType);
+    } else if (domain === 'media_player' && effectiveProfile === 'basicVideoPlayer') {
+      entityInstance = new MediaPlayerEntity(this, state, deviceType);
     } else if (override === 'PetFeeder') {
       entityInstance = new PetFeederEntity(this, state, deviceType);
     } else if (override === 'Oven' || deviceType.name === 'Oven') {
@@ -355,6 +377,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     if (!this.entities.has(entityId)) {
       return { success: false, error: 'Device not found in discovery.' };
     }
+    if (this.isAuxiliaryEntity(entityId)) {
+      return { success: false, error: 'This is an auxiliary action of the main device and cannot be exported independently.' };
+    }
     try {
       this.exportedDevices.add(entityId);
       await this.activateEntity(entityId);
@@ -393,6 +418,38 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       await fs.writeFile('/data/exported-devices.json', JSON.stringify(Array.from(this.exportedDevices)), 'utf8');
     } catch (err) {
       this.log.error(`Failed to save exported-devices.json: ${err}`);
+    }
+  }
+
+  private async saveDeviceOverrides() {
+    await fs.writeFile('/data/device-overrides.json', JSON.stringify(this.deviceOverrides, null, 2), 'utf8');
+  }
+
+  public async setDeviceProfile(entityId: string, profileId: string): Promise<{ success: boolean; error?: string }> {
+    const entity = this.entities.get(entityId);
+    if (!entity) return { success: false, error: 'Device not found in discovery.' };
+    const [domain] = entityId.split('.');
+    if (!getExportProfile(domain, profileId) || !(MatterDeviceTypes as any)[profileId]) {
+      return { success: false, error: 'The selected Matter profile is not valid for this entity.' };
+    }
+    if (this.isAuxiliaryEntity(entityId)) {
+      return { success: false, error: 'Auxiliary actions inherit the profile of their main device.' };
+    }
+
+    try {
+      const wasExported = this.exportedDevices.has(entityId);
+      const state = entity.state;
+      if (wasExported) await this.manualUnregister(entityId);
+      this.deviceOverrides[entityId] = profileId;
+      await this.saveDeviceOverrides();
+      this.entities.delete(entityId);
+      this.matterbridgeDevices.delete(entityId);
+      await this.registerHAEntity(state);
+      if (wasExported) await this.manualRegister(entityId);
+      return { success: true };
+    } catch (error) {
+      this.log.error(`Failed to update Matter profile for ${entityId}: ${error}`);
+      return { success: false, error: String(error) };
     }
   }
 
@@ -539,6 +596,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           res.end(JSON.stringify({
             status: this.ha.connected ? 'operativo' : 'reconectando',
             version,
+            matterbridgeVersion: this.matterbridge.matterbridgeVersion,
+            bridgeMode: this.matterbridge.bridgeMode,
             // Pairing is managed by Matterbridge's official frontend.  The
             // plugin deliberately does not scrape private Matterbridge state.
             qrPairingCode: '',
@@ -572,6 +631,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               ...this.getHaRegistryInfo(e.entityId),
               // Accessory status
               exported: this.exportedDevices.has(e.entityId),
+              auxiliary: this.isAuxiliaryEntity(e.entityId),
+              primaryEntityId: this.getPrimaryEntityId(e.entityId) ?? null,
+              profileId: this.deviceOverrides[e.entityId] ?? getDefaultExportProfileId(domain) ?? null,
+              profiles: getExportProfiles(domain),
               pairingCode: null,
               manualPairingCode: null,
               commissioned: false,
@@ -598,6 +661,23 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           const result = await this.manualUnregister(entityId);
           res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
           res.end(JSON.stringify(result));
+          return;
+        }
+
+        if (req.method === 'POST' && pathname.startsWith('/api/custom/device-profile/')) {
+          const entityId = decodeURIComponent(pathname.substring('/api/custom/device-profile/'.length));
+          let body = '';
+          req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
+          await new Promise<void>((resolve) => req.on('end', resolve));
+          try {
+            const data = JSON.parse(body) as { profileId?: string };
+            const result = await this.setDeviceProfile(entityId, data.profileId ?? '');
+            res.writeHead(result.success ? 200 : 400, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify(result));
+          } catch {
+            res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify({ success: false, error: 'Invalid request body.' }));
+          }
           return;
         }
 

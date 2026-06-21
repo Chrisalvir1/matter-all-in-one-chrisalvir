@@ -20,6 +20,7 @@ import {
   flowSensor,
   lightSensor,
   roboticVacuumCleaner,
+  basicVideoPlayer,
   fan,
   cooktop,
   oven,
@@ -75,6 +76,8 @@ export const MatterDeviceTypes = {
 
   roboticVacuumCleaner,
 
+  basicVideoPlayer,
+
   fan,
 
   cooktop,
@@ -95,6 +98,7 @@ export const DEVICE_REGISTRY: Record<string, DeviceRegistryEntry> = {
   light: { matterType: MatterDeviceTypes.dimmableLight, homekitSupported: homekitSupported.dimmableLight },
   switch: { matterType: MatterDeviceTypes.onOffPlugInUnit, homekitSupported: homekitSupported.onOffPlugInUnit },
   vacuum: { matterType: MatterDeviceTypes.roboticVacuumCleaner, homekitSupported: homekitSupported.roboticVacuumCleaner },
+  media_player: { matterType: MatterDeviceTypes.basicVideoPlayer, homekitSupported: false },
   button: { matterType: MatterDeviceTypes.onOffPlugInUnit, homekitSupported: homekitSupported.onOffPlugInUnit },
   fan: { matterType: MatterDeviceTypes.fan, homekitSupported: homekitSupported.fan },
   humidifier: { matterType: MatterDeviceTypes.onOffPlugInUnit, homekitSupported: homekitSupported.humidifier },

@@ -11,6 +11,7 @@ const els = {
   deviceModalName: $('device-modal-name'), deviceModalId: $('device-modal-id'), entityList: $('entity-list'),
   modalExportCount: $('modal-export-count'), selectionPanel: $('selection-panel'), selectionTitle: $('selection-title'),
   selectionDescription: $('selection-description'), selectionMeta: $('selection-meta'), selectionStatus: $('selection-status'),
+  profileField: $('profile-field'), profileSelect: $('profile-select'), profileNote: $('profile-note'), bridgeQrButton: $('bridge-qr-button'),
   settingsButton: $('settings-button'), settingsModal: $('settings-modal'), settingsModalClose: $('settings-modal-close'),
   restartButton: $('restart-button'), factoryResetButton: $('factory-reset-button'), confirmModal: $('confirm-modal'),
   confirmTitle: $('confirm-title'), confirmDescription: $('confirm-description'), confirmCancel: $('confirm-cancel'),
@@ -49,7 +50,7 @@ async function fetchStatus() {
     const online = data.haStatus === 'conectado';
     els.haDot.className = `connection-dot ${online ? 'online' : 'offline'}`;
     els.haStatus.textContent = online ? 'Home Assistant conectado' : 'Reconectando con Home Assistant';
-    els.version.textContent = data.version ? `v${data.version}` : '—';
+    els.version.textContent = data.version ? `Add-on v${data.version}${data.matterbridgeVersion ? ` · Matterbridge v${data.matterbridgeVersion}` : ''}` : '—';
     els.bridgeOrb.className = `status-orb ${online ? 'online' : 'offline'}`;
     els.bridgeTitle.textContent = online ? 'Bridge activo' : 'Bridge sin conexión';
     els.bridgeDescription.textContent = online ? 'Listo para publicar las entidades seleccionadas.' : 'El bridge reintentará automáticamente la conexión.';
@@ -118,10 +119,15 @@ function buildEntityRow(entity) {
   const element = document.createElement('div');
   element.className = `entity-row${entity.exported ? '' : ' dimmed'}`;
   element.dataset.entityId = entity.entityId;
-  element.innerHTML = `<span class="entity-row-icon">${icon(entity.domain)}</span><div><div class="entity-row-name">${escapeHtml(displayName(entity))}</div><div class="entity-row-id">${escapeHtml(entity.entityId)}</div><span class="entity-state ${isOn(entity.state) ? 'on' : ''}">${escapeHtml(stateLabel(entity.state))}</span></div><label class="export-control" title="Publicar en Matter"><span>${entity.exported ? 'Activo' : 'Inactivo'}</span><span class="toggle"><input type="checkbox" ${entity.exported ? 'checked' : ''} aria-label="Exportar ${escapeHtml(displayName(entity))}"><span></span></span></label>`;
+  const control = entity.auxiliary
+    ? '<span class="export-control">Integrada</span>'
+    : `<label class="export-control" title="Publicar en Matter"><span>${entity.exported ? 'Activo' : 'Inactivo'}</span><span class="toggle"><input type="checkbox" ${entity.exported ? 'checked' : ''} aria-label="Exportar ${escapeHtml(displayName(entity))}"><span></span></span></label>`;
+  element.innerHTML = `<span class="entity-row-icon">${icon(entity.domain)}</span><div><div class="entity-row-name">${escapeHtml(displayName(entity))}</div><div class="entity-row-id">${escapeHtml(entity.entityId)}</div><span class="entity-state ${isOn(entity.state) ? 'on' : ''}">${escapeHtml(stateLabel(entity.state))}</span></div>${control}`;
   const checkbox = element.querySelector('input');
-  checkbox.addEventListener('click', (event) => event.stopPropagation());
-  checkbox.addEventListener('change', () => toggleEntity(entity, checkbox));
+  if (checkbox) {
+    checkbox.addEventListener('click', (event) => event.stopPropagation());
+    checkbox.addEventListener('change', () => toggleEntity(entity, checkbox));
+  }
   element.addEventListener('click', () => selectEntity(entity));
   return element;
 }
@@ -131,10 +137,47 @@ function selectEntity(entity) {
   els.entityList.querySelectorAll('.entity-row').forEach((row) => row.classList.toggle('selected', row.dataset.entityId === entity?.entityId));
   if (!entity) { els.selectionTitle.textContent = 'No hay entidades'; els.selectionDescription.textContent = ''; els.selectionMeta.innerHTML = ''; els.selectionStatus.textContent = ''; return; }
   els.selectionTitle.textContent = displayName(entity);
-  els.selectionDescription.textContent = entity.exported ? 'Esta entidad forma parte del bridge. Los controladores la descubrirán a través del único emparejamiento del bridge.' : 'Actívala para publicar el endpoint en Matter.';
+  els.selectionDescription.textContent = entity.auxiliary
+    ? `Acción auxiliar de ${entity.primaryEntityId || 'su dispositivo principal'}. No se expone como accesorio Matter independiente.`
+    : entity.exported
+      ? 'Esta entidad forma parte del bridge. Los controladores la descubrirán a través del único emparejamiento del bridge.'
+      : 'Actívala para publicar el endpoint en Matter.';
+  const profiles = Array.isArray(entity.profiles) ? entity.profiles : [];
+  els.profileField.hidden = entity.auxiliary || profiles.length === 0;
+  els.profileSelect.replaceChildren(...profiles.map((profile) => {
+    const option = document.createElement('option');
+    option.value = profile.id;
+    option.textContent = `${profile.label}${profile.appleHome === 'supported' ? '' : profile.appleHome === 'experimental' ? ' · experimental' : ' · no compatible con Apple Home'}`;
+    option.selected = profile.id === (entity.profileId || entity.matterType);
+    return option;
+  }));
+  const currentProfile = profiles.find((profile) => profile.id === (entity.profileId || entity.matterType)) || profiles[0];
+  els.profileNote.textContent = currentProfile ? `${currentProfile.description} ${profileCompatibilityText(currentProfile.appleHome)}` : '';
+  els.profileSelect.disabled = entity.auxiliary;
   els.selectionMeta.innerHTML = `<div><dt>Entidad</dt><dd>${escapeHtml(entity.entityId)}</dd></div><div><dt>Tipo Matter</dt><dd>${escapeHtml(entity.matterType || 'Predeterminado')}</dd></div><div><dt>Estado HA</dt><dd>${escapeHtml(stateLabel(entity.state))}</dd></div>`;
   els.selectionStatus.className = `selection-status${entity.exported ? ' active' : ''}`;
-  els.selectionStatus.textContent = entity.exported ? '✓ Publicada en el bridge Matter' : 'Aún no se publica en Matter';
+  els.selectionStatus.textContent = entity.auxiliary
+    ? 'Acción auxiliar: no se crea un mosaico ni un accesorio Matter separado.'
+    : entity.exported ? '✓ Publicada en el bridge Matter' : 'Aún no se publica en Matter';
+}
+
+function profileCompatibilityText(compatibility) {
+  if (compatibility === 'supported') return 'Reconocido por la lista actual de accesorios Matter de Apple Home.';
+  if (compatibility === 'experimental') return 'Tipo Matter oficial; Apple Home no lo lista actualmente como categoría Matter compatible.';
+  return 'Tipo Matter oficial, pero Apple Home no lo reconoce actualmente como categoría Matter compatible.';
+}
+
+async function updateProfile(entity, profileId) {
+  if (!profileId || profileId === entity.profileId || profileId === entity.matterType) return;
+  els.profileSelect.disabled = true;
+  try {
+    const result = await request(`/device-profile/${encodeURIComponent(entity.entityId)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ profileId }) });
+    if (!result.success) throw new Error(result.error || 'No se pudo cambiar el perfil Matter');
+    showToast(`Perfil Matter actualizado para ${displayName(entity)}.`);
+    await fetchDevices();
+    const device = groupEntities(state.entities).find((item) => item.id === state.activeDevice.id);
+    if (device) openDevice(device);
+  } catch (error) { showToast(error.message || 'No se pudo cambiar el perfil Matter.', true); els.profileSelect.disabled = false; }
 }
 
 async function toggleEntity(entity, checkbox) {
@@ -155,6 +198,8 @@ async function toggleEntity(entity, checkbox) {
 function openConfirm(title, description, action) { els.confirmTitle.textContent = title; els.confirmDescription.textContent = description; state.confirmAction = action; setModalOpen(els.confirmModal, true); }
 
 els.deviceSearch.addEventListener('input', renderDevices);
+els.profileSelect.addEventListener('change', () => { if (state.activeEntity) void updateProfile(state.activeEntity, els.profileSelect.value); });
+els.bridgeQrButton.addEventListener('click', () => { window.open(`${window.location.protocol}//${window.location.hostname}:8284`, '_blank', 'noopener'); });
 els.refreshButton.addEventListener('click', async () => { await Promise.all([fetchStatus(), fetchDevices()]); showToast('Lista actualizada.'); });
 els.deviceModalClose.addEventListener('click', () => setModalOpen(els.deviceModal, false));
 els.settingsButton.addEventListener('click', () => setModalOpen(els.settingsModal, true));

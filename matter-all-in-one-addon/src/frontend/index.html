@@ -33,7 +33,7 @@
 
       <section class="sidebar-note">
         <span aria-hidden="true">✦</span>
-        <p>Un solo bridge Matter. Selecciona únicamente las entidades que quieres publicar.</p>
+        <p>Un solo bridge Matter. El botón de QR abre el frontend oficial, que muestra el código Matter real.</p>
       </section>
 
       <div class="sidebar-spacer"></div>
@@ -97,8 +97,14 @@
           <p class="card-label">SELECCIÓN</p>
           <h3 id="selection-title">Selecciona una entidad</h3>
           <p id="selection-description">Activa una entidad para añadirla al bridge Matter.</p>
+          <label class="profile-field" id="profile-field">
+            <span>Perfil Matter</span>
+            <select id="profile-select" aria-label="Perfil Matter"></select>
+            <small id="profile-note"></small>
+          </label>
           <dl class="selection-meta" id="selection-meta"></dl>
           <div class="selection-status" id="selection-status"></div>
+          <button class="button button-secondary bridge-qr-button" id="bridge-qr-button" type="button">Ver QR real del bridge</button>
         </aside>
       </div>
     </section>

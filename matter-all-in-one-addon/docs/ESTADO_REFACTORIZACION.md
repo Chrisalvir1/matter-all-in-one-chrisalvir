@@ -1,6 +1,6 @@
 # Estado de refactorización — matter-all-in-one-chrisalvir
 
-> Documento vivo. Última actualización: 2026-06-21 — versión 1.1.66.
+> Documento vivo. Última actualización: 2026-06-21 — versión 1.1.67.
 
 ## Objetivo de arquitectura
 
@@ -22,14 +22,18 @@ físicos.
 | Dependencias oficiales | Hecho | Matterbridge fijado en `3.9.1`; retirada dependencia directa duplicada de `@matter/nodejs`. |
 | Código privado de Matterbridge | Hecho | Se eliminó el acceso por rutas internas y `createRequire` al singleton de Matterbridge. |
 | Panel gráfico | Hecho | Reemplazado por un panel responsivo de selección de entidades, búsqueda, estado del bridge y acciones confirmadas de mantenimiento. |
-| Publicación GitHub | Parcial | `main` y el tag anotado `v1.1.66` están publicados; falta crear la GitHub Release por ausencia de sesión/API autenticada. |
+| Dispositivos compuestos | Hecho | Los `button.*` auxiliares de un dispositivo HA con entidad principal no se publican como accesorios Matter independientes. |
+| Perfil Matter | Hecho | El panel expone solo perfiles Matterbridge oficiales y muestra el alcance real de compatibilidad actual con Apple Home. |
+| QR / código manual | Hecho | La interfaz dirige al frontend oficial de Matterbridge; el bridge único es el propietario del QR y PIN reales. |
+| Identidad RVC | Hecho | Identificadores estables derivados de `entity_id`; se retiraron sufijos de versión que generaban accesorios nuevos. |
+| Publicación GitHub | Parcial | `main` y el tag anotado `v1.1.67` están publicados; falta crear la GitHub Release por ausencia de sesión/API autenticada. |
 
 ## Validación actual
 
 - `npm run build`: correcto.
 - `npm run lint`: correcto.
 - `node --check src/frontend/script.js`: correcto.
-- `npm test`: 50 pruebas correctas.
+- `npm test`: 52 pruebas correctas.
 - `sh -n run.sh`: correcto.
 
 ## Decisiones técnicas
@@ -38,8 +42,10 @@ físicos.
 
 Un endpoint bridged no tiene QR ni fabric propios. El QR pertenece al bridge,
 por lo que el emparejamiento inicial se realiza una vez desde el frontend
-oficial de Matterbridge. Para añadir un segundo ecosistema se debe abrir una
-ventana de comisión temporal desde el controlador o el frontend oficial.
+oficial de Matterbridge. El botón de QR del panel abre dicho frontend sin leer
+estado privado ni fabricar códigos. Para añadir un segundo ecosistema se debe
+abrir una ventana de comisión temporal desde el controlador o el frontend
+oficial.
 
 No se regenerará el PIN inicial cada pocos minutos: esa credencial identifica
 al nodo y cambiarla no es una renovación segura compatible. La ventana de
@@ -54,7 +60,6 @@ integración de Home Assistant; este bridge continúa siguiendo el mismo
 
 ## Pendientes para la siguiente iteración
 
-- [ ] Integrar en la interfaz una acción hacia el flujo oficial de comisión de Matterbridge, sin leer estado privado ni exponer QR permanentemente.
 - [ ] Añadir pruebas de reconexión WebSocket, ráfagas de eventos y alta/baja repetida de endpoints.
 - [ ] Ejecutar prueba de integración en Home Assistant real con Apple Home, IPv6 y mDNS habilitados.
 - [ ] Auditar individualmente clusters no estándar (cámara, horno, cooktop y RVC) contra las capacidades vigentes de Apple Home.
