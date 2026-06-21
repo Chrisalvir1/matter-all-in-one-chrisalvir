@@ -1,4 +1,4 @@
-# Resumen de Cambios: Versión 1.2.6 (Estado de carga RVC)
+# Resumen de Cambios: Versión 1.2.7 (Recuperación y estado Matter en vivo)
 
 Hemos implementado mejoras clave en el add-on para solucionar problemas de emparejamiento, corregir errores fatales en el ciclo de vida y optimizar la experiencia de usuario.
 

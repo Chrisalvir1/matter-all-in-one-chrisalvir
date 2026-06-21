@@ -12,6 +12,7 @@ const els = {
   modalExportCount: $('modal-export-count'), selectionPanel: $('selection-panel'), selectionTitle: $('selection-title'),
   selectionDescription: $('selection-description'), selectionMeta: $('selection-meta'), selectionStatus: $('selection-status'),
   deviceQrContainer: $('device-qr-container'), deviceQrCode: $('device-qr-code'), deviceManualCode: $('device-manual-code'), deviceQrButton: $('device-qr-button'),
+  resetAccessoryButton: $('reset-accessory-button'),
   profileField: $('profile-field'), profileSelect: $('profile-select'), profileNote: $('profile-note'),
   settingsButton: $('settings-button'), settingsModal: $('settings-modal'), settingsModalClose: $('settings-modal-close'),
   restartButton: $('restart-button'), factoryResetButton: $('factory-reset-button'), confirmModal: $('confirm-modal'),
@@ -113,13 +114,24 @@ function buildDeviceCard(device) {
   return element;
 }
 
-async function fetchDevices() {
+async function fetchDevices(refreshSelection = false) {
   if (state.devicesBusy) return;
   state.devicesBusy = true;
   els.deviceList.setAttribute('aria-busy', 'true');
   try {
     state.entities = await request('/devices');
     renderDevices();
+    if (refreshSelection && state.activeEntity && els.deviceModal.classList.contains('open')) {
+      const selected = state.entities.find((entity) => entity.entityId === state.activeEntity.entityId);
+      if (selected) {
+        const qrWasVisible = els.deviceQrContainer.style.display !== 'none';
+        selectEntity(selected);
+        if (qrWasVisible && selected.pairingCode) {
+          showQrCode(selected);
+          els.deviceQrButton.textContent = 'Ocultar Código';
+        }
+      }
+    }
   } catch {
     els.deviceList.setAttribute('aria-busy', 'false');
     els.deviceList.innerHTML = '<div class="empty-state"><p>No se pudieron cargar las entidades. Verifica la conexión con Home Assistant.</p><button class="button button-secondary" type="button" id="retry-load">Reintentar</button></div>';
@@ -162,12 +174,16 @@ function renderQrSection(entity) {
   els.deviceQrCode.innerHTML = '';
   els.deviceManualCode.textContent = '';
   els.deviceQrButton.style.display = 'none';
+  els.resetAccessoryButton.style.display = 'none';
   els.deviceQrButton.textContent = 'Mostrar Código de Emparejamiento';
 
   if (!entity || entity.auxiliary || !entity.exported) return;
 
   // Always show the QR button for exported (active) entities
   els.deviceQrButton.style.display = 'block';
+  // This is intentionally per-accessory: it clears only this node's fabrics
+  // and reopens commissioning if a controller left a stale fabric behind.
+  els.resetAccessoryButton.style.display = entity.commissioned ? 'block' : 'none';
 
   if (entity.commissioned && entity.homeName) {
     els.deviceQrButton.textContent = `Código Matter · Conectado: ${entity.homeName}`;
@@ -357,6 +373,25 @@ els.deviceQrButton.addEventListener('click', () => {
   }
 });
 
+els.resetAccessoryButton.addEventListener('click', () => {
+  const entity = state.activeEntity;
+  if (!entity) return;
+  openConfirm(
+    'Restablecer conexión Matter',
+    `Se eliminará únicamente el emparejamiento Matter de ${displayName(entity)}. No afecta otros accesorios. El mismo código QR volverá a quedar listo para escanear.`,
+    async () => {
+      try {
+        const result = await request(`/reset-accessory/${encodeURIComponent(entity.entityId)}`, { method: 'POST' });
+        if (!result.success) throw new Error(result.error || 'No se pudo restablecer el accesorio');
+        showToast('Conexión Matter restablecida. Esperando el código de emparejamiento…');
+        setTimeout(() => void fetchDevices(true), 1200);
+      } catch (error) {
+        showToast(error.message || 'No se pudo restablecer el accesorio.', true);
+      }
+    },
+  );
+});
+
 els.refreshButton.addEventListener('click', async () => { await Promise.all([fetchStatus(), fetchDevices()]); showToast('Lista actualizada.'); });
 els.deviceModalClose.addEventListener('click', () => setModalOpen(els.deviceModal, false));
 els.settingsButton.addEventListener('click', () => setModalOpen(els.settingsModal, true));
@@ -371,3 +406,5 @@ document.addEventListener('keydown', (event) => { if (event.key === 'Escape') [e
 void fetchStatus();
 void fetchDevices();
 setInterval(() => void fetchStatus(), 8000);
+// Refresh fabrics and commissioning state without requiring a page reload.
+setInterval(() => void fetchDevices(true), 4000);

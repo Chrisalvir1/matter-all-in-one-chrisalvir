@@ -136,6 +136,7 @@ h2 { margin: 5px 0 7px; font-size: clamp(25px, 3vw, 34px); letter-spacing: -.04e
 .home-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 6px; border: 1px solid rgba(124,168,255,.35); background: rgba(124,168,255,.1); color: #9ec6ff; font-size: 11px; font-weight: 600; margin-left: 6px; vertical-align: middle; }
 .home-badge.commissioned { border-color: rgba(89,213,162,.35); background: rgba(89,213,162,.1); color: #abebd0; }
 .bridge-qr-button { width: 100%; margin-top: 10px; justify-content: center; }
+.reset-accessory-button { width: 100%; margin-top: 10px; color: #ffb0bc; font-size: 11px; }
 .settings-actions { display: grid; gap: 14px; margin-top: 25px; }
 .settings-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 15px; border: 1px solid var(--border); border-radius: 14px; background: rgba(255,255,255,.035); }
 .settings-row strong { font-size: 13px; }.settings-row p { max-width: 315px; margin: 4px 0 0; color: var(--muted); font-size: 11px; line-height: 1.45; }.danger-row { border-color: rgba(251,132,150,.2); }

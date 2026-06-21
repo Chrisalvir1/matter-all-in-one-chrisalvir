@@ -1,6 +1,6 @@
 # Estado de refactorización — matter-all-in-one-chrisalvir
 
-> Documento vivo. Última actualización: 2026-06-21 — versión 1.2.6.
+> Documento vivo. Última actualización: 2026-06-21 — versión 1.2.7.
 
 ## Objetivo de arquitectura actual (v1.2.0+)
 
@@ -14,7 +14,7 @@ El add-on opera publicando cada entidad exportada de Home Assistant como un nodo
 
 ## Cambios aplicados y estado actual
 
-| Área | Estado | Implementación / Detalles en v1.2.6 |
+| Área | Estado | Implementación / Detalles en v1.2.7 |
 | --- | --- | --- |
 | **Ciclo de Vida Matter** | Hecho | Cada accesorio es un `ServerNode` independiente. Se registran/desregistran mediante `registerDevice()` y `unregisterDevice()`. |
 | **Llamadas de control API** | Hecho | **Se eliminaron por completo las llamadas a `startServerNode()` y `stopServerNode()`** que no existen en `MatterbridgePlatform` y producían `TypeError` al deshabilitar dispositivos. |
@@ -22,6 +22,7 @@ El add-on opera publicando cada entidad exportada de Home Assistant como un nodo
 | **Nombre de Casa (Fabric)** | Hecho | El backend extrae el nombre de la casa (ej: "Casa de Chris") desde `endpoint?.serverNode?.state?.commissioning?.fabrics` (propiedad `label`) y lo expone como `homeName` en la API `/api/custom/devices`. |
 | **Panel Gráfico (Liquid Glass)** | Hecho | El frontend agrupa entidades por **Dispositivo físico de HA** (`device_id`). El usuario interactúa con dispositivos físicos en la lista, no con un listado confuso de entidades sueltas. |
 | **Polling de Código QR** | Hecho | El botón de ver QR está siempre visible para entidades exportadas. Si el código QR aún no se ha generado en el arranque, el frontend realiza polling automático cada 2 segundos. |
+| **Restablecimiento individual** | Hecho | `POST /api/custom/reset-accessory/:entityId` ejecuta `serverNode.erase()` para eliminar únicamente los fabrics del accesorio seleccionado y reabrir su comisión. |
 | **RVC y Apple Home** | Hecho | `vacuum.*` usa el tipo Matter real `RoboticVacuumCleaner` (`0x0074`) como ServerNode independiente. No se debe convertir en switch ni añadirlo al bridge. |
 | **Identidad visible** | Hecho | El nombre visible es el `friendly_name` de Home Assistant (hasta 32 caracteres); `entity_id`, serial y `uniqueId` proporcionan la identidad interna estable. |
 
@@ -62,6 +63,7 @@ El add-on opera publicando cada entidad exportada de Home Assistant como un nodo
 | GET | `/api/custom/devices` | Devuelve el listado de todas las entidades agrupadas con su estado Matter (incluye `pairingCode`, `manualPairingCode`, `commissioned`, `homeName`). |
 | POST | `/api/custom/register/:entityId` | Registra/exporta una entidad como accesorio Matter independiente. |
 | POST | `/api/custom/unregister/:entityId` | Desregistra/deshabilita una entidad. |
+| POST | `/api/custom/reset-accessory/:entityId` | Restablece solo ese nodo Matter: elimina fabrics y permite emparejarlo de nuevo. |
 | POST | `/api/custom/device-profile/:entityId` | Cambia el perfil Matter de la entidad. |
 | GET | `/api/custom/status` | Devuelve el estado general y la versión del addon. |
 | GET | `/api/custom/logs` | Devuelve logs para depuración. |

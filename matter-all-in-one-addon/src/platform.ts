@@ -415,6 +415,28 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     }
   }
 
+  /**
+   * Factory-reset one standalone Matter accessory without affecting other
+   * exported entities. This clears stale fabrics left behind by a controller
+   * that was removed without completing RemoveFabric.
+   */
+  public async resetMatterAccessory(entityId: string): Promise<{ success: boolean; error?: string }> {
+    const endpoint = this.matterbridgeDevices.get(entityId) as any;
+    const serverNode = endpoint?.serverNode;
+    if (!endpoint || !serverNode) {
+      return { success: false, error: 'El accesorio Matter no está activo o su nodo aún no está listo.' };
+    }
+
+    try {
+      await serverNode.erase();
+      this.log.notice(`Matter factory reset completed for ${idn}${entityId}${rs}`);
+      return { success: true };
+    } catch (error) {
+      this.log.error(`Failed to factory reset Matter accessory ${entityId}: ${error}`);
+      return { success: false, error: String(error) };
+    }
+  }
+
   private async saveExportedDevices() {
     try {
       await fs.writeFile('/data/exported-devices.json', JSON.stringify(Array.from(this.exportedDevices)), 'utf8');
@@ -673,6 +695,15 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           const entityId = decodeURIComponent(pathname.substring('/api/custom/unregister/'.length));
           const result = await this.manualUnregister(entityId);
           res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify(result));
+          return;
+        }
+
+        // POST /api/custom/reset-accessory/:entityId
+        if (req.method === 'POST' && pathname.startsWith('/api/custom/reset-accessory/')) {
+          const entityId = decodeURIComponent(pathname.substring('/api/custom/reset-accessory/'.length));
+          const result = await this.resetMatterAccessory(entityId);
+          res.writeHead(result.success ? 200 : 400, { 'Content-Type': 'application/json; charset=utf-8' });
           res.end(JSON.stringify(result));
           return;
         }
