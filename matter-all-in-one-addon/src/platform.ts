@@ -636,9 +636,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               primaryEntityId: this.getPrimaryEntityId(e.entityId) ?? null,
               profileId: this.deviceOverrides[e.entityId] ?? getDefaultExportProfileId(domain) ?? null,
               profiles: getExportProfiles(domain),
-              pairingCode: endpoint?.qrPairingCode ?? null,
-              manualPairingCode: endpoint?.manualPairingCode ?? null,
-              commissioned: endpoint?.serverNode?.isCommissioned?.() ?? endpoint?.commissioned ?? false,
+              pairingCode: endpoint?.serverNode?.state?.commissioning?.pairingCodes?.qrPairingCode ?? null,
+              manualPairingCode: endpoint?.serverNode?.state?.commissioning?.pairingCodes?.manualPairingCode ?? null,
+              commissioned: endpoint?.serverNode?.state?.commissioning?.commissioned ?? false,
               fabric: null,
             };
           });

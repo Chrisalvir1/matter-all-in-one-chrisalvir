@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.1] - 2026-06-21
+
+### Fixed
+- **Extracción de Códigos QR de Servidores Matter:** Corregido el mapeo en el endpoint de la API `/api/custom/devices` para extraer correctamente los códigos de emparejamiento QR y manual y el estado de comisión desde la estructura interna de `serverNode.state.commissioning.pairingCodes` de Matterbridge. Esto soluciona el problema de los códigos QR que aparecían en blanco o no se mostraban.
+- **Clarificación de Interfaz:** Removidas todas las referencias legacy que hablaban de "bridge Matter" en la interfaz de usuario, actualizando los textos para reflejar con precisión el modo de accesorios independientes.
+
 ## [1.2.0] - 2026-06-21
 
 ### Added

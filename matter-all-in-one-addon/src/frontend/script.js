@@ -53,11 +53,11 @@ async function fetchStatus() {
     els.haStatus.textContent = online ? 'Home Assistant conectado' : 'Reconectando con Home Assistant';
     els.version.textContent = data.version ? `Add-on v${data.version}${data.matterbridgeVersion ? ` · Matterbridge v${data.matterbridgeVersion}` : ''}` : '—';
     els.bridgeOrb.className = `status-orb ${online ? 'online' : 'offline'}`;
-    els.bridgeTitle.textContent = online ? 'Bridge activo' : 'Bridge sin conexión';
-    els.bridgeDescription.textContent = online ? 'Listo para publicar las entidades seleccionadas.' : 'El bridge reintentará automáticamente la conexión.';
+    els.bridgeTitle.textContent = online ? 'Servicio activo' : 'Servicio sin conexión';
+    els.bridgeDescription.textContent = online ? 'Listo para publicar las entidades seleccionadas.' : 'El servicio reintentará automáticamente la conexión.';
   } catch {
     els.haDot.className = 'connection-dot offline';
-    els.haStatus.textContent = 'No se pudo consultar el bridge';
+    els.haStatus.textContent = 'No se pudo consultar el servicio';
     els.bridgeOrb.className = 'status-orb offline';
     els.bridgeTitle.textContent = 'Estado no disponible';
     els.bridgeDescription.textContent = 'Comprueba que el add-on esté en ejecución.';
@@ -141,8 +141,8 @@ function selectEntity(entity) {
   els.selectionDescription.textContent = entity.auxiliary
     ? `Acción auxiliar de ${entity.primaryEntityId || 'su dispositivo principal'}. No se expone como accesorio Matter independiente.`
     : entity.exported
-      ? 'Esta entidad forma parte del bridge. Los controladores la descubrirán a través del único emparejamiento del bridge.'
-      : 'Actívala para publicar el endpoint en Matter.';
+      ? 'Esta entidad está publicada como un accesorio Matter independiente. Usa el código QR único para agregarla a tu casa inteligente (Apple Home, Google Home, etc.).'
+      : 'Actívala para publicar la entidad como accesorio Matter.';
   const profiles = Array.isArray(entity.profiles) ? entity.profiles : [];
   els.profileField.hidden = entity.auxiliary || profiles.length === 0;
   els.profileSelect.replaceChildren(...profiles.map((profile) => {
@@ -159,7 +159,7 @@ function selectEntity(entity) {
   els.selectionStatus.className = `selection-status${entity.exported ? ' active' : ''}`;
   els.selectionStatus.textContent = entity.auxiliary
     ? 'Acción auxiliar: no se crea un mosaico ni un accesorio Matter separado.'
-    : entity.exported ? '✓ Publicada en el bridge Matter' : 'Aún no se publica en Matter';
+    : entity.exported ? '✓ Publicada como accesorio Matter' : 'Aún no se publica en Matter';
 
   els.deviceQrContainer.style.display = 'none';
   els.deviceQrCode.innerHTML = '';
@@ -207,7 +207,7 @@ async function toggleEntity(entity, checkbox) {
     const result = await request(`/${next ? 'register' : 'unregister'}/${encodeURIComponent(entity.entityId)}`, { method: 'POST' });
     if (!result.success) throw new Error(result.error || 'No se pudo actualizar la entidad');
     entity.exported = next;
-    showToast(next ? `${displayName(entity)} se publicó en Matter.` : `${displayName(entity)} se retiró del bridge.`);
+    showToast(next ? `${displayName(entity)} se publicó en Matter.` : `${displayName(entity)} se retiró de Matter.`);
     await fetchDevices();
     const device = groupEntities(state.entities).find((item) => item.id === state.activeDevice.id);
     if (device) openDevice(device); else setModalOpen(els.deviceModal, false);
@@ -250,8 +250,8 @@ els.settingsButton.addEventListener('click', () => setModalOpen(els.settingsModa
 els.settingsModalClose.addEventListener('click', () => setModalOpen(els.settingsModal, false));
 els.confirmCancel.addEventListener('click', () => setModalOpen(els.confirmModal, false));
 els.confirmAccept.addEventListener('click', async () => { const action = state.confirmAction; setModalOpen(els.confirmModal, false); if (action) await action(); });
-els.restartButton.addEventListener('click', () => openConfirm('Reiniciar bridge', 'El servicio se reiniciará y las conexiones Matter se restablecerán durante unos segundos.', async () => { try { await request('/restart', { method: 'POST' }); showToast('El bridge se está reiniciando.'); } catch { showToast('No se pudo solicitar el reinicio.', true); } }));
-els.factoryResetButton.addEventListener('click', () => openConfirm('Restablecimiento de fábrica', 'Esta operación elimina configuración y emparejamientos del plugin. Tendrás que volver a emparejar el bridge.', async () => { try { await request('/factoryreset', { method: 'POST' }); showToast('Restablecimiento solicitado.'); } catch { showToast('No se pudo solicitar el restablecimiento.', true); } }));
+els.restartButton.addEventListener('click', () => openConfirm('Reiniciar servicio', 'El servicio se reiniciará y las conexiones Matter se restablecerán durante unos segundos.', async () => { try { await request('/restart', { method: 'POST' }); showToast('El servicio se está reiniciando.'); } catch { showToast('No se pudo solicitar el reinicio.', true); } }));
+els.factoryResetButton.addEventListener('click', () => openConfirm('Restablecimiento de fábrica', 'Esta operación elimina configuración y emparejamientos. Tendrás que volver a configurar y emparejar los accesorios.', async () => { try { await request('/factoryreset', { method: 'POST' }); showToast('Restablecimiento solicitado.'); } catch { showToast('No se pudo solicitar el restablecimiento.', true); } }));
 [els.deviceModal, els.settingsModal].forEach((modal) => modal.addEventListener('click', (event) => { if (event.target === modal) setModalOpen(modal, false); }));
 document.addEventListener('keydown', (event) => { if (event.key === 'Escape') [els.confirmModal, els.settingsModal, els.deviceModal].find((modal) => modal.classList.contains('open')) && setModalOpen([els.confirmModal, els.settingsModal, els.deviceModal].find((modal) => modal.classList.contains('open')), false); });
 

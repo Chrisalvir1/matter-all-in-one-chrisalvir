@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#0b1020">
-  <title>Matter Bridge · Home Assistant</title>
+  <title>Matter Accessories · Home Assistant</title>
   <meta name="description" content="Gestiona de forma segura las entidades de Home Assistant exportadas mediante Matter.">
   <link rel="stylesheet" href="style.css">
 </head>
@@ -13,19 +13,19 @@
   <div class="ambient ambient-two"></div>
 
   <div class="app-shell">
-    <aside class="sidebar" aria-label="Estado del bridge">
+    <aside class="sidebar" aria-label="Estado del servicio">
       <div class="brand">
         <div class="brand-mark" aria-hidden="true">M</div>
         <div>
           <p class="eyebrow">HOME ASSISTANT</p>
-          <h1>Matter Bridge</h1>
+          <h1>Matter All-in-One</h1>
         </div>
       </div>
 
       <section class="bridge-card" aria-live="polite">
         <span class="status-orb" id="bridge-orb"></span>
         <div>
-          <p class="card-label">Estado del bridge</p>
+          <p class="card-label">Estado del servicio</p>
           <strong id="bridge-title">Iniciando…</strong>
           <p id="bridge-description">Comprobando la conexión con Home Assistant.</p>
         </div>
@@ -33,11 +33,11 @@
 
       <section class="sidebar-note">
         <span aria-hidden="true">✦</span>
-        <p>Un solo bridge Matter. El botón de QR abre el frontend oficial, que muestra el código Matter real.</p>
+        <p>Cada dispositivo se expone como un accesorio Matter independiente con su propio código de emparejamiento único.</p>
       </section>
 
       <div class="sidebar-spacer"></div>
-      <button class="button button-secondary" id="settings-button" type="button">Ajustes del bridge</button>
+      <button class="button button-secondary" id="settings-button" type="button">Ajustes del servicio</button>
       <div class="connection-state">
         <span class="connection-dot" id="ha-dot"></span>
         <span id="ha-status">Conectando con Home Assistant…</span>
@@ -50,7 +50,7 @@
         <div>
           <p class="eyebrow">PUBLICACIÓN CONTROLADA</p>
           <h2>Dispositivos</h2>
-          <p class="lead">Activa una entidad solo cuando quieres añadirla al bridge. El emparejamiento se realiza una vez, desde Matterbridge.</p>
+          <p class="lead">Activa una entidad para publicarla como un accesorio Matter independiente. Cada accesorio tiene su propio código de emparejamiento único.</p>
         </div>
         <label class="search" for="device-search">
           <span aria-hidden="true">⌕</span>
@@ -62,7 +62,7 @@
         <span class="info-icon" aria-hidden="true">i</span>
         <div>
           <strong>Emparejamiento seguro</strong>
-          <p>Los códigos Matter pertenecen al bridge, no a cada entidad. Ábrelos solo desde el flujo de comisión del frontend oficial de Matterbridge.</p>
+          <p>Cada accesorio tiene su propio código QR y manual de emparejamiento único. Haz clic en la entidad activa para visualizarlos.</p>
         </div>
       </section>
 
@@ -96,7 +96,7 @@
         <aside class="selection-panel" id="selection-panel">
           <p class="card-label">SELECCIÓN</p>
           <h3 id="selection-title">Selecciona una entidad</h3>
-          <p id="selection-description">Activa una entidad para añadirla al bridge Matter.</p>
+          <p id="selection-description">Activa una entidad para publicarla como un accesorio independiente.</p>
           <label class="profile-field" id="profile-field">
             <span>Perfil Matter</span>
             <select id="profile-select" aria-label="Perfil Matter"></select>
@@ -118,11 +118,11 @@
     <section class="modal modal-small">
       <button class="icon-button" id="settings-modal-close" type="button" aria-label="Cerrar">×</button>
       <p class="eyebrow">MANTENIMIENTO</p>
-      <h2 id="settings-title">Ajustes del bridge</h2>
-      <p class="lead compact">Estas acciones afectan al bridge completo, no a una entidad individual.</p>
+      <h2 id="settings-title">Ajustes del servicio</h2>
+      <p class="lead compact">Estas acciones afectan a todos los accesorios y al servicio Matterbridge subyacente.</p>
       <div class="settings-actions">
         <div class="settings-row">
-          <div><strong>Reiniciar bridge</strong><p>Recarga el servicio y restablece conexiones activas.</p></div>
+          <div><strong>Reiniciar servicio</strong><p>Recarga el servicio y restablece conexiones activas.</p></div>
           <button class="button button-primary" id="restart-button" type="button">Reiniciar</button>
         </div>
         <div class="settings-row danger-row">

@@ -1,17 +1,16 @@
 # matter-all-in-one-chrisalvir
 
-> **Matter 1.5.1 Bridge for Home Assistant**  
-> Complete HomeKit (2025/2026) compatibility. Expose Home Assistant entities directly to the Matter protocol.
+> **Matter All-in-One for Home Assistant (v1.2.1)**  
+> Expose Home Assistant entities as independent Matter accessories with complete HomeKit compatibility.
 
 ---
 
 ## 🌟 Key Features
 
-* **Complete HomeKit 2025/2026 Ready**: Native support for Apple HomeKit's Matter 1.5.1 specifications.
+* **Independent Accessories Mode (Plan B)**: Exported entities are published as standalone Matter Server nodes (not a bridged device), each with its own unique QR pairing code. This avoids mDNS overhead and simplifies discovery.
+* **Liquid Glass UI Integration**: View QR codes and manual codes natively inside a custom dark-themed control panel, without leaving the page.
+* **Complete HomeKit Ready**: Native support for Apple HomeKit's Matter specifications.
 * **Unified Closure Support**: Cover entities (`cover.*`) mapped directly to the unified `ClosureDimension` and `ClosureControl` clusters.
-* **Secure IP Cameras**: Support for camera entities (`camera.*`) with RTSP, HLS, and WebRTC streaming using `CameraAvStreamManagement`.
-* **Soil Humidity Sensors**: Map sensor moisture measurements directly to standard Soil Moisture + Temperature endpoints.
-* **Energy Tariff Tracking**: Expose monetary sensors using standard Electrical Grid Conditions clusters.
 
 ---
 
