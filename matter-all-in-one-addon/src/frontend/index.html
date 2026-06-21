@@ -104,7 +104,11 @@
           </label>
           <dl class="selection-meta" id="selection-meta"></dl>
           <div class="selection-status" id="selection-status"></div>
-          <button class="button button-secondary bridge-qr-button" id="bridge-qr-button" type="button">Ver QR real del bridge</button>
+          <div id="device-qr-container" style="display: none; text-align: center; margin-top: 1rem;">
+            <div id="device-qr-code" style="display: inline-block; background: white; padding: 1rem; border-radius: 8px;"></div>
+            <p id="device-manual-code" style="margin-top: 0.5rem; font-family: monospace; user-select: all; font-weight: bold;"></p>
+          </div>
+          <button class="button button-secondary bridge-qr-button" id="device-qr-button" type="button" style="display: none;">Mostrar Código de Emparejamiento</button>
         </aside>
       </div>
     </section>
@@ -142,6 +146,7 @@
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="qrcode.min.js"></script>
   <script src="script.js"></script>
 </body>
 </html>

@@ -67,6 +67,7 @@ export class BaseEntity {
 
     this.endpoint = new MatterbridgeEndpoint([this.deviceType], {
       id: this.entityId.replaceAll('.', '_'),
+      mode: 'server',
     });
 
     const [domain] = this.entityId.split('.');
@@ -84,11 +85,12 @@ export class BaseEntity {
     // This is a bridged endpoint, not an independent Matter server.  One
     // Matter node per HA entity creates excessive mDNS traffic and leaves
     // orphan nodes behind when entities are toggled in the UI.
-    this.endpoint.createDefaultBridgedDeviceBasicInformationClusterServer(
+    this.endpoint.createDefaultBasicInformationClusterServer(
       uniqueName,
       this.endpoint.serialNumber,
       0xfff1,
       'Home Assistant',
+      0x8000,
       this.endpoint.productName
     );
 

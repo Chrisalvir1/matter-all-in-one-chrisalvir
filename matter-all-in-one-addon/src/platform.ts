@@ -619,6 +619,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         if (req.method === 'GET' && pathname === '/api/custom/devices') {
           const result = Array.from(this.entities.values()).map(e => {
             const [domain] = e.entityId.split('.');
+            const endpoint = this.matterbridgeDevices.get(e.entityId) as any;
 
             return {
               entityId: e.entityId, // Frontend expects entityId
@@ -635,9 +636,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               primaryEntityId: this.getPrimaryEntityId(e.entityId) ?? null,
               profileId: this.deviceOverrides[e.entityId] ?? getDefaultExportProfileId(domain) ?? null,
               profiles: getExportProfiles(domain),
-              pairingCode: null,
-              manualPairingCode: null,
-              commissioned: false,
+              pairingCode: endpoint?.qrPairingCode ?? null,
+              manualPairingCode: endpoint?.manualPairingCode ?? null,
+              commissioned: endpoint?.serverNode?.isCommissioned?.() ?? endpoint?.commissioned ?? false,
               fabric: null,
             };
           });

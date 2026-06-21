@@ -11,7 +11,8 @@ const els = {
   deviceModalName: $('device-modal-name'), deviceModalId: $('device-modal-id'), entityList: $('entity-list'),
   modalExportCount: $('modal-export-count'), selectionPanel: $('selection-panel'), selectionTitle: $('selection-title'),
   selectionDescription: $('selection-description'), selectionMeta: $('selection-meta'), selectionStatus: $('selection-status'),
-  profileField: $('profile-field'), profileSelect: $('profile-select'), profileNote: $('profile-note'), bridgeQrButton: $('bridge-qr-button'),
+  deviceQrContainer: $('device-qr-container'), deviceQrCode: $('device-qr-code'), deviceManualCode: $('device-manual-code'), deviceQrButton: $('device-qr-button'),
+  profileField: $('profile-field'), profileSelect: $('profile-select'), profileNote: $('profile-note'),
   settingsButton: $('settings-button'), settingsModal: $('settings-modal'), settingsModalClose: $('settings-modal-close'),
   restartButton: $('restart-button'), factoryResetButton: $('factory-reset-button'), confirmModal: $('confirm-modal'),
   confirmTitle: $('confirm-title'), confirmDescription: $('confirm-description'), confirmCancel: $('confirm-cancel'),
@@ -159,6 +160,25 @@ function selectEntity(entity) {
   els.selectionStatus.textContent = entity.auxiliary
     ? 'Acción auxiliar: no se crea un mosaico ni un accesorio Matter separado.'
     : entity.exported ? '✓ Publicada en el bridge Matter' : 'Aún no se publica en Matter';
+
+  els.deviceQrContainer.style.display = 'none';
+  els.deviceQrCode.innerHTML = '';
+  els.deviceManualCode.textContent = '';
+  els.deviceQrButton.style.display = 'none';
+  els.deviceQrButton.textContent = 'Mostrar Código de Emparejamiento';
+
+  if (entity && !entity.auxiliary && entity.exported) {
+    if (entity.commissioned) {
+      els.selectionStatus.textContent = '✓ Conectado a un Controlador Matter (HomeKit/Google)';
+      els.selectionStatus.classList.add('commissioned');
+    } else {
+      els.selectionStatus.classList.remove('commissioned');
+    }
+
+    if (entity.pairingCode) {
+      els.deviceQrButton.style.display = 'block';
+    }
+  }
 }
 
 function profileCompatibilityText(compatibility) {
@@ -199,7 +219,31 @@ function openConfirm(title, description, action) { els.confirmTitle.textContent 
 
 els.deviceSearch.addEventListener('input', renderDevices);
 els.profileSelect.addEventListener('change', () => { if (state.activeEntity) void updateProfile(state.activeEntity, els.profileSelect.value); });
-els.bridgeQrButton.addEventListener('click', () => { window.open(`${window.location.protocol}//${window.location.hostname}:8284`, '_blank', 'noopener'); });
+els.deviceQrButton.addEventListener('click', () => {
+  if (els.deviceQrContainer.style.display === 'none') {
+    els.deviceQrContainer.style.display = 'block';
+    els.deviceQrButton.textContent = 'Ocultar Código';
+    els.deviceQrCode.innerHTML = '';
+    if (state.activeEntity && state.activeEntity.pairingCode) {
+      if (typeof QRCode !== 'undefined') {
+        new QRCode(els.deviceQrCode, {
+          text: state.activeEntity.pairingCode,
+          width: 180,
+          height: 180,
+          colorDark : "#0b1020",
+          colorLight : "#ffffff",
+          correctLevel : QRCode.CorrectLevel.M
+        });
+      } else {
+        els.deviceQrCode.textContent = 'Librería QR no cargada.';
+      }
+      els.deviceManualCode.textContent = state.activeEntity.manualPairingCode || state.activeEntity.pairingCode;
+    }
+  } else {
+    els.deviceQrContainer.style.display = 'none';
+    els.deviceQrButton.textContent = 'Mostrar Código de Emparejamiento';
+  }
+});
 els.refreshButton.addEventListener('click', async () => { await Promise.all([fetchStatus(), fetchDevices()]); showToast('Lista actualizada.'); });
 els.deviceModalClose.addEventListener('click', () => setModalOpen(els.deviceModal, false));
 els.settingsButton.addEventListener('click', () => setModalOpen(els.settingsModal, true));
