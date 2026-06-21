@@ -1,6 +1,6 @@
 # matter-all-in-one-chrisalvir
 
-> **Matter All-in-One for Home Assistant (v1.2.2)**  
+> **Matter All-in-One for Home Assistant (v1.2.3)**  
 > Expose Home Assistant entities as independent Matter accessories with complete HomeKit compatibility.
 
 ---
