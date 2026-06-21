@@ -750,6 +750,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               const { rm } = await import('fs/promises');
               await rm('/data/device-overrides.json', { force: true });
               await rm('/data/exported-devices.json', { force: true });
+              // A Matter factory reset must also remove Matterbridge's
+              // persistent fabrics and commissioning data. Leaving this
+              // directory behind makes a failed pairing look commissioned
+              // and causes the old QR/node identity to be reused.
+              await rm('/data/.matterbridge', { recursive: true, force: true });
             } catch (err) {
               this.log.error(`Failed to wipe storage: ${err}`);
             }

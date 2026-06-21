@@ -1,4 +1,4 @@
-# Resumen de Cambios: Versión 1.2.3 (Estabilidad y Mejoras UX)
+# Resumen de Cambios: Versión 1.2.5 (RVC Matter y estabilidad)
 
 Hemos implementado mejoras clave en el add-on para solucionar problemas de emparejamiento, corregir errores fatales en el ciclo de vida y optimizar la experiencia de usuario.
 

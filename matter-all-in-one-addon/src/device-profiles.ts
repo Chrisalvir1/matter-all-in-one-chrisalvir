@@ -37,7 +37,7 @@ const profilesByDomain: Record<string, DeviceExportProfile[]> = {
     { id: 'thermostat', label: 'Termostato', description: 'Control HVAC.', appleHome: 'supported' },
   ],
   vacuum: [
-    { id: 'roboticVacuumCleaner', label: 'Aspiradora robot (RVC)', description: 'Tipo Matter RVC oficial.', appleHome: 'experimental' },
+    { id: 'roboticVacuumCleaner', label: 'Aspiradora robot (RVC)', description: 'Tipo Matter RVC oficial con controles nativos en Apple Home.', appleHome: 'supported' },
   ],
   media_player: [
     { id: 'basicVideoPlayer', label: 'Reproductor de vídeo / TV', description: 'Tipo Matter Basic Video Player oficial.', appleHome: 'unsupported' },

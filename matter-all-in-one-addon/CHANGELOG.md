@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.5] - 2026-06-21
+
+### Fixed
+- **RVC Matter nativo para Apple Home:** `vacuum.*` continúa exponiéndose exclusivamente como `RoboticVacuumCleaner` (`0x0074`) en un nodo independiente `mode: 'server'`; se eliminó cualquier alternativa de degradarlo a interruptor.
+- **Nombres de Home Assistant preservados:** se eliminaron los sufijos internos añadidos a los nombres visibles de accesorios. La identidad Matter sigue siendo estable mediante `entity_id`, número de serie y `uniqueId`, sin alterar el `friendly_name` de HA.
+- **Factory reset real:** la restauración de fábrica borra también `/data/.matterbridge`, incluidos fabrics y estado de comisión. Esto evita que un intento de comisión revertido reutilice una identidad Matter que parecía ya emparejada.
+- **Documentación técnica actualizada:** se documentan la topología RVC requerida por Apple Home, las restricciones de identidad y el procedimiento de recuperación para futuras contribuciones e IAs.
+
+### Changed
+- **Perfil RVC:** el panel declara el perfil `RoboticVacuumCleaner` como compatible con Apple Home y muestra que ofrece controles RVC nativos.
+
 ## [1.2.4] - 2026-06-21
 
 ### Fixed

@@ -1,6 +1,6 @@
 # Estado de refactorización — matter-all-in-one-chrisalvir
 
-> Documento vivo. Última actualización: 2026-06-21 — versión 1.2.3.
+> Documento vivo. Última actualización: 2026-06-21 — versión 1.2.5.
 
 ## Objetivo de arquitectura actual (v1.2.0+)
 
@@ -14,7 +14,7 @@ El add-on opera publicando cada entidad exportada de Home Assistant como un nodo
 
 ## Cambios aplicados y estado actual
 
-| Área | Estado | Implementación / Detalles en v1.2.3 |
+| Área | Estado | Implementación / Detalles en v1.2.5 |
 | --- | --- | --- |
 | **Ciclo de Vida Matter** | Hecho | Cada accesorio es un `ServerNode` independiente. Se registran/desregistran mediante `registerDevice()` y `unregisterDevice()`. |
 | **Llamadas de control API** | Hecho | **Se eliminaron por completo las llamadas a `startServerNode()` y `stopServerNode()`** que no existen en `MatterbridgePlatform` y producían `TypeError` al deshabilitar dispositivos. |
@@ -22,7 +22,8 @@ El add-on opera publicando cada entidad exportada de Home Assistant como un nodo
 | **Nombre de Casa (Fabric)** | Hecho | El backend extrae el nombre de la casa (ej: "Casa de Chris") desde `endpoint?.serverNode?.state?.commissioning?.fabrics` (propiedad `label`) y lo expone como `homeName` en la API `/api/custom/devices`. |
 | **Panel Gráfico (Liquid Glass)** | Hecho | El frontend agrupa entidades por **Dispositivo físico de HA** (`device_id`). El usuario interactúa con dispositivos físicos en la lista, no con un listado confuso de entidades sueltas. |
 | **Polling de Código QR** | Hecho | El botón de ver QR está siempre visible para entidades exportadas. Si el código QR aún no se ha generado en el arranque, el frontend realiza polling automático cada 2 segundos. |
-| **Versiones y Git** | Hecho | Versión 1.2.3 publicada en git, con tag `v1.2.3` y cambios descritos en `CHANGELOG.md`. |
+| **RVC y Apple Home** | Hecho | `vacuum.*` usa el tipo Matter real `RoboticVacuumCleaner` (`0x0074`) como ServerNode independiente. No se debe convertir en switch ni añadirlo al bridge. |
+| **Identidad visible** | Hecho | El nombre visible es el `friendly_name` de Home Assistant (hasta 32 caracteres); `entity_id`, serial y `uniqueId` proporcionan la identidad interna estable. |
 
 ---
 
@@ -35,6 +36,14 @@ El add-on opera publicando cada entidad exportada de Home Assistant como un nodo
 > [!IMPORTANT]
 > **¡NO USAR `this.matterbridge.startServerNode()` ni `this.matterbridge.stopServerNode()`!**
 > Estos métodos NO existen en la clase `MatterbridgePlatform`. El ciclo de vida de cada nodo Matter independiente en modo `server` es manejado de manera interna por `registerDevice()` y `unregisterDevice()`. Intentar llamarlos causa un crash fatal del add-on.
+
+> [!IMPORTANT]
+> **RVC para Apple Home debe mantenerse como RVC Matter real.**
+> Apple Home soporta aspiradoras robot Matter, pero Matterbridge exige un nodo individual `mode: 'server'` para el RVC. No usar `mode: 'matter'`, no añadirlo como endpoint hijo de un bridge y no sustituirlo por `OnOffPlugInUnit`. El constructor es `new RoboticVacuumCleaner(name, serial, 'server', ...)`.
+
+> [!IMPORTANT]
+> **No alterar el nombre del usuario para crear unicidad.**
+> El nombre de Basic Information debe proceder de `friendly_name` de Home Assistant. La unicidad vive en `entity_id`, `serialNumber` y `uniqueId`; añadir sufijos como el ID de entidad o versiones modifica indebidamente el accesorio visible.
 
 > [!NOTE]
 > **El `pairingCode` puede ser nulo inicialmente.**
@@ -57,4 +66,4 @@ El add-on opera publicando cada entidad exportada de Home Assistant como un nodo
 | GET | `/api/custom/status` | Devuelve el estado general y la versión del addon. |
 | GET | `/api/custom/logs` | Devuelve logs para depuración. |
 | POST | `/api/custom/restart` | Reinicia Matterbridge. |
-| POST | `/api/custom/factoryreset` | Borra la base de datos de Matter y reinicia. |
+| POST | `/api/custom/factoryreset` | Borra selección, perfiles y el almacenamiento Matterbridge (fabrics/QR/nodos), y reinicia. |

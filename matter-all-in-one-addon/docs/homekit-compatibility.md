@@ -1,6 +1,6 @@
 # HomeKit Compatibility (2025/2026)
 
-This document provides a detailed overview of the compatibility of standard and new Matter 1.5.1 device types with Apple HomeKit (iOS 18+ and iOS 19/HomeKit 2025/2026 releases).
+This document records the compatibility baseline used by this project for Apple Home in 2026. It distinguishes a Matter device type from the required commissioning topology.
 
 ## Supported Device Type Mapping
 
@@ -21,6 +21,7 @@ export const homekitSupportedDeviceTypes = {
   temperatureSensor: true,
   humiditySensor: true,
   illuminanceSensor: true,
+  roboticVacuumCleaner: true, // Native RVC controls; standalone node required
   
   // Matter 1.4 (HomeKit does not support yet)
   waterHeater: false,
@@ -35,6 +36,17 @@ export const homekitSupportedDeviceTypes = {
   energyTariff: false,   // Experimental/Partial
 }
 ```
+
+## Robotic Vacuum Cleaner (RVC)
+
+`vacuum.*` is exported as the official Matter `RoboticVacuumCleaner` device type (`0x0074`), not as a switch. Apple documents robot-vacuum features in the current Home app, and Matterbridge documents the Apple constraint: an RVC must be a standalone Matter server node, with its own QR code and fabric store.
+
+- Use `mode: 'server'` as the third `RoboticVacuumCleaner` constructor argument.
+- Keep exactly one RVC endpoint in that server node; do not bridge it as a child endpoint.
+- Preserve the Home Assistant `friendly_name` (limited only to Matter's 32-character Basic Information field); use `entity_id`/serial for internal identity.
+- On a failed attempt that leaves the node commissioned, perform the add-on factory reset before retrying so the old fabric store is not reused.
+
+Sources: [Apple Home — robot vacuums](https://www.apple.com/home-app/), [Apple Home update support](https://support.apple.com/en-ie/102287), [Matterbridge RVC server-mode guidance](https://matterbridge.io/CHANGELOG.html), and [Apple Matter accessory interoperability best practices](https://developer.apple.com/apple-home/downloads/Matter-Accessory-Best-Practices-for-Apple-Home.pdf).
 
 ## Special Notes for Camera Streaming
 

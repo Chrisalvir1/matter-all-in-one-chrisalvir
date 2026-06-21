@@ -26,11 +26,7 @@ export class CooktopEntity extends BaseEntity {
   public override async createEndpoint(): Promise<MatterbridgeEndpoint> {
     const rawName = this.state.attributes.friendly_name ?? this.entityId;
 
-    const entityPart = this.entityId.replace(/[^a-zA-Z0-9]/g, '').slice(-6);
-    const displayName = rawName.length > 24
-      ? rawName.substring(0, 24).trim() + ' ' + entityPart
-      : rawName + (rawName.length < 28 ? ' ' + entityPart : '');
-    const uniqueName = (displayName.substring(0, 28) + ' v6').trim();
+    const uniqueName = rawName.substring(0, 32).trim();
 
     const v6Id = this.entityId.replaceAll('.', '_') + '_v6';
     const serialNumber = v6Id + '_sn';

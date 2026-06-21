@@ -14,7 +14,7 @@ Este add-on expone ahora las entidades de Home Assistant en **Modo de Accesorios
 Si vienes de una versión que usaba el modo Bridge único global (versiones 1.1.x o anteriores):
 
 1. **Respaldar configuración:** Haz una copia de seguridad de la carpeta de datos `/data/.matterbridge`.
-2. **Actualizar el add-on:** Instala la última versión (v1.2.3 o superior).
+2. **Actualizar el add-on:** Instala la última versión (v1.2.5 o superior).
 3. **Eliminar accesorios antiguos:** En tus ecosistemas domésticos (Apple Home, Google Home, etc.), elimina el puente "Matterbridge" antiguo si existía.
 4. **Registrar de nuevo:** Abre el panel gráfico del add-on (puerto 8285), busca los dispositivos físicos y activa las entidades individuales que quieras exponer a Matter.
 5. **Emparejar uno por uno:** Para cada entidad exportada, haz clic en `Configurar` y usa el botón de ver código QR. Escanea el código QR único generado para ese accesorio específico en tu aplicación de hogar (Apple Home, etc.).

@@ -2,12 +2,11 @@
  * vacuum.entity.ts
  *
  * Matterbridge entity for Home Assistant `vacuum.*` devices.
- * Exposes them as Matter 1.2 RVC (Robotic Vacuum Cleaner) — device type 0x0074.
+ * Exposes them as the official Matter RVC (Robotic Vacuum Cleaner) — device type 0x0074.
  *
  * Uses the official RoboticVacuumCleaner implementation provided by
- * Matterbridge. Controller support is intentionally handled by the UI as an
- * explicit compatibility choice; an official Matter device type does not by
- * itself guarantee that every controller exposes all RVC controls.
+ * Matterbridge. Apple Home supports RVC when it is commissioned as an
+ * independent Matter server node (mode: 'server'), never as a bridged child.
  */
 
 import { MatterbridgeEndpoint, DeviceTypeDefinition } from 'matterbridge';
@@ -41,11 +40,9 @@ export class VacuumEntity extends BaseEntity {
   public override async createEndpoint(): Promise<MatterbridgeEndpoint> {
     const rawName = this.state.attributes.friendly_name ?? this.entityId;
 
-    const entityPart = this.entityId.replace(/[^a-zA-Z0-9]/g, '').slice(-6);
-    const displayName = rawName.length > 24
-      ? rawName.substring(0, 24).trim() + ' ' + entityPart
-      : rawName + (rawName.length < 28 ? ' ' + entityPart : '');
-    const uniqueName = displayName.substring(0, 32).trim();
+    // The accessory name must match Home Assistant. The stable entity ID and
+    // serial number below provide uniqueness without modifying this name.
+    const uniqueName = rawName.substring(0, 32).trim();
 
     // Stable identity for this entity — do NOT rotate or append version suffixes.
     // Changing stableId or serialNumber after first pairing creates orphaned tiles

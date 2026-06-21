@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { getDefaultExportProfileId, getExportProfile, getExportProfiles } from '../src/device-profiles.js';
 
 describe('device export profiles', () => {
-  it('offers the official RVC profile as the only vacuum profile', () => {
+  it('offers the official RVC profile as Apple Home-supported', () => {
     expect(getExportProfiles('vacuum')).toEqual([
-      expect.objectContaining({ id: 'roboticVacuumCleaner', appleHome: 'experimental' }),
+      expect.objectContaining({ id: 'roboticVacuumCleaner', appleHome: 'supported' }),
     ]);
     expect(getDefaultExportProfileId('vacuum')).toBe('roboticVacuumCleaner');
   });

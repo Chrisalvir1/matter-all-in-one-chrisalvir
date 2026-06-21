@@ -56,14 +56,10 @@ export class BaseEntity {
   public async createEndpoint(): Promise<MatterbridgeEndpoint> {
     const rawName = this.state.attributes.friendly_name ?? this.entityId;
 
-    // Build a unique device name: use friendly name truncated to 24 chars + short entity suffix
-    // This avoids the "Device already registered" error when multiple devices share the same area prefix
-    const entityPart = this.entityId.replace(/[^a-zA-Z0-9]/g, '').slice(-6);
-    const displayName = rawName.length > 24
-      ? rawName.substring(0, 24).trim() + ' ' + entityPart
-      : rawName + (rawName.length < 28 ? ' ' + entityPart : '');
-    // Final safety truncate to 32 chars (Matter spec limit)
-    const uniqueName = displayName.substring(0, 32).trim();
+    // Preserve the Home Assistant friendly name exactly (within Matter's
+    // 32-character limit). Identity and uniqueness belong to entityId/serial,
+    // never to the user-visible accessory name.
+    const uniqueName = rawName.substring(0, 32).trim();
 
     this.endpoint = new MatterbridgeEndpoint([this.deviceType], {
       id: this.entityId.replaceAll('.', '_'),
