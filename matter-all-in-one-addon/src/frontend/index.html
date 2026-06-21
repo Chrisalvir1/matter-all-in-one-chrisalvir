@@ -1,253 +1,141 @@
-<!--
-  Matter 1.5.x Bridge · Liquid Glass UI · index.html
-  Layout: Sidebar + Panel principal de dispositivos
--->
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Matter 1.5.x Bridge · All-in-One</title>
-  <meta name="description" content="Puente Matter 1.5.x All-in-One para Home Assistant. Expone tus entidades a Apple Home, Google Home y Alexa.">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b1020">
+  <title>Matter Bridge · Home Assistant</title>
+  <meta name="description" content="Gestiona de forma segura las entidades de Home Assistant exportadas mediante Matter.">
   <link rel="stylesheet" href="style.css">
-  <script src="qrcode.min.js"></script>
 </head>
 <body>
-
-  <!-- Ambient Background Orbs -->
-  <div class="bg-orb orb-1"></div>
-  <div class="bg-orb orb-2"></div>
-  <div class="bg-orb orb-3"></div>
+  <div class="ambient ambient-one"></div>
+  <div class="ambient ambient-two"></div>
 
   <div class="app-shell">
-
-    <!-- ── SIDEBAR ──────────────────────────────────────────── -->
-    <aside class="sidebar glass">
-      <div class="sidebar-brand">
-        <div class="brand-icon">
-          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="12" cy="12" r="10" stroke="url(#grad)" stroke-width="1.5"/>
-            <path d="M8 12h8M12 8l4 4-4 4" stroke="url(#grad)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            <defs>
-              <linearGradient id="grad" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
-                <stop stop-color="#5e9bff"/>
-                <stop offset="1" stop-color="#a78bfa"/>
-              </linearGradient>
-            </defs>
-          </svg>
-        </div>
-        <div class="brand-text">
-          <span class="brand-name">Matter 1.5.x</span>
-          <span class="brand-sub">All-in-One Bridge</span>
+    <aside class="sidebar" aria-label="Estado del bridge">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">M</div>
+        <div>
+          <p class="eyebrow">HOME ASSISTANT</p>
+          <h1>Matter Bridge</h1>
         </div>
       </div>
 
-      <!-- Mode Indicator -->
-      <div class="sidebar-bridge-status glass-card-sm">
-        <div class="sbs-orb-row">
-          <div class="sbs-orb connected" id="sbs-orb"></div>
-          <div>
-            <div class="sbs-title">Modo Accesorio</div>
-            <div class="sbs-desc" style="font-size:11px; margin-top:4px;">QRs individuales por dispositivo</div>
-          </div>
+      <section class="bridge-card" aria-live="polite">
+        <span class="status-orb" id="bridge-orb"></span>
+        <div>
+          <p class="card-label">Estado del bridge</p>
+          <strong id="bridge-title">Iniciando…</strong>
+          <p id="bridge-description">Comprobando la conexión con Home Assistant.</p>
         </div>
-      </div>
+      </section>
 
-      <div class="sidebar-actions">
-        <button id="advanced-btn" class="pill-btn secondary full-w sm">⚙ Ajustes</button>
-      </div>
+      <section class="sidebar-note">
+        <span aria-hidden="true">✦</span>
+        <p>Un solo bridge Matter. Selecciona únicamente las entidades que quieres publicar.</p>
+      </section>
 
-      <div class="sidebar-footer">
-        <div class="ha-status-pill" id="ha-status-pill">
-          <span class="status-dot" id="ha-dot"></span>
-          <span id="ha-status-text">Conectando...</span>
-        </div>
-        <div class="version-pill" id="version-pill">v1.1.60</div>
+      <div class="sidebar-spacer"></div>
+      <button class="button button-secondary" id="settings-button" type="button">Ajustes del bridge</button>
+      <div class="connection-state">
+        <span class="connection-dot" id="ha-dot"></span>
+        <span id="ha-status">Conectando con Home Assistant…</span>
       </div>
+      <p class="version" id="version">—</p>
     </aside>
 
-    <!-- ── MAIN CONTENT ───────────────────────────────────────── -->
-    <main class="main-content">
-
-      <!-- Banner de cambios pendientes -->
-      <div class="pending-restart-banner glass-card" id="pending-restart-banner" style="display: none;">
-        <div class="prb-content">
-          <span class="prb-icon">⚠️</span>
-          <span class="prb-text">Tienes cambios guardados pendientes de aplicar. Reinicia el puente para aplicarlos a HomeKit.</span>
-        </div>
-        <button id="banner-restart-btn" class="pill-btn primary sm">🔄 Aplicar y Reiniciar</button>
-      </div>
-
-      <!-- Header de dispositivos -->
-      <div class="devices-header">
+    <main class="content">
+      <header class="content-header">
         <div>
-          <h1 class="page-title">Dispositivos</h1>
-          <p class="page-desc">Entidades de Home Assistant expuestas a Matter. Expande un dispositivo para configurar sus entidades.</p>
+          <p class="eyebrow">PUBLICACIÓN CONTROLADA</p>
+          <h2>Dispositivos</h2>
+          <p class="lead">Activa una entidad solo cuando quieres añadirla al bridge. El emparejamiento se realiza una vez, desde Matterbridge.</p>
         </div>
-        <div class="devices-header-controls">
-          <div class="search-pill">
-            <svg class="search-icon-svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd"/></svg>
-            <input type="text" id="device-search" placeholder="Buscar dispositivo...">
-          </div>
-          <span class="device-count-badge" id="device-count-badge"></span>
+        <label class="search" for="device-search">
+          <span aria-hidden="true">⌕</span>
+          <input id="device-search" type="search" placeholder="Buscar dispositivo o habitación" autocomplete="off">
+        </label>
+      </header>
+
+      <section class="info-banner" aria-label="Información de emparejamiento">
+        <span class="info-icon" aria-hidden="true">i</span>
+        <div>
+          <strong>Emparejamiento seguro</strong>
+          <p>Los códigos Matter pertenecen al bridge, no a cada entidad. Ábrelos solo desde el flujo de comisión del frontend oficial de Matterbridge.</p>
         </div>
+      </section>
+
+      <div class="toolbar">
+        <span id="device-count">Cargando entidades…</span>
+        <button class="text-button" id="refresh-button" type="button">Actualizar</button>
       </div>
 
-      <!-- Grid de dispositivos -->
-      <div class="device-list" id="device-list">
-        <div class="devices-empty" id="devices-loading">
-          <div class="spinner large"></div>
-          <p>Cargando dispositivos desde Home Assistant...</p>
-        </div>
-      </div>
-
+      <section class="device-grid" id="device-list" aria-live="polite" aria-busy="true">
+        <div class="empty-state"><span class="spinner"></span><p>Cargando entidades de Home Assistant…</p></div>
+      </section>
     </main>
   </div>
 
-  <!-- ── DEVICE CONFIG MODAL ──────────────────────────────────── -->
   <div class="modal-backdrop" id="device-modal" role="dialog" aria-modal="true" aria-labelledby="device-modal-name">
-    <div class="modal-sheet glass" style="max-width: 900px; width: 90vw;">
-      <button class="modal-close" id="device-modal-close" aria-label="Cerrar">
-        <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
-      </button>
-
-      <div class="device-modal-body">
-        <div class="dm-header" style="margin-bottom: 20px; border-bottom: 1px solid var(--glass-bdr); padding-bottom: 16px;">
-          <div style="display: flex; align-items: center; gap: 16px;">
-            <span class="dm-icon" id="dm-icon" style="font-size: 32px;">💡</span>
-            <div>
-              <h2 class="dm-name" id="device-modal-name" style="margin: 0; font-size: 20px;">Dispositivo</h2>
-              <div class="dm-id" id="dm-id" style="font-size: 12px; color: var(--t2);">device.id</div>
-            </div>
-          </div>
+    <section class="modal modal-wide">
+      <button class="icon-button" id="device-modal-close" type="button" aria-label="Cerrar">×</button>
+      <header class="modal-header">
+        <span class="modal-icon" id="device-modal-icon">⌂</span>
+        <div>
+          <p class="eyebrow">DISPOSITIVO HOME ASSISTANT</p>
+          <h2 id="device-modal-name">Dispositivo</h2>
+          <p class="entity-id" id="device-modal-id"></p>
         </div>
-
-        <div class="dm-grid" style="display: grid; grid-template-columns: 1fr 340px; gap: 24px;">
-          <div class="dm-left" style="display: flex; flex-direction: column; gap: 16px;">
-            <div class="dm-section-label" style="font-size: 14px; font-weight: 600; color: var(--t1);">Entidades del Dispositivo</div>
-            <div class="dm-entities-list" id="dm-entities-list" style="display: flex; flex-direction: column; gap: 12px; overflow-y: auto; max-height: 50vh; padding-right: 8px;">
-              <!-- Entities populated by JS -->
-            </div>
-          </div>
-
-          <div class="dm-right">
-            <div id="dm-right-placeholder" style="display: flex; align-items: center; justify-content: center; height: 100%; color: var(--t2); text-align: center; font-size: 13px;">
-              Selecciona una entidad exportada para ver su código de emparejamiento.
-            </div>
-            
-            <div id="dm-right-content" style="display: none;">
-              <div class="dm-section" id="dm-qr-section">
-              <div class="em-section-label">Emparejamiento Matter</div>
-
-              <!-- Commissioned Status Card -->
-              <div id="commissioned-status-card" class="glass-card-sm" style="display: none; border: 1px solid rgba(52,211,153,0.3); background: rgba(52,211,153,0.06); padding: 16px; border-radius: 14px; margin-top: 12px;">
-                <div style="display: flex; align-items: center; gap: 12px;">
-                  <div class="status-indicator-green" style="width: 14px; height: 14px; border-radius: 50%; background: var(--accent-g); box-shadow: 0 0 10px var(--accent-g); flex-shrink: 0; animation: dot-pulse 1.8s ease-in-out infinite;"></div>
-                  <div>
-                    <div style="font-size: 13px; font-weight: 700; color: var(--t1);">Dispositivo Conectado</div>
-                    <div style="font-size: 11px; color: var(--t2); margin-top: 2px;" id="commissioned-fabric-name">Vinculado a Casa</div>
-                  </div>
-                </div>
-                <div style="margin-top: 16px;">
-                  <button class="pill-btn danger full-w sm" id="decommission-btn" style="font-size: 12px; padding: 8px;">❌ Desconectar de la casa</button>
-                </div>
-              </div>
-
-              <!-- QR Pairing Code Card -->
-              <div id="qr-pairing-card" style="display: block;">
-                <div class="em-section-desc">Escanea el código para emparejar este accesorio de manera independiente.</div>
-                <div class="sqr-zone" style="margin-top: 12px; background: rgba(0,0,0,0.2); padding: 16px; border-radius: 12px;">
-                  <div id="modal-qrcode"></div>
-                  <div class="sqr-loading" id="modal-qr-loading" style="display:none;">
-                    <div class="spinner"></div>
-                    <span>Generando QR...</span>
-                  </div>
-                </div>
-                <div class="sqr-manual-row" style="margin-top: 12px; justify-content: center;">
-                  <code id="modal-manual-code">---- --- ----</code>
-                </div>
-              </div>
-            </div>
-
-            <!-- Collapsible Pairing Logs Section -->
-            <div class="dm-section" id="dm-logs-section" style="padding-top: 20px; border-top: 1px solid var(--glass-bdr);">
-              <details id="logs-details" style="width: 100%;">
-                <summary style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--t3); cursor: pointer; user-select: none; display: flex; align-items: center; justify-content: space-between; outline: none;">
-                  <span>📋 Registros del Emparejamiento (Logs)</span>
-                  <span class="details-chevron" style="transition: transform 0.2s; font-size: 8px;">▼</span>
-                </summary>
-                <div style="margin-top: 12px;">
-                  <div class="dm-section-desc" style="font-size: 11px; color: var(--t2); margin-bottom: 8px;">Registros del puente en tiempo real para diagnosticar errores de Apple y Matter.</div>
-                  <div class="logs-console glass-inset" id="modal-logs-console" style="font-family: 'Courier New', monospace; font-size: 11px; padding: 12px; background: rgba(0,0,0,0.4); border-radius: 8px; height: 180px; overflow-y: auto; color: #a5f3fc; white-space: pre-wrap; word-break: break-all; border: 1px solid var(--glass-bdr);">
-                    <!-- Logs populated by JS -->
-                  </div>
-                  <div style="display: flex; gap: 8px; margin-top: 10px;">
-                    <button class="pill-btn secondary sm" id="clear-logs-btn" style="flex: 1; font-size: 11px; padding: 6px; justify-content: center;">Limpiar</button>
-                    <button class="pill-btn secondary sm" id="copy-logs-btn" style="flex: 1; font-size: 11px; padding: 6px; justify-content: center;">Copiar Logs</button>
-                  </div>
-                </div>
-              </details>
-            </div>
-
-            <div class="dm-section" style="margin-top: 16px;">
-              <div class="dm-section-label" style="font-size: 14px; font-weight: 600; color: var(--t1); margin-bottom: 8px;">Compatibilidad HomeKit 2026</div>
-              <div class="compat-badges" id="compat-badges">
-                <span class="compat-badge apple">Apple Home</span>
-                <span class="compat-badge google">Google Home</span>
-                <span class="compat-badge alexa">Amazon Alexa</span>
-                <span class="compat-badge matter">Matter 1.5.x</span>
-              </div>
-            </div>
-            </div>
-          </div>
+      </header>
+      <div class="modal-layout">
+        <div>
+          <div class="section-header"><h3>Entidades disponibles</h3><span id="modal-export-count"></span></div>
+          <div class="entity-list" id="entity-list"></div>
         </div>
+        <aside class="selection-panel" id="selection-panel">
+          <p class="card-label">SELECCIÓN</p>
+          <h3 id="selection-title">Selecciona una entidad</h3>
+          <p id="selection-description">Activa una entidad para añadirla al bridge Matter.</p>
+          <dl class="selection-meta" id="selection-meta"></dl>
+          <div class="selection-status" id="selection-status"></div>
+        </aside>
       </div>
-    </div>
+    </section>
   </div>
 
-  <!-- ── CONFIRM MODAL ──────────────────────────────────── -->
-  <div class="modal-backdrop small" id="confirm-modal">
-    <div class="modal-sheet confirm-sheet glass">
-      <h3 id="confirm-title">¿Continuar?</h3>
-      <p id="confirm-desc">Esta acción no se puede deshacer.</p>
-      <div class="confirm-btns">
-        <button class="pill-btn secondary" id="confirm-cancel">Cancelar</button>
-        <button class="pill-btn primary" id="confirm-ok">Confirmar</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── ADVANCED MODAL ──────────────────────────────────── -->
-  <div class="modal-backdrop small" id="advanced-modal">
-    <div class="modal-sheet glass" style="max-width: 440px;">
-      <button class="modal-close" id="adv-modal-close" aria-label="Cerrar">
-        <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
-      </button>
-      <h3 style="margin-bottom: 8px;">Ajustes Avanzados</h3>
-      <p class="em-section-desc" style="margin-bottom: 24px;">Operaciones de mantenimiento del puente Matter.</p>
-      <div class="action-list">
-        <div class="action-item">
-          <div>
-            <div class="action-title">Reiniciar Puente</div>
-            <div class="action-desc">Recarga la configuración y reinicia los servicios. Tarda unos segundos.</div>
-          </div>
-          <button id="restart-btn" class="pill-btn primary">Reiniciar</button>
+  <div class="modal-backdrop" id="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+    <section class="modal modal-small">
+      <button class="icon-button" id="settings-modal-close" type="button" aria-label="Cerrar">×</button>
+      <p class="eyebrow">MANTENIMIENTO</p>
+      <h2 id="settings-title">Ajustes del bridge</h2>
+      <p class="lead compact">Estas acciones afectan al bridge completo, no a una entidad individual.</p>
+      <div class="settings-actions">
+        <div class="settings-row">
+          <div><strong>Reiniciar bridge</strong><p>Recarga el servicio y restablece conexiones activas.</p></div>
+          <button class="button button-primary" id="restart-button" type="button">Reiniciar</button>
         </div>
-        <div class="divider"></div>
-        <div class="action-item">
-          <div>
-            <div class="action-title" style="color: var(--accent-r);">Restablecimiento de Fábrica</div>
-            <div class="action-desc">Elimina <strong>permanentemente</strong> todos los emparejamientos actuales.</div>
-          </div>
-          <button id="factoryreset-btn" class="pill-btn danger">Restablecer</button>
+        <div class="settings-row danger-row">
+          <div><strong>Restablecimiento de fábrica</strong><p>Elimina la configuración del plugin y requiere volver a emparejar.</p></div>
+          <button class="button button-danger" id="factory-reset-button" type="button">Restablecer</button>
         </div>
       </div>
-    </div>
+    </section>
   </div>
 
+  <div class="modal-backdrop" id="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+    <section class="modal modal-confirm">
+      <p class="eyebrow">CONFIRMACIÓN</p>
+      <h2 id="confirm-title">¿Continuar?</h2>
+      <p class="lead compact" id="confirm-description"></p>
+      <div class="confirm-actions">
+        <button class="button button-secondary" id="confirm-cancel" type="button">Cancelar</button>
+        <button class="button button-danger" id="confirm-accept" type="button">Confirmar</button>
+      </div>
+    </section>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script src="script.js"></script>
 </body>
 </html>

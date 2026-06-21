@@ -73,7 +73,7 @@ export class VacuumEntity extends BaseEntity {
     this.endpoint = new RoboticVacuumCleaner(
       uniqueName,
       serialNumber, // serial with _v6 and _sn
-      'server',
+      undefined,
       RUN_MODE_ID_IDLE, // currentRunMode
       supportedRunModes, // supportedRunModes
       1, // currentCleanMode

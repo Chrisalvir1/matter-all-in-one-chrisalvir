@@ -80,7 +80,7 @@ export class CooktopEntity extends BaseEntity {
     }
   }
 
-  protected override registerCommandHandlers(endpoint?: MatterbridgeEndpoint): void {
+  protected override registerCommandHandlers(_endpoint?: MatterbridgeEndpoint): void {
     // Cooktops are OffOnly in Matter for safety, no write command handlers needed
   }
 

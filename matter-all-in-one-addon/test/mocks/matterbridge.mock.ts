@@ -118,6 +118,9 @@ vi.mock('matterbridge', () => {
       registerDevice(endpoint: any) {
         return Promise.resolve();
       }
+      unregisterDevice(endpoint: any) {
+        return Promise.resolve();
+      }
     },
     MatterbridgeAccessoryPlatform: class {
       public matterbridge: any;
@@ -153,5 +156,8 @@ vi.mock('matterbridge', () => {
     flowSensor: makeMockDeviceType(0x0306, 'flowSensor'),
     lightSensor: makeMockDeviceType(0x0106, 'lightSensor'),
     roboticVacuumCleaner: makeMockDeviceType(0x0074, 'roboticVacuumCleaner'),
+    fan: makeMockDeviceType(0x002b, 'fan'),
+    cooktop: makeMockDeviceType(0x0077, 'cooktop'),
+    oven: makeMockDeviceType(0x0078, 'oven'),
   };
 });

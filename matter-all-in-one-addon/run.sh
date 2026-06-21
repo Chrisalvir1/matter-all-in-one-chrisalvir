@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -e
 
-echo "[Info] Starting Matter 1.5.x All-in-One Bridge Add-on..."
+echo "[Info] Starting Matter All-in-One Bridge Add-on..."
 
 # Read options from HA options file
 OPTIONS_FILE="/data/options.json"
@@ -51,7 +51,7 @@ if [ ! -f "$SETTINGS_PATH" ]; then
     echo "[Info] Creating default matterbridge.json"
     cat <<EOF > "$SETTINGS_PATH"
 {
-  "bridgeMode": "dynamic",
+  "bridgeMode": "bridge",
   "plugins": {
     "matter-all-in-one-chrisalvir": {
       "enabled": true,
@@ -60,6 +60,13 @@ if [ ! -f "$SETTINGS_PATH" ]; then
   }
 }
 EOF
+fi
+
+# Older releases wrote an unsupported "dynamic" bridgeMode. Matterbridge
+# supports only bridge or childbridge; use one stable bridge node here.
+if [ -f "$SETTINGS_PATH" ] && [ "$(jq -r '.bridgeMode // empty' "$SETTINGS_PATH")" = "dynamic" ]; then
+    echo "[Info] Migrating unsupported bridgeMode 'dynamic' to 'bridge'"
+    jq '.bridgeMode = "bridge"' "$SETTINGS_PATH" > "$SETTINGS_PATH.tmp" && mv "$SETTINGS_PATH.tmp" "$SETTINGS_PATH"
 fi
 
 # Add/register the plugin in matterbridge explicitly
@@ -102,5 +109,4 @@ fi
 
 # Start Matterbridge
 echo "[Info] Launching Matterbridge on port 8284 with $MDNS_PARAM..."
-exec matterbridge -frontend 8284 $MDNS_PARAM
-
+exec matterbridge -bridge -frontend 8284 $MDNS_PARAM

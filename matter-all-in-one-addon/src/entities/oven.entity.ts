@@ -13,7 +13,6 @@ import { safeSetAttribute, safeUpdateAttribute } from '../utils/matter-attribute
 import {
   TemperatureControl,
   TemperatureMeasurement,
-  OvenMode,
   OvenCavityOperationalState,
 } from 'matterbridge/matter/clusters';
 
@@ -122,7 +121,7 @@ export class OvenEntity extends BaseEntity {
     }
   }
 
-  protected override registerCommandHandlers(endpoint?: MatterbridgeEndpoint): void {
+  protected override registerCommandHandlers(_endpoint?: MatterbridgeEndpoint): void {
     if (!this.cabinet) return;
 
     this.cabinet.addCommandHandler('OvenMode.changeToMode', async (data: any) => {

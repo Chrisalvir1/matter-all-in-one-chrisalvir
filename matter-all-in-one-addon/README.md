@@ -1,6 +1,6 @@
 # Matter All-in-One for Home Assistant
 
-Matter 1.5.x All-in-One bridge for Home Assistant with HomeKit compatible mappings.
+Matter bridge for Home Assistant with HomeKit-compatible mappings.
 
 ## Minimum Requirements
 - **iOS:** 18.4+
@@ -9,7 +9,7 @@ Matter 1.5.x All-in-One bridge for Home Assistant with HomeKit compatible mappin
 
 ## Supported Devices & HomeKit Compatibility
 
-With Matter 1.5.x / Matterbridge 3.9.0 as our stable baseline, we support the following new device types alongside standard devices. Below is the HomeKit compatibility matrix:
+With Matterbridge 3.9.1 as the stable baseline, the bridge uses official Matterbridge dependencies and is prepared for a future Matter 1.6-compatible runtime release. Below is the HomeKit compatibility matrix:
 
 | Device Type (Matter)       | HA Domain / Class | HomeKit Supported? |
 |----------------------------|-------------------|--------------------|

@@ -1,12 +1,27 @@
-## Matter 1.5.x baseline / preparación para Matter 1.6
-
-- Se establece **Matter 1.5.x / Matterbridge 3.9.0** como baseline estable del proyecto.
-- Se mantienen las notas históricas de soporte Matter 1.4 y 1.5 como referencia funcional.
-- Se inicia la preparación de compatibilidad para **Matter 1.6** sin declarar aún migración completa.
-
 # Changelog
 
 All notable changes to this project will be documented in this file.
+
+## [1.1.66] - 2026-06-21
+
+### Changed
+
+- **Arquitectura Matter estable:** el plugin opera ahora como `MatterbridgeDynamicPlatform` con un único bridge Matter. Las entidades seleccionadas se publican como endpoints bridged; ya no se crea un `ServerNode`, almacenamiento ni anuncio mDNS por entidad.
+- **Exportación bajo demanda:** los endpoints Matter se crean únicamente al activar una entidad en el panel y se eliminan al desactivarla.
+- **Conexión Home Assistant:** el cliente WebSocket ahora usa un dispatcher único de solicitudes, limpia peticiones pendientes, filtra la suscripción a `state_changed`, reintenta indefinidamente con backoff y coalesce ráfagas de cambios de estado.
+- **Modo de arranque:** se migra el valor inválido `bridgeMode: dynamic` a `bridge` y el add-on inicia explícitamente con `matterbridge --bridge`.
+- **Dependencias:** Matterbridge actualizado de `3.9.0` a la versión oficial `3.9.1`; se eliminó la dependencia directa duplicada de `@matter/nodejs`.
+- **Panel web:** reemplazado el panel inconsistente de QR individuales, logs y controles heredados por un panel responsivo de selección de entidades, estado del bridge, búsqueda y mantenimiento seguro.
+
+### Fixed
+
+- Corregido el error de sintaxis que impedía ejecutar el JavaScript de la interfaz.
+- Eliminado el acceso a rutas privadas del singleton de Matterbridge para obtener códigos de comisión.
+- Corregidos metadatos de versión del add-on y del manifiesto Matterbridge.
+
+### Migration
+
+- Esta versión cambia la topología Matter. Haz copia de `/data/.matterbridge`, elimina los accesorios individuales de la versión anterior y vuelve a emparejar **una vez** el bridge. Consulta `docs/production-migration.md`.
 
 ## [1.1.24] - 2026-06-18
 ### Added

@@ -7,7 +7,7 @@ RUN apk add --no-cache jq
 # This is the heaviest step (compiling @matter/node native bindings).
 # By doing this before copying any source files, Docker caches it permanently
 # until the matterbridge version string changes in this file.
-RUN npm install -g matterbridge@3.9.0 --no-fund --no-audit
+RUN npm install -g matterbridge@3.9.1 --no-fund --no-audit
 
 WORKDIR /app
 

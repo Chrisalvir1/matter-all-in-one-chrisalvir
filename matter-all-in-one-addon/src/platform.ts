@@ -4,7 +4,7 @@
 import './utils/log-buffer.js';
 import { getLogs, clearLogs } from './utils/log-buffer.js';
 import {
-  MatterbridgeAccessoryPlatform,
+  MatterbridgeDynamicPlatform,
   MatterbridgeEndpoint,
   PlatformConfig,
   PlatformMatterbridge,
@@ -36,12 +36,13 @@ export interface HomeAssistantPlatformConfig extends PlatformConfig {
   excludeEntities?: string[];
 }
 
-export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
+export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   public ha!: HomeAssistant;
   public entities = new Map<string, BaseEntity>();
   public matterbridgeDevices = new Map<string, MatterbridgeEndpoint>();
   public deviceOverrides: Record<string, string> = {};
   private uiServer?: http.Server;
+  private packageVersion?: string;
   /** Raw host from config (may be undefined — triggers network auto-discovery) */
   private _configHost?: string;
   /** Resolved token (may be empty string for trust-local / supervisor mode) */
@@ -49,6 +50,14 @@ export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
 
   /** Set of entity IDs that the user has explicitly requested to export as accessories */
   public exportedDevices: Set<string> = new Set();
+  /**
+   * HA can emit several state_changed events for the same entity in a single
+   * tick.  Coalescing those events keeps Matter attribute transactions from
+   * piling up behind slow controller subscriptions.
+   */
+  private readonly pendingStateUpdates = new Map<string, HassState>();
+  private stateUpdateFlushScheduled = false;
+  private syncInFlight?: Promise<void>;
 
   private getHaRegistryInfo(entityId: string) {
     const entityRegistry = (this.ha as any).hassEntities?.get(entityId);
@@ -73,16 +82,6 @@ export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
       entity_registry_id: entityRegistry?.id ?? null,
       platform: entityRegistry?.platform ?? null,
     };
-  }
-
-  private normalizeMatterQrCode(value: unknown): string {
-    const code = typeof value === 'string' ? value.trim() : '';
-    return code.startsWith('MT:') ? code : '';
-  }
-
-  private normalizeMatterManualCode(value: unknown): string {
-    const code = typeof value === 'string' ? value.replace(/[^0-9]/g, '') : '';
-    return code.length >= 11 ? code : '';
   }
 
   constructor(
@@ -126,7 +125,7 @@ export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
 
     this.ha.on('event', (_deviceId, entityId, _oldState, newState) => {
       if (newState) {
-        void this.handleEntityStateChange(entityId, newState);
+        this.handleEntityStateChange(entityId, newState);
       }
     });
   }
@@ -166,8 +165,8 @@ export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
     this.ha = new HomeAssistant(
       wsHost,
       this._configToken,
-      60,
-      10,
+      3,
+      0, // Retry forever. HA restarts and DHCP renewals must not require a plugin restart.
       undefined,
       false,
     );
@@ -191,17 +190,29 @@ export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
       this.uiServer.close();
       this.log.info('Custom UI Server stopped.');
     }
-    await this.ha.close();
+    await this.ha?.close();
   }
 
   /**
    * Discover entities from Home Assistant and sync them to Matter.
    */
   private async discoverAndSync() {
+    if (this.syncInFlight) return this.syncInFlight;
+
+    this.syncInFlight = this.performDiscoverAndSync().finally(() => {
+      this.syncInFlight = undefined;
+    });
+    return this.syncInFlight;
+  }
+
+  private async performDiscoverAndSync() {
     this.log.info('Fetching data for entity discovery...');
     try {
       await this.ha.fetchData();
-      await this.ha.subscribe();
+      // Subscribing to every HA event is extremely noisy (automations,
+      // recorder, service calls, etc.) and can starve Matter subscriptions.
+      // State changes are the only realtime stream this bridge needs.
+      await this.ha.subscribe('state_changed');
 
       // Load device overrides
       try {
@@ -227,9 +238,7 @@ export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
       const states = Array.from(this.ha.hassStates.values());
       this.log.info(`Fetched ${states.length} entity states. Registering matching devices...`);
 
-      for (const hassState of states) {
-        await this.registerHAEntity(hassState);
-      }
+      for (const hassState of states) await this.registerHAEntity(hassState);
     } catch (err) {
       this.log.error(`Discovery error: ${err}`);
     }
@@ -241,9 +250,12 @@ export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
   private async registerHAEntity(state: HassState) {
     const entityId = state.entity_id;
 
-    // Idempotency guard: if already registered, just update state
+    // Idempotency guard: discovery objects are retained for the UI, but an
+    // endpoint is only allocated when the user explicitly exports it.
     if (this.entities.has(entityId)) {
-      await this.entities.get(entityId)!.updateState(state);
+      const entity = this.entities.get(entityId)!;
+      entity.state = state;
+      if (this.exportedDevices.has(entityId)) this.queueStateUpdate(entityId, state);
       return;
     }
 
@@ -309,32 +321,30 @@ export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
       entityInstance = new BaseEntity(this, state, deviceType);
     }
 
+    this.entities.set(entityId, entityInstance);
+    if (!this.exportedDevices.has(entityId)) {
+      this.log.debug(`Entity ${entityId} is discovered but not exported. Endpoint creation deferred.`);
+      return;
+    }
+
+    await this.activateEntity(entityId);
+  }
+
+  /** Create a bridged endpoint and let Matterbridge own its lifecycle. */
+  private async activateEntity(entityId: string): Promise<void> {
+    if (this.matterbridgeDevices.has(entityId)) return;
+    const entity = this.entities.get(entityId);
+    if (!entity) throw new Error(`Entity ${entityId} was not discovered.`);
+
     try {
-      const endpoint = await entityInstance.createEndpoint();
-      if (endpoint) {
-        this.entities.set(entityId, entityInstance);
-        this.matterbridgeDevices.set(entityId, endpoint);
-
-        if (this.exportedDevices.has(entityId)) {
-          this.log.info(`Auto-starting Accessory Server for ${idn}${entityId}${rs}...`);
-          this.log.info(`DEBUG ENDPOINT MODE: ${endpoint.mode}`);
-          this.log.info(`DEBUG ENDPOINT Properties: type=${endpoint.deviceType}, name=${endpoint.deviceName}, vendor=${endpoint.vendorId}, product=${endpoint.productId}, name=${endpoint.productName}`);
-          await this.registerDevice(endpoint);
-          
-          // Force start the serverNode if it is not online yet
-          const serverNode = (endpoint as any).serverNode;
-          if (serverNode && !serverNode.lifecycle?.isOnline) {
-            this.log.notice(`Explicitly starting server node for auto-started device ${entityId}...`);
-            await serverNode.start();
-          }
-
-          await entityInstance.syncInitialState();
-        } else {
-          this.log.debug(`Entity ${entityId} is discovered but not exported. Skipping Accessory Server creation.`);
-        }
-      }
+      const endpoint = await entity.createEndpoint();
+      await this.registerDevice(endpoint);
+      this.matterbridgeDevices.set(entityId, endpoint);
+      await entity.syncInitialState();
+      this.log.notice(`Exported bridged endpoint ${idn}${entityId}${rs}`);
     } catch (err) {
-      this.log.error(`Failed to register entity ${entityId}: ${err}`);
+      this.log.error(`Failed to activate entity ${entityId}: ${err}`);
+      throw err;
     }
   }
 
@@ -342,38 +352,17 @@ export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
    * Manually export an entity as an Accessory and save to config.
    */
   public async manualRegister(entityId: string): Promise<{ success: boolean; error?: string }> {
-    if (!this.matterbridgeDevices.has(entityId)) {
+    if (!this.entities.has(entityId)) {
       return { success: false, error: 'Device not found in discovery.' };
     }
     try {
       this.exportedDevices.add(entityId);
+      await this.activateEntity(entityId);
       await this.saveExportedDevices();
-      const endpoint = this.matterbridgeDevices.get(entityId)!;
-      try {
-        await this.registerDevice(endpoint);
-      } catch (err) {
-        this.log.warn(`Already registered or failed: ${err}`);
-      }
-      
-      // Force start the serverNode if it is not online yet
-      const serverNode = (endpoint as any).serverNode;
-      if (serverNode && !serverNode.lifecycle?.isOnline) {
-        this.log.notice(`Explicitly starting server node for manually registered device ${entityId}...`);
-        try {
-          await serverNode.start();
-        } catch (startErr) {
-          this.log.warn(`ServerNode start ignored: ${startErr}`);
-        }
-      }
-
-      const entity = this.entities.get(entityId);
-      if (entity) {
-        await entity.syncInitialState();
-      }
-
-      this.log.notice(`Manually started Accessory Server for ${entityId}`);
+      this.log.notice(`Manually exported bridged endpoint for ${entityId}`);
       return { success: true };
     } catch (err) {
+      this.exportedDevices.delete(entityId);
       this.log.error(`Failed to manually register ${entityId}: ${err}`);
       return { success: false, error: String(err) };
     }
@@ -383,27 +372,15 @@ export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
    * Manually unregister an Accessory and save to config.
    */
   public async manualUnregister(entityId: string): Promise<{ success: boolean; error?: string }> {
-    if (!this.matterbridgeDevices.has(entityId)) {
-      return { success: false, error: 'Device not found.' };
-    }
     try {
       this.exportedDevices.delete(entityId);
-      await this.saveExportedDevices();
-      const endpoint = this.matterbridgeDevices.get(entityId)!;
-      await this.unregisterDevice(endpoint);
-      
-      // Stop the server node if it exists
-      const serverNode = (endpoint as any).serverNode;
-      if (serverNode) {
-        try {
-          this.log.notice(`Closing server node for unregistered device ${entityId}...`);
-          await serverNode.close();
-        } catch (closeErr) {
-          this.log.warn(`Failed to close server node for ${entityId}: ${closeErr}`);
-        }
+      const endpoint = this.matterbridgeDevices.get(entityId);
+      if (endpoint) {
+        await this.unregisterDevice(endpoint);
+        this.matterbridgeDevices.delete(entityId);
       }
-
-      this.log.notice(`Manually stopped Accessory Server for ${entityId}`);
+      await this.saveExportedDevices();
+      this.log.notice(`Removed bridged endpoint for ${entityId}`);
       return { success: true };
     } catch (err) {
       this.log.error(`Failed to manually unregister ${entityId}: ${err}`);
@@ -422,14 +399,37 @@ export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
   /**
    * Real-time state synchronization from HA to Matter.
    */
-  private async handleEntityStateChange(entityId: string, newState: HassState) {
+  private handleEntityStateChange(entityId: string, newState: HassState) {
     const entity = this.entities.get(entityId);
-    if (entity) {
-      entity.state = newState;
-      if (this.exportedDevices.has(entityId)) {
-        this.log.debug(`Syncing state update for ${entityId} to Matter.`);
-        await entity.updateState(newState);
-      }
+    if (!entity) {
+      // An entity may become available after HA's initial snapshot.
+      void this.registerHAEntity(newState);
+      return;
+    }
+    entity.state = newState;
+    if (this.exportedDevices.has(entityId)) this.queueStateUpdate(entityId, newState);
+  }
+
+  private queueStateUpdate(entityId: string, state: HassState) {
+    this.pendingStateUpdates.set(entityId, state);
+    if (this.stateUpdateFlushScheduled) return;
+    this.stateUpdateFlushScheduled = true;
+    setImmediate(() => void this.flushStateUpdates());
+  }
+
+  private async flushStateUpdates() {
+    this.stateUpdateFlushScheduled = false;
+    const updates = [...this.pendingStateUpdates.entries()];
+    this.pendingStateUpdates.clear();
+    await Promise.allSettled(
+      updates.map(async ([entityId, state]) => {
+        const entity = this.entities.get(entityId);
+        if (entity && this.exportedDevices.has(entityId)) await entity.updateState(state);
+      }),
+    );
+    if (this.pendingStateUpdates.size && !this.stateUpdateFlushScheduled) {
+      this.stateUpdateFlushScheduled = true;
+      setImmediate(() => void this.flushStateUpdates());
     }
   }
 
@@ -438,17 +438,6 @@ export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
    */
   private startUiServer() {
     const server = http.createServer(async (req, res) => {
-      // CORS headers
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-      if (req.method === 'OPTIONS') {
-        res.writeHead(204);
-        res.end();
-        return;
-      }
-
       const urlObj = new URL(req.url ?? '', `http://${req.headers.host ?? 'localhost'}`);
 
       // If requested at the base Ingress URL without a trailing slash,
@@ -545,65 +534,17 @@ export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
         }
 
         if (req.method === 'GET' && pathname === '/api/custom/status') {
-          let qrPairingCode = '';
-          let manualPairingCode = '';
-          let commissioned = false;
-          let pairedFabrics: any[] = [];
-          // === ESTRATEGIA DEFINITIVA ===
-          // Matterbridge expone un singleton estático: Matterbridge.instance
-          // Accedemos a él directamente en memoria usando createRequire para resolver
-          // el módulo global instalado en el contenedor.
-          try {
-            const { createRequire } = await import('node:module');
-            // Rutas candidatas del módulo global de matterbridge en el contenedor
-            const candidatePaths = [
-              '/usr/local/lib/node_modules/matterbridge/node_modules/@matterbridge/core/dist/matterbridge.js',
-              '/usr/lib/node_modules/matterbridge/node_modules/@matterbridge/core/dist/matterbridge.js',
-              '/root/matterbridge/node_modules/@matterbridge/core/dist/matterbridge.js',
-            ];
-            let MatterbridgeClass: any = null;
-            for (const p of candidatePaths) {
-              try {
-                const r = createRequire(p);
-                const mod = r(p);
-                if (mod?.Matterbridge) { MatterbridgeClass = mod.Matterbridge; break; }
-              } catch { /* try next */ }
-            }
-            // Fallback: intentar require normal si el módulo está en la cadena de resolución
-            if (!MatterbridgeClass) {
-              const r = createRequire(import.meta.url);
-              try { MatterbridgeClass = r('@matterbridge/core/dist/matterbridge.js')?.Matterbridge; } catch { /* not found */ }
-            }
-
-            const mb = MatterbridgeClass?.instance;
-            if (mb?.serverNode?.state?.commissioning?.pairingCodes) {
-              const codes = mb.serverNode.state.commissioning.pairingCodes;
-              qrPairingCode = this.normalizeMatterQrCode(codes.qrPairingCode);
-              manualPairingCode = this.normalizeMatterManualCode(codes.manualPairingCode);
-            }
-            if (mb?.serverNode?.lifecycle?.isCommissioned !== undefined) {
-              commissioned = mb.serverNode.lifecycle.isCommissioned;
-            } else if (mb?.serverNode?.state?.commissioning?.commissioned !== undefined) {
-              commissioned = mb.serverNode.state.commissioning.commissioned === true;
-            }
-            if (commissioned) {
-              const fabrics = mb?.serverNode?.state?.commissioning?.fabrics;
-              pairedFabrics = fabrics ? Object.values(fabrics) : [];
-            }
-          } catch (err) {
-            // bridge data not available yet — silently ignore during startup
-          }
-
-          const status = commissioned ? 'vinculado' : (qrPairingCode ? 'esperando' : 'iniciando');
           const version = await this.getPackageVersion();
           res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
           res.end(JSON.stringify({
-            status,
+            status: this.ha.connected ? 'operativo' : 'reconectando',
             version,
-            qrPairingCode,
-            manualPairingCode,
-            commissioned,
-            pairedFabrics,
+            // Pairing is managed by Matterbridge's official frontend.  The
+            // plugin deliberately does not scrape private Matterbridge state.
+            qrPairingCode: '',
+            manualPairingCode: '',
+            commissioned: false,
+            pairedFabrics: [],
             systemInfo: {
               os: 'Linux',
               nodeVersion: process.version,
@@ -618,48 +559,7 @@ export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
 
         if (req.method === 'GET' && pathname === '/api/custom/devices') {
           const result = Array.from(this.entities.values()).map(e => {
-            const endpoint = this.matterbridgeDevices.get(e.entityId);
-            const serverNode = (endpoint as any)?.serverNode;
-            let pairingCode = null;
-            let manualPairingCode = null;
-            let commissioned = false;
-            let fabric = null;
             const [domain] = e.entityId.split('.');
-
-            if (serverNode?.state?.commissioning?.pairingCodes) {
-              pairingCode = this.normalizeMatterQrCode(serverNode.state.commissioning.pairingCodes.qrPairingCode);
-              manualPairingCode = this.normalizeMatterManualCode(serverNode.state.commissioning.pairingCodes.manualPairingCode);
-            }
-            if (serverNode?.lifecycle?.isCommissioned !== undefined) {
-              commissioned = serverNode.lifecycle.isCommissioned;
-            } else if (serverNode?.state?.commissioning?.commissioned !== undefined) {
-              commissioned = serverNode.state.commissioning.commissioned;
-            }
-            
-            if (commissioned) {
-              const fabrics = serverNode?.state?.commissioning?.fabrics;
-              if (fabrics && Object.keys(fabrics).length > 0) {
-                const fabricList = Object.values(fabrics);
-                if (fabricList.length > 0) {
-                  const f = fabricList[0] as any;
-                  let fLabel = f.label || f.vendorName || '';
-                  const vid = f.rootVendorId || f.vendorId;
-                  if (vid === 4875 || vid === 0x130b) {
-                    fLabel = fLabel ? `${fLabel} (Apple Home)` : 'Apple HomeKit';
-                  } else if (vid === 4447 || vid === 0x115f) {
-                    fLabel = fLabel ? `${fLabel} (Aqara)` : 'Xiaomi/Aqara';
-                  } else if (vid === 4187 || vid === 0x105b) {
-                    fLabel = fLabel ? `${fLabel} (Google Home)` : 'Google Home';
-                  } else if (vid === 4687 || vid === 0x124f) {
-                    fLabel = fLabel ? `${fLabel} (Amazon Alexa)` : 'Amazon Alexa';
-                  } else if (!fLabel) {
-                    // Apple Home generates dynamic vendor IDs, so if we don't know it, we assume Apple Home if it has a label
-                    fLabel = `Casa: ${vid || 'Desconocido'}`;
-                  }
-                  fabric = fLabel;
-                }
-              }
-            }
 
             return {
               entityId: e.entityId, // Frontend expects entityId
@@ -672,10 +572,10 @@ export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
               ...this.getHaRegistryInfo(e.entityId),
               // Accessory status
               exported: this.exportedDevices.has(e.entityId),
-              pairingCode: pairingCode,
-              manualPairingCode: manualPairingCode,
-              commissioned: commissioned,
-              fabric: fabric,
+              pairingCode: null,
+              manualPairingCode: null,
+              commissioned: false,
+              fabric: null,
             };
           });
           res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -698,39 +598,6 @@ export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
           const result = await this.manualUnregister(entityId);
           res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
           res.end(JSON.stringify(result));
-          return;
-        }
-
-        // POST /api/custom/decommission/:entityId
-        if (req.method === 'POST' && pathname.startsWith('/api/custom/decommission/')) {
-          const entityId = decodeURIComponent(pathname.substring('/api/custom/decommission/'.length));
-          const endpoint = this.matterbridgeDevices.get(entityId);
-          const serverNode = (endpoint as any)?.serverNode;
-          if (serverNode) {
-            try {
-              this.log.notice(`Decommissioning server node for ${entityId}...`);
-              await serverNode.close();
-              await serverNode.erase();
-              
-              // Also forcefully unregister it so the user isn't stuck
-              await this.manualUnregister(entityId);
-
-              res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-              res.end(JSON.stringify({ success: true }));
-            } catch (err) {
-              this.log.error(`Failed to decommission ${entityId}: ${err}`);
-              
-              // Force unregister even on error to rescue the user
-              this.log.warn(`Forcing unregistration for ${entityId} due to decommission error.`);
-              await this.manualUnregister(entityId);
-
-              res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-              res.end(JSON.stringify({ success: true, warning: 'Forced unexport despite error.' }));
-            }
-          } else {
-            res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
-            res.end(JSON.stringify({ success: false, error: 'Server node not found' }));
-          }
           return;
         }
 
@@ -830,6 +697,7 @@ export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
   }
 
   private async getPackageVersion(): Promise<string> {
+    if (this.packageVersion) return this.packageVersion;
     const dir = import.meta.dirname;
     const paths = [
       path.join(dir, '../package.json'),
@@ -840,11 +708,14 @@ export class HomeAssistantPlatform extends MatterbridgeAccessoryPlatform {
       try {
         const content = await fs.readFile(p, 'utf8');
         const pkg = JSON.parse(content);
-        if (pkg.version) return pkg.version;
+        if (pkg.version) {
+          this.packageVersion = pkg.version;
+          return pkg.version;
+        }
       } catch {
         // try next
       }
     }
-    return '1.1.44';
+    return 'unknown';
   }
 }
