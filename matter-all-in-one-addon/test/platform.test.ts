@@ -65,6 +65,31 @@ describe('HomeAssistantPlatform', () => {
     });
   });
 
+  it('marks fan and light sharing a device_id as one composite before either is activated', async () => {
+    await platform.onStart();
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    const res = await fetch('http://127.0.0.1:8285/api/custom/devices');
+    const devices = await res.json() as any[];
+    const fan = devices.find(device => device.entityId === 'fan.ceiling_fan');
+    const light = devices.find(device => device.entityId === 'light.ceiling_fan_light');
+
+    expect(fan).toMatchObject({
+      composite: true,
+      compositeActive: false,
+      compositeDeviceId: 'device-ceiling-fan-1',
+      compositePrimaryEntityId: 'fan.ceiling_fan',
+      exported: false,
+    });
+    expect(light).toMatchObject({
+      composite: true,
+      compositeActive: false,
+      compositeDeviceId: 'device-ceiling-fan-1',
+      compositePrimaryEntityId: 'fan.ceiling_fan',
+      exported: false,
+    });
+  });
+
   it('should update entities state when a HA event occurs', async () => {
     await platform.onStart();
     platform.ha.emit('connected', '2026.6.0');

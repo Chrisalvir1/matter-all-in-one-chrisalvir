@@ -2,11 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.2.9] - 2026-06-21
+## [1.2.10] - 2026-06-21
 
 ### Added
 - **Dispositivos compuestos por `device_id`:** modo opt-in `group_by_device_id` para publicar un Fan con Light/Switch/Sensor relacionados como endpoints de un solo nodo Matter, con un QR compartido.
 - **Selección de capacidades reales de luces:** On/Off, Dimmable, Color Temperature y Extended Color se eligen a partir de las capacidades reportadas por Home Assistant.
+
+### Changed
+- **Activación compuesta por defecto:** Fan + Light/Switch/Sensor que comparten `device_id` usan un solo interruptor de publicación en el panel y un único QR Matter. Las filas secundarias se muestran como **Integrada** antes y después de activar. Use `group_by_device_id: false` para recuperar el comportamiento por entidad.
 
 ## [1.2.8] - 2026-06-21
 

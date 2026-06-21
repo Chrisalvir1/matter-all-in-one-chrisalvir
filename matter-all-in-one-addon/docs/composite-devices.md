@@ -2,7 +2,7 @@
 
 ## Flujo
 
-Con `group_by_device_id: true`, el plugin consulta el entity registry de Home Assistant y agrupa las entidades que comparten `device_id`. Cuando encuentra un `fan.*` junto con al menos otra entidad compatible, publica un único `ServerNode` Matter:
+De forma predeterminada, el plugin consulta el entity registry de Home Assistant y agrupa las entidades que comparten `device_id`. Cuando encuentra un `fan.*` junto con al menos otra entidad compatible, publica un único `ServerNode` Matter:
 
 - El ventilador es el endpoint principal.
 - Una `light.*` se añade como endpoint Light hijo, seleccionando On/Off, Dimmable, Color Temperature o Extended Color a partir de `supported_color_modes` y atributos reales.
@@ -11,7 +11,7 @@ Con `group_by_device_id: true`, el plugin consulta el entity registry de Home As
 
 El resultado es un solo QR y un único conjunto de fabrics para el dispositivo físico. Apple Home puede presentar Fan y Light como controles distintos; siguen perteneciendo al mismo accesorio Matter.
 
-El modo predeterminado es `false` para conservar los accesorios por entidad existentes. Los dispositivos simples no cambian de comportamiento.
+El panel deja activar únicamente la entidad principal (normalmente `fan.*`). Las demás filas aparecen como **Integrada**, incluso antes de publicar, para evitar crear accidentalmente dos códigos QR. Los dispositivos simples no cambian de comportamiento.
 
 ## Activación
 
@@ -59,4 +59,4 @@ Ejemplo de log esperado:
 Exported composite Matter device Ventilador de Sala with endpoints: fan.ventilador_de_sala_main_fan, light.ventilador_de_sala_main_light
 ```
 
-Para volver al comportamiento anterior, establece `group_by_device_id: false` y reinicia el add-on. Antes de cambiar la topología de un accesorio ya emparejado, elimínalo de Apple Home y vuelve a emparejar el nuevo nodo compuesto.
+Para volver al comportamiento anterior por entidad, establece `group_by_device_id: false` y reinicia el add-on. Antes de cambiar la topología de un accesorio ya emparejado, elimínalo de Apple Home y vuelve a emparejar el nuevo nodo compuesto.

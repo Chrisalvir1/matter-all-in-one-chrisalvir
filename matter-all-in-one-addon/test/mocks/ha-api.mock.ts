@@ -58,6 +58,35 @@ export class MockHomeAssistant extends EventEmitter {
       platform: 'mock',
     });
 
+    // Two capabilities of the same physical device. This is the regression
+    // fixture for the one-QR Fan + Light grouping flow.
+    this.hassDevices.set('device-ceiling-fan-1', {
+      id: 'device-ceiling-fan-1',
+      name: 'Ceiling Fan',
+      name_by_user: null,
+      area_id: 'living_room',
+      manufacturer: 'Mock',
+      model: 'Fan Light',
+    });
+    this.hassEntities.set('fan.ceiling_fan', {
+      id: 'entity-ceiling-fan-1',
+      entity_id: 'fan.ceiling_fan',
+      device_id: 'device-ceiling-fan-1',
+      area_id: null,
+      name: null,
+      original_name: 'Ceiling Fan',
+      platform: 'mock',
+    });
+    this.hassEntities.set('light.ceiling_fan_light', {
+      id: 'entity-ceiling-fan-light-1',
+      entity_id: 'light.ceiling_fan_light',
+      device_id: 'device-ceiling-fan-1',
+      area_id: null,
+      name: null,
+      original_name: 'Ceiling Fan Light',
+      platform: 'mock',
+    });
+
     // Populate mock states
     this.hassStates.set('light.living_room', {
       entity_id: 'light.living_room',
@@ -66,6 +95,16 @@ export class MockHomeAssistant extends EventEmitter {
         friendly_name: 'Living Room Light',
         brightness: 200,
       },
+    });
+    this.hassStates.set('fan.ceiling_fan', {
+      entity_id: 'fan.ceiling_fan',
+      state: 'on',
+      attributes: { friendly_name: 'Ceiling Fan', percentage: 50 },
+    });
+    this.hassStates.set('light.ceiling_fan_light', {
+      entity_id: 'light.ceiling_fan_light',
+      state: 'off',
+      attributes: { friendly_name: 'Ceiling Fan Light', brightness: 0, supported_color_modes: ['brightness'] },
     });
 
     this.hassStates.set('cover.garage_door', {

@@ -23,7 +23,7 @@ El add-on opera publicando cada entidad exportada de Home Assistant como un nodo
 | **Panel Gráfico (Liquid Glass)** | Hecho | El frontend agrupa entidades por **Dispositivo físico de HA** (`device_id`). El usuario interactúa con dispositivos físicos en la lista, no con un listado confuso de entidades sueltas. |
 | **Polling de Código QR** | Hecho | El botón de ver QR está siempre visible para entidades exportadas. Si el código QR aún no se ha generado en el arranque, el frontend realiza polling automático cada 2 segundos. |
 | **Restablecimiento individual** | Hecho | `POST /api/custom/reset-accessory/:entityId` ejecuta `serverNode.erase()` para eliminar únicamente los fabrics del accesorio seleccionado y reabrir su comisión. |
-| **Dispositivos compuestos** | Opt-in | Con `group_by_device_id: true`, Fan + Light/Switch/Sensor del mismo `device_id` se publican como endpoints de un único ServerNode y comparten QR/fabrics. Ver `docs/composite-devices.md`. |
+| **Dispositivos compuestos** | Predeterminado | Fan + Light/Switch/Sensor del mismo `device_id` se publican como endpoints de un único ServerNode y comparten QR/fabrics. El panel permite activar solo la entidad principal. Use `group_by_device_id: false` para el modo por entidad. Ver `docs/composite-devices.md`. |
 | **RVC y Apple Home** | Hecho | `vacuum.*` usa el tipo Matter real `RoboticVacuumCleaner` (`0x0074`) como ServerNode independiente. No se debe convertir en switch ni añadirlo al bridge. |
 | **Identidad visible** | Hecho | El nombre visible es el `friendly_name` de Home Assistant (hasta 32 caracteres); `entity_id`, serial y `uniqueId` proporcionan la identidad interna estable. |
 

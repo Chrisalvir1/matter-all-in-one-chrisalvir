@@ -28,6 +28,7 @@ function displayName(entity) { return entity.attributes?.friendly_name || entity
 function icon(domain) { return ICONS[domain] || '◇'; }
 function isOn(value) { return ['on', 'open', 'home', 'playing', 'unlocked', 'active'].includes(String(value ?? '').toLowerCase()); }
 function stateLabel(value) { return String(value ?? 'desconocido').replaceAll('_', ' '); }
+function matterNodeKey(entity) { return entity.compositeDeviceId ? `device:${entity.compositeDeviceId}` : entity.entityId; }
 
 async function request(path, options) {
   const response = await fetch(`${API}${path}`, options);
@@ -94,8 +95,8 @@ function renderDevices() {
     )
   );
   const devices = groupEntities(filtered);
-  const exportedCount = state.entities.filter((entity) => entity.exported).length;
-  els.deviceCount.textContent = `${devices.length} dispositivo${devices.length === 1 ? '' : 's'} · ${exportedCount} activo${exportedCount === 1 ? '' : 's'} en Matter`;
+  const exportedNodes = new Set(state.entities.filter((entity) => entity.exported).map(matterNodeKey)).size;
+  els.deviceCount.textContent = `${devices.length} dispositivo${devices.length === 1 ? '' : 's'} · ${exportedNodes} accesorio${exportedNodes === 1 ? '' : 's'} activo${exportedNodes === 1 ? '' : 's'} en Matter`;
   els.deviceList.setAttribute('aria-busy', 'false');
   if (!devices.length) {
     els.deviceList.innerHTML = '<div class="empty-state"><p>No hay dispositivos que coincidan con la búsqueda.</p></div>';
@@ -145,7 +146,11 @@ function openDevice(device) {
   els.deviceModalName.textContent = device.name;
   els.deviceModalId.textContent = device.area || device.id;
   const sorted = [...device.entities].sort((a, b) => Number(b.exported) - Number(a.exported) || displayName(a).localeCompare(displayName(b)));
-  els.modalExportCount.textContent = `${sorted.filter((entity) => entity.exported).length}/${sorted.length} publicadas`;
+  const activeNodes = new Set(sorted.filter((entity) => entity.exported).map(matterNodeKey)).size;
+  const groupedEndpoints = sorted.filter((entity) => entity.exported).length;
+  els.modalExportCount.textContent = activeNodes
+    ? `${activeNodes} accesorio Matter · ${groupedEndpoints}/${sorted.length} endpoints`
+    : `0/${sorted.length} publicadas`;
   els.entityList.replaceChildren(...sorted.map((entity) => buildEntityRow(entity)));
   setModalOpen(els.deviceModal, true);
   selectEntity(sorted[0] || null);
@@ -158,7 +163,7 @@ function buildEntityRow(entity) {
   const compositeChild = entity.composite && entity.entityId !== entity.compositePrimaryEntityId;
   const control = entity.auxiliary || compositeChild
     ? '<span class="export-control">Integrada</span>'
-    : `<label class="export-control" title="Publicar en Matter"><span>${entity.exported ? 'Activo' : 'Inactivo'}</span><span class="toggle"><input type="checkbox" ${entity.exported ? 'checked' : ''} aria-label="Exportar ${escapeHtml(displayName(entity))}"><span></span></span></label>`;
+    : `<label class="export-control" title="Publicar dispositivo en Matter"><span>${entity.exported ? 'Activo' : 'Inactivo'}</span><span class="toggle"><input type="checkbox" ${entity.exported ? 'checked' : ''} aria-label="Exportar ${escapeHtml(displayName(entity))}"><span></span></span></label>`;
   element.innerHTML = `<span class="entity-row-icon">${icon(entity.domain)}</span><div><div class="entity-row-name">${escapeHtml(displayName(entity))}</div><div class="entity-row-id">${escapeHtml(entity.entityId)}</div><span class="entity-state ${isOn(entity.state) ? 'on' : ''}">${escapeHtml(stateLabel(entity.state))}</span></div>${control}`;
   const checkbox = element.querySelector('input');
   if (checkbox) {
@@ -253,12 +258,16 @@ function selectEntity(entity) {
   els.selectionDescription.textContent = entity.auxiliary
     ? `Acción auxiliar de ${entity.primaryEntityId || 'su dispositivo principal'}. No se expone como accesorio Matter independiente.`
     : entity.composite && entity.entityId !== entity.compositePrimaryEntityId
-      ? 'Endpoint integrado en el mismo accesorio Matter de este dispositivo físico. Comparte su código QR y emparejamiento.'
+      ? entity.exported
+        ? 'Endpoint integrado en el mismo accesorio Matter de este dispositivo físico. Comparte su código QR y emparejamiento.'
+        : 'Endpoint que se integrará en el accesorio Matter del dispositivo físico. Activa la entidad principal para publicar el grupo completo.'
     : entity.exported
       ? (entity.commissioned
           ? `Accesorio Matter activo${entity.homeName ? ` · Casa: ${entity.homeName}` : ''}. Usa el botón para ver el código QR si necesitas añadirlo a otra casa.`
           : 'Accesorio Matter listo para emparejar. Usa el código QR único para agregarlo a Apple Home, Google Home u otro controlador.')
-      : 'Actívala para publicar la entidad como accesorio Matter independiente.';
+      : entity.composite
+        ? 'Entidad principal del dispositivo Matter compuesto. Al activarla se publicarán todos sus endpoints compatibles con un único código QR.'
+        : 'Actívala para publicar la entidad como accesorio Matter independiente.';
 
   const profiles = Array.isArray(entity.profiles) ? entity.profiles : [];
   els.profileField.hidden = entity.auxiliary || profiles.length === 0;
@@ -282,7 +291,9 @@ function selectEntity(entity) {
       ? (entity.commissioned
           ? `✓ Emparejado${entity.homeName ? ' · ' + entity.homeName : ''}`
           : '✓ Publicada como accesorio Matter — pendiente de emparejar')
-      : 'Aún no se publica en Matter';
+      : entity.composite && entity.entityId !== entity.compositePrimaryEntityId
+        ? 'Integrada: se publica junto con la entidad principal'
+        : 'Aún no se publica en Matter';
 
   renderQrSection(entity);
 }
@@ -313,7 +324,8 @@ async function toggleEntity(entity, checkbox) {
     const result = await request(`/${next ? 'register' : 'unregister'}/${encodeURIComponent(entity.entityId)}`, { method: 'POST' });
     if (!result.success) throw new Error(result.error || 'No se pudo actualizar la entidad');
     entity.exported = next;
-    showToast(next ? `${displayName(entity)} se publicó en Matter.` : `${displayName(entity)} se retiró de Matter.`);
+    const compositeLabel = entity.composite ? 'El dispositivo completo' : displayName(entity);
+    showToast(next ? `${compositeLabel} se publicó en Matter.` : `${compositeLabel} se retiró de Matter.`);
     await fetchDevices();
     const device = groupEntities(state.entities).find((item) => item.id === state.activeDevice?.id);
     if (device) openDevice(device); else setModalOpen(els.deviceModal, false);

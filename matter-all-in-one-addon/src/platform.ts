@@ -37,7 +37,7 @@ export interface HomeAssistantPlatformConfig extends PlatformConfig {
   token?: string;      // Optional: not required when running as HA add-on (SUPERVISOR_TOKEN) or with trust-local mode
   includeEntities?: string[];
   excludeEntities?: string[];
-  /** Keep legacy one-node-per-entity behavior unless this is explicitly enabled. */
+  /** Group related HA entities into a physical Matter device. Set false for legacy entity mode. */
   groupByDeviceId?: boolean;
   /** Home Assistant add-on options use snake_case. */
   group_by_device_id?: boolean;
@@ -86,7 +86,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   private get groupingEnabled(): boolean {
     return (this.config as HomeAssistantPlatformConfig).groupByDeviceId
       ?? (this.config as HomeAssistantPlatformConfig).group_by_device_id
-      ?? false;
+      // A device registry entry represents the physical product.  Group it by
+      // default so a fan/light cannot accidentally be commissioned as two
+      // unrelated accessories. Users that need the former behavior can opt
+      // out with group_by_device_id: false.
+      ?? true;
   }
 
   private compositeStorageKey(deviceId: string): string {
@@ -440,7 +444,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
   /** Restore persisted legacy entities and grouped physical devices after discovery. */
   private async restoreExportedDevices(): Promise<void> {
-    for (const exportedId of this.exportedDevices) {
+    let migratedLegacyEntries = false;
+    for (const exportedId of Array.from(this.exportedDevices)) {
       if (exportedId.startsWith('device:')) {
         const deviceId = exportedId.substring('device:'.length);
         const entityId = Array.from(this.entities.keys()).find((id) => this.ha.hassEntities.get(id)?.device_id === deviceId);
@@ -448,9 +453,19 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         continue;
       }
       if (!this.entities.has(exportedId)) continue;
-      if (this.getCompositeCandidate(exportedId)) await this.activateComposite(exportedId);
-      else await this.activateEntity(exportedId);
+      const composite = this.getCompositeCandidate(exportedId);
+      if (composite) {
+        // Versions prior to grouping persisted every entity separately. Fold
+        // that legacy selection into one physical-device key on first start.
+        this.exportedDevices.add(this.compositeStorageKey(composite.deviceId));
+        composite.members.forEach((member) => this.exportedDevices.delete(member.entityId));
+        migratedLegacyEntries = true;
+        await this.activateComposite(exportedId);
+      } else {
+        await this.activateEntity(exportedId);
+      }
     }
+    if (migratedLegacyEntries) await this.saveExportedDevices();
   }
 
   private async activateComposite(entityId: string): Promise<void> {
@@ -517,6 +532,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       if (composite) {
         const key = this.compositeStorageKey(composite.deviceId);
         this.exportedDevices.add(key);
+        composite.members.forEach((member) => this.exportedDevices.delete(member.entityId));
         try {
           await this.activateComposite(entityId);
           await this.saveExportedDevices();
@@ -552,7 +568,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         if (endpoint) await this.unregisterDevice(endpoint);
         this.matterbridgeDevices.delete(key);
         const composite = this.compositeDevices.get(compositeDeviceId);
-        composite?.members.forEach((member) => this.compositeMembership.delete(member.entityId));
+        composite?.members.forEach((member) => {
+          this.compositeMembership.delete(member.entityId);
+          this.exportedDevices.delete(member.entityId);
+        });
         this.compositeDevices.delete(compositeDeviceId);
         await this.saveExportedDevices();
         return { success: true };
@@ -584,7 +603,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
    * that was removed without completing RemoveFabric.
    */
   public async resetMatterAccessory(entityId: string): Promise<{ success: boolean; error?: string }> {
-    const endpoint = this.matterbridgeDevices.get(entityId) as any;
+    const compositeDeviceId = this.compositeMembership.get(entityId) ?? this.getCompositeCandidate(entityId)?.deviceId;
+    const endpoint = this.matterbridgeDevices.get(compositeDeviceId ? this.compositeStorageKey(compositeDeviceId) : entityId) as any;
     const serverNode = endpoint?.serverNode;
     if (!endpoint || !serverNode) {
       return { success: false, error: 'El accesorio Matter no está activo o su nodo aún no está listo.' };
@@ -592,7 +612,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
     try {
       await serverNode.erase();
-      this.log.notice(`Matter factory reset completed for ${idn}${entityId}${rs}`);
+      this.log.notice(`Matter factory reset completed for ${idn}${compositeDeviceId ? `device:${compositeDeviceId}` : entityId}${rs}`);
       return { success: true };
     } catch (error) {
       this.log.error(`Failed to factory reset Matter accessory ${entityId}: ${error}`);
@@ -814,9 +834,17 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         if (req.method === 'GET' && pathname === '/api/custom/devices') {
           const result = Array.from(this.entities.values()).map(e => {
             const [domain] = e.entityId.split('.');
-            const compositeDeviceId = this.compositeMembership.get(e.entityId) ?? this.getCompositeCandidate(e.entityId)?.deviceId;
+            // Include grouping metadata before activation. The frontend must
+            // never offer a second toggle for a future child endpoint.
+            const compositeCandidate = this.getCompositeCandidate(e.entityId);
+            const compositeDeviceId = this.compositeMembership.get(e.entityId) ?? compositeCandidate?.deviceId;
             const endpoint = this.matterbridgeDevices.get(compositeDeviceId ? this.compositeStorageKey(compositeDeviceId) : e.entityId) as any;
             const composite = compositeDeviceId ? this.compositeDevices.get(compositeDeviceId) : undefined;
+            const compositePrimaryEntityId = composite?.primaryEntityId
+              ?? compositeCandidate?.config?.primary_entity
+              ?? compositeCandidate?.members.find((member) => member.entityId.startsWith('fan.'))?.entityId
+              ?? compositeCandidate?.members[0]?.entityId
+              ?? null;
 
             // Extract fabric (home) label if device is commissioned
             const fabrics: Record<number, { label: string }> | undefined =
@@ -839,9 +867,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               ...this.getHaRegistryInfo(e.entityId),
               // Accessory status
               exported: this.isEntityExported(e.entityId),
-              composite: compositeDeviceId !== undefined && this.compositeDevices.has(compositeDeviceId),
+              composite: compositeDeviceId !== undefined,
+              compositeActive: composite !== undefined,
               compositeDeviceId: compositeDeviceId ?? null,
-              compositePrimaryEntityId: composite?.primaryEntityId ?? null,
+              compositePrimaryEntityId,
               auxiliary: this.isAuxiliaryEntity(e.entityId),
               primaryEntityId: this.getPrimaryEntityId(e.entityId) ?? null,
               profileId: this.deviceOverrides[e.entityId] ?? getDefaultExportProfileId(domain) ?? null,
