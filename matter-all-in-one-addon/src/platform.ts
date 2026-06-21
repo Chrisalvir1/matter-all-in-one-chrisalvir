@@ -362,6 +362,14 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       const endpoint = await entity.createEndpoint();
       await this.registerDevice(endpoint);
       this.matterbridgeDevices.set(entityId, endpoint);
+
+      // Start the server node if registering dynamically
+      const serverNode = (endpoint as any).serverNode;
+      if (serverNode && this.isStarted) {
+        this.log.notice(`Starting standalone server node for entity ${entityId}`);
+        await (this.matterbridge as any).startServerNode(serverNode);
+      }
+
       await entity.syncInitialState();
       this.log.notice(`Exported bridged endpoint ${idn}${entityId}${rs}`);
     } catch (err) {
@@ -401,6 +409,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       this.exportedDevices.delete(entityId);
       const endpoint = this.matterbridgeDevices.get(entityId);
       if (endpoint) {
+        const serverNode = (endpoint as any).serverNode;
+        if (serverNode) {
+          this.log.notice(`Stopping standalone server node for entity ${entityId}`);
+          await (this.matterbridge as any).stopServerNode(serverNode);
+        }
         await this.unregisterDevice(endpoint);
         this.matterbridgeDevices.delete(entityId);
       }
