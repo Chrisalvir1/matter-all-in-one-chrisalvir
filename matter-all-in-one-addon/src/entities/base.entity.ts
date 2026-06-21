@@ -82,9 +82,10 @@ export class BaseEntity {
     this.endpoint.productId = 0x8000;
     this.endpoint.productName = domain.charAt(0).toUpperCase() + domain.slice(1);
 
-    // This is a bridged endpoint, not an independent Matter server.  One
-    // Matter node per HA entity creates excessive mDNS traffic and leaves
-    // orphan nodes behind when entities are toggled in the UI.
+    // Use the BasicInformation cluster (NOT BridgedDeviceBasicInformation).
+    // This entity is registered with mode: 'server' so Matterbridge creates
+    // an independent ServerNode with its own QR code. Using the bridged version
+    // here would conflict with the server mode and prevent pairing.
     this.endpoint.createDefaultBasicInformationClusterServer(
       uniqueName,
       this.endpoint.serialNumber,

@@ -2,7 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.4] - 2026-06-21
+
+### Fixed
+- **Aspiradora sin código QR (root cause encontrado y corregido):** El aspirador se registraba como endpoint `bridgeado` (sin QR propio) porque en `vacuum.entity.ts` el tercer argumento del constructor `RoboticVacuumCleaner(name, serial, mode, ...)` se pasaba como `undefined` en lugar de `'server'`. La API de Matterbridge (`registerDevice`) verifica `device.mode === undefined` y, si el bridge está en modo `bridge`, convierte automáticamente el endpoint en un endpoint bridgeado añadiéndole `bridgedDeviceBasicInformation`. Al pasar `'server'` explícitamente, el aspirador ahora genera su propio ServerNode Matter con QR y código manual de emparejamiento únicos.
+- **Comentario incorrecto en `base.entity.ts` corregido:** El comentario decía "Este es un endpoint bridgeado" cuando en realidad el endpoint usa `mode: 'server'`. Actualizado para evitar confusión futura.
+
 ## [1.2.3] - 2026-06-21
+
 
 ### Fixed
 - **Error crítico al desactivar dispositivo:** Eliminadas las llamadas a `this.matterbridge.stopServerNode()` y `this.matterbridge.startServerNode()` que no existen en la API real de `MatterbridgePlatform` y causaban `TypeError: this.matterbridge.stopServerNode is not a function` al intentar desactivar un accesorio. El ciclo de vida completo del nodo Matter (arranque y parada) es manejado internamente por los métodos heredados `registerDevice()` y `unregisterDevice()`.

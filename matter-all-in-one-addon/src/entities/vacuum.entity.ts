@@ -47,9 +47,9 @@ export class VacuumEntity extends BaseEntity {
       : rawName + (rawName.length < 28 ? ' ' + entityPart : '');
     const uniqueName = displayName.substring(0, 32).trim();
 
-    // The endpoint identity must remain stable. Rotating this value creates a
-    // new bridged endpoint and is a common cause of duplicate/orphaned tiles
-    // in controllers after an add-on update.
+    // Stable identity for this entity — do NOT rotate or append version suffixes.
+    // Changing stableId or serialNumber after first pairing creates orphaned tiles
+    // in Matter controllers and forces re-pairing.
     const stableId = this.entityId.replaceAll('.', '_');
     const serialNumber = `${stableId.slice(0, 28)}_rvc`;
 
@@ -68,16 +68,15 @@ export class VacuumEntity extends BaseEntity {
       { operationalStateId: 66 }  // Docked
     ];
 
-    // The official RoboticVacuumCleaner will auto-add:
-    // - PowerSource (with valid defaults, 5900mV etc)
-    // - ServiceArea (configured empty here to disable room selection/infinite loading)
-    // - RvcRunMode (with correct tags)
-    // - RvcCleanMode (Only Vacuum mode, removing Mop/DeepClean since A1 has no mop)
-    // - RvcOperationalState (with valid error states and complete behaviors)
+    // IMPORTANT: Pass 'server' as the third argument (mode) so that Matterbridge
+    // registers this as an independent Matter ServerNode (with its own QR code)
+    // instead of a bridged endpoint under the main Matterbridge bridge.
+    // Without mode: 'server', registerDevice() sees mode === undefined and
+    // falls back to bridge mode, adding bridgedDeviceBasicInformation and NO QR code.
     this.endpoint = new RoboticVacuumCleaner(
       uniqueName,
-      serialNumber, // serial with _v6 and _sn
-      undefined,
+      serialNumber,
+      'server', // ← CRITICAL: makes this an independent Matter server node with its own QR
       RUN_MODE_ID_IDLE, // currentRunMode
       supportedRunModes, // supportedRunModes
       1, // currentCleanMode
