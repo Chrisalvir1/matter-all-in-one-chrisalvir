@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.8] - 2026-06-21
+
+### Fixed
+- **QR de accesorios registrados dinámicamente:** el `ServerNode` ahora se inicia de forma explícita después de registrarlo. Antes, un nodo recreado desde el panel podía mostrar un QR válido pero no publicar `_matterc._udp`, provocando “Accessory Not Found” en Apple Home.
+
 ## [1.2.7] - 2026-06-21
 
 ### Fixed

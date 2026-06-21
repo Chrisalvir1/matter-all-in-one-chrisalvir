@@ -1,6 +1,6 @@
 # Estado de refactorización — matter-all-in-one-chrisalvir
 
-> Documento vivo. Última actualización: 2026-06-21 — versión 1.2.7.
+> Documento vivo. Última actualización: 2026-06-21 — versión 1.2.8.
 
 ## Objetivo de arquitectura actual (v1.2.0+)
 
@@ -14,7 +14,7 @@ El add-on opera publicando cada entidad exportada de Home Assistant como un nodo
 
 ## Cambios aplicados y estado actual
 
-| Área | Estado | Implementación / Detalles en v1.2.7 |
+| Área | Estado | Implementación / Detalles en v1.2.8 |
 | --- | --- | --- |
 | **Ciclo de Vida Matter** | Hecho | Cada accesorio es un `ServerNode` independiente. Se registran/desregistran mediante `registerDevice()` y `unregisterDevice()`. |
 | **Llamadas de control API** | Hecho | **Se eliminaron por completo las llamadas a `startServerNode()` y `stopServerNode()`** que no existen en `MatterbridgePlatform` y producían `TypeError` al deshabilitar dispositivos. |
@@ -37,6 +37,10 @@ El add-on opera publicando cada entidad exportada de Home Assistant como un nodo
 > [!IMPORTANT]
 > **¡NO USAR `this.matterbridge.startServerNode()` ni `this.matterbridge.stopServerNode()`!**
 > Estos métodos NO existen en la clase `MatterbridgePlatform`. El ciclo de vida de cada nodo Matter independiente en modo `server` es manejado de manera interna por `registerDevice()` y `unregisterDevice()`. Intentar llamarlos causa un crash fatal del add-on.
+
+> [!IMPORTANT]
+> **Los nodos creados dinámicamente sí requieren arrancar `endpoint.serverNode`.**
+> Tras `registerDevice(endpoint)`, Matterbridge ya ha creado el `ServerNode`, pero si el accesorio se añadió después de su intervalo de arranque inicial, el nodo puede seguir offline. Llamar `await endpoint.serverNode.start()` publica `_matterc._udp` y hace que el QR sea detectable. Al retirar un endpoint `server`, llamar `await endpoint.serverNode.close()` antes de `unregisterDevice()` evita anuncios mDNS residuales. No llamar los métodos privados/inexistentes del singleton `this.matterbridge`.
 
 > [!IMPORTANT]
 > **RVC para Apple Home debe mantenerse como RVC Matter real.**

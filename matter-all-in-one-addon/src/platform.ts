@@ -360,8 +360,18 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
     try {
       const endpoint = await entity.createEndpoint();
-      // registerDevice handles full lifecycle including starting the server node
       await this.registerDevice(endpoint);
+      // Matterbridge creates the ServerNode during registerDevice(), but nodes
+      // added dynamically after the initial startup interval are not started
+      // by that interval. Start this node explicitly so its commissionable
+      // mDNS record (_matterc._udp) is present before showing its QR code.
+      const serverNode = (endpoint as any).serverNode;
+      if (!serverNode) {
+        throw new Error(`Matter server node was not created for ${entityId}.`);
+      }
+      if (!serverNode.lifecycle?.isOnline) {
+        await serverNode.start();
+      }
       this.matterbridgeDevices.set(entityId, endpoint);
       await entity.syncInitialState();
       this.log.notice(`Exported bridged endpoint ${idn}${entityId}${rs}`);
@@ -402,7 +412,12 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       this.exportedDevices.delete(entityId);
       const endpoint = this.matterbridgeDevices.get(entityId);
       if (endpoint) {
-        // unregisterDevice handles full lifecycle including stopping the server node
+        // Server-mode endpoints are not stopped by Matterbridge's dynamic
+        // unregister path. Close this node first to avoid stale mDNS records.
+        const serverNode = (endpoint as any).serverNode;
+        if (serverNode?.lifecycle?.isOnline) {
+          await serverNode.close();
+        }
         await this.unregisterDevice(endpoint);
         this.matterbridgeDevices.delete(entityId);
       }
