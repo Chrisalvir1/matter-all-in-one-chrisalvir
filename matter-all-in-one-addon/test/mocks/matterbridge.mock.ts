@@ -9,6 +9,7 @@ export class MockMatterbridgeEndpoint {
   public clusterServers = new Set<number>();
   public attributes = new Map<string, any>();
   public commandHandlers = new Map<string, (...args: any[]) => any>();
+  public children = new Map<string, MockMatterbridgeEndpoint>();
 
   constructor(deviceTypes: any[], options: any) {
     this.deviceTypes = deviceTypes;
@@ -20,6 +21,17 @@ export class MockMatterbridgeEndpoint {
   }
 
   public addRequiredClusterServers() {}
+
+  public createDefaultBasicInformationClusterServer() { return this; }
+
+  public createDefaultFanControlClusterServer() { return this; }
+
+  public addChildDeviceTypeWithClusterServer(id: string, deviceTypes: any[], clusterIds: number[]) {
+    const child = new MockMatterbridgeEndpoint(Array.isArray(deviceTypes) ? deviceTypes : [deviceTypes], { id });
+    child.addClusterServers(clusterIds);
+    this.children.set(id, child);
+    return child;
+  }
 
   public createDefaultBridgedDeviceBasicInformationClusterServer(
     uniqueName: string,

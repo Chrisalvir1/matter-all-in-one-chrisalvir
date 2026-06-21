@@ -155,7 +155,8 @@ function buildEntityRow(entity) {
   const element = document.createElement('div');
   element.className = `entity-row${entity.exported ? '' : ' dimmed'}`;
   element.dataset.entityId = entity.entityId;
-  const control = entity.auxiliary
+  const compositeChild = entity.composite && entity.entityId !== entity.compositePrimaryEntityId;
+  const control = entity.auxiliary || compositeChild
     ? '<span class="export-control">Integrada</span>'
     : `<label class="export-control" title="Publicar en Matter"><span>${entity.exported ? 'Activo' : 'Inactivo'}</span><span class="toggle"><input type="checkbox" ${entity.exported ? 'checked' : ''} aria-label="Exportar ${escapeHtml(displayName(entity))}"><span></span></span></label>`;
   element.innerHTML = `<span class="entity-row-icon">${icon(entity.domain)}</span><div><div class="entity-row-name">${escapeHtml(displayName(entity))}</div><div class="entity-row-id">${escapeHtml(entity.entityId)}</div><span class="entity-state ${isOn(entity.state) ? 'on' : ''}">${escapeHtml(stateLabel(entity.state))}</span></div>${control}`;
@@ -251,6 +252,8 @@ function selectEntity(entity) {
 
   els.selectionDescription.textContent = entity.auxiliary
     ? `Acción auxiliar de ${entity.primaryEntityId || 'su dispositivo principal'}. No se expone como accesorio Matter independiente.`
+    : entity.composite && entity.entityId !== entity.compositePrimaryEntityId
+      ? 'Endpoint integrado en el mismo accesorio Matter de este dispositivo físico. Comparte su código QR y emparejamiento.'
     : entity.exported
       ? (entity.commissioned
           ? `Accesorio Matter activo${entity.homeName ? ` · Casa: ${entity.homeName}` : ''}. Usa el botón para ver el código QR si necesitas añadirlo a otra casa.`
@@ -268,7 +271,7 @@ function selectEntity(entity) {
   }));
   const currentProfile = profiles.find((profile) => profile.id === (entity.profileId || entity.matterType)) || profiles[0];
   els.profileNote.textContent = currentProfile ? `${currentProfile.description} ${profileCompatibilityText(currentProfile.appleHome)}` : '';
-  els.profileSelect.disabled = entity.auxiliary;
+  els.profileSelect.disabled = entity.auxiliary || entity.composite;
 
   els.selectionMeta.innerHTML = `<div><dt>Entidad</dt><dd>${escapeHtml(entity.entityId)}</dd></div><div><dt>Tipo Matter</dt><dd>${escapeHtml(entity.matterType || 'Predeterminado')}</dd></div><div><dt>Estado HA</dt><dd>${escapeHtml(stateLabel(entity.state))}</dd></div>`;
 

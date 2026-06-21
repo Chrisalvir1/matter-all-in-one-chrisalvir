@@ -1,4 +1,4 @@
-# Resumen de Cambios: Versión 1.2.8 (Arranque de comisión dinámica)
+# Resumen de Cambios: Versión 1.2.9 (Dispositivos Matter compuestos)
 
 Hemos implementado mejoras clave en el add-on para solucionar problemas de emparejamiento, corregir errores fatales en el ciclo de vida y optimizar la experiencia de usuario.
 

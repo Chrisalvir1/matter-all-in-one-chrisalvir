@@ -125,7 +125,23 @@ export const DEVICE_CLASS_REGISTRY: Record<string, Record<string, DeviceRegistry
   }
 };
 
-export function getDeviceTypeForEntity(domain: string, deviceClass?: string): DeviceTypeDefinition {
+/** Select the narrowest light device type supported by the HA capabilities. */
+export function getLightDeviceType(attributes: Record<string, any> = {}): DeviceTypeDefinition {
+  const modes: string[] = attributes.supported_color_modes ?? [];
+  if (modes.some((mode) => ['hs', 'xy', 'rgb', 'rgbw', 'rgbww'].includes(mode))) {
+    return MatterDeviceTypes.extendedColorLight;
+  }
+  if (modes.includes('color_temp') || attributes.color_temp !== undefined || attributes.color_temp_kelvin !== undefined) {
+    return MatterDeviceTypes.colorTemperatureLight;
+  }
+  if (modes.includes('brightness') || attributes.brightness !== undefined) {
+    return MatterDeviceTypes.dimmableLight;
+  }
+  return MatterDeviceTypes.onOffLight;
+}
+
+export function getDeviceTypeForEntity(domain: string, deviceClass?: string, attributes: Record<string, any> = {}): DeviceTypeDefinition {
+  if (domain === 'light') return getLightDeviceType(attributes);
   if (deviceClass && DEVICE_CLASS_REGISTRY[domain]?.[deviceClass]) {
     return DEVICE_CLASS_REGISTRY[domain][deviceClass].matterType;
   }

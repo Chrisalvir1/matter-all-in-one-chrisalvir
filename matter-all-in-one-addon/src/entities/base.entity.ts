@@ -2,7 +2,7 @@
  * Base entity class for exposing Home Assistant entities to Matter.
  */
 import { DeviceTypeDefinition, MatterbridgeEndpoint } from 'matterbridge';
-import { OnOff, LevelControl, ColorControl } from 'matterbridge/matter/clusters';
+import { OnOff, LevelControl, ColorControl, FanControl } from 'matterbridge/matter/clusters';
 import { ClusterId } from 'matterbridge/matter/types';
 import { HomeAssistantPlatform } from '../platform.js';
 import { HassState } from '../utils/ha-state.js';
@@ -33,7 +33,7 @@ export class BaseEntity {
     const [domain] = this.entityId.split('.');
     const clusters: ClusterId[] = [];
 
-    if (domain === 'light' || domain === 'switch' || domain === 'fan' || domain === 'media_player') {
+    if (domain === 'light' || domain === 'switch' || domain === 'media_player') {
       clusters.push(OnOff.id);
       if (this.state.attributes.brightness !== undefined) {
         clusters.push(LevelControl.id);
@@ -91,6 +91,13 @@ export class BaseEntity {
       this.endpoint.productName
     );
 
+    if (domain === 'fan') {
+      const on = this.state.state === 'on';
+      const percentage = typeof this.state.attributes.percentage === 'number' ? this.state.attributes.percentage : (on ? 100 : 0);
+      this.endpoint.createDefaultFanControlClusterServer(on ? 1 : 0, undefined, percentage, percentage);
+      this.endpoint.addClusterServers([OnOff.id]);
+    }
+
     const clusters = this.getRequiredClusterIds();
     if (clusters.length > 0) {
       this.endpoint.addClusterServers(clusters);
@@ -130,6 +137,15 @@ export class BaseEntity {
         this.platform.log.debug(`Matter Off commanded for ${this.entityId}`);
         await this.platform.ha.callService(domain, 'turn_off', this.entityId);
       });
+
+      if (domain === 'fan') {
+        this.endpoint.addCommandHandler('FanControl.step', async (data: any) => {
+          const direction = data?.request?.direction ?? data?.direction;
+          const current = typeof this.state.attributes.percentage === 'number' ? this.state.attributes.percentage : 0;
+          const percentage = direction === 0 ? Math.min(100, current + 10) : Math.max(0, current - 10);
+          await this.platform.ha.callService('fan', 'set_percentage', this.entityId, { percentage });
+        });
+      }
 
       // LevelControl handlers (brightness)
       if (this.endpoint.hasAttributeServer(LevelControl.id, 'currentLevel')) {
@@ -235,6 +251,14 @@ export class BaseEntity {
         } else {
           await safeUpdateAttribute(this.endpoint, LevelControl.id, 'currentLevel', level, this.platform.log);
         }
+      }
+
+      if (domain === 'fan') {
+        const percentage = typeof newState.attributes.percentage === 'number' ? newState.attributes.percentage : (isOn ? 100 : 0);
+        const update = isInitialSync ? safeSetAttribute : safeUpdateAttribute;
+        await update(this.endpoint, FanControl.id, 'percentCurrent', percentage, this.platform.log);
+        await update(this.endpoint, FanControl.id, 'percentSetting', percentage, this.platform.log);
+        await update(this.endpoint, FanControl.id, 'fanMode', isOn ? 1 : 0, this.platform.log);
       }
     }
   }

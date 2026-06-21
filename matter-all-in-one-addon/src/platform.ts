@@ -28,6 +28,7 @@ import { HumidifierEntity } from './entities/humidifier.entity.js';
 import { OvenEntity } from './entities/oven.entity.js';
 import { CooktopEntity } from './entities/cooktop.entity.js';
 import { MediaPlayerEntity } from './entities/media-player.entity.js';
+import { CompositeDeviceEntity, CompositeMember } from './entities/composite-device.entity.js';
 import { getDefaultExportProfileId, getExportProfile, getExportProfiles } from './device-profiles.js';
 
 
@@ -36,13 +37,34 @@ export interface HomeAssistantPlatformConfig extends PlatformConfig {
   token?: string;      // Optional: not required when running as HA add-on (SUPERVISOR_TOKEN) or with trust-local mode
   includeEntities?: string[];
   excludeEntities?: string[];
+  /** Keep legacy one-node-per-entity behavior unless this is explicitly enabled. */
+  groupByDeviceId?: boolean;
+  /** Home Assistant add-on options use snake_case. */
+  group_by_device_id?: boolean;
+  devices?: CompositeDeviceConfig[];
+}
+
+export interface CompositeDeviceConfig {
+  device_id: string;
+  name?: string;
+  group_by_device_id?: boolean;
+  primary_entity?: string;
+  include_entities?: string[];
+  exclude_entities?: string[];
+  endpoint_order?: string[];
+  friendly_name?: string;
+  room?: string;
 }
 
 export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   public ha!: HomeAssistant;
   public entities = new Map<string, BaseEntity>();
   public matterbridgeDevices = new Map<string, MatterbridgeEndpoint>();
+  /** One composite endpoint tree per HA device_id. */
+  public compositeDevices = new Map<string, CompositeDeviceEntity>();
+  private readonly compositeMembership = new Map<string, string>();
   public deviceOverrides: Record<string, string> = {};
+  public deviceGroupingConfigs: CompositeDeviceConfig[] = [];
   private uiServer?: http.Server;
   private packageVersion?: string;
   /** Raw host from config (may be undefined — triggers network auto-discovery) */
@@ -60,6 +82,57 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   private readonly pendingStateUpdates = new Map<string, HassState>();
   private stateUpdateFlushScheduled = false;
   private syncInFlight?: Promise<void>;
+
+  private get groupingEnabled(): boolean {
+    return (this.config as HomeAssistantPlatformConfig).groupByDeviceId
+      ?? (this.config as HomeAssistantPlatformConfig).group_by_device_id
+      ?? false;
+  }
+
+  private compositeStorageKey(deviceId: string): string {
+    return `device:${deviceId}`;
+  }
+
+  private getCompositeConfig(deviceId: string): CompositeDeviceConfig | undefined {
+    return this.deviceGroupingConfigs.find((config) => config.device_id === deviceId)
+      ?? this.config.devices?.find((config) => config.device_id === deviceId);
+  }
+
+  private getCompositeCandidate(entityId: string): { deviceId: string; members: CompositeMember[]; config?: CompositeDeviceConfig } | undefined {
+    const deviceId = this.ha.hassEntities.get(entityId)?.device_id;
+    if (!deviceId) return undefined;
+    const config = this.getCompositeConfig(deviceId);
+    if (!this.groupingEnabled && config?.group_by_device_id !== true) return undefined;
+    if (config?.group_by_device_id === false) return undefined;
+    const excluded = new Set(config?.exclude_entities ?? []);
+    const explicitlyIncluded = config?.include_entities;
+    const supported = new Set(['fan', 'light', 'switch', 'sensor', 'binary_sensor']);
+    let members = Array.from(this.entities.values())
+      .filter((entity) => this.ha.hassEntities.get(entity.entityId)?.device_id === deviceId)
+      .filter((entity) => supported.has(entity.entityId.split('.')[0]))
+      .filter((entity) => !excluded.has(entity.entityId));
+    if (explicitlyIncluded?.length) members = members.filter((entity) => explicitlyIncluded.includes(entity.entityId));
+
+    // A composite node is useful when it has a Fan plus at least one separate
+    // capability. Other device families retain the established entity mode.
+    if (!members.some((member) => member.entityId.startsWith('fan.')) || members.length < 2) return undefined;
+    const order = config?.endpoint_order ?? [];
+    members.sort((a, b) => {
+      if (a.entityId === config?.primary_entity) return -1;
+      if (b.entityId === config?.primary_entity) return 1;
+      const left = order.indexOf(a.entityId);
+      const right = order.indexOf(b.entityId);
+      if (left !== -1 || right !== -1) return (left === -1 ? Number.MAX_SAFE_INTEGER : left) - (right === -1 ? Number.MAX_SAFE_INTEGER : right);
+      return a.entityId.localeCompare(b.entityId);
+    });
+    return { deviceId, config, members: members.map((entity) => ({ entityId: entity.entityId, state: entity.state, deviceType: entity.deviceType })) };
+  }
+
+  private isEntityExported(entityId: string): boolean {
+    if (this.exportedDevices.has(entityId)) return true;
+    const deviceId = this.compositeMembership.get(entityId) ?? this.getCompositeCandidate(entityId)?.deviceId;
+    return deviceId !== undefined && this.exportedDevices.has(this.compositeStorageKey(deviceId));
+  }
 
   private getHaRegistryInfo(entityId: string) {
     const entityRegistry = (this.ha as any).hassEntities?.get(entityId);
@@ -254,10 +327,23 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         this.log.info('No exported-devices.json found. No accessories will be started automatically.');
       }
 
+      // Optional device-level composite definitions. This file intentionally
+      // lives beside entity overrides so advanced users can tune grouping
+      // without changing the add-on image.
+      try {
+        const rawGroups = await fs.readFile('/data/device-groups.json', 'utf8');
+        const parsed = JSON.parse(rawGroups);
+        this.deviceGroupingConfigs = Array.isArray(parsed) ? parsed : (Array.isArray(parsed.devices) ? parsed.devices : []);
+        this.log.info(`Loaded ${this.deviceGroupingConfigs.length} device grouping definitions.`);
+      } catch {
+        this.deviceGroupingConfigs = [];
+      }
+
       const states = Array.from(this.ha.hassStates.values());
       this.log.info(`Fetched ${states.length} entity states. Registering matching devices...`);
 
       for (const hassState of states) await this.registerHAEntity(hassState);
+      await this.restoreExportedDevices();
     } catch (err) {
       this.log.error(`Discovery error: ${err}`);
     }
@@ -274,7 +360,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     if (this.entities.has(entityId)) {
       const entity = this.entities.get(entityId)!;
       entity.state = state;
-      if (this.exportedDevices.has(entityId)) this.queueStateUpdate(entityId, state);
+      if (this.isEntityExported(entityId)) this.queueStateUpdate(entityId, state);
       return;
     }
 
@@ -307,7 +393,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     }
 
     // Retrieve corresponding Matter Device Type
-    let deviceType = getDeviceTypeForEntity(domain, deviceClass);
+    let deviceType = getDeviceTypeForEntity(domain, deviceClass, state.attributes);
     if (override && (MatterDeviceTypes as any)[override]) {
       deviceType = (MatterDeviceTypes as any)[override];
       this.log.info(`Applying override for ${entityId}: ${deviceType.name}`);
@@ -344,12 +430,47 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     }
 
     this.entities.set(entityId, entityInstance);
-    if (!this.exportedDevices.has(entityId)) {
+    if (!this.isEntityExported(entityId) || this.groupingEnabled || this.getCompositeConfig(this.ha.hassEntities.get(entityId)?.device_id ?? '')?.group_by_device_id === true) {
       this.log.debug(`Entity ${entityId} is discovered but not exported. Endpoint creation deferred.`);
       return;
     }
 
     await this.activateEntity(entityId);
+  }
+
+  /** Restore persisted legacy entities and grouped physical devices after discovery. */
+  private async restoreExportedDevices(): Promise<void> {
+    for (const exportedId of this.exportedDevices) {
+      if (exportedId.startsWith('device:')) {
+        const deviceId = exportedId.substring('device:'.length);
+        const entityId = Array.from(this.entities.keys()).find((id) => this.ha.hassEntities.get(id)?.device_id === deviceId);
+        if (entityId) await this.activateComposite(entityId);
+        continue;
+      }
+      if (!this.entities.has(exportedId)) continue;
+      if (this.getCompositeCandidate(exportedId)) await this.activateComposite(exportedId);
+      else await this.activateEntity(exportedId);
+    }
+  }
+
+  private async activateComposite(entityId: string): Promise<void> {
+    const candidate = this.getCompositeCandidate(entityId);
+    if (!candidate) return this.activateEntity(entityId);
+    if (this.compositeDevices.has(candidate.deviceId)) return;
+
+    const info = this.getHaRegistryInfo(entityId);
+    const nodeName = candidate.config?.friendly_name || candidate.config?.name || info.device_name || this.entities.get(entityId)?.state.attributes.friendly_name || entityId;
+    const composite = new CompositeDeviceEntity(this, candidate.deviceId, nodeName, candidate.members, candidate.config?.primary_entity);
+    const endpoint = await composite.createEndpoint();
+    await this.registerDevice(endpoint);
+    const serverNode = (endpoint as any).serverNode;
+    if (!serverNode) throw new Error(`Matter server node was not created for device ${candidate.deviceId}.`);
+    if (!serverNode.lifecycle?.isOnline) await serverNode.start();
+    this.compositeDevices.set(candidate.deviceId, composite);
+    this.matterbridgeDevices.set(this.compositeStorageKey(candidate.deviceId), endpoint);
+    candidate.members.forEach((member) => this.compositeMembership.set(member.entityId, candidate.deviceId));
+    await composite.syncInitialState();
+    this.log.notice(`Exported composite Matter device ${idn}${nodeName}${rs} with endpoints: ${candidate.members.map((member) => member.entityId).join(', ')}`);
   }
 
   /** Create a bridged endpoint and let Matterbridge own its lifecycle. */
@@ -392,6 +513,19 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       return { success: false, error: 'This is an auxiliary action of the main device and cannot be exported independently.' };
     }
     try {
+      const composite = this.getCompositeCandidate(entityId);
+      if (composite) {
+        const key = this.compositeStorageKey(composite.deviceId);
+        this.exportedDevices.add(key);
+        try {
+          await this.activateComposite(entityId);
+          await this.saveExportedDevices();
+          return { success: true };
+        } catch (error) {
+          this.exportedDevices.delete(key);
+          throw error;
+        }
+      }
       this.exportedDevices.add(entityId);
       await this.activateEntity(entityId);
       await this.saveExportedDevices();
@@ -409,6 +543,20 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
    */
   public async manualUnregister(entityId: string): Promise<{ success: boolean; error?: string }> {
     try {
+      const compositeDeviceId = this.compositeMembership.get(entityId) ?? this.getCompositeCandidate(entityId)?.deviceId;
+      if (compositeDeviceId && this.compositeDevices.has(compositeDeviceId)) {
+        const key = this.compositeStorageKey(compositeDeviceId);
+        this.exportedDevices.delete(key);
+        const endpoint = this.matterbridgeDevices.get(key) as any;
+        if (endpoint?.serverNode?.lifecycle?.isOnline) await endpoint.serverNode.close();
+        if (endpoint) await this.unregisterDevice(endpoint);
+        this.matterbridgeDevices.delete(key);
+        const composite = this.compositeDevices.get(compositeDeviceId);
+        composite?.members.forEach((member) => this.compositeMembership.delete(member.entityId));
+        this.compositeDevices.delete(compositeDeviceId);
+        await this.saveExportedDevices();
+        return { success: true };
+      }
       this.exportedDevices.delete(entityId);
       const endpoint = this.matterbridgeDevices.get(entityId);
       if (endpoint) {
@@ -467,6 +615,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   public async setDeviceProfile(entityId: string, profileId: string): Promise<{ success: boolean; error?: string }> {
     const entity = this.entities.get(entityId);
     if (!entity) return { success: false, error: 'Device not found in discovery.' };
+    if (this.compositeMembership.has(entityId) || this.getCompositeCandidate(entityId)) {
+      return { success: false, error: 'Los perfiles de un dispositivo compuesto se determinan por las capacidades reales de cada endpoint.' };
+    }
     const [domain] = entityId.split('.');
     if (!getExportProfile(domain, profileId) || !(MatterDeviceTypes as any)[profileId]) {
       return { success: false, error: 'The selected Matter profile is not valid for this entity.' };
@@ -503,7 +654,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       return;
     }
     entity.state = newState;
-    if (this.exportedDevices.has(entityId)) this.queueStateUpdate(entityId, newState);
+    if (this.isEntityExported(entityId)) this.queueStateUpdate(entityId, newState);
   }
 
   private queueStateUpdate(entityId: string, state: HassState) {
@@ -519,8 +670,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     this.pendingStateUpdates.clear();
     await Promise.allSettled(
       updates.map(async ([entityId, state]) => {
+        const compositeDeviceId = this.compositeMembership.get(entityId);
+        if (compositeDeviceId) {
+          await this.compositeDevices.get(compositeDeviceId)?.updateEntity(entityId, state);
+          return;
+        }
         const entity = this.entities.get(entityId);
-        if (entity && this.exportedDevices.has(entityId)) await entity.updateState(state);
+        if (entity && this.isEntityExported(entityId)) await entity.updateState(state);
       }),
     );
     if (this.pendingStateUpdates.size && !this.stateUpdateFlushScheduled) {
@@ -658,7 +814,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         if (req.method === 'GET' && pathname === '/api/custom/devices') {
           const result = Array.from(this.entities.values()).map(e => {
             const [domain] = e.entityId.split('.');
-            const endpoint = this.matterbridgeDevices.get(e.entityId) as any;
+            const compositeDeviceId = this.compositeMembership.get(e.entityId) ?? this.getCompositeCandidate(e.entityId)?.deviceId;
+            const endpoint = this.matterbridgeDevices.get(compositeDeviceId ? this.compositeStorageKey(compositeDeviceId) : e.entityId) as any;
+            const composite = compositeDeviceId ? this.compositeDevices.get(compositeDeviceId) : undefined;
 
             // Extract fabric (home) label if device is commissioned
             const fabrics: Record<number, { label: string }> | undefined =
@@ -680,7 +838,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               // Registry info
               ...this.getHaRegistryInfo(e.entityId),
               // Accessory status
-              exported: this.exportedDevices.has(e.entityId),
+              exported: this.isEntityExported(e.entityId),
+              composite: compositeDeviceId !== undefined && this.compositeDevices.has(compositeDeviceId),
+              compositeDeviceId: compositeDeviceId ?? null,
+              compositePrimaryEntityId: composite?.primaryEntityId ?? null,
               auxiliary: this.isAuxiliaryEntity(e.entityId),
               primaryEntityId: this.getPrimaryEntityId(e.entityId) ?? null,
               profileId: this.deviceOverrides[e.entityId] ?? getDefaultExportProfileId(domain) ?? null,

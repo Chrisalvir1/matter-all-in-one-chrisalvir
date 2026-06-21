@@ -9,6 +9,7 @@ HOST=$(jq -r '.host // empty' "$OPTIONS_FILE")
 TOKEN=$(jq -r '.token // empty' "$OPTIONS_FILE")
 MDNSINTERFACE=$(jq -r '.mdnsinterface // empty' "$OPTIONS_FILE")
 IPV4_ONLY=$(jq -r '.ipv4_only // false' "$OPTIONS_FILE")
+GROUP_BY_DEVICE_ID=$(jq -r '.group_by_device_id // false' "$OPTIONS_FILE")
 
 # Fallback to supervisor API if defaults are used
 if [ -z "$HOST" ] || [ "$HOST" = "http://supervisor/core" ]; then
@@ -41,7 +42,8 @@ cat <<EOF > "$CONFIG_PATH"
   "name": "matter-all-in-one-chrisalvir",
   "type": "dynamic",
   "host": "$HOST",
-  "token": "$TOKEN"
+  "token": "$TOKEN",
+  "groupByDeviceId": $GROUP_BY_DEVICE_ID
 }
 EOF
 
