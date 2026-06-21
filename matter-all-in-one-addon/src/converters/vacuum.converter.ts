@@ -103,6 +103,36 @@ export function haVacuumIsActive(haState: HaVacuumState): boolean {
   return haState.toLowerCase() === 'cleaning';
 }
 
+/**
+ * Some vacuum integrations leave the HA entity state at `cleaning` while the
+ * physical robot is already in its base. Prefer an explicit charging/docked
+ * status from the integration over that stale activity state.
+ */
+export function isVacuumChargingOrDocked(entity: HassState): boolean {
+  const attributes = entity.attributes ?? {};
+  const rawDps = attributes.raw_dps;
+  const signals = [
+    attributes.status,
+    attributes.activity,
+    attributes.state,
+    ...(rawDps && typeof rawDps === 'object' ? Object.values(rawDps as Record<string, unknown>) : []),
+  ];
+
+  return signals.some((value) => {
+    if (typeof value !== 'string') return false;
+    const normalized = value.trim().toLowerCase();
+    return [
+      'charging',
+      'charge',
+      'docked',
+      'on_charge',
+      'in_charge',
+      'charging_completed',
+      'charge_done',
+    ].includes(normalized);
+  });
+}
+
 // ─── HA command mapping ───────────────────────────────────────────────────
 
 /**
@@ -292,6 +322,8 @@ export interface VacuumMatterUpdate {
   operationalState: RvcOperationalStateValue;
   /** Maps to OnOff.onOff (true while cleaning) */
   onOff: boolean;
+  /** True when the integration reports that the robot is at its base. */
+  isChargingOrDocked: boolean;
   /** Maps to PowerSource.batPercentRemaining (Matter uses 0-200 range) */
   batteryLevel: number | null;
   /** Maps to FanControl.percentSetting (0-100) */
@@ -302,9 +334,13 @@ export interface VacuumMatterUpdate {
 
 export function buildVacuumUpdate(entity: HassState): VacuumMatterUpdate {
   const attrs = extractVacuumAttributes(entity);
+  const isChargingOrDocked = isVacuumChargingOrDocked(entity);
   return {
-    operationalState: haVacuumStateToMatter(entity.state),
-    onOff: haVacuumIsActive(entity.state),
+    operationalState: isChargingOrDocked
+      ? RvcOperationalStateId.Charging
+      : haVacuumStateToMatter(entity.state),
+    onOff: !isChargingOrDocked && haVacuumIsActive(entity.state),
+    isChargingOrDocked,
     batteryLevel: attrs.battery_level,
     fanSpeedPercent: haFanSpeedToMatter(attrs.fan_speed),
     attributes: attrs,

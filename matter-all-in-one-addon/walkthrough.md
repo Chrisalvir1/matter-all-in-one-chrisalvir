@@ -1,4 +1,4 @@
-# Resumen de Cambios: Versión 1.2.5 (RVC Matter y estabilidad)
+# Resumen de Cambios: Versión 1.2.6 (Estado de carga RVC)
 
 Hemos implementado mejoras clave en el add-on para solucionar problemas de emparejamiento, corregir errores fatales en el ciclo de vida y optimizar la experiencia de usuario.
 

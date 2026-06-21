@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.6] - 2026-06-21
+
+### Fixed
+- **Estado de carga RVC:** una señal física de base/carga (`status`, `activity` o `raw_dps` de la integración) ahora prevalece sobre un estado HA obsoleto `cleaning`. El RVC publica `Charging`, `Idle` y la carga de batería correcta en Apple Home.
+
 ## [1.2.5] - 2026-06-21
 
 ### Fixed

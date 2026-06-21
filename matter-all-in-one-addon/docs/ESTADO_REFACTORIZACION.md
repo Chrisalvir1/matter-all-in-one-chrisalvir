@@ -1,6 +1,6 @@
 # Estado de refactorización — matter-all-in-one-chrisalvir
 
-> Documento vivo. Última actualización: 2026-06-21 — versión 1.2.5.
+> Documento vivo. Última actualización: 2026-06-21 — versión 1.2.6.
 
 ## Objetivo de arquitectura actual (v1.2.0+)
 
@@ -14,7 +14,7 @@ El add-on opera publicando cada entidad exportada de Home Assistant como un nodo
 
 ## Cambios aplicados y estado actual
 
-| Área | Estado | Implementación / Detalles en v1.2.5 |
+| Área | Estado | Implementación / Detalles en v1.2.6 |
 | --- | --- | --- |
 | **Ciclo de Vida Matter** | Hecho | Cada accesorio es un `ServerNode` independiente. Se registran/desregistran mediante `registerDevice()` y `unregisterDevice()`. |
 | **Llamadas de control API** | Hecho | **Se eliminaron por completo las llamadas a `startServerNode()` y `stopServerNode()`** que no existen en `MatterbridgePlatform` y producían `TypeError` al deshabilitar dispositivos. |

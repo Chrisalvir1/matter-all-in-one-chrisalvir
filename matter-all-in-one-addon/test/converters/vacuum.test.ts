@@ -13,6 +13,7 @@ import {
   matterCommandToHaVacuum,
   extractVacuumAttributes,
   buildVacuumUpdate,
+  isVacuumChargingOrDocked,
   buildVacuumMatterMeta,
   isVacuumEntity,
   RvcOperationalStateId,
@@ -191,6 +192,19 @@ describe('buildVacuumUpdate', () => {
     expect(update.operationalState).toBe(RvcOperationalStateId.Docked);
     expect(update.onOff).toBe(false);
     expect(update.batteryLevel).toBe(100);
+  });
+
+  it('prefers a Tuya charging signal over a stale cleaning state', () => {
+    const entity = makeEntity('cleaning', { raw_dps: { '5': 'charging' } });
+    const update = buildVacuumUpdate(entity);
+    expect(isVacuumChargingOrDocked(entity)).toBe(true);
+    expect(update.operationalState).toBe(RvcOperationalStateId.Charging);
+    expect(update.onOff).toBe(false);
+  });
+
+  it('recognizes docked status supplied as an integration attribute', () => {
+    const entity = makeEntity('cleaning', { status: 'docked' });
+    expect(isVacuumChargingOrDocked(entity)).toBe(true);
   });
 });
 

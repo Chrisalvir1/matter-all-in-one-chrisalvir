@@ -44,6 +44,7 @@ export const homekitSupportedDeviceTypes = {
 - Use `mode: 'server'` as the third `RoboticVacuumCleaner` constructor argument.
 - Keep exactly one RVC endpoint in that server node; do not bridge it as a child endpoint.
 - Preserve the Home Assistant `friendly_name` (limited only to Matter's 32-character Basic Information field); use `entity_id`/serial for internal identity.
+- When an integration leaves HA at `cleaning` while its physical status/DPS reports charge or dock, prefer the physical signal and publish `Charging` with RVC Run Mode `Idle`.
 - On a failed attempt that leaves the node commissioned, perform the add-on factory reset before retrying so the old fabric store is not reused.
 
 Sources: [Apple Home — robot vacuums](https://www.apple.com/home-app/), [Apple Home update support](https://support.apple.com/en-ie/102287), [Matterbridge RVC server-mode guidance](https://matterbridge.io/CHANGELOG.html), and [Apple Matter accessory interoperability best practices](https://developer.apple.com/apple-home/downloads/Matter-Accessory-Best-Practices-for-Apple-Home.pdf).

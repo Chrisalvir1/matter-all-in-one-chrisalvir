@@ -142,7 +142,9 @@ export class VacuumEntity extends BaseEntity {
       const now = Date.now();
       const commandCooldown = now - this.lastCommandTime < 15000;
 
-      if (!commandCooldown || isInitialSync) {
+      // A physical charge/base signal must immediately override the optimistic
+      // state written after a Siri command, even during the command cooldown.
+      if (!commandCooldown || isInitialSync || update.isChargingOrDocked) {
         await syncFunc(
           endpoint as any,
           'rvcOperationalState' as any,
@@ -170,21 +172,15 @@ export class VacuumEntity extends BaseEntity {
           this.platform.log,
         );
 
-        // Sync battery charge state (lightning bolt in HomeKit)
-        // In HA, state "docked" means it is at the base charging. 
-        // We can also check raw_dps["5"] === "charging" (Tuya charging status dps)
-        const rawDps = state.attributes?.raw_dps;
-        const isCharging = state.state === 'docked' || 
-                           (rawDps && (rawDps['5'] === 'charging' || rawDps['5'] === 'charge' || rawDps['3'] === 'charging'));
-        
-        await syncFunc(
-          endpoint as any,
-          'powerSource' as any,
-          'batChargeState',
-          isCharging ? 1 : 3, // 1 = IsCharging, 3 = IsNotCharging
-          this.platform.log,
-        );
       }
+
+      await syncFunc(
+        endpoint as any,
+        'powerSource' as any,
+        'batChargeState',
+        update.isChargingOrDocked || state.state.toLowerCase() === 'docked' ? 1 : 3,
+        this.platform.log,
+      );
     } catch (err) {
       this.platform.log?.warn?.(`[VacuumEntity] syncState error for ${this.state.entity_id}: ${err}`);
     }
