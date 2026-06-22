@@ -103,11 +103,21 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   }
 
   private getCompositeCandidate(entityId: string): { deviceId: string; members: CompositeMember[]; config?: CompositeDeviceConfig } | undefined {
-    const deviceId = this.ha.hassEntities.get(entityId)?.device_id;
-    if (!deviceId) return undefined;
+    const hassEntry = this.ha.hassEntities.get(entityId);
+    const deviceId = hassEntry?.device_id;
+    if (!deviceId) {
+      this.log.debug(`[Composite] ${entityId}: no device_id in entity registry — composite grouping skipped`);
+      return undefined;
+    }
     const config = this.getCompositeConfig(deviceId);
-    if (!this.groupingEnabled && config?.group_by_device_id !== true) return undefined;
-    if (config?.group_by_device_id === false) return undefined;
+    if (!this.groupingEnabled && config?.group_by_device_id !== true) {
+      this.log.debug(`[Composite] ${entityId}: grouping disabled and no per-device override`);
+      return undefined;
+    }
+    if (config?.group_by_device_id === false) {
+      this.log.debug(`[Composite] ${entityId}: grouping explicitly disabled for device ${deviceId}`);
+      return undefined;
+    }
     const excluded = new Set(config?.exclude_entities ?? []);
     const explicitlyIncluded = config?.include_entities;
     const supported = new Set(['fan', 'light', 'switch', 'sensor', 'binary_sensor']);
@@ -117,9 +127,19 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       .filter((entity) => !excluded.has(entity.entityId));
     if (explicitlyIncluded?.length) members = members.filter((entity) => explicitlyIncluded.includes(entity.entityId));
 
+    this.log.debug(`[Composite] ${entityId}: device_id=${deviceId}, candidate members=[${members.map((m) => m.entityId).join(', ')}]`);
+
     // A composite node is useful when it has a Fan plus at least one separate
     // capability. Other device families retain the established entity mode.
-    if (!members.some((member) => member.entityId.startsWith('fan.')) || members.length < 2) return undefined;
+    if (!members.some((member) => member.entityId.startsWith('fan.'))) {
+      this.log.debug(`[Composite] ${entityId}: no fan.* member found — not a composite candidate`);
+      return undefined;
+    }
+    if (members.length < 2) {
+      this.log.debug(`[Composite] ${entityId}: only ${members.length} member(s) — need at least 2 for composite`);
+      return undefined;
+    }
+
     const order = config?.endpoint_order ?? [];
     members.sort((a, b) => {
       if (a.entityId === config?.primary_entity) return -1;
@@ -129,6 +149,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       if (left !== -1 || right !== -1) return (left === -1 ? Number.MAX_SAFE_INTEGER : left) - (right === -1 ? Number.MAX_SAFE_INTEGER : right);
       return a.entityId.localeCompare(b.entityId);
     });
+
+    this.log.debug(`[Composite] ${entityId}: composite candidate confirmed → ${members.map((m) => m.entityId).join(' + ')}`);
     return { deviceId, config, members: members.map((entity) => ({ entityId: entity.entityId, state: entity.state, deviceType: entity.deviceType })) };
   }
 

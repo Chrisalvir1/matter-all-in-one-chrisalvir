@@ -1,6 +1,6 @@
 name: "Matter All-in-One Bridge"
 description: "Expose Home Assistant entities through one stable Matter bridge with HomeKit-compatible mappings."
-version: "1.2.10"
+version: "1.2.11"
 slug: "matter_all_in_one_bridge"
 init: false
 host_network: true

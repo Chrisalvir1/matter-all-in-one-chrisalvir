@@ -3,9 +3,10 @@ import './mocks/matterbridge.mock.js';
 import { CompositeDeviceEntity } from '../src/entities/composite-device.entity.js';
 
 const platform = {
-  log: { error: vi.fn(), debug: vi.fn() },
+  log: { error: vi.fn(), debug: vi.fn(), info: vi.fn(), notice: vi.fn(), warn: vi.fn() },
   ha: { callService: vi.fn().mockResolvedValue(undefined) },
 };
+
 
 function state(entityId: string, value: string, attributes: Record<string, any> = {}) {
   return { entity_id: entityId, state: value, attributes: { friendly_name: entityId, ...attributes }, last_changed: '', last_updated: '' };
