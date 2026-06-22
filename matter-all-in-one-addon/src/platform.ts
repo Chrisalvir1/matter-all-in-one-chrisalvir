@@ -110,10 +110,6 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       return undefined;
     }
     const config = this.getCompositeConfig(deviceId);
-    if (!this.groupingEnabled && config?.group_by_device_id !== true) {
-      this.log.debug(`[Composite] ${entityId}: grouping disabled and no per-device override`);
-      return undefined;
-    }
     if (config?.group_by_device_id === false) {
       this.log.debug(`[Composite] ${entityId}: grouping explicitly disabled for device ${deviceId}`);
       return undefined;

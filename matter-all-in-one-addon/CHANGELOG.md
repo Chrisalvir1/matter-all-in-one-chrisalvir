@@ -1,3 +1,7 @@
+## 1.2.12
+
+- Fix: Forzar agrupación de dispositivos composite ignorando el estado de 'group_by_device_id' en la configuración para evitar deshabilitación accidental.
+
 # Changelog
 
 All notable changes to this project will be documented in this file.
