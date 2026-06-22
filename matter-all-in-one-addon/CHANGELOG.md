@@ -1,3 +1,8 @@
+## 1.2.14
+
+- Fixed: Corrección crítica en la detección de `LevelControl` para dispositivos apagados al iniciar el puente. Esto asegura que Apple Home reconozca la barra de brillo ("dimmer") en enchufes regulables, en lugar de mostrarlos como interruptores básicos sin slider.
+- Fixed: Corrección en los comandos `moveToLevel` para extraer el nivel de brillo dictado por Apple Home desde la nueva estructura interna de Matterbridge (`data.request.level`), evitando enviar datos NaN a Home Assistant que causaban falta de respuesta al dimmear.
+
 ## 1.2.13
 
 - Added: Opción de perfil "Enchufe regulable / Dimmer" (`dimmablePlugInUnit`) en la interfaz para exportar luces (ej. Desayunador) como interruptores dimmers hacia Apple HomeKit.

@@ -35,12 +35,13 @@ export class BaseEntity {
 
     if (domain === 'light' || domain === 'switch' || domain === 'media_player') {
       clusters.push(OnOff.id);
+      const supportedModes: string[] = this.state.attributes.supported_color_modes ?? [];
+      const hasBrightness = supportedModes.includes('brightness') || this.state.attributes.brightness !== undefined;
       const isOnOffProfile = this.deviceType.code === 0x0100 || this.deviceType.code === 0x010A; // OnOffLight or OnOffPlugInUnit
-      if (this.state.attributes.brightness !== undefined && !isOnOffProfile) {
+      if (hasBrightness && !isOnOffProfile) {
         clusters.push(LevelControl.id);
       }
       // Only add ColorControl if the light supports real color modes AND the profile allows it
-      const supportedModes: string[] = this.state.attributes.supported_color_modes ?? [];
       const realColorModes = ['hs', 'xy', 'rgb', 'rgbw', 'rgbww', 'color_temp'];
       const hasColorCapability = supportedModes.some(m => realColorModes.includes(m));
       const isColorProfile = this.deviceType.code === 0x010C || this.deviceType.code === 0x010D; // ColorTemperatureLight or ExtendedColorLight
@@ -152,24 +153,28 @@ export class BaseEntity {
       // LevelControl handlers (brightness)
       if (this.endpoint.hasAttributeServer(LevelControl.id, 'currentLevel')) {
         this.endpoint.addCommandHandler('moveToLevel', async (data: any) => {
-          const level = data.level; // 0..254
-          const haBrightness = Math.round((level / 254) * 255);
-          this.platform.log.debug(`Matter MoveToLevel commanded for ${this.entityId}: level=${level} -> HA brightness=${haBrightness}`);
-          await this.platform.ha.callService(domain, 'turn_on', this.entityId, {
-            brightness: haBrightness,
-          });
-        });
-
-        this.endpoint.addCommandHandler('moveToLevelWithOnOff', async (data: any) => {
-          const level = data.level;
-          const haBrightness = Math.round((level / 254) * 255);
-          this.platform.log.debug(`Matter MoveToLevelWithOnOff commanded for ${this.entityId}: level=${level} -> HA brightness=${haBrightness}`);
-          if (level === 0) {
-            await this.platform.ha.callService(domain, 'turn_off', this.entityId);
-          } else {
+          const level = data?.level ?? data?.request?.level; // 0..254
+          if (typeof level === 'number') {
+            const haBrightness = Math.round((level / 254) * 255);
+            this.platform.log.debug(`Matter MoveToLevel commanded for ${this.entityId}: level=${level} -> HA brightness=${haBrightness}`);
             await this.platform.ha.callService(domain, 'turn_on', this.entityId, {
               brightness: haBrightness,
             });
+          }
+        });
+
+        this.endpoint.addCommandHandler('moveToLevelWithOnOff', async (data: any) => {
+          const level = data?.level ?? data?.request?.level;
+          if (typeof level === 'number') {
+            const haBrightness = Math.round((level / 254) * 255);
+            this.platform.log.debug(`Matter MoveToLevelWithOnOff commanded for ${this.entityId}: level=${level} -> HA brightness=${haBrightness}`);
+            if (level === 0) {
+              await this.platform.ha.callService(domain, 'turn_off', this.entityId);
+            } else {
+              await this.platform.ha.callService(domain, 'turn_on', this.entityId, {
+                brightness: haBrightness,
+              });
+            }
           }
         });
       }
