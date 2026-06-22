@@ -17,6 +17,7 @@ const profilesByDomain: Record<string, DeviceExportProfile[]> = {
     { id: 'dimmableLight', label: 'Luz regulable', description: 'Encendido, apagado y brillo.', appleHome: 'supported' },
     { id: 'colorTemperatureLight', label: 'Luz con temperatura de color', description: 'Brillo y blanco cálido/frío.', appleHome: 'supported' },
     { id: 'extendedColorLight', label: 'Luz de color', description: 'Brillo, color y temperatura de color.', appleHome: 'supported' },
+    { id: 'dimmablePlugInUnit', label: 'Enchufe regulable / Dimmer', description: 'Interruptor o enchufe con control de brillo.', appleHome: 'supported' },
   ],
   switch: [
     { id: 'onOffPlugInUnit', label: 'Enchufe', description: 'Interruptor mostrado como toma de corriente.', appleHome: 'supported' },

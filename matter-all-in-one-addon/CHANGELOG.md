@@ -1,3 +1,8 @@
+## 1.2.13
+
+- Added: Opción de perfil "Enchufe regulable / Dimmer" (`dimmablePlugInUnit`) en la interfaz para exportar luces (ej. Desayunador) como interruptores dimmers hacia Apple HomeKit.
+- Fixed: Las luces que tienen perfil de enchufe o dimmer ya no reportarán erróneamente capacidades de color (`ColorControl`) ni controles de nivel (`LevelControl`) en perfiles on/off que no los soportan nativamente, incluso si Home Assistant los reporta.
+
 ## 1.2.12
 
 - Fix: Forzar agrupación de dispositivos composite ignorando el estado de 'group_by_device_id' en la configuración para evitar deshabilitación accidental.

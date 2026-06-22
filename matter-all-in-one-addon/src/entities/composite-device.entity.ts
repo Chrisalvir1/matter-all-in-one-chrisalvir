@@ -49,7 +49,7 @@ function isOn(state: HassState): boolean {
  *  brightness → Dimmable Light → OnOff + LevelControl
  *  onoff-only → OnOff Light → OnOff
  */
-function lightClusterIds(state: HassState): ClusterId[] {
+function lightClusterIds(state: HassState, deviceType: DeviceTypeDefinition): ClusterId[] {
   const clusters: ClusterId[] = [OnOff.id];
   const modes: string[] = state.attributes.supported_color_modes ?? [];
   const hasBrightness = modes.includes('brightness') || state.attributes.brightness !== undefined;
@@ -58,10 +58,13 @@ function lightClusterIds(state: HassState): ClusterId[] {
     || state.attributes.color_temp_kelvin !== undefined;
   const hasRgb = modes.some((m) => ['hs', 'xy', 'rgb', 'rgbw', 'rgbww'].includes(m));
 
-  // LevelControl required whenever brightness, color_temp or color is supported
-  if (hasBrightness || hasColorTemp || hasRgb) clusters.push(LevelControl.id);
-  // ColorControl required when color temperature or RGB color is supported
-  if (hasColorTemp || hasRgb) clusters.push(ColorControl.id);
+  const isOnOffProfile = deviceType.code === 0x0100 || deviceType.code === 0x010A; // OnOffLight or OnOffPlugInUnit
+  const isColorProfile = deviceType.code === 0x010C || deviceType.code === 0x010D; // ColorTemperatureLight or ExtendedColorLight
+
+  // LevelControl required whenever brightness, color_temp or color is supported AND profile allows it
+  if ((hasBrightness || hasColorTemp || hasRgb) && !isOnOffProfile) clusters.push(LevelControl.id);
+  // ColorControl required when color temperature or RGB color is supported AND profile allows it
+  if ((hasColorTemp || hasRgb) && isColorProfile) clusters.push(ColorControl.id);
   return clusters;
 }
 
@@ -241,7 +244,7 @@ export class CompositeDeviceEntity {
    */
   private computeClusterIds(member: CompositeMember): ClusterId[] {
     const [domain] = member.entityId.split('.');
-    if (domain === 'light') return lightClusterIds(member.state);
+    if (domain === 'light') return lightClusterIds(member.state, this.typeFor(member));
     if (domain === 'switch') return [OnOff.id];
     if (domain === 'fan') return [OnOff.id, FanControl.id];
     return [];

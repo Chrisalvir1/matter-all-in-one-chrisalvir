@@ -35,14 +35,16 @@ export class BaseEntity {
 
     if (domain === 'light' || domain === 'switch' || domain === 'media_player') {
       clusters.push(OnOff.id);
-      if (this.state.attributes.brightness !== undefined) {
+      const isOnOffProfile = this.deviceType.code === 0x0100 || this.deviceType.code === 0x010A; // OnOffLight or OnOffPlugInUnit
+      if (this.state.attributes.brightness !== undefined && !isOnOffProfile) {
         clusters.push(LevelControl.id);
       }
-      // Only add ColorControl if the light supports real color modes
+      // Only add ColorControl if the light supports real color modes AND the profile allows it
       const supportedModes: string[] = this.state.attributes.supported_color_modes ?? [];
       const realColorModes = ['hs', 'xy', 'rgb', 'rgbw', 'rgbww', 'color_temp'];
       const hasColorCapability = supportedModes.some(m => realColorModes.includes(m));
-      if (hasColorCapability) {
+      const isColorProfile = this.deviceType.code === 0x010C || this.deviceType.code === 0x010D; // ColorTemperatureLight or ExtendedColorLight
+      if (hasColorCapability && isColorProfile) {
         clusters.push(ColorControl.id);
       }
     }
