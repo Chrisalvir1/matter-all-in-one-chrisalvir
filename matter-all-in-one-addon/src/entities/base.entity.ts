@@ -79,7 +79,9 @@ export class BaseEntity {
     this.endpoint.vendorId = 0xfff1;
     this.endpoint.vendorName = 'Home Assistant';
     this.endpoint.productId = 0x8000;
-    this.endpoint.productName = domain.charAt(0).toUpperCase() + domain.slice(1);
+    // Instead of hardcoding the domain (e.g. "Light"), use the deviceType name (e.g. "DimmablePlugInUnit")
+    // to prevent Apple HomeKit from forcing the Lightbulb icon on dimmers that are not lights.
+    this.endpoint.productName = this.deviceType.name;
 
     // Use the BasicInformation cluster (NOT BridgedDeviceBasicInformation).
     // This entity is registered with mode: 'server' so Matterbridge creates

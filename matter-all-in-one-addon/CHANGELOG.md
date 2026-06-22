@@ -1,3 +1,7 @@
+## 1.2.15
+
+- Changed: El metadato `ProductName` exportado a Apple HomeKit ahora usa dinámicamente el nombre del perfil técnico Matter (ej. "DimmablePlugInUnit") en lugar de forzar siempre la categoría original ("Light"). Esto le da libertad a HomeKit para clasificar enchufes y dimmers correctamente y permitir cambiar sus íconos, en lugar de bloquearlos como bombillos amarrillos por defecto.
+
 ## 1.2.14
 
 - Fixed: Corrección crítica en la detección de `LevelControl` para dispositivos apagados al iniciar el puente. Esto asegura que Apple Home reconozca la barra de brillo ("dimmer") en enchufes regulables, en lugar de mostrarlos como interruptores básicos sin slider.
