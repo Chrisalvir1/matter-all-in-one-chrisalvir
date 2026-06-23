@@ -41,7 +41,7 @@ describe('HomeAssistantPlatform', () => {
     expect(platform.entities.size).toBeGreaterThan(0);
     expect(platform.entities.has('light.living_room')).toBe(true);
     expect(platform.entities.has('cover.garage_door')).toBe(true);
-    expect(platform.entities.has('camera.backyard')).toBe(true);
+    expect(platform.entities.has('camera.backyard')).toBe(false);
     expect(platform.entities.has('sensor.garden_moisture')).toBe(true);
   });
 
@@ -88,6 +88,22 @@ describe('HomeAssistantPlatform', () => {
       compositePrimaryEntityId: 'fan.ceiling_fan',
       exported: false,
     });
+  });
+
+  it('should fail closed for unsafe or incomplete Matter mappings', async () => {
+    await platform.onStart();
+
+    const unsafeStates = [
+      { entity_id: 'binary_sensor.smoke_alarm', state: 'off', attributes: { device_class: 'smoke' } },
+      { entity_id: 'sensor.water_pressure', state: '1013', attributes: { device_class: 'pressure' } },
+      { entity_id: 'sensor.energy_price', state: '0.25', attributes: { device_class: 'monetary' } },
+      { entity_id: 'camera.backyard', state: 'recording', attributes: {} },
+      { entity_id: 'alarm_control_panel.home', state: 'disarmed', attributes: {} },
+    ];
+
+    for (const state of unsafeStates) await (platform as any).registerHAEntity(state);
+
+    for (const state of unsafeStates) expect(platform.entities.has(state.entity_id)).toBe(false);
   });
 
   it('should update entities state when a HA event occurs', async () => {

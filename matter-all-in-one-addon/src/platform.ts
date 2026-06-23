@@ -393,21 +393,22 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     }
 
     const [domain] = entityId.split('.');
+    const override = this.deviceOverrides[entityId];
 
-    // Filtering rules: Whitelist
-    const allowedDomains = ['light', 'switch', 'cover', 'lock', 'climate', 'fan', 'sensor', 'binary_sensor', 'vacuum', 'alarm_control_panel', 'water_heater', 'button', 'media_player', 'camera', 'humidifier'];
-    if (!allowedDomains.includes(domain)) return;
+    // Export only domains that have a complete device type and command/state
+    // mapping. Unimplemented or safety-critical domains must fail closed.
+    const allowedDomains = ['light', 'switch', 'cover', 'lock', 'climate', 'fan', 'sensor', 'binary_sensor', 'vacuum', 'media_player', 'humidifier'];
+    if (!allowedDomains.includes(domain) && !(domain === 'button' && override === 'PetFeeder')) return;
 
     // Strict device_class whitelist for sensors to avoid exporting system/energy sensors
     const deviceClass = state.attributes.device_class;
-    if (domain === 'sensor' && !['temperature', 'humidity', 'illuminance', 'moisture', 'pressure', 'flow', 'monetary'].includes(deviceClass ?? '')) return;
-    if (domain === 'binary_sensor' && !['door', 'window', 'opening', 'motion', 'occupancy', 'contact', 'smoke', 'co'].includes(deviceClass ?? '')) return;
+    if (domain === 'sensor' && !['temperature', 'humidity', 'illuminance', 'moisture'].includes(deviceClass ?? '')) return;
+    if (domain === 'binary_sensor' && !['door', 'window', 'opening', 'motion', 'occupancy', 'contact'].includes(deviceClass ?? '')) return;
 
     if (this.config.excludeEntities?.includes(entityId)) return;
     if (this.config.includeEntities && !this.config.includeEntities.includes(entityId)) return;
 
     // Check device override
-    const override = this.deviceOverrides[entityId];
     const effectiveProfile = override ?? getDefaultExportProfileId(domain);
     if (override === '_DISABLED_') {
       this.log.debug(`Skipping ${entityId} because it is disabled by override.`);

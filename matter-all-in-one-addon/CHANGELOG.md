@@ -1,3 +1,19 @@
+## 1.2.16
+
+### Fixed
+
+- **Exposición segura de entidades:** se dejan de descubrir por defecto cámara, tarifa energética, humo/CO, presión, caudal, alarmas, calentadores de agua y botones genéricos. Estas rutas no tenían un mapeo Matter completo o podían comunicar un tipo de seguridad incorrecto.
+- **Sensores de seguridad:** `smoke` y `co` ya no pueden degradarse silenciosamente a un sensor de contacto.
+- **Perfil de cubierta Apple Home:** el perfil predeterminado de `cover.*` pasa a `windowCovering`; `Closure` queda como opción experimental, no como afirmación de compatibilidad Apple Home.
+- **Metadatos de compatibilidad:** cámara, Closure, suelo y humidificador ya no se anuncian como compatibles con Apple Home hasta contar con implementación y pruebas interoperables.
+
+### Stability and quality
+
+- Añadido el proveedor de cobertura de Vitest y pruebas para conversores de binario, clima, ventilador, cerradura, tarifa y suelo.
+- Corregida la accesibilidad del panel: los diálogos inactivos permanecen fuera del árbol visible y accesible.
+- Eliminado material de certificados no utilizado del repositorio.
+- Alineados `package.json`, `package-lock.json` y el manifiesto del add-on en la versión 1.2.16.
+
 ## 1.2.15
 
 - Changed: El metadato `ProductName` exportado a Apple HomeKit ahora usa dinámicamente el nombre del perfil técnico Matter (ej. "DimmablePlugInUnit") en lugar de forzar siempre la categoría original ("Light"). Esto le da libertad a HomeKit para clasificar enchufes y dimmers correctamente y permitir cambiar sus íconos, en lugar de bloquearlos como bombillos amarrillos por defecto.

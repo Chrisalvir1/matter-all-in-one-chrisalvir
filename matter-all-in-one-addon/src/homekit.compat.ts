@@ -1,7 +1,9 @@
 export const homekitSupported = {
-  camera: true,
-  closure: true,
-  soilSensor: true,
+  // These Matter 1.5 types are not enabled by this bridge until their
+  // transport/cluster mappings have been implemented and interoperably tested.
+  camera: false,
+  closure: false,
+  soilSensor: false,
   waterHeater: false,
   evse: false,
   solarPanel: false,
@@ -23,7 +25,7 @@ export const homekitSupported = {
   energyTariff: false,
   roboticVacuumCleaner: true,
   fan: true,
-  humidifier: true
+  humidifier: false
 } as const;
 
 export type HomeKitSupportedDeviceType = keyof typeof homekitSupported;

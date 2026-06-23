@@ -1,4 +1,4 @@
-# HomeKit Compatibility (2025/2026)
+# Apple Home Compatibility (2026)
 
 This document records the compatibility baseline used by this project for Apple Home in 2026. It distinguishes a Matter device type from the required commissioning topology.
 
@@ -29,11 +29,11 @@ export const homekitSupportedDeviceTypes = {
   solarPanel: false,
   heatPump: false,
   
-  // Matter 1.5.1 (HomeKit supported - 2025/2026)
-  camera: true,          // Recognized as native IP video streams
-  closure: true,         // Replaces legacy WindowCovering with Unified Closure behavior
-  soilSensor: true,      // Native soil moisture reading
-  energyTariff: false,   // Experimental/Partial
+  // Not exported until implementation and Apple interoperability testing exist.
+  camera: false,
+  closure: false,
+  soilSensor: false,
+  energyTariff: false,
 }
 ```
 
@@ -49,15 +49,13 @@ export const homekitSupportedDeviceTypes = {
 
 Sources: [Apple Home — robot vacuums](https://www.apple.com/home-app/), [Apple Home update support](https://support.apple.com/en-ie/102287), [Matterbridge RVC server-mode guidance](https://matterbridge.io/CHANGELOG.html), and [Apple Matter accessory interoperability best practices](https://developer.apple.com/apple-home/downloads/Matter-Accessory-Best-Practices-for-Apple-Home.pdf).
 
-## Special Notes for Camera Streaming
+## Topología y alcance
 
-> [!NOTE]
-> HomeKit Secure Video (HKSV) requires certified camera feeds. By using the `CameraAvStreamManagement` cluster, we expose the camera as an IP video stream, allowing live views.
->
-> **RTSP & WebRTC Setup**: Make sure your cameras in Home Assistant are configured with the WebRTC integration or RTSP streams enabled, so the HLS stream is loaded successfully.
+- Cada accesorio se publica como un nodo Matter independiente y pertenece a la fabric del controlador que escanea su QR. Apple Home y Home Assistant son fabrics distintas.
+- El bridge no puede recibir Home Key ni convertirse en una cámara HomeKit Secure Video: esas funciones requieren dispositivos y certificación específicos.
+- `windowCovering` es el perfil predeterminado de Apple Home. `Closure` permanece experimental y no se anuncia como soporte Apple.
+- Cámara, tarifa energética, suelo, humo/CO, presión, caudal, alarma, calentador de agua y botón genérico se excluyen hasta implementar sus clusters, comandos y pruebas interoperables.
 
-## Unified Closure Advantages
+## Unified Closure
 
-* Replaces legacy **WindowCovering** cluster.
-* Supports distinct cover classes: `garage_door`, `gate`, `blind`, `shade`, `curtain`, and `awning`.
-* Avoids the "reverse position percentage" bug commonly seen in legacy HomeKit window covering implementations (where 0% open meant closed, but some bridges inverted this).
+`Closure` sigue disponible únicamente como perfil experimental. No se debe usar para una instalación Apple Home de producción hasta completar las pruebas de interoperabilidad del tipo y de sus clusters.

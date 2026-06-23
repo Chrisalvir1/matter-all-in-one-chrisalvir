@@ -43,7 +43,12 @@ function showToast(message, error = false) {
   state.toastTimer = setTimeout(() => { els.toast.className = 'toast'; }, 3600);
 }
 
-function setModalOpen(modal, open) { modal.classList.toggle('open', open); if (open) document.body.style.overflow = 'hidden'; else if (![els.deviceModal, els.settingsModal, els.confirmModal].some((item) => item.classList.contains('open'))) document.body.style.overflow = ''; }
+function setModalOpen(modal, open) {
+  modal.hidden = !open;
+  modal.classList.toggle('open', open);
+  if (open) document.body.style.overflow = 'hidden';
+  else if (![els.deviceModal, els.settingsModal, els.confirmModal].some((item) => item.classList.contains('open'))) document.body.style.overflow = '';
+}
 
 async function fetchStatus() {
   if (state.statusBusy) return;

@@ -57,7 +57,7 @@ const defaultProfileByDomain: Record<string, string> = {
   light: 'dimmableLight',
   switch: 'onOffPlugInUnit',
   fan: 'fan',
-  cover: 'closure',
+  cover: 'windowCovering',
   lock: 'doorLock',
   climate: 'thermostat',
   vacuum: 'roboticVacuumCleaner',

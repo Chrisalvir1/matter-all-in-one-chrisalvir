@@ -1,31 +1,29 @@
 # matter-all-in-one-chrisalvir
 
-> **Matter All-in-One for Home Assistant (v1.2.12)**  
-> Expose Home Assistant entities as independent Matter accessories with complete HomeKit compatibility.
+> **Matter All-in-One for Home Assistant (v1.2.16)**
+> Expose entidades verificadas de Home Assistant como accesorios Matter independientes con perfiles conservadores para Apple Home.
 
 ---
 
 ## 🌟 Key Features
 
-* **Independent Accessories Mode (Plan B)**: Exported entities are published as standalone Matter Server nodes (not a bridged device), each with its own unique QR pairing code. This avoids mDNS overhead and simplifies discovery.
+* **Independent Accessories Mode (Plan B)**: las entidades exportadas se publican como nodos Matter independientes con QR propio. Esta topología prioriza aislamiento; cada nodo añade sus propios anuncios mDNS.
 * **Liquid Glass UI Integration**: View QR codes and manual codes natively inside a custom dark-themed control panel, without leaving the page.
-* **Complete HomeKit Ready**: Native support for Apple HomeKit's Matter specifications.
-* **Unified Closure Support**: Cover entities (`cover.*`) mapped directly to the unified `ClosureDimension` and `ClosureControl` clusters.
+* **Apple Home con tipos verificados**: luces, enchufes, persianas `windowCovering`, cerraduras, termostatos, ventiladores, RVC y sensores admitidos.
+* **Thread externo**: el bridge usa IP; una red Thread requiere un Thread Border Router compatible en la LAN.
 
 ---
 
 ## 📊 Supported Device Types
 
-| Device Type (Matter 1.5.1) | Home Assistant Domain | Primary Clusters | HomeKit Compatibility |
-| :--- | :--- | :--- | :--- |
-| **Camera** (0x0510) | `camera.*` | `CameraAvStreamManagement`, `WebRTCTransportProvider` | ✅ Native IP Camera (2025/2026) |
-| **Closure** (0x000d) | `cover.*` (garage, blind, curtain...) | `ClosureDimension`, `ClosureControl` | ✅ Native Closure (2025/2026) |
-| **Soil Sensor** (0x000c) | `sensor.*` (moisture class) | `SoilMoistureMeasurement`, `TemperatureMeasurement` | ✅ Native Soil Sensor |
-| **Energy Tariff** (0x000e) | `sensor.*` (monetary class) | `ElectricalGridConditions` | ⚠️ Partial / Experimental |
-| **Light** | `light.*` | `OnOff`, `LevelControl`, `ColorControl` | ✅ Full Support |
-| **Switch / Plug** | `switch.*` | `OnOff` | ✅ Full Support |
-| **Thermostat** | `climate.*` | `Thermostat` | ✅ Full Support |
-| **Lock** | `lock.*` | `DoorLock` | ✅ Full Support |
+| Device Type | Home Assistant Domain / Class | Apple Home |
+| :--- | :--- | :--- |
+| Luz, enchufe e interruptor | `light.*`, `switch.*` | Compatible |
+| Persiana o cortina | `cover.*` con perfil `windowCovering` | Compatible |
+| Cerradura y termostato | `lock.*`, `climate.*` | Compatible |
+| Ventilador y RVC | `fan.*`, `vacuum.*` | Compatible; RVC requiere nodo independiente |
+| Contacto, movimiento, ocupación, temperatura, humedad, luz ambiental | clases admitidas de `binary_sensor.*` y `sensor.*` | Compatible |
+| Cámara, tarifa, humo/CO, presión, caudal, alarma, calentador de agua y botón genérico | — | No se exportan por defecto hasta tener mapeo y pruebas completos |
 
 ---
 
@@ -60,8 +58,8 @@ Register the plugin in your Matterbridge configuration:
 
 ## 📖 Further Documentation
 
-* [HomeKit Compatibility Details](docs/homekit-compatibility.md)
-* [Thread Network Setup Guide](docs/thread-setup.md)
+* [Compatibilidad y topología Apple Home](docs/homekit-compatibility.md)
+* [Guía correcta de Thread](docs/thread-setup.md)
 
 ---
 

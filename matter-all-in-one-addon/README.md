@@ -1,9 +1,9 @@
 # Matter All-in-One for Home Assistant
 
-Matter bridge for Home Assistant with HomeKit-compatible mappings.
+Puente Matter para Home Assistant con publicación de accesorios independientes y perfiles conservadores para Apple Home.
 
 ## Minimum Requirements
-- **iOS:** 18.4+
+- **Apple Home:** un HomePod o Apple TV 4K como hub Matter; un hub compatible con Thread es necesario solo para accesorios Thread.
 - **Matterbridge:** >= 2.0.0
 - **Home Assistant:** >= 2025.1
 
@@ -14,21 +14,14 @@ Matter bridge for Home Assistant with HomeKit-compatible mappings.
 
 ## Supported Devices & HomeKit Compatibility
 
-With Matterbridge 3.9.1 as the stable baseline, the bridge uses official Matterbridge dependencies and is prepared for a future Matter 1.6-compatible runtime release. Below is the HomeKit compatibility matrix:
+Matterbridge 3.9.1 es la base estable. Matter 1.6 no se anuncia como soportado hasta que Matterbridge y los controladores implementen y validen sus funciones. La matriz refleja únicamente los tipos que el bridge publica por defecto:
 
-| Device Type (Matter)       | HA Domain / Class | HomeKit Supported? |
-|----------------------------|-------------------|--------------------|
-| **Camera**                 | `camera.*`        | ✅ Yes             |
-| **Closure** (Unified)      | `cover.*`         | ✅ Yes             |
-| **Soil Sensor**            | `sensor.*` (moisture)| ✅ Yes          |
-| **Energy Tariff**          | `sensor.*` (monetary)| ⚠️ Partial     |
-| **Robotic Vacuum Cleaner** | `vacuum.*`        | ✅ Yes             |
-| Light / Dimmable           | `light.*`         | ✅ Yes             |
-| On/Off Plug-in Unit        | `switch.*`        | ✅ Yes             |
-| Door Lock                  | `lock.*`          | ✅ Yes             |
-| Thermostat                 | `climate.*`       | ✅ Yes             |
-| Contact / Occupancy Sensor | `binary_sensor.*` | ✅ Yes             |
-| Temp / Humidity Sensor     | `sensor.*`        | ✅ Yes             |
+| Device Type | HA Domain / Class | Apple Home |
+|---|---|---|
+| Lights, plugs, locks, thermostats, fans and RVC | `light.*`, `switch.*`, `lock.*`, `climate.*`, `fan.*`, `vacuum.*` | Supported mapping |
+| Covers | `cover.*` with `windowCovering` profile | Supported mapping |
+| Contact, motion, occupancy, temperature, humidity and ambient light | supported `binary_sensor.*` and `sensor.*` classes | Supported mapping |
+| Camera, energy tariff, smoke/CO, pressure, flow, alarm, water heater and generic button | — | Not exported by default |
 
 > Note: Matter 1.4 features like Water Heater, EVSE, and Solar Panel are not yet fully supported by HomeKit and will be filtered automatically.
 
