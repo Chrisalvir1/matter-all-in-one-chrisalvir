@@ -87,6 +87,33 @@ export class MockHomeAssistant extends EventEmitter {
       platform: 'mock',
     });
 
+    this.hassDevices.set('device-switchbot-lock-1', {
+      id: 'device-switchbot-lock-1',
+      name: 'Llavin SwitchBot',
+      name_by_user: null,
+      area_id: 'living_room',
+      manufacturer: 'SwitchBot',
+      model: 'Lock',
+    });
+    this.hassEntities.set('lock.llavin_switchbot', {
+      id: 'entity-switchbot-lock-1',
+      entity_id: 'lock.llavin_switchbot',
+      device_id: 'device-switchbot-lock-1',
+      area_id: null,
+      name: null,
+      original_name: 'Llavin SwitchBot',
+      platform: 'switchbot',
+    });
+    this.hassEntities.set('binary_sensor.llavin_switchbot_contact', {
+      id: 'entity-switchbot-lock-contact-1',
+      entity_id: 'binary_sensor.llavin_switchbot_contact',
+      device_id: 'device-switchbot-lock-1',
+      area_id: null,
+      name: null,
+      original_name: 'Llavin SwitchBot Contact',
+      platform: 'switchbot',
+    });
+
     // Populate mock states
     this.hassStates.set('light.living_room', {
       entity_id: 'light.living_room',
@@ -105,6 +132,16 @@ export class MockHomeAssistant extends EventEmitter {
       entity_id: 'light.ceiling_fan_light',
       state: 'off',
       attributes: { friendly_name: 'Ceiling Fan Light', brightness: 0, supported_color_modes: ['brightness'] },
+    });
+    this.hassStates.set('lock.llavin_switchbot', {
+      entity_id: 'lock.llavin_switchbot',
+      state: 'locked',
+      attributes: { friendly_name: 'Llavin SwitchBot' },
+    });
+    this.hassStates.set('binary_sensor.llavin_switchbot_contact', {
+      entity_id: 'binary_sensor.llavin_switchbot_contact',
+      state: 'off',
+      attributes: { friendly_name: 'Llavin SwitchBot Contact', device_class: 'door' },
     });
 
     this.hassStates.set('cover.garage_door', {

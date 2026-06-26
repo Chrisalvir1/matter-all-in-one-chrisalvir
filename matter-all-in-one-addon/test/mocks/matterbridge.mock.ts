@@ -26,6 +26,8 @@ export class MockMatterbridgeEndpoint {
 
   public createDefaultFanControlClusterServer() { return this; }
 
+  public createDefaultDoorLockClusterServer() { return this; }
+
   public addChildDeviceTypeWithClusterServer(id: string, deviceTypes: any[], clusterIds: number[]) {
     const child = new MockMatterbridgeEndpoint(Array.isArray(deviceTypes) ? deviceTypes : [deviceTypes], { id });
     child.addClusterServers(clusterIds);

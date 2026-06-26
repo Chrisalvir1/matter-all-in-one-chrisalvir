@@ -37,4 +37,20 @@ describe('CompositeDeviceEntity', () => {
     expect(platform.ha.callService).toHaveBeenCalledWith('fan', 'turn_on', 'fan.sala');
     expect(platform.ha.callService).toHaveBeenCalledWith('light', 'turn_on', 'light.sala');
   });
+
+  it('creates a lock-rooted Matter node with contact sensor integrated', async () => {
+    const composite = new CompositeDeviceEntity(platform, 'switchbot-lock', 'Llavin SwitchBot', [
+      { entityId: 'lock.llavin_switchbot', state: state('lock.llavin_switchbot', 'locked') },
+      { entityId: 'binary_sensor.llavin_switchbot_contact', state: state('binary_sensor.llavin_switchbot_contact', 'off', { device_class: 'door' }) },
+    ]);
+
+    const root = await composite.createEndpoint();
+    expect(composite.primaryEntityId).toBe('lock.llavin_switchbot');
+    expect(composite.endpoints.get('lock.llavin_switchbot')).toBe(root);
+    expect(composite.endpoints.get('binary_sensor.llavin_switchbot_contact')).toBeDefined();
+    expect((root as any).children.has('binary_sensor_llavin_switchbot_contact')).toBe(true);
+
+    await (composite.endpoints.get('lock.llavin_switchbot') as any).invokeCommand('unlockDoor');
+    expect(platform.ha.callService).toHaveBeenCalledWith('lock', 'unlock', 'lock.llavin_switchbot');
+  });
 });

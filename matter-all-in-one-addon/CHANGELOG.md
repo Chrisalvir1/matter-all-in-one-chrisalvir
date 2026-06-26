@@ -1,3 +1,14 @@
+## 1.2.21
+
+### Fixed
+
+- **SwitchBot Lock como cerradura real en Apple Home:** los dispositivos HA que comparten `device_id` y tienen `lock.*` junto con `binary_sensor.*` ahora se publican como un solo accesorio Matter con raíz `DoorLock`, un único QR y sensores integrados. Esto evita activar varios switches/sensores separados para el mismo llavín y permite que HomeKit lo reconozca como cerrojo.
+- **Selección principal estable en el panel:** la interfaz prioriza la entidad principal del dispositivo compuesto, por ejemplo `lock.llavin_switchbot`, para que el usuario active el accesorio correcto.
+
+### Changed
+
+- Alineados `package.json`, `package-lock.json`, `config.yaml`, metadata Matterbridge y README en la versión 1.2.21 para que Home Assistant detecte la actualización.
+
 ## 1.2.16
 
 ### Fixed

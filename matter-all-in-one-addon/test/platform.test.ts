@@ -4,6 +4,13 @@ import './mocks/ha-api.mock.js';
 import { HomeAssistantPlatform } from '../src/platform.js';
 import { mockMatterbridge, mockLog } from './mocks/matterbridge.mock.js';
 
+async function waitForDiscovery(platform: HomeAssistantPlatform) {
+  for (let attempt = 0; attempt < 20; attempt++) {
+    if (platform.entities.size > 0) return;
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
+}
+
 describe('HomeAssistantPlatform', () => {
   let platform: HomeAssistantPlatform;
 
@@ -36,7 +43,7 @@ describe('HomeAssistantPlatform', () => {
     platform.ha.emit('connected', '2026.6.0');
 
     // Wait for async discovery and registration to settle
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await waitForDiscovery(platform);
 
     expect(platform.entities.size).toBeGreaterThan(0);
     expect(platform.entities.has('light.living_room')).toBe(true);
@@ -86,6 +93,33 @@ describe('HomeAssistantPlatform', () => {
       compositeActive: false,
       compositeDeviceId: 'device-ceiling-fan-1',
       compositePrimaryEntityId: 'fan.ceiling_fan',
+      exported: false,
+    });
+  });
+
+  it('uses the HA lock entity as the primary Matter accessory for SwitchBot-style lock devices', async () => {
+    await platform.onStart();
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    const res = await fetch('http://127.0.0.1:8285/api/custom/devices');
+    const devices = await res.json() as any[];
+    const lock = devices.find(device => device.entityId === 'lock.llavin_switchbot');
+    const contact = devices.find(device => device.entityId === 'binary_sensor.llavin_switchbot_contact');
+
+    expect(lock).toMatchObject({
+      composite: true,
+      compositeActive: false,
+      compositeDeviceId: 'device-switchbot-lock-1',
+      compositePrimaryEntityId: 'lock.llavin_switchbot',
+      matterType: 'doorLock',
+      exported: false,
+    });
+    expect(contact).toMatchObject({
+      composite: true,
+      compositeActive: false,
+      compositeDeviceId: 'device-switchbot-lock-1',
+      compositePrimaryEntityId: 'lock.llavin_switchbot',
+      matterType: 'contactSensor',
       exported: false,
     });
   });

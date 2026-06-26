@@ -117,7 +117,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     }
     const excluded = new Set(config?.exclude_entities ?? []);
     const explicitlyIncluded = config?.include_entities;
-    const supported = new Set(['fan', 'light', 'switch', 'sensor', 'binary_sensor']);
+    const supported = new Set(['fan', 'light', 'switch', 'lock', 'sensor', 'binary_sensor']);
     let members = Array.from(this.entities.values())
       .filter((entity) => this.ha.hassEntities.get(entity.entityId)?.device_id === deviceId)
       .filter((entity) => supported.has(entity.entityId.split('.')[0]))
@@ -126,10 +126,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
     this.log.debug(`[Composite] ${entityId}: device_id=${deviceId}, candidate members=[${members.map((m) => m.entityId).join(', ')}]`);
 
-    // A composite node is useful when it has a Fan plus at least one separate
-    // capability. Other device families retain the established entity mode.
-    if (!members.some((member) => member.entityId.startsWith('fan.'))) {
-      this.log.debug(`[Composite] ${entityId}: no fan.* member found — not a composite candidate`);
+    // A composite node is useful when one physical HA device exposes a primary
+    // controllable entity plus extra capabilities. This keeps products like
+    // fan+light and SwitchBot lock+contact sensor under one QR code.
+    if (!members.some((member) => member.entityId.startsWith('fan.') || member.entityId.startsWith('lock.'))) {
+      this.log.debug(`[Composite] ${entityId}: no fan.* or lock.* member found — not a composite candidate`);
       return undefined;
     }
     if (members.length < 2) {
@@ -864,6 +865,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             const composite = compositeDeviceId ? this.compositeDevices.get(compositeDeviceId) : undefined;
             const compositePrimaryEntityId = composite?.primaryEntityId
               ?? compositeCandidate?.config?.primary_entity
+              ?? compositeCandidate?.members.find((member) => member.entityId.startsWith('lock.'))?.entityId
               ?? compositeCandidate?.members.find((member) => member.entityId.startsWith('fan.'))?.entityId
               ?? compositeCandidate?.members[0]?.entityId
               ?? null;

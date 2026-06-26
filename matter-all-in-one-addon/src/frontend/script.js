@@ -150,7 +150,10 @@ function openDevice(device) {
   els.deviceModalIcon.textContent = icon(device.entities[0]?.domain);
   els.deviceModalName.textContent = device.name;
   els.deviceModalId.textContent = device.area || device.id;
-  const sorted = [...device.entities].sort((a, b) => Number(b.exported) - Number(a.exported) || displayName(a).localeCompare(displayName(b)));
+  const sorted = [...device.entities].sort((a, b) => {
+    const primaryDelta = Number(b.entityId === b.compositePrimaryEntityId) - Number(a.entityId === a.compositePrimaryEntityId);
+    return primaryDelta || Number(b.exported) - Number(a.exported) || displayName(a).localeCompare(displayName(b));
+  });
   const activeNodes = new Set(sorted.filter((entity) => entity.exported).map(matterNodeKey)).size;
   const groupedEndpoints = sorted.filter((entity) => entity.exported).length;
   els.modalExportCount.textContent = activeNodes

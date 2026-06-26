@@ -1,7 +1,7 @@
 /**
  * One Matter ServerNode containing multiple endpoints that belong to the same
- * Home Assistant device registry entry.  The first endpoint is the primary
- * capability (normally a fan); remaining compatible entities are child
+ * Home Assistant device registry entry.  The root endpoint is the primary
+ * capability (lock, fan, or configured entity); remaining compatible entities are child
  * endpoints and therefore share its QR code and fabrics.
  *
  * v1.2.11 — Critical fix: child endpoint clusters (LevelControl, ColorControl)
@@ -13,7 +13,7 @@
 import { DeviceTypeDefinition, MatterbridgeEndpoint } from 'matterbridge';
 import {
   BooleanState, ColorControl, FanControl, LevelControl,
-  OccupancySensing, RelativeHumidityMeasurement, TemperatureMeasurement, OnOff,
+  OccupancySensing, RelativeHumidityMeasurement, TemperatureMeasurement, OnOff, DoorLock,
 } from 'matterbridge/matter/clusters';
 import { ClusterId } from 'matterbridge/matter/types';
 import { safeSetAttribute, safeUpdateAttribute } from '../utils/matter-attributes.js';
@@ -82,7 +82,7 @@ function miredsToKelvin(mireds: number): number {
   return Math.round(1_000_000 / mireds);
 }
 
-/** A grouped physical HA device — fan + light share one QR code and Matter node. */
+/** A grouped physical HA device — related endpoints share one QR code and Matter node. */
 export class CompositeDeviceEntity {
   public endpoint!: MatterbridgeEndpoint;
   public readonly endpoints = new Map<string, MatterbridgeEndpoint>();
@@ -105,7 +105,9 @@ export class CompositeDeviceEntity {
     ) {
       return this.primaryEntityIdOverride;
     }
-    return this.members.find((m) => m.entityId.startsWith('fan.'))?.entityId ?? this.members[0].entityId;
+    return this.members.find((m) => m.entityId.startsWith('lock.'))?.entityId
+      ?? this.members.find((m) => m.entityId.startsWith('fan.'))?.entityId
+      ?? this.members[0].entityId;
   }
 
   async createEndpoint(): Promise<MatterbridgeEndpoint> {
@@ -122,7 +124,7 @@ export class CompositeDeviceEntity {
 
     this.endpoint = new MatterbridgeEndpoint([primaryType], { id: `device_${this.deviceId}`, mode: 'server' });
     this.configureRootIdentity(this.endpoint, primaryType);
-    this.addRootClusters(this.endpoint, primary);
+    await this.addRootClusters(this.endpoint, primary);
     this.addCommandHandlers(this.endpoint, primary);
     this.endpoints.set(primary.entityId, this.endpoint);
 
@@ -174,6 +176,12 @@ export class CompositeDeviceEntity {
       await update(endpoint, FanControl.id, 'percentCurrent', percentage, this.platform.log);
       await update(endpoint, FanControl.id, 'percentSetting', percentage, this.platform.log);
       await update(endpoint, FanControl.id, 'fanMode', on ? 1 : 0, this.platform.log);
+      return;
+    }
+
+    if (domain === 'lock') {
+      const matterState = this.toLockState(state);
+      await update(endpoint, DoorLock.id, 'lockState', matterState, this.platform.log);
       return;
     }
 
@@ -247,6 +255,17 @@ export class CompositeDeviceEntity {
     if (domain === 'light') return lightClusterIds(member.state, this.typeFor(member));
     if (domain === 'switch') return [OnOff.id];
     if (domain === 'fan') return [OnOff.id, FanControl.id];
+    if (domain === 'lock') return [DoorLock.id];
+    if (domain === 'sensor') {
+      const deviceClass = member.state.attributes.device_class;
+      if (deviceClass === 'temperature') return [TemperatureMeasurement.id];
+      if (deviceClass === 'humidity') return [RelativeHumidityMeasurement.id];
+    }
+    if (domain === 'binary_sensor') {
+      const deviceClass = member.state.attributes.device_class;
+      if (deviceClass === 'motion' || deviceClass === 'occupancy') return [OccupancySensing.id];
+      return [BooleanState.id];
+    }
     return [];
   }
 
@@ -267,8 +286,8 @@ export class CompositeDeviceEntity {
     );
   }
 
-  /** Initialize clusters on the ROOT endpoint (fan primary). */
-  private addRootClusters(endpoint: MatterbridgeEndpoint, member: CompositeMember) {
+  /** Initialize clusters on the ROOT endpoint. */
+  private async addRootClusters(endpoint: MatterbridgeEndpoint, member: CompositeMember) {
     const [domain] = member.entityId.split('.');
     if (domain === 'fan') {
       const on = isOn(member.state);
@@ -278,6 +297,22 @@ export class CompositeDeviceEntity {
       endpoint.createDefaultFanControlClusterServer(on ? 1 : 0, undefined, percentage, percentage);
       endpoint.addClusterServers([OnOff.id]);
       endpoint.addRequiredClusterServers();
+      return;
+    }
+
+    if (domain === 'lock') {
+      const matterState = this.toLockState(member.state);
+      endpoint.createDefaultDoorLockClusterServer(matterState, DoorLock.LockType.DeadBolt);
+      endpoint.addRequiredClusterServers();
+      await safeSetAttribute(endpoint, DoorLock.id, 'actuatorEnabled', true, this.platform.log);
+      await safeSetAttribute(endpoint, DoorLock.id, 'operatingMode', DoorLock.OperatingMode.Normal, this.platform.log);
+      await safeSetAttribute(endpoint, DoorLock.id, 'supportedOperatingModes', {
+        normal: true,
+        vacation: false,
+        privacy: false,
+        noRemoteLockUnlock: false,
+        passage: false,
+      }, this.platform.log);
     }
   }
 
@@ -298,6 +333,16 @@ export class CompositeDeviceEntity {
         const current = this.states.get(entityId)?.attributes.percentage ?? 50;
         const next = direction === 0 ? Math.min(100, current + 10) : Math.max(0, current - 10);
         await this.platform.ha.callService('fan', 'set_percentage', entityId, { percentage: next });
+      });
+      return;
+    }
+
+    if (domain === 'lock') {
+      endpoint.addCommandHandler('lockDoor', async () => {
+        await this.platform.ha.callService('lock', 'lock', entityId);
+      });
+      endpoint.addCommandHandler('unlockDoor', async () => {
+        await this.platform.ha.callService('lock', 'unlock', entityId);
       });
       return;
     }
@@ -368,6 +413,12 @@ export class CompositeDeviceEntity {
         await this.platform.ha.callService('switch', 'turn_off', entityId);
       });
     }
+  }
+
+  private toLockState(state: HassState): DoorLock.LockState {
+    return ['locked', 'locking'].includes(state.state)
+      ? DoorLock.LockState.Locked
+      : DoorLock.LockState.Unlocked;
   }
 
   /** Emit structured diagnostic log lines for a light member. */
