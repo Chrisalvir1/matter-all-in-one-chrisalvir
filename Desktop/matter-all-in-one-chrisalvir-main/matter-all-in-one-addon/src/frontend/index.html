@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b1020">
+  <title>Matter Accessories · Home Assistant</title>
+  <meta name="description" content="Gestiona de forma segura las entidades de Home Assistant exportadas mediante Matter.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="ambient ambient-one"></div>
+  <div class="ambient ambient-two"></div>
+
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Estado del servicio">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">M</div>
+        <div>
+          <p class="eyebrow">HOME ASSISTANT</p>
+          <h1>Matter All-in-One</h1>
+        </div>
+      </div>
+
+      <section class="bridge-card" aria-live="polite">
+        <span class="status-orb" id="bridge-orb"></span>
+        <div>
+          <p class="card-label">Estado del servicio</p>
+          <strong id="bridge-title">Iniciando…</strong>
+          <p id="bridge-description">Comprobando la conexión con Home Assistant.</p>
+        </div>
+      </section>
+
+      <section class="sidebar-note">
+        <span aria-hidden="true">✦</span>
+        <p>Cada dispositivo físico se expone como un accesorio Matter con un código de emparejamiento único.</p>
+      </section>
+
+      <div class="sidebar-spacer"></div>
+      <button class="button button-secondary" id="settings-button" type="button">Ajustes del servicio</button>
+      <div class="connection-state">
+        <span class="connection-dot" id="ha-dot"></span>
+        <span id="ha-status">Conectando con Home Assistant…</span>
+      </div>
+      <p class="version" id="version">—</p>
+    </aside>
+
+    <main class="content">
+      <header class="content-header">
+        <div>
+          <p class="eyebrow">PUBLICACIÓN CONTROLADA</p>
+          <h2>Dispositivos</h2>
+          <p class="lead">Activa la entidad principal para publicar el dispositivo físico. Sus capacidades compatibles se integran como endpoints bajo un único código Matter.</p>
+        </div>
+        <label class="search" for="device-search">
+          <span aria-hidden="true">⌕</span>
+          <input id="device-search" type="search" placeholder="Buscar dispositivo o habitación" autocomplete="off">
+        </label>
+      </header>
+
+      <section class="info-banner" aria-label="Información de emparejamiento">
+        <span class="info-icon" aria-hidden="true">i</span>
+        <div>
+          <strong>Emparejamiento seguro</strong>
+          <p>Cada dispositivo físico tiene un único código QR y manual de emparejamiento. Los endpoints integrados comparten ese código.</p>
+        </div>
+      </section>
+
+      <div class="toolbar">
+        <span id="device-count">Cargando entidades…</span>
+        <button class="text-button" id="refresh-button" type="button">Actualizar</button>
+      </div>
+
+      <section class="device-grid" id="device-list" aria-live="polite" aria-busy="true">
+        <div class="empty-state"><span class="spinner"></span><p>Cargando entidades de Home Assistant…</p></div>
+      </section>
+    </main>
+  </div>
+
+  <div class="modal-backdrop" id="device-modal" role="dialog" aria-modal="true" aria-labelledby="device-modal-name" hidden>
+    <section class="modal modal-wide">
+      <button class="icon-button" id="device-modal-close" type="button" aria-label="Cerrar">×</button>
+      <header class="modal-header">
+        <span class="modal-icon" id="device-modal-icon">⌂</span>
+        <div>
+          <p class="eyebrow">DISPOSITIVO HOME ASSISTANT</p>
+          <h2 id="device-modal-name">Dispositivo</h2>
+          <p class="entity-id" id="device-modal-id"></p>
+        </div>
+      </header>
+      <div class="modal-layout">
+        <div>
+          <div class="section-header"><h3>Entidades disponibles</h3><span id="modal-export-count"></span></div>
+          <div class="entity-list" id="entity-list"></div>
+        </div>
+        <aside class="selection-panel" id="selection-panel">
+          <p class="card-label">SELECCIÓN</p>
+          <h3 id="selection-title">Selecciona una entidad</h3>
+          <p id="selection-description">Activa la entidad principal para publicar el dispositivo físico.</p>
+          <label class="profile-field" id="profile-field">
+            <span>Perfil Matter</span>
+            <select id="profile-select" aria-label="Perfil Matter"></select>
+            <small id="profile-note"></small>
+          </label>
+          <dl class="selection-meta" id="selection-meta"></dl>
+          <div class="selection-status" id="selection-status"></div>
+          <div id="device-qr-container" style="display: none; text-align: center; margin-top: 1rem;">
+            <div id="device-qr-code" style="display: inline-block; background: white; padding: 1rem; border-radius: 8px;"></div>
+            <p id="device-manual-code" style="margin-top: 0.5rem; font-family: monospace; user-select: all; font-weight: bold;"></p>
+          </div>
+          <button class="button button-secondary bridge-qr-button" id="device-qr-button" type="button" style="display: none;">Mostrar Código de Emparejamiento</button>
+          <button class="text-button reset-accessory-button" id="reset-accessory-button" type="button" style="display: none;">Restablecer conexión Matter de este accesorio</button>
+        </aside>
+      </div>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title" hidden>
+    <section class="modal modal-small">
+      <button class="icon-button" id="settings-modal-close" type="button" aria-label="Cerrar">×</button>
+      <p class="eyebrow">MANTENIMIENTO</p>
+      <h2 id="settings-title">Ajustes del servicio</h2>
+      <p class="lead compact">Estas acciones afectan a todos los accesorios y al servicio Matterbridge subyacente.</p>
+      <div class="settings-actions">
+        <div class="settings-row">
+          <div><strong>Reiniciar servicio</strong><p>Recarga el servicio y restablece conexiones activas.</p></div>
+          <button class="button button-primary" id="restart-button" type="button">Reiniciar</button>
+        </div>
+        <div class="settings-row danger-row">
+          <div><strong>Restablecimiento de fábrica</strong><p>Elimina la configuración del plugin y requiere volver a emparejar.</p></div>
+          <button class="button button-danger" id="factory-reset-button" type="button">Restablecer</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title" hidden>
+    <section class="modal modal-confirm">
+      <p class="eyebrow">CONFIRMACIÓN</p>
+      <h2 id="confirm-title">¿Continuar?</h2>
+      <p class="lead compact" id="confirm-description"></p>
+      <div class="confirm-actions">
+        <button class="button button-secondary" id="confirm-cancel" type="button">Cancelar</button>
+        <button class="button button-danger" id="confirm-accept" type="button">Confirmar</button>
+      </div>
+    </section>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="qrcode.min.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>

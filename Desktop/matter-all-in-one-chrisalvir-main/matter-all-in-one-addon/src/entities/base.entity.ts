@@ -1,0 +1,274 @@
+/**
+ * Base entity class for exposing Home Assistant entities to Matter.
+ */
+import { DeviceTypeDefinition, MatterbridgeEndpoint } from 'matterbridge';
+import { OnOff, LevelControl, ColorControl, FanControl } from 'matterbridge/matter/clusters';
+import { ClusterId } from 'matterbridge/matter/types';
+import { HomeAssistantPlatform } from '../platform.js';
+import { HassState } from '../utils/ha-state.js';
+import { safeSetAttribute, safeUpdateAttribute } from '../utils/matter-attributes.js';
+
+export class BaseEntity {
+  public platform: HomeAssistantPlatform;
+  public entityId: string;
+  public state: HassState;
+  public deviceType: DeviceTypeDefinition;
+  public endpoint!: MatterbridgeEndpoint;
+
+  constructor(
+    platform: HomeAssistantPlatform,
+    state: HassState,
+    deviceType: DeviceTypeDefinition
+  ) {
+    this.platform = platform;
+    this.entityId = state.entity_id;
+    this.state = state;
+    this.deviceType = deviceType;
+  }
+
+  /**
+   * Determine which cluster IDs are needed based on entity domain and capabilities.
+   */
+  protected getRequiredClusterIds(): ClusterId[] {
+    const [domain] = this.entityId.split('.');
+    const clusters: ClusterId[] = [];
+
+    if (domain === 'light' || domain === 'switch' || domain === 'media_player') {
+      clusters.push(OnOff.id);
+      const supportedModes: string[] = this.state.attributes.supported_color_modes ?? [];
+      const hasBrightness = supportedModes.includes('brightness') || this.state.attributes.brightness !== undefined;
+      const isOnOffProfile = this.deviceType.code === 0x0100 || this.deviceType.code === 0x010A; // OnOffLight or OnOffPlugInUnit
+      if (hasBrightness && !isOnOffProfile) {
+        clusters.push(LevelControl.id);
+      }
+      // Only add ColorControl if the light supports real color modes AND the profile allows it
+      const realColorModes = ['hs', 'xy', 'rgb', 'rgbw', 'rgbww', 'color_temp'];
+      const hasColorCapability = supportedModes.some(m => realColorModes.includes(m));
+      const isColorProfile = this.deviceType.code === 0x010C || this.deviceType.code === 0x010D; // ColorTemperatureLight or ExtendedColorLight
+      if (hasColorCapability && isColorProfile) {
+        clusters.push(ColorControl.id);
+      }
+    }
+
+    return clusters;
+  }
+
+  /**
+   * Create and register the MatterbridgeEndpoint.
+   */
+  public async createEndpoint(): Promise<MatterbridgeEndpoint> {
+    const rawName = this.state.attributes.friendly_name ?? this.entityId;
+
+    // Preserve the Home Assistant friendly name exactly (within Matter's
+    // 32-character limit). Identity and uniqueness belong to entityId/serial,
+    // never to the user-visible accessory name.
+    const uniqueName = rawName.substring(0, 32).trim();
+
+    this.endpoint = new MatterbridgeEndpoint([this.deviceType], {
+      id: this.entityId.replaceAll('.', '_'),
+      mode: 'server',
+    });
+
+    const [domain] = this.entityId.split('.');
+    
+    // Explicitly set metadata properties on the endpoint instance for createDeviceServerNode
+    this.endpoint.deviceType = this.deviceType.code;
+    this.endpoint.deviceName = uniqueName;
+    this.endpoint.uniqueId = this.entityId.replaceAll('.', '_');
+    this.endpoint.serialNumber = this.entityId.replaceAll('.', '_').substring(0, 29) + '_G2';
+    this.endpoint.vendorId = 0xfff1;
+    this.endpoint.vendorName = 'Home Assistant';
+    this.endpoint.productId = 0x8000;
+    // Instead of hardcoding the domain (e.g. "Light"), use the deviceType name (e.g. "DimmablePlugInUnit")
+    // to prevent Apple HomeKit from forcing the Lightbulb icon on dimmers that are not lights.
+    this.endpoint.productName = this.deviceType.name;
+
+    // Use the BasicInformation cluster (NOT BridgedDeviceBasicInformation).
+    // This entity is registered with mode: 'server' so Matterbridge creates
+    // an independent ServerNode with its own QR code. Using the bridged version
+    // here would conflict with the server mode and prevent pairing.
+    this.endpoint.createDefaultBasicInformationClusterServer(
+      uniqueName,
+      this.endpoint.serialNumber,
+      0xfff1,
+      'Home Assistant',
+      0x8000,
+      this.endpoint.productName
+    );
+
+    if (domain === 'fan') {
+      const on = this.state.state === 'on';
+      const percentage = typeof this.state.attributes.percentage === 'number' ? this.state.attributes.percentage : (on ? 100 : 0);
+      this.endpoint.createDefaultFanControlClusterServer(on ? 1 : 0, undefined, percentage, percentage);
+      this.endpoint.addClusterServers([OnOff.id]);
+    }
+
+    const clusters = this.getRequiredClusterIds();
+    if (clusters.length > 0) {
+      this.endpoint.addClusterServers(clusters);
+    }
+    this.endpoint.addRequiredClusterServers();
+
+    // Add custom cluster servers for subclasses before registering handlers and syncing state
+    await this.addCustomClusterServers();
+
+    this.registerCommandHandlers();
+
+    return this.endpoint;
+  }
+
+  /**
+   * Hook for subclasses to add custom cluster servers before registering handlers/syncing state.
+   */
+  protected addCustomClusterServers(): void | Promise<void> {
+    return;
+  }
+
+  /**
+   * Setup command handlers from Matter to Home Assistant.
+   * @param endpoint - Optional endpoint override (used by subclasses like VacuumEntity).
+   */
+  protected registerCommandHandlers(_endpoint?: MatterbridgeEndpoint) {
+    const [domain] = this.entityId.split('.');
+
+    if (domain === 'light' || domain === 'switch' || domain === 'fan' || domain === 'media_player') {
+      // On/Off handlers
+      this.endpoint.addCommandHandler('on', async () => {
+        this.platform.log.debug(`Matter On commanded for ${this.entityId}`);
+        await this.platform.ha.callService(domain, 'turn_on', this.entityId);
+      });
+
+      this.endpoint.addCommandHandler('off', async () => {
+        this.platform.log.debug(`Matter Off commanded for ${this.entityId}`);
+        await this.platform.ha.callService(domain, 'turn_off', this.entityId);
+      });
+
+      if (domain === 'fan') {
+        this.endpoint.addCommandHandler('FanControl.step', async (data: any) => {
+          const direction = data?.request?.direction ?? data?.direction;
+          const current = typeof this.state.attributes.percentage === 'number' ? this.state.attributes.percentage : 0;
+          const percentage = direction === 0 ? Math.min(100, current + 10) : Math.max(0, current - 10);
+          await this.platform.ha.callService('fan', 'set_percentage', this.entityId, { percentage });
+        });
+      }
+
+      // LevelControl handlers (brightness)
+      if (this.endpoint.hasAttributeServer(LevelControl.id, 'currentLevel')) {
+        this.endpoint.addCommandHandler('moveToLevel', async (data: any) => {
+          const level = data?.level ?? data?.request?.level; // 0..254
+          if (typeof level === 'number') {
+            const haBrightness = Math.round((level / 254) * 255);
+            this.platform.log.debug(`Matter MoveToLevel commanded for ${this.entityId}: level=${level} -> HA brightness=${haBrightness}`);
+            await this.platform.ha.callService(domain, 'turn_on', this.entityId, {
+              brightness: haBrightness,
+            });
+          }
+        });
+
+        this.endpoint.addCommandHandler('moveToLevelWithOnOff', async (data: any) => {
+          const level = data?.level ?? data?.request?.level;
+          if (typeof level === 'number') {
+            const haBrightness = Math.round((level / 254) * 255);
+            this.platform.log.debug(`Matter MoveToLevelWithOnOff commanded for ${this.entityId}: level=${level} -> HA brightness=${haBrightness}`);
+            if (level === 0) {
+              await this.platform.ha.callService(domain, 'turn_off', this.entityId);
+            } else {
+              await this.platform.ha.callService(domain, 'turn_on', this.entityId, {
+                brightness: haBrightness,
+              });
+            }
+          }
+        });
+      }
+    }
+  }
+
+  /**
+   * Set initial attribute values based on current Home Assistant state.
+   * NOTE: called BEFORE the endpoint is added to Matterbridge, so the
+   * endpoint is still in the "inactive" lifecycle state.  We must use
+   * setAttribute (not updateAttribute) and swallow the inactive-state
+   * error silently — Matterbridge will pick up the initial values when
+   * the endpoint transitions to active during commissioning setup.
+   */
+  public async syncInitialState(): Promise<void> {
+    await this.updateState(this.state, true);
+  }
+
+  /**
+   * Clamp a level value to the LevelControl minLevel / maxLevel bounds
+   * reported by the endpoint cluster server.  Matter spec says currentLevel
+   * MUST satisfy the constraint "minLevel to maxLevel"; if we send 0 when
+   * minLevel=135 the transaction rolls back with an UnhandledRejection.
+   *
+   * Falls back to the raw value when the cluster is not present so this
+   * helper is safe to call unconditionally.
+   */
+  /**
+   * Clamp a level value to the LevelControl minLevel / maxLevel bounds
+   * reported by the endpoint cluster server.  Matter spec says currentLevel
+   * MUST satisfy the constraint "minLevel to maxLevel"; if we send 0 when
+   * minLevel=135 the transaction rolls back with an UnhandledRejection.
+   *
+   * Falls back to the raw value when the cluster is not present so this
+   * helper is safe to call unconditionally.
+   */
+  private clampLevel(rawLevel: number, isInitialSync = false): number {
+    if (isInitialSync) {
+      return Math.min(254, Math.max(1, rawLevel));
+    }
+    try {
+      const minLevel = (this.endpoint as any)
+        .getAttribute?.(LevelControl.id, 'minLevel') ?? 1;
+      const maxLevel = (this.endpoint as any)
+        .getAttribute?.(LevelControl.id, 'maxLevel') ?? 254;
+      // minLevel must be at least 1 per Matter spec (0 means "off")
+      const lo = Math.max(1, minLevel as number);
+      const hi = Math.min(254, maxLevel as number);
+      return Math.min(hi, Math.max(lo, rawLevel));
+    } catch {
+      return Math.min(254, Math.max(1, rawLevel));
+    }
+  }
+
+  /**
+   * Sync a new Home Assistant state update to the Matter endpoint.
+   * Safe to call at any point in the endpoint lifecycle.
+   */
+  public async updateState(newState: HassState, isInitialSync = false): Promise<void> {
+    this.state = newState;
+    const [domain] = this.entityId.split('.');
+
+    if (domain === 'light' || domain === 'switch' || domain === 'fan' || domain === 'media_player') {
+      const isOn = newState.state === 'on';
+
+      if (isInitialSync) {
+        await safeSetAttribute(this.endpoint, OnOff.id, 'onOff', isOn, this.platform.log);
+      } else {
+        await safeUpdateAttribute(this.endpoint, OnOff.id, 'onOff', isOn, this.platform.log);
+      }
+
+      if (newState.attributes.brightness !== undefined) {
+        // HA brightness: 0-255  →  Matter currentLevel: 1-254
+        // Never send 0: it violates the minLevel constraint on dimmers
+        // (e.g. Govee minLevel=135).  Map 0-brightness to level 1 (off
+        // state is communicated via onOff cluster, not currentLevel=0).
+        const raw   = Math.round((newState.attributes.brightness / 255) * 254);
+        const level = this.clampLevel(Math.max(1, raw), isInitialSync);
+        if (isInitialSync) {
+          await safeSetAttribute(this.endpoint, LevelControl.id, 'currentLevel', level, this.platform.log);
+        } else {
+          await safeUpdateAttribute(this.endpoint, LevelControl.id, 'currentLevel', level, this.platform.log);
+        }
+      }
+
+      if (domain === 'fan') {
+        const percentage = typeof newState.attributes.percentage === 'number' ? newState.attributes.percentage : (isOn ? 100 : 0);
+        const update = isInitialSync ? safeSetAttribute : safeUpdateAttribute;
+        await update(this.endpoint, FanControl.id, 'percentCurrent', percentage, this.platform.log);
+        await update(this.endpoint, FanControl.id, 'percentSetting', percentage, this.platform.log);
+        await update(this.endpoint, FanControl.id, 'fanMode', isOn ? 1 : 0, this.platform.log);
+      }
+    }
+  }
+}
