@@ -1,0 +1,51 @@
+{
+  "name": "matter-all-in-one-chrisalvir",
+  "version": "1.2.18",
+  "description": "Standards-based Matter bridge for Home Assistant - HomeKit compatible mappings",
+  "author": "chrisalvir",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "peerDependencies": {
+    "matterbridge": ">=2.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.10",
+    "@vitest/coverage-v8": "^3.2.6",
+    "eslint": "^9.0.0",
+    "matterbridge": "3.9.1",
+    "prettier": "^3.0.0",
+    "typescript": "^5.8.0",
+    "typescript-eslint": "^8.61.1",
+    "vitest": "^3.2.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && mkdir -p dist/frontend && cp src/frontend/* dist/frontend/",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint src/**/*.ts",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "matter",
+    "homekit",
+    "home-assistant",
+    "matterbridge",
+    "iot",
+    "smart-home",
+    "matter-1.6-ready"
+  ],
+  "matterbridge": {
+    "name": "matter-all-in-one-chrisalvir",
+    "version": "1.2.16",
+    "author": "chrisalvir",
+    "description": "Standards-based Matter bridge for Home Assistant"
+  }
+}
