@@ -19,6 +19,7 @@ import { discoverHassUrl, toWsUrl } from './utils/ha-discovery.js';
 import { getDeviceTypeForEntity, MatterDeviceTypes } from './device-registry.js';
 import { BaseEntity } from './entities/base.entity.js';
 import { ClosureEntity } from './entities/closure.entity.js';
+import { LockEntity } from './entities/lock.entity.js';
 import { CameraEntity } from './entities/camera.entity.js';
 import { SoilSensorEntity } from './entities/soil_sensor.entity.js';
 import { EnergyTariffEntity } from './entities/energy_tariff.entity.js';
@@ -429,6 +430,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     // Instantiation based on mapped device type
     if (domain === 'cover' && ['garage_door', 'gate', 'blind', 'shade', 'curtain', 'awning'].includes(deviceClass ?? '')) {
       entityInstance = new ClosureEntity(this, state, deviceType);
+    } else if (domain === 'lock') {
+      entityInstance = new LockEntity(this, state, deviceType);
     } else if (domain === 'camera') {
       entityInstance = new CameraEntity(this, state, deviceType);
     } else if (domain === 'sensor' && deviceClass === 'moisture') {
