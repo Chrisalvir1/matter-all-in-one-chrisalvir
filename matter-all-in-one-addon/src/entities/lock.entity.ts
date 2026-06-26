@@ -25,27 +25,38 @@ export class LockEntity extends BaseEntity {
     if (domain === 'alarm_control_panel') {
       isLocked = ['armed_home', 'armed_away', 'armed_night', 'armed_vacation', 'arming'].includes(this.state.state);
     } else {
-      isLocked = this.state.state === 'locked' || this.state.state === 'locking';
+      isLocked = this.state.state === 'locked' || this.state.state === 'locking' || this.state.state === 'armed_away' || this.state.state === 'armed_home';
     }
     
-    // Create DoorLock cluster server with standard features
-    // We do not enable HomeKey/Aliro/RFID features based on user preference
+    // Create DoorLock cluster server with mandatory features for Apple HomeKit
+    // Apple HomeKit requires ActuatorEnabled and OperatingMode to be set.
     this.endpoint.createDefaultDoorLockClusterServer(
       isLocked ? DoorLock.LockState.Locked : DoorLock.LockState.Unlocked,
       DoorLock.LockType.DeadBolt
     );
+
+    // Explicitly set the mandatory attributes required by Matter 1.2+ for Apple Home
+    await safeSetAttribute(this.endpoint, DoorLock.id, 'actuatorEnabled', true, this.platform.log);
+    await safeSetAttribute(this.endpoint, DoorLock.id, 'operatingMode', DoorLock.OperatingMode.Normal, this.platform.log);
+    await safeSetAttribute(this.endpoint, DoorLock.id, 'supportedOperatingModes', {
+      normal: true,
+      vacation: false,
+      privacy: false,
+      noRemoteLockUnlock: false,
+      passage: false
+    }, this.platform.log);
   }
 
   protected override registerCommandHandlers(): void {
-    const domain = this.entityId.split('.')[0];
-    
+    const [domain] = this.entityId.split('.');
+
     // Lock command handler
     this.endpoint.addCommandHandler('lockDoor', async () => {
       this.platform.log.debug(`Matter LockDoor commanded for ${this.entityId}`);
       if (domain === 'alarm_control_panel') {
-        await this.platform.ha.callService('alarm_control_panel', 'alarm_arm_away', this.entityId);
+        await this.platform.ha.callService(domain, 'alarm_arm_away', this.entityId);
       } else {
-        await this.platform.ha.callService('lock', 'lock', this.entityId);
+        await this.platform.ha.callService(domain, 'lock', this.entityId);
       }
     });
 
@@ -53,9 +64,9 @@ export class LockEntity extends BaseEntity {
     this.endpoint.addCommandHandler('unlockDoor', async () => {
       this.platform.log.debug(`Matter UnlockDoor commanded for ${this.entityId}`);
       if (domain === 'alarm_control_panel') {
-        await this.platform.ha.callService('alarm_control_panel', 'alarm_disarm', this.entityId);
+        await this.platform.ha.callService(domain, 'alarm_disarm', this.entityId);
       } else {
-        await this.platform.ha.callService('lock', 'unlock', this.entityId);
+        await this.platform.ha.callService(domain, 'unlock', this.entityId);
       }
     });
   }
@@ -68,9 +79,8 @@ export class LockEntity extends BaseEntity {
     if (domain === 'alarm_control_panel') {
       isLocked = ['armed_home', 'armed_away', 'armed_night', 'armed_vacation', 'arming'].includes(newState.state);
     } else {
-      isLocked = newState.state === 'locked' || newState.state === 'locking';
+      isLocked = newState.state === 'locked' || newState.state === 'locking' || newState.state === 'armed_away' || newState.state === 'armed_home';
     }
-    
     const matterState = isLocked ? DoorLock.LockState.Locked : DoorLock.LockState.Unlocked;
 
     if (isInitialSync) {
