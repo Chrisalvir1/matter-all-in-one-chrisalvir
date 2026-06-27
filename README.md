@@ -1,7 +1,7 @@
 # matter-all-in-one-chrisalvir
 
-> **Matter All-in-One for Home Assistant (v1.2.19)**
-> Expose entidades verificadas de Home Assistant como accesorios Matter independientes con perfiles conservadores para Apple Home.
+> **Matter All-in-One for Home Assistant (v1.2.22)**
+> Expone entidades verificadas de Home Assistant como accesorios Matter 1.6 independientes con perfiles conservadores para Apple Home.
 
 ---
 

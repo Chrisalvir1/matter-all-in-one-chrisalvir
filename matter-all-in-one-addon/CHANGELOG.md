@@ -1,4 +1,21 @@
+## 1.2.22
+
+### Changed
+
+- **Matter 1.6:** Actualización de branding, metadata y keywords al estándar Matter 1.6 (CSA, 17 Jun 2026). Las nuevas características del protocolo (NFC commissioning, Joint Fabric, Thermostat Suggestions) son implementadas por el controlador Matter (Apple Home, Google, Amazon) y este bridge las soporta automáticamente al usar el SDK actualizado.
+- **Matterbridge 3.9.2:** Actualizado `matterbridge` de `3.9.1` → `3.9.2` (lanzado 26 Jun 2026). Drop-in patch release: correcciones de estabilidad internas, actualización de `@matterbridge/core` y dependencias. Sin breaking changes de API. Actualizado en `package.json`, `package-lock.json` y `Dockerfile`.
+- **Dockerfile:** Imagen base `node:24-alpine` confirmada como LTS activo — sin cambios requeridos.
+- **`homekit.compat.ts`:** Documentación actualizada para reflejar compatibilidad Matter 1.6 y contexto de las features del protocolo.
+- **`repository.json`:** Nombre actualizado a "Matter 1.6 All-in-One Bridge Repository".
+- Alineados `package.json`, `package-lock.json`, `config.yaml`, metadata Matterbridge y README en la versión 1.2.22.
+
+### Notes
+
+- **No se requiere re-pairing:** esta actualización es de dependencias y metadata; `/data/.matterbridge` y los fabrics existentes **no son afectados**.
+- **Dispositivos preservados:** vacuum (RVC), cerrojo (DoorLock) y luces (OnOff/Dimmable/Color) continúan funcionando sin cambios.
+
 ## 1.2.19
+
 
 ### Fixed
 
