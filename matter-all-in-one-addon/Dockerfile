@@ -29,6 +29,13 @@ RUN jq 'del(.devDependencies, .peerDependencies)' package.json > package.json.tm
 
 RUN matterbridge -add /app || true
 
+# ── Persistent data volume ──
+# /data is the Home Assistant addon data directory mounted by the supervisor.
+# Declaring it as VOLUME ensures Docker never writes Matterbridge state
+# (fabrics, commissioning files, device overrides) into the image layer.
+# This protects light, lock and vacuum pairing state across every image rebuild.
+VOLUME ["/data"]
+
 # ── Startup script ──
 COPY run.sh /run.sh
 RUN chmod a+x /run.sh
