@@ -1,5 +1,12 @@
-## 1.2.22
+## 1.2.23
 
+### Fixed
+
+- **Falla en cadena de exportación:** Se implementó aislamiento de fallos (try...catch) al inicializar dispositivos previamente exportados en el arranque. Si un dispositivo individual falla al iniciar (ej. por nombre duplicado o conflicto de Matterbridge), el proceso continúa y permite que el resto de los dispositivos, como los ventiladores, arranquen correctamente.
+- **Excepción de atributos (hasAttributeServer):** Se añadió una capa de seguridad en la actualización de estado para ignorar eventos de Home Assistant si el endpoint interno no logró instanciarse correctamente durante un fallo de arranque.
+- **Desvinculación de entidades atascadas:** `manualUnregister` ahora elimina el identificador del dispositivo compuesto incluso si Matterbridge no pudo arrancarlo. Esto evita que los dispositivos corruptos o conflictivos se queden "atascados" en la base de datos interna impidiendo que la UI refleje el botón de desactivación correctamente.
+
+## 1.2.22
 ### Changed
 
 - **Matter 1.6:** Actualización de branding, metadata y keywords al estándar Matter 1.6 (CSA, 17 Jun 2026). Las nuevas características del protocolo (NFC commissioning, Joint Fabric, Thermostat Suggestions) son implementadas por el controlador Matter (Apple Home, Google, Amazon) y este bridge las soporta automáticamente al usar el SDK actualizado.

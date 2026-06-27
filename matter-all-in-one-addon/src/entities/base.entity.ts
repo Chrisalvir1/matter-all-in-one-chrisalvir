@@ -237,6 +237,8 @@ export class BaseEntity {
    */
   public async updateState(newState: HassState, isInitialSync = false): Promise<void> {
     this.state = newState;
+    if (!this.endpoint) return;
+
     const [domain] = this.entityId.split('.');
 
     if (domain === 'light' || domain === 'switch' || domain === 'fan' || domain === 'media_player') {

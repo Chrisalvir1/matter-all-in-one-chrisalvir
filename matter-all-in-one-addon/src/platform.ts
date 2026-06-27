@@ -462,30 +462,38 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       return;
     }
 
-    await this.activateEntity(entityId);
+    try {
+      await this.activateEntity(entityId);
+    } catch (err) {
+      this.log.error(`Failed to automatically activate entity ${entityId} during discovery: ${err}`);
+    }
   }
 
   /** Restore persisted legacy entities and grouped physical devices after discovery. */
   private async restoreExportedDevices(): Promise<void> {
     let migratedLegacyEntries = false;
     for (const exportedId of Array.from(this.exportedDevices)) {
-      if (exportedId.startsWith('device:')) {
-        const deviceId = exportedId.substring('device:'.length);
-        const entityId = Array.from(this.entities.keys()).find((id) => this.ha.hassEntities.get(id)?.device_id === deviceId);
-        if (entityId) await this.activateComposite(entityId);
-        continue;
-      }
-      if (!this.entities.has(exportedId)) continue;
-      const composite = this.getCompositeCandidate(exportedId);
-      if (composite) {
-        // Versions prior to grouping persisted every entity separately. Fold
-        // that legacy selection into one physical-device key on first start.
-        this.exportedDevices.add(this.compositeStorageKey(composite.deviceId));
-        composite.members.forEach((member) => this.exportedDevices.delete(member.entityId));
-        migratedLegacyEntries = true;
-        await this.activateComposite(exportedId);
-      } else {
-        await this.activateEntity(exportedId);
+      try {
+        if (exportedId.startsWith('device:')) {
+          const deviceId = exportedId.substring('device:'.length);
+          const entityId = Array.from(this.entities.keys()).find((id) => this.ha.hassEntities.get(id)?.device_id === deviceId);
+          if (entityId) await this.activateComposite(entityId);
+          continue;
+        }
+        if (!this.entities.has(exportedId)) continue;
+        const composite = this.getCompositeCandidate(exportedId);
+        if (composite) {
+          // Versions prior to grouping persisted every entity separately. Fold
+          // that legacy selection into one physical-device key on first start.
+          this.exportedDevices.add(this.compositeStorageKey(composite.deviceId));
+          composite.members.forEach((member) => this.exportedDevices.delete(member.entityId));
+          migratedLegacyEntries = true;
+          await this.activateComposite(exportedId);
+        } else {
+          await this.activateEntity(exportedId);
+        }
+      } catch (err) {
+        this.log.error(`Failed to restore exported device ${exportedId}: ${err}`);
       }
     }
     if (migratedLegacyEntries) await this.saveExportedDevices();
@@ -583,19 +591,22 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   public async manualUnregister(entityId: string): Promise<{ success: boolean; error?: string }> {
     try {
       const compositeDeviceId = this.compositeMembership.get(entityId) ?? this.getCompositeCandidate(entityId)?.deviceId;
-      if (compositeDeviceId && this.compositeDevices.has(compositeDeviceId)) {
+      if (compositeDeviceId) {
         const key = this.compositeStorageKey(compositeDeviceId);
         this.exportedDevices.delete(key);
-        const endpoint = this.matterbridgeDevices.get(key) as any;
-        if (endpoint?.serverNode?.lifecycle?.isOnline) await endpoint.serverNode.close();
-        if (endpoint) await this.unregisterDevice(endpoint);
-        this.matterbridgeDevices.delete(key);
-        const composite = this.compositeDevices.get(compositeDeviceId);
-        composite?.members.forEach((member) => {
-          this.compositeMembership.delete(member.entityId);
-          this.exportedDevices.delete(member.entityId);
-        });
-        this.compositeDevices.delete(compositeDeviceId);
+        
+        if (this.compositeDevices.has(compositeDeviceId)) {
+          const endpoint = this.matterbridgeDevices.get(key) as any;
+          if (endpoint?.serverNode?.lifecycle?.isOnline) await endpoint.serverNode.close();
+          if (endpoint) await this.unregisterDevice(endpoint);
+          this.matterbridgeDevices.delete(key);
+          const composite = this.compositeDevices.get(compositeDeviceId);
+          composite?.members.forEach((member) => {
+            this.compositeMembership.delete(member.entityId);
+            this.exportedDevices.delete(member.entityId);
+          });
+          this.compositeDevices.delete(compositeDeviceId);
+        }
         await this.saveExportedDevices();
         return { success: true };
       }
