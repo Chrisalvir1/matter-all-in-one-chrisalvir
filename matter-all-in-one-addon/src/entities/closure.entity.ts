@@ -10,7 +10,9 @@ const WindowCoveringId = 0x0102 as any as ClusterId;
 export class ClosureEntity extends BaseEntity {
   protected override getRequiredClusterIds(): ClusterId[] {
     const clusters = super.getRequiredClusterIds();
-    clusters.push(ClosureDimensionId);
+    if (this.deviceType.code === 0x000d) {
+      clusters.push(ClosureDimensionId);
+    }
     clusters.push(WindowCoveringId);
     return clusters;
   }

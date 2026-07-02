@@ -24,7 +24,7 @@ const profilesByDomain: Record<string, DeviceExportProfile[]> = {
     { id: 'onOffLight', label: 'Luz On/Off', description: 'Interruptor mostrado como luz.', appleHome: 'supported' },
   ],
   fan: [
-    { id: 'fan', label: 'Ventilador', description: 'Control de ventilador Matter.', appleHome: 'experimental' },
+    { id: 'fan', label: 'Ventilador', description: 'Control de ventilador Matter.', appleHome: 'supported' },
     { id: 'onOffPlugInUnit', label: 'Enchufe On/Off', description: 'Alternativa de máxima compatibilidad.', appleHome: 'supported' },
   ],
   cover: [
@@ -61,7 +61,7 @@ const defaultProfileByDomain: Record<string, string> = {
   lock: 'doorLock',
   climate: 'thermostat',
   vacuum: 'roboticVacuumCleaner',
-  media_player: 'basicVideoPlayer',
+  media_player: 'onOffPlugInUnit',
   humidifier: 'onOffPlugInUnit',
   button: 'onOffPlugInUnit',
 };

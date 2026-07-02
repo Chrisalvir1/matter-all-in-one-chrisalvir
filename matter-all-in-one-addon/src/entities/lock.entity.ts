@@ -1,4 +1,4 @@
-import { DeviceTypeDefinition, MatterbridgeEndpoint } from 'matterbridge';
+import { DeviceTypeDefinition } from 'matterbridge';
 import { DoorLock } from 'matterbridge/matter/clusters';
 import { BaseEntity } from './base.entity.js';
 import { HomeAssistantPlatform } from '../platform.js';

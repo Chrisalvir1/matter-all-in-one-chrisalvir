@@ -14,4 +14,15 @@ describe('device export profiles', () => {
       expect.objectContaining({ appleHome: 'unsupported' }),
     );
   });
+
+  it('uses an Apple Home-compatible media player fallback by default', () => {
+    expect(getDefaultExportProfileId('media_player')).toBe('onOffPlugInUnit');
+  });
+
+  it('uses native Matter Fan by default', () => {
+    expect(getDefaultExportProfileId('fan')).toBe('fan');
+    expect(getExportProfile('fan', 'fan')).toEqual(
+      expect.objectContaining({ appleHome: 'supported' }),
+    );
+  });
 });

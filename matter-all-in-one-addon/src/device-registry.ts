@@ -92,16 +92,16 @@ export interface DeviceRegistryEntry {
 
 export const DEVICE_REGISTRY: Record<string, DeviceRegistryEntry> = {
   camera: { matterType: MatterDeviceTypes.camera, homekitSupported: homekitSupported.camera },
-  cover: { matterType: MatterDeviceTypes.closure, homekitSupported: homekitSupported.closure }, // Note: unified cover
+  cover: { matterType: MatterDeviceTypes.windowCovering, homekitSupported: homekitSupported.windowCovering },
   climate: { matterType: MatterDeviceTypes.thermostat, homekitSupported: homekitSupported.thermostat },
   lock: { matterType: MatterDeviceTypes.doorLock, homekitSupported: homekitSupported.doorLock },
   light: { matterType: MatterDeviceTypes.dimmableLight, homekitSupported: homekitSupported.dimmableLight },
   switch: { matterType: MatterDeviceTypes.onOffPlugInUnit, homekitSupported: homekitSupported.onOffPlugInUnit },
   vacuum: { matterType: MatterDeviceTypes.roboticVacuumCleaner, homekitSupported: homekitSupported.roboticVacuumCleaner },
-  media_player: { matterType: MatterDeviceTypes.basicVideoPlayer, homekitSupported: false },
+  media_player: { matterType: MatterDeviceTypes.onOffPlugInUnit, homekitSupported: homekitSupported.onOffPlugInUnit },
   button: { matterType: MatterDeviceTypes.onOffPlugInUnit, homekitSupported: homekitSupported.onOffPlugInUnit },
   fan: { matterType: MatterDeviceTypes.fan, homekitSupported: homekitSupported.fan },
-  humidifier: { matterType: MatterDeviceTypes.onOffPlugInUnit, homekitSupported: homekitSupported.humidifier },
+  humidifier: { matterType: MatterDeviceTypes.onOffPlugInUnit, homekitSupported: homekitSupported.onOffPlugInUnit },
   // Domain-level fallback mapping; specific device_classes logic may still need to be handled if required
   binary_sensor: { matterType: MatterDeviceTypes.contactSensor, homekitSupported: homekitSupported.contactSensor },
   sensor: { matterType: MatterDeviceTypes.temperatureSensor, homekitSupported: homekitSupported.temperatureSensor },
@@ -120,7 +120,7 @@ export const DEVICE_CLASS_REGISTRY: Record<string, Record<string, DeviceRegistry
     temperature: { matterType: MatterDeviceTypes.temperatureSensor, homekitSupported: homekitSupported.temperatureSensor },
     humidity: { matterType: MatterDeviceTypes.humiditySensor, homekitSupported: homekitSupported.humiditySensor },
     illuminance: { matterType: MatterDeviceTypes.lightSensor, homekitSupported: homekitSupported.illuminanceSensor },
-    moisture: { matterType: MatterDeviceTypes.soilSensor, homekitSupported: homekitSupported.soilSensor },
+    moisture: { matterType: MatterDeviceTypes.humiditySensor, homekitSupported: homekitSupported.humiditySensor },
     monetary: { matterType: MatterDeviceTypes.energyTariff, homekitSupported: homekitSupported.energyTariff },
   }
 };

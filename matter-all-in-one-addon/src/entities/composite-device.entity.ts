@@ -39,6 +39,10 @@ function isOn(state: HassState): boolean {
   return state.state === 'on';
 }
 
+function isFanProfile(deviceType: DeviceTypeDefinition): boolean {
+  return deviceType.code === 0x002b || deviceType.name.toLowerCase() === 'fan';
+}
+
 /**
  * Compute the ClusterIds that a light endpoint MUST expose based on HA capabilities.
  * These must be passed to addChildDeviceTypeWithClusterServer() — not added afterwards.
@@ -172,6 +176,7 @@ export class CompositeDeviceEntity {
     if (domain === 'fan') {
       const on = isOn(state);
       await update(endpoint, OnOff.id, 'onOff', on, this.platform.log);
+      if (!endpoint.hasAttributeServer(FanControl.id, 'percentCurrent')) return;
       const percentage = typeof state.attributes.percentage === 'number' ? state.attributes.percentage : (on ? 100 : 0);
       await update(endpoint, FanControl.id, 'percentCurrent', percentage, this.platform.log);
       await update(endpoint, FanControl.id, 'percentSetting', percentage, this.platform.log);
@@ -254,7 +259,9 @@ export class CompositeDeviceEntity {
     const [domain] = member.entityId.split('.');
     if (domain === 'light') return lightClusterIds(member.state, this.typeFor(member));
     if (domain === 'switch') return [OnOff.id];
-    if (domain === 'fan') return [OnOff.id, FanControl.id];
+    if (domain === 'fan') {
+      return isFanProfile(this.typeFor(member)) ? [OnOff.id, FanControl.id] : [OnOff.id];
+    }
     if (domain === 'lock') return [DoorLock.id];
     if (domain === 'sensor') {
       const deviceClass = member.state.attributes.device_class;
@@ -290,6 +297,11 @@ export class CompositeDeviceEntity {
   private async addRootClusters(endpoint: MatterbridgeEndpoint, member: CompositeMember) {
     const [domain] = member.entityId.split('.');
     if (domain === 'fan') {
+      if (!isFanProfile(this.typeFor(member))) {
+        endpoint.addClusterServers([OnOff.id]);
+        endpoint.addRequiredClusterServers();
+        return;
+      }
       const on = isOn(member.state);
       const percentage = typeof member.state.attributes.percentage === 'number'
         ? member.state.attributes.percentage
@@ -328,12 +340,14 @@ export class CompositeDeviceEntity {
       endpoint.addCommandHandler('off', async () => {
         await this.platform.ha.callService('fan', 'turn_off', entityId);
       });
-      endpoint.addCommandHandler('FanControl.step', async (data: any) => {
-        const direction = data?.request?.direction ?? data?.direction;
-        const current = this.states.get(entityId)?.attributes.percentage ?? 50;
-        const next = direction === 0 ? Math.min(100, current + 10) : Math.max(0, current - 10);
-        await this.platform.ha.callService('fan', 'set_percentage', entityId, { percentage: next });
-      });
+      if (endpoint.hasAttributeServer(FanControl.id, 'percentCurrent')) {
+        endpoint.addCommandHandler('FanControl.step', async (data: any) => {
+          const direction = data?.request?.direction ?? data?.direction;
+          const current = this.states.get(entityId)?.attributes.percentage ?? 50;
+          const next = direction === 0 ? Math.min(100, current + 10) : Math.max(0, current - 10);
+          await this.platform.ha.callService('fan', 'set_percentage', entityId, { percentage: next });
+        });
+      }
       return;
     }
 

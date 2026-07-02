@@ -96,7 +96,9 @@ export class BaseEntity {
       this.endpoint.productName
     );
 
-    if (domain === 'fan') {
+    const isFanProfile = this.deviceType.code === 0x002b || this.deviceType.name.toLowerCase() === 'fan';
+
+    if (domain === 'fan' && isFanProfile) {
       const on = this.state.state === 'on';
       const percentage = typeof this.state.attributes.percentage === 'number' ? this.state.attributes.percentage : (on ? 100 : 0);
       this.endpoint.createDefaultFanControlClusterServer(on ? 1 : 0, undefined, percentage, percentage);
@@ -143,7 +145,7 @@ export class BaseEntity {
         await this.platform.ha.callService(domain, 'turn_off', this.entityId);
       });
 
-      if (domain === 'fan') {
+      if (domain === 'fan' && this.endpoint.hasAttributeServer(FanControl.id, 'percentCurrent')) {
         this.endpoint.addCommandHandler('FanControl.step', async (data: any) => {
           const direction = data?.request?.direction ?? data?.direction;
           const current = typeof this.state.attributes.percentage === 'number' ? this.state.attributes.percentage : 0;
@@ -264,7 +266,7 @@ export class BaseEntity {
         }
       }
 
-      if (domain === 'fan') {
+      if (domain === 'fan' && this.endpoint.hasAttributeServer(FanControl.id, 'percentCurrent')) {
         const percentage = typeof newState.attributes.percentage === 'number' ? newState.attributes.percentage : (isOn ? 100 : 0);
         const update = isInitialSync ? safeSetAttribute : safeUpdateAttribute;
         await update(this.endpoint, FanControl.id, 'percentCurrent', percentage, this.platform.log);

@@ -1,3 +1,27 @@
+## 1.2.24
+
+### Fixed
+
+- **Apple Home compartido muestra "Unsupported":** se corrigieron defaults y rutas backend que podían publicar tipos Matter experimentales o no listados por Apple Home, visibles especialmente para residentes compartidos que no tenían la misma caché del owner.
+- **Covers:** `cover.*` ahora se exporta por defecto como `WindowCovering`; `Closure` queda únicamente como perfil experimental explícito.
+- **Cluster experimental de Closure:** `ClosureEntity` ya no añade el cluster experimental cuando el dispositivo se publica como `WindowCovering`.
+- **Media players:** `media_player.*` ahora usa `OnOffPlugInUnit` como fallback Apple Home-compatible por defecto, en lugar de `BasicVideoPlayer`.
+- **Humidifier:** `humidifier.*` queda alineado internamente con su fallback `OnOffPlugInUnit`.
+- **Moisture sensors:** sensores de humedad de suelo dejan de anunciarse como `SoilSensor` experimental y usan `HumiditySensor`.
+
+### Changed
+
+- **Toolchain:** actualizado a TypeScript `6.0.3`, `@types/node` `24.13.2`, `ws` `8.21.0`, Prettier `3.9.4` y `typescript-eslint` `8.62.1`.
+- **TypeScript 7 RC:** probado con `typescript@7.0.1-rc`; compila y pasa tests, pero no se promueve porque `typescript-eslint` actual falla con el nuevo layout de exports del paquete TS7. El proyecto queda preparado con `rootDir` explícito para la migración.
+- **Matterbridge / Matter SDK:** `matterbridge@3.9.2` sigue siendo la última versión publicada. El Matter SDK se mantiene a través de `@matterbridge/core`; no se fuerza una versión directa paralela para evitar incompatibilidades de runtime.
+
+### Validation
+
+- `npm run build`
+- `npm test`
+- `npm run lint`
+- `npx -y -p @typescript/native-preview tsgo -p tsconfig.build.json`
+
 ## 1.2.23
 
 ### Fixed

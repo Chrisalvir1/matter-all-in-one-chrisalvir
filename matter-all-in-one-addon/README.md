@@ -1,17 +1,17 @@
-# Matter All-in-One for Home Assistant — v1.2.22
+# Matter All-in-One for Home Assistant — v1.2.24
 
 > Puente Matter 1.6 para Home Assistant con publicación de accesorios independientes y perfiles conservadores para Apple Home.
 > **Base:** `matterbridge@3.9.2` · **Node.js:** `24-alpine` · **Spec:** Matter 1.6 (CSA, 17 Jun 2026)
 
 ---
 
-## 🤖 AI Agent Context (machine-readable)
+## AI Agent Context (machine-readable)
 
 This file is intentionally structured for both humans and AI agents.
 
 ```yaml
 project: matter-all-in-one-chrisalvir
-version: "1.2.22"
+version: "1.2.24"
 spec: "Matter 1.6"
 engine: matterbridge
 engine_version: "3.9.2"
@@ -49,12 +49,13 @@ matterbridge_ui_port: 8284
 
 | Device Type | HA Domain / Class | Apple Home |
 |---|---|---|
-| Lights, plugs, locks, thermostats, fans, RVC | `light.*`, `switch.*`, `lock.*`, `climate.*`, `fan.*`, `vacuum.*` | ✅ Supported |
-| Covers | `cover.*` with `windowCovering` profile | ✅ Supported |
-| Contact, motion, occupancy, temperature, humidity, ambient light | `binary_sensor.*`, `sensor.*` (supported classes) | ✅ Supported |
-| Camera, energy tariff, smoke/CO, pressure, flow, alarm, water heater, generic button | — | ❌ Not exported by default |
+| Lights, plugs, locks, thermostats, fans, RVC | `light.*`, `switch.*`, `lock.*`, `climate.*`, `fan.*`, `vacuum.*` | Supported |
+| Covers | `cover.*` with `windowCovering` profile | Supported |
+| Contact, motion, occupancy, temperature, humidity, moisture, ambient light | `binary_sensor.*`, `sensor.*` (supported classes) | Supported |
+| Media players | `media_player.*` as `onOffPlugInUnit` fallback | Supported |
+| Camera, energy tariff, smoke/CO, pressure, flow, alarm, water heater, generic button | - | Not exported by default |
 
-> **Note:** Devices marked ❌ are intentionally excluded until full cluster/transport mappings are implemented and interop-tested with Matter 1.6 controllers.
+> **Note:** Devices marked as not exported are intentionally excluded until full cluster/transport mappings are implemented and interop-tested with Matter 1.6 controllers.
 
 ---
 
@@ -103,18 +104,19 @@ Matter 1.6 Network (mDNS + BLE commissioning)
 
 ```bash
 npm install -g matterbridge@3.9.2
-npm install -g matter-all-in-one-chrisalvir@1.2.22
+npm install -g matter-all-in-one-chrisalvir@1.2.24
 ```
 
 ---
 
 ## Changelog Summary (latest)
 
-### v1.2.22 (2026-06-27)
-- Matterbridge `3.9.1` → `3.9.2` (drop-in patch, no API changes)
-- Matter 1.6 branding and metadata
-- `homekit.compat.ts`: documented Matter 1.6 feature context
-- **No re-pairing required — `/data/.matterbridge` untouched**
+### v1.2.24 (2026-07-02)
+- Apple Home-safe defaults for shared homes: covers use `WindowCovering`, media players use `OnOffPlugInUnit`, humidifiers use `OnOffPlugInUnit`, and moisture sensors use `HumiditySensor`.
+- `Closure` stays available only as an explicit experimental profile and no longer leaks its experimental cluster into `WindowCovering`.
+- Toolchain updated to TypeScript `6.0.3`, Node 24 typings, `ws@8.21.0`, Prettier `3.9.4`, and `typescript-eslint@8.62.1`.
+- TypeScript 7 RC was tested but not promoted because current `typescript-eslint` releases do not yet support the TS7 package export layout.
+- Existing accessories may need reset/re-pair if Apple Home cached old descriptors from a previous export profile.
 
 ### v1.2.19
 - SwitchBot Lock published as real Matter DoorLock with composite device grouping
