@@ -90,6 +90,71 @@ describe('HomeAssistantPlatform', () => {
     });
   });
 
+  it('allows explicit composite groups to include fan and light from different HA device_ids', async () => {
+    const groupedPlatform = new HomeAssistantPlatform(
+      mockMatterbridge as any,
+      mockLog as any,
+      {
+        name: 'test-platform',
+        type: 'dynamic',
+        host: 'localhost',
+        token: 'fake-token',
+        devices: [
+          {
+            device_id: 'device-guest-fan-group',
+            primary_entity: 'fan.guest_fan',
+            include_entities: ['fan.guest_fan', 'light.guest_fan_light'],
+          },
+        ],
+      } as any
+    );
+
+    try {
+      await groupedPlatform.onStart();
+      groupedPlatform.ha.hassEntities.set('fan.guest_fan', {
+        id: 'entity-guest-fan',
+        entity_id: 'fan.guest_fan',
+        device_id: 'device-guest-fan',
+        platform: 'mock',
+      });
+      groupedPlatform.ha.hassEntities.set('light.guest_fan_light', {
+        id: 'entity-guest-fan-light',
+        entity_id: 'light.guest_fan_light',
+        device_id: 'device-guest-light',
+        platform: 'mock',
+      });
+      await (groupedPlatform as any).registerHAEntity({
+        entity_id: 'fan.guest_fan',
+        state: 'on',
+        attributes: { friendly_name: 'Guest Fan', percentage: 50 },
+      });
+      await (groupedPlatform as any).registerHAEntity({
+        entity_id: 'light.guest_fan_light',
+        state: 'on',
+        attributes: { friendly_name: 'Guest Fan Light', brightness: 120, supported_color_modes: ['brightness'] },
+      });
+
+      const res = await fetch('http://127.0.0.1:8285/api/custom/devices');
+      const devices = await res.json() as any[];
+      const fan = devices.find(device => device.entityId === 'fan.guest_fan');
+      const light = devices.find(device => device.entityId === 'light.guest_fan_light');
+
+      expect(fan).toMatchObject({
+        composite: true,
+        compositeDeviceId: 'device-guest-fan-group',
+        compositePrimaryEntityId: 'fan.guest_fan',
+      });
+      expect(light).toMatchObject({
+        composite: true,
+        compositeDeviceId: 'device-guest-fan-group',
+        compositePrimaryEntityId: 'fan.guest_fan',
+        matterType: 'dimmableLight',
+      });
+    } finally {
+      await groupedPlatform.onShutdown('test-teardown');
+    }
+  });
+
   it('uses the HA lock entity as the primary Matter accessory for SwitchBot-style lock devices', async () => {
     await platform.onStart();
     await new Promise(resolve => setTimeout(resolve, 100));

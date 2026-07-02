@@ -1,3 +1,20 @@
+## 1.2.25
+
+### Added
+
+- **Agrupación explícita Fan + Light:** `device-groups.json` ahora puede unir entidades exactas con `include_entities` aunque Home Assistant las registre bajo `device_id` distintos. Esto permite que ventiladores como Recámara o Visitas publiquen su luz integrada igual que el de Sala cuando la integración separa `fan.*` y `light.*`.
+- **Detección automática de capacidades de luz preservada:** si la entidad `light.*` reporta `brightness`, `color_temp`, `hs`, `xy` o `rgb`, el endpoint hijo se publica automáticamente como Dimmable, Color Temperature o Extended Color Light.
+
+### Documentation
+
+- `docs/composite-devices.md` incluye una receta de `/data/device-groups.json` para unir fan y luz separados por integración.
+
+### Validation
+
+- `npm run build`
+- `npm test`
+- `npm run lint`
+
 ## 1.2.24
 
 ### Fixed

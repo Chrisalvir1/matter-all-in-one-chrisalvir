@@ -49,6 +49,30 @@ Para reglas avanzadas, crea `/data/device-groups.json`:
 
 `include_entities`, `exclude_entities`, `primary_entity`, `endpoint_order`, `friendly_name` y `room` son opcionales. Las capacidades se detectan desde Home Assistant; no se deben forzar capacidades que la entidad no reporta.
 
+`include_entities` también permite unir entidades exactas aunque Home Assistant las haya registrado con `device_id` distintos. Úsalo cuando una integración expone el ventilador y la luz del mismo producto como dispositivos separados:
+
+```json
+{
+  "devices": [
+    {
+      "device_id": "ventilador_visitas_group",
+      "friendly_name": "Ventilador Visitas",
+      "primary_entity": "fan.ventilador_visitas",
+      "include_entities": [
+        "fan.ventilador_visitas",
+        "light.ventilador_visitas_luz"
+      ],
+      "endpoint_order": [
+        "fan.ventilador_visitas",
+        "light.ventilador_visitas_luz"
+      ]
+    }
+  ]
+}
+```
+
+Si la entidad `light.*` reporta `supported_color_modes` con `brightness`, `color_temp`, `hs`, `xy` o `rgb`, el endpoint hijo se publica automáticamente como Dimmable, Color Temperature o Extended Color Light. Si Home Assistant solo expone un `switch.*`, Matter solo puede publicarlo como On/Off.
+
 ## Sincronización y diagnóstico
 
 Los eventos `state_changed` se enrutan al endpoint hijo adecuado. Los comandos Matter se traducen al servicio HA del dominio correspondiente (`fan.turn_on`, `fan.set_percentage`, `light.turn_on`, `switch.turn_off`, etc.).

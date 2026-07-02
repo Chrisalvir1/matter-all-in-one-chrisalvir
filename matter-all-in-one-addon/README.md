@@ -1,4 +1,4 @@
-# Matter All-in-One for Home Assistant — v1.2.24
+# Matter All-in-One for Home Assistant — v1.2.25
 
 > Puente Matter 1.6 para Home Assistant con publicación de accesorios independientes y perfiles conservadores para Apple Home.
 > **Base:** `matterbridge@3.9.2` · **Node.js:** `24-alpine` · **Spec:** Matter 1.6 (CSA, 17 Jun 2026)
@@ -11,7 +11,7 @@ This file is intentionally structured for both humans and AI agents.
 
 ```yaml
 project: matter-all-in-one-chrisalvir
-version: "1.2.24"
+version: "1.2.25"
 spec: "Matter 1.6"
 engine: matterbridge
 engine_version: "3.9.2"
@@ -93,7 +93,7 @@ Matter 1.6 Network (mDNS + BLE commissioning)
 | `src/entities/base.entity.ts` | Base entity with cluster registration |
 | `src/entities/vacuum.entity.ts` | RVC Matter 1.4+ (device type 0x0074) |
 | `src/entities/lock.entity.ts` | DoorLock with alarm_control_panel support |
-| `src/entities/composite-device.entity.ts` | Fan+Light grouped by HA device_id |
+| `src/entities/composite-device.entity.ts` | Fan+Light grouped by HA device_id or explicit include list |
 | `src/converters/vacuum.converter.ts` | HA vacuum state → Matter RVC attributes |
 | `run.sh` | Startup: mDNS interface detection, plugin registration, proxy |
 | `Dockerfile` | `node:24-alpine` + `matterbridge@3.9.2` global install |
@@ -104,19 +104,20 @@ Matter 1.6 Network (mDNS + BLE commissioning)
 
 ```bash
 npm install -g matterbridge@3.9.2
-npm install -g matter-all-in-one-chrisalvir@1.2.24
+npm install -g matter-all-in-one-chrisalvir@1.2.25
 ```
 
 ---
 
 ## Changelog Summary (latest)
 
-### v1.2.24 (2026-07-02)
-- Apple Home-safe defaults for shared homes: covers use `WindowCovering`, media players use `OnOffPlugInUnit`, humidifiers use `OnOffPlugInUnit`, and moisture sensors use `HumiditySensor`.
-- `Closure` stays available only as an explicit experimental profile and no longer leaks its experimental cluster into `WindowCovering`.
-- Toolchain updated to TypeScript `6.0.3`, Node 24 typings, `ws@8.21.0`, Prettier `3.9.4`, and `typescript-eslint@8.62.1`.
-- TypeScript 7 RC was tested but not promoted because current `typescript-eslint` releases do not yet support the TS7 package export layout.
-- Existing accessories may need reset/re-pair if Apple Home cached old descriptors from a previous export profile.
+### v1.2.25 (2026-07-02)
+- Fan+Light composites can now be declared explicitly with `include_entities` even when Home Assistant registers the fan and light under different `device_id` values.
+- Light capabilities remain auto-detected from Home Assistant (`brightness`, `color_temp`, RGB/HS/XY), so compatible fan lights expose dimmer, color temperature, or color controls in Apple Home.
+- Documentation updated with a `device-groups.json` recipe for fan integrations that split the light into a separate HA device.
+
+### v1.2.24
+- Apple Home-safe defaults for shared homes and toolchain updates.
 
 ### v1.2.19
 - SwitchBot Lock published as real Matter DoorLock with composite device grouping

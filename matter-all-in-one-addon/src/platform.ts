@@ -103,6 +103,15 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       ?? this.config.devices?.find((config) => config.device_id === deviceId);
   }
 
+  private getCompositeConfigForEntity(entityId: string, deviceId?: string): CompositeDeviceConfig | undefined {
+    const configs = [
+      ...this.deviceGroupingConfigs,
+      ...(this.config.devices ?? []),
+    ];
+    return configs.find((config) => config.device_id === deviceId)
+      ?? configs.find((config) => config.primary_entity === entityId || config.include_entities?.includes(entityId));
+  }
+
   private getCompositeCandidate(entityId: string): { deviceId: string; members: CompositeMember[]; config?: CompositeDeviceConfig } | undefined {
     const hassEntry = this.ha.hassEntities.get(entityId);
     const deviceId = hassEntry?.device_id;
@@ -110,21 +119,30 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       this.log.debug(`[Composite] ${entityId}: no device_id in entity registry — composite grouping skipped`);
       return undefined;
     }
-    const config = this.getCompositeConfig(deviceId);
+    const config = this.getCompositeConfigForEntity(entityId, deviceId);
     if (config?.group_by_device_id === false) {
       this.log.debug(`[Composite] ${entityId}: grouping explicitly disabled for device ${deviceId}`);
       return undefined;
     }
+    const compositeDeviceId = config?.device_id ?? deviceId;
     const excluded = new Set(config?.exclude_entities ?? []);
     const explicitlyIncluded = config?.include_entities;
     const supported = new Set(['fan', 'light', 'switch', 'lock', 'sensor', 'binary_sensor']);
-    let members = Array.from(this.entities.values())
-      .filter((entity) => this.ha.hassEntities.get(entity.entityId)?.device_id === deviceId)
-      .filter((entity) => supported.has(entity.entityId.split('.')[0]))
-      .filter((entity) => !excluded.has(entity.entityId));
-    if (explicitlyIncluded?.length) members = members.filter((entity) => explicitlyIncluded.includes(entity.entityId));
+    let members = Array.from(this.entities.values()).filter((entity) => {
+      if (!supported.has(entity.entityId.split('.')[0])) return false;
+      if (excluded.has(entity.entityId)) return false;
+      if (explicitlyIncluded?.length) return explicitlyIncluded.includes(entity.entityId);
+      return this.ha.hassEntities.get(entity.entityId)?.device_id === compositeDeviceId;
+    });
 
-    this.log.debug(`[Composite] ${entityId}: device_id=${deviceId}, candidate members=[${members.map((m) => m.entityId).join(', ')}]`);
+    if (config?.primary_entity && !members.some((member) => member.entityId === config.primary_entity)) {
+      const primary = this.entities.get(config.primary_entity);
+      if (primary && supported.has(primary.entityId.split('.')[0]) && !excluded.has(primary.entityId)) {
+        members.push(primary);
+      }
+    }
+
+    this.log.debug(`[Composite] ${entityId}: device_id=${compositeDeviceId}, candidate members=[${members.map((m) => m.entityId).join(', ')}]`);
 
     // A composite node is useful when one physical HA device exposes a primary
     // controllable entity plus extra capabilities. This keeps products like
@@ -149,7 +167,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     });
 
     this.log.debug(`[Composite] ${entityId}: composite candidate confirmed → ${members.map((m) => m.entityId).join(' + ')}`);
-    return { deviceId, config, members: members.map((entity) => ({ entityId: entity.entityId, state: entity.state, deviceType: entity.deviceType })) };
+    return { deviceId: compositeDeviceId, config, members: members.map((entity) => ({ entityId: entity.entityId, state: entity.state, deviceType: entity.deviceType })) };
   }
 
   private isEntityExported(entityId: string): boolean {
