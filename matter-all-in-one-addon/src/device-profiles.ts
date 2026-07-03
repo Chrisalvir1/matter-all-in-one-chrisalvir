@@ -70,7 +70,7 @@ const defaultProfileByDomain: Record<string, string> = {
   cover: 'windowCovering',
   lock: 'doorLock',
   climate: 'thermostat',
-  vacuum: 'onOffPlugInUnit',
+  vacuum: 'roboticVacuumCleaner',
   media_player: 'onOffPlugInUnit',
   humidifier: 'onOffPlugInUnit',
   button: 'onOffPlugInUnit',
