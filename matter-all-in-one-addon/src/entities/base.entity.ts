@@ -2,7 +2,7 @@
  * Base entity class for exposing Home Assistant entities to Matter.
  */
 import { DeviceTypeDefinition, MatterbridgeEndpoint } from 'matterbridge';
-import { OnOff, LevelControl, ColorControl, FanControl } from 'matterbridge/matter/clusters';
+import { OnOff, LevelControl, ColorControl, FanControl, OccupancySensing, BooleanState, TemperatureMeasurement, RelativeHumidityMeasurement } from 'matterbridge/matter/clusters';
 import { ClusterId } from 'matterbridge/matter/types';
 import { HomeAssistantPlatform } from '../platform.js';
 import { HassState } from '../utils/ha-state.js';
@@ -12,6 +12,8 @@ export class BaseEntity {
   public platform: HomeAssistantPlatform;
   public entityId: string;
   public state: HassState;
+  
+  private binarySensorLatchTimeout?: NodeJS.Timeout;
   public deviceType: DeviceTypeDefinition;
   public endpoint!: MatterbridgeEndpoint;
 
@@ -274,6 +276,49 @@ export class BaseEntity {
         await update(this.endpoint, FanControl.id, 'percentCurrent', percentage, this.platform.log);
         await update(this.endpoint, FanControl.id, 'percentSetting', percentage, this.platform.log);
         await update(this.endpoint, FanControl.id, 'fanMode', isOn ? 1 : 0, this.platform.log);
+      }
+    } else if (domain === 'binary_sensor') {
+      const active = ['on', 'open', 'detected', 'true'].includes(newState.state.toLowerCase());
+
+      const updateMatter = async (isActive: boolean) => {
+        if (!this.endpoint) return;
+        if (this.endpoint.hasAttributeServer(OccupancySensing.id, 'occupancy')) {
+          const updateFn = isInitialSync ? safeSetAttribute : safeUpdateAttribute;
+          await updateFn(this.endpoint, OccupancySensing.id, 'occupancy', { occupied: isActive }, this.platform.log);
+        } else if (this.endpoint.hasAttributeServer(BooleanState.id, 'stateValue')) {
+          const updateFn = isInitialSync ? safeSetAttribute : safeUpdateAttribute;
+          await updateFn(this.endpoint, BooleanState.id, 'stateValue', isActive, this.platform.log);
+        }
+      };
+
+      if (active) {
+        if (this.binarySensorLatchTimeout) {
+          clearTimeout(this.binarySensorLatchTimeout);
+          this.binarySensorLatchTimeout = undefined;
+        }
+        await updateMatter(true);
+      } else {
+        if (isInitialSync) {
+          await updateMatter(false);
+        } else {
+          if (!this.binarySensorLatchTimeout) {
+            this.binarySensorLatchTimeout = setTimeout(async () => {
+              this.binarySensorLatchTimeout = undefined;
+              await updateMatter(false);
+            }, 3000); // 3 seconds latch
+          }
+        }
+      }
+    } else if (domain === 'sensor') {
+      const numeric = parseFloat(newState.state);
+      if (!isNaN(numeric) && this.endpoint) {
+        if (this.endpoint.hasAttributeServer(TemperatureMeasurement.id, 'measuredValue')) {
+          const updateFn = isInitialSync ? safeSetAttribute : safeUpdateAttribute;
+          await updateFn(this.endpoint, TemperatureMeasurement.id, 'measuredValue', Math.round(numeric * 100), this.platform.log);
+        } else if (this.endpoint.hasAttributeServer(RelativeHumidityMeasurement.id, 'measuredValue')) {
+          const updateFn = isInitialSync ? safeSetAttribute : safeUpdateAttribute;
+          await updateFn(this.endpoint, RelativeHumidityMeasurement.id, 'measuredValue', Math.round(numeric * 100), this.platform.log);
+        }
       }
     }
   }
