@@ -33,7 +33,7 @@ export class BaseEntity {
     const [domain] = this.entityId.split('.');
     const clusters: ClusterId[] = [];
 
-    if (domain === 'light' || domain === 'switch' || domain === 'media_player') {
+    if (domain === 'light' || domain === 'switch' || domain === 'media_player' || domain === 'vacuum') {
       clusters.push(OnOff.id);
       const supportedModes: string[] = this.state.attributes.supported_color_modes ?? [];
       const hasBrightness = supportedModes.includes('brightness') || this.state.attributes.brightness !== undefined;
@@ -133,16 +133,18 @@ export class BaseEntity {
   protected registerCommandHandlers(_endpoint?: MatterbridgeEndpoint) {
     const [domain] = this.entityId.split('.');
 
-    if (domain === 'light' || domain === 'switch' || domain === 'fan' || domain === 'media_player') {
+    if (domain === 'light' || domain === 'switch' || domain === 'fan' || domain === 'media_player' || domain === 'vacuum') {
       // On/Off handlers
       this.endpoint.addCommandHandler('on', async () => {
         this.platform.log.debug(`Matter On commanded for ${this.entityId}`);
-        await this.platform.ha.callService(domain, 'turn_on', this.entityId);
+        if (domain === 'vacuum') await this.platform.ha.callService(domain, 'start', this.entityId);
+        else await this.platform.ha.callService(domain, 'turn_on', this.entityId);
       });
 
       this.endpoint.addCommandHandler('off', async () => {
         this.platform.log.debug(`Matter Off commanded for ${this.entityId}`);
-        await this.platform.ha.callService(domain, 'turn_off', this.entityId);
+        if (domain === 'vacuum') await this.platform.ha.callService(domain, 'return_to_base', this.entityId);
+        else await this.platform.ha.callService(domain, 'turn_off', this.entityId);
       });
 
       if (domain === 'fan' && this.endpoint.hasAttributeServer(FanControl.id, 'percentCurrent')) {
@@ -243,8 +245,8 @@ export class BaseEntity {
 
     const [domain] = this.entityId.split('.');
 
-    if (domain === 'light' || domain === 'switch' || domain === 'fan' || domain === 'media_player') {
-      const isOn = newState.state === 'on';
+    if (domain === 'light' || domain === 'switch' || domain === 'fan' || domain === 'media_player' || domain === 'vacuum') {
+      const isOn = domain === 'vacuum' ? newState.state === 'cleaning' : newState.state === 'on';
 
       if (isInitialSync) {
         await safeSetAttribute(this.endpoint, OnOff.id, 'onOff', isOn, this.platform.log);

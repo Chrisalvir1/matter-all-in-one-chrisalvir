@@ -38,6 +38,7 @@ const profilesByDomain: Record<string, DeviceExportProfile[]> = {
     { id: 'thermostat', label: 'Termostato', description: 'Control HVAC.', appleHome: 'supported' },
   ],
   vacuum: [
+    { id: 'onOffPlugInUnit', label: 'Enchufe On/Off', description: 'Alternativa de máxima compatibilidad.', appleHome: 'supported' },
     { id: 'roboticVacuumCleaner', label: 'Aspiradora robot (RVC)', description: 'Tipo Matter RVC oficial con controles nativos en Apple Home.', appleHome: 'supported' },
   ],
   media_player: [
@@ -51,6 +52,15 @@ const profilesByDomain: Record<string, DeviceExportProfile[]> = {
   button: [
     { id: 'onOffPlugInUnit', label: 'Acción On/Off', description: 'Solo para botones independientes.', appleHome: 'supported' },
   ],
+  binary_sensor: [
+    { id: 'contactSensor', label: 'Sensor de contacto', description: 'Puerta, ventana o estado binario.', appleHome: 'supported' },
+    { id: 'occupancySensor', label: 'Sensor de movimiento', description: 'Detección de presencia o movimiento.', appleHome: 'supported' },
+  ],
+  sensor: [
+    { id: 'temperatureSensor', label: 'Sensor de temperatura', description: 'Medición de temperatura.', appleHome: 'supported' },
+    { id: 'humiditySensor', label: 'Sensor de humedad', description: 'Medición de humedad relativa.', appleHome: 'supported' },
+    { id: 'lightSensor', label: 'Sensor de luz', description: 'Medición de iluminancia (lux).', appleHome: 'supported' },
+  ],
 };
 
 const defaultProfileByDomain: Record<string, string> = {
@@ -60,10 +70,12 @@ const defaultProfileByDomain: Record<string, string> = {
   cover: 'windowCovering',
   lock: 'doorLock',
   climate: 'thermostat',
-  vacuum: 'roboticVacuumCleaner',
+  vacuum: 'onOffPlugInUnit',
   media_player: 'onOffPlugInUnit',
   humidifier: 'onOffPlugInUnit',
   button: 'onOffPlugInUnit',
+  binary_sensor: 'contactSensor',
+  sensor: 'temperatureSensor',
 };
 
 export function getExportProfiles(domain: string): DeviceExportProfile[] {

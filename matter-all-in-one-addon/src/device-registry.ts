@@ -97,7 +97,7 @@ export const DEVICE_REGISTRY: Record<string, DeviceRegistryEntry> = {
   lock: { matterType: MatterDeviceTypes.doorLock, homekitSupported: homekitSupported.doorLock },
   light: { matterType: MatterDeviceTypes.dimmableLight, homekitSupported: homekitSupported.dimmableLight },
   switch: { matterType: MatterDeviceTypes.onOffPlugInUnit, homekitSupported: homekitSupported.onOffPlugInUnit },
-  vacuum: { matterType: MatterDeviceTypes.roboticVacuumCleaner, homekitSupported: homekitSupported.roboticVacuumCleaner },
+  vacuum: { matterType: MatterDeviceTypes.onOffPlugInUnit, homekitSupported: homekitSupported.roboticVacuumCleaner },
   media_player: { matterType: MatterDeviceTypes.onOffPlugInUnit, homekitSupported: homekitSupported.onOffPlugInUnit },
   button: { matterType: MatterDeviceTypes.onOffPlugInUnit, homekitSupported: homekitSupported.onOffPlugInUnit },
   fan: { matterType: MatterDeviceTypes.fan, homekitSupported: homekitSupported.fan },
