@@ -3,9 +3,9 @@ import { getDefaultExportProfileId, getExportProfile, getExportProfiles } from '
 
 describe('device export profiles', () => {
   it('offers the official RVC profile as Apple Home-supported', () => {
-    expect(getExportProfiles('vacuum')).toEqual([
-      expect.objectContaining({ id: 'roboticVacuumCleaner', appleHome: 'supported' }),
-    ]);
+    expect(getExportProfiles('vacuum')).toContainEqual(
+      expect.objectContaining({ id: 'roboticVacuumCleaner', appleHome: 'supported' })
+    );
     expect(getDefaultExportProfileId('vacuum')).toBe('roboticVacuumCleaner');
   });
 

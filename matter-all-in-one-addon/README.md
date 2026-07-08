@@ -1,7 +1,7 @@
-# Matter All-in-One for Home Assistant — v1.2.25
+# Matter All-in-One for Home Assistant — v1.2.29
 
 > Puente Matter 1.6 para Home Assistant con publicación de accesorios independientes y perfiles conservadores para Apple Home.
-> **Base:** `matterbridge@3.9.2` · **Node.js:** `24-alpine` · **Spec:** Matter 1.6 (CSA, 17 Jun 2026)
+> **Base:** `matterbridge@3.9.3` · **Node.js:** `24-alpine` · **Spec:** Matter 1.6 (CSA, 17 Jun 2026)
 
 ---
 
@@ -11,10 +11,10 @@ This file is intentionally structured for both humans and AI agents.
 
 ```yaml
 project: matter-all-in-one-chrisalvir
-version: "1.2.25"
+version: "1.2.29"
 spec: "Matter 1.6"
 engine: matterbridge
-engine_version: "3.9.2"
+engine_version: "3.9.3"
 node_image: "node:24-alpine"
 bridge_mode: server       # Each exported entity = independent Matter ServerNode with own QR
 plugin_mode: dynamic      # MatterbridgeDynamicPlatform
@@ -40,7 +40,7 @@ matterbridge_ui_port: 8284
 ## Minimum Requirements
 
 - **Apple Home:** HomePod mini / Apple TV 4K (Matter hub); Thread router only needed for Thread accessories.
-- **Matterbridge:** `>= 3.9.2`
+- **Matterbridge:** `>= 3.9.3`
 - **Home Assistant:** `>= 2025.1`
 
 ---
@@ -73,7 +73,7 @@ HomeAssistantPlatform (MatterbridgeDynamicPlatform)
         └── CompositeDeviceEntity → Fan+Light grouped (ServerNode, own QR)
         │
         ▼
-matterbridge@3.9.2 (Matter SDK: @matter/node)
+matterbridge@3.9.3 (Matter SDK: @matter/node)
         │
         ▼
 Matter 1.6 Network (mDNS + BLE commissioning)
@@ -96,20 +96,25 @@ Matter 1.6 Network (mDNS + BLE commissioning)
 | `src/entities/composite-device.entity.ts` | Fan+Light grouped by HA device_id or explicit include list |
 | `src/converters/vacuum.converter.ts` | HA vacuum state → Matter RVC attributes |
 | `run.sh` | Startup: mDNS interface detection, plugin registration, proxy |
-| `Dockerfile` | `node:24-alpine` + `matterbridge@3.9.2` global install |
+| `Dockerfile` | `node:24-alpine` + `matterbridge@3.9.3` global install |
 
 ---
 
 ## Installation
 
 ```bash
-npm install -g matterbridge@3.9.2
-npm install -g matter-all-in-one-chrisalvir@1.2.25
+npm install -g matterbridge@3.9.3
+npm install -g matter-all-in-one-chrisalvir@1.2.29
 ```
 
 ---
 
 ## Changelog Summary (latest)
+
+### v1.2.29 (2026-07-08)
+- Updated toolchain to TypeScript 7.0.2.
+- Updated core engine to Matterbridge 3.9.3 (integrating Matter 1.6+ features).
+- Node 24 Active LTS verified as baseline.
 
 ### v1.2.25 (2026-07-02)
 - Fan+Light composites can now be declared explicitly with `include_entities` even when Home Assistant registers the fan and light under different `device_id` values.

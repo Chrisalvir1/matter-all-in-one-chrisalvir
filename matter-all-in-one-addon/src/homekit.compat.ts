@@ -4,7 +4,7 @@
  * Matter 1.6 (CSA, 17 Jun 2026) introduces: NFC commissioning, Joint Fabric,
  * Thermostat Suggestions and security sensor event history improvements.
  * These features are implemented by the Matter controller (Apple Home, Google, Amazon);
- * this bridge benefits automatically via matterbridge@3.9.2 which bundles the updated SDK.
+ * this bridge benefits automatically via matterbridge@3.9.3 which bundles the updated SDK.
  *
  * Device types marked `false` below are NOT enabled until transport/cluster
  * mappings have been implemented and interoperably tested with Matter 1.6 controllers.

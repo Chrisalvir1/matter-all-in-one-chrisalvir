@@ -1,3 +1,12 @@
+## 1.2.29
+
+### Changed
+
+- **TypeScript 7.0.2:** Actualizado a la versión oficial estable de TypeScript 7.0.2.
+- **Matterbridge 3.9.3:** Actualizado `matterbridge` a `3.9.3` para incorporar las optimizaciones de memoria del Matter SDK y compatibilidad con el estándar Matter 1.6 de forma más estable.
+- **Node.js:** Verificado y mantenido en la imagen base `node:24-alpine` (Active LTS) para garantizar compatibilidad con los binarios nativos del SDK.
+- **@types/node:** Actualizado a `^24.13.3` para alinearse con la última versión menor de Node 24.
+
 ## 1.2.25
 
 ### Added
