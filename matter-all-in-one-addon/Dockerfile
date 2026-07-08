@@ -13,7 +13,7 @@ WORKDIR /app
 
 # ── Layer 1: Install plugin dependencies ──
 COPY package.json package-lock.json ./
-RUN npm install --no-fund --no-audit
+RUN npm install --legacy-peer-deps --no-fund --no-audit
 
 # ── Layer 2: Link global matterbridge and build TypeScript ──
 # Link global matterbridge to local node_modules so TypeScript can see the types
