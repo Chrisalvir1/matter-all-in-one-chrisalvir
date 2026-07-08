@@ -24,7 +24,7 @@ COPY src/ ./src/
 RUN npm run build
 
 # ── Layer 3: Cleanup and register plugin ──
-RUN npm prune --production
+RUN npm prune --production --legacy-peer-deps
 RUN jq 'del(.devDependencies, .peerDependencies)' package.json > package.json.tmp && mv package.json.tmp package.json
 
 RUN matterbridge -add /app || true
