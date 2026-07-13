@@ -28,6 +28,7 @@ button { cursor: pointer; }
 .sidebar { display: flex; flex-direction: column; gap: 18px; min-height: 100vh; padding: 26px 18px; background: rgba(6, 12, 25, .62); border-right: 1px solid var(--border); backdrop-filter: blur(24px); }
 .brand { display: flex; align-items: center; gap: 12px; padding: 4px 4px 21px; border-bottom: 1px solid var(--border); }
 .brand-mark { display: grid; place-items: center; width: 38px; height: 38px; border: 1px solid rgba(124, 168, 255, .48); border-radius: 12px; color: var(--blue); font-weight: 800; background: linear-gradient(145deg, rgba(124,168,255,.2), rgba(145,100,229,.12)); }
+.brand-logo { display: block; width: 68px; height: 68px; border-radius: 16px; object-fit: contain; box-shadow: 0 4px 16px rgba(0,0,0,.3); background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1); }
 .eyebrow, .card-label { margin: 0; color: var(--dim); font-size: 10px; font-weight: 750; letter-spacing: .12em; }
 .brand h1 { margin: 2px 0 0; font-size: 16px; letter-spacing: -.02em; }
 

@@ -1,3 +1,9 @@
+## 1.2.33
+
+### Changed
+
+- **UI:** Reemplazada la "M" predeterminada en la barra lateral del panel web interno del Add-on por el logotipo oficial de la integración, con un tamaño ampliado para mejorar la estética.
+
 ## 1.2.32
 
 ### Added
