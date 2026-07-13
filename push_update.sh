@@ -5,9 +5,9 @@ rm -f .git/index.lock
 echo "Agregando archivos..."
 git add matter-all-in-one-addon/Dockerfile matter-all-in-one-addon/package.json matter-all-in-one-addon/config.yaml matter-all-in-one-addon/CHANGELOG.md
 echo "Haciendo commit..."
-git commit -m "chore: release v1.2.33 - update panel UI logo" || echo "Nada que comitear"
+git commit -m "chore: release v1.2.37 - precision scaling maintenance release" || echo "Nada que comitear"
 echo "Creando tag..."
-git tag -a v1.2.33 -m "Release v1.2.33" || echo "El tag ya existe"
+git tag -a v1.2.37 -m "Release v1.2.37" || echo "El tag ya existe"
 echo "Haciendo push..."
 git push origin HEAD --tags
 echo "¡Hecho!"
