@@ -1,3 +1,9 @@
+## 1.2.35
+
+### Fixed
+
+- **UI / Branding:** Convertida estrictamente la imagen del logotipo y el ícono al formato real PNG. Anteriormente el archivo tenía extensión `.png` pero contenía cabeceras JPEG, lo que provocaba que tanto el Add-on (en el panel Ingress) como Home Assistant Supervisor fallaran al intentar renderizarlo.
+
 ## 1.2.34
 
 ### Fixed
