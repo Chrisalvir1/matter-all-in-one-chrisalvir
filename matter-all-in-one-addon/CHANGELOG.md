@@ -1,3 +1,9 @@
+## 1.2.37
+
+### Changed
+
+- **Mantenimiento:** Versión de mantenimiento para forzar la reconstrucción y actualización del Add-on con soporte para las optimizaciones de precisión de brillo en dispositivos dimmer.
+
 ## 1.2.36
 
 ### Added
