@@ -174,5 +174,7 @@ vi.mock('matterbridge', () => {
     fan: makeMockDeviceType(0x002b, 'fan'),
     cooktop: makeMockDeviceType(0x0077, 'cooktop'),
     oven: makeMockDeviceType(0x0078, 'oven'),
+    smokeCoAlarm: makeMockDeviceType(0x0076, 'smokeCoAlarm'),
+    waterLeakDetector: makeMockDeviceType(0x007b, 'waterLeakDetector'),
   };
 });

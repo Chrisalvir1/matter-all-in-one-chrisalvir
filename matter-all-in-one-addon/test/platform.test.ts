@@ -186,7 +186,7 @@ describe('HomeAssistantPlatform', () => {
     await platform.onStart();
 
     const unsafeStates = [
-      { entity_id: 'binary_sensor.smoke_alarm', state: 'off', attributes: { device_class: 'smoke' } },
+      { entity_id: 'binary_sensor.connectivity_status', state: 'off', attributes: { device_class: 'connectivity' } },
       { entity_id: 'sensor.water_pressure', state: '1013', attributes: { device_class: 'pressure' } },
       { entity_id: 'sensor.energy_price', state: '0.25', attributes: { device_class: 'monetary' } },
       { entity_id: 'camera.backyard', state: 'recording', attributes: {} },

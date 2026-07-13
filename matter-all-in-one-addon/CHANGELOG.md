@@ -1,3 +1,9 @@
+## 1.2.39
+
+### Fixed
+
+- **Pruebas Unitarias:** Corregida la suite de pruebas unitarias (Vitest). Se añadieron las definiciones faltantes de `smokeCoAlarm` y `waterLeakDetector` a los mocks de Matterbridge y se actualizó la aserción de seguridad para sensores de humo que ahora son exportados correctamente desde la versión 1.2.36.
+
 ## 1.2.38
 
 ### Fixed
