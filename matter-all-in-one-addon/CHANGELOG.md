@@ -1,3 +1,17 @@
+## 1.2.31
+
+### Changed
+
+- **Node.js:** Downgraded to node 24 LTS (`node:24.18-alpine` and github workflows updated to `24.18.x`).
+- **Matterbridge:** Maintained version `3.9.4` and Matter SDK `1.6` capabilities.
+
+## 1.2.30
+
+### Changed
+
+- **Node.js:** Actualizada la imagen base a `node:26-alpine`.
+- **Matterbridge:** Actualizado `matterbridge` a la versión `3.9.4` para incluir las últimas mejoras del SDK de Matter.
+
 ## 1.2.29
 
 ### Changed
