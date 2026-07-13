@@ -1,3 +1,9 @@
+## 1.2.34
+
+### Fixed
+
+- **UI:** Corregido el error por el que la imagen del logotipo aparecía rota en el panel interno. El servidor web integrado ahora soporta la carga y lectura segura de archivos binarios como PNG.
+
 ## 1.2.33
 
 ### Changed

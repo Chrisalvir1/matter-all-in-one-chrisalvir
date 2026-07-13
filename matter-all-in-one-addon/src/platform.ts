@@ -808,6 +808,18 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           return;
         }
 
+        if (req.method === 'GET' && pathname === '/logo.png') {
+          const content = await this.readBinaryFile('logo.png');
+          if (content) {
+            res.writeHead(200, { 'Content-Type': 'image/png' });
+            res.end(content);
+          } else {
+            res.writeHead(404);
+            res.end('Not Found');
+          }
+          return;
+        }
+
         if (req.method === 'GET' && pathname === '/style.css') {
           const content = await this.readFrontendFile('style.css');
           if (content) {
@@ -1077,6 +1089,21 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     } catch {
       try {
         return await fs.readFile(srcPath, 'utf8');
+      } catch {
+        return null;
+      }
+    }
+  }
+
+  private async readBinaryFile(filename: string): Promise<Buffer | null> {
+    const dir = import.meta.dirname;
+    const distPath = path.join(dir, 'frontend', filename);
+    const srcPath = path.join(dir, '../src/frontend', filename);
+    try {
+      return await fs.readFile(distPath);
+    } catch {
+      try {
+        return await fs.readFile(srcPath);
       } catch {
         return null;
       }
