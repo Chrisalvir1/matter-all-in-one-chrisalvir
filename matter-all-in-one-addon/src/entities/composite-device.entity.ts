@@ -91,6 +91,18 @@ export class CompositeDeviceEntity {
   public endpoint!: MatterbridgeEndpoint;
   public readonly endpoints = new Map<string, MatterbridgeEndpoint>();
   public readonly states = new Map<string, HassState>();
+  private lastCommands = new Map<string, { value: any; timestamp: number }>();
+
+  private shouldIgnoreStateUpdate(attribute: string, windowMs = 3000): boolean {
+    const last = this.lastCommands.get(attribute);
+    if (!last) return false;
+    const elapsed = Date.now() - last.timestamp;
+    if (elapsed > windowMs) {
+      this.lastCommands.delete(attribute);
+      return false;
+    }
+    return true;
+  }
 
   constructor(
     public readonly platform: CompositePlatform,
@@ -196,7 +208,11 @@ export class CompositeDeviceEntity {
       if (domain === 'light') {
         // Brightness → LevelControl.currentLevel
         if (typeof state.attributes.brightness === 'number') {
-          await update(endpoint, LevelControl.id, 'currentLevel', toMatterLevel(state.attributes.brightness), this.platform.log);
+          if (!initial && this.shouldIgnoreStateUpdate('brightness')) {
+            this.platform.log.debug(`Ignoring HA brightness state update for ${entityId} due to recent command lockout`);
+          } else {
+            await update(endpoint, LevelControl.id, 'currentLevel', toMatterLevel(state.attributes.brightness), this.platform.log);
+          }
         }
 
         // Color temperature: prefer native mireds, fall back to converting kelvin
@@ -207,16 +223,24 @@ export class CompositeDeviceEntity {
           colorTempMireds = kelvinToMireds(state.attributes.color_temp_kelvin);
         }
         if (colorTempMireds !== undefined) {
-          await update(endpoint, ColorControl.id, 'colorTemperatureMireds', colorTempMireds, this.platform.log);
-          await update(endpoint, ColorControl.id, 'colorMode', ColorControl.ColorMode.ColorTemperatureMireds, this.platform.log);
+          if (!initial && this.shouldIgnoreStateUpdate('color_temp')) {
+            this.platform.log.debug(`Ignoring HA color temperature state update for ${entityId} due to recent command lockout`);
+          } else {
+            await update(endpoint, ColorControl.id, 'colorTemperatureMireds', colorTempMireds, this.platform.log);
+            await update(endpoint, ColorControl.id, 'colorMode', ColorControl.ColorMode.ColorTemperatureMireds, this.platform.log);
+          }
         }
 
         // HS color (hue 0-360 → 0-254, sat 0-100 → 0-254)
         if (Array.isArray(state.attributes.hs_color)) {
           const [hue, sat] = state.attributes.hs_color as number[];
-          await update(endpoint, ColorControl.id, 'currentHue', Math.round((hue / 360) * 254), this.platform.log);
-          await update(endpoint, ColorControl.id, 'currentSaturation', Math.round((sat / 100) * 254), this.platform.log);
-          await update(endpoint, ColorControl.id, 'colorMode', ColorControl.ColorMode.CurrentHueAndCurrentSaturation, this.platform.log);
+          if (!initial && this.shouldIgnoreStateUpdate('hs_color')) {
+            this.platform.log.debug(`Ignoring HA hs_color state update for ${entityId} due to recent command lockout`);
+          } else {
+            await update(endpoint, ColorControl.id, 'currentHue', Math.round((hue / 360) * 254), this.platform.log);
+            await update(endpoint, ColorControl.id, 'currentSaturation', Math.round((sat / 100) * 254), this.platform.log);
+            await update(endpoint, ColorControl.id, 'colorMode', ColorControl.ColorMode.CurrentHueAndCurrentSaturation, this.platform.log);
+          }
         }
       }
       return;
@@ -373,8 +397,10 @@ export class CompositeDeviceEntity {
       endpoint.addCommandHandler('moveToLevel', async (data: any) => {
         const level = data?.level ?? data?.request?.level;
         if (typeof level === 'number') {
+          const haBrightness = Math.round((level / 254) * 255);
+          this.lastCommands.set('brightness', { value: haBrightness, timestamp: Date.now() });
           await this.platform.ha.callService('light', 'turn_on', entityId, {
-            brightness: Math.round((level / 254) * 255),
+            brightness: haBrightness,
           });
         }
       });
@@ -383,8 +409,10 @@ export class CompositeDeviceEntity {
         if (typeof level !== 'number' || level === 0) {
           await this.platform.ha.callService('light', 'turn_off', entityId);
         } else {
+          const haBrightness = Math.round((level / 254) * 255);
+          this.lastCommands.set('brightness', { value: haBrightness, timestamp: Date.now() });
           await this.platform.ha.callService('light', 'turn_on', entityId, {
-            brightness: Math.round((level / 254) * 255),
+            brightness: haBrightness,
           });
         }
       });
@@ -393,6 +421,7 @@ export class CompositeDeviceEntity {
       endpoint.addCommandHandler('moveToColorTemperature', async (data: any) => {
         const mireds = data?.colorTemperatureMireds ?? data?.request?.colorTemperatureMireds;
         if (typeof mireds === 'number') {
+          this.lastCommands.set('color_temp', { value: mireds, timestamp: Date.now() });
           const currentState = this.states.get(entityId);
           const modes: string[] = currentState?.attributes.supported_color_modes ?? [];
           // If HA device reports kelvin, send kelvin; otherwise send mireds
@@ -411,8 +440,10 @@ export class CompositeDeviceEntity {
         const hue = data?.hue ?? data?.request?.hue;
         const sat = data?.saturation ?? data?.request?.saturation;
         if (typeof hue === 'number' && typeof sat === 'number') {
+          const hs = [Math.round((hue / 254) * 360), Math.round((sat / 254) * 100)];
+          this.lastCommands.set('hs_color', { value: hs, timestamp: Date.now() });
           await this.platform.ha.callService('light', 'turn_on', entityId, {
-            hs_color: [Math.round((hue / 254) * 360), Math.round((sat / 254) * 100)],
+            hs_color: hs,
           });
         }
       });

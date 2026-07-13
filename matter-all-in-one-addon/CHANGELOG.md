@@ -1,3 +1,9 @@
+## 1.2.38
+
+### Fixed
+
+- **Precisión de Luces / Dimmers:** Implementada ventana de bloqueo temporal (command lockout) de 3 segundos para comandos de brillo, temperatura de color y HS. Evita el "rebote" (jumping) de los deslizadores en HomeKit por estados intermedios y de transición enviados por Home Assistant.
+
 ## 1.2.37
 
 ### Changed

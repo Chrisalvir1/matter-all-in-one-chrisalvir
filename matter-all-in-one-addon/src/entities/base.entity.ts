@@ -14,7 +14,19 @@ export class BaseEntity {
   public state: HassState;
   
   private binarySensorLatchTimeout?: NodeJS.Timeout;
+  private lastCommands = new Map<string, { value: any; timestamp: number }>();
   public deviceType: DeviceTypeDefinition;
+
+  private shouldIgnoreStateUpdate(attribute: string, windowMs = 3000): boolean {
+    const last = this.lastCommands.get(attribute);
+    if (!last) return false;
+    const elapsed = Date.now() - last.timestamp;
+    if (elapsed > windowMs) {
+      this.lastCommands.delete(attribute);
+      return false;
+    }
+    return true;
+  }
   public endpoint!: MatterbridgeEndpoint;
 
   constructor(
@@ -165,6 +177,7 @@ export class BaseEntity {
           if (typeof level === 'number') {
             const haBrightness = Math.round((level / 254) * 255);
             this.platform.log.debug(`Matter MoveToLevel commanded for ${this.entityId}: level=${level} -> HA brightness=${haBrightness}`);
+            this.lastCommands.set('brightness', { value: haBrightness, timestamp: Date.now() });
             await this.platform.ha.callService(domain, 'turn_on', this.entityId, {
               brightness: haBrightness,
             });
@@ -176,6 +189,7 @@ export class BaseEntity {
           if (typeof level === 'number') {
             const haBrightness = Math.round((level / 254) * 255);
             this.platform.log.debug(`Matter MoveToLevelWithOnOff commanded for ${this.entityId}: level=${level} -> HA brightness=${haBrightness}`);
+            this.lastCommands.set('brightness', { value: haBrightness, timestamp: Date.now() });
             if (level === 0) {
               await this.platform.ha.callService(domain, 'turn_off', this.entityId);
             } else {
@@ -257,16 +271,20 @@ export class BaseEntity {
       }
 
       if (newState.attributes.brightness !== undefined) {
-        // HA brightness: 0-255  →  Matter currentLevel: 1-254
-        // Never send 0: it violates the minLevel constraint on dimmers
-        // (e.g. Govee minLevel=135).  Map 0-brightness to level 1 (off
-        // state is communicated via onOff cluster, not currentLevel=0).
-        const raw   = Math.round((newState.attributes.brightness / 255) * 254);
-        const level = this.clampLevel(Math.max(1, raw), isInitialSync);
-        if (isInitialSync) {
-          await safeSetAttribute(this.endpoint, LevelControl.id, 'currentLevel', level, this.platform.log);
+        if (!isInitialSync && this.shouldIgnoreStateUpdate('brightness')) {
+          this.platform.log.debug(`Ignoring HA brightness state update for ${this.entityId} due to recent command lockout`);
         } else {
-          await safeUpdateAttribute(this.endpoint, LevelControl.id, 'currentLevel', level, this.platform.log);
+          // HA brightness: 0-255  →  Matter currentLevel: 1-254
+          // Never send 0: it violates the minLevel constraint on dimmers
+          // (e.g. Govee minLevel=135).  Map 0-brightness to level 1 (off
+          // state is communicated via onOff cluster, not currentLevel=0).
+          const raw   = Math.round((newState.attributes.brightness / 255) * 254);
+          const level = this.clampLevel(Math.max(1, raw), isInitialSync);
+          if (isInitialSync) {
+            await safeSetAttribute(this.endpoint, LevelControl.id, 'currentLevel', level, this.platform.log);
+          } else {
+            await safeUpdateAttribute(this.endpoint, LevelControl.id, 'currentLevel', level, this.platform.log);
+          }
         }
       }
 
