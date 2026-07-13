@@ -28,6 +28,8 @@ export const homekitSupported = {
   thermostat: true,
   windowCovering: true,
   contactSensor: true,
+  smokeCoAlarm: true,
+  waterLeakDetector: true,
   occupancySensor: true,
   temperatureSensor: true,
   humiditySensor: true,

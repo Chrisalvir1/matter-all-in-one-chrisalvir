@@ -24,6 +24,8 @@ import {
   fan,
   cooktop,
   oven,
+  smokeCoAlarm,
+  waterLeakDetector,
 } from 'matterbridge';
 
 export const MatterDeviceTypes = {
@@ -43,6 +45,8 @@ export const MatterDeviceTypes = {
   pressureSensor,
   flowSensor,
   lightSensor,
+  smokeCoAlarm,
+  waterLeakDetector,
 
   camera: {
     code: 0x0510,
@@ -115,6 +119,12 @@ export const DEVICE_CLASS_REGISTRY: Record<string, Record<string, DeviceRegistry
     door: { matterType: MatterDeviceTypes.contactSensor, homekitSupported: homekitSupported.contactSensor },
     window: { matterType: MatterDeviceTypes.contactSensor, homekitSupported: homekitSupported.contactSensor },
     opening: { matterType: MatterDeviceTypes.contactSensor, homekitSupported: homekitSupported.contactSensor },
+    smoke: { matterType: MatterDeviceTypes.contactSensor, homekitSupported: homekitSupported.contactSensor },
+    gas: { matterType: MatterDeviceTypes.contactSensor, homekitSupported: homekitSupported.contactSensor },
+    carbon_monoxide: { matterType: MatterDeviceTypes.contactSensor, homekitSupported: homekitSupported.contactSensor },
+    moisture: { matterType: MatterDeviceTypes.contactSensor, homekitSupported: homekitSupported.contactSensor },
+    safety: { matterType: MatterDeviceTypes.contactSensor, homekitSupported: homekitSupported.contactSensor },
+    tamper: { matterType: MatterDeviceTypes.contactSensor, homekitSupported: homekitSupported.contactSensor },
   },
   sensor: {
     temperature: { matterType: MatterDeviceTypes.temperatureSensor, homekitSupported: homekitSupported.temperatureSensor },

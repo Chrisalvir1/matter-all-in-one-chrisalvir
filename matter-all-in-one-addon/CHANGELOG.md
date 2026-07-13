@@ -1,3 +1,9 @@
+## 1.2.36
+
+### Added
+
+- **Soporte de Sensores de Seguridad:** Se ha habilitado la exportación nativa a Matter para sensores de Humo, Gas, Inundación (Moisture), Monóxido de Carbono (CO), Antisabotaje (Tamper) y Seguridad (Safety). Anteriormente, la integración bloqueaba silenciosamente la exportación de estos dispositivos hacia HomeKit/Matter por restricciones de los `device_class`. Ahora se mapean como sensores de contacto, lo que asegura el envío de notificaciones y la integración 100% confiable en Apple HomeKit.
+
 ## 1.2.35
 
 ### Fixed

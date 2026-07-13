@@ -423,7 +423,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     // Strict device_class whitelist for sensors to avoid exporting system/energy sensors
     const deviceClass = state.attributes.device_class;
     if (domain === 'sensor' && !['temperature', 'humidity', 'illuminance', 'moisture'].includes(deviceClass ?? '')) return;
-    if (domain === 'binary_sensor' && !['door', 'window', 'opening', 'motion', 'occupancy', 'contact'].includes(deviceClass ?? '')) return;
+    if (domain === 'binary_sensor' && !['door', 'window', 'opening', 'motion', 'occupancy', 'contact', 'smoke', 'gas', 'moisture', 'safety', 'tamper', 'carbon_monoxide'].includes(deviceClass ?? '')) return;
 
     if (this.config.excludeEntities?.includes(entityId)) return;
     if (this.config.includeEntities && !this.config.includeEntities.includes(entityId)) return;
