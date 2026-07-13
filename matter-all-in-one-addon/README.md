@@ -1,4 +1,8 @@
-# Matter All-in-One for Home Assistant — v1.2.29
+# Matter All-in-One for Home Assistant — v1.2.32
+
+<div align="center">
+  <img src="logo.png" alt="Matter All In One Logo" width="300" />
+</div>
 
 > Puente Matter 1.6 para Home Assistant con publicación de accesorios independientes y perfiles conservadores para Apple Home.
 > **Base:** `matterbridge@3.9.3` · **Node.js:** `24-alpine` · **Spec:** Matter 1.6 (CSA, 17 Jun 2026)

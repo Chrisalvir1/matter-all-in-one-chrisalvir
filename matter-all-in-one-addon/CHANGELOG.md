@@ -1,3 +1,10 @@
+## 1.2.32
+
+### Added
+
+- **HA Branding:** Añadidos archivos `logo.png` e `icon.png` en el Add-on para que Home Assistant muestre el ícono y logotipo nativamente en la UI del Supervisor y en el panel.
+- **Readme:** Actualizado el archivo README.md para incluir el logotipo del repositorio.
+
 ## 1.2.31
 
 ### Changed

@@ -1,5 +1,8 @@
 # matter-all-in-one-chrisalvir
 
+<div align="center">
+  <img src="matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
+</div>
 > **Matter All-in-One for Home Assistant (v1.2.29)**
 > Expone entidades verificadas de Home Assistant como accesorios Matter 1.6 independientes con perfiles conservadores para Apple Home.
 
