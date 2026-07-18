@@ -10,6 +10,7 @@ import {
   PlatformMatterbridge,
 } from 'matterbridge';
 import { AnsiLogger, CYAN, idn, nf, rs } from 'matterbridge/logger';
+import { FabricManager } from '@matter/protocol';
 import http from 'http';
 import fs from 'fs/promises';
 import path from 'path';
@@ -139,10 +140,19 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   private getMatterConnectionInfo(endpoint: any) {
     const nodeState = endpoint?.serverNode?.state ?? {};
     const commissioning = nodeState.commissioning ?? nodeState.commissioningServer ?? {};
-    const rawFabrics = commissioning.fabrics
+    let rawFabrics = commissioning.fabrics
       ?? nodeState.operationalCredentials?.fabrics
       ?? nodeState.operationalCredentialsServer?.fabrics
       ?? [];
+    // FabricManager is the authoritative source in Matter.js 0.17+. State
+    // snapshots can lag after upgrades and incorrectly classify a paired node
+    // as pending even though it owns operational fabrics.
+    try {
+      const managedFabrics = endpoint?.serverNode?.env?.get?.(FabricManager)?.fabrics;
+      if (Array.isArray(managedFabrics)) rawFabrics = managedFabrics;
+    } catch {
+      // Older Matterbridge versions may not expose the Environment here.
+    }
     const fabrics = Array.isArray(rawFabrics) ? rawFabrics : Object.values(rawFabrics ?? {});
     const controllerNames = [...new Set(fabrics
       .map((fabric: any) => fabric?.label ?? fabric?.fabricLabel ?? fabric?.name)
@@ -150,7 +160,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     const pairingCodes = commissioning.pairingCodes ?? nodeState.pairingCodes ?? {};
 
     return {
-      commissioned: Boolean(commissioning.commissioned ?? nodeState.commissioned ?? fabrics.length > 0),
+      // Fabrics are the authoritative proof of commissioning. Some
+      // Matterbridge compatibility state can retain `commissioned: false`
+      // while the current OperationalCredentials behavior already has fabrics.
+      commissioned: commissioning.commissioned === true || nodeState.commissioned === true || fabrics.length > 0,
       controllerNames,
       // Matter exposes the fabric/controller label. A controller may choose to
       // use the Apple Home house name as that label, but Matter does not expose
@@ -160,6 +173,17 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       pairingCode: pairingCodes.qrPairingCode ?? null,
       manualPairingCode: pairingCodes.manualPairingCode ?? null,
     };
+  }
+
+  private getEntityErrorLogs(entityId: string, endpoint: any): string[] {
+    const compositeDeviceId = this.compositeMembership.get(entityId) ?? this.getCompositeCandidate(entityId)?.deviceId;
+    const identifiers = [entityId, compositeDeviceId && `device:${compositeDeviceId}`, endpoint?.uniqueId, endpoint?.serialNumber]
+      .filter((value): value is string => typeof value === 'string' && value.length > 0);
+    const errorPattern = /\b(error|warn|warning|failed|failure|exception|unable|timeout)\b/i;
+    return getLogs()
+      .filter((line) => errorPattern.test(line) && identifiers.some((identifier) => line.includes(identifier)))
+      .slice(-10)
+      .reverse();
   }
 
   private scheduleDiagnosticsSave() {
@@ -1071,8 +1095,12 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               homeName: connection.homeName,
               controllerNames: connection.controllerNames,
               fabricCount: connection.fabricCount,
-              hasIssue: this.entityProblems.has(e.entityId) || isUnavailable(e.state),
+              // The attention queue is for live Matter accessories only. An
+              // unavailable HA entity that was never exported must not look
+              // like a broken Matter accessory.
+              hasIssue: this.isEntityExported(e.entityId) && (this.entityProblems.has(e.entityId) || isUnavailable(e.state)),
               diagnostics: this.entityDiagnostics.get(e.entityId) ?? [],
+              logs: this.isEntityExported(e.entityId) ? this.getEntityErrorLogs(e.entityId, endpoint) : [],
             };
           });
           res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });

@@ -108,7 +108,7 @@ function renderDevices() {
   const exportedNodes = new Set(state.entities.filter((entity) => entity.exported).map(matterNodeKey)).size;
   const allDevices = groupEntities(state.entities);
   const pairedNodes = new Set(state.entities.filter((entity) => entity.exported && entity.commissioned).map(matterNodeKey)).size;
-  const issues = state.entities.filter((entity) => entity.hasIssue).length;
+  const issues = state.entities.filter((entity) => entity.exported && entity.hasIssue).length;
   els.statDevices.textContent = String(allDevices.length);
   els.statExported.textContent = String(exportedNodes);
   els.statPaired.textContent = String(pairedNodes);
@@ -129,7 +129,7 @@ function matchesFilter(entity) {
   if (state.activeFilter === 'active') return entity.exported;
   if (state.activeFilter === 'pending') return entity.exported && !entity.commissioned;
   if (state.activeFilter === 'unpublished') return !entity.exported && !entity.auxiliary;
-  if (state.activeFilter === 'issues') return entity.hasIssue;
+  if (state.activeFilter === 'issues') return entity.exported && entity.hasIssue;
   return true;
 }
 
@@ -137,7 +137,7 @@ function buildDeviceCard(device) {
   const exported = device.entities.filter((entity) => entity.exported).length;
   const domains = [...new Set(device.entities.map((entity) => entity.domain))].sort((a, b) => PRIORITY.indexOf(a) - PRIORITY.indexOf(b));
   const element = document.createElement('article');
-  const hasIssue = device.entities.some((entity) => entity.hasIssue);
+  const hasIssue = device.entities.some((entity) => entity.exported && entity.hasIssue);
   element.className = `device-card${hasIssue ? ' needs-attention' : ''}`;
   element.innerHTML = `<div class="card-top"><span class="device-icon">${icon(domains[0])}</span><span class="export-badge ${exported ? 'active' : ''}">${exported}/${device.entities.length}</span></div><h3 title="${escapeHtml(device.name)}">${escapeHtml(device.name)}</h3><p class="device-meta">${escapeHtml(device.area || device.manufacturer || 'Sin área asignada')}</p><div class="tags">${hasIssue ? '<span class="tag tag-warning">Revisar</span>' : ''}${domains.slice(0, 3).map((domain) => `<span class="tag">${escapeHtml(domain)}</span>`).join('')}</div><div class="card-footer"><span class="entity-summary">${device.entities.length} entidad${device.entities.length === 1 ? '' : 'es'}</span><button class="button button-secondary" type="button">Configurar</button></div>`;
   element.querySelector('button').addEventListener('click', () => openDevice(device));
@@ -220,7 +220,10 @@ function renderQrSection(entity) {
 
   // Always show the QR button for exported (active) entities
   els.deviceQrButton.style.display = 'block';
-  els.matterActions.hidden = false;
+  // Recovery actions remove or alter fabrics, so they only belong to an
+  // accessory that is actually commissioned. Unpaired accessories only need
+  // their pairing code.
+  els.matterActions.hidden = !entity.commissioned;
   // This is intentionally per-accessory: it clears only this node's fabrics
   // and reopens commissioning if a controller left a stale fabric behind.
   els.resetAccessoryButton.style.display = entity.commissioned ? 'block' : 'none';
@@ -338,21 +341,28 @@ function selectEntity(entity) {
 }
 
 function renderDiagnostics(entity) {
-  const diagnostics = Array.isArray(entity.diagnostics) ? diagnostics : [];
-  if (!entity.exported && !entity.hasIssue && diagnostics.length === 0) {
+  const diagnostics = Array.isArray(entity.diagnostics) ? entity.diagnostics : [];
+  const logs = Array.isArray(entity.logs) ? entity.logs : [];
+  if (!entity.exported && !entity.hasIssue && diagnostics.length === 0 && logs.length === 0) {
     els.diagnosticsPanel.hidden = true;
     return;
   }
   els.diagnosticsPanel.hidden = false;
   els.diagnosticsSummary.textContent = entity.hasIssue
     ? 'Este accesorio necesita atención. Se conserva el detalle más reciente para facilitar el diagnóstico.'
-    : diagnostics.length ? 'Historial reciente de incidencias ya resueltas.' : 'Sin errores registrados para este accesorio.';
+    : diagnostics.length || logs.length ? 'Historial reciente de incidencias y logs asociados.' : 'Sin errores registrados para este accesorio.';
   const rows = diagnostics.slice(0, 5).map((item) => {
     const row = document.createElement('li');
     const date = new Date(item.timestamp);
     const time = Number.isNaN(date.getTime()) ? '' : date.toLocaleString();
     row.innerHTML = `<span class="diagnostic-level ${item.level === 'warning' ? 'warning' : ''}">${item.level === 'warning' ? 'Aviso' : 'Error'}</span><div><strong>${escapeHtml(item.message)}</strong><small>${escapeHtml(time)}</small></div>`;
     return row;
+  });
+  logs.slice(0, 5).forEach((line) => {
+    const row = document.createElement('li');
+    row.className = 'diagnostic-log';
+    row.innerHTML = `<span class="diagnostic-level warning">Log</span><div><strong>${escapeHtml(line)}</strong></div>`;
+    rows.push(row);
   });
   if (!rows.length) {
     const row = document.createElement('li');

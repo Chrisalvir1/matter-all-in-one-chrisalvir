@@ -1,3 +1,10 @@
+## 1.2.44
+
+### Fixed
+
+- **Live Pairing Count:** El contador de emparejados (paired) y la condición de "commissioned" ahora se extraen fidedignamente del `FabricManager` del protocolo, previniendo estados cacheados o inconsistentes (commissioned: false) al tener *fabrics* activos.
+- **Entity Logs Panel:** El panel de diagnóstico por accesorio ahora carga y muestra de manera consistente los eventos y logs del sistema asociados exclusivamente al dispositivo, previniendo fallos donde la interfaz omitía los errores recientes en nodos estables.
+
 ## 1.2.43
 
 ### Fixed

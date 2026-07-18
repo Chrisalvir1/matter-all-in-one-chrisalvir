@@ -65,6 +65,40 @@ describe('HomeAssistantPlatform', () => {
     });
   });
 
+  it('treats existing Matter fabrics as commissioned even when legacy state is stale', () => {
+    const connection = (platform as any).getMatterConnectionInfo({
+      serverNode: {
+        state: {
+          commissioning: {
+            commissioned: false,
+            fabrics: { 1: { label: 'Casa principal' } },
+          },
+        },
+      },
+    });
+
+    expect(connection).toMatchObject({
+      commissioned: true,
+      homeName: 'Casa principal',
+      fabricCount: 1,
+    });
+  });
+
+  it('uses the Matter FabricManager when the compatibility state has not refreshed yet', () => {
+    const connection = (platform as any).getMatterConnectionInfo({
+      serverNode: {
+        state: { commissioning: { commissioned: false, fabrics: [] } },
+        env: { get: () => ({ fabrics: [{ label: 'Casa Matter' }] }) },
+      },
+    });
+
+    expect(connection).toMatchObject({
+      commissioned: true,
+      homeName: 'Casa Matter',
+      fabricCount: 1,
+    });
+  });
+
   it('marks fan and light sharing a device_id as one composite before either is activated', async () => {
     await platform.onStart();
     await new Promise(resolve => setTimeout(resolve, 100));

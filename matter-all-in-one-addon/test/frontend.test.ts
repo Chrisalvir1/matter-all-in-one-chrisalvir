@@ -26,6 +26,8 @@ describe('frontend accessibility contract', () => {
     expect(html).toContain('id="reset-accessory-button"');
     expect(script).toContain('/refresh-accessory/');
     expect(script).toContain('Sin errores registrados para este accesorio.');
+    expect(script).toContain('entity.logs');
+    expect(html).toContain('Diagnóstico y logs de esta entidad');
     expect(script).toContain('entity.compositeDeviceId ? `matter:${entity.compositeDeviceId}`');
   });
 });
