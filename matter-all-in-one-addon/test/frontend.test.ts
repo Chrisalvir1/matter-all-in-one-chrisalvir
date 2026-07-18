@@ -29,5 +29,7 @@ describe('frontend accessibility contract', () => {
     expect(script).toContain('entity.logs');
     expect(html).toContain('Diagnóstico y logs de esta entidad');
     expect(script).toContain('entity.compositeDeviceId ? `matter:${entity.compositeDeviceId}`');
+    expect(script).toContain('function matchesDeviceFilter(device)');
+    expect(script).toContain('!isDevicePaired(device)');
   });
 });

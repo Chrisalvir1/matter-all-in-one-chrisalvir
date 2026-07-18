@@ -101,6 +101,17 @@ describe('HomeAssistantPlatform', () => {
     });
   });
 
+  it('keeps a commissioned legacy endpoint visible while its composite replacement is not ready', () => {
+    const legacyEndpoint = {
+      serverNode: { state: { commissioning: { commissioned: true, fabrics: [{ label: 'El Chante' }] } } },
+    };
+    (platform as any).matterbridgeDevices.set('lock.front_door', legacyEndpoint);
+    (platform as any).matterbridgeDevices.set('device:front-door', {});
+
+    expect((platform as any).getMatterEndpointForEntity('binary_sensor.front_door_contact', 'front-door', 'lock.front_door'))
+      .toBe(legacyEndpoint);
+  });
+
   it('marks fan and light sharing a device_id as one composite before either is activated', async () => {
     await platform.onStart();
     await new Promise(resolve => setTimeout(resolve, 100));

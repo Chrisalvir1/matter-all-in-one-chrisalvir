@@ -1,3 +1,11 @@
+## 1.2.46
+
+### Fixed
+
+- **Composite Device Restore:** Solucionada la restauración de dispositivos Matter compuestos. Si Matterbridge falla al recrear el nodo compuesto general, el sistema ahora conserva y restaura automáticamente el endpoint principal emparejado preexistente.
+- **State Migration:** Se implementó la migración automática de registros persistidos para asegurar que un dispositivo compuesto fallido transfiera su estado al endpoint principal para prevenir fallas repetitivas en cada inicio.
+- **UI Device Counting:** El filtro de "Por emparejar" y el contador de "Emparejados" en la interfaz ahora se evalúan correctamente por dispositivo físico y no de manera subdividida por canales o endpoints internos.
+
 ## 1.2.45
 
 ### Fixed

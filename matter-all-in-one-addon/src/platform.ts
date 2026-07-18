@@ -172,6 +172,29 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     };
   }
 
+  /**
+   * Resolve the live Matter node for an entity. During the migration from
+   * per-entity exports to one physical-device export, an existing legacy node
+   * can remain paired while a new composite node has not been created yet.
+   * Never let that incomplete composite hide the commissioned legacy node.
+   */
+  private getMatterEndpointForEntity(entityId: string, compositeDeviceId?: string, primaryEntityId?: string | null): any {
+    const compositeEndpoint = compositeDeviceId
+      ? this.matterbridgeDevices.get(this.compositeStorageKey(compositeDeviceId)) as any
+      : undefined;
+    if (compositeEndpoint?.serverNode) return compositeEndpoint;
+
+    const directEndpoint = this.matterbridgeDevices.get(entityId) as any;
+    if (directEndpoint?.serverNode) return directEndpoint;
+
+    if (primaryEntityId && primaryEntityId !== entityId) {
+      const primaryEndpoint = this.matterbridgeDevices.get(primaryEntityId) as any;
+      if (primaryEndpoint?.serverNode) return primaryEndpoint;
+    }
+
+    return compositeEndpoint ?? directEndpoint;
+  }
+
   private getEntityErrorLogs(entityId: string, endpoint: any): string[] {
     const compositeDeviceId = this.compositeMembership.get(entityId) ?? this.getCompositeCandidate(entityId)?.deviceId;
     const identifiers = [entityId, compositeDeviceId && `device:${compositeDeviceId}`, endpoint?.uniqueId, endpoint?.serialNumber]
@@ -608,7 +631,15 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         if (exportedId.startsWith('device:')) {
           const deviceId = exportedId.substring('device:'.length);
           const entityId = Array.from(this.entities.keys()).find((id) => this.ha.hassEntities.get(id)?.device_id === deviceId);
-          if (entityId) await this.activateComposite(entityId);
+          if (entityId) {
+            try {
+              await this.activateComposite(entityId);
+            } catch (error) {
+              if (!this.isCompositeNodeCreationFailure(error)) throw error;
+              await this.restoreCompositeAsPrimary(entityId, deviceId);
+              migratedLegacyEntries = true;
+            }
+          }
           continue;
         }
         if (!this.entities.has(exportedId)) continue;
@@ -616,10 +647,18 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         if (composite) {
           // Versions prior to grouping persisted every entity separately. Fold
           // that legacy selection into one physical-device key on first start.
-          this.exportedDevices.add(this.compositeStorageKey(composite.deviceId));
-          composite.members.forEach((member) => this.exportedDevices.delete(member.entityId));
-          migratedLegacyEntries = true;
-          await this.activateComposite(exportedId);
+          // Do that only after the composite node actually exists; otherwise a
+          // failed migration would hide an already commissioned legacy node.
+          try {
+            await this.activateComposite(exportedId);
+            this.exportedDevices.add(this.compositeStorageKey(composite.deviceId));
+            composite.members.forEach((member) => this.exportedDevices.delete(member.entityId));
+            migratedLegacyEntries = true;
+          } catch (error) {
+            if (!this.isCompositeNodeCreationFailure(error)) throw error;
+            await this.restoreCompositeAsPrimary(exportedId, composite.deviceId);
+            migratedLegacyEntries = true;
+          }
         } else {
           await this.activateEntity(exportedId);
         }
@@ -628,6 +667,26 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       }
     }
     if (migratedLegacyEntries) await this.saveExportedDevices();
+  }
+
+  private isCompositeNodeCreationFailure(error: unknown): boolean {
+    return String(error).includes('Matter server node was not created for device');
+  }
+
+  /** Keep a working paired accessory when this Matterbridge runtime cannot host a composite node. */
+  private async restoreCompositeAsPrimary(entityId: string, deviceId: string): Promise<void> {
+    const candidate = this.getCompositeCandidate(entityId);
+    const primaryEntityId = candidate?.config?.primary_entity
+      ?? candidate?.members.find((member) => member.entityId.startsWith('lock.'))?.entityId
+      ?? candidate?.members.find((member) => member.entityId.startsWith('fan.'))?.entityId
+      ?? candidate?.members[0]?.entityId
+      ?? entityId;
+
+    this.exportedDevices.delete(this.compositeStorageKey(deviceId));
+    if (candidate) candidate.members.forEach((member) => this.exportedDevices.delete(member.entityId));
+    this.exportedDevices.add(primaryEntityId);
+    await this.activateEntity(primaryEntityId);
+    this.log.warn(`Composite Matter node for device ${deviceId} is unavailable; preserved the existing paired endpoint ${primaryEntityId}.`);
   }
 
   private async activateComposite(entityId: string): Promise<void> {
@@ -641,7 +700,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     const endpoint = await composite.createEndpoint();
     await this.registerDevice(endpoint);
     const serverNode = (endpoint as any).serverNode;
-    if (!serverNode) throw new Error(`Matter server node was not created for device ${candidate.deviceId}.`);
+    if (!serverNode) {
+      await this.unregisterDevice(endpoint).catch(() => undefined);
+      throw new Error(`Matter server node was not created for device ${candidate.deviceId}.`);
+    }
     if (!serverNode.lifecycle?.isOnline) await serverNode.start();
     this.compositeDevices.set(candidate.deviceId, composite);
     this.matterbridgeDevices.set(this.compositeStorageKey(candidate.deviceId), endpoint);
@@ -1056,7 +1118,6 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             // never offer a second toggle for a future child endpoint.
             const compositeCandidate = this.getCompositeCandidate(e.entityId);
             const compositeDeviceId = this.compositeMembership.get(e.entityId) ?? compositeCandidate?.deviceId;
-            const endpoint = this.matterbridgeDevices.get(compositeDeviceId ? this.compositeStorageKey(compositeDeviceId) : e.entityId) as any;
             const composite = compositeDeviceId ? this.compositeDevices.get(compositeDeviceId) : undefined;
             const compositePrimaryEntityId = composite?.primaryEntityId
               ?? compositeCandidate?.config?.primary_entity
@@ -1064,6 +1125,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               ?? compositeCandidate?.members.find((member) => member.entityId.startsWith('fan.'))?.entityId
               ?? compositeCandidate?.members[0]?.entityId
               ?? null;
+            const endpoint = this.getMatterEndpointForEntity(e.entityId, compositeDeviceId, compositePrimaryEntityId);
 
             const connection = this.getMatterConnectionInfo(endpoint);
 
