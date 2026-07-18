@@ -130,6 +130,38 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     for (const entityId of this.entities.keys()) this.recordEntityDiagnostic(entityId, message, 'warning');
   }
 
+  /**
+   * Matter.js has changed the public shape of ServerNode state a few times.
+   * Keep the UI boundary tolerant of both the Matterbridge compatibility
+   * shape and the current Matter.js behaviors, rather than showing an
+   * unpaired accessory merely because a state property was renamed.
+   */
+  private getMatterConnectionInfo(endpoint: any) {
+    const nodeState = endpoint?.serverNode?.state ?? {};
+    const commissioning = nodeState.commissioning ?? nodeState.commissioningServer ?? {};
+    const rawFabrics = commissioning.fabrics
+      ?? nodeState.operationalCredentials?.fabrics
+      ?? nodeState.operationalCredentialsServer?.fabrics
+      ?? [];
+    const fabrics = Array.isArray(rawFabrics) ? rawFabrics : Object.values(rawFabrics ?? {});
+    const controllerNames = [...new Set(fabrics
+      .map((fabric: any) => fabric?.label ?? fabric?.fabricLabel ?? fabric?.name)
+      .filter((label): label is string => typeof label === 'string' && label.trim().length > 0))];
+    const pairingCodes = commissioning.pairingCodes ?? nodeState.pairingCodes ?? {};
+
+    return {
+      commissioned: Boolean(commissioning.commissioned ?? nodeState.commissioned ?? fabrics.length > 0),
+      controllerNames,
+      // Matter exposes the fabric/controller label. A controller may choose to
+      // use the Apple Home house name as that label, but Matter does not expose
+      // Apple's private Home/Room database to an accessory.
+      homeName: controllerNames.join(', ') || null,
+      fabricCount: fabrics.length,
+      pairingCode: pairingCodes.qrPairingCode ?? null,
+      manualPairingCode: pairingCodes.manualPairingCode ?? null,
+    };
+  }
+
   private scheduleDiagnosticsSave() {
     if (this.diagnosticSaveTimer) clearTimeout(this.diagnosticSaveTimer);
     this.diagnosticSaveTimer = setTimeout(() => {
@@ -736,6 +768,28 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     }
   }
 
+  /** Refresh a single node's Matter advertisement without removing fabrics. */
+  public async refreshMatterAccessory(entityId: string): Promise<{ success: boolean; error?: string }> {
+    const compositeDeviceId = this.compositeMembership.get(entityId) ?? this.getCompositeCandidate(entityId)?.deviceId;
+    const endpoint = this.matterbridgeDevices.get(compositeDeviceId ? this.compositeStorageKey(compositeDeviceId) : entityId) as any;
+    const serverNode = endpoint?.serverNode;
+    if (!endpoint || !serverNode) {
+      return { success: false, error: 'El accesorio Matter no está activo o su nodo aún no está listo.' };
+    }
+    try {
+      // start() is intentionally idempotent. For an online node it refreshes
+      // the requested state safely; for a node that came up late it makes sure
+      // it is serving before the UI reports it as ready.
+      await serverNode.start();
+      this.log.notice(`Matter connection refresh requested for ${idn}${compositeDeviceId ? `device:${compositeDeviceId}` : entityId}${rs}`);
+      return { success: true };
+    } catch (error) {
+      this.log.error(`Failed to refresh Matter accessory ${entityId}: ${error}`);
+      this.recordEntityDiagnostic(entityId, `No se pudo actualizar el estado Matter: ${String(error)}`);
+      return { success: false, error: String(error) };
+    }
+  }
+
   private async saveExportedDevices() {
     try {
       await fs.writeFile('/data/exported-devices.json', JSON.stringify(Array.from(this.exportedDevices)), 'utf8');
@@ -990,15 +1044,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               ?? compositeCandidate?.members[0]?.entityId
               ?? null;
 
-            // Extract fabric (home) label if device is commissioned
-            const fabrics: Record<number, { label: string }> | undefined =
-              endpoint?.serverNode?.state?.commissioning?.fabrics;
-            const homeName = fabrics
-              ? Object.values(fabrics)
-                  .map((f: any) => f.label)
-                  .filter(Boolean)
-                  .join(', ') || null
-              : null;
+            const connection = this.getMatterConnectionInfo(endpoint);
 
             return {
               entityId: e.entityId,
@@ -1019,10 +1065,12 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               primaryEntityId: this.getPrimaryEntityId(e.entityId) ?? null,
               profileId: this.deviceOverrides[e.entityId] ?? getDefaultExportProfileId(domain) ?? null,
               profiles: getExportProfiles(domain),
-              pairingCode: endpoint?.serverNode?.state?.commissioning?.pairingCodes?.qrPairingCode ?? null,
-              manualPairingCode: endpoint?.serverNode?.state?.commissioning?.pairingCodes?.manualPairingCode ?? null,
-              commissioned: endpoint?.serverNode?.state?.commissioning?.commissioned ?? false,
-              homeName,
+              pairingCode: connection.pairingCode,
+              manualPairingCode: connection.manualPairingCode,
+              commissioned: connection.commissioned,
+              homeName: connection.homeName,
+              controllerNames: connection.controllerNames,
+              fabricCount: connection.fabricCount,
               hasIssue: this.entityProblems.has(e.entityId) || isUnavailable(e.state),
               diagnostics: this.entityDiagnostics.get(e.entityId) ?? [],
             };
@@ -1054,6 +1102,15 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         if (req.method === 'POST' && pathname.startsWith('/api/custom/reset-accessory/')) {
           const entityId = decodeURIComponent(pathname.substring('/api/custom/reset-accessory/'.length));
           const result = await this.resetMatterAccessory(entityId);
+          res.writeHead(result.success ? 200 : 400, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify(result));
+          return;
+        }
+
+        // POST /api/custom/refresh-accessory/:entityId
+        if (req.method === 'POST' && pathname.startsWith('/api/custom/refresh-accessory/')) {
+          const entityId = decodeURIComponent(pathname.substring('/api/custom/refresh-accessory/'.length));
+          const result = await this.refreshMatterAccessory(entityId);
           res.writeHead(result.success ? 200 : 400, { 'Content-Type': 'application/json; charset=utf-8' });
           res.end(JSON.stringify(result));
           return;

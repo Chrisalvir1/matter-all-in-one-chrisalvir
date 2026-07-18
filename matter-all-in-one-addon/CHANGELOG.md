@@ -1,3 +1,10 @@
+## 1.2.43
+
+### Fixed
+
+- **UI Matter:** Corregida la interfaz visual para no duplicar accesorios compuestos, mejorando la lectura del estado de emparejamiento (commissioning) y agrupando correctamente bajo el mismo nodo (`compositeDeviceId`).
+- **Diagnósticos y Recuperación:** Añadidas acciones de recuperación por accesorio en el panel (actualizar estado, desconectar, regenerar código) y visualización permanente de diagnósticos específicos por entidad para todos los dispositivos sanos.
+
 ## 1.2.42
 
 ### Added

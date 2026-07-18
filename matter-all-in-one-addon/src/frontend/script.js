@@ -14,7 +14,7 @@ const els = {
   modalExportCount: $('modal-export-count'), selectionPanel: $('selection-panel'), selectionTitle: $('selection-title'),
   selectionDescription: $('selection-description'), selectionMeta: $('selection-meta'), selectionStatus: $('selection-status'),
   deviceQrContainer: $('device-qr-container'), deviceQrCode: $('device-qr-code'), deviceManualCode: $('device-manual-code'), deviceQrButton: $('device-qr-button'),
-  resetAccessoryButton: $('reset-accessory-button'),
+  resetAccessoryButton: $('reset-accessory-button'), matterActions: $('matter-actions'), reconnectAccessoryButton: $('reconnect-accessory-button'), regenerateCodeButton: $('regenerate-code-button'),
   profileField: $('profile-field'), profileSelect: $('profile-select'), profileNote: $('profile-note'),
   settingsButton: $('settings-button'), settingsModal: $('settings-modal'), settingsModalClose: $('settings-modal-close'),
   restartButton: $('restart-button'), factoryResetButton: $('factory-reset-button'), confirmModal: $('confirm-modal'),
@@ -77,8 +77,10 @@ async function fetchStatus() {
 function groupEntities(entities) {
   const groups = new Map();
   for (const entity of entities) {
-    // Use device_id if available, otherwise group by domain (virtual group)
-    const id = entity.device_id || `virtual:${entity.domain}`;
+    // A configured composite can intentionally span more than one HA
+    // device_id. Its Matter node is the source of truth for this screen: one
+    // node means one card and one pairing flow.
+    const id = entity.compositeDeviceId ? `matter:${entity.compositeDeviceId}` : (entity.device_id || `virtual:${entity.domain}`);
     if (!groups.has(id)) {
       groups.set(id, {
         id,
@@ -211,12 +213,14 @@ function renderQrSection(entity) {
   els.deviceManualCode.textContent = '';
   els.deviceQrButton.style.display = 'none';
   els.resetAccessoryButton.style.display = 'none';
+  els.matterActions.hidden = true;
   els.deviceQrButton.textContent = 'Mostrar Código de Emparejamiento';
 
   if (!entity || entity.auxiliary || !entity.exported) return;
 
   // Always show the QR button for exported (active) entities
   els.deviceQrButton.style.display = 'block';
+  els.matterActions.hidden = false;
   // This is intentionally per-accessory: it clears only this node's fabrics
   // and reopens commissioning if a controller left a stale fabric behind.
   els.resetAccessoryButton.style.display = entity.commissioned ? 'block' : 'none';
@@ -280,7 +284,7 @@ function selectEntity(entity) {
   // Home name badge next to title
   let homeLabel = '';
   if (entity.exported && entity.commissioned && entity.homeName) {
-    homeLabel = `<span class="home-badge" title="Casa conectada">🏠 ${escapeHtml(entity.homeName)}</span>`;
+    homeLabel = `<span class="home-badge" title="Etiqueta del controlador Matter">🏠 ${escapeHtml(entity.homeName)}</span>`;
   } else if (entity.exported && entity.commissioned) {
     homeLabel = `<span class="home-badge commissioned" title="Emparejado">✓ Emparejado</span>`;
   }
@@ -313,7 +317,10 @@ function selectEntity(entity) {
   els.profileNote.textContent = currentProfile ? `${currentProfile.description} ${profileCompatibilityText(currentProfile.appleHome)}` : '';
   els.profileSelect.disabled = entity.auxiliary || entity.composite;
 
-  els.selectionMeta.innerHTML = `<div><dt>Entidad</dt><dd>${escapeHtml(entity.entityId)}</dd></div><div><dt>Tipo Matter</dt><dd>${escapeHtml(entity.matterType || 'Predeterminado')}</dd></div><div><dt>Estado HA</dt><dd>${escapeHtml(stateLabel(entity.state))}</dd></div>`;
+  const connectionMeta = entity.exported && entity.commissioned
+    ? `<div><dt>Controlador Matter</dt><dd>${escapeHtml(entity.homeName || 'Emparejado; el controlador no publicó una etiqueta')}</dd></div><div><dt>Fabrics</dt><dd>${escapeHtml(entity.fabricCount || 1)}</dd></div>`
+    : '';
+  els.selectionMeta.innerHTML = `<div><dt>Entidad</dt><dd>${escapeHtml(entity.entityId)}</dd></div><div><dt>Tipo Matter</dt><dd>${escapeHtml(entity.matterType || 'Predeterminado')}</dd></div><div><dt>Estado HA</dt><dd>${escapeHtml(stateLabel(entity.state))}</dd></div>${connectionMeta}`;
 
   els.selectionStatus.className = `selection-status${entity.exported ? ' active' : ''}${entity.commissioned ? ' commissioned' : ''}`;
   els.selectionStatus.textContent = entity.auxiliary
@@ -332,21 +339,28 @@ function selectEntity(entity) {
 
 function renderDiagnostics(entity) {
   const diagnostics = Array.isArray(entity.diagnostics) ? diagnostics : [];
-  if (!entity.hasIssue && diagnostics.length === 0) {
+  if (!entity.exported && !entity.hasIssue && diagnostics.length === 0) {
     els.diagnosticsPanel.hidden = true;
     return;
   }
   els.diagnosticsPanel.hidden = false;
   els.diagnosticsSummary.textContent = entity.hasIssue
     ? 'Este accesorio necesita atención. Se conserva el detalle más reciente para facilitar el diagnóstico.'
-    : 'Historial reciente de incidencias ya resueltas.';
-  els.diagnosticsList.replaceChildren(...diagnostics.slice(0, 5).map((item) => {
+    : diagnostics.length ? 'Historial reciente de incidencias ya resueltas.' : 'Sin errores registrados para este accesorio.';
+  const rows = diagnostics.slice(0, 5).map((item) => {
     const row = document.createElement('li');
     const date = new Date(item.timestamp);
     const time = Number.isNaN(date.getTime()) ? '' : date.toLocaleString();
     row.innerHTML = `<span class="diagnostic-level ${item.level === 'warning' ? 'warning' : ''}">${item.level === 'warning' ? 'Aviso' : 'Error'}</span><div><strong>${escapeHtml(item.message)}</strong><small>${escapeHtml(time)}</small></div>`;
     return row;
-  }));
+  });
+  if (!rows.length) {
+    const row = document.createElement('li');
+    row.className = 'diagnostic-empty';
+    row.textContent = 'No hay incidencias que mostrar.';
+    rows.push(row);
+  }
+  els.diagnosticsList.replaceChildren(...rows);
 }
 
 function profileCompatibilityText(compatibility) {
@@ -448,8 +462,8 @@ els.resetAccessoryButton.addEventListener('click', () => {
   const entity = state.activeEntity;
   if (!entity) return;
   openConfirm(
-    'Restablecer conexión Matter',
-    `Se eliminará únicamente el emparejamiento Matter de ${displayName(entity)}. No afecta otros accesorios. El mismo código QR volverá a quedar listo para escanear.`,
+    'Desconectar Matter',
+    `Se eliminarán los emparejamientos Matter de ${displayName(entity)} y de sus endpoints integrados. No afecta otros accesorios ni Home Assistant. Después podrás volver a escanear su código.`,
     async () => {
       try {
         const result = await request(`/reset-accessory/${encodeURIComponent(entity.entityId)}`, { method: 'POST' });
@@ -458,6 +472,41 @@ els.resetAccessoryButton.addEventListener('click', () => {
         setTimeout(() => void fetchDevices(true), 1200);
       } catch (error) {
         showToast(error.message || 'No se pudo restablecer el accesorio.', true);
+      }
+    },
+  );
+});
+
+els.reconnectAccessoryButton.addEventListener('click', async () => {
+  const entity = state.activeEntity;
+  if (!entity) return;
+  els.reconnectAccessoryButton.disabled = true;
+  try {
+    const result = await request(`/refresh-accessory/${encodeURIComponent(entity.entityId)}`, { method: 'POST' });
+    if (!result.success) throw new Error(result.error || 'No se pudo actualizar el estado Matter');
+    await fetchDevices(true);
+    showToast('Estado Matter actualizado sin eliminar el emparejamiento.');
+  } catch (error) {
+    showToast(error.message || 'No se pudo actualizar el estado Matter.', true);
+  } finally {
+    els.reconnectAccessoryButton.disabled = false;
+  }
+});
+
+els.regenerateCodeButton.addEventListener('click', () => {
+  const entity = state.activeEntity;
+  if (!entity) return;
+  openConfirm(
+    'Generar un código Matter nuevo',
+    `Esto desconectará ${displayName(entity)} de todos los controladores Matter y creará nuevas credenciales de emparejamiento. Tendrás que añadirlo nuevamente en Apple Home u otro controlador.`,
+    async () => {
+      try {
+        const result = await request(`/reset-accessory/${encodeURIComponent(entity.entityId)}`, { method: 'POST' });
+        if (!result.success) throw new Error(result.error || 'No se pudo regenerar el código Matter');
+        showToast('Código Matter regenerado. Esperando las nuevas credenciales…');
+        setTimeout(() => void fetchDevices(true), 1200);
+      } catch (error) {
+        showToast(error.message || 'No se pudo regenerar el código Matter.', true);
       }
     },
   );

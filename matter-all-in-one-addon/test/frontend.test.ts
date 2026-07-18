@@ -17,4 +17,15 @@ describe('frontend accessibility contract', () => {
     expect(script).toContain('modal.hidden = !open;');
     expect(stylesheet).toContain('.modal-backdrop[hidden] { display: none; }');
   });
+
+  it('provides per-accessory Matter recovery controls and an explicit diagnostics state', async () => {
+    const html = await readFile(new URL('index.html', frontendPath), 'utf8');
+    const script = await readFile(new URL('script.js', frontendPath), 'utf8');
+    expect(html).toContain('id="reconnect-accessory-button"');
+    expect(html).toContain('id="regenerate-code-button"');
+    expect(html).toContain('id="reset-accessory-button"');
+    expect(script).toContain('/refresh-accessory/');
+    expect(script).toContain('Sin errores registrados para este accesorio.');
+    expect(script).toContain('entity.compositeDeviceId ? `matter:${entity.compositeDeviceId}`');
+  });
 });
