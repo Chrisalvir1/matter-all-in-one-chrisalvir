@@ -10,7 +10,6 @@ import {
   PlatformMatterbridge,
 } from 'matterbridge';
 import { AnsiLogger, CYAN, idn, nf, rs } from 'matterbridge/logger';
-import { FabricManager } from '@matter/protocol';
 import http from 'http';
 import fs from 'fs/promises';
 import path from 'path';
@@ -140,20 +139,18 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   private getMatterConnectionInfo(endpoint: any) {
     const nodeState = endpoint?.serverNode?.state ?? {};
     const commissioning = nodeState.commissioning ?? nodeState.commissioningServer ?? {};
-    let rawFabrics = commissioning.fabrics
-      ?? nodeState.operationalCredentials?.fabrics
-      ?? nodeState.operationalCredentialsServer?.fabrics
-      ?? [];
-    // FabricManager is the authoritative source in Matter.js 0.17+. State
-    // snapshots can lag after upgrades and incorrectly classify a paired node
-    // as pending even though it owns operational fabrics.
-    try {
-      const managedFabrics = endpoint?.serverNode?.env?.get?.(FabricManager)?.fabrics;
-      if (Array.isArray(managedFabrics)) rawFabrics = managedFabrics;
-    } catch {
-      // Older Matterbridge versions may not expose the Environment here.
-    }
-    const fabrics = Array.isArray(rawFabrics) ? rawFabrics : Object.values(rawFabrics ?? {});
+    // Matterbridge can retain an empty legacy fabric record while the current
+    // OperationalCredentials behavior already contains the real fabrics. Pick
+    // the first non-empty representation instead of letting an empty array
+    // mask the live state.
+    const fabricSources = [
+      commissioning.fabrics,
+      nodeState.operationalCredentials?.fabrics,
+      nodeState.operationalCredentialsServer?.fabrics,
+    ];
+    const fabrics = fabricSources
+      .map((source) => Array.isArray(source) ? source : Object.values(source ?? {}))
+      .find((source) => source.length > 0) ?? [];
     const controllerNames = [...new Set(fabrics
       .map((fabric: any) => fabric?.label ?? fabric?.fabricLabel ?? fabric?.name)
       .filter((label): label is string => typeof label === 'string' && label.trim().length > 0))];

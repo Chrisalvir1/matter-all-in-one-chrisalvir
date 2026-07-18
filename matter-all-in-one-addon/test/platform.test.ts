@@ -84,11 +84,13 @@ describe('HomeAssistantPlatform', () => {
     });
   });
 
-  it('uses the Matter FabricManager when the compatibility state has not refreshed yet', () => {
+  it('uses current operational credential fabrics when compatibility state has not refreshed yet', () => {
     const connection = (platform as any).getMatterConnectionInfo({
       serverNode: {
-        state: { commissioning: { commissioned: false, fabrics: [] } },
-        env: { get: () => ({ fabrics: [{ label: 'Casa Matter' }] }) },
+        state: {
+          commissioning: { commissioned: false, fabrics: [] },
+          operationalCredentials: { fabrics: [{ label: 'Casa Matter' }] },
+        },
       },
     });
 

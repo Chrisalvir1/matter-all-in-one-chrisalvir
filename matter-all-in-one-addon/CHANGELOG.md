@@ -1,3 +1,9 @@
+## 1.2.45
+
+### Fixed
+
+- **Runtime Dependency Regression:** Removida la importación inválida de `@matter/protocol` que causaba que el plugin colapsara durante el inicio (startup) en el entorno de producción de Home Assistant (Matterbridge). La lógica de lectura de *fabrics* ahora utiliza exclusivamente los snapshots nativos en su lugar.
+
 ## 1.2.44
 
 ### Fixed
