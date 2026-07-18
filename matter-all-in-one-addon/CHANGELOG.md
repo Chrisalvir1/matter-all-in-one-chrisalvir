@@ -1,3 +1,9 @@
+## 1.2.47
+
+### Fixed
+
+- **Node Reusability:** Corregida la restauración de accesorios Matter ya emparejados. Tras una desconexión transitoria de Home Assistant, el sistema ahora detecta y reutiliza los nodos de servidor preexistentes conservados en memoria por Matterbridge, evitando errores de duplicidad ("Device with name is already registered") y manteniendo el estado legítimo de emparejamiento.
+
 ## 1.2.46
 
 ### Fixed

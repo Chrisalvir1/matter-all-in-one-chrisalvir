@@ -112,6 +112,22 @@ describe('HomeAssistantPlatform', () => {
       .toBe(legacyEndpoint);
   });
 
+  it('reuses an already registered Matter endpoint instead of creating a duplicate after reconnect', async () => {
+    await platform.onStart();
+    platform.ha.emit('connected', '2026.6.0');
+    await new Promise(resolve => setTimeout(resolve, 100));
+    const existingEndpoint = {
+      uniqueId: 'light_living_room',
+      deviceName: 'Living Room Lamp',
+      serverNode: { state: { commissioning: { commissioned: true } } },
+    };
+    (platform as any).getDeviceByUniqueId = vi.fn().mockReturnValue(existingEndpoint);
+
+    await (platform as any).activateEntity('light.living_room');
+
+    expect((platform as any).matterbridgeDevices.get('light.living_room')).toBe(existingEndpoint);
+  });
+
   it('marks fan and light sharing a device_id as one composite before either is activated', async () => {
     await platform.onStart();
     await new Promise(resolve => setTimeout(resolve, 100));

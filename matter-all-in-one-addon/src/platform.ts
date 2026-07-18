@@ -696,6 +696,17 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
     const info = this.getHaRegistryInfo(entityId);
     const nodeName = candidate.config?.friendly_name || candidate.config?.name || info.device_name || this.entities.get(entityId)?.state.attributes.friendly_name || entityId;
+    // Discovery can run again after a Home Assistant reconnect. Matterbridge
+    // retains the already commissioned ServerNode, so registering another
+    // endpoint with the same name is rejected. Reuse that live node instead.
+    const existingEndpoint = this.getDeviceByName(nodeName);
+    if (existingEndpoint?.serverNode) {
+      this.matterbridgeDevices.set(this.compositeStorageKey(candidate.deviceId), existingEndpoint);
+      candidate.members.forEach((member) => this.compositeMembership.set(member.entityId, candidate.deviceId));
+      this.log.notice(`Reused existing Matter node ${idn}${nodeName}${rs}; it remains paired and was not recreated.`);
+      return;
+    }
+
     const composite = new CompositeDeviceEntity(this, candidate.deviceId, nodeName, candidate.members, candidate.config?.primary_entity);
     const endpoint = await composite.createEndpoint();
     await this.registerDevice(endpoint);
@@ -720,6 +731,20 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
     try {
       const endpoint = await entity.createEndpoint();
+      // The platform may already own this endpoint after a transient HA
+      // disconnect. Re-registering would produce "already registered" and
+      // incorrectly make a commissioned accessory look pending.
+      const existingEndpoint = endpoint.uniqueId
+        ? this.getDeviceByUniqueId(endpoint.uniqueId)
+        : endpoint.deviceName
+          ? this.getDeviceByName(endpoint.deviceName)
+          : undefined;
+      if (existingEndpoint?.serverNode) {
+        entity.endpoint = existingEndpoint;
+        this.matterbridgeDevices.set(entityId, existingEndpoint);
+        this.log.notice(`Reused existing Matter endpoint ${idn}${entityId}${rs}; it remains paired and was not recreated.`);
+        return;
+      }
       await this.registerDevice(endpoint);
       // Matterbridge creates the ServerNode during registerDevice(), but nodes
       // added dynamically after the initial startup interval are not started
