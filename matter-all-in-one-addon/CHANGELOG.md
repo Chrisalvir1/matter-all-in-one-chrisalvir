@@ -1,3 +1,10 @@
+## 1.2.42
+
+### Added
+
+- **NPM Package Metadata:** Añadidos los enlaces de repositorio, bugs y homepage al paquete para mejorar su visibilidad en el registro NPM.
+- **Trusted Publishing:** Migrada la publicación automatizada de GitHub Actions a OIDC Trusted Publishing, eliminando la dependencia de tokens (NPM_TOKEN) y habilitando *provenance* nativo.
+
 ## 1.2.41
 
 ### Fixed
