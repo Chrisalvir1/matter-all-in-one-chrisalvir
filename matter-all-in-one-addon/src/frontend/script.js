@@ -1,12 +1,14 @@
 'use strict';
 
 const API = './api/custom';
-const state = { entities: [], activeDevice: null, activeEntity: null, statusBusy: false, devicesBusy: false, confirmAction: null, toastTimer: null };
+const state = { entities: [], activeDevice: null, activeEntity: null, activeFilter: 'all', statusBusy: false, devicesBusy: false, confirmAction: null, toastTimer: null };
 const $ = (id) => document.getElementById(id);
 const els = {
   bridgeOrb: $('bridge-orb'), bridgeTitle: $('bridge-title'), bridgeDescription: $('bridge-description'),
   haDot: $('ha-dot'), haStatus: $('ha-status'), version: $('version'), deviceSearch: $('device-search'),
   deviceCount: $('device-count'), deviceList: $('device-list'), refreshButton: $('refresh-button'),
+  overviewMessage: $('overview-message'), statDevices: $('stat-devices'), statExported: $('stat-exported'), statPaired: $('stat-paired'),
+  issueCount: $('issue-count'), diagnosticsPanel: $('diagnostics-panel'), diagnosticsSummary: $('diagnostics-summary'), diagnosticsList: $('diagnostics-list'),
   deviceModal: $('device-modal'), deviceModalClose: $('device-modal-close'), deviceModalIcon: $('device-modal-icon'),
   deviceModalName: $('device-modal-name'), deviceModalId: $('device-modal-id'), entityList: $('entity-list'),
   modalExportCount: $('modal-export-count'), selectionPanel: $('selection-panel'), selectionTitle: $('selection-title'),
@@ -95,12 +97,23 @@ function groupEntities(entities) {
 function renderDevices() {
   const query = els.deviceSearch.value.trim().toLowerCase();
   const filtered = state.entities.filter((entity) =>
+    matchesFilter(entity) &&
     [displayName(entity), entity.entityId, entity.device_name, entity.area_name, entity.domain].some((value) =>
       String(value || '').toLowerCase().includes(query)
     )
   );
   const devices = groupEntities(filtered);
   const exportedNodes = new Set(state.entities.filter((entity) => entity.exported).map(matterNodeKey)).size;
+  const allDevices = groupEntities(state.entities);
+  const pairedNodes = new Set(state.entities.filter((entity) => entity.exported && entity.commissioned).map(matterNodeKey)).size;
+  const issues = state.entities.filter((entity) => entity.hasIssue).length;
+  els.statDevices.textContent = String(allDevices.length);
+  els.statExported.textContent = String(exportedNodes);
+  els.statPaired.textContent = String(pairedNodes);
+  els.issueCount.textContent = String(issues);
+  els.overviewMessage.textContent = exportedNodes
+    ? `${exportedNodes} accesorio${exportedNodes === 1 ? '' : 's'} listo${exportedNodes === 1 ? '' : 's'} para Matter`
+    : 'Selecciona un dispositivo para comenzar';
   els.deviceCount.textContent = `${devices.length} dispositivo${devices.length === 1 ? '' : 's'} · ${exportedNodes} accesorio${exportedNodes === 1 ? '' : 's'} activo${exportedNodes === 1 ? '' : 's'} en Matter`;
   els.deviceList.setAttribute('aria-busy', 'false');
   if (!devices.length) {
@@ -110,12 +123,21 @@ function renderDevices() {
   els.deviceList.replaceChildren(...devices.map(buildDeviceCard));
 }
 
+function matchesFilter(entity) {
+  if (state.activeFilter === 'active') return entity.exported;
+  if (state.activeFilter === 'pending') return entity.exported && !entity.commissioned;
+  if (state.activeFilter === 'unpublished') return !entity.exported && !entity.auxiliary;
+  if (state.activeFilter === 'issues') return entity.hasIssue;
+  return true;
+}
+
 function buildDeviceCard(device) {
   const exported = device.entities.filter((entity) => entity.exported).length;
   const domains = [...new Set(device.entities.map((entity) => entity.domain))].sort((a, b) => PRIORITY.indexOf(a) - PRIORITY.indexOf(b));
   const element = document.createElement('article');
-  element.className = 'device-card';
-  element.innerHTML = `<div class="card-top"><span class="device-icon">${icon(domains[0])}</span><span class="export-badge ${exported ? 'active' : ''}">${exported}/${device.entities.length}</span></div><h3 title="${escapeHtml(device.name)}">${escapeHtml(device.name)}</h3><p class="device-meta">${escapeHtml(device.area || device.manufacturer || 'Sin área asignada')}</p><div class="tags">${domains.slice(0, 3).map((domain) => `<span class="tag">${escapeHtml(domain)}</span>`).join('')}</div><div class="card-footer"><span class="entity-summary">${device.entities.length} entidad${device.entities.length === 1 ? '' : 'es'}</span><button class="button button-secondary" type="button">Configurar</button></div>`;
+  const hasIssue = device.entities.some((entity) => entity.hasIssue);
+  element.className = `device-card${hasIssue ? ' needs-attention' : ''}`;
+  element.innerHTML = `<div class="card-top"><span class="device-icon">${icon(domains[0])}</span><span class="export-badge ${exported ? 'active' : ''}">${exported}/${device.entities.length}</span></div><h3 title="${escapeHtml(device.name)}">${escapeHtml(device.name)}</h3><p class="device-meta">${escapeHtml(device.area || device.manufacturer || 'Sin área asignada')}</p><div class="tags">${hasIssue ? '<span class="tag tag-warning">Revisar</span>' : ''}${domains.slice(0, 3).map((domain) => `<span class="tag">${escapeHtml(domain)}</span>`).join('')}</div><div class="card-footer"><span class="entity-summary">${device.entities.length} entidad${device.entities.length === 1 ? '' : 'es'}</span><button class="button button-secondary" type="button">Configurar</button></div>`;
   element.querySelector('button').addEventListener('click', () => openDevice(device));
   return element;
 }
@@ -246,6 +268,7 @@ function selectEntity(entity) {
     els.selectionDescription.textContent = '';
     els.selectionMeta.innerHTML = '';
     els.selectionStatus.textContent = '';
+    els.diagnosticsPanel.hidden = true;
     renderQrSection(null);
     return;
   }
@@ -301,9 +324,29 @@ function selectEntity(entity) {
           : '✓ Publicada como accesorio Matter — pendiente de emparejar')
       : entity.composite && entity.entityId !== entity.compositePrimaryEntityId
         ? 'Integrada: se publica junto con la entidad principal'
-        : 'Aún no se publica en Matter';
+      : 'Aún no se publica en Matter';
 
+  renderDiagnostics(entity);
   renderQrSection(entity);
+}
+
+function renderDiagnostics(entity) {
+  const diagnostics = Array.isArray(entity.diagnostics) ? diagnostics : [];
+  if (!entity.hasIssue && diagnostics.length === 0) {
+    els.diagnosticsPanel.hidden = true;
+    return;
+  }
+  els.diagnosticsPanel.hidden = false;
+  els.diagnosticsSummary.textContent = entity.hasIssue
+    ? 'Este accesorio necesita atención. Se conserva el detalle más reciente para facilitar el diagnóstico.'
+    : 'Historial reciente de incidencias ya resueltas.';
+  els.diagnosticsList.replaceChildren(...diagnostics.slice(0, 5).map((item) => {
+    const row = document.createElement('li');
+    const date = new Date(item.timestamp);
+    const time = Number.isNaN(date.getTime()) ? '' : date.toLocaleString();
+    row.innerHTML = `<span class="diagnostic-level ${item.level === 'warning' ? 'warning' : ''}">${item.level === 'warning' ? 'Aviso' : 'Error'}</span><div><strong>${escapeHtml(item.message)}</strong><small>${escapeHtml(time)}</small></div>`;
+    return row;
+  }));
 }
 
 function profileCompatibilityText(compatibility) {
@@ -363,6 +406,11 @@ function showQrCode(entity) {
 }
 
 els.deviceSearch.addEventListener('input', renderDevices);
+document.querySelectorAll('.filter-chip').forEach((button) => button.addEventListener('click', () => {
+  state.activeFilter = button.dataset.filter || 'all';
+  document.querySelectorAll('.filter-chip').forEach((chip) => chip.classList.toggle('active', chip === button));
+  renderDevices();
+}));
 els.profileSelect.addEventListener('change', () => { if (state.activeEntity) void updateProfile(state.activeEntity, els.profileSelect.value); });
 
 els.deviceQrButton.addEventListener('click', () => {

@@ -57,6 +57,12 @@ export interface CompositeDeviceConfig {
   room?: string;
 }
 
+interface EntityDiagnostic {
+  timestamp: string;
+  level: 'error' | 'warning';
+  message: string;
+}
+
 export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   public ha!: HomeAssistant;
   public entities = new Map<string, BaseEntity>();
@@ -81,6 +87,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
    * piling up behind slow controller subscriptions.
    */
   private readonly pendingStateUpdates = new Map<string, HassState>();
+  /** Recent, entity-scoped failures shown in the UI for troubleshooting. */
+  private readonly entityDiagnostics = new Map<string, EntityDiagnostic[]>();
+  private readonly entityProblems = new Set<string>();
+  private diagnosticSaveTimer?: NodeJS.Timeout;
   private stateUpdateFlushScheduled = false;
   private syncInFlight?: Promise<void>;
 
@@ -96,6 +106,52 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
   private compositeStorageKey(deviceId: string): string {
     return `device:${deviceId}`;
+  }
+
+  private recordEntityDiagnostic(entityId: string, message: string, level: EntityDiagnostic['level'] = 'error') {
+    const diagnostics = this.entityDiagnostics.get(entityId) ?? [];
+    const latest = diagnostics[0];
+    // State events can be duplicated by HA. Keep the history useful rather
+    // than recording the same issue hundreds of times.
+    if (!latest || latest.message !== message || Date.now() - Date.parse(latest.timestamp) > 30_000) {
+      diagnostics.unshift({ timestamp: new Date().toISOString(), level, message });
+      diagnostics.splice(30);
+      this.entityDiagnostics.set(entityId, diagnostics);
+      this.scheduleDiagnosticsSave();
+    }
+    this.entityProblems.add(entityId);
+  }
+
+  private clearEntityProblem(entityId: string) {
+    this.entityProblems.delete(entityId);
+  }
+
+  private recordConnectionProblem(message: string) {
+    for (const entityId of this.entities.keys()) this.recordEntityDiagnostic(entityId, message, 'warning');
+  }
+
+  private scheduleDiagnosticsSave() {
+    if (this.diagnosticSaveTimer) clearTimeout(this.diagnosticSaveTimer);
+    this.diagnosticSaveTimer = setTimeout(() => {
+      const saved = Object.fromEntries(this.entityDiagnostics.entries());
+      void fs.writeFile('/data/entity-diagnostics.json', JSON.stringify(saved, null, 2), 'utf8')
+        .catch((error) => this.log.warn(`Unable to save entity diagnostics: ${error}`));
+    }, 250);
+  }
+
+  private async loadEntityDiagnostics() {
+    try {
+      const raw = await fs.readFile('/data/entity-diagnostics.json', 'utf8');
+      const saved = JSON.parse(raw) as Record<string, EntityDiagnostic[]>;
+      for (const [entityId, diagnostics] of Object.entries(saved)) {
+        if (!Array.isArray(diagnostics)) continue;
+        this.entityDiagnostics.set(entityId, diagnostics
+          .filter((entry) => entry && typeof entry.message === 'string' && typeof entry.timestamp === 'string')
+          .slice(0, 30));
+      }
+    } catch {
+      // The diagnostics file is optional and is created on the first issue.
+    }
   }
 
   private getCompositeConfig(deviceId: string): CompositeDeviceConfig | undefined {
@@ -246,15 +302,18 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   private setupHaListeners() {
     this.ha.on('connected', (version) => {
       this.log.notice(`Connected to Home Assistant ${version}`);
+      for (const entityId of this.entities.keys()) this.clearEntityProblem(entityId);
       void this.discoverAndSync();
     });
 
     this.ha.on('disconnected', () => {
       this.log.warn('Disconnected from Home Assistant');
+      this.recordConnectionProblem('Home Assistant se desconectó. Se reintentará la conexión automáticamente.');
     });
 
     this.ha.on('error', (err) => {
       this.log.error(`Home Assistant connection error: ${err}`);
+      this.recordConnectionProblem(`Error de conexión con Home Assistant: ${String(err)}`);
     });
 
     this.ha.on('event', (_deviceId, entityId, _oldState, newState) => {
@@ -269,6 +328,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
    */
   override async onStart(reason?: string) {
     this.log.info(`Starting HomeAssistant platform: ${reason ?? ''}`);
+    await this.loadEntityDiagnostics();
     this.startUiServer();
 
     // ── Resolve Home Assistant URL ─────────────────────────────────────────
@@ -562,6 +622,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       this.log.notice(`Exported bridged endpoint ${idn}${entityId}${rs}`);
     } catch (err) {
       this.log.error(`Failed to activate entity ${entityId}: ${err}`);
+      this.recordEntityDiagnostic(entityId, `No se pudo publicar el accesorio Matter: ${String(err)}`);
       throw err;
     }
   }
@@ -599,6 +660,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     } catch (err) {
       this.exportedDevices.delete(entityId);
       this.log.error(`Failed to manually register ${entityId}: ${err}`);
+      this.recordEntityDiagnostic(entityId, `No se pudo publicar manualmente: ${String(err)}`);
       return { success: false, error: String(err) };
     }
   }
@@ -645,6 +707,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       return { success: true };
     } catch (err) {
       this.log.error(`Failed to manually unregister ${entityId}: ${err}`);
+      this.recordEntityDiagnostic(entityId, `No se pudo retirar el accesorio: ${String(err)}`);
       return { success: false, error: String(err) };
     }
   }
@@ -668,6 +731,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       return { success: true };
     } catch (error) {
       this.log.error(`Failed to factory reset Matter accessory ${entityId}: ${error}`);
+      this.recordEntityDiagnostic(entityId, `No se pudo restablecer Matter: ${String(error)}`);
       return { success: false, error: String(error) };
     }
   }
@@ -711,6 +775,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       return { success: true };
     } catch (error) {
       this.log.error(`Failed to update Matter profile for ${entityId}: ${error}`);
+      this.recordEntityDiagnostic(entityId, `No se pudo actualizar el perfil Matter: ${String(error)}`);
       return { success: false, error: String(error) };
     }
   }
@@ -726,6 +791,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       return;
     }
     entity.state = newState;
+    if (isUnavailable(newState)) {
+      this.recordEntityDiagnostic(entityId, `Home Assistant informa el estado “${newState.state}”.`, 'warning');
+    }
     if (this.isEntityExported(entityId)) this.queueStateUpdate(entityId, newState);
   }
 
@@ -740,7 +808,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     this.stateUpdateFlushScheduled = false;
     const updates = [...this.pendingStateUpdates.entries()];
     this.pendingStateUpdates.clear();
-    await Promise.allSettled(
+    const results = await Promise.allSettled(
       updates.map(async ([entityId, state]) => {
         const compositeDeviceId = this.compositeMembership.get(entityId);
         if (compositeDeviceId) {
@@ -748,9 +816,20 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           return;
         }
         const entity = this.entities.get(entityId);
-        if (entity && this.isEntityExported(entityId)) await entity.updateState(state);
+        if (entity && this.isEntityExported(entityId)) {
+          await entity.updateState(state);
+          if (!isUnavailable(state)) this.clearEntityProblem(entityId);
+        }
       }),
     );
+    results.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        const [entityId] = updates[index];
+        const message = `No se pudo sincronizar el estado con Matter: ${String(result.reason)}`;
+        this.log.error(`${message} (${entityId})`);
+        this.recordEntityDiagnostic(entityId, message);
+      }
+    });
     if (this.pendingStateUpdates.size && !this.stateUpdateFlushScheduled) {
       this.stateUpdateFlushScheduled = true;
       setImmediate(() => void this.flushStateUpdates());
@@ -944,6 +1023,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               manualPairingCode: endpoint?.serverNode?.state?.commissioning?.pairingCodes?.manualPairingCode ?? null,
               commissioned: endpoint?.serverNode?.state?.commissioning?.commissioned ?? false,
               homeName,
+              hasIssue: this.entityProblems.has(e.entityId) || isUnavailable(e.state),
+              diagnostics: this.entityDiagnostics.get(e.entityId) ?? [],
             };
           });
           res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });

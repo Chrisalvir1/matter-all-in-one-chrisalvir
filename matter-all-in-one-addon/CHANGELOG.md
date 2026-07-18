@@ -1,3 +1,21 @@
+## 1.2.40
+
+### Added
+
+- **UI Liquid Glass Mejorada:**
+  - Panel visual interactivo con resumen de dispositivos y métricas en tiempo real.
+  - Filtros dinámicos de visualización: Todos, En Matter, Por emparejar, Sin publicar y Necesitan atención.
+  - Micro-animaciones tipo resorte/rebote integradas en filtros, paneles laterales y modales.
+  - Sección de diagnóstico por entidad con historial completo de errores.
+- **Persistencia de Diagnósticos:** Historial de eventos guardado de forma persistente en `/data/entity-diagnostics.json`, reteniendo hasta 30 eventos por entidad.
+
+### Changed
+
+- **Matterbridge:** Actualizado a la versión `3.10.0`.
+- **Matter SDK:** Gestión de SDK de Matter controlada por Matterbridge en su versión `0.17.5` (`@matter/main`, `@matter/node`, `@matter/nodejs`).
+- **Compatibilidad Matter:** Confirmada y optimizada para el estándar Matter `1.6.0`.
+- **Docker:** Imagen base actualizada con soporte para Matterbridge `3.10.0` manteniendo Node.js en su versión 24 LTS.
+
 ## 1.2.39
 
 ### Fixed

@@ -48,8 +48,8 @@
     <main class="content">
       <header class="content-header">
         <div>
-          <p class="eyebrow">PUBLICACIÓN CONTROLADA</p>
-          <h2>Dispositivos</h2>
+          <p class="eyebrow"><span class="eyebrow-pulse" aria-hidden="true"></span>PUBLICACIÓN CONTROLADA</p>
+          <h2>Tu espacio Matter</h2>
           <p class="lead">Activa la entidad principal para publicar el dispositivo físico. Sus capacidades compatibles se integran como endpoints bajo un único código Matter.</p>
         </div>
         <label class="search" for="device-search">
@@ -58,10 +58,20 @@
         </label>
       </header>
 
+      <section class="overview" aria-label="Resumen de dispositivos">
+        <div class="overview-main">
+          <span class="overview-icon" aria-hidden="true">✦</span>
+          <div><span class="overview-label">CENTRO DE CONTROL</span><strong id="overview-message">Preparando tus accesorios…</strong></div>
+        </div>
+        <div class="overview-stat"><span>Dispositivos</span><strong id="stat-devices">—</strong></div>
+        <div class="overview-stat"><span>En Matter</span><strong id="stat-exported">—</strong></div>
+        <div class="overview-stat"><span>Emparejados</span><strong id="stat-paired">—</strong></div>
+      </section>
+
       <section class="info-banner" aria-label="Información de emparejamiento">
-        <span class="info-icon" aria-hidden="true">i</span>
+        <span class="info-icon" aria-hidden="true">✦</span>
         <div>
-          <strong>Emparejamiento seguro</strong>
+          <strong>Un dispositivo, un único acceso Matter</strong>
           <p>Cada dispositivo físico tiene un único código QR y manual de emparejamiento. Los endpoints integrados comparten ese código.</p>
         </div>
       </section>
@@ -69,6 +79,14 @@
       <div class="toolbar">
         <span id="device-count">Cargando entidades…</span>
         <button class="text-button" id="refresh-button" type="button">Actualizar</button>
+      </div>
+
+      <div class="filter-bar" role="group" aria-label="Filtrar dispositivos">
+        <button class="filter-chip active" type="button" data-filter="all">Todos</button>
+        <button class="filter-chip" type="button" data-filter="active">En Matter</button>
+        <button class="filter-chip" type="button" data-filter="pending">Por emparejar</button>
+        <button class="filter-chip" type="button" data-filter="unpublished">Sin publicar</button>
+        <button class="filter-chip filter-chip-warning" type="button" data-filter="issues">Necesitan atención <span id="issue-count">0</span></button>
       </div>
 
       <section class="device-grid" id="device-list" aria-live="polite" aria-busy="true">
@@ -104,6 +122,11 @@
           </label>
           <dl class="selection-meta" id="selection-meta"></dl>
           <div class="selection-status" id="selection-status"></div>
+          <section class="diagnostics-panel" id="diagnostics-panel" hidden aria-live="polite">
+            <div class="diagnostics-heading"><span aria-hidden="true">!</span><strong>Diagnóstico de esta entidad</strong></div>
+            <p id="diagnostics-summary"></p>
+            <ul id="diagnostics-list"></ul>
+          </section>
           <div id="device-qr-container" style="display: none; text-align: center; margin-top: 1rem;">
             <div id="device-qr-code" style="display: inline-block; background: white; padding: 1rem; border-radius: 8px;"></div>
             <p id="device-manual-code" style="margin-top: 0.5rem; font-family: monospace; user-select: all; font-weight: bold;"></p>
