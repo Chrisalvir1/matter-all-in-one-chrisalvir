@@ -1,3 +1,10 @@
+## 1.2.41
+
+### Fixed
+
+- **CI/CD Build Pipeline:** Eliminados los paquetes de ESLint incompatibles con TypeScript 7.0.2 que provocaban errores de compilación y publicación en GitHub Actions.
+- **NPM Config Warnings:** Resuelto el warning de `npm config always-auth` que aparecía durante la instalación de dependencias en el flujo de publicación.
+
 ## 1.2.40
 
 ### Added
