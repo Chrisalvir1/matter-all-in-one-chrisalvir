@@ -96,6 +96,7 @@ export class VacuumEntity extends BaseEntity {
     this.endpoint.vendorName = 'Home Assistant';
     this.endpoint.productId = 0x8000;
     this.endpoint.productName = 'Robotic Vacuum Cleaner';
+    this.applyMatterbridgeFirmware();
 
     // Keep Basic Information aligned with the bridge identity instead of
     // impersonating a physical manufacturer or model.

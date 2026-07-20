@@ -39,6 +39,7 @@ export class CooktopEntity extends BaseEntity {
     this.endpoint.vendorName = 'Samsung by Chrisalvir';
     this.endpoint.productId = 0x8000;
     this.endpoint.productName = 'Samsung Cooktop';
+    this.applyMatterbridgeFirmware();
 
     // Add a single cooking surface representing the hotplate/burner
     this.surface = this.endpoint.addSurface(

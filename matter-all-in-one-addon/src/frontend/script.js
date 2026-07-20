@@ -34,8 +34,9 @@ function matterNodeKey(entity) { return entity.compositeDeviceId ? `device:${ent
 
 async function request(path, options) {
   const response = await fetch(`${API}${path}`, options);
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  return response.json();
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(payload?.error || `HTTP ${response.status}`);
+  return payload;
 }
 
 function showToast(message, error = false) {
@@ -351,7 +352,10 @@ function selectEntity(entity) {
 function renderDiagnostics(entity) {
   const diagnostics = Array.isArray(entity.diagnostics) ? entity.diagnostics : [];
   const logs = Array.isArray(entity.logs) ? entity.logs : [];
-  if (!entity.exported && !entity.hasIssue && diagnostics.length === 0 && logs.length === 0) {
+  // Diagnostics are historical, but the yellow panel is a live health
+  // indicator. Do not keep a working accessory visually in an error state
+  // merely because it had an earlier warning in the log buffer.
+  if (!entity.exported || !entity.hasIssue) {
     els.diagnosticsPanel.hidden = true;
     return;
   }

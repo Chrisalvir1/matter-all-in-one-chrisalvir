@@ -44,6 +44,7 @@ export class OvenEntity extends BaseEntity {
     this.endpoint.vendorName = 'Samsung by Chrisalvir';
     this.endpoint.productId = 0x8000;
     this.endpoint.productName = 'Samsung Cooker';
+    this.applyMatterbridgeFirmware();
 
     // Add a single cavity cabinet to control the oven
     this.cabinet = this.endpoint.addCabinet(

@@ -21,6 +21,7 @@ export class MediaPlayerEntity extends BaseEntity {
     this.endpoint.vendorName = 'Home Assistant';
     this.endpoint.productId = 0x8000;
     this.endpoint.productName = 'Basic Video Player';
+    this.applyMatterbridgeFirmware();
     this.registerCommandHandlers();
     return this.endpoint;
   }

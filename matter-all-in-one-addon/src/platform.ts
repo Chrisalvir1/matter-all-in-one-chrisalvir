@@ -859,7 +859,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
    */
   public async resetMatterAccessory(entityId: string): Promise<{ success: boolean; error?: string }> {
     const compositeDeviceId = this.compositeMembership.get(entityId) ?? this.getCompositeCandidate(entityId)?.deviceId;
-    const endpoint = this.matterbridgeDevices.get(compositeDeviceId ? this.compositeStorageKey(compositeDeviceId) : entityId) as any;
+    const endpoint = this.getMatterEndpointForEntity(entityId, compositeDeviceId);
     const serverNode = endpoint?.serverNode;
     if (!endpoint || !serverNode) {
       return { success: false, error: 'El accesorio Matter no está activo o su nodo aún no está listo.' };
@@ -867,6 +867,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
     try {
       await serverNode.erase();
+      // Matter.js recreates the commissioning state during erase(), but an
+      // explicitly started node is needed when this happens after startup.
+      if (!serverNode.lifecycle?.isOnline) await serverNode.start();
+      this.clearMatterAccessoryProblems(entityId, compositeDeviceId);
       this.log.notice(`Matter factory reset completed for ${idn}${compositeDeviceId ? `device:${compositeDeviceId}` : entityId}${rs}`);
       return { success: true };
     } catch (error) {
@@ -879,16 +883,18 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   /** Refresh a single node's Matter advertisement without removing fabrics. */
   public async refreshMatterAccessory(entityId: string): Promise<{ success: boolean; error?: string }> {
     const compositeDeviceId = this.compositeMembership.get(entityId) ?? this.getCompositeCandidate(entityId)?.deviceId;
-    const endpoint = this.matterbridgeDevices.get(compositeDeviceId ? this.compositeStorageKey(compositeDeviceId) : entityId) as any;
+    const endpoint = this.getMatterEndpointForEntity(entityId, compositeDeviceId);
     const serverNode = endpoint?.serverNode;
     if (!endpoint || !serverNode) {
       return { success: false, error: 'El accesorio Matter no está activo o su nodo aún no está listo.' };
     }
     try {
-      // start() is intentionally idempotent. For an online node it refreshes
-      // the requested state safely; for a node that came up late it makes sure
-      // it is serving before the UI reports it as ready.
+      // `close()` permanently disposes a Matter.js ServerNode and cannot be
+      // followed by start(). A soft reset refreshes its live operational state
+      // and sessions without deleting fabrics or the pairing credentials.
+      await serverNode.reset();
       await serverNode.start();
+      this.clearMatterAccessoryProblems(entityId, compositeDeviceId);
       this.log.notice(`Matter connection refresh requested for ${idn}${compositeDeviceId ? `device:${compositeDeviceId}` : entityId}${rs}`);
       return { success: true };
     } catch (error) {
@@ -896,6 +902,16 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       this.recordEntityDiagnostic(entityId, `No se pudo actualizar el estado Matter: ${String(error)}`);
       return { success: false, error: String(error) };
     }
+  }
+
+  /** A successful connection or state sync means the accessory is healthy again. */
+  private clearMatterAccessoryProblems(entityId: string, compositeDeviceId?: string) {
+    if (compositeDeviceId) {
+      const composite = this.compositeDevices.get(compositeDeviceId);
+      composite?.members.forEach((member) => this.clearEntityProblem(member.entityId));
+      return;
+    }
+    this.clearEntityProblem(entityId);
   }
 
   private async saveExportedDevices() {
@@ -975,6 +991,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         const compositeDeviceId = this.compositeMembership.get(entityId);
         if (compositeDeviceId) {
           await this.compositeDevices.get(compositeDeviceId)?.updateEntity(entityId, state);
+          if (!isUnavailable(state)) this.clearMatterAccessoryProblems(entityId, compositeDeviceId);
           return;
         }
         const entity = this.entities.get(entityId);

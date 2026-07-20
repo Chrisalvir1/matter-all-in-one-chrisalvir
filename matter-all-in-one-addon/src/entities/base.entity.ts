@@ -29,6 +29,18 @@ export class BaseEntity {
   }
   public endpoint!: MatterbridgeEndpoint;
 
+  /**
+   * Matterbridge defaults endpoint firmware to 1.0.0.  That value is shown
+   * verbatim by HomeKit, so every server node must explicitly inherit the
+   * running Matterbridge version.
+   */
+  protected applyMatterbridgeFirmware(endpoint: MatterbridgeEndpoint = this.endpoint): void {
+    const version = String((this.platform as any).matterbridge?.matterbridgeVersion ?? 'Matterbridge');
+    const [major = 0, minor = 0, patch = 0] = version.split(/[-+.]/).map((part) => Number.parseInt(part, 10) || 0);
+    endpoint.softwareVersion = Math.min(0xffffffff, major * 1_000_000 + minor * 1_000 + patch);
+    endpoint.softwareVersionString = version.startsWith('Matterbridge') ? version : `Matterbridge ${version}`;
+  }
+
   constructor(
     platform: HomeAssistantPlatform,
     state: HassState,
@@ -109,6 +121,7 @@ export class BaseEntity {
       0x8000,
       this.endpoint.productName
     );
+    this.applyMatterbridgeFirmware();
 
     const isFanProfile = this.deviceType.code === 0x002b || this.deviceType.name.toLowerCase() === 'fan';
 
