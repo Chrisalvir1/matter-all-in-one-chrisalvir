@@ -38,6 +38,31 @@ describe('CompositeDeviceEntity', () => {
     expect(platform.ha.callService).toHaveBeenCalledWith('light', 'turn_on', 'light.sala');
   });
 
+  it('publishes warm/cold fan lights as ColorTemperatureLight and sends modern HA kelvin commands', async () => {
+    const composite = new CompositeDeviceEntity(platform, 'bedroom-fan', 'Ventilador Recámara', [
+      { entityId: 'fan.bedroom', state: state('fan.bedroom', 'off') },
+      {
+        entityId: 'light.bedroom_main_light',
+        state: state('light.bedroom_main_light', 'on', {
+          color_mode: 'color_temp',
+          min_color_temp_kelvin: 2200,
+          max_color_temp_kelvin: 6500,
+        }),
+      },
+    ]);
+
+    const root = await composite.createEndpoint();
+    const light = composite.endpoints.get('light.bedroom_main_light') as any;
+    expect(light.deviceTypes[0]).toMatchObject({ code: 0x010c });
+    expect(light.clusterServers.size).toBeGreaterThan(2);
+
+    await light.invokeCommand('moveToColorTemperature', { colorTemperatureMireds: 250 });
+    expect(platform.ha.callService).toHaveBeenCalledWith('light', 'turn_on', 'light.bedroom_main_light', {
+      color_temp_kelvin: 4000,
+    });
+    expect((root as any).children.has('light_bedroom_main_light')).toBe(true);
+  });
+
   it('creates a lock-rooted Matter node with contact sensor integrated', async () => {
     const composite = new CompositeDeviceEntity(platform, 'switchbot-lock', 'Llavin SwitchBot', [
       { entityId: 'lock.llavin_switchbot', state: state('lock.llavin_switchbot', 'locked') },

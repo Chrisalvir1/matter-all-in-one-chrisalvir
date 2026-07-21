@@ -137,8 +137,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
    * unpaired accessory merely because a state property was renamed.
    */
   private getMatterConnectionInfo(endpoint: any) {
-    const nodeState = endpoint?.serverNode?.state ?? {};
-    const commissioning = nodeState.commissioning ?? nodeState.commissioningServer ?? {};
+    try {
+      const nodeState = endpoint?.serverNode?.state ?? {};
+      const commissioning = nodeState.commissioning ?? nodeState.commissioningServer ?? {};
     // Matterbridge can retain an empty legacy fabric record while the current
     // OperationalCredentials behavior already contains the real fabrics. Pick
     // the first non-empty representation instead of letting an empty array
@@ -156,7 +157,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       .filter((label): label is string => typeof label === 'string' && label.trim().length > 0))];
     const pairingCodes = commissioning.pairingCodes ?? nodeState.pairingCodes ?? {};
 
-    return {
+      return {
       // Fabrics are the authoritative proof of commissioning. Some
       // Matterbridge compatibility state can retain `commissioned: false`
       // while the current OperationalCredentials behavior already has fabrics.
@@ -169,7 +170,21 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       fabricCount: fabrics.length,
       pairingCode: pairingCodes.qrPairingCode ?? null,
       manualPairingCode: pairingCodes.manualPairingCode ?? null,
-    };
+      };
+    } catch (error) {
+      // A node that Matter.js is still tearing down can throw while reading
+      // its behavior-backed state. One bad accessory must not make the custom
+      // UI return 500 or stay on its loading screen.
+      this.log.warn(`Unable to read Matter connection state: ${String(error)}`);
+      return {
+        commissioned: false,
+        controllerNames: [],
+        homeName: null,
+        fabricCount: 0,
+        pairingCode: null,
+        manualPairingCode: null,
+      };
+    }
   }
 
   /**
@@ -814,19 +829,12 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       if (compositeDeviceId) {
         const key = this.compositeStorageKey(compositeDeviceId);
         this.exportedDevices.delete(key);
-        
-        if (this.compositeDevices.has(compositeDeviceId)) {
-          const endpoint = this.matterbridgeDevices.get(key) as any;
-          if (endpoint?.serverNode?.lifecycle?.isOnline) await endpoint.serverNode.close();
-          if (endpoint) await this.unregisterDevice(endpoint);
-          this.matterbridgeDevices.delete(key);
-          const composite = this.compositeDevices.get(compositeDeviceId);
-          composite?.members.forEach((member) => {
-            this.compositeMembership.delete(member.entityId);
-            this.exportedDevices.delete(member.entityId);
-          });
-          this.compositeDevices.delete(compositeDeviceId);
-        }
+        const candidate = this.getCompositeCandidate(entityId);
+        candidate?.members.forEach((member) => this.exportedDevices.delete(member.entityId));
+        // A reconnect can reuse a Matterbridge-owned node before this process
+        // has a CompositeDeviceEntity wrapper for it. It still needs the same
+        // teardown path; otherwise an old node remains advertised forever.
+        await this.disposeCompositeNode(compositeDeviceId);
         await this.saveExportedDevices();
         return { success: true };
       }
@@ -852,10 +860,27 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     }
   }
 
+  /** Stop and unregister a composite node while keeping its export selection. */
+  private async disposeCompositeNode(deviceId: string): Promise<void> {
+    const key = this.compositeStorageKey(deviceId);
+    const endpoint = this.matterbridgeDevices.get(key) as any;
+    if (endpoint?.serverNode?.lifecycle?.isOnline) await endpoint.serverNode.close();
+    if (endpoint) await this.unregisterDevice(endpoint);
+    this.matterbridgeDevices.delete(key);
+
+    const members = this.compositeDevices.get(deviceId)?.members
+      ?? Array.from(this.compositeMembership.entries())
+        .filter(([, memberDeviceId]) => memberDeviceId === deviceId)
+        .map(([memberId]) => ({ entityId: memberId }));
+    members.forEach((member) => this.compositeMembership.delete(member.entityId));
+    this.compositeDevices.delete(deviceId);
+  }
+
   /**
-   * Factory-reset one standalone Matter accessory without affecting other
-   * exported entities. This clears stale fabrics left behind by a controller
-   * that was removed without completing RemoveFabric.
+   * Factory-reset an accessory and rebuild its endpoint tree from the latest
+   * Home Assistant capabilities. Matter descriptors are immutable after
+   * commissioning, so erasing fabrics alone cannot add ColorControl to a
+   * light that was first published as on/off-only.
    */
   public async resetMatterAccessory(entityId: string): Promise<{ success: boolean; error?: string }> {
     const compositeDeviceId = this.compositeMembership.get(entityId) ?? this.getCompositeCandidate(entityId)?.deviceId;
@@ -867,11 +892,17 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
     try {
       await serverNode.erase();
-      // Matter.js recreates the commissioning state during erase(), but an
-      // explicitly started node is needed when this happens after startup.
-      if (!serverNode.lifecycle?.isOnline) await serverNode.start();
+      if (compositeDeviceId) {
+        await this.disposeCompositeNode(compositeDeviceId);
+        await this.activateComposite(entityId);
+      } else {
+        if (serverNode.lifecycle?.isOnline) await serverNode.close();
+        await this.unregisterDevice(endpoint);
+        this.matterbridgeDevices.delete(entityId);
+        await this.activateEntity(entityId);
+      }
       this.clearMatterAccessoryProblems(entityId, compositeDeviceId);
-      this.log.notice(`Matter factory reset completed for ${idn}${compositeDeviceId ? `device:${compositeDeviceId}` : entityId}${rs}`);
+      this.log.notice(`Matter factory reset and capability rebuild completed for ${idn}${compositeDeviceId ? `device:${compositeDeviceId}` : entityId}${rs}`);
       return { success: true };
     } catch (error) {
       this.log.error(`Failed to factory reset Matter accessory ${entityId}: ${error}`);

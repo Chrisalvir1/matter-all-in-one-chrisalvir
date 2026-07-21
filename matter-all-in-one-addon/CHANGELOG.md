@@ -554,3 +554,10 @@ All notable changes to this project will be documented in this file.
 - Video camera streaming management and RTSP/WebRTC support.
 - Soil moisture and temperature sensor mapping.
 - Automatic Supervisor API token and WebSocket host detection.
+## 1.2.49
+
+### Fixed
+
+- **Ventiladores con luz:** las luces de blanco cálido/frío ahora conservan el perfil `ColorTemperatureLight` aunque Home Assistant omita el valor de temperatura actual al estar apagadas; se usan también el modo y el rango Kelvin anunciados por el dispositivo.
+- **Reconstrucción Matter:** “Desconectar Matter” reconstruye el árbol de endpoints con las capacidades actuales tras borrar los fabrics, permitiendo que accesorios publicados anteriormente como on/off expongan `ColorControl` al emparejarse de nuevo.
+- **Estabilidad de UI:** la lectura de estado de un nodo Matter a medio desmontar ya no puede romper toda la respuesta de dispositivos ni dejar la interfaz cargando.

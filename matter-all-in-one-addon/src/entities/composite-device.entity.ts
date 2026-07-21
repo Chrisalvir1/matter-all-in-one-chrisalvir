@@ -18,7 +18,7 @@ import {
 import { ClusterId } from 'matterbridge/matter/types';
 import { safeSetAttribute, safeUpdateAttribute } from '../utils/matter-attributes.js';
 import type { HassState } from '../utils/ha-state.js';
-import { getDeviceTypeForEntity } from '../device-registry.js';
+import { getDeviceTypeForEntity, hasColorTemperatureCapability } from '../device-registry.js';
 
 type CompositePlatform = {
   log: any;
@@ -57,9 +57,7 @@ function lightClusterIds(state: HassState, deviceType: DeviceTypeDefinition): Cl
   const clusters: ClusterId[] = [OnOff.id];
   const modes: string[] = state.attributes.supported_color_modes ?? [];
   const hasBrightness = modes.includes('brightness') || state.attributes.brightness !== undefined;
-  const hasColorTemp = modes.includes('color_temp')
-    || state.attributes.color_temp !== undefined
-    || state.attributes.color_temp_kelvin !== undefined;
+  const hasColorTemp = hasColorTemperatureCapability(state.attributes);
   const hasRgb = modes.some((m) => ['hs', 'xy', 'rgb', 'rgbw', 'rgbww'].includes(m));
 
   const isOnOffProfile = deviceType.code === 0x0100 || deviceType.code === 0x010A; // OnOffLight or OnOffPlugInUnit
@@ -428,9 +426,13 @@ export class CompositeDeviceEntity {
         if (typeof mireds === 'number') {
           this.lastCommands.set('color_temp', { value: mireds, timestamp: Date.now() });
           const currentState = this.states.get(entityId);
-          const modes: string[] = currentState?.attributes.supported_color_modes ?? [];
-          // If HA device reports kelvin, send kelvin; otherwise send mireds
-          if (modes.includes('color_temp') || currentState?.attributes.color_temp_kelvin !== undefined) {
+          // Modern HA exposes its colour-temperature range in kelvin. Do not
+          // infer the unit from supported_color_modes: legacy integrations use
+          // that same mode name but expect mireds in the service payload.
+          const usesKelvin = currentState?.attributes.color_temp_kelvin !== undefined
+            || currentState?.attributes.min_color_temp_kelvin !== undefined
+            || currentState?.attributes.max_color_temp_kelvin !== undefined;
+          if (usesKelvin) {
             await this.platform.ha.callService('light', 'turn_on', entityId, {
               color_temp_kelvin: miredsToKelvin(mireds),
             });

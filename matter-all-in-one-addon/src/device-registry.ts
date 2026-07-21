@@ -136,12 +136,28 @@ export const DEVICE_CLASS_REGISTRY: Record<string, Record<string, DeviceRegistry
 };
 
 /** Select the narrowest light device type supported by the HA capabilities. */
+/**
+ * HA can omit the current `color_temp_kelvin` value while a light is off.
+ * Its supported mode, current mode and advertised min/max range are all
+ * capability evidence and must therefore be considered when the Matter
+ * endpoint is built.
+ */
+export function hasColorTemperatureCapability(attributes: Record<string, any> = {}): boolean {
+  const modes: string[] = attributes.supported_color_modes ?? [];
+  return modes.includes('color_temp')
+    || attributes.color_mode === 'color_temp'
+    || attributes.color_temp !== undefined
+    || attributes.color_temp_kelvin !== undefined
+    || attributes.min_color_temp_kelvin !== undefined
+    || attributes.max_color_temp_kelvin !== undefined;
+}
+
 export function getLightDeviceType(attributes: Record<string, any> = {}): DeviceTypeDefinition {
   const modes: string[] = attributes.supported_color_modes ?? [];
   if (modes.some((mode) => ['hs', 'xy', 'rgb', 'rgbw', 'rgbww'].includes(mode))) {
     return MatterDeviceTypes.extendedColorLight;
   }
-  if (modes.includes('color_temp') || attributes.color_temp !== undefined || attributes.color_temp_kelvin !== undefined) {
+  if (hasColorTemperatureCapability(attributes)) {
     return MatterDeviceTypes.colorTemperatureLight;
   }
   if (modes.includes('brightness') || attributes.brightness !== undefined) {

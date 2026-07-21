@@ -8,6 +8,14 @@ describe('light device type selection', () => {
     expect(getLightDeviceType({ supported_color_modes: ['color_temp'] }).name).toBe('ColorTemperatureLight');
     expect(getLightDeviceType({ supported_color_modes: ['hs'] }).name).toBe('ExtendedColorLight');
   });
+
+  it('keeps warm/cold capability when HA omits the current colour temperature', () => {
+    expect(getLightDeviceType({
+      color_mode: 'color_temp',
+      min_color_temp_kelvin: 2200,
+      max_color_temp_kelvin: 6500,
+    }).name).toBe('ColorTemperatureLight');
+  });
 });
 
 describe('Apple Home-safe default device types', () => {
