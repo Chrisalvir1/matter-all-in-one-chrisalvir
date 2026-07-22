@@ -78,6 +78,7 @@ jobs:
         uses: home-assistant/builder/actions/build-image@2026.06.0
         with:
           arch: ${{ matrix.arch }}
+          container-registry-user: ${{ github.actor }}
           container-registry-password: ${{ secrets.GITHUB_TOKEN }}
           context: ./matter-all-in-one-addon
           image: ${{ matrix.image }}
@@ -106,6 +107,7 @@ jobs:
         uses: home-assistant/builder/actions/publish-multi-arch-manifest@2026.06.0
         with:
           architectures: ${{ needs.prepare.outputs.architectures }}
+          container-registry-user: ${{ github.actor }}
           container-registry-password: ${{ secrets.GITHUB_TOKEN }}
           image-name: ${{ needs.prepare.outputs.image_name }}
           image-tags: |

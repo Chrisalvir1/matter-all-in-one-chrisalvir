@@ -1,4 +1,5 @@
-FROM node:24.18-alpine3.24 AS builder
+ARG BUILD_FROM=node:24.18-alpine3.24
+FROM ${BUILD_FROM} AS builder
 
 WORKDIR /app
 COPY package.json package-lock.json ./
@@ -8,7 +9,7 @@ COPY scripts/clean-dist.mjs ./scripts/clean-dist.mjs
 COPY src/ ./src/
 RUN npm run build
 
-FROM node:24.18-alpine3.24 AS runtime
+FROM ${BUILD_FROM} AS runtime
 
 ARG BUILD_VERSION=dev
 ARG BUILD_ARCH=unknown
