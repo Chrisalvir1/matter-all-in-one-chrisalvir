@@ -17,16 +17,22 @@ export class MockMatterbridgeEndpoint {
   }
 
   public addClusterServers(clusterIds: number[]) {
-    clusterIds.forEach(id => this.clusterServers.add(id));
+    clusterIds.forEach((id) => this.clusterServers.add(id));
   }
 
   public addRequiredClusterServers() {}
 
-  public createDefaultBasicInformationClusterServer() { return this; }
+  public createDefaultBasicInformationClusterServer() {
+    return this;
+  }
 
-  public createDefaultFanControlClusterServer() { return this; }
+  public createDefaultFanControlClusterServer() {
+    return this;
+  }
 
-  public createDefaultDoorLockClusterServer() { return this; }
+  public createDefaultDoorLockClusterServer() {
+    return this;
+  }
 
   public addChildDeviceTypeWithClusterServer(id: string, deviceTypes: any[], clusterIds: number[]) {
     const child = new MockMatterbridgeEndpoint(Array.isArray(deviceTypes) ? deviceTypes : [deviceTypes], { id });
@@ -35,13 +41,15 @@ export class MockMatterbridgeEndpoint {
     return child;
   }
 
-  public createDefaultBridgedDeviceBasicInformationClusterServer(
-    uniqueName: string,
-    serialNumber: string,
-    vendorId: number,
-    vendorName: string,
-    productLabel: string
-  ) {}
+  public getChildEndpointById(id: string) {
+    return this.children.get(id);
+  }
+
+  public getChildEndpointByOriginalId(id: string) {
+    return this.children.get(id);
+  }
+
+  public createDefaultBridgedDeviceBasicInformationClusterServer(uniqueName: string, serialNumber: string, vendorId: number, vendorName: string, productLabel: string) {}
 
   public hasClusterServer(cluster: any): boolean {
     return this.clusterServers.has(cluster.id);
@@ -64,7 +72,7 @@ export class MockMatterbridgeEndpoint {
         },
         setMeasuredValueAttribute: (value: any) => {
           this.attributes.set(`${cluster.id}:measuredValue`, value);
-        }
+        },
       };
     }
     return undefined;

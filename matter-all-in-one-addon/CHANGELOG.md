@@ -1,3 +1,23 @@
+## [1.2.50] - 2026-07-22
+
+### Fixed
+
+- **Recuperación total:** los nodos Matter directos y compuestos reutilizados reconstruyen sus endpoints, comandos y estado inicial tras una caída de Home Assistant.
+- **WebSocket:** se cierran conexiones a medio abrir, se descartan sockets obsoletos y se reintentan snapshots incompletos con espera exponencial.
+- **Estado:** las actualizaciones Matter se serializan, los snapshots de HA se reemplazan atómicamente y un `unavailable` conserva el último valor válido.
+- **Docker y red:** construcción multi-stage reproducible, Node 24 LTS sobre Alpine 3.24, mDNS en todas las interfaces y dual-stack IPv4/IPv6 por defecto.
+- **Actualizaciones rápidas:** Home Assistant descarga una imagen GHCR precompilada para `amd64` y `aarch64` en vez de reinstalar y compilar todas las dependencias localmente.
+- **Toolchain:** Vitest y su cobertura suben a 3.2.7, y Prettier a 3.9.6; se conservan Node 24 y Matterbridge 3.10.0 para evitar cambios mayores innecesarios.
+- **Seguridad:** el panel sólo acepta Ingress de Supervisor o loopback, las mutaciones usan un token interno y el add-on ya no solicita rol de administrador.
+
+## [1.2.49]
+
+### Fixed
+
+- **Ventiladores con luz:** las luces de blanco cálido/frío ahora conservan el perfil `ColorTemperatureLight` aunque Home Assistant omita el valor de temperatura actual al estar apagadas; se usan también el modo y el rango Kelvin anunciados por el dispositivo.
+- **Reconstrucción Matter:** “Desconectar Matter” reconstruye el árbol de endpoints con las capacidades actuales tras borrar los fabrics, permitiendo que accesorios publicados anteriormente como on/off expongan `ColorControl` al emparejarse de nuevo.
+- **Estabilidad de UI:** la lectura de estado de un nodo Matter a medio desmontar ya no puede romper toda la respuesta de dispositivos ni dejar la interfaz cargando.
+
 ## 1.2.47
 
 ### Fixed
@@ -554,10 +574,3 @@ All notable changes to this project will be documented in this file.
 - Video camera streaming management and RTSP/WebRTC support.
 - Soil moisture and temperature sensor mapping.
 - Automatic Supervisor API token and WebSocket host detection.
-## 1.2.49
-
-### Fixed
-
-- **Ventiladores con luz:** las luces de blanco cálido/frío ahora conservan el perfil `ColorTemperatureLight` aunque Home Assistant omita el valor de temperatura actual al estar apagadas; se usan también el modo y el rango Kelvin anunciados por el dispositivo.
-- **Reconstrucción Matter:** “Desconectar Matter” reconstruye el árbol de endpoints con las capacidades actuales tras borrar los fabrics, permitiendo que accesorios publicados anteriormente como on/off expongan `ColorControl` al emparejarse de nuevo.
-- **Estabilidad de UI:** la lectura de estado de un nodo Matter a medio desmontar ya no puede romper toda la respuesta de dispositivos ni dejar la interfaz cargando.

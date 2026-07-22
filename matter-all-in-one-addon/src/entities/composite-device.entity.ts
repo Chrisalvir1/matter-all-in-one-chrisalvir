@@ -11,10 +11,7 @@
  * endpoint capabilities; clusters added after endpoint creation are not visible.
  */
 import { DeviceTypeDefinition, MatterbridgeEndpoint } from 'matterbridge';
-import {
-  BooleanState, ColorControl, FanControl, LevelControl,
-  OccupancySensing, RelativeHumidityMeasurement, TemperatureMeasurement, OnOff, DoorLock,
-} from 'matterbridge/matter/clusters';
+import { BooleanState, ColorControl, FanControl, LevelControl, OccupancySensing, RelativeHumidityMeasurement, TemperatureMeasurement, OnOff, DoorLock } from 'matterbridge/matter/clusters';
 import { ClusterId } from 'matterbridge/matter/types';
 import { safeSetAttribute, safeUpdateAttribute } from '../utils/matter-attributes.js';
 import type { HassState } from '../utils/ha-state.js';
@@ -22,7 +19,9 @@ import { getDeviceTypeForEntity, hasColorTemperatureCapability } from '../device
 
 type CompositePlatform = {
   log: any;
-  ha: { callService(domain: string, service: string, entityId: string, data?: Record<string, any>): Promise<unknown> };
+  ha: {
+    callService(domain: string, service: string, entityId: string, data?: Record<string, any>): Promise<unknown>;
+  };
 };
 
 export interface CompositeMember {
@@ -60,8 +59,8 @@ function lightClusterIds(state: HassState, deviceType: DeviceTypeDefinition): Cl
   const hasColorTemp = hasColorTemperatureCapability(state.attributes);
   const hasRgb = modes.some((m) => ['hs', 'xy', 'rgb', 'rgbw', 'rgbww'].includes(m));
 
-  const isOnOffProfile = deviceType.code === 0x0100 || deviceType.code === 0x010A; // OnOffLight or OnOffPlugInUnit
-  const isColorProfile = deviceType.code === 0x010C || deviceType.code === 0x010D; // ColorTemperatureLight or ExtendedColorLight
+  const isOnOffProfile = deviceType.code === 0x0100 || deviceType.code === 0x010a; // OnOffLight or OnOffPlugInUnit
+  const isColorProfile = deviceType.code === 0x010c || deviceType.code === 0x010d; // ColorTemperatureLight or ExtendedColorLight
 
   // LevelControl required whenever brightness, color_temp or color is supported AND profile allows it
   if ((hasBrightness || hasColorTemp || hasRgb) && !isOnOffProfile) clusters.push(LevelControl.id);
@@ -113,15 +112,10 @@ export class CompositeDeviceEntity {
   }
 
   get primaryEntityId(): string {
-    if (
-      this.primaryEntityIdOverride
-      && this.members.some((m) => m.entityId === this.primaryEntityIdOverride)
-    ) {
+    if (this.primaryEntityIdOverride && this.members.some((m) => m.entityId === this.primaryEntityIdOverride)) {
       return this.primaryEntityIdOverride;
     }
-    return this.members.find((m) => m.entityId.startsWith('lock.'))?.entityId
-      ?? this.members.find((m) => m.entityId.startsWith('fan.'))?.entityId
-      ?? this.members[0].entityId;
+    return this.members.find((m) => m.entityId.startsWith('lock.'))?.entityId ?? this.members.find((m) => m.entityId.startsWith('fan.'))?.entityId ?? this.members[0].entityId;
   }
 
   async createEndpoint(): Promise<MatterbridgeEndpoint> {
@@ -136,7 +130,10 @@ export class CompositeDeviceEntity {
     this.platform.log.notice(`[Composite] Creating ServerNode composite accessory: ${this.name}`);
     this.platform.log.notice(`[Composite] Endpoint 1 (root): ${primaryType.name} → ${primary.entityId}`);
 
-    this.endpoint = new MatterbridgeEndpoint([primaryType], { id: `device_${this.deviceId}`, mode: 'server' });
+    this.endpoint = new MatterbridgeEndpoint([primaryType], {
+      id: `device_${this.deviceId}`,
+      mode: 'server',
+    });
     this.configureRootIdentity(this.endpoint, primaryType);
     await this.addRootClusters(this.endpoint, primary);
     this.addCommandHandlers(this.endpoint, primary);
@@ -172,6 +169,24 @@ export class CompositeDeviceEntity {
     return this.endpoint;
   }
 
+  /** Restore the runtime model around a commissioned composite ServerNode. */
+  adoptEndpoint(endpoint: MatterbridgeEndpoint): void {
+    this.endpoint = endpoint;
+    this.endpoints.clear();
+    for (const member of this.members) {
+      const memberEndpoint =
+        member.entityId === this.primaryEntityId ? endpoint : (endpoint.getChildEndpointById(endpointId(member.entityId)) ?? endpoint.getChildEndpointByOriginalId(endpointId(member.entityId)));
+      if (!memberEndpoint) {
+        this.platform.log.warn(`[Composite] Retained node is missing endpoint ${member.entityId}; preserving the node without fabric reset.`);
+        continue;
+      }
+      this.endpoints.set(member.entityId, memberEndpoint);
+      if (memberEndpoint.commandHandler && (memberEndpoint.commandHandler as any).handler?.length === 0) {
+        this.addCommandHandlers(memberEndpoint, member);
+      }
+    }
+  }
+
   async syncInitialState(): Promise<void> {
     await Promise.all(this.members.map((m) => this.updateEntity(m.entityId, m.state, true)));
   }
@@ -187,7 +202,7 @@ export class CompositeDeviceEntity {
       const on = isOn(state);
       await update(endpoint, OnOff.id, 'onOff', on, this.platform.log);
       if (!endpoint.hasAttributeServer(FanControl.id, 'percentCurrent')) return;
-      const percentage = typeof state.attributes.percentage === 'number' ? state.attributes.percentage : (on ? 100 : 0);
+      const percentage = typeof state.attributes.percentage === 'number' ? state.attributes.percentage : on ? 100 : 0;
       await update(endpoint, FanControl.id, 'percentCurrent', percentage, this.platform.log);
       await update(endpoint, FanControl.id, 'percentSetting', percentage, this.platform.log);
       await update(endpoint, FanControl.id, 'fanMode', on ? 1 : 0, this.platform.log);
@@ -313,10 +328,14 @@ export class CompositeDeviceEntity {
     endpoint.softwareVersion = Math.min(0xffffffff, major * 1_000_000 + minor * 1_000 + patch);
     endpoint.softwareVersionString = version.startsWith('Matterbridge') ? version : `Matterbridge ${version}`;
     endpoint.createDefaultBasicInformationClusterServer(
-      nodeName, endpoint.serialNumber,
-      endpoint.vendorId, endpoint.vendorName,
-      endpoint.productId, endpoint.productName,
-      endpoint.softwareVersion, endpoint.softwareVersionString,
+      nodeName,
+      endpoint.serialNumber,
+      endpoint.vendorId,
+      endpoint.vendorName,
+      endpoint.productId,
+      endpoint.productName,
+      endpoint.softwareVersion,
+      endpoint.softwareVersionString,
     );
   }
 
@@ -330,9 +349,7 @@ export class CompositeDeviceEntity {
         return;
       }
       const on = isOn(member.state);
-      const percentage = typeof member.state.attributes.percentage === 'number'
-        ? member.state.attributes.percentage
-        : (on ? 100 : 0);
+      const percentage = typeof member.state.attributes.percentage === 'number' ? member.state.attributes.percentage : on ? 100 : 0;
       endpoint.createDefaultFanControlClusterServer(on ? 1 : 0, undefined, percentage, percentage);
       endpoint.addClusterServers([OnOff.id]);
       endpoint.addRequiredClusterServers();
@@ -345,13 +362,19 @@ export class CompositeDeviceEntity {
       endpoint.addRequiredClusterServers();
       await safeSetAttribute(endpoint, DoorLock.id, 'actuatorEnabled', true, this.platform.log);
       await safeSetAttribute(endpoint, DoorLock.id, 'operatingMode', DoorLock.OperatingMode.Normal, this.platform.log);
-      await safeSetAttribute(endpoint, DoorLock.id, 'supportedOperatingModes', {
-        normal: true,
-        vacation: false,
-        privacy: false,
-        noRemoteLockUnlock: false,
-        passage: false,
-      }, this.platform.log);
+      await safeSetAttribute(
+        endpoint,
+        DoorLock.id,
+        'supportedOperatingModes',
+        {
+          normal: true,
+          vacation: false,
+          privacy: false,
+          noRemoteLockUnlock: false,
+          passage: false,
+        },
+        this.platform.log,
+      );
     }
   }
 
@@ -401,7 +424,10 @@ export class CompositeDeviceEntity {
         const level = data?.level ?? data?.request?.level;
         if (typeof level === 'number') {
           const haBrightness = Math.round((level / 254) * 255);
-          this.lastCommands.set('brightness', { value: haBrightness, timestamp: Date.now() });
+          this.lastCommands.set('brightness', {
+            value: haBrightness,
+            timestamp: Date.now(),
+          });
           await this.platform.ha.callService('light', 'turn_on', entityId, {
             brightness: haBrightness,
           });
@@ -413,7 +439,10 @@ export class CompositeDeviceEntity {
           await this.platform.ha.callService('light', 'turn_off', entityId);
         } else {
           const haBrightness = Math.round((level / 254) * 255);
-          this.lastCommands.set('brightness', { value: haBrightness, timestamp: Date.now() });
+          this.lastCommands.set('brightness', {
+            value: haBrightness,
+            timestamp: Date.now(),
+          });
           await this.platform.ha.callService('light', 'turn_on', entityId, {
             brightness: haBrightness,
           });
@@ -424,20 +453,24 @@ export class CompositeDeviceEntity {
       endpoint.addCommandHandler('moveToColorTemperature', async (data: any) => {
         const mireds = data?.colorTemperatureMireds ?? data?.request?.colorTemperatureMireds;
         if (typeof mireds === 'number') {
-          this.lastCommands.set('color_temp', { value: mireds, timestamp: Date.now() });
+          this.lastCommands.set('color_temp', {
+            value: mireds,
+            timestamp: Date.now(),
+          });
           const currentState = this.states.get(entityId);
           // Modern HA exposes its colour-temperature range in kelvin. Do not
           // infer the unit from supported_color_modes: legacy integrations use
           // that same mode name but expect mireds in the service payload.
-          const usesKelvin = currentState?.attributes.color_temp_kelvin !== undefined
-            || currentState?.attributes.min_color_temp_kelvin !== undefined
-            || currentState?.attributes.max_color_temp_kelvin !== undefined;
+          const usesKelvin =
+            currentState?.attributes.color_temp_kelvin !== undefined || currentState?.attributes.min_color_temp_kelvin !== undefined || currentState?.attributes.max_color_temp_kelvin !== undefined;
           if (usesKelvin) {
             await this.platform.ha.callService('light', 'turn_on', entityId, {
               color_temp_kelvin: miredsToKelvin(mireds),
             });
           } else {
-            await this.platform.ha.callService('light', 'turn_on', entityId, { color_temp: mireds });
+            await this.platform.ha.callService('light', 'turn_on', entityId, {
+              color_temp: mireds,
+            });
           }
         }
       });
@@ -448,7 +481,10 @@ export class CompositeDeviceEntity {
         const sat = data?.saturation ?? data?.request?.saturation;
         if (typeof hue === 'number' && typeof sat === 'number') {
           const hs = [Math.round((hue / 254) * 360), Math.round((sat / 254) * 100)];
-          this.lastCommands.set('hs_color', { value: hs, timestamp: Date.now() });
+          this.lastCommands.set('hs_color', {
+            value: hs,
+            timestamp: Date.now(),
+          });
           await this.platform.ha.callService('light', 'turn_on', entityId, {
             hs_color: hs,
           });
@@ -468,23 +504,14 @@ export class CompositeDeviceEntity {
   }
 
   private toLockState(state: HassState): DoorLock.LockState {
-    return ['locked', 'locking'].includes(state.state)
-      ? DoorLock.LockState.Locked
-      : DoorLock.LockState.Unlocked;
+    return ['locked', 'locking'].includes(state.state) ? DoorLock.LockState.Locked : DoorLock.LockState.Unlocked;
   }
 
   /** Emit structured diagnostic log lines for a light member. */
-  private logLightCapabilities(
-    member: CompositeMember,
-    memberType: DeviceTypeDefinition,
-    clusterIds: ClusterId[],
-    primaryId: string,
-  ) {
+  private logLightCapabilities(member: CompositeMember, memberType: DeviceTypeDefinition, clusterIds: ClusterId[], primaryId: string) {
     const modes: string[] = member.state.attributes.supported_color_modes ?? [];
     const hasBrightness = modes.includes('brightness') || member.state.attributes.brightness !== undefined;
-    const hasColorTemp = modes.includes('color_temp')
-      || member.state.attributes.color_temp !== undefined
-      || member.state.attributes.color_temp_kelvin !== undefined;
+    const hasColorTemp = modes.includes('color_temp') || member.state.attributes.color_temp !== undefined || member.state.attributes.color_temp_kelvin !== undefined;
     const hasRgb = modes.some((m) => ['hs', 'xy', 'rgb', 'rgbw', 'rgbww'].includes(m));
     const clusterNames = ['OnOff', ...(clusterIds.includes(LevelControl.id) ? ['LevelControl'] : []), ...(clusterIds.includes(ColorControl.id) ? ['ColorControl'] : [])];
 
@@ -497,9 +524,7 @@ export class CompositeDeviceEntity {
     const minK = member.state.attributes.min_color_temp_kelvin;
     const maxK = member.state.attributes.max_color_temp_kelvin;
     if (minK || maxK) {
-      this.platform.log.notice(
-        `[Composite]   Color temp range: ${minK ?? '?'}K–${maxK ?? '?'}K (${minK ? kelvinToMireds(minK) : '?'}–${maxK ? kelvinToMireds(maxK) : '?'} mireds)`,
-      );
+      this.platform.log.notice(`[Composite]   Color temp range: ${minK ?? '?'}K–${maxK ?? '?'}K (${minK ? kelvinToMireds(minK) : '?'}–${maxK ? kelvinToMireds(maxK) : '?'} mireds)`);
     }
     this.platform.log.notice(`[Composite]   Integrated into composite node: ${primaryId}`);
   }

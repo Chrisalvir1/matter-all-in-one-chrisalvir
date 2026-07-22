@@ -17,7 +17,7 @@ describe('HomeAssistantPlatform', () => {
         type: 'dynamic',
         host: 'localhost',
         token: 'fake-token',
-      } as any
+      } as any,
     );
   });
 
@@ -36,7 +36,7 @@ describe('HomeAssistantPlatform', () => {
     platform.ha.emit('connected', '2026.6.0');
 
     // Wait for async discovery and registration to settle
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
     expect(platform.entities.size).toBeGreaterThan(0);
     expect(platform.entities.has('light.living_room')).toBe(true);
@@ -48,13 +48,13 @@ describe('HomeAssistantPlatform', () => {
   it('should expose Home Assistant device registry metadata in the custom devices API', async () => {
     await platform.onStart();
     platform.ha.emit('connected', '2026.6.0');
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
     const res = await fetch('http://127.0.0.1:8285/api/custom/devices');
     expect(res.ok).toBe(true);
 
-    const devices = await res.json() as any[];
-    const livingRoomLight = devices.find(device => device.entityId === 'light.living_room');
+    const devices = (await res.json()) as any[];
+    const livingRoomLight = devices.find((device) => device.entityId === 'light.living_room');
 
     expect(livingRoomLight).toMatchObject({
       device_id: 'device-light-1',
@@ -103,39 +103,48 @@ describe('HomeAssistantPlatform', () => {
 
   it('keeps a commissioned legacy endpoint visible while its composite replacement is not ready', () => {
     const legacyEndpoint = {
-      serverNode: { state: { commissioning: { commissioned: true, fabrics: [{ label: 'El Chante' }] } } },
+      serverNode: {
+        state: {
+          commissioning: {
+            commissioned: true,
+            fabrics: [{ label: 'El Chante' }],
+          },
+        },
+      },
     };
     (platform as any).matterbridgeDevices.set('lock.front_door', legacyEndpoint);
     (platform as any).matterbridgeDevices.set('device:front-door', {});
 
-    expect((platform as any).getMatterEndpointForEntity('binary_sensor.front_door_contact', 'front-door', 'lock.front_door'))
-      .toBe(legacyEndpoint);
+    expect((platform as any).getMatterEndpointForEntity('binary_sensor.front_door_contact', 'front-door', 'lock.front_door')).toBe(legacyEndpoint);
   });
 
   it('reuses an already registered Matter endpoint instead of creating a duplicate after reconnect', async () => {
     await platform.onStart();
     platform.ha.emit('connected', '2026.6.0');
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, 100));
     const existingEndpoint = {
       uniqueId: 'light_living_room',
       deviceName: 'Living Room Lamp',
       serverNode: { state: { commissioning: { commissioned: true } } },
     };
     (platform as any).getDeviceByUniqueId = vi.fn().mockReturnValue(existingEndpoint);
+    const entity = (platform as any).entities.get('light.living_room');
+    const initialSync = vi.spyOn(entity, 'syncInitialState');
 
     await (platform as any).activateEntity('light.living_room');
 
     expect((platform as any).matterbridgeDevices.get('light.living_room')).toBe(existingEndpoint);
+    expect(initialSync).toHaveBeenCalledOnce();
   });
 
   it('marks fan and light sharing a device_id as one composite before either is activated', async () => {
     await platform.onStart();
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
     const res = await fetch('http://127.0.0.1:8285/api/custom/devices');
-    const devices = await res.json() as any[];
-    const fan = devices.find(device => device.entityId === 'fan.ceiling_fan');
-    const light = devices.find(device => device.entityId === 'light.ceiling_fan_light');
+    const devices = (await res.json()) as any[];
+    const fan = devices.find((device) => device.entityId === 'fan.ceiling_fan');
+    const light = devices.find((device) => device.entityId === 'light.ceiling_fan_light');
 
     expect(fan).toMatchObject({
       composite: true,
@@ -169,11 +178,14 @@ describe('HomeAssistantPlatform', () => {
             include_entities: ['fan.guest_fan', 'light.guest_fan_light'],
           },
         ],
-      } as any
+      } as any,
     );
 
     try {
       await groupedPlatform.onStart();
+      // Let the startup snapshot finish before injecting registry entries;
+      // otherwise reconciliation can correctly remove this synthetic state.
+      await new Promise((resolve) => setTimeout(resolve, 100));
       groupedPlatform.ha.hassEntities.set('fan.guest_fan', {
         id: 'entity-guest-fan',
         entity_id: 'fan.guest_fan',
@@ -194,13 +206,17 @@ describe('HomeAssistantPlatform', () => {
       await (groupedPlatform as any).registerHAEntity({
         entity_id: 'light.guest_fan_light',
         state: 'on',
-        attributes: { friendly_name: 'Guest Fan Light', brightness: 120, supported_color_modes: ['brightness'] },
+        attributes: {
+          friendly_name: 'Guest Fan Light',
+          brightness: 120,
+          supported_color_modes: ['brightness'],
+        },
       });
 
       const res = await fetch('http://127.0.0.1:8285/api/custom/devices');
-      const devices = await res.json() as any[];
-      const fan = devices.find(device => device.entityId === 'fan.guest_fan');
-      const light = devices.find(device => device.entityId === 'light.guest_fan_light');
+      const devices = (await res.json()) as any[];
+      const fan = devices.find((device) => device.entityId === 'fan.guest_fan');
+      const light = devices.find((device) => device.entityId === 'light.guest_fan_light');
 
       expect(fan).toMatchObject({
         composite: true,
@@ -220,12 +236,12 @@ describe('HomeAssistantPlatform', () => {
 
   it('uses the HA lock entity as the primary Matter accessory for SwitchBot-style lock devices', async () => {
     await platform.onStart();
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
     const res = await fetch('http://127.0.0.1:8285/api/custom/devices');
-    const devices = await res.json() as any[];
-    const lock = devices.find(device => device.entityId === 'lock.llavin_switchbot');
-    const contact = devices.find(device => device.entityId === 'binary_sensor.llavin_switchbot_contact');
+    const devices = (await res.json()) as any[];
+    const lock = devices.find((device) => device.entityId === 'lock.llavin_switchbot');
+    const contact = devices.find((device) => device.entityId === 'binary_sensor.llavin_switchbot_contact');
 
     expect(lock).toMatchObject({
       composite: true,
@@ -249,11 +265,27 @@ describe('HomeAssistantPlatform', () => {
     await platform.onStart();
 
     const unsafeStates = [
-      { entity_id: 'binary_sensor.connectivity_status', state: 'off', attributes: { device_class: 'connectivity' } },
-      { entity_id: 'sensor.water_pressure', state: '1013', attributes: { device_class: 'pressure' } },
-      { entity_id: 'sensor.energy_price', state: '0.25', attributes: { device_class: 'monetary' } },
+      {
+        entity_id: 'binary_sensor.connectivity_status',
+        state: 'off',
+        attributes: { device_class: 'connectivity' },
+      },
+      {
+        entity_id: 'sensor.water_pressure',
+        state: '1013',
+        attributes: { device_class: 'pressure' },
+      },
+      {
+        entity_id: 'sensor.energy_price',
+        state: '0.25',
+        attributes: { device_class: 'monetary' },
+      },
       { entity_id: 'camera.backyard', state: 'recording', attributes: {} },
-      { entity_id: 'alarm_control_panel.home', state: 'disarmed', attributes: {} },
+      {
+        entity_id: 'alarm_control_panel.home',
+        state: 'disarmed',
+        attributes: {},
+      },
     ];
 
     for (const state of unsafeStates) await (platform as any).registerHAEntity(state);
@@ -264,7 +296,7 @@ describe('HomeAssistantPlatform', () => {
   it('should update entities state when a HA event occurs', async () => {
     await platform.onStart();
     platform.ha.emit('connected', '2026.6.0');
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
     const lightEntity = platform.entities.get('light.living_room');
     expect(lightEntity).toBeDefined();
@@ -282,5 +314,38 @@ describe('HomeAssistantPlatform', () => {
     });
 
     expect(lightEntity!.state.state).toBe('off');
+  });
+
+  it('preserves the last valid Matter state while a HA entity is unavailable', async () => {
+    await platform.onStart();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    const lightEntity = platform.entities.get('light.living_room')!;
+    platform.exportedDevices.add('light.living_room');
+    const updateState = vi.spyOn(lightEntity, 'updateState').mockResolvedValue();
+
+    (platform as any).handleEntityStateChange('light.living_room', {
+      entity_id: 'light.living_room',
+      state: 'unavailable',
+      attributes: { friendly_name: 'Living Room Light' },
+      last_changed: 'now',
+      last_updated: 'now',
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(updateState).not.toHaveBeenCalled();
+    expect(lightEntity.state.state).toBe('unavailable');
+
+    (platform as any).handleEntityStateChange('light.living_room', {
+      entity_id: 'light.living_room',
+      state: 'on',
+      attributes: { friendly_name: 'Living Room Light', brightness: 180 },
+      last_changed: 'now',
+      last_updated: 'now',
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(updateState).toHaveBeenCalledOnce();
+    expect(updateState.mock.calls[0][0].state).toBe('on');
   });
 });

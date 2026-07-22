@@ -1,36 +1,35 @@
-FROM node:24.18-alpine
-
-# Install only what's needed at build/runtime
-RUN apk add --no-cache jq
-
-# ── Install matterbridge globally FIRST ──
-# This is the heaviest step (compiling @matter/node native bindings).
-# By doing this before copying any source files, Docker caches it permanently
-# until the matterbridge version string changes in this file.
-RUN npm install -g matterbridge@3.10.0 --no-fund --no-audit
+FROM node:24.18-alpine3.24 AS builder
 
 WORKDIR /app
-
-# ── Layer 1: Install plugin dependencies ──
 COPY package.json package-lock.json ./
-RUN npm install --legacy-peer-deps --no-fund --no-audit
-
-# ── Layer 2: Link global matterbridge and build TypeScript ──
-# Link global matterbridge to local node_modules so TypeScript can see the types
-RUN ln -s /usr/local/lib/node_modules/matterbridge /app/node_modules/matterbridge
-
+RUN npm ci --legacy-peer-deps --no-fund --no-audit
 COPY tsconfig*.json ./
+COPY scripts/clean-dist.mjs ./scripts/clean-dist.mjs
 COPY src/ ./src/
 RUN npm run build
 
-# ── Layer 3: Cleanup and register plugin ──
-RUN npm prune --production --legacy-peer-deps
-RUN jq 'del(.devDependencies, .peerDependencies)' package.json > package.json.tmp && mv package.json.tmp package.json
+FROM node:24.18-alpine3.24 AS runtime
 
-RUN matterbridge -add /app || true
+ARG BUILD_VERSION=dev
+ARG BUILD_ARCH=unknown
+LABEL io.hass.type="app" \
+  io.hass.version="${BUILD_VERSION}" \
+  io.hass.arch="${BUILD_ARCH}" \
+  org.opencontainers.image.source="https://github.com/Chrisalvir1/matter-all-in-one-chrisalvir" \
+  org.opencontainers.image.licenses="Apache-2.0"
 
-# ── Startup script ──
+RUN apk add --no-cache jq \
+  && npm install -g matterbridge@3.10.0 --omit=dev --no-fund --no-audit
+
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev --omit=peer --legacy-peer-deps --no-fund --no-audit \
+  && { test -e /app/node_modules/matterbridge || ln -s /usr/local/lib/node_modules/matterbridge /app/node_modules/matterbridge; }
+RUN jq 'del(.devDependencies, .peerDependencies)' package.json > package.json.tmp \
+  && mv package.json.tmp package.json
+
+COPY --from=builder /app/dist ./dist
 COPY run.sh /run.sh
-RUN chmod a+x /run.sh
+RUN chmod 0755 /run.sh
 
 CMD ["/run.sh"]

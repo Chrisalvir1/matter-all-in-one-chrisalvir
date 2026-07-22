@@ -7,11 +7,7 @@ import { safeSetAttribute, safeUpdateAttribute } from '../utils/matter-attribute
 import { ClusterId } from 'matterbridge/matter/types';
 
 export class LockEntity extends BaseEntity {
-  constructor(
-    platform: HomeAssistantPlatform,
-    state: HassState,
-    deviceType: DeviceTypeDefinition
-  ) {
+  constructor(platform: HomeAssistantPlatform, state: HassState, deviceType: DeviceTypeDefinition) {
     super(platform, state, deviceType);
   }
 
@@ -27,24 +23,14 @@ export class LockEntity extends BaseEntity {
     } else {
       isLocked = this.state.state === 'locked' || this.state.state === 'locking' || this.state.state === 'armed_away' || this.state.state === 'armed_home';
     }
-    
+
     // Create DoorLock cluster server with mandatory features for Apple HomeKit
     // Apple HomeKit requires ActuatorEnabled and OperatingMode to be set.
-    this.endpoint.createDefaultDoorLockClusterServer(
-      isLocked ? DoorLock.LockState.Locked : DoorLock.LockState.Unlocked,
-      DoorLock.LockType.DeadBolt
-    );
+    this.endpoint.createDefaultDoorLockClusterServer(isLocked ? DoorLock.LockState.Locked : DoorLock.LockState.Unlocked, DoorLock.LockType.DeadBolt);
 
-    // Explicitly set the mandatory attributes required by Matter 1.2+ for Apple Home
-    await safeSetAttribute(this.endpoint, DoorLock.id, 'actuatorEnabled', true, this.platform.log);
-    await safeSetAttribute(this.endpoint, DoorLock.id, 'operatingMode', DoorLock.OperatingMode.Normal, this.platform.log);
-    await safeSetAttribute(this.endpoint, DoorLock.id, 'supportedOperatingModes', {
-      normal: true,
-      vacation: false,
-      privacy: false,
-      noRemoteLockUnlock: false,
-      passage: false
-    }, this.platform.log);
+    // The helper provides the mandatory attributes. Their final values are
+    // applied by updateState(initial=true), after Matterbridge has activated
+    // the endpoint; writing here produces an "inactive state" error.
   }
 
   protected override registerCommandHandlers(): void {
@@ -73,7 +59,7 @@ export class LockEntity extends BaseEntity {
 
   public override async updateState(newState: HassState, isInitialSync = false): Promise<void> {
     this.state = newState;
-    
+
     let isLocked = false;
     const domain = this.entityId.split('.')[0];
     if (domain === 'alarm_control_panel') {
@@ -84,6 +70,21 @@ export class LockEntity extends BaseEntity {
     const matterState = isLocked ? DoorLock.LockState.Locked : DoorLock.LockState.Unlocked;
 
     if (isInitialSync) {
+      await safeSetAttribute(this.endpoint, DoorLock.id, 'actuatorEnabled', true, this.platform.log);
+      await safeSetAttribute(this.endpoint, DoorLock.id, 'operatingMode', DoorLock.OperatingMode.Normal, this.platform.log);
+      await safeSetAttribute(
+        this.endpoint,
+        DoorLock.id,
+        'supportedOperatingModes',
+        {
+          normal: true,
+          vacation: false,
+          privacy: false,
+          noRemoteLockUnlock: false,
+          passage: false,
+        },
+        this.platform.log,
+      );
       await safeSetAttribute(this.endpoint, DoorLock.id, 'lockState', matterState, this.platform.log);
     } else {
       await safeUpdateAttribute(this.endpoint, DoorLock.id, 'lockState', matterState, this.platform.log);

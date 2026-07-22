@@ -1,13 +1,13 @@
 #!/usr/bin/env sh
-set -e
-echo "Removiendo lock file..."
-rm -f .git/index.lock
-echo "Agregando archivos..."
-git add matter-all-in-one-addon/Dockerfile matter-all-in-one-addon/package.json matter-all-in-one-addon/config.yaml matter-all-in-one-addon/CHANGELOG.md matter-all-in-one-addon/src/ matter-all-in-one-addon/test/
-echo "Haciendo commit..."
-git commit -m "fix(matter): reuse paired nodes after Home Assistant reconnect" || echo "Nada que comitear"
-echo "Creando tag..."
-git tag -a v1.2.47 -m "v1.2.47 — reuse paired nodes after Home Assistant reconnect" || echo "El tag ya existe"
-echo "Haciendo push..."
-git push origin HEAD --tags
-echo "¡Hecho!"
+set -eu
+
+VERSION=$(node -p "require('./matter-all-in-one-addon/package.json').version")
+TAG="v$VERSION"
+MESSAGE=${1:-"release: $TAG"}
+
+git diff --quiet && git diff --cached --quiet && { echo "No hay cambios para publicar."; exit 1; }
+git add README.md push_update.sh matter-all-in-one-addon .github/workflows
+git commit -m "$MESSAGE"
+git tag -a "$TAG" -m "$TAG"
+git push origin HEAD
+git push origin "$TAG"

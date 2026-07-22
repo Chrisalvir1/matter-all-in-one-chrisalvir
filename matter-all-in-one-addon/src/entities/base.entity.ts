@@ -12,7 +12,7 @@ export class BaseEntity {
   public platform: HomeAssistantPlatform;
   public entityId: string;
   public state: HassState;
-  
+
   private binarySensorLatchTimeout?: NodeJS.Timeout;
   private lastCommands = new Map<string, { value: any; timestamp: number }>();
   public deviceType: DeviceTypeDefinition;
@@ -41,11 +41,7 @@ export class BaseEntity {
     endpoint.softwareVersionString = version.startsWith('Matterbridge') ? version : `Matterbridge ${version}`;
   }
 
-  constructor(
-    platform: HomeAssistantPlatform,
-    state: HassState,
-    deviceType: DeviceTypeDefinition
-  ) {
+  constructor(platform: HomeAssistantPlatform, state: HassState, deviceType: DeviceTypeDefinition) {
     this.platform = platform;
     this.entityId = state.entity_id;
     this.state = state;
@@ -63,14 +59,14 @@ export class BaseEntity {
       clusters.push(OnOff.id);
       const supportedModes: string[] = this.state.attributes.supported_color_modes ?? [];
       const hasBrightness = supportedModes.includes('brightness') || this.state.attributes.brightness !== undefined;
-      const isOnOffProfile = this.deviceType.code === 0x0100 || this.deviceType.code === 0x010A; // OnOffLight or OnOffPlugInUnit
+      const isOnOffProfile = this.deviceType.code === 0x0100 || this.deviceType.code === 0x010a; // OnOffLight or OnOffPlugInUnit
       if (hasBrightness && !isOnOffProfile) {
         clusters.push(LevelControl.id);
       }
       // Only add ColorControl if the light supports real color modes AND the profile allows it
       const realColorModes = ['hs', 'xy', 'rgb', 'rgbw', 'rgbww', 'color_temp'];
-      const hasColorCapability = supportedModes.some(m => realColorModes.includes(m));
-      const isColorProfile = this.deviceType.code === 0x010C || this.deviceType.code === 0x010D; // ColorTemperatureLight or ExtendedColorLight
+      const hasColorCapability = supportedModes.some((m) => realColorModes.includes(m));
+      const isColorProfile = this.deviceType.code === 0x010c || this.deviceType.code === 0x010d; // ColorTemperatureLight or ExtendedColorLight
       if (hasColorCapability && isColorProfile) {
         clusters.push(ColorControl.id);
       }
@@ -96,7 +92,7 @@ export class BaseEntity {
     });
 
     const [domain] = this.entityId.split('.');
-    
+
     // Explicitly set metadata properties on the endpoint instance for createDeviceServerNode
     this.endpoint.deviceType = this.deviceType.code;
     this.endpoint.deviceName = uniqueName;
@@ -113,21 +109,14 @@ export class BaseEntity {
     // This entity is registered with mode: 'server' so Matterbridge creates
     // an independent ServerNode with its own QR code. Using the bridged version
     // here would conflict with the server mode and prevent pairing.
-    this.endpoint.createDefaultBasicInformationClusterServer(
-      uniqueName,
-      this.endpoint.serialNumber,
-      0xfff1,
-      'Home Assistant',
-      0x8000,
-      this.endpoint.productName
-    );
+    this.endpoint.createDefaultBasicInformationClusterServer(uniqueName, this.endpoint.serialNumber, 0xfff1, 'Home Assistant', 0x8000, this.endpoint.productName);
     this.applyMatterbridgeFirmware();
 
     const isFanProfile = this.deviceType.code === 0x002b || this.deviceType.name.toLowerCase() === 'fan';
 
     if (domain === 'fan' && isFanProfile) {
       const on = this.state.state === 'on';
-      const percentage = typeof this.state.attributes.percentage === 'number' ? this.state.attributes.percentage : (on ? 100 : 0);
+      const percentage = typeof this.state.attributes.percentage === 'number' ? this.state.attributes.percentage : on ? 100 : 0;
       this.endpoint.createDefaultFanControlClusterServer(on ? 1 : 0, undefined, percentage, percentage);
       this.endpoint.addClusterServers([OnOff.id]);
     }
@@ -144,6 +133,18 @@ export class BaseEntity {
     this.registerCommandHandlers();
 
     return this.endpoint;
+  }
+
+  /**
+   * Reattach this entity to a ServerNode retained by Matterbridge after a
+   * Home Assistant reconnect or plugin reload.  Persisted endpoints may not
+   * have runtime command callbacks, so restore them only when none exist.
+   */
+  public adoptEndpoint(endpoint: MatterbridgeEndpoint): void {
+    this.endpoint = endpoint;
+    if (endpoint.commandHandler && (endpoint.commandHandler as any).handler?.length === 0) {
+      this.registerCommandHandlers(endpoint);
+    }
   }
 
   /**
@@ -190,7 +191,10 @@ export class BaseEntity {
           if (typeof level === 'number') {
             const haBrightness = Math.round((level / 254) * 255);
             this.platform.log.debug(`Matter MoveToLevel commanded for ${this.entityId}: level=${level} -> HA brightness=${haBrightness}`);
-            this.lastCommands.set('brightness', { value: haBrightness, timestamp: Date.now() });
+            this.lastCommands.set('brightness', {
+              value: haBrightness,
+              timestamp: Date.now(),
+            });
             await this.platform.ha.callService(domain, 'turn_on', this.entityId, {
               brightness: haBrightness,
             });
@@ -202,7 +206,10 @@ export class BaseEntity {
           if (typeof level === 'number') {
             const haBrightness = Math.round((level / 254) * 255);
             this.platform.log.debug(`Matter MoveToLevelWithOnOff commanded for ${this.entityId}: level=${level} -> HA brightness=${haBrightness}`);
-            this.lastCommands.set('brightness', { value: haBrightness, timestamp: Date.now() });
+            this.lastCommands.set('brightness', {
+              value: haBrightness,
+              timestamp: Date.now(),
+            });
             if (level === 0) {
               await this.platform.ha.callService(domain, 'turn_off', this.entityId);
             } else {
@@ -251,10 +258,8 @@ export class BaseEntity {
       return Math.min(254, Math.max(1, rawLevel));
     }
     try {
-      const minLevel = (this.endpoint as any)
-        .getAttribute?.(LevelControl.id, 'minLevel') ?? 1;
-      const maxLevel = (this.endpoint as any)
-        .getAttribute?.(LevelControl.id, 'maxLevel') ?? 254;
+      const minLevel = (this.endpoint as any).getAttribute?.(LevelControl.id, 'minLevel') ?? 1;
+      const maxLevel = (this.endpoint as any).getAttribute?.(LevelControl.id, 'maxLevel') ?? 254;
       // minLevel must be at least 1 per Matter spec (0 means "off")
       const lo = Math.max(1, minLevel as number);
       const hi = Math.min(254, maxLevel as number);
@@ -291,7 +296,7 @@ export class BaseEntity {
           // Never send 0: it violates the minLevel constraint on dimmers
           // (e.g. Govee minLevel=135).  Map 0-brightness to level 1 (off
           // state is communicated via onOff cluster, not currentLevel=0).
-          const raw   = Math.round((newState.attributes.brightness / 255) * 254);
+          const raw = Math.round((newState.attributes.brightness / 255) * 254);
           const level = this.clampLevel(Math.max(1, raw), isInitialSync);
           if (isInitialSync) {
             await safeSetAttribute(this.endpoint, LevelControl.id, 'currentLevel', level, this.platform.log);
@@ -302,7 +307,7 @@ export class BaseEntity {
       }
 
       if (domain === 'fan' && this.endpoint.hasAttributeServer(FanControl.id, 'percentCurrent')) {
-        const percentage = typeof newState.attributes.percentage === 'number' ? newState.attributes.percentage : (isOn ? 100 : 0);
+        const percentage = typeof newState.attributes.percentage === 'number' ? newState.attributes.percentage : isOn ? 100 : 0;
         const update = isInitialSync ? safeSetAttribute : safeUpdateAttribute;
         await update(this.endpoint, FanControl.id, 'percentCurrent', percentage, this.platform.log);
         await update(this.endpoint, FanControl.id, 'percentSetting', percentage, this.platform.log);

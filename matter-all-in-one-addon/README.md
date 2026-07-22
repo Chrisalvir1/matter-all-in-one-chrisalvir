@@ -1,11 +1,11 @@
-# Matter All-in-One for Home Assistant — v1.2.32
+# Matter All-in-One for Home Assistant — v1.2.50
 
 <div align="center">
   <img src="logo.png" alt="Matter All In One Logo" width="300" />
 </div>
 
-> Puente Matter 1.6 para Home Assistant con publicación de accesorios independientes y perfiles conservadores para Apple Home.
-> **Base:** `matterbridge@3.9.3` · **Node.js:** `24-alpine` · **Spec:** Matter 1.6 (CSA, 17 Jun 2026)
+> Puente Matter 1.6 para Home Assistant con agrupación por dispositivo físico, accesorios independientes cuando corresponde y perfiles conservadores para Apple Home.
+> **Base:** `matterbridge@3.10.0` · **Node.js:** `24.18-alpine3.24` · **Spec:** Matter 1.6 (CSA, 17 Jun 2026)
 
 ---
 
@@ -15,12 +15,12 @@ This file is intentionally structured for both humans and AI agents.
 
 ```yaml
 project: matter-all-in-one-chrisalvir
-version: "1.2.29"
+version: "1.2.50"
 spec: "Matter 1.6"
 engine: matterbridge
-engine_version: "3.9.3"
-node_image: "node:24-alpine"
-bridge_mode: server       # Each exported entity = independent Matter ServerNode with own QR
+engine_version: "3.10.0"
+node_image: "node:24.18-alpine3.24"
+bridge_mode: server       # Each HA device = ServerNode; standalone entities keep their own QR
 plugin_mode: dynamic      # MatterbridgeDynamicPlatform
 ha_integration: websocket # WebSocket to HA supervisor API
 persistent_data: /data/.matterbridge
@@ -44,7 +44,7 @@ matterbridge_ui_port: 8284
 ## Minimum Requirements
 
 - **Apple Home:** HomePod mini / Apple TV 4K (Matter hub); Thread router only needed for Thread accessories.
-- **Matterbridge:** `>= 3.9.3`
+- **Matterbridge:** `>= 3.10.0`
 - **Home Assistant:** `>= 2025.1`
 
 ---
@@ -77,7 +77,7 @@ HomeAssistantPlatform (MatterbridgeDynamicPlatform)
         └── CompositeDeviceEntity → Fan+Light grouped (ServerNode, own QR)
         │
         ▼
-matterbridge@3.9.3 (Matter SDK: @matter/node)
+matterbridge@3.10.0 (Matter SDK: @matter/node)
         │
         ▼
 Matter 1.6 Network (mDNS + BLE commissioning)
@@ -100,25 +100,27 @@ Matter 1.6 Network (mDNS + BLE commissioning)
 | `src/entities/composite-device.entity.ts` | Fan+Light grouped by HA device_id or explicit include list |
 | `src/converters/vacuum.converter.ts` | HA vacuum state → Matter RVC attributes |
 | `run.sh` | Startup: mDNS interface detection, plugin registration, proxy |
-| `Dockerfile` | `node:24-alpine` + `matterbridge@3.9.3` global install |
+| `Dockerfile` | Imagen multi-stage reproducible con `node:24.18-alpine3.24` y `matterbridge@3.10.0` |
 
 ---
 
 ## Installation
 
 ```bash
-npm install -g matterbridge@3.9.3
-npm install -g matter-all-in-one-chrisalvir@1.2.29
+npm install -g matterbridge@3.10.0
+npm install -g matter-all-in-one-chrisalvir@1.2.50
 ```
+
+En Home Assistant, el add-on usa `ghcr.io/chrisalvir1/matter-all-in-one-chrisalvir` con un manifiesto para `amd64` y `aarch64`. Así una actualización sólo descarga la imagen ya construida; no recompila dependencias en el host.
 
 ---
 
 ## Changelog Summary (latest)
 
-### v1.2.29 (2026-07-08)
-- Updated toolchain to TypeScript 7.0.2.
-- Updated core engine to Matterbridge 3.9.3 (integrating Matter 1.6+ features).
-- Node 24 Active LTS verified as baseline.
+### v1.2.50 (2026-07-22)
+- Recuperación robusta después de desconexiones de Home Assistant y reconstrucción de endpoints reutilizados.
+- Red dual-stack IPv4/IPv6, mDNS en interfaces disponibles y estados Matter conservados durante indisponibilidad.
+- Imágenes GHCR precompiladas para actualizaciones rápidas en Home Assistant.
 
 ### v1.2.25 (2026-07-02)
 - Fan+Light composites can now be declared explicitly with `include_entities` even when Home Assistant registers the fan and light under different `device_id` values.

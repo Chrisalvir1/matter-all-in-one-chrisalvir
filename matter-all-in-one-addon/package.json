@@ -1,6 +1,6 @@
 {
   "name": "matter-all-in-one-chrisalvir",
-  "version": "1.2.49",
+  "version": "1.2.50",
   "description": "Standards-based Matter bridge for Home Assistant - HomeKit compatible mappings",
   "author": "chrisalvir",
   "license": "Apache-2.0",
@@ -13,6 +13,9 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
   "dependencies": {
     "ws": "^8.21.0"
   },
@@ -22,14 +25,15 @@
   "devDependencies": {
     "@types/node": "^24.13.3",
     "@types/ws": "^8.5.10",
-    "@vitest/coverage-v8": "^3.2.6",
+    "@vitest/coverage-v8": "^3.2.7",
     "matterbridge": "3.10.0",
-    "prettier": "^3.9.4",
+    "prettier": "^3.9.6",
     "typescript": "^7.0.2",
-    "vitest": "^3.2.0"
+    "vitest": "^3.2.7"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && mkdir -p dist/frontend && cp src/frontend/* dist/frontend/",
+    "clean": "node scripts/clean-dist.mjs",
+    "build": "npm run clean && tsc -p tsconfig.build.json && mkdir -p dist/frontend && cp src/frontend/* dist/frontend/",
     "dev": "tsc --watch",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -47,7 +51,7 @@
   ],
   "matterbridge": {
     "name": "matter-all-in-one-chrisalvir",
-    "version": "1.2.49",
+    "version": "1.2.50",
     "author": "chrisalvir",
     "description": "Standards-based Matter 1.6 bridge for Home Assistant"
   }

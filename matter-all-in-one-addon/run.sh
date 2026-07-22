@@ -5,11 +5,12 @@ echo "[Info] Starting Matter All-in-One Bridge Add-on..."
 
 # Read options from HA options file
 OPTIONS_FILE="/data/options.json"
+[ -r "$OPTIONS_FILE" ] || { echo "[Error] Missing $OPTIONS_FILE"; exit 1; }
 HOST=$(jq -r '.host // empty' "$OPTIONS_FILE")
 TOKEN=$(jq -r '.token // empty' "$OPTIONS_FILE")
 MDNSINTERFACE=$(jq -r '.mdnsinterface // empty' "$OPTIONS_FILE")
 IPV4_ONLY=$(jq -r '.ipv4_only // false' "$OPTIONS_FILE")
-GROUP_BY_DEVICE_ID=$(jq -r '.group_by_device_id // false' "$OPTIONS_FILE")
+GROUP_BY_DEVICE_ID=$(jq -r '.group_by_device_id // true' "$OPTIONS_FILE")
 
 # Fallback to supervisor API if defaults are used
 if [ -z "$HOST" ] || [ "$HOST" = "http://supervisor/core" ]; then
@@ -19,6 +20,11 @@ fi
 if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
     echo "[Info] Using injected Supervisor Token for connection."
     TOKEN="$SUPERVISOR_TOKEN"
+fi
+
+if [ -z "$TOKEN" ]; then
+    echo "[Error] Home Assistant did not provide a Supervisor token and no token was configured."
+    exit 1
 fi
 
 # Ensure Matterbridge persistent config directory exists in HA data volume
@@ -34,18 +40,17 @@ fi
 echo "[Info] Linking /root/.matterbridge to persistent volume /data/.matterbridge"
 ln -sfn /data/.matterbridge /root/.matterbridge
 
-# Write the plugin config file
+# Write the plugin config file atomically and safely escape host/token values.
 CONFIG_PATH="/root/.matterbridge/matter-all-in-one-chrisalvir.config.json"
 echo "[Info] Generating config file at $CONFIG_PATH"
-cat <<EOF > "$CONFIG_PATH"
-{
-  "name": "matter-all-in-one-chrisalvir",
-  "type": "dynamic",
-  "host": "$HOST",
-  "token": "$TOKEN",
-  "groupByDeviceId": $GROUP_BY_DEVICE_ID
-}
-EOF
+jq -n \
+  --arg host "$HOST" \
+  --arg token "$TOKEN" \
+  --argjson groupByDeviceId "$GROUP_BY_DEVICE_ID" \
+  '{name:"matter-all-in-one-chrisalvir",type:"dynamic",host:$host,token:$token,groupByDeviceId:$groupByDeviceId}' \
+  > "$CONFIG_PATH.tmp"
+mv "$CONFIG_PATH.tmp" "$CONFIG_PATH"
+chmod 600 "$CONFIG_PATH"
 
 # Write the main matterbridge settings to automatically enable the plugin
 SETTINGS_PATH="/root/.matterbridge/matterbridge.json"
@@ -73,42 +78,36 @@ fi
 
 # Add/register the plugin in matterbridge explicitly
 echo "[Info] Registering plugin..."
-matterbridge -add /app || true
+if ! matterbridge -add /app; then
+    echo "[Warning] Plugin registration returned an error (it may already be registered); continuing with the persistent configuration."
+fi
+
+# Private token between the loopback Ingress proxy and the plugin UI. It is
+# never written to disk and prevents direct calls to destructive admin routes.
+MATTER_AIO_ADMIN_TOKEN=$(node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))")
+export MATTER_AIO_ADMIN_TOKEN
 
 # Start Ingress proxy server
 echo "[Info] Starting proxy server on port 8283..."
 node /app/dist/proxy.js &
 
-# Handle mDNS interface configuration
-MDNS_PARAM=""
+# Build arguments without shell word-splitting or option injection.
+set -- matterbridge -bridge -frontend 8284 -bind 127.0.0.1
 if [ -n "$MDNSINTERFACE" ]; then
+    case "$MDNSINTERFACE" in
+      *[!A-Za-z0-9_.:-]*) echo "[Error] Invalid mDNS interface name."; exit 1 ;;
+    esac
     echo "[Info] Using manually configured network interface for mDNS: $MDNSINTERFACE"
-    MDNS_PARAM="-mdnsinterface $MDNSINTERFACE"
+    set -- "$@" -mdnsinterface "$MDNSINTERFACE"
 else
-    # Try dynamic auto-detection
-    ACTIVE_INTERFACE=""
-    if command -v ip >/dev/null 2>&1; then
-        ACTIVE_INTERFACE=$(ip route get 1.1.1.1 2>/dev/null | grep -oE "dev [^ ]+" | cut -d' ' -f2)
-        if [ -z "$ACTIVE_INTERFACE" ]; then
-            ACTIVE_INTERFACE=$(ip route show default 2>/dev/null | grep -oE "dev [^ ]+" | head -n1 | cut -d' ' -f2)
-        fi
-    fi
-    if [ -z "$ACTIVE_INTERFACE" ] && command -v route >/dev/null 2>&1; then
-        ACTIVE_INTERFACE=$(route -n 2>/dev/null | grep '^0.0.0.0' | awk '{print $8}' | head -n1)
-    fi
-    if [ -n "$ACTIVE_INTERFACE" ]; then
-        echo "[Info] Auto-detected active network interface for mDNS: $ACTIVE_INTERFACE"
-        MDNS_PARAM="-mdnsinterface $ACTIVE_INTERFACE"
-    else
-        echo "[Warning] Could not detect active network interface and no override was configured. mDNS will start on all interfaces."
-    fi
+    echo "[Info] mDNS will use all available interfaces so route changes do not strand Matter devices."
 fi
 
 if [ "$IPV4_ONLY" = "true" ]; then
-    echo "[Info] Forcing IPv4 only networking for Matterbridge due to addon config."
-    MDNS_PARAM="$MDNS_PARAM -ipv4"
+    echo "[Warning] IPv4-only mode is enabled. Matter normally requires IPv6 link-local; use this only for diagnostics."
+    set -- "$@" -ipv4
 fi
 
 # Start Matterbridge
-echo "[Info] Launching Matterbridge on port 8284 with $MDNS_PARAM..."
-exec matterbridge -bridge -frontend 8284 $MDNS_PARAM
+echo "[Info] Launching Matterbridge with dual-stack networking..."
+exec "$@"

@@ -1,7 +1,8 @@
 name: "Matter All-in-One Bridge"
 description: "Expose Home Assistant entities through one stable Matter bridge with HomeKit-compatible mappings."
-version: "1.2.49"
+version: "1.2.50"
 slug: "matter_all_in_one_bridge"
+image: "ghcr.io/chrisalvir1/matter-all-in-one-chrisalvir"
 init: false
 host_network: true
 ingress: true
@@ -9,13 +10,9 @@ ingress_port: 8283
 arch:
   - amd64
   - aarch64
-ports:
-  8283/tcp: 8283
-ports_description:
-  8283/tcp: Matterbridge Web UI
 hassio_api: true
 homeassistant_api: true
-hassio_role: admin
+hassio_role: homeassistant
 options: {}
 schema:
   host: str?

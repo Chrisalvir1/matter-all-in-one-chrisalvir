@@ -995,12 +995,7 @@ export interface HassServices {
 }
 
 export type HassWebSocketResponse =
-  | HassWebSocketResponseAuthRequired
-  | HassWebSocketResponseAuthOk
-  | HassWebSocketResponseAuthInvalid
-  | HassWebSocketResponsePong
-  | HassWebSocketResponseEvent
-  | HassWebSocketResponseResult;
+  HassWebSocketResponseAuthRequired | HassWebSocketResponseAuthOk | HassWebSocketResponseAuthInvalid | HassWebSocketResponsePong | HassWebSocketResponseEvent | HassWebSocketResponseResult;
 
 export interface HassWebSocketResponseAuthRequired {
   type: 'auth_required';
@@ -1120,8 +1115,9 @@ interface HomeAssistantEventEmitter {
   entities: [entities: HassEntity[]];
   areas: [areas: HassArea[]];
   labels: [labels: HassLabel[]];
+  registry_changed: [];
   subscribed: [];
-  event: [deviceId: string | null, entityId: string, old_state: HassState, new_state: HassState];
+  event: [deviceId: string | null, entityId: string, old_state: HassState | null, new_state: HassState];
   call_service: [];
   ping: [data: Buffer];
   pong: [data: Buffer];
@@ -1151,22 +1147,30 @@ export class HomeAssistant extends EventEmitter {
   private pingInterval: NodeJS.Timeout | undefined = undefined;
   private pingTimeout: NodeJS.Timeout | undefined = undefined;
   private reconnectTimeout: NodeJS.Timeout | undefined = undefined;
+  private connectionTimeout: NodeJS.Timeout | undefined = undefined;
   private readonly pingIntervalTime: number = 30000;
   private readonly pingTimeoutTime: number = 35000;
   private readonly reconnectTimeoutTime: number = 60000; // Reconnect timeout in milliseconds, 0 means no timeout.
   private readonly reconnectRetries: number = 0; // 0 means retry indefinitely.
+  private readonly connectionTimeoutTime: number;
   private _responseTimeout: number = 5000; // Default WebSocket timeout for responses in milliseconds
   private readonly certificatePath: string | undefined = undefined; // Full path to the CA certificate for secure connections
   private readonly rejectUnauthorized: boolean | undefined = undefined; // Whether the WebSocket has to reject unauthorized certificates
   private reconnectRetry = 1; // Reconnect retry count. It is incremented each time a reconnect is attempted till the maximum number of retries is reached.
+  /** Lets delayed callbacks detect that their WebSocket was superseded. */
+  private connectionGeneration = 0;
   private requestId = 1; // Next id for WebSocket requests. It has to be incremented for each request.
   private closing = false;
   /** One dispatcher prevents one WebSocket listener per HA request. */
-  private readonly pendingRequests = new Map<number, {
-    resolve: (response: HassWebSocketResponseResult) => void;
-    reject: (error: Error) => void;
-    timer: NodeJS.Timeout;
-  }>();
+  private readonly pendingRequests = new Map<
+    number,
+    {
+      resolve: (response: HassWebSocketResponseResult) => void;
+      reject: (error: Error) => void;
+      timer: NodeJS.Timeout;
+    }
+  >();
+  private readonly subscriptions = new Map<string, number>();
 
   private fetchTimeout: NodeJS.Timeout | undefined = undefined;
   private fetchQueue = new Set<string>();
@@ -1215,14 +1219,16 @@ export class HomeAssistant extends EventEmitter {
    * @param {number} [reconnectRetries] - Max reconnection attempts before giving up. Defaults to 10.
    * @param {string | undefined} [certificatePath] - Path to CA certificate for secure WebSocket. Defaults to undefined.
    * @param {boolean | undefined} [rejectUnauthorized] - Reject unauthorized TLS certs. Defaults to false (allow LAN self-signed).
+   * @param {number} [connectionTimeoutTime] - Maximum seconds for the WebSocket upgrade and authentication. Defaults to 15.
    */
   constructor(
     url: string,
-    accessToken: string = '',   // empty string = trust-local / supervisor mode
+    accessToken: string = '', // empty string = trust-local / supervisor mode
     reconnectTimeoutTime: number = 60,
     reconnectRetries: number = 10,
     certificatePath: string | undefined = undefined,
     rejectUnauthorized: boolean | undefined = false, // allow self-signed certs on LAN
+    connectionTimeoutTime: number = 15,
   ) {
     super();
     this.wsUrl = url;
@@ -1231,6 +1237,7 @@ export class HomeAssistant extends EventEmitter {
     this.reconnectRetries = reconnectRetries;
     this.certificatePath = certificatePath;
     this.rejectUnauthorized = rejectUnauthorized;
+    this.connectionTimeoutTime = connectionTimeoutTime * 1000;
     this.log = new AnsiLogger({
       logName: 'HomeAssistant',
       logTimestampFormat: TimestampFormat.TIME_MILLIS,
@@ -1307,14 +1314,9 @@ export class HomeAssistant extends EventEmitter {
       if (this.verbose) this.log.debug(`Event ${CYAN}${response.event.event_type}${db} received id ${CYAN}${response.id}${db}:${rs}\n${debugStringify(response.event)}`);
       if (response.event.event_type === 'state_changed') {
         const entity = this.hassEntities.get(response.event.data.entity_id);
-        if (!entity) {
-          this.log.debug(`Entity id ${CYAN}${response.event.data.entity_id}${db} not found processing event`);
-          return;
-        }
-        // istanbul ignore else
-        if (response.event.data.old_state && response.event.data.new_state) {
+        if (response.event.data.new_state) {
           this.hassStates.set(response.event.data.new_state.entity_id, response.event.data.new_state);
-          this.emit('event', entity.device_id, entity.entity_id, response.event.data.old_state, response.event.data.new_state);
+          this.emit('event', entity?.device_id ?? null, response.event.data.new_state.entity_id, response.event.data.old_state ?? null, response.event.data.new_state);
         }
       } else if (response.event.event_type === 'call_service') {
         this.log.debug(`Event ${CYAN}${response.event.event_type}${db} received id ${CYAN}${response.id}${db}`);
@@ -1337,6 +1339,7 @@ export class HomeAssistant extends EventEmitter {
         // istanbul ignore next cause is too long to test the fetch timeout in this case
         this.fetchTimeout = setTimeout(() => void this.onFetchTimeout(), 5000).unref();
         this.fetchQueue.add('config/entity_registry/list');
+        this.fetchQueue.add('get_states');
       } else if (response.event.event_type === 'area_registry_updated') {
         this.log.debug(`Event ${CYAN}${response.event.event_type}${db} received id ${CYAN}${response.id}${db}`);
         clearTimeout(this.fetchTimeout);
@@ -1360,6 +1363,11 @@ export class HomeAssistant extends EventEmitter {
     const closeMessage = `WebSocket connection closed. Code: ${code} Reason: ${reason.toString()}`;
     this.log.debug(closeMessage);
     this.connected = false;
+    this.subscriptions.clear();
+    if (this.connectionTimeout) {
+      clearTimeout(this.connectionTimeout);
+      this.connectionTimeout = undefined;
+    }
     this.stopPing();
     this.rejectPendingRequests(new Error(`WebSocket closed (${code}): ${reason.toString()}`));
     this.emit('socket_closed', code, reason);
@@ -1400,7 +1408,8 @@ export class HomeAssistant extends EventEmitter {
   private async onFetchTimeout() {
     this.fetchTimeout = undefined;
     this.log.debug(`Fetch timeout reached, processing fetch queue of ${this.fetchQueue.size} fetch id(s)...`);
-    for (const fetchId of this.fetchQueue) {
+    let registryChanged = false;
+    for (const fetchId of [...this.fetchQueue]) {
       this.log.debug(`Fetching ${CYAN}${fetchId}${db}...`);
       try {
         const data = await this.fetch(fetchId);
@@ -1415,29 +1424,44 @@ export class HomeAssistant extends EventEmitter {
         } else if (fetchId === 'config/device_registry/list') {
           const devices = data as HassDevice[];
           this.log.debug(`Received ${devices.length} devices.`);
+          this.hassDevices.clear();
           devices.forEach((device) => this.hassDevices.set(device.id, device));
           this.emit('devices', devices);
+          registryChanged = true;
         } else if (fetchId === 'config/entity_registry/list') {
           const entities = data as HassEntity[];
           this.log.debug(`Received ${entities.length} entities.`);
+          this.hassEntities.clear();
           entities.forEach((entity) => this.hassEntities.set(entity.entity_id, entity));
           this.emit('entities', entities);
+          registryChanged = true;
+        } else if (fetchId === 'get_states') {
+          const states = data as HassState[];
+          this.hassStates.clear();
+          states.forEach((state) => this.hassStates.set(state.entity_id, state));
+          this.emit('states', states);
+          registryChanged = true;
         } else if (fetchId === 'config/area_registry/list') {
           const areas = data as HassArea[];
           this.log.debug(`Received ${areas.length} areas.`);
+          this.hassAreas.clear();
           areas.forEach((area) => this.hassAreas.set(area.area_id, area));
           this.emit('areas', areas);
+          registryChanged = true;
         } else if (fetchId === 'config/label_registry/list') {
           const labels = data as HassLabel[];
           this.log.debug(`Received ${labels.length} labels.`);
+          this.hassLabels.clear();
           labels.forEach((label) => this.hassLabels.set(label.label_id, label));
           this.emit('labels', labels);
+          registryChanged = true;
         }
       } catch (error) {
         this.log.error(`Error fetching ${CYAN}${fetchId}${er}: ${error}`);
       }
       this.fetchQueue.delete(fetchId);
     }
+    if (registryChanged) this.emit('registry_changed');
   }
 
   /**
@@ -1453,6 +1477,14 @@ export class HomeAssistant extends EventEmitter {
         return reject(new Error('Already connected to Home Assistant'));
       }
       this.closing = false;
+      const generation = ++this.connectionGeneration;
+      let authenticated = false;
+
+      // A failed upgrade may still own a TCP socket. Supersede it before a
+      // new attempt so file descriptors cannot accumulate during an outage.
+      if (this.ws && this.ws.readyState !== WebSocket.CLOSED) {
+        this.ws.terminate();
+      }
 
       try {
         this.log.info(`Connecting to Home Assistant on ${this.wsUrl}...`);
@@ -1474,21 +1506,55 @@ export class HomeAssistant extends EventEmitter {
         } else {
           return reject(new Error(`Invalid WebSocket URL: ${this.wsUrl}. It must start with ws:// or wss://`));
         }
+        const socket = this.ws;
+        const isCurrent = () => this.ws === socket && this.connectionGeneration === generation;
+
+        // A router or HA Core restart can leave the TCP socket half-open
+        // without completing the WebSocket upgrade. Bound the whole
+        // connection/authentication phase so a dead attempt cannot block
+        // every later reconnect indefinitely.
+        if (this.connectionTimeout) clearTimeout(this.connectionTimeout);
+        this.connectionTimeout = setTimeout(() => {
+          if (!isCurrent()) return;
+          this.connectionTimeout = undefined;
+          const message = `Home Assistant WebSocket connection timed out after ${this.connectionTimeoutTime / 1000} seconds`;
+          this.log.error(message);
+          this.emit('error', message);
+          socket.terminate();
+          if (!this.closing) this.startReconnect();
+          reject(new Error(message));
+        }, this.connectionTimeoutTime).unref();
 
         // Add the event listeners
-        this.ws.on('open', this.onOpen.bind(this));
-        this.ws.on('ping', this.onPing.bind(this));
-        this.ws.on('pong', this.onPong.bind(this));
-        this.ws.on('close', this.onClose.bind(this));
+        socket.on('open', () => {
+          if (isCurrent()) this.onOpen();
+        });
+        socket.on('ping', (data) => {
+          if (isCurrent()) this.onPing(data);
+        });
+        socket.on('pong', (data) => {
+          if (isCurrent()) this.onPong(data);
+        });
+        socket.on('close', (code, reason) => {
+          if (!isCurrent()) return;
+          if (!authenticated) reject(new Error(`WebSocket closed before authentication (${code}): ${reason.toString()}`));
+          this.onClose(code, reason);
+        });
 
-        this.ws.onerror = (event: ErrorEvent) => {
+        socket.onerror = (event: ErrorEvent) => {
+          if (!isCurrent()) return;
+          if (this.connectionTimeout) {
+            clearTimeout(this.connectionTimeout);
+            this.connectionTimeout = undefined;
+          }
           this.log.error(`WebSocket error: ${event.message}`);
           this.emit('error', `WebSocket error: ${event.message}`);
           if (!this.closing) this.startReconnect();
           return reject(new Error(`WebSocket error: ${event.message}`));
         };
 
-        this.ws.onmessage = (event: WebSocket.MessageEvent) => {
+        socket.onmessage = (event: WebSocket.MessageEvent) => {
+          if (!isCurrent()) return;
           let response;
           try {
             response = JSON.parse(event.data.toString()) as HassWebSocketResponse;
@@ -1511,7 +1577,7 @@ export class HomeAssistant extends EventEmitter {
             } else {
               this.log.debug('No token configured — attempting trust-local / supervisor auth...');
             }
-            this.ws?.send(
+            socket.send(
               JSON.stringify({
                 type: 'auth',
                 access_token: this.wsAccessToken,
@@ -1523,26 +1589,45 @@ export class HomeAssistant extends EventEmitter {
             // If no token was supplied the host is probably not in trusted_networks.
             // ──────────────────────────────────────────────────────────────
             const msg = (response as unknown as { message?: string }).message ?? 'auth_invalid';
+            if (this.connectionTimeout) {
+              clearTimeout(this.connectionTimeout);
+              this.connectionTimeout = undefined;
+            }
             if (this.wsAccessToken) {
               return reject(new Error(`Home Assistant rejected the access token: ${msg}. Check your token in the plugin config.`));
             } else {
-              return reject(new Error(
-                `Home Assistant requires authentication but no token was provided and the host IP is not in trusted_networks. ` +
-                `Either add a Long-Lived Access Token to the plugin config, or add this host to trusted_networks in HA's configuration.yaml.`
-              ));
+              return reject(
+                new Error(
+                  `Home Assistant requires authentication but no token was provided and the host IP is not in trusted_networks. ` +
+                    `Either add a Long-Lived Access Token to the plugin config, or add this host to trusted_networks in HA's configuration.yaml.`,
+                ),
+              );
             }
           } else if (response.type === 'auth_ok') {
             // Handle successful authentication
             this.log.debug(`Authenticated successfully: ${debugStringify(response)}`);
             this.log.debug(`Authenticated successfully with Home Assistant v. ${response.ha_version}`);
+            authenticated = true;
             this.connected = true;
             this.reconnectRetry = 1; // Reset the reconnect retry count
+            if (this.connectionTimeout) {
+              clearTimeout(this.connectionTimeout);
+              this.connectionTimeout = undefined;
+            }
+            if (this.reconnectTimeout) {
+              clearTimeout(this.reconnectTimeout);
+              this.reconnectTimeout = undefined;
+            }
 
             // Add the message event listeners
-            if (this.ws) this.ws.onmessage = null; // Clear the current onmessage handler to avoid duplicate processing
-            this.ws?.on('message', this.onMessage.bind(this)); // Set the new onmessage handler
-            if (this.ws) this.ws.onerror = null; // Clear the current onerror handler to avoid duplicate processing
-            this.ws?.on('error', this.onError.bind(this)); // Set the new onerror handler
+            socket.onmessage = null; // Clear the current onmessage handler to avoid duplicate processing
+            socket.on('message', (data, isBinary) => {
+              if (isCurrent()) this.onMessage(data, isBinary);
+            });
+            socket.onerror = null;
+            socket.on('error', (error) => {
+              if (isCurrent()) this.onError(error);
+            });
 
             // Start ping interval
             this.startPing();
@@ -1574,6 +1659,12 @@ export class HomeAssistant extends EventEmitter {
         void this.close().catch(/* istanbul ignore next */ () => {});
         return;
       }
+      // Keep one watchdog per unanswered ping. Replacing this timer every 30
+      // seconds lets a dead connection postpone its timeout indefinitely.
+      if (this.pingTimeout) {
+        this.log.debug('Previous ping is still pending; waiting for its timeout');
+        return;
+      }
       this.log.debug(`Sending WebSocket ping...`);
       this.ws.ping();
       this.log.debug(`Sending Home Assistant ping id ${this.requestId}...`);
@@ -1586,8 +1677,11 @@ export class HomeAssistant extends EventEmitter {
       this.log.debug('Starting ping timeout...');
       this.pingTimeout = setTimeout(() => {
         this.log.error('Ping timeout. Closing connection...');
-        void this.close().catch(/* istanbul ignore next */ () => {});
-        this.startReconnect();
+        this.pingTimeout = undefined;
+        // A graceful close of an unreachable peer waits for another timeout.
+        // Terminating emits close immediately and lets onClose reconnect.
+        this.closing = false;
+        this.ws?.terminate();
       }, this.pingTimeoutTime).unref();
       this.log.debug('Started ping timeout');
     }, this.pingIntervalTime).unref();
@@ -1652,8 +1746,13 @@ export class HomeAssistant extends EventEmitter {
     return new Promise((resolve, reject) => {
       this.log.info('Closing Home Assistant connection...');
       this.closing = true;
+      this.connectionGeneration++;
 
       this.stopPing();
+      if (this.connectionTimeout) {
+        clearTimeout(this.connectionTimeout);
+        this.connectionTimeout = undefined;
+      }
       if (this.reconnectTimeout) {
         clearTimeout(this.reconnectTimeout);
         this.reconnectTimeout = undefined;
@@ -1739,38 +1838,41 @@ export class HomeAssistant extends EventEmitter {
         this.emit('config', this.hassConfig);
       }
 
-      this.hassServices = (await this.fetch('get_services')) as HassServices;
-      this.log.debug('Received services.');
-      this.emit('services', this.hassServices);
+      const [services, devices, entities, states, areas, labels] = await Promise.all([
+        this.fetch('get_services') as Promise<HassServices>,
+        this.fetch('config/device_registry/list') as Promise<HassDevice[]>,
+        this.fetch('config/entity_registry/list') as Promise<HassEntity[]>,
+        this.fetch('get_states') as Promise<HassState[]>,
+        this.fetch('config/area_registry/list') as Promise<HassArea[]>,
+        this.fetch('config/label_registry/list') as Promise<HassLabel[]>,
+      ]);
 
-      const devices = (await this.fetch('config/device_registry/list')) as HassDevice[];
-      devices.forEach((device: HassDevice) => this.hassDevices.set(device.id, device));
+      // Replace each snapshot only after every request succeeded. A partial
+      // reconnect must never mix stale and current registry data.
+      this.hassServices = services;
+      this.hassDevices = new Map(devices.map((device) => [device.id, device]));
+      this.hassEntities = new Map(entities.map((entity) => [entity.entity_id, entity]));
+      this.hassStates = new Map(states.map((state) => [state.entity_id, state]));
+      this.hassAreas = new Map(areas.map((area) => [area.area_id, area]));
+      this.hassLabels = new Map(labels.map((label) => [label.label_id, label]));
+
+      this.log.debug('Received services.');
+      this.emit('services', services);
       this.log.debug(`Received ${devices.length} devices.`);
       this.emit('devices', devices);
-
-      const entities = (await this.fetch('config/entity_registry/list')) as HassEntity[];
-      entities.forEach((entity: HassEntity) => this.hassEntities.set(entity.entity_id, entity));
       this.log.debug(`Received ${entities.length} entities.`);
       this.emit('entities', entities);
-
-      const states = (await this.fetch('get_states')) as HassState[];
-      states.forEach((state: HassState) => this.hassStates.set(state.entity_id, state));
       this.log.debug(`Received ${states.length} states.`);
       this.emit('states', states);
-
-      const areas = (await this.fetch('config/area_registry/list')) as HassArea[];
-      areas.forEach((area: HassArea) => this.hassAreas.set(area.area_id, area));
       this.log.debug(`Received ${areas.length} areas.`);
       this.emit('areas', areas);
-
-      const labels = (await this.fetch('config/label_registry/list')) as HassLabel[];
-      labels.forEach((label: HassLabel) => this.hassLabels.set(label.label_id, label));
       this.log.debug(`Received ${labels.length} labels.`);
       this.emit('labels', labels);
 
       this.log.debug('Initial data fetched successfully.');
     } catch (error) {
       this.log.error(`Error fetching initial data: ${error}`);
+      throw error;
     }
   }
 
@@ -1811,8 +1913,12 @@ export class HomeAssistant extends EventEmitter {
    */
   // eslint-disable-next-line @typescript-eslint/promise-function-async
   subscribe(event?: string): Promise<number> {
+    const key = event ?? '*';
+    const existing = this.subscriptions.get(key);
+    if (existing !== undefined) return Promise.resolve(existing);
     return this.request({ type: 'subscribe_events', event_type: event }).then((response) => {
       if (!response.success) throw new Error(response.error?.message ?? `Subscribe ${event ?? 'events'} failed`);
+      this.subscriptions.set(key, response.id);
       return response.id;
     });
   }
@@ -1832,8 +1938,14 @@ export class HomeAssistant extends EventEmitter {
    */
   // eslint-disable-next-line @typescript-eslint/promise-function-async
   unsubscribe(subscriptionId: number): Promise<void> {
-    return this.request({ type: 'unsubscribe_events', subscription: subscriptionId }).then((response) => {
+    return this.request({
+      type: 'unsubscribe_events',
+      subscription: subscriptionId,
+    }).then((response) => {
       if (!response.success) throw new Error(response.error?.message ?? `Unsubscribe ${subscriptionId} failed`);
+      for (const [key, id] of this.subscriptions) {
+        if (id === subscriptionId) this.subscriptions.delete(key);
+      }
     });
   }
 
@@ -1861,7 +1973,10 @@ export class HomeAssistant extends EventEmitter {
       target: { entity_id: entityId },
     }).then((response) => {
       if (!response.success) throw new Error(response.error?.message ?? `Service ${domain}.${service} failed`);
-      return response.result as unknown as { context: HassContext; response: unknown };
+      return response.result as unknown as {
+        context: HassContext;
+        response: unknown;
+      };
     });
   }
 }

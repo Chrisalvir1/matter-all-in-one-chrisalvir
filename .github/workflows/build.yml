@@ -2,13 +2,13 @@ name: Build and Test
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
     paths-ignore:
-      - '**/*.md'
+      - "**/*.md"
   pull_request:
-    branches: [ main ]
+    branches: [main]
     paths-ignore:
-      - '**/*.md'
+      - "**/*.md"
   workflow_dispatch:
 
 jobs:
@@ -34,11 +34,14 @@ jobs:
           node-version: ${{ matrix.node-version }}
 
       - name: Install dependencies
-        run: npm install --legacy-peer-deps --no-fund --no-audit
+        run: npm ci --legacy-peer-deps --no-fund --no-audit
 
       - name: Build plugin
         run: npm run build
 
-
       - name: Run unit tests
         run: npm run test
+
+      - name: Build add-on container
+        if: matrix.os == 'ubuntu-latest' && github.event_name != 'push'
+        run: docker build --tag matter-all-in-one:test .

@@ -3,20 +3,40 @@ import './mocks/matterbridge.mock.js';
 import { CompositeDeviceEntity } from '../src/entities/composite-device.entity.js';
 
 const platform = {
-  log: { error: vi.fn(), debug: vi.fn(), info: vi.fn(), notice: vi.fn(), warn: vi.fn() },
+  log: {
+    error: vi.fn(),
+    debug: vi.fn(),
+    info: vi.fn(),
+    notice: vi.fn(),
+    warn: vi.fn(),
+  },
   ha: { callService: vi.fn().mockResolvedValue(undefined) },
 };
 
-
 function state(entityId: string, value: string, attributes: Record<string, any> = {}) {
-  return { entity_id: entityId, state: value, attributes: { friendly_name: entityId, ...attributes }, last_changed: '', last_updated: '' };
+  return {
+    entity_id: entityId,
+    state: value,
+    attributes: { friendly_name: entityId, ...attributes },
+    last_changed: '',
+    last_updated: '',
+  };
 }
 
 describe('CompositeDeviceEntity', () => {
   it('creates one fan-rooted Matter node with a light child endpoint', async () => {
     const composite = new CompositeDeviceEntity(platform, 'fan-device', 'Ventilador Sala', [
-      { entityId: 'fan.sala', state: state('fan.sala', 'on', { percentage: 60 }) },
-      { entityId: 'light.sala', state: state('light.sala', 'on', { brightness: 128, supported_color_modes: ['brightness'] }) },
+      {
+        entityId: 'fan.sala',
+        state: state('fan.sala', 'on', { percentage: 60 }),
+      },
+      {
+        entityId: 'light.sala',
+        state: state('light.sala', 'on', {
+          brightness: 128,
+          supported_color_modes: ['brightness'],
+        }),
+      },
     ]);
 
     const root = await composite.createEndpoint();
@@ -56,7 +76,9 @@ describe('CompositeDeviceEntity', () => {
     expect(light.deviceTypes[0]).toMatchObject({ code: 0x010c });
     expect(light.clusterServers.size).toBeGreaterThan(2);
 
-    await light.invokeCommand('moveToColorTemperature', { colorTemperatureMireds: 250 });
+    await light.invokeCommand('moveToColorTemperature', {
+      colorTemperatureMireds: 250,
+    });
     expect(platform.ha.callService).toHaveBeenCalledWith('light', 'turn_on', 'light.bedroom_main_light', {
       color_temp_kelvin: 4000,
     });
@@ -65,8 +87,16 @@ describe('CompositeDeviceEntity', () => {
 
   it('creates a lock-rooted Matter node with contact sensor integrated', async () => {
     const composite = new CompositeDeviceEntity(platform, 'switchbot-lock', 'Llavin SwitchBot', [
-      { entityId: 'lock.llavin_switchbot', state: state('lock.llavin_switchbot', 'locked') },
-      { entityId: 'binary_sensor.llavin_switchbot_contact', state: state('binary_sensor.llavin_switchbot_contact', 'off', { device_class: 'door' }) },
+      {
+        entityId: 'lock.llavin_switchbot',
+        state: state('lock.llavin_switchbot', 'locked'),
+      },
+      {
+        entityId: 'binary_sensor.llavin_switchbot_contact',
+        state: state('binary_sensor.llavin_switchbot_contact', 'off', {
+          device_class: 'door',
+        }),
+      },
     ]);
 
     const root = await composite.createEndpoint();
@@ -77,5 +107,27 @@ describe('CompositeDeviceEntity', () => {
 
     await (composite.endpoints.get('lock.llavin_switchbot') as any).invokeCommand('unlockDoor');
     expect(platform.ha.callService).toHaveBeenCalledWith('lock', 'unlock', 'lock.llavin_switchbot');
+  });
+
+  it('reattaches every member when Matterbridge retains a commissioned composite node', async () => {
+    const members = [
+      {
+        entityId: 'fan.sala',
+        state: state('fan.sala', 'on', { percentage: 40 }),
+      },
+      {
+        entityId: 'light.sala',
+        state: state('light.sala', 'on', { brightness: 100 }),
+      },
+    ];
+    const original = new CompositeDeviceEntity(platform, 'fan-device', 'Ventilador Sala', members);
+    const retainedEndpoint = await original.createEndpoint();
+    const restored = new CompositeDeviceEntity(platform, 'fan-device', 'Ventilador Sala', members);
+
+    restored.adoptEndpoint(retainedEndpoint);
+
+    expect(restored.endpoints.get('fan.sala')).toBe(retainedEndpoint);
+    expect(restored.endpoints.get('light.sala')).toBe((retainedEndpoint as any).children.get('light_sala'));
+    await expect(restored.syncInitialState()).resolves.toBeUndefined();
   });
 });

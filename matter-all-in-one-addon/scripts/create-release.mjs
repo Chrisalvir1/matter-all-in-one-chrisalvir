@@ -35,11 +35,11 @@ function stripLeadingV(version) {
   return typeof version === 'string' ? version.replace(/^v/i, '') : '';
 }
 
-function isSemverBracketLine(line) {
+function isSemverHeading(line) {
   // Matches typical changelog headings like:
   //   ## [2.0.8] - 2026-02-07
   // and also any line containing [2.0.8]
-  return /\[v?\d+\.\d+\.\d+\]/.test(line);
+  return /^##\s+\[?v?\d+\.\d+\.\d+\]?(?:\s|$)/.test(line);
 }
 
 function normalizeNewlines(text) {
@@ -50,25 +50,24 @@ function extractChangelogSection(changelogText, version) {
   const v = stripLeadingV(version);
   const lines = normalizeNewlines(changelogText).split('\n');
 
-  const targetA = `[${v}]`;
-  const targetB = `[v${v}]`;
+  const target = new RegExp(`^##\\s+\\[?v?${v.replaceAll('.', '\\.')}\\]?(?:\\s|$)`);
 
   let startHeadingIndex = -1;
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i];
-    if (line.includes(targetA) || line.includes(targetB)) {
+    if (target.test(line)) {
       startHeadingIndex = i;
       break;
     }
   }
 
   if (startHeadingIndex === -1) {
-    throw new Error(`Could not find changelog entry for ${targetA} in CHANGELOG.md`);
+    throw new Error(`Could not find changelog entry for ${v} in CHANGELOG.md`);
   }
 
   let endIndex = lines.length;
   for (let i = startHeadingIndex + 1; i < lines.length; i += 1) {
-    if (isSemverBracketLine(lines[i])) {
+    if (isSemverHeading(lines[i])) {
       endIndex = i;
       break;
     }

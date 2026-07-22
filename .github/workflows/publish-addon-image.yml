@@ -1,0 +1,136 @@
+name: Publish Home Assistant add-on image
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "matter-all-in-one-addon/**"
+      - ".github/workflows/publish-addon-image.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: publish-addon-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    name: Prepare build
+    runs-on: ubuntu-latest
+    outputs:
+      architectures: ${{ steps.info.outputs.architectures }}
+      build_matrix: ${{ steps.matrix.outputs.matrix }}
+      image_name: ${{ steps.normalize.outputs.image_name }}
+      name: ${{ steps.normalize.outputs.name }}
+      registry_prefix: ${{ steps.normalize.outputs.registry_prefix }}
+      version: ${{ steps.normalize.outputs.version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Read add-on metadata
+        id: info
+        uses: home-assistant/actions/helpers/info@master
+        with:
+          path: ./matter-all-in-one-addon
+
+      - name: Normalize add-on metadata
+        id: normalize
+        env:
+          ADDON_IMAGE: ${{ steps.info.outputs.image }}
+          ADDON_NAME: ${{ steps.info.outputs.name }}
+          ADDON_VERSION: ${{ steps.info.outputs.version }}
+        run: |
+          echo "image_name=${ADDON_IMAGE##*/}" >> "$GITHUB_OUTPUT"
+          echo "registry_prefix=${ADDON_IMAGE%/*}" >> "$GITHUB_OUTPUT"
+          echo "name=${ADDON_NAME}" >> "$GITHUB_OUTPUT"
+          echo "version=${ADDON_VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare architecture matrix
+        id: matrix
+        uses: home-assistant/builder/actions/prepare-multi-arch-matrix@2026.06.0
+        with:
+          architectures: ${{ steps.info.outputs.architectures }}
+          image-name: ${{ steps.normalize.outputs.image_name }}
+          registry-prefix: ${{ steps.normalize.outputs.registry_prefix }}
+
+  build:
+    name: Build ${{ matrix.arch }}
+    needs: prepare
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      id-token: write
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.prepare.outputs.build_matrix) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Build and publish architecture image
+        uses: home-assistant/builder/actions/build-image@2026.06.0
+        with:
+          arch: ${{ matrix.arch }}
+          container-registry-password: ${{ secrets.GITHUB_TOKEN }}
+          context: ./matter-all-in-one-addon
+          image: ${{ matrix.image }}
+          image-tags: |
+            ${{ needs.prepare.outputs.version }}
+            latest
+          labels: |
+            io.hass.type=app
+            io.hass.name=${{ needs.prepare.outputs.name }}
+            io.hass.description=Stable Matter bridge for Home Assistant entities
+            org.opencontainers.image.url=https://github.com/Chrisalvir1/matter-all-in-one-chrisalvir
+          push: true
+          version: ${{ needs.prepare.outputs.version }}
+
+  manifest:
+    name: Publish multi-architecture manifest
+    needs:
+      - prepare
+      - build
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      packages: write
+    steps:
+      - name: Publish generic image tags
+        uses: home-assistant/builder/actions/publish-multi-arch-manifest@2026.06.0
+        with:
+          architectures: ${{ needs.prepare.outputs.architectures }}
+          container-registry-password: ${{ secrets.GITHUB_TOKEN }}
+          image-name: ${{ needs.prepare.outputs.image_name }}
+          image-tags: |
+            ${{ needs.prepare.outputs.version }}
+            latest
+          registry-prefix: ${{ needs.prepare.outputs.registry_prefix }}
+
+  verify-public:
+    name: Verify Home Assistant can download the image
+    needs:
+      - prepare
+      - manifest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect image without registry credentials
+        env:
+          ADDON_IMAGE: ${{ needs.prepare.outputs.registry_prefix }}/${{ needs.prepare.outputs.image_name }}
+          ADDON_VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          for attempt in 1 2 3 4 5; do
+            if docker buildx imagetools inspect "${ADDON_IMAGE}:${ADDON_VERSION}"; then
+              exit 0
+            fi
+            echo "Public image verification attempt ${attempt} failed; retrying..."
+            sleep 5
+          done
+          echo "::error::The GHCR package is not public. Open the package settings, choose Change visibility, and make it Public so Home Assistant can download it."
+          exit 1

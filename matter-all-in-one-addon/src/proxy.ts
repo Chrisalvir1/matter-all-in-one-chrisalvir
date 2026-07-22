@@ -2,8 +2,16 @@ import http from 'http';
 
 const TARGET_PORT = 8285;
 const PROXY_PORT = 8283;
+const ADMIN_TOKEN = process.env.MATTER_AIO_ADMIN_TOKEN ?? '';
+const ALLOWED_INGRESS_CLIENTS = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1', '172.30.32.2', '::ffff:172.30.32.2']);
 
 const server = http.createServer((req, res) => {
+  const remoteAddress = req.socket.remoteAddress ?? '';
+  if (!ALLOWED_INGRESS_CLIENTS.has(remoteAddress)) {
+    res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end('Forbidden');
+    return;
+  }
   // Setup standard proxy request to the plugin's actual HTTP server on 8285
   const proxyReq = http.request(
     {
@@ -11,18 +19,31 @@ const server = http.createServer((req, res) => {
       port: TARGET_PORT,
       path: req.url,
       method: req.method,
-      headers: req.headers,
+      headers: {
+        ...req.headers,
+        ...(ADMIN_TOKEN ? { 'x-matter-aio-token': ADMIN_TOKEN } : {}),
+      },
     },
     (proxyRes) => {
       // Set the response headers and status from the target response
       res.writeHead(proxyRes.statusCode ?? 200, proxyRes.headers);
       proxyRes.pipe(res);
-    }
+    },
   );
 
   // Handle errors (e.g. target server not started yet)
-  proxyReq.on('error', (err) => {
-    // If the plugin server is down (ECONNREFUSED), serve the premium loading page.
+  proxyReq.on('error', () => {
+    if (req.method !== 'GET') {
+      res.writeHead(503, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(
+        JSON.stringify({
+          success: false,
+          error: 'El servicio todavía está iniciando.',
+        }),
+      );
+      return;
+    }
+    // If the plugin server is down (ECONNREFUSED), serve the loading page for GET requests.
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     res.end(getLoadingHtml());
   });
@@ -32,7 +53,7 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PROXY_PORT, '0.0.0.0', () => {
-  console.log(`[Proxy] Listening on port ${PROXY_PORT}, proxying requests to port ${TARGET_PORT}`);
+  console.log(`[Proxy] Ingress-only listener on port ${PROXY_PORT}, proxying requests to port ${TARGET_PORT}`);
 });
 
 function getLoadingHtml() {
