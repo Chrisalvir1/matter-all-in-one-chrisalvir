@@ -1,4 +1,4 @@
-# Matter All-in-One for Home Assistant — v1.2.51
+# Matter All-in-One for Home Assistant — v1.2.52
 
 <div align="center">
   <img src="logo.png" alt="Matter All In One Logo" width="300" />
@@ -15,7 +15,7 @@ This file is intentionally structured for both humans and AI agents.
 
 ```yaml
 project: matter-all-in-one-chrisalvir
-version: "1.2.51"
+version: "1.2.52"
 spec: "Matter 1.6"
 engine: matterbridge
 engine_version: "3.10.0"
@@ -108,7 +108,7 @@ Matter 1.6 Network (mDNS + BLE commissioning)
 
 ```bash
 npm install -g matterbridge@3.10.0
-npm install -g matter-all-in-one-chrisalvir@1.2.51
+npm install -g matter-all-in-one-chrisalvir@1.2.52
 ```
 
 En Home Assistant, el add-on usa `ghcr.io/chrisalvir1/matter-all-in-one-chrisalvir` con un manifiesto para `amd64` y `aarch64`. Así una actualización sólo descarga la imagen ya construida; no recompila dependencias en el host.
@@ -116,6 +116,10 @@ En Home Assistant, el add-on usa `ghcr.io/chrisalvir1/matter-all-in-one-chrisalv
 ---
 
 ## Changelog Summary (latest)
+
+### v1.2.52 (2026-07-22)
+
+- Actualización del emparejamiento: la interfaz toma los fabrics vivos de Operational Credentials como fuente de verdad. Al eliminar el último fabric desde HomeKit, el accesorio pasa automáticamente a **No emparejado** en la siguiente actualización de la interfaz.
 
 ### v1.2.51 (2026-07-22)
 - Recuperación robusta después de desconexiones de Home Assistant y reconstrucción de endpoints reutilizados.

@@ -289,6 +289,10 @@ function selectEntity(entity) {
     return;
   }
 
+  const matterFabrics = Array.isArray(entity.matterFabrics) ? entity.matterFabrics : [];
+  const controllers = matterFabrics.map((fabric) => fabric.controller).filter(Boolean);
+  const controllerSummary = [...new Set(controllers)].join(', ');
+
   // Title: device name + home name if commissioned
   let titleText = displayName(entity);
   els.selectionTitle.textContent = titleText;
@@ -310,7 +314,7 @@ function selectEntity(entity) {
         : 'Endpoint que se integrará en el accesorio Matter del dispositivo físico. Activa la entidad principal para publicar el grupo completo.'
     : entity.exported
       ? (entity.commissioned
-          ? `Accesorio Matter activo${entity.homeName ? ` · Casa: ${entity.homeName}` : ''}. Usa el botón para ver el código QR si necesitas añadirlo a otra casa.`
+          ? `Accesorio Matter activo${entity.homeName ? ` · Casa: ${entity.homeName}` : ''}${controllerSummary ? ` · Controlador: ${controllerSummary}` : ''}. Usa el botón para ver el código QR si necesitas añadirlo a otra casa.`
           : 'Accesorio Matter listo para emparejar. Usa el código QR único para agregarlo a Apple Home, Google Home u otro controlador.')
       : entity.composite
         ? 'Entidad principal del dispositivo Matter compuesto. Al activarla se publicarán todos sus endpoints compatibles con un único código QR.'
@@ -329,8 +333,15 @@ function selectEntity(entity) {
   els.profileNote.textContent = currentProfile ? `${currentProfile.description} ${profileCompatibilityText(currentProfile.appleHome)}` : '';
   els.profileSelect.disabled = entity.auxiliary || entity.composite;
 
+  const fabricMeta = matterFabrics.map((fabric, index) => {
+    const label = fabric.label ? ` · ${fabric.label}` : '';
+    const vendor = typeof fabric.vendorId === 'number' ? ` · VID 0x${fabric.vendorId.toString(16).toUpperCase()}` : '';
+    const identifier = fabric.fabricId ? ` · Fabric ${fabric.fabricId}` : '';
+    const value = `${fabric.controller || 'Controlador Matter'}${label}${vendor}${identifier}`;
+    return `<div><dt>Fabric ${index + 1}</dt><dd title="${escapeHtml(value)}">${escapeHtml(value)}</dd></div>`;
+  }).join('');
   const connectionMeta = entity.exported && entity.commissioned
-    ? `<div><dt>Controlador Matter</dt><dd>${escapeHtml(entity.homeName || 'Emparejado; el controlador no publicó una etiqueta')}</dd></div><div><dt>Fabrics</dt><dd>${escapeHtml(entity.fabricCount || 1)}</dd></div>`
+    ? `<div><dt>Controladores</dt><dd title="${escapeHtml(controllerSummary)}">${escapeHtml(controllerSummary || 'Controlador Matter sin VID reportado')}</dd></div><div><dt>Fabrics</dt><dd>${escapeHtml(entity.fabricCount || 1)}</dd></div>${fabricMeta}`
     : '';
   els.selectionMeta.innerHTML = `<div><dt>Entidad</dt><dd>${escapeHtml(entity.entityId)}</dd></div><div><dt>Tipo Matter</dt><dd>${escapeHtml(entity.matterType || 'Predeterminado')}</dd></div><div><dt>Estado HA</dt><dd>${escapeHtml(stateLabel(entity.state))}</dd></div>${connectionMeta}`;
 

@@ -16,6 +16,7 @@ import { ClusterId } from 'matterbridge/matter/types';
 import { safeSetAttribute, safeUpdateAttribute } from '../utils/matter-attributes.js';
 import type { HassState } from '../utils/ha-state.js';
 import { getDeviceTypeForEntity, hasColorTemperatureCapability } from '../device-registry.js';
+import { getMatterSerialNumber, MATTER_BRIDGE_VENDOR_ID, MATTER_BRIDGE_VENDOR_NAME } from '../utils/matter-device-identity.js';
 
 type CompositePlatform = {
   log: any;
@@ -134,7 +135,7 @@ export class CompositeDeviceEntity {
       id: `device_${this.deviceId}`,
       mode: 'server',
     });
-    this.configureRootIdentity(this.endpoint, primaryType);
+    this.configureRootIdentity(this.endpoint, primaryType, primary.entityId);
     await this.addRootClusters(this.endpoint, primary);
     this.addCommandHandlers(this.endpoint, primary);
     this.endpoints.set(primary.entityId, this.endpoint);
@@ -313,16 +314,16 @@ export class CompositeDeviceEntity {
     return [];
   }
 
-  private configureRootIdentity(endpoint: MatterbridgeEndpoint, type: DeviceTypeDefinition) {
+  private configureRootIdentity(endpoint: MatterbridgeEndpoint, type: DeviceTypeDefinition, primaryEntityId: string) {
     const nodeName = this.name.substring(0, 32).trim();
     endpoint.deviceType = type.code;
     endpoint.deviceName = nodeName;
     endpoint.uniqueId = `device_${this.deviceId}`.substring(0, 32);
-    endpoint.serialNumber = `device_${this.deviceId}`.substring(0, 29);
-    endpoint.vendorId = 0xfff1;
-    endpoint.vendorName = 'Home Assistant';
+    endpoint.serialNumber = getMatterSerialNumber(this.platform, primaryEntityId);
+    endpoint.vendorId = MATTER_BRIDGE_VENDOR_ID;
+    endpoint.vendorName = MATTER_BRIDGE_VENDOR_NAME;
     endpoint.productId = 0x8000;
-    endpoint.productName = 'Home Assistant Composite Device';
+    endpoint.productName = 'Matter All-in-One Composite Device';
     const version = String((this.platform as any).matterbridge?.matterbridgeVersion ?? 'Matterbridge');
     const [major = 0, minor = 0, patch = 0] = version.split(/[-+.]/).map((part) => Number.parseInt(part, 10) || 0);
     endpoint.softwareVersion = Math.min(0xffffffff, major * 1_000_000 + minor * 1_000 + patch);

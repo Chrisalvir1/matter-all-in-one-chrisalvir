@@ -10,6 +10,7 @@ import { Oven } from 'matterbridge/devices';
 import { BaseEntity } from './base.entity.js';
 import type { HassState } from '../utils/ha-state.js';
 import { safeSetAttribute, safeUpdateAttribute } from '../utils/matter-attributes.js';
+import { MATTER_BRIDGE_VENDOR_ID, MATTER_BRIDGE_VENDOR_NAME } from '../utils/matter-device-identity.js';
 import {
   TemperatureControl,
   TemperatureMeasurement,
@@ -34,14 +35,14 @@ export class OvenEntity extends BaseEntity {
     const uniqueName = rawName.substring(0, 32).trim();
 
     const v6Id = this.entityId.replaceAll('.', '_') + '_v6';
-    const serialNumber = v6Id + '_sn';
+    const serialNumber = this.getMatterSerialNumber();
 
     this.endpoint = new Oven(uniqueName, serialNumber);
 
     this.endpoint.deviceType = this.deviceType.code;
     this.endpoint.uniqueId = v6Id;
-    this.endpoint.vendorId = 0xfff1;
-    this.endpoint.vendorName = 'Samsung by Chrisalvir';
+    this.endpoint.vendorId = MATTER_BRIDGE_VENDOR_ID;
+    this.endpoint.vendorName = MATTER_BRIDGE_VENDOR_NAME;
     this.endpoint.productId = 0x8000;
     this.endpoint.productName = 'Samsung Cooker';
     this.applyMatterbridgeFirmware();

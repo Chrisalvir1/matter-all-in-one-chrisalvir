@@ -57,6 +57,36 @@ interface EntityDiagnostic {
   message: string;
 }
 
+interface MatterFabricInfo {
+  label: string | null;
+  controller: string;
+  vendorId: number | null;
+  fabricId: string | null;
+  fabricIndex: string | null;
+}
+
+interface MatterConnectionInfo {
+  commissioned: boolean;
+  controllerNames: string[];
+  homeName: string | null;
+  fabricCount: number;
+  fabrics: MatterFabricInfo[];
+  pairingCode: string | null;
+  manualPairingCode: string | null;
+}
+
+// Matter FabricDescriptor carries the controller's Vendor ID.  These values
+// cover the major ecosystems and are intentionally shown as “reported by the
+// fabric”, not as a claim inferred from a user-editable home label.
+const MATTER_CONTROLLER_VENDORS: Record<number, string> = {
+  0x1349: 'Apple Home',
+  0x1384: 'Apple Home',
+  0x6006: 'Google Home',
+  0x1217: 'Amazon Alexa',
+  0x10e1: 'Samsung SmartThings',
+  0x110a: 'Samsung SmartThings',
+};
+
 export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   public ha!: HomeAssistant;
   public entities = new Map<string, BaseEntity>();
@@ -84,7 +114,12 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   /** Recent, entity-scoped failures shown in the UI for troubleshooting. */
   private readonly entityDiagnostics = new Map<string, EntityDiagnostic[]>();
   private readonly entityProblems = new Set<string>();
+  /** Last HA availability state, so logs describe transitions rather than spam events. */
+  private readonly haAvailabilityStates = new Map<string, string>();
+  /** Last observed live Matter fabric state, used to log real pairing changes. */
+  private readonly matterConnectionStates = new Map<string, MatterConnectionInfo>();
   private diagnosticSaveTimer?: NodeJS.Timeout;
+  private matterConnectionMonitor?: NodeJS.Timeout;
   private stateUpdateFlushScheduled = false;
   private stateUpdateFlushInFlight?: Promise<void>;
   private syncInFlight?: Promise<void>;
@@ -135,38 +170,74 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     for (const entityId of this.entities.keys()) this.recordEntityDiagnostic(entityId, message, 'warning');
   }
 
+  private observeHomeAssistantAvailability(entityId: string, state: HassState): boolean {
+    const previous = this.haAvailabilityStates.get(entityId);
+    this.haAvailabilityStates.set(entityId, state.state);
+    if (isUnavailable(state)) {
+      if (previous === state.state) return true;
+      const message = `Home Assistant informa el estado “${state.state}”.`;
+      this.log.warn(`[Home Assistant] ${entityId}: ${message}`);
+      this.recordEntityDiagnostic(entityId, message, 'warning');
+      return true;
+    }
+    if (previous && ['unavailable', 'unknown'].includes(previous)) {
+      this.log.notice(`[Home Assistant] ${entityId}: la entidad se recuperó y volvió a “${state.state}”.`);
+    }
+    return false;
+  }
+
   /**
    * Matter.js has changed the public shape of ServerNode state a few times.
    * Keep the UI boundary tolerant of both the Matterbridge compatibility
    * shape and the current Matter.js behaviors, rather than showing an
    * unpaired accessory merely because a state property was renamed.
    */
-  private getMatterConnectionInfo(endpoint: any) {
+  private getMatterConnectionInfo(endpoint: any): MatterConnectionInfo {
     try {
       const nodeState = endpoint?.serverNode?.state ?? {};
       const commissioning = nodeState.commissioning ?? nodeState.commissioningServer ?? {};
-      // Matterbridge can retain an empty legacy fabric record while the current
-      // OperationalCredentials behavior already contains the real fabrics. Pick
-      // the first non-empty representation instead of letting an empty array
-      // mask the live state.
-      const fabricSources = [commissioning.fabrics, nodeState.operationalCredentials?.fabrics, nodeState.operationalCredentialsServer?.fabrics];
-      const fabrics = fabricSources.map((source) => (Array.isArray(source) ? source : Object.values(source ?? {}))).find((source) => source.length > 0) ?? [];
+      // OperationalCredentials is the live Matter source of truth.  The
+      // commissioning field is compatibility state and may retain a fabric
+      // after a controller has already sent RemoveFabric (for example after
+      // removing the accessory from Apple Home).  Use legacy state only when
+      // no live OperationalCredentials representation is available at all.
+      const liveFabricSource =
+        nodeState.operationalCredentials?.fabrics ??
+        nodeState.operationalCredentialsServer?.fabrics;
+      const fabricSource = liveFabricSource ?? commissioning.fabrics;
+      const rawFabrics = Array.isArray(fabricSource) ? fabricSource : Object.values(fabricSource ?? {});
+      const fabrics: MatterFabricInfo[] = rawFabrics.map((fabric: any) => {
+        const parsedVendorId = typeof fabric?.vendorId === 'number' ? fabric.vendorId : Number(fabric?.vendorId);
+        const vendorId = Number.isFinite(parsedVendorId) ? parsedVendorId : null;
+        return {
+          label: typeof (fabric?.label ?? fabric?.fabricLabel ?? fabric?.name) === 'string'
+            ? (fabric.label ?? fabric.fabricLabel ?? fabric.name).trim() || null
+            : null,
+          controller: vendorId !== null
+            ? MATTER_CONTROLLER_VENDORS[vendorId] ?? `Controlador Matter desconocido (VID 0x${vendorId.toString(16).toUpperCase()})`
+            : 'Controlador Matter sin VID reportado',
+          vendorId,
+          fabricId: fabric?.fabricId !== undefined && fabric?.fabricId !== null ? String(fabric.fabricId) : null,
+          fabricIndex: fabric?.fabricIndex !== undefined && fabric?.fabricIndex !== null ? String(fabric.fabricIndex) : null,
+        };
+      });
       const controllerNames = [
-        ...new Set(fabrics.map((fabric: any) => fabric?.label ?? fabric?.fabricLabel ?? fabric?.name).filter((label): label is string => typeof label === 'string' && label.trim().length > 0)),
+        ...new Set(fabrics.map((fabric) => fabric.label).filter((label): label is string => label !== null)),
       ];
       const pairingCodes = commissioning.pairingCodes ?? nodeState.pairingCodes ?? {};
 
       return {
-        // Fabrics are the authoritative proof of commissioning. Some
-        // Matterbridge compatibility state can retain `commissioned: false`
-        // while the current OperationalCredentials behavior already has fabrics.
-        commissioned: commissioning.commissioned === true || nodeState.commissioned === true || fabrics.length > 0,
+        // A non-empty live fabric list proves commissioning.  If its list is
+        // explicitly empty, a controller removed the last fabric and any
+        // legacy `commissioned` flag must not keep the UI falsely paired.
+        commissioned: fabrics.length > 0 || (liveFabricSource === undefined && (commissioning.commissioned === true || nodeState.commissioned === true)),
         controllerNames,
         // Matter exposes the fabric/controller label. A controller may choose to
         // use the Apple Home house name as that label, but Matter does not expose
         // Apple's private Home/Room database to an accessory.
         homeName: controllerNames.join(', ') || null,
         fabricCount: fabrics.length,
+        fabrics,
         pairingCode: pairingCodes.qrPairingCode ?? null,
         manualPairingCode: pairingCodes.manualPairingCode ?? null,
       };
@@ -180,10 +251,73 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         controllerNames: [],
         homeName: null,
         fabricCount: 0,
+        fabrics: [],
         pairingCode: null,
         manualPairingCode: null,
       };
     }
+  }
+
+  /** Describe only the failure evidence supplied by the HA WebSocket client. */
+  private describeHomeAssistantConnectionFailure(error: unknown): string {
+    const detail = String(error ?? '').trim();
+    if (/\b502\b/.test(detail)) return `Home Assistant o su proxy respondió HTTP 502 (${detail}).`;
+    if (/ECONNREFUSED|EHOSTUNREACH|ENETUNREACH|ENOTFOUND|ETIMEDOUT|network|socket hang up/i.test(detail)) {
+      return `No se pudo alcanzar Home Assistant por red/IP (${detail || 'sin detalle adicional'}).`;
+    }
+    if (!detail || /WebSocket connection closed/i.test(detail)) {
+      return 'La conexión WebSocket con Home Assistant se cerró sin una causa adicional reportada.';
+    }
+    return `Error de conexión WebSocket con Home Assistant: ${detail}`;
+  }
+
+  /**
+   * Matter does not expose whether RemoveFabric came from a button press or a
+   * controller automation. It does expose the resulting live fabric list, so
+   * log that state transition exactly and never invent a cause.
+   */
+  private observeMatterConnection(entityId: string, current: MatterConnectionInfo) {
+    const previous = this.matterConnectionStates.get(entityId);
+    this.matterConnectionStates.set(entityId, current);
+    if (!previous) return;
+
+    if (previous.fabricCount > 0 && current.fabricCount === 0) {
+      const controllers = previous.controllerNames.length ? ` (${previous.controllerNames.join(', ')})` : '';
+      const message = `Matter confirmó que se eliminó el último fabric${controllers}; el accesorio quedó desemparejado. Matter no informa si la retirada fue manual o automática desde el controlador.`;
+      this.log.warn(`[Matter] ${entityId}: ${message}`);
+      this.recordEntityDiagnostic(entityId, message, 'warning');
+      return;
+    }
+
+    if (previous.fabricCount !== current.fabricCount) {
+      const message = `Matter confirmó un cambio de fabrics: ${previous.fabricCount} → ${current.fabricCount}. El accesorio ${current.commissioned ? 'sigue emparejado con otro controlador.' : 'quedó desemparejado.'}`;
+      this.log.notice(`[Matter] ${entityId}: ${message}`);
+      if (!current.commissioned) this.recordEntityDiagnostic(entityId, message, 'warning');
+      return;
+    }
+
+    if (!previous.commissioned && current.commissioned) {
+      this.log.notice(`[Matter] ${entityId}: Matter confirmó un nuevo emparejamiento con ${current.fabricCount} fabric(s).`);
+    }
+  }
+
+  /** Poll live server state even when the custom UI is closed. */
+  private monitorMatterConnections() {
+    for (const [entityId] of this.entities) {
+      if (!this.isEntityExported(entityId)) continue;
+      try {
+        const compositeDeviceId = this.compositeMembership.get(entityId) ?? this.getCompositeCandidate(entityId)?.deviceId;
+        const endpoint = this.getMatterEndpointForEntity(entityId, compositeDeviceId);
+        this.observeMatterConnection(entityId, this.getMatterConnectionInfo(endpoint));
+      } catch (error) {
+        this.log.debug(`[Matter] Unable to inspect pairing state for ${entityId}: ${String(error)}`);
+      }
+    }
+  }
+
+  private startMatterConnectionMonitor() {
+    if (this.matterConnectionMonitor) return;
+    this.matterConnectionMonitor = setInterval(() => this.monitorMatterConnections(), 4_000);
   }
 
   /**
@@ -400,18 +534,20 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       void this.discoverAndSync();
     });
 
-    this.ha.on('disconnected', () => {
+    this.ha.on('disconnected', (reason) => {
       if (this.syncRetryTimeout) {
         clearTimeout(this.syncRetryTimeout);
         this.syncRetryTimeout = undefined;
       }
-      this.log.warn('Disconnected from Home Assistant');
-      this.recordConnectionProblem('Home Assistant se desconectó. Se reintentará la conexión automáticamente.');
+      const message = this.describeHomeAssistantConnectionFailure(reason);
+      this.log.warn(`Disconnected from Home Assistant: ${message}`);
+      this.recordConnectionProblem(`${message} Se reintentará la conexión automáticamente.`);
     });
 
     this.ha.on('error', (err) => {
-      this.log.error(`Home Assistant connection error: ${err}`);
-      this.recordConnectionProblem(`Error de conexión con Home Assistant: ${String(err)}`);
+      const message = this.describeHomeAssistantConnectionFailure(err);
+      this.log.error(`Home Assistant connection error: ${message}`);
+      this.recordConnectionProblem(message);
     });
 
     this.ha.on('event', (_deviceId, entityId, _oldState, newState) => {
@@ -432,6 +568,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     this.log.info(`Starting HomeAssistant platform: ${reason ?? ''}`);
     await this.loadEntityDiagnostics();
     await this.startUiServer();
+    this.startMatterConnectionMonitor();
 
     // ── Resolve Home Assistant URL ─────────────────────────────────────────
     // If the user didn’t set config.host we run the network discovery:
@@ -489,6 +626,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       this.log.info('Custom UI Server stopped.');
     }
     if (this.syncRetryTimeout) clearTimeout(this.syncRetryTimeout);
+    if (this.matterConnectionMonitor) clearInterval(this.matterConnectionMonitor);
+    this.matterConnectionMonitor = undefined;
+    this.matterConnectionStates.clear();
+    this.haAvailabilityStates.clear();
     await this.ha?.close();
   }
 
@@ -580,8 +721,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       const currentEntityIds = new Set(states.map((state) => state.entity_id));
       for (const entityId of [...this.entities.keys()]) {
         if (currentEntityIds.has(entityId)) continue;
-        if (this.isEntityExported(entityId)) {
-          this.recordEntityDiagnostic(entityId, 'La entidad ya no existe en el snapshot de Home Assistant; se conserva el último estado Matter.', 'warning');
+      if (this.isEntityExported(entityId)) {
+          const message = 'Home Assistant ya no incluye esta entidad en su snapshot; se conserva el último estado Matter.';
+          this.log.warn(`[Home Assistant] ${entityId}: ${message}`);
+          this.recordEntityDiagnostic(entityId, message, 'warning');
         } else {
           this.entities.delete(entityId);
         }
@@ -613,10 +756,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     if (this.entities.has(entityId)) {
       const entity = this.entities.get(entityId)!;
       entity.state = state;
-      if (isUnavailable(state)) {
-        this.recordEntityDiagnostic(entityId, `Home Assistant informa el estado “${state.state}”.`, 'warning');
-        return;
-      }
+      if (this.observeHomeAssistantAvailability(entityId, state)) return;
       if (this.isEntityExported(entityId)) this.queueStateUpdate(entityId, state);
       return;
     }
@@ -1086,8 +1226,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       return;
     }
     entity.state = newState;
-    if (isUnavailable(newState)) {
-      this.recordEntityDiagnostic(entityId, `Home Assistant informa el estado “${newState.state}”.`, 'warning');
+    if (this.observeHomeAssistantAvailability(entityId, newState)) {
       // `unavailable` is not a real off/unlocked/closed reading. Keep the last
       // valid Matter value so one failed integration cannot falsify an entire
       // composite device or make it appear to have shut down.
@@ -1349,6 +1488,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               homeName: connection.homeName,
               controllerNames: connection.controllerNames,
               fabricCount: connection.fabricCount,
+              matterFabrics: connection.fabrics,
               // The attention queue is for live Matter accessories only. An
               // unavailable HA entity that was never exported must not look
               // like a broken Matter accessory.

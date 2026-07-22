@@ -18,6 +18,7 @@ import {
   buildVacuumMatterMeta,
 } from '../converters/vacuum.converter.js';
 import { safeSetAttribute, safeUpdateAttribute } from '../utils/matter-attributes.js';
+import { MATTER_BRIDGE_VENDOR_ID, MATTER_BRIDGE_VENDOR_NAME } from '../utils/matter-device-identity.js';
 
 export { buildVacuumMatterMeta };
 
@@ -40,15 +41,16 @@ export class VacuumEntity extends BaseEntity {
   public override async createEndpoint(): Promise<MatterbridgeEndpoint> {
     const rawName = this.state.attributes.friendly_name ?? this.entityId;
 
-    // The accessory name must match Home Assistant. The stable entity ID and
-    // serial number below provide uniqueness without modifying this name.
+    // The accessory name must match Home Assistant. The stable entity ID keeps
+    // Matterbridge storage identity, while the serial comes from HA's physical
+    // device registry.
     const uniqueName = rawName.substring(0, 32).trim();
 
     // Stable identity for this entity — do NOT rotate or append version suffixes.
-    // Changing stableId or serialNumber after first pairing creates orphaned tiles
-    // in Matter controllers and forces re-pairing.
+    // Changing stableId after first pairing creates orphaned tiles in Matter
+    // controllers and forces re-pairing.
     const stableId = this.entityId.replaceAll('.', '_');
-    const serialNumber = `${stableId.slice(0, 28)}_rvc`;
+    const serialNumber = this.getMatterSerialNumber();
 
     const supportedRunModes = [
       { label: 'Idle', mode: 1, modeTags: [{ value: 16384 }] },      // 0x4000 = 16384 (Idle)
@@ -92,8 +94,8 @@ export class VacuumEntity extends BaseEntity {
 
     this.endpoint.deviceType = this.deviceType.code;
     this.endpoint.uniqueId = stableId;
-    this.endpoint.vendorId = 0xfff1;
-    this.endpoint.vendorName = 'Home Assistant';
+    this.endpoint.vendorId = MATTER_BRIDGE_VENDOR_ID;
+    this.endpoint.vendorName = MATTER_BRIDGE_VENDOR_NAME;
     this.endpoint.productId = 0x8000;
     this.endpoint.productName = 'Robotic Vacuum Cleaner';
     this.applyMatterbridgeFirmware();
@@ -104,7 +106,7 @@ export class VacuumEntity extends BaseEntity {
       this.endpoint as any,
       'basicInformation' as any,
       'vendorName',
-      'Home Assistant',
+      MATTER_BRIDGE_VENDOR_NAME,
       this.platform.log,
     );
     safeSetAttribute(

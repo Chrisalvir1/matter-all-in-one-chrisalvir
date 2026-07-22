@@ -1,3 +1,11 @@
+## [1.2.52] - 2026-07-22
+
+- **Estado de emparejamiento en tiempo real:** Operational Credentials es ahora la fuente de verdad del fabric Matter. Tras retirar un accesorio de HomeKit, el panel deja de mostrarlo como emparejado cuando HomeKit ha eliminado su último fabric.
+- **Protección contra estado obsoleto:** un registro heredado de commissioning ya no puede conservar un falso estado de emparejamiento después de `RemoveFabric`.
+- **Diagnóstico de causa:** el registro distingue fallos de conectividad con Home Assistant/red, entidades `unavailable` o eliminadas de HA, y cambios reales del número de fabrics Matter. No atribuye una retirada a una acción manual si Matter no proporciona esa evidencia.
+- **Controladores y casas Matter:** el detalle del accesorio muestra cada fabric, su etiqueta de casa, VID y el ecosistema identificado por el VID (Apple Home, Alexa, Google Home o SmartThings). Los VIDs no reconocidos se conservan como controladores Matter desconocidos.
+- **Identidad Matter:** Manufacturer se publica como `Matter All-in-One Chrisalvir`; Serial Number usa el `serial_number` físico del registro de dispositivos de Home Assistant, con un identificador estable de respaldo solo cuando HA no ofrece serial.
+
 ## [1.2.51] - 2026-07-22
 
 ### Fixed

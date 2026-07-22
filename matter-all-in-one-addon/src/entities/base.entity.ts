@@ -8,6 +8,7 @@ import { HomeAssistantPlatform } from '../platform.js';
 import { HassState } from '../utils/ha-state.js';
 import { safeSetAttribute, safeUpdateAttribute } from '../utils/matter-attributes.js';
 import { hasColorTemperatureCapability } from '../device-registry.js';
+import { getMatterSerialNumber, MATTER_BRIDGE_VENDOR_ID, MATTER_BRIDGE_VENDOR_NAME } from '../utils/matter-device-identity.js';
 
 export class BaseEntity {
   public platform: HomeAssistantPlatform;
@@ -63,6 +64,10 @@ export class BaseEntity {
     else if (max === green) hue = 60 * ((blue - red) / delta + 2);
     else hue = 60 * ((red - green) / delta + 4);
     return [(hue + 360) % 360, Math.round((delta / max) * 100)];
+  }
+
+  protected getMatterSerialNumber(): string {
+    return getMatterSerialNumber(this.platform, this.entityId);
   }
 
   public endpoint!: MatterbridgeEndpoint;
@@ -137,9 +142,9 @@ export class BaseEntity {
     this.endpoint.deviceType = this.deviceType.code;
     this.endpoint.deviceName = uniqueName;
     this.endpoint.uniqueId = this.entityId.replaceAll('.', '_');
-    this.endpoint.serialNumber = this.entityId.replaceAll('.', '_').substring(0, 29) + '_G2';
-    this.endpoint.vendorId = 0xfff1;
-    this.endpoint.vendorName = 'Home Assistant';
+    this.endpoint.serialNumber = this.getMatterSerialNumber();
+    this.endpoint.vendorId = MATTER_BRIDGE_VENDOR_ID;
+    this.endpoint.vendorName = MATTER_BRIDGE_VENDOR_NAME;
     this.endpoint.productId = 0x8000;
     // Instead of hardcoding the domain (e.g. "Light"), use the deviceType name (e.g. "DimmablePlugInUnit")
     // to prevent Apple HomeKit from forcing the Lightbulb icon on dimmers that are not lights.
@@ -149,7 +154,14 @@ export class BaseEntity {
     // This entity is registered with mode: 'server' so Matterbridge creates
     // an independent ServerNode with its own QR code. Using the bridged version
     // here would conflict with the server mode and prevent pairing.
-    this.endpoint.createDefaultBasicInformationClusterServer(uniqueName, this.endpoint.serialNumber, 0xfff1, 'Home Assistant', 0x8000, this.endpoint.productName);
+    this.endpoint.createDefaultBasicInformationClusterServer(
+      uniqueName,
+      this.endpoint.serialNumber,
+      MATTER_BRIDGE_VENDOR_ID,
+      MATTER_BRIDGE_VENDOR_NAME,
+      0x8000,
+      this.endpoint.productName,
+    );
     this.applyMatterbridgeFirmware();
 
     const isFanProfile = this.deviceType.code === 0x002b || this.deviceType.name.toLowerCase() === 'fan';

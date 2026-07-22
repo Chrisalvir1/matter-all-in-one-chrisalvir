@@ -89,7 +89,7 @@ describe('HomeAssistantPlatform', () => {
       serverNode: {
         state: {
           commissioning: { commissioned: false, fabrics: [] },
-          operationalCredentials: { fabrics: [{ label: 'Casa Matter' }] },
+          operationalCredentials: { fabrics: [{ label: 'Casa Matter', vendorId: 0x6006, fabricId: 123n, fabricIndex: 1 }] },
         },
       },
     });
@@ -99,6 +99,57 @@ describe('HomeAssistantPlatform', () => {
       homeName: 'Casa Matter',
       fabricCount: 1,
     });
+    expect(connection.fabrics).toEqual([
+      expect.objectContaining({ label: 'Casa Matter', controller: 'Google Home', vendorId: 0x6006, fabricId: '123', fabricIndex: '1' }),
+    ]);
+  });
+
+  it('shows an accessory as unpaired when HomeKit removes its final live Matter fabric', () => {
+    const connection = (platform as any).getMatterConnectionInfo({
+      serverNode: {
+        state: {
+          commissioning: {
+            commissioned: true,
+            fabrics: [{ label: 'Casa antigua' }],
+          },
+          operationalCredentials: { fabrics: [] },
+        },
+      },
+    });
+
+    expect(connection).toMatchObject({
+      commissioned: false,
+      homeName: null,
+      fabricCount: 0,
+    });
+  });
+
+  it('records the real Matter fabric transition without inventing a manual-removal cause', () => {
+    const recordDiagnostic = vi.spyOn(platform as any, 'recordEntityDiagnostic');
+    const paired = {
+      commissioned: true,
+      controllerNames: ['Apple Home'],
+      homeName: 'Apple Home',
+      fabricCount: 1,
+      pairingCode: null,
+      manualPairingCode: null,
+    };
+    const unpaired = { ...paired, commissioned: false, controllerNames: [], homeName: null, fabricCount: 0 };
+
+    (platform as any).observeMatterConnection('light.living_room', paired);
+    (platform as any).observeMatterConnection('light.living_room', unpaired);
+
+    expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('Matter confirmó que se eliminó el último fabric'));
+    expect(recordDiagnostic).toHaveBeenCalledWith(
+      'light.living_room',
+      expect.stringContaining('Matter no informa si la retirada fue manual o automática'),
+      'warning',
+    );
+  });
+
+  it('classifies an HA 502 as an HA or proxy response, not a network outage', () => {
+    expect((platform as any).describeHomeAssistantConnectionFailure('WebSocket error: Unexpected server response: 502'))
+      .toContain('respondió HTTP 502');
   });
 
   it('keeps a commissioned legacy endpoint visible while its composite replacement is not ready', () => {

@@ -4,6 +4,7 @@ import { MediaPlayback, OnOff } from 'matterbridge/matter/clusters';
 import { BaseEntity } from './base.entity.js';
 import type { HassState } from '../utils/ha-state.js';
 import { safeSetAttribute, safeUpdateAttribute } from '../utils/matter-attributes.js';
+import { MATTER_BRIDGE_VENDOR_ID, MATTER_BRIDGE_VENDOR_NAME } from '../utils/matter-device-identity.js';
 
 export class MediaPlayerEntity extends BaseEntity {
   public declare endpoint: BasicVideoPlayer;
@@ -14,11 +15,11 @@ export class MediaPlayerEntity extends BaseEntity {
 
   public override async createEndpoint(): Promise<MatterbridgeEndpoint> {
     const name = (this.state.attributes.friendly_name ?? this.entityId).slice(0, 32);
-    const serial = `${this.entityId.replaceAll('.', '_').slice(0, 25)}_tv`;
+    const serial = this.getMatterSerialNumber();
     this.endpoint = new BasicVideoPlayer(name, serial, { onOff: this.state.state !== 'off' });
     this.endpoint.uniqueId = this.entityId.replaceAll('.', '_');
-    this.endpoint.vendorId = 0xfff1;
-    this.endpoint.vendorName = 'Home Assistant';
+    this.endpoint.vendorId = MATTER_BRIDGE_VENDOR_ID;
+    this.endpoint.vendorName = MATTER_BRIDGE_VENDOR_NAME;
     this.endpoint.productId = 0x8000;
     this.endpoint.productName = 'Basic Video Player';
     this.applyMatterbridgeFirmware();

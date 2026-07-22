@@ -7,7 +7,11 @@ import { MatterDeviceTypes } from '../src/device-registry.js';
 const platform = {
   matterbridge: { matterbridgeVersion: '3.10.0' },
   log: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), notice: vi.fn(), warn: vi.fn() },
-  ha: { callService: vi.fn().mockResolvedValue(undefined) },
+  ha: {
+    callService: vi.fn().mockResolvedValue(undefined),
+    hassEntities: new Map([['light.govee_test', { id: 'entity-govee-test', device_id: 'device-govee-test' }]]),
+    hassDevices: new Map([['device-govee-test', { serial_number: 'GOVEE-H6076-REAL-SN' }]]),
+  },
 };
 
 function state(attributes: Record<string, unknown>) {
@@ -21,6 +25,14 @@ function state(attributes: Record<string, unknown>) {
 }
 
 describe('BaseEntity direct colour lights', () => {
+  it('uses the physical HA serial and the bridge manufacturer in Matter Basic Information', async () => {
+    const entity = new BaseEntity(platform as any, state({ supported_color_modes: ['brightness'] }), MatterDeviceTypes.dimmableLight);
+    const endpoint = await entity.createEndpoint() as any;
+
+    expect(endpoint.serialNumber).toBe('GOVEE-H6076-REAL-SN');
+    expect(endpoint.vendorName).toBe('Matter All-in-One Chrisalvir');
+  });
+
   it('publishes ColorControl, mirrors HA hue/saturation, and sends Matter colour commands to HA', async () => {
     const entity = new BaseEntity(platform as any, state({
       brightness: 128,
