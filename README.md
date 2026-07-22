@@ -3,7 +3,7 @@
 <div align="center">
   <img src="matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
 </div>
-> **Matter All-in-One for Home Assistant (v1.2.50)**
+> **Matter All-in-One for Home Assistant (v1.2.51)**
 > Expone entidades verificadas de Home Assistant como accesorios Matter 1.6 estables, agrupados por dispositivo físico cuando corresponde.
 
 ---

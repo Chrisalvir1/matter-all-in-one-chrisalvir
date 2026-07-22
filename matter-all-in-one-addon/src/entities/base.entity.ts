@@ -7,6 +7,7 @@ import { ClusterId } from 'matterbridge/matter/types';
 import { HomeAssistantPlatform } from '../platform.js';
 import { HassState } from '../utils/ha-state.js';
 import { safeSetAttribute, safeUpdateAttribute } from '../utils/matter-attributes.js';
+import { hasColorTemperatureCapability } from '../device-registry.js';
 
 export class BaseEntity {
   public platform: HomeAssistantPlatform;
@@ -27,6 +28,43 @@ export class BaseEntity {
     }
     return true;
   }
+
+  private hasColorControl(endpoint: MatterbridgeEndpoint = this.endpoint): boolean {
+    const hasClusterServer = (endpoint as any).hasClusterServer;
+    if (typeof hasClusterServer === 'function') {
+      return hasClusterServer.call(endpoint, ColorControl);
+    }
+    const hasAttributeServer = (endpoint as any).hasAttributeServer;
+    return typeof hasAttributeServer === 'function' && hasAttributeServer.call(endpoint, ColorControl.id, 'colorMode');
+  }
+
+  private static miredsToKelvin(mireds: number): number {
+    return Math.round(1_000_000 / mireds);
+  }
+
+  private static kelvinToMireds(kelvin: number): number {
+    return Math.round(1_000_000 / kelvin);
+  }
+
+  private getHsColor(state: HassState): [number, number] | undefined {
+    const attributes = state.attributes as any;
+    if (Array.isArray(attributes.hs_color) && attributes.hs_color.length >= 2) {
+      return [attributes.hs_color[0], attributes.hs_color[1]];
+    }
+    if (!Array.isArray(attributes.rgb_color) || attributes.rgb_color.length < 3) return undefined;
+
+    const [red, green, blue] = attributes.rgb_color.map((value: number) => Math.max(0, Math.min(255, value)) / 255);
+    const max = Math.max(red, green, blue);
+    const min = Math.min(red, green, blue);
+    const delta = max - min;
+    if (delta === 0) return [0, 0];
+    let hue = 0;
+    if (max === red) hue = 60 * (((green - blue) / delta) % 6);
+    else if (max === green) hue = 60 * ((blue - red) / delta + 2);
+    else hue = 60 * ((red - green) / delta + 4);
+    return [(hue + 360) % 360, Math.round((delta / max) * 100)];
+  }
+
   public endpoint!: MatterbridgeEndpoint;
 
   /**
@@ -60,13 +98,15 @@ export class BaseEntity {
       const supportedModes: string[] = this.state.attributes.supported_color_modes ?? [];
       const hasBrightness = supportedModes.includes('brightness') || this.state.attributes.brightness !== undefined;
       const isOnOffProfile = this.deviceType.code === 0x0100 || this.deviceType.code === 0x010a; // OnOffLight or OnOffPlugInUnit
-      if (hasBrightness && !isOnOffProfile) {
-        clusters.push(LevelControl.id);
-      }
       // Only add ColorControl if the light supports real color modes AND the profile allows it
       const realColorModes = ['hs', 'xy', 'rgb', 'rgbw', 'rgbww', 'color_temp'];
-      const hasColorCapability = supportedModes.some((m) => realColorModes.includes(m));
+      const hasColorCapability =
+        supportedModes.some((m) => realColorModes.includes(m)) ||
+        hasColorTemperatureCapability(this.state.attributes);
       const isColorProfile = this.deviceType.code === 0x010c || this.deviceType.code === 0x010d; // ColorTemperatureLight or ExtendedColorLight
+      if ((hasBrightness || hasColorCapability) && !isOnOffProfile) {
+        clusters.push(LevelControl.id);
+      }
       if (hasColorCapability && isColorProfile) {
         clusters.push(ColorControl.id);
       }
@@ -220,6 +260,57 @@ export class BaseEntity {
           }
         });
       }
+
+      // Govee, Tuya and other direct colour lights use ColorControl on their
+      // own ServerNode.  These handlers deliberately live in BaseEntity (not
+      // only in CompositeDeviceEntity) so standalone lights keep every colour
+      // capability they advertised to Home Assistant.
+      if (domain === 'light' && this.hasColorControl(this.endpoint)) {
+        const currentHs = () => this.getHsColor(this.state) ?? [0, 100];
+        const sendHs = async (hue: number, saturation: number) => {
+          const hs: [number, number] = [Math.round((hue / 254) * 360), Math.round((saturation / 254) * 100)];
+          this.lastCommands.set('hs_color', { value: hs, timestamp: Date.now() });
+          await this.platform.ha.callService('light', 'turn_on', this.entityId, { hs_color: hs });
+        };
+
+        this.endpoint.addCommandHandler('moveToHueAndSaturation', async (data: any) => {
+          const hue = data?.hue ?? data?.request?.hue;
+          const saturation = data?.saturation ?? data?.request?.saturation;
+          if (typeof hue === 'number' && typeof saturation === 'number') await sendHs(hue, saturation);
+        });
+
+        this.endpoint.addCommandHandler('moveToHue', async (data: any) => {
+          const hue = data?.hue ?? data?.request?.hue;
+          if (typeof hue !== 'number') return;
+          const [, saturation] = currentHs();
+          await sendHs(hue, Math.round((saturation / 100) * 254));
+        });
+
+        this.endpoint.addCommandHandler('moveToSaturation', async (data: any) => {
+          const saturation = data?.saturation ?? data?.request?.saturation;
+          if (typeof saturation !== 'number') return;
+          const [hue] = currentHs();
+          await sendHs(Math.round((hue / 360) * 254), saturation);
+        });
+
+        this.endpoint.addCommandHandler('moveToColor', async (data: any) => {
+          const x = data?.colorX ?? data?.request?.colorX;
+          const y = data?.colorY ?? data?.request?.colorY;
+          if (typeof x !== 'number' || typeof y !== 'number') return;
+          const xy: [number, number] = [x / 65535, y / 65535];
+          this.lastCommands.set('xy_color', { value: xy, timestamp: Date.now() });
+          await this.platform.ha.callService('light', 'turn_on', this.entityId, { xy_color: xy });
+        });
+
+        this.endpoint.addCommandHandler('moveToColorTemperature', async (data: any) => {
+          const mireds = data?.colorTemperatureMireds ?? data?.request?.colorTemperatureMireds;
+          if (typeof mireds !== 'number' || mireds <= 0) return;
+          this.lastCommands.set('color_temp', { value: mireds, timestamp: Date.now() });
+          const attributes = this.state.attributes as any;
+          const usesKelvin = attributes.color_temp_kelvin !== undefined || attributes.min_color_temp_kelvin !== undefined || attributes.max_color_temp_kelvin !== undefined;
+          await this.platform.ha.callService('light', 'turn_on', this.entityId, usesKelvin ? { color_temp_kelvin: BaseEntity.miredsToKelvin(mireds) } : { color_temp: mireds });
+        });
+      }
     }
   }
 
@@ -302,6 +393,44 @@ export class BaseEntity {
             await safeSetAttribute(this.endpoint, LevelControl.id, 'currentLevel', level, this.platform.log);
           } else {
             await safeUpdateAttribute(this.endpoint, LevelControl.id, 'currentLevel', level, this.platform.log);
+          }
+        }
+      }
+
+      if (domain === 'light' && this.hasColorControl()) {
+        const updateColor = isInitialSync ? safeSetAttribute : safeUpdateAttribute;
+        const attributes = newState.attributes as any;
+        const colorMode = attributes.color_mode;
+        const hs = this.getHsColor(newState);
+        const xy = Array.isArray(attributes.xy_color) && attributes.xy_color.length >= 2 ? attributes.xy_color as [number, number] : undefined;
+        const colorTempMireds = typeof attributes.color_temp === 'number'
+          ? attributes.color_temp
+          : typeof attributes.color_temp_kelvin === 'number'
+            ? BaseEntity.kelvinToMireds(attributes.color_temp_kelvin)
+            : undefined;
+
+        if (colorTempMireds !== undefined && (colorMode === 'color_temp' || (!hs && !xy))) {
+          if (!isInitialSync && this.shouldIgnoreStateUpdate('color_temp')) {
+            this.platform.log.debug(`Ignoring HA colour-temperature state update for ${this.entityId} due to recent command lockout`);
+          } else {
+            await updateColor(this.endpoint, ColorControl.id, 'colorTemperatureMireds', colorTempMireds, this.platform.log);
+            await updateColor(this.endpoint, ColorControl.id, 'colorMode', ColorControl.ColorMode.ColorTemperatureMireds, this.platform.log);
+          }
+        } else if (hs && (colorMode === 'hs' || colorMode === 'rgb' || colorMode === 'rgbw' || colorMode === 'rgbww' || !xy)) {
+          if (!isInitialSync && this.shouldIgnoreStateUpdate('hs_color')) {
+            this.platform.log.debug(`Ignoring HA hue/saturation state update for ${this.entityId} due to recent command lockout`);
+          } else {
+            await updateColor(this.endpoint, ColorControl.id, 'currentHue', Math.round((hs[0] / 360) * 254), this.platform.log);
+            await updateColor(this.endpoint, ColorControl.id, 'currentSaturation', Math.round((hs[1] / 100) * 254), this.platform.log);
+            await updateColor(this.endpoint, ColorControl.id, 'colorMode', ColorControl.ColorMode.CurrentHueAndCurrentSaturation, this.platform.log);
+          }
+        } else if (xy) {
+          if (!isInitialSync && this.shouldIgnoreStateUpdate('xy_color')) {
+            this.platform.log.debug(`Ignoring HA XY-colour state update for ${this.entityId} due to recent command lockout`);
+          } else {
+            await updateColor(this.endpoint, ColorControl.id, 'currentX', Math.round(xy[0] * 65535), this.platform.log);
+            await updateColor(this.endpoint, ColorControl.id, 'currentY', Math.round(xy[1] * 65535), this.platform.log);
+            await updateColor(this.endpoint, ColorControl.id, 'colorMode', ColorControl.ColorMode.CurrentXAndCurrentY, this.platform.log);
           }
         }
       }

@@ -21,9 +21,18 @@ jobs:
   build-and-publish:
     name: Build multi-arch image and publish to GHCR
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.metadata.outputs.version }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Read add-on version
+        id: metadata
+        run: |
+          version="$(sed -nE 's/^version:[[:space:]]*"?([^"[:space:]]+)"?$/\1/p' matter-all-in-one-addon/config.yaml)"
+          test -n "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -45,13 +54,14 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ghcr.io/chrisalvir1/matter-all-in-one-chrisalvir:1.2.50
+            ghcr.io/chrisalvir1/matter-all-in-one-chrisalvir:${{ steps.metadata.outputs.version }}
             ghcr.io/chrisalvir1/matter-all-in-one-chrisalvir:latest
           labels: |
             io.hass.type=app
             io.hass.name=Matter All-in-One Bridge
             io.hass.description=Expose Home Assistant entities through one stable Matter bridge with HomeKit-compatible mappings.
             org.opencontainers.image.source=https://github.com/Chrisalvir1/matter-all-in-one-chrisalvir
+            org.opencontainers.image.version=${{ steps.metadata.outputs.version }}
 
   verify-public:
     name: Verify Home Assistant can download the image
@@ -61,8 +71,8 @@ jobs:
       - name: Inspect image without registry credentials
         run: |
           for attempt in 1 2 3 4 5; do
-            if docker buildx imagetools inspect "ghcr.io/chrisalvir1/matter-all-in-one-chrisalvir:1.2.50"; then
-              echo "GHCR package 1.2.50 is public and accessible!"
+            if docker buildx imagetools inspect "ghcr.io/chrisalvir1/matter-all-in-one-chrisalvir:${{ needs.build-and-publish.outputs.version }}"; then
+              echo "GHCR package ${{ needs.build-and-publish.outputs.version }} is public and accessible!"
               exit 0
             fi
             echo "Public image verification attempt ${attempt} failed; retrying..."

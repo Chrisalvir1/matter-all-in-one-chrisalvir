@@ -1,3 +1,11 @@
+## [1.2.51] - 2026-07-22
+
+### Fixed
+
+- **Luces de color directas:** las entidades `light.*` RGB/HS/XY ya publican `ExtendedColorLight` con `ColorControl` y sincronizan tono, saturación, XY y temperatura de color en ambos sentidos con Home Assistant.
+- **Govee RGBIC:** el color general, brillo y temperatura disponibles se exportan correctamente sin representar de forma falsa los segmentos, escenas o efectos propietarios como controles Matter estándar.
+- **Publicación:** la imagen GHCR toma su etiqueta de `config.yaml`, evitando que una versión futura sobrescriba por error la imagen `1.2.50`.
+
 ## [1.2.50] - 2026-07-22
 
 ### Fixed
