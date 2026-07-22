@@ -111,33 +111,33 @@
           <div class="section-header"><h3>Entidades disponibles</h3><span id="modal-export-count"></span></div>
           <div class="entity-list" id="entity-list"></div>
         </div>
-        <aside class="selection-panel" id="selection-panel">
-          <p class="card-label">SELECCIÓN</p>
-          <h3 id="selection-title">Selecciona una entidad</h3>
-          <p id="selection-description">Activa la entidad principal para publicar el dispositivo físico.</p>
-          <label class="profile-field" id="profile-field">
-            <span>Perfil Matter</span>
-            <select id="profile-select" aria-label="Perfil Matter"></select>
-            <small id="profile-note"></small>
-          </label>
-          <dl class="selection-meta" id="selection-meta"></dl>
-          <div class="selection-status" id="selection-status"></div>
-          <section class="diagnostics-panel" id="diagnostics-panel" hidden aria-live="polite">
-            <div class="diagnostics-heading"><span aria-hidden="true">!</span><strong>Diagnóstico y logs de esta entidad</strong></div>
-            <p id="diagnostics-summary"></p>
-            <ul id="diagnostics-list"></ul>
-          </section>
-          <div id="device-qr-container" style="display: none; text-align: center; margin-top: 1rem;">
-            <div id="device-qr-code" style="display: inline-block; background: white; padding: 1rem; border-radius: 8px;"></div>
-            <p id="device-manual-code" style="margin-top: 0.5rem; font-family: monospace; user-select: all; font-weight: bold;"></p>
-          </div>
-          <button class="button button-secondary bridge-qr-button" id="device-qr-button" type="button" style="display: none;">Mostrar Código de Emparejamiento</button>
-          <div class="matter-actions" id="matter-actions" hidden>
-            <button class="text-button" id="reconnect-accessory-button" type="button">Actualizar estado Matter</button>
-            <button class="text-button" id="regenerate-code-button" type="button">Desconectar y generar código nuevo</button>
-          </div>
-          <button class="text-button reset-accessory-button" id="reset-accessory-button" type="button" style="display: none;">Desconectar Matter</button>
-        </aside>
+          <aside class="selection-panel" id="selection-panel">
+            <p class="card-label">SELECCIÓN</p>
+            <h3 id="selection-title">Selecciona una entidad</h3>
+            <p id="selection-description">Activa la entidad principal para publicar el dispositivo físico.</p>
+            <label class="profile-field" id="profile-field">
+              <span>PERFIL MATTER</span>
+              <select id="profile-select" aria-label="Perfil Matter"></select>
+              <small id="profile-note"></small>
+            </label>
+            <dl class="selection-meta" id="selection-meta"></dl>
+            <div class="selection-status" id="selection-status"></div>
+            <section class="diagnostics-panel" id="diagnostics-panel" hidden aria-live="polite">
+              <div class="diagnostics-heading"><span aria-hidden="true">!</span><strong>Diagnóstico y logs de esta entidad</strong></div>
+              <p id="diagnostics-summary"></p>
+              <ul id="diagnostics-list"></ul>
+            </section>
+            <div id="device-qr-container" style="display: none;">
+              <div id="device-qr-code"></div>
+              <p id="device-manual-code"></p>
+            </div>
+            <button class="button button-secondary bridge-qr-button" id="device-qr-button" type="button" style="display: none;">Mostrar Código de Emparejamiento</button>
+            <div class="matter-actions" id="matter-actions" hidden>
+              <button class="text-button" id="reconnect-accessory-button" type="button">Actualizar estado Matter</button>
+              <button class="text-button" id="regenerate-code-button" type="button">Desconectar y generar código nuevo</button>
+            </div>
+            <button class="text-button reset-accessory-button" id="reset-accessory-button" type="button" style="display: none;">Desconectar Matter</button>
+          </aside>
       </div>
     </section>
   </div>

@@ -1,3 +1,14 @@
+## [1.2.53] - 2026-07-23
+
+### Fixed
+
+- **Panel de selección:** rediseño completo del panel derecho del modal. La tabla de metadatos ahora usa una cuadrícula de dos columnas con corte por `text-overflow` que evita el desbordamiento de IDs y nombres largos.
+- **Botones de acción Matter:** los botones `Actualizar estado Matter` y `Desconectar y generar código nuevo` permiten ahora que el texto se ajuste en dos líneas, eliminando el texto recortado en pantallas pequeñas.
+- **Badge de casa:** el `home-badge` tiene `max-width` para no desbordarse cuando el nombre de la casa es muy largo.
+- **Selectore de perfil:** se añade `appearance: none` para uniformidad visual en todos los sistemas operativos.
+- **QR y código manual:** el contenedor del QR y el código manual toman estilos desde CSS en lugar de atributos `style` inline, garantizando coherencia visual.
+- **Responsividad del modal:** se amplía la columna del panel lateral de 260 px a 290 px para acomodar mejor el contenido del panel en pantallas de escritorio.
+
 ## [1.2.52] - 2026-07-22
 
 - **Estado de emparejamiento en tiempo real:** Operational Credentials es ahora la fuente de verdad del fabric Matter. Tras retirar un accesorio de HomeKit, el panel deja de mostrarlo como emparejado cuando HomeKit ha eliminado su último fabric.
