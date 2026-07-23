@@ -1,3 +1,10 @@
+## [1.2.56] - 2026-07-23
+
+### Fixed
+
+- **Contador de pendientes en tiempo real:** Se agrega el indicador numérico dinámico (`badge`) al botón de filtro *Por emparejar*. Cuando un accesorio Matter es desemparejado o está publicado pero aún no se escanea en Apple Home / Google Home, el contador *Emparejados* disminuye inmediatamente y el badge *Por emparejar* se incrementa en tiempo real.
+- **Filtro activo de emparejamiento:** Al pulsar el filtro *Por emparejar*, la lista se filtra para mostrar únicamente los dispositivos que contienen accesorios Matter pendientes de escanear y emparejar.
+
 ## [1.2.55] - 2026-07-23
 
 ### Fixed

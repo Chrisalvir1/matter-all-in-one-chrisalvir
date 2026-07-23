@@ -8,7 +8,7 @@ const els = {
   haDot: $('ha-dot'), haStatus: $('ha-status'), version: $('version'), deviceSearch: $('device-search'),
   deviceCount: $('device-count'), deviceList: $('device-list'), refreshButton: $('refresh-button'),
   overviewMessage: $('overview-message'), statDevices: $('stat-devices'), statExported: $('stat-exported'), statPaired: $('stat-paired'),
-  issueCount: $('issue-count'), diagnosticsPanel: $('diagnostics-panel'), diagnosticsSummary: $('diagnostics-summary'), diagnosticsList: $('diagnostics-list'),
+  pendingCount: $('pending-count'), issueCount: $('issue-count'), diagnosticsPanel: $('diagnostics-panel'), diagnosticsSummary: $('diagnostics-summary'), diagnosticsList: $('diagnostics-list'),
   deviceModal: $('device-modal'), deviceModalClose: $('device-modal-close'), deviceModalIcon: $('device-modal-icon'),
   deviceModalName: $('device-modal-name'), deviceModalId: $('device-modal-id'), entityList: $('entity-list'),
   modalExportCount: $('modal-export-count'), selectionPanel: $('selection-panel'), selectionTitle: $('selection-title'),
@@ -109,11 +109,13 @@ function renderDevices() {
   const devices = groupEntities(searched).filter(matchesDeviceFilter);
   const exportedNodes = new Set(state.entities.filter((entity) => entity.exported).map(matterNodeKey)).size;
   const pairedNodes = new Set(state.entities.filter((entity) => entity.exported && entity.commissioned).map(matterNodeKey)).size;
+  const pendingNodes = new Set(state.entities.filter((entity) => entity.exported && !entity.commissioned).map(matterNodeKey)).size;
   const allDevices = groupEntities(state.entities);
   const issues = allDevices.filter((device) => device.entities.some((entity) => entity.exported && entity.hasIssue)).length;
   els.statDevices.textContent = String(allDevices.length);
   els.statExported.textContent = String(exportedNodes);
   els.statPaired.textContent = String(pairedNodes);
+  els.pendingCount.textContent = String(pendingNodes);
   els.issueCount.textContent = String(issues);
   els.overviewMessage.textContent = exportedNodes
     ? `${exportedNodes} accesorio${exportedNodes === 1 ? '' : 's'} listo${exportedNodes === 1 ? '' : 's'} para Matter`

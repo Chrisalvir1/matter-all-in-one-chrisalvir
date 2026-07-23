@@ -80,6 +80,7 @@ h2 { margin: 5px 0 7px; font-size: clamp(25px, 3vw, 34px); letter-spacing: -.04e
 .filter-chip:hover { border-color: rgba(124,168,255,.48); color: var(--text); transform: translateY(-2px); }
 .filter-chip.active { border-color: rgba(124,168,255,.55); color: #e9f0ff; background: rgba(124,168,255,.16); box-shadow: 0 6px 16px rgba(44,77,154,.16); }
 .filter-chip-warning span { display: grid; min-width: 17px; height: 17px; place-items: center; border-radius: 50%; color: #ffdca3; background: rgba(246,200,102,.16); font-size: 9px; }
+.chip-badge { display: grid; min-width: 17px; height: 17px; padding: 0 3px; place-items: center; border-radius: 50%; color: #9ec6ff; background: rgba(124,168,255,.16); font-size: 9px; }
 .text-button { padding: 0; color: var(--blue); border: 0; background: none; font-size: 12px; font-weight: 650; }
 .text-button:hover { color: #b6ccff; }
 
