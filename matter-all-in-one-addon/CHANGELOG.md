@@ -1,3 +1,11 @@
+## [1.2.54] - 2026-07-23
+
+### Fixed
+
+- **Modelo (Marca + Modelo Real) en HomeKit:** El campo *Model* en Apple Home muestra ahora la combinación de la Marca y Modelo real del dispositivo (p. ej. `Tuya CB03-SBL`, `Shelly SHSW-25`), mientras que *Manufacturer* se mantiene consistentemente como `Matter All-in-One Chrisalvir`.
+- **QR independiente por canal en apagadores dobles/triples y enchufes dobles:** Los dispositivos físicos de HA con 2 o más entidades `switch.*` o `light.*` bajo el mismo `device_id` ahora publican cada canal como un accesorio Matter independiente con su propio código QR y proceso de emparejamiento. Se elimina el agrupamiento erróneo que impedía generar un segundo QR cuando ya había uno activo.
+- **Filtrado de entidades DPS genéricas:** Las entidades cuyo `friendly_name` empieza con `"DPS"` o cuyo `original_name` contiene `"DPS"` se ocultan del panel de control. Estas son entidades de datapoint genérico de Tuya que no tienen nombre significativo y no se pueden publicar en Matter. Si el usuario les cambia el nombre en HA, vuelven a aparecer automáticamente.
+
 ## [1.2.53] - 2026-07-23
 
 ### Fixed

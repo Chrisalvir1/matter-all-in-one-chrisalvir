@@ -3,14 +3,16 @@
 <div align="center">
   <img src="matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
 </div>
-> **Matter All-in-One for Home Assistant (v1.2.52)**
-> Expone entidades verificadas de Home Assistant como accesorios Matter 1.6 estables, agrupados por dispositivo físico cuando corresponde.
+> **Matter All-in-One for Home Assistant (v1.2.54)**
+> Expone entidades verificadas de Home Assistant como accesorios Matter 1.6 estables, con QR independiente por canal para apagadores/enchufes múltiples y modelo/marca real en HomeKit.
 
 ---
 
 ## 🌟 Key Features
 
-* **Agrupación física estable**: las capacidades del mismo `device_id` comparten un nodo y un QR; las entidades independientes conservan su propio nodo.
+* **QR independiente por canal**: los apagadores dobles/triples y enchufes dobles se publican con un código QR único e independiente por cada canal.
+* **Modelo y marca real en HomeKit**: el campo *Model* en Apple Home muestra la Marca + Modelo real del dispositivo de HA (`Tuya CB03-SBL`), manteniendo *Manufacturer* como `Matter All-in-One Chrisalvir`.
+* **Filtro de DPS genéricos**: los datapoints de Tuya sin nombrar (`DPS 2`, `DPS 3`) se ocultan automáticamente del panel de control.
 * **Red dual-stack**: IPv4 e IPv6 permanecen habilitados y mDNS escucha las interfaces disponibles para sobrevivir cambios de ruta entre Ethernet y Wi-Fi.
 * **Liquid Glass UI Integration**: View QR codes and manual codes natively inside a custom dark-themed control panel, without leaving the page.
 * **Apple Home con tipos verificados**: luces, enchufes, persianas `windowCovering`, cerraduras, termostatos, ventiladores, RVC y sensores admitidos.

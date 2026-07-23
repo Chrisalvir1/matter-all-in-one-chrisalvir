@@ -8,7 +8,7 @@ import { HomeAssistantPlatform } from '../platform.js';
 import { HassState } from '../utils/ha-state.js';
 import { safeSetAttribute, safeUpdateAttribute } from '../utils/matter-attributes.js';
 import { hasColorTemperatureCapability } from '../device-registry.js';
-import { getMatterSerialNumber, MATTER_BRIDGE_VENDOR_ID, MATTER_BRIDGE_VENDOR_NAME } from '../utils/matter-device-identity.js';
+import { getMatterSerialNumber, getHaDeviceModel, getHaDeviceManufacturer, MATTER_BRIDGE_VENDOR_ID, MATTER_BRIDGE_VENDOR_NAME } from '../utils/matter-device-identity.js';
 
 export class BaseEntity {
   public platform: HomeAssistantPlatform;
@@ -144,11 +144,13 @@ export class BaseEntity {
     this.endpoint.uniqueId = this.entityId.replaceAll('.', '_');
     this.endpoint.serialNumber = this.getMatterSerialNumber();
     this.endpoint.vendorId = MATTER_BRIDGE_VENDOR_ID;
-    this.endpoint.vendorName = MATTER_BRIDGE_VENDOR_NAME;
+    // Use real manufacturer from HA device registry (e.g. "Tuya", "Shelly").
+    // Falls back to the bridge vendor name when the integration omits it.
+    this.endpoint.vendorName = getHaDeviceManufacturer(this.platform, this.entityId);
     this.endpoint.productId = 0x8000;
-    // Instead of hardcoding the domain (e.g. "Light"), use the deviceType name (e.g. "DimmablePlugInUnit")
-    // to prevent Apple HomeKit from forcing the Lightbulb icon on dimmers that are not lights.
-    this.endpoint.productName = this.deviceType.name;
+    // Use real model from HA device registry (e.g. "CB03-SBL", "SHSW-25").
+    // Falls back to the Matter device type name (e.g. "OnOffLight") when unavailable.
+    this.endpoint.productName = getHaDeviceModel(this.platform, this.entityId, this.deviceType.name);
 
     // Use the BasicInformation cluster (NOT BridgedDeviceBasicInformation).
     // This entity is registered with mode: 'server' so Matterbridge creates
@@ -158,7 +160,7 @@ export class BaseEntity {
       uniqueName,
       this.endpoint.serialNumber,
       MATTER_BRIDGE_VENDOR_ID,
-      MATTER_BRIDGE_VENDOR_NAME,
+      this.endpoint.vendorName,
       0x8000,
       this.endpoint.productName,
     );

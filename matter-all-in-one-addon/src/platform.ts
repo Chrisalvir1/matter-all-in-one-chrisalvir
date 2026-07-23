@@ -383,6 +383,38 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     return configs.find((config) => config.device_id === deviceId) ?? configs.find((config) => config.primary_entity === entityId || config.include_entities?.includes(entityId));
   }
 
+  /**
+   * Returns true when the entity's friendly_name starts with "DPS" (case-insensitive)
+   * or its original_name in the HA entity registry contains "DPS". These are generic
+   * Tuya datapoint sensors that have not been given a meaningful name and should be
+   * excluded from the Matter panel and from the multi-switch switch-count.
+   */
+  public isDpsGenericEntity(entityId: string): boolean {
+    const entry = (this.ha as any).hassEntities?.get(entityId);
+    if (!entry) return false;
+    const friendly: string = entry.name ?? entry.original_name ?? '';
+    const original: string = entry.original_name ?? '';
+    return /^DPS\b/i.test(friendly) || /\bDPS\b/i.test(original);
+  }
+
+  /**
+   * A "multi-switch device" is a physical HA device_id that has TWO OR MORE
+   * exported-eligible switch.* or light.* entities that are NOT DPS generics.
+   * These devices are published as independent Matter accessories (one QR each)
+   * rather than as a grouped composite node.
+   */
+  public isMultiSwitchDevice(deviceId: string): boolean {
+    if (!deviceId) return false;
+    const controllable = Array.from(this.entities.values()).filter((entity) => {
+      const [domain] = entity.entityId.split('.');
+      if (!['switch', 'light'].includes(domain)) return false;
+      const hassEntry = (this.ha as any).hassEntities?.get(entity.entityId);
+      if (hassEntry?.device_id !== deviceId) return false;
+      return !this.isDpsGenericEntity(entity.entityId);
+    });
+    return controllable.length >= 2;
+  }
+
   private getCompositeCandidate(entityId: string):
     | {
         deviceId: string;
@@ -399,6 +431,12 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     const config = this.getCompositeConfigForEntity(entityId, deviceId);
     if (config?.group_by_device_id === false) {
       this.log.debug(`[Composite] ${entityId}: grouping explicitly disabled for device ${deviceId}`);
+      return undefined;
+    }
+    // Multi-switch devices (≥2 switch/light entities under one HA device) publish
+    // each canal as an independent Matter accessory with its own QR code.
+    if (this.isMultiSwitchDevice(deviceId)) {
+      this.log.debug(`[Composite] ${entityId}: multi-switch device ${deviceId} — composite grouping bypassed, each entity gets its own QR`);
       return undefined;
     }
     const compositeDeviceId = config?.device_id ?? deviceId;
@@ -1002,8 +1040,16 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         error: 'This is an auxiliary action of the main device and cannot be exported independently.',
       };
     }
+    // DPS generic entities are display-only datapoints; they cannot be published.
+    if (this.isDpsGenericEntity(entityId)) {
+      return { success: false, error: 'Esta entidad es un datapoint genérico DPS y no se puede publicar en Matter.' };
+    }
+    const deviceId = (this.ha as any).hassEntities?.get(entityId)?.device_id;
+    // Multi-switch: each canal is registered as an independent Matter accessory.
+    // Skip the composite path entirely so every switch gets its own QR code.
+    const isMultiSwitch = deviceId ? this.isMultiSwitchDevice(deviceId) : false;
     try {
-      const composite = this.getCompositeCandidate(entityId);
+      const composite = isMultiSwitch ? undefined : this.getCompositeCandidate(entityId);
       if (composite) {
         const key = this.compositeStorageKey(composite.deviceId);
         this.exportedDevices.add(key);
@@ -1020,7 +1066,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       this.exportedDevices.add(entityId);
       await this.activateEntity(entityId);
       await this.saveExportedDevices();
-      this.log.notice(`Manually exported bridged endpoint for ${entityId}`);
+      this.log.notice(`Manually exported bridged endpoint for ${entityId}${isMultiSwitch ? ' (multi-switch: independent QR)' : ''}`);
       return { success: true };
     } catch (err) {
       this.exportedDevices.delete(entityId);
@@ -1445,7 +1491,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         }
 
         if (req.method === 'GET' && pathname === '/api/custom/devices') {
-          const result = Array.from(this.entities.values()).map((e) => {
+          const result = Array.from(this.entities.values()).flatMap((e) => {
+            // Exclude generic DPS datapoints — they have no meaningful Matter mapping
+            // and cluttering the panel with unnamed sensor rows harms usability.
+            if (this.isDpsGenericEntity(e.entityId)) return [];
             const [domain] = e.entityId.split('.');
             // Include grouping metadata before activation. The frontend must
             // never offer a second toggle for a future child endpoint.

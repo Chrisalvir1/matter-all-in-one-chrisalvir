@@ -16,7 +16,7 @@ import { ClusterId } from 'matterbridge/matter/types';
 import { safeSetAttribute, safeUpdateAttribute } from '../utils/matter-attributes.js';
 import type { HassState } from '../utils/ha-state.js';
 import { getDeviceTypeForEntity, hasColorTemperatureCapability } from '../device-registry.js';
-import { getMatterSerialNumber, MATTER_BRIDGE_VENDOR_ID, MATTER_BRIDGE_VENDOR_NAME } from '../utils/matter-device-identity.js';
+import { getMatterSerialNumber, getHaDeviceModel, getHaDeviceManufacturer, MATTER_BRIDGE_VENDOR_ID, MATTER_BRIDGE_VENDOR_NAME } from '../utils/matter-device-identity.js';
 
 type CompositePlatform = {
   log: any;
@@ -321,9 +321,12 @@ export class CompositeDeviceEntity {
     endpoint.uniqueId = `device_${this.deviceId}`.substring(0, 32);
     endpoint.serialNumber = getMatterSerialNumber(this.platform, primaryEntityId);
     endpoint.vendorId = MATTER_BRIDGE_VENDOR_ID;
-    endpoint.vendorName = MATTER_BRIDGE_VENDOR_NAME;
+    // Use real manufacturer from HA device registry (e.g. "Tuya", "Shelly").
+    endpoint.vendorName = getHaDeviceManufacturer(this.platform, primaryEntityId);
     endpoint.productId = 0x8000;
-    endpoint.productName = 'Matter All-in-One Composite Device';
+    // Use real model from HA device registry (e.g. "CB03-SBL").
+    // Falls back to the device type name when the integration omits the model.
+    endpoint.productName = getHaDeviceModel(this.platform, primaryEntityId, type.name);
     const version = String((this.platform as any).matterbridge?.matterbridgeVersion ?? 'Matterbridge');
     const [major = 0, minor = 0, patch = 0] = version.split(/[-+.]/).map((part) => Number.parseInt(part, 10) || 0);
     endpoint.softwareVersion = Math.min(0xffffffff, major * 1_000_000 + minor * 1_000 + patch);
