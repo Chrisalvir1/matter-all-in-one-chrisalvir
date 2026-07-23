@@ -1,7 +1,7 @@
 # Matter All-in-One for Home Assistant — v1.2.57
 
 <div align="center">
-  <img src="logo.png" alt="Matter All In One Logo" width="300" />
+  <img src="https://raw.githubusercontent.com/chrisalvir1/matter-all-in-one-chrisalvir/main/matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
 </div>
 
 > Puente Matter 1.6 para Home Assistant con código QR independiente para apagadores dobles/triples y enchufes múltiples, perfiles conservadores para Apple Home y modelo/marca real en el campo Model.
