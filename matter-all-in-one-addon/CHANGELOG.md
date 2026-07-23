@@ -1,3 +1,10 @@
+## [1.2.55] - 2026-07-23
+
+### Fixed
+
+- **Conteo exacto de accesorios emparejados:** El indicador *Emparejados* en la barra de estadísticas del panel superior ahora calcula el total de nodos Matter accesorios independientes emparejados (basado en `matterNodeKey`) en lugar de contar únicamente los grupos de tarjetas de dispositivos físicos de HA. Esto resuelve la inconsistencia donde dispositivos con múltiples canales independientes (apagadores/enchufes dobles o triples) solo sumaban 1 al contador de emparejados.
+- **Filtro de accesorios pendientes:** El filtro *Por emparejar* muestra ahora cualquier tarjeta que contenga al menos un accesorio Matter exportado pendiente de emparejar.
+
 ## [1.2.54] - 2026-07-23
 
 ### Fixed

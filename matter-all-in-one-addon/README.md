@@ -1,4 +1,4 @@
-# Matter All-in-One for Home Assistant — v1.2.54
+# Matter All-in-One for Home Assistant — v1.2.55
 
 <div align="center">
   <img src="logo.png" alt="Matter All In One Logo" width="300" />
@@ -15,7 +15,7 @@ This file is intentionally structured for both humans and AI agents.
 
 ```yaml
 project: matter-all-in-one-chrisalvir
-version: "1.2.54"
+version: "1.2.55"
 spec: "Matter 1.6"
 engine: matterbridge
 engine_version: "3.10.0"

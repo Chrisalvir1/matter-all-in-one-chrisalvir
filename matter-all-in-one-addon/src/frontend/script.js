@@ -108,8 +108,8 @@ function renderDevices() {
   // state belongs to the accessory/card, not to an individual channel.
   const devices = groupEntities(searched).filter(matchesDeviceFilter);
   const exportedNodes = new Set(state.entities.filter((entity) => entity.exported).map(matterNodeKey)).size;
+  const pairedNodes = new Set(state.entities.filter((entity) => entity.exported && entity.commissioned).map(matterNodeKey)).size;
   const allDevices = groupEntities(state.entities);
-  const pairedNodes = allDevices.filter((device) => isDevicePaired(device)).length;
   const issues = allDevices.filter((device) => device.entities.some((entity) => entity.exported && entity.hasIssue)).length;
   els.statDevices.textContent = String(allDevices.length);
   els.statExported.textContent = String(exportedNodes);
@@ -134,9 +134,8 @@ function isDevicePaired(device) {
 function matchesDeviceFilter(device) {
   const exported = device.entities.some((entity) => entity.exported);
   if (state.activeFilter === 'active') return exported;
-  // One physical device, one Matter pairing state. Do not show a paired
-  // accessory as pending because an old internal channel has no fabric.
-  if (state.activeFilter === 'pending') return exported && !isDevicePaired(device);
+  // A device is pending pairing if it has any exported entity not yet commissioned
+  if (state.activeFilter === 'pending') return device.entities.some((entity) => entity.exported && !entity.commissioned);
   if (state.activeFilter === 'unpublished') return !exported && device.entities.some((entity) => !entity.auxiliary);
   if (state.activeFilter === 'issues') return device.entities.some((entity) => entity.exported && entity.hasIssue);
   return true;
