@@ -1,3 +1,9 @@
+## [1.2.57] - 2026-07-23
+
+### Fixed
+
+- **Actualización de identidad visual en el panel:** Se actualiza el encabezado del panel lateral superior a `MATTER 1.6 BRIDGE` y el título principal a `Matter All In One Chrisalvir`, eliminando el texto genérico *Home Assistant*.
+
 ## [1.2.56] - 2026-07-23
 
 ### Fixed
