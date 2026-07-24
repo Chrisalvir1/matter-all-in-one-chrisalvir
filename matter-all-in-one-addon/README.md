@@ -1,11 +1,11 @@
-# Matter All-in-One for Home Assistant — v1.2.58
+# Matter All-in-One for Home Assistant — v1.2.60
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/chrisalvir1/matter-all-in-one-chrisalvir/main/matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
 </div>
 
 > Puente Matter 1.6 para Home Assistant con código QR independiente para apagadores dobles/triples y enchufes múltiples, perfiles conservadores para Apple Home y modelo/marca real en el campo Model.
-> **Base:** `matterbridge@3.10.0` · **Node.js:** `24.18-alpine3.24` · **Spec:** Matter 1.6 (CSA, 17 Jun 2026)
+> **Base:** `matterbridge@3.10.2` · **Node.js:** `24.18-alpine3.24` · **Spec:** Matter 1.6 (CSA, 17 Jun 2026)
 
 ---
 
@@ -15,10 +15,10 @@ This file is intentionally structured for both humans and AI agents.
 
 ```yaml
 project: matter-all-in-one-chrisalvir
-version: "1.2.58"
+version: "1.2.60"
 spec: "Matter 1.6"
 engine: matterbridge
-engine_version: "3.10.0"
+engine_version: "3.10.2"
 node_image: "node:24.18-alpine3.24"
 bridge_mode: server       # Each HA device = ServerNode; standalone entities keep their own QR
 plugin_mode: dynamic      # MatterbridgeDynamicPlatform
@@ -44,7 +44,7 @@ matterbridge_ui_port: 8284
 ## Minimum Requirements
 
 - **Apple Home:** HomePod mini / Apple TV 4K (Matter hub); Thread router only needed for Thread accessories.
-- **Matterbridge:** `>= 3.10.0`
+- **Matterbridge:** `>= 3.10.2`
 - **Home Assistant:** `>= 2025.1`
 
 ---
@@ -77,7 +77,7 @@ HomeAssistantPlatform (MatterbridgeDynamicPlatform)
         └── CompositeDeviceEntity → Fan+Light grouped (ServerNode, own QR)
         │
         ▼
-matterbridge@3.10.0 (Matter SDK: @matter/node)
+matterbridge@3.10.2 (Matter SDK: @matter/node)
         │
         ▼
 Matter 1.6 Network (mDNS + BLE commissioning)
@@ -100,41 +100,65 @@ Matter 1.6 Network (mDNS + BLE commissioning)
 | `src/entities/composite-device.entity.ts` | Fan+Light grouped by HA device_id or explicit include list |
 | `src/converters/vacuum.converter.ts` | HA vacuum state → Matter RVC attributes |
 | `run.sh` | Startup: mDNS interface detection, plugin registration, proxy |
-| `Dockerfile` | Imagen multi-stage reproducible con `node:24.18-alpine3.24` y `matterbridge@3.10.0` |
+| `Dockerfile` | Imagen multi-stage reproducible con `node:24.18-alpine3.24` y `matterbridge@3.10.2` |
 
 ---
 
 ## Installation
 
+> ⚠️ **Siempre usa la última versión disponible.** Las instrucciones de abajo reflejan la versión actual del proyecto.
+
 ```bash
-npm install -g matterbridge@3.10.0
-npm install -g matter-all-in-one-chrisalvir@1.2.52
+# 1. Instalar Matterbridge (última versión requerida)
+npm install -g matterbridge@3.10.2
+
+# 2. Instalar el plugin
+npm install -g matter-all-in-one-chrisalvir@1.2.60
 ```
 
-En Home Assistant, el add-on usa `ghcr.io/chrisalvir1/matter-all-in-one-chrisalvir` con un manifiesto para `amd64` y `aarch64`. Así una actualización sólo descarga la imagen ya construida; no recompila dependencias en el host.
+En Home Assistant, el add-on usa `ghcr.io/chrisalvir1/matter-all-in-one-chrisalvir` con un manifiesto multi-arquitectura para `amd64` y `aarch64`. Una actualización solo descarga la imagen precompilada desde GHCR — no recompila dependencias en el host.
+
+Para actualizar desde una versión anterior:
+
+```bash
+npm update -g matterbridge
+npm update -g matter-all-in-one-chrisalvir
+```
 
 ---
 
 ## Changelog Summary (latest)
 
-### v1.2.52 (2026-07-22)
+### v1.2.60 (2026-07-24) — Estabilidad y limpieza de logs
 
-- Actualización del emparejamiento: la interfaz toma los fabrics vivos de Operational Credentials como fuente de verdad. Al eliminar el último fabric desde HomeKit, el accesorio pasa automáticamente a **No emparejado** en la siguiente actualización de la interfaz.
+- **🔧 Reconexión sin carreras de condición:** Se elimina la llamada redundante a `startReconnect()` dentro del callback `connectionTimeout`. Cuando `socket.terminate()` es invocado, Node.js siempre emite el evento `close` → `onClose()` → `startReconnect()`. La llamada duplicada podía avanzar `reconnectRetry` dos veces y producir mensajes redundantes. Ahora hay un único punto de entrada garantizado.
+- **🔇 Filtro de ruido en logs:** Las entidades de Home Assistant **no exportadas como Matter** (p. ej. Samsung TV, sensores de alarma solar, cerrojos de baño) ya no generan `WARN`/`NOTICE` cuando van a `unavailable`. Se registran a nivel `debug`. Solo los accesorios Matter activos emiten advertencias visibles.
+- **⬆️ Matterbridge 3.10.2:** `@matter/main` v0.17.6 · Closure devices con `countdownTime`, `mainState`, `overallCurrentState/TargetState`, `addPanel()` · Fix `ClosureTag` export shadowing · Frontend v3.5.4 con `@rjsf v6.7.0` y `vite v8.1.5` · Detección correcta de plugins locales.
+- **🏷️ Versión sincronizada:** `matterbridge.version` en `package.json` ahora es `1.2.60` (antes atascado en `1.2.52`). Matterbridge ya muestra la versión correcta del plugin.
 
-### v1.2.51 (2026-07-22)
-- Recuperación robusta después de desconexiones de Home Assistant y reconstrucción de endpoints reutilizados.
-- Red dual-stack IPv4/IPv6, mDNS en interfaces disponibles y estados Matter conservados durante indisponibilidad.
-- Imágenes GHCR precompiladas para actualizaciones rápidas en Home Assistant.
+### v1.2.57–1.2.58 (2026-07-23) — Identidad visual
 
-### v1.2.25 (2026-07-02)
-- Fan+Light composites can now be declared explicitly with `include_entities` even when Home Assistant registers the fan and light under different `device_id` values.
-- Light capabilities remain auto-detected from Home Assistant (`brightness`, `color_temp`, RGB/HS/XY), so compatible fan lights expose dimmer, color temperature, or color controls in Apple Home.
-- Documentation updated with a `device-groups.json` recipe for fan integrations that split the light into a separate HA device.
+- Encabezado del panel lateral: `MATTER 1.6 BRIDGE`. Título principal: `Matter All In One Chrisalvir`.
 
-### v1.2.24
-- Apple Home-safe defaults for shared homes and toolchain updates.
+### v1.2.56 (2026-07-23) — Badge de emparejamiento
 
-### v1.2.19
-- SwitchBot Lock published as real Matter DoorLock with composite device grouping
+- Indicador numérico dinámico en el botón *Por emparejar*. Actualización en tiempo real cuando un accesorio se desempareja o se publica sin escanear. Filtro activo por accesorios pendientes de escanear.
+
+### v1.2.55 (2026-07-23) — Conteo exacto de emparejados
+
+- El contador *Emparejados* usa `matterNodeKey` como fuente de verdad en lugar de grupos de tarjetas. Dispositivos con múltiples canales independientes (apagadores/enchufes dobles/triples) suman correctamente.
+
+### v1.2.54 (2026-07-23) — Modelo y QR independiente
+
+- Campo *Model* en Apple Home muestra `Marca + Modelo real` (p. ej. `Tuya CB03-SBL`). QR independiente por canal en apagadores dobles/triples y enchufes dobles. Filtrado de entidades DPS genéricas de Tuya.
+
+### v1.2.52 (2026-07-22) — Fabric Operational Credentials
+
+- `OperationalCredentials` como fuente de verdad de fabrics. Al eliminar el último fabric desde HomeKit, el accesorio pasa automáticamente a **No emparejado**.
+
+### v1.2.51 (2026-07-22) — Luces de color
+
+- Entidades `light.*` RGB/HS/XY publican `ExtendedColorLight` con `ColorControl`. Govee RGBIC exportado correctamente.
 
 See [CHANGELOG.md](CHANGELOG.md) for full history.
+

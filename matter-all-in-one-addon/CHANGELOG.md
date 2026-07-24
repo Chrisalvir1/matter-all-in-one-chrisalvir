@@ -1,3 +1,29 @@
+## [1.2.60] - 2026-07-24
+
+### Fixed
+
+- **Reconexión estable sin carreras:** Se elimina la llamada redundante a `startReconnect()` dentro del callback de `connectionTimeout`. Cuando `socket.terminate()` es invocado, Node.js siempre emite el evento `close` que dispara `onClose()` → `startReconnect()`. La llamada duplicada podía avanzar el contador `reconnectRetry` dos veces y generar mensajes de log redundantes de reconexión. Ahora hay un único punto de entrada garantizado.
+- **Filtro de ruido en logs de entidades no exportadas:** Los eventos `unavailable`/`unknown` de entidades de Home Assistant que **no están exportadas como dispositivos Matter** (p. ej. `media_player.samsung_*`, sensores de alarma, cerrojos de baño, etc.) se registran ahora a nivel `debug` en lugar de `warn`/`notice`. Estas entidades no tienen ningún impacto en los accesorios Matter y sus ciclos de disponibilidad/recuperación no deben contaminar el log principal.
+- **Actualización de Matterbridge a 3.10.2:** Se actualiza matterbridge de `3.10.0` a `3.10.2` en Dockerfile, `devDependencies` y `peerDependencies`. La nueva versión incluye:
+  - `@matter/main` actualizado a `v0.17.6`.
+  - Soporte ampliado de `Closure` devices: `countdownTime`, `mainState`, `currentErrorList`, `overallCurrentState`, `overallTargetState`, `latchControlModes` y `addPanel()` con `tagList`.
+  - Fix del shadowing de `ClosureTag` export.
+  - Fix de detección de plugins locales en el frontend (omite comprobación de versión disponible).
+  - Frontend actualizado a `v3.5.4` con `@rjsf v6.7.0` y `vite v8.1.5`.
+- **Versión del plugin sincronizada:** El campo `matterbridge.version` en `package.json` se actualiza de `1.2.52` a `1.2.60` para que Matterbridge muestre la versión correcta del plugin en su interfaz de gestión.
+
+## [1.2.59] - 2026-07-23
+
+### Fixed
+
+- **Relleno de versión interna** — Sin cambios funcionales; bump para mantener consistencia de numeración entre `config.yaml` y `package.json`.
+
+## [1.2.58] - 2026-07-23
+
+### Fixed
+
+- **Actualización de identidad visual en el panel:** Se actualiza el encabezado del panel lateral superior a `MATTER 1.6 BRIDGE` y el título principal a `Matter All In One Chrisalvir`, eliminando el texto genérico *Home Assistant*.
+
 ## [1.2.57] - 2026-07-23
 
 ### Fixed

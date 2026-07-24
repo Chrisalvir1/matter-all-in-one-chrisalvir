@@ -97,6 +97,14 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   public deviceOverrides: Record<string, string> = {};
   public deviceGroupingConfigs: CompositeDeviceConfig[] = [];
   private uiServer?: http.Server;
+  /** Port the UI HTTP server will bind to. Override in tests with 0 to get an OS-assigned port. */
+  protected _uiPort = 8285;
+
+  /** Returns the actual TCP port the UI server is listening on (0 until the server starts). */
+  public get uiServerPort(): number {
+    const addr = this.uiServer?.address();
+    return addr && typeof addr === 'object' ? addr.port : 0;
+  }
   private packageVersion?: string;
   /** Raw host from config (may be undefined — triggers network auto-discovery) */
   private _configHost?: string;
@@ -173,15 +181,27 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   private observeHomeAssistantAvailability(entityId: string, state: HassState): boolean {
     const previous = this.haAvailabilityStates.get(entityId);
     this.haAvailabilityStates.set(entityId, state.state);
+    // Only emit visible warnings for entities that are exported as Matter accessories.
+    // Non-exported entities (Samsung TVs, alarm sensors, etc.) going unavailable
+    // have zero impact on Matter and must not flood the log with noise.
+    const exported = this.isEntityExported(entityId);
     if (isUnavailable(state)) {
       if (previous === state.state) return true;
-      const message = `Home Assistant informa el estado “${state.state}”.`;
-      this.log.warn(`[Home Assistant] ${entityId}: ${message}`);
-      this.recordEntityDiagnostic(entityId, message, 'warning');
+      const message = `Home Assistant informa el estado "${state.state}".`;
+      if (exported) {
+        this.log.warn(`[Home Assistant] ${entityId}: ${message}`);
+        this.recordEntityDiagnostic(entityId, message, 'warning');
+      } else {
+        this.log.debug(`[Home Assistant] ${entityId}: ${message} (no exportado — sin impacto Matter)`);
+      }
       return true;
     }
     if (previous && ['unavailable', 'unknown'].includes(previous)) {
-      this.log.notice(`[Home Assistant] ${entityId}: la entidad se recuperó y volvió a “${state.state}”.`);
+      if (exported) {
+        this.log.notice(`[Home Assistant] ${entityId}: la entidad se recuperó y volvió a "${state.state}".`);
+      } else {
+        this.log.debug(`[Home Assistant] ${entityId}: la entidad se recuperó y volvió a "${state.state}". (no exportado)`);
+      }
     }
     return false;
   }
@@ -1721,10 +1741,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     return new Promise((resolve, reject) => {
       const startupError = (error: Error) => reject(error);
       server.once('error', startupError);
-      server.listen(8285, '127.0.0.1', () => {
+      server.listen(this._uiPort, '127.0.0.1', () => {
         server.off('error', startupError);
         server.on('error', (error) => this.log.error(`Custom UI Server error: ${error}`));
-        this.log.notice('Custom Liquid Glass UI Server listening on port 8285');
+        this.log.notice(`Custom Liquid Glass UI Server listening on port ${this.uiServerPort}`);
         resolve();
       });
     });

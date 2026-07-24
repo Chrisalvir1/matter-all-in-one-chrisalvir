@@ -1520,8 +1520,10 @@ export class HomeAssistant extends EventEmitter {
           const message = `Home Assistant WebSocket connection timed out after ${this.connectionTimeoutTime / 1000} seconds`;
           this.log.error(message);
           this.emit('error', message);
+          // socket.terminate() always emits the 'close' event, which triggers
+          // onClose() → startReconnect(). Calling startReconnect() here too
+          // would race with that path and could advance reconnectRetry twice.
           socket.terminate();
-          if (!this.closing) this.startReconnect();
           reject(new Error(message));
         }, this.connectionTimeoutTime).unref();
 
