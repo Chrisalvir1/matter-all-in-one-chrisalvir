@@ -53,7 +53,7 @@ export interface CompositeDeviceConfig {
 
 interface EntityDiagnostic {
   timestamp: string;
-  level: 'error' | 'warning';
+  level: 'error' | 'warning' | 'info';
   message: string;
 }
 
@@ -181,26 +181,30 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   private observeHomeAssistantAvailability(entityId: string, state: HassState): boolean {
     const previous = this.haAvailabilityStates.get(entityId);
     this.haAvailabilityStates.set(entityId, state.state);
-    // Only emit visible warnings for entities that are exported as Matter accessories.
-    // Non-exported entities (Samsung TVs, alarm sensors, etc.) going unavailable
-    // have zero impact on Matter and must not flood the log with noise.
-    const exported = this.isEntityExported(entityId);
+    // Only emit visible warnings for entities that are fully exported AND actively converted
+    // into Matter endpoints. Unsupported entities (like Samsung TVs) must not flood the log.
+    const entity = this.entities.get(entityId);
+    const hasEndpoint = entity && (('endpoint' in entity && entity.endpoint !== undefined) || ('endpoints' in entity && (entity as any).endpoints !== undefined && (entity as any).endpoints.size > 0));
+    const isActivelyExported = this.isEntityExported(entityId) && hasEndpoint;
+    
     if (isUnavailable(state)) {
       if (previous === state.state) return true;
       const message = `Home Assistant informa el estado "${state.state}".`;
-      if (exported) {
+      if (isActivelyExported) {
         this.log.warn(`[Home Assistant] ${entityId}: ${message}`);
         this.recordEntityDiagnostic(entityId, message, 'warning');
       } else {
-        this.log.debug(`[Home Assistant] ${entityId}: ${message} (no exportado — sin impacto Matter)`);
+        this.log.debug(`[Home Assistant] ${entityId}: ${message} (no exportado o no soportado — sin impacto Matter)`);
       }
       return true;
     }
     if (previous && ['unavailable', 'unknown'].includes(previous)) {
-      if (exported) {
-        this.log.notice(`[Home Assistant] ${entityId}: la entidad se recuperó y volvió a "${state.state}".`);
+      if (isActivelyExported) {
+        this.log.info(`\u001b[32m[Home Assistant] ${entityId}: la entidad se recuperó y volvió a "${state.state}".\u001b[0m`);
+        this.clearEntityProblem(entityId);
+        this.recordEntityDiagnostic(entityId, `Conexión restaurada (estado: ${state.state})`, 'info');
       } else {
-        this.log.debug(`[Home Assistant] ${entityId}: la entidad se recuperó y volvió a "${state.state}". (no exportado)`);
+        this.log.debug(`[Home Assistant] ${entityId}: la entidad se recuperó y volvió a "${state.state}". (no exportado o no soportado)`);
       }
     }
     return false;
@@ -361,13 +365,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     return compositeEndpoint ?? directEndpoint;
   }
 
-  private getEntityErrorLogs(entityId: string, endpoint: any): string[] {
+  private getEntityErrorLogs(entityId: string, endpoint: any, allLogs: string[]): string[] {
     const compositeDeviceId = this.compositeMembership.get(entityId) ?? this.getCompositeCandidate(entityId)?.deviceId;
     const identifiers = [entityId, compositeDeviceId && `device:${compositeDeviceId}`, endpoint?.uniqueId, endpoint?.serialNumber].filter(
       (value): value is string => typeof value === 'string' && value.length > 0,
     );
     const errorPattern = /\b(error|warn|warning|failed|failure|exception|unable|timeout)\b/i;
-    return getLogs()
+    return allLogs
       .filter((line) => errorPattern.test(line) && identifiers.some((identifier) => line.includes(identifier)))
       .slice(-10)
       .reverse();
@@ -1511,6 +1515,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         }
 
         if (req.method === 'GET' && pathname === '/api/custom/devices') {
+          const allLogs = getLogs();
           const result = Array.from(this.entities.values()).flatMap((e) => {
             // Exclude generic DPS datapoints — they have no meaningful Matter mapping
             // and cluttering the panel with unnamed sensor rows harms usability.
@@ -1536,7 +1541,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               entityId: e.entityId,
               domain: domain,
               state: e.state.state,
-              attributes: e.state.attributes,
+              attributes: { friendly_name: e.state.attributes?.friendly_name },
               deviceTypeLabel: (e.constructor as any).matterTypeLabel || 'Generic',
               matterType: e.deviceType.name,
               // Registry info
@@ -1563,7 +1568,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               // like a broken Matter accessory.
               hasIssue: this.isEntityExported(e.entityId) && (this.entityProblems.has(e.entityId) || isUnavailable(e.state)),
               diagnostics: this.entityDiagnostics.get(e.entityId) ?? [],
-              logs: this.isEntityExported(e.entityId) ? this.getEntityErrorLogs(e.entityId, endpoint) : [],
+              logs: this.isEntityExported(e.entityId) ? this.getEntityErrorLogs(e.entityId, endpoint, allLogs) : [],
             };
           });
           res.writeHead(200, {

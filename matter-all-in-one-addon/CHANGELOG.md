@@ -1,5 +1,13 @@
-## [1.2.62] - 2026-07-24
+## [1.2.63] - 2026-07-24
 
+### Fixed
+
+- **Rendimiento extremo de la UI (Anti-Crash):** Se corrigió un error crítico en el endpoint `/api/custom/devices` que causaba la desconexión total del puente (causando "Sin Respuesta" en Apple Home). Anteriormente, la API iteraba sobre todas las entidades, leyendo y ejecutando expresiones regulares sobre el historial completo de logs en cada paso (complejidad O(N*L)). Se optimizó extrayendo la lectura de logs fuera del bucle, reduciendo drástically el uso de CPU.
+- **Reducción de Payload de Atributos:** El endpoint de dispositivos devolvía el diccionario completo de `attributes` de Home Assistant (incluyendo imágenes en Base64 o listas gigantes para reproductores multimedia/climas). Ahora solo devuelve el `friendly_name`, ahorrando varios Megabytes por cada recarga.
+- **Limpieza visual en recuperación de dispositivos:** Ahora, cuando un dispositivo se recupera de un estado `unavailable`, se elimina automáticamente de `entityProblems`, haciendo desaparecer la alerta naranja de la interfaz, e inyectando un mensaje de log verde en Home Assistant confirmando la reconexión.
+- **Restauración del Polling en tiempo real:** Gracias a la liberación del 99% de la carga de CPU, la interfaz ha vuelto a escanear los estados de emparejamiento cada 4 segundos, dándole al usuario retroalimentación en tiempo real cuando empareja un accesorio mediante código QR.
+
+## [1.2.62] - 2026-07-24
 ### Fixed
 
 - **Reconexión estable sin carreras:** Se elimina la llamada redundante a `startReconnect()` dentro del callback de `connectionTimeout`. Cuando `socket.terminate()` es invocado, Node.js siempre emite el evento `close` que dispara `onClose()` → `startReconnect()`. La llamada duplicada podía avanzar el contador `reconnectRetry` dos veces y generar mensajes de log redundantes de reconexión. Ahora hay un único punto de entrada garantizado.

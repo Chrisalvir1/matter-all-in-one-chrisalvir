@@ -379,7 +379,9 @@ function renderDiagnostics(entity) {
     const row = document.createElement('li');
     const date = new Date(item.timestamp);
     const time = Number.isNaN(date.getTime()) ? '' : date.toLocaleString();
-    row.innerHTML = `<span class="diagnostic-level ${item.level === 'warning' ? 'warning' : ''}">${item.level === 'warning' ? 'Aviso' : 'Error'}</span><div><strong>${escapeHtml(item.message)}</strong><small>${escapeHtml(time)}</small></div>`;
+    const levelClass = item.level === 'info' ? 'success' : (item.level === 'warning' ? 'warning' : 'error');
+    const levelLabel = item.level === 'info' ? 'Info' : (item.level === 'warning' ? 'Aviso' : 'Error');
+    row.innerHTML = `<span class="diagnostic-level ${levelClass}">${levelLabel}</span><div><strong>${escapeHtml(item.message)}</strong><small>${escapeHtml(time)}</small></div>`;
     return row;
   });
   logs.slice(0, 5).forEach((line) => {

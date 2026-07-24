@@ -196,6 +196,7 @@ h2 { margin: 5px 0 7px; font-size: clamp(25px, 3vw, 34px); letter-spacing: -.04e
 .diagnostics-panel li:first-child { padding-top: 0; border-top: 0; }
 .diagnostic-level { padding: 2px 4px; border-radius: 4px; color: #ffc3ca; background: rgba(251,132,150,.15); font-size: 8px; font-weight: 800; text-transform: uppercase; white-space: nowrap; }
 .diagnostic-level.warning { color: #ffd895; background: rgba(246,200,102,.14); }
+.diagnostic-level.success { color: #87e885; background: rgba(135,232,133,.15); }
 .diagnostics-panel li strong { display: block; color: #dce5f7; font-size: 10px; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
 .diagnostics-panel li small { display: block; margin-top: 3px; color: var(--dim); font-size: 9px; }
 .diagnostics-panel .diagnostic-empty { display: block; padding: 7px 0 0; color: var(--dim); font-size: 10px; }
