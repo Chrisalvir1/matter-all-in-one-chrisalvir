@@ -365,14 +365,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     return compositeEndpoint ?? directEndpoint;
   }
 
-  private getEntityErrorLogs(entityId: string, endpoint: any, allLogs: string[]): string[] {
+  private getEntityErrorLogs(entityId: string, endpoint: any, allErrorLogs: string[]): string[] {
     const compositeDeviceId = this.compositeMembership.get(entityId) ?? this.getCompositeCandidate(entityId)?.deviceId;
     const identifiers = [entityId, compositeDeviceId && `device:${compositeDeviceId}`, endpoint?.uniqueId, endpoint?.serialNumber].filter(
       (value): value is string => typeof value === 'string' && value.length > 0,
     );
-    const errorPattern = /\b(error|warn|warning|failed|failure|exception|unable|timeout)\b/i;
-    return allLogs
-      .filter((line) => errorPattern.test(line) && identifiers.some((identifier) => line.includes(identifier)))
+    return allErrorLogs
+      .filter((line) => identifiers.some((identifier) => line.includes(identifier)))
       .slice(-10)
       .reverse();
   }
@@ -1515,7 +1514,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         }
 
         if (req.method === 'GET' && pathname === '/api/custom/devices') {
-          const allLogs = getLogs();
+          const errorPattern = /\b(error|warn|warning|failed|failure|exception|unable|timeout)\b/i;
+          const allErrorLogs = getLogs().filter(line => errorPattern.test(line));
           const result = Array.from(this.entities.values()).flatMap((e) => {
             // Exclude generic DPS datapoints — they have no meaningful Matter mapping
             // and cluttering the panel with unnamed sensor rows harms usability.
@@ -1568,7 +1568,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               // like a broken Matter accessory.
               hasIssue: this.isEntityExported(e.entityId) && (this.entityProblems.has(e.entityId) || isUnavailable(e.state)),
               diagnostics: this.entityDiagnostics.get(e.entityId) ?? [],
-              logs: this.isEntityExported(e.entityId) ? this.getEntityErrorLogs(e.entityId, endpoint, allLogs) : [],
+              logs: this.isEntityExported(e.entityId) ? this.getEntityErrorLogs(e.entityId, endpoint, allErrorLogs) : [],
             };
           });
           res.writeHead(200, {

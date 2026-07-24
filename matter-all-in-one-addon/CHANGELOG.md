@@ -1,5 +1,11 @@
-## [1.2.63] - 2026-07-24
+## [1.2.64] - 2026-07-24
 
+### Fixed
+
+- **Anti-Crash Total (Unhandled Rejections):** Se agregó un manejador global de errores (`unhandledRejection` y `uncaughtException`) en la raíz del Addon. Anteriormente, si el core interno de Matter.js sufría un fallo de red o un timeout al intentar enviar un paquete UDP (por ejemplo, al encender una luz desde Home Assistant y notificar a Apple Home), el proceso interno de Node.js se cerraba abruptamente sin dejar rastro en los logs ("todo caído"). Ahora el Addon absorberá cualquier fallo interno de red de Matter.js sin apagarse, manteniendo la estabilidad ininterrumpida.
+- **Rendimiento O(1) definitivo en UI:** Se corrigió por completo la evaluación de logs en la API de la interfaz. La versión anterior reducía los arrays pero aún iteraba las expresiones regulares miles de veces en cada refresco, lo que podía causar micro-bloqueos en el Event Loop con cientos de entidades. Ahora la lectura es 100% plana.
+
+## [1.2.63] - 2026-07-24
 ### Fixed
 
 - **Rendimiento extremo de la UI (Anti-Crash):** Se corrigió un error crítico en el endpoint `/api/custom/devices` que causaba la desconexión total del puente (causando "Sin Respuesta" en Apple Home). Anteriormente, la API iteraba sobre todas las entidades, leyendo y ejecutando expresiones regulares sobre el historial completo de logs en cada paso (complejidad O(N*L)). Se optimizó extrayendo la lectura de logs fuera del bucle, reduciendo drástically el uso de CPU.
