@@ -17,7 +17,7 @@ const els = {
   resetAccessoryButton: $('reset-accessory-button'), matterActions: $('matter-actions'), reconnectAccessoryButton: $('reconnect-accessory-button'), regenerateCodeButton: $('regenerate-code-button'),
   profileField: $('profile-field'), profileSelect: $('profile-select'), profileNote: $('profile-note'),
   settingsButton: $('settings-button'), settingsModal: $('settings-modal'), settingsModalClose: $('settings-modal-close'),
-  restartButton: $('restart-button'), factoryResetButton: $('factory-reset-button'), confirmModal: $('confirm-modal'),
+  quickRestartButton: $('quick-restart-button'), restartButton: $('restart-button'), factoryResetButton: $('factory-reset-button'), confirmModal: $('confirm-modal'),
   confirmTitle: $('confirm-title'), confirmDescription: $('confirm-description'), confirmCancel: $('confirm-cancel'),
   confirmAccept: $('confirm-accept'), toast: $('toast'),
 };
@@ -554,7 +554,9 @@ els.settingsButton.addEventListener('click', () => setModalOpen(els.settingsModa
 els.settingsModalClose.addEventListener('click', () => setModalOpen(els.settingsModal, false));
 els.confirmCancel.addEventListener('click', () => setModalOpen(els.confirmModal, false));
 els.confirmAccept.addEventListener('click', async () => { const action = state.confirmAction; setModalOpen(els.confirmModal, false); if (action) await action(); });
-els.restartButton.addEventListener('click', () => openConfirm('Reiniciar servicio', 'El servicio se reiniciará y las conexiones Matter se restablecerán durante unos segundos.', async () => { try { await request('/restart', { method: 'POST' }); showToast('El servicio se está reiniciando.'); } catch { showToast('No se pudo solicitar el reinicio.', true); } }));
+const doRestart = () => openConfirm('Reiniciar servicio', 'El servicio se reiniciará y las conexiones Matter se restablecerán durante unos segundos.', async () => { try { await request('/restart', { method: 'POST' }); showToast('El servicio se está reiniciando.'); } catch { showToast('No se pudo solicitar el reinicio.', true); } });
+if (els.quickRestartButton) els.quickRestartButton.addEventListener('click', doRestart);
+els.restartButton.addEventListener('click', doRestart);
 els.factoryResetButton.addEventListener('click', () => openConfirm('Restablecimiento de fábrica', 'Esta operación elimina configuración y emparejamientos. Tendrás que volver a configurar y emparejar los accesorios.', async () => { try { await request('/factoryreset', { method: 'POST' }); showToast('Restablecimiento solicitado.'); } catch { showToast('No se pudo solicitar el restablecimiento.', true); } }));
 [els.deviceModal, els.settingsModal].forEach((modal) => modal.addEventListener('click', (event) => { if (event.target === modal) setModalOpen(modal, false); }));
 document.addEventListener('keydown', (event) => { if (event.key === 'Escape') [els.confirmModal, els.settingsModal, els.deviceModal].find((modal) => modal.classList.contains('open')) && setModalOpen([els.confirmModal, els.settingsModal, els.deviceModal].find((modal) => modal.classList.contains('open')), false); });

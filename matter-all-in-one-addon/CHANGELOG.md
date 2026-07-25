@@ -1,3 +1,13 @@
+## [1.2.66] - 2026-07-25
+
+### Added
+
+- **Botón de Reinicio Rápido en UI:** Se agregó un botón rojo de "↻ Reiniciar Servicio" directamente en la barra lateral de la interfaz web del Addon. Esto permite reiniciar el servicio de forma inmediata con un solo clic sin necesidad de navegar a través de los ajustes de Home Assistant.
+
+### Fixed
+
+- **Activación de Actualización en Home Assistant:** Se actualizó la versión a v1.2.66 para forzar a Home Assistant Supervisor a detectar los cambios recientes de IPv4-Only y el Escudo Anti-Crash.
+
 ## [1.2.65] - 2026-07-25
 
 ### Fixed
