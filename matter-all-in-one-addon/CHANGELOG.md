@@ -1,3 +1,10 @@
+## [1.2.65] - 2026-07-25
+
+### Fixed
+
+- **IPv4-Only Forzado (Estabilidad Definitiva):** Se eliminó la dependencia de IPv6 de forma permanente y sin configuración. El motor de red de Matterbridge ahora usa exclusivamente IPv4 en todos los arranques. Las rutas IPv6 dentro de contenedores Docker en Home Assistant OS son inestables y provocaban que Matter.js generara errores de red internos que mataban el proceso completo sin dejar rastro en los logs ("Addon caído de la nada"). Con IPv4 puro la comunicación con Apple Home (Apple TV / HomePod) es directa, sin ambigüedades de protocolo y sin riesgo de crash.
+- **Valor por defecto `ipv4_only: true`:** Se establece `ipv4_only: true` como valor predefinido en `config.yaml`. Ningún usuario necesita configurar nada manualmente.
+
 ## [1.2.64] - 2026-07-24
 
 ### Fixed
