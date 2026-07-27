@@ -822,12 +822,6 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       return;
     }
 
-    // Skip unavailable / unknown entities
-    if (isUnavailable(state)) {
-      this.log.debug(`Skipping ${entityId} because it is unavailable/unknown.`);
-      return;
-    }
-
     const [domain] = entityId.split('.');
     const override = this.deviceOverrides[entityId];
 
@@ -892,6 +886,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     }
 
     this.entities.set(entityId, entityInstance);
+    // Keep supported entities in discovery even when their initial HA state is
+    // unknown/unavailable. Stateless IR/RF controls and entities created by
+    // custom add-ons commonly start that way and may not report a concrete
+    // state until their first command. Dropping them here made them impossible
+    // to find or export from the UI. Matter uses a safe inactive initial value
+    // and later state_changed events replace it when HA reports a real state.
+    this.observeHomeAssistantAvailability(entityId, state);
     if (!this.isEntityExported(entityId) || this.groupingEnabled || this.getCompositeConfig(this.ha.hassEntities.get(entityId)?.device_id ?? '')?.group_by_device_id === true) {
       this.log.debug(`Entity ${entityId} is discovered but not exported. Endpoint creation deferred.`);
       return;

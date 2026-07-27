@@ -1,3 +1,11 @@
+## [1.2.69] - 2026-07-27
+
+### Fixed
+
+- **Descubrimiento real de controles IR/RF y entidades virtuales:** Las entidades compatibles que Home Assistant presenta inicialmente como `unknown` o `unavailable` ya no se descartan antes de llegar al panel. Esto afecta especialmente a switches sin estado creados por Omni Broadlink, MQTT, scripts y otros add-ons, que a menudo no informan un valor concreto hasta recibir su primera orden.
+- **Exportación de entidades sin estado inicial:** Esas entidades permanecen visibles por nombre y `entity_id`, pueden seleccionarse para Matter con un valor inicial seguro y se actualizan automáticamente cuando Home Assistant publica su primer estado real.
+- **Metadatos de versión sincronizados:** `config.yaml`, `package.json`, `package-lock.json` y el manifiesto interno de Matterbridge quedan alineados en `1.2.69`.
+
 ## [1.2.68] - 2026-07-27
 
 ### Fixed

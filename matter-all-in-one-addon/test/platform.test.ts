@@ -63,6 +63,27 @@ describe('HomeAssistantPlatform', () => {
     expect(platform.entities.has('sensor.garden_moisture')).toBe(true);
   });
 
+  it.each(['unknown', 'unavailable'])(
+    'keeps a standalone Broadlink switch discoverable when its initial state is %s',
+    async (initialState, ctx) => {
+      if (!networkAvailable) { ctx.skip(); return; }
+      await platform.onStart();
+      const entityId = 'switch.omni_broadlink_robot_limpiador';
+      await (platform as any).registerHAEntity({
+        entity_id: entityId,
+        state: initialState,
+        attributes: { friendly_name: 'ROBOT LIMPIADOR' },
+        last_changed: 'now',
+        last_updated: 'now',
+      });
+
+      const entity = platform.entities.get(entityId);
+      expect(entity).toBeDefined();
+      expect(entity?.state.state).toBe(initialState);
+      expect(entity?.state.attributes.friendly_name).toBe('ROBOT LIMPIADOR');
+    },
+  );
+
   it('should expose Home Assistant device registry metadata in the custom devices API', async (ctx) => {
     if (!networkAvailable) { ctx.skip(); return; }
     await platform.onStart();
