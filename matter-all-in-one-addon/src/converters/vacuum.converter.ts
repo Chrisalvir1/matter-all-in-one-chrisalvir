@@ -252,15 +252,15 @@ export interface VacuumCleanModeOption {
   option: string;  // HA select option (e.g., "smart", "random", "wall_follow", "spiral")
   mode: number;    // Matter mode ID (1, 2, 3, 4...)
   label: string;   // Human-readable label in Spanish
-  modeTag: number; // Matter mode tag (0x4001 = Vacuum/Auto, 0x4000 = DeepClean/custom)
+  modeTag: number; // Distinguishes this option in Apple Home's RVC mode picker.
 }
 
 const CLEAN_MODE_MAPPING: Record<string, { mode: number; label: string; modeTag: number }> = {
-  smart: { mode: 1, label: 'Automático', modeTag: 0x4001 },
-  auto: { mode: 1, label: 'Automático', modeTag: 0x4001 },
-  random: { mode: 2, label: 'Aleatorio', modeTag: 0x4000 },
-  wall_follow: { mode: 3, label: 'Seguimiento de pared', modeTag: 0x4000 },
-  edge: { mode: 3, label: 'Seguimiento de pared', modeTag: 0x4000 },
+  smart: { mode: 1, label: 'Automático', modeTag: 0x0000 }, // Auto
+  auto: { mode: 1, label: 'Automático', modeTag: 0x0000 },
+  random: { mode: 2, label: 'Aleatorio', modeTag: 0x0001 }, // Quick
+  wall_follow: { mode: 3, label: 'Seguimiento de pared', modeTag: 0x0002 }, // Quiet
+  edge: { mode: 3, label: 'Seguimiento de pared', modeTag: 0x0002 },
   spiral: { mode: 4, label: 'Espiral', modeTag: 0x4000 },
   spot: { mode: 4, label: 'Espiral', modeTag: 0x4000 },
 };

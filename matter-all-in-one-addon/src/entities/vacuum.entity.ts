@@ -82,6 +82,11 @@ export class VacuumEntity extends BaseEntity {
   public override async createEndpoint(): Promise<MatterbridgeEndpoint> {
     const rawName = this.state.attributes.friendly_name ?? this.entityId;
     const uniqueName = rawName.substring(0, 32).trim();
+    // Matterbridge uses deviceName as the persistent ServerNode storage key.
+    // The previous RVC node used `uniqueName` and therefore retained its old
+    // entity-id serial. This one-time key migration creates a fresh RVC node
+    // from the physical HA serial without touching any other accessory.
+    const serverNodeName = `${uniqueName} RVC`.substring(0, 32);
     const stableId = this.entityId.replaceAll('.', '_');
     const serialNumber = this.getMatterSerialNumber();
 
@@ -104,15 +109,16 @@ export class VacuumEntity extends BaseEntity {
 
     const cleanSelector = this.getLinkedCleanModeSelector();
     const cleanModeDefs = cleanSelector ? getSupportedVacuumCleanModes(cleanSelector.options) : [];
-
     const supportedCleanModes = cleanModeDefs.length > 0
       ? cleanModeDefs.map((def) => ({
           label: def.label,
           mode: def.mode,
-          modeTags: [{ value: def.modeTag }],
+          // Every Tuya mode vacuums. The second tag is intentionally unique so
+          // Apple Home presents distinct choices instead of merging them all
+          // into one Deep Clean button.
+          modeTags: [{ value: 16385 }, { value: def.modeTag }],
         }))
       : [{ label: 'Vacuum', mode: 1, modeTags: [{ value: 16385 }] }];
-
     const initialCleanMode = cleanSelector?.state
       ? (cleanModeDefs.find((d) => d.option.toLowerCase() === cleanSelector.state?.toLowerCase())?.mode ?? 1)
       : 1;
@@ -136,7 +142,7 @@ export class VacuumEntity extends BaseEntity {
     );
 
     this.endpoint.deviceType = this.deviceType.code;
-    this.endpoint.deviceName = uniqueName;
+    this.endpoint.deviceName = serverNodeName;
     this.endpoint.uniqueId = stableId;
     this.endpoint.serialNumber = serialNumber;
     this.endpoint.vendorId = MATTER_BRIDGE_VENDOR_ID;
@@ -217,21 +223,12 @@ export class VacuumEntity extends BaseEntity {
         );
       }
 
-      // Synchronize only the native Matter RVC Clean Mode cluster. Apple Home
-      // requires an RVC to be a single, non-composed endpoint; adding On/Off
-      // children makes it classify the accessory as an outlet strip.
       const cleanSelector = this.getLinkedCleanModeSelector();
-      if (cleanSelector && cleanSelector.state) {
-        const defs = getSupportedVacuumCleanModes(cleanSelector.options);
-        const activeMatch = defs.find((d) => d.option.toLowerCase() === cleanSelector.state?.toLowerCase());
+      if (cleanSelector?.state) {
+        const activeMatch = getSupportedVacuumCleanModes(cleanSelector.options)
+          .find((d) => d.option.toLowerCase() === cleanSelector.state?.toLowerCase());
         if (activeMatch) {
-          await syncFunc(
-            endpoint as any,
-            'rvcCleanMode' as any,
-            'currentMode',
-            activeMatch.mode,
-            this.platform.log,
-          );
+          await syncFunc(endpoint as any, 'rvcCleanMode' as any, 'currentMode', activeMatch.mode, this.platform.log);
         }
       }
 

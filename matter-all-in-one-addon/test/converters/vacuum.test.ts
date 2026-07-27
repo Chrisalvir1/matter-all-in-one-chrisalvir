@@ -266,6 +266,7 @@ describe('getSupportedVacuumCleanModes', () => {
     expect(modes).toHaveLength(4);
     expect(modes.map((m) => m.option)).toEqual(['random', 'smart', 'wall_follow', 'spiral']);
     expect(modes.map((m) => m.label)).toEqual(['Aleatorio', 'Automático', 'Seguimiento de pared', 'Espiral']);
+    expect(modes.map((m) => m.modeTag)).toEqual([1, 0, 2, 16384]);
     expect(modes.find((m) => m.option === 'chargego')).toBeUndefined();
     expect(modes.find((m) => m.option === 'standby')).toBeUndefined();
     expect(modes.find((m) => m.option === 'manual')).toBeUndefined();

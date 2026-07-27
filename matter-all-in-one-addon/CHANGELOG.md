@@ -1,3 +1,22 @@
+## [1.2.74] - 2026-07-27
+
+### Fixed
+
+- **Migración de serial RVC:** Robotina crea un ServerNode Matter nuevo usando el número de serie físico del registro de Home Assistant, en lugar de reutilizar el serial de entidad guardado por el nodo RVC anterior. La migración afecta únicamente a la aspiradora y requiere emparejar su nuevo QR.
+
+## [1.2.73] - 2026-07-27
+
+### Fixed
+
+- **Selección funcional de modos Robotina desde Apple Home:** Los modos `Automático`, `Aleatorio`, `Seguimiento de pared` y `Espiral` se mantienen como opciones nativas del cluster `RvcCleanMode`. Cada opción envía `select.select_option` al selector Tuya correspondiente, por lo que al tocarla en HomeKit cambia efectivamente el modo en Smart Life/Home Assistant.
+- **Opciones RVC diferenciadas:** Cada modo se anuncia con una etiqueta Matter adicional distinta, evitando que Apple Home colapse las cuatro opciones como un único botón `Deep Clean`.
+
+## [1.2.72] - 2026-07-27
+
+### Fixed
+
+- **Modo de limpieza honesto en Apple Home:** Se retiró el agrupamiento incorrecto de modos Tuya bajo una única categoría `Deep Clean`; la corrección funcional completa se publicó en 1.2.73.
+
 ## [1.2.71] - 2026-07-27
 
 ### Fixed

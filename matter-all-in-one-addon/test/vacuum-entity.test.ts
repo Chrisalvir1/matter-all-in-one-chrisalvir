@@ -41,9 +41,32 @@ describe('VacuumEntity Apple Home topology and identity', () => {
 
     expect(endpoint.options.mode).toBe('server');
     expect(endpoint.deviceType).toBe(0x0074);
-    expect(endpoint.deviceName).toBe('ROBOTINA');
+    expect(endpoint.deviceName).toBe('ROBOTINA RVC');
     expect(endpoint.productName).toBe('Ropvocnic Tuya Vacuum');
     expect(endpoint.serialNumber).toBe('bf4ae2b69ab212b227zupl');
+    expect(endpoint.supportedCleanModes).toEqual([
+      { label: 'Automático', mode: 1, modeTags: [{ value: 16385 }, { value: 0 }] },
+      { label: 'Aleatorio', mode: 2, modeTags: [{ value: 16385 }, { value: 1 }] },
+      { label: 'Seguimiento de pared', mode: 3, modeTags: [{ value: 16385 }, { value: 2 }] },
+      { label: 'Espiral', mode: 4, modeTags: [{ value: 16385 }, { value: 16384 }] },
+    ]);
     expect(endpoint.children.size).toBe(0);
+
+    for (const [mode, option] of [[1, 'smart'], [2, 'random'], [3, 'wall_follow'], [4, 'spiral']] as const) {
+      await endpoint.invokeCommand('RvcCleanMode.changeToMode', { request: { newMode: mode } });
+      expect(platform.ha.callService).toHaveBeenLastCalledWith(
+        'select',
+        'select_option',
+        selectId,
+        { option },
+      );
+      expect(endpoint.attributes.get('rvcCleanMode:currentMode')).toBe(mode);
+    }
+
+    // The reverse path is equally important: a mode selected in Smart Life
+    // must update the RVC mode that Apple Home reads.
+    (platform.ha.hassStates.get(selectId) as any).state = 'spiral';
+    await vacuum.updateState({ ...state, state: 'cleaning' } as any, true);
+    expect(endpoint.attributes.get('rvcCleanMode:currentMode')).toBe(4);
   });
 });

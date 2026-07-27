@@ -192,13 +192,14 @@ vi.mock('matterbridge', () => {
 // network-only cases.
 vi.mock('matterbridge/devices', () => ({
   RoboticVacuumCleaner: class extends MockMatterbridgeEndpoint {
-    constructor(name: string, serial: string, mode: string) {
+    constructor(name: string, serial: string, mode: string, _runMode?: number, _runModes?: any[], _cleanMode?: number, cleanModes?: any[]) {
       super([{ code: 0x0074, name: 'roboticVacuumCleaner' }], {
         id: `${name.replaceAll(' ', '')}-${serial.replaceAll(' ', '')}`,
         mode,
       });
       (this as any).deviceName = name;
       (this as any).serialNumber = serial;
+      (this as any).supportedCleanModes = cleanModes;
     }
   },
   BasicVideoPlayer: class extends MockMatterbridgeEndpoint {},
