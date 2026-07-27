@@ -80,12 +80,14 @@ function groupEntities(entities) {
   for (const entity of entities) {
     // A configured composite can intentionally span more than one HA
     // device_id. Its Matter node is the source of truth for this screen: one
-    // node means one card and one pairing flow.
-    const id = entity.compositeDeviceId ? `matter:${entity.compositeDeviceId}` : (entity.device_id || `virtual:${entity.domain}`);
+    // node means one card and one pairing flow. Standalone entities without a
+    // HA device_id (such as Broadlink IR devices or custom addon entities) get
+    // their own distinct card using their friendly name.
+    const id = entity.compositeDeviceId ? `matter:${entity.compositeDeviceId}` : (entity.device_id || `entity:${entity.entityId}`);
     if (!groups.has(id)) {
       groups.set(id, {
         id,
-        name: entity.device_name || entity.area_name || entity.domain,
+        name: entity.device_name || displayName(entity) || entity.area_name || entity.domain,
         area: entity.area_name || '',
         manufacturer: entity.manufacturer || '',
         model: entity.model || '',

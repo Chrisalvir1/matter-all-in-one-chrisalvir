@@ -1,3 +1,9 @@
+## [1.2.68] - 2026-07-27
+
+### Fixed
+
+- **Visualización y Detección de Dispositivos Virtuales / Broadlink / Add-ons:** Se corrigió un problema en el agrupamiento de la interfaz web (`groupEntities` en `script.js`). Anteriormente, todas las entidades sin un `device_id` asignado en el registro de Home Assistant (como controles remotos IR de Broadlink, switches virtuales o dispositivos creados por otros add-ons) se agrupaban erróneamente dentro de una única tarjeta genérica llamada "switch", haciendo imposible encontrarlas o configurarlas individualmente. Ahora cada entidad autónoma recibe su propia tarjeta independiente con su Nombre Amigable (*Friendly Name*), permitiendo detectarlas, buscarlas y exportarlas a Matter fácilmente.
+
 ## [1.2.67] - 2026-07-27
 
 ### Added
