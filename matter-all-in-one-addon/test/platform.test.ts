@@ -65,8 +65,8 @@ describe('HomeAssistantPlatform', () => {
 
   it.each(['unknown', 'unavailable'])(
     'keeps a standalone Broadlink switch discoverable when its initial state is %s',
-    async (initialState, ctx) => {
-      if (!networkAvailable) { ctx.skip(); return; }
+    async (initialState) => {
+      if (!networkAvailable) return;
       await platform.onStart();
       const entityId = 'switch.omni_broadlink_robot_limpiador';
       await (platform as any).registerHAEntity({
@@ -83,6 +83,27 @@ describe('HomeAssistantPlatform', () => {
       expect(entity?.state.attributes.friendly_name).toBe('ROBOT LIMPIADOR');
     },
   );
+
+  it('refreshes a newly-created Omni Broadlink robot as an RVC in the devices API', async (ctx) => {
+    if (!networkAvailable) { ctx.skip(); return; }
+    await platform.onStart();
+    const entityId = 'switch.omni_broadlink_robot_limpiador';
+    (platform as any).ha.hassStates.set(entityId, {
+      entity_id: entityId,
+      state: 'off',
+      attributes: { friendly_name: 'EVERYBOT IRCEDGE ROBOT LIMPIADOR' },
+      last_changed: 'now',
+      last_updated: 'now',
+    });
+
+    const response = await fetch(`http://127.0.0.1:${platform.uiServerPort}/api/custom/devices`);
+    const devices = await response.json() as any[];
+    expect(devices.find((device) => device.entityId === entityId)).toMatchObject({
+      matterType: 'roboticVacuumCleaner',
+      deviceTypeLabel: 'RoboticVacuumCleaner',
+      profileId: 'roboticVacuumCleaner',
+    });
+  });
 
   it('should expose Home Assistant device registry metadata in the custom devices API', async (ctx) => {
     if (!networkAvailable) { ctx.skip(); return; }

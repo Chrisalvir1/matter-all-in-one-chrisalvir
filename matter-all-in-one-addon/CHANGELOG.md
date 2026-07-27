@@ -1,3 +1,11 @@
+## [1.2.71] - 2026-07-27
+
+### Fixed
+
+- **Robotina vuelve a ser una aspiradora en Apple Home:** Se eliminan los endpoints hijos `OnOffPlugInUnit` añadidos en 1.2.70. El RVC se publica nuevamente como un único nodo independiente `RoboticVacuumCleaner` (`0x0074`), tal como exige Apple Home, evitando que se clasifique como regleta.
+- **Modos de limpieza Matter nativos:** `smart`, `random`, `wall_follow` y `spiral` permanecen en el cluster `RvcCleanMode` (`0x0055`) y continúan enviándose a `select.robotina_modo_de_limpieza`; no se simulan como enchufes o interruptores.
+- **Identidad ROPVOCNIC correcta:** El ServerNode anuncia el modelo `Ropvocnic Tuya Vacuum` y usa explícitamente el número de serie físico disponible en el registro de dispositivos de Home Assistant.
+
 ## [1.2.70] - 2026-07-27
 
 ### Added

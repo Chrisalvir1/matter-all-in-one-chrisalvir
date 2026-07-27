@@ -186,3 +186,22 @@ vi.mock('matterbridge', () => {
     waterLeakDetector: makeMockDeviceType(0x007b, 'waterLeakDetector'),
   };
 });
+
+// Keep entity imports from initializing the real Matter runtime during unit
+// tests. Some sandboxed CI environments deny uv_uptime before tests can skip
+// network-only cases.
+vi.mock('matterbridge/devices', () => ({
+  RoboticVacuumCleaner: class extends MockMatterbridgeEndpoint {
+    constructor(name: string, serial: string, mode: string) {
+      super([{ code: 0x0074, name: 'roboticVacuumCleaner' }], {
+        id: `${name.replaceAll(' ', '')}-${serial.replaceAll(' ', '')}`,
+        mode,
+      });
+      (this as any).deviceName = name;
+      (this as any).serialNumber = serial;
+    }
+  },
+  BasicVideoPlayer: class extends MockMatterbridgeEndpoint {},
+  Cooktop: class extends MockMatterbridgeEndpoint {},
+  Oven: class extends MockMatterbridgeEndpoint {},
+}));
