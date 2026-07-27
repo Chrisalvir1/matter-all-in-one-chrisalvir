@@ -82,11 +82,6 @@ export class VacuumEntity extends BaseEntity {
   public override async createEndpoint(): Promise<MatterbridgeEndpoint> {
     const rawName = this.state.attributes.friendly_name ?? this.entityId;
     const uniqueName = rawName.substring(0, 32).trim();
-    // Matterbridge uses deviceName as the persistent ServerNode storage key.
-    // The previous RVC node used `uniqueName` and therefore retained its old
-    // entity-id serial. This one-time key migration creates a fresh RVC node
-    // from the physical HA serial without touching any other accessory.
-    const serverNodeName = `${uniqueName} RVC`.substring(0, 32);
     const stableId = this.entityId.replaceAll('.', '_');
     const serialNumber = this.getMatterSerialNumber();
 
@@ -142,7 +137,7 @@ export class VacuumEntity extends BaseEntity {
     );
 
     this.endpoint.deviceType = this.deviceType.code;
-    this.endpoint.deviceName = serverNodeName;
+    this.endpoint.deviceName = uniqueName;
     this.endpoint.uniqueId = stableId;
     this.endpoint.serialNumber = serialNumber;
     this.endpoint.vendorId = MATTER_BRIDGE_VENDOR_ID;

@@ -1194,6 +1194,22 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
     try {
       await serverNode.erase();
+      // Matter.js erases fabrics and endpoint state, but Matterbridge keeps a
+      // separate `persist` context with Basic Information values. Clear that
+      // per-accessory context too, otherwise a regenerated QR reuses a stale
+      // serial number from a previous virtual node.
+      const storeId = String(endpoint.deviceName ?? '').replace(/[ .]/g, '');
+      const bridgeRuntime = this.matterbridge as any;
+      const managedStorage = bridgeRuntime.serverNodeStorageManagers?.get?.(storeId);
+      const storageService = bridgeRuntime.matterStorageService;
+      const storageManager = managedStorage ?? await storageService?.open?.(storeId);
+      try {
+        await storageManager?.createContext?.('persist')?.clearAll?.();
+      } finally {
+        // Managers owned by Matterbridge stay open for its lifecycle. Only
+        // close a temporary manager opened by this reset operation.
+        if (!managedStorage) await storageManager?.close?.();
+      }
       if (compositeDeviceId) {
         await this.disposeCompositeNode(compositeDeviceId);
         await this.activateComposite(entityId);

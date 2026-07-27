@@ -1,8 +1,20 @@
+## [1.2.76] - 2026-07-27
+
+### Fixed
+
+- **QR RVC bloqueado tras regenerar:** El restablecimiento individual de Robotina ahora borra también el contexto `persist` de Matterbridge que conserva serial, nombre y metadata del nodo. Al regenerar el QR se crea un nodo activo con el serial físico actual, sin borrar otros accesorios.
+
+## [1.2.75] - 2026-07-27
+
+### Fixed
+
+- **Arranque del nodo Robotina:** Se revierte la migración de nombre de almacenamiento de 1.2.74, que dejaba el endpoint RVC inactivo y sin QR. El restablecimiento individual de Robotina desde el panel vuelve a ser la ruta segura para borrar su identidad Matter anterior y regenerar el nodo con el serial físico, sin afectar otros accesorios.
+
 ## [1.2.74] - 2026-07-27
 
 ### Fixed
 
-- **Migración de serial RVC:** Robotina crea un ServerNode Matter nuevo usando el número de serie físico del registro de Home Assistant, en lugar de reutilizar el serial de entidad guardado por el nodo RVC anterior. La migración afecta únicamente a la aspiradora y requiere emparejar su nuevo QR.
+- **Migración de serial RVC:** Se identificó que la migración automática por nombre no era compatible con el ciclo de vida de Matterbridge; se sustituyó por el restablecimiento individual seguro en 1.2.75.
 
 ## [1.2.73] - 2026-07-27
 
