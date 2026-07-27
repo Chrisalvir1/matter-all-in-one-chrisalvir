@@ -246,6 +246,52 @@ export function extractVacuumAttributes(entity: HassState): VacuumAttributes {
   };
 }
 
+// ─── Clean Mode mapping (RVC Clean Mode cluster 0x0055) ─────────────────
+
+export interface VacuumCleanModeOption {
+  option: string;  // HA select option (e.g., "smart", "random", "wall_follow", "spiral")
+  mode: number;    // Matter mode ID (1, 2, 3, 4...)
+  label: string;   // Human-readable label in Spanish
+  modeTag: number; // Matter mode tag (0x4001 = Vacuum/Auto, 0x4000 = DeepClean/custom)
+}
+
+const CLEAN_MODE_MAPPING: Record<string, { mode: number; label: string; modeTag: number }> = {
+  smart: { mode: 1, label: 'Automático', modeTag: 0x4001 },
+  auto: { mode: 1, label: 'Automático', modeTag: 0x4001 },
+  random: { mode: 2, label: 'Aleatorio', modeTag: 0x4000 },
+  wall_follow: { mode: 3, label: 'Seguimiento de pared', modeTag: 0x4000 },
+  edge: { mode: 3, label: 'Seguimiento de pared', modeTag: 0x4000 },
+  spiral: { mode: 4, label: 'Espiral', modeTag: 0x4000 },
+  spot: { mode: 4, label: 'Espiral', modeTag: 0x4000 },
+};
+
+/**
+ * Filters and maps HA clean mode selector options to valid RVC Clean Mode definitions.
+ * Explicitly excludes non-clean options such as 'standby', 'chargego', 'manual', 'stop'.
+ */
+export function getSupportedVacuumCleanModes(options: string[]): VacuumCleanModeOption[] {
+  const result: VacuumCleanModeOption[] = [];
+  const seenModes = new Set<number>();
+
+  for (const opt of options) {
+    const key = opt.toLowerCase().trim();
+    if (['standby', 'chargego', 'manual', 'stop', 'off', 'idle'].includes(key)) continue;
+
+    const mapped = CLEAN_MODE_MAPPING[key];
+    if (mapped && !seenModes.has(mapped.mode)) {
+      seenModes.add(mapped.mode);
+      result.push({
+        option: opt,
+        mode: mapped.mode,
+        label: mapped.label,
+        modeTag: mapped.modeTag,
+      });
+    }
+  }
+
+  return result;
+}
+
 // ─── QR / device selection metadata ──────────────────────────────────────
 
 /**

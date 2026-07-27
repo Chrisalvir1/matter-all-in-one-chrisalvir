@@ -16,6 +16,7 @@ import {
   isVacuumChargingOrDocked,
   buildVacuumMatterMeta,
   isVacuumEntity,
+  getSupportedVacuumCleanModes,
   RvcOperationalStateId,
 } from '../../src/converters/vacuum.converter.js';
 import type { HassEntity } from '../../src/homeAssistant.js';
@@ -252,5 +253,21 @@ describe('isVacuumEntity', () => {
     expect(haVacuumIsActive('on')).toBe(true);
     expect(haVacuumStateToMatter('off')).toBe(RvcOperationalStateId.Stopped);
     expect(haVacuumIsActive('off')).toBe(false);
+  });
+});
+
+// ── getSupportedVacuumCleanModes ──────────────────────────────────────────
+
+describe('getSupportedVacuumCleanModes', () => {
+  it('filters out standby, chargego, manual and maps valid Robotina clean modes', () => {
+    const options = ['standby', 'random', 'smart', 'wall_follow', 'spiral', 'chargego', 'manual'];
+    const modes = getSupportedVacuumCleanModes(options);
+
+    expect(modes).toHaveLength(4);
+    expect(modes.map((m) => m.option)).toEqual(['random', 'smart', 'wall_follow', 'spiral']);
+    expect(modes.map((m) => m.label)).toEqual(['Aleatorio', 'Automático', 'Seguimiento de pared', 'Espiral']);
+    expect(modes.find((m) => m.option === 'chargego')).toBeUndefined();
+    expect(modes.find((m) => m.option === 'standby')).toBeUndefined();
+    expect(modes.find((m) => m.option === 'manual')).toBeUndefined();
   });
 });

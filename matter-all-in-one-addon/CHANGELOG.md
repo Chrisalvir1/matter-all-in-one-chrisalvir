@@ -1,3 +1,17 @@
+## [1.2.70] - 2026-07-27
+
+### Added
+
+- **Soporte Robotina ROPVACNIC Tuya RVC Clean Mode (0x0055):** Vinculación automática de `select.robotina_modo_de_limpieza` al accesorio `vacuum.robotina`. Exposición del cluster Matter RVC Clean Mode (0x0055) con los modos `smart` (Automático), `random` (Aleatorio), `wall_follow` (Seguimiento de pared) y `spiral` (Espiral).
+- **Endpoints Secundarios On/Off para Apple Home:** Creación de endpoints hijos On/Off ("Robotina · Automático", "Robotina · Aleatorio", "Robotina · Seguimiento de pared", "Robotina · Espiral") vinculados al mismo accesorio único de Robotina, con actualización mutuamente exclusiva para máxima visibilidad táctil en Apple Home.
+- **Filtrado Estricto de Modos no Aptos:** Exclusión explícita de `chargego` (retorno a base), `standby` (Idle) y `manual` (Dirección DPS 4) del catálogo de modos de limpieza RVC.
+
+### Fixed
+
+- **Detección inmediata de entidades virtuales:** La API del panel vuelve a comprobar el caché de estados de Home Assistant antes de responder. Los controles creados por Omni Broadlink u otros add-ons que hayan aparecido fuera de un evento de registro ya no quedan ausentes de la búsqueda.
+- **Everybot IRCEDGE por IR como RVC Matter:** `switch.omni_broadlink_robot_limpiador` y controles Omni Broadlink identificados como robot, Everybot o IRCEDGE se publican automáticamente con el perfil oficial **Robotic Vacuum Cleaner**.
+- **Sin dock ficticio:** Para robots IR Omni Broadlink de carga manual, detener y “volver” apagan el switch; no se anuncian estados de búsqueda de cargador, carga ni acoplado.
+
 ## [1.2.69] - 2026-07-27
 
 ### Fixed

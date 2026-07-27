@@ -421,6 +421,24 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   }
 
   /**
+   * Omni Broadlink exposes learned IR appliances as standalone `switch.*`
+   * entities. A learned robot control has no native HA vacuum domain, but it
+   * is still a real RVC candidate when its name identifies it as a robot.
+   */
+  private getAutomaticProfile(entityId: string, state: HassState): string | undefined {
+    if (!entityId.startsWith('switch.omni_broadlink_')) return undefined;
+    const identity = `${entityId} ${state.attributes?.friendly_name ?? ''}`;
+    return /(?:^|[_\s-])(everybot|ircedge|robot|aspiradora|vacuum|cleaner)(?:$|[_\s-])/i.test(identity)
+      ? 'roboticVacuumCleaner'
+      : undefined;
+  }
+
+  /** Refresh the panel catalogue from the latest HA state cache on demand. */
+  private async refreshDiscoveryCatalog(): Promise<void> {
+    for (const state of this.ha.hassStates.values()) await this.registerHAEntity(state);
+  }
+
+  /**
    * A "multi-switch device" is a physical HA device_id that has TWO OR MORE
    * exported-eligible switch.* or light.* entities that are NOT DPS generics.
    * These devices are published as independent Matter accessories (one QR each)
@@ -840,7 +858,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     if (this.config.includeEntities && !this.config.includeEntities.includes(entityId)) return;
 
     // Check device override
-    const effectiveProfile = override ?? getDefaultExportProfileId(domain);
+    const effectiveProfile = override ?? this.getAutomaticProfile(entityId, state) ?? getDefaultExportProfileId(domain);
     if (override === '_DISABLED_') {
       this.log.debug(`Skipping ${entityId} because it is disabled by override.`);
       return;
@@ -848,9 +866,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
     // Retrieve corresponding Matter Device Type
     let deviceType = getDeviceTypeForEntity(domain, deviceClass, state.attributes);
-    if (override && (MatterDeviceTypes as any)[override]) {
-      deviceType = (MatterDeviceTypes as any)[override];
-      this.log.info(`Applying override for ${entityId}: ${deviceType.name}`);
+    if (effectiveProfile && (MatterDeviceTypes as any)[effectiveProfile]) {
+      deviceType = (MatterDeviceTypes as any)[effectiveProfile];
+      this.log.info(`Applying ${override ? 'override' : 'automatic profile'} for ${entityId}: ${deviceType.name}`);
     }
 
     this.log.debug(`Mapping ${entityId} to Matter device type ${deviceType.name} (0x${deviceType.code.toString(16)})`);
@@ -1303,6 +1321,18 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       return;
     }
     if (this.isEntityExported(entityId)) this.queueStateUpdate(entityId, newState);
+
+    if (entityId.startsWith('select.')) {
+      const deviceId = this.ha.hassEntities.get(entityId)?.device_id;
+      for (const [vId, vEntity] of this.entities.entries()) {
+        if (vId.startsWith('vacuum.') && vEntity instanceof VacuumEntity && this.isEntityExported(vId)) {
+          const vDeviceId = this.ha.hassEntities.get(vId)?.device_id;
+          if ((deviceId && vDeviceId === deviceId) || entityId.includes(vId.split('.')[1])) {
+            this.queueStateUpdate(vId, vEntity.state);
+          }
+        }
+      }
+    }
   }
 
   private queueStateUpdate(entityId: string, state: HassState) {
@@ -1515,6 +1545,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         }
 
         if (req.method === 'GET' && pathname === '/api/custom/devices') {
+          // Do not rely solely on registry events: integrations that create
+          // virtual entities can publish their first state before HA emits a
+          // registry notification. Refreshing from the current state cache
+          // makes those switches immediately searchable in the panel.
+          await this.refreshDiscoveryCatalog();
           const errorPattern = /\b(error|warn|warning|failed|failure|exception|unable|timeout)\b/i;
           const allErrorLogs = getLogs().filter(line => errorPattern.test(line));
           const result = Array.from(this.entities.values()).flatMap((e) => {
@@ -1555,7 +1590,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               compositePrimaryEntityId,
               auxiliary: this.isAuxiliaryEntity(e.entityId),
               primaryEntityId: this.getPrimaryEntityId(e.entityId) ?? null,
-              profileId: this.deviceOverrides[e.entityId] ?? getDefaultExportProfileId(domain) ?? null,
+              profileId: this.deviceOverrides[e.entityId] ?? this.getAutomaticProfile(e.entityId, e.state) ?? getDefaultExportProfileId(domain) ?? null,
               profiles: getExportProfiles(domain),
               pairingCode: connection.pairingCode,
               manualPairingCode: connection.manualPairingCode,

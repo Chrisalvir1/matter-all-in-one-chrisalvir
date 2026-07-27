@@ -9,16 +9,23 @@
  * independent Matter server node (mode: 'server'), never as a bridged child.
  */
 
-import { MatterbridgeEndpoint, DeviceTypeDefinition } from 'matterbridge';
+import { MatterbridgeEndpoint, DeviceTypeDefinition, onOffPlugInUnit } from 'matterbridge';
+import { OnOff } from 'matterbridge/matter/clusters';
 import { RoboticVacuumCleaner } from 'matterbridge/devices';
 import { BaseEntity } from './base.entity.js';
 import type { HassState } from '../utils/ha-state.js';
 import {
   buildVacuumUpdate,
   buildVacuumMatterMeta,
+  getSupportedVacuumCleanModes,
+  VacuumCleanModeOption,
 } from '../converters/vacuum.converter.js';
 import { safeSetAttribute, safeUpdateAttribute } from '../utils/matter-attributes.js';
-import { MATTER_BRIDGE_VENDOR_ID, MATTER_BRIDGE_VENDOR_NAME } from '../utils/matter-device-identity.js';
+import {
+  MATTER_BRIDGE_VENDOR_ID,
+  MATTER_BRIDGE_VENDOR_NAME,
+  getHaDeviceModel,
+} from '../utils/matter-device-identity.js';
 
 export { buildVacuumMatterMeta };
 
@@ -29,6 +36,7 @@ const RUN_MODE_ID_CLEANING = 2;
 export class VacuumEntity extends BaseEntity {
   public declare endpoint: RoboticVacuumCleaner;
   private lastCommandTime = 0;
+  private cleanModeChildEndpoints = new Map<string, { endpoint: MatterbridgeEndpoint; option: string; mode: number }>();
 
   constructor(
     platform: any,
@@ -38,17 +46,45 @@ export class VacuumEntity extends BaseEntity {
     super(platform, state, deviceType);
   }
 
+  /** Learned IR robots are manually connected to their charger; they cannot dock. */
+  private isManualChargeOnly(): boolean {
+    const identity = `${this.entityId} ${this.state.attributes?.friendly_name ?? ''}`;
+    return this.entityId.startsWith('switch.omni_broadlink_') && /(?:^|[_\s-])(everybot|ircedge|robot|aspiradora|vacuum|cleaner)(?:$|[_\s-])/i.test(identity);
+  }
+
+  /** Locate linked select.*_modo_de_limpieza / select.*_mode entity sharing the same HA device_id or entity name. */
+  public getLinkedCleanModeSelector(): { entityId: string; options: string[]; state?: string } | undefined {
+    const entityRegistry = this.platform.ha?.hassEntities?.get(this.entityId);
+    const deviceId = entityRegistry?.device_id;
+
+    if (deviceId) {
+      for (const [id, reg] of this.platform.ha?.hassEntities?.entries() ?? []) {
+        if (reg.device_id === deviceId && id.startsWith('select.')) {
+          const stateObj = this.platform.ha?.hassStates?.get(id);
+          const options = Array.isArray(stateObj?.attributes?.options) ? stateObj.attributes.options : [];
+          if (options.length > 0) {
+            return { entityId: id, options, state: stateObj?.state };
+          }
+        }
+      }
+    }
+
+    const [domain, objectId] = this.entityId.split('.');
+    const patterns = [`select.${objectId}_modo_de_limpieza`, `select.${objectId}_mode`, `select.${objectId}_clean_mode`];
+    for (const pattern of patterns) {
+      const stateObj = this.platform.ha?.hassStates?.get(pattern);
+      if (stateObj) {
+        const options = Array.isArray(stateObj.attributes?.options) ? stateObj.attributes.options : [];
+        return { entityId: pattern, options, state: stateObj.state };
+      }
+    }
+
+    return undefined;
+  }
+
   public override async createEndpoint(): Promise<MatterbridgeEndpoint> {
     const rawName = this.state.attributes.friendly_name ?? this.entityId;
-
-    // The accessory name must match Home Assistant. The stable entity ID keeps
-    // Matterbridge storage identity, while the serial comes from HA's physical
-    // device registry.
     const uniqueName = rawName.substring(0, 32).trim();
-
-    // Stable identity for this entity — do NOT rotate or append version suffixes.
-    // Changing stableId after first pairing creates orphaned tiles in Matter
-    // controllers and forces re-pairing.
     const stableId = this.entityId.replaceAll('.', '_');
     const serialNumber = this.getMatterSerialNumber();
 
@@ -62,34 +98,44 @@ export class VacuumEntity extends BaseEntity {
       { operationalStateId: 1 }, // Running
       { operationalStateId: 2 }, // Paused
       { operationalStateId: 3 }, // Error
-      { operationalStateId: 64 }, // SeekingCharger
-      { operationalStateId: 65 }, // Charging
-      { operationalStateId: 66 }  // Docked
+      ...(this.isManualChargeOnly() ? [] : [
+        { operationalStateId: 64 }, // SeekingCharger
+        { operationalStateId: 65 }, // Charging
+        { operationalStateId: 66 }, // Docked
+      ]),
     ];
 
-    // IMPORTANT: Pass 'server' as the third argument (mode) so that Matterbridge
-    // registers this as an independent Matter ServerNode (with its own QR code)
-    // instead of a bridged endpoint under the main Matterbridge bridge.
-    // Without mode: 'server', registerDevice() sees mode === undefined and
-    // falls back to bridge mode, adding bridgedDeviceBasicInformation and NO QR code.
+    const cleanSelector = this.getLinkedCleanModeSelector();
+    const cleanModeDefs = cleanSelector ? getSupportedVacuumCleanModes(cleanSelector.options) : [];
+
+    const supportedCleanModes = cleanModeDefs.length > 0
+      ? cleanModeDefs.map((def) => ({
+          label: def.label,
+          mode: def.mode,
+          modeTags: [{ value: def.modeTag }],
+        }))
+      : [{ label: 'Vacuum', mode: 1, modeTags: [{ value: 16385 }] }];
+
+    const initialCleanMode = cleanSelector?.state
+      ? (cleanModeDefs.find((d) => d.option.toLowerCase() === cleanSelector.state?.toLowerCase())?.mode ?? 1)
+      : 1;
+
     this.endpoint = new RoboticVacuumCleaner(
       uniqueName,
       serialNumber,
-      'server', // ← CRITICAL: makes this an independent Matter server node with its own QR
-      RUN_MODE_ID_IDLE, // currentRunMode
-      supportedRunModes, // supportedRunModes
-      1, // currentCleanMode
-      [
-        { label: 'Vacuum', mode: 1, modeTags: [{ value: 16385 }] } // Only expose Vacuum mode (0x4001 = 16385)
-      ], // supportedCleanModes
-      null, // currentPhase
-      null, // phaseList
-      0, // operationalState (Stopped)
-      operationalStateList, // operationalStateList
-      [], // supportedAreas (empty array disables service areas in UI)
-      [], // selectedAreas
-      null, // currentArea
-      [], // supportedMaps
+      'server',
+      RUN_MODE_ID_IDLE,
+      supportedRunModes,
+      initialCleanMode,
+      supportedCleanModes,
+      null,
+      null,
+      0,
+      operationalStateList,
+      [],
+      [],
+      null,
+      [],
     );
 
     this.endpoint.deviceType = this.deviceType.code;
@@ -100,8 +146,7 @@ export class VacuumEntity extends BaseEntity {
     this.endpoint.productName = 'Robotic Vacuum Cleaner';
     this.applyMatterbridgeFirmware();
 
-    // Keep Basic Information aligned with the bridge identity instead of
-    // impersonating a physical manufacturer or model.
+    const deviceModel = getHaDeviceModel(this.platform, this.entityId, 'Ropvocnic Tuya Vacuum cleaner');
     safeSetAttribute(
       this.endpoint as any,
       'basicInformation' as any,
@@ -113,7 +158,14 @@ export class VacuumEntity extends BaseEntity {
       this.endpoint as any,
       'basicInformation' as any,
       'productName',
-      'Robotic Vacuum Cleaner',
+      deviceModel,
+      this.platform.log,
+    );
+    safeSetAttribute(
+      this.endpoint as any,
+      'basicInformation' as any,
+      'nodeLabel',
+      uniqueName,
       this.platform.log,
     );
     safeSetAttribute(
@@ -123,6 +175,54 @@ export class VacuumEntity extends BaseEntity {
       'Matterbridge bridge endpoint',
       this.platform.log,
     );
+
+    // Create Apple Home secondary child On/Off endpoints for clean modes
+    this.cleanModeChildEndpoints.clear();
+    if (cleanModeDefs.length > 0 && cleanSelector) {
+      for (const def of cleanModeDefs) {
+        const childId = `clean_mode_${def.option}`;
+        const childName = `${rawName} · ${def.label}`;
+        try {
+          const childEndpoint = this.endpoint.addChildDeviceTypeWithClusterServer(
+            childId,
+            onOffPlugInUnit,
+            [OnOff.id],
+          );
+          safeSetAttribute(
+            childEndpoint as any,
+            'basicInformation' as any,
+            'nodeLabel',
+            childName,
+            this.platform.log,
+          );
+          safeSetAttribute(
+            childEndpoint as any,
+            'basicInformation' as any,
+            'productName',
+            childName,
+            this.platform.log,
+          );
+          this.cleanModeChildEndpoints.set(def.option, {
+            endpoint: childEndpoint,
+            option: def.option,
+            mode: def.mode,
+          });
+
+          childEndpoint.addCommandHandler('OnOff.on', async () => {
+            this.lastCommandTime = Date.now();
+            this.platform.log?.info?.(`[VacuumEntity] Clean mode OnOff command: ${def.label} (${def.option})`);
+            await this.platform.ha?.callService('select', 'select_option', cleanSelector.entityId, { option: def.option });
+            await this.syncCleanModeState(def.mode, def.option);
+          });
+
+          childEndpoint.addCommandHandler('OnOff.off', async () => {
+            this.platform.log?.info?.(`[VacuumEntity] Clean mode Off command ignored for ${def.label}`);
+          });
+        } catch (err) {
+          this.platform.log?.warn?.(`[VacuumEntity] Failed to add clean mode child endpoint ${childId}: ${err}`);
+        }
+      }
+    }
 
     this.registerCommandHandlers();
 
@@ -145,8 +245,6 @@ export class VacuumEntity extends BaseEntity {
       const now = Date.now();
       const commandCooldown = now - this.lastCommandTime < 15000;
 
-      // A physical charge/base signal must immediately override the optimistic
-      // state written after a Siri command, even during the command cooldown.
       if (!commandCooldown || isInitialSync || update.isChargingOrDocked) {
         await syncFunc(
           endpoint as any,
@@ -166,6 +264,23 @@ export class VacuumEntity extends BaseEntity {
         );
       }
 
+      // Synchronize Clean Mode cluster & child On/Off endpoints
+      const cleanSelector = this.getLinkedCleanModeSelector();
+      if (cleanSelector && cleanSelector.state) {
+        const defs = getSupportedVacuumCleanModes(cleanSelector.options);
+        const activeMatch = defs.find((d) => d.option.toLowerCase() === cleanSelector.state?.toLowerCase());
+        if (activeMatch) {
+          await syncFunc(
+            endpoint as any,
+            'rvcCleanMode' as any,
+            'currentMode',
+            activeMatch.mode,
+            this.platform.log,
+          );
+          await this.syncCleanModeChildEndpoints(activeMatch.option, syncFunc);
+        }
+      }
+
       if (update.batteryLevel !== null) {
         await syncFunc(
           endpoint as any,
@@ -174,7 +289,6 @@ export class VacuumEntity extends BaseEntity {
           Math.round(update.batteryLevel * 2),
           this.platform.log,
         );
-
       }
 
       await syncFunc(
@@ -186,6 +300,24 @@ export class VacuumEntity extends BaseEntity {
       );
     } catch (err) {
       this.platform.log?.warn?.(`[VacuumEntity] syncState error for ${this.state.entity_id}: ${err}`);
+    }
+  }
+
+  private async syncCleanModeState(mode: number, activeOption: string): Promise<void> {
+    safeSetAttribute(this.endpoint as any, 'rvcCleanMode' as any, 'currentMode', mode, this.platform.log);
+    await this.syncCleanModeChildEndpoints(activeOption, safeSetAttribute);
+  }
+
+  private async syncCleanModeChildEndpoints(activeOption: string, syncFunc: Function): Promise<void> {
+    for (const [option, item] of this.cleanModeChildEndpoints.entries()) {
+      const isActive = option.toLowerCase() === activeOption.toLowerCase();
+      await syncFunc(
+        item.endpoint as any,
+        'onOff' as any,
+        'onOff',
+        isActive,
+        this.platform.log,
+      );
     }
   }
 
@@ -203,7 +335,7 @@ export class VacuumEntity extends BaseEntity {
         safeSetAttribute(endpoint as any, 'rvcRunMode' as any, 'currentMode', RUN_MODE_ID_CLEANING, this.platform.log);
         await this.callHaService('vacuum.start');
       } else if (request?.newMode === RUN_MODE_ID_IDLE) {
-        safeSetAttribute(endpoint as any, 'rvcOperationalState' as any, 'operationalState', 64, this.platform.log);
+        safeSetAttribute(endpoint as any, 'rvcOperationalState' as any, 'operationalState', this.isManualChargeOnly() ? 0 : 64, this.platform.log);
         safeSetAttribute(endpoint as any, 'rvcRunMode' as any, 'currentMode', RUN_MODE_ID_IDLE, this.platform.log);
         await this.callHaService('vacuum.return_to_base');
       }
@@ -211,6 +343,17 @@ export class VacuumEntity extends BaseEntity {
 
     endpoint.addCommandHandler('RvcCleanMode.changeToMode', async (data: any) => {
       this.platform.log?.info?.(`[VacuumEntity] RvcCleanMode.changeToMode commanded: ${JSON.stringify(data)}`);
+      const newMode = data?.request?.newMode;
+      const cleanSelector = this.getLinkedCleanModeSelector();
+      if (cleanSelector && typeof newMode === 'number') {
+        const defs = getSupportedVacuumCleanModes(cleanSelector.options);
+        const match = defs.find((d) => d.mode === newMode);
+        if (match) {
+          this.lastCommandTime = Date.now();
+          await this.platform.ha?.callService('select', 'select_option', cleanSelector.entityId, { option: match.option });
+          await this.syncCleanModeState(match.mode, match.option);
+        }
+      }
     });
 
     endpoint.addCommandHandler('RvcOperationalState.resume', async () => {
@@ -235,14 +378,14 @@ export class VacuumEntity extends BaseEntity {
 
     endpoint.addCommandHandler('RvcOperationalState.goHome', async () => {
       this.lastCommandTime = Date.now();
-      safeSetAttribute(endpoint as any, 'rvcOperationalState' as any, 'operationalState', 64, this.platform.log);
+      safeSetAttribute(endpoint as any, 'rvcOperationalState' as any, 'operationalState', this.isManualChargeOnly() ? 0 : 64, this.platform.log);
       safeSetAttribute(endpoint as any, 'rvcRunMode' as any, 'currentMode', RUN_MODE_ID_IDLE, this.platform.log);
       await this.callHaService('vacuum.return_to_base');
     });
-    
+
     endpoint.addCommandHandler('goHome', async () => {
       this.lastCommandTime = Date.now();
-      safeSetAttribute(endpoint as any, 'rvcOperationalState' as any, 'operationalState', 64, this.platform.log);
+      safeSetAttribute(endpoint as any, 'rvcOperationalState' as any, 'operationalState', this.isManualChargeOnly() ? 0 : 64, this.platform.log);
       safeSetAttribute(endpoint as any, 'rvcRunMode' as any, 'currentMode', RUN_MODE_ID_IDLE, this.platform.log);
       await this.callHaService('vacuum.return_to_base');
     });
@@ -267,7 +410,6 @@ export class VacuumEntity extends BaseEntity {
         if (service === 'vacuum.start') {
           action = 'turn_on';
         } else {
-          // vacuum.stop, vacuum.pause, vacuum.return_to_base -> turn off the switch
           action = 'turn_off';
         }
       } else if (service === 'vacuum.return_to_base') {
@@ -275,7 +417,7 @@ export class VacuumEntity extends BaseEntity {
         const btnEntityId2 = `button.${objectId}_volver_a_base_2`;
         const btnEntityId = `button.${objectId}_volver_a_base`;
         const selectEntityId = `select.${objectId}_modo`;
-        
+
         const hasBtn2 = this.platform.ha?.hassStates?.has(btnEntityId2);
         const hasBtn = this.platform.ha?.hassStates?.has(btnEntityId);
         const hasSelect = this.platform.ha?.hassStates?.has(selectEntityId);
