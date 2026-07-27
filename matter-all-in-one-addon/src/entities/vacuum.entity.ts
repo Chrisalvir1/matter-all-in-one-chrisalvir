@@ -260,7 +260,17 @@ export class VacuumEntity extends BaseEntity {
       let entityId = this.state.entity_id;
       let serviceData: Record<string, any> = {};
 
-      if (service === 'vacuum.return_to_base') {
+      const isSwitchEntity = this.state.entity_id.startsWith('switch.');
+
+      if (isSwitchEntity) {
+        domain = 'switch';
+        if (service === 'vacuum.start') {
+          action = 'turn_on';
+        } else {
+          // vacuum.stop, vacuum.pause, vacuum.return_to_base -> turn off the switch
+          action = 'turn_off';
+        }
+      } else if (service === 'vacuum.return_to_base') {
         const objectId = this.state.entity_id.split('.')[1];
         const btnEntityId2 = `button.${objectId}_volver_a_base_2`;
         const btnEntityId = `button.${objectId}_volver_a_base`;

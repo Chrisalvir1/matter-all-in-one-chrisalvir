@@ -80,6 +80,7 @@ export type HaVacuumState =
 export function haVacuumStateToMatter(haState: HaVacuumState): RvcOperationalStateValue {
   switch (haState.toLowerCase()) {
     case 'cleaning':
+    case 'on':
       return RvcOperationalStateId.Running;
     case 'paused':
       return RvcOperationalStateId.Paused;
@@ -90,17 +91,19 @@ export function haVacuumStateToMatter(haState: HaVacuumState): RvcOperationalSta
     case 'error':
       return RvcOperationalStateId.Error;
     case 'idle':
+    case 'off':
     default:
       return RvcOperationalStateId.Stopped;
   }
 }
 
 /**
- * Returns true when the vacuum is actively cleaning.
+ * Returns true when the vacuum is actively cleaning or switched on.
  * Used to drive the OnOff cluster for simple on/off bridges.
  */
 export function haVacuumIsActive(haState: HaVacuumState): boolean {
-  return haState.toLowerCase() === 'cleaning';
+  const normalized = haState.toLowerCase();
+  return normalized === 'cleaning' || normalized === 'on';
 }
 
 /**
@@ -291,10 +294,10 @@ export function buildVacuumMatterMeta(entity: HassState): VacuumMatterMeta {
 
 /**
  * Determines whether a HA entity should be handled by this converter.
- * Only matches `vacuum.*` domain entities.
+ * Matches `vacuum.*` domain entities or entities with roboticVacuumCleaner profile.
  */
-export function isVacuumEntity(entity: HassState): boolean {
-  return entity.entity_id.startsWith('vacuum.');
+export function isVacuumEntity(entity: HassState, effectiveProfile?: string): boolean {
+  return entity.entity_id.startsWith('vacuum.') || effectiveProfile === 'roboticVacuumCleaner';
 }
 
 /**

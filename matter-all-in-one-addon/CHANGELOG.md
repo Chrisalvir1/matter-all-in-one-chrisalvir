@@ -1,3 +1,9 @@
+## [1.2.67] - 2026-07-27
+
+### Added
+
+- **Soporte para Exportar Entidades del Dominio `switch` como Aspiradora Robot (RVC):** Se añadió el perfil de exportación "Aspiradora robot (RVC)" para entidades de la clase `switch` (como el robot Everybot IRCEDGE integrado mediante Omni Broadlink IR). Permite controlar el encendido/apagado del robot como un accesorio RVC nativo en Matter y Apple Home sin requerir una entidad `vacuum.*` propia en Home Assistant.
+
 ## [1.2.66] - 2026-07-25
 
 ### Added

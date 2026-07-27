@@ -874,7 +874,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       entityInstance = new SoilSensorEntity(this, state, deviceType);
     } else if (domain === 'sensor' && deviceClass === 'monetary') {
       entityInstance = new EnergyTariffEntity(this, state, deviceType);
-    } else if (domain === 'vacuum' && (effectiveProfile === 'roboticVacuumCleaner' || deviceType.name === 'RoboticVacuumCleaner')) {
+    } else if ((domain === 'vacuum' || effectiveProfile === 'roboticVacuumCleaner' || override === 'roboticVacuumCleaner') && (effectiveProfile === 'roboticVacuumCleaner' || deviceType.name === 'RoboticVacuumCleaner')) {
       entityInstance = new VacuumEntity(this, state, deviceType);
     } else if (domain === 'humidifier') {
       entityInstance = new HumidifierEntity(this, state, deviceType);

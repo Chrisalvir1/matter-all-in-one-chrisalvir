@@ -237,8 +237,20 @@ describe('isVacuumEntity', () => {
     expect(isVacuumEntity(makeEntity('cleaning'))).toBe(true);
   });
 
-  it('does not match other domains', () => {
+  it('does not match switch domain without effectiveProfile', () => {
     const other = { ...makeEntity('on'), entity_id: 'switch.my_robot' };
     expect(isVacuumEntity(other)).toBe(false);
+  });
+
+  it('matches switch domain when effectiveProfile is roboticVacuumCleaner', () => {
+    const switchRobot = { ...makeEntity('on'), entity_id: 'switch.omni_broadlink_robot_limpiador' };
+    expect(isVacuumEntity(switchRobot, 'roboticVacuumCleaner')).toBe(true);
+  });
+
+  it('maps switch "on" state to Running in haVacuumStateToMatter and active in haVacuumIsActive', () => {
+    expect(haVacuumStateToMatter('on')).toBe(RvcOperationalStateId.Running);
+    expect(haVacuumIsActive('on')).toBe(true);
+    expect(haVacuumStateToMatter('off')).toBe(RvcOperationalStateId.Stopped);
+    expect(haVacuumIsActive('off')).toBe(false);
   });
 });

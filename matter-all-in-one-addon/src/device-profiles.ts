@@ -22,6 +22,7 @@ const profilesByDomain: Record<string, DeviceExportProfile[]> = {
   switch: [
     { id: 'onOffPlugInUnit', label: 'Enchufe', description: 'Interruptor mostrado como toma de corriente.', appleHome: 'supported' },
     { id: 'onOffLight', label: 'Luz On/Off', description: 'Interruptor mostrado como luz.', appleHome: 'supported' },
+    { id: 'roboticVacuumCleaner', label: 'Aspiradora robot (RVC)', description: 'Tipo Matter RVC oficial con controles nativos en Apple Home.', appleHome: 'supported' },
   ],
   fan: [
     { id: 'fan', label: 'Ventilador', description: 'Control de ventilador Matter.', appleHome: 'supported' },
