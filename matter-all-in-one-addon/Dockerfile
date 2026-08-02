@@ -1,4 +1,4 @@
-ARG BUILD_FROM=node:24.18-alpine3.24
+ARG BUILD_FROM=node:24.18.1-alpine3.24
 FROM ${BUILD_FROM} AS builder
 
 WORKDIR /app
@@ -20,7 +20,7 @@ LABEL io.hass.type="app" \
   org.opencontainers.image.licenses="Apache-2.0"
 
 RUN apk add --no-cache jq \
-  && npm install -g matterbridge@3.10.2 --omit=dev --no-fund --no-audit
+  && npm install -g matterbridge@3.10.3 --omit=dev --no-fund --no-audit
 
 WORKDIR /app
 COPY package.json package-lock.json ./

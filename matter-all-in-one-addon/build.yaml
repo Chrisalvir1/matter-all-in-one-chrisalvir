@@ -1,4 +1,4 @@
 # Multi-architecture build configuration for Home Assistant add-on
 build_from:
-  amd64: "node:24.18-alpine3.24"
-  aarch64: "node:24.18-alpine3.24"
+  amd64: "node:24.18.1-alpine3.24"
+  aarch64: "node:24.18.1-alpine3.24"

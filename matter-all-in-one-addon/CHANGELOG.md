@@ -1,3 +1,12 @@
+## [1.2.77] - 2026-08-02
+
+### Changed
+- **Dependencias Actualizadas:**
+  - `matterbridge` actualizado a la versión `3.10.3`.
+  - Node.js de la imagen Docker actualizado a `24.18.1-alpine3.24`.
+  - Actualización principal de `vitest` y `coverage-v8` a `v4.1.10`.
+  - Actualización de `ws` a `8.21.1` y `@types/ws` a `8.18.1`.
+
 ## [1.2.76] - 2026-07-27
 
 ### Fixed
