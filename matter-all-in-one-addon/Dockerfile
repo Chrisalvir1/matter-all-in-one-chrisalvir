@@ -3,9 +3,9 @@ FROM ${BUILD_FROM} AS builder
 
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci --legacy-peer-deps --no-fund --no-audit
+RUN npm install --legacy-peer-deps --no-fund --no-audit --save-exact matterbridge@3.10.4
 COPY tsconfig*.json ./
-COPY scripts/clean-dist.mjs ./scripts/clean-dist.mjs
+COPY scripts/clean-dist.mjs scripts/apply-matterbridge-3.10.4-fixes.mjs ./scripts/
 COPY src/ ./src/
 RUN npm run build
 
@@ -20,11 +20,11 @@ LABEL io.hass.type="app" \
   org.opencontainers.image.licenses="Apache-2.0"
 
 RUN apk add --no-cache jq \
-  && npm install -g matterbridge@3.10.3 --omit=dev --no-fund --no-audit
+  && npm install -g matterbridge@3.10.4 --omit=dev --no-fund --no-audit
 
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev --omit=peer --legacy-peer-deps --no-fund --no-audit \
+RUN npm install --omit=dev --omit=peer --legacy-peer-deps --no-fund --no-audit \
   && { test -e /app/node_modules/matterbridge || ln -s /usr/local/lib/node_modules/matterbridge /app/node_modules/matterbridge; }
 RUN jq 'del(.devDependencies, .peerDependencies)' package.json > package.json.tmp \
   && mv package.json.tmp package.json

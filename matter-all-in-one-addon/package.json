@@ -1,57 +1,42 @@
 {
   "name": "matter-all-in-one-chrisalvir",
-  "version": "1.2.77",
+  "version": "1.2.78",
   "description": "Standards-based Matter bridge for Home Assistant - HomeKit compatible mappings",
   "author": "chrisalvir",
   "license": "Apache-2.0",
   "repository": "https://github.com/Chrisalvir1/matter-all-in-one-chrisalvir",
   "bugs": "https://github.com/Chrisalvir1/matter-all-in-one-chrisalvir/issues",
   "homepage": "https://github.com/Chrisalvir1/matter-all-in-one-chrisalvir",
-  "publishConfig": {
-    "access": "public"
-  },
+  "publishConfig": { "access": "public" },
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": [
-    "dist"
-  ],
-  "dependencies": {
-    "ws": "^8.21.1"
-  },
-  "peerDependencies": {
-    "matterbridge": ">= 3.10.3"
-  },
+  "files": ["dist"],
+  "dependencies": { "ws": "^8.21.2" },
+  "peerDependencies": { "matterbridge": ">=3.10.4 <3.11.0" },
   "devDependencies": {
-    "@types/node": "^24.13.3",
+    "@types/node": "^26.1.2",
     "@types/ws": "^8.18.1",
     "@vitest/coverage-v8": "^4.1.10",
-    "matterbridge": "3.10.3",
+    "matterbridge": "3.10.4",
     "prettier": "^3.9.6",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"
   },
   "scripts": {
+    "prepare:source": "node scripts/apply-matterbridge-3.10.4-fixes.mjs",
     "clean": "node scripts/clean-dist.mjs",
-    "build": "npm run clean && tsc -p tsconfig.build.json && mkdir -p dist/frontend && cp src/frontend/* dist/frontend/",
-    "dev": "tsc --watch",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
+    "build": "npm run prepare:source && npm run clean && tsc -p tsconfig.build.json && mkdir -p dist/frontend && cp src/frontend/* dist/frontend/",
+    "dev": "npm run prepare:source && tsc --watch",
+    "test": "npm run prepare:source && vitest run",
+    "test:watch": "npm run prepare:source && vitest",
+    "test:coverage": "npm run prepare:source && vitest run --coverage",
     "prepublishOnly": "npm run build"
   },
-  "keywords": [
-    "matter",
-    "matter-1.6",
-    "homekit",
-    "home-assistant",
-    "matterbridge",
-    "iot",
-    "smart-home"
-  ],
+  "keywords": ["matter", "matter-1.6", "homekit", "home-assistant", "matterbridge", "iot", "smart-home"],
   "matterbridge": {
     "name": "matter-all-in-one-chrisalvir",
-    "version": "1.2.77",
+    "version": "1.2.78",
     "author": "chrisalvir",
     "description": "Standards-based Matter 1.6 bridge for Home Assistant"
   }
