@@ -34,7 +34,10 @@ jobs:
           node-version: ${{ matrix.node-version }}
 
       - name: Install dependencies
-        run: npm ci --legacy-peer-deps --no-fund --no-audit
+        run: npm install --legacy-peer-deps --no-fund --no-audit
+
+      - name: Verify Matter dependency versions
+        run: npm ls matterbridge @matter/main
 
       - name: Build plugin
         run: npm run build
