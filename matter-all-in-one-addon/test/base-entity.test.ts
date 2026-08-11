@@ -54,7 +54,9 @@ describe('BaseEntity direct colour lights', () => {
     expect(platform.ha.callService).toHaveBeenLastCalledWith('light', 'turn_on', 'light.govee_test', { hs_color: [180, 100] });
 
     await endpoint.invokeCommand('moveToColorTemperature', { colorTemperatureMireds: 250 });
-    expect(platform.ha.callService).toHaveBeenLastCalledWith('light', 'turn_on', 'light.govee_test', { color_temp_kelvin: 4000 });
+    expect(platform.ha.callService).toHaveBeenLastCalledWith('light', 'turn_on', 'light.govee_test', {
+      color_temp_kelvin: 4000,
+    });
   });
 
   it('maps Matter XY colour commands to Home Assistant XY coordinates', async () => {
@@ -67,7 +69,7 @@ describe('BaseEntity direct colour lights', () => {
 
     await endpoint.invokeCommand('moveToColor', { colorX: 32768, colorY: 16384 });
     expect(platform.ha.callService).toHaveBeenLastCalledWith('light', 'turn_on', 'light.govee_test', {
-      xy_color: [32768 / 65535, 16384 / 65535],
+      xy_color: [32768 / 65536, 16384 / 65536],
     });
   });
 });

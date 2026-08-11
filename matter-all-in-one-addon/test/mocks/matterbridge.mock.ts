@@ -6,6 +6,17 @@ import { vi } from 'vitest';
 export class MockMatterbridgeEndpoint {
   public deviceTypes: any[];
   public options: any;
+  public deviceType: number = 0;
+  public deviceName: string = '';
+  public uniqueId: string = '';
+  public serialNumber: string = '';
+  public vendorId: number = 0;
+  public vendorName: string = '';
+  public productId: number = 0;
+  public productName: string = '';
+  public softwareVersion: number = 0;
+  public softwareVersionString: string = '';
+  public behaviors = { require: (...args: any[]) => {} };
   public clusterServers = new Set<number>();
   public attributes = new Map<string, any>();
   public commandHandlers = new Map<string, (...args: any[]) => any>();

@@ -4,11 +4,13 @@
 import { DeviceTypeDefinition, MatterbridgeEndpoint } from 'matterbridge';
 import { OnOff, LevelControl, ColorControl, FanControl, OccupancySensing, BooleanState, TemperatureMeasurement, RelativeHumidityMeasurement } from 'matterbridge/matter/clusters';
 import { ClusterId } from 'matterbridge/matter/types';
+import { MatterbridgeOnOffServer } from 'matterbridge/behaviors';
 import { HomeAssistantPlatform } from '../platform.js';
 import { HassState } from '../utils/ha-state.js';
 import { safeSetAttribute, safeUpdateAttribute } from '../utils/matter-attributes.js';
 import { hasColorTemperatureCapability } from '../device-registry.js';
 import { getMatterSerialNumber, getHaDeviceModel, getHaDeviceManufacturer, MATTER_BRIDGE_VENDOR_ID, MATTER_BRIDGE_VENDOR_NAME } from '../utils/matter-device-identity.js';
+import { lightColor } from '../utils/light-color.js';
 
 export class BaseEntity {
   public platform: HomeAssistantPlatform;
@@ -19,15 +21,46 @@ export class BaseEntity {
   private lastCommands = new Map<string, { value: any; timestamp: number }>();
   public deviceType: DeviceTypeDefinition;
 
-  private shouldIgnoreStateUpdate(attribute: string, windowMs = 3000): boolean {
-    const last = this.lastCommands.get(attribute);
+  private isDifferent(attribute: string, requested: any, actual: any): boolean {
+    if (attribute === 'hs_color') {
+      if (!requested || !actual) return true;
+      return Math.abs(requested[0] - actual[0]) > 3 || Math.abs(requested[1] - actual[1]) > 2;
+    }
+    if (attribute === 'xy_color') {
+      if (!requested || !actual) return true;
+      return Math.abs(requested[0] - actual[0]) > 0.01 || Math.abs(requested[1] - actual[1]) > 0.01;
+    }
+    if (attribute === 'brightness') {
+      return Math.abs(requested - actual) > 5;
+    }
+    if (attribute === 'color_temp') {
+      return Math.abs(requested - actual) > 10;
+    }
+    return requested !== actual;
+  }
+
+  private shouldIgnoreStateUpdate(attribute: string, haValue: any, windowMs = 3000): boolean {
+    const key = `${this.entityId}:${attribute}`;
+    const last = this.lastCommands.get(key);
     if (!last) return false;
+
     const elapsed = Date.now() - last.timestamp;
     if (elapsed > windowMs) {
-      this.lastCommands.delete(attribute);
+      this.lastCommands.delete(key);
       return false;
     }
-    return true;
+
+    if (this.isDifferent(attribute, last.value, haValue)) {
+      this.platform.log.debug(`[${this.entityId}] Reconciling HA feedback for ${attribute} (req=${JSON.stringify(last.value)}, got=${JSON.stringify(haValue)})`);
+      this.lastCommands.delete(key);
+      return false; // Force reconciliation
+    }
+
+    return true; // Ignore, within window and matches
+  }
+
+  private setCommandLockout(attribute: string, value: any) {
+    this.lastCommands.set(`${this.entityId}:${attribute}`, { value, timestamp: Date.now() });
   }
 
   private hasColorControl(endpoint: MatterbridgeEndpoint = this.endpoint): boolean {
@@ -39,44 +72,12 @@ export class BaseEntity {
     return typeof hasAttributeServer === 'function' && hasAttributeServer.call(endpoint, ColorControl.id, 'colorMode');
   }
 
-  private static miredsToKelvin(mireds: number): number {
-    return Math.round(1_000_000 / mireds);
-  }
-
-  private static kelvinToMireds(kelvin: number): number {
-    return Math.round(1_000_000 / kelvin);
-  }
-
-  private getHsColor(state: HassState): [number, number] | undefined {
-    const attributes = state.attributes as any;
-    if (Array.isArray(attributes.hs_color) && attributes.hs_color.length >= 2) {
-      return [attributes.hs_color[0], attributes.hs_color[1]];
-    }
-    if (!Array.isArray(attributes.rgb_color) || attributes.rgb_color.length < 3) return undefined;
-
-    const [red, green, blue] = attributes.rgb_color.map((value: number) => Math.max(0, Math.min(255, value)) / 255);
-    const max = Math.max(red, green, blue);
-    const min = Math.min(red, green, blue);
-    const delta = max - min;
-    if (delta === 0) return [0, 0];
-    let hue = 0;
-    if (max === red) hue = 60 * (((green - blue) / delta) % 6);
-    else if (max === green) hue = 60 * ((blue - red) / delta + 2);
-    else hue = 60 * ((red - green) / delta + 4);
-    return [(hue + 360) % 360, Math.round((delta / max) * 100)];
-  }
-
   protected getMatterSerialNumber(): string {
     return getMatterSerialNumber(this.platform, this.entityId);
   }
 
   public endpoint!: MatterbridgeEndpoint;
 
-  /**
-   * Matterbridge defaults endpoint firmware to 1.0.0.  That value is shown
-   * verbatim by HomeKit, so every server node must explicitly inherit the
-   * running Matterbridge version.
-   */
   protected applyMatterbridgeFirmware(endpoint: MatterbridgeEndpoint = this.endpoint): void {
     const version = String((this.platform as any).matterbridge?.matterbridgeVersion ?? 'Matterbridge');
     const [major = 0, minor = 0, patch = 0] = version.split(/[-+.]/).map((part) => Number.parseInt(part, 10) || 0);
@@ -91,24 +92,20 @@ export class BaseEntity {
     this.deviceType = deviceType;
   }
 
-  /**
-   * Determine which cluster IDs are needed based on entity domain and capabilities.
-   */
   protected getRequiredClusterIds(): ClusterId[] {
     const [domain] = this.entityId.split('.');
     const clusters: ClusterId[] = [];
 
     if (domain === 'light' || domain === 'switch' || domain === 'media_player' || domain === 'vacuum') {
-      clusters.push(OnOff.id);
       const supportedModes: string[] = this.state.attributes.supported_color_modes ?? [];
       const hasBrightness = supportedModes.includes('brightness') || this.state.attributes.brightness !== undefined;
-      const isOnOffProfile = this.deviceType.code === 0x0100 || this.deviceType.code === 0x010a; // OnOffLight or OnOffPlugInUnit
-      // Only add ColorControl if the light supports real color modes AND the profile allows it
+      const isOnOffProfile = this.deviceType.code === 0x0100 || this.deviceType.code === 0x010a; 
       const realColorModes = ['hs', 'xy', 'rgb', 'rgbw', 'rgbww', 'color_temp'];
       const hasColorCapability =
         supportedModes.some((m) => realColorModes.includes(m)) ||
         hasColorTemperatureCapability(this.state.attributes);
-      const isColorProfile = this.deviceType.code === 0x010c || this.deviceType.code === 0x010d; // ColorTemperatureLight or ExtendedColorLight
+      const isColorProfile = this.deviceType.code === 0x010c || this.deviceType.code === 0x010d; 
+      
       if ((hasBrightness || hasColorCapability) && !isOnOffProfile) {
         clusters.push(LevelControl.id);
       }
@@ -120,15 +117,8 @@ export class BaseEntity {
     return clusters;
   }
 
-  /**
-   * Create and register the MatterbridgeEndpoint.
-   */
   public async createEndpoint(): Promise<MatterbridgeEndpoint> {
     const rawName = this.state.attributes.friendly_name ?? this.entityId;
-
-    // Preserve the Home Assistant friendly name exactly (within Matter's
-    // 32-character limit). Identity and uniqueness belong to entityId/serial,
-    // never to the user-visible accessory name.
     const uniqueName = rawName.substring(0, 32).trim();
 
     this.endpoint = new MatterbridgeEndpoint([this.deviceType], {
@@ -138,24 +128,15 @@ export class BaseEntity {
 
     const [domain] = this.entityId.split('.');
 
-    // Explicitly set metadata properties on the endpoint instance for createDeviceServerNode
     this.endpoint.deviceType = this.deviceType.code;
     this.endpoint.deviceName = uniqueName;
     this.endpoint.uniqueId = this.entityId.replaceAll('.', '_');
     this.endpoint.serialNumber = this.getMatterSerialNumber();
     this.endpoint.vendorId = MATTER_BRIDGE_VENDOR_ID;
-    // Use real manufacturer from HA device registry (e.g. "Tuya", "Shelly").
-    // Falls back to the bridge vendor name when the integration omits it.
     this.endpoint.vendorName = getHaDeviceManufacturer(this.platform, this.entityId);
     this.endpoint.productId = 0x8000;
-    // Use real model from HA device registry (e.g. "CB03-SBL", "SHSW-25").
-    // Falls back to the Matter device type name (e.g. "OnOffLight") when unavailable.
     this.endpoint.productName = getHaDeviceModel(this.platform, this.entityId, this.deviceType.name);
 
-    // Use the BasicInformation cluster (NOT BridgedDeviceBasicInformation).
-    // This entity is registered with mode: 'server' so Matterbridge creates
-    // an independent ServerNode with its own QR code. Using the bridged version
-    // here would conflict with the server mode and prevent pairing.
     this.endpoint.createDefaultBasicInformationClusterServer(
       uniqueName,
       this.endpoint.serialNumber,
@@ -172,7 +153,10 @@ export class BaseEntity {
       const on = this.state.state === 'on';
       const percentage = typeof this.state.attributes.percentage === 'number' ? this.state.attributes.percentage : on ? 100 : 0;
       this.endpoint.createDefaultFanControlClusterServer(on ? 1 : 0, undefined, percentage, percentage);
-      this.endpoint.addClusterServers([OnOff.id]);
+      this.endpoint.behaviors.require(MatterbridgeOnOffServer.with());
+    } else if (domain === 'light' || domain === 'switch' || domain === 'media_player' || domain === 'vacuum' || domain === 'fan') {
+      const isLighting = domain === 'light';
+      this.endpoint.behaviors.require(isLighting ? MatterbridgeOnOffServer.with(OnOff.Feature.Lighting) : MatterbridgeOnOffServer.with());
     }
 
     const clusters = this.getRequiredClusterIds();
@@ -181,7 +165,6 @@ export class BaseEntity {
     }
     this.endpoint.addRequiredClusterServers();
 
-    // Add custom cluster servers for subclasses before registering handlers and syncing state
     await this.addCustomClusterServers();
 
     this.registerCommandHandlers();
@@ -189,11 +172,6 @@ export class BaseEntity {
     return this.endpoint;
   }
 
-  /**
-   * Reattach this entity to a ServerNode retained by Matterbridge after a
-   * Home Assistant reconnect or plugin reload.  Persisted endpoints may not
-   * have runtime command callbacks, so restore them only when none exist.
-   */
   public adoptEndpoint(endpoint: MatterbridgeEndpoint): void {
     this.endpoint = endpoint;
     if (endpoint.commandHandler && (endpoint.commandHandler as any).handler?.length === 0) {
@@ -201,30 +179,20 @@ export class BaseEntity {
     }
   }
 
-  /**
-   * Hook for subclasses to add custom cluster servers before registering handlers/syncing state.
-   */
   protected addCustomClusterServers(): void | Promise<void> {
     return;
   }
 
-  /**
-   * Setup command handlers from Matter to Home Assistant.
-   * @param endpoint - Optional endpoint override (used by subclasses like VacuumEntity).
-   */
   protected registerCommandHandlers(_endpoint?: MatterbridgeEndpoint) {
     const [domain] = this.entityId.split('.');
 
     if (domain === 'light' || domain === 'switch' || domain === 'fan' || domain === 'media_player' || domain === 'vacuum') {
-      // On/Off handlers
       this.endpoint.addCommandHandler('on', async () => {
-        this.platform.log.debug(`Matter On commanded for ${this.entityId}`);
         if (domain === 'vacuum') await this.platform.ha.callService(domain, 'start', this.entityId);
         else await this.platform.ha.callService(domain, 'turn_on', this.entityId);
       });
 
       this.endpoint.addCommandHandler('off', async () => {
-        this.platform.log.debug(`Matter Off commanded for ${this.entityId}`);
         if (domain === 'vacuum') await this.platform.ha.callService(domain, 'return_to_base', this.entityId);
         else await this.platform.ha.callService(domain, 'turn_off', this.entityId);
       });
@@ -238,134 +206,155 @@ export class BaseEntity {
         });
       }
 
-      // LevelControl handlers (brightness)
       if (this.endpoint.hasAttributeServer(LevelControl.id, 'currentLevel')) {
         this.endpoint.addCommandHandler('moveToLevel', async (data: any) => {
-          const level = data?.level ?? data?.request?.level; // 0..254
+          const level = data?.request?.level ?? data?.level;
           if (typeof level === 'number') {
             const haBrightness = Math.round((level / 254) * 255);
-            this.platform.log.debug(`Matter MoveToLevel commanded for ${this.entityId}: level=${level} -> HA brightness=${haBrightness}`);
-            this.lastCommands.set('brightness', {
-              value: haBrightness,
-              timestamp: Date.now(),
-            });
-            await this.platform.ha.callService(domain, 'turn_on', this.entityId, {
-              brightness: haBrightness,
-            });
+            this.setCommandLockout('brightness', haBrightness);
+            await this.platform.ha.callService(domain, 'turn_on', this.entityId, { brightness: haBrightness });
           }
         });
 
         this.endpoint.addCommandHandler('moveToLevelWithOnOff', async (data: any) => {
-          const level = data?.level ?? data?.request?.level;
+          const level = data?.request?.level ?? data?.level;
           if (typeof level === 'number') {
-            const haBrightness = Math.round((level / 254) * 255);
-            this.platform.log.debug(`Matter MoveToLevelWithOnOff commanded for ${this.entityId}: level=${level} -> HA brightness=${haBrightness}`);
-            this.lastCommands.set('brightness', {
-              value: haBrightness,
-              timestamp: Date.now(),
-            });
             if (level === 0) {
               await this.platform.ha.callService(domain, 'turn_off', this.entityId);
             } else {
-              await this.platform.ha.callService(domain, 'turn_on', this.entityId, {
-                brightness: haBrightness,
-              });
+              const haBrightness = Math.round((level / 254) * 255);
+              this.setCommandLockout('brightness', haBrightness);
+              await this.platform.ha.callService(domain, 'turn_on', this.entityId, { brightness: haBrightness });
             }
           }
         });
       }
 
-      // Govee, Tuya and other direct colour lights use ColorControl on their
-      // own ServerNode.  These handlers deliberately live in BaseEntity (not
-      // only in CompositeDeviceEntity) so standalone lights keep every colour
-      // capability they advertised to Home Assistant.
       if (domain === 'light' && this.hasColorControl(this.endpoint)) {
-        const currentHs = () => this.getHsColor(this.state) ?? [0, 100];
-        const sendHs = async (hue: number, saturation: number) => {
-          const hs: [number, number] = [Math.round((hue / 254) * 360), Math.round((saturation / 254) * 100)];
-          this.lastCommands.set('hs_color', { value: hs, timestamp: Date.now() });
-          await this.platform.ha.callService('light', 'turn_on', this.entityId, { hs_color: hs });
+        const sendColor = async (payload: any) => {
+          if (payload.hs_color) this.setCommandLockout('hs_color', payload.hs_color);
+          if (payload.xy_color) this.setCommandLockout('xy_color', payload.xy_color);
+          if (payload.color_temp) this.setCommandLockout('color_temp', payload.color_temp);
+          await this.platform.ha.callService('light', 'turn_on', this.entityId, payload);
         };
 
+        const currentHs = () => lightColor.getHsColor(this.state) ?? [0, 100];
+
         this.endpoint.addCommandHandler('moveToHueAndSaturation', async (data: any) => {
-          const hue = data?.hue ?? data?.request?.hue;
-          const saturation = data?.saturation ?? data?.request?.saturation;
-          if (typeof hue === 'number' && typeof saturation === 'number') await sendHs(hue, saturation);
+          const req = data?.request ?? data;
+          if (typeof req?.hue === 'number' && typeof req?.saturation === 'number') {
+            const hs: [number, number] = [lightColor.matterHueToHa(req.hue), lightColor.matterSatToHa(req.saturation)];
+            const payload = lightColor.buildColorPayload(this.state.attributes.supported_color_modes ?? [], this.state.attributes.color_mode, { hs });
+            await sendColor(payload);
+          }
         });
 
         this.endpoint.addCommandHandler('moveToHue', async (data: any) => {
-          const hue = data?.hue ?? data?.request?.hue;
-          if (typeof hue !== 'number') return;
-          const [, saturation] = currentHs();
-          await sendHs(hue, Math.round((saturation / 100) * 254));
+          const req = data?.request ?? data;
+          if (typeof req?.hue === 'number') {
+            const [, sat] = currentHs();
+            const hs: [number, number] = [lightColor.matterHueToHa(req.hue), sat];
+            const payload = lightColor.buildColorPayload(this.state.attributes.supported_color_modes ?? [], this.state.attributes.color_mode, { hs });
+            await sendColor(payload);
+          }
+        });
+
+        this.endpoint.addCommandHandler('stepHue', async (data: any) => {
+          const req = data?.request ?? data;
+          if (typeof req?.stepSize === 'number') {
+            const [hue, sat] = currentHs();
+            const sign = req.stepMode === 1 ? -1 : 1; // 1 = down, 0 = up per cluster spec usually, wait 3.10.4 spec 1 is down
+            const newHue = lightColor.normalizeHue(hue + (sign * lightColor.matterHueToHa(req.stepSize)));
+            const hs: [number, number] = [newHue, sat];
+            const payload = lightColor.buildColorPayload(this.state.attributes.supported_color_modes ?? [], this.state.attributes.color_mode, { hs });
+            await sendColor(payload);
+          }
+        });
+
+        this.endpoint.addCommandHandler('enhancedMoveToHue', async (data: any) => {
+          const req = data?.request ?? data;
+          if (typeof req?.enhancedHue === 'number') {
+            const [, sat] = currentHs();
+            const hs: [number, number] = [lightColor.matterEnhancedHueToHa(req.enhancedHue), sat];
+            const payload = lightColor.buildColorPayload(this.state.attributes.supported_color_modes ?? [], this.state.attributes.color_mode, { hs });
+            await sendColor(payload);
+          }
+        });
+
+        this.endpoint.addCommandHandler('enhancedMoveHue', async (data: any) => {
+          // Handled same as moveHue if direction provided, usually controller doesn't send move without stop
+        });
+
+        this.endpoint.addCommandHandler('enhancedStepHue', async (data: any) => {
+          const req = data?.request ?? data;
+          if (typeof req?.stepSize === 'number') {
+            const [hue, sat] = currentHs();
+            const sign = req.stepMode === 1 ? -1 : 1;
+            const newHue = lightColor.normalizeHue(hue + (sign * lightColor.matterEnhancedHueToHa(req.stepSize)));
+            const hs: [number, number] = [newHue, sat];
+            const payload = lightColor.buildColorPayload(this.state.attributes.supported_color_modes ?? [], this.state.attributes.color_mode, { hs });
+            await sendColor(payload);
+          }
         });
 
         this.endpoint.addCommandHandler('moveToSaturation', async (data: any) => {
-          const saturation = data?.saturation ?? data?.request?.saturation;
-          if (typeof saturation !== 'number') return;
-          const [hue] = currentHs();
-          await sendHs(Math.round((hue / 360) * 254), saturation);
+          const req = data?.request ?? data;
+          if (typeof req?.saturation === 'number') {
+            const [hue] = currentHs();
+            const hs: [number, number] = [hue, lightColor.matterSatToHa(req.saturation)];
+            const payload = lightColor.buildColorPayload(this.state.attributes.supported_color_modes ?? [], this.state.attributes.color_mode, { hs });
+            await sendColor(payload);
+          }
+        });
+        
+        this.endpoint.addCommandHandler('stepSaturation', async (data: any) => {
+          const req = data?.request ?? data;
+          if (typeof req?.stepSize === 'number') {
+            const [hue, sat] = currentHs();
+            const sign = req.stepMode === 1 ? -1 : 1;
+            const newSat = Math.max(0, Math.min(100, sat + (sign * lightColor.matterSatToHa(req.stepSize))));
+            const hs: [number, number] = [hue, newSat];
+            const payload = lightColor.buildColorPayload(this.state.attributes.supported_color_modes ?? [], this.state.attributes.color_mode, { hs });
+            await sendColor(payload);
+          }
         });
 
         this.endpoint.addCommandHandler('moveToColor', async (data: any) => {
-          const x = data?.colorX ?? data?.request?.colorX;
-          const y = data?.colorY ?? data?.request?.colorY;
-          if (typeof x !== 'number' || typeof y !== 'number') return;
-          const xy: [number, number] = [x / 65535, y / 65535];
-          this.lastCommands.set('xy_color', { value: xy, timestamp: Date.now() });
-          await this.platform.ha.callService('light', 'turn_on', this.entityId, { xy_color: xy });
+          const req = data?.request ?? data;
+          if (typeof req?.colorX === 'number' && typeof req?.colorY === 'number') {
+            const xy = lightColor.matterXyToHa(req.colorX, req.colorY);
+            const payload = lightColor.buildColorPayload(this.state.attributes.supported_color_modes ?? [], this.state.attributes.color_mode, { xy });
+            await sendColor(payload);
+          }
         });
 
         this.endpoint.addCommandHandler('moveToColorTemperature', async (data: any) => {
-          const mireds = data?.colorTemperatureMireds ?? data?.request?.colorTemperatureMireds;
-          if (typeof mireds !== 'number' || mireds <= 0) return;
-          this.lastCommands.set('color_temp', { value: mireds, timestamp: Date.now() });
-          const attributes = this.state.attributes as any;
-          const usesKelvin = attributes.color_temp_kelvin !== undefined || attributes.min_color_temp_kelvin !== undefined || attributes.max_color_temp_kelvin !== undefined;
-          await this.platform.ha.callService('light', 'turn_on', this.entityId, usesKelvin ? { color_temp_kelvin: BaseEntity.miredsToKelvin(mireds) } : { color_temp: mireds });
+          const req = data?.request ?? data;
+          if (typeof req?.colorTemperatureMireds === 'number' && req.colorTemperatureMireds > 0) {
+            const mireds = req.colorTemperatureMireds;
+            const payload = lightColor.buildColorPayload(this.state.attributes.supported_color_modes ?? [], this.state.attributes.color_mode, { mireds });
+            const usesKelvin = this.state.attributes.color_temp_kelvin !== undefined || this.state.attributes.min_color_temp_kelvin !== undefined || this.state.attributes.max_color_temp_kelvin !== undefined;
+            if (usesKelvin) {
+              this.setCommandLockout('color_temp', mireds);
+              await this.platform.ha.callService('light', 'turn_on', this.entityId, { color_temp_kelvin: lightColor.miredsToKelvin(mireds) });
+            } else {
+              await sendColor(payload);
+            }
+          }
         });
       }
     }
   }
 
-  /**
-   * Set initial attribute values based on current Home Assistant state.
-   * NOTE: called BEFORE the endpoint is added to Matterbridge, so the
-   * endpoint is still in the "inactive" lifecycle state.  We must use
-   * setAttribute (not updateAttribute) and swallow the inactive-state
-   * error silently — Matterbridge will pick up the initial values when
-   * the endpoint transitions to active during commissioning setup.
-   */
   public async syncInitialState(): Promise<void> {
     await this.updateState(this.state, true);
   }
 
-  /**
-   * Clamp a level value to the LevelControl minLevel / maxLevel bounds
-   * reported by the endpoint cluster server.  Matter spec says currentLevel
-   * MUST satisfy the constraint "minLevel to maxLevel"; if we send 0 when
-   * minLevel=135 the transaction rolls back with an UnhandledRejection.
-   *
-   * Falls back to the raw value when the cluster is not present so this
-   * helper is safe to call unconditionally.
-   */
-  /**
-   * Clamp a level value to the LevelControl minLevel / maxLevel bounds
-   * reported by the endpoint cluster server.  Matter spec says currentLevel
-   * MUST satisfy the constraint "minLevel to maxLevel"; if we send 0 when
-   * minLevel=135 the transaction rolls back with an UnhandledRejection.
-   *
-   * Falls back to the raw value when the cluster is not present so this
-   * helper is safe to call unconditionally.
-   */
   private clampLevel(rawLevel: number, isInitialSync = false): number {
-    if (isInitialSync) {
-      return Math.min(254, Math.max(1, rawLevel));
-    }
+    if (isInitialSync) return Math.min(254, Math.max(1, rawLevel));
     try {
       const minLevel = (this.endpoint as any).getAttribute?.(LevelControl.id, 'minLevel') ?? 1;
       const maxLevel = (this.endpoint as any).getAttribute?.(LevelControl.id, 'maxLevel') ?? 254;
-      // minLevel must be at least 1 per Matter spec (0 means "off")
       const lo = Math.max(1, minLevel as number);
       const hi = Math.min(254, maxLevel as number);
       return Math.min(hi, Math.max(lo, rawLevel));
@@ -374,87 +363,72 @@ export class BaseEntity {
     }
   }
 
-  /**
-   * Sync a new Home Assistant state update to the Matter endpoint.
-   * Safe to call at any point in the endpoint lifecycle.
-   */
   public async updateState(newState: HassState, isInitialSync = false): Promise<void> {
     this.state = newState;
     if (!this.endpoint) return;
 
     const [domain] = this.entityId.split('.');
+    const updateFn = isInitialSync ? safeSetAttribute : safeUpdateAttribute;
 
     if (domain === 'light' || domain === 'switch' || domain === 'fan' || domain === 'media_player' || domain === 'vacuum') {
       const isOn = domain === 'vacuum' ? newState.state === 'cleaning' : newState.state === 'on';
 
-      if (isInitialSync) {
-        await safeSetAttribute(this.endpoint, OnOff.id, 'onOff', isOn, this.platform.log);
-      } else {
-        await safeUpdateAttribute(this.endpoint, OnOff.id, 'onOff', isOn, this.platform.log);
-      }
+      await updateFn(this.endpoint, OnOff.id, 'onOff', isOn, this.platform.log);
 
       if (newState.attributes.brightness !== undefined) {
-        if (!isInitialSync && this.shouldIgnoreStateUpdate('brightness')) {
-          this.platform.log.debug(`Ignoring HA brightness state update for ${this.entityId} due to recent command lockout`);
+        if (!isInitialSync && this.shouldIgnoreStateUpdate('brightness', newState.attributes.brightness)) {
+          this.platform.log.debug(`[${this.entityId}] Ignoring HA brightness state update due to recent command lockout`);
         } else {
-          // HA brightness: 0-255  →  Matter currentLevel: 1-254
-          // Never send 0: it violates the minLevel constraint on dimmers
-          // (e.g. Govee minLevel=135).  Map 0-brightness to level 1 (off
-          // state is communicated via onOff cluster, not currentLevel=0).
           const raw = Math.round((newState.attributes.brightness / 255) * 254);
           const level = this.clampLevel(Math.max(1, raw), isInitialSync);
-          if (isInitialSync) {
-            await safeSetAttribute(this.endpoint, LevelControl.id, 'currentLevel', level, this.platform.log);
-          } else {
-            await safeUpdateAttribute(this.endpoint, LevelControl.id, 'currentLevel', level, this.platform.log);
-          }
+          await updateFn(this.endpoint, LevelControl.id, 'currentLevel', level, this.platform.log);
         }
       }
 
       if (domain === 'light' && this.hasColorControl()) {
-        const updateColor = isInitialSync ? safeSetAttribute : safeUpdateAttribute;
-        const attributes = newState.attributes as any;
-        const colorMode = attributes.color_mode;
-        const hs = this.getHsColor(newState);
-        const xy = Array.isArray(attributes.xy_color) && attributes.xy_color.length >= 2 ? attributes.xy_color as [number, number] : undefined;
-        const colorTempMireds = typeof attributes.color_temp === 'number'
-          ? attributes.color_temp
-          : typeof attributes.color_temp_kelvin === 'number'
-            ? BaseEntity.kelvinToMireds(attributes.color_temp_kelvin)
-            : undefined;
+        const attrs = newState.attributes as any;
+        const colorMode = attrs.color_mode;
+        
+        const mireds = attrs.color_temp ?? (attrs.color_temp_kelvin ? lightColor.kelvinToMireds(attrs.color_temp_kelvin) : undefined);
+        const xy = Array.isArray(attrs.xy_color) && attrs.xy_color.length >= 2 ? attrs.xy_color : undefined;
+        const hs = lightColor.getHsColor(newState);
 
-        if (colorTempMireds !== undefined && (colorMode === 'color_temp' || (!hs && !xy))) {
-          if (!isInitialSync && this.shouldIgnoreStateUpdate('color_temp')) {
-            this.platform.log.debug(`Ignoring HA colour-temperature state update for ${this.entityId} due to recent command lockout`);
+        if (mireds !== undefined && (colorMode === 'color_temp' || (!hs && !xy))) {
+          if (!isInitialSync && this.shouldIgnoreStateUpdate('color_temp', mireds)) {
+            this.platform.log.debug(`[${this.entityId}] Ignoring HA color_temp state update due to recent command lockout`);
           } else {
-            await updateColor(this.endpoint, ColorControl.id, 'colorTemperatureMireds', colorTempMireds, this.platform.log);
-            await updateColor(this.endpoint, ColorControl.id, 'colorMode', ColorControl.ColorMode.ColorTemperatureMireds, this.platform.log);
+            await updateFn(this.endpoint, ColorControl.id, 'colorTemperatureMireds', mireds, this.platform.log);
+            await updateFn(this.endpoint, ColorControl.id, 'colorMode', ColorControl.ColorMode.ColorTemperatureMireds, this.platform.log);
           }
-        } else if (hs && (colorMode === 'hs' || colorMode === 'rgb' || colorMode === 'rgbw' || colorMode === 'rgbww' || !xy)) {
-          if (!isInitialSync && this.shouldIgnoreStateUpdate('hs_color')) {
-            this.platform.log.debug(`Ignoring HA hue/saturation state update for ${this.entityId} due to recent command lockout`);
+        } else if (xy && (colorMode === 'xy' || (!hs))) {
+          if (!isInitialSync && this.shouldIgnoreStateUpdate('xy_color', xy)) {
+            this.platform.log.debug(`[${this.entityId}] Ignoring HA xy_color state update due to recent command lockout`);
           } else {
-            await updateColor(this.endpoint, ColorControl.id, 'currentHue', Math.round((hs[0] / 360) * 254), this.platform.log);
-            await updateColor(this.endpoint, ColorControl.id, 'currentSaturation', Math.round((hs[1] / 100) * 254), this.platform.log);
-            await updateColor(this.endpoint, ColorControl.id, 'colorMode', ColorControl.ColorMode.CurrentHueAndCurrentSaturation, this.platform.log);
+            const matterXy = lightColor.haXyToMatter(xy[0], xy[1]);
+            await updateFn(this.endpoint, ColorControl.id, 'currentX', matterXy[0], this.platform.log);
+            await updateFn(this.endpoint, ColorControl.id, 'currentY', matterXy[1], this.platform.log);
+            await updateFn(this.endpoint, ColorControl.id, 'colorMode', ColorControl.ColorMode.CurrentXAndCurrentY, this.platform.log);
           }
-        } else if (xy) {
-          if (!isInitialSync && this.shouldIgnoreStateUpdate('xy_color')) {
-            this.platform.log.debug(`Ignoring HA XY-colour state update for ${this.entityId} due to recent command lockout`);
+        } else if (hs) {
+          if (!isInitialSync && this.shouldIgnoreStateUpdate('hs_color', hs)) {
+            this.platform.log.debug(`[${this.entityId}] Ignoring HA hs_color state update due to recent command lockout`);
           } else {
-            await updateColor(this.endpoint, ColorControl.id, 'currentX', Math.round(xy[0] * 65535), this.platform.log);
-            await updateColor(this.endpoint, ColorControl.id, 'currentY', Math.round(xy[1] * 65535), this.platform.log);
-            await updateColor(this.endpoint, ColorControl.id, 'colorMode', ColorControl.ColorMode.CurrentXAndCurrentY, this.platform.log);
+            await updateFn(this.endpoint, ColorControl.id, 'currentHue', lightColor.haHueToMatter(hs[0]), this.platform.log);
+            await updateFn(this.endpoint, ColorControl.id, 'enhancedCurrentHue', lightColor.haHueToMatterEnhanced(hs[0]), this.platform.log);
+            await updateFn(this.endpoint, ColorControl.id, 'currentSaturation', lightColor.haSatToMatter(hs[1]), this.platform.log);
+            await updateFn(this.endpoint, ColorControl.id, 'colorMode', ColorControl.ColorMode.CurrentHueAndCurrentSaturation, this.platform.log);
+            if (this.endpoint.hasAttributeServer(ColorControl.id, 'enhancedColorMode')) {
+               await updateFn(this.endpoint, ColorControl.id, 'enhancedColorMode', ColorControl.EnhancedColorMode.EnhancedCurrentHueAndCurrentSaturation, this.platform.log);
+            }
           }
         }
       }
 
       if (domain === 'fan' && this.endpoint.hasAttributeServer(FanControl.id, 'percentCurrent')) {
         const percentage = typeof newState.attributes.percentage === 'number' ? newState.attributes.percentage : isOn ? 100 : 0;
-        const update = isInitialSync ? safeSetAttribute : safeUpdateAttribute;
-        await update(this.endpoint, FanControl.id, 'percentCurrent', percentage, this.platform.log);
-        await update(this.endpoint, FanControl.id, 'percentSetting', percentage, this.platform.log);
-        await update(this.endpoint, FanControl.id, 'fanMode', isOn ? 1 : 0, this.platform.log);
+        await updateFn(this.endpoint, FanControl.id, 'percentCurrent', percentage, this.platform.log);
+        await updateFn(this.endpoint, FanControl.id, 'percentSetting', percentage, this.platform.log);
+        await updateFn(this.endpoint, FanControl.id, 'fanMode', isOn ? 1 : 0, this.platform.log);
       }
     } else if (domain === 'binary_sensor') {
       const active = ['on', 'open', 'detected', 'true'].includes(newState.state.toLowerCase());
@@ -462,10 +436,8 @@ export class BaseEntity {
       const updateMatter = async (isActive: boolean) => {
         if (!this.endpoint) return;
         if (this.endpoint.hasAttributeServer(OccupancySensing.id, 'occupancy')) {
-          const updateFn = isInitialSync ? safeSetAttribute : safeUpdateAttribute;
           await updateFn(this.endpoint, OccupancySensing.id, 'occupancy', { occupied: isActive }, this.platform.log);
         } else if (this.endpoint.hasAttributeServer(BooleanState.id, 'stateValue')) {
-          const updateFn = isInitialSync ? safeSetAttribute : safeUpdateAttribute;
           await updateFn(this.endpoint, BooleanState.id, 'stateValue', isActive, this.platform.log);
         }
       };
@@ -484,7 +456,7 @@ export class BaseEntity {
             this.binarySensorLatchTimeout = setTimeout(async () => {
               this.binarySensorLatchTimeout = undefined;
               await updateMatter(false);
-            }, 3000); // 3 seconds latch
+            }, 3000); 
           }
         }
       }
@@ -492,10 +464,8 @@ export class BaseEntity {
       const numeric = parseFloat(newState.state);
       if (!isNaN(numeric) && this.endpoint) {
         if (this.endpoint.hasAttributeServer(TemperatureMeasurement.id, 'measuredValue')) {
-          const updateFn = isInitialSync ? safeSetAttribute : safeUpdateAttribute;
           await updateFn(this.endpoint, TemperatureMeasurement.id, 'measuredValue', Math.round(numeric * 100), this.platform.log);
         } else if (this.endpoint.hasAttributeServer(RelativeHumidityMeasurement.id, 'measuredValue')) {
-          const updateFn = isInitialSync ? safeSetAttribute : safeUpdateAttribute;
           await updateFn(this.endpoint, RelativeHumidityMeasurement.id, 'measuredValue', Math.round(numeric * 100), this.platform.log);
         }
       }

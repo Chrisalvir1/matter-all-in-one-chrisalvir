@@ -1,3 +1,19 @@
+## [1.3.0] - 2026-08-10
+
+### Changed
+- **Dependencias Actualizadas:**
+  - `matterbridge` actualizado a la versión `3.10.4`.
+  - SDK transitivo `@matter/main` a `0.17.9`.
+- **Corrección profunda de color:**
+  - Se unificó la lógica de conversión de color (Hue/Saturation, XY, Color Temp) en una utilidad compartida.
+  - Corrección de escalado XY (1/65536 en lugar de 1/65535).
+  - Los lockouts de actualización de Home Assistant ahora rastrean atributos y comandos de forma aislada por entidad para evitar bloqueos cruzados en luces compuestas.
+  - Reconciliación determinista del color: el puente Matter se sincroniza con el estado devuelto por HA tras aplicar tolerancias, en vez de ignorarlo de forma incondicional.
+  - Soporte completo para `enhancedHue` y los comandos `step*`/`move*` en luminarias compuestas y directas.
+- **OnOffServer en Matterbridge 3.10.4:**
+  - Las luces ahora usan correctamente `MatterbridgeOnOffServer.with(OnOff.Feature.Lighting)`.
+  - Los endpoints de switch/plug/fan power usan `MatterbridgeOnOffServer.with()` para no inyectar atributos de iluminación inválidos.
+
 ## [1.2.77] - 2026-08-02
 
 ### Changed
