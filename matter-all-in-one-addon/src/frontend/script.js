@@ -26,6 +26,14 @@ const ICONS = { light: '💡', switch: '🔌', cover: '🪟', lock: '🔒', clim
 const PRIORITY = ['light', 'switch', 'cover', 'lock', 'climate', 'fan', 'vacuum', 'camera', 'humidifier', 'sensor', 'binary_sensor', 'button', 'media_player'];
 
 function escapeHtml(value) { return String(value ?? '').replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char])); }
+function highlightMatch(text, query) {
+  const str = String(text ?? '');
+  if (!query) return escapeHtml(str);
+  const q = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp(`(${q})`, 'gi');
+  const parts = str.split(regex);
+  return parts.map((part) => regex.test(part) ? `<mark>${escapeHtml(part)}</mark>` : escapeHtml(part)).join('');
+}
 function displayName(entity) { return entity.attributes?.friendly_name || entity.friendlyName || entity.entityId; }
 function icon(domain) { return ICONS[domain] || '◇'; }
 function isOn(value) { return ['on', 'open', 'home', 'playing', 'unlocked', 'active'].includes(String(value ?? '').toLowerCase()); }
@@ -149,14 +157,33 @@ function matchesDeviceFilter(device) {
 }
 
 function buildDeviceCard(device) {
+  const query = els.deviceSearch.value.trim().toLowerCase();
   const exported = device.entities.filter((entity) => entity.exported).length;
   const domains = [...new Set(device.entities.map((entity) => entity.domain))].sort((a, b) => PRIORITY.indexOf(a) - PRIORITY.indexOf(b));
   const element = document.createElement('article');
   const hasIssue = device.entities.some((entity) => entity.exported && entity.hasIssue);
   const isMqtt = device.entities.some((entity) => entity.origin === 'mqtt' || entity.entityId.startsWith('mqtt.'));
+
+  // Detect which specific entities matched the current search query
+  const matchingEntities = query ? device.entities.filter((entity) =>
+    [displayName(entity), entity.entityId, entity.domain].some((val) => String(val || '').toLowerCase().includes(query))
+  ) : [];
+
+  let searchMatchesHtml = '';
+  if (query && matchingEntities.length > 0) {
+    const listHtml = matchingEntities.slice(0, 3).map((e) => `<span class="search-match-item">↳ ${highlightMatch(displayName(e), query)}</span>`).join(' ');
+    const more = matchingEntities.length > 3 ? ` <span class="search-match-item">+${matchingEntities.length - 3} más</span>` : '';
+    searchMatchesHtml = `<div class="search-matches"><span class="search-matches-label">Coincidencia en entidad:</span>${listHtml}${more}</div>`;
+  }
+
+  const originText = isMqtt ? 'MQTT Auto-Discovery' : (device.area ? `${device.area} · Home Assistant` : 'Home Assistant');
+  const highlightedTitle = highlightMatch(device.name, query);
+
   element.className = `device-card${hasIssue ? ' needs-attention' : ''}`;
-  element.innerHTML = `<div class="card-top"><span class="device-icon">${icon(domains[0])}</span><span class="export-badge ${exported ? 'active' : ''}">${exported}/${device.entities.length}</span></div><h3 title="${escapeHtml(device.name)}">${escapeHtml(device.name)}</h3><p class="device-meta">${escapeHtml(device.area || device.manufacturer || (isMqtt ? 'MQTT Auto-Discovery' : 'Sin área asignada'))}</p><div class="tags">${isMqtt ? '<span class="tag tag-mqtt">📡 MQTT</span>' : ''}${hasIssue ? '<span class="tag tag-warning">Revisar</span>' : ''}${domains.slice(0, 3).map((domain) => `<span class="tag">${escapeHtml(domain)}</span>`).join('')}</div><div class="card-footer"><span class="entity-summary">${device.entities.length} entidad${device.entities.length === 1 ? '' : 'es'}</span><button class="button button-secondary" type="button">Configurar</button></div>`;
-  element.querySelector('button').addEventListener('click', () => openDevice(device));
+  element.innerHTML = `<div class="card-top"><span class="device-icon">${icon(domains[0])}</span><span class="export-badge ${exported ? 'active' : ''}">${exported}/${device.entities.length}</span></div><h3 title="${escapeHtml(device.name)}">${highlightedTitle}</h3><p class="device-meta">${escapeHtml(originText)}</p><div class="tags">${isMqtt ? '<span class="tag tag-mqtt">📡 MQTT</span>' : ''}${hasIssue ? '<span class="tag tag-warning">Revisar</span>' : ''}${domains.slice(0, 3).map((domain) => `<span class="tag">${escapeHtml(domain)}</span>`).join('')}</div>${searchMatchesHtml}<div class="card-footer"><span class="entity-summary">${device.entities.length} entidad${device.entities.length === 1 ? '' : 'es'}</span><button class="button button-secondary" type="button">Configurar</button></div>`;
+  
+  const targetEntity = matchingEntities[0] || null;
+  element.querySelector('button').addEventListener('click', () => openDevice(device, targetEntity));
   return element;
 }
 
@@ -185,12 +212,17 @@ async function fetchDevices(refreshSelection = false) {
   } finally { state.devicesBusy = false; }
 }
 
-function openDevice(device) {
+function openDevice(device, targetEntity = null) {
   state.activeDevice = device;
   els.deviceModalIcon.textContent = icon(device.entities[0]?.domain);
   els.deviceModalName.textContent = device.name;
-  els.deviceModalId.textContent = device.area || device.id;
+  const isMqtt = device.entities.some((e) => e.origin === 'mqtt' || e.entityId.startsWith('mqtt.'));
+  els.deviceModalId.textContent = isMqtt ? `MQTT · ${device.id}` : (device.area || device.id);
   const sorted = [...device.entities].sort((a, b) => {
+    if (targetEntity) {
+      if (a.entityId === targetEntity.entityId) return -1;
+      if (b.entityId === targetEntity.entityId) return 1;
+    }
     const primaryDelta = Number(b.entityId === b.compositePrimaryEntityId) - Number(a.entityId === a.compositePrimaryEntityId);
     return primaryDelta || Number(b.exported) - Number(a.exported) || displayName(a).localeCompare(displayName(b));
   });
@@ -199,21 +231,27 @@ function openDevice(device) {
   els.modalExportCount.textContent = activeNodes
     ? `${activeNodes} accesorio Matter · ${groupedEndpoints}/${sorted.length} endpoints`
     : `0/${sorted.length} publicadas`;
-  els.entityList.replaceChildren(...sorted.map((entity) => buildEntityRow(entity)));
+  els.entityList.replaceChildren(...sorted.map((entity) => buildEntityRow(entity, targetEntity?.entityId === entity.entityId)));
   setModalOpen(els.deviceModal, true);
-  selectEntity(sorted[0] || null);
+  const initialSelection = targetEntity ? sorted.find((e) => e.entityId === targetEntity.entityId) || sorted[0] : (sorted[0] || null);
+  selectEntity(initialSelection);
 }
 
-function buildEntityRow(entity) {
+function buildEntityRow(entity, isSearchHit = false) {
+  const query = els.deviceSearch.value.trim().toLowerCase();
   const element = document.createElement('div');
-  element.className = `entity-row${entity.exported ? '' : ' dimmed'}`;
+  element.className = `entity-row${entity.exported ? '' : ' dimmed'}${isSearchHit ? ' search-hit' : ''}`;
   element.dataset.entityId = entity.entityId;
   const compositeChild = entity.composite && entity.entityId !== entity.compositePrimaryEntityId;
   const isMqtt = entity.origin === 'mqtt' || entity.entityId.startsWith('mqtt.');
   const control = entity.auxiliary || compositeChild
     ? '<span class="export-control">Integrada</span>'
     : `<label class="export-control" title="Publicar dispositivo en Matter"><span>${entity.exported ? 'Activo' : 'Inactivo'}</span><span class="toggle"><input type="checkbox" ${entity.exported ? 'checked' : ''} aria-label="Exportar ${escapeHtml(displayName(entity))}"><span></span></span></label>`;
-  element.innerHTML = `<span class="entity-row-icon">${icon(entity.domain)}</span><div><div class="entity-row-name">${escapeHtml(displayName(entity))}${isMqtt ? ' <span class="badge-mqtt">MQTT</span>' : ''}</div><div class="entity-row-id">${escapeHtml(entity.entityId)}</div><span class="entity-state ${isOn(entity.state) ? 'on' : ''}">${escapeHtml(stateLabel(entity.state))}</span></div>${control}`;
+  
+  const highlightedName = highlightMatch(displayName(entity), query);
+  const highlightedId = highlightMatch(entity.entityId, query);
+
+  element.innerHTML = `<span class="entity-row-icon">${icon(entity.domain)}</span><div><div class="entity-row-name">${highlightedName}${isMqtt ? ' <span class="badge-mqtt">MQTT</span>' : ''}</div><div class="entity-row-id">${highlightedId}</div><span class="entity-state ${isOn(entity.state) ? 'on' : ''}">${escapeHtml(stateLabel(entity.state))}</span></div>${control}`;
   const checkbox = element.querySelector('input');
   if (checkbox) {
     checkbox.addEventListener('click', (event) => event.stopPropagation());

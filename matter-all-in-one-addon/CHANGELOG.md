@@ -1,3 +1,12 @@
+## [1.3.5] - 2026-08-14
+
+### Added
+- **Identificación y Resaltado Visual de Coincidencias en la Búsqueda:**
+  - Las tarjetas de dispositivo ahora muestran un bloque de vista previa con las entidades internas que coinciden con el término buscado (ej. `↳ Patrulla Cochera`).
+  - Resaltado visual con `<mark>` del texto buscado en títulos de dispositivos, subtítulos y entidades internas.
+  - Subtítulo de contenedor con origen explícito (`Home Assistant` vs `MQTT Auto-Discovery`) para diferenciar dispositivos con el mismo nombre.
+  - Apertura inteligente: al hacer clic en *"Configurar"* desde una búsqueda, el modal preselecciona y resalta automáticamente la entidad que coincidió.
+
 ## [1.3.4] - 2026-08-14
 
 ### Added

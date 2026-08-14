@@ -100,6 +100,11 @@ h2 { margin: 5px 0 7px; font-size: clamp(25px, 3vw, 34px); letter-spacing: -.04e
 .tag-mqtt { color: #5eead4; border: 1px solid rgba(94,234,212,.35); background: rgba(94,234,212,.12); font-weight: 800; }
 .badge-mqtt { display: inline-block; margin-left: 6px; padding: 2px 6px; border-radius: 4px; color: #042f2e; background: #2dd4bf; font-size: 9px; font-weight: 800; text-transform: uppercase; vertical-align: middle; }
 .device-card.needs-attention { border-color: rgba(246,200,102,.28); }
+.search-matches { margin-top: 10px; padding: 6px 9px; border-radius: 8px; background: rgba(124,168,255,.07); border: 1px dashed rgba(124,168,255,.25); font-size: 11px; line-height: 1.4; color: var(--text); }
+.search-matches-label { display: block; font-size: 9px; font-weight: 750; text-transform: uppercase; letter-spacing: .05em; color: #9bb8ff; margin-bottom: 2px; }
+.search-match-item { display: inline-block; margin-right: 6px; font-size: 11px; }
+mark { background: rgba(255,216,77,.28); color: #ffe685; padding: 1px 3px; border-radius: 3px; font-weight: 700; }
+.entity-row.search-hit { background: rgba(255,216,77,.08); border-left: 3px solid var(--amber); }
 .card-footer { display: flex; justify-content: space-between; align-items: center; gap: 9px; margin-top: auto; padding-top: 17px; }
 .entity-summary { color: var(--dim); font-size: 11px; }
 .empty-state { display: grid; grid-column: 1 / -1; min-height: 260px; place-content: center; justify-items: center; gap: 13px; color: var(--muted); font-size: 13px; }
