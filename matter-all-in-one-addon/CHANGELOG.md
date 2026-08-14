@@ -1,3 +1,11 @@
+## [1.3.7] - 2026-08-14
+
+### Fixed
+- **Eliminación del Parpadeo y Recargas en Bucle en la Pantalla de Inicio:**
+  - Sustituida la recarga fija (`window.location.reload()`) cada 2 segundos en la pantalla de Ingress por una comprobación silenciosa en segundo plano (`checkReady`). La tarjeta y animación morada permanecen estables sin parpadear ni recargar la ventana hasta que el backend responde.
+- **Rendimiento y Sincronización de Accesorios en HomeKit:**
+  - Optimización en el proxy y enrutamiento Ingress para responder 503 en endpoints de API durante el inicio temprano sin bloquear solicitudes HTTP.
+
 ## [1.3.6] - 2026-08-14
 
 ### Fixed

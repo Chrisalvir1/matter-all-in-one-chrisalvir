@@ -33,7 +33,8 @@ const server = http.createServer((req, res) => {
 
   // Handle errors (e.g. target server not started yet)
   proxyReq.on('error', () => {
-    if (req.method !== 'GET') {
+    const url = req.url || '';
+    if (req.method !== 'GET' || url.includes('/api/')) {
       res.writeHead(503, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(
         JSON.stringify({
@@ -180,10 +181,18 @@ function getLoadingHtml() {
     }
   </style>
   <script>
-    // Automatic reload check every 2 seconds
-    setTimeout(() => {
-      window.location.reload();
-    }, 2000);
+    // Silent background poll to avoid screen flickering
+    async function checkReady() {
+      try {
+        const res = await fetch('./api/custom/status', { cache: 'no-store' });
+        if (res.ok && res.status === 200) {
+          window.location.reload();
+          return;
+        }
+      } catch (e) {}
+      setTimeout(checkReady, 1000);
+    }
+    setTimeout(checkReady, 1000);
   </script>
 </head>
 <body>
