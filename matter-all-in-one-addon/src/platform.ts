@@ -24,7 +24,6 @@ import { HumidifierEntity } from './entities/humidifier.entity.js';
 import { OvenEntity } from './entities/oven.entity.js';
 import { CooktopEntity } from './entities/cooktop.entity.js';
 import { MediaPlayerEntity } from './entities/media-player.entity.js';
-import { AlarmEntity } from './entities/alarm.entity.js';
 import { CompositeDeviceEntity, CompositeMember } from './entities/composite-device.entity.js';
 import { getDefaultExportProfileId, getExportProfile, getExportProfiles } from './device-profiles.js';
 import { MqttClientManager } from './mqtt/mqtt-client.js';
@@ -922,8 +921,6 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       entityInstance = new LockEntity(this, state, deviceType);
     } else if (domain === 'camera') {
       entityInstance = new CameraEntity(this, state, deviceType);
-    } else if (domain === 'alarm_control_panel') {
-      entityInstance = new AlarmEntity(this, state, deviceType);
     } else if (domain === 'sensor' && deviceClass === 'moisture') {
       entityInstance = new SoilSensorEntity(this, state, deviceType);
     } else if (domain === 'sensor' && deviceClass === 'monetary') {

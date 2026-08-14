@@ -1,3 +1,9 @@
+## [1.3.3] - 2026-08-14
+
+### Removed
+- **Eliminación de soporte para Paneles de Alarma (`alarm_control_panel`):**
+  - Removida la lógica experimental de alarma/seguridad para mantener el enfoque exclusivo en dispositivos físicos y estándares nativos soportados por Matter.
+
 ## [1.3.2] - 2026-08-13
 
 ### Fixed
