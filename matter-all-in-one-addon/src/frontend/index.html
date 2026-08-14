@@ -151,6 +151,16 @@
       <p class="lead compact">Estas acciones afectan a todos los accesorios y al servicio Matterbridge subyacente.</p>
       <div class="settings-actions">
         <div class="settings-row">
+          <div><strong>Configuración MQTT (Auto-Discovery)</strong><p>Habilita la integración de dispositivos MQTT directamente en Matter.</p></div>
+          <div class="mqtt-form" style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
+            <input type="text" id="mqtt-host" placeholder="Broker IP (ej. 192.168.1.50)" aria-label="MQTT Host" class="search" style="padding: 8px; width: 100%;">
+            <input type="number" id="mqtt-port" placeholder="Puerto (ej. 1883)" aria-label="MQTT Port" class="search" style="padding: 8px; width: 100%;">
+            <input type="text" id="mqtt-user" placeholder="Usuario" aria-label="MQTT User" class="search" style="padding: 8px; width: 100%;">
+            <input type="password" id="mqtt-pass" placeholder="Contraseña" aria-label="MQTT Password" class="search" style="padding: 8px; width: 100%;">
+            <button class="button button-primary" id="mqtt-save-button" type="button" style="align-self: flex-start; margin-top: 4px;">Guardar MQTT</button>
+          </div>
+        </div>
+        <div class="settings-row">
           <div><strong>Reiniciar servicio</strong><p>Recarga el servicio y restablece conexiones activas.</p></div>
           <button class="button button-primary" id="restart-button" type="button">Reiniciar</button>
         </div>

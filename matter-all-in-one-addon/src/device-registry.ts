@@ -98,6 +98,7 @@ export const DEVICE_REGISTRY: Record<string, DeviceRegistryEntry> = {
   camera: { matterType: MatterDeviceTypes.camera, homekitSupported: homekitSupported.camera },
   cover: { matterType: MatterDeviceTypes.windowCovering, homekitSupported: homekitSupported.windowCovering },
   climate: { matterType: MatterDeviceTypes.thermostat, homekitSupported: homekitSupported.thermostat },
+  alarm_control_panel: { matterType: MatterDeviceTypes.doorLock, homekitSupported: true },
   lock: { matterType: MatterDeviceTypes.doorLock, homekitSupported: homekitSupported.doorLock },
   light: { matterType: MatterDeviceTypes.dimmableLight, homekitSupported: homekitSupported.dimmableLight },
   switch: { matterType: MatterDeviceTypes.onOffPlugInUnit, homekitSupported: homekitSupported.onOffPlugInUnit },

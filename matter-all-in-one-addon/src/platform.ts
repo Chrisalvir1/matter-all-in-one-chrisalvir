@@ -24,8 +24,11 @@ import { HumidifierEntity } from './entities/humidifier.entity.js';
 import { OvenEntity } from './entities/oven.entity.js';
 import { CooktopEntity } from './entities/cooktop.entity.js';
 import { MediaPlayerEntity } from './entities/media-player.entity.js';
+import { AlarmEntity } from './entities/alarm.entity.js';
 import { CompositeDeviceEntity, CompositeMember } from './entities/composite-device.entity.js';
 import { getDefaultExportProfileId, getExportProfile, getExportProfiles } from './device-profiles.js';
+import { MqttClientManager } from './mqtt/mqtt-client.js';
+import { MqttEntity } from './mqtt/mqtt.entity.js';
 
 export interface HomeAssistantPlatformConfig extends PlatformConfig {
   host?: string; // Optional: auto-detected from network/supervisor if not set
@@ -96,6 +99,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   private readonly compositeMembership = new Map<string, string>();
   public deviceOverrides: Record<string, string> = {};
   public deviceGroupingConfigs: CompositeDeviceConfig[] = [];
+  public mqttManager?: MqttClientManager;
   private uiServer?: http.Server;
   /** Port the UI HTTP server will bind to. Override in tests with 0 to get an OS-assigned port. */
   protected _uiPort = 8285;
@@ -503,8 +507,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     // A composite node is useful when one physical HA device exposes a primary
     // controllable entity plus extra capabilities. This keeps products like
     // fan+light and SwitchBot lock+contact sensor under one QR code.
-    if (!members.some((member) => member.entityId.startsWith('fan.') || member.entityId.startsWith('lock.'))) {
-      this.log.debug(`[Composite] ${entityId}: no fan.* or lock.* member found — not a composite candidate`);
+    // Also, BTHome sensors often group multiple sensors (temp, humidity, battery) 
+    // under a single device_id.
+    const hasPrimaryControllable = members.some((member) => member.entityId.startsWith('fan.') || member.entityId.startsWith('lock.'));
+    const isAllSensors = members.every((member) => member.entityId.startsWith('sensor.') || member.entityId.startsWith('binary_sensor.'));
+    
+    if (!hasPrimaryControllable && !isAllSensors) {
+      this.log.debug(`[Composite] ${entityId}: neither a primary controllable (fan/lock) nor a pure sensor group — not a composite candidate`);
       return undefined;
     }
     if (members.length < 2) {
@@ -649,6 +658,36 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     await this.startUiServer();
     this.startMatterConnectionMonitor();
 
+    // Load MQTT Config if exists
+    try {
+      const mqttConfigRaw = await fs.readFile('/data/mqtt-config.json', 'utf8');
+      const mqttData = JSON.parse(mqttConfigRaw);
+      (this.config as any).mqttHost = mqttData.host;
+      (this.config as any).mqttPort = mqttData.port;
+      (this.config as any).mqttUser = mqttData.user;
+      (this.config as any).mqttPassword = mqttData.password;
+    } catch {
+      // File missing, that's fine
+    }
+
+    if ((this.config as any).mqttHost) {
+      this.mqttManager = new MqttClientManager(this.log, {
+        host: (this.config as any).mqttHost,
+        port: Number((this.config as any).mqttPort) || 1883,
+        user: (this.config as any).mqttUser,
+        password: (this.config as any).mqttPassword,
+      });
+      
+      this.mqttManager.onDeviceDiscovered(async (payload) => {
+        // Here we would map the Auto-Discovery payload to a Matterbridge Endpoint
+        // and register it.
+        // For brevity, we just log it as a proof of concept.
+        this.log.info(`[MQTT] Discovered ${payload.name || 'device'}!`);
+      });
+      
+      this.mqttManager.connect();
+    }
+
     // ── Resolve Home Assistant URL ─────────────────────────────────────────
     // If the user didn’t set config.host we run the network discovery:
     //   1. Probe well-known hostnames (homeassistant.local, supervisor...)
@@ -709,6 +748,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     this.matterConnectionMonitor = undefined;
     this.matterConnectionStates.clear();
     this.haAvailabilityStates.clear();
+    if (this.mqttManager) this.mqttManager.disconnect();
     await this.ha?.close();
   }
 
@@ -882,6 +922,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       entityInstance = new LockEntity(this, state, deviceType);
     } else if (domain === 'camera') {
       entityInstance = new CameraEntity(this, state, deviceType);
+    } else if (domain === 'alarm_control_panel') {
+      entityInstance = new AlarmEntity(this, state, deviceType);
     } else if (domain === 'sensor' && deviceClass === 'moisture') {
       entityInstance = new SoilSensorEntity(this, state, deviceType);
     } else if (domain === 'sensor' && deviceClass === 'monetary') {
@@ -1529,6 +1571,42 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           res.end(JSON.stringify({ success: true }));
           return;
         }
+
+        if (req.method === 'GET' && pathname === '/api/custom/mqtt-config') {
+          res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({
+            host: (this.config as any).mqttHost || '',
+            port: (this.config as any).mqttPort || 1883,
+            user: (this.config as any).mqttUser || '',
+            password: (this.config as any).mqttPassword || ''
+          }));
+          return;
+        }
+
+        if (req.method === 'POST' && pathname === '/api/custom/mqtt-config') {
+          let body = '';
+          req.on('data', chunk => body += chunk.toString());
+          req.on('end', async () => {
+            try {
+              const data = JSON.parse(body);
+              (this.config as any).mqttHost = data.host;
+              (this.config as any).mqttPort = data.port;
+              (this.config as any).mqttUser = data.user;
+              (this.config as any).mqttPassword = data.password;
+              
+              // To persist, we should write to a file or matterbridge config
+              await fs.writeFile('/data/mqtt-config.json', JSON.stringify(data), 'utf8');
+              
+              res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+              res.end(JSON.stringify({ success: true }));
+            } catch (e) {
+              res.writeHead(400);
+              res.end('Bad Request');
+            }
+          });
+          return;
+        }
+
 
         if (req.method === 'GET' && pathname === '/api/custom/status') {
           const version = await this.getPackageVersion();

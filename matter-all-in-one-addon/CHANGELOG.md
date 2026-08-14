@@ -1,3 +1,14 @@
+## [1.3.1] - 2026-08-13
+
+### Added
+- **Soporte Nativo para MQTT (Auto-Discovery):**
+  - Nuevo gestor `MqttClientManager` y entidad `MqttEntity` para descubrir e integrar automáticamente dispositivos MQTT (`homeassistant/+/+/config`) en Matter sin depender del WebSocket de Home Assistant.
+  - Pestaña de configuración de Broker MQTT (Host, Puerto, Usuario, Contraseña) añadida a la interfaz gráfica de usuario (UI frontend) en Ajustes del Servicio.
+- **Soporte para Paneles de Alarma (`alarm_control_panel`):**
+  - Nueva entidad `AlarmEntity` que mapea paneles de seguridad de Home Assistant a endpoints de seguridad tipo `DoorLock` compatibles con Apple Home y Google Home.
+- **Agrupamiento Nativo para Sensores BTHome:**
+  - Optimización en la detección de `CompositeDevice` para agrupar múltiples entidades de sensores (`sensor.*` / `binary_sensor.*`) de un mismo `device_id` (como termómetros BLE BTHome con temperatura, humedad y batería) en un único accesorio Matter combinado.
+
 ## [1.3.0] - 2026-08-10
 
 ### Changed

@@ -568,3 +568,48 @@ void fetchDevices();
 setInterval(() => void fetchStatus(), 8000);
 // Refresh fabrics and commissioning state without requiring a page reload.
 setInterval(() => void fetchDevices(true), 4000);
+
+// MQTT Configuration
+const mqttHostInput = $('mqtt-host');
+const mqttPortInput = $('mqtt-port');
+const mqttUserInput = $('mqtt-user');
+const mqttPassInput = $('mqtt-pass');
+const mqttSaveButton = $('mqtt-save-button');
+
+async function loadMqttConfig() {
+  try {
+    const res = await api('/api/custom/mqtt-config');
+    mqttHostInput.value = res.host || '';
+    mqttPortInput.value = res.port || '';
+    mqttUserInput.value = res.user || '';
+    mqttPassInput.value = res.password || '';
+  } catch (e) {
+    console.error('Failed to load MQTT config', e);
+  }
+}
+
+if (mqttSaveButton) {
+  mqttSaveButton.addEventListener('click', async () => {
+    const data = {
+      host: mqttHostInput.value,
+      port: Number(mqttPortInput.value) || 1883,
+      user: mqttUserInput.value,
+      password: mqttPassInput.value
+    };
+    try {
+      await api('/api/custom/mqtt-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      showToast('Configuración MQTT guardada. Reinicia el servicio para aplicar.');
+    } catch (e) {
+      showToast('Error al guardar configuración MQTT');
+    }
+  });
+}
+
+// Load config when settings modal opens
+els.settingsButton.addEventListener('click', () => {
+  loadMqttConfig();
+});

@@ -1,6 +1,6 @@
 {
   "name": "matter-all-in-one-chrisalvir",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "description": "Standards-based Matter bridge for Home Assistant - HomeKit compatible mappings",
   "author": "chrisalvir",
   "license": "Apache-2.0",
@@ -17,6 +17,7 @@
     "dist"
   ],
   "dependencies": {
+    "mqtt": "^5.15.2",
     "ws": "^8.21.1"
   },
   "peerDependencies": {
@@ -51,8 +52,9 @@
   ],
   "matterbridge": {
     "name": "matter-all-in-one-chrisalvir",
-    "version": "1.3.0",
+    "version": "1.3.1",
     "author": "chrisalvir",
     "description": "Standards-based Matter 1.6 bridge for Home Assistant"
   }
 }
+
