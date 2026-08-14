@@ -1,3 +1,12 @@
+## [1.3.4] - 2026-08-14
+
+### Added
+- **Integración Visual Completa de Dispositivos MQTT en la UI:**
+  - Los dispositivos descubiertos por `MqttClientManager` (`homeassistant/#`) ahora se muestran automáticamente en el panel principal con tarjeta propia, distintivo `📡 MQTT` y metadatos de broker.
+  - Añadido filtro dedicado `MQTT 📡` en la barra de filtros para segmentar rápidamente las entidades MQTT.
+  - Soporte completo para activar, exportar a Matter, emparejar por código QR y controlar dispositivos MQTT directamente desde la interfaz web.
+  - Soporte de tipos de dispositivos MQTT: luces On/Off y regulables, interruptores/enchufes, sensores ambientales (temperatura, humedad, iluminación, presión), sensores binarios (contacto, movimiento) y cerraduras.
+
 ## [1.3.3] - 2026-08-14
 
 ### Removed

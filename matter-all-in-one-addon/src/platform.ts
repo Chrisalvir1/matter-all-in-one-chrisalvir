@@ -99,6 +99,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   public deviceOverrides: Record<string, string> = {};
   public deviceGroupingConfigs: CompositeDeviceConfig[] = [];
   public mqttManager?: MqttClientManager;
+  public mqttEntities = new Map<string, MqttEntity>();
   private uiServer?: http.Server;
   /** Port the UI HTTP server will bind to. Override in tests with 0 to get an OS-assigned port. */
   protected _uiPort = 8285;
@@ -677,11 +678,36 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         password: (this.config as any).mqttPassword,
       });
       
-      this.mqttManager.onDeviceDiscovered(async (payload) => {
-        // Here we would map the Auto-Discovery payload to a Matterbridge Endpoint
-        // and register it.
-        // For brevity, we just log it as a proof of concept.
-        this.log.info(`[MQTT] Discovered ${payload.name || 'device'}!`);
+      this.mqttManager.onDeviceDiscovered(async (entry) => {
+        const entity = new MqttEntity(this, this.mqttManager!, entry);
+        this.mqttEntities.set(entity.entityId, entity);
+        this.log.info(`[MQTT] Discovered ${entity.domain}: "${entity.friendlyName}" (${entity.entityId})`);
+        
+        if (this.isEntityExported(entity.entityId)) {
+          try {
+            await this.activateMqttEntity(entity.entityId);
+          } catch (err) {
+            this.log.error(`[MQTT] Failed to activate exported MQTT device ${entity.entityId}: ${err}`);
+          }
+        }
+      });
+
+      this.mqttManager.onDeviceRemoved((topic) => {
+        for (const [entityId, entity] of this.mqttEntities.entries()) {
+          if (entity.stateTopic === topic || entity.entityId.includes(topic.split('/').pop() || '')) {
+            this.mqttEntities.delete(entityId);
+            this.log.info(`[MQTT] Removed entity ${entityId}`);
+            break;
+          }
+        }
+      });
+
+      this.mqttManager.onStateChanged((topic, payload) => {
+        for (const entity of this.mqttEntities.values()) {
+          if (entity.stateTopic === topic) {
+            entity.handleStateUpdate(payload);
+          }
+        }
       });
       
       this.mqttManager.connect();
@@ -1108,10 +1134,56 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     }
   }
 
+  /** Create an MQTT bridged endpoint and let Matterbridge own its lifecycle. */
+  public async activateMqttEntity(entityId: string): Promise<void> {
+    if (this.matterbridgeDevices.has(entityId)) return;
+    const entity = this.mqttEntities.get(entityId);
+    if (!entity) throw new Error(`MQTT Entity ${entityId} was not discovered.`);
+
+    try {
+      const endpoint = await entity.createEndpoint();
+      const existingEndpoint = endpoint.uniqueId ? this.getDeviceByUniqueId(endpoint.uniqueId) : endpoint.deviceName ? this.getDeviceByName(endpoint.deviceName) : undefined;
+      if (existingEndpoint?.serverNode) {
+        entity.adoptEndpoint(existingEndpoint);
+        this.matterbridgeDevices.set(entityId, existingEndpoint);
+        await entity.syncInitialState();
+        this.log.notice(`Reused existing Matter endpoint ${idn}${entityId}${rs}; it remains paired.`);
+        return;
+      }
+      await this.registerDevice(endpoint);
+      const serverNode = (endpoint as any).serverNode;
+      if (!serverNode) {
+        throw new Error(`Matter server node was not created for ${entityId}.`);
+      }
+      if (!serverNode.lifecycle?.isOnline) {
+        await serverNode.start();
+      }
+      this.matterbridgeDevices.set(entityId, endpoint);
+      await entity.syncInitialState();
+      this.log.notice(`Exported bridged MQTT endpoint ${idn}${entityId}${rs}`);
+    } catch (err) {
+      this.log.error(`Failed to activate MQTT entity ${entityId}: ${err}`);
+      throw err;
+    }
+  }
+
   /**
    * Manually export an entity as an Accessory and save to config.
    */
   public async manualRegister(entityId: string): Promise<{ success: boolean; error?: string }> {
+    if (entityId.startsWith('mqtt.')) {
+      try {
+        this.exportedDevices.add(entityId);
+        await this.activateMqttEntity(entityId);
+        await this.saveExportedDevices();
+        this.log.notice(`Manually exported bridged MQTT endpoint for ${entityId}`);
+        return { success: true };
+      } catch (err) {
+        this.exportedDevices.delete(entityId);
+        this.log.error(`Failed to manually register MQTT entity ${entityId}: ${err}`);
+        return { success: false, error: String(err) };
+      }
+    }
     if (!this.entities.has(entityId)) {
       return { success: false, error: 'Device not found in discovery.' };
     }
@@ -1162,6 +1234,22 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
    */
   public async manualUnregister(entityId: string): Promise<{ success: boolean; error?: string }> {
     try {
+      if (entityId.startsWith('mqtt.')) {
+        this.exportedDevices.delete(entityId);
+        const endpoint = this.matterbridgeDevices.get(entityId);
+        if (endpoint) {
+          const serverNode = (endpoint as any).serverNode;
+          if (serverNode?.lifecycle?.isOnline) {
+            await serverNode.close();
+          }
+          await this.unregisterDevice(endpoint);
+          this.matterbridgeDevices.delete(entityId);
+        }
+        await this.saveExportedDevices();
+        this.log.notice(`Manually unregistered MQTT endpoint ${entityId}`);
+        return { success: true };
+      }
+
       const compositeDeviceId = this.compositeMembership.get(entityId) ?? this.getCompositeCandidate(entityId)?.deviceId;
       if (compositeDeviceId) {
         const key = this.compositeStorageKey(compositeDeviceId);
@@ -1698,10 +1786,51 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               logs: this.isEntityExported(e.entityId) ? this.getEntityErrorLogs(e.entityId, endpoint, allErrorLogs) : [],
             };
           });
+          const mqttResults = Array.from(this.mqttEntities.values()).map((m) => {
+            const endpoint = this.matterbridgeDevices.get(m.entityId);
+            const connection = this.getMatterConnectionInfo(endpoint);
+            return {
+              entityId: m.entityId,
+              domain: m.domain,
+              state: m.getStateString(),
+              origin: 'mqtt',
+              attributes: { friendly_name: m.friendlyName, ...m.attributes },
+              deviceTypeLabel: 'MQTT ' + (m.domain.charAt(0).toUpperCase() + m.domain.slice(1)),
+              matterType: m.deviceType.name,
+              device_id: m.deviceId,
+              device_name: m.deviceName,
+              area_id: null,
+              area_name: m.areaName,
+              manufacturer: m.manufacturer,
+              model: m.model,
+              entity_registry_id: null,
+              platform: 'mqtt',
+              exported: this.isEntityExported(m.entityId),
+              composite: false,
+              compositeActive: false,
+              compositeDeviceId: null,
+              compositePrimaryEntityId: null,
+              auxiliary: false,
+              primaryEntityId: null,
+              profileId: null,
+              profiles: [],
+              pairingCode: connection.pairingCode,
+              manualPairingCode: connection.manualPairingCode,
+              commissioned: connection.commissioned,
+              homeName: connection.homeName,
+              controllerNames: connection.controllerNames,
+              fabricCount: connection.fabricCount,
+              matterFabrics: connection.fabrics,
+              hasIssue: false,
+              diagnostics: [],
+              logs: [],
+            };
+          });
+
           res.writeHead(200, {
             'Content-Type': 'application/json; charset=utf-8',
           });
-          res.end(JSON.stringify(result));
+          res.end(JSON.stringify([...result, ...mqttResults]));
           return;
         }
 

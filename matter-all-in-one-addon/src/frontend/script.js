@@ -8,7 +8,7 @@ const els = {
   haDot: $('ha-dot'), haStatus: $('ha-status'), version: $('version'), deviceSearch: $('device-search'),
   deviceCount: $('device-count'), deviceList: $('device-list'), refreshButton: $('refresh-button'),
   overviewMessage: $('overview-message'), statDevices: $('stat-devices'), statExported: $('stat-exported'), statPaired: $('stat-paired'),
-  pendingCount: $('pending-count'), issueCount: $('issue-count'), diagnosticsPanel: $('diagnostics-panel'), diagnosticsSummary: $('diagnostics-summary'), diagnosticsList: $('diagnostics-list'),
+  pendingCount: $('pending-count'), mqttCount: $('mqtt-count'), issueCount: $('issue-count'), diagnosticsPanel: $('diagnostics-panel'), diagnosticsSummary: $('diagnostics-summary'), diagnosticsList: $('diagnostics-list'),
   deviceModal: $('device-modal'), deviceModalClose: $('device-modal-close'), deviceModalIcon: $('device-modal-icon'),
   deviceModalName: $('device-modal-name'), deviceModalId: $('device-modal-id'), entityList: $('entity-list'),
   modalExportCount: $('modal-export-count'), selectionPanel: $('selection-panel'), selectionTitle: $('selection-title'),
@@ -114,10 +114,12 @@ function renderDevices() {
   const pendingNodes = new Set(state.entities.filter((entity) => entity.exported && !entity.commissioned).map(matterNodeKey)).size;
   const allDevices = groupEntities(state.entities);
   const issues = allDevices.filter((device) => device.entities.some((entity) => entity.exported && entity.hasIssue)).length;
+  const mqttDevicesCount = allDevices.filter((device) => device.entities.some((entity) => entity.origin === 'mqtt' || entity.entityId.startsWith('mqtt.'))).length;
   els.statDevices.textContent = String(allDevices.length);
   els.statExported.textContent = String(exportedNodes);
   els.statPaired.textContent = String(pairedNodes);
   els.pendingCount.textContent = String(pendingNodes);
+  if (els.mqttCount) els.mqttCount.textContent = String(mqttDevicesCount);
   els.issueCount.textContent = String(issues);
   els.overviewMessage.textContent = exportedNodes
     ? `${exportedNodes} accesorio${exportedNodes === 1 ? '' : 's'} listo${exportedNodes === 1 ? '' : 's'} para Matter`
@@ -138,6 +140,7 @@ function isDevicePaired(device) {
 function matchesDeviceFilter(device) {
   const exported = device.entities.some((entity) => entity.exported);
   if (state.activeFilter === 'active') return exported;
+  if (state.activeFilter === 'mqtt') return device.entities.some((entity) => entity.origin === 'mqtt' || entity.entityId.startsWith('mqtt.'));
   // A device is pending pairing if it has any exported entity not yet commissioned
   if (state.activeFilter === 'pending') return device.entities.some((entity) => entity.exported && !entity.commissioned);
   if (state.activeFilter === 'unpublished') return !exported && device.entities.some((entity) => !entity.auxiliary);
@@ -150,8 +153,9 @@ function buildDeviceCard(device) {
   const domains = [...new Set(device.entities.map((entity) => entity.domain))].sort((a, b) => PRIORITY.indexOf(a) - PRIORITY.indexOf(b));
   const element = document.createElement('article');
   const hasIssue = device.entities.some((entity) => entity.exported && entity.hasIssue);
+  const isMqtt = device.entities.some((entity) => entity.origin === 'mqtt' || entity.entityId.startsWith('mqtt.'));
   element.className = `device-card${hasIssue ? ' needs-attention' : ''}`;
-  element.innerHTML = `<div class="card-top"><span class="device-icon">${icon(domains[0])}</span><span class="export-badge ${exported ? 'active' : ''}">${exported}/${device.entities.length}</span></div><h3 title="${escapeHtml(device.name)}">${escapeHtml(device.name)}</h3><p class="device-meta">${escapeHtml(device.area || device.manufacturer || 'Sin área asignada')}</p><div class="tags">${hasIssue ? '<span class="tag tag-warning">Revisar</span>' : ''}${domains.slice(0, 3).map((domain) => `<span class="tag">${escapeHtml(domain)}</span>`).join('')}</div><div class="card-footer"><span class="entity-summary">${device.entities.length} entidad${device.entities.length === 1 ? '' : 'es'}</span><button class="button button-secondary" type="button">Configurar</button></div>`;
+  element.innerHTML = `<div class="card-top"><span class="device-icon">${icon(domains[0])}</span><span class="export-badge ${exported ? 'active' : ''}">${exported}/${device.entities.length}</span></div><h3 title="${escapeHtml(device.name)}">${escapeHtml(device.name)}</h3><p class="device-meta">${escapeHtml(device.area || device.manufacturer || (isMqtt ? 'MQTT Auto-Discovery' : 'Sin área asignada'))}</p><div class="tags">${isMqtt ? '<span class="tag tag-mqtt">📡 MQTT</span>' : ''}${hasIssue ? '<span class="tag tag-warning">Revisar</span>' : ''}${domains.slice(0, 3).map((domain) => `<span class="tag">${escapeHtml(domain)}</span>`).join('')}</div><div class="card-footer"><span class="entity-summary">${device.entities.length} entidad${device.entities.length === 1 ? '' : 'es'}</span><button class="button button-secondary" type="button">Configurar</button></div>`;
   element.querySelector('button').addEventListener('click', () => openDevice(device));
   return element;
 }
@@ -205,10 +209,11 @@ function buildEntityRow(entity) {
   element.className = `entity-row${entity.exported ? '' : ' dimmed'}`;
   element.dataset.entityId = entity.entityId;
   const compositeChild = entity.composite && entity.entityId !== entity.compositePrimaryEntityId;
+  const isMqtt = entity.origin === 'mqtt' || entity.entityId.startsWith('mqtt.');
   const control = entity.auxiliary || compositeChild
     ? '<span class="export-control">Integrada</span>'
     : `<label class="export-control" title="Publicar dispositivo en Matter"><span>${entity.exported ? 'Activo' : 'Inactivo'}</span><span class="toggle"><input type="checkbox" ${entity.exported ? 'checked' : ''} aria-label="Exportar ${escapeHtml(displayName(entity))}"><span></span></span></label>`;
-  element.innerHTML = `<span class="entity-row-icon">${icon(entity.domain)}</span><div><div class="entity-row-name">${escapeHtml(displayName(entity))}</div><div class="entity-row-id">${escapeHtml(entity.entityId)}</div><span class="entity-state ${isOn(entity.state) ? 'on' : ''}">${escapeHtml(stateLabel(entity.state))}</span></div>${control}`;
+  element.innerHTML = `<span class="entity-row-icon">${icon(entity.domain)}</span><div><div class="entity-row-name">${escapeHtml(displayName(entity))}${isMqtt ? ' <span class="badge-mqtt">MQTT</span>' : ''}</div><div class="entity-row-id">${escapeHtml(entity.entityId)}</div><span class="entity-state ${isOn(entity.state) ? 'on' : ''}">${escapeHtml(stateLabel(entity.state))}</span></div>${control}`;
   const checkbox = element.querySelector('input');
   if (checkbox) {
     checkbox.addEventListener('click', (event) => event.stopPropagation());
@@ -346,7 +351,11 @@ function selectEntity(entity) {
   const connectionMeta = entity.exported && entity.commissioned
     ? `<div><dt>Controladores</dt><dd title="${escapeHtml(controllerSummary)}">${escapeHtml(controllerSummary || 'Controlador Matter sin VID reportado')}</dd></div><div><dt>Fabrics</dt><dd>${escapeHtml(entity.fabricCount || 1)}</dd></div>${fabricMeta}`
     : '';
-  els.selectionMeta.innerHTML = `<div><dt>Entidad</dt><dd>${escapeHtml(entity.entityId)}</dd></div><div><dt>Tipo Matter</dt><dd>${escapeHtml(entity.matterType || 'Predeterminado')}</dd></div><div><dt>Estado HA</dt><dd>${escapeHtml(stateLabel(entity.state))}</dd></div>${connectionMeta}`;
+  const isMqtt = entity.origin === 'mqtt' || entity.entityId.startsWith('mqtt.');
+  const mqttMeta = isMqtt
+    ? `<div><dt>Origen</dt><dd><span class="badge-mqtt">MQTT Auto-Discovery</span></dd></div>${entity.attributes?.state_topic ? `<div><dt>Tópico Estado</dt><dd title="${escapeHtml(entity.attributes.state_topic)}">${escapeHtml(entity.attributes.state_topic)}</dd></div>` : ''}${entity.attributes?.command_topic ? `<div><dt>Tópico Comando</dt><dd title="${escapeHtml(entity.attributes.command_topic)}">${escapeHtml(entity.attributes.command_topic)}</dd></div>` : ''}`
+    : `<div><dt>Estado HA</dt><dd>${escapeHtml(stateLabel(entity.state))}</dd></div>`;
+  els.selectionMeta.innerHTML = `<div><dt>Entidad</dt><dd>${escapeHtml(entity.entityId)}</dd></div><div><dt>Tipo Matter</dt><dd>${escapeHtml(entity.matterType || 'Predeterminado')}</dd></div>${mqttMeta}${connectionMeta}`;
 
   els.selectionStatus.className = `selection-status${entity.exported ? ' active' : ''}${entity.commissioned ? ' commissioned' : ''}`;
   els.selectionStatus.textContent = entity.auxiliary
