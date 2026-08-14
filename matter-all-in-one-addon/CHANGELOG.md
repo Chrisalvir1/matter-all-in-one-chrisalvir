@@ -1,3 +1,10 @@
+## [1.3.8] - 2026-08-14
+
+### Fixed
+- **Solución al error "UNABLE TO ADD ACCESSORY" en Apple HomeKit (MQTT):**
+  - Incorporados todos los clusters obligatorios de medición para sensores ambientales (temperatura, humedad, iluminación, presión) y sensores binarios (contacto, ocupación) en `MqttEntity`.
+  - Añadida versión de software y firmware en el cluster BasicInformation de Matter para cumplir estrictamente con los requisitos de validación de Apple Home.
+
 ## [1.3.7] - 2026-08-14
 
 ### Fixed

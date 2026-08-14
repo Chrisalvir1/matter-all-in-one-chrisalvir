@@ -148,8 +148,9 @@ export class MqttEntity {
     this.endpoint.vendorId = 0xfff1;
     this.endpoint.vendorName = this.manufacturer.substring(0, 32);
     this.endpoint.productId = 0x8000;
-    this.endpoint.productName = this.model.substring(0, 32);
-    
+    this.endpoint.softwareVersion = 1;
+    this.endpoint.softwareVersionString = 'Matterbridge 1.3.7';
+
     this.endpoint.createDefaultBasicInformationClusterServer(
       rawName,
       this.endpoint.serialNumber,
@@ -210,6 +211,22 @@ export class MqttEntity {
           this.handleStateUpdate(payload);
         }
       });
+    } else if (this.domain === 'sensor') {
+      if (this.deviceType === temperatureSensor) {
+        this.endpoint.createDefaultTemperatureMeasurementClusterServer(2000);
+      } else if (this.deviceType === humiditySensor) {
+        this.endpoint.createDefaultRelativeHumidityMeasurementClusterServer(5000);
+      } else if (this.deviceType === lightSensor) {
+        this.endpoint.createDefaultIlluminanceMeasurementClusterServer(100);
+      } else if (this.deviceType === pressureSensor) {
+        this.endpoint.createDefaultPressureMeasurementClusterServer(1013);
+      }
+    } else if (this.domain === 'binary_sensor') {
+      if (this.deviceType === contactSensor) {
+        this.endpoint.createDefaultBooleanStateClusterServer(true);
+      } else if (this.deviceType === occupancySensor) {
+        this.endpoint.createDefaultOccupancySensingClusterServer(false);
+      }
     }
 
     this.endpoint.addRequiredClusterServers();
