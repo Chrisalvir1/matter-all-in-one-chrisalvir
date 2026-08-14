@@ -578,11 +578,13 @@ const mqttSaveButton = $('mqtt-save-button');
 
 async function loadMqttConfig() {
   try {
-    const res = await api('/api/custom/mqtt-config');
-    mqttHostInput.value = res.host || '';
-    mqttPortInput.value = res.port || '';
-    mqttUserInput.value = res.user || '';
-    mqttPassInput.value = res.password || '';
+    const res = await request('/mqtt-config');
+    if (res) {
+      if (mqttHostInput) mqttHostInput.value = res.host || '';
+      if (mqttPortInput) mqttPortInput.value = res.port || '';
+      if (mqttUserInput) mqttUserInput.value = res.user || '';
+      if (mqttPassInput) mqttPassInput.value = res.password || '';
+    }
   } catch (e) {
     console.error('Failed to load MQTT config', e);
   }
@@ -591,25 +593,26 @@ async function loadMqttConfig() {
 if (mqttSaveButton) {
   mqttSaveButton.addEventListener('click', async () => {
     const data = {
-      host: mqttHostInput.value,
-      port: Number(mqttPortInput.value) || 1883,
-      user: mqttUserInput.value,
-      password: mqttPassInput.value
+      host: mqttHostInput?.value || '',
+      port: Number(mqttPortInput?.value) || 1883,
+      user: mqttUserInput?.value || '',
+      password: mqttPassInput?.value || ''
     };
     try {
-      await api('/api/custom/mqtt-config', {
+      await request('/mqtt-config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
       });
       showToast('Configuración MQTT guardada. Reinicia el servicio para aplicar.');
     } catch (e) {
-      showToast('Error al guardar configuración MQTT');
+      showToast('Error al guardar configuración MQTT: ' + (e.message || e), true);
     }
   });
 }
 
 // Load config when settings modal opens
-els.settingsButton.addEventListener('click', () => {
-  loadMqttConfig();
+els.settingsButton?.addEventListener('click', () => {
+  void loadMqttConfig();
 });
+
