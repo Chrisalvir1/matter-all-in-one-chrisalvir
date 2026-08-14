@@ -1,3 +1,9 @@
+## [1.3.2] - 2026-08-13
+
+### Fixed
+- **Corrección de API en Interfaz de Usuario (UI):**
+  - Corregida la llamada al endpoint de configuración MQTT en `script.js` para utilizar la función auxiliar `request()` en lugar de `api()`, solucionando el error al guardar parámetros de conexión del broker MQTT.
+
 ## [1.3.1] - 2026-08-13
 
 ### Added
