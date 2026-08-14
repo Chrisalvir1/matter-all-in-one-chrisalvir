@@ -1224,8 +1224,8 @@ export class HomeAssistant extends EventEmitter {
   constructor(
     url: string,
     accessToken: string = '', // empty string = trust-local / supervisor mode
-    reconnectTimeoutTime: number = 60,
-    reconnectRetries: number = 10,
+    reconnectTimeoutTime: number = 3,
+    reconnectRetries: number = 0, // 0 = infinite retries on HA restart
     certificatePath: string | undefined = undefined,
     rejectUnauthorized: boolean | undefined = false, // allow self-signed certs on LAN
     connectionTimeoutTime: number = 15,
@@ -1717,7 +1717,7 @@ export class HomeAssistant extends EventEmitter {
       return;
     }
     if (this.reconnectTimeoutTime && (this.reconnectRetries === 0 || this.reconnectRetry <= this.reconnectRetries)) {
-      const delay = Math.min(this.reconnectTimeoutTime * 2 ** (this.reconnectRetry - 1), 60000);
+      const delay = Math.min(this.reconnectTimeoutTime * 2 ** (this.reconnectRetry - 1), 30000);
       this.log.notice(`Reconnecting in ${delay / 1000} seconds...`);
       this.reconnectTimeout = setTimeout(() => {
         const attempt = this.reconnectRetry;

@@ -1,3 +1,15 @@
+## [1.3.6] - 2026-08-14
+
+### Fixed
+- **Emparejamiento Instantáneo de Dispositivos MQTT en Apple Home:**
+  - Añadida la invocación obligatoria de `addRequiredClusterServers()` y soporte del cluster `LevelControl` en `MqttEntity`. Resuelve el problema donde Apple Home / HomeKit se quedaba indefinidamente en *"Conectando..."*.
+- **Arranque Ultra Rápido de Accesorios Emparejados:**
+  - Paralelización por lotes concurrentes en `restoreExportedDevices()`. Reduce el tiempo de recuperación de los accesorios emparejados de ~40 segundos a ~3-5 segundos tras reiniciar.
+- **Reconexión Infinita y Rápida con Home Assistant:**
+  - Configurado reintento infinito automático (`reconnectRetries = 0`) con intervalo inicial rápido de 3 segundos en `homeAssistant.ts`. Garantiza que tras un reinicio o actualización de HA, el puente reconecte de forma inmediata sin quedarse nunca inservible.
+- **Eliminación del Parpadeo en la UI:**
+  - Prevención de redibujados destructivos en `fetchDevices()`. Si ya hay tarjetas cargadas durante un reinicio del servicio, se mantienen en pantalla de forma estable sin parpadear.
+
 ## [1.3.5] - 2026-08-14
 
 ### Added

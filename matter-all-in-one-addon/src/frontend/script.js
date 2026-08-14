@@ -207,8 +207,10 @@ async function fetchDevices(refreshSelection = false) {
     }
   } catch {
     els.deviceList.setAttribute('aria-busy', 'false');
-    els.deviceList.innerHTML = '<div class="empty-state"><p>No se pudieron cargar las entidades. Verifica la conexión con Home Assistant.</p><button class="button button-secondary" type="button" id="retry-load">Reintentar</button></div>';
-    $('retry-load').addEventListener('click', fetchDevices);
+    if (!state.entities || state.entities.length === 0) {
+      els.deviceList.innerHTML = '<div class="empty-state"><span class="spinner"></span><p>Conectando con el servicio…</p><button class="button button-secondary" type="button" id="retry-load">Reintentar</button></div>';
+      $('retry-load')?.addEventListener('click', () => void fetchDevices());
+    }
   } finally { state.devicesBusy = false; }
 }
 

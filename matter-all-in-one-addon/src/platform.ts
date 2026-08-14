@@ -976,60 +976,61 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     // to find or export from the UI. Matter uses a safe inactive initial value
     // and later state_changed events replace it when HA reports a real state.
     this.observeHomeAssistantAvailability(entityId, state);
-    if (!this.isEntityExported(entityId) || this.groupingEnabled || this.getCompositeConfig(this.ha.hassEntities.get(entityId)?.device_id ?? '')?.group_by_device_id === true) {
-      this.log.debug(`Entity ${entityId} is discovered but not exported. Endpoint creation deferred.`);
-      return;
-    }
-
-    try {
-      await this.activateEntity(entityId);
-    } catch (err) {
-      this.log.error(`Failed to automatically activate entity ${entityId} during discovery: ${err}`);
-    }
   }
 
-  /** Restore persisted legacy entities and grouped physical devices after discovery. */
+  /** Restore persisted legacy entities and grouped physical devices after discovery in parallel batches. */
   private async restoreExportedDevices(): Promise<void> {
     let migratedLegacyEntries = false;
-    for (const exportedId of Array.from(this.exportedDevices)) {
-      try {
-        if (exportedId.startsWith('device:')) {
-          const deviceId = exportedId.substring('device:'.length);
-          const entityId = Array.from(this.entities.keys()).find((id) => this.ha.hassEntities.get(id)?.device_id === deviceId);
-          if (entityId) {
-            try {
-              await this.activateComposite(entityId);
-            } catch (error) {
-              if (!this.isCompositeNodeCreationFailure(error)) throw error;
-              await this.restoreCompositeAsPrimary(entityId, deviceId);
-              migratedLegacyEntries = true;
-            }
-          }
-          continue;
-        }
-        if (!this.entities.has(exportedId)) continue;
-        const composite = this.getCompositeCandidate(exportedId);
-        if (composite) {
-          // Versions prior to grouping persisted every entity separately. Fold
-          // that legacy selection into one physical-device key on first start.
-          // Do that only after the composite node actually exists; otherwise a
-          // failed migration would hide an already commissioned legacy node.
+    const entries = Array.from(this.exportedDevices);
+
+    // Process in parallel batches of 6 to avoid serverNode startup bottlenecks while speeding up launch dramatically
+    const batchSize = 6;
+    for (let i = 0; i < entries.length; i += batchSize) {
+      const batch = entries.slice(i, i + batchSize);
+      await Promise.all(
+        batch.map(async (exportedId) => {
           try {
-            await this.activateComposite(exportedId);
-            this.exportedDevices.add(this.compositeStorageKey(composite.deviceId));
-            composite.members.forEach((member) => this.exportedDevices.delete(member.entityId));
-            migratedLegacyEntries = true;
-          } catch (error) {
-            if (!this.isCompositeNodeCreationFailure(error)) throw error;
-            await this.restoreCompositeAsPrimary(exportedId, composite.deviceId);
-            migratedLegacyEntries = true;
+            if (exportedId.startsWith('device:')) {
+              const deviceId = exportedId.substring('device:'.length);
+              const entityId = Array.from(this.entities.keys()).find((id) => this.ha.hassEntities.get(id)?.device_id === deviceId);
+              if (entityId) {
+                try {
+                  await this.activateComposite(entityId);
+                } catch (error) {
+                  if (!this.isCompositeNodeCreationFailure(error)) throw error;
+                  await this.restoreCompositeAsPrimary(entityId, deviceId);
+                  migratedLegacyEntries = true;
+                }
+              }
+              return;
+            }
+            if (exportedId.startsWith('mqtt.')) {
+              if (this.mqttEntities.has(exportedId)) {
+                await this.activateMqttEntity(exportedId);
+              }
+              return;
+            }
+            if (!this.entities.has(exportedId)) return;
+            const composite = this.getCompositeCandidate(exportedId);
+            if (composite) {
+              try {
+                await this.activateComposite(exportedId);
+                this.exportedDevices.add(this.compositeStorageKey(composite.deviceId));
+                composite.members.forEach((member) => this.exportedDevices.delete(member.entityId));
+                migratedLegacyEntries = true;
+              } catch (error) {
+                if (!this.isCompositeNodeCreationFailure(error)) throw error;
+                await this.restoreCompositeAsPrimary(exportedId, composite.deviceId);
+                migratedLegacyEntries = true;
+              }
+            } else {
+              await this.activateEntity(exportedId);
+            }
+          } catch (err) {
+            this.log.error(`Failed to restore exported device ${exportedId}: ${err}`);
           }
-        } else {
-          await this.activateEntity(exportedId);
-        }
-      } catch (err) {
-        this.log.error(`Failed to restore exported device ${exportedId}: ${err}`);
-      }
+        }),
+      );
     }
     if (migratedLegacyEntries) await this.saveExportedDevices();
   }

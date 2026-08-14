@@ -182,6 +182,7 @@ export class MqttEntity {
       });
       
       if (this.config.brightness_command_topic && this.deviceType === dimmableLight) {
+        this.endpoint.addClusterServers([LevelControl.id]);
         this.endpoint.addCommandHandler('moveToLevel', async (data: any) => {
           const level = data?.request?.level ?? data?.level;
           if (typeof level === 'number') {
@@ -210,6 +211,8 @@ export class MqttEntity {
         }
       });
     }
+
+    this.endpoint.addRequiredClusterServers();
 
     return this.endpoint;
   }
