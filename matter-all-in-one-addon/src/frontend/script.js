@@ -306,12 +306,15 @@ function renderQrSection(entity) {
       els.fabricsSection.hidden = false;
       els.fabricsList.innerHTML = matterFabrics.map((fabric) => {
         const vendor = fabric.controller || 'Controlador Matter';
-        const label = fabric.label ? ` · ${escapeHtml(fabric.label)}` : '';
+        const house = fabric.label || entity.homeName || 'Casa Principal';
         const idx = fabric.fabricIndex || fabric.fabricId || '1';
         const icon = getControllerIcon(vendor);
         return `<div class="fabric-item">
           <div class="fabric-info">
-            <strong class="fabric-name">${icon} ${escapeHtml(vendor)}${label}</strong>
+            <div class="fabric-controller-line">
+              <strong class="fabric-name">${icon} ${escapeHtml(vendor)}</strong>
+            </div>
+            <div class="fabric-home-name">🏠 Casa: <strong>${escapeHtml(house)}</strong></div>
             <span class="fabric-detail">Fabric ID: ${escapeHtml(fabric.fabricId || idx)}</span>
           </div>
           <button class="fabric-disconnect-btn" type="button" data-fabric-index="${escapeHtml(idx)}" data-controller="${escapeHtml(vendor)}" title="Desconectar este accesorio de ${escapeHtml(vendor)}">Desconectar</button>
