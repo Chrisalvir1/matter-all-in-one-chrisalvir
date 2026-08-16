@@ -27,7 +27,9 @@ describe('frontend accessibility contract', () => {
     expect(script).toContain('/refresh-accessory/');
     expect(script).toContain('Sin errores registrados para este accesorio.');
     expect(script).toContain('entity.logs');
-    expect(html).toContain('Diagnóstico y logs de esta entidad');
+    expect(html).toContain('id="fabrics-section"');
+    expect(script).toContain('/remove-fabric/');
+    expect(script).toContain('Desconectar de');
     expect(script).toContain('entity.compositeDeviceId ? `matter:${entity.compositeDeviceId}`');
     expect(script).toContain('function matchesDeviceFilter(device)');
     expect(script).toContain('!entity.commissioned');

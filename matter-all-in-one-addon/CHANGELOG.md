@@ -8,18 +8,21 @@
   - Actualizaciones optimistas locales para una respuesta inmediata sin latencia ni rebotes en Apple Home.
 - **Control Confiable de Luz y Temperatura de Color (Kelvin / Mireds):**
   - Corrección en `buildColorPayload` para garantizar el envío simultáneo de `color_temp_kelvin` y `color_temp`, eliminando cargas útiles vacías en luces de ventiladores.
-- **Eliminación de Colisiones y Congelamiento en Dispositivos BLE:**
-  - Implementada cola FIFO secuencial por `device_id` en `homeAssistant.ts` para serializar comandos hacia el mismo adaptador/dispositivo Bluetooth (`BleakDBusError: InProgress`).
+- **Eliminación de Congelamientos y Colisiones BLE (Bluetooth):**
+  - Cola FIFO secuencial por `device_id` en `homeAssistant.ts` para serializar comandos hacia el mismo adaptador/dispositivo Bluetooth (`BleakDBusError: InProgress`).
   - Timeout dedicado de llamadas a servicios ampliado a 25 segundos para evitar desconexiones prematuras de BLE.
   - Captura y registro seguro de excepciones en todos los manejadores de comandos.
-- **Generación y Visualización Instantánea de Códigos QR y de Emparejamiento:**
-  - Retorno directo de `pairingCode` y `manualPairingCode` en la respuesta de `/reset-accessory`.
-  - Sondeo adaptativo rápido cada 300 ms en el frontend mientras se generan los registros mDNS.
-  - Eliminadas funciones duplicadas de sondeo en `script.js`.
-- **Mejoras Integrales en la Interfaz de Usuario (UI):**
-  - Tarjetas de dispositivo completamente cliqueables con cursor pointer.
-  - Integración de estilos limpios para el formulario MQTT y botón de reinicio rápido en el diseño Liquid Glass.
-  - Cierre jerárquico y limpio de modales con la tecla `Escape`.
+- **Gestión Multi-Ecosistema de Casas y Controladores Conectados:**
+  - Nueva sección en la UI que lista de forma individual cada casa/controlador conectado (Apple Home, Google Home, Alexa) con su botón directo **"Desconectar"**.
+  - Detección en tiempo real de retirada de fabric (`RemoveFabric`): cuando eliminas el accesorio de Apple Home, la UI reconoce inmediatamente que quedó desemparejado y muestra el código QR sin retener estados zombis.
+- **Claridad Total en Botones de Acción de Matter:**
+  - Rediseño de acciones eliminando botones redundantes:
+    - **`↻ Recargar / Sincronizar`**: Refresca mDNS y sincroniza estados con Home Assistant sin perder emparejamientos.
+    - **`Desconectar todo y nuevo QR`**: Desvincula de todas las casas y genera nuevas credenciales Matter.
+    - **`Añadir a otra casa (Ver QR)`**: Despliega el código QR para multi-admin (vincular a Google/Alexa sin desvincular de Apple).
+- **Diagnósticos y Logs en Tiempo Real en Verde:**
+  - Los logs informativos y estados recuperados ahora se muestran con etiqueta y color verde `[OK]`.
+  - Eliminado el problema donde `entityProblems` mantenía permanentemente el estado "Necesitan atención" en dispositivos que ya estaban funcionando correctamente.
 - **Actualización de Entorno y Herramientas:**
   - Actualizado a **Vitest `v5.0.0-rc.1`** con `vite ^8.2.1` y soporte TypeScript 7 / Node 24 LTS.
 

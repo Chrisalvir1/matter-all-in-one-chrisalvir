@@ -8,7 +8,10 @@ const els = {
   haDot: $('ha-dot'), haStatus: $('ha-status'), version: $('version'), deviceSearch: $('device-search'),
   deviceCount: $('device-count'), deviceList: $('device-list'), refreshButton: $('refresh-button'),
   overviewMessage: $('overview-message'), statDevices: $('stat-devices'), statExported: $('stat-exported'), statPaired: $('stat-paired'),
-  pendingCount: $('pending-count'), mqttCount: $('mqtt-count'), issueCount: $('issue-count'), diagnosticsPanel: $('diagnostics-panel'), diagnosticsSummary: $('diagnostics-summary'), diagnosticsList: $('diagnostics-list'),
+  pendingCount: $('pending-count'), mqttCount: $('mqtt-count'), issueCount: $('issue-count'),
+  diagnosticsPanel: $('diagnostics-panel'), diagnosticsIcon: $('diagnostics-icon'), diagnosticsHeadingText: $('diagnostics-heading-text'),
+  diagnosticsSummary: $('diagnostics-summary'), diagnosticsList: $('diagnostics-list'),
+  fabricsSection: $('fabrics-section'), fabricsList: $('fabrics-list'),
   deviceModal: $('device-modal'), deviceModalClose: $('device-modal-close'), deviceModalIcon: $('device-modal-icon'),
   deviceModalName: $('device-modal-name'), deviceModalId: $('device-modal-id'), entityList: $('entity-list'),
   modalExportCount: $('modal-export-count'), selectionPanel: $('selection-panel'), selectionTitle: $('selection-title'),
@@ -268,38 +271,80 @@ function buildEntityRow(entity, isSearchHit = false) {
 }
 
 function renderQrSection(entity) {
-  // Reset QR area
+  // Reset QR and Fabrics areas
   els.deviceQrContainer.style.display = 'none';
   els.deviceQrCode.innerHTML = '';
   els.deviceManualCode.textContent = '';
   els.deviceQrButton.style.display = 'none';
   els.resetAccessoryButton.style.display = 'none';
   els.matterActions.hidden = true;
+  if (els.fabricsSection) els.fabricsSection.hidden = true;
+  if (els.fabricsList) els.fabricsList.innerHTML = '';
   els.deviceQrButton.textContent = 'Mostrar Código de Emparejamiento';
 
   if (!entity || entity.auxiliary || !entity.exported) return;
 
-  // Always show the QR button for exported (active) entities
-  els.deviceQrButton.style.display = 'block';
-  // Recovery actions remove or alter fabrics, so they only belong to an
-  // accessory that is actually commissioned. Unpaired accessories only need
-  // their pairing code.
-  els.matterActions.hidden = !entity.commissioned;
-  // This is intentionally per-accessory: it clears only this node's fabrics
-  // and reopens commissioning if a controller left a stale fabric behind.
-  els.resetAccessoryButton.style.display = entity.commissioned ? 'block' : 'none';
+  const matterFabrics = Array.isArray(entity.matterFabrics) ? entity.matterFabrics : [];
 
-  if (entity.commissioned && entity.homeName) {
-    els.deviceQrButton.textContent = `Código Matter · Conectado: ${entity.homeName}`;
-  } else if (entity.commissioned) {
-    els.deviceQrButton.textContent = 'Código Matter · Ya emparejado';
-  } else if (entity.pairingCode) {
-    els.deviceQrButton.textContent = 'Mostrar Código de Emparejamiento';
-  } else {
-    // Exported but QR not ready yet (serverNode may still be starting)
-    els.deviceQrButton.textContent = '⏳ Generando código…';
-    els.deviceQrButton.disabled = true;
-    void pollForPairingCode(entity.entityId);
+  if (entity.commissioned && matterFabrics.length > 0) {
+    // Show connected ecosystems list
+    if (els.fabricsSection && els.fabricsList) {
+      els.fabricsSection.hidden = false;
+      els.fabricsList.innerHTML = matterFabrics.map((fabric) => {
+        const vendor = fabric.controller || 'Controlador Matter';
+        const label = fabric.label ? ` · ${escapeHtml(fabric.label)}` : '';
+        const idx = fabric.fabricIndex || fabric.fabricId || '1';
+        return `<div class="fabric-item">
+          <div class="fabric-info">
+            <strong class="fabric-name">🏠 ${escapeHtml(vendor)}${label}</strong>
+            <span class="fabric-detail">Fabric ID: ${escapeHtml(fabric.fabricId || idx)}</span>
+          </div>
+          <button class="fabric-disconnect-btn" type="button" data-fabric-index="${escapeHtml(idx)}" data-controller="${escapeHtml(vendor)}" title="Desconectar este accesorio de ${escapeHtml(vendor)}">Desconectar</button>
+        </div>`;
+      }).join('');
+
+      // Add listeners to individual fabric disconnect buttons
+      els.fabricsList.querySelectorAll('.fabric-disconnect-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const fIndex = btn.dataset.fabricIndex;
+          const controllerName = btn.dataset.controller || 'este controlador';
+          openConfirm(
+            `Desconectar de ${controllerName}`,
+            `Se eliminará el emparejamiento con ${controllerName}. Este accesorio dejará de responder en esa casa.`,
+            async () => {
+              try {
+                const res = await request(`/remove-fabric/${encodeURIComponent(entity.entityId)}/${encodeURIComponent(fIndex)}`, { method: 'POST' });
+                if (!res.success) throw new Error(res.error || 'No se pudo desconectar');
+                showToast(`Desconectado de ${controllerName}.`);
+                await fetchDevices(true);
+              } catch (err) {
+                showToast(err.message || 'Error al desconectar.', true);
+              }
+            }
+          );
+        });
+      });
+    }
+
+    // Show matter actions for commissioned device
+    els.matterActions.hidden = false;
+    els.deviceQrButton.style.display = 'block';
+    els.deviceQrButton.textContent = 'Añadir a otra casa (Ver QR)';
+    if (els.reconnectAccessoryButton) els.reconnectAccessoryButton.textContent = '↻ Recargar / Sincronizar';
+    if (els.regenerateCodeButton) els.regenerateCodeButton.textContent = 'Desconectar todo y nuevo QR';
+  } else if (entity.exported) {
+    // Exported but NOT commissioned: display QR and manual code directly!
+    els.matterActions.hidden = true;
+    if (entity.pairingCode) {
+      showQrCode(entity);
+      els.deviceQrButton.style.display = 'block';
+      els.deviceQrButton.textContent = 'Generar nuevo código QR';
+    } else {
+      els.deviceQrContainer.style.display = 'block';
+      els.deviceQrCode.innerHTML = '<p style="color:#888;font-size:0.85rem;">Generando código Matter…</p>';
+      els.deviceQrButton.style.display = 'none';
+      void pollForPairingCode(entity.entityId);
+    }
   }
 }
 
@@ -311,6 +356,7 @@ function selectEntity(entity) {
     els.selectionDescription.textContent = '';
     els.selectionMeta.innerHTML = '';
     els.selectionStatus.textContent = '';
+    if (els.fabricsSection) els.fabricsSection.hidden = true;
     els.diagnosticsPanel.hidden = true;
     renderQrSection(null);
     return;
@@ -341,8 +387,8 @@ function selectEntity(entity) {
         : 'Endpoint que se integrará en el accesorio Matter del dispositivo físico. Activa la entidad principal para publicar el grupo completo.'
     : entity.exported
       ? (entity.commissioned
-          ? `Accesorio Matter activo${entity.homeName ? ` · Casa: ${entity.homeName}` : ''}${controllerSummary ? ` · Controlador: ${controllerSummary}` : ''}. Usa el botón para ver el código QR si necesitas añadirlo a otra casa.`
-          : 'Accesorio Matter listo para emparejar. Usa el código QR único para agregarlo a Apple Home, Google Home u otro controlador.')
+          ? `Accesorio Matter activo y conectado a ${controllerSummary || 'Matter'}. Puedes añadirlo a otra casa con el botón o desconectarlo cuando lo desees.`
+          : 'Accesorio Matter listo para emparejar. Escanea el código QR en Apple Home, Google Home u otro controlador.')
       : entity.composite
         ? 'Entidad principal del dispositivo Matter compuesto. Al activarla se publicarán todos sus endpoints compatibles con un único código QR.'
         : 'Actívala para publicar la entidad como accesorio Matter independiente.';
@@ -360,20 +406,15 @@ function selectEntity(entity) {
   els.profileNote.textContent = currentProfile ? `${currentProfile.description} ${profileCompatibilityText(currentProfile.appleHome)}` : '';
   els.profileSelect.disabled = entity.auxiliary || entity.composite;
 
-  const fabricMeta = matterFabrics.map((fabric, index) => {
-    const label = fabric.label ? ` · ${fabric.label}` : '';
-    const vendor = typeof fabric.vendorId === 'number' ? ` · VID 0x${fabric.vendorId.toString(16).toUpperCase()}` : '';
-    const identifier = fabric.fabricId ? ` · Fabric ${fabric.fabricId}` : '';
-    const value = `${fabric.controller || 'Controlador Matter'}${label}${vendor}${identifier}`;
-    return `<div><dt>Fabric ${index + 1}</dt><dd title="${escapeHtml(value)}">${escapeHtml(value)}</dd></div>`;
-  }).join('');
-  const connectionMeta = entity.exported && entity.commissioned
-    ? `<div><dt>Controladores</dt><dd title="${escapeHtml(controllerSummary)}">${escapeHtml(controllerSummary || 'Controlador Matter sin VID reportado')}</dd></div><div><dt>Fabrics</dt><dd>${escapeHtml(entity.fabricCount || 1)}</dd></div>${fabricMeta}`
-    : '';
   const isMqtt = entity.origin === 'mqtt' || entity.entityId.startsWith('mqtt.');
   const mqttMeta = isMqtt
     ? `<div><dt>Origen</dt><dd><span class="badge-mqtt">MQTT Auto-Discovery</span></dd></div>${entity.attributes?.state_topic ? `<div><dt>Tópico Estado</dt><dd title="${escapeHtml(entity.attributes.state_topic)}">${escapeHtml(entity.attributes.state_topic)}</dd></div>` : ''}${entity.attributes?.command_topic ? `<div><dt>Tópico Comando</dt><dd title="${escapeHtml(entity.attributes.command_topic)}">${escapeHtml(entity.attributes.command_topic)}</dd></div>` : ''}`
     : `<div><dt>Estado HA</dt><dd>${escapeHtml(stateLabel(entity.state))}</dd></div>`;
+  
+  const connectionMeta = entity.exported && entity.commissioned
+    ? `<div><dt>Controladores</dt><dd title="${escapeHtml(controllerSummary)}">${escapeHtml(controllerSummary || 'Controlador Matter sin VID reportado')}</dd></div><div><dt>Casas vinculadas</dt><dd>${escapeHtml(entity.fabricCount || 1)}</dd></div>`
+    : '';
+
   els.selectionMeta.innerHTML = `<div><dt>Entidad</dt><dd>${escapeHtml(entity.entityId)}</dd></div><div><dt>Tipo Matter</dt><dd>${escapeHtml(entity.matterType || 'Predeterminado')}</dd></div>${mqttMeta}${connectionMeta}`;
 
   els.selectionStatus.className = `selection-status${entity.exported ? ' active' : ''}${entity.commissioned ? ' commissioned' : ''}`;
@@ -382,7 +423,7 @@ function selectEntity(entity) {
     : entity.exported
       ? (entity.commissioned
           ? `✓ Emparejado${entity.homeName ? ' · ' + entity.homeName : ''}`
-          : '✓ Publicada como accesorio Matter — pendiente de emparejar')
+          : '✓ Publicado en Matter — Listo para emparejar')
       : entity.composite && entity.entityId !== entity.compositePrimaryEntityId
         ? 'Integrada: se publica junto con la entidad principal'
       : 'Aún no se publica en Matter';
@@ -394,36 +435,52 @@ function selectEntity(entity) {
 function renderDiagnostics(entity) {
   const diagnostics = Array.isArray(entity.diagnostics) ? entity.diagnostics : [];
   const logs = Array.isArray(entity.logs) ? entity.logs : [];
-  // Diagnostics are historical, but the yellow panel is a live health
-  // indicator. Do not keep a working accessory visually in an error state
-  // merely because it had an earlier warning in the log buffer.
-  if (!entity.exported || !entity.hasIssue) {
+
+  if (!entity || !entity.exported) {
     els.diagnosticsPanel.hidden = true;
     return;
   }
+
   els.diagnosticsPanel.hidden = false;
-  els.diagnosticsSummary.textContent = entity.hasIssue
-    ? 'Este accesorio necesita atención. Se conserva el detalle más reciente para facilitar el diagnóstico.'
-    : diagnostics.length || logs.length ? 'Historial reciente de incidencias y logs asociados.' : 'Sin errores registrados para este accesorio.';
+  const isHealthy = !entity.hasIssue;
+
+  els.diagnosticsPanel.classList.toggle('has-issues', !isHealthy);
+  if (els.diagnosticsIcon) els.diagnosticsIcon.textContent = isHealthy ? '✓' : '!';
+  if (els.diagnosticsHeadingText) {
+    els.diagnosticsHeadingText.textContent = isHealthy ? 'Diagnóstico y estado' : 'Atención requerida';
+  }
+
+  if (isHealthy) {
+    els.diagnosticsSummary.textContent = entity.commissioned
+      ? '✓ Accesorio en línea y sincronizado con Matter y Home Assistant.'
+      : '✓ Accesorio activo y listo para ser emparejado.';
+  } else {
+    els.diagnosticsSummary.textContent = 'Se detectó una advertencia reciente o estado no disponible en Home Assistant:';
+  }
+
   const rows = diagnostics.slice(0, 5).map((item) => {
     const row = document.createElement('li');
     const date = new Date(item.timestamp);
-    const time = Number.isNaN(date.getTime()) ? '' : date.toLocaleString();
-    const levelClass = item.level === 'info' ? 'success' : (item.level === 'warning' ? 'warning' : 'error');
-    const levelLabel = item.level === 'info' ? 'Info' : (item.level === 'warning' ? 'Aviso' : 'Error');
+    const time = Number.isNaN(date.getTime()) ? '' : date.toLocaleTimeString();
+    const isInfo = item.level === 'info';
+    const isWarn = item.level === 'warning';
+    const levelClass = isInfo ? 'success' : (isWarn ? 'warning' : 'error');
+    const levelLabel = isInfo ? 'OK' : (isWarn ? 'Aviso' : 'Error');
     row.innerHTML = `<span class="diagnostic-level ${levelClass}">${levelLabel}</span><div><strong>${escapeHtml(item.message)}</strong><small>${escapeHtml(time)}</small></div>`;
     return row;
   });
-  logs.slice(0, 5).forEach((line) => {
+
+  logs.slice(0, 3).forEach((line) => {
     const row = document.createElement('li');
     row.className = 'diagnostic-log';
     row.innerHTML = `<span class="diagnostic-level warning">Log</span><div><strong>${escapeHtml(line)}</strong></div>`;
     rows.push(row);
   });
+
   if (!rows.length) {
     const row = document.createElement('li');
     row.className = 'diagnostic-empty';
-    row.textContent = 'No hay incidencias que mostrar.';
+    row.textContent = isHealthy ? 'Sin errores registrados para este accesorio.' : 'No hay detalles adicionales.';
     rows.push(row);
   }
   els.diagnosticsList.replaceChildren(...rows);
@@ -527,12 +584,10 @@ els.deviceQrButton.addEventListener('click', () => {
     els.deviceQrContainer.style.display = 'none';
     const entity = state.activeEntity;
     if (entity && entity.exported) {
-      if (entity.commissioned && entity.homeName) {
-        els.deviceQrButton.textContent = `Código Matter · Conectado: ${entity.homeName}`;
-      } else if (entity.commissioned) {
-        els.deviceQrButton.textContent = 'Código Matter · Ya emparejado';
+      if (entity.commissioned) {
+        els.deviceQrButton.textContent = 'Añadir a otra casa (Ver QR)';
       } else {
-        els.deviceQrButton.textContent = 'Mostrar Código de Emparejamiento';
+        els.deviceQrButton.textContent = 'Mostrar Código QR';
       }
     }
     return;
@@ -543,22 +598,22 @@ els.deviceQrButton.addEventListener('click', () => {
 
   if (entity.pairingCode) {
     showQrCode(entity);
-    els.deviceQrButton.textContent = 'Ocultar Código';
+    els.deviceQrButton.textContent = 'Ocultar Código QR';
   } else {
     // No pairing code yet, show message and fast poll
-    els.deviceQrCode.innerHTML = '<p style="color:#888;font-size:0.85rem;">El código QR aún se está generando. Espera unos segundos…</p>';
+    els.deviceQrCode.innerHTML = '<p style="color:#888;font-size:0.85rem;">Generando código Matter…</p>';
     els.deviceQrContainer.style.display = 'block';
-    els.deviceQrButton.textContent = 'Ocultar Código';
+    els.deviceQrButton.textContent = 'Ocultar Código QR';
     void pollForPairingCode(entity.entityId);
   }
 });
 
-els.resetAccessoryButton.addEventListener('click', () => {
+const doResetAccessory = () => {
   const entity = state.activeEntity;
   if (!entity) return;
   openConfirm(
-    'Desconectar Matter',
-    `Se eliminarán los emparejamientos Matter de ${displayName(entity)} y de sus endpoints integrados. No afecta otros accesorios ni Home Assistant. Después podrás volver a escanear su código.`,
+    'Desconectar todo y generar nuevo QR',
+    `Se desvincularán todos los controladores Matter de ${displayName(entity)} (Apple Home, Google Home, etc.) y se regenerarán sus credenciales con un nuevo código QR limpio.`,
     async () => {
       try {
         const result = await request(`/reset-accessory/${encodeURIComponent(entity.entityId)}`, { method: 'POST' });
@@ -567,13 +622,15 @@ els.resetAccessoryButton.addEventListener('click', () => {
           entity.pairingCode = result.pairingCode;
           entity.manualPairingCode = result.manualPairingCode;
           entity.commissioned = false;
+          entity.matterFabrics = [];
+          entity.fabricCount = 0;
           entity.homeName = null;
           showQrCode(entity);
-          els.deviceQrButton.textContent = 'Ocultar Código';
-          showToast('Conexión Matter restablecida.');
+          els.deviceQrButton.textContent = 'Ocultar Código QR';
+          showToast('Accesorio desvinculado de todas las casas. Nuevo código QR listo.');
           void fetchDevices(true);
         } else {
-          showToast('Conexión Matter restablecida. Esperando el código de emparejamiento…');
+          showToast('Desvinculación solicitada. Esperando nuevo código QR…');
           void pollForPairingCode(entity.entityId);
         }
       } catch (error) {
@@ -581,7 +638,10 @@ els.resetAccessoryButton.addEventListener('click', () => {
       }
     },
   );
-});
+};
+
+if (els.resetAccessoryButton) els.resetAccessoryButton.addEventListener('click', doResetAccessory);
+if (els.regenerateCodeButton) els.regenerateCodeButton.addEventListener('click', doResetAccessory);
 
 els.reconnectAccessoryButton.addEventListener('click', async () => {
   const entity = state.activeEntity;
@@ -589,44 +649,14 @@ els.reconnectAccessoryButton.addEventListener('click', async () => {
   els.reconnectAccessoryButton.disabled = true;
   try {
     const result = await request(`/refresh-accessory/${encodeURIComponent(entity.entityId)}`, { method: 'POST' });
-    if (!result.success) throw new Error(result.error || 'No se pudo actualizar el estado Matter');
+    if (!result.success) throw new Error(result.error || 'No se pudo sincronizar');
     await fetchDevices(true);
-    showToast('Estado Matter actualizado sin eliminar el emparejamiento.');
+    showToast('Estado sincronizado con Home Assistant y Matter.');
   } catch (error) {
-    showToast(error.message || 'No se pudo actualizar el estado Matter.', true);
+    showToast(error.message || 'No se pudo sincronizar el estado Matter.', true);
   } finally {
     els.reconnectAccessoryButton.disabled = false;
   }
-});
-
-els.regenerateCodeButton.addEventListener('click', () => {
-  const entity = state.activeEntity;
-  if (!entity) return;
-  openConfirm(
-    'Generar un código Matter nuevo',
-    `Esto desconectará ${displayName(entity)} de todos los controladores Matter y creará nuevas credenciales de emparejamiento. Tendrás que añadirlo nuevamente en Apple Home u otro controlador.`,
-    async () => {
-      try {
-        const result = await request(`/reset-accessory/${encodeURIComponent(entity.entityId)}`, { method: 'POST' });
-        if (!result.success) throw new Error(result.error || 'No se pudo regenerar el código Matter');
-        if (result.pairingCode) {
-          entity.pairingCode = result.pairingCode;
-          entity.manualPairingCode = result.manualPairingCode;
-          entity.commissioned = false;
-          entity.homeName = null;
-          showQrCode(entity);
-          els.deviceQrButton.textContent = 'Ocultar Código';
-          showToast('Código Matter regenerado.');
-          void fetchDevices(true);
-        } else {
-          showToast('Código Matter regenerado. Esperando las nuevas credenciales…');
-          void pollForPairingCode(entity.entityId);
-        }
-      } catch (error) {
-        showToast(error.message || 'No se pudo regenerar el código Matter.', true);
-      }
-    },
-  );
 });
 
 els.refreshButton.addEventListener('click', async () => { await Promise.all([fetchStatus(), fetchDevices()]); showToast('Lista actualizada.'); });
