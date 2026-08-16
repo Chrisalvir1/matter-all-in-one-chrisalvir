@@ -135,7 +135,18 @@ export class MockMatterbridgeEndpoint {
   }
 
   public async invokeCommand(commandName: string, data?: any) {
-    const handler = this.commandHandlers.get(commandName);
+    let handler = this.commandHandlers.get(commandName);
+    if (!handler && commandName.includes('.')) {
+      handler = this.commandHandlers.get(commandName.split('.').pop()!);
+    }
+    if (!handler && !commandName.includes('.')) {
+      for (const [key, h] of this.commandHandlers.entries()) {
+        if (key.endsWith('.' + commandName)) {
+          handler = h;
+          break;
+        }
+      }
+    }
     if (handler) {
       return await handler(data);
     }

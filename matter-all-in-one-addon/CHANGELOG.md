@@ -1,3 +1,11 @@
+## [1.4.12] - 2026-08-16
+
+### Fixed
+- **Restauración Completa de Comandos en Ventiladores y Luces:**
+  - Se corrigió la captura de comandos de Apple Home / Matterbridge registrando tanto los manejadores de comandos explícitos (`on`, `off`, `OnOff.on`, `OnOff.off`, `toggle`, `OnOff.toggle`) como las suscripciones de atributos, garantizando que todas las órdenes lleguen instantáneamente a Home Assistant.
+  - Eliminación de auto-actualizaciones recursivas en suscripciones de ventiladores y difusores que provocaban bloqueos o picos de CPU.
+  - Limpieza de `safeSetAttribute` y `safeUpdateAttribute` para delegar la verificación de estado al motor nativo de Matterbridge.
+
 ## [1.4.11] - 2026-08-16
 
 ### Fixed

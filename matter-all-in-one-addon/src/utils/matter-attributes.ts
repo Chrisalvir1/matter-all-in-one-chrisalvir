@@ -16,8 +16,6 @@ export async function safeSetAttribute(
 ): Promise<boolean> {
   try {
     if (endpoint.hasAttributeServer(clusterId, attributeName)) {
-      const current = endpoint.getAttribute(clusterId, attributeName);
-      if (current === value) return true;
       await endpoint.setAttribute(clusterId, attributeName, value, log);
       return true;
     }
@@ -41,9 +39,6 @@ export async function safeUpdateAttribute(
 ): Promise<boolean> {
   try {
     if (endpoint.hasAttributeServer(clusterId, attributeName)) {
-      const current = endpoint.getAttribute(clusterId, attributeName);
-      // Skip update if the value is strictly equal, this prevents infinite subscribe event loops
-      if (current === value) return true;
       await endpoint.updateAttribute(clusterId, attributeName, value, log);
       return true;
     }
