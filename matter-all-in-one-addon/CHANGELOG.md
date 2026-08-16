@@ -1,3 +1,13 @@
+## [1.4.2] - 2026-08-16
+
+### Added & Enhanced
+- **Soporte Nativo y Completo para Difusores y Humidificadores:**
+  - Habilitada la exportación de entidades `humidifier.*` (Govee, Tuya, Meross, Levoit, Xiaomi, etc.) compatibles con Apple Home / HomeKit.
+  - Soporte de dispositivos compuestos: unifica el control de vapor (`humidifier`), luz nocturna ambiental RGB (`light`) y sensores (`temperature`/`humidity`) bajo un solo accesorio y un único código QR.
+  - Mapeo de potencia y niveles de vapor porcentuales (0–100%) mediante `FanControl.percentSetting`.
+- **Claridad en Compatibilidad de Comederos de Mascotas (Pet Feeder):**
+  - Mapeo funcional instantáneo de comederos inteligentes a botones de acción e interruptores de un solo toque (`onOffPlugInUnit` / `button.press`).
+
 ## [1.4.1] - 2026-08-16
 
 ### Fixed & Enhanced
