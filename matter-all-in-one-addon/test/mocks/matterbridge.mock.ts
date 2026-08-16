@@ -103,6 +103,11 @@ export class MockMatterbridgeEndpoint {
     this.attributes.set(`${id}:${attributeName}`, value);
   }
 
+  public getAttribute(clusterId: any, attributeName: string): any {
+    const id = typeof clusterId === 'object' && clusterId !== null ? clusterId.id : clusterId;
+    return this.attributes.get(`${id}:${attributeName}`);
+  }
+
   public attributeSubscriptions = new Map<string, ((newValue: any, oldValue: any, context?: any) => any)[]>();
 
   public subscribeAttribute(clusterId: any, attributeName: string, callback: (...args: any[]) => any) {

@@ -1,3 +1,10 @@
+## [1.4.10] - 2026-08-16
+
+### Fixed
+- **Uso excesivo de CPU (30%+):**
+  - Corrección de un bucle infinito (ping-pong) causado por la actualización optimista del estado de un dispositivo en HomeKit.
+  - Al cambiar un estado desde HomeKit (ej. Humedad o Ventilador), el servidor enviaba una confirmación innecesaria que volvía a disparar el evento internamente en un bucle infinito de retroalimentación en Matterbridge. Esto disparaba el uso de CPU. Se implementó una verificación de igualdad de estado estricto para evitar notificaciones redundantes.
+
 ## [1.4.9] - 2026-08-16
 
 ### Enhanced & Fixed
