@@ -73,3 +73,48 @@ describe('BaseEntity direct colour lights', () => {
     });
   });
 });
+
+describe('BaseEntity FanControl full features', () => {
+  function fanState(attributes: Record<string, unknown> = {}, value = 'on') {
+    return {
+      entity_id: 'fan.living_room_fan',
+      state: value,
+      attributes: { friendly_name: 'Living Room Fan', percentage: 50, direction: 'forward', ...attributes },
+      last_changed: '',
+      last_updated: '',
+    } as any;
+  }
+
+  it('handles HomeKit fan speed slider (percentSetting) adjustments and turns off when 0%', async () => {
+    const entity = new BaseEntity(platform as any, fanState({ percentage: 50 }), MatterDeviceTypes.fan);
+    const endpoint = await entity.createEndpoint() as any;
+
+    // Simulate HomeKit sliding speed to 75%
+    await endpoint.invokeAttributeChange(0x0202, 'percentSetting', 75);
+    expect(platform.ha.callService).toHaveBeenLastCalledWith('fan', 'set_percentage', 'fan.living_room_fan', { percentage: 75 });
+    expect(endpoint.attributes.get('514:percentCurrent')).toBe(75);
+
+    // Simulate HomeKit sliding speed to 0%
+    await endpoint.invokeAttributeChange(0x0202, 'percentSetting', 0);
+    expect(platform.ha.callService).toHaveBeenLastCalledWith('fan', 'turn_off', 'fan.living_room_fan');
+    expect(endpoint.attributes.get('514:percentCurrent')).toBe(0);
+    expect(endpoint.attributes.get('6:onOff')).toBe(false);
+  });
+
+  it('handles HomeKit fan mode and direction changes', async () => {
+    const entity = new BaseEntity(platform as any, fanState({ preset_modes: ['auto', 'nature'] }), MatterDeviceTypes.fan);
+    const endpoint = await entity.createEndpoint() as any;
+
+    // Simulate fan mode Low (1) -> 33%
+    await endpoint.invokeAttributeChange(0x0202, 'fanMode', 1);
+    expect(platform.ha.callService).toHaveBeenLastCalledWith('fan', 'set_percentage', 'fan.living_room_fan', { percentage: 33 });
+
+    // Simulate fan mode Auto (5)
+    await endpoint.invokeAttributeChange(0x0202, 'fanMode', 5);
+    expect(platform.ha.callService).toHaveBeenLastCalledWith('fan', 'set_preset_mode', 'fan.living_room_fan', { preset_mode: 'auto' });
+
+    // Simulate airflow direction Reverse (1)
+    await endpoint.invokeAttributeChange(0x0202, 'airflowDirection', 1);
+    expect(platform.ha.callService).toHaveBeenLastCalledWith('fan', 'set_direction', 'fan.living_room_fan', { direction: 'reverse' });
+  });
+});

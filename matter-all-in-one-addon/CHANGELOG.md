@@ -1,3 +1,28 @@
+## [1.3.9] - 2026-08-16
+
+### Fixed & Enhanced
+- **Control Completo de Ventiladores (FAN) en HomeKit / Matter:**
+  - Soporte de deslizador de velocidad real (0–100%) mediante `FanControl.percentSetting`.
+  - Soporte de modos de ventilador (`fanMode`: Auto, Manual, Bajo 33%, Medio 66%, Alto 100%, On/Off).
+  - Soporte de dirección de flujo de aire (`airflowDirection`: adelante / reversa) con mapeo directo a `fan.set_direction`.
+  - Actualizaciones optimistas locales para una respuesta inmediata sin latencia ni rebotes en Apple Home.
+- **Control Confiable de Luz y Temperatura de Color (Kelvin / Mireds):**
+  - Corrección en `buildColorPayload` para garantizar el envío simultáneo de `color_temp_kelvin` y `color_temp`, eliminando cargas útiles vacías en luces de ventiladores.
+- **Eliminación de Colisiones y Congelamiento en Dispositivos BLE:**
+  - Implementada cola FIFO secuencial por `device_id` en `homeAssistant.ts` para serializar comandos hacia el mismo adaptador/dispositivo Bluetooth (`BleakDBusError: InProgress`).
+  - Timeout dedicado de llamadas a servicios ampliado a 25 segundos para evitar desconexiones prematuras de BLE.
+  - Captura y registro seguro de excepciones en todos los manejadores de comandos.
+- **Generación y Visualización Instantánea de Códigos QR y de Emparejamiento:**
+  - Retorno directo de `pairingCode` y `manualPairingCode` en la respuesta de `/reset-accessory`.
+  - Sondeo adaptativo rápido cada 300 ms en el frontend mientras se generan los registros mDNS.
+  - Eliminadas funciones duplicadas de sondeo en `script.js`.
+- **Mejoras Integrales en la Interfaz de Usuario (UI):**
+  - Tarjetas de dispositivo completamente cliqueables con cursor pointer.
+  - Integración de estilos limpios para el formulario MQTT y botón de reinicio rápido en el diseño Liquid Glass.
+  - Cierre jerárquico y limpio de modales con la tecla `Escape`.
+- **Actualización de Entorno y Herramientas:**
+  - Actualizado a **Vitest `v5.0.0-rc.1`** con `vite ^8.2.1` y soporte TypeScript 7 / Node 24 LTS.
+
 ## [1.3.8] - 2026-08-14
 
 ### Fixed

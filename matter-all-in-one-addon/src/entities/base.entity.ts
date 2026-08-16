@@ -33,6 +33,9 @@ export class BaseEntity {
     if (attribute === 'brightness') {
       return Math.abs(requested - actual) > 5;
     }
+    if (attribute === 'percentage') {
+      return Math.abs(requested - actual) > 2;
+    }
     if (attribute === 'color_temp') {
       return Math.abs(requested - actual) > 10;
     }
@@ -152,7 +155,8 @@ export class BaseEntity {
     if (domain === 'fan' && isFanProfile) {
       const on = this.state.state === 'on';
       const percentage = typeof this.state.attributes.percentage === 'number' ? this.state.attributes.percentage : on ? 100 : 0;
-      this.endpoint.createDefaultFanControlClusterServer(on ? 1 : 0, undefined, percentage, percentage);
+      const fanMode = on ? (percentage > 66 ? 3 : percentage > 33 ? 2 : 1) : 0;
+      this.endpoint.createDefaultFanControlClusterServer(fanMode, undefined, percentage, percentage);
       this.endpoint.behaviors.require(MatterbridgeOnOffServer.with());
     } else if (domain === 'light' || domain === 'switch' || domain === 'media_player' || domain === 'vacuum' || domain === 'fan') {
       const isLighting = domain === 'light';
@@ -188,22 +192,153 @@ export class BaseEntity {
 
     if (domain === 'light' || domain === 'switch' || domain === 'fan' || domain === 'media_player' || domain === 'vacuum') {
       this.endpoint.addCommandHandler('on', async () => {
-        if (domain === 'vacuum') await this.platform.ha.callService(domain, 'start', this.entityId);
-        else await this.platform.ha.callService(domain, 'turn_on', this.entityId);
+        if (domain === 'vacuum') {
+          await this.platform.ha.callService(domain, 'start', this.entityId).catch((err) => {
+            this.platform.log.warn(`[${this.entityId}] Error starting vacuum: ${err?.message ?? err}`);
+          });
+        } else {
+          this.setCommandLockout('onOff', true);
+          await safeUpdateAttribute(this.endpoint, OnOff.id, 'onOff', true, this.platform.log);
+          await this.platform.ha.callService(domain, 'turn_on', this.entityId).catch((err) => {
+            this.platform.log.warn(`[${this.entityId}] Error turning on ${domain}: ${err?.message ?? err}`);
+          });
+        }
       });
 
       this.endpoint.addCommandHandler('off', async () => {
-        if (domain === 'vacuum') await this.platform.ha.callService(domain, 'return_to_base', this.entityId);
-        else await this.platform.ha.callService(domain, 'turn_off', this.entityId);
+        if (domain === 'vacuum') {
+          await this.platform.ha.callService(domain, 'return_to_base', this.entityId).catch((err) => {
+            this.platform.log.warn(`[${this.entityId}] Error returning vacuum: ${err?.message ?? err}`);
+          });
+        } else {
+          this.setCommandLockout('onOff', false);
+          await safeUpdateAttribute(this.endpoint, OnOff.id, 'onOff', false, this.platform.log);
+          if (domain === 'fan' && this.endpoint.hasAttributeServer(FanControl.id, 'fanMode')) {
+            await safeUpdateAttribute(this.endpoint, FanControl.id, 'fanMode', 0, this.platform.log);
+          }
+          await this.platform.ha.callService(domain, 'turn_off', this.entityId).catch((err) => {
+            this.platform.log.warn(`[${this.entityId}] Error turning off ${domain}: ${err?.message ?? err}`);
+          });
+        }
       });
 
-      if (domain === 'fan' && this.endpoint.hasAttributeServer(FanControl.id, 'percentCurrent')) {
-        this.endpoint.addCommandHandler('FanControl.step', async (data: any) => {
-          const direction = data?.request?.direction ?? data?.direction;
-          const current = typeof this.state.attributes.percentage === 'number' ? this.state.attributes.percentage : 0;
-          const percentage = direction === 0 ? Math.min(100, current + 10) : Math.max(0, current - 10);
-          await this.platform.ha.callService('fan', 'set_percentage', this.entityId, { percentage });
-        });
+      if (domain === 'fan') {
+        if (this.endpoint.hasAttributeServer(FanControl.id, 'percentCurrent') || this.endpoint.hasAttributeServer(FanControl.id, 'percentSetting')) {
+          this.endpoint.addCommandHandler('FanControl.step', async (data: any) => {
+            const direction = data?.request?.direction ?? data?.direction;
+            const current = typeof this.state.attributes.percentage === 'number' ? this.state.attributes.percentage : 0;
+            const percentage = direction === 0 ? Math.min(100, current + 10) : Math.max(0, current - 10);
+            this.setCommandLockout('percentage', percentage);
+            await safeUpdateAttribute(this.endpoint, FanControl.id, 'percentCurrent', percentage, this.platform.log);
+            await safeUpdateAttribute(this.endpoint, FanControl.id, 'percentSetting', percentage, this.platform.log);
+            await this.platform.ha.callService('fan', 'set_percentage', this.entityId, { percentage }).catch((err) => {
+              this.platform.log.warn(`[${this.entityId}] Error stepping fan percentage: ${err?.message ?? err}`);
+            });
+          });
+
+          this.endpoint.subscribeAttribute(
+            FanControl.id,
+            'percentSetting',
+            async (newValue: number | null) => {
+              if (typeof newValue !== 'number') return;
+              const current = typeof this.state.attributes.percentage === 'number' ? this.state.attributes.percentage : (this.state.state === 'on' ? 100 : 0);
+              if (Math.abs(current - newValue) <= 1 && (newValue === 0 ? this.state.state === 'off' : this.state.state === 'on')) {
+                return;
+              }
+              if (this.shouldIgnoreStateUpdate('percentage', newValue)) return;
+              this.setCommandLockout('percentage', newValue);
+
+              // Optimistic local update so HomeKit slider doesn't bounce/freeze
+              await safeUpdateAttribute(this.endpoint, FanControl.id, 'percentCurrent', newValue, this.platform.log);
+              await safeUpdateAttribute(this.endpoint, OnOff.id, 'onOff', newValue > 0, this.platform.log);
+              const fanMode = newValue === 0 ? 0 : (newValue > 66 ? 3 : newValue > 33 ? 2 : 1);
+              await safeUpdateAttribute(this.endpoint, FanControl.id, 'fanMode', fanMode, this.platform.log);
+
+              if (newValue === 0) {
+                await this.platform.ha.callService('fan', 'turn_off', this.entityId).catch((err) => {
+                  this.platform.log.warn(`[${this.entityId}] Error turning off fan: ${err?.message ?? err}`);
+                });
+              } else {
+                await this.platform.ha.callService('fan', 'set_percentage', this.entityId, { percentage: newValue }).catch((err) => {
+                  this.platform.log.warn(`[${this.entityId}] Error setting fan percentage: ${err?.message ?? err}`);
+                });
+              }
+            }
+          );
+
+          this.endpoint.subscribeAttribute(
+            FanControl.id,
+            'fanMode',
+            async (newMode: number) => {
+              if (typeof newMode !== 'number') return;
+              if (newMode === 0) {
+                this.setCommandLockout('percentage', 0);
+                await safeUpdateAttribute(this.endpoint, FanControl.id, 'percentCurrent', 0, this.platform.log);
+                await safeUpdateAttribute(this.endpoint, FanControl.id, 'percentSetting', 0, this.platform.log);
+                await safeUpdateAttribute(this.endpoint, OnOff.id, 'onOff', false, this.platform.log);
+                await this.platform.ha.callService('fan', 'turn_off', this.entityId).catch((err) => {
+                  this.platform.log.warn(`[${this.entityId}] Error turning off fan: ${err?.message ?? err}`);
+                });
+              } else if (newMode === 4) { // On
+                await safeUpdateAttribute(this.endpoint, OnOff.id, 'onOff', true, this.platform.log);
+                await this.platform.ha.callService('fan', 'turn_on', this.entityId).catch((err) => {
+                  this.platform.log.warn(`[${this.entityId}] Error turning on fan: ${err?.message ?? err}`);
+                });
+              } else if (newMode === 1) { // Low
+                this.setCommandLockout('percentage', 33);
+                await safeUpdateAttribute(this.endpoint, FanControl.id, 'percentCurrent', 33, this.platform.log);
+                await safeUpdateAttribute(this.endpoint, FanControl.id, 'percentSetting', 33, this.platform.log);
+                await safeUpdateAttribute(this.endpoint, OnOff.id, 'onOff', true, this.platform.log);
+                await this.platform.ha.callService('fan', 'set_percentage', this.entityId, { percentage: 33 }).catch((err) => {
+                  this.platform.log.warn(`[${this.entityId}] Error setting fan low: ${err?.message ?? err}`);
+                });
+              } else if (newMode === 2) { // Medium
+                this.setCommandLockout('percentage', 66);
+                await safeUpdateAttribute(this.endpoint, FanControl.id, 'percentCurrent', 66, this.platform.log);
+                await safeUpdateAttribute(this.endpoint, FanControl.id, 'percentSetting', 66, this.platform.log);
+                await safeUpdateAttribute(this.endpoint, OnOff.id, 'onOff', true, this.platform.log);
+                await this.platform.ha.callService('fan', 'set_percentage', this.entityId, { percentage: 66 }).catch((err) => {
+                  this.platform.log.warn(`[${this.entityId}] Error setting fan med: ${err?.message ?? err}`);
+                });
+              } else if (newMode === 3) { // High
+                this.setCommandLockout('percentage', 100);
+                await safeUpdateAttribute(this.endpoint, FanControl.id, 'percentCurrent', 100, this.platform.log);
+                await safeUpdateAttribute(this.endpoint, FanControl.id, 'percentSetting', 100, this.platform.log);
+                await safeUpdateAttribute(this.endpoint, OnOff.id, 'onOff', true, this.platform.log);
+                await this.platform.ha.callService('fan', 'set_percentage', this.entityId, { percentage: 100 }).catch((err) => {
+                  this.platform.log.warn(`[${this.entityId}] Error setting fan high: ${err?.message ?? err}`);
+                });
+              } else if (newMode === 5) { // Auto
+                await safeUpdateAttribute(this.endpoint, OnOff.id, 'onOff', true, this.platform.log);
+                const presets: string[] = this.state.attributes.preset_modes ?? [];
+                if (presets.includes('auto')) {
+                  await this.platform.ha.callService('fan', 'set_preset_mode', this.entityId, { preset_mode: 'auto' }).catch((err) => {
+                    this.platform.log.warn(`[${this.entityId}] Error setting fan auto preset: ${err?.message ?? err}`);
+                  });
+                } else {
+                  await this.platform.ha.callService('fan', 'turn_on', this.entityId).catch((err) => {
+                    this.platform.log.warn(`[${this.entityId}] Error turning on fan: ${err?.message ?? err}`);
+                  });
+                }
+              }
+            }
+          );
+
+          if (this.endpoint.hasAttributeServer(FanControl.id, 'airflowDirection')) {
+            this.endpoint.subscribeAttribute(
+              FanControl.id,
+              'airflowDirection',
+              async (newDir: number) => {
+                if (typeof newDir !== 'number') return;
+                const direction = newDir === 1 ? 'reverse' : 'forward';
+                await safeUpdateAttribute(this.endpoint, FanControl.id, 'airflowDirection', newDir, this.platform.log);
+                await this.platform.ha.callService('fan', 'set_direction', this.entityId, { direction }).catch((err) => {
+                  this.platform.log.warn(`[${this.entityId}] Error setting fan direction: ${err?.message ?? err}`);
+                });
+              }
+            );
+          }
+        }
       }
 
       if (this.endpoint.hasAttributeServer(LevelControl.id, 'currentLevel')) {
@@ -212,7 +347,10 @@ export class BaseEntity {
           if (typeof level === 'number') {
             const haBrightness = Math.round((level / 254) * 255);
             this.setCommandLockout('brightness', haBrightness);
-            await this.platform.ha.callService(domain, 'turn_on', this.entityId, { brightness: haBrightness });
+            await safeUpdateAttribute(this.endpoint, LevelControl.id, 'currentLevel', level, this.platform.log);
+            await this.platform.ha.callService(domain, 'turn_on', this.entityId, { brightness: haBrightness }).catch((err) => {
+              this.platform.log.warn(`[${this.entityId}] Error setting brightness: ${err?.message ?? err}`);
+            });
           }
         });
 
@@ -220,11 +358,18 @@ export class BaseEntity {
           const level = data?.request?.level ?? data?.level;
           if (typeof level === 'number') {
             if (level === 0) {
-              await this.platform.ha.callService(domain, 'turn_off', this.entityId);
+              await safeUpdateAttribute(this.endpoint, OnOff.id, 'onOff', false, this.platform.log);
+              await this.platform.ha.callService(domain, 'turn_off', this.entityId).catch((err) => {
+                this.platform.log.warn(`[${this.entityId}] Error turning off: ${err?.message ?? err}`);
+              });
             } else {
               const haBrightness = Math.round((level / 254) * 255);
               this.setCommandLockout('brightness', haBrightness);
-              await this.platform.ha.callService(domain, 'turn_on', this.entityId, { brightness: haBrightness });
+              await safeUpdateAttribute(this.endpoint, LevelControl.id, 'currentLevel', level, this.platform.log);
+              await safeUpdateAttribute(this.endpoint, OnOff.id, 'onOff', true, this.platform.log);
+              await this.platform.ha.callService(domain, 'turn_on', this.entityId, { brightness: haBrightness }).catch((err) => {
+                this.platform.log.warn(`[${this.entityId}] Error setting brightness: ${err?.message ?? err}`);
+              });
             }
           }
         });
@@ -235,7 +380,9 @@ export class BaseEntity {
           if (payload.hs_color) this.setCommandLockout('hs_color', payload.hs_color);
           if (payload.xy_color) this.setCommandLockout('xy_color', payload.xy_color);
           if (payload.color_temp) this.setCommandLockout('color_temp', payload.color_temp);
-          await this.platform.ha.callService('light', 'turn_on', this.entityId, payload);
+          await this.platform.ha.callService('light', 'turn_on', this.entityId, payload).catch((err) => {
+            this.platform.log.warn(`[${this.entityId}] Error setting light color: ${err?.message ?? err}`);
+          });
         };
 
         const currentHs = () => lightColor.getHsColor(this.state) ?? [0, 100];
@@ -263,7 +410,7 @@ export class BaseEntity {
           const req = data?.request ?? data;
           if (typeof req?.stepSize === 'number') {
             const [hue, sat] = currentHs();
-            const sign = req.stepMode === 1 ? -1 : 1; // 1 = down, 0 = up per cluster spec usually, wait 3.10.4 spec 1 is down
+            const sign = req.stepMode === 1 ? -1 : 1;
             const newHue = lightColor.normalizeHue(hue + (sign * lightColor.matterHueToHa(req.stepSize)));
             const hs: [number, number] = [newHue, sat];
             const payload = lightColor.buildColorPayload(this.state.attributes.supported_color_modes ?? [], this.state.attributes.color_mode, { hs });
@@ -282,7 +429,7 @@ export class BaseEntity {
         });
 
         this.endpoint.addCommandHandler('enhancedMoveHue', async (data: any) => {
-          // Handled same as moveHue if direction provided, usually controller doesn't send move without stop
+          // Handled same as moveHue if direction provided
         });
 
         this.endpoint.addCommandHandler('enhancedStepHue', async (data: any) => {
@@ -336,7 +483,9 @@ export class BaseEntity {
             const usesKelvin = this.state.attributes.color_temp_kelvin !== undefined || this.state.attributes.min_color_temp_kelvin !== undefined || this.state.attributes.max_color_temp_kelvin !== undefined;
             if (usesKelvin) {
               this.setCommandLockout('color_temp', mireds);
-              await this.platform.ha.callService('light', 'turn_on', this.entityId, { color_temp_kelvin: lightColor.miredsToKelvin(mireds) });
+              await this.platform.ha.callService('light', 'turn_on', this.entityId, { color_temp_kelvin: lightColor.miredsToKelvin(mireds) }).catch((err) => {
+                this.platform.log.warn(`[${this.entityId}] Error setting color temp: ${err?.message ?? err}`);
+              });
             } else {
               await sendColor(payload);
             }
@@ -426,9 +575,18 @@ export class BaseEntity {
 
       if (domain === 'fan' && this.endpoint.hasAttributeServer(FanControl.id, 'percentCurrent')) {
         const percentage = typeof newState.attributes.percentage === 'number' ? newState.attributes.percentage : isOn ? 100 : 0;
-        await updateFn(this.endpoint, FanControl.id, 'percentCurrent', percentage, this.platform.log);
-        await updateFn(this.endpoint, FanControl.id, 'percentSetting', percentage, this.platform.log);
-        await updateFn(this.endpoint, FanControl.id, 'fanMode', isOn ? 1 : 0, this.platform.log);
+        if (!isInitialSync && this.shouldIgnoreStateUpdate('percentage', percentage)) {
+          this.platform.log.debug(`[${this.entityId}] Ignoring HA fan percentage update due to recent command lockout`);
+        } else {
+          await updateFn(this.endpoint, FanControl.id, 'percentCurrent', percentage, this.platform.log);
+          await updateFn(this.endpoint, FanControl.id, 'percentSetting', percentage, this.platform.log);
+          const fanMode = isOn ? (percentage > 66 ? 3 : percentage > 33 ? 2 : percentage > 0 ? 1 : 4) : 0;
+          await updateFn(this.endpoint, FanControl.id, 'fanMode', fanMode, this.platform.log);
+          if (this.endpoint.hasAttributeServer(FanControl.id, 'airflowDirection') && newState.attributes.direction) {
+            const dir = newState.attributes.direction === 'reverse' ? 1 : 0;
+            await updateFn(this.endpoint, FanControl.id, 'airflowDirection', dir, this.platform.log);
+          }
+        }
       }
     } else if (domain === 'binary_sensor') {
       const active = ['on', 'open', 'detected', 'true'].includes(newState.state.toLowerCase());

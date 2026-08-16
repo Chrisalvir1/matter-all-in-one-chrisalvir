@@ -93,12 +93,36 @@ export class MockMatterbridgeEndpoint {
     return true;
   }
 
-  public setAttribute(clusterId: number, attributeName: string, value: any) {
-    this.attributes.set(`${clusterId}:${attributeName}`, value);
+  public setAttribute(clusterId: any, attributeName: string, value: any) {
+    const id = typeof clusterId === 'object' && clusterId !== null ? clusterId.id : clusterId;
+    this.attributes.set(`${id}:${attributeName}`, value);
   }
 
-  public updateAttribute(clusterId: number, attributeName: string, value: any) {
-    this.attributes.set(`${clusterId}:${attributeName}`, value);
+  public updateAttribute(clusterId: any, attributeName: string, value: any) {
+    const id = typeof clusterId === 'object' && clusterId !== null ? clusterId.id : clusterId;
+    this.attributes.set(`${id}:${attributeName}`, value);
+  }
+
+  public attributeSubscriptions = new Map<string, ((newValue: any, oldValue: any, context?: any) => any)[]>();
+
+  public subscribeAttribute(clusterId: any, attributeName: string, callback: (...args: any[]) => any) {
+    const id = typeof clusterId === 'object' && clusterId !== null ? clusterId.id : clusterId;
+    const key = `${id}:${attributeName}`;
+    const list = this.attributeSubscriptions.get(key) ?? [];
+    list.push(callback);
+    this.attributeSubscriptions.set(key, list);
+    return this;
+  }
+
+  public async invokeAttributeChange(clusterId: any, attributeName: string, newValue: any, oldValue?: any) {
+    const id = typeof clusterId === 'object' && clusterId !== null ? clusterId.id : clusterId;
+    const key = `${id}:${attributeName}`;
+    const list = this.attributeSubscriptions.get(key);
+    if (list) {
+      for (const cb of list) {
+        await cb(newValue, oldValue, {} as any);
+      }
+    }
   }
 
   public addCommandHandler(commandName: string, callback: (...args: any[]) => any) {

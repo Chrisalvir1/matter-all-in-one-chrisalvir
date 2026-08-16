@@ -144,15 +144,11 @@ export const lightColor = {
     const payload: Record<string, any> = {};
 
     if (colorReq.mireds !== undefined) {
-      // If a temperature was requested, it takes precedence if supported
-      if (modes.includes('color_temp')) {
-        const kelvin = this.miredsToKelvin(colorReq.mireds);
-        // We might want to send color_temp_kelvin if HA prefers it, but for compatibility 
-        // sending just color_temp (mireds) is safer, or check if HA sent kelvin.
-        // We will just send color_temp
-        payload.color_temp = colorReq.mireds;
-        return payload;
-      }
+      const kelvin = this.miredsToKelvin(colorReq.mireds);
+      // Modern Home Assistant prefers color_temp_kelvin, while legacy integrations use color_temp (mireds)
+      payload.color_temp = colorReq.mireds;
+      payload.color_temp_kelvin = kelvin;
+      return payload;
     }
 
     if (colorReq.xy) {
@@ -162,23 +158,16 @@ export const lightColor = {
       }
       if (modes.includes('hs') || modes.includes('rgb') || modes.includes('rgbw') || modes.includes('rgbww')) {
         const hs = this.xyToHs(colorReq.xy[0], colorReq.xy[1]);
-        if (modes.includes('hs')) payload.hs_color = hs;
-        else payload.hs_color = hs; // HA automatically converts hs to rgb
+        payload.hs_color = hs;
         return payload;
       }
+      payload.xy_color = colorReq.xy;
+      return payload;
     }
 
     if (colorReq.hs) {
-      if (modes.includes('hs') || modes.includes('rgb') || modes.includes('rgbw') || modes.includes('rgbww')) {
-        payload.hs_color = colorReq.hs;
-        return payload;
-      }
-      // If only XY is supported
-      if (modes.includes('xy')) {
-        // Fallback to sending hs, HA usually handles it if XY is the only mode
-        payload.hs_color = colorReq.hs;
-        return payload;
-      }
+      payload.hs_color = colorReq.hs;
+      return payload;
     }
 
     return payload;

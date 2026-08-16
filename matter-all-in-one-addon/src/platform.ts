@@ -252,7 +252,24 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       const controllerNames = [
         ...new Set(fabrics.map((fabric) => fabric.label).filter((label): label is string => label !== null)),
       ];
-      const pairingCodes = commissioning.pairingCodes ?? nodeState.pairingCodes ?? {};
+      const pairingCodes =
+        commissioning.pairingCodes ??
+        nodeState.pairingCodes ??
+        endpoint?.serverNode?.pairingCodes ??
+        endpoint?.pairingCodes ??
+        {};
+      const qrPairingCode =
+        pairingCodes.qrPairingCode ??
+        pairingCodes.qrCode ??
+        endpoint?.serverNode?.state?.commissioning?.pairingCodes?.qrPairingCode ??
+        endpoint?.qrPairingCode ??
+        null;
+      const manualPairingCode =
+        pairingCodes.manualPairingCode ??
+        pairingCodes.manualCode ??
+        endpoint?.serverNode?.state?.commissioning?.pairingCodes?.manualPairingCode ??
+        endpoint?.manualPairingCode ??
+        null;
 
       return {
         // A non-empty live fabric list proves commissioning.  If its list is
@@ -266,8 +283,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         homeName: controllerNames.join(', ') || null,
         fabricCount: fabrics.length,
         fabrics,
-        pairingCode: pairingCodes.qrPairingCode ?? null,
-        manualPairingCode: pairingCodes.manualPairingCode ?? null,
+        pairingCode: qrPairingCode,
+        manualPairingCode,
       };
     } catch (error) {
       // A node that Matter.js is still tearing down can throw while reading
@@ -1309,7 +1326,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
    * commissioning, so erasing fabrics alone cannot add ColorControl to a
    * light that was first published as on/off-only.
    */
-  public async resetMatterAccessory(entityId: string): Promise<{ success: boolean; error?: string }> {
+  public async resetMatterAccessory(entityId: string): Promise<{ success: boolean; error?: string; pairingCode?: string | null; manualPairingCode?: string | null }> {
     const compositeDeviceId = this.compositeMembership.get(entityId) ?? this.getCompositeCandidate(entityId)?.deviceId;
     const endpoint = this.getMatterEndpointForEntity(entityId, compositeDeviceId);
     const serverNode = endpoint?.serverNode;
@@ -1348,8 +1365,14 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         await this.activateEntity(entityId);
       }
       this.clearMatterAccessoryProblems(entityId, compositeDeviceId);
+      const newEndpoint = this.getMatterEndpointForEntity(entityId, compositeDeviceId);
+      const connection = newEndpoint ? this.getMatterConnectionInfo(newEndpoint) : undefined;
       this.log.notice(`Matter factory reset and capability rebuild completed for ${idn}${compositeDeviceId ? `device:${compositeDeviceId}` : entityId}${rs}`);
-      return { success: true };
+      return {
+        success: true,
+        pairingCode: connection?.pairingCode ?? null,
+        manualPairingCode: connection?.manualPairingCode ?? null,
+      };
     } catch (error) {
       this.log.error(`Failed to factory reset Matter accessory ${entityId}: ${error}`);
       this.recordEntityDiagnostic(entityId, `No se pudo restablecer Matter: ${String(error)}`);
@@ -1670,26 +1693,23 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         }
 
         if (req.method === 'POST' && pathname === '/api/custom/mqtt-config') {
-          let body = '';
-          req.on('data', chunk => body += chunk.toString());
-          req.on('end', async () => {
-            try {
-              const data = JSON.parse(body);
-              (this.config as any).mqttHost = data.host;
-              (this.config as any).mqttPort = data.port;
-              (this.config as any).mqttUser = data.user;
-              (this.config as any).mqttPassword = data.password;
-              
-              // To persist, we should write to a file or matterbridge config
-              await fs.writeFile('/data/mqtt-config.json', JSON.stringify(data), 'utf8');
-              
-              res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-              res.end(JSON.stringify({ success: true }));
-            } catch (e) {
-              res.writeHead(400);
-              res.end('Bad Request');
-            }
-          });
+          try {
+            const body = await this.readRequestBody(req);
+            const data = JSON.parse(body);
+            (this.config as any).mqttHost = data.host;
+            (this.config as any).mqttPort = data.port;
+            (this.config as any).mqttUser = data.user;
+            (this.config as any).mqttPassword = data.password;
+
+            // To persist, write to /data/mqtt-config.json
+            await fs.writeFile('/data/mqtt-config.json', JSON.stringify(data), 'utf8');
+
+            res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify({ success: true }));
+          } catch {
+            res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify({ success: false, error: 'Invalid MQTT configuration payload.' }));
+          }
           return;
         }
 

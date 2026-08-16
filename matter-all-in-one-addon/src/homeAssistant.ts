@@ -1153,7 +1153,9 @@ export class HomeAssistant extends EventEmitter {
   private readonly reconnectTimeoutTime: number = 60000; // Reconnect timeout in milliseconds, 0 means no timeout.
   private readonly reconnectRetries: number = 0; // 0 means retry indefinitely.
   private readonly connectionTimeoutTime: number;
-  private _responseTimeout: number = 5000; // Default WebSocket timeout for responses in milliseconds
+  private _responseTimeout: number = 10000; // Default WebSocket timeout for responses in milliseconds
+  private _serviceTimeout: number = 25000; // Dedicated timeout for call_service to accommodate BLE and slow integrations
+  private readonly deviceCommandQueues = new Map<string, Promise<any>>();
   private readonly certificatePath: string | undefined = undefined; // Full path to the CA certificate for secure connections
   private readonly rejectUnauthorized: boolean | undefined = undefined; // Whether the WebSocket has to reject unauthorized certificates
   private reconnectRetry = 1; // Reconnect retry count. It is incremented each time a reconnect is attempted till the maximum number of retries is reached.
@@ -1205,6 +1207,14 @@ export class HomeAssistant extends EventEmitter {
 
   set responseTimeout(value: number) {
     this._responseTimeout = value;
+  }
+
+  get serviceTimeout(): number {
+    return this._serviceTimeout;
+  }
+
+  set serviceTimeout(value: number) {
+    this._serviceTimeout = value;
   }
 
   /**
@@ -1383,17 +1393,18 @@ export class HomeAssistant extends EventEmitter {
     this.pendingRequests.clear();
   }
 
-  private request(request: Record<string, unknown>): Promise<HassWebSocketResponseResult> {
+  private request(request: Record<string, unknown>, timeoutMs?: number): Promise<HassWebSocketResponseResult> {
     return new Promise((resolve, reject) => {
       if (!this.connected || !this.ws || this.ws.readyState !== WebSocket.OPEN) {
         reject(new Error('WebSocket request failed: not connected to Home Assistant'));
         return;
       }
       const id = this.requestId++;
+      const timeout = timeoutMs ?? this._responseTimeout;
       const timer = setTimeout(() => {
         this.pendingRequests.delete(id);
-        reject(new Error(`Home Assistant request ${String(request.type)} id ${id} timed out`));
-      }, this._responseTimeout).unref();
+        reject(new Error(`Home Assistant request ${String(request.type)} id ${id} timed out after ${timeout}ms`));
+      }, timeout).unref();
       this.pendingRequests.set(id, { resolve, reject, timer });
       try {
         this.ws.send(JSON.stringify({ ...request, id }));
@@ -1965,20 +1976,41 @@ export class HomeAssistant extends EventEmitter {
    * await this.callService('switch', 'toggle', 'switch.living_room');
    * await this.callService('light', 'turn_on', 'light.living_room', { brightness: 255 });
    */
-  // eslint-disable-next-line @typescript-eslint/promise-function-async
   callService(domain: string, service: string, entityId: string, serviceData: Record<string, HomeAssistantPrimitive> = {}): Promise<{ context: HassContext; response: unknown }> {
-    return this.request({
-      type: 'call_service',
-      domain,
-      service,
-      service_data: { ...serviceData },
-      target: { entity_id: entityId },
-    }).then((response) => {
-      if (!response.success) throw new Error(response.error?.message ?? `Service ${domain}.${service} failed`);
+    const deviceId = this.hassEntities?.get(entityId)?.device_id;
+    const queueKey = deviceId ? `dev:${deviceId}` : `ent:${entityId}`;
+    const prevQueue = this.deviceCommandQueues.get(queueKey) ?? Promise.resolve();
+
+    const executeCall = async () => {
+      const response = await this.request(
+        {
+          type: 'call_service',
+          domain,
+          service,
+          service_data: { ...serviceData },
+          target: { entity_id: entityId },
+        },
+        this._serviceTimeout,
+      );
+
+      if (!response.success) {
+        throw new Error(response.error?.message ?? `Service ${domain}.${service} failed`);
+      }
       return response.result as unknown as {
         context: HassContext;
         response: unknown;
       };
+    };
+
+    const nextPromise = prevQueue.catch(() => {}).then(executeCall);
+    this.deviceCommandQueues.set(queueKey, nextPromise);
+
+    nextPromise.finally(() => {
+      if (this.deviceCommandQueues.get(queueKey) === nextPromise) {
+        this.deviceCommandQueues.delete(queueKey);
+      }
     });
+
+    return nextPromise;
   }
 }

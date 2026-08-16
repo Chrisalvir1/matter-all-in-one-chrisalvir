@@ -130,4 +130,32 @@ describe('CompositeDeviceEntity', () => {
     expect(restored.endpoints.get('light.sala')).toBe((retainedEndpoint as any).children.get('light_sala'));
     await expect(restored.syncInitialState()).resolves.toBeUndefined();
   });
+
+  it('supports speed slider (percentSetting), modes, and direction in composite fan + light accessories', async () => {
+    const composite = new CompositeDeviceEntity(platform, 'fan-combo', 'Ventilador con Luz', [
+      {
+        entityId: 'fan.combo',
+        state: state('fan.combo', 'on', { percentage: 50, direction: 'forward' }),
+      },
+      {
+        entityId: 'light.combo',
+        state: state('light.combo', 'off', { brightness: 255 }),
+      },
+    ]);
+
+    const root = await composite.createEndpoint();
+    const fanEndpoint = composite.endpoints.get('fan.combo') as any;
+
+    // Simulate dragging HomeKit fan slider to 80%
+    await fanEndpoint.invokeAttributeChange(0x0202, 'percentSetting', 80);
+    expect(platform.ha.callService).toHaveBeenCalledWith('fan', 'set_percentage', 'fan.combo', { percentage: 80 });
+
+    // Simulate fan mode Low (1) -> 33%
+    await fanEndpoint.invokeAttributeChange(0x0202, 'fanMode', 1);
+    expect(platform.ha.callService).toHaveBeenCalledWith('fan', 'set_percentage', 'fan.combo', { percentage: 33 });
+
+    // Simulate fan direction reverse
+    await fanEndpoint.invokeAttributeChange(0x0202, 'airflowDirection', 1);
+    expect(platform.ha.callService).toHaveBeenCalledWith('fan', 'set_direction', 'fan.combo', { direction: 'reverse' });
+  });
 });

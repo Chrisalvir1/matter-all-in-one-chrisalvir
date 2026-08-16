@@ -45,4 +45,42 @@ describe('HomeAssistant connection recovery', () => {
     const ha = new HomeAssistant('ws://127.0.0.1:1', 'test-token', 0, 0);
     await expect(ha.fetchData()).rejects.toThrow('not connected to Home Assistant');
   });
+
+  it('serializes service calls targeting the same device ID to prevent BLE collisions', async () => {
+    const ha = new HomeAssistant('ws://127.0.0.1:8123', 'test-token', 0, 0);
+    // Populate mock entities map
+    ha.hassEntities.set('fan.ble_fan', { id: 'ent-1', entity_id: 'fan.ble_fan', device_id: 'dev-ble-combo' } as any);
+    ha.hassEntities.set('light.ble_light', { id: 'ent-2', entity_id: 'light.ble_light', device_id: 'dev-ble-combo' } as any);
+    ha.hassEntities.set('switch.other', { id: 'ent-3', entity_id: 'switch.other', device_id: 'dev-other' } as any);
+
+    const executionOrder: string[] = [];
+    (ha as any).connected = true;
+    (ha as any).ws = { readyState: 1, send: () => {} };
+
+    // Mock request to record order and simulate async completion
+    (ha as any).request = async (req: any) => {
+      const target = req.target?.entity_id;
+      executionOrder.push(`start:${target}`);
+      await new Promise((r) => setTimeout(r, 20));
+      executionOrder.push(`end:${target}`);
+      return { success: true, result: { context: {}, response: {} } };
+    };
+
+    // Dispatch fan and light commands simultaneously (same device) and switch command (different device)
+    const pFan = ha.callService('fan', 'turn_on', 'fan.ble_fan');
+    const pLight = ha.callService('light', 'turn_on', 'light.ble_light');
+    const pOther = ha.callService('switch', 'turn_on', 'switch.other');
+
+    await Promise.all([pFan, pLight, pOther]);
+
+    // Verify that fan and light executed strictly in series (start:fan -> end:fan -> start:light -> end:light)
+    const fanStartIndex = executionOrder.indexOf('start:fan.ble_fan');
+    const fanEndIndex = executionOrder.indexOf('end:fan.ble_fan');
+    const lightStartIndex = executionOrder.indexOf('start:light.ble_light');
+    const lightEndIndex = executionOrder.indexOf('end:light.ble_light');
+
+    expect(fanStartIndex).toBeLessThan(fanEndIndex);
+    expect(fanEndIndex).toBeLessThan(lightStartIndex);
+    expect(lightStartIndex).toBeLessThan(lightEndIndex);
+  });
 });

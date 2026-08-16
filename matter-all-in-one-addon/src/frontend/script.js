@@ -183,7 +183,11 @@ function buildDeviceCard(device) {
   element.innerHTML = `<div class="card-top"><span class="device-icon">${icon(domains[0])}</span><span class="export-badge ${exported ? 'active' : ''}">${exported}/${device.entities.length}</span></div><h3 title="${escapeHtml(device.name)}">${highlightedTitle}</h3><p class="device-meta">${escapeHtml(originText)}</p><div class="tags">${isMqtt ? '<span class="tag tag-mqtt">📡 MQTT</span>' : ''}${hasIssue ? '<span class="tag tag-warning">Revisar</span>' : ''}${domains.slice(0, 3).map((domain) => `<span class="tag">${escapeHtml(domain)}</span>`).join('')}</div>${searchMatchesHtml}<div class="card-footer"><span class="entity-summary">${device.entities.length} entidad${device.entities.length === 1 ? '' : 'es'}</span><button class="button button-secondary" type="button">Configurar</button></div>`;
   
   const targetEntity = matchingEntities[0] || null;
-  element.querySelector('button').addEventListener('click', () => openDevice(device, targetEntity));
+  element.addEventListener('click', () => openDevice(device, targetEntity));
+  element.querySelector('button')?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    openDevice(device, targetEntity);
+  });
   return element;
 }
 
@@ -295,33 +299,8 @@ function renderQrSection(entity) {
     // Exported but QR not ready yet (serverNode may still be starting)
     els.deviceQrButton.textContent = '⏳ Generando código…';
     els.deviceQrButton.disabled = true;
-    // Poll until pairingCode is available
-    pollForPairingCode(entity);
+    void pollForPairingCode(entity.entityId);
   }
-}
-
-function pollForPairingCode(entity) {
-  let attempts = 0;
-  const interval = setInterval(async () => {
-    attempts++;
-    if (attempts > 20) { clearInterval(interval); els.deviceQrButton.textContent = 'Código no disponible'; return; }
-    try {
-      const fresh = await request('/devices');
-      const found = fresh.find((e) => e.entityId === entity.entityId);
-      if (found && found.pairingCode) {
-        clearInterval(interval);
-        // Update in state
-        const idx = state.entities.findIndex((e) => e.entityId === entity.entityId);
-        if (idx !== -1) state.entities[idx] = found;
-        // Only re-render if this entity is still selected
-        if (state.activeEntity && state.activeEntity.entityId === entity.entityId) {
-          state.activeEntity = found;
-          els.deviceQrButton.disabled = false;
-          els.deviceQrButton.textContent = 'Mostrar Código de Emparejamiento';
-        }
-      }
-    } catch { /* ignore */ }
-  }, 2000);
 }
 
 function selectEntity(entity) {
@@ -464,7 +443,7 @@ async function updateProfile(entity, profileId) {
     if (!result.success) throw new Error(result.error || 'No se pudo cambiar el perfil Matter');
     showToast(`Perfil Matter actualizado para ${displayName(entity)}.`);
     await fetchDevices();
-    const device = groupEntities(state.entities).find((item) => item.id === state.activeDevice.id);
+    const device = groupEntities(state.entities).find((item) => item.id === state.activeDevice?.id);
     if (device) openDevice(device);
   } catch (error) { showToast(error.message || 'No se pudo cambiar el perfil Matter.', true); els.profileSelect.disabled = false; }
 }
@@ -514,6 +493,34 @@ document.querySelectorAll('.filter-chip').forEach((button) => button.addEventLis
 }));
 els.profileSelect.addEventListener('change', () => { if (state.activeEntity) void updateProfile(state.activeEntity, els.profileSelect.value); });
 
+async function pollForPairingCode(entityOrId, maxAttempts = 20) {
+  const targetEntityId = typeof entityOrId === 'object' && entityOrId !== null ? entityOrId.entityId : entityOrId;
+  if (!targetEntityId) return;
+
+  for (let i = 0; i < maxAttempts; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    try {
+      const fresh = await request('/devices');
+      if (Array.isArray(fresh)) {
+        state.entities = fresh;
+        const found = fresh.find((e) => e.entityId === targetEntityId);
+        if (found && found.pairingCode) {
+          if (state.activeEntity?.entityId === targetEntityId) {
+            state.activeEntity = found;
+            els.deviceQrButton.disabled = false;
+            showQrCode(found);
+            els.deviceQrButton.textContent = 'Ocultar Código';
+          }
+          renderDevices();
+          break;
+        }
+      }
+    } catch {
+      // Ignore transient poll error
+    }
+  }
+}
+
 els.deviceQrButton.addEventListener('click', () => {
   if (els.deviceQrContainer.style.display !== 'none') {
     // Toggle off
@@ -538,10 +545,11 @@ els.deviceQrButton.addEventListener('click', () => {
     showQrCode(entity);
     els.deviceQrButton.textContent = 'Ocultar Código';
   } else {
-    // No pairing code yet, show message and poll
+    // No pairing code yet, show message and fast poll
     els.deviceQrCode.innerHTML = '<p style="color:#888;font-size:0.85rem;">El código QR aún se está generando. Espera unos segundos…</p>';
     els.deviceQrContainer.style.display = 'block';
     els.deviceQrButton.textContent = 'Ocultar Código';
+    void pollForPairingCode(entity.entityId);
   }
 });
 
@@ -555,8 +563,19 @@ els.resetAccessoryButton.addEventListener('click', () => {
       try {
         const result = await request(`/reset-accessory/${encodeURIComponent(entity.entityId)}`, { method: 'POST' });
         if (!result.success) throw new Error(result.error || 'No se pudo restablecer el accesorio');
-        showToast('Conexión Matter restablecida. Esperando el código de emparejamiento…');
-        setTimeout(() => void fetchDevices(true), 1200);
+        if (result.pairingCode) {
+          entity.pairingCode = result.pairingCode;
+          entity.manualPairingCode = result.manualPairingCode;
+          entity.commissioned = false;
+          entity.homeName = null;
+          showQrCode(entity);
+          els.deviceQrButton.textContent = 'Ocultar Código';
+          showToast('Conexión Matter restablecida.');
+          void fetchDevices(true);
+        } else {
+          showToast('Conexión Matter restablecida. Esperando el código de emparejamiento…');
+          void pollForPairingCode(entity.entityId);
+        }
       } catch (error) {
         showToast(error.message || 'No se pudo restablecer el accesorio.', true);
       }
@@ -590,8 +609,19 @@ els.regenerateCodeButton.addEventListener('click', () => {
       try {
         const result = await request(`/reset-accessory/${encodeURIComponent(entity.entityId)}`, { method: 'POST' });
         if (!result.success) throw new Error(result.error || 'No se pudo regenerar el código Matter');
-        showToast('Código Matter regenerado. Esperando las nuevas credenciales…');
-        setTimeout(() => void fetchDevices(true), 1200);
+        if (result.pairingCode) {
+          entity.pairingCode = result.pairingCode;
+          entity.manualPairingCode = result.manualPairingCode;
+          entity.commissioned = false;
+          entity.homeName = null;
+          showQrCode(entity);
+          els.deviceQrButton.textContent = 'Ocultar Código';
+          showToast('Código Matter regenerado.');
+          void fetchDevices(true);
+        } else {
+          showToast('Código Matter regenerado. Esperando las nuevas credenciales…');
+          void pollForPairingCode(entity.entityId);
+        }
       } catch (error) {
         showToast(error.message || 'No se pudo regenerar el código Matter.', true);
       }
@@ -610,7 +640,12 @@ if (els.quickRestartButton) els.quickRestartButton.addEventListener('click', doR
 els.restartButton.addEventListener('click', doRestart);
 els.factoryResetButton.addEventListener('click', () => openConfirm('Restablecimiento de fábrica', 'Esta operación elimina configuración y emparejamientos. Tendrás que volver a configurar y emparejar los accesorios.', async () => { try { await request('/factoryreset', { method: 'POST' }); showToast('Restablecimiento solicitado.'); } catch { showToast('No se pudo solicitar el restablecimiento.', true); } }));
 [els.deviceModal, els.settingsModal].forEach((modal) => modal.addEventListener('click', (event) => { if (event.target === modal) setModalOpen(modal, false); }));
-document.addEventListener('keydown', (event) => { if (event.key === 'Escape') [els.confirmModal, els.settingsModal, els.deviceModal].find((modal) => modal.classList.contains('open')) && setModalOpen([els.confirmModal, els.settingsModal, els.deviceModal].find((modal) => modal.classList.contains('open')), false); });
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') {
+    const topModal = [els.confirmModal, els.settingsModal, els.deviceModal].find((modal) => modal && modal.classList.contains('open'));
+    if (topModal) setModalOpen(topModal, false);
+  }
+});
 
 void fetchStatus();
 void fetchDevices();

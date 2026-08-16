@@ -37,7 +37,7 @@
       </section>
 
       <div class="sidebar-spacer"></div>
-      <button class="button button-secondary" id="quick-restart-button" type="button" style="border-color: rgba(239, 68, 68, 0.4); color: #f87171; margin-bottom: 8px;">↻ Reiniciar Servicio</button>
+      <button class="button button-secondary button-restart-quick" id="quick-restart-button" type="button">↻ Reiniciar Servicio</button>
       <button class="button button-secondary" id="settings-button" type="button">Ajustes del servicio</button>
       <div class="connection-state">
         <span class="connection-dot" id="ha-dot"></span>
@@ -151,14 +151,14 @@
       <h2 id="settings-title">Ajustes del servicio</h2>
       <p class="lead compact">Estas acciones afectan a todos los accesorios y al servicio Matterbridge subyacente.</p>
       <div class="settings-actions">
-        <div class="settings-row">
+        <div class="settings-row mqtt-settings-row">
           <div><strong>Configuración MQTT (Auto-Discovery)</strong><p>Habilita la integración de dispositivos MQTT directamente en Matter.</p></div>
-          <div class="mqtt-form" style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
-            <input type="text" id="mqtt-host" placeholder="Broker IP (ej. 192.168.1.50)" aria-label="MQTT Host" class="search" style="padding: 8px; width: 100%;">
-            <input type="number" id="mqtt-port" placeholder="Puerto (ej. 1883)" aria-label="MQTT Port" class="search" style="padding: 8px; width: 100%;">
-            <input type="text" id="mqtt-user" placeholder="Usuario" aria-label="MQTT User" class="search" style="padding: 8px; width: 100%;">
-            <input type="password" id="mqtt-pass" placeholder="Contraseña" aria-label="MQTT Password" class="search" style="padding: 8px; width: 100%;">
-            <button class="button button-primary" id="mqtt-save-button" type="button" style="align-self: flex-start; margin-top: 4px;">Guardar MQTT</button>
+          <div class="mqtt-form">
+            <input type="text" id="mqtt-host" placeholder="Broker IP (ej. 192.168.1.50)" aria-label="MQTT Host" class="form-input">
+            <input type="number" id="mqtt-port" placeholder="Puerto (ej. 1883)" aria-label="MQTT Port" class="form-input">
+            <input type="text" id="mqtt-user" placeholder="Usuario" aria-label="MQTT User" class="form-input">
+            <input type="password" id="mqtt-pass" placeholder="Contraseña" aria-label="MQTT Password" class="form-input">
+            <button class="button button-primary" id="mqtt-save-button" type="button">Guardar MQTT</button>
           </div>
         </div>
         <div class="settings-row">
