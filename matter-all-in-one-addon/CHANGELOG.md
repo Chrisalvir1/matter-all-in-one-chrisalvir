@@ -1,3 +1,32 @@
+## [1.4.0] - 2026-08-16
+
+### Added & Enhanced
+- **Soporte Completo Multi-Ecosistema con Samsung SmartThings:**
+  - Identificación nativa de los Vendor IDs de Samsung SmartThings (`0x10e1`, `0x110a`, `0x127b`, `0x1175`, `0x1360`), Apple Home, Google Home, Alexa, Tuya, LG ThinQ y Home Assistant.
+  - Sección visual dedicada de **"Casas / Controladores Conectados"** con iconos distintivos (`💠 Samsung SmartThings`, `🍎 Apple Home`, `🌐 Google Home`, `🔊 Amazon Alexa`) y botón independiente **`[Desconectar]`** por casa.
+  - Multi-Admin fluido: permite vincular el mismo accesorio a Samsung SmartThings y Apple Home simultáneamente mediante **`Añadir a otra casa (Ver QR)`**.
+- **Control Completo de Ventiladores (FAN) en SmartThings, HomeKit y Matter:**
+  - Deslizador de velocidad porcentual real (0–100%) mediante `FanControl.percentSetting`.
+  - Modos de ventilador (`fanMode`: Auto, Manual, Bajo 33%, Medio 66%, Alto 100%, On/Off).
+  - Dirección de flujo de aire (`airflowDirection`: adelante / reversa) con mapeo directo a `fan.set_direction`.
+  - Actualizaciones optimistas locales para una respuesta inmediata sin latencia ni rebotes.
+- **Control Confiable de Luces y Temperatura de Color (Kelvin / Mireds):**
+  - Corrección en `buildColorPayload` garantizando el envío simultáneo de `color_temp_kelvin` y `color_temp`, eliminando cargas útiles vacías en luces de ventiladores.
+- **Eliminación Definitiva de Congelamientos y Colisiones BLE (Bluetooth):**
+  - Cola FIFO secuencial por `device_id` en `homeAssistant.ts` para serializar comandos hacia el mismo adaptador/dispositivo Bluetooth (`BleakDBusError: InProgress`).
+  - Timeout ampliado a 25 segundos para evitar desconexiones prematuras de BLE.
+- **Detección en Tiempo Real de Desemparejamiento:**
+  - Reconocimiento inmediato de retirada de fabric (`RemoveFabric`): al eliminar el accesorio de Apple Home o SmartThings, la UI muestra inmediatamente el estado desemparejado con el código QR listo.
+- **Claridad Total en Botones de Acción de Matter:**
+  - `↻ Recargar / Sincronizar`: Refresca la conexión con Home Assistant y Matter sin perder emparejamientos.
+  - `Desconectar todo y nuevo QR`: Desvincula de todas las casas y genera nuevas credenciales limpias.
+  - `Añadir a otra casa (Ver QR)`: Despliega el código QR para multi-admin.
+- **Diagnósticos y Logs en Tiempo Real en Verde:**
+  - Los eventos informativos y recuperados se muestran con etiqueta y color verde `[OK]`.
+  - Auto-limpieza de `entityProblems` en dispositivos recuperados.
+- **Actualización de Dependencias:**
+  - Actualizado a **Vitest `v5.0.0-rc.1`** con `vite ^8.2.1` y soporte TypeScript 7 / Node 24 LTS.
+
 ## [1.3.9] - 2026-08-16
 
 ### Fixed & Enhanced
