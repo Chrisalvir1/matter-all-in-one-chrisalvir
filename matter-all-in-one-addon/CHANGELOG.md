@@ -1,3 +1,20 @@
+## [1.4.1] - 2026-08-16
+
+### Fixed & Enhanced
+- **Solución Definitiva al Error 'This view is read-only':**
+  - Eliminación de asignaciones directas sobre el proxy inmutable de estado de Matter.js (`serverNode.state`).
+  - Transacciones de desemparejamiento nativas y asíncronas con `serverNode.act` y borrado total con `serverNode.erase()`.
+- **Desconexión Precisa por Fabric ID (64-bit) y Fabric Index:**
+  - Identificación dual de identificadores de fabric enviados por Apple Home (`1580155120`) e índices de Matter.js (1–254).
+  - Al pulsar **`[Desconectar]`**, el accesorio se desvincula de raíz y muestra inmediatamente el nuevo código QR.
+- **Diseño de Modal Ampliado y Selección Panorámica (390px):**
+  - Columna de selección ampliada de 290px a 390px y modal a 1140px, evitando que el contenido se estire hacia abajo.
+  - Scroll interno independiente para la lista de entidades y el panel de selección, manteniendo encabezados fijos y accesibles.
+- **Nombre de la Casa / Hogar en Cada Controlador:**
+  - Cada tarjeta de controlador conectado muestra el ecosistema (`🍎 Apple Home`, `💠 Samsung SmartThings`, `🌐 Google Home`, `🔊 Amazon Alexa`) y el nombre de la Casa (`🏠 Casa: Casa Principal / Casa de Chris`).
+- **Limpieza Automática de Logs WebSocket (Code: 1006):**
+  - Auto-limpieza de advertencias de desconexión transitoria al restablecer el enlace con Home Assistant.
+
 ## [1.4.0] - 2026-08-16
 
 ### Added & Enhanced
