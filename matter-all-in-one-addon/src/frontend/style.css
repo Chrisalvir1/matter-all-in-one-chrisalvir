@@ -159,12 +159,12 @@ mark { background: rgba(255,216,77,.28); color: #ffe685; padding: 1px 3px; borde
 .toggle input:checked + span::after { background: var(--green); transform: translateX(16px); }
 /* ── Selection Panel ── */
 .selection-panel { align-self: stretch; padding: 18px; border-radius: 16px; background: rgba(6,12,25,.6); border: 1px solid var(--border); overflow-y: auto; max-height: calc(92vh - 170px); display: flex; flex-direction: column; gap: 11px; box-sizing: border-box; }
-.selection-panel .card-label { display: block; margin-bottom: 2px; }
-.selection-panel h3 { margin: 0; font-size: 15px; line-height: 1.35; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.selection-panel h3 { margin: 0; font-size: 15px; line-height: 1.4; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.selection-panel .selection-title-text { font-size: 15px; font-weight: 700; color: #f8fafc; word-break: break-word; }
 .selection-panel > p:not(.card-label) { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
 
 /* Home badge — inline with title */
-.home-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 6px; border: 1px solid rgba(124,168,255,.35); background: rgba(124,168,255,.1); color: #9ec6ff; font-size: 10px; font-weight: 600; margin-left: 6px; vertical-align: middle; white-space: nowrap; max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+.home-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 6px; border: 1px solid rgba(124,168,255,.35); background: rgba(124,168,255,.1); color: #9ec6ff; font-size: 10px; font-weight: 600; vertical-align: middle; white-space: nowrap; }
 .home-badge.commissioned { border-color: rgba(89,213,162,.35); background: rgba(89,213,162,.1); color: #abebd0; }
 
 /* Profile selector */
@@ -206,6 +206,9 @@ mark { background: rgba(255,216,77,.28); color: #ffe685; padding: 1px 3px; borde
 .qr-status-label { padding: 6px 11px; border-radius: 8px; font-size: 11px; font-weight: 700; color: var(--dim); background: rgba(255,255,255,.04); border: 1px solid transparent; }
 .qr-status-label.active { color: #abebd0; border-color: rgba(89,213,162,.22); background: rgba(89,213,162,.08); }
 .qr-status-label.commissioned { color: #7cc8ff; border-color: rgba(124,168,255,.3); background: rgba(124,168,255,.08); }
+.commissioned-hint { padding: 12px; border-radius: 12px; background: rgba(124,168,255,.07); border: 1px solid rgba(124,168,255,.2); font-size: 11px; line-height: 1.45; }
+.commissioned-hint .hint-title { margin: 0 0 5px; font-weight: 700; color: #9ec6ff; font-size: 12px; }
+.commissioned-hint .hint-desc { margin: 0; color: var(--muted); font-size: 11px; }
 .qr-spinner-wrap { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 24px 0; }
 .qr-spinner-label { margin: 0; color: var(--muted); font-size: 12px; }
 /* QR section */

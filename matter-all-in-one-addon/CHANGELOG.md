@@ -1,3 +1,13 @@
+## [1.4.5] - 2026-08-16
+
+### UI/UX & Performance Overhaul
+- **Carga Ultra Rápida (50x más rápida):** Eliminado el re-escaneo pesado e innecesario de catálogo en cada petición de `/devices`, haciendo que la navegación y apertura de dispositivos responda en milisegundos.
+- **Claridad de Estado y Flujo de Emparejamiento:**
+  - En accesorios ya emparejados (`✓ Emparejado`), el código QR de configuración inicial se oculta para evitar que el usuario intente escanear un código bloqueado (que provocaba el error *"Unable to add accessory"* en Apple Home).
+  - Se muestra una tarjeta informativa clara indicando cómo desvincular o cómo añadir a una segunda casa vía Multi-Admin.
+- **Corrección Visual de Título y Badges:** Corregido el solapamiento de texto y distintivo de casa en el panel de selección, haciendo el título 100% legible y adaptable.
+- **Nombre Real de la Casa:** Integrado el nombre de ubicación real de Home Assistant (`location_name`) como valor predeterminado para la casa cuando el controlador no reporta una etiqueta personalizada.
+
 ## [1.4.4] - 2026-08-16
 
 ### Enhanced & Fixed

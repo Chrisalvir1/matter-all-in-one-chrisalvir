@@ -265,13 +265,15 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         rawFabrics = Array.isArray(commissioning.fabrics) ? commissioning.fabrics : Object.values(commissioning.fabrics);
       }
 
+      const homeLocation = (this.ha as any)?.hassConfig?.location_name || null;
       const fabrics: MatterFabricInfo[] = rawFabrics.map((fabric: any) => {
         const parsedVendorId = typeof fabric?.vendorId === 'number' ? fabric.vendorId : Number(fabric?.vendorId);
         const vendorId = Number.isFinite(parsedVendorId) ? parsedVendorId : null;
+        const rawLabel = typeof (fabric?.label ?? fabric?.fabricLabel ?? fabric?.name) === 'string'
+          ? (fabric.label ?? fabric.fabricLabel ?? fabric.name).trim()
+          : null;
         return {
-          label: typeof (fabric?.label ?? fabric?.fabricLabel ?? fabric?.name) === 'string'
-            ? (fabric.label ?? fabric.fabricLabel ?? fabric.name).trim() || null
-            : null,
+          label: rawLabel || homeLocation,
           controller: vendorId !== null
             ? MATTER_CONTROLLER_VENDORS[vendorId] ?? `Controlador Matter desconocido (VID 0x${vendorId.toString(16).toUpperCase()})`
             : 'Controlador Matter sin VID reportado',
@@ -309,7 +311,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         commissioned: isCommissioned,
         controllerNames,
         // Matter exposes the fabric/controller label.
-        homeName: controllerNames.join(', ') || null,
+        homeName: controllerNames.join(', ') || homeLocation,
         fabricCount: fabrics.length,
         fabrics,
         pairingCode: qrPairingCode,
@@ -1904,13 +1906,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         }
 
         if (req.method === 'GET' && pathname === '/api/custom/devices') {
-          // Do not rely solely on registry events: integrations that create
-          // virtual entities can publish their first state before HA emits a
-          // registry notification. Refreshing from the current state cache
-          // makes those switches immediately searchable in the panel.
-          await this.refreshDiscoveryCatalog();
           const errorPattern = /\b(error|warn|warning|failed|failure|exception|unable|timeout)\b/i;
           const allErrorLogs = getLogs().filter(line => errorPattern.test(line));
+          const homeLocation = (this.ha as any)?.hassConfig?.location_name || null;
           const result = Array.from(this.entities.values()).flatMap((e) => {
             // Exclude generic DPS datapoints — they have no meaningful Matter mapping
             // and cluttering the panel with unnamed sensor rows harms usability.
