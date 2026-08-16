@@ -1,3 +1,13 @@
+## [1.4.4] - 2026-08-16
+
+### Enhanced & Fixed
+- **Eliminación Total y Definitiva de Fabrics Huérfanos:**
+  - Implementado `forceRecreate` estricto en el restablecimiento y desconexión de accesorios Matter. Cuando se desconecta un accesorio de Apple Home o Google Home, se purga completamente el almacenamiento local y se genera un nuevo código QR limpio sin reciclar nodos antiguos.
+  - Añadida guía contextual en la tarjeta de casas conectadas: si un accesorio fue eliminado previamente en iOS/HomeKit, pulsar «Desconectar» lo libera al instante y actualiza la UI.
+- **Purga de Diagnósticos de WebSocket (Code 1006):**
+  - Eliminada la inyección de advertencias globales de WebSocket en los historiales de diagnósticos de las entidades individuales.
+  - Limpieza automática al arranque de registros obsoletos de WebSocket 1006.
+
 ## [1.4.3] - 2026-08-16
 
 ### UI/UX — Tiempo Real y Layout 3 Columnas
