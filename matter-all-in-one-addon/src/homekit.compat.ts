@@ -37,7 +37,7 @@ export const homekitSupported = {
   energyTariff: false,
   roboticVacuumCleaner: true,
   fan: true,
-  humidifier: false,
+  humidifier: true,
 } as const;
 
 export type HomeKitSupportedDeviceType = keyof typeof homekitSupported;

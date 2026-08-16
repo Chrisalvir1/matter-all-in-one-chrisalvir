@@ -105,7 +105,7 @@ export const DEVICE_REGISTRY: Record<string, DeviceRegistryEntry> = {
   media_player: { matterType: MatterDeviceTypes.onOffPlugInUnit, homekitSupported: homekitSupported.onOffPlugInUnit },
   button: { matterType: MatterDeviceTypes.onOffPlugInUnit, homekitSupported: homekitSupported.onOffPlugInUnit },
   fan: { matterType: MatterDeviceTypes.fan, homekitSupported: homekitSupported.fan },
-  humidifier: { matterType: MatterDeviceTypes.onOffPlugInUnit, homekitSupported: homekitSupported.onOffPlugInUnit },
+  humidifier: { matterType: MatterDeviceTypes.fan, homekitSupported: homekitSupported.fan },
   // Domain-level fallback mapping; specific device_classes logic may still need to be handled if required
   binary_sensor: { matterType: MatterDeviceTypes.contactSensor, homekitSupported: homekitSupported.contactSensor },
   sensor: { matterType: MatterDeviceTypes.temperatureSensor, homekitSupported: homekitSupported.temperatureSensor },

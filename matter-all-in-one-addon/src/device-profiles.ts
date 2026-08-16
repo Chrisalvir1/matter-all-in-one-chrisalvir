@@ -47,7 +47,7 @@ const profilesByDomain: Record<string, DeviceExportProfile[]> = {
     { id: 'onOffPlugInUnit', label: 'Enchufe On/Off', description: 'Control de energía básico.', appleHome: 'supported' },
   ],
   humidifier: [
-    { id: 'fan', label: 'Ventilador', description: 'Mapea velocidad a nivel de humidificación.', appleHome: 'experimental' },
+    { id: 'fan', label: 'Difusor / Humidificador (Nivel de Vapor)', description: 'Control de encendido y deslizador de vapor/niebla en Apple Home.', appleHome: 'supported' },
     { id: 'onOffPlugInUnit', label: 'Enchufe On/Off', description: 'Control de energía básico.', appleHome: 'supported' },
   ],
   button: [
@@ -73,7 +73,7 @@ const defaultProfileByDomain: Record<string, string> = {
   climate: 'thermostat',
   vacuum: 'roboticVacuumCleaner',
   media_player: 'onOffPlugInUnit',
-  humidifier: 'onOffPlugInUnit',
+  humidifier: 'fan',
   button: 'onOffPlugInUnit',
   binary_sensor: 'contactSensor',
   sensor: 'temperatureSensor',

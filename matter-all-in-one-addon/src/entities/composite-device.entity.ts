@@ -127,7 +127,7 @@ export class CompositeDeviceEntity {
     if (this.primaryEntityIdOverride && this.members.some((m) => m.entityId === this.primaryEntityIdOverride)) {
       return this.primaryEntityIdOverride;
     }
-    return this.members.find((m) => m.entityId.startsWith('lock.'))?.entityId ?? this.members.find((m) => m.entityId.startsWith('fan.'))?.entityId ?? this.members[0].entityId;
+    return this.members.find((m) => m.entityId.startsWith('lock.'))?.entityId ?? this.members.find((m) => m.entityId.startsWith('fan.'))?.entityId ?? this.members.find((m) => m.entityId.startsWith('humidifier.'))?.entityId ?? this.members[0].entityId;
   }
 
   async createEndpoint(): Promise<MatterbridgeEndpoint> {
@@ -168,7 +168,7 @@ export class CompositeDeviceEntity {
 
       const child = this.endpoint.addChildDeviceTypeWithClusterServer(endpointId(member.entityId), memberType, clusterIds);
       
-      if (domain === 'light' || domain === 'switch' || domain === 'fan' || domain === 'media_player' || domain === 'vacuum') {
+      if (domain === 'light' || domain === 'switch' || domain === 'fan' || domain === 'humidifier' || domain === 'media_player' || domain === 'vacuum') {
         const isLighting = domain === 'light';
         child.behaviors.require(isLighting ? MatterbridgeOnOffServer.with(OnOff.Feature.Lighting) : MatterbridgeOnOffServer.with());
       }
@@ -226,6 +226,26 @@ export class CompositeDeviceEntity {
           const dir = state.attributes.direction === 'reverse' ? 1 : 0;
           await update(endpoint, FanControl.id, 'airflowDirection', dir, this.platform.log);
         }
+      }
+      return;
+    }
+
+    if (domain === 'humidifier') {
+      const on = isOn(state);
+      await update(endpoint, OnOff.id, 'onOff', on, this.platform.log);
+      if (endpoint.hasAttributeServer(FanControl.id, 'percentCurrent')) {
+        const minHum = state.attributes.min_humidity ?? 40;
+        const maxHum = state.attributes.max_humidity ?? 80;
+        const currentTarget = state.attributes.humidity ?? minHum;
+        let percent = 0;
+        if (on) {
+          percent = Math.round(((currentTarget - minHum) / (maxHum - minHum)) * 100);
+          percent = Math.min(100, Math.max(1, percent));
+        }
+        await update(endpoint, FanControl.id, 'percentSetting', percent, this.platform.log);
+        await update(endpoint, FanControl.id, 'percentCurrent', percent, this.platform.log);
+        const fanMode = on ? (percent > 66 ? 3 : percent > 33 ? 2 : percent > 0 ? 1 : 4) : 0;
+        await update(endpoint, FanControl.id, 'fanMode', fanMode, this.platform.log);
       }
       return;
     }
@@ -318,7 +338,7 @@ export class CompositeDeviceEntity {
     const [domain] = member.entityId.split('.');
     if (domain === 'light') return lightClusterIds(member.state, this.typeFor(member));
     if (domain === 'switch') return []; 
-    if (domain === 'fan') {
+    if (domain === 'fan' || domain === 'humidifier') {
       return isFanProfile(this.typeFor(member)) ? [FanControl.id] : [];
     }
     if (domain === 'lock') return [DoorLock.id];
@@ -546,6 +566,65 @@ export class CompositeDeviceEntity {
             }
           );
         }
+      }
+      return;
+    }
+
+    if (domain === 'humidifier') {
+      endpoint.addCommandHandler('on', async () => {
+        await safeUpdateAttribute(endpoint, OnOff.id, 'onOff', true, this.platform.log);
+        await this.platform.ha.callService('humidifier', 'turn_on', entityId).catch((err) => {
+          this.platform.log.warn(`[${entityId}] Error turning on humidifier: ${err?.message ?? err}`);
+        });
+      });
+
+      endpoint.addCommandHandler('off', async () => {
+        await safeUpdateAttribute(endpoint, OnOff.id, 'onOff', false, this.platform.log);
+        await this.platform.ha.callService('humidifier', 'turn_off', entityId).catch((err) => {
+          this.platform.log.warn(`[${entityId}] Error turning off humidifier: ${err?.message ?? err}`);
+        });
+      });
+
+      if (endpoint.hasAttributeServer(FanControl.id, 'percentSetting')) {
+        endpoint.subscribeAttribute(
+          FanControl.id,
+          'percentSetting',
+          async (newValue: number) => {
+            if (typeof newValue !== 'number') return;
+            const currentState = this.states.get(entityId);
+            const minHum = currentState?.attributes.min_humidity ?? 40;
+            const maxHum = currentState?.attributes.max_humidity ?? 80;
+            const currentTarget = currentState?.attributes.humidity ?? minHum;
+            const isOnState = isOn(currentState!);
+
+            let expectedPercent = 0;
+            if (isOnState) {
+              expectedPercent = Math.round(((currentTarget - minHum) / (maxHum - minHum)) * 100);
+              expectedPercent = Math.min(100, Math.max(1, expectedPercent));
+            }
+            if (newValue === expectedPercent) return;
+
+            if (newValue === 0) {
+              await safeUpdateAttribute(endpoint, FanControl.id, 'percentCurrent', 0, this.platform.log);
+              await safeUpdateAttribute(endpoint, OnOff.id, 'onOff', false, this.platform.log);
+              await this.platform.ha.callService('humidifier', 'turn_off', entityId).catch((err) => {
+                this.platform.log.warn(`[${entityId}] Error turning off humidifier: ${err?.message ?? err}`);
+              });
+            } else {
+              if (!isOnState) {
+                await safeUpdateAttribute(endpoint, OnOff.id, 'onOff', true, this.platform.log);
+                await this.platform.ha.callService('humidifier', 'turn_on', entityId).catch((err) => {
+                  this.platform.log.warn(`[${entityId}] Error turning on humidifier: ${err?.message ?? err}`);
+                });
+              }
+              const targetHumidity = minHum + Math.round((newValue / 100) * (maxHum - minHum));
+              await safeUpdateAttribute(endpoint, FanControl.id, 'percentCurrent', newValue, this.platform.log);
+              await this.platform.ha.callService('humidifier', 'set_humidity', entityId, { humidity: targetHumidity }).catch((err) => {
+                this.platform.log.warn(`[${entityId}] Error setting humidity: ${err?.message ?? err}`);
+              });
+            }
+          }
+        );
       }
       return;
     }
