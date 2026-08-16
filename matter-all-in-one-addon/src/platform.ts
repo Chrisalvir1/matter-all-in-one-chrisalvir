@@ -663,6 +663,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         clearTimeout(this.syncRetryTimeout);
         this.syncRetryTimeout = undefined;
       }
+      for (const entityId of this.entities.keys()) {
+        this.clearEntityProblem(entityId);
+        this.recordEntityDiagnostic(entityId, `Conexión con Home Assistant activa (${version})`, 'info');
+      }
       void this.discoverAndSync();
     });
 
@@ -1377,6 +1381,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       const storageManager = managedStorage ?? await storageService?.open?.(storeId);
       try {
         await storageManager?.createContext?.('persist')?.clearAll?.();
+        await storageManager?.createContext?.('fabrics')?.clearAll?.();
+        await storageManager?.createContext?.('commissioning')?.clearAll?.();
+        await storageManager?.createContext?.('operationalCredentials')?.clearAll?.();
       } finally {
         // Managers owned by Matterbridge stay open for its lifecycle. Only
         // close a temporary manager opened by this reset operation.
@@ -1435,7 +1442,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   }
 
   /** Remove a specific fabric from a node without resetting everything. */
-  public async removeMatterFabric(entityId: string, fabricIndexStr: string): Promise<{ success: boolean; error?: string; remainingFabrics?: number; pairingCode?: string | null; manualPairingCode?: string | null }> {
+  public async removeMatterFabric(entityId: string, fabricIndexOrIdStr: string): Promise<{ success: boolean; error?: string; remainingFabrics?: number; pairingCode?: string | null; manualPairingCode?: string | null }> {
     const compositeDeviceId = this.compositeMembership.get(entityId) ?? this.getCompositeCandidate(entityId)?.deviceId;
     const endpoint = this.getMatterEndpointForEntity(entityId, compositeDeviceId);
     const serverNode = endpoint?.serverNode;
@@ -1443,8 +1450,36 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       return { success: false, error: 'El accesorio Matter no está activo o su nodo aún no está listo.' };
     }
     try {
-      const fabricIndex = Number(fabricIndexStr);
+      const targetStr = String(fabricIndexOrIdStr).trim();
+      const targetNum = Number(targetStr);
       let removed = false;
+
+      const nodeState = serverNode.state as any;
+      const liveFabricSource =
+        nodeState.operationalCredentials?.fabrics ??
+        nodeState.operationalCredentialsServer?.fabrics ??
+        endpoint?.serverNode?.behaviors?.operationalCredentials?.state?.fabrics ??
+        nodeState.commissioning?.fabrics;
+
+      let rawFabrics: any[] = [];
+      if (liveFabricSource !== undefined && liveFabricSource !== null) {
+        rawFabrics = Array.isArray(liveFabricSource) ? liveFabricSource : Object.values(liveFabricSource);
+      }
+
+      // If only 1 fabric exists in total or less, removing it is a full reset
+      if (rawFabrics.length <= 1) {
+        return await this.resetMatterAccessory(entityId);
+      }
+
+      const matchedFabric = rawFabrics.find((f: any) =>
+        String(f?.fabricIndex) === targetStr ||
+        String(f?.fabricId) === targetStr ||
+        Number(f?.fabricIndex) === targetNum
+      );
+
+      const fabricIndex = matchedFabric && matchedFabric.fabricIndex !== undefined
+        ? Number(matchedFabric.fabricIndex)
+        : (targetNum <= 254 && targetNum > 0 ? targetNum : 1);
 
       // 1. Try Matter.js ServerNode behavior removal
       if (typeof (serverNode as any).act === 'function') {
@@ -1456,22 +1491,26 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         }).catch(() => {});
       }
 
-      // 2. Try direct operationalCredentials behavior state or nodeState
-      const nodeState = serverNode.state as any;
-      if (!removed && nodeState?.operationalCredentials?.fabrics) {
-        if (Array.isArray(nodeState.operationalCredentials.fabrics)) {
-          nodeState.operationalCredentials.fabrics = nodeState.operationalCredentials.fabrics.filter((f: any) => Number(f.fabricIndex) !== fabricIndex);
-          removed = true;
-        }
+      // 2. Direct operationalCredentials behavior state or nodeState
+      if (nodeState?.operationalCredentials?.fabrics && Array.isArray(nodeState.operationalCredentials.fabrics)) {
+        nodeState.operationalCredentials.fabrics = nodeState.operationalCredentials.fabrics.filter((f: any) =>
+          Number(f.fabricIndex) !== fabricIndex && String(f.fabricId) !== targetStr
+        );
+        removed = true;
+      }
+      if (nodeState?.commissioning?.fabrics && Array.isArray(nodeState.commissioning.fabrics)) {
+        nodeState.commissioning.fabrics = nodeState.commissioning.fabrics.filter((f: any) =>
+          Number(f.fabricIndex) !== fabricIndex && String(f.fabricId) !== targetStr
+        );
+        removed = true;
       }
 
       const connection = this.getMatterConnectionInfo(endpoint);
       if (connection.fabricCount === 0 || !removed) {
-        // If 0 fabrics remain or selective removal wasn't directly handled, perform full reset
         return await this.resetMatterAccessory(entityId);
       }
 
-      this.recordEntityDiagnostic(entityId, `Se desconectó del fabric ${fabricIndexStr} correctamente.`, 'info');
+      this.recordEntityDiagnostic(entityId, `Se desconectó del fabric ${fabricIndexOrIdStr} correctamente.`, 'info');
       return {
         success: true,
         remainingFabrics: connection.fabricCount,
@@ -1479,8 +1518,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         manualPairingCode: connection.manualPairingCode,
       };
     } catch (error) {
-      this.log.error(`Error removing fabric ${fabricIndexStr} for ${entityId}: ${error}`);
-      return { success: false, error: String(error) };
+      this.log.error(`Error removing fabric ${fabricIndexOrIdStr} for ${entityId}: ${error}`);
+      return await this.resetMatterAccessory(entityId);
     }
   }
 
