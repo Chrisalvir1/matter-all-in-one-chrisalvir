@@ -4,7 +4,7 @@
 import { DeviceTypeDefinition, MatterbridgeEndpoint } from 'matterbridge';
 import { OnOff, LevelControl, ColorControl, FanControl, OccupancySensing, BooleanState, TemperatureMeasurement, RelativeHumidityMeasurement } from 'matterbridge/matter/clusters';
 import { ClusterId } from 'matterbridge/matter/types';
-import { MatterbridgeOnOffServer } from 'matterbridge/behaviors';
+import { MatterbridgeOnOffServer, MatterbridgeFanControlServer } from 'matterbridge/behaviors';
 import { HomeAssistantPlatform } from '../platform.js';
 import { HassState } from '../utils/ha-state.js';
 import { safeSetAttribute, safeUpdateAttribute } from '../utils/matter-attributes.js';
@@ -151,17 +151,51 @@ export class BaseEntity {
     this.applyMatterbridgeFirmware();
     const isFanProfile = this.deviceType.code === 0x002b || this.deviceType.name.toLowerCase() === 'fan';
 
-    if (domain === 'fan' && isFanProfile) {
+    if ((domain === 'fan' || domain === 'humidifier') && isFanProfile) {
       const on = this.state.state === 'on';
-      const percentage = typeof this.state.attributes.percentage === 'number' ? this.state.attributes.percentage : on ? 100 : 0;
-      const fanMode = on ? (percentage > 66 ? 3 : percentage > 33 ? 2 : 1) : 0;
-      this.endpoint.createDefaultFanControlClusterServer(fanMode, undefined, percentage, percentage);
-      this.endpoint.behaviors.require(MatterbridgeOnOffServer.with());
-      const hasDirection = this.state.attributes.direction !== undefined || (Number(this.state.attributes.supported_features || 0) & 4) !== 0;
-      if (hasDirection) {
-        const dir = this.state.attributes.direction === 'reverse' ? 1 : 0;
-        safeSetAttribute(this.endpoint, FanControl.id, 'airflowDirection', dir, this.platform.log);
+      let percentage = 0;
+      let fanMode = 0;
+      let hasDirection = false;
+      let dir = 0;
+
+      if (domain === 'humidifier') {
+        const minHum = this.state.attributes.min_humidity ?? 40;
+        const maxHum = this.state.attributes.max_humidity ?? 80;
+        const currentTarget = this.state.attributes.humidity;
+        const mode = (this.state.attributes.mode || '').toLowerCase();
+        if (on) {
+          if (typeof currentTarget === 'number' && maxHum > minHum) {
+            percentage = Math.round(((currentTarget - minHum) / (maxHum - minHum)) * 100);
+          } else if (mode.includes('high') || mode.includes('alto') || mode === '3') {
+            percentage = 100;
+          } else if (mode.includes('med') || mode.includes('medio') || mode === '2') {
+            percentage = 66;
+          } else if (mode.includes('low') || mode.includes('bajo') || mode === '1') {
+            percentage = 33;
+          } else {
+            percentage = 50;
+          }
+          percentage = Math.min(100, Math.max(1, percentage));
+        }
+        fanMode = on ? (mode.includes('auto') ? 5 : (percentage > 66 ? 3 : percentage > 33 ? 2 : 1)) : 0;
+      } else {
+        percentage = typeof this.state.attributes.percentage === 'number' ? this.state.attributes.percentage : on ? 100 : 0;
+        fanMode = on ? (percentage > 66 ? 3 : percentage > 33 ? 2 : 1) : 0;
+        hasDirection = this.state.attributes.direction !== undefined || (Number(this.state.attributes.supported_features || 0) & 4) !== 0;
+        dir = this.state.attributes.direction === 'reverse' ? 1 : 0;
       }
+
+      const features = [FanControl.Feature.Auto, FanControl.Feature.Step];
+      if (hasDirection) features.push(FanControl.Feature.AirflowDirection);
+
+      this.endpoint.behaviors.require(MatterbridgeFanControlServer.with(...features), {
+        fanMode,
+        fanModeSequence: FanControl.FanModeSequence.OffLowMedHighAuto,
+        percentSetting: percentage,
+        percentCurrent: percentage,
+        airflowDirection: dir,
+      });
+      this.endpoint.behaviors.require(MatterbridgeOnOffServer.with());
     } else if (domain === 'light' || domain === 'switch' || domain === 'media_player' || domain === 'vacuum' || domain === 'fan') {
       const isLighting = domain === 'light';
       this.endpoint.behaviors.require(isLighting ? MatterbridgeOnOffServer.with(OnOff.Feature.Lighting) : MatterbridgeOnOffServer.with());

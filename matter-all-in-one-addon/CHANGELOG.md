@@ -1,3 +1,10 @@
+## [1.4.9] - 2026-08-16
+
+### Enhanced & Fixed
+- **Modos Completos y Dirección en HomeKit para Ventiladores (Adelante/Reversa, Auto/Manual):**
+  - Implementación de `MatterbridgeFanControlServer.with(Feature.AirflowDirection, Feature.Auto, Feature.Step)` en la inicialización de ventiladores y humidificadores.
+  - Esto garantiza que HomeKit *muestre* los controles de Adelante/Reversa y los modos Automático/Manual que antes no aparecían en Apple Home.
+
 ## [1.4.8] - 2026-08-16
 
 ### Enhanced & Fixed

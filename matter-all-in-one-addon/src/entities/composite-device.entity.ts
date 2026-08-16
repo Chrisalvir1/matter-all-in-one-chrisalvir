@@ -13,7 +13,7 @@
 import { DeviceTypeDefinition, MatterbridgeEndpoint } from 'matterbridge';
 import { BooleanState, ColorControl, FanControl, LevelControl, OccupancySensing, RelativeHumidityMeasurement, TemperatureMeasurement, OnOff, DoorLock } from 'matterbridge/matter/clusters';
 import { ClusterId } from 'matterbridge/matter/types';
-import { MatterbridgeOnOffServer } from 'matterbridge/behaviors';
+import { MatterbridgeOnOffServer, MatterbridgeFanControlServer } from 'matterbridge/behaviors';
 import { safeSetAttribute, safeUpdateAttribute } from '../utils/matter-attributes.js';
 import type { HassState } from '../utils/ha-state.js';
 import { getDeviceTypeForEntity, hasColorTemperatureCapability } from '../device-registry.js';
@@ -394,23 +394,57 @@ export class CompositeDeviceEntity {
   private async addRootClusters(endpoint: MatterbridgeEndpoint, member: CompositeMember) {
     const [domain] = member.entityId.split('.');
     
-    if (domain === 'fan') {
+    if (domain === 'fan' || domain === 'humidifier') {
       if (!isFanProfile(this.typeFor(member))) {
         endpoint.behaviors.require(MatterbridgeOnOffServer.with());
         endpoint.addRequiredClusterServers();
         return;
       }
       const on = isOn(member.state);
-      const percentage = typeof member.state.attributes.percentage === 'number' ? member.state.attributes.percentage : on ? 100 : 0;
-      const fanMode = on ? (percentage > 66 ? 3 : percentage > 33 ? 2 : 1) : 0;
-      endpoint.createDefaultFanControlClusterServer(fanMode, undefined, percentage, percentage);
+      let percentage = 0;
+      let fanMode = 0;
+      let hasDirection = false;
+      let dir = 0;
+
+      if (domain === 'humidifier') {
+        const minHum = member.state.attributes.min_humidity ?? 40;
+        const maxHum = member.state.attributes.max_humidity ?? 80;
+        const currentTarget = member.state.attributes.humidity;
+        const mode = (member.state.attributes.mode || '').toLowerCase();
+        if (on) {
+          if (typeof currentTarget === 'number' && maxHum > minHum) {
+            percentage = Math.round(((currentTarget - minHum) / (maxHum - minHum)) * 100);
+          } else if (mode.includes('high') || mode.includes('alto') || mode === '3') {
+            percentage = 100;
+          } else if (mode.includes('med') || mode.includes('medio') || mode === '2') {
+            percentage = 66;
+          } else if (mode.includes('low') || mode.includes('bajo') || mode === '1') {
+            percentage = 33;
+          } else {
+            percentage = 50;
+          }
+          percentage = Math.min(100, Math.max(1, percentage));
+        }
+        fanMode = on ? (mode.includes('auto') ? 5 : (percentage > 66 ? 3 : percentage > 33 ? 2 : 1)) : 0;
+      } else {
+        percentage = typeof member.state.attributes.percentage === 'number' ? member.state.attributes.percentage : on ? 100 : 0;
+        fanMode = on ? (percentage > 66 ? 3 : percentage > 33 ? 2 : 1) : 0;
+        hasDirection = member.state.attributes.direction !== undefined || (Number(member.state.attributes.supported_features || 0) & 4) !== 0;
+        dir = member.state.attributes.direction === 'reverse' ? 1 : 0;
+      }
+
+      const features = [FanControl.Feature.Auto, FanControl.Feature.Step];
+      if (hasDirection) features.push(FanControl.Feature.AirflowDirection);
+
+      endpoint.behaviors.require(MatterbridgeFanControlServer.with(...features), {
+        fanMode,
+        fanModeSequence: FanControl.FanModeSequence.OffLowMedHighAuto,
+        percentSetting: percentage,
+        percentCurrent: percentage,
+        airflowDirection: dir,
+      });
       endpoint.behaviors.require(MatterbridgeOnOffServer.with());
       endpoint.addRequiredClusterServers();
-      const hasDirection = member.state.attributes.direction !== undefined || (Number(member.state.attributes.supported_features || 0) & 4) !== 0;
-      if (hasDirection) {
-        const dir = member.state.attributes.direction === 'reverse' ? 1 : 0;
-        await safeSetAttribute(endpoint, FanControl.id, 'airflowDirection', dir, this.platform.log);
-      }
       return;
     }
 
