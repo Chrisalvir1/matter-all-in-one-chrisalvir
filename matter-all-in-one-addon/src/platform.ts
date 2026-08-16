@@ -81,12 +81,34 @@ interface MatterConnectionInfo {
 // cover the major ecosystems and are intentionally shown as “reported by the
 // fabric”, not as a claim inferred from a user-editable home label.
 const MATTER_CONTROLLER_VENDORS: Record<number, string> = {
+  // Apple Home
   0x1349: 'Apple Home',
   0x1384: 'Apple Home',
+  0x134b: 'Apple Home',
+  // Google Home
   0x6006: 'Google Home',
+  0x138b: 'Google Home',
+  // Amazon Alexa
   0x1217: 'Amazon Alexa',
+  0x1211: 'Amazon Alexa',
+  0x140a: 'Amazon Alexa',
+  // Samsung SmartThings
   0x10e1: 'Samsung SmartThings',
   0x110a: 'Samsung SmartThings',
+  0x127b: 'Samsung SmartThings',
+  0x1175: 'Samsung SmartThings',
+  0x1360: 'Samsung SmartThings',
+  // Home Assistant
+  0x130d: 'Home Assistant',
+  // LG ThinQ
+  0x1156: 'LG ThinQ',
+  // Homey
+  0x1325: 'Homey',
+  // Tuya Smart
+  0x1002: 'Tuya Smart',
+  0x1244: 'Tuya Smart',
+  // Aqara
+  0x115f: 'Aqara',
 };
 
 export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {

@@ -28,6 +28,20 @@ const els = {
 const ICONS = { light: '💡', switch: '🔌', cover: '🪟', lock: '🔒', climate: '🌡️', fan: '🌀', sensor: '◌', binary_sensor: '◐', camera: '📷', vacuum: '◉', button: '●', humidifier: '💧', media_player: '▶' };
 const PRIORITY = ['light', 'switch', 'cover', 'lock', 'climate', 'fan', 'vacuum', 'camera', 'humidifier', 'sensor', 'binary_sensor', 'button', 'media_player'];
 
+function getControllerIcon(name) {
+  const n = String(name || '').toLowerCase();
+  if (n.includes('apple')) return '🍎';
+  if (n.includes('google')) return '🌐';
+  if (n.includes('alexa') || n.includes('amazon')) return '🔊';
+  if (n.includes('smartthings') || n.includes('samsung')) return '💠';
+  if (n.includes('home assistant')) return '🏠';
+  if (n.includes('thinq') || n.includes('lg')) return '📺';
+  if (n.includes('homey')) return '⚪';
+  if (n.includes('tuya')) return '🟠';
+  if (n.includes('aqara')) return '🟢';
+  return '🏠';
+}
+
 function escapeHtml(value) { return String(value ?? '').replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char])); }
 function highlightMatch(text, query) {
   const str = String(text ?? '');
@@ -294,9 +308,10 @@ function renderQrSection(entity) {
         const vendor = fabric.controller || 'Controlador Matter';
         const label = fabric.label ? ` · ${escapeHtml(fabric.label)}` : '';
         const idx = fabric.fabricIndex || fabric.fabricId || '1';
+        const icon = getControllerIcon(vendor);
         return `<div class="fabric-item">
           <div class="fabric-info">
-            <strong class="fabric-name">🏠 ${escapeHtml(vendor)}${label}</strong>
+            <strong class="fabric-name">${icon} ${escapeHtml(vendor)}${label}</strong>
             <span class="fabric-detail">Fabric ID: ${escapeHtml(fabric.fabricId || idx)}</span>
           </div>
           <button class="fabric-disconnect-btn" type="button" data-fabric-index="${escapeHtml(idx)}" data-controller="${escapeHtml(vendor)}" title="Desconectar este accesorio de ${escapeHtml(vendor)}">Desconectar</button>
@@ -613,7 +628,7 @@ const doResetAccessory = () => {
   if (!entity) return;
   openConfirm(
     'Desconectar todo y generar nuevo QR',
-    `Se desvincularán todos los controladores Matter de ${displayName(entity)} (Apple Home, Google Home, etc.) y se regenerarán sus credenciales con un nuevo código QR limpio.`,
+    `Se desvincularán todos los controladores Matter de ${displayName(entity)} (Apple Home, Google Home, SmartThings, Alexa, etc.) y se regenerarán sus credenciales con un nuevo código QR limpio.`,
     async () => {
       try {
         const result = await request(`/reset-accessory/${encodeURIComponent(entity.entityId)}`, { method: 'POST' });
