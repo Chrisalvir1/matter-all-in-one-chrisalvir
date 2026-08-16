@@ -1,3 +1,10 @@
+## [1.4.14] - 2026-08-16
+
+### Fixed
+- **Desbloqueo Total de Vinculación y Event Loop en Matterbridge:**
+  - **Fin de Rejecciones y Bucles de Sincronización:** Se previno que los cambios de atributos recibidos desde Home Assistant disparen callbacks de suscripción que enviaban llamadas redundantes o no autorizadas a HA durante el arranque o en estado desconectado (`WebSocket request failed: not connected to Home Assistant`).
+  - **Emparejamiento Inmediato (PASE Commissioning):** Al liberar el Event Loop de bloqueos de transacciones (`#updateTotalOperationalHoursCounter` y `#subscriptionCancelled`), HomeKit ahora descubre e intercambia claves PASE con el nuevo accesorio inmediatamente sin quedarse "pensando" o expirando por timeout.
+
 ## [1.4.13] - 2026-08-16
 
 ### Fixed

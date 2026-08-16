@@ -288,6 +288,7 @@ export class BaseEntity {
             'percentSetting',
             async (newValue: number | null) => {
               if (typeof newValue !== 'number') return;
+              if (this.isUpdatingFromHa) return;
               this.setCommandLockout('percentage', newValue);
               await safeUpdateAttribute(this.endpoint, FanControl.id, 'percentCurrent', newValue, this.platform.log);
               if (newValue === 0) {
@@ -311,6 +312,7 @@ export class BaseEntity {
             'fanMode',
             async (newMode: number) => {
               if (typeof newMode !== 'number') return;
+              if (this.isUpdatingFromHa) return;
               if (newMode === 0) {
                 this.setCommandLockout('percentage', 0);
                 await this.platform.ha.callService('fan', 'turn_off', this.entityId).catch((err) => {
@@ -356,6 +358,7 @@ export class BaseEntity {
               'airflowDirection',
               async (newDir: number) => {
                 if (typeof newDir !== 'number') return;
+                if (this.isUpdatingFromHa) return;
                 const direction = newDir === 1 ? 'reverse' : 'forward';
                 await this.platform.ha.callService('fan', 'set_direction', this.entityId, { direction }).catch((err) => {
                   this.platform.log.warn(`[${this.entityId}] Error setting fan direction: ${err?.message ?? err}`);
@@ -537,12 +540,16 @@ export class BaseEntity {
     }
   }
 
-  public async updateState(newState: HassState, isInitialSync = false): Promise<void> {
-    this.state = newState;
-    if (!this.endpoint) return;
+  private isUpdatingFromHa = false;
 
-    const [domain] = this.entityId.split('.');
-    const updateFn = isInitialSync ? safeSetAttribute : safeUpdateAttribute;
+  public async updateState(newState: HassState, isInitialSync = false): Promise<void> {
+    this.isUpdatingFromHa = true;
+    try {
+      this.state = newState;
+      if (!this.endpoint) return;
+
+      const [domain] = this.entityId.split('.');
+      const updateFn = isInitialSync ? safeSetAttribute : safeUpdateAttribute;
 
     if (domain === 'light' || domain === 'switch' || domain === 'fan' || domain === 'media_player' || domain === 'vacuum') {
       const isOn = domain === 'vacuum' ? newState.state === 'cleaning' : newState.state === 'on';
@@ -653,5 +660,8 @@ export class BaseEntity {
         }
       }
     }
+  } finally {
+    this.isUpdatingFromHa = false;
   }
+}
 }

@@ -202,12 +202,16 @@ export class CompositeDeviceEntity {
     await Promise.all(this.members.map((m) => this.updateEntity(m.entityId, m.state, true)));
   }
 
+  private isUpdatingFromHa = false;
+
   async updateEntity(entityId: string, state: HassState, initial = false): Promise<void> {
-    this.states.set(entityId, state);
-    const endpoint = this.endpoints.get(entityId);
-    if (!endpoint) return;
-    const [domain] = entityId.split('.');
-    const update = initial ? safeSetAttribute : safeUpdateAttribute;
+    this.isUpdatingFromHa = true;
+    try {
+      this.states.set(entityId, state);
+      const endpoint = this.endpoints.get(entityId);
+      if (!endpoint) return;
+      const [domain] = entityId.split('.');
+      const update = initial ? safeSetAttribute : safeUpdateAttribute;
 
     if (domain === 'fan') {
       const on = isOn(state);
@@ -337,7 +341,10 @@ export class CompositeDeviceEntity {
         await update(endpoint, BooleanState.id, 'stateValue', active, this.platform.log);
       }
     }
+  } finally {
+    this.isUpdatingFromHa = false;
   }
+}
 
   private typeFor(member: CompositeMember): DeviceTypeDefinition {
     const [domain] = member.entityId.split('.');
@@ -543,6 +550,7 @@ export class CompositeDeviceEntity {
           'percentSetting',
           async (newValue: number | null) => {
             if (typeof newValue !== 'number') return;
+            if (this.isUpdatingFromHa) return;
             this.setCommandLockout(entityId, 'percentage', newValue);
             await safeUpdateAttribute(endpoint, FanControl.id, 'percentCurrent', newValue, this.platform.log);
 
@@ -567,6 +575,7 @@ export class CompositeDeviceEntity {
           'fanMode',
           async (newMode: number) => {
             if (typeof newMode !== 'number') return;
+            if (this.isUpdatingFromHa) return;
             if (newMode === 0) {
               this.setCommandLockout(entityId, 'percentage', 0);
               await this.platform.ha.callService('fan', 'turn_off', entityId).catch((err) => {
@@ -612,6 +621,7 @@ export class CompositeDeviceEntity {
             'airflowDirection',
             async (newDir: number) => {
               if (typeof newDir !== 'number') return;
+              if (this.isUpdatingFromHa) return;
               const direction = newDir === 1 ? 'reverse' : 'forward';
               await this.platform.ha.callService('fan', 'set_direction', entityId, { direction }).catch((err) => {
                 this.platform.log.warn(`[${entityId}] Error setting fan direction: ${err?.message ?? err}`);
@@ -630,6 +640,7 @@ export class CompositeDeviceEntity {
           'percentSetting',
           async (newValue: number) => {
             if (typeof newValue !== 'number') return;
+            if (this.isUpdatingFromHa) return;
             const currentState = this.states.get(entityId);
             const minHum = currentState?.attributes.min_humidity ?? 40;
             const maxHum = currentState?.attributes.max_humidity ?? 80;
@@ -681,6 +692,7 @@ export class CompositeDeviceEntity {
           'fanMode',
           async (newMode: number) => {
             if (typeof newMode !== 'number') return;
+            if (this.isUpdatingFromHa) return;
             const currentState = this.states.get(entityId);
             const availableModes: string[] = currentState?.attributes.available_modes ?? [];
 
