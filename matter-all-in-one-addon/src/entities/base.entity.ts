@@ -228,56 +228,36 @@ export class BaseEntity {
   protected registerCommandHandlers(_endpoint?: MatterbridgeEndpoint) {
     const [domain] = this.entityId.split('.');
 
-    if (domain === 'light' || domain === 'switch' || domain === 'fan' || domain === 'media_player' || domain === 'vacuum') {
-      const turnOn = async () => {
+    if (domain === 'light' || domain === 'switch' || domain === 'fan' || domain === 'media_player' || domain === 'vacuum' || domain === 'humidifier') {
+      this.endpoint.subscribeAttribute(OnOff.id, 'onOff', async (newValue: boolean) => {
+        if (typeof newValue !== 'boolean') return;
+        
+        // Handle Vacuum special mapping
         if (domain === 'vacuum') {
-          await this.platform.ha.callService(domain, 'start', this.entityId).catch((err) => {
-            this.platform.log.warn(`[${this.entityId}] Error starting vacuum: ${err?.message ?? err}`);
-          });
-        } else {
-          this.setCommandLockout('onOff', true);
-          await safeUpdateAttribute(this.endpoint, OnOff.id, 'onOff', true, this.platform.log);
-          await this.platform.ha.callService(domain, 'turn_on', this.entityId).catch((err) => {
-            this.platform.log.warn(`[${this.entityId}] Error turning on ${domain}: ${err?.message ?? err}`);
-          });
-        }
-      };
-
-      const turnOff = async () => {
-        if (domain === 'vacuum') {
-          await this.platform.ha.callService(domain, 'return_to_base', this.entityId).catch((err) => {
-            this.platform.log.warn(`[${this.entityId}] Error returning vacuum: ${err?.message ?? err}`);
-          });
-        } else {
-          this.setCommandLockout('onOff', false);
-          await safeUpdateAttribute(this.endpoint, OnOff.id, 'onOff', false, this.platform.log);
-          if (domain === 'fan' && this.endpoint.hasAttributeServer(FanControl.id, 'fanMode')) {
-            await safeUpdateAttribute(this.endpoint, FanControl.id, 'fanMode', 0, this.platform.log);
-          }
-          await this.platform.ha.callService(domain, 'turn_off', this.entityId).catch((err) => {
-            this.platform.log.warn(`[${this.entityId}] Error turning off ${domain}: ${err?.message ?? err}`);
-          });
-        }
-      };
-
-      const toggle = async () => {
-        if (domain === 'vacuum') {
-          await turnOn();
-        } else {
-          if (this.state.state === 'on') {
-            await turnOff();
+          if (newValue) {
+            await this.platform.ha.callService(domain, 'start', this.entityId).catch((err) => {
+              this.platform.log.warn(`[${this.entityId}] Error starting vacuum: ${err?.message ?? err}`);
+            });
           } else {
-            await turnOn();
+            await this.platform.ha.callService(domain, 'return_to_base', this.entityId).catch((err) => {
+              this.platform.log.warn(`[${this.entityId}] Error returning vacuum: ${err?.message ?? err}`);
+            });
           }
+          return;
         }
-      };
 
-      this.endpoint.addCommandHandler('on', turnOn);
-      this.endpoint.addCommandHandler('OnOff.on', turnOn);
-      this.endpoint.addCommandHandler('off', turnOff);
-      this.endpoint.addCommandHandler('OnOff.off', turnOff);
-      this.endpoint.addCommandHandler('toggle', toggle);
-      this.endpoint.addCommandHandler('OnOff.toggle', toggle);
+        // Handle standard on/off for Fan, Light, Switch, Humidifier, Media Player
+        this.setCommandLockout('onOff', newValue);
+        
+        // If it's a fan turning off, also optimistically reset fanMode to 0
+        if (domain === 'fan' && !newValue && this.endpoint.hasAttributeServer(FanControl.id, 'fanMode')) {
+          await safeUpdateAttribute(this.endpoint, FanControl.id, 'fanMode', 0, this.platform.log);
+        }
+
+        await this.platform.ha.callService(domain, newValue ? 'turn_on' : 'turn_off', this.entityId).catch((err) => {
+          this.platform.log.warn(`[${this.entityId}] Error turning ${newValue ? 'on' : 'off'} ${domain}: ${err?.message ?? err}`);
+        });
+      });
 
       if (domain === 'fan') {
         if (this.endpoint.hasAttributeServer(FanControl.id, 'percentCurrent') || this.endpoint.hasAttributeServer(FanControl.id, 'percentSetting')) {

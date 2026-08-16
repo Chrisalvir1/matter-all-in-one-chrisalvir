@@ -52,8 +52,8 @@ describe('CompositeDeviceEntity', () => {
       { entityId: 'light.sala', state: state('light.sala', 'off') },
     ]);
     await composite.createEndpoint();
-    await (composite.endpoints.get('fan.sala') as any).invokeCommand('on');
-    await (composite.endpoints.get('light.sala') as any).invokeCommand('on');
+    await (composite.endpoints.get('fan.sala') as any).invokeAttributeChange(0x0006, 'onOff', true);
+    await (composite.endpoints.get('light.sala') as any).invokeAttributeChange(0x0006, 'onOff', true);
     expect(platform.ha.callService).toHaveBeenCalledWith('fan', 'turn_on', 'fan.sala');
     expect(platform.ha.callService).toHaveBeenCalledWith('light', 'turn_on', 'light.sala');
   });

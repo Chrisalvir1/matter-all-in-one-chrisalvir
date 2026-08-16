@@ -480,39 +480,36 @@ export class CompositeDeviceEntity {
     const [domain] = member.entityId.split('.');
     const entityId = member.entityId;
 
-    if (domain === 'fan') {
-      const turnOn = async () => {
-        this.setCommandLockout(entityId, 'onOff', true);
-        await safeUpdateAttribute(endpoint, OnOff.id, 'onOff', true, this.platform.log);
-        await this.platform.ha.callService('fan', 'turn_on', entityId).catch((err) => {
-          this.platform.log.warn(`[${entityId}] Error turning on fan: ${err?.message ?? err}`);
-        });
-      };
-      const turnOff = async () => {
-        this.setCommandLockout(entityId, 'onOff', false);
-        await safeUpdateAttribute(endpoint, OnOff.id, 'onOff', false, this.platform.log);
-        if (endpoint.hasAttributeServer(FanControl.id, 'fanMode')) {
+    if (domain === 'light' || domain === 'switch' || domain === 'fan' || domain === 'media_player' || domain === 'vacuum' || domain === 'humidifier') {
+      endpoint.subscribeAttribute(OnOff.id, 'onOff', async (newValue: boolean) => {
+        if (typeof newValue !== 'boolean') return;
+        
+        if (domain === 'vacuum') {
+          if (newValue) {
+            await this.platform.ha.callService(domain, 'start', entityId).catch((err) => {
+              this.platform.log.warn(`[${entityId}] Error starting vacuum: ${err?.message ?? err}`);
+            });
+          } else {
+            await this.platform.ha.callService(domain, 'return_to_base', entityId).catch((err) => {
+              this.platform.log.warn(`[${entityId}] Error returning vacuum: ${err?.message ?? err}`);
+            });
+          }
+          return;
+        }
+
+        this.setCommandLockout(entityId, 'onOff', newValue);
+        
+        if (domain === 'fan' && !newValue && endpoint.hasAttributeServer(FanControl.id, 'fanMode')) {
           await safeUpdateAttribute(endpoint, FanControl.id, 'fanMode', 0, this.platform.log);
         }
-        await this.platform.ha.callService('fan', 'turn_off', entityId).catch((err) => {
-          this.platform.log.warn(`[${entityId}] Error turning off fan: ${err?.message ?? err}`);
-        });
-      };
-      const toggle = async () => {
-        const currentState = this.states.get(entityId);
-        if (isOn(currentState!)) {
-          await turnOff();
-        } else {
-          await turnOn();
-        }
-      };
 
-      endpoint.addCommandHandler('on', turnOn);
-      endpoint.addCommandHandler('OnOff.on', turnOn);
-      endpoint.addCommandHandler('off', turnOff);
-      endpoint.addCommandHandler('OnOff.off', turnOff);
-      endpoint.addCommandHandler('toggle', toggle);
-      endpoint.addCommandHandler('OnOff.toggle', toggle);
+        await this.platform.ha.callService(domain, newValue ? 'turn_on' : 'turn_off', entityId).catch((err) => {
+          this.platform.log.warn(`[${entityId}] Error turning ${newValue ? 'on' : 'off'} ${domain}: ${err?.message ?? err}`);
+        });
+      });
+    }
+
+    if (domain === 'fan') {
 
       if (endpoint.hasAttributeServer(FanControl.id, 'percentCurrent') || endpoint.hasAttributeServer(FanControl.id, 'percentSetting')) {
         endpoint.addCommandHandler('FanControl.step', async (data: any) => {
@@ -635,37 +632,6 @@ export class CompositeDeviceEntity {
     }
 
     if (domain === 'humidifier') {
-      const turnOn = async () => {
-        await safeUpdateAttribute(endpoint, OnOff.id, 'onOff', true, this.platform.log);
-        await this.platform.ha.callService('humidifier', 'turn_on', entityId).catch((err) => {
-          this.platform.log.warn(`[${entityId}] Error turning on humidifier: ${err?.message ?? err}`);
-        });
-      };
-      const turnOff = async () => {
-        await safeUpdateAttribute(endpoint, OnOff.id, 'onOff', false, this.platform.log);
-        if (endpoint.hasAttributeServer(FanControl.id, 'fanMode')) {
-          await safeUpdateAttribute(endpoint, FanControl.id, 'fanMode', 0, this.platform.log);
-        }
-        await this.platform.ha.callService('humidifier', 'turn_off', entityId).catch((err) => {
-          this.platform.log.warn(`[${entityId}] Error turning off humidifier: ${err?.message ?? err}`);
-        });
-      };
-      const toggle = async () => {
-        const currentState = this.states.get(entityId);
-        if (isOn(currentState!)) {
-          await turnOff();
-        } else {
-          await turnOn();
-        }
-      };
-
-      endpoint.addCommandHandler('on', turnOn);
-      endpoint.addCommandHandler('OnOff.on', turnOn);
-      endpoint.addCommandHandler('off', turnOff);
-      endpoint.addCommandHandler('OnOff.off', turnOff);
-      endpoint.addCommandHandler('toggle', toggle);
-      endpoint.addCommandHandler('OnOff.toggle', toggle);
-
       if (endpoint.hasAttributeServer(FanControl.id, 'percentSetting')) {
         endpoint.subscribeAttribute(
           FanControl.id,

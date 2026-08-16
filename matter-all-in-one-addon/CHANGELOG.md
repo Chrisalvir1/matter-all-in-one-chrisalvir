@@ -1,3 +1,11 @@
+## [1.4.11] - 2026-08-16
+
+### Fixed
+- **Luces y Ventiladores no responden desde HomeKit (Error Crítico):**
+  - Se solucionó un error crítico introducido en la versión 1.4.8 (al actualizar los controladores de Matter) que ignoraba los comandos de encendido y apagado (On/Off) de las luces, ventiladores, purificadores, interruptores y aspiradoras.
+  - Ahora se utiliza un sistema robusto de suscripción de atributos (`subscribeAttribute`) que detecta correctamente cualquier cambio de estado On/Off ordenado desde HomeKit y lo transmite de manera instantánea y confiable a Home Assistant, sin depender de los antiguos manejadores de comandos.
+  - Además, se solucionó el problema por el cual las "luces hijas" (como la luz nocturna de un ventilador o difusor) no respondían a los comandos de encendido/apagado.
+
 ## [1.4.10] - 2026-08-16
 
 ### Fixed
