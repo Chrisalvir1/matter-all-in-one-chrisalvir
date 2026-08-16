@@ -1466,7 +1466,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         rawFabrics = Array.isArray(liveFabricSource) ? liveFabricSource : Object.values(liveFabricSource);
       }
 
-      // If only 1 fabric exists in total or less, removing it is a full reset
+      // If only 1 fabric exists or none, removing it is a full reset
       if (rawFabrics.length <= 1) {
         return await this.resetMatterAccessory(entityId);
       }
@@ -1481,28 +1481,19 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         ? Number(matchedFabric.fabricIndex)
         : (targetNum <= 254 && targetNum > 0 ? targetNum : 1);
 
-      // 1. Try Matter.js ServerNode behavior removal
+      // 1. Try Matter.js ServerNode behavior removal via agent transaction
       if (typeof (serverNode as any).act === 'function') {
-        await (serverNode as any).act(async (agent: any) => {
-          if (agent.operationalCredentials?.removeFabric) {
-            await agent.operationalCredentials.removeFabric({ fabricIndex });
-            removed = true;
-          }
-        }).catch(() => {});
-      }
-
-      // 2. Direct operationalCredentials behavior state or nodeState
-      if (nodeState?.operationalCredentials?.fabrics && Array.isArray(nodeState.operationalCredentials.fabrics)) {
-        nodeState.operationalCredentials.fabrics = nodeState.operationalCredentials.fabrics.filter((f: any) =>
-          Number(f.fabricIndex) !== fabricIndex && String(f.fabricId) !== targetStr
-        );
-        removed = true;
-      }
-      if (nodeState?.commissioning?.fabrics && Array.isArray(nodeState.commissioning.fabrics)) {
-        nodeState.commissioning.fabrics = nodeState.commissioning.fabrics.filter((f: any) =>
-          Number(f.fabricIndex) !== fabricIndex && String(f.fabricId) !== targetStr
-        );
-        removed = true;
+        try {
+          await (serverNode as any).act(async (agent: any) => {
+            const opCreds = agent.operationalCredentials ?? agent.behaviors?.operationalCredentials;
+            if (opCreds?.removeFabric) {
+              await opCreds.removeFabric({ fabricIndex });
+              removed = true;
+            }
+          });
+        } catch {
+          // If transaction fails, fallback to reset
+        }
       }
 
       const connection = this.getMatterConnectionInfo(endpoint);
@@ -1518,7 +1509,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         manualPairingCode: connection.manualPairingCode,
       };
     } catch (error) {
-      this.log.error(`Error removing fabric ${fabricIndexOrIdStr} for ${entityId}: ${error}`);
+      this.log.notice(`Resetting Matter accessory ${entityId} on fabric removal: ${error}`);
       return await this.resetMatterAccessory(entityId);
     }
   }
