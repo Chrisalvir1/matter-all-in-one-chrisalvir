@@ -271,12 +271,6 @@ export class BaseEntity {
         else await handleOn();
       });
 
-      this.endpoint.subscribeAttribute(OnOff.id, 'onOff', async (newValue: boolean) => {
-        if (typeof newValue !== 'boolean') return;
-        if (newValue) await handleOn();
-        else await handleOff();
-      });
-
       if (domain === 'fan') {
         if (this.endpoint.hasAttributeServer(FanControl.id, 'percentCurrent') || this.endpoint.hasAttributeServer(FanControl.id, 'percentSetting')) {
           this.endpoint.addCommandHandler('FanControl.step', async (data: any) => {
@@ -605,13 +599,13 @@ export class BaseEntity {
       }
 
       if (domain === 'fan' && this.endpoint.hasAttributeServer(FanControl.id, 'percentCurrent')) {
-        const percentage = typeof newState.attributes.percentage === 'number' ? newState.attributes.percentage : isOn ? 100 : 0;
+        const percentage = isOn ? (typeof newState.attributes.percentage === 'number' && newState.attributes.percentage > 0 ? newState.attributes.percentage : 100) : 0;
         if (!isInitialSync && this.shouldIgnoreStateUpdate('percentage', percentage)) {
           this.platform.log.debug(`[${this.entityId}] Ignoring HA fan percentage update due to recent command lockout`);
         } else {
           await updateFn(this.endpoint, FanControl.id, 'percentCurrent', percentage, this.platform.log);
           await updateFn(this.endpoint, FanControl.id, 'percentSetting', percentage, this.platform.log);
-          const fanMode = isOn ? (percentage > 66 ? 3 : percentage > 33 ? 2 : percentage > 0 ? 1 : 4) : 0;
+          const fanMode = isOn ? (percentage > 66 ? 3 : percentage > 33 ? 2 : 1) : 0;
           await updateFn(this.endpoint, FanControl.id, 'fanMode', fanMode, this.platform.log);
           if (this.endpoint.hasAttributeServer(FanControl.id, 'airflowDirection') && newState.attributes.direction) {
             const dir = newState.attributes.direction === 'reverse' ? 1 : 0;

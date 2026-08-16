@@ -213,13 +213,13 @@ export class CompositeDeviceEntity {
       const on = isOn(state);
       await update(endpoint, OnOff.id, 'onOff', on, this.platform.log);
       if (!endpoint.hasAttributeServer(FanControl.id, 'percentCurrent')) return;
-      const percentage = typeof state.attributes.percentage === 'number' ? state.attributes.percentage : on ? 100 : 0;
+      const percentage = on ? (typeof state.attributes.percentage === 'number' && state.attributes.percentage > 0 ? state.attributes.percentage : 100) : 0;
       if (!initial && this.shouldIgnoreStateUpdate(entityId, 'percentage', percentage)) {
         this.platform.log.debug(`[${entityId}] Ignoring HA fan percentage state update due to recent command lockout`);
       } else {
         await update(endpoint, FanControl.id, 'percentCurrent', percentage, this.platform.log);
         await update(endpoint, FanControl.id, 'percentSetting', percentage, this.platform.log);
-        const fanMode = on ? (percentage > 66 ? 3 : percentage > 33 ? 2 : percentage > 0 ? 1 : 4) : 0;
+        const fanMode = on ? (percentage > 66 ? 3 : percentage > 33 ? 2 : 1) : 0;
         await update(endpoint, FanControl.id, 'fanMode', fanMode, this.platform.log);
         if (endpoint.hasAttributeServer(FanControl.id, 'airflowDirection') && state.attributes.direction) {
           const dir = state.attributes.direction === 'reverse' ? 1 : 0;
@@ -524,12 +524,6 @@ export class CompositeDeviceEntity {
         if (isOn(currentState!)) await handleOff();
         else await handleOn();
       });
-
-      endpoint.subscribeAttribute(OnOff.id, 'onOff', async (newValue: boolean) => {
-        if (typeof newValue !== 'boolean') return;
-        if (newValue) await handleOn();
-        else await handleOff();
-      });
     }
 
     if (domain === 'fan') {
@@ -742,36 +736,6 @@ export class CompositeDeviceEntity {
       };
 
       const currentHs = () => lightColor.getHsColor(this.states.get(entityId)!) ?? [0, 100];
-      
-      const turnOnLight = async () => {
-        this.setCommandLockout(entityId, 'onOff', true);
-        await safeUpdateAttribute(endpoint, OnOff.id, 'onOff', true, this.platform.log);
-        await this.platform.ha.callService('light', 'turn_on', entityId).catch((err) => {
-          this.platform.log.warn(`[${entityId}] Error turning on light: ${err?.message ?? err}`);
-        });
-      };
-      const turnOffLight = async () => {
-        this.setCommandLockout(entityId, 'onOff', false);
-        await safeUpdateAttribute(endpoint, OnOff.id, 'onOff', false, this.platform.log);
-        await this.platform.ha.callService('light', 'turn_off', entityId).catch((err) => {
-          this.platform.log.warn(`[${entityId}] Error turning off light: ${err?.message ?? err}`);
-        });
-      };
-      const toggleLight = async () => {
-        const currentState = this.states.get(entityId);
-        if (isOn(currentState!)) {
-          await turnOffLight();
-        } else {
-          await turnOnLight();
-        }
-      };
-
-      endpoint.addCommandHandler('on', turnOnLight);
-      endpoint.addCommandHandler('OnOff.on', turnOnLight);
-      endpoint.addCommandHandler('off', turnOffLight);
-      endpoint.addCommandHandler('OnOff.off', turnOffLight);
-      endpoint.addCommandHandler('toggle', toggleLight);
-      endpoint.addCommandHandler('OnOff.toggle', toggleLight);
 
       if (endpoint.hasAttributeServer(LevelControl.id, 'currentLevel')) {
         endpoint.addCommandHandler('moveToLevel', async (data: any) => {
@@ -779,7 +743,6 @@ export class CompositeDeviceEntity {
           if (typeof level === 'number') {
             const haBrightness = Math.round((level / 254) * 255);
             this.setCommandLockout(entityId, 'brightness', haBrightness);
-            await safeUpdateAttribute(endpoint, LevelControl.id, 'currentLevel', level, this.platform.log);
             await this.platform.ha.callService('light', 'turn_on', entityId, { brightness: haBrightness }).catch((err) => {
               this.platform.log.warn(`[${entityId}] Error setting brightness: ${err?.message ?? err}`);
             });
@@ -789,15 +752,12 @@ export class CompositeDeviceEntity {
           const level = data?.level ?? data?.request?.level;
           if (typeof level === 'number') {
             if (level === 0) {
-              await safeUpdateAttribute(endpoint, OnOff.id, 'onOff', false, this.platform.log);
               await this.platform.ha.callService('light', 'turn_off', entityId).catch((err) => {
                 this.platform.log.warn(`[${entityId}] Error turning off light: ${err?.message ?? err}`);
               });
             } else {
               const haBrightness = Math.round((level / 254) * 255);
               this.setCommandLockout(entityId, 'brightness', haBrightness);
-              await safeUpdateAttribute(endpoint, LevelControl.id, 'currentLevel', level, this.platform.log);
-              await safeUpdateAttribute(endpoint, OnOff.id, 'onOff', true, this.platform.log);
               await this.platform.ha.callService('light', 'turn_on', entityId, { brightness: haBrightness }).catch((err) => {
                 this.platform.log.warn(`[${entityId}] Error setting brightness: ${err?.message ?? err}`);
               });

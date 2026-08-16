@@ -1,3 +1,11 @@
+## [1.4.13] - 2026-08-16
+
+### Fixed
+- **Respuesta Instantánea en HomeKit y Corrección de Fan al 100%:**
+  - **Corrección de Estado Inconsistente:** Se solucionó el problema por el cual un ventilador apagado en Home Assistant reportaba 100% de velocidad a HomeKit debido a que HA retiene el último porcentaje. Ahora, cuando el ventilador está apagado, el puente reporta 0% de velocidad y modo apagado inmediatamente.
+  - **Eliminación de Comandos Duplicados y Retardos:** Se eliminaron los suscriptores redundantes que disparaban dos llamadas paralelas hacia Home Assistant por cada toque en HomeKit (provocando demoras y spinners de carga en la app Casa).
+  - **Limpieza de Controladores de Luz en Dispositivos Compuestos:** Se simplificó la ejecución de comandos de brillo y encendido/apagado para que respondan en milisegundos sin bloqueos.
+
 ## [1.4.12] - 2026-08-16
 
 ### Fixed
