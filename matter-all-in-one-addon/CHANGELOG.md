@@ -1,3 +1,15 @@
+## [1.4.7] - 2026-08-16
+
+### Enhanced & Fixed
+- **Manejadores de Comandos Completos para Ventiladores (FAN) y Luces (on/off/toggle):**
+  - Añadidos listeners directos para comandos `toggle`, `OnOff.toggle`, `OnOff.on` y `OnOff.off`.
+  - Ahora al presionar el botón del ventilador o la luz directamente en la casilla de Apple Home, el comando se envía y ejecuta en Home Assistant en tiempo real sin perder sincronización.
+- **Soporte Completo de Temperatura de Color (Kelvin) y Brillo en Luces de Ventiladores:**
+  - Mejorada la detección de capacidades de iluminación (`supported_features`, `min_mireds`, `max_mireds`, `color_temp_kelvin`).
+  - Las luces de los ventiladores de techo ahora se publican con `ColorControl` (selector de temperatura cálida/fría en Kelvin) y `LevelControl` (brillo), no solo como interruptor de encender/apagar.
+- **Soporte Completo de Color y Control de Nivel para Luces Nocturnas de Difusores:**
+  - Activación de los clusters `ColorControl` y `LevelControl` en luces integradas en difusores.
+
 ## [1.4.6] - 2026-08-16
 
 ### Enhanced & Fixed

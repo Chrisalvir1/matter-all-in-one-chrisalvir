@@ -50,13 +50,12 @@ function lightClusterIds(state: HassState, deviceType: DeviceTypeDefinition): Cl
   const modes: string[] = state.attributes.supported_color_modes ?? [];
   const hasBrightness = modes.includes('brightness') || state.attributes.brightness !== undefined;
   const hasColorTemp = hasColorTemperatureCapability(state.attributes);
-  const hasRgb = modes.some((m) => ['hs', 'xy', 'rgb', 'rgbw', 'rgbww'].includes(m));
+  const hasRgb = modes.some((m) => ['hs', 'xy', 'rgb', 'rgbw', 'rgbww'].includes(m)) || state.attributes.rgb_color !== undefined || state.attributes.hs_color !== undefined || state.attributes.xy_color !== undefined;
 
   const isOnOffProfile = deviceType.code === 0x0100 || deviceType.code === 0x010a; 
-  const isColorProfile = deviceType.code === 0x010c || deviceType.code === 0x010d; 
 
   if ((hasBrightness || hasColorTemp || hasRgb) && !isOnOffProfile) clusters.push(LevelControl.id);
-  if ((hasColorTemp || hasRgb) && isColorProfile) clusters.push(ColorControl.id);
+  if (hasColorTemp || hasRgb) clusters.push(ColorControl.id);
   return clusters;
 }
 
@@ -432,14 +431,14 @@ export class CompositeDeviceEntity {
     const entityId = member.entityId;
 
     if (domain === 'fan') {
-      endpoint.addCommandHandler('on', async () => {
+      const turnOn = async () => {
         this.setCommandLockout(entityId, 'onOff', true);
         await safeUpdateAttribute(endpoint, OnOff.id, 'onOff', true, this.platform.log);
         await this.platform.ha.callService('fan', 'turn_on', entityId).catch((err) => {
           this.platform.log.warn(`[${entityId}] Error turning on fan: ${err?.message ?? err}`);
         });
-      });
-      endpoint.addCommandHandler('off', async () => {
+      };
+      const turnOff = async () => {
         this.setCommandLockout(entityId, 'onOff', false);
         await safeUpdateAttribute(endpoint, OnOff.id, 'onOff', false, this.platform.log);
         if (endpoint.hasAttributeServer(FanControl.id, 'fanMode')) {
@@ -448,7 +447,22 @@ export class CompositeDeviceEntity {
         await this.platform.ha.callService('fan', 'turn_off', entityId).catch((err) => {
           this.platform.log.warn(`[${entityId}] Error turning off fan: ${err?.message ?? err}`);
         });
-      });
+      };
+      const toggle = async () => {
+        const currentState = this.states.get(entityId);
+        if (isOn(currentState!)) {
+          await turnOff();
+        } else {
+          await turnOn();
+        }
+      };
+
+      endpoint.addCommandHandler('on', turnOn);
+      endpoint.addCommandHandler('OnOff.on', turnOn);
+      endpoint.addCommandHandler('off', turnOff);
+      endpoint.addCommandHandler('OnOff.off', turnOff);
+      endpoint.addCommandHandler('toggle', toggle);
+      endpoint.addCommandHandler('OnOff.toggle', toggle);
 
       if (endpoint.hasAttributeServer(FanControl.id, 'percentCurrent') || endpoint.hasAttributeServer(FanControl.id, 'percentSetting')) {
         endpoint.addCommandHandler('FanControl.step', async (data: any) => {
@@ -571,19 +585,33 @@ export class CompositeDeviceEntity {
     }
 
     if (domain === 'humidifier') {
-      endpoint.addCommandHandler('on', async () => {
+      const turnOn = async () => {
         await safeUpdateAttribute(endpoint, OnOff.id, 'onOff', true, this.platform.log);
         await this.platform.ha.callService('humidifier', 'turn_on', entityId).catch((err) => {
           this.platform.log.warn(`[${entityId}] Error turning on humidifier: ${err?.message ?? err}`);
         });
-      });
-
-      endpoint.addCommandHandler('off', async () => {
+      };
+      const turnOff = async () => {
         await safeUpdateAttribute(endpoint, OnOff.id, 'onOff', false, this.platform.log);
         await this.platform.ha.callService('humidifier', 'turn_off', entityId).catch((err) => {
           this.platform.log.warn(`[${entityId}] Error turning off humidifier: ${err?.message ?? err}`);
         });
-      });
+      };
+      const toggle = async () => {
+        const currentState = this.states.get(entityId);
+        if (isOn(currentState!)) {
+          await turnOff();
+        } else {
+          await turnOn();
+        }
+      };
+
+      endpoint.addCommandHandler('on', turnOn);
+      endpoint.addCommandHandler('OnOff.on', turnOn);
+      endpoint.addCommandHandler('off', turnOff);
+      endpoint.addCommandHandler('OnOff.off', turnOff);
+      endpoint.addCommandHandler('toggle', toggle);
+      endpoint.addCommandHandler('OnOff.toggle', toggle);
 
       if (endpoint.hasAttributeServer(FanControl.id, 'percentSetting')) {
         endpoint.subscribeAttribute(
@@ -657,20 +685,35 @@ export class CompositeDeviceEntity {
 
       const currentHs = () => lightColor.getHsColor(this.states.get(entityId)!) ?? [0, 100];
       
-      endpoint.addCommandHandler('on', async () => {
+      const turnOnLight = async () => {
         this.setCommandLockout(entityId, 'onOff', true);
         await safeUpdateAttribute(endpoint, OnOff.id, 'onOff', true, this.platform.log);
         await this.platform.ha.callService('light', 'turn_on', entityId).catch((err) => {
           this.platform.log.warn(`[${entityId}] Error turning on light: ${err?.message ?? err}`);
         });
-      });
-      endpoint.addCommandHandler('off', async () => {
+      };
+      const turnOffLight = async () => {
         this.setCommandLockout(entityId, 'onOff', false);
         await safeUpdateAttribute(endpoint, OnOff.id, 'onOff', false, this.platform.log);
         await this.platform.ha.callService('light', 'turn_off', entityId).catch((err) => {
           this.platform.log.warn(`[${entityId}] Error turning off light: ${err?.message ?? err}`);
         });
-      });
+      };
+      const toggleLight = async () => {
+        const currentState = this.states.get(entityId);
+        if (isOn(currentState!)) {
+          await turnOffLight();
+        } else {
+          await turnOnLight();
+        }
+      };
+
+      endpoint.addCommandHandler('on', turnOnLight);
+      endpoint.addCommandHandler('OnOff.on', turnOnLight);
+      endpoint.addCommandHandler('off', turnOffLight);
+      endpoint.addCommandHandler('OnOff.off', turnOffLight);
+      endpoint.addCommandHandler('toggle', toggleLight);
+      endpoint.addCommandHandler('OnOff.toggle', toggleLight);
 
       if (endpoint.hasAttributeServer(LevelControl.id, 'currentLevel')) {
         endpoint.addCommandHandler('moveToLevel', async (data: any) => {
@@ -819,18 +862,33 @@ export class CompositeDeviceEntity {
     }
 
     if (domain === 'switch') {
-      endpoint.addCommandHandler('on', async () => {
+      const turnOnSwitch = async () => {
         await safeUpdateAttribute(endpoint, OnOff.id, 'onOff', true, this.platform.log);
         await this.platform.ha.callService('switch', 'turn_on', entityId).catch((err) => {
           this.platform.log.warn(`[${entityId}] Error turning on switch: ${err?.message ?? err}`);
         });
-      });
-      endpoint.addCommandHandler('off', async () => {
+      };
+      const turnOffSwitch = async () => {
         await safeUpdateAttribute(endpoint, OnOff.id, 'onOff', false, this.platform.log);
         await this.platform.ha.callService('switch', 'turn_off', entityId).catch((err) => {
           this.platform.log.warn(`[${entityId}] Error turning off switch: ${err?.message ?? err}`);
         });
-      });
+      };
+      const toggleSwitch = async () => {
+        const currentState = this.states.get(entityId);
+        if (isOn(currentState!)) {
+          await turnOffSwitch();
+        } else {
+          await turnOnSwitch();
+        }
+      };
+
+      endpoint.addCommandHandler('on', turnOnSwitch);
+      endpoint.addCommandHandler('OnOff.on', turnOnSwitch);
+      endpoint.addCommandHandler('off', turnOffSwitch);
+      endpoint.addCommandHandler('OnOff.off', turnOffSwitch);
+      endpoint.addCommandHandler('toggle', toggleSwitch);
+      endpoint.addCommandHandler('OnOff.toggle', toggleSwitch);
     }
   }
 

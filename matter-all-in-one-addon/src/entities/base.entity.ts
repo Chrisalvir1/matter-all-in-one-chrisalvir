@@ -191,7 +191,7 @@ export class BaseEntity {
     const [domain] = this.entityId.split('.');
 
     if (domain === 'light' || domain === 'switch' || domain === 'fan' || domain === 'media_player' || domain === 'vacuum') {
-      this.endpoint.addCommandHandler('on', async () => {
+      const turnOn = async () => {
         if (domain === 'vacuum') {
           await this.platform.ha.callService(domain, 'start', this.entityId).catch((err) => {
             this.platform.log.warn(`[${this.entityId}] Error starting vacuum: ${err?.message ?? err}`);
@@ -203,9 +203,9 @@ export class BaseEntity {
             this.platform.log.warn(`[${this.entityId}] Error turning on ${domain}: ${err?.message ?? err}`);
           });
         }
-      });
+      };
 
-      this.endpoint.addCommandHandler('off', async () => {
+      const turnOff = async () => {
         if (domain === 'vacuum') {
           await this.platform.ha.callService(domain, 'return_to_base', this.entityId).catch((err) => {
             this.platform.log.warn(`[${this.entityId}] Error returning vacuum: ${err?.message ?? err}`);
@@ -220,7 +220,26 @@ export class BaseEntity {
             this.platform.log.warn(`[${this.entityId}] Error turning off ${domain}: ${err?.message ?? err}`);
           });
         }
-      });
+      };
+
+      const toggle = async () => {
+        if (domain === 'vacuum') {
+          await turnOn();
+        } else {
+          if (this.state.state === 'on') {
+            await turnOff();
+          } else {
+            await turnOn();
+          }
+        }
+      };
+
+      this.endpoint.addCommandHandler('on', turnOn);
+      this.endpoint.addCommandHandler('OnOff.on', turnOn);
+      this.endpoint.addCommandHandler('off', turnOff);
+      this.endpoint.addCommandHandler('OnOff.off', turnOff);
+      this.endpoint.addCommandHandler('toggle', toggle);
+      this.endpoint.addCommandHandler('OnOff.toggle', toggle);
 
       if (domain === 'fan') {
         if (this.endpoint.hasAttributeServer(FanControl.id, 'percentCurrent') || this.endpoint.hasAttributeServer(FanControl.id, 'percentSetting')) {

@@ -144,23 +144,27 @@ export const DEVICE_CLASS_REGISTRY: Record<string, Record<string, DeviceRegistry
  */
 export function hasColorTemperatureCapability(attributes: Record<string, any> = {}): boolean {
   const modes: string[] = attributes.supported_color_modes ?? [];
+  const supportedFeatures = Number(attributes.supported_features || 0);
   return modes.includes('color_temp')
+    || (supportedFeatures & 2) !== 0
     || attributes.color_mode === 'color_temp'
     || attributes.color_temp !== undefined
     || attributes.color_temp_kelvin !== undefined
     || attributes.min_color_temp_kelvin !== undefined
-    || attributes.max_color_temp_kelvin !== undefined;
+    || attributes.max_color_temp_kelvin !== undefined
+    || (typeof attributes.min_mireds === 'number' && typeof attributes.max_mireds === 'number');
 }
 
 export function getLightDeviceType(attributes: Record<string, any> = {}): DeviceTypeDefinition {
   const modes: string[] = attributes.supported_color_modes ?? [];
-  if (modes.some((mode) => ['hs', 'xy', 'rgb', 'rgbw', 'rgbww'].includes(mode))) {
+  const supportedFeatures = Number(attributes.supported_features || 0);
+  if (modes.some((mode) => ['hs', 'xy', 'rgb', 'rgbw', 'rgbww'].includes(mode)) || (supportedFeatures & 16) !== 0 || attributes.rgb_color !== undefined || attributes.hs_color !== undefined || attributes.xy_color !== undefined) {
     return MatterDeviceTypes.extendedColorLight;
   }
   if (hasColorTemperatureCapability(attributes)) {
     return MatterDeviceTypes.colorTemperatureLight;
   }
-  if (modes.includes('brightness') || attributes.brightness !== undefined) {
+  if (modes.includes('brightness') || attributes.brightness !== undefined || (supportedFeatures & 1) !== 0) {
     return MatterDeviceTypes.dimmableLight;
   }
   return MatterDeviceTypes.onOffLight;
