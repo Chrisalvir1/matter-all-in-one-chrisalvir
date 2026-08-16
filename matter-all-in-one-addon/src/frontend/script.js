@@ -1,7 +1,7 @@
 'use strict';
 
 const API = './api/custom';
-const state = { entities: [], activeDevice: null, activeEntity: null, activeFilter: 'all', statusBusy: false, devicesBusy: false, confirmAction: null, toastTimer: null };
+const state = { entities: [], activeDevice: null, activeEntity: null, activeFilter: 'all', statusBusy: false, devicesBusy: false, confirmAction: null, toastTimer: null, pollId: null };
 const $ = (id) => document.getElementById(id);
 const els = {
   bridgeOrb: $('bridge-orb'), bridgeTitle: $('bridge-title'), bridgeDescription: $('bridge-description'),
@@ -16,6 +16,7 @@ const els = {
   deviceModalName: $('device-modal-name'), deviceModalId: $('device-modal-id'), entityList: $('entity-list'),
   modalExportCount: $('modal-export-count'), selectionPanel: $('selection-panel'), selectionTitle: $('selection-title'),
   selectionDescription: $('selection-description'), selectionMeta: $('selection-meta'), selectionStatus: $('selection-status'),
+  qrPanel: $('qr-panel'), qrStatusLabel: $('qr-status-label'), qrSpinnerWrap: $('qr-spinner-wrap'),
   deviceQrContainer: $('device-qr-container'), deviceQrCode: $('device-qr-code'), deviceManualCode: $('device-manual-code'), deviceQrButton: $('device-qr-button'),
   resetAccessoryButton: $('reset-accessory-button'), matterActions: $('matter-actions'), reconnectAccessoryButton: $('reconnect-accessory-button'), regenerateCodeButton: $('regenerate-code-button'),
   profileField: $('profile-field'), profileSelect: $('profile-select'), profileNote: $('profile-note'),
@@ -285,16 +286,30 @@ function buildEntityRow(entity, isSearchHit = false) {
 }
 
 function renderQrSection(entity) {
-  // Reset QR and Fabrics areas
-  els.deviceQrContainer.style.display = 'none';
-  els.deviceQrCode.innerHTML = '';
-  els.deviceManualCode.textContent = '';
-  els.deviceQrButton.style.display = 'none';
-  els.resetAccessoryButton.style.display = 'none';
-  els.matterActions.hidden = true;
+  // Reset QR panel areas
+  if (els.deviceQrContainer) els.deviceQrContainer.style.display = 'none';
+  if (els.deviceQrCode) els.deviceQrCode.innerHTML = '';
+  if (els.deviceManualCode) els.deviceManualCode.textContent = '';
+  if (els.qrSpinnerWrap) els.qrSpinnerWrap.style.display = 'none';
+  if (els.deviceQrButton) els.deviceQrButton.style.display = 'none';
+  if (els.resetAccessoryButton) els.resetAccessoryButton.style.display = 'none';
+  if (els.matterActions) els.matterActions.hidden = true;
   if (els.fabricsSection) els.fabricsSection.hidden = true;
   if (els.fabricsList) els.fabricsList.innerHTML = '';
-  els.deviceQrButton.textContent = 'Mostrar Código de Emparejamiento';
+
+  // Update QR panel status label
+  if (els.qrStatusLabel) {
+    if (!entity || !entity.exported) {
+      els.qrStatusLabel.textContent = 'Sin publicar en Matter';
+      els.qrStatusLabel.className = 'qr-status-label';
+    } else if (entity.commissioned) {
+      els.qrStatusLabel.textContent = '✓ Emparejado';
+      els.qrStatusLabel.className = 'qr-status-label commissioned';
+    } else {
+      els.qrStatusLabel.textContent = '● Listo para emparejar';
+      els.qrStatusLabel.className = 'qr-status-label active';
+    }
+  }
 
   if (!entity || entity.auxiliary || !entity.exported) return;
 
@@ -321,7 +336,6 @@ function renderQrSection(entity) {
         </div>`;
       }).join('');
 
-      // Add listeners to individual fabric disconnect buttons
       els.fabricsList.querySelectorAll('.fabric-disconnect-btn').forEach((btn) => {
         btn.addEventListener('click', () => {
           const fIndex = btn.dataset.fabricIndex;
@@ -331,12 +345,23 @@ function renderQrSection(entity) {
             `Se eliminará el emparejamiento con ${controllerName}. Este accesorio dejará de responder en esa casa.`,
             async () => {
               try {
+                btn.disabled = true;
+                btn.textContent = 'Desconectando…';
                 const res = await request(`/remove-fabric/${encodeURIComponent(entity.entityId)}/${encodeURIComponent(fIndex)}`, { method: 'POST' });
                 if (!res.success) throw new Error(res.error || 'No se pudo desconectar');
                 showToast(`Desconectado de ${controllerName}.`);
+                // Update entity in place with returned data
+                if (res.pairingCode !== undefined) {
+                  entity.pairingCode = res.pairingCode;
+                  entity.manualPairingCode = res.manualPairingCode;
+                  entity.commissioned = (res.remainingFabrics ?? 0) > 0;
+                  entity.fabricCount = res.remainingFabrics ?? 0;
+                  entity.matterFabrics = entity.matterFabrics?.filter(f => String(f.fabricIndex) !== String(fIndex) && String(f.fabricId) !== String(fIndex)) ?? [];
+                }
                 await fetchDevices(true);
               } catch (err) {
                 showToast(err.message || 'Error al desconectar.', true);
+                await fetchDevices(true);
               }
             }
           );
@@ -344,23 +369,22 @@ function renderQrSection(entity) {
       });
     }
 
-    // Show matter actions for commissioned device
+    // Show matter actions + "Add to another home" QR button
     els.matterActions.hidden = false;
     els.deviceQrButton.style.display = 'block';
     els.deviceQrButton.textContent = 'Añadir a otra casa (Ver QR)';
     if (els.reconnectAccessoryButton) els.reconnectAccessoryButton.textContent = '↻ Recargar / Sincronizar';
     if (els.regenerateCodeButton) els.regenerateCodeButton.textContent = 'Desconectar todo y nuevo QR';
   } else if (entity.exported) {
-    // Exported but NOT commissioned: display QR and manual code directly!
+    // Not commissioned: show QR directly and large in the panel
     els.matterActions.hidden = true;
     if (entity.pairingCode) {
       showQrCode(entity);
-      els.deviceQrButton.style.display = 'block';
-      els.deviceQrButton.textContent = 'Generar nuevo código QR';
-    } else {
-      els.deviceQrContainer.style.display = 'block';
-      els.deviceQrCode.innerHTML = '<p style="color:#888;font-size:0.85rem;">Generando código Matter…</p>';
+      // For not-yet-paired: show 'Add to another home' only after pairing
       els.deviceQrButton.style.display = 'none';
+    } else {
+      // No pairing code yet — show spinner and begin fast poll
+      if (els.qrSpinnerWrap) els.qrSpinnerWrap.style.display = 'flex';
       void pollForPairingCode(entity.entityId);
     }
   }
@@ -532,9 +556,29 @@ async function toggleEntity(entity, checkbox) {
     entity.exported = next;
     const compositeLabel = entity.composite ? 'El dispositivo completo' : displayName(entity);
     showToast(next ? `${compositeLabel} se publicó en Matter.` : `${compositeLabel} se retiró de Matter.`);
-    await fetchDevices();
-    const device = groupEntities(state.entities).find((item) => item.id === state.activeDevice?.id);
-    if (device) openDevice(device); else setModalOpen(els.deviceModal, false);
+    // Refresh device list in background without closing the modal
+    void fetchDevices();
+    // Update only the current entity row state without reopening the modal
+    const fresh = await request('/devices');
+    if (Array.isArray(fresh)) {
+      state.entities = fresh;
+      renderDevices();
+      // If modal is open, update selection panel for the affected entity only
+      if (state.activeEntity?.entityId === entity.entityId && els.deviceModal.classList.contains('open')) {
+        const updated = fresh.find((e) => e.entityId === entity.entityId);
+        if (updated) {
+          state.activeEntity = updated;
+          // Update the entity row export badge without full modal re-open
+          const row = els.entityList.querySelector(`[data-entity-id="${CSS.escape(entity.entityId)}"]`);
+          if (row) {
+            row.classList.toggle('dimmed', !updated.exported);
+            const cb = row.querySelector('input[type="checkbox"]');
+            if (cb) cb.checked = !!updated.exported;
+          }
+          selectEntity(updated);
+        }
+      }
+    }
   } catch (error) { checkbox.checked = !next; showToast(error.message || 'No se pudo actualizar la entidad.', true); }
   finally { checkbox.disabled = false; }
 }
@@ -543,12 +587,13 @@ function openConfirm(title, description, action) { els.confirmTitle.textContent 
 
 function showQrCode(entity) {
   if (!entity || !entity.pairingCode) return;
+  if (els.qrSpinnerWrap) els.qrSpinnerWrap.style.display = 'none';
   els.deviceQrCode.innerHTML = '';
   if (typeof QRCode !== 'undefined') {
     new QRCode(els.deviceQrCode, {
       text: entity.pairingCode,
-      width: 180,
-      height: 180,
+      width: 232,
+      height: 232,
       colorDark: '#0b1020',
       colorLight: '#ffffff',
       correctLevel: QRCode.CorrectLevel.M,
@@ -568,9 +613,13 @@ document.querySelectorAll('.filter-chip').forEach((button) => button.addEventLis
 }));
 els.profileSelect.addEventListener('change', () => { if (state.activeEntity) void updateProfile(state.activeEntity, els.profileSelect.value); });
 
-async function pollForPairingCode(entityOrId, maxAttempts = 20) {
+async function pollForPairingCode(entityOrId, maxAttempts = 40) {
   const targetEntityId = typeof entityOrId === 'object' && entityOrId !== null ? entityOrId.entityId : entityOrId;
   if (!targetEntityId) return;
+
+  // Cancel any previous spinner
+  if (els.qrSpinnerWrap) els.qrSpinnerWrap.style.display = 'flex';
+  if (els.deviceQrContainer) els.deviceQrContainer.style.display = 'none';
 
   for (let i = 0; i < maxAttempts; i++) {
     await new Promise((resolve) => setTimeout(resolve, 300));
@@ -580,11 +629,10 @@ async function pollForPairingCode(entityOrId, maxAttempts = 20) {
         state.entities = fresh;
         const found = fresh.find((e) => e.entityId === targetEntityId);
         if (found && found.pairingCode) {
+          if (els.qrSpinnerWrap) els.qrSpinnerWrap.style.display = 'none';
           if (state.activeEntity?.entityId === targetEntityId) {
             state.activeEntity = found;
-            els.deviceQrButton.disabled = false;
             showQrCode(found);
-            els.deviceQrButton.textContent = 'Ocultar Código';
           }
           renderDevices();
           break;
@@ -594,19 +642,21 @@ async function pollForPairingCode(entityOrId, maxAttempts = 20) {
       // Ignore transient poll error
     }
   }
+  // If still no code after all attempts, hide spinner and show message
+  if (els.qrSpinnerWrap && els.qrSpinnerWrap.style.display !== 'none') {
+    els.qrSpinnerWrap.style.display = 'none';
+    if (els.deviceQrCode) els.deviceQrCode.innerHTML = '<p style="color:var(--muted);font-size:0.85rem;">No se pudo generar el código QR. Presiona Recargar.</p>';
+    if (els.deviceQrContainer) els.deviceQrContainer.style.display = 'block';
+  }
 }
 
 els.deviceQrButton.addEventListener('click', () => {
+  // For commissioned devices: toggle QR visibility ("Add to another home")
   if (els.deviceQrContainer.style.display !== 'none') {
-    // Toggle off
     els.deviceQrContainer.style.display = 'none';
     const entity = state.activeEntity;
-    if (entity && entity.exported) {
-      if (entity.commissioned) {
-        els.deviceQrButton.textContent = 'Añadir a otra casa (Ver QR)';
-      } else {
-        els.deviceQrButton.textContent = 'Mostrar Código QR';
-      }
+    if (entity && entity.exported && entity.commissioned) {
+      els.deviceQrButton.textContent = 'Añadir a otra casa (Ver QR)';
     }
     return;
   }
@@ -616,11 +666,10 @@ els.deviceQrButton.addEventListener('click', () => {
 
   if (entity.pairingCode) {
     showQrCode(entity);
-    els.deviceQrButton.textContent = 'Ocultar Código QR';
+    if (entity.commissioned) els.deviceQrButton.textContent = 'Ocultar Código QR';
   } else {
-    // No pairing code yet, show message and fast poll
-    els.deviceQrCode.innerHTML = '<p style="color:#888;font-size:0.85rem;">Generando código Matter…</p>';
-    els.deviceQrContainer.style.display = 'block';
+    // No pairing code yet — show spinner and fast poll
+    if (els.qrSpinnerWrap) els.qrSpinnerWrap.style.display = 'flex';
     els.deviceQrButton.textContent = 'Ocultar Código QR';
     void pollForPairingCode(entity.entityId);
   }
@@ -700,6 +749,40 @@ void fetchDevices();
 setInterval(() => void fetchStatus(), 8000);
 // Refresh fabrics and commissioning state without requiring a page reload.
 setInterval(() => void fetchDevices(true), 4000);
+
+// --- SSE: Real-time push for fabric/commissioning changes ---
+function connectSSE() {
+  try {
+    const sse = new EventSource(`${API}/events`);
+    sse.onmessage = (ev) => {
+      try {
+        const update = JSON.parse(ev.data);
+        if (!update || !update.entityId) return;
+        // Merge update into state.entities
+        const idx = state.entities.findIndex((e) => e.entityId === update.entityId);
+        if (idx !== -1) {
+          state.entities[idx] = { ...state.entities[idx], ...update };
+          renderDevices();
+          // If modal is open for this entity, update the selection panel
+          if (state.activeEntity?.entityId === update.entityId && els.deviceModal.classList.contains('open')) {
+            state.activeEntity = state.entities[idx];
+            selectEntity(state.activeEntity);
+          }
+        }
+      } catch {
+        // ignore malformed SSE data
+      }
+    };
+    sse.onerror = () => {
+      sse.close();
+      // Reconnect after 5s if SSE drops
+      setTimeout(connectSSE, 5000);
+    };
+  } catch {
+    // SSE not supported or blocked — fallback to polling only
+  }
+}
+connectSSE();
 
 // MQTT Configuration
 const mqttHostInput = $('mqtt-host');

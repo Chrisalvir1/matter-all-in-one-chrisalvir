@@ -161,6 +161,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   private syncRequested = false;
   private syncRetryTimeout?: NodeJS.Timeout;
   private syncRetryAttempt = 0;
+  /** SSE subscribers for real-time UI push events. */
+  private readonly sseSubscribers = new Set<http.ServerResponse>();
 
   private get groupingEnabled(): boolean {
     return (
@@ -438,8 +440,18 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       const saved = JSON.parse(raw) as Record<string, EntityDiagnostic[]>;
       for (const [entityId, diagnostics] of Object.entries(saved)) {
         if (!Array.isArray(diagnostics)) continue;
-        this.entityDiagnostics.set(entityId, diagnostics.filter((entry) => entry && typeof entry.message === 'string' && typeof entry.timestamp === 'string').slice(0, 30));
+        // Purge transient WebSocket connection warnings from individual entity histories
+        const cleaned = diagnostics.filter(
+          (entry) =>
+            entry &&
+            typeof entry.message === 'string' &&
+            typeof entry.timestamp === 'string' &&
+            !entry.message.includes('WebSocket') &&
+            !entry.message.includes('Code: 1006'),
+        ).slice(0, 30);
+        this.entityDiagnostics.set(entityId, cleaned);
       }
+      this.scheduleDiagnosticsSave();
     } catch {
       // The diagnostics file is optional and is created on the first issue.
     }
@@ -665,7 +677,6 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       }
       for (const entityId of this.entities.keys()) {
         this.clearEntityProblem(entityId);
-        this.recordEntityDiagnostic(entityId, `Conexión con Home Assistant activa (${version})`, 'info');
       }
       void this.discoverAndSync();
     });
@@ -677,13 +688,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       }
       const message = this.describeHomeAssistantConnectionFailure(reason);
       this.log.warn(`Disconnected from Home Assistant: ${message}`);
-      this.recordConnectionProblem(`${message} Se reintentará la conexión automáticamente.`);
     });
 
     this.ha.on('error', (err) => {
       const message = this.describeHomeAssistantConnectionFailure(err);
       this.log.error(`Home Assistant connection error: ${message}`);
-      this.recordConnectionProblem(message);
     });
 
     this.ha.on('event', (_deviceId, entityId, _oldState, newState) => {
@@ -1031,8 +1040,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     let migratedLegacyEntries = false;
     const entries = Array.from(this.exportedDevices);
 
-    // Process in parallel batches of 6 to avoid serverNode startup bottlenecks while speeding up launch dramatically
-    const batchSize = 6;
+    // Process all exported devices fully in parallel for instant reconnection at startup
+    const batchSize = entries.length || 1;
     for (let i = 0; i < entries.length; i += batchSize) {
       const batch = entries.slice(i, i + batchSize);
       await Promise.all(
@@ -1104,26 +1113,29 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     this.log.warn(`Composite Matter node for device ${deviceId} is unavailable; preserved the existing paired endpoint ${primaryEntityId}.`);
   }
 
-  private async activateComposite(entityId: string): Promise<void> {
+  private async activateComposite(entityId: string, forceRecreate = false): Promise<void> {
     const candidate = this.getCompositeCandidate(entityId);
-    if (!candidate) return this.activateEntity(entityId);
-    if (this.compositeDevices.has(candidate.deviceId)) return;
+    if (!candidate) return this.activateEntity(entityId, forceRecreate);
+    if (this.compositeDevices.has(candidate.deviceId) && !forceRecreate) return;
 
     const info = this.getHaRegistryInfo(entityId);
     const nodeName = candidate.config?.friendly_name || candidate.config?.name || info.device_name || this.entities.get(entityId)?.state.attributes.friendly_name || entityId;
     // Discovery can run again after a Home Assistant reconnect. Matterbridge
     // retains the already commissioned ServerNode, so registering another
-    // endpoint with the same name is rejected. Reuse that live node instead.
-    const existingEndpoint = this.getDeviceByName(nodeName);
-    if (existingEndpoint?.serverNode) {
-      const composite = new CompositeDeviceEntity(this, candidate.deviceId, nodeName, candidate.members, candidate.config?.primary_entity);
-      composite.adoptEndpoint(existingEndpoint);
-      this.compositeDevices.set(candidate.deviceId, composite);
-      this.matterbridgeDevices.set(this.compositeStorageKey(candidate.deviceId), existingEndpoint);
-      candidate.members.forEach((member) => this.compositeMembership.set(member.entityId, candidate.deviceId));
-      await composite.syncInitialState();
-      this.log.notice(`Reused existing Matter node ${idn}${nodeName}${rs}; it remains paired and was not recreated.`);
-      return;
+    // endpoint with the same name is rejected. Reuse that live node instead,
+    // UNLESS this is an explicit factory reset (forceRecreate = true).
+    if (!forceRecreate) {
+      const existingEndpoint = this.getDeviceByName(nodeName);
+      if (existingEndpoint?.serverNode) {
+        const composite = new CompositeDeviceEntity(this, candidate.deviceId, nodeName, candidate.members, candidate.config?.primary_entity);
+        composite.adoptEndpoint(existingEndpoint);
+        this.compositeDevices.set(candidate.deviceId, composite);
+        this.matterbridgeDevices.set(this.compositeStorageKey(candidate.deviceId), existingEndpoint);
+        candidate.members.forEach((member) => this.compositeMembership.set(member.entityId, candidate.deviceId));
+        await composite.syncInitialState();
+        this.log.notice(`Reused existing Matter node ${idn}${nodeName}${rs}; it remains paired and was not recreated.`);
+        return;
+      }
     }
 
     const composite = new CompositeDeviceEntity(this, candidate.deviceId, nodeName, candidate.members, candidate.config?.primary_entity);
@@ -1143,23 +1155,22 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   }
 
   /** Create a bridged endpoint and let Matterbridge own its lifecycle. */
-  private async activateEntity(entityId: string): Promise<void> {
-    if (this.matterbridgeDevices.has(entityId)) return;
+  private async activateEntity(entityId: string, forceRecreate = false): Promise<void> {
+    if (this.matterbridgeDevices.has(entityId) && !forceRecreate) return;
     const entity = this.entities.get(entityId);
     if (!entity) throw new Error(`Entity ${entityId} was not discovered.`);
 
     try {
       const endpoint = await entity.createEndpoint();
-      // The platform may already own this endpoint after a transient HA
-      // disconnect. Re-registering would produce "already registered" and
-      // incorrectly make a commissioned accessory look pending.
-      const existingEndpoint = endpoint.uniqueId ? this.getDeviceByUniqueId(endpoint.uniqueId) : endpoint.deviceName ? this.getDeviceByName(endpoint.deviceName) : undefined;
-      if (existingEndpoint?.serverNode) {
-        entity.adoptEndpoint(existingEndpoint);
-        this.matterbridgeDevices.set(entityId, existingEndpoint);
-        await entity.syncInitialState();
-        this.log.notice(`Reused existing Matter endpoint ${idn}${entityId}${rs}; it remains paired and was not recreated.`);
-        return;
+      if (!forceRecreate) {
+        const existingEndpoint = endpoint.uniqueId ? this.getDeviceByUniqueId(endpoint.uniqueId) : endpoint.deviceName ? this.getDeviceByName(endpoint.deviceName) : undefined;
+        if (existingEndpoint?.serverNode) {
+          entity.adoptEndpoint(existingEndpoint);
+          this.matterbridgeDevices.set(entityId, existingEndpoint);
+          await entity.syncInitialState();
+          this.log.notice(`Reused existing Matter endpoint ${idn}${entityId}${rs}; it remains paired and was not recreated.`);
+          return;
+        }
       }
       await this.registerDevice(endpoint);
       // Matterbridge creates the ServerNode during registerDevice(), but nodes
@@ -1385,23 +1396,33 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         await storageManager?.createContext?.('commissioning')?.clearAll?.();
         await storageManager?.createContext?.('operationalCredentials')?.clearAll?.();
       } finally {
-        // Managers owned by Matterbridge stay open for its lifecycle. Only
-        // close a temporary manager opened by this reset operation.
         if (!managedStorage) await storageManager?.close?.();
       }
       if (compositeDeviceId) {
         await this.disposeCompositeNode(compositeDeviceId);
-        await this.activateComposite(entityId);
+        await this.activateComposite(entityId, true);
       } else {
         if (serverNode.lifecycle?.isOnline) await serverNode.close();
         await this.unregisterDevice(endpoint);
         this.matterbridgeDevices.delete(entityId);
-        await this.activateEntity(entityId);
+        await this.activateEntity(entityId, true);
       }
       this.clearMatterAccessoryProblems(entityId, compositeDeviceId);
+
+      // Actively wait for the new serverNode to come online and return its QR immediately
       const newEndpoint = this.getMatterEndpointForEntity(entityId, compositeDeviceId);
-      const connection = newEndpoint ? this.getMatterConnectionInfo(newEndpoint) : undefined;
+      let connection = newEndpoint ? this.getMatterConnectionInfo(newEndpoint) : undefined;
+      if (!connection?.pairingCode && newEndpoint) {
+        for (let attempt = 0; attempt < 30; attempt++) {
+          await new Promise(r => setTimeout(r, 200));
+          connection = this.getMatterConnectionInfo(newEndpoint);
+          if (connection?.pairingCode) break;
+        }
+      }
+
       this.log.notice(`Matter factory reset and capability rebuild completed for ${idn}${compositeDeviceId ? `device:${compositeDeviceId}` : entityId}${rs}`);
+      this.recordEntityDiagnostic(entityId, `✓ Accesorio desvinculado de todas las casas. Nuevo código QR generado.`, 'info');
+      this.pushEntityUpdate(entityId);
       return {
         success: true,
         pairingCode: connection?.pairingCode ?? null,
@@ -1501,7 +1522,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         return await this.resetMatterAccessory(entityId);
       }
 
-      this.recordEntityDiagnostic(entityId, `Se desconectó del fabric ${fabricIndexOrIdStr} correctamente.`, 'info');
+      const controllerName = matchedFabric ? (MATTER_CONTROLLER_VENDORS[matchedFabric.rootNodeId?.vendorId ?? matchedFabric.rootPartnerNodeId?.vendorId ?? 0] ?? 'Controlador Matter') : 'Controlador Matter';
+      const timestamp = new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+      this.recordEntityDiagnostic(entityId, `✓ Desconectado de ${controllerName} a las ${timestamp}. Fabrics restantes: ${connection.fabricCount}.`, 'info');
+      this.pushEntityUpdate(entityId);
       return {
         success: true,
         remainingFabrics: connection.fabricCount,
@@ -1529,6 +1553,34 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       await fs.writeFile('/data/exported-devices.json', JSON.stringify(Array.from(this.exportedDevices)), 'utf8');
     } catch (err) {
       this.log.error(`Failed to save exported-devices.json: ${err}`);
+    }
+  }
+
+  /** Broadcast an entity state update to all connected SSE clients. */
+  private pushEntityUpdate(entityId: string): void {
+    if (this.sseSubscribers.size === 0) return;
+    try {
+      const compositeDeviceId = this.compositeMembership.get(entityId) ?? this.getCompositeCandidate(entityId)?.deviceId;
+      const endpoint = this.getMatterEndpointForEntity(entityId, compositeDeviceId);
+      const connection = endpoint ? this.getMatterConnectionInfo(endpoint) : undefined;
+      const entity = this.entities.get(entityId);
+      if (!entity) return;
+      const payload = JSON.stringify({
+        entityId,
+        commissioned: connection?.commissioned ?? false,
+        pairingCode: connection?.pairingCode ?? null,
+        manualPairingCode: connection?.manualPairingCode ?? null,
+        fabricCount: connection?.fabricCount ?? 0,
+        matterFabrics: connection?.fabrics ?? [],
+        homeName: connection?.homeName ?? null,
+        exported: this.exportedDevices.has(entityId) || (compositeDeviceId ? this.exportedDevices.has(this.compositeStorageKey(compositeDeviceId)) : false),
+      });
+      const msg = `data: ${payload}\n\n`;
+      for (const sub of this.sseSubscribers) {
+        try { sub.write(msg); } catch { this.sseSubscribers.delete(sub); }
+      }
+    } catch {
+      // non-critical
     }
   }
 
@@ -2127,6 +2179,24 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             }
             process.exit(0);
           }, 1000);
+          return;
+        }
+
+        // GET /api/custom/events - Server-Sent Events for real-time UI push
+        if (req.method === 'GET' && pathname === '/api/custom/events') {
+          res.writeHead(200, {
+            'Content-Type': 'text/event-stream; charset=utf-8',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            'X-Accel-Buffering': 'no',
+          });
+          res.write(':ok\n\n');
+          this.sseSubscribers.add(res);
+          req.on('close', () => this.sseSubscribers.delete(res));
+          req.on('error', () => this.sseSubscribers.delete(res));
+          // Keep-alive ping every 20s
+          const ping = setInterval(() => { try { res.write(':ping\n\n'); } catch { clearInterval(ping); this.sseSubscribers.delete(res); } }, 20000);
+          req.on('close', () => clearInterval(ping));
           return;
         }
 

@@ -1,3 +1,18 @@
+## [1.4.3] - 2026-08-16
+
+### UI/UX — Tiempo Real y Layout 3 Columnas
+- **SSE (Server-Sent Events):** El backend ahora hace push en tiempo real al frontend cuando un fabric se desconecta, se agrega o se completa un reset — sin esperar el poll de 4 segundos.
+- **Spinner de QR animado:** El mensaje estático "Generando código Matter..." fue reemplazado por un spinner real en el panel QR. El poll se extendió a 40 intentos (~12 segundos) para cubrir nodos que tardan en inicializarse.
+- **Toggle sin re-apertura de modal:** Activar/desactivar una entidad ahora actualiza únicamente la fila y el panel de selección — el modal ya no se cierra y reabre, eliminando el flash visual.
+- **Panel QR siempre visible (columna derecha):** El código QR ahora ocupa una columna dedicada de 320px en el lado derecho del modal, siempre visible, con tamaño 232×232px. Ya no es un toggle oculto.
+- **Botón Desconectar mejorado:** Al pulsar "Desconectar", el botón muestra "Desconectando…" y actualiza el estado localmente antes del siguiente poll.
+- **Diagnóstico automático de fabric:** Al desconectarse de un controlador (Apple Home, Google Home, etc.), se registra automáticamente en el log de diagnósticos con nombre del controlador y hora.
+
+### Backend — Reconexión Paralela al Reiniciar
+- **Reconexión completamente paralela:** Al reiniciar el sistema, todos los dispositivos exportados se reconectan de forma simultánea (no 1 a 1 secuencial), reduciendo drásticamente el tiempo de reconexión.
+- **`resetMatterAccessory` más rápido:** Tras el `erase()`, el backend ahora sondea activamente `lifecycle.isOnline` para retornar el nuevo QR en cuanto esté listo (máx 6s de espera activa) sin delays arbitrarios.
+- **`pushEntityUpdate()`:** Nuevo método que serializa el estado de una entidad y lo envía por SSE a todos los clientes conectados inmediatamente tras una operación de fabric.
+
 ## [1.4.2] - 2026-08-16
 
 ### Added & Enhanced

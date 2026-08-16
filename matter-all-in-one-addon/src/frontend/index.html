@@ -109,52 +109,62 @@
         </div>
       </header>
       <div class="modal-layout">
-        <div>
+        <!-- Column 1: Entity list -->
+        <div class="entity-list-col">
           <div class="section-header"><h3>Entidades disponibles</h3><span id="modal-export-count"></span></div>
           <div class="entity-list" id="entity-list"></div>
         </div>
-          <aside class="selection-panel" id="selection-panel">
-            <p class="card-label">SELECCIÓN</p>
-            <h3 id="selection-title">Selecciona una entidad</h3>
-            <p id="selection-description">Activa la entidad principal para publicar el dispositivo físico.</p>
-            <label class="profile-field" id="profile-field">
-              <span>PERFIL MATTER</span>
-              <select id="profile-select" aria-label="Perfil Matter"></select>
-              <small id="profile-note"></small>
-            </label>
-            <dl class="selection-meta" id="selection-meta"></dl>
-            <div class="selection-status" id="selection-status"></div>
+        <!-- Column 2: Selection info -->
+        <aside class="selection-panel" id="selection-panel">
+          <p class="card-label">SELECCIÓN</p>
+          <h3 id="selection-title">Selecciona una entidad</h3>
+          <p id="selection-description">Activa la entidad principal para publicar el dispositivo físico.</p>
+          <label class="profile-field" id="profile-field">
+            <span>PERFIL MATTER</span>
+            <select id="profile-select" aria-label="Perfil Matter"></select>
+            <small id="profile-note"></small>
+          </label>
+          <dl class="selection-meta" id="selection-meta"></dl>
+          <div class="selection-status" id="selection-status"></div>
 
-            <!-- Fabrics / Connected Ecosystems -->
-            <section class="fabrics-section" id="fabrics-section" hidden>
-              <div class="fabrics-heading">
-                <span class="fabrics-icon" aria-hidden="true">🏠</span>
-                <strong>Casas / Controladores Conectados</strong>
-              </div>
-              <div class="fabrics-list" id="fabrics-list"></div>
-            </section>
-
-            <section class="diagnostics-panel" id="diagnostics-panel" aria-live="polite">
-              <div class="diagnostics-heading"><span id="diagnostics-icon" aria-hidden="true">✓</span><strong id="diagnostics-heading-text">Diagnóstico y logs de esta entidad</strong></div>
-              <p id="diagnostics-summary"></p>
-              <ul id="diagnostics-list"></ul>
-            </section>
-
-            <div id="device-qr-container" style="display: none;">
-              <div id="device-qr-code"></div>
-              <p id="device-manual-code"></p>
-              <small class="qr-note">Escanea con Apple Home, Google Home, Alexa o SmartThings</small>
+          <!-- Fabrics / Connected Ecosystems -->
+          <section class="fabrics-section" id="fabrics-section" hidden>
+            <div class="fabrics-heading">
+              <span class="fabrics-icon" aria-hidden="true">🏠</span>
+              <strong>Casas / Controladores Conectados</strong>
             </div>
+            <p class="fabrics-subtitle">Controladores activos. Si ya eliminaste este accesorio en tu app de Apple Home, Google Home o Alexa, pulsa «Desconectar» para liberar el accesorio y generar un nuevo código QR limpio.</p>
+            <div class="fabrics-list" id="fabrics-list"></div>
+          </section>
 
-            <div class="accessory-controls" id="accessory-controls">
-              <button class="button button-secondary bridge-qr-button" id="device-qr-button" type="button" style="display: none;">Mostrar Código de Emparejamiento</button>
-              <div class="matter-actions" id="matter-actions" hidden>
-                <button class="button button-secondary action-btn" id="reconnect-accessory-button" type="button" title="Refresca la conexión con Home Assistant y Matter sin perder emparejamientos">↻ Recargar / Sincronizar</button>
-                <button class="button button-danger action-btn" id="regenerate-code-button" type="button" title="Desconectar de todas las casas y generar un nuevo código QR">Desconectar todo y nuevo QR</button>
-              </div>
-              <button class="text-button reset-accessory-button" id="reset-accessory-button" type="button" style="display: none;">Desconectar Matter</button>
+          <section class="diagnostics-panel" id="diagnostics-panel" aria-live="polite">
+            <div class="diagnostics-heading"><span id="diagnostics-icon" aria-hidden="true">✓</span><strong id="diagnostics-heading-text">Diagnóstico y logs de esta entidad</strong></div>
+            <p id="diagnostics-summary"></p>
+            <ul id="diagnostics-list"></ul>
+          </section>
+        </aside>
+        <!-- Column 3: QR panel (always visible when exported) -->
+        <div class="qr-panel" id="qr-panel">
+          <p class="card-label">CÓDIGO MATTER</p>
+          <div class="qr-status-label" id="qr-status-label">Sin publicar</div>
+          <div id="device-qr-container" style="display: none;">
+            <div id="device-qr-code"></div>
+            <p id="device-manual-code"></p>
+            <small class="qr-note">Escanea con Apple Home, Google Home, Alexa o SmartThings</small>
+          </div>
+          <div class="qr-spinner-wrap" id="qr-spinner-wrap" style="display:none;">
+            <span class="spinner"></span>
+            <p class="qr-spinner-label">Generando código QR…</p>
+          </div>
+          <div class="accessory-controls" id="accessory-controls">
+            <button class="button button-secondary bridge-qr-button" id="device-qr-button" type="button" style="display: none;">Añadir a otra casa (Ver QR)</button>
+            <div class="matter-actions" id="matter-actions" hidden>
+              <button class="button button-secondary action-btn" id="reconnect-accessory-button" type="button" title="Refresca la conexión con Home Assistant y Matter sin perder emparejamientos">↻ Recargar / Sincronizar</button>
+              <button class="button button-danger action-btn" id="regenerate-code-button" type="button" title="Desconectar de todas las casas y generar un nuevo código QR">Desconectar todo y nuevo QR</button>
             </div>
-          </aside>
+            <button class="text-button reset-accessory-button" id="reset-accessory-button" type="button" style="display: none;">Desconectar Matter</button>
+          </div>
+        </div>
       </div>
     </section>
   </div>
