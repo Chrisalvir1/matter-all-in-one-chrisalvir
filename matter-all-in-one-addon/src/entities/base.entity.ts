@@ -149,7 +149,6 @@ export class BaseEntity {
       this.endpoint.productName,
     );
     this.applyMatterbridgeFirmware();
-
     const isFanProfile = this.deviceType.code === 0x002b || this.deviceType.name.toLowerCase() === 'fan';
 
     if (domain === 'fan' && isFanProfile) {
@@ -158,6 +157,11 @@ export class BaseEntity {
       const fanMode = on ? (percentage > 66 ? 3 : percentage > 33 ? 2 : 1) : 0;
       this.endpoint.createDefaultFanControlClusterServer(fanMode, undefined, percentage, percentage);
       this.endpoint.behaviors.require(MatterbridgeOnOffServer.with());
+      const hasDirection = this.state.attributes.direction !== undefined || (Number(this.state.attributes.supported_features || 0) & 4) !== 0;
+      if (hasDirection) {
+        const dir = this.state.attributes.direction === 'reverse' ? 1 : 0;
+        safeSetAttribute(this.endpoint, FanControl.id, 'airflowDirection', dir, this.platform.log);
+      }
     } else if (domain === 'light' || domain === 'switch' || domain === 'media_player' || domain === 'vacuum' || domain === 'fan') {
       const isLighting = domain === 'light';
       this.endpoint.behaviors.require(isLighting ? MatterbridgeOnOffServer.with(OnOff.Feature.Lighting) : MatterbridgeOnOffServer.with());

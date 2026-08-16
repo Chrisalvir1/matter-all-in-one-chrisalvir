@@ -1,3 +1,18 @@
+## [1.4.8] - 2026-08-16
+
+### Enhanced & Fixed
+- **Soporte Completo de Dirección de Flujo (Adelante / Reversa) en Ventiladores:**
+  - Añadido e inicializado el atributo `airflowDirection` en el cluster `FanControl` cuando el ventilador de Home Assistant soporta reversa / dirección.
+  - Sincronización bidireccional inmediata de reversa y adelante con el servicio `fan.set_direction`.
+- **Manejadores de Encendido, Apagado y Alternancia (Toggle) para Ventiladores y Luces:**
+  - Añadidos listeners directos para comandos `toggle`, `OnOff.toggle`, `OnOff.on` y `OnOff.off`.
+  - Ahora al presionar el botón del ventilador o la luz directamente en la casilla de Apple Home, el comando se envía y ejecuta en Home Assistant en tiempo real sin perder sincronización.
+- **Soporte Completo de Temperatura de Color (Kelvin) y Brillo en Luces de Ventiladores:**
+  - Mejorada la detección de capacidades de iluminación (`supported_features`, `min_mireds`, `max_mireds`, `color_temp_kelvin`).
+  - Las luces de los ventiladores de techo ahora se publican con `ColorControl` (selector de temperatura cálida/fría en Kelvin) y `LevelControl` (brillo), no solo como interruptor de encender/apagar.
+- **Corrección de Etiqueta Matter (muestra `Fan` y no `Generic`):**
+  - La interfaz web y la API ahora identifican y muestran claramente el tipo de Matter como **`Fan`** (y no `Generic`).
+
 ## [1.4.7] - 2026-08-16
 
 ### Enhanced & Fixed

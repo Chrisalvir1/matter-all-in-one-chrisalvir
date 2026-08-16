@@ -455,7 +455,8 @@ function selectEntity(entity) {
     ? `<div><dt>Controladores</dt><dd title="${escapeHtml(controllerSummary)}">${escapeHtml(controllerSummary || 'Controlador Matter sin VID reportado')}</dd></div><div><dt>Casas vinculadas</dt><dd>${escapeHtml(entity.fabricCount || 1)}</dd></div>`
     : '';
 
-  els.selectionMeta.innerHTML = `<div><dt>Entidad</dt><dd>${escapeHtml(entity.entityId)}</dd></div><div><dt>Tipo Matter</dt><dd>${escapeHtml(entity.domain === 'humidifier' ? 'Humidifier' : (entity.deviceTypeLabel || entity.matterType || 'Predeterminado'))}</dd></div>${mqttMeta}${connectionMeta}`;
+  const typeText = entity.deviceTypeLabel || (entity.domain === 'fan' ? 'Fan' : (entity.domain === 'humidifier' ? 'Humidifier' : (entity.matterType || 'Predeterminado')));
+  els.selectionMeta.innerHTML = `<div><dt>Entidad</dt><dd>${escapeHtml(entity.entityId)}</dd></div><div><dt>Tipo Matter</dt><dd>${escapeHtml(typeText)}</dd></div>${mqttMeta}${connectionMeta}`;
 
   els.selectionStatus.className = `selection-status${entity.exported ? ' active' : ''}${entity.commissioned ? ' commissioned' : ''}`;
   els.selectionStatus.textContent = entity.auxiliary

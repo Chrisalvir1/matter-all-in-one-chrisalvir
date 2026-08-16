@@ -1937,13 +1937,28 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
             const connection = this.getMatterConnectionInfo(endpoint);
 
+            const domainLabels: Record<string, string> = {
+              fan: 'Fan',
+              humidifier: 'Humidifier',
+              light: 'Light',
+              switch: 'Switch',
+              climate: 'Thermostat',
+              lock: 'DoorLock',
+              cover: 'WindowCovering',
+              vacuum: 'RoboticVacuumCleaner',
+              media_player: 'Speaker',
+              sensor: 'Sensor',
+              binary_sensor: 'BinarySensor',
+            };
+            const typeLabel = (e.constructor as any).matterTypeLabel || domainLabels[domain] || e.deviceType.name || 'Generic';
+
             return {
               entityId: e.entityId,
               domain: domain,
               state: e.state.state,
               attributes: { friendly_name: e.state.attributes?.friendly_name },
-              deviceTypeLabel: (e.constructor as any).matterTypeLabel || (domain === 'humidifier' ? 'Humidifier' : 'Generic'),
-              matterType: domain === 'humidifier' ? 'humidifier' : e.deviceType.name,
+              deviceTypeLabel: typeLabel,
+              matterType: domain === 'fan' ? 'fan' : (domain === 'humidifier' ? 'humidifier' : e.deviceType.name),
               // Registry info
               ...this.getHaRegistryInfo(e.entityId),
               // Accessory status

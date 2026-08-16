@@ -235,15 +235,26 @@ export class CompositeDeviceEntity {
       if (endpoint.hasAttributeServer(FanControl.id, 'percentCurrent')) {
         const minHum = state.attributes.min_humidity ?? 40;
         const maxHum = state.attributes.max_humidity ?? 80;
-        const currentTarget = state.attributes.humidity ?? minHum;
+        const currentTarget = state.attributes.humidity;
+        const mode = (state.attributes.mode || '').toLowerCase();
         let percent = 0;
         if (on) {
-          percent = Math.round(((currentTarget - minHum) / (maxHum - minHum)) * 100);
+          if (typeof currentTarget === 'number' && maxHum > minHum) {
+            percent = Math.round(((currentTarget - minHum) / (maxHum - minHum)) * 100);
+          } else if (mode.includes('high') || mode.includes('alto') || mode === '3') {
+            percent = 100;
+          } else if (mode.includes('med') || mode.includes('medio') || mode === '2') {
+            percent = 66;
+          } else if (mode.includes('low') || mode.includes('bajo') || mode === '1') {
+            percent = 33;
+          } else {
+            percent = 50;
+          }
           percent = Math.min(100, Math.max(1, percent));
         }
         await update(endpoint, FanControl.id, 'percentSetting', percent, this.platform.log);
         await update(endpoint, FanControl.id, 'percentCurrent', percent, this.platform.log);
-        const fanMode = on ? (percent > 66 ? 3 : percent > 33 ? 2 : percent > 0 ? 1 : 4) : 0;
+        const fanMode = on ? (mode.includes('auto') ? 5 : (percent > 66 ? 3 : percent > 33 ? 2 : 1)) : 0;
         await update(endpoint, FanControl.id, 'fanMode', fanMode, this.platform.log);
       }
       return;
@@ -395,6 +406,11 @@ export class CompositeDeviceEntity {
       endpoint.createDefaultFanControlClusterServer(fanMode, undefined, percentage, percentage);
       endpoint.behaviors.require(MatterbridgeOnOffServer.with());
       endpoint.addRequiredClusterServers();
+      const hasDirection = member.state.attributes.direction !== undefined || (Number(member.state.attributes.supported_features || 0) & 4) !== 0;
+      if (hasDirection) {
+        const dir = member.state.attributes.direction === 'reverse' ? 1 : 0;
+        await safeSetAttribute(endpoint, FanControl.id, 'airflowDirection', dir, this.platform.log);
+      }
       return;
     }
 
@@ -593,6 +609,9 @@ export class CompositeDeviceEntity {
       };
       const turnOff = async () => {
         await safeUpdateAttribute(endpoint, OnOff.id, 'onOff', false, this.platform.log);
+        if (endpoint.hasAttributeServer(FanControl.id, 'fanMode')) {
+          await safeUpdateAttribute(endpoint, FanControl.id, 'fanMode', 0, this.platform.log);
+        }
         await this.platform.ha.callService('humidifier', 'turn_off', entityId).catch((err) => {
           this.platform.log.warn(`[${entityId}] Error turning off humidifier: ${err?.message ?? err}`);
         });
@@ -622,33 +641,87 @@ export class CompositeDeviceEntity {
             const currentState = this.states.get(entityId);
             const minHum = currentState?.attributes.min_humidity ?? 40;
             const maxHum = currentState?.attributes.max_humidity ?? 80;
-            const currentTarget = currentState?.attributes.humidity ?? minHum;
             const isOnState = isOn(currentState!);
+            const availableModes: string[] = currentState?.attributes.available_modes ?? [];
 
-            let expectedPercent = 0;
-            if (isOnState) {
-              expectedPercent = Math.round(((currentTarget - minHum) / (maxHum - minHum)) * 100);
-              expectedPercent = Math.min(100, Math.max(1, expectedPercent));
-            }
-            if (newValue === expectedPercent) return;
+            // Optimistic update
+            await safeUpdateAttribute(endpoint, FanControl.id, 'percentCurrent', newValue, this.platform.log);
+            await safeUpdateAttribute(endpoint, FanControl.id, 'percentSetting', newValue, this.platform.log);
+            await safeUpdateAttribute(endpoint, OnOff.id, 'onOff', newValue > 0, this.platform.log);
+            const fanMode = newValue === 0 ? 0 : (newValue > 66 ? 3 : newValue > 33 ? 2 : 1);
+            await safeUpdateAttribute(endpoint, FanControl.id, 'fanMode', fanMode, this.platform.log);
 
             if (newValue === 0) {
-              await safeUpdateAttribute(endpoint, FanControl.id, 'percentCurrent', 0, this.platform.log);
-              await safeUpdateAttribute(endpoint, OnOff.id, 'onOff', false, this.platform.log);
               await this.platform.ha.callService('humidifier', 'turn_off', entityId).catch((err) => {
                 this.platform.log.warn(`[${entityId}] Error turning off humidifier: ${err?.message ?? err}`);
               });
             } else {
               if (!isOnState) {
-                await safeUpdateAttribute(endpoint, OnOff.id, 'onOff', true, this.platform.log);
                 await this.platform.ha.callService('humidifier', 'turn_on', entityId).catch((err) => {
                   this.platform.log.warn(`[${entityId}] Error turning on humidifier: ${err?.message ?? err}`);
                 });
               }
-              const targetHumidity = minHum + Math.round((newValue / 100) * (maxHum - minHum));
-              await safeUpdateAttribute(endpoint, FanControl.id, 'percentCurrent', newValue, this.platform.log);
-              await this.platform.ha.callService('humidifier', 'set_humidity', entityId, { humidity: targetHumidity }).catch((err) => {
-                this.platform.log.warn(`[${entityId}] Error setting humidity: ${err?.message ?? err}`);
+
+              // Try discrete mode if available (e.g. low/med/high for diffusers)
+              if (availableModes.length > 0) {
+                let targetMode: string | undefined;
+                if (newValue > 66) targetMode = availableModes.find(m => /high|alto|3/i.test(m));
+                else if (newValue > 33) targetMode = availableModes.find(m => /med|medio|2/i.test(m));
+                else targetMode = availableModes.find(m => /low|bajo|1/i.test(m));
+
+                if (!targetMode) {
+                  targetMode = availableModes.find(m => !/auto/i.test(m));
+                }
+
+                if (targetMode) {
+                  await this.platform.ha.callService('humidifier', 'set_mode', entityId, { mode: targetMode }).catch((err) => {
+                    this.platform.log.warn(`[${entityId}] Error setting humidifier mode: ${err?.message ?? err}`);
+                  });
+                }
+              }
+
+              // Also try target humidity if min/max humidity is supported
+              if (currentState?.attributes.min_humidity !== undefined || currentState?.attributes.max_humidity !== undefined || typeof currentState?.attributes.humidity === 'number') {
+                const targetHumidity = minHum + Math.round((newValue / 100) * (maxHum - minHum));
+                await this.platform.ha.callService('humidifier', 'set_humidity', entityId, { humidity: targetHumidity }).catch((err) => {
+                  this.platform.log.warn(`[${entityId}] Error setting humidity: ${err?.message ?? err}`);
+                });
+              }
+            }
+          }
+        );
+
+        endpoint.subscribeAttribute(
+          FanControl.id,
+          'fanMode',
+          async (newMode: number) => {
+            if (typeof newMode !== 'number') return;
+            const currentState = this.states.get(entityId);
+            const availableModes: string[] = currentState?.attributes.available_modes ?? [];
+
+            if (newMode === 0) {
+              await safeUpdateAttribute(endpoint, FanControl.id, 'percentCurrent', 0, this.platform.log);
+              await safeUpdateAttribute(endpoint, FanControl.id, 'percentSetting', 0, this.platform.log);
+              await safeUpdateAttribute(endpoint, OnOff.id, 'onOff', false, this.platform.log);
+              await this.platform.ha.callService('humidifier', 'turn_off', entityId).catch((err) => {
+                this.platform.log.warn(`[${entityId}] Error turning off humidifier: ${err?.message ?? err}`);
+              });
+            } else if (newMode === 5) { // Auto mode
+              await safeUpdateAttribute(endpoint, OnOff.id, 'onOff', true, this.platform.log);
+              await safeUpdateAttribute(endpoint, FanControl.id, 'fanMode', 5, this.platform.log);
+              const autoMode = availableModes.find(m => /auto/i.test(m)) ?? 'auto';
+              await this.platform.ha.callService('humidifier', 'set_mode', entityId, { mode: autoMode }).catch(async () => {
+                await this.platform.ha.callService('humidifier', 'turn_on', entityId).catch((err) => {
+                  this.platform.log.warn(`[${entityId}] Error turning on humidifier in auto: ${err?.message ?? err}`);
+                });
+              });
+            } else { // Manual mode (1: Low, 2: Med, 3: High, 4: On)
+              await safeUpdateAttribute(endpoint, OnOff.id, 'onOff', true, this.platform.log);
+              const manualMode = availableModes.find(m => !/auto/i.test(m)) ?? 'manual';
+              await this.platform.ha.callService('humidifier', 'set_mode', entityId, { mode: manualMode }).catch(async () => {
+                await this.platform.ha.callService('humidifier', 'turn_on', entityId).catch((err) => {
+                  this.platform.log.warn(`[${entityId}] Error turning on humidifier manual: ${err?.message ?? err}`);
+                });
               });
             }
           }
