@@ -497,7 +497,12 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
   /** Refresh the panel catalogue from the latest HA state cache on demand. */
   private async refreshDiscoveryCatalog(): Promise<void> {
-    for (const state of this.ha.hassStates.values()) await this.registerHAEntity(state);
+    if (this.entities.size === this.ha.hassStates.size) return;
+    for (const state of this.ha.hassStates.values()) {
+      if (!this.entities.has(state.entity_id)) {
+        await this.registerHAEntity(state);
+      }
+    }
   }
 
   /**
@@ -545,7 +550,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     const compositeDeviceId = config?.device_id ?? deviceId;
     const excluded = new Set(config?.exclude_entities ?? []);
     const explicitlyIncluded = config?.include_entities;
-    const supported = new Set(['fan', 'light', 'switch', 'lock', 'sensor', 'binary_sensor']);
+    const supported = new Set(['fan', 'light', 'switch', 'lock', 'sensor', 'binary_sensor', 'humidifier']);
     let members = Array.from(this.entities.values()).filter((entity) => {
       if (!supported.has(entity.entityId.split('.')[0])) return false;
       if (excluded.has(entity.entityId)) return false;
@@ -630,7 +635,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   private getPrimaryEntityId(entityId: string): string | undefined {
     const deviceId = this.ha.hassEntities.get(entityId)?.device_id;
     if (!deviceId) return undefined;
-    const priority = ['vacuum', 'media_player', 'climate', 'lock', 'cover', 'light', 'switch', 'fan', 'humidifier'];
+    const priority = ['humidifier', 'vacuum', 'media_player', 'climate', 'lock', 'cover', 'light', 'switch', 'fan'];
     const candidates = Array.from(this.entities.values())
       .filter((entity) => this.ha.hassEntities.get(entity.entityId)?.device_id === deviceId)
       .sort((left, right) => priority.indexOf(left.entityId.split('.')[0]) - priority.indexOf(right.entityId.split('.')[0]));
@@ -1906,6 +1911,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         }
 
         if (req.method === 'GET' && pathname === '/api/custom/devices') {
+          await this.refreshDiscoveryCatalog();
           const errorPattern = /\b(error|warn|warning|failed|failure|exception|unable|timeout)\b/i;
           const allErrorLogs = getLogs().filter(line => errorPattern.test(line));
           const homeLocation = (this.ha as any)?.hassConfig?.location_name || null;
@@ -1922,6 +1928,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             const compositePrimaryEntityId =
               composite?.primaryEntityId ??
               compositeCandidate?.config?.primary_entity ??
+              compositeCandidate?.members.find((member) => member.entityId.startsWith('humidifier.'))?.entityId ??
               compositeCandidate?.members.find((member) => member.entityId.startsWith('lock.'))?.entityId ??
               compositeCandidate?.members.find((member) => member.entityId.startsWith('fan.'))?.entityId ??
               compositeCandidate?.members[0]?.entityId ??
@@ -1935,8 +1942,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               domain: domain,
               state: e.state.state,
               attributes: { friendly_name: e.state.attributes?.friendly_name },
-              deviceTypeLabel: (e.constructor as any).matterTypeLabel || 'Generic',
-              matterType: e.deviceType.name,
+              deviceTypeLabel: (e.constructor as any).matterTypeLabel || (domain === 'humidifier' ? 'Humidifier' : 'Generic'),
+              matterType: domain === 'humidifier' ? 'humidifier' : e.deviceType.name,
               // Registry info
               ...this.getHaRegistryInfo(e.entityId),
               // Accessory status

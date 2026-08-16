@@ -13,6 +13,8 @@ import type { HassState } from '../utils/ha-state.js';
 import { safeSetAttribute, safeUpdateAttribute } from '../utils/matter-attributes.js';
 
 export class HumidifierEntity extends BaseEntity {
+  static readonly matterTypeLabel = 'Humidifier';
+
   constructor(
     platform: any,
     state: HassState,

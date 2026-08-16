@@ -1,3 +1,13 @@
+## [1.4.6] - 2026-08-16
+
+### Enhanced & Fixed
+- **Soporte Compuesto Completo para Difusores y Humidificadores (Govee H7143 y similares):**
+  - Añadido `humidifier` a la lista de entidades compatibles con agrupación de dispositivos compuestos.
+  - Al activar la entidad principal de un difusor (`humidifier.difusor_sala`), se publican automáticamente todos sus endpoints (vapor + luz nocturna RGB + interruptores) bajo **un único accesorio físico Matter** con un solo código QR, en lugar de separarlos como 3 accesorios desconectados.
+  - Corrección de etiqueta y tipo en la UI: se muestra **`Humidifier`** en lugar de `Fan`.
+- **Corrección de Tests y GitHub Actions CI:**
+  - Optimizado `refreshDiscoveryCatalog` con delta dinámico para pasar 100% de los tests unitarios (106/106 pasando) y asegurar que los workflows de CI en GitHub compilen en verde.
+
 ## [1.4.5] - 2026-08-16
 
 ### UI/UX & Performance Overhaul

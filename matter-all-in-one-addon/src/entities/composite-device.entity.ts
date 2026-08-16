@@ -127,7 +127,7 @@ export class CompositeDeviceEntity {
     if (this.primaryEntityIdOverride && this.members.some((m) => m.entityId === this.primaryEntityIdOverride)) {
       return this.primaryEntityIdOverride;
     }
-    return this.members.find((m) => m.entityId.startsWith('lock.'))?.entityId ?? this.members.find((m) => m.entityId.startsWith('fan.'))?.entityId ?? this.members.find((m) => m.entityId.startsWith('humidifier.'))?.entityId ?? this.members[0].entityId;
+    return this.members.find((m) => m.entityId.startsWith('humidifier.'))?.entityId ?? this.members.find((m) => m.entityId.startsWith('lock.'))?.entityId ?? this.members.find((m) => m.entityId.startsWith('fan.'))?.entityId ?? this.members[0].entityId;
   }
 
   async createEndpoint(): Promise<MatterbridgeEndpoint> {
