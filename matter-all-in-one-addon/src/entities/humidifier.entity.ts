@@ -25,19 +25,10 @@ export class HumidifierEntity extends BaseEntity {
 
   /**
    * Determine which clusters are needed based on the selected Matter device type.
+   * OnOff and FanControl are already installed by BaseEntity behaviors.
    */
   protected override getRequiredClusterIds(): ClusterId[] {
-    const clusters: ClusterId[] = [];
-    
-    // Always include OnOff for power state
-    clusters.push(OnOff.id);
-    
-    // If mapped as a Fan, add FanControl cluster
-    if (this.deviceType.name === 'Fan') {
-      clusters.push(FanControl.id);
-    }
-    
-    return clusters;
+    return [];
   }
 
   /**

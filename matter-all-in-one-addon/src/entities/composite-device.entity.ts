@@ -169,7 +169,9 @@ export class CompositeDeviceEntity {
       
       if (domain === 'light' || domain === 'switch' || domain === 'fan' || domain === 'humidifier' || domain === 'media_player' || domain === 'vacuum') {
         const isLighting = domain === 'light';
-        child.behaviors.require(isLighting ? MatterbridgeOnOffServer.with(OnOff.Feature.Lighting) : MatterbridgeOnOffServer.with());
+        if (!child.hasAttributeServer(OnOff.id, 'onOff')) {
+          child.behaviors.require(isLighting ? MatterbridgeOnOffServer.with(OnOff.Feature.Lighting) : MatterbridgeOnOffServer.with());
+        }
       }
       
       this.addCommandHandlers(child, member);
@@ -403,7 +405,9 @@ export class CompositeDeviceEntity {
     
     if (domain === 'fan' || domain === 'humidifier') {
       if (!isFanProfile(this.typeFor(member))) {
-        endpoint.behaviors.require(MatterbridgeOnOffServer.with());
+        if (!endpoint.hasAttributeServer(OnOff.id, 'onOff')) {
+          endpoint.behaviors.require(MatterbridgeOnOffServer.with());
+        }
         endpoint.addRequiredClusterServers();
         return;
       }
@@ -450,7 +454,9 @@ export class CompositeDeviceEntity {
         percentCurrent: percentage,
         airflowDirection: dir,
       });
-      endpoint.behaviors.require(MatterbridgeOnOffServer.with());
+      if (!endpoint.hasAttributeServer(OnOff.id, 'onOff')) {
+        endpoint.behaviors.require(MatterbridgeOnOffServer.with());
+      }
       endpoint.addRequiredClusterServers();
       return;
     }
@@ -479,7 +485,9 @@ export class CompositeDeviceEntity {
 
     if (domain === 'light' || domain === 'switch') {
       const isLighting = domain === 'light';
-      endpoint.behaviors.require(isLighting ? MatterbridgeOnOffServer.with(OnOff.Feature.Lighting) : MatterbridgeOnOffServer.with());
+      if (!endpoint.hasAttributeServer(OnOff.id, 'onOff')) {
+        endpoint.behaviors.require(isLighting ? MatterbridgeOnOffServer.with(OnOff.Feature.Lighting) : MatterbridgeOnOffServer.with());
+      }
     }
   }
 

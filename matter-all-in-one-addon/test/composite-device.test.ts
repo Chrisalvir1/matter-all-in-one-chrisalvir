@@ -158,4 +158,22 @@ describe('CompositeDeviceEntity', () => {
     await fanEndpoint.invokeAttributeChange(0x0202, 'airflowDirection', 1);
     expect(platform.ha.callService).toHaveBeenCalledWith('fan', 'set_direction', 'fan.combo', { direction: 'reverse' });
   });
+
+  it('creates humidifier diffuser accessory without onOff conflict', async () => {
+    const composite = new CompositeDeviceEntity(platform, 'diffuser-device', 'Difusor Sala', [
+      {
+        entityId: 'humidifier.difusor_sala',
+        state: state('humidifier.difusor_sala', 'on', { min_humidity: 40, max_humidity: 80, humidity: 60 }),
+      },
+      {
+        entityId: 'light.difusor_luz',
+        state: state('light.difusor_luz', 'off'),
+      },
+    ]);
+
+    const root = await composite.createEndpoint();
+    expect(root).toBeDefined();
+    expect(composite.endpoints.get('humidifier.difusor_sala')).toBeDefined();
+    expect(composite.endpoints.get('light.difusor_luz')).toBeDefined();
+  });
 });

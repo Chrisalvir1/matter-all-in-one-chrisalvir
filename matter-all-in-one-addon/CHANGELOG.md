@@ -1,3 +1,9 @@
+## [1.4.15] - 2026-08-16
+
+### Fixed
+- **Soporte y Creación de Difusores / Humidificadores:**
+  - **Eliminación de Conflicto de Cluster OnOff (`incompatible implementation already exists`):** Se corrigió la inicialización de difusores y dispositivos compuestos con humidificadores para evitar que se intentara requerir el cluster `OnOff` dos veces de forma incompatible, permitiendo que difusores y humidificadores se creen y vinculen correctamente.
+
 ## [1.4.14] - 2026-08-16
 
 ### Fixed

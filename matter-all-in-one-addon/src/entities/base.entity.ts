@@ -195,10 +195,14 @@ export class BaseEntity {
         percentCurrent: percentage,
         airflowDirection: dir,
       });
-      this.endpoint.behaviors.require(MatterbridgeOnOffServer.with());
+      if (!this.endpoint.hasAttributeServer(OnOff.id, 'onOff')) {
+        this.endpoint.behaviors.require(MatterbridgeOnOffServer.with());
+      }
     } else if (domain === 'light' || domain === 'switch' || domain === 'media_player' || domain === 'vacuum' || domain === 'fan') {
       const isLighting = domain === 'light';
-      this.endpoint.behaviors.require(isLighting ? MatterbridgeOnOffServer.with(OnOff.Feature.Lighting) : MatterbridgeOnOffServer.with());
+      if (!this.endpoint.hasAttributeServer(OnOff.id, 'onOff')) {
+        this.endpoint.behaviors.require(isLighting ? MatterbridgeOnOffServer.with(OnOff.Feature.Lighting) : MatterbridgeOnOffServer.with());
+      }
     }
 
     const clusters = this.getRequiredClusterIds();
