@@ -113,6 +113,27 @@ export class CompositeDeviceEntity {
     this.lastCommands.set(`${entityId}:${attribute}`, { value, timestamp: Date.now() });
   }
 
+  private serviceDebounceTimers = new Map<string, NodeJS.Timeout>();
+
+  private callServiceDebounced(entityId: string, domain: string, service: string, data?: Record<string, any>, delayMs = 40) {
+    const key = `${entityId}:${domain}.${service}`;
+    const existing = this.serviceDebounceTimers.get(key);
+    if (existing) clearTimeout(existing);
+
+    this.serviceDebounceTimers.set(
+      key,
+      setTimeout(() => {
+        this.serviceDebounceTimers.delete(key);
+        const promise = data !== undefined
+          ? this.platform.ha.callService(domain, service, entityId, data)
+          : this.platform.ha.callService(domain, service, entityId);
+        promise.catch((err: any) => {
+          this.platform.log.warn(`[${entityId}] Error calling ${domain}.${service}: ${err?.message ?? err}`);
+        });
+      }, delayMs)
+    );
+  }
+
   constructor(
     public readonly platform: CompositePlatform,
     public readonly deviceId: string,
@@ -497,78 +518,66 @@ export class CompositeDeviceEntity {
     const entityId = member.entityId;
 
     if (domain === 'light' || domain === 'switch' || domain === 'fan' || domain === 'media_player' || domain === 'vacuum' || domain === 'humidifier') {
-      const handleOn = async () => {
+      endpoint.addCommandHandler('on', () => {
         if (domain === 'vacuum') {
-          await this.platform.ha.callService(domain, 'start', entityId).catch((err) => {
+          void this.platform.ha.callService(domain, 'start', entityId).catch((err) => {
             this.platform.log.warn(`[${entityId}] Error starting vacuum: ${err?.message ?? err}`);
           });
         } else {
           this.setCommandLockout(entityId, 'onOff', true);
-          await this.platform.ha.callService(domain, 'turn_on', entityId).catch((err) => {
+          void this.platform.ha.callService(domain, 'turn_on', entityId).catch((err) => {
             this.platform.log.warn(`[${entityId}] Error turning on ${domain}: ${err?.message ?? err}`);
           });
         }
-      };
+      });
 
-      const handleOff = async () => {
+      endpoint.addCommandHandler('off', () => {
         if (domain === 'vacuum') {
-          await this.platform.ha.callService(domain, 'return_to_base', entityId).catch((err) => {
+          void this.platform.ha.callService(domain, 'return_to_base', entityId).catch((err) => {
             this.platform.log.warn(`[${entityId}] Error returning vacuum: ${err?.message ?? err}`);
           });
         } else {
           this.setCommandLockout(entityId, 'onOff', false);
-          await this.platform.ha.callService(domain, 'turn_off', entityId).catch((err) => {
+          void this.platform.ha.callService(domain, 'turn_off', entityId).catch((err) => {
             this.platform.log.warn(`[${entityId}] Error turning off ${domain}: ${err?.message ?? err}`);
           });
         }
-      };
-
-      endpoint.addCommandHandler('on', handleOn);
-      endpoint.addCommandHandler('OnOff.on', handleOn);
-      endpoint.addCommandHandler('off', handleOff);
-      endpoint.addCommandHandler('OnOff.off', handleOff);
-      endpoint.addCommandHandler('toggle', async () => {
-        const currentState = this.states.get(entityId);
-        if (isOn(currentState!)) await handleOff();
-        else await handleOn();
       });
-      endpoint.addCommandHandler('OnOff.toggle', async () => {
+
+      endpoint.addCommandHandler('toggle', () => {
         const currentState = this.states.get(entityId);
-        if (isOn(currentState!)) await handleOff();
-        else await handleOn();
+        const nextOn = !isOn(currentState!);
+        this.setCommandLockout(entityId, 'onOff', nextOn);
+        void this.platform.ha.callService(domain, nextOn ? 'turn_on' : 'turn_off', entityId).catch((err) => {
+          this.platform.log.warn(`[${entityId}] Error toggling ${domain}: ${err?.message ?? err}`);
+        });
       });
     }
 
     if (domain === 'fan') {
       if (endpoint.hasAttributeServer(FanControl.id, 'percentCurrent') || endpoint.hasAttributeServer(FanControl.id, 'percentSetting')) {
-        endpoint.addCommandHandler('FanControl.step', async (data: any) => {
+        endpoint.addCommandHandler('FanControl.step', (data: any) => {
           const direction = data?.request?.direction ?? data?.direction;
           const current = this.states.get(entityId)?.attributes.percentage ?? 50;
           const next = direction === 0 ? Math.min(100, current + 10) : Math.max(0, current - 10);
           this.setCommandLockout(entityId, 'percentage', next);
-          await this.platform.ha.callService('fan', 'set_percentage', entityId, { percentage: next }).catch((err) => {
-            this.platform.log.warn(`[${entityId}] Error stepping fan percentage: ${err?.message ?? err}`);
-          });
+          this.callServiceDebounced(entityId, 'fan', 'set_percentage', { percentage: next }, 40);
         });
 
         endpoint.subscribeAttribute(
           FanControl.id,
           'percentSetting',
-          async (newValue: number | null) => {
+          (newValue: number | null) => {
             if (typeof newValue !== 'number') return;
             if (this.isUpdatingFromHa) return;
             this.setCommandLockout(entityId, 'percentage', newValue);
 
             if (newValue === 0) {
-              await this.platform.ha.callService('fan', 'turn_off', entityId).catch((err) => {
-                this.platform.log.warn(`[${entityId}] Error turning off fan: ${err?.message ?? err}`);
-              });
+              this.setCommandLockout(entityId, 'onOff', false);
+              this.callServiceDebounced(entityId, 'fan', 'turn_off', undefined, 40);
             } else {
-              await this.platform.ha.callService('fan', 'set_percentage', entityId, { percentage: newValue }).catch(async () => {
-                await this.platform.ha.callService('fan', 'turn_on', entityId).catch((err) => {
-                  this.platform.log.warn(`[${entityId}] Error setting fan percentage: ${err?.message ?? err}`);
-                });
-              });
+              this.setCommandLockout(entityId, 'onOff', true);
+              this.callServiceDebounced(entityId, 'fan', 'set_percentage', { percentage: newValue }, 40);
             }
           }
         );
@@ -576,43 +585,30 @@ export class CompositeDeviceEntity {
         endpoint.subscribeAttribute(
           FanControl.id,
           'fanMode',
-          async (newMode: number) => {
+          (newMode: number) => {
             if (typeof newMode !== 'number') return;
             if (this.isUpdatingFromHa) return;
             if (newMode === 0) {
               this.setCommandLockout(entityId, 'percentage', 0);
-              await this.platform.ha.callService('fan', 'turn_off', entityId).catch((err) => {
-                this.platform.log.warn(`[${entityId}] Error turning off fan: ${err?.message ?? err}`);
-              });
+              this.setCommandLockout(entityId, 'onOff', false);
+              this.callServiceDebounced(entityId, 'fan', 'turn_off', undefined, 40);
             } else if (newMode === 4) { // On
-              await this.platform.ha.callService('fan', 'turn_on', entityId).catch((err) => {
-                this.platform.log.warn(`[${entityId}] Error turning on fan: ${err?.message ?? err}`);
-              });
+              void this.platform.ha.callService('fan', 'turn_on', entityId).catch(() => {});
             } else if (newMode === 1) { // Low
               this.setCommandLockout(entityId, 'percentage', 33);
-              await this.platform.ha.callService('fan', 'set_percentage', entityId, { percentage: 33 }).catch((err) => {
-                this.platform.log.warn(`[${entityId}] Error setting fan low: ${err?.message ?? err}`);
-              });
+              this.callServiceDebounced(entityId, 'fan', 'set_percentage', { percentage: 33 }, 40);
             } else if (newMode === 2) { // Medium
               this.setCommandLockout(entityId, 'percentage', 66);
-              await this.platform.ha.callService('fan', 'set_percentage', entityId, { percentage: 66 }).catch((err) => {
-                this.platform.log.warn(`[${entityId}] Error setting fan med: ${err?.message ?? err}`);
-              });
+              this.callServiceDebounced(entityId, 'fan', 'set_percentage', { percentage: 66 }, 40);
             } else if (newMode === 3) { // High
               this.setCommandLockout(entityId, 'percentage', 100);
-              await this.platform.ha.callService('fan', 'set_percentage', entityId, { percentage: 100 }).catch((err) => {
-                this.platform.log.warn(`[${entityId}] Error setting fan high: ${err?.message ?? err}`);
-              });
+              this.callServiceDebounced(entityId, 'fan', 'set_percentage', { percentage: 100 }, 40);
             } else if (newMode === 5) { // Auto
               const presets: string[] = this.states.get(entityId)?.attributes.preset_modes ?? [];
               if (presets.includes('auto')) {
-                await this.platform.ha.callService('fan', 'set_preset_mode', entityId, { preset_mode: 'auto' }).catch((err) => {
-                  this.platform.log.warn(`[${entityId}] Error setting fan auto preset: ${err?.message ?? err}`);
-                });
+                void this.platform.ha.callService('fan', 'set_preset_mode', entityId, { preset_mode: 'auto' }).catch(() => {});
               } else {
-                await this.platform.ha.callService('fan', 'turn_on', entityId).catch((err) => {
-                  this.platform.log.warn(`[${entityId}] Error turning on fan: ${err?.message ?? err}`);
-                });
+                void this.platform.ha.callService('fan', 'turn_on', entityId).catch(() => {});
               }
             }
           }
@@ -753,71 +749,37 @@ export class CompositeDeviceEntity {
       const currentHs = () => lightColor.getHsColor(this.states.get(entityId)!) ?? [0, 100];
 
       if (endpoint.hasAttributeServer(LevelControl.id, 'currentLevel')) {
-        const handleLevel = async (level: number | undefined | null, withOnOff: boolean) => {
+        const handleLevel = (level: number | undefined | null, withOnOff: boolean) => {
           if (typeof level !== 'number') return;
           if (level <= 0 && withOnOff) {
             this.setCommandLockout(entityId, 'onOff', false);
             this.setCommandLockout(entityId, 'brightness', 0);
-            await this.platform.ha.callService('light', 'turn_off', entityId).catch((err: any) => {
-              this.platform.log.warn(`[${entityId}] Error turning off light: ${err?.message ?? err}`);
-            });
+            this.callServiceDebounced(entityId, 'light', 'turn_off', undefined, 40);
           } else {
             const haBrightness = Math.max(1, Math.min(255, Math.round((Math.max(1, level) / 254) * 255)));
             this.setCommandLockout(entityId, 'brightness', haBrightness);
             if (withOnOff) this.setCommandLockout(entityId, 'onOff', true);
-            await this.platform.ha.callService('light', 'turn_on', entityId, { brightness: haBrightness }).catch((err: any) => {
-              this.platform.log.warn(`[${entityId}] Error setting brightness: ${err?.message ?? err}`);
-            });
+            this.callServiceDebounced(entityId, 'light', 'turn_on', { brightness: haBrightness }, 40);
           }
         };
 
-        const onMoveToLevel = async (data: any) => {
+        endpoint.addCommandHandler('moveToLevel', (data: any) => {
           const level = data?.level ?? data?.request?.level;
-          await handleLevel(level, false);
-        };
-        endpoint.addCommandHandler('moveToLevel', onMoveToLevel);
-        endpoint.addCommandHandler('LevelControl.moveToLevel', onMoveToLevel);
+          handleLevel(level, false);
+        });
 
-        const onMoveToLevelWithOnOff = async (data: any) => {
+        endpoint.addCommandHandler('moveToLevelWithOnOff', (data: any) => {
           const level = data?.level ?? data?.request?.level;
-          await handleLevel(level, true);
-        };
-        endpoint.addCommandHandler('moveToLevelWithOnOff', onMoveToLevelWithOnOff);
-        endpoint.addCommandHandler('LevelControl.moveToLevelWithOnOff', onMoveToLevelWithOnOff);
+          handleLevel(level, true);
+        });
 
-        const onStep = async (data: any) => {
+        endpoint.addCommandHandler('step', (data: any) => {
           const req = data?.request ?? data;
           const current = (endpoint as any).getAttribute?.(LevelControl.id, 'currentLevel') ?? 128;
           const step = req?.stepSize ?? 25;
           const next = req?.stepMode === 1 ? Math.max(1, current - step) : Math.min(254, current + step);
-          await handleLevel(next, false);
-        };
-        endpoint.addCommandHandler('step', onStep);
-        endpoint.addCommandHandler('LevelControl.step', onStep);
-
-        const onStepWithOnOff = async (data: any) => {
-          const req = data?.request ?? data;
-          const current = (endpoint as any).getAttribute?.(LevelControl.id, 'currentLevel') ?? 128;
-          const step = req?.stepSize ?? 25;
-          const next = req?.stepMode === 1 ? Math.max(0, current - step) : Math.min(254, current + step);
-          await handleLevel(next, true);
-        };
-        (endpoint as any).addCommandHandler('stepWithOnOff', onStepWithOnOff);
-        (endpoint as any).addCommandHandler('LevelControl.stepWithOnOff', onStepWithOnOff);
-
-        endpoint.subscribeAttribute(
-          LevelControl.id,
-          'currentLevel',
-          async (newLevel: number | null) => {
-            if (typeof newLevel !== 'number') return;
-            if (this.isUpdatingFromHa) return;
-            const haBrightness = Math.max(1, Math.min(255, Math.round((Math.max(1, newLevel) / 254) * 255)));
-            this.setCommandLockout(entityId, 'brightness', haBrightness);
-            await this.platform.ha.callService('light', 'turn_on', entityId, { brightness: haBrightness }).catch((err: any) => {
-              this.platform.log.warn(`[${entityId}] Error setting brightness via attribute: ${err?.message ?? err}`);
-            });
-          }
-        );
+          handleLevel(next, false);
+        });
       }
 
       if (endpoint.hasAttributeServer(ColorControl.id, 'colorMode')) {

@@ -40,71 +40,53 @@ export class HumidifierEntity extends BaseEntity {
 
     const [domain] = this.entityId.split('.');
 
-    const turnOn = async () => {
+    const turnOn = () => {
       this.platform.log.debug(`Matter On commanded for ${this.entityId}`);
-      await safeUpdateAttribute(targetEndpoint, OnOff.id, 'onOff', true, this.platform.log);
-      await this.platform.ha.callService(domain, 'turn_on', this.entityId).catch((err: any) => {
+      this.setCommandLockout('onOff', true);
+      void this.platform.ha.callService(domain, 'turn_on', this.entityId).catch((err: any) => {
         this.platform.log.warn(`[${this.entityId}] Error turning on humidifier: ${err?.message ?? err}`);
       });
     };
 
-    const turnOff = async () => {
+    const turnOff = () => {
       this.platform.log.debug(`Matter Off commanded for ${this.entityId}`);
-      await safeUpdateAttribute(targetEndpoint, OnOff.id, 'onOff', false, this.platform.log);
-      if (targetEndpoint.hasAttributeServer(FanControl.id, 'fanMode')) {
-        await safeUpdateAttribute(targetEndpoint, FanControl.id, 'fanMode', 0, this.platform.log);
-      }
-      await this.platform.ha.callService(domain, 'turn_off', this.entityId).catch((err: any) => {
+      this.setCommandLockout('onOff', false);
+      void this.platform.ha.callService(domain, 'turn_off', this.entityId).catch((err: any) => {
         this.platform.log.warn(`[${this.entityId}] Error turning off humidifier: ${err?.message ?? err}`);
       });
     };
 
-    const toggle = async () => {
+    const toggle = () => {
       if (this.state.state === 'on') {
-        await turnOff();
+        turnOff();
       } else {
-        await turnOn();
+        turnOn();
       }
     };
 
     targetEndpoint.addCommandHandler('on', turnOn);
-    targetEndpoint.addCommandHandler('OnOff.on', turnOn);
     targetEndpoint.addCommandHandler('off', turnOff);
-    targetEndpoint.addCommandHandler('OnOff.off', turnOff);
     targetEndpoint.addCommandHandler('toggle', toggle);
-    targetEndpoint.addCommandHandler('OnOff.toggle', toggle);
 
     // Writable attributes mapping: percentSetting for target humidity / mist level
     if (targetEndpoint.hasAttributeServer(FanControl.id, 'percentSetting')) {
       targetEndpoint.subscribeAttribute(
         FanControl.id,
         'percentSetting',
-        async (newValue: number) => {
+        (newValue: number) => {
           this.platform.log.debug(`Matter percentSetting changed for ${this.entityId} to ${newValue}`);
+          if (this.isUpdatingFromHa) return;
+          this.setCommandLockout('percentage', newValue);
 
           const minHum = this.state.attributes.min_humidity ?? 40;
           const maxHum = this.state.attributes.max_humidity ?? 80;
-          const isOn = this.state.state === 'on';
           const availableModes: string[] = this.state.attributes.available_modes ?? [];
 
-          // Optimistic local updates
-          await safeUpdateAttribute(targetEndpoint, FanControl.id, 'percentCurrent', newValue, this.platform.log);
-          await safeUpdateAttribute(targetEndpoint, FanControl.id, 'percentSetting', newValue, this.platform.log);
-          await safeUpdateAttribute(targetEndpoint, OnOff.id, 'onOff', newValue > 0, this.platform.log);
-          const fanMode = newValue === 0 ? 0 : (newValue > 66 ? 3 : newValue > 33 ? 2 : 1);
-          await safeUpdateAttribute(targetEndpoint, FanControl.id, 'fanMode', fanMode, this.platform.log);
-
           if (newValue === 0) {
-            await this.platform.ha.callService(domain, 'turn_off', this.entityId).catch((err: any) => {
-              this.platform.log.warn(`[${this.entityId}] Error turning off humidifier: ${err?.message ?? err}`);
-            });
+            this.setCommandLockout('onOff', false);
+            this.callServiceDebounced(domain, 'turn_off', undefined, 40);
           } else {
-            if (!isOn) {
-              await this.platform.ha.callService(domain, 'turn_on', this.entityId).catch((err: any) => {
-                this.platform.log.warn(`[${this.entityId}] Error turning on humidifier: ${err?.message ?? err}`);
-              });
-            }
-
+            this.setCommandLockout('onOff', true);
             // Try discrete mode if available
             if (availableModes.length > 0) {
               let targetMode: string | undefined;
@@ -117,20 +99,17 @@ export class HumidifierEntity extends BaseEntity {
               }
 
               if (targetMode) {
-                await this.platform.ha.callService(domain, 'set_mode', this.entityId, { mode: targetMode }).catch((err: any) => {
-                  this.platform.log.warn(`[${this.entityId}] Error setting humidifier mode: ${err?.message ?? err}`);
-                });
+                this.callServiceDebounced(domain, 'set_mode', { mode: targetMode }, 40);
+                return;
               }
             }
 
             // Map speed percentage back to target humidity range
             if (this.state.attributes.min_humidity !== undefined || this.state.attributes.max_humidity !== undefined || typeof this.state.attributes.humidity === 'number') {
               const targetHumidity = minHum + Math.round((newValue / 100) * (maxHum - minHum));
-              await this.platform.ha.callService(domain, 'set_humidity', this.entityId, {
-                humidity: targetHumidity,
-              }).catch((err: any) => {
-                this.platform.log.warn(`[${this.entityId}] Error setting humidity: ${err?.message ?? err}`);
-              });
+              this.callServiceDebounced(domain, 'set_humidity', { humidity: targetHumidity }, 40);
+            } else {
+              this.callServiceDebounced(domain, 'turn_on', undefined, 40);
             }
           }
         }
@@ -139,34 +118,23 @@ export class HumidifierEntity extends BaseEntity {
       targetEndpoint.subscribeAttribute(
         FanControl.id,
         'fanMode',
-        async (newMode: number) => {
+        (newMode: number) => {
           if (typeof newMode !== 'number') return;
+          if (this.isUpdatingFromHa) return;
           const availableModes: string[] = this.state.attributes.available_modes ?? [];
 
           if (newMode === 0) {
-            await safeUpdateAttribute(targetEndpoint, FanControl.id, 'percentCurrent', 0, this.platform.log);
-            await safeUpdateAttribute(targetEndpoint, FanControl.id, 'percentSetting', 0, this.platform.log);
-            await safeUpdateAttribute(targetEndpoint, OnOff.id, 'onOff', false, this.platform.log);
-            await this.platform.ha.callService(domain, 'turn_off', this.entityId).catch((err: any) => {
-              this.platform.log.warn(`[${this.entityId}] Error turning off humidifier: ${err?.message ?? err}`);
-            });
+            this.setCommandLockout('percentage', 0);
+            this.setCommandLockout('onOff', false);
+            this.callServiceDebounced(domain, 'turn_off', undefined, 40);
           } else if (newMode === 5) { // Auto mode
-            await safeUpdateAttribute(targetEndpoint, OnOff.id, 'onOff', true, this.platform.log);
-            await safeUpdateAttribute(targetEndpoint, FanControl.id, 'fanMode', 5, this.platform.log);
+            this.setCommandLockout('onOff', true);
             const autoMode = availableModes.find(m => /auto/i.test(m)) ?? 'auto';
-            await this.platform.ha.callService(domain, 'set_mode', this.entityId, { mode: autoMode }).catch(async () => {
-              await this.platform.ha.callService(domain, 'turn_on', this.entityId).catch((err: any) => {
-                this.platform.log.warn(`[${this.entityId}] Error turning on humidifier in auto: ${err?.message ?? err}`);
-              });
-            });
+            this.callServiceDebounced(domain, 'set_mode', { mode: autoMode }, 40);
           } else { // Manual mode
-            await safeUpdateAttribute(targetEndpoint, OnOff.id, 'onOff', true, this.platform.log);
+            this.setCommandLockout('onOff', true);
             const manualMode = availableModes.find(m => !/auto/i.test(m)) ?? 'manual';
-            await this.platform.ha.callService(domain, 'set_mode', this.entityId, { mode: manualMode }).catch(async () => {
-              await this.platform.ha.callService(domain, 'turn_on', this.entityId).catch((err: any) => {
-                this.platform.log.warn(`[${this.entityId}] Error turning on humidifier manual: ${err?.message ?? err}`);
-              });
-            });
+            this.callServiceDebounced(domain, 'set_mode', { mode: manualMode }, 40);
           }
         }
       );

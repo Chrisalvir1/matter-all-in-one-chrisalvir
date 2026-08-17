@@ -91,10 +91,12 @@ describe('BaseEntity FanControl full features', () => {
 
     // Simulate HomeKit sliding speed to 75%
     await endpoint.invokeAttributeChange(0x0202, 'percentSetting', 75);
+    await new Promise(r => setTimeout(r, 60));
     expect(platform.ha.callService).toHaveBeenLastCalledWith('fan', 'set_percentage', 'fan.living_room_fan', { percentage: 75 });
 
     // Simulate HomeKit sliding speed to 0%
     await endpoint.invokeAttributeChange(0x0202, 'percentSetting', 0);
+    await new Promise(r => setTimeout(r, 60));
     expect(platform.ha.callService).toHaveBeenLastCalledWith('fan', 'turn_off', 'fan.living_room_fan');
   });
 
@@ -104,14 +106,17 @@ describe('BaseEntity FanControl full features', () => {
 
     // Simulate fan mode Low (1) -> 33%
     await endpoint.invokeAttributeChange(0x0202, 'fanMode', 1);
+    await new Promise(r => setTimeout(r, 60));
     expect(platform.ha.callService).toHaveBeenLastCalledWith('fan', 'set_percentage', 'fan.living_room_fan', { percentage: 33 });
 
     // Simulate fan mode Auto (5)
     await endpoint.invokeAttributeChange(0x0202, 'fanMode', 5);
+    await new Promise(r => setTimeout(r, 60));
     expect(platform.ha.callService).toHaveBeenLastCalledWith('fan', 'set_preset_mode', 'fan.living_room_fan', { preset_mode: 'auto' });
 
     // Simulate airflow direction Reverse (1)
     await endpoint.invokeAttributeChange(0x0202, 'airflowDirection', 1);
+    await new Promise(r => setTimeout(r, 60));
     expect(platform.ha.callService).toHaveBeenLastCalledWith('fan', 'set_direction', 'fan.living_room_fan', { direction: 'reverse' });
   });
 });

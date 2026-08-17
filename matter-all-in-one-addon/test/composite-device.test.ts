@@ -148,14 +148,17 @@ describe('CompositeDeviceEntity', () => {
 
     // Simulate dragging HomeKit fan slider to 80%
     await fanEndpoint.invokeAttributeChange(0x0202, 'percentSetting', 80);
+    await new Promise(r => setTimeout(r, 60));
     expect(platform.ha.callService).toHaveBeenCalledWith('fan', 'set_percentage', 'fan.combo', { percentage: 80 });
 
     // Simulate fan mode Low (1) -> 33%
     await fanEndpoint.invokeAttributeChange(0x0202, 'fanMode', 1);
+    await new Promise(r => setTimeout(r, 60));
     expect(platform.ha.callService).toHaveBeenCalledWith('fan', 'set_percentage', 'fan.combo', { percentage: 33 });
 
     // Simulate fan direction reverse
     await fanEndpoint.invokeAttributeChange(0x0202, 'airflowDirection', 1);
+    await new Promise(r => setTimeout(r, 60));
     expect(platform.ha.callService).toHaveBeenCalledWith('fan', 'set_direction', 'fan.combo', { direction: 'reverse' });
   });
 

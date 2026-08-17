@@ -1,3 +1,11 @@
+## [1.4.21] - 2026-08-16
+
+### Fixed
+- **Procesamiento No-Bloqueante e Instantáneo para Comandos de Luces, Dimmers, Ventiladores y Difusores:**
+  - Se desacopló la respuesta del protocolo Matter de la comunicación de red con Home Assistant (las órdenes de Home Assistant se ejecutan de forma asíncrona no-bloqueante), permitiendo que Matter responda a Apple Home en <1ms y liberando inmediatamente las colas de transacciones.
+  - Se implementó *Debouncing* inteligente de 40ms en los deslizadores de brillo y velocidad: al mover el dedo rápidamente, se cancelan ráfagas intermedias y se envía únicamente el valor final, evitando saturar la radio Bluetooth/BLE o provocar `Operation already in progress`.
+  - Se eliminaron todos los registros duplicados de comandos (`'OnOff.on'`, `'LevelControl.moveToLevel'`) y suscripciones redundantes que disparaban múltiples peticiones por cada toque.
+
 ## [1.4.20] - 2026-08-16
 
 ### Fixed
