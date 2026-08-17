@@ -1,3 +1,10 @@
+## [1.4.17] - 2026-08-16
+
+### Fixed
+- **Detección y Agrupación Completa de Difusores con Luz y Múltiples Interruptores:**
+  - Se corrigió la función `isMultiSwitchDevice` para que los dispositivos físicos que contienen difusores (`humidifier.*`) o ventiladores (`fan.*`) nunca se dividan erróneamente en múltiples accesorios independientes cuando tienen una luz o interruptores adicionales (beeper, luz ambiental, etc.). Ahora se agrupan siempre bajo un único accesorio compuesto con su luz en HomeKit.
+  - **Control Preciso de Velocidad de Ventiladores:** Al mover el deslizador en Apple Home, el comando `fan.set_percentage` se transmite de forma limpia y directa a Home Assistant ajustando las velocidades reales en el ventilador.
+
 ## [1.4.16] - 2026-08-16
 
 ### Added / Improved

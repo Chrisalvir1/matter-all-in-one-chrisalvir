@@ -513,11 +513,17 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
    */
   public isMultiSwitchDevice(deviceId: string): boolean {
     if (!deviceId) return false;
-    const controllable = Array.from(this.entities.values()).filter((entity) => {
+    const allMembers = Array.from(this.entities.values()).filter((entity) => {
+      const hassEntry = (this.ha as any).hassEntities?.get(entity.entityId);
+      return hassEntry?.device_id === deviceId;
+    });
+    // If the physical device includes an appliance domain (fan, humidifier, lock, etc.), it is a composite device (e.g. diffuser+light, fan+light), NOT a multi-gang wall switch!
+    if (allMembers.some((e) => ['fan', 'humidifier', 'lock', 'climate', 'vacuum'].includes(e.entityId.split('.')[0]))) {
+      return false;
+    }
+    const controllable = allMembers.filter((entity) => {
       const [domain] = entity.entityId.split('.');
       if (!['switch', 'light'].includes(domain)) return false;
-      const hassEntry = (this.ha as any).hassEntities?.get(entity.entityId);
-      if (hassEntry?.device_id !== deviceId) return false;
       return !this.isDpsGenericEntity(entity.entityId);
     });
     return controllable.length >= 2;
