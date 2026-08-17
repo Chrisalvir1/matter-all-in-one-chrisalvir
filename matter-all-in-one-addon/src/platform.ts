@@ -572,7 +572,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     // fan+light and SwitchBot lock+contact sensor under one QR code.
     // Also, BTHome sensors often group multiple sensors (temp, humidity, battery) 
     // under a single device_id.
-    const hasPrimaryControllable = members.some((member) => member.entityId.startsWith('fan.') || member.entityId.startsWith('lock.'));
+    const hasPrimaryControllable = members.some((member) => member.entityId.startsWith('fan.') || member.entityId.startsWith('lock.') || member.entityId.startsWith('humidifier.'));
     const isAllSensors = members.every((member) => member.entityId.startsWith('sensor.') || member.entityId.startsWith('binary_sensor.'));
     
     if (!hasPrimaryControllable && !isAllSensors) {
@@ -1108,6 +1108,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     const candidate = this.getCompositeCandidate(entityId);
     const primaryEntityId =
       candidate?.config?.primary_entity ??
+      candidate?.members.find((member) => member.entityId.startsWith('humidifier.'))?.entityId ??
       candidate?.members.find((member) => member.entityId.startsWith('lock.'))?.entityId ??
       candidate?.members.find((member) => member.entityId.startsWith('fan.'))?.entityId ??
       candidate?.members[0]?.entityId ??

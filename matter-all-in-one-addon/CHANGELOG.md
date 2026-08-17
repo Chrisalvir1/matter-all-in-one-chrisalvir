@@ -1,3 +1,10 @@
+## [1.4.16] - 2026-08-16
+
+### Added / Improved
+- **Agrupación Automática de Difusores con Luz en un Solo Accesorio Compuesto:**
+  - Se habilitó `humidifier.*` como entidad controlable primaria en la detección de candidatos compuestos (`getCompositeCandidate`).
+  - Ahora cualquier difusor o humidificador que contenga su luz integrada en Home Assistant (mismo `device_id`) se agrupa y exporta automáticamente en un **único accesorio Matter con un único código QR**, permitiendo controlar tanto la niebla/humedad como la luz en el mismo dispositivo desde HomeKit.
+
 ## [1.4.15] - 2026-08-16
 
 ### Fixed
