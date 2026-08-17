@@ -1,3 +1,11 @@
+## [1.4.19] - 2026-08-16
+
+### Fixed
+- **Control Preciso del Deslizador de Brillo en Luces y Dimmers (`LevelControl`):**
+  - Se garantizó la instalación del cluster `LevelControl` en todos los perfiles de dimerización (`dimmableLight`, `dimmablePlugInUnit`, `colorTemperatureLight`, `extendedColorLight`), incluso si la entidad en Home Assistant no reportaba modos de color explícitos.
+  - Se añadieron todos los comandos estándar de Matter (`moveToLevel`, `LevelControl.moveToLevel`, `moveToLevelWithOnOff`, `LevelControl.moveToLevelWithOnOff`, `step`, `stepWithOnOff`) junto con la suscripción reactiva a cambios de atributo `currentLevel`.
+  - Ahora al mover el deslizador de brillo en Apple Home, el nivel se transmite de forma suave, precisa y sin retrasos a Home Assistant.
+
 ## [1.4.18] - 2026-08-16
 
 ### Fixed

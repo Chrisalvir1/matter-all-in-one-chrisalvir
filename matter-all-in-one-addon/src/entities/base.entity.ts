@@ -103,13 +103,14 @@ export class BaseEntity {
       const supportedModes: string[] = this.state.attributes.supported_color_modes ?? [];
       const hasBrightness = supportedModes.includes('brightness') || this.state.attributes.brightness !== undefined;
       const isOnOffProfile = this.deviceType.code === 0x0100 || this.deviceType.code === 0x010a; 
+      const isDimmableProfile = this.deviceType.code === 0x0101 || this.deviceType.code === 0x010b || this.deviceType.code === 0x010c || this.deviceType.code === 0x010d;
       const realColorModes = ['hs', 'xy', 'rgb', 'rgbw', 'rgbww', 'color_temp'];
       const hasColorCapability =
         supportedModes.some((m) => realColorModes.includes(m)) ||
         hasColorTemperatureCapability(this.state.attributes);
       const isColorProfile = this.deviceType.code === 0x010c || this.deviceType.code === 0x010d; 
       
-      if ((hasBrightness || hasColorCapability) && !isOnOffProfile) {
+      if ((hasBrightness || hasColorCapability || isDimmableProfile) && !isOnOffProfile) {
         clusters.push(LevelControl.id);
       }
       if (hasColorCapability && isColorProfile) {
@@ -374,37 +375,75 @@ export class BaseEntity {
       }
 
       if (this.endpoint.hasAttributeServer(LevelControl.id, 'currentLevel')) {
-        this.endpoint.addCommandHandler('moveToLevel', async (data: any) => {
-          const level = data?.request?.level ?? data?.level;
-          if (typeof level === 'number') {
-            const haBrightness = Math.round((level / 254) * 255);
+        const handleLevel = async (level: number | undefined | null, withOnOff: boolean) => {
+          if (typeof level !== 'number') return;
+          if (level <= 0 && withOnOff) {
+            this.setCommandLockout('onOff', false);
+            this.setCommandLockout('brightness', 0);
+            await safeUpdateAttribute(this.endpoint, LevelControl.id, 'currentLevel', 1, this.platform.log);
+            await safeUpdateAttribute(this.endpoint, OnOff.id, 'onOff', false, this.platform.log);
+            await this.platform.ha.callService(domain, 'turn_off', this.entityId).catch((err: any) => {
+              this.platform.log.warn(`[${this.entityId}] Error turning off: ${err?.message ?? err}`);
+            });
+          } else {
+            const haBrightness = Math.max(1, Math.min(255, Math.round((Math.max(1, level) / 254) * 255)));
             this.setCommandLockout('brightness', haBrightness);
-            await safeUpdateAttribute(this.endpoint, LevelControl.id, 'currentLevel', level, this.platform.log);
-            await this.platform.ha.callService(domain, 'turn_on', this.entityId, { brightness: haBrightness }).catch((err) => {
+            if (withOnOff) this.setCommandLockout('onOff', true);
+            await safeUpdateAttribute(this.endpoint, LevelControl.id, 'currentLevel', Math.max(1, level), this.platform.log);
+            if (withOnOff) await safeUpdateAttribute(this.endpoint, OnOff.id, 'onOff', true, this.platform.log);
+            await this.platform.ha.callService(domain, 'turn_on', this.entityId, { brightness: haBrightness }).catch((err: any) => {
               this.platform.log.warn(`[${this.entityId}] Error setting brightness: ${err?.message ?? err}`);
             });
           }
-        });
+        };
 
-        this.endpoint.addCommandHandler('moveToLevelWithOnOff', async (data: any) => {
+        const onMoveToLevel = async (data: any) => {
           const level = data?.request?.level ?? data?.level;
-          if (typeof level === 'number') {
-            if (level === 0) {
-              await safeUpdateAttribute(this.endpoint, OnOff.id, 'onOff', false, this.platform.log);
-              await this.platform.ha.callService(domain, 'turn_off', this.entityId).catch((err) => {
-                this.platform.log.warn(`[${this.entityId}] Error turning off: ${err?.message ?? err}`);
-              });
-            } else {
-              const haBrightness = Math.round((level / 254) * 255);
-              this.setCommandLockout('brightness', haBrightness);
-              await safeUpdateAttribute(this.endpoint, LevelControl.id, 'currentLevel', level, this.platform.log);
-              await safeUpdateAttribute(this.endpoint, OnOff.id, 'onOff', true, this.platform.log);
-              await this.platform.ha.callService(domain, 'turn_on', this.entityId, { brightness: haBrightness }).catch((err) => {
-                this.platform.log.warn(`[${this.entityId}] Error setting brightness: ${err?.message ?? err}`);
-              });
-            }
+          await handleLevel(level, false);
+        };
+        this.endpoint.addCommandHandler('moveToLevel', onMoveToLevel);
+        this.endpoint.addCommandHandler('LevelControl.moveToLevel', onMoveToLevel);
+
+        const onMoveToLevelWithOnOff = async (data: any) => {
+          const level = data?.request?.level ?? data?.level;
+          await handleLevel(level, true);
+        };
+        this.endpoint.addCommandHandler('moveToLevelWithOnOff', onMoveToLevelWithOnOff);
+        this.endpoint.addCommandHandler('LevelControl.moveToLevelWithOnOff', onMoveToLevelWithOnOff);
+
+        const onStep = async (data: any) => {
+          const req = data?.request ?? data;
+          const current = (this.endpoint as any).getAttribute?.(LevelControl.id, 'currentLevel') ?? 128;
+          const step = req?.stepSize ?? 25;
+          const next = req?.stepMode === 1 ? Math.max(1, current - step) : Math.min(254, current + step);
+          await handleLevel(next, false);
+        };
+        this.endpoint.addCommandHandler('step', onStep);
+        this.endpoint.addCommandHandler('LevelControl.step', onStep);
+
+        const onStepWithOnOff = async (data: any) => {
+          const req = data?.request ?? data;
+          const current = (this.endpoint as any).getAttribute?.(LevelControl.id, 'currentLevel') ?? 128;
+          const step = req?.stepSize ?? 25;
+          const next = req?.stepMode === 1 ? Math.max(0, current - step) : Math.min(254, current + step);
+          await handleLevel(next, true);
+        };
+        (this.endpoint as any).addCommandHandler('stepWithOnOff', onStepWithOnOff);
+        (this.endpoint as any).addCommandHandler('LevelControl.stepWithOnOff', onStepWithOnOff);
+
+        this.endpoint.subscribeAttribute(
+          LevelControl.id,
+          'currentLevel',
+          async (newLevel: number | null) => {
+            if (typeof newLevel !== 'number') return;
+            if (this.isUpdatingFromHa) return;
+            const haBrightness = Math.max(1, Math.min(255, Math.round((Math.max(1, newLevel) / 254) * 255)));
+            this.setCommandLockout('brightness', haBrightness);
+            await this.platform.ha.callService(domain, 'turn_on', this.entityId, { brightness: haBrightness }).catch((err: any) => {
+              this.platform.log.warn(`[${this.entityId}] Error setting brightness via attribute: ${err?.message ?? err}`);
+            });
           }
-        });
+        );
       }
 
       if (domain === 'light' && this.hasColorControl(this.endpoint)) {
