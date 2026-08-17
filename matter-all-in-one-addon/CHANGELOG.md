@@ -1,3 +1,10 @@
+## [1.4.20] - 2026-08-16
+
+### Fixed
+- **Eliminación Definitiva de Bloqueos por Deadlock en Transacciones de Matter (`Tx waiting on ...`):**
+  - Se identificó y resolvió la causa raíz por la cual **Dimmer Café** y otros dispositivos se quedaban en "Sin respuesta" o cargando al mover el deslizador: las llamadas sincronizadas a `safeUpdateAttribute` dentro de los handlers de comandos generaban un interbloqueo (*deadlock*) con el gestor de transacciones de Matter.js.
+  - Al remover las modificaciones de atributos redundantes dentro de las transacciones activas, los comandos de nivel de luz y velocidad se procesan y responden de forma instantánea sin bloquear transacciones sucesivas.
+
 ## [1.4.19] - 2026-08-16
 
 ### Fixed

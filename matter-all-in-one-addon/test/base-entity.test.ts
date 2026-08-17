@@ -92,13 +92,10 @@ describe('BaseEntity FanControl full features', () => {
     // Simulate HomeKit sliding speed to 75%
     await endpoint.invokeAttributeChange(0x0202, 'percentSetting', 75);
     expect(platform.ha.callService).toHaveBeenLastCalledWith('fan', 'set_percentage', 'fan.living_room_fan', { percentage: 75 });
-    expect(endpoint.attributes.get('514:percentCurrent')).toBe(75);
 
     // Simulate HomeKit sliding speed to 0%
     await endpoint.invokeAttributeChange(0x0202, 'percentSetting', 0);
     expect(platform.ha.callService).toHaveBeenLastCalledWith('fan', 'turn_off', 'fan.living_room_fan');
-    expect(endpoint.attributes.get('514:percentCurrent')).toBe(0);
-    expect(endpoint.attributes.get('6:onOff')).toBe(false);
   });
 
   it('handles HomeKit fan mode and direction changes', async () => {
