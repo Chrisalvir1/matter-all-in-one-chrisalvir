@@ -1,6 +1,6 @@
 name: "Matter All-in-One chrisalvir"
 description: "All-in-one bridge and custom UI for Home Assistant entities exported to Apple Home, Google Home, SmartThings and Alexa over Matter"
-version: "1.4.17"
+version: "1.4.18"
 slug: "matter_all_in_one_bridge"
 image: "ghcr.io/chrisalvir1/matter-all-in-one-chrisalvir"
 init: false

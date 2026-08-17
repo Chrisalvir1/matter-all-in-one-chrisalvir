@@ -1,3 +1,10 @@
+## [1.4.18] - 2026-08-16
+
+### Fixed
+- **Eliminación de Interruptores Inútiles / Desconectados en Difusores y Ventiladores:**
+  - Se filtran automáticamente todos los interruptores auxiliares de configuración/diagnóstico (`entity_category: config/diagnostic`, beepers, zumbadores, indicadores o interruptores duplicados de energía) en difusores y ventiladores compuestos.
+  - Ahora el difusor se exporta exclusivamente con sus dos funciones reales: **Vapor/Difusor (`humidifier.*`) + Luz (`light.*`)**, sin el tercer interruptor fantasma que aparecía como no disponible en HomeKit.
+
 ## [1.4.17] - 2026-08-16
 
 ### Fixed

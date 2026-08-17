@@ -558,10 +558,23 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     const explicitlyIncluded = config?.include_entities;
     const supported = new Set(['fan', 'light', 'switch', 'lock', 'sensor', 'binary_sensor', 'humidifier']);
     let members = Array.from(this.entities.values()).filter((entity) => {
-      if (!supported.has(entity.entityId.split('.')[0])) return false;
+      const [domain] = entity.entityId.split('.');
+      if (!supported.has(domain)) return false;
       if (excluded.has(entity.entityId)) return false;
       if (explicitlyIncluded?.length) return explicitlyIncluded.includes(entity.entityId);
-      return this.ha.hassEntities.get(entity.entityId)?.device_id === compositeDeviceId;
+      
+      const hassEntry = this.ha.hassEntities.get(entity.entityId);
+      if (hassEntry?.device_id !== compositeDeviceId) return false;
+
+      // Exclude HA configuration/diagnostic entities unless explicitly included
+      if (hassEntry?.entity_category === 'config' || hassEntry?.entity_category === 'diagnostic') {
+        return false;
+      }
+
+      // Exclude unnamed generic Tuya DPS entities
+      if (this.isDpsGenericEntity(entity.entityId)) return false;
+
+      return true;
     });
 
     if (config?.primary_entity && !members.some((member) => member.entityId === config.primary_entity)) {
@@ -569,6 +582,20 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       if (primary && supported.has(primary.entityId.split('.')[0]) && !excluded.has(primary.entityId)) {
         members.push(primary);
       }
+    }
+
+    // If the composite group is a diffuser (humidifier), exclude auxiliary switches (beeper, buzzer, power duplicates)
+    if (members.some((m) => m.entityId.startsWith('humidifier.')) && !explicitlyIncluded?.length) {
+      members = members.filter((m) => !m.entityId.startsWith('switch.'));
+    }
+
+    // If the composite group is a fan, exclude auxiliary beeper/sound switches
+    if (members.some((m) => m.entityId.startsWith('fan.')) && !explicitlyIncluded?.length) {
+      members = members.filter((m) => {
+        if (!m.entityId.startsWith('switch.')) return true;
+        const name = (this.ha.hassEntities.get(m.entityId)?.name || m.entityId).toLowerCase();
+        return !/beep|buzz|sound|audio|timb|indicat|display/i.test(name);
+      });
     }
 
     this.log.debug(`[Composite] ${entityId}: device_id=${compositeDeviceId}, candidate members=[${members.map((m) => m.entityId).join(', ')}]`);
