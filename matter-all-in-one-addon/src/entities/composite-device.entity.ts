@@ -91,7 +91,7 @@ export class CompositeDeviceEntity {
     return requested !== actual;
   }
 
-  private shouldIgnoreStateUpdate(entityId: string, attribute: string, haValue: any, windowMs = 3000): boolean {
+  private shouldIgnoreStateUpdate(entityId: string, attribute: string, haValue: any, windowMs = 3500): boolean {
     const key = `${entityId}:${attribute}`;
     const last = this.lastCommands.get(key);
     if (!last) return false;
@@ -101,14 +101,14 @@ export class CompositeDeviceEntity {
       return false;
     }
     
-    if (this.isDifferent(attribute, last.value, haValue)) {
-      this.platform.log.debug(`[${entityId}] Reconciling HA feedback for ${attribute} (req=${JSON.stringify(last.value)}, got=${JSON.stringify(haValue)})`);
+    if (!this.isDifferent(attribute, last.value, haValue)) {
       this.lastCommands.delete(key);
       return false; 
     }
+    this.platform.log.debug(`[${entityId}] Ignoring stale HA update for ${attribute} (req=${JSON.stringify(last.value)}, ha=${JSON.stringify(haValue)}, ${elapsed}ms ago)`);
     return true;
   }
-  
+
   private setCommandLockout(entityId: string, attribute: string, value: any) {
     this.lastCommands.set(`${entityId}:${attribute}`, { value, timestamp: Date.now() });
   }
@@ -239,7 +239,11 @@ export class CompositeDeviceEntity {
 
     if (domain === 'fan') {
       const on = isOn(state);
-      await update(endpoint, OnOff.id, 'onOff', on, this.platform.log);
+      if (!initial && this.shouldIgnoreStateUpdate(entityId, 'onOff', on)) {
+        this.platform.log.debug(`[${entityId}] Ignoring HA fan onOff state update due to recent command lockout`);
+      } else {
+        await update(endpoint, OnOff.id, 'onOff', on, this.platform.log);
+      }
       if (!endpoint.hasAttributeServer(FanControl.id, 'percentCurrent')) return;
       const percentage = on ? (typeof state.attributes.percentage === 'number' && state.attributes.percentage > 0 ? state.attributes.percentage : 100) : 0;
       if (!initial && this.shouldIgnoreStateUpdate(entityId, 'percentage', percentage)) {
@@ -259,7 +263,11 @@ export class CompositeDeviceEntity {
 
     if (domain === 'humidifier') {
       const on = isOn(state);
-      await update(endpoint, OnOff.id, 'onOff', on, this.platform.log);
+      if (!initial && this.shouldIgnoreStateUpdate(entityId, 'onOff', on)) {
+        this.platform.log.debug(`[${entityId}] Ignoring HA humidifier onOff state update due to recent command lockout`);
+      } else {
+        await update(endpoint, OnOff.id, 'onOff', on, this.platform.log);
+      }
       if (endpoint.hasAttributeServer(FanControl.id, 'percentCurrent')) {
         const minHum = state.attributes.min_humidity ?? 40;
         const maxHum = state.attributes.max_humidity ?? 80;
@@ -295,7 +303,12 @@ export class CompositeDeviceEntity {
     }
 
     if (domain === 'light' || domain === 'switch') {
-      await update(endpoint, OnOff.id, 'onOff', isOn(state), this.platform.log);
+      const on = isOn(state);
+      if (!initial && this.shouldIgnoreStateUpdate(entityId, 'onOff', on)) {
+        this.platform.log.debug(`[${entityId}] Ignoring HA ${domain} onOff state update due to recent command lockout`);
+      } else {
+        await update(endpoint, OnOff.id, 'onOff', on, this.platform.log);
+      }
 
       if (domain === 'light') {
         if (typeof state.attributes.brightness === 'number') {

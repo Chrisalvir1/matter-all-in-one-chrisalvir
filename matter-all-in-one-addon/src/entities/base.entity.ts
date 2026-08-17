@@ -42,7 +42,7 @@ export class BaseEntity {
     return requested !== actual;
   }
 
-  private shouldIgnoreStateUpdate(attribute: string, haValue: any, windowMs = 3000): boolean {
+  private shouldIgnoreStateUpdate(attribute: string, haValue: any, windowMs = 3500): boolean {
     const key = `${this.entityId}:${attribute}`;
     const last = this.lastCommands.get(key);
     if (!last) return false;
@@ -53,13 +53,15 @@ export class BaseEntity {
       return false;
     }
 
-    if (this.isDifferent(attribute, last.value, haValue)) {
-      this.platform.log.debug(`[${this.entityId}] Reconciling HA feedback for ${attribute} (req=${JSON.stringify(last.value)}, got=${JSON.stringify(haValue)})`);
+    // If HA matches the value we commanded, clear lockout early and accept
+    if (!this.isDifferent(attribute, last.value, haValue)) {
       this.lastCommands.delete(key);
-      return false; // Force reconciliation
+      return false;
     }
 
-    return true; // Ignore, within window and matches
+    // Stale echo within lockout window: ignore it to prevent bouncing in HomeKit
+    this.platform.log.debug(`[${this.entityId}] Ignoring stale HA update for ${attribute} (req=${JSON.stringify(last.value)}, ha=${JSON.stringify(haValue)}, ${elapsed}ms ago)`);
+    return true;
   }
 
   protected setCommandLockout(attribute: string, value: any) {
@@ -550,7 +552,11 @@ export class BaseEntity {
     if (domain === 'light' || domain === 'switch' || domain === 'fan' || domain === 'media_player' || domain === 'vacuum') {
       const isOn = domain === 'vacuum' ? newState.state === 'cleaning' : newState.state === 'on';
 
-      await updateFn(this.endpoint, OnOff.id, 'onOff', isOn, this.platform.log);
+      if (!isInitialSync && this.shouldIgnoreStateUpdate('onOff', isOn)) {
+        this.platform.log.debug(`[${this.entityId}] Ignoring HA onOff state update due to recent command lockout`);
+      } else {
+        await updateFn(this.endpoint, OnOff.id, 'onOff', isOn, this.platform.log);
+      }
 
       if (newState.attributes.brightness !== undefined) {
         if (!isInitialSync && this.shouldIgnoreStateUpdate('brightness', newState.attributes.brightness)) {

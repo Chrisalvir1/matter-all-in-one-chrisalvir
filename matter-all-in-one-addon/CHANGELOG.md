@@ -1,3 +1,11 @@
+## [1.4.22] - 2026-08-16
+
+### Fixed
+- **Eliminación del Rebote y Movimiento Autónomo de Interruptores y Deslizadores en Apple Home:**
+  - Se corrigió la lógica de *Command Lockout* (`shouldIgnoreStateUpdate`): ahora ignora estrictamente cualquier eco de estado desactualizado proveniente de Home Assistant durante la ventana de 3.5 segundos tras el comando, evitando que el interruptor o deslizador regrese al estado anterior antes de que el dispositivo físico termine de procesar.
+  - Se aplicó la protección de bloqueo a los atributos `OnOff.onOff` de ventiladores, luces, interruptores y difusores.
+  - El estado visual en HomeKit se mantiene firme e idéntico a lo accionado por el usuario.
+
 ## [1.4.21] - 2026-08-16
 
 ### Fixed
