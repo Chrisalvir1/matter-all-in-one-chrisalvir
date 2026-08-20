@@ -32,6 +32,7 @@ import {
   MATTER_BRIDGE_VENDOR_NAME,
 } from "../utils/matter-device-identity.js";
 import { lightColor } from "../utils/light-color.js";
+import { fanConverter } from "../converters/fan.converter.js";
 
 export class BaseEntity {
   public platform: HomeAssistantPlatform;
@@ -43,6 +44,12 @@ export class BaseEntity {
   public deviceType: DeviceTypeDefinition;
 
   private isDifferent(attribute: string, requested: any, actual: any): boolean {
+    if (attribute === "onOff") {
+      return Boolean(requested) !== Boolean(actual);
+    }
+    if (attribute === "fanMode") {
+      return Number(requested) !== Number(actual);
+    }
     if (attribute === "hs_color") {
       if (!requested || !actual) return true;
       return (
@@ -401,6 +408,14 @@ export class BaseEntity {
       domain === "humidifier"
     ) {
       this.endpoint.addCommandHandler("on", () => {
+        this.setCommandLockout("onOff", true);
+        void safeUpdateAttribute(
+          this.endpoint,
+          OnOff.id,
+          "onOff",
+          true,
+          this.platform.log,
+        );
         if (domain === "vacuum") {
           void this.platform.ha
             .callService(domain, "start", this.entityId)
@@ -410,7 +425,6 @@ export class BaseEntity {
               );
             });
         } else {
-          this.setCommandLockout("onOff", true);
           void this.platform.ha
             .callService(domain, "turn_on", this.entityId)
             .catch((err) => {
@@ -422,6 +436,14 @@ export class BaseEntity {
       });
 
       this.endpoint.addCommandHandler("off", () => {
+        this.setCommandLockout("onOff", false);
+        void safeUpdateAttribute(
+          this.endpoint,
+          OnOff.id,
+          "onOff",
+          false,
+          this.platform.log,
+        );
         if (domain === "vacuum") {
           void this.platform.ha
             .callService(domain, "return_to_base", this.entityId)
@@ -431,7 +453,6 @@ export class BaseEntity {
               );
             });
         } else {
-          this.setCommandLockout("onOff", false);
           void this.platform.ha
             .callService(domain, "turn_off", this.entityId)
             .catch((err) => {
@@ -511,10 +532,20 @@ export class BaseEntity {
                 this.setCommandLockout("onOff", false);
                 this.callServiceDebounced("fan", "turn_off", undefined, 40);
               } else if (newMode === 4) {
-                // On
-                void this.platform.ha
-                  .callService("fan", "turn_on", this.entityId)
-                  .catch(() => {});
+                // On / Manual
+                const presets: string[] =
+                  this.state.attributes.preset_modes ?? [];
+                if (presets.includes("manual")) {
+                  void this.platform.ha
+                    .callService("fan", "set_preset_mode", this.entityId, {
+                      preset_mode: "manual",
+                    })
+                    .catch(() => {});
+                } else {
+                  void this.platform.ha
+                    .callService("fan", "turn_on", this.entityId)
+                    .catch(() => {});
+                }
               } else if (newMode === 1) {
                 // Low
                 this.setCommandLockout("percentage", 33);
@@ -1107,20 +1138,26 @@ export class BaseEntity {
               percentage,
               this.platform.log,
             );
-            const fanMode = isOn
-              ? percentage > 66
-                ? 3
-                : percentage > 33
-                  ? 2
-                  : 1
-              : 0;
-            await updateFn(
-              this.endpoint,
-              FanControl.id,
-              "fanMode",
-              fanMode,
-              this.platform.log,
+            const fanMode = fanConverter.presetModeToFanMode(
+              newState.attributes.preset_mode,
+              isOn,
             );
+            if (
+              !isInitialSync &&
+              this.shouldIgnoreStateUpdate("fanMode", fanMode)
+            ) {
+              this.platform.log.debug(
+                `[${this.entityId}] Ignoring HA fan fanMode update due to recent command lockout`,
+              );
+            } else {
+              await updateFn(
+                this.endpoint,
+                FanControl.id,
+                "fanMode",
+                fanMode,
+                this.platform.log,
+              );
+            }
             if (
               this.endpoint.hasAttributeServer(
                 FanControl.id,

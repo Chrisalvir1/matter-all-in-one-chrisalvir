@@ -44,6 +44,7 @@ import {
   MATTER_BRIDGE_VENDOR_NAME,
 } from "../utils/matter-device-identity.js";
 import { lightColor } from "../utils/light-color.js";
+import { fanConverter } from "../converters/fan.converter.js";
 
 type CompositePlatform = {
   log: any;
@@ -118,6 +119,12 @@ export class CompositeDeviceEntity {
   private lastCommands = new Map<string, { value: any; timestamp: number }>();
 
   private isDifferent(attribute: string, requested: any, actual: any): boolean {
+    if (attribute === "onOff") {
+      return Boolean(requested) !== Boolean(actual);
+    }
+    if (attribute === "fanMode") {
+      return Number(requested) !== Number(actual);
+    }
     if (attribute === "hs_color") {
       if (!requested || !actual) return true;
       return (
@@ -409,20 +416,26 @@ export class CompositeDeviceEntity {
             percentage,
             this.platform.log,
           );
-          const fanMode = on
-            ? percentage > 66
-              ? 3
-              : percentage > 33
-                ? 2
-                : 1
-            : 0;
-          await update(
-            endpoint,
-            FanControl.id,
-            "fanMode",
-            fanMode,
-            this.platform.log,
+          const fanMode = fanConverter.presetModeToFanMode(
+            state.attributes.preset_mode,
+            on,
           );
+          if (
+            !initial &&
+            this.shouldIgnoreStateUpdate(entityId, "fanMode", fanMode)
+          ) {
+            this.platform.log.debug(
+              `[${entityId}] Ignoring HA fan fanMode state update due to recent command lockout`,
+            );
+          } else {
+            await update(
+              endpoint,
+              FanControl.id,
+              "fanMode",
+              fanMode,
+              this.platform.log,
+            );
+          }
           if (
             endpoint.hasAttributeServer(FanControl.id, "airflowDirection") &&
             state.attributes.direction

@@ -1,3 +1,15 @@
+## [1.4.26] - 2026-08-20
+
+### Fixed
+- **Control Preciso de Vapor y Velocidad de Difusores y Ventiladores en Apple HomeKit:**
+  - Suscripción completa al atributo `FanControl.percentSetting` en `BaseEntity`, `CompositeDeviceEntity` y `HumidifierEntity`. Los controles deslizantes (0% al 100%, incluyendo 10%) ahora ajustan la velocidad o nivel de vapor en tiempo real hacia Home Assistant (`fan.set_percentage`, `humidifier.set_humidity` o `humidifier.set_mode`).
+- **Soporte Bidireccional de Modos Automático y Manual (`fanMode`):**
+  - Suscripción completa al atributo `FanControl.fanMode` para conmutar entre los modos Automático (5) y Manual/On (4) de HomeKit, invocando `fan.set_preset_mode` y `humidifier.set_mode`. Sincronización continua de `preset_mode` / `mode` de HA hacia HomeKit.
+- **Protección Anti-Rebote en Apagado de Luces de Ventilador (*Command Lockout*):**
+  - Incorporado el comando `onOff` al mecanismo de bloqueo temporal de comandos (*command lockout*) y actualización de estado optimista en `BaseEntity` y `CompositeDeviceEntity`. Evita que ecos de estado intermedios de dispositivos Tuya/BLE vuelvan a encender la luz sola en HomeKit tras apagarla.
+- **Soporte Completo de Luz Kelvin (Blanco Cálido/Frío) en Ventiladores:**
+  - Soporte robusto para llamadas de servicio `color_temp_kelvin` y límites de Mireds físicos en Matter (`colorTempPhysicalMinMireds` / `colorTempPhysicalMaxMireds`), garantizando que la rueda de temperatura de color funcione en todos los ventiladores con luz.
+
 ## [1.4.25] - 2026-08-20
 
 ### Added
