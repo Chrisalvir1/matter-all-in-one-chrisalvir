@@ -1,7 +1,7 @@
 /**
  * Converter utility for lock domain.
  */
-import { HassState } from '../utils/ha-state.js';
+import { HassState } from "../utils/ha-state.js";
 
 export enum MatterLockState {
   NotFullyLocked = 0,
@@ -16,9 +16,9 @@ export const lockConverter = {
    */
   toLockState(state: HassState): MatterLockState {
     switch (state.state) {
-      case 'locked':
+      case "locked":
         return MatterLockState.Locked;
-      case 'unlocked':
+      case "unlocked":
         return MatterLockState.Unlocked;
       default:
         return MatterLockState.NotFullyLocked;
@@ -28,7 +28,7 @@ export const lockConverter = {
   /**
    * Map Matter LockState back to HA service call.
    */
-  toHaService(lockState: MatterLockState): 'lock' | 'unlock' {
-    return lockState === MatterLockState.Locked ? 'lock' : 'unlock';
+  toHaService(lockState: MatterLockState): "lock" | "unlock" {
+    return lockState === MatterLockState.Locked ? "lock" : "unlock";
   },
 };

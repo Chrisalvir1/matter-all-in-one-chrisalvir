@@ -1,7 +1,7 @@
 /**
  * Converter utility for cover domain to Matter 1.5.1 Closure values.
  */
-import { HassState } from '../utils/ha-state.js';
+import { HassState } from "../utils/ha-state.js";
 
 export const coverConverter = {
   /**
@@ -17,8 +17,8 @@ export const coverConverter = {
    * Map HA state to Closure status value.
    */
   toClosureStatus(state: HassState): number {
-    if (state.state === 'closed') return 0;
-    if (state.state === 'open') return 100;
+    if (state.state === "closed") return 0;
+    if (state.state === "open") return 100;
     return state.attributes.current_position ?? 50;
   },
 };

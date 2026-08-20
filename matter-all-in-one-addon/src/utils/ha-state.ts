@@ -47,13 +47,16 @@ export interface HassEvent {
  */
 export function isUnavailable(state: HassState | null | undefined): boolean {
   if (!state) return true;
-  return state.state === 'unavailable' || state.state === 'unknown';
+  return state.state === "unavailable" || state.state === "unknown";
 }
 
 /**
  * Extract numerical state from HA state, returning a default value if not valid.
  */
-export function getNumericState(state: HassState | null | undefined, defaultValue = 0): number {
+export function getNumericState(
+  state: HassState | null | undefined,
+  defaultValue = 0,
+): number {
   if (!state) return defaultValue;
   const num = parseFloat(state.state);
   return isNaN(num) ? defaultValue : num;

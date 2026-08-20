@@ -1,7 +1,7 @@
 /**
  * Thread network credentials manager helper.
  */
-import { safeSetAttribute } from './matter-attributes.js';
+import { safeSetAttribute } from "./matter-attributes.js";
 
 export interface ThreadNetworkCredentials {
   panId: number;
@@ -33,7 +33,17 @@ export class ThreadCredentialsManager {
    */
   public syncWithEndpoint(endpoint: any, clusterId: any) {
     if (!this.activeCredentials) return;
-    safeSetAttribute(endpoint, clusterId, 'channel', this.activeCredentials.channel);
-    safeSetAttribute(endpoint, clusterId, 'panId', this.activeCredentials.panId);
+    safeSetAttribute(
+      endpoint,
+      clusterId,
+      "channel",
+      this.activeCredentials.channel,
+    );
+    safeSetAttribute(
+      endpoint,
+      clusterId,
+      "panId",
+      this.activeCredentials.panId,
+    );
   }
 }

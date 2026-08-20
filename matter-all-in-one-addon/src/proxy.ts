@@ -1,27 +1,33 @@
-import http from 'http';
+import http from "http";
 
 const TARGET_PORT = 8285;
 const PROXY_PORT = 8283;
-const ADMIN_TOKEN = process.env.MATTER_AIO_ADMIN_TOKEN ?? '';
-const ALLOWED_INGRESS_CLIENTS = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1', '172.30.32.2', '::ffff:172.30.32.2']);
+const ADMIN_TOKEN = process.env.MATTER_AIO_ADMIN_TOKEN ?? "";
+const ALLOWED_INGRESS_CLIENTS = new Set([
+  "127.0.0.1",
+  "::1",
+  "::ffff:127.0.0.1",
+  "172.30.32.2",
+  "::ffff:172.30.32.2",
+]);
 
 const server = http.createServer((req, res) => {
-  const remoteAddress = req.socket.remoteAddress ?? '';
+  const remoteAddress = req.socket.remoteAddress ?? "";
   if (!ALLOWED_INGRESS_CLIENTS.has(remoteAddress)) {
-    res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
-    res.end('Forbidden');
+    res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
+    res.end("Forbidden");
     return;
   }
   // Setup standard proxy request to the plugin's actual HTTP server on 8285
   const proxyReq = http.request(
     {
-      host: '127.0.0.1',
+      host: "127.0.0.1",
       port: TARGET_PORT,
       path: req.url,
       method: req.method,
       headers: {
         ...req.headers,
-        ...(ADMIN_TOKEN ? { 'x-matter-aio-token': ADMIN_TOKEN } : {}),
+        ...(ADMIN_TOKEN ? { "x-matter-aio-token": ADMIN_TOKEN } : {}),
       },
     },
     (proxyRes) => {
@@ -32,20 +38,20 @@ const server = http.createServer((req, res) => {
   );
 
   // Handle errors (e.g. target server not started yet)
-  proxyReq.on('error', () => {
-    const url = req.url || '';
-    if (req.method !== 'GET' || url.includes('/api/')) {
-      res.writeHead(503, { 'Content-Type': 'application/json; charset=utf-8' });
+  proxyReq.on("error", () => {
+    const url = req.url || "";
+    if (req.method !== "GET" || url.includes("/api/")) {
+      res.writeHead(503, { "Content-Type": "application/json; charset=utf-8" });
       res.end(
         JSON.stringify({
           success: false,
-          error: 'El servicio todavía está iniciando.',
+          error: "El servicio todavía está iniciando.",
         }),
       );
       return;
     }
     // If the plugin server is down (ECONNREFUSED), serve the loading page for GET requests.
-    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
     res.end(getLoadingHtml());
   });
 
@@ -53,8 +59,10 @@ const server = http.createServer((req, res) => {
   req.pipe(proxyReq);
 });
 
-server.listen(PROXY_PORT, '0.0.0.0', () => {
-  console.log(`[Proxy] Ingress-only listener on port ${PROXY_PORT}, proxying requests to port ${TARGET_PORT}`);
+server.listen(PROXY_PORT, "0.0.0.0", () => {
+  console.log(
+    `[Proxy] Ingress-only listener on port ${PROXY_PORT}, proxying requests to port ${TARGET_PORT}`,
+  );
 });
 
 function getLoadingHtml() {

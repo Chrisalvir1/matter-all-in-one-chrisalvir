@@ -1,9 +1,11 @@
 /** Identity shown by the virtual Matter accessory. */
 export const MATTER_BRIDGE_VENDOR_ID = 0xfff1;
-export const MATTER_BRIDGE_VENDOR_NAME = 'Matter All-in-One Chrisalvir';
+export const MATTER_BRIDGE_VENDOR_NAME = "Matter All-in-One Chrisalvir";
 
 function nonEmptyString(value: unknown): string | undefined {
-  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : undefined;
 }
 
 /** Matter Basic Information serialNumber is limited to 32 characters. */
@@ -31,11 +33,17 @@ export function getMatterSerialNumber(platform: any, entityId: string): string {
   if (serial) return toMatterSerial(serial);
 
   const identifier = Array.isArray(deviceRegistry?.identifiers)
-    ? deviceRegistry.identifiers.map((entry: unknown) => Array.isArray(entry) ? nonEmptyString(entry[1]) : undefined).find(Boolean)
+    ? deviceRegistry.identifiers
+        .map((entry: unknown) =>
+          Array.isArray(entry) ? nonEmptyString(entry[1]) : undefined,
+        )
+        .find(Boolean)
     : undefined;
   if (identifier) return toMatterSerial(identifier);
 
-  return toMatterSerial(`ha-${entityRegistry?.id ?? entityId.replaceAll('.', '_')}`);
+  return toMatterSerial(
+    `ha-${entityRegistry?.id ?? entityId.replaceAll(".", "_")}`,
+  );
 }
 
 /**
@@ -44,7 +52,11 @@ export function getMatterSerialNumber(platform: any, entityId: string): string {
  *
  * HomeKit shows this value in Settings → Device → Model.
  */
-export function getHaDeviceModel(platform: any, entityId: string, fallback: string): string {
+export function getHaDeviceModel(
+  platform: any,
+  entityId: string,
+  fallback: string,
+): string {
   const entityRegistry = platform?.ha?.hassEntities?.get?.(entityId);
   const deviceRegistry = entityRegistry?.device_id
     ? platform?.ha?.hassDevices?.get?.(entityRegistry.device_id)
@@ -71,7 +83,9 @@ export function getHaDeviceModel(platform: any, entityId: string, fallback: stri
  *
  * HomeKit shows this value in Settings → Device → Manufacturer.
  */
-export function getHaDeviceManufacturer(_platform?: any, _entityId?: string): string {
+export function getHaDeviceManufacturer(
+  _platform?: any,
+  _entityId?: string,
+): string {
   return MATTER_BRIDGE_VENDOR_NAME;
 }
-

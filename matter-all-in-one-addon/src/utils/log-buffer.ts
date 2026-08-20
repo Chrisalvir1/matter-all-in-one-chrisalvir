@@ -9,18 +9,19 @@ const logBuffer: string[] = [];
 
 // Regular expression to strip ANSI color codes
 // eslint-disable-next-line no-control-regex
-const ANSI_REGEX = /[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g;
+const ANSI_REGEX =
+  /[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g;
 
 function appendToBuffer(chunk: any) {
-  const text = typeof chunk === 'string' ? chunk : chunk.toString('utf8');
-  const lines = text.split('\n');
+  const text = typeof chunk === "string" ? chunk : chunk.toString("utf8");
+  const lines = text.split("\n");
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    const cleanLine = line.replace(ANSI_REGEX, '');
+    const cleanLine = line.replace(ANSI_REGEX, "");
 
     // Skip empty trailing lines from splits unless they are meaningful
-    if (i === lines.length - 1 && cleanLine === '') continue;
+    if (i === lines.length - 1 && cleanLine === "") continue;
 
     logBuffer.push(cleanLine);
   }
@@ -35,12 +36,20 @@ function appendToBuffer(chunk: any) {
 const originalStdoutWrite = process.stdout.write.bind(process.stdout);
 const originalStderrWrite = process.stderr.write.bind(process.stderr);
 
-process.stdout.write = function(chunk: any, encoding?: any, callback?: any): boolean {
+process.stdout.write = function (
+  chunk: any,
+  encoding?: any,
+  callback?: any,
+): boolean {
   appendToBuffer(chunk);
   return originalStdoutWrite(chunk, encoding, callback);
 } as any;
 
-process.stderr.write = function(chunk: any, encoding?: any, callback?: any): boolean {
+process.stderr.write = function (
+  chunk: any,
+  encoding?: any,
+  callback?: any,
+): boolean {
   appendToBuffer(chunk);
   return originalStderrWrite(chunk, encoding, callback);
 } as any;

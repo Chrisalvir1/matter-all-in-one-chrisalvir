@@ -1,21 +1,21 @@
 /**
  * Matterbridge and Endpoint mock APIs.
  */
-import { vi } from 'vitest';
+import { vi } from "vitest";
 
 export class MockMatterbridgeEndpoint {
   public deviceTypes: any[];
   public options: any;
   public deviceType: number = 0;
-  public deviceName: string = '';
-  public uniqueId: string = '';
-  public serialNumber: string = '';
+  public deviceName: string = "";
+  public uniqueId: string = "";
+  public serialNumber: string = "";
   public vendorId: number = 0;
-  public vendorName: string = '';
+  public vendorName: string = "";
   public productId: number = 0;
-  public productName: string = '';
+  public productName: string = "";
   public softwareVersion: number = 0;
-  public softwareVersionString: string = '';
+  public softwareVersionString: string = "";
   public behaviors = { require: (...args: any[]) => {} };
   public clusterServers = new Set<number>();
   public attributes = new Map<string, any>();
@@ -45,8 +45,15 @@ export class MockMatterbridgeEndpoint {
     return this;
   }
 
-  public addChildDeviceTypeWithClusterServer(id: string, deviceTypes: any[], clusterIds: number[]) {
-    const child = new MockMatterbridgeEndpoint(Array.isArray(deviceTypes) ? deviceTypes : [deviceTypes], { id });
+  public addChildDeviceTypeWithClusterServer(
+    id: string,
+    deviceTypes: any[],
+    clusterIds: number[],
+  ) {
+    const child = new MockMatterbridgeEndpoint(
+      Array.isArray(deviceTypes) ? deviceTypes : [deviceTypes],
+      { id },
+    );
     child.addClusterServers(clusterIds);
     this.children.set(id, child);
     return child;
@@ -60,7 +67,13 @@ export class MockMatterbridgeEndpoint {
     return this.children.get(id);
   }
 
-  public createDefaultBridgedDeviceBasicInformationClusterServer(uniqueName: string, serialNumber: string, vendorId: number, vendorName: string, productLabel: string) {}
+  public createDefaultBridgedDeviceBasicInformationClusterServer(
+    uniqueName: string,
+    serialNumber: string,
+    vendorId: number,
+    vendorName: string,
+    productLabel: string,
+  ) {}
 
   public hasClusterServer(cluster: any): boolean {
     return this.clusterServers.has(cluster.id);
@@ -75,7 +88,10 @@ export class MockMatterbridgeEndpoint {
   public getClusterServer(cluster: any): any {
     if (this.clusterServers.has(cluster.id)) {
       return {
-        addCommandHandler: (commandName: string, callback: (...args: any[]) => any) => {
+        addCommandHandler: (
+          commandName: string,
+          callback: (...args: any[]) => any,
+        ) => {
           this.commandHandlers.set(commandName, callback);
         },
         setBarrierPositionAttribute: (value: any) => {
@@ -94,24 +110,43 @@ export class MockMatterbridgeEndpoint {
   }
 
   public setAttribute(clusterId: any, attributeName: string, value: any) {
-    const id = typeof clusterId === 'object' && clusterId !== null ? clusterId.id : clusterId;
+    const id =
+      typeof clusterId === "object" && clusterId !== null
+        ? clusterId.id
+        : clusterId;
     this.attributes.set(`${id}:${attributeName}`, value);
   }
 
   public updateAttribute(clusterId: any, attributeName: string, value: any) {
-    const id = typeof clusterId === 'object' && clusterId !== null ? clusterId.id : clusterId;
+    const id =
+      typeof clusterId === "object" && clusterId !== null
+        ? clusterId.id
+        : clusterId;
     this.attributes.set(`${id}:${attributeName}`, value);
   }
 
   public getAttribute(clusterId: any, attributeName: string): any {
-    const id = typeof clusterId === 'object' && clusterId !== null ? clusterId.id : clusterId;
+    const id =
+      typeof clusterId === "object" && clusterId !== null
+        ? clusterId.id
+        : clusterId;
     return this.attributes.get(`${id}:${attributeName}`);
   }
 
-  public attributeSubscriptions = new Map<string, ((newValue: any, oldValue: any, context?: any) => any)[]>();
+  public attributeSubscriptions = new Map<
+    string,
+    ((newValue: any, oldValue: any, context?: any) => any)[]
+  >();
 
-  public subscribeAttribute(clusterId: any, attributeName: string, callback: (...args: any[]) => any) {
-    const id = typeof clusterId === 'object' && clusterId !== null ? clusterId.id : clusterId;
+  public subscribeAttribute(
+    clusterId: any,
+    attributeName: string,
+    callback: (...args: any[]) => any,
+  ) {
+    const id =
+      typeof clusterId === "object" && clusterId !== null
+        ? clusterId.id
+        : clusterId;
     const key = `${id}:${attributeName}`;
     const list = this.attributeSubscriptions.get(key) ?? [];
     list.push(callback);
@@ -119,8 +154,16 @@ export class MockMatterbridgeEndpoint {
     return this;
   }
 
-  public async invokeAttributeChange(clusterId: any, attributeName: string, newValue: any, oldValue?: any) {
-    const id = typeof clusterId === 'object' && clusterId !== null ? clusterId.id : clusterId;
+  public async invokeAttributeChange(
+    clusterId: any,
+    attributeName: string,
+    newValue: any,
+    oldValue?: any,
+  ) {
+    const id =
+      typeof clusterId === "object" && clusterId !== null
+        ? clusterId.id
+        : clusterId;
     const key = `${id}:${attributeName}`;
     const list = this.attributeSubscriptions.get(key);
     if (list) {
@@ -130,18 +173,21 @@ export class MockMatterbridgeEndpoint {
     }
   }
 
-  public addCommandHandler(commandName: string, callback: (...args: any[]) => any) {
+  public addCommandHandler(
+    commandName: string,
+    callback: (...args: any[]) => any,
+  ) {
     this.commandHandlers.set(commandName, callback);
   }
 
   public async invokeCommand(commandName: string, data?: any) {
     let handler = this.commandHandlers.get(commandName);
-    if (!handler && commandName.includes('.')) {
-      handler = this.commandHandlers.get(commandName.split('.').pop()!);
+    if (!handler && commandName.includes(".")) {
+      handler = this.commandHandlers.get(commandName.split(".").pop()!);
     }
-    if (!handler && !commandName.includes('.')) {
+    if (!handler && !commandName.includes(".")) {
       for (const [key, h] of this.commandHandlers.entries()) {
-        if (key.endsWith('.' + commandName)) {
+        if (key.endsWith("." + commandName)) {
           handler = h;
           break;
         }
@@ -154,9 +200,9 @@ export class MockMatterbridgeEndpoint {
 }
 
 export const mockMatterbridge = {
-  matterbridgeVersion: '3.9.0',
-  systemInformation: { nodeVersion: 'v22.0.0' },
-  matterbridgePluginDirectory: '/tmp/matterbridge-plugins',
+  matterbridgeVersion: "3.9.0",
+  systemInformation: { nodeVersion: "v22.0.0" },
+  matterbridgePluginDirectory: "/tmp/matterbridge-plugins",
   addBridgedEndpoint: vi.fn(),
   removeBridgedEndpoint: vi.fn(),
 };
@@ -170,12 +216,12 @@ export const mockLog = {
   logLevel: 0,
 };
 
-vi.mock('matterbridge', () => {
+vi.mock("matterbridge", () => {
   const makeMockDeviceType = (code: number, name: string) => ({
     code,
     name,
-    deviceClass: 'Simple',
-    category: 'Utility',
+    deviceClass: "Simple",
+    category: "Utility",
   });
 
   return {
@@ -212,40 +258,48 @@ vi.mock('matterbridge', () => {
       }
     },
     MatterbridgeEndpoint: MockMatterbridgeEndpoint,
-    onOffLight: makeMockDeviceType(0x0100, 'onOffLight'),
-    dimmableLight: makeMockDeviceType(0x0101, 'dimmableLight'),
-    colorTemperatureLight: makeMockDeviceType(0x010c, 'colorTemperatureLight'),
-    extendedColorLight: makeMockDeviceType(0x010d, 'extendedColorLight'),
-    onOffPlugInUnit: makeMockDeviceType(0x010a, 'onOffPlugInUnit'),
-    dimmablePlugInUnit: makeMockDeviceType(0x010b, 'dimmablePlugInUnit'),
-    doorLock: makeMockDeviceType(0x000a, 'doorLock'),
-    thermostat: makeMockDeviceType(0x0301, 'thermostat'),
-    windowCovering: makeMockDeviceType(0x0202, 'windowCovering'),
-    temperatureSensor: makeMockDeviceType(0x0302, 'temperatureSensor'),
-    humiditySensor: makeMockDeviceType(0x0307, 'humiditySensor'),
-    contactSensor: makeMockDeviceType(0x0015, 'contactSensor'),
-    occupancySensor: makeMockDeviceType(0x0107, 'occupancySensor'),
-    pressureSensor: makeMockDeviceType(0x0305, 'pressureSensor'),
-    flowSensor: makeMockDeviceType(0x0306, 'flowSensor'),
-    lightSensor: makeMockDeviceType(0x0106, 'lightSensor'),
-    roboticVacuumCleaner: makeMockDeviceType(0x0074, 'roboticVacuumCleaner'),
-    basicVideoPlayer: makeMockDeviceType(0x0028, 'basicVideoPlayer'),
-    fan: makeMockDeviceType(0x002b, 'fan'),
-    cooktop: makeMockDeviceType(0x0077, 'cooktop'),
-    oven: makeMockDeviceType(0x0078, 'oven'),
-    smokeCoAlarm: makeMockDeviceType(0x0076, 'smokeCoAlarm'),
-    waterLeakDetector: makeMockDeviceType(0x007b, 'waterLeakDetector'),
+    onOffLight: makeMockDeviceType(0x0100, "onOffLight"),
+    dimmableLight: makeMockDeviceType(0x0101, "dimmableLight"),
+    colorTemperatureLight: makeMockDeviceType(0x010c, "colorTemperatureLight"),
+    extendedColorLight: makeMockDeviceType(0x010d, "extendedColorLight"),
+    onOffPlugInUnit: makeMockDeviceType(0x010a, "onOffPlugInUnit"),
+    dimmablePlugInUnit: makeMockDeviceType(0x010b, "dimmablePlugInUnit"),
+    doorLock: makeMockDeviceType(0x000a, "doorLock"),
+    thermostat: makeMockDeviceType(0x0301, "thermostat"),
+    windowCovering: makeMockDeviceType(0x0202, "windowCovering"),
+    temperatureSensor: makeMockDeviceType(0x0302, "temperatureSensor"),
+    humiditySensor: makeMockDeviceType(0x0307, "humiditySensor"),
+    contactSensor: makeMockDeviceType(0x0015, "contactSensor"),
+    occupancySensor: makeMockDeviceType(0x0107, "occupancySensor"),
+    pressureSensor: makeMockDeviceType(0x0305, "pressureSensor"),
+    flowSensor: makeMockDeviceType(0x0306, "flowSensor"),
+    lightSensor: makeMockDeviceType(0x0106, "lightSensor"),
+    roboticVacuumCleaner: makeMockDeviceType(0x0074, "roboticVacuumCleaner"),
+    basicVideoPlayer: makeMockDeviceType(0x0028, "basicVideoPlayer"),
+    fan: makeMockDeviceType(0x002b, "fan"),
+    cooktop: makeMockDeviceType(0x0077, "cooktop"),
+    oven: makeMockDeviceType(0x0078, "oven"),
+    smokeCoAlarm: makeMockDeviceType(0x0076, "smokeCoAlarm"),
+    waterLeakDetector: makeMockDeviceType(0x007b, "waterLeakDetector"),
   };
 });
 
 // Keep entity imports from initializing the real Matter runtime during unit
 // tests. Some sandboxed CI environments deny uv_uptime before tests can skip
 // network-only cases.
-vi.mock('matterbridge/devices', () => ({
+vi.mock("matterbridge/devices", () => ({
   RoboticVacuumCleaner: class extends MockMatterbridgeEndpoint {
-    constructor(name: string, serial: string, mode: string, _runMode?: number, _runModes?: any[], _cleanMode?: number, cleanModes?: any[]) {
-      super([{ code: 0x0074, name: 'roboticVacuumCleaner' }], {
-        id: `${name.replaceAll(' ', '')}-${serial.replaceAll(' ', '')}`,
+    constructor(
+      name: string,
+      serial: string,
+      mode: string,
+      _runMode?: number,
+      _runModes?: any[],
+      _cleanMode?: number,
+      cleanModes?: any[],
+    ) {
+      super([{ code: 0x0074, name: "roboticVacuumCleaner" }], {
+        id: `${name.replaceAll(" ", "")}-${serial.replaceAll(" ", "")}`,
         mode,
       });
       (this as any).deviceName = name;

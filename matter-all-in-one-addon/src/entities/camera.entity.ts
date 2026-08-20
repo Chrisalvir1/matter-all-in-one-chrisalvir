@@ -1,6 +1,6 @@
-import { BaseEntity } from './base.entity.js';
-import { ClusterId } from 'matterbridge/matter/types';
-import { HassState } from '../utils/ha-state.js';
+import { BaseEntity } from "./base.entity.js";
+import { ClusterId } from "matterbridge/matter/types";
+import { HassState } from "../utils/ha-state.js";
 
 const CameraAvStreamManagementId = 0x0551 as any as ClusterId;
 const WebRtcTransportProviderId = 0x0553 as any as ClusterId;

@@ -21,12 +21,21 @@
  */
 /* eslint-disable jsdoc/reject-any-type */
 
-import { EventEmitter } from 'node:events';
-import { readFileSync } from 'node:fs';
+import { EventEmitter } from "node:events";
+import { readFileSync } from "node:fs";
 
-import { AnsiLogger, CYAN, db, debugStringify, er, LogLevel, rs, TimestampFormat } from 'matterbridge/logger';
-import { hasParameter } from 'matterbridge/utils';
-import WebSocket, { ErrorEvent } from 'ws';
+import {
+  AnsiLogger,
+  CYAN,
+  db,
+  debugStringify,
+  er,
+  LogLevel,
+  rs,
+  TimestampFormat,
+} from "matterbridge/logger";
+import { hasParameter } from "matterbridge/utils";
+import WebSocket, { ErrorEvent } from "ws";
 
 export type DeviceId = string;
 export type EntityId = string;
@@ -182,18 +191,18 @@ export interface HassStateSelectAttributes {
  * await ha.callService('select', SelectService.SELECT_NEXT, 'select.living_room_mode', { cycle: false });
  */
 export enum SelectService {
-  SELECT_FIRST = 'select_first',
-  SELECT_LAST = 'select_last',
-  SELECT_NEXT = 'select_next',
-  SELECT_OPTION = 'select_option',
-  SELECT_PREVIOUS = 'select_previous',
+  SELECT_FIRST = "select_first",
+  SELECT_LAST = "select_last",
+  SELECT_NEXT = "select_next",
+  SELECT_OPTION = "select_option",
+  SELECT_PREVIOUS = "select_previous",
 }
 
 /** Select service/attribute keys for the select domain. */
 export enum SelectAttribute {
-  CYCLE = 'cycle',
-  OPTIONS = 'options',
-  OPTION = 'option',
+  CYCLE = "cycle",
+  OPTIONS = "options",
+  OPTION = "option",
 }
 
 /**
@@ -240,151 +249,151 @@ export interface HassStateMediaPlayerAttributes {
 
 /** Media player services for the media_player domain. */
 export enum MediaPlayerService {
-  BROWSE_MEDIA = 'browse_media',
-  CLEAR_PLAYLIST = 'clear_playlist',
-  JOIN = 'join',
-  MEDIA_NEXT_TRACK = 'media_next_track',
-  MEDIA_PAUSE = 'media_pause',
-  MEDIA_PLAY = 'media_play',
-  MEDIA_PLAY_PAUSE = 'media_play_pause',
-  MEDIA_PREVIOUS_TRACK = 'media_previous_track',
-  MEDIA_SEEK = 'media_seek',
-  MEDIA_STOP = 'media_stop',
-  PLAY_MEDIA = 'play_media',
-  REPEAT_SET = 'repeat_set',
-  SEARCH_MEDIA = 'search_media',
-  SELECT_SOUND_MODE = 'select_sound_mode',
-  SELECT_SOURCE = 'select_source',
-  SHUFFLE_SET = 'shuffle_set',
-  TOGGLE = 'toggle',
-  TURN_OFF = 'turn_off',
-  TURN_ON = 'turn_on',
-  UNJOIN = 'unjoin',
-  VOLUME_DOWN = 'volume_down',
-  VOLUME_MUTE = 'volume_mute',
-  VOLUME_SET = 'volume_set',
-  VOLUME_UP = 'volume_up',
+  BROWSE_MEDIA = "browse_media",
+  CLEAR_PLAYLIST = "clear_playlist",
+  JOIN = "join",
+  MEDIA_NEXT_TRACK = "media_next_track",
+  MEDIA_PAUSE = "media_pause",
+  MEDIA_PLAY = "media_play",
+  MEDIA_PLAY_PAUSE = "media_play_pause",
+  MEDIA_PREVIOUS_TRACK = "media_previous_track",
+  MEDIA_SEEK = "media_seek",
+  MEDIA_STOP = "media_stop",
+  PLAY_MEDIA = "play_media",
+  REPEAT_SET = "repeat_set",
+  SEARCH_MEDIA = "search_media",
+  SELECT_SOUND_MODE = "select_sound_mode",
+  SELECT_SOURCE = "select_source",
+  SHUFFLE_SET = "shuffle_set",
+  TOGGLE = "toggle",
+  TURN_OFF = "turn_off",
+  TURN_ON = "turn_on",
+  UNJOIN = "unjoin",
+  VOLUME_DOWN = "volume_down",
+  VOLUME_MUTE = "volume_mute",
+  VOLUME_SET = "volume_set",
+  VOLUME_UP = "volume_up",
 }
 
 /** Media player attribute keys for the media_player domain. */
 export enum MediaPlayerAttribute {
-  APP_ID = 'app_id',
-  APP_NAME = 'app_name',
-  ENTITY_PICTURE_LOCAL = 'entity_picture_local',
-  GROUP_MEMBERS = 'group_members',
-  INPUT_SOURCE = 'source',
-  INPUT_SOURCE_LIST = 'source_list',
-  MEDIA_ALBUM_ARTIST = 'media_album_artist',
-  MEDIA_ALBUM_NAME = 'media_album_name',
-  MEDIA_ANNOUNCE = 'announce',
-  MEDIA_ARTIST = 'media_artist',
-  MEDIA_CHANNEL = 'media_channel',
-  MEDIA_CONTENT_ID = 'media_content_id',
-  MEDIA_CONTENT_TYPE = 'media_content_type',
-  MEDIA_DURATION = 'media_duration',
-  MEDIA_ENQUEUE = 'enqueue',
-  MEDIA_EPISODE = 'media_episode',
-  MEDIA_EXTRA = 'extra',
-  MEDIA_FILTER_CLASSES = 'media_filter_classes',
-  MEDIA_IMAGE_REMOTELY_ACCESSIBLE = 'media_image_remotely_accessible',
-  MEDIA_IMAGE_URL = 'media_image_url',
-  MEDIA_PLAYLIST = 'media_playlist',
-  MEDIA_POSITION = 'media_position',
-  MEDIA_POSITION_UPDATED_AT = 'media_position_updated_at',
-  MEDIA_REPEAT = 'repeat',
-  MEDIA_SEARCH_QUERY = 'search_query',
-  MEDIA_SEASON = 'media_season',
-  MEDIA_SEEK_POSITION = 'seek_position',
-  MEDIA_SERIES_TITLE = 'media_series_title',
-  MEDIA_SHUFFLE = 'shuffle',
-  MEDIA_TITLE = 'media_title',
-  MEDIA_TRACK = 'media_track',
-  MEDIA_VOLUME_LEVEL = 'volume_level',
-  MEDIA_VOLUME_MUTED = 'is_volume_muted',
-  SOUND_MODE = 'sound_mode',
-  SOUND_MODE_LIST = 'sound_mode_list',
+  APP_ID = "app_id",
+  APP_NAME = "app_name",
+  ENTITY_PICTURE_LOCAL = "entity_picture_local",
+  GROUP_MEMBERS = "group_members",
+  INPUT_SOURCE = "source",
+  INPUT_SOURCE_LIST = "source_list",
+  MEDIA_ALBUM_ARTIST = "media_album_artist",
+  MEDIA_ALBUM_NAME = "media_album_name",
+  MEDIA_ANNOUNCE = "announce",
+  MEDIA_ARTIST = "media_artist",
+  MEDIA_CHANNEL = "media_channel",
+  MEDIA_CONTENT_ID = "media_content_id",
+  MEDIA_CONTENT_TYPE = "media_content_type",
+  MEDIA_DURATION = "media_duration",
+  MEDIA_ENQUEUE = "enqueue",
+  MEDIA_EPISODE = "media_episode",
+  MEDIA_EXTRA = "extra",
+  MEDIA_FILTER_CLASSES = "media_filter_classes",
+  MEDIA_IMAGE_REMOTELY_ACCESSIBLE = "media_image_remotely_accessible",
+  MEDIA_IMAGE_URL = "media_image_url",
+  MEDIA_PLAYLIST = "media_playlist",
+  MEDIA_POSITION = "media_position",
+  MEDIA_POSITION_UPDATED_AT = "media_position_updated_at",
+  MEDIA_REPEAT = "repeat",
+  MEDIA_SEARCH_QUERY = "search_query",
+  MEDIA_SEASON = "media_season",
+  MEDIA_SEEK_POSITION = "seek_position",
+  MEDIA_SERIES_TITLE = "media_series_title",
+  MEDIA_SHUFFLE = "shuffle",
+  MEDIA_TITLE = "media_title",
+  MEDIA_TRACK = "media_track",
+  MEDIA_VOLUME_LEVEL = "volume_level",
+  MEDIA_VOLUME_MUTED = "is_volume_muted",
+  SOUND_MODE = "sound_mode",
+  SOUND_MODE_LIST = "sound_mode_list",
 }
 
 /** State of media player entities. */
 export enum MediaPlayerState {
-  OFF = 'off',
-  ON = 'on',
-  IDLE = 'idle',
-  PLAYING = 'playing',
-  PAUSED = 'paused',
-  STANDBY = 'standby',
-  BUFFERING = 'buffering',
+  OFF = "off",
+  ON = "on",
+  IDLE = "idle",
+  PLAYING = "playing",
+  PAUSED = "paused",
+  STANDBY = "standby",
+  BUFFERING = "buffering",
 }
 
 /** Media class for media player entities. */
 export enum MediaClass {
-  ALBUM = 'album',
-  APP = 'app',
-  ARTIST = 'artist',
-  CHANNEL = 'channel',
-  COMPOSER = 'composer',
-  CONTRIBUTING_ARTIST = 'contributing_artist',
-  DIRECTORY = 'directory',
-  EPISODE = 'episode',
-  GAME = 'game',
-  GENRE = 'genre',
-  IMAGE = 'image',
-  MOVIE = 'movie',
-  MUSIC = 'music',
-  PLAYLIST = 'playlist',
-  PODCAST = 'podcast',
-  SEASON = 'season',
-  TRACK = 'track',
-  TV_SHOW = 'tv_show',
-  URL = 'url',
-  VIDEO = 'video',
+  ALBUM = "album",
+  APP = "app",
+  ARTIST = "artist",
+  CHANNEL = "channel",
+  COMPOSER = "composer",
+  CONTRIBUTING_ARTIST = "contributing_artist",
+  DIRECTORY = "directory",
+  EPISODE = "episode",
+  GAME = "game",
+  GENRE = "genre",
+  IMAGE = "image",
+  MOVIE = "movie",
+  MUSIC = "music",
+  PLAYLIST = "playlist",
+  PODCAST = "podcast",
+  SEASON = "season",
+  TRACK = "track",
+  TV_SHOW = "tv_show",
+  URL = "url",
+  VIDEO = "video",
 }
 
 /** Media type for media player entities. */
 export enum MediaType {
-  ALBUM = 'album',
-  APP = 'app',
-  APPS = 'apps',
-  ARTIST = 'artist',
-  CHANNEL = 'channel',
-  CHANNELS = 'channels',
-  COMPOSER = 'composer',
-  CONTRIBUTING_ARTIST = 'contributing_artist',
-  EPISODE = 'episode',
-  GAME = 'game',
-  GENRE = 'genre',
-  IMAGE = 'image',
-  MOVIE = 'movie',
-  MUSIC = 'music',
-  PLAYLIST = 'playlist',
-  PODCAST = 'podcast',
-  SEASON = 'season',
-  TRACK = 'track',
-  TVSHOW = 'tvshow',
-  URL = 'url',
-  VIDEO = 'video',
+  ALBUM = "album",
+  APP = "app",
+  APPS = "apps",
+  ARTIST = "artist",
+  CHANNEL = "channel",
+  CHANNELS = "channels",
+  COMPOSER = "composer",
+  CONTRIBUTING_ARTIST = "contributing_artist",
+  EPISODE = "episode",
+  GAME = "game",
+  GENRE = "genre",
+  IMAGE = "image",
+  MOVIE = "movie",
+  MUSIC = "music",
+  PLAYLIST = "playlist",
+  PODCAST = "podcast",
+  SEASON = "season",
+  TRACK = "track",
+  TVSHOW = "tvshow",
+  URL = "url",
+  VIDEO = "video",
 }
 
 /** Repeat mode for media player entities. */
 export enum RepeatMode {
-  ALL = 'all',
-  OFF = 'off',
-  ONE = 'one',
+  ALL = "all",
+  OFF = "off",
+  ONE = "one",
 }
 
 /** Device class for media players. */
 export enum MediaPlayerDeviceClass {
-  TV = 'tv',
-  SPEAKER = 'speaker',
-  RECEIVER = 'receiver',
+  TV = "tv",
+  SPEAKER = "speaker",
+  RECEIVER = "receiver",
 }
 
 /** Enqueue types for playing media. */
 export enum MediaPlayerEnqueue {
-  ADD = 'add',
-  NEXT = 'next',
-  PLAY = 'play',
-  REPLACE = 'replace',
+  ADD = "add",
+  NEXT = "next",
+  PLAY = "play",
+  REPLACE = "replace",
 }
 
 /** Supported features of the media player entity. */
@@ -444,49 +453,52 @@ export enum LightEntityFeature {
  * Enum representing the possible color modes of a Home Assistant light entity.
  */
 export enum ColorMode {
-  UNKNOWN = 'unknown', // """Ambiguous color mode"""
-  ONOFF = 'onoff', // """Must be the only supported mode"""
-  BRIGHTNESS = 'brightness', // """Must be the only supported mode"""
-  COLOR_TEMP = 'color_temp',
-  HS = 'hs',
-  XY = 'xy',
-  RGB = 'rgb',
-  RGBW = 'rgbw',
-  RGBWW = 'rgbww',
-  WHITE = 'white',
+  UNKNOWN = "unknown", // """Ambiguous color mode"""
+  ONOFF = "onoff", // """Must be the only supported mode"""
+  BRIGHTNESS = "brightness", // """Must be the only supported mode"""
+  COLOR_TEMP = "color_temp",
+  HS = "hs",
+  XY = "xy",
+  RGB = "rgb",
+  RGBW = "rgbw",
+  RGBWW = "rgbww",
+  WHITE = "white",
 }
 
 // Color mode of the light
-export const ATTR_COLOR_MODE = 'color_mode';
+export const ATTR_COLOR_MODE = "color_mode";
 // List of color modes supported by the light
-export const ATTR_SUPPORTED_COLOR_MODES = 'supported_color_modes';
+export const ATTR_SUPPORTED_COLOR_MODES = "supported_color_modes";
 // Float that represents transition time in seconds to make change.
-export const ATTR_TRANSITION = 'transition';
+export const ATTR_TRANSITION = "transition";
 // Lists holding color values
-export const ATTR_RGB_COLOR = 'rgb_color';
-export const ATTR_RGBW_COLOR = 'rgbw_color';
-export const ATTR_RGBWW_COLOR = 'rgbww_color';
-export const ATTR_XY_COLOR = 'xy_color';
-export const ATTR_HS_COLOR = 'hs_color';
-export const ATTR_COLOR_TEMP_KELVIN = 'color_temp_kelvin';
-export const ATTR_MIN_COLOR_TEMP_KELVIN = 'min_color_temp_kelvin';
-export const ATTR_MAX_COLOR_TEMP_KELVIN = 'max_color_temp_kelvin';
-export const ATTR_COLOR_NAME = 'color_name';
-export const ATTR_WHITE = 'white';
+export const ATTR_RGB_COLOR = "rgb_color";
+export const ATTR_RGBW_COLOR = "rgbw_color";
+export const ATTR_RGBWW_COLOR = "rgbww_color";
+export const ATTR_XY_COLOR = "xy_color";
+export const ATTR_HS_COLOR = "hs_color";
+export const ATTR_COLOR_TEMP_KELVIN = "color_temp_kelvin";
+export const ATTR_MIN_COLOR_TEMP_KELVIN = "min_color_temp_kelvin";
+export const ATTR_MAX_COLOR_TEMP_KELVIN = "max_color_temp_kelvin";
+export const ATTR_COLOR_NAME = "color_name";
+export const ATTR_WHITE = "white";
 // Default to the Philips Hue value that HA has always assumed
 // https://developers.meethue.com/documentation/core-concepts
 export const DEFAULT_MIN_KELVIN = 2000; // 500 mireds
 export const DEFAULT_MAX_KELVIN = 6535; // 153 mireds
 
-export const DIRECTION_FORWARD = 'forward';
-export const DIRECTION_REVERSE = 'reverse';
+export const DIRECTION_FORWARD = "forward";
+export const DIRECTION_REVERSE = "reverse";
 
 /**
  * Interface representing the attributes of a Home Assistant fan entity's state.
  */
 export interface HassStateFanAttributes {
-  preset_modes: ('auto' | 'low' | 'medium' | 'high' | 'natural_wind' | 'sleep_wind')[] | null; // List of supported fan modes
-  preset_mode: 'auto' | 'low' | 'medium' | 'high' | 'natural_wind' | 'sleep_wind' | null; // Current preset mode of the fan (e.g., "auto") but also the state of the fan entity
+  preset_modes:
+    | ("auto" | "low" | "medium" | "high" | "natural_wind" | "sleep_wind")[]
+    | null; // List of supported fan modes
+  preset_mode:
+    "auto" | "low" | "medium" | "high" | "natural_wind" | "sleep_wind" | null; // Current preset mode of the fan (e.g., "auto") but also the state of the fan entity
   percentage: number | null; // Current speed setting. Default is 0.
   direction: typeof DIRECTION_FORWARD | typeof DIRECTION_REVERSE | null; // Current direction of the fan
   oscillating: boolean | null; // Whether the fan is oscillating
@@ -523,16 +535,16 @@ export enum ValveEntityFeature {
 /** Device class for valve. */
 export enum ValveDeviceClass {
   // Refer to the valve dev docs for device class descriptions
-  WATER = 'water',
-  GAS = 'gas',
+  WATER = "water",
+  GAS = "gas",
 }
 
 /** State of Valve entities. */
 export enum ValveState {
-  OPENING = 'opening',
-  CLOSING = 'closing',
-  CLOSED = 'closed',
-  OPEN = 'open',
+  OPENING = "opening",
+  CLOSING = "closing",
+  CLOSED = "closed",
+  OPEN = "open",
 }
 
 /**
@@ -567,12 +579,12 @@ export enum VacuumEntityFeature {
 }
 /** Vacuum activity states. */
 export enum VacuumActivity {
-  CLEANING = 'cleaning',
-  DOCKED = 'docked',
-  IDLE = 'idle',
-  PAUSED = 'paused',
-  RETURNING = 'returning',
-  ERROR = 'error',
+  CLEANING = "cleaning",
+  DOCKED = "docked",
+  IDLE = "idle",
+  PAUSED = "paused",
+  RETURNING = "returning",
+  ERROR = "error",
 }
 
 /**
@@ -582,10 +594,50 @@ export interface HassStateClimateAttributes {
   hvac_modes: HVACMode[]; // List of supported HVAC modes. Fixed set of strings defined by Home Assistant.
   hvac_mode: HVACMode | null; // Current HVAC mode but also the state of the climate entity
   hvac_action?: HVACAction | null; // Current HVAC action
-  preset_modes?: ('none' | 'eco' | 'away' | 'boost' | 'comfort' | 'home' | 'sleep' | 'activity')[]; // List of supported preset modes
-  preset_mode?: 'none' | 'eco' | 'away' | 'boost' | 'comfort' | 'home' | 'sleep' | 'activity' | null; // Current preset mode
-  fan_modes?: ('on' | 'off' | 'auto' | 'low' | 'medium' | 'high' | 'top' | 'middle' | 'focus' | 'diffuse')[]; // List of supported fan modes
-  fan_mode?: 'on' | 'off' | 'auto' | 'low' | 'medium' | 'high' | 'top' | 'middle' | 'focus' | 'diffuse' | null; // Current fan mode
+  preset_modes?: (
+    | "none"
+    | "eco"
+    | "away"
+    | "boost"
+    | "comfort"
+    | "home"
+    | "sleep"
+    | "activity"
+  )[]; // List of supported preset modes
+  preset_mode?:
+    | "none"
+    | "eco"
+    | "away"
+    | "boost"
+    | "comfort"
+    | "home"
+    | "sleep"
+    | "activity"
+    | null; // Current preset mode
+  fan_modes?: (
+    | "on"
+    | "off"
+    | "auto"
+    | "low"
+    | "medium"
+    | "high"
+    | "top"
+    | "middle"
+    | "focus"
+    | "diffuse"
+  )[]; // List of supported fan modes
+  fan_mode?:
+    | "on"
+    | "off"
+    | "auto"
+    | "low"
+    | "medium"
+    | "high"
+    | "top"
+    | "middle"
+    | "focus"
+    | "diffuse"
+    | null; // Current fan mode
   current_humidity: number | null; // Current humidity of the climate entity
   current_temperature: number | null; // Current temperature of the climate entity
   temperature?: number | null; // Target temperature setting for the climate entity (not in heat_cool thermostats)
@@ -615,55 +667,55 @@ export enum ClimateEntityFeature {
 /** HVAC mode for climate devices. */
 export enum HVACMode {
   /** All activity disabled / Device is off/standby */
-  OFF = 'off',
+  OFF = "off",
   /** Heating */
-  HEAT = 'heat',
+  HEAT = "heat",
   /** Cooling */
-  COOL = 'cool',
+  COOL = "cool",
   /** The device supports heating/cooling to a range */
-  HEAT_COOL = 'heat_cool',
+  HEAT_COOL = "heat_cool",
   /** The temperature is set based on a schedule, learned behavior, AI or some other related mechanism. User is not able to adjust the temperature */
-  AUTO = 'auto',
+  AUTO = "auto",
   /** Device is in Dry/Humidity mode */
-  DRY = 'dry',
+  DRY = "dry",
   /** Only the fan is on, not fan and another mode like cool */
-  FAN_ONLY = 'fan_only',
+  FAN_ONLY = "fan_only",
 }
 
 /** HVAC action for climate devices */
 export enum HVACAction {
-  COOLING = 'cooling',
-  DEFROSTING = 'defrosting',
-  DRYING = 'drying',
-  FAN = 'fan',
-  HEATING = 'heating',
-  IDLE = 'idle',
-  OFF = 'off',
-  PREHEATING = 'preheating',
+  COOLING = "cooling",
+  DEFROSTING = "defrosting",
+  DRYING = "drying",
+  FAN = "fan",
+  HEATING = "heating",
+  IDLE = "idle",
+  OFF = "off",
+  PREHEATING = "preheating",
 }
 
 // Possible climate fan state
-export const CLIMATE_FAN_ON = 'on';
-export const CLIMATE_FAN_OFF = 'off';
-export const CLIMATE_FAN_AUTO = 'auto';
-export const CLIMATE_FAN_LOW = 'low';
-export const CLIMATE_FAN_MEDIUM = 'medium';
-export const CLIMATE_FAN_HIGH = 'high';
-export const CLIMATE_FAN_TOP = 'top';
-export const CLIMATE_FAN_MIDDLE = 'middle';
-export const CLIMATE_FAN_FOCUS = 'focus';
-export const CLIMATE_FAN_DIFFUSE = 'diffuse';
+export const CLIMATE_FAN_ON = "on";
+export const CLIMATE_FAN_OFF = "off";
+export const CLIMATE_FAN_AUTO = "auto";
+export const CLIMATE_FAN_LOW = "low";
+export const CLIMATE_FAN_MEDIUM = "medium";
+export const CLIMATE_FAN_HIGH = "high";
+export const CLIMATE_FAN_TOP = "top";
+export const CLIMATE_FAN_MIDDLE = "middle";
+export const CLIMATE_FAN_FOCUS = "focus";
+export const CLIMATE_FAN_DIFFUSE = "diffuse";
 
 // Possible climate swing state
-export const CLIMATE_SWING_ON = 'on';
-export const CLIMATE_SWING_OFF = 'off';
-export const CLIMATE_SWING_BOTH = 'both';
-export const CLIMATE_SWING_VERTICAL = 'vertical';
-export const CLIMATE_SWING_HORIZONTAL = 'horizontal';
+export const CLIMATE_SWING_ON = "on";
+export const CLIMATE_SWING_OFF = "off";
+export const CLIMATE_SWING_BOTH = "both";
+export const CLIMATE_SWING_VERTICAL = "vertical";
+export const CLIMATE_SWING_HORIZONTAL = "horizontal";
 
 // Possible climate horizontal swing state
-export const CLIMATE_SWING_HORIZONTAL_ON = 'on';
-export const CLIMATE_SWING_HORIZONTAL_OFF = 'off';
+export const CLIMATE_SWING_HORIZONTAL_ON = "on";
+export const CLIMATE_SWING_HORIZONTAL_OFF = "off";
 
 // Default temperature and humidity limits
 export const DEFAULT_MIN_TEMP = 7;
@@ -686,9 +738,9 @@ export interface HassStateEventAttributes {
  * Enum representing the device classes for Home Assistant events.
  */
 export enum EventDeviceClass {
-  DOORBELL = 'doorbell',
-  BUTTON = 'button',
-  MOTION = 'motion',
+  DOORBELL = "doorbell",
+  BUTTON = "button",
+  MOTION = "motion",
 }
 
 /**
@@ -711,231 +763,231 @@ export interface HassEvent {
 /** Apparent power units */
 export enum UnitOfApparentPower {
   /** Millivolt-ampere */
-  MILLIVOLT_AMPERE = 'mVA',
+  MILLIVOLT_AMPERE = "mVA",
   /** Volt-ampere */
-  VOLT_AMPERE = 'VA',
+  VOLT_AMPERE = "VA",
   /** Kilovolt-ampere */
-  KILO_VOLT_AMPERE = 'kVA',
+  KILO_VOLT_AMPERE = "kVA",
 }
 /** Power units */
 export enum UnitOfPower {
   /** Milliwatt */
-  MILLIWATT = 'mW',
+  MILLIWATT = "mW",
   /** Watt */
-  WATT = 'W',
+  WATT = "W",
   /** Kilowatt */
-  KILO_WATT = 'kW',
+  KILO_WATT = "kW",
   /** Megawatt */
-  MEGA_WATT = 'MW',
+  MEGA_WATT = "MW",
   /** Gigawatt */
-  GIGA_WATT = 'GW',
+  GIGA_WATT = "GW",
   /** Terawatt */
-  TERA_WATT = 'TW',
+  TERA_WATT = "TW",
   /** British thermal units per hour */
-  BTU_PER_HOUR = 'BTU/h',
+  BTU_PER_HOUR = "BTU/h",
 }
 
 /** Reactive power units */
 export enum UnitOfReactivePower {
   /** Millivolt-ampere reactive */
-  MILLIVOLT_AMPERE_REACTIVE = 'mvar',
+  MILLIVOLT_AMPERE_REACTIVE = "mvar",
   /** Volt-ampere reactive */
-  VOLT_AMPERE_REACTIVE = 'var',
+  VOLT_AMPERE_REACTIVE = "var",
   /** Kilovolt-ampere reactive */
-  KILO_VOLT_AMPERE_REACTIVE = 'kvar',
+  KILO_VOLT_AMPERE_REACTIVE = "kvar",
 }
 /** Energy units */
 export enum UnitOfEnergy {
   /** Joule */
-  JOULE = 'J',
+  JOULE = "J",
   /** Kilojoule */
-  KILO_JOULE = 'kJ',
+  KILO_JOULE = "kJ",
   /** Megajoule */
-  MEGA_JOULE = 'MJ',
+  MEGA_JOULE = "MJ",
   /** Gigajoule */
-  GIGA_JOULE = 'GJ',
+  GIGA_JOULE = "GJ",
   /** Milliwatt hour */
-  MILLIWATT_HOUR = 'mWh',
+  MILLIWATT_HOUR = "mWh",
   /** Watt hour */
-  WATT_HOUR = 'Wh',
+  WATT_HOUR = "Wh",
   /** Kilowatt hour */
-  KILO_WATT_HOUR = 'kWh',
+  KILO_WATT_HOUR = "kWh",
   /** Megawatt hour */
-  MEGA_WATT_HOUR = 'MWh',
+  MEGA_WATT_HOUR = "MWh",
   /** Gigawatt hour */
-  GIGA_WATT_HOUR = 'GWh',
+  GIGA_WATT_HOUR = "GWh",
   /** Terawatt hour */
-  TERA_WATT_HOUR = 'TWh',
+  TERA_WATT_HOUR = "TWh",
   /** Calorie */
-  CALORIE = 'cal',
+  CALORIE = "cal",
   /** Kilocalorie */
-  KILO_CALORIE = 'kcal',
+  KILO_CALORIE = "kcal",
   /** Megacalorie */
-  MEGA_CALORIE = 'Mcal',
+  MEGA_CALORIE = "Mcal",
   /** Gigacalorie */
-  GIGA_CALORIE = 'Gcal',
+  GIGA_CALORIE = "Gcal",
 }
 /** Reactive energy units */
 export enum UnitOfReactiveEnergy {
   /** Volt-ampere reactive hour */
-  VOLT_AMPERE_REACTIVE_HOUR = 'varh',
+  VOLT_AMPERE_REACTIVE_HOUR = "varh",
   /** Kilovolt-ampere reactive hour */
-  KILO_VOLT_AMPERE_REACTIVE_HOUR = 'kvarh',
+  KILO_VOLT_AMPERE_REACTIVE_HOUR = "kvarh",
 }
 /** Energy Distance units */
 export enum UnitOfEnergyDistance {
   /** Kilowatt hour per 100 kilometers */
-  KILO_WATT_HOUR_PER_100_KM = 'kWh/100km',
+  KILO_WATT_HOUR_PER_100_KM = "kWh/100km",
   /** Watt hour per kilometer */
-  WATT_HOUR_PER_KM = 'Wh/km',
+  WATT_HOUR_PER_KM = "Wh/km",
   /** Miles per kilowatt hour */
-  MILES_PER_KILO_WATT_HOUR = 'mi/kWh',
+  MILES_PER_KILO_WATT_HOUR = "mi/kWh",
   /** Kilometers per kilowatt hour */
-  KM_PER_KILO_WATT_HOUR = 'km/kWh',
+  KM_PER_KILO_WATT_HOUR = "km/kWh",
 }
 /** Electric current units */
 export enum UnitOfElectricCurrent {
   /** Milliampere */
-  MILLIAMPERE = 'mA',
+  MILLIAMPERE = "mA",
   /** Ampere */
-  AMPERE = 'A',
+  AMPERE = "A",
 }
 /** Electric potential units */
 export enum UnitOfElectricPotential {
   /** Microvolt */
-  MICROVOLT = 'μV',
+  MICROVOLT = "μV",
   /** Millivolt */
-  MILLIVOLT = 'mV',
+  MILLIVOLT = "mV",
   /** Volt */
-  VOLT = 'V',
+  VOLT = "V",
   /** Kilovolt */
-  KILOVOLT = 'kV',
+  KILOVOLT = "kV",
   /** Megavolt */
-  MEGAVOLT = 'MV',
+  MEGAVOLT = "MV",
 }
 /** Degree units */
-export const DEGREE = '°';
+export const DEGREE = "°";
 /** Currency units */
 export enum Currency {
-  EURO = '€',
-  DOLLAR = '$',
-  CENT = '¢',
+  EURO = "€",
+  DOLLAR = "$",
+  CENT = "¢",
 }
 /** Temperature units. */
 export enum UnitOfTemperature {
-  CELSIUS = '°C',
-  FAHRENHEIT = '°F',
-  KELVIN = 'K',
+  CELSIUS = "°C",
+  FAHRENHEIT = "°F",
+  KELVIN = "K",
 }
 /** Time units */
 export enum UnitOfTime {
-  MICROSECONDS = 'μs',
-  MILLISECONDS = 'ms',
-  SECONDS = 's',
-  MINUTES = 'min',
-  HOURS = 'h',
-  DAYS = 'd',
-  WEEKS = 'w',
-  MONTHS = 'm',
-  YEARS = 'y',
+  MICROSECONDS = "μs",
+  MILLISECONDS = "ms",
+  SECONDS = "s",
+  MINUTES = "min",
+  HOURS = "h",
+  DAYS = "d",
+  WEEKS = "w",
+  MONTHS = "m",
+  YEARS = "y",
 }
 /** Length units */
 export enum UnitOfLength {
-  MILLIMETERS = 'mm',
-  CENTIMETERS = 'cm',
-  METERS = 'm',
-  KILOMETERS = 'km',
-  INCHES = 'in',
-  FEET = 'ft',
-  YARDS = 'yd',
-  MILES = 'mi',
-  NAUTICAL_MILES = 'nmi',
+  MILLIMETERS = "mm",
+  CENTIMETERS = "cm",
+  METERS = "m",
+  KILOMETERS = "km",
+  INCHES = "in",
+  FEET = "ft",
+  YARDS = "yd",
+  MILES = "mi",
+  NAUTICAL_MILES = "nmi",
 }
 /** Frequency units */
 export enum UnitOfFrequency {
-  HERTZ = 'Hz',
-  KILOHERTZ = 'kHz',
-  MEGAHERTZ = 'MHz',
-  GIGAHERTZ = 'GHz',
+  HERTZ = "Hz",
+  KILOHERTZ = "kHz",
+  MEGAHERTZ = "MHz",
+  GIGAHERTZ = "GHz",
 }
 /** Pressure units */
 export enum UnitOfPressure {
-  MILLIPASCAL = 'mPa',
-  PA = 'Pa',
-  HPA = 'hPa',
-  KPA = 'kPa',
-  BAR = 'bar',
-  CBAR = 'cbar',
-  MBAR = 'mbar',
-  MMHG = 'mmHg',
-  INHG = 'inHg',
-  INH2O = 'inH₂O',
-  PSI = 'psi',
+  MILLIPASCAL = "mPa",
+  PA = "Pa",
+  HPA = "hPa",
+  KPA = "kPa",
+  BAR = "bar",
+  CBAR = "cbar",
+  MBAR = "mbar",
+  MMHG = "mmHg",
+  INHG = "inHg",
+  INH2O = "inH₂O",
+  PSI = "psi",
 }
 /** Sound pressure units */
 export enum UnitOfSoundPressure {
-  DECIBEL = 'dB',
-  WEIGHTED_DECIBEL_A = 'dBA',
+  DECIBEL = "dB",
+  WEIGHTED_DECIBEL_A = "dBA",
 }
 /** Volume units */
 export enum UnitOfVolume {
-  CUBIC_FEET = 'ft³',
-  CENTUM_CUBIC_FEET = 'CCF',
-  MILLE_CUBIC_FEET = 'MCF',
-  CUBIC_METERS = 'm³',
-  LITERS = 'L',
-  MILLILITERS = 'mL',
-  GALLONS = 'gal',
-  FLUID_OUNCES = 'fl. oz.',
+  CUBIC_FEET = "ft³",
+  CENTUM_CUBIC_FEET = "CCF",
+  MILLE_CUBIC_FEET = "MCF",
+  CUBIC_METERS = "m³",
+  LITERS = "L",
+  MILLILITERS = "mL",
+  GALLONS = "gal",
+  FLUID_OUNCES = "fl. oz.",
 }
 /** Volume Flow Rate units */
 export enum UnitOfVolumeFlowRate {
-  CUBIC_METERS_PER_HOUR = 'm³/h',
-  CUBIC_METERS_PER_MINUTE = 'm³/min',
-  CUBIC_METERS_PER_SECOND = 'm³/s',
-  CUBIC_FEET_PER_MINUTE = 'ft³/min',
-  LITERS_PER_HOUR = 'L/h',
-  LITERS_PER_MINUTE = 'L/min',
-  LITERS_PER_SECOND = 'L/s',
-  GALLONS_PER_HOUR = 'gal/h',
-  GALLONS_PER_MINUTE = 'gal/min',
-  GALLONS_PER_DAY = 'gal/d',
-  MILLILITERS_PER_SECOND = 'mL/s',
+  CUBIC_METERS_PER_HOUR = "m³/h",
+  CUBIC_METERS_PER_MINUTE = "m³/min",
+  CUBIC_METERS_PER_SECOND = "m³/s",
+  CUBIC_FEET_PER_MINUTE = "ft³/min",
+  LITERS_PER_HOUR = "L/h",
+  LITERS_PER_MINUTE = "L/min",
+  LITERS_PER_SECOND = "L/s",
+  GALLONS_PER_HOUR = "gal/h",
+  GALLONS_PER_MINUTE = "gal/min",
+  GALLONS_PER_DAY = "gal/d",
+  MILLILITERS_PER_SECOND = "mL/s",
 }
 export enum UnitOfArea {
   /** Square meters */
-  SQUARE_METERS = 'm²',
+  SQUARE_METERS = "m²",
   /** Square centimeters */
-  SQUARE_CENTIMETERS = 'cm²',
+  SQUARE_CENTIMETERS = "cm²",
   /** Square kilometers */
-  SQUARE_KILOMETERS = 'km²',
+  SQUARE_KILOMETERS = "km²",
   /** Square millimeters */
-  SQUARE_MILLIMETERS = 'mm²',
-  SQUARE_INCHES = 'in²',
-  SQUARE_FEET = 'ft²',
-  SQUARE_YARDS = 'yd²',
-  SQUARE_MILES = 'mi²',
-  ACRES = 'ac',
-  HECTARES = 'ha',
+  SQUARE_MILLIMETERS = "mm²",
+  SQUARE_INCHES = "in²",
+  SQUARE_FEET = "ft²",
+  SQUARE_YARDS = "yd²",
+  SQUARE_MILES = "mi²",
+  ACRES = "ac",
+  HECTARES = "ha",
 }
 /** Mass units */
 export enum UnitOfMass {
   /** Grams */
-  GRAMS = 'g',
-  KILOGRAMS = 'kg',
-  MILLIGRAMS = 'mg',
-  MICROGRAMS = 'μg',
-  OUNCES = 'oz',
-  POUNDS = 'lb',
-  STONES = 'st',
+  GRAMS = "g",
+  KILOGRAMS = "kg",
+  MILLIGRAMS = "mg",
+  MICROGRAMS = "μg",
+  OUNCES = "oz",
+  POUNDS = "lb",
+  STONES = "st",
 }
 export enum UnitOfConductivity {
   /** Siemens per centimeter */
-  SIEMENS_PER_CM = 'S/cm',
+  SIEMENS_PER_CM = "S/cm",
   /** Microsiemens per centimeter */
-  MICROSIEMENS_PER_CM = 'μS/cm',
+  MICROSIEMENS_PER_CM = "μS/cm",
   /** Millisiemens per centimeter */
-  MILLISIEMENS_PER_CM = 'mS/cm',
+  MILLISIEMENS_PER_CM = "mS/cm",
 }
 /**
  * Interface representing the unit system used in Home Assistant.
@@ -995,37 +1047,42 @@ export interface HassServices {
 }
 
 export type HassWebSocketResponse =
-  HassWebSocketResponseAuthRequired | HassWebSocketResponseAuthOk | HassWebSocketResponseAuthInvalid | HassWebSocketResponsePong | HassWebSocketResponseEvent | HassWebSocketResponseResult;
+  | HassWebSocketResponseAuthRequired
+  | HassWebSocketResponseAuthOk
+  | HassWebSocketResponseAuthInvalid
+  | HassWebSocketResponsePong
+  | HassWebSocketResponseEvent
+  | HassWebSocketResponseResult;
 
 export interface HassWebSocketResponseAuthRequired {
-  type: 'auth_required';
+  type: "auth_required";
   ha_version: string; // i.e. "2021.12.0"
 }
 
 export interface HassWebSocketResponseAuthOk {
-  type: 'auth_ok';
+  type: "auth_ok";
   ha_version: string; // i.e. "2021.12.0"
 }
 
 export interface HassWebSocketResponseAuthInvalid {
-  type: 'auth_invalid';
+  type: "auth_invalid";
   message: string; // i.e. "Invalid access token"
 }
 
 export interface HassWebSocketResponsePong {
-  type: 'pong';
+  type: "pong";
   id: number; // The id of the ping request that this pong is responding to
 }
 
 export interface HassWebSocketResponseEvent {
   id: number; // The id of the subscribe request that this event is responding to
-  type: 'event';
+  type: "event";
   event: HassEvent;
 }
 
 export interface HassWebSocketResponseResult {
   id: number; // The id of the subscribe_events request that this response is responding to
-  type: 'result';
+  type: "result";
   success: boolean;
   result: null; // The result is null for subscribe_events responses
   error?: { code: string; message: string }; // Error object for the response with success false
@@ -1033,41 +1090,49 @@ export interface HassWebSocketResponseResult {
 
 export interface HassWebSocketResponseSuccess {
   id: number; // The id of the fetch request that this response is responding to
-  type: 'result';
+  type: "result";
   success: true;
   result: unknown;
 }
 
 export interface HassWebSocketResponseError {
   id: number; // The id of the fetch request that this response is responding to
-  type: 'result';
+  type: "result";
   success: false;
   error: { code: string; message: string }; // Error object for the response with success false
 }
 
 export interface HassWebSocketResponseFetch {
   id: number; // The id of the fetch request that this response is responding to
-  type: 'result';
+  type: "result";
   success: boolean;
-  result: HassConfig | HassServices | HassDevice[] | HassEntity[] | HassState[] | HassArea[] | HassLabel[] | null; // The result of the fetch command, can be null if the fetch fails or does not return a result
+  result:
+    | HassConfig
+    | HassServices
+    | HassDevice[]
+    | HassEntity[]
+    | HassState[]
+    | HassArea[]
+    | HassLabel[]
+    | null; // The result of the fetch command, can be null if the fetch fails or does not return a result
   error?: { code: string; message: string }; // Error object for the response with success false
 }
 
 export interface HassWebSocketResponseCallService {
   id: number; // The id of the call_service request that this response is responding to
-  type: 'result';
+  type: "result";
   success: boolean;
   result: { context: HassContext; response: unknown };
   error?: { code: string; message: string }; // Error object for the response with success false
 }
 
 export interface HassWebSocketRequestAuth {
-  type: 'auth';
+  type: "auth";
   access_token: string;
 }
 
 export interface HassWebSocketRequestPing {
-  type: 'ping';
+  type: "ping";
   id: number;
 }
 
@@ -1078,7 +1143,7 @@ export interface HassWebSocketRequestFetch {
 
 export interface HassWebSocketRequestCallService {
   id: number;
-  type: 'call_service';
+  type: "call_service";
   domain: string;
   service: string;
   service_data?: { entity_id: string } & Record<string, HomeAssistantPrimitive>; // Optional service data to send with the service call
@@ -1090,17 +1155,18 @@ export interface HassWebSocketRequestCallService {
 
 export interface HassWebSocketRequestSubscribeEvents {
   id: number;
-  type: 'subscribe_events';
+  type: "subscribe_events";
   event_type?: string; // Optional event type to subscribe to specific events (i.e. state_changed), if not provided all events are subscribed
 }
 
 export interface HassWebSocketRequestUnsubscribeEvents {
   id: number;
-  type: 'unsubscribe_events';
+  type: "unsubscribe_events";
   subscription: number; // ID of the subscription to unsubscribe from
 }
 
-export type HomeAssistantPrimitive = string | number | bigint | boolean | object | null | undefined;
+export type HomeAssistantPrimitive =
+  string | number | bigint | boolean | object | null | undefined;
 
 interface HomeAssistantEventEmitter {
   connected: [ha_version: string];
@@ -1117,7 +1183,12 @@ interface HomeAssistantEventEmitter {
   labels: [labels: HassLabel[]];
   registry_changed: [];
   subscribed: [];
-  event: [deviceId: string | null, entityId: string, old_state: HassState | null, new_state: HassState];
+  event: [
+    deviceId: string | null,
+    entityId: string,
+    old_state: HassState | null,
+    new_state: HassState,
+  ];
   call_service: [];
   ping: [data: Buffer];
   pong: [data: Buffer];
@@ -1142,8 +1213,8 @@ export class HomeAssistant extends EventEmitter {
   hassServices: HassServices | null = null;
   hassConfig: HassConfig | null = null;
   static hassConfig: HassConfig | null = null;
-  private readonly debug = hasParameter('debug') || hasParameter('verbose');
-  private readonly verbose = hasParameter('verbose');
+  private readonly debug = hasParameter("debug") || hasParameter("verbose");
+  private readonly verbose = hasParameter("verbose");
   private pingInterval: NodeJS.Timeout | undefined = undefined;
   private pingTimeout: NodeJS.Timeout | undefined = undefined;
   private reconnectTimeout: NodeJS.Timeout | undefined = undefined;
@@ -1185,7 +1256,10 @@ export class HomeAssistant extends EventEmitter {
    * @param {...HomeAssistantEventEmitter[K]} args - The arguments to pass to the event listeners.
    * @returns {boolean} - Returns true if the event had listeners, false otherwise.
    */
-  override emit<K extends keyof HomeAssistantEventEmitter>(eventName: K, ...args: HomeAssistantEventEmitter[K]): boolean {
+  override emit<K extends keyof HomeAssistantEventEmitter>(
+    eventName: K,
+    ...args: HomeAssistantEventEmitter[K]
+  ): boolean {
     return super.emit(eventName, ...args);
   }
 
@@ -1197,7 +1271,10 @@ export class HomeAssistant extends EventEmitter {
    * @param {(...args: HomeAssistantEventEmitter[K]) => void} listener - The callback function to invoke when the event is emitted.
    * @returns {this} - Returns the instance of the HomeAssistant class for chaining.
    */
-  override on<K extends keyof HomeAssistantEventEmitter>(eventName: K, listener: (...args: HomeAssistantEventEmitter[K]) => void): this {
+  override on<K extends keyof HomeAssistantEventEmitter>(
+    eventName: K,
+    listener: (...args: HomeAssistantEventEmitter[K]) => void,
+  ): this {
     return super.on(eventName, listener);
   }
 
@@ -1233,7 +1310,7 @@ export class HomeAssistant extends EventEmitter {
    */
   constructor(
     url: string,
-    accessToken: string = '', // empty string = trust-local / supervisor mode
+    accessToken: string = "", // empty string = trust-local / supervisor mode
     reconnectTimeoutTime: number = 3,
     reconnectRetries: number = 0, // 0 = infinite retries on HA restart
     certificatePath: string | undefined = undefined,
@@ -1249,53 +1326,55 @@ export class HomeAssistant extends EventEmitter {
     this.rejectUnauthorized = rejectUnauthorized;
     this.connectionTimeoutTime = connectionTimeoutTime * 1000;
     this.log = new AnsiLogger({
-      logName: 'HomeAssistant',
+      logName: "HomeAssistant",
       logTimestampFormat: TimestampFormat.TIME_MILLIS,
       logLevel: this.debug ? LogLevel.DEBUG : LogLevel.INFO,
     });
   }
 
   private onOpen = () => {
-    this.log.debug('WebSocket connection established');
-    this.emit('socket_opened');
+    this.log.debug("WebSocket connection established");
+    this.emit("socket_opened");
   };
 
   private onPing(data: Buffer) {
-    this.log.debug('WebSocket ping received');
+    this.log.debug("WebSocket ping received");
     if (this.pingTimeout) {
       clearTimeout(this.pingTimeout);
       this.pingTimeout = undefined;
-      this.log.debug('Stopped ping timeout');
+      this.log.debug("Stopped ping timeout");
     }
-    this.emit('ping', data);
+    this.emit("ping", data);
   }
 
   private onPong(data: Buffer) {
-    this.log.debug('WebSocket pong received');
+    this.log.debug("WebSocket pong received");
     if (this.pingTimeout) {
       clearTimeout(this.pingTimeout);
       this.pingTimeout = undefined;
-      this.log.debug('Stopped ping timeout');
+      this.log.debug("Stopped ping timeout");
     }
-    this.emit('pong', data);
+    this.emit("pong", data);
   }
 
   private onError(error: Error) {
     const errorMessage = `WebSocket error: ${error}`;
     this.log.debug(errorMessage);
-    this.emit('error', errorMessage);
+    this.emit("error", errorMessage);
   }
 
   private onMessage(data: WebSocket.RawData, isBinary: boolean) {
     let response;
     try {
-      response = JSON.parse(isBinary ? data.toString() : (data as unknown as string)) as HassWebSocketResponse;
+      response = JSON.parse(
+        isBinary ? data.toString() : (data as unknown as string),
+      ) as HassWebSocketResponse;
     } catch (error) {
       this.log.error(`Error parsing WebSocket message: ${error}`);
       return;
     }
     // console.log(`Received WebSocket message:`, response);
-    if (response.type === 'result') {
+    if (response.type === "result") {
       const pending = this.pendingRequests.get(response.id);
       if (pending) {
         this.pendingRequests.delete(response.id);
@@ -1304,67 +1383,109 @@ export class HomeAssistant extends EventEmitter {
       }
       return;
     }
-    if (response.type === 'pong') {
+    if (response.type === "pong") {
       this.log.debug(`Home Assistant pong received with id ${response.id}`);
       // istanbul ignore else
       if (this.pingTimeout) {
         clearTimeout(this.pingTimeout);
         this.pingTimeout = undefined;
-        this.log.debug('Stopped ping timeout');
+        this.log.debug("Stopped ping timeout");
       }
-      this.emit('pong', Buffer.from('Home Assistant pong received'));
-    } else if (response.type === 'event') {
+      this.emit("pong", Buffer.from("Home Assistant pong received"));
+    } else if (response.type === "event") {
       if (!response.event) {
         const errorMessage = `WebSocket event response missing event data for id ${response.id}`;
         this.log.error(errorMessage);
-        this.emit('error', errorMessage);
+        this.emit("error", errorMessage);
         return;
       }
       // istanbul ignore next
-      if (this.verbose) this.log.debug(`Event ${CYAN}${response.event.event_type}${db} received id ${CYAN}${response.id}${db}:${rs}\n${debugStringify(response.event)}`);
-      if (response.event.event_type === 'state_changed') {
+      if (this.verbose)
+        this.log.debug(
+          `Event ${CYAN}${response.event.event_type}${db} received id ${CYAN}${response.id}${db}:${rs}\n${debugStringify(response.event)}`,
+        );
+      if (response.event.event_type === "state_changed") {
         const entity = this.hassEntities.get(response.event.data.entity_id);
         if (response.event.data.new_state) {
-          this.hassStates.set(response.event.data.new_state.entity_id, response.event.data.new_state);
-          this.emit('event', entity?.device_id ?? null, response.event.data.new_state.entity_id, response.event.data.old_state ?? null, response.event.data.new_state);
+          this.hassStates.set(
+            response.event.data.new_state.entity_id,
+            response.event.data.new_state,
+          );
+          this.emit(
+            "event",
+            entity?.device_id ?? null,
+            response.event.data.new_state.entity_id,
+            response.event.data.old_state ?? null,
+            response.event.data.new_state,
+          );
         }
-      } else if (response.event.event_type === 'call_service') {
-        this.log.debug(`Event ${CYAN}${response.event.event_type}${db} received id ${CYAN}${response.id}${db}`);
-        this.emit('call_service');
-      } else if (response.event.event_type === 'core_config_updated') {
-        this.log.debug(`Event ${CYAN}${response.event.event_type}${db} received id ${CYAN}${response.id}${db}`);
+      } else if (response.event.event_type === "call_service") {
+        this.log.debug(
+          `Event ${CYAN}${response.event.event_type}${db} received id ${CYAN}${response.id}${db}`,
+        );
+        this.emit("call_service");
+      } else if (response.event.event_type === "core_config_updated") {
+        this.log.debug(
+          `Event ${CYAN}${response.event.event_type}${db} received id ${CYAN}${response.id}${db}`,
+        );
         clearTimeout(this.fetchTimeout);
         // istanbul ignore next cause is too long to test the fetch timeout in this case
-        this.fetchTimeout = setTimeout(() => void this.onFetchTimeout(), 5000).unref();
-        this.fetchQueue.add('get_config');
-      } else if (response.event.event_type === 'device_registry_updated') {
-        this.log.debug(`Event ${CYAN}${response.event.event_type}${db} received id ${CYAN}${response.id}${db}`);
+        this.fetchTimeout = setTimeout(
+          () => void this.onFetchTimeout(),
+          5000,
+        ).unref();
+        this.fetchQueue.add("get_config");
+      } else if (response.event.event_type === "device_registry_updated") {
+        this.log.debug(
+          `Event ${CYAN}${response.event.event_type}${db} received id ${CYAN}${response.id}${db}`,
+        );
         clearTimeout(this.fetchTimeout);
         // istanbul ignore next cause is too long to test the fetch timeout in this case
-        this.fetchTimeout = setTimeout(() => void this.onFetchTimeout(), 5000).unref();
-        this.fetchQueue.add('config/device_registry/list');
-      } else if (response.event.event_type === 'entity_registry_updated') {
-        this.log.debug(`Event ${CYAN}${response.event.event_type}${db} received id ${CYAN}${response.id}${db}`);
+        this.fetchTimeout = setTimeout(
+          () => void this.onFetchTimeout(),
+          5000,
+        ).unref();
+        this.fetchQueue.add("config/device_registry/list");
+      } else if (response.event.event_type === "entity_registry_updated") {
+        this.log.debug(
+          `Event ${CYAN}${response.event.event_type}${db} received id ${CYAN}${response.id}${db}`,
+        );
         clearTimeout(this.fetchTimeout);
         // istanbul ignore next cause is too long to test the fetch timeout in this case
-        this.fetchTimeout = setTimeout(() => void this.onFetchTimeout(), 5000).unref();
-        this.fetchQueue.add('config/entity_registry/list');
-        this.fetchQueue.add('get_states');
-      } else if (response.event.event_type === 'area_registry_updated') {
-        this.log.debug(`Event ${CYAN}${response.event.event_type}${db} received id ${CYAN}${response.id}${db}`);
+        this.fetchTimeout = setTimeout(
+          () => void this.onFetchTimeout(),
+          5000,
+        ).unref();
+        this.fetchQueue.add("config/entity_registry/list");
+        this.fetchQueue.add("get_states");
+      } else if (response.event.event_type === "area_registry_updated") {
+        this.log.debug(
+          `Event ${CYAN}${response.event.event_type}${db} received id ${CYAN}${response.id}${db}`,
+        );
         clearTimeout(this.fetchTimeout);
         // istanbul ignore next cause is too long to test the fetch timeout in this case
-        this.fetchTimeout = setTimeout(() => void this.onFetchTimeout(), 5000).unref();
-        this.fetchQueue.add('config/area_registry/list');
-      } else if (response.event.event_type === 'label_registry_updated') {
-        this.log.debug(`Event ${CYAN}${response.event.event_type}${db} received id ${CYAN}${response.id}${db}`);
+        this.fetchTimeout = setTimeout(
+          () => void this.onFetchTimeout(),
+          5000,
+        ).unref();
+        this.fetchQueue.add("config/area_registry/list");
+      } else if (response.event.event_type === "label_registry_updated") {
+        this.log.debug(
+          `Event ${CYAN}${response.event.event_type}${db} received id ${CYAN}${response.id}${db}`,
+        );
         clearTimeout(this.fetchTimeout);
         // istanbul ignore next cause is too long to test the fetch timeout in this case
-        this.fetchTimeout = setTimeout(() => void this.onFetchTimeout(), 5000).unref();
-        this.fetchQueue.add('config/label_registry/list');
+        this.fetchTimeout = setTimeout(
+          () => void this.onFetchTimeout(),
+          5000,
+        ).unref();
+        this.fetchQueue.add("config/label_registry/list");
       } else {
         // istanbul ignore else
-        if (this.debug) this.log.debug(`Unknown event type ${CYAN}${response.event.event_type}${db} received id ${CYAN}${response.id}${db}`);
+        if (this.debug)
+          this.log.debug(
+            `Unknown event type ${CYAN}${response.event.event_type}${db} received id ${CYAN}${response.id}${db}`,
+          );
       }
     }
   }
@@ -1379,9 +1500,11 @@ export class HomeAssistant extends EventEmitter {
       this.connectionTimeout = undefined;
     }
     this.stopPing();
-    this.rejectPendingRequests(new Error(`WebSocket closed (${code}): ${reason.toString()}`));
-    this.emit('socket_closed', code, reason);
-    this.emit('disconnected', `Code: ${code} Reason: ${reason.toString()}`);
+    this.rejectPendingRequests(
+      new Error(`WebSocket closed (${code}): ${reason.toString()}`),
+    );
+    this.emit("socket_closed", code, reason);
+    this.emit("disconnected", `Code: ${code} Reason: ${reason.toString()}`);
     if (!this.closing) this.startReconnect();
   }
 
@@ -1393,17 +1516,32 @@ export class HomeAssistant extends EventEmitter {
     this.pendingRequests.clear();
   }
 
-  private request(request: Record<string, unknown>, timeoutMs?: number): Promise<HassWebSocketResponseResult> {
+  private request(
+    request: Record<string, unknown>,
+    timeoutMs?: number,
+  ): Promise<HassWebSocketResponseResult> {
     return new Promise((resolve, reject) => {
-      if (!this.connected || !this.ws || this.ws.readyState !== WebSocket.OPEN) {
-        reject(new Error('WebSocket request failed: not connected to Home Assistant'));
+      if (
+        !this.connected ||
+        !this.ws ||
+        this.ws.readyState !== WebSocket.OPEN
+      ) {
+        reject(
+          new Error(
+            "WebSocket request failed: not connected to Home Assistant",
+          ),
+        );
         return;
       }
       const id = this.requestId++;
       const timeout = timeoutMs ?? this._responseTimeout;
       const timer = setTimeout(() => {
         this.pendingRequests.delete(id);
-        reject(new Error(`Home Assistant request ${String(request.type)} id ${id} timed out after ${timeout}ms`));
+        reject(
+          new Error(
+            `Home Assistant request ${String(request.type)} id ${id} timed out after ${timeout}ms`,
+          ),
+        );
       }, timeout).unref();
       this.pendingRequests.set(id, { resolve, reject, timer });
       try {
@@ -1418,7 +1556,9 @@ export class HomeAssistant extends EventEmitter {
 
   private async onFetchTimeout() {
     this.fetchTimeout = undefined;
-    this.log.debug(`Fetch timeout reached, processing fetch queue of ${this.fetchQueue.size} fetch id(s)...`);
+    this.log.debug(
+      `Fetch timeout reached, processing fetch queue of ${this.fetchQueue.size} fetch id(s)...`,
+    );
     let registryChanged = false;
     for (const fetchId of [...this.fetchQueue]) {
       this.log.debug(`Fetching ${CYAN}${fetchId}${db}...`);
@@ -1426,45 +1566,49 @@ export class HomeAssistant extends EventEmitter {
         const data = await this.fetch(fetchId);
         this.log.debug(`Received data for ${CYAN}${fetchId}${db}`);
         // istanbul ignore else
-        if (fetchId === 'get_config') {
+        if (fetchId === "get_config") {
           const config = data as HassConfig;
           this.log.debug(`Received config.`);
           this.hassConfig = config;
           HomeAssistant.hassConfig = this.hassConfig;
-          this.emit('config', config);
-        } else if (fetchId === 'config/device_registry/list') {
+          this.emit("config", config);
+        } else if (fetchId === "config/device_registry/list") {
           const devices = data as HassDevice[];
           this.log.debug(`Received ${devices.length} devices.`);
           this.hassDevices.clear();
           devices.forEach((device) => this.hassDevices.set(device.id, device));
-          this.emit('devices', devices);
+          this.emit("devices", devices);
           registryChanged = true;
-        } else if (fetchId === 'config/entity_registry/list') {
+        } else if (fetchId === "config/entity_registry/list") {
           const entities = data as HassEntity[];
           this.log.debug(`Received ${entities.length} entities.`);
           this.hassEntities.clear();
-          entities.forEach((entity) => this.hassEntities.set(entity.entity_id, entity));
-          this.emit('entities', entities);
+          entities.forEach((entity) =>
+            this.hassEntities.set(entity.entity_id, entity),
+          );
+          this.emit("entities", entities);
           registryChanged = true;
-        } else if (fetchId === 'get_states') {
+        } else if (fetchId === "get_states") {
           const states = data as HassState[];
           this.hassStates.clear();
-          states.forEach((state) => this.hassStates.set(state.entity_id, state));
-          this.emit('states', states);
+          states.forEach((state) =>
+            this.hassStates.set(state.entity_id, state),
+          );
+          this.emit("states", states);
           registryChanged = true;
-        } else if (fetchId === 'config/area_registry/list') {
+        } else if (fetchId === "config/area_registry/list") {
           const areas = data as HassArea[];
           this.log.debug(`Received ${areas.length} areas.`);
           this.hassAreas.clear();
           areas.forEach((area) => this.hassAreas.set(area.area_id, area));
-          this.emit('areas', areas);
+          this.emit("areas", areas);
           registryChanged = true;
-        } else if (fetchId === 'config/label_registry/list') {
+        } else if (fetchId === "config/label_registry/list") {
           const labels = data as HassLabel[];
           this.log.debug(`Received ${labels.length} labels.`);
           this.hassLabels.clear();
           labels.forEach((label) => this.hassLabels.set(label.label_id, label));
-          this.emit('labels', labels);
+          this.emit("labels", labels);
           registryChanged = true;
         }
       } catch (error) {
@@ -1472,7 +1616,7 @@ export class HomeAssistant extends EventEmitter {
       }
       this.fetchQueue.delete(fetchId);
     }
-    if (registryChanged) this.emit('registry_changed');
+    if (registryChanged) this.emit("registry_changed");
   }
 
   /**
@@ -1485,7 +1629,7 @@ export class HomeAssistant extends EventEmitter {
   connect(): Promise<string> {
     return new Promise((resolve, reject) => {
       if (this.connected) {
-        return reject(new Error('Already connected to Home Assistant'));
+        return reject(new Error("Already connected to Home Assistant"));
       }
       this.closing = false;
       const generation = ++this.connectionGeneration;
@@ -1500,25 +1644,36 @@ export class HomeAssistant extends EventEmitter {
       try {
         this.log.info(`Connecting to Home Assistant on ${this.wsUrl}...`);
 
-        if (this.wsUrl.startsWith('ws://')) {
-          this.ws = new WebSocket(this.wsUrl + '/api/websocket');
-        } else if (this.wsUrl.startsWith('wss://')) {
-          let ca: string | Buffer<ArrayBufferLike> | (string | Buffer<ArrayBufferLike>)[] | undefined;
+        if (this.wsUrl.startsWith("ws://")) {
+          this.ws = new WebSocket(this.wsUrl + "/api/websocket");
+        } else if (this.wsUrl.startsWith("wss://")) {
+          let ca:
+            | string
+            | Buffer<ArrayBufferLike>
+            | (string | Buffer<ArrayBufferLike>)[]
+            | undefined;
           // Load the CA certificate if provided
           if (this.certificatePath) {
-            this.log.debug(`Loading CA certificate from ${this.certificatePath}...`);
+            this.log.debug(
+              `Loading CA certificate from ${this.certificatePath}...`,
+            );
             ca = readFileSync(this.certificatePath); // Load CA certificate from the provided path
             this.log.debug(`CA certificate loaded successfully`);
           }
-          this.ws = new WebSocket(this.wsUrl + '/api/websocket', {
+          this.ws = new WebSocket(this.wsUrl + "/api/websocket", {
             ca,
             rejectUnauthorized: this.rejectUnauthorized,
           });
         } else {
-          return reject(new Error(`Invalid WebSocket URL: ${this.wsUrl}. It must start with ws:// or wss://`));
+          return reject(
+            new Error(
+              `Invalid WebSocket URL: ${this.wsUrl}. It must start with ws:// or wss://`,
+            ),
+          );
         }
         const socket = this.ws;
-        const isCurrent = () => this.ws === socket && this.connectionGeneration === generation;
+        const isCurrent = () =>
+          this.ws === socket && this.connectionGeneration === generation;
 
         // A router or HA Core restart can leave the TCP socket half-open
         // without completing the WebSocket upgrade. Bound the whole
@@ -1530,7 +1685,7 @@ export class HomeAssistant extends EventEmitter {
           this.connectionTimeout = undefined;
           const message = `Home Assistant WebSocket connection timed out after ${this.connectionTimeoutTime / 1000} seconds`;
           this.log.error(message);
-          this.emit('error', message);
+          this.emit("error", message);
           // socket.terminate() always emits the 'close' event, which triggers
           // onClose() → startReconnect(). Calling startReconnect() here too
           // would race with that path and could advance reconnectRetry twice.
@@ -1539,18 +1694,23 @@ export class HomeAssistant extends EventEmitter {
         }, this.connectionTimeoutTime).unref();
 
         // Add the event listeners
-        socket.on('open', () => {
+        socket.on("open", () => {
           if (isCurrent()) this.onOpen();
         });
-        socket.on('ping', (data) => {
+        socket.on("ping", (data) => {
           if (isCurrent()) this.onPing(data);
         });
-        socket.on('pong', (data) => {
+        socket.on("pong", (data) => {
           if (isCurrent()) this.onPong(data);
         });
-        socket.on('close', (code, reason) => {
+        socket.on("close", (code, reason) => {
           if (!isCurrent()) return;
-          if (!authenticated) reject(new Error(`WebSocket closed before authentication (${code}): ${reason.toString()}`));
+          if (!authenticated)
+            reject(
+              new Error(
+                `WebSocket closed before authentication (${code}): ${reason.toString()}`,
+              ),
+            );
           this.onClose(code, reason);
         });
 
@@ -1561,7 +1721,7 @@ export class HomeAssistant extends EventEmitter {
             this.connectionTimeout = undefined;
           }
           this.log.error(`WebSocket error: ${event.message}`);
-          this.emit('error', `WebSocket error: ${event.message}`);
+          this.emit("error", `WebSocket error: ${event.message}`);
           if (!this.closing) this.startReconnect();
           return reject(new Error(`WebSocket error: ${event.message}`));
         };
@@ -1570,13 +1730,17 @@ export class HomeAssistant extends EventEmitter {
           if (!isCurrent()) return;
           let response;
           try {
-            response = JSON.parse(event.data.toString()) as HassWebSocketResponse;
+            response = JSON.parse(
+              event.data.toString(),
+            ) as HassWebSocketResponse;
           } catch (error) {
-            return reject(new Error(`Error parsing WebSocket message: ${error}`));
+            return reject(
+              new Error(`Error parsing WebSocket message: ${error}`),
+            );
           }
           // console.log(`Received WebSocket message:`, response);
           // istanbul ignore else
-          if (response.type === 'auth_required') {
+          if (response.type === "auth_required") {
             // ── Auth handler ──────────────────────────────────────────────
             // We always send the auth message, even when the token is empty.
             // HA will respond with auth_ok if:
@@ -1584,30 +1748,40 @@ export class HomeAssistant extends EventEmitter {
             //   b) The connection IP is in HA's trusted_networks list, OR
             //   c) We are inside the HA OS supervisor (token injected via env)
             // ──────────────────────────────────────────────────────────────
-            this.log.debug(`Authentication required: ${debugStringify(response)}`);
+            this.log.debug(
+              `Authentication required: ${debugStringify(response)}`,
+            );
             if (this.wsAccessToken) {
-              this.log.debug('Sending auth token...');
+              this.log.debug("Sending auth token...");
             } else {
-              this.log.debug('No token configured — attempting trust-local / supervisor auth...');
+              this.log.debug(
+                "No token configured — attempting trust-local / supervisor auth...",
+              );
             }
             socket.send(
               JSON.stringify({
-                type: 'auth',
+                type: "auth",
                 access_token: this.wsAccessToken,
               } as HassWebSocketRequestAuth),
             );
-          } else if (response.type === 'auth_invalid') {
+          } else if (response.type === "auth_invalid") {
             // ── Auth rejected by HA ───────────────────────────────────────
             // Only hard-fail if the user actually supplied a token (wrong token).
             // If no token was supplied the host is probably not in trusted_networks.
             // ──────────────────────────────────────────────────────────────
-            const msg = (response as unknown as { message?: string }).message ?? 'auth_invalid';
+            const msg =
+              (response as unknown as { message?: string }).message ??
+              "auth_invalid";
             if (this.connectionTimeout) {
               clearTimeout(this.connectionTimeout);
               this.connectionTimeout = undefined;
             }
             if (this.wsAccessToken) {
-              return reject(new Error(`Home Assistant rejected the access token: ${msg}. Check your token in the plugin config.`));
+              return reject(
+                new Error(
+                  `Home Assistant rejected the access token: ${msg}. Check your token in the plugin config.`,
+                ),
+              );
             } else {
               return reject(
                 new Error(
@@ -1616,10 +1790,14 @@ export class HomeAssistant extends EventEmitter {
                 ),
               );
             }
-          } else if (response.type === 'auth_ok') {
+          } else if (response.type === "auth_ok") {
             // Handle successful authentication
-            this.log.debug(`Authenticated successfully: ${debugStringify(response)}`);
-            this.log.debug(`Authenticated successfully with Home Assistant v. ${response.ha_version}`);
+            this.log.debug(
+              `Authenticated successfully: ${debugStringify(response)}`,
+            );
+            this.log.debug(
+              `Authenticated successfully with Home Assistant v. ${response.ha_version}`,
+            );
             authenticated = true;
             this.connected = true;
             this.reconnectRetry = 1; // Reset the reconnect retry count
@@ -1634,17 +1812,17 @@ export class HomeAssistant extends EventEmitter {
 
             // Add the message event listeners
             socket.onmessage = null; // Clear the current onmessage handler to avoid duplicate processing
-            socket.on('message', (data, isBinary) => {
+            socket.on("message", (data, isBinary) => {
               if (isCurrent()) this.onMessage(data, isBinary);
             });
             socket.onerror = null;
-            socket.on('error', (error) => {
+            socket.on("error", (error) => {
               if (isCurrent()) this.onError(error);
             });
 
             // Start ping interval
             this.startPing();
-            this.emit('connected', response.ha_version);
+            this.emit("connected", response.ha_version);
             return resolve(response.ha_version);
           }
         };
@@ -1662,20 +1840,24 @@ export class HomeAssistant extends EventEmitter {
    */
   private startPing() {
     if (this.pingInterval) {
-      this.log.debug('Ping interval already started');
+      this.log.debug("Ping interval already started");
       return;
     }
-    this.log.debug('Starting ping interval...');
+    this.log.debug("Starting ping interval...");
     this.pingInterval = setInterval(() => {
       if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-        this.log.error('WebSocket not open sending ping. Closing connection...');
+        this.log.error(
+          "WebSocket not open sending ping. Closing connection...",
+        );
         void this.close().catch(/* istanbul ignore next */ () => {});
         return;
       }
       // Keep one watchdog per unanswered ping. Replacing this timer every 30
       // seconds lets a dead connection postpone its timeout indefinitely.
       if (this.pingTimeout) {
-        this.log.debug('Previous ping is still pending; waiting for its timeout');
+        this.log.debug(
+          "Previous ping is still pending; waiting for its timeout",
+        );
         return;
       }
       this.log.debug(`Sending WebSocket ping...`);
@@ -1684,39 +1866,39 @@ export class HomeAssistant extends EventEmitter {
       this.ws.send(
         JSON.stringify({
           id: this.requestId++,
-          type: 'ping',
+          type: "ping",
         } as HassWebSocketRequestPing),
       );
-      this.log.debug('Starting ping timeout...');
+      this.log.debug("Starting ping timeout...");
       this.pingTimeout = setTimeout(() => {
-        this.log.error('Ping timeout. Closing connection...');
+        this.log.error("Ping timeout. Closing connection...");
         this.pingTimeout = undefined;
         // A graceful close of an unreachable peer waits for another timeout.
         // Terminating emits close immediately and lets onClose reconnect.
         this.closing = false;
         this.ws?.terminate();
       }, this.pingTimeoutTime).unref();
-      this.log.debug('Started ping timeout');
+      this.log.debug("Started ping timeout");
     }, this.pingIntervalTime).unref();
-    this.log.debug('Started ping interval');
+    this.log.debug("Started ping interval");
   }
 
   /**
    * Stops the ping interval and clears any pending timeouts.
    */
   private stopPing() {
-    this.log.debug('Stopping ping interval...');
+    this.log.debug("Stopping ping interval...");
     if (this.pingInterval) {
       clearInterval(this.pingInterval);
       this.pingInterval = undefined;
     }
-    this.log.debug('Stopped ping interval');
-    this.log.debug('Stopping ping timeout...');
+    this.log.debug("Stopped ping interval");
+    this.log.debug("Stopping ping timeout...");
     if (this.pingTimeout) {
       clearTimeout(this.pingTimeout);
       this.pingTimeout = undefined;
     }
-    this.log.debug('Stopped ping timeout');
+    this.log.debug("Stopped ping timeout");
   }
 
   /**
@@ -1727,23 +1909,35 @@ export class HomeAssistant extends EventEmitter {
       this.log.debug(`Reconnecting already in progress.`);
       return;
     }
-    if (this.reconnectTimeoutTime && (this.reconnectRetries === 0 || this.reconnectRetry <= this.reconnectRetries)) {
-      const delay = Math.min(this.reconnectTimeoutTime * 2 ** (this.reconnectRetry - 1), 30000);
+    if (
+      this.reconnectTimeoutTime &&
+      (this.reconnectRetries === 0 ||
+        this.reconnectRetry <= this.reconnectRetries)
+    ) {
+      const delay = Math.min(
+        this.reconnectTimeoutTime * 2 ** (this.reconnectRetry - 1),
+        30000,
+      );
       this.log.notice(`Reconnecting in ${delay / 1000} seconds...`);
       this.reconnectTimeout = setTimeout(() => {
         const attempt = this.reconnectRetry;
-        this.log.notice(`Reconnecting attempt ${attempt}${this.reconnectRetries ? ` of ${this.reconnectRetries}` : ''}...`);
+        this.log.notice(
+          `Reconnecting attempt ${attempt}${this.reconnectRetries ? ` of ${this.reconnectRetries}` : ""}...`,
+        );
         this.reconnectTimeout = undefined;
         void this.connect().catch((error) => {
           // istanbul ignore next
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          this.log.debug(`Reconnection attempt ${attempt} failed: ${errorMessage}`);
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
+          this.log.debug(
+            `Reconnection attempt ${attempt} failed: ${errorMessage}`,
+          );
           this.startReconnect();
         });
         this.reconnectRetry++;
       }, delay).unref();
     } else {
-      this.log.error('Restart the plugin to reconnect.');
+      this.log.error("Restart the plugin to reconnect.");
     }
   }
 
@@ -1755,9 +1949,9 @@ export class HomeAssistant extends EventEmitter {
    * @returns {Promise<void>} - A Promise that resolves when the connection is closed or rejects with an error if the connection could not be closed.
    */
   // eslint-disable-next-line @typescript-eslint/promise-function-async
-  close(code: number = 1000, reason: string = 'Normal closure'): Promise<void> {
+  close(code: number = 1000, reason: string = "Normal closure"): Promise<void> {
     return new Promise((resolve, reject) => {
-      this.log.info('Closing Home Assistant connection...');
+      this.log.info("Closing Home Assistant connection...");
       this.closing = true;
       this.connectionGeneration++;
 
@@ -1776,9 +1970,11 @@ export class HomeAssistant extends EventEmitter {
         this.ws?.removeAllListeners();
         this.ws = null;
         this.connected = false;
-        this.rejectPendingRequests(new Error('Home Assistant connection closed'));
-        this.emit('disconnected', 'WebSocket connection closed');
-        this.log.info('Home Assistant connection closed');
+        this.rejectPendingRequests(
+          new Error("Home Assistant connection closed"),
+        );
+        this.emit("disconnected", "WebSocket connection closed");
+        this.log.info("Home Assistant connection closed");
       };
 
       const timer = setTimeout(() => {
@@ -1789,14 +1985,15 @@ export class HomeAssistant extends EventEmitter {
       }, this._responseTimeout).unref();
 
       const onClose = () => {
-        this.log.debug('Close received closed event from Home Assistant');
-        this.emit('socket_closed', code, Buffer.from(reason));
+        this.log.debug("Close received closed event from Home Assistant");
+        this.emit("socket_closed", code, Buffer.from(reason));
         cleanup();
         return resolve();
       };
 
       const onError = () => {
-        const message = 'Close received error event while closing connection to Home Assistant';
+        const message =
+          "Close received error event while closing connection to Home Assistant";
         this.log.debug(message);
         cleanup();
         return reject(new Error(message));
@@ -1809,10 +2006,10 @@ export class HomeAssistant extends EventEmitter {
       }
 
       if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-        this.log.debug('Close websocket is open, closing...');
+        this.log.debug("Close websocket is open, closing...");
         this.ws.close(code, reason);
       } else {
-        this.log.debug('Close websocket is not open, resolving...');
+        this.log.debug("Close websocket is not open, resolving...");
         cleanup();
         return resolve();
       }
@@ -1833,56 +2030,63 @@ export class HomeAssistant extends EventEmitter {
    */
   async fetchData() {
     try {
-      this.log.debug('Fetching initial data from Home Assistant...');
+      this.log.debug("Fetching initial data from Home Assistant...");
 
-      this.hassConfig = (await this.fetch('get_config')) as HassConfig;
+      this.hassConfig = (await this.fetch("get_config")) as HassConfig;
       HomeAssistant.hassConfig = this.hassConfig;
-      this.log.debug('Received config.');
-      this.emit('config', this.hassConfig);
+      this.log.debug("Received config.");
+      this.emit("config", this.hassConfig);
 
       // Try to fetch the core state until it is RUNNING or timeout after 100 seconds
       let retries = 1;
-      while (this.hassConfig.state !== 'RUNNING' && retries <= 100) {
-        this.log.debug(`State is ${CYAN}${this.hassConfig.state}${db}. Waiting (${retries}/100) for Home Assistant to be RUNNING...`);
+      while (this.hassConfig.state !== "RUNNING" && retries <= 100) {
+        this.log.debug(
+          `State is ${CYAN}${this.hassConfig.state}${db}. Waiting (${retries}/100) for Home Assistant to be RUNNING...`,
+        );
         retries += 1;
         await new Promise((resolve) => setTimeout(resolve, 1000));
-        this.hassConfig = (await this.fetch('get_config')) as HassConfig;
+        this.hassConfig = (await this.fetch("get_config")) as HassConfig;
         HomeAssistant.hassConfig = this.hassConfig;
-        this.emit('config', this.hassConfig);
+        this.emit("config", this.hassConfig);
       }
 
-      const [services, devices, entities, states, areas, labels] = await Promise.all([
-        this.fetch('get_services') as Promise<HassServices>,
-        this.fetch('config/device_registry/list') as Promise<HassDevice[]>,
-        this.fetch('config/entity_registry/list') as Promise<HassEntity[]>,
-        this.fetch('get_states') as Promise<HassState[]>,
-        this.fetch('config/area_registry/list') as Promise<HassArea[]>,
-        this.fetch('config/label_registry/list') as Promise<HassLabel[]>,
-      ]);
+      const [services, devices, entities, states, areas, labels] =
+        await Promise.all([
+          this.fetch("get_services") as Promise<HassServices>,
+          this.fetch("config/device_registry/list") as Promise<HassDevice[]>,
+          this.fetch("config/entity_registry/list") as Promise<HassEntity[]>,
+          this.fetch("get_states") as Promise<HassState[]>,
+          this.fetch("config/area_registry/list") as Promise<HassArea[]>,
+          this.fetch("config/label_registry/list") as Promise<HassLabel[]>,
+        ]);
 
       // Replace each snapshot only after every request succeeded. A partial
       // reconnect must never mix stale and current registry data.
       this.hassServices = services;
       this.hassDevices = new Map(devices.map((device) => [device.id, device]));
-      this.hassEntities = new Map(entities.map((entity) => [entity.entity_id, entity]));
-      this.hassStates = new Map(states.map((state) => [state.entity_id, state]));
+      this.hassEntities = new Map(
+        entities.map((entity) => [entity.entity_id, entity]),
+      );
+      this.hassStates = new Map(
+        states.map((state) => [state.entity_id, state]),
+      );
       this.hassAreas = new Map(areas.map((area) => [area.area_id, area]));
       this.hassLabels = new Map(labels.map((label) => [label.label_id, label]));
 
-      this.log.debug('Received services.');
-      this.emit('services', services);
+      this.log.debug("Received services.");
+      this.emit("services", services);
       this.log.debug(`Received ${devices.length} devices.`);
-      this.emit('devices', devices);
+      this.emit("devices", devices);
       this.log.debug(`Received ${entities.length} entities.`);
-      this.emit('entities', entities);
+      this.emit("entities", entities);
       this.log.debug(`Received ${states.length} states.`);
-      this.emit('states', states);
+      this.emit("states", states);
       this.log.debug(`Received ${areas.length} areas.`);
-      this.emit('areas', areas);
+      this.emit("areas", areas);
       this.log.debug(`Received ${labels.length} labels.`);
-      this.emit('labels', labels);
+      this.emit("labels", labels);
 
-      this.log.debug('Initial data fetched successfully.');
+      this.log.debug("Initial data fetched successfully.");
     } catch (error) {
       this.log.error(`Error fetching initial data: ${error}`);
       throw error;
@@ -1906,7 +2110,8 @@ export class HomeAssistant extends EventEmitter {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/promise-function-async
   fetch(type: string): Promise<any> {
     return this.request({ type }).then((response) => {
-      if (!response.success) throw new Error(response.error?.message ?? `Fetch ${type} failed`);
+      if (!response.success)
+        throw new Error(response.error?.message ?? `Fetch ${type} failed`);
       return response.result;
     });
   }
@@ -1926,14 +2131,19 @@ export class HomeAssistant extends EventEmitter {
    */
   // eslint-disable-next-line @typescript-eslint/promise-function-async
   subscribe(event?: string): Promise<number> {
-    const key = event ?? '*';
+    const key = event ?? "*";
     const existing = this.subscriptions.get(key);
     if (existing !== undefined) return Promise.resolve(existing);
-    return this.request({ type: 'subscribe_events', event_type: event }).then((response) => {
-      if (!response.success) throw new Error(response.error?.message ?? `Subscribe ${event ?? 'events'} failed`);
-      this.subscriptions.set(key, response.id);
-      return response.id;
-    });
+    return this.request({ type: "subscribe_events", event_type: event }).then(
+      (response) => {
+        if (!response.success)
+          throw new Error(
+            response.error?.message ?? `Subscribe ${event ?? "events"} failed`,
+          );
+        this.subscriptions.set(key, response.id);
+        return response.id;
+      },
+    );
   }
 
   /**
@@ -1952,10 +2162,13 @@ export class HomeAssistant extends EventEmitter {
   // eslint-disable-next-line @typescript-eslint/promise-function-async
   unsubscribe(subscriptionId: number): Promise<void> {
     return this.request({
-      type: 'unsubscribe_events',
+      type: "unsubscribe_events",
       subscription: subscriptionId,
     }).then((response) => {
-      if (!response.success) throw new Error(response.error?.message ?? `Unsubscribe ${subscriptionId} failed`);
+      if (!response.success)
+        throw new Error(
+          response.error?.message ?? `Unsubscribe ${subscriptionId} failed`,
+        );
       for (const [key, id] of this.subscriptions) {
         if (id === subscriptionId) this.subscriptions.delete(key);
       }
@@ -1976,15 +2189,21 @@ export class HomeAssistant extends EventEmitter {
    * await this.callService('switch', 'toggle', 'switch.living_room');
    * await this.callService('light', 'turn_on', 'light.living_room', { brightness: 255 });
    */
-  callService(domain: string, service: string, entityId: string, serviceData: Record<string, HomeAssistantPrimitive> = {}): Promise<{ context: HassContext; response: unknown }> {
+  callService(
+    domain: string,
+    service: string,
+    entityId: string,
+    serviceData: Record<string, HomeAssistantPrimitive> = {},
+  ): Promise<{ context: HassContext; response: unknown }> {
     const deviceId = this.hassEntities?.get(entityId)?.device_id;
     const queueKey = deviceId ? `dev:${deviceId}` : `ent:${entityId}`;
-    const prevQueue = this.deviceCommandQueues.get(queueKey) ?? Promise.resolve();
+    const prevQueue =
+      this.deviceCommandQueues.get(queueKey) ?? Promise.resolve();
 
     const executeCall = async () => {
       const response = await this.request(
         {
-          type: 'call_service',
+          type: "call_service",
           domain,
           service,
           service_data: { ...serviceData },
@@ -1994,7 +2213,9 @@ export class HomeAssistant extends EventEmitter {
       );
 
       if (!response.success) {
-        throw new Error(response.error?.message ?? `Service ${domain}.${service} failed`);
+        throw new Error(
+          response.error?.message ?? `Service ${domain}.${service} failed`,
+        );
       }
       return response.result as unknown as {
         context: HassContext;

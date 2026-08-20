@@ -1,7 +1,7 @@
 /**
  * Converter utility for soil sensors.
  */
-import { HassState } from '../utils/ha-state.js';
+import { HassState } from "../utils/ha-state.js";
 
 export const soilSensorConverter = {
   /**

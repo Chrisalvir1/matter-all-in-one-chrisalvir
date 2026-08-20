@@ -1,8 +1,8 @@
-import { BaseEntity } from './base.entity.js';
-import { ClusterId } from 'matterbridge/matter/types';
-import { HassState } from '../utils/ha-state.js';
+import { BaseEntity } from "./base.entity.js";
+import { ClusterId } from "matterbridge/matter/types";
+import { HassState } from "../utils/ha-state.js";
 
-const ElectricalGridConditionsId = 0x00A0 as any as ClusterId;
+const ElectricalGridConditionsId = 0x00a0 as any as ClusterId;
 
 export class EnergyTariffEntity extends BaseEntity {
   protected override getRequiredClusterIds(): ClusterId[] {

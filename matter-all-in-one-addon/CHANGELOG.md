@@ -1,3 +1,30 @@
+## [1.4.23] - 2026-08-20
+
+### Changed
+- **Runtime & Toolchain Upgrade:**
+  - Actualizado `matterbridge` a `3.10.5` (cumplimiento con Matter 1.6.0).
+  - Actualizado `ws` a `8.21.3`.
+  - Actualizado `vitest` y `@vitest/coverage-v8` a `5.0.0-rc.2`.
+  - Actualizado `@types/node` a `26.2.0` (Node 24 LTS support).
+  - Actualizado Docker base image a `node:24.19.0-alpine3.24` (multi-arch amd64 / aarch64).
+  - Actualizados los workflows de CI/CD para utilizar Node.js `24.19.x`.
+
+### Added
+- **Matter 1.6 - Thermostat Suggestions Support:**
+  - Soporte de `Thermostat.Feature.ThermostatSuggestions` a través de Matterbridge 3.10.5.
+
+## Matter 1.6 compliance notes
+- Joint Fabric: not implemented. Requires fabric-administrator role,
+  which is out of scope for a Matterbridge-based bridge. No controller
+  (Apple Home, Google Home, Alexa) has shipped Joint Fabric as of Aug 2026.
+  Revisit once matter.js exposes a stable API and at least one controller
+  supports it.
+- NFC Commissioning: not implemented. Requires physical NFC hardware
+  on the commissioned device plus stack-level support in matter.js,
+  neither of which applies to a software-only HA bridge. matter.js@0.17.7
+  does not expose a public NFC commissioning API. Revisit if matter.js
+  adds bridge-side NFC discovery support.
+
 ## [1.4.22] - 2026-08-16
 
 ### Fixed

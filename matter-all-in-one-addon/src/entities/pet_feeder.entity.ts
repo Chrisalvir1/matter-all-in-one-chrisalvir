@@ -18,10 +18,10 @@
  * Compatible HA domains: `button`, `switch`
  */
 
-import { MatterbridgeEndpoint, DeviceTypeDefinition } from 'matterbridge';
-import { BaseEntity } from './base.entity.js';
-import type { HassState } from '../utils/ha-state.js';
-import { safeUpdateAttribute } from '../utils/matter-attributes.js';
+import { MatterbridgeEndpoint, DeviceTypeDefinition } from "matterbridge";
+import { BaseEntity } from "./base.entity.js";
+import type { HassState } from "../utils/ha-state.js";
+import { safeUpdateAttribute } from "../utils/matter-attributes.js";
 
 export class PetFeederEntity extends BaseEntity {
   constructor(
@@ -34,43 +34,70 @@ export class PetFeederEntity extends BaseEntity {
 
   // ─── State sync (HA → Matter) ─────────────────────────────────────────
 
-  override async updateState(newState: HassState, _isInitialSync = false): Promise<void> {
+  override async updateState(
+    newState: HassState,
+    _isInitialSync = false,
+  ): Promise<void> {
     if (!this.endpoint) return;
-    const isOn = newState.state === 'on';
-    await safeUpdateAttribute(this.endpoint, 'onOff' as any, 'onOff', isOn, this.platform.log);
+    const isOn = newState.state === "on";
+    await safeUpdateAttribute(
+      this.endpoint,
+      "onOff" as any,
+      "onOff",
+      isOn,
+      this.platform.log,
+    );
     this.state = newState;
   }
 
   // ─── Command handlers (Matter → HA) ───────────────────────────────────
 
-  protected override registerCommandHandlers(endpoint?: MatterbridgeEndpoint): void {
+  protected override registerCommandHandlers(
+    endpoint?: MatterbridgeEndpoint,
+  ): void {
     if (!endpoint) endpoint = this.endpoint;
-    const [domain] = this.entityId.split('.');
+    const [domain] = this.entityId.split(".");
 
-    endpoint.addCommandHandler('on', async () => {
+    endpoint.addCommandHandler("on", async () => {
       try {
-        if (domain === 'button') {
-          await this.platform.ha?.callService('button', 'press', this.entityId);
+        if (domain === "button") {
+          await this.platform.ha?.callService("button", "press", this.entityId);
         } else {
-          await this.platform.ha?.callService('switch', 'turn_on', this.entityId);
+          await this.platform.ha?.callService(
+            "switch",
+            "turn_on",
+            this.entityId,
+          );
         }
-        this.platform.log?.info?.(`[PetFeederEntity] Feed triggered on ${this.entityId}`);
+        this.platform.log?.info?.(
+          `[PetFeederEntity] Feed triggered on ${this.entityId}`,
+        );
       } catch (err) {
-        this.platform.log?.error?.(`[PetFeederEntity] Failed to trigger feed: ${err}`);
+        this.platform.log?.error?.(
+          `[PetFeederEntity] Failed to trigger feed: ${err}`,
+        );
       }
     });
 
-    endpoint.addCommandHandler('off', async () => {
+    endpoint.addCommandHandler("off", async () => {
       try {
-        if (domain === 'switch') {
-          await this.platform.ha?.callService('switch', 'turn_off', this.entityId);
+        if (domain === "switch") {
+          await this.platform.ha?.callService(
+            "switch",
+            "turn_off",
+            this.entityId,
+          );
         }
-        this.platform.log?.info?.(`[PetFeederEntity] Off command on ${this.entityId}`);
+        this.platform.log?.info?.(
+          `[PetFeederEntity] Off command on ${this.entityId}`,
+        );
       } catch (err) {
-        this.platform.log?.error?.(`[PetFeederEntity] Failed off command: ${err}`);
+        this.platform.log?.error?.(
+          `[PetFeederEntity] Failed off command: ${err}`,
+        );
       }
     });
   }
 
-  static matterTypeLabel = 'PetFeeder' as const;
+  static matterTypeLabel = "PetFeeder" as const;
 }
