@@ -1,7 +1,7 @@
 /**
  * Converter utility for fan domain.
  */
-import { HassState } from '../utils/ha-state.js';
+import { HassState } from "../utils/ha-state.js";
 
 export const fanConverter = {
   /**

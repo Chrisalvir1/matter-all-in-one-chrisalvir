@@ -1,8 +1,8 @@
 /**
  * Utilities for getting and setting attributes on Matter endpoints.
  */
-import { MatterbridgeEndpoint } from 'matterbridge';
-import { ClusterId } from 'matterbridge/matter/types';
+import { MatterbridgeEndpoint } from "matterbridge";
+import { ClusterId } from "matterbridge/matter/types";
 
 /**
  * Safely set an attribute value on a MatterbridgeEndpoint, updating it and catching errors.
@@ -12,7 +12,7 @@ export async function safeSetAttribute(
   clusterId: ClusterId,
   attributeName: string,
   value: any,
-  log?: any
+  log?: any,
 ): Promise<boolean> {
   try {
     if (endpoint.hasAttributeServer(clusterId, attributeName)) {
@@ -20,8 +20,10 @@ export async function safeSetAttribute(
       return true;
     }
   } catch (err) {
-    if (log && typeof log.error === 'function') {
-      log.error(`Failed to set attribute ${attributeName} on cluster ${clusterId}: ${err}`);
+    if (log && typeof log.error === "function") {
+      log.error(
+        `Failed to set attribute ${attributeName} on cluster ${clusterId}: ${err}`,
+      );
     }
   }
   return false;
@@ -35,7 +37,7 @@ export async function safeUpdateAttribute(
   clusterId: ClusterId,
   attributeName: string,
   value: any,
-  log?: any
+  log?: any,
 ): Promise<boolean> {
   try {
     if (endpoint.hasAttributeServer(clusterId, attributeName)) {
@@ -43,8 +45,10 @@ export async function safeUpdateAttribute(
       return true;
     }
   } catch (err) {
-    if (log && typeof log.error === 'function') {
-      log.error(`Failed to update attribute ${attributeName} on cluster ${clusterId}: ${err}`);
+    if (log && typeof log.error === "function") {
+      log.error(
+        `Failed to update attribute ${attributeName} on cluster ${clusterId}: ${err}`,
+      );
     }
   }
   return false;

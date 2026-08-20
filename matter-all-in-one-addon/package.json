@@ -1,6 +1,6 @@
 {
   "name": "matter-all-in-one-chrisalvir",
-  "version": "1.4.22",
+  "version": "1.4.23",
   "description": "Standards-based Matter bridge for Home Assistant - HomeKit compatible mappings",
   "author": "chrisalvir",
   "license": "Apache-2.0",
@@ -18,25 +18,28 @@
   ],
   "dependencies": {
     "mqtt": "^5.15.2",
-    "ws": "^8.21.1"
+    "ws": "^8.21.3"
   },
   "peerDependencies": {
-    "matterbridge": ">= 3.10.4"
+    "matterbridge": ">= 3.10.5"
   },
   "devDependencies": {
-    "@types/node": "^24.13.3",
+    "@types/node": "^26.2.0",
     "@types/ws": "^8.18.1",
-    "@vitest/coverage-v8": "^5.0.0-rc.1",
-    "matterbridge": "^3.10.4",
+    "@vitest/coverage-v8": "^5.0.0-rc.2",
+    "matterbridge": "^3.10.5",
     "prettier": "^3.9.6",
     "typescript": "^7.0.2",
     "vite": "^8.2.1",
-    "vitest": "^5.0.0-rc.1"
+    "vitest": "^5.0.0-rc.2"
   },
   "scripts": {
     "clean": "node scripts/clean-dist.mjs",
     "build": "npm run clean && tsc -p tsconfig.build.json && mkdir -p dist/frontend && cp src/frontend/* dist/frontend/",
     "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\"",
+    "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -53,7 +56,7 @@
   ],
   "matterbridge": {
     "name": "matter-all-in-one-chrisalvir",
-    "version": "1.4.0",
+    "version": "1.4.23",
     "author": "chrisalvir",
     "description": "Standards-based Matter 1.6 bridge for Home Assistant"
   }

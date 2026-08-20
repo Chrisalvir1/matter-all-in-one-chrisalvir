@@ -23,7 +23,7 @@
  * @see https://github.com/project-chip/connectedhomeip/blob/master/docs/clusters/RoboticVacuumCleaner.md
  */
 
-import type { HassState } from '../utils/ha-state.js';
+import type { HassState } from "../utils/ha-state.js";
 
 // ─── Matter RVC Cluster IDs ────────────────────────────────────────────────
 
@@ -62,14 +62,14 @@ export type RvcOperationalStateValue =
  * https://www.home-assistant.io/integrations/vacuum/
  */
 export type HaVacuumState =
-  | 'cleaning'
-  | 'docked'
-  | 'idle'
-  | 'paused'
-  | 'returning'
-  | 'error'
-  | 'unavailable'
-  | 'unknown'
+  | "cleaning"
+  | "docked"
+  | "idle"
+  | "paused"
+  | "returning"
+  | "error"
+  | "unavailable"
+  | "unknown"
   | string;
 
 // ─── State mapping ────────────────────────────────────────────────────────
@@ -77,21 +77,23 @@ export type HaVacuumState =
 /**
  * Maps a HA vacuum state string to the closest Matter RvcOperationalState value.
  */
-export function haVacuumStateToMatter(haState: HaVacuumState): RvcOperationalStateValue {
+export function haVacuumStateToMatter(
+  haState: HaVacuumState,
+): RvcOperationalStateValue {
   switch (haState.toLowerCase()) {
-    case 'cleaning':
-    case 'on':
+    case "cleaning":
+    case "on":
       return RvcOperationalStateId.Running;
-    case 'paused':
+    case "paused":
       return RvcOperationalStateId.Paused;
-    case 'docked':
+    case "docked":
       return RvcOperationalStateId.Docked;
-    case 'returning':
+    case "returning":
       return RvcOperationalStateId.SeekingCharger;
-    case 'error':
+    case "error":
       return RvcOperationalStateId.Error;
-    case 'idle':
-    case 'off':
+    case "idle":
+    case "off":
     default:
       return RvcOperationalStateId.Stopped;
   }
@@ -103,7 +105,7 @@ export function haVacuumStateToMatter(haState: HaVacuumState): RvcOperationalSta
  */
 export function haVacuumIsActive(haState: HaVacuumState): boolean {
   const normalized = haState.toLowerCase();
-  return normalized === 'cleaning' || normalized === 'on';
+  return normalized === "cleaning" || normalized === "on";
 }
 
 /**
@@ -118,20 +120,22 @@ export function isVacuumChargingOrDocked(entity: HassState): boolean {
     attributes.status,
     attributes.activity,
     attributes.state,
-    ...(rawDps && typeof rawDps === 'object' ? Object.values(rawDps as Record<string, unknown>) : []),
+    ...(rawDps && typeof rawDps === "object"
+      ? Object.values(rawDps as Record<string, unknown>)
+      : []),
   ];
 
   return signals.some((value) => {
-    if (typeof value !== 'string') return false;
+    if (typeof value !== "string") return false;
     const normalized = value.trim().toLowerCase();
     return [
-      'charging',
-      'charge',
-      'docked',
-      'on_charge',
-      'in_charge',
-      'charging_completed',
-      'charge_done',
+      "charging",
+      "charge",
+      "docked",
+      "on_charge",
+      "in_charge",
+      "charging_completed",
+      "charge_done",
     ].includes(normalized);
   });
 }
@@ -146,20 +150,20 @@ export function isVacuumChargingOrDocked(entity: HassState): boolean {
  * `null` when there is no matching HA service.
  */
 export function matterCommandToHaVacuum(
-  command: 'start' | 'stop' | 'pause' | 'resume' | 'goHome',
+  command: "start" | "stop" | "pause" | "resume" | "goHome",
 ): { service: string; extra?: Record<string, unknown> } | null {
   switch (command) {
-    case 'start':
-      return { service: 'vacuum.start' };
-    case 'stop':
-      return { service: 'vacuum.stop' };
-    case 'pause':
-      return { service: 'vacuum.pause' };
-    case 'resume':
+    case "start":
+      return { service: "vacuum.start" };
+    case "stop":
+      return { service: "vacuum.stop" };
+    case "pause":
+      return { service: "vacuum.pause" };
+    case "resume":
       // HA doesn't have a dedicated resume — start again
-      return { service: 'vacuum.start' };
-    case 'goHome':
-      return { service: 'vacuum.return_to_base' };
+      return { service: "vacuum.start" };
+    case "goHome":
+      return { service: "vacuum.return_to_base" };
     default:
       return null;
   }
@@ -173,24 +177,26 @@ export function matterCommandToHaVacuum(
  *
  * Falls back to `null` when unknown so callers can skip the attribute update.
  */
-export function haFanSpeedToMatter(fanSpeed: string | undefined): number | null {
+export function haFanSpeedToMatter(
+  fanSpeed: string | undefined,
+): number | null {
   if (fanSpeed == null) return null;
   switch (fanSpeed.toLowerCase()) {
-    case 'quiet':
-    case 'min':
-    case 'eco':
+    case "quiet":
+    case "min":
+    case "eco":
       return 25;
-    case 'standard':
-    case 'normal':
-    case 'medium':
+    case "standard":
+    case "normal":
+    case "medium":
       return 50;
-    case 'strong':
-    case 'high':
-    case 'turbo':
-    case 'boost':
+    case "strong":
+    case "high":
+    case "turbo":
+    case "boost":
       return 75;
-    case 'max':
-    case 'max+':
+    case "max":
+    case "max+":
       return 100;
     default: {
       // Try to parse numeric strings ("50", "75", etc.)
@@ -207,27 +213,31 @@ export function haFanSpeedToMatter(fanSpeed: string | undefined): number | null 
  * Normalises attribute names across Tuya, Roborock, iRobot, Dreame, etc.
  */
 export interface VacuumAttributes {
-  battery_level: number | null;    // 0-100
-  fan_speed: string | undefined;   // "quiet" | "standard" | "strong" | "max" | ...
-  fan_speed_list: string[];         // available fan speed levels
-  status: string | undefined;      // human-readable status (model-specific)
-  error_code: number | null;        // error code from device
+  battery_level: number | null; // 0-100
+  fan_speed: string | undefined; // "quiet" | "standard" | "strong" | "max" | ...
+  fan_speed_list: string[]; // available fan speed levels
+  status: string | undefined; // human-readable status (model-specific)
+  error_code: number | null; // error code from device
 }
 
 export function extractVacuumAttributes(entity: HassState): VacuumAttributes {
   const a = entity.attributes ?? {};
-  
+
   // Try to parse battery level from standard attributes
-  let battery = typeof a['battery_level'] === 'number' ? a['battery_level'] :
-                typeof a['battery'] === 'number' ? a['battery'] : null;
+  let battery =
+    typeof a["battery_level"] === "number"
+      ? a["battery_level"]
+      : typeof a["battery"] === "number"
+        ? a["battery"]
+        : null;
 
   // Fallback: If not found, try to extract from raw_dps (common in Tuya/Smart Life integrations)
-  if (battery === null && a['raw_dps'] && typeof a['raw_dps'] === 'object') {
-    const rawDps = a['raw_dps'] as Record<string, unknown>;
-    const dps6 = rawDps['6'];
-    if (typeof dps6 === 'number') {
+  if (battery === null && a["raw_dps"] && typeof a["raw_dps"] === "object") {
+    const rawDps = a["raw_dps"] as Record<string, unknown>;
+    const dps6 = rawDps["6"];
+    if (typeof dps6 === "number") {
       battery = dps6;
-    } else if (typeof dps6 === 'string') {
+    } else if (typeof dps6 === "string") {
       const parsed = parseInt(dps6, 10);
       if (!isNaN(parsed)) battery = parsed;
     }
@@ -236,46 +246,55 @@ export function extractVacuumAttributes(entity: HassState): VacuumAttributes {
   return {
     battery_level: battery,
     fan_speed:
-      typeof a['fan_speed'] === 'string' ? a['fan_speed'] :
-      typeof a['suction'] === 'string' ? a['suction'] : undefined,
-    fan_speed_list: Array.isArray(a['fan_speed_list']) ? a['fan_speed_list'] : [],
-    status:
-      typeof a['status'] === 'string' ? a['status'] : undefined,
-    error_code:
-      typeof a['error_code'] === 'number' ? a['error_code'] : null,
+      typeof a["fan_speed"] === "string"
+        ? a["fan_speed"]
+        : typeof a["suction"] === "string"
+          ? a["suction"]
+          : undefined,
+    fan_speed_list: Array.isArray(a["fan_speed_list"])
+      ? a["fan_speed_list"]
+      : [],
+    status: typeof a["status"] === "string" ? a["status"] : undefined,
+    error_code: typeof a["error_code"] === "number" ? a["error_code"] : null,
   };
 }
 
 // ─── Clean Mode mapping (RVC Clean Mode cluster 0x0055) ─────────────────
 
 export interface VacuumCleanModeOption {
-  option: string;  // HA select option (e.g., "smart", "random", "wall_follow", "spiral")
-  mode: number;    // Matter mode ID (1, 2, 3, 4...)
-  label: string;   // Human-readable label in Spanish
+  option: string; // HA select option (e.g., "smart", "random", "wall_follow", "spiral")
+  mode: number; // Matter mode ID (1, 2, 3, 4...)
+  label: string; // Human-readable label in Spanish
   modeTag: number; // Distinguishes this option in Apple Home's RVC mode picker.
 }
 
-const CLEAN_MODE_MAPPING: Record<string, { mode: number; label: string; modeTag: number }> = {
-  smart: { mode: 1, label: 'Automático', modeTag: 0x0000 }, // Auto
-  auto: { mode: 1, label: 'Automático', modeTag: 0x0000 },
-  random: { mode: 2, label: 'Aleatorio', modeTag: 0x0001 }, // Quick
-  wall_follow: { mode: 3, label: 'Seguimiento de pared', modeTag: 0x0002 }, // Quiet
-  edge: { mode: 3, label: 'Seguimiento de pared', modeTag: 0x0002 },
-  spiral: { mode: 4, label: 'Espiral', modeTag: 0x4000 },
-  spot: { mode: 4, label: 'Espiral', modeTag: 0x4000 },
+const CLEAN_MODE_MAPPING: Record<
+  string,
+  { mode: number; label: string; modeTag: number }
+> = {
+  smart: { mode: 1, label: "Automático", modeTag: 0x0000 }, // Auto
+  auto: { mode: 1, label: "Automático", modeTag: 0x0000 },
+  random: { mode: 2, label: "Aleatorio", modeTag: 0x0001 }, // Quick
+  wall_follow: { mode: 3, label: "Seguimiento de pared", modeTag: 0x0002 }, // Quiet
+  edge: { mode: 3, label: "Seguimiento de pared", modeTag: 0x0002 },
+  spiral: { mode: 4, label: "Espiral", modeTag: 0x4000 },
+  spot: { mode: 4, label: "Espiral", modeTag: 0x4000 },
 };
 
 /**
  * Filters and maps HA clean mode selector options to valid RVC Clean Mode definitions.
  * Explicitly excludes non-clean options such as 'standby', 'chargego', 'manual', 'stop'.
  */
-export function getSupportedVacuumCleanModes(options: string[]): VacuumCleanModeOption[] {
+export function getSupportedVacuumCleanModes(
+  options: string[],
+): VacuumCleanModeOption[] {
   const result: VacuumCleanModeOption[] = [];
   const seenModes = new Set<number>();
 
   for (const opt of options) {
     const key = opt.toLowerCase().trim();
-    if (['standby', 'chargego', 'manual', 'stop', 'off', 'idle'].includes(key)) continue;
+    if (["standby", "chargego", "manual", "stop", "off", "idle"].includes(key))
+      continue;
 
     const mapped = CLEAN_MODE_MAPPING[key];
     if (mapped && !seenModes.has(mapped.mode)) {
@@ -300,13 +319,14 @@ export function getSupportedVacuumCleanModes(options: string[]): VacuumCleanMode
  */
 export interface VacuumMatterMeta {
   /** Matter device type discriminator shown in the UI */
-  matterType: 'RoboticVacuumCleaner';
+  matterType: "RoboticVacuumCleaner";
   /** Short human-readable label for the QR code selector */
   displayLabel: string;
   /** HomeKit-compatible: true — Apple Home supports RVC via Matter ≥1.2 */
   homekitCompatible: true;
   /** Vendor-specific hint parsed from the entity's integration manifest */
-  vendorHint: 'tuya' | 'smartlife' | 'roborock' | 'irobot' | 'dreame' | 'generic';
+  vendorHint:
+    "tuya" | "smartlife" | "roborock" | "irobot" | "dreame" | "generic";
 }
 
 /**
@@ -315,22 +335,26 @@ export interface VacuumMatterMeta {
  */
 export function buildVacuumMatterMeta(entity: HassState): VacuumMatterMeta {
   const integrationId =
-    (entity.attributes?.['integration'] as string | undefined)?.toLowerCase() ?? '';
+    (entity.attributes?.["integration"] as string | undefined)?.toLowerCase() ??
+    "";
 
-  let vendorHint: VacuumMatterMeta['vendorHint'] = 'generic';
-  if (integrationId.includes('tuya') || integrationId.includes('smart_life')) {
-    vendorHint = 'tuya';
-  } else if (integrationId.includes('roborock')) {
-    vendorHint = 'roborock';
-  } else if (integrationId.includes('irobot') || integrationId.includes('roomba')) {
-    vendorHint = 'irobot';
-  } else if (integrationId.includes('dreame')) {
-    vendorHint = 'dreame';
+  let vendorHint: VacuumMatterMeta["vendorHint"] = "generic";
+  if (integrationId.includes("tuya") || integrationId.includes("smart_life")) {
+    vendorHint = "tuya";
+  } else if (integrationId.includes("roborock")) {
+    vendorHint = "roborock";
+  } else if (
+    integrationId.includes("irobot") ||
+    integrationId.includes("roomba")
+  ) {
+    vendorHint = "irobot";
+  } else if (integrationId.includes("dreame")) {
+    vendorHint = "dreame";
   }
 
   return {
-    matterType: 'RoboticVacuumCleaner',
-    displayLabel: entity.attributes?.['friendly_name'] ?? entity.entity_id,
+    matterType: "RoboticVacuumCleaner",
+    displayLabel: entity.attributes?.["friendly_name"] ?? entity.entity_id,
     homekitCompatible: true,
     vendorHint,
   };
@@ -342,8 +366,14 @@ export function buildVacuumMatterMeta(entity: HassState): VacuumMatterMeta {
  * Determines whether a HA entity should be handled by this converter.
  * Matches `vacuum.*` domain entities or entities with roboticVacuumCleaner profile.
  */
-export function isVacuumEntity(entity: HassState, effectiveProfile?: string): boolean {
-  return entity.entity_id.startsWith('vacuum.') || effectiveProfile === 'roboticVacuumCleaner';
+export function isVacuumEntity(
+  entity: HassState,
+  effectiveProfile?: string,
+): boolean {
+  return (
+    entity.entity_id.startsWith("vacuum.") ||
+    effectiveProfile === "roboticVacuumCleaner"
+  );
 }
 
 /**

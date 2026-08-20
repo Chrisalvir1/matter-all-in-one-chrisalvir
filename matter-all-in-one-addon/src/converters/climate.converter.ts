@@ -22,14 +22,14 @@ export const climateConverter = {
    */
   toMatterSystemMode(mode: string | null): number {
     switch (mode) {
-      case 'off':
+      case "off":
         return 0; // Off
-      case 'heat':
+      case "heat":
         return 4; // Heat
-      case 'cool':
+      case "cool":
         return 3; // Cool
-      case 'auto':
-      case 'heat_cool':
+      case "auto":
+      case "heat_cool":
         return 1; // Auto
       default:
         return 0;
@@ -42,15 +42,15 @@ export const climateConverter = {
   toHaHvacMode(systemMode: number): string {
     switch (systemMode) {
       case 0:
-        return 'off';
+        return "off";
       case 4:
-        return 'heat';
+        return "heat";
       case 3:
-        return 'cool';
+        return "cool";
       case 1:
-        return 'auto';
+        return "auto";
       default:
-        return 'off';
+        return "off";
     }
   },
 };

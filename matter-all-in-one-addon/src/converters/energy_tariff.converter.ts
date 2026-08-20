@@ -1,7 +1,7 @@
 /**
  * Converter utility for energy tariff and monetary sensors in Matter 1.5.1.
  */
-import { HassState } from '../utils/ha-state.js';
+import { HassState } from "../utils/ha-state.js";
 
 export const energyTariffConverter = {
   /**

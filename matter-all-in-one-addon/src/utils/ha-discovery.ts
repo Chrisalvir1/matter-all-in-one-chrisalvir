@@ -15,8 +15,8 @@
  * @license Apache-2.0
  */
 
-import { networkInterfaces } from 'node:os';
-import http from 'node:http';
+import { networkInterfaces } from "node:os";
+import http from "node:http";
 
 /** Timeout in ms for each probe request */
 const PROBE_TIMEOUT_MS = 1500;
@@ -31,7 +31,10 @@ async function probeHassUrl(baseUrl: string): Promise<string | null> {
     try {
       const req = http.get(url, { timeout: PROBE_TIMEOUT_MS }, (res) => {
         // HA responds with 200 or 401 on /api/. Both mean HA is there.
-        if (res.statusCode && (res.statusCode === 200 || res.statusCode === 401)) {
+        if (
+          res.statusCode &&
+          (res.statusCode === 200 || res.statusCode === 401)
+        ) {
           resolve(baseUrl);
         } else {
           resolve(null);
@@ -39,8 +42,11 @@ async function probeHassUrl(baseUrl: string): Promise<string | null> {
         // Consume response body to free socket
         res.resume();
       });
-      req.on('error', () => resolve(null));
-      req.on('timeout', () => { req.destroy(); resolve(null); });
+      req.on("error", () => resolve(null));
+      req.on("timeout", () => {
+        req.destroy();
+        resolve(null);
+      });
     } catch {
       resolve(null);
     }
@@ -56,9 +62,9 @@ function getLocalSubnets(): string[] {
   const ifaces = networkInterfaces();
   for (const name of Object.keys(ifaces)) {
     for (const iface of ifaces[name] ?? []) {
-      if (iface.family !== 'IPv4' || iface.internal) continue;
+      if (iface.family !== "IPv4" || iface.internal) continue;
       // Extract the /24 subnet prefix  e.g. "192.168.1"
-      const parts = iface.address.split('.');
+      const parts = iface.address.split(".");
       if (parts.length === 4) {
         subnets.add(`${parts[0]}.${parts[1]}.${parts[2]}`);
       }
@@ -93,7 +99,9 @@ async function scanSubnet(subnet: string): Promise<string | null> {
  * @returns The base HTTP URL of the discovered HA instance (e.g. "http://192.168.1.100:8123"),
  *          or null if no HA instance was found.
  */
-export async function discoverHassUrl(log?: (msg: string) => void): Promise<string | null> {
+export async function discoverHassUrl(
+  log?: (msg: string) => void,
+): Promise<string | null> {
   const info = (msg: string) => log?.(msg);
 
   // 1. Environment variable (set by HA OS supervisor inside add-ons)
@@ -104,12 +112,12 @@ export async function discoverHassUrl(log?: (msg: string) => void): Promise<stri
 
   // 2. Well-known hostnames — fastest path on most networks
   const wellKnown = [
-    'http://homeassistant.local:8123',
-    'http://homeassistant:8123',
-    'http://supervisor/core',         // only works inside HA OS add-on
+    "http://homeassistant.local:8123",
+    "http://homeassistant:8123",
+    "http://supervisor/core", // only works inside HA OS add-on
   ];
 
-  info('Probing well-known Home Assistant hostnames...');
+  info("Probing well-known Home Assistant hostnames...");
   for (const candidate of wellKnown) {
     const result = await probeHassUrl(candidate);
     if (result) {
@@ -121,11 +129,11 @@ export async function discoverHassUrl(log?: (msg: string) => void): Promise<stri
   // 3. Scan local subnets
   const subnets = getLocalSubnets();
   if (subnets.length === 0) {
-    info('No local network interfaces found. Cannot scan for Home Assistant.');
+    info("No local network interfaces found. Cannot scan for Home Assistant.");
     return null;
   }
 
-  info(`Scanning local subnets for Home Assistant: ${subnets.join(', ')}`);
+  info(`Scanning local subnets for Home Assistant: ${subnets.join(", ")}`);
   for (const subnet of subnets) {
     const result = await scanSubnet(subnet);
     if (result) {
@@ -134,37 +142,37 @@ export async function discoverHassUrl(log?: (msg: string) => void): Promise<stri
     }
   }
 
-  info('Home Assistant not found on local network.');
+  info("Home Assistant not found on local network.");
   return null;
 }
 
 export function toWsUrl(url: string): string {
-  if (url.includes('supervisor')) {
-    let parsed = url.replace(/^https?:\/\//, 'ws://');
-    if (!parsed.startsWith('ws://')) {
-      parsed = 'ws://' + parsed;
+  if (url.includes("supervisor")) {
+    let parsed = url.replace(/^https?:\/\//, "ws://");
+    if (!parsed.startsWith("ws://")) {
+      parsed = "ws://" + parsed;
     }
     return parsed;
   }
 
   let parsedUrl = url
-    .replace(/^\/core\/?$/, '')          // bare /core path
-    .replace(/\/core\/?$/, '');          // trailing /core
+    .replace(/^\/core\/?$/, "") // bare /core path
+    .replace(/\/core\/?$/, ""); // trailing /core
 
   // If the user just typed an IP or hostname without protocol, assume http (which becomes ws)
-  if (!parsedUrl.includes('://')) {
-    parsedUrl = 'http://' + parsedUrl;
+  if (!parsedUrl.includes("://")) {
+    parsedUrl = "http://" + parsedUrl;
   }
 
   // Convert http/https to ws/wss
   parsedUrl = parsedUrl
-    .replace(/^https:\/\//, 'wss://')
-    .replace(/^http:\/\//, 'ws://');
+    .replace(/^https:\/\//, "wss://")
+    .replace(/^http:\/\//, "ws://");
 
   // If it's a standard ws:// connection without a port, append the default HA port 8123
   // (We skip this for wss:// as standard HTTPS ports are 443, usually handled by proxies)
-  if (parsedUrl.startsWith('ws://') && !parsedUrl.match(/:\d+(\/.*)?$/)) {
-    parsedUrl = parsedUrl.replace(/(ws:\/\/[^/]+)/, '$1:8123');
+  if (parsedUrl.startsWith("ws://") && !parsedUrl.match(/:\d+(\/.*)?$/)) {
+    parsedUrl = parsedUrl.replace(/(ws:\/\/[^/]+)/, "$1:8123");
   }
 
   return parsedUrl;

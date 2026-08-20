@@ -1,14 +1,14 @@
 /**
  * Converter utility for light and switch domains.
  */
-import { HassState } from '../utils/ha-state.js';
+import { HassState } from "../utils/ha-state.js";
 
 export const lightConverter = {
   /**
    * Map HA state to OnOff boolean.
    */
   toOnOff(state: HassState): boolean {
-    return state.state === 'on';
+    return state.state === "on";
   },
 
   /**
