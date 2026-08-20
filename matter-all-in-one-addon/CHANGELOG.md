@@ -1,3 +1,12 @@
+## [1.4.27] - 2026-08-20
+
+### Added
+- **Pestaña Dedicada "Cámaras 📹" en el Frontend:**
+  - Nueva pestaña de filtro en la barra superior con contador interactivo de cámaras.
+  - Botón directo de escaneo "🔍 Escanear Cámaras en Red (macOS / LAN)" dentro de la pestaña para descubrir cámaras de Scrypted / NVR / RTSP sin abrir ajustes.
+- **Flujo de CI/CD Seguro con SHAs de Commit Completos:**
+  - Corregido el flujo de publicación en GitHub Actions cumpliendo estrictamente la política de seguridad del repositorio.
+
 ## [1.4.26] - 2026-08-20
 
 ### Added
