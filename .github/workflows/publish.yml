@@ -40,6 +40,13 @@ jobs:
         run: npm run test
 
       - name: Publish to NPM
-        run: npm publish
+        run: |
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          PUBLISHED_VERSION=$(npm view matter-all-in-one-chrisalvir version 2>/dev/null || echo "")
+          if [ "$CURRENT_VERSION" = "$PUBLISHED_VERSION" ]; then
+            echo "Version $CURRENT_VERSION is already published to npm. Skipping."
+          else
+            npm publish
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
