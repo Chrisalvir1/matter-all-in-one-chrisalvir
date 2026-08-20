@@ -1,3 +1,12 @@
+## [1.4.25] - 2026-08-20
+
+### Added
+- **Integración con Scrypted NVR (Cámaras & Sensores en Matter):**
+  - Detección y auto-descubrimiento en red local (LAN / Zeroconf / Subnet Probing) de servidores Scrypted NVR.
+  - Exportación de cámaras como accesorios Matter independientes con código QR propio.
+  - Soporte de sensor de presencia/movimiento (`OccupancySensing`), timbres/pulsadores (`BooleanState`) y reflectores/luces (`OnOff`).
+  - Panel de monitorización y ajustes en tiempo real en la UI del add-on (IP, latencia, conteo de cámaras).
+
 ## [1.4.24] - 2026-08-20
 
 ### Fixed
