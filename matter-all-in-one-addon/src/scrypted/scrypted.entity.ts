@@ -77,7 +77,14 @@ export class ScryptedCameraEntity {
       this.camera.motionState,
     );
 
-    // If camera has doorbell or light, require OnOff cluster behavior
+    // If camera has doorbell, add BooleanState cluster
+    if (this.camera.hasDoorbell) {
+      this.endpoint.createDefaultBooleanStateClusterServer(
+        this.camera.doorbellTriggered,
+      );
+    }
+
+    // If camera has light, require OnOff cluster behavior
     if (this.camera.hasLight) {
       this.endpoint.behaviors.require(MatterbridgeOnOffServer.with());
     }
@@ -100,6 +107,19 @@ export class ScryptedCameraEntity {
         OccupancySensing.id,
         "occupancy",
         { occupied: this.camera.motionState },
+        this.platform.log,
+      );
+    }
+
+    if (
+      this.camera.hasDoorbell &&
+      this.endpoint.hasAttributeServer(BooleanState.id, "stateValue")
+    ) {
+      await safeSetAttribute(
+        this.endpoint,
+        BooleanState.id,
+        "stateValue",
+        this.camera.doorbellTriggered,
         this.platform.log,
       );
     }
