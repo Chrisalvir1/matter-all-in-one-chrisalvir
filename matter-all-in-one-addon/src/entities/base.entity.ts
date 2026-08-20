@@ -79,7 +79,7 @@ export class BaseEntity {
   private shouldIgnoreStateUpdate(
     attribute: string,
     haValue: any,
-    windowMs = 3500,
+    windowMs = 6000,
   ): boolean {
     const key = `${this.entityId}:${attribute}`;
     const last = this.lastCommands.get(key);
@@ -91,9 +91,8 @@ export class BaseEntity {
       return false;
     }
 
-    // If HA matches the value we commanded, clear lockout early and accept
+    // If HA matches the value we commanded, accept without prematurely wiping lockout
     if (!this.isDifferent(attribute, last.value, haValue)) {
-      this.lastCommands.delete(key);
       return false;
     }
 

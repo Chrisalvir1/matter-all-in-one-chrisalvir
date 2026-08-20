@@ -1,3 +1,10 @@
+## [1.4.28] - 2026-08-20
+
+### Fixed
+- **Solución Definitiva al Bucle de Apagado de Luz en Ventiladores/Difusores (Apple HomeKit):**
+  - Se actualiza de forma optimista e inmediata el atributo `OnOff.onOff = false` en el endpoint Matter al recibir el comando `off` o `moveToLevel(0)`.
+  - Se amplió la ventana de protección (*command lockout*) a 6000ms y se eliminó la limpieza prematura del candado de estado ante ecos intermedios de dispositivos Tuya/BLE/WiFi, impidiendo que Apple HomeKit vuelva a encender la luz sola en bucle tras apagarla.
+
 ## [1.4.27] - 2026-08-20
 
 ### Added

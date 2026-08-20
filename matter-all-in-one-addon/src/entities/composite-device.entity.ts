@@ -155,7 +155,7 @@ export class CompositeDeviceEntity {
     entityId: string,
     attribute: string,
     haValue: any,
-    windowMs = 3500,
+    windowMs = 6000,
   ): boolean {
     const key = `${entityId}:${attribute}`;
     const last = this.lastCommands.get(key);
@@ -167,7 +167,8 @@ export class CompositeDeviceEntity {
     }
 
     if (!this.isDifferent(attribute, last.value, haValue)) {
-      this.lastCommands.delete(key);
+      // HA has caught up with requested value. Keep the lockout active for the full windowMs
+      // to shield against delayed oscillating bounces from Tuya/BLE devices.
       return false;
     }
     this.platform.log.debug(
@@ -1013,6 +1014,13 @@ export class CompositeDeviceEntity {
             });
         } else {
           this.setCommandLockout(entityId, "onOff", true);
+          void safeUpdateAttribute(
+            endpoint,
+            OnOff.id,
+            "onOff",
+            true,
+            this.platform.log,
+          );
           void this.platform.ha
             .callService(domain, "turn_on", entityId)
             .catch((err) => {
@@ -1034,6 +1042,13 @@ export class CompositeDeviceEntity {
             });
         } else {
           this.setCommandLockout(entityId, "onOff", false);
+          void safeUpdateAttribute(
+            endpoint,
+            OnOff.id,
+            "onOff",
+            false,
+            this.platform.log,
+          );
           void this.platform.ha
             .callService(domain, "turn_off", entityId)
             .catch((err) => {
@@ -1416,6 +1431,13 @@ export class CompositeDeviceEntity {
           if (level <= 0 && withOnOff) {
             this.setCommandLockout(entityId, "onOff", false);
             this.setCommandLockout(entityId, "brightness", 0);
+            void safeUpdateAttribute(
+              endpoint,
+              OnOff.id,
+              "onOff",
+              false,
+              this.platform.log,
+            );
             this.callServiceDebounced(
               entityId,
               "light",
@@ -1429,7 +1451,16 @@ export class CompositeDeviceEntity {
               Math.min(255, Math.round((Math.max(1, level) / 254) * 255)),
             );
             this.setCommandLockout(entityId, "brightness", haBrightness);
-            if (withOnOff) this.setCommandLockout(entityId, "onOff", true);
+            if (withOnOff) {
+              this.setCommandLockout(entityId, "onOff", true);
+              void safeUpdateAttribute(
+                endpoint,
+                OnOff.id,
+                "onOff",
+                true,
+                this.platform.log,
+              );
+            }
             this.callServiceDebounced(
               entityId,
               "light",
