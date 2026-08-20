@@ -2686,6 +2686,17 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           return;
         }
 
+        if (req.method === "POST" && pathname === "/api/custom/scan-cameras") {
+          if (this.scryptedManager) {
+            void this.scryptedManager.discoverAndConnect();
+          }
+          res.writeHead(200, {
+            "Content-Type": "application/json; charset=utf-8",
+          });
+          res.end(JSON.stringify({ success: true, message: "Escaneo de cámaras iniciado en red local." }));
+          return;
+        }
+
         if (
           req.method === "POST" &&
           pathname === "/api/custom/scrypted-config"

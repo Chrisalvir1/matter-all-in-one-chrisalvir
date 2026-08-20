@@ -875,6 +875,26 @@ if (scryptedSaveButton) {
   });
 }
 
+const cameraScanButton = $('camera-scan-button');
+if (cameraScanButton) {
+  cameraScanButton.addEventListener('click', async () => {
+    cameraScanButton.disabled = true;
+    showToast('🔍 Escaneando cámaras en toda tu red local (macOS / LAN)...');
+    try {
+      await request('/scan-cameras', { method: 'POST' });
+      setTimeout(async () => {
+        await loadScryptedConfig();
+        await fetchDevices();
+        cameraScanButton.disabled = false;
+        showToast('Escaneo de red completado.');
+      }, 4000);
+    } catch (e) {
+      cameraScanButton.disabled = false;
+      showToast('Error al iniciar escaneo de cámaras: ' + (e.message || e), true);
+    }
+  });
+}
+
 // Load config when settings modal opens
 els.settingsButton?.addEventListener('click', () => {
   void loadMqttConfig();

@@ -1,5 +1,11 @@
 ## [1.4.26] - 2026-08-20
 
+### Added
+- **Escáner Universal Automático de Cámaras en Red Local (macOS / LAN / Scrypted / RTSP):**
+  - Barrido automático de toda la subred local (IPs 1-254) para detectar cámaras IP estándar (RTSP puerto 554 / ONVIF puerto 8000) e instancias de Scrypted NVR en macOS (puertos 10443, 10444, 11080).
+  - Botón interactivo "🔍 Escanear Cámaras Ahora" en la sección de Ajustes para descubrimiento instantáneo sin formularios ni tokens.
+  - Exportación automática a Matter con código QR independiente por cámara.
+
 ### Fixed
 - **Control Preciso de Vapor y Velocidad de Difusores y Ventiladores en Apple HomeKit:**
   - Suscripción completa al atributo `FanControl.percentSetting` en `BaseEntity`, `CompositeDeviceEntity` y `HumidifierEntity`. Los controles deslizantes (0% al 100%, incluyendo 10%) ahora ajustan la velocidad o nivel de vapor en tiempo real hacia Home Assistant (`fan.set_percentage`, `humidifier.set_humidity` o `humidifier.set_mode`).

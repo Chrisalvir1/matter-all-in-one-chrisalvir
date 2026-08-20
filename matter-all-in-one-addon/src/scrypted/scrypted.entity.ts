@@ -48,8 +48,8 @@ export class ScryptedCameraEntity {
   }
 
   public async createEndpoint(): Promise<MatterbridgeEndpoint> {
-    const nodeName = `Scrypted - ${this.name}`;
-    const sanitizedSerial = `SC-${this.camera.id.replace(/[^a-zA-Z0-9]/g, "").substring(0, 16)}`;
+    const nodeName = this.name;
+    const sanitizedSerial = `CAM-${this.camera.id.replace(/[^a-zA-Z0-9]/g, "").substring(0, 16)}`;
 
     // Create root endpoint as OccupancySensor
     this.endpoint = new MatterbridgeEndpoint(
@@ -63,13 +63,13 @@ export class ScryptedCameraEntity {
       nodeName,
       sanitizedSerial,
       0xfff1,
-      "Scrypted NVR",
+      this.camera.host ? "IP Camera" : "Scrypted NVR",
       0x8001,
-      "Scrypted Camera",
+      "Matter Camera Sensor",
       1,
-      "1.4.24",
+      "1.4.26",
       1,
-      "1.4.24",
+      "1.4.26",
     );
 
     // Add OccupancySensing cluster for Motion
