@@ -35,7 +35,7 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@49ed152c8ee8272d0f40d556fa8946733e8d4a8b # v3.2.0
+        uses: docker/setup-qemu-action@49b01bf5cb84922221036d802e25219e5ed51044 # v3.2.0
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@c47758b77c9736f4b2ef4073d4d51994fabfe349 # v3.7.1
