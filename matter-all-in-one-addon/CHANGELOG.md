@@ -1,3 +1,10 @@
+## [1.4.24] - 2026-08-20
+
+### Fixed
+- **Limpieza Automática del Estado de Diagnósticos en Accesorios Emparejados (Difusores y Entidades Matter):**
+  - Se corrigió el cálculo de `hasIssue`: los accesorios que están activamente emparejados (`commissioned: true`) y en línea en Home Assistant ya no son marcados como problemáticos ni quedan congelados en la pestaña "Revisar".
+  - Se implementó la resolución automática de problemas (`clearEntityProblem`) en cuanto Matter confirma la presencia de uno o más fabrics activos (Apple Home / Google Home), registrando el evento de salud en verde y manteniendo limpia la interfaz.
+
 ## [1.4.23] - 2026-08-20
 
 ### Changed
