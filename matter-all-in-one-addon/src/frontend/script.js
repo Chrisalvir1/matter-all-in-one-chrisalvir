@@ -8,7 +8,7 @@ const els = {
   haDot: $('ha-dot'), haStatus: $('ha-status'), version: $('version'), deviceSearch: $('device-search'),
   deviceCount: $('device-count'), deviceList: $('device-list'), refreshButton: $('refresh-button'),
   overviewMessage: $('overview-message'), statDevices: $('stat-devices'), statExported: $('stat-exported'), statPaired: $('stat-paired'),
-  pendingCount: $('pending-count'), mqttCount: $('mqtt-count'), issueCount: $('issue-count'),
+  pendingCount: $('pending-count'), mqttCount: $('mqtt-count'), cameraCount: $('camera-count'), issueCount: $('issue-count'),
   diagnosticsPanel: $('diagnostics-panel'), diagnosticsIcon: $('diagnostics-icon'), diagnosticsHeadingText: $('diagnostics-heading-text'),
   diagnosticsSummary: $('diagnostics-summary'), diagnosticsList: $('diagnostics-list'),
   fabricsSection: $('fabrics-section'), fabricsList: $('fabrics-list'),
@@ -142,11 +142,13 @@ function renderDevices() {
   const allDevices = groupEntities(state.entities);
   const issues = allDevices.filter((device) => device.entities.some((entity) => entity.exported && entity.hasIssue)).length;
   const mqttDevicesCount = allDevices.filter((device) => device.entities.some((entity) => entity.origin === 'mqtt' || entity.entityId.startsWith('mqtt.'))).length;
+  const cameraDevicesCount = allDevices.filter((device) => device.entities.some((entity) => entity.domain === 'camera' || entity.origin === 'scrypted' || entity.entityId.startsWith('scrypted.'))).length;
   els.statDevices.textContent = String(allDevices.length);
   els.statExported.textContent = String(exportedNodes);
   els.statPaired.textContent = String(pairedNodes);
   els.pendingCount.textContent = String(pendingNodes);
   if (els.mqttCount) els.mqttCount.textContent = String(mqttDevicesCount);
+  if (els.cameraCount) els.cameraCount.textContent = String(cameraDevicesCount);
   els.issueCount.textContent = String(issues);
   els.overviewMessage.textContent = exportedNodes
     ? `${exportedNodes} accesorio${exportedNodes === 1 ? '' : 's'} listo${exportedNodes === 1 ? '' : 's'} para Matter`
@@ -154,6 +156,19 @@ function renderDevices() {
   els.deviceCount.textContent = `${devices.length} dispositivo${devices.length === 1 ? '' : 's'} · ${exportedNodes} accesorio${exportedNodes === 1 ? '' : 's'} activo${exportedNodes === 1 ? '' : 's'} en Matter`;
   els.deviceList.setAttribute('aria-busy', 'false');
   if (!devices.length) {
+    if (state.activeFilter === 'cameras') {
+      els.deviceList.innerHTML = '<div class="empty-state"><p>No se han descubierto cámaras aún en tu red local.</p><button class="button button-primary" type="button" id="scan-cameras-empty-btn">🔍 Escanear Cámaras en Red (macOS / LAN)</button></div>';
+      $('scan-cameras-empty-btn')?.addEventListener('click', async (e) => {
+        e.target.disabled = true;
+        showToast('🔍 Escaneando cámaras en toda tu red local (macOS / LAN)...');
+        await request('/scan-cameras', { method: 'POST' });
+        setTimeout(async () => {
+          await fetchDevices();
+          showToast('Escaneo de cámaras finalizado.');
+        }, 4000);
+      });
+      return;
+    }
     els.deviceList.innerHTML = '<div class="empty-state"><p>No hay dispositivos que coincidan con la búsqueda.</p></div>';
     return;
   }
@@ -166,6 +181,7 @@ function isDevicePaired(device) {
 
 function matchesDeviceFilter(device) {
   const exported = device.entities.some((entity) => entity.exported);
+  if (state.activeFilter === 'cameras') return device.entities.some((entity) => entity.domain === 'camera' || entity.origin === 'scrypted' || entity.entityId.startsWith('scrypted.'));
   if (state.activeFilter === 'active') return exported;
   if (state.activeFilter === 'mqtt') return device.entities.some((entity) => entity.origin === 'mqtt' || entity.entityId.startsWith('mqtt.'));
   // A device is pending pairing if it has any exported entity not yet commissioned
