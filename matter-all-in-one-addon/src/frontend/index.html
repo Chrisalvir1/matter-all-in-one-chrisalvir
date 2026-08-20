@@ -181,6 +181,15 @@
       <p class="lead compact">Estas acciones afectan a todos los accesorios y al servicio Matterbridge subyacente.</p>
       <div class="settings-actions">
         <div class="settings-row mqtt-settings-row">
+          <div><strong>Integración Scrypted NVR (Cámaras)</strong><p id="scrypted-status-text">Detectando servidor Scrypted en la red local...</p></div>
+          <div class="mqtt-form">
+            <input type="text" id="scrypted-host" placeholder="Host / IP (opcional: auto-detecta por mDNS)" aria-label="Scrypted Host" class="form-input">
+            <input type="number" id="scrypted-port" placeholder="Puerto (ej. 10443)" aria-label="Scrypted Port" class="form-input">
+            <input type="password" id="scrypted-token" placeholder="Token permanente (opcional)" aria-label="Scrypted Token" class="form-input">
+            <button class="button button-primary" id="scrypted-save-button" type="button">Guardar Scrypted</button>
+          </div>
+        </div>
+        <div class="settings-row mqtt-settings-row">
           <div><strong>Configuración MQTT (Auto-Discovery)</strong><p>Habilita la integración de dispositivos MQTT directamente en Matter.</p></div>
           <div class="mqtt-form">
             <input type="text" id="mqtt-host" placeholder="Broker IP (ej. 192.168.1.50)" aria-label="MQTT Host" class="form-input">

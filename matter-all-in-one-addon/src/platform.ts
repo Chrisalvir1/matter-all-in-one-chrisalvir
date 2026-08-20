@@ -43,6 +43,8 @@ import {
 } from "./device-profiles.js";
 import { MqttClientManager } from "./mqtt/mqtt-client.js";
 import { MqttEntity } from "./mqtt/mqtt.entity.js";
+import { ScryptedClientManager } from "./scrypted/scrypted-client.js";
+import { ScryptedCameraEntity } from "./scrypted/scrypted.entity.js";
 
 export interface HomeAssistantPlatformConfig extends PlatformConfig {
   host?: string; // Optional: auto-detected from network/supervisor if not set
@@ -137,6 +139,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   public deviceGroupingConfigs: CompositeDeviceConfig[] = [];
   public mqttManager?: MqttClientManager;
   public mqttEntities = new Map<string, MqttEntity>();
+  public scryptedManager?: ScryptedClientManager;
+  public scryptedEntities = new Map<string, ScryptedCameraEntity>();
   private uiServer?: http.Server;
   /** Port the UI HTTP server will bind to. Override in tests with 0 to get an OS-assigned port. */
   protected _uiPort = 8285;
@@ -1081,6 +1085,57 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       this.mqttManager.connect();
     }
 
+    // ── Load Scrypted Configuration & Auto-Discovery ───────────────────────
+    try {
+      const scryptedConfigRaw = await fs.readFile(
+        "/data/scrypted-config.json",
+        "utf8",
+      );
+      const scryptedData = JSON.parse(scryptedConfigRaw);
+      (this.config as any).scryptedHost = scryptedData.host;
+      (this.config as any).scryptedPort = scryptedData.port;
+      (this.config as any).scryptedToken = scryptedData.token;
+    } catch {
+      // File missing, fallback to auto-discovery
+    }
+
+    this.scryptedManager = new ScryptedClientManager(this.log, {
+      host: (this.config as any).scryptedHost,
+      port: Number((this.config as any).scryptedPort) || 10443,
+      token: (this.config as any).scryptedToken,
+    });
+
+    this.scryptedManager.onCameraDiscovered(async (camera) => {
+      const entity = new ScryptedCameraEntity(
+        this,
+        camera,
+        this.scryptedManager!,
+      );
+      this.scryptedEntities.set(entity.entityId, entity);
+      this.log.notice(
+        `[Scrypted] Discovered Camera: "${entity.name}" (${entity.entityId})`,
+      );
+
+      if (this.isEntityExported(entity.entityId)) {
+        try {
+          await this.activateScryptedEntity(entity.entityId);
+        } catch (err) {
+          this.log.error(
+            `[Scrypted] Failed to activate exported camera ${entity.entityId}: ${err}`,
+          );
+        }
+      }
+    });
+
+    this.scryptedManager.onCameraStateChanged((camId, camera) => {
+      const entity = this.scryptedEntities.get(`scrypted.${camId}`);
+      if (entity) {
+        void entity.updateState(camera);
+      }
+    });
+
+    void this.scryptedManager.discoverAndConnect();
+
     // ── Resolve Home Assistant URL ─────────────────────────────────────────
     // If the user didn’t set config.host we run the network discovery:
     //   1. Probe well-known hostnames (homeassistant.local, supervisor...)
@@ -1721,12 +1776,65 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     }
   }
 
+  public async activateScryptedEntity(entityId: string): Promise<void> {
+    const entity = this.scryptedEntities.get(entityId);
+    if (!entity) return;
+    try {
+      const endpoint = await entity.createEndpoint();
+      const existingEndpoint = endpoint.uniqueId
+        ? this.getDeviceByUniqueId(endpoint.uniqueId)
+        : endpoint.deviceName
+          ? this.getDeviceByName(endpoint.deviceName)
+          : undefined;
+      if (existingEndpoint?.serverNode) {
+        entity.endpoint = existingEndpoint;
+        this.matterbridgeDevices.set(entityId, existingEndpoint);
+        this.log.notice(
+          `Reused existing Matter endpoint ${idn}${entityId}${rs}; it remains paired.`,
+        );
+        return;
+      }
+      await this.registerDevice(endpoint);
+      const serverNode = (endpoint as any).serverNode;
+      if (!serverNode) {
+        throw new Error(`Matter server node was not created for ${entityId}.`);
+      }
+      if (!serverNode.lifecycle?.isOnline) {
+        await serverNode.start();
+      }
+      this.matterbridgeDevices.set(entityId, endpoint);
+      this.log.notice(
+        `Exported bridged Scrypted camera endpoint ${idn}${entityId}${rs}`,
+      );
+    } catch (err) {
+      this.log.error(`Failed to activate Scrypted camera ${entityId}: ${err}`);
+      throw err;
+    }
+  }
+
   /**
    * Manually export an entity as an Accessory and save to config.
    */
   public async manualRegister(
     entityId: string,
   ): Promise<{ success: boolean; error?: string }> {
+    if (entityId.startsWith("scrypted.")) {
+      try {
+        this.exportedDevices.add(entityId);
+        await this.activateScryptedEntity(entityId);
+        await this.saveExportedDevices();
+        this.log.notice(
+          `Manually exported bridged Scrypted camera for ${entityId}`,
+        );
+        return { success: true };
+      } catch (err) {
+        this.exportedDevices.delete(entityId);
+        this.log.error(
+          `Failed to manually register Scrypted camera ${entityId}: ${err}`,
+        );
+        return { success: false, error: String(err) };
+      }
+    }
     if (entityId.startsWith("mqtt.")) {
       try {
         this.exportedDevices.add(entityId);
@@ -1810,6 +1918,23 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     entityId: string,
   ): Promise<{ success: boolean; error?: string }> {
     try {
+      if (entityId.startsWith("scrypted.")) {
+        this.exportedDevices.delete(entityId);
+        const endpoint = this.matterbridgeDevices.get(entityId);
+        if (endpoint) {
+          const serverNode = (endpoint as any).serverNode;
+          if (serverNode?.lifecycle?.isOnline) {
+            await serverNode.close();
+          }
+          await this.unregisterDevice(endpoint);
+          this.matterbridgeDevices.delete(entityId);
+        }
+        await this.saveExportedDevices();
+        this.log.notice(
+          `Manually unregistered bridged Scrypted camera for ${entityId}`,
+        );
+        return { success: true };
+      }
       if (entityId.startsWith("mqtt.")) {
         this.exportedDevices.delete(entityId);
         const endpoint = this.matterbridgeDevices.get(entityId);
@@ -2540,6 +2665,77 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           return;
         }
 
+        if (
+          req.method === "GET" &&
+          pathname === "/api/custom/scrypted-config"
+        ) {
+          res.writeHead(200, {
+            "Content-Type": "application/json; charset=utf-8",
+          });
+          res.end(
+            JSON.stringify({
+              host: (this.config as any).scryptedHost || "",
+              port: (this.config as any).scryptedPort || 10443,
+              token: (this.config as any).scryptedToken || "",
+              connected: this.scryptedManager?.connected || false,
+              discoveredUrl: this.scryptedManager?.discoveredServerUrl || null,
+              latencyMs: this.scryptedManager?.latencyMs || 0,
+              cameraCount: this.scryptedEntities.size,
+            }),
+          );
+          return;
+        }
+
+        if (
+          req.method === "POST" &&
+          pathname === "/api/custom/scrypted-config"
+        ) {
+          try {
+            const body = await this.readRequestBody(req);
+            const data = JSON.parse(body);
+            (this.config as any).scryptedHost = data.host || "";
+            (this.config as any).scryptedPort = Number(data.port) || 10443;
+            (this.config as any).scryptedToken = data.token || "";
+
+            await fs.writeFile(
+              "/data/scrypted-config.json",
+              JSON.stringify(
+                {
+                  host: (this.config as any).scryptedHost,
+                  port: (this.config as any).scryptedPort,
+                  token: (this.config as any).scryptedToken,
+                },
+                null,
+                2,
+              ),
+              "utf8",
+            );
+
+            if (this.scryptedManager) {
+              this.scryptedManager.close();
+            }
+            this.scryptedManager = new ScryptedClientManager(this.log, {
+              host: (this.config as any).scryptedHost,
+              port: (this.config as any).scryptedPort,
+              token: (this.config as any).scryptedToken,
+            });
+            void this.scryptedManager.discoverAndConnect();
+
+            res.writeHead(200, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ success: true }));
+          } catch (err) {
+            res.writeHead(400, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(
+              JSON.stringify({ success: false, error: "Invalid request body" }),
+            );
+          }
+          return;
+        }
+
         if (req.method === "POST" && pathname === "/api/custom/mqtt-config") {
           try {
             const body = await this.readRequestBody(req);
@@ -2759,10 +2955,60 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             },
           );
 
+          const scryptedResults = Array.from(
+            this.scryptedEntities.values(),
+          ).map((s) => {
+            const endpoint = this.matterbridgeDevices.get(s.entityId);
+            const connection = this.getMatterConnectionInfo(endpoint);
+            return {
+              entityId: s.entityId,
+              domain: "camera",
+              state: s.camera.motionState ? "motion" : "idle",
+              origin: "scrypted",
+              attributes: {
+                friendly_name: s.name,
+                motion: s.camera.motionState,
+                doorbell: s.camera.doorbellTriggered,
+                light: s.camera.lightState,
+              },
+              deviceTypeLabel: "Scrypted Camera",
+              matterType: "OccupancySensor",
+              device_id: s.camera.id,
+              device_name: s.name,
+              area_id: null,
+              area_name: s.camera.room || "Scrypted NVR",
+              manufacturer: "Scrypted",
+              model: "NVR Camera",
+              entity_registry_id: null,
+              platform: "scrypted",
+              exported: this.isEntityExported(s.entityId),
+              composite: false,
+              compositeActive: false,
+              compositeDeviceId: null,
+              compositePrimaryEntityId: null,
+              auxiliary: false,
+              primaryEntityId: null,
+              profileId: null,
+              profiles: [],
+              pairingCode: connection.pairingCode,
+              manualPairingCode: connection.manualPairingCode,
+              commissioned: connection.commissioned,
+              homeName: connection.homeName,
+              controllerNames: connection.controllerNames,
+              fabricCount: connection.fabricCount,
+              matterFabrics: connection.fabrics,
+              hasIssue: false,
+              diagnostics: [],
+              logs: [],
+            };
+          });
+
           res.writeHead(200, {
             "Content-Type": "application/json; charset=utf-8",
           });
-          res.end(JSON.stringify([...result, ...mqttResults]));
+          res.end(
+            JSON.stringify([...result, ...mqttResults, ...scryptedResults]),
+          );
           return;
         }
 

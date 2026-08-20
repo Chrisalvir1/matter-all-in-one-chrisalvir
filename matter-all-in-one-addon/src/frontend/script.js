@@ -825,8 +825,59 @@ if (mqttSaveButton) {
   });
 }
 
+// Scrypted NVR Configuration
+const scryptedHostInput = $('scrypted-host');
+const scryptedPortInput = $('scrypted-port');
+const scryptedTokenInput = $('scrypted-token');
+const scryptedSaveButton = $('scrypted-save-button');
+const scryptedStatusText = $('scrypted-status-text');
+
+async function loadScryptedConfig() {
+  try {
+    const res = await request('/scrypted-config');
+    if (res) {
+      if (scryptedHostInput) scryptedHostInput.value = res.host || '';
+      if (scryptedPortInput) scryptedPortInput.value = res.port || '';
+      if (scryptedTokenInput) scryptedTokenInput.value = res.token || '';
+      if (scryptedStatusText) {
+        if (res.connected) {
+          scryptedStatusText.innerHTML = `<span style="color: #22c55e;">● Conectado a Scrypted (${escapeHtml(res.discoveredUrl || '')}) · ${res.cameraCount} cámara(s) · ${res.latencyMs}ms latencia</span>`;
+        } else if (res.discoveredUrl) {
+          scryptedStatusText.innerHTML = `<span style="color: #eab308;">● Servidor detectado en ${escapeHtml(res.discoveredUrl)} (conectando...)</span>`;
+        } else {
+          scryptedStatusText.textContent = 'Servidor no detectado en LAN. Ingresa la IP manualmente.';
+        }
+      }
+    }
+  } catch (e) {
+    console.error('Failed to load Scrypted config', e);
+  }
+}
+
+if (scryptedSaveButton) {
+  scryptedSaveButton.addEventListener('click', async () => {
+    const data = {
+      host: scryptedHostInput?.value || '',
+      port: Number(scryptedPortInput?.value) || 10443,
+      token: scryptedTokenInput?.value || '',
+    };
+    try {
+      await request('/scrypted-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      showToast('Configuración Scrypted guardada.');
+      void loadScryptedConfig();
+    } catch (e) {
+      showToast('Error al guardar configuración Scrypted: ' + (e.message || e), true);
+    }
+  });
+}
+
 // Load config when settings modal opens
 els.settingsButton?.addEventListener('click', () => {
   void loadMqttConfig();
+  void loadScryptedConfig();
 });
 
