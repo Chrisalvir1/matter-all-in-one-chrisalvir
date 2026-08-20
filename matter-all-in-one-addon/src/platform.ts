@@ -458,9 +458,23 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     }
 
     if (!previous.commissioned && current.commissioned) {
+      this.clearEntityProblem(entityId);
+      this.recordEntityDiagnostic(
+        entityId,
+        `Matter confirmó el emparejamiento con ${current.fabricCount} casa(s) / controlador(es).`,
+        "info",
+      );
       this.log.notice(
         `[Matter] ${entityId}: Matter confirmó un nuevo emparejamiento con ${current.fabricCount} fabric(s).`,
       );
+      return;
+    }
+
+    if (current.commissioned && this.entityProblems.has(entityId)) {
+      const entity = this.entities.get(entityId);
+      if (entity && !isUnavailable(entity.state)) {
+        this.clearEntityProblem(entityId);
+      }
     }
   }
 
@@ -2690,10 +2704,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               fabricCount: connection.fabricCount,
               matterFabrics: connection.fabrics,
               // The attention queue is for live Matter accessories only. An
-              // unavailable HA entity that was never exported must not look
-              // like a broken Matter accessory.
               hasIssue:
                 this.isEntityExported(e.entityId) &&
+                !connection.commissioned &&
                 (this.entityProblems.has(e.entityId) || isUnavailable(e.state)),
               diagnostics: this.entityDiagnostics.get(e.entityId) ?? [],
               logs: this.isEntityExported(e.entityId)
