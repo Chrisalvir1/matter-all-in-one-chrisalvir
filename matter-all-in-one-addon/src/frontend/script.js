@@ -142,7 +142,7 @@ function renderDevices() {
   const allDevices = groupEntities(state.entities);
   const issues = allDevices.filter((device) => device.entities.some((entity) => entity.exported && entity.hasIssue)).length;
   const mqttDevicesCount = allDevices.filter((device) => device.entities.some((entity) => entity.origin === 'mqtt' || entity.entityId.startsWith('mqtt.'))).length;
-  const cameraDevicesCount = allDevices.filter((device) => device.entities.some((entity) => entity.domain === 'camera' || entity.origin === 'scrypted' || entity.entityId.startsWith('scrypted.'))).length;
+  const cameraDevicesCount = allDevices.filter((device) => device.entities.some((entity) => entity.domain === 'camera')).length;
   els.statDevices.textContent = String(allDevices.length);
   els.statExported.textContent = String(exportedNodes);
   els.statPaired.textContent = String(pairedNodes);
@@ -181,7 +181,7 @@ function isDevicePaired(device) {
 
 function matchesDeviceFilter(device) {
   const exported = device.entities.some((entity) => entity.exported);
-  if (state.activeFilter === 'cameras') return device.entities.some((entity) => entity.domain === 'camera' || entity.origin === 'scrypted' || entity.entityId.startsWith('scrypted.'));
+  if (state.activeFilter === 'cameras') return device.entities.some((entity) => entity.domain === 'camera');
   if (state.activeFilter === 'active') return exported;
   if (state.activeFilter === 'mqtt') return device.entities.some((entity) => entity.origin === 'mqtt' || entity.entityId.startsWith('mqtt.'));
   // A device is pending pairing if it has any exported entity not yet commissioned
@@ -841,79 +841,7 @@ if (mqttSaveButton) {
   });
 }
 
-// Scrypted NVR Configuration
-const scryptedHostInput = $('scrypted-host');
-const scryptedPortInput = $('scrypted-port');
-const scryptedTokenInput = $('scrypted-token');
-const scryptedSaveButton = $('scrypted-save-button');
-const scryptedStatusText = $('scrypted-status-text');
-
-async function loadScryptedConfig() {
-  try {
-    const res = await request('/scrypted-config');
-    if (res) {
-      if (scryptedHostInput) scryptedHostInput.value = res.host || '';
-      if (scryptedPortInput) scryptedPortInput.value = res.port || '';
-      if (scryptedTokenInput) scryptedTokenInput.value = res.token || '';
-      if (scryptedStatusText) {
-        if (res.connected) {
-          scryptedStatusText.innerHTML = `<span style="color: #22c55e;">● Conectado a Scrypted (${escapeHtml(res.discoveredUrl || '')}) · ${res.cameraCount} cámara(s) · ${res.latencyMs}ms latencia</span>`;
-        } else if (res.discoveredUrl) {
-          scryptedStatusText.innerHTML = `<span style="color: #eab308;">● Servidor detectado en ${escapeHtml(res.discoveredUrl)} (conectando...)</span>`;
-        } else {
-          scryptedStatusText.textContent = 'Servidor no detectado en LAN. Ingresa la IP manualmente.';
-        }
-      }
-    }
-  } catch (e) {
-    console.error('Failed to load Scrypted config', e);
-  }
-}
-
-if (scryptedSaveButton) {
-  scryptedSaveButton.addEventListener('click', async () => {
-    const data = {
-      host: scryptedHostInput?.value || '',
-      port: Number(scryptedPortInput?.value) || 10443,
-      token: scryptedTokenInput?.value || '',
-    };
-    try {
-      await request('/scrypted-config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      showToast('Configuración Scrypted guardada.');
-      void loadScryptedConfig();
-    } catch (e) {
-      showToast('Error al guardar configuración Scrypted: ' + (e.message || e), true);
-    }
-  });
-}
-
-const cameraScanButton = $('camera-scan-button');
-if (cameraScanButton) {
-  cameraScanButton.addEventListener('click', async () => {
-    cameraScanButton.disabled = true;
-    showToast('🔍 Escaneando cámaras en toda tu red local (macOS / LAN)...');
-    try {
-      await request('/scan-cameras', { method: 'POST' });
-      setTimeout(async () => {
-        await loadScryptedConfig();
-        await fetchDevices();
-        cameraScanButton.disabled = false;
-        showToast('Escaneo de red completado.');
-      }, 4000);
-    } catch (e) {
-      cameraScanButton.disabled = false;
-      showToast('Error al iniciar escaneo de cámaras: ' + (e.message || e), true);
-    }
-  });
-}
-
 // Load config when settings modal opens
 els.settingsButton?.addEventListener('click', () => {
   void loadMqttConfig();
-  void loadScryptedConfig();
 });
-

@@ -1,3 +1,18 @@
+## [1.4.32] - 2026-08-22
+
+### Removed
+- **Scrypted NVR y escáner de cámaras:** se elimina la integración, los
+  endpoints API, el panel y las reconexiones automáticas. El complemento deja
+  de intentar conectar a puertos Scrypted inexistentes cada 15 segundos.
+
+## [1.4.31] - 2026-08-22
+
+### Fixed
+- **Conflicto Matter al regular la luz de un FAN:** `moveToLevelWithOnOff`
+  modificaba `OnOff` dos veces dentro de la misma transacción. Se elimina la
+  escritura duplicada, que provocaba `synchronous-transaction-conflict`,
+  estados de luz incorrectos y esperas de Apple Home.
+
 ## [1.4.30] - 2026-08-22
 
 ### Fixed

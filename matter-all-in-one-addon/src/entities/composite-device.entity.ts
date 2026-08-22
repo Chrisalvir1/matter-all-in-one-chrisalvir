@@ -1458,13 +1458,9 @@ export class CompositeDeviceEntity {
           if (level <= 0 && withOnOff) {
             this.setCommandLockout(entityId, "onOff", false);
             this.setCommandLockout(entityId, "brightness", 0);
-            void safeUpdateAttribute(
-              endpoint,
-              OnOff.id,
-              "onOff",
-              false,
-              this.platform.log,
-            );
+            // moveToLevelWithOnOff owns the OnOff transaction. Updating OnOff
+            // here re-enters that same transaction and causes Matter's
+            // synchronous-transaction-conflict, leaving Apple Home waiting.
             this.callServiceDebounced(
               entityId,
               "light",
@@ -1480,13 +1476,6 @@ export class CompositeDeviceEntity {
             this.setCommandLockout(entityId, "brightness", haBrightness);
             if (withOnOff) {
               this.setCommandLockout(entityId, "onOff", true);
-              void safeUpdateAttribute(
-                endpoint,
-                OnOff.id,
-                "onOff",
-                true,
-                this.platform.log,
-              );
             }
             this.callServiceDebounced(
               entityId,
