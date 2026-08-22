@@ -84,6 +84,41 @@ describe("CompositeDeviceEntity", () => {
     );
   });
 
+  it("does not re-light a fan light when Apple sends level 1 before off", async () => {
+    vi.useFakeTimers();
+    try {
+      const composite = new CompositeDeviceEntity(
+        platform,
+        "fan-device",
+        "Ventilador Sala",
+        [
+          { entityId: "fan.sala", state: state("fan.sala", "on") },
+          {
+            entityId: "light.sala",
+            state: state("light.sala", "on", {
+              brightness: 80,
+              supported_color_modes: ["brightness"],
+            }),
+          },
+        ],
+      );
+      await composite.createEndpoint();
+      const light = composite.endpoints.get("light.sala") as any;
+      const start = platform.ha.callService.mock.calls.length;
+
+      // This is the command sequence captured from Apple Home's light tile.
+      await light.invokeCommand("moveToLevelWithOnOff", { level: 1 });
+      await light.invokeCommand("OnOff.off");
+      await vi.advanceTimersByTimeAsync(60);
+
+      expect(platform.ha.callService.mock.calls.slice(start)).toEqual([
+        ["light", "turn_off", "light.sala"],
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("publishes warm/cold fan lights as ColorTemperatureLight and sends modern HA kelvin commands", async () => {
     const composite = new CompositeDeviceEntity(
       platform,

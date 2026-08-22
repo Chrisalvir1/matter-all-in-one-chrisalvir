@@ -189,6 +189,25 @@ export class CompositeDeviceEntity {
 
   private serviceDebounceTimers = new Map<string, NodeJS.Timeout>();
 
+  /**
+   * Apple Home commonly ends a dimming gesture with a level-1 command followed
+   * immediately by OnOff.off. The level command schedules light.turn_on, so it
+   * must be cancelled when the later power command expresses the opposite
+   * intent; otherwise the deferred turn_on re-lights the fixture after off.
+   */
+  private cancelDebouncedService(
+    entityId: string,
+    domain: string,
+    service: string,
+  ) {
+    const key = `${entityId}:${domain}.${service}`;
+    const pending = this.serviceDebounceTimers.get(key);
+    if (pending) {
+      clearTimeout(pending);
+      this.serviceDebounceTimers.delete(key);
+    }
+  }
+
   private callServiceDebounced(
     entityId: string,
     domain: string,
@@ -196,6 +215,11 @@ export class CompositeDeviceEntity {
     data?: Record<string, any>,
     delayMs = 40,
   ) {
+    if (service === "turn_on") {
+      this.cancelDebouncedService(entityId, domain, "turn_off");
+    } else if (service === "turn_off") {
+      this.cancelDebouncedService(entityId, domain, "turn_on");
+    }
     const key = `${entityId}:${domain}.${service}`;
     const existing = this.serviceDebounceTimers.get(key);
     if (existing) clearTimeout(existing);
@@ -1018,6 +1042,7 @@ export class CompositeDeviceEntity {
             });
         } else {
           this.setCommandLockout(entityId, "onOff", true);
+          this.cancelDebouncedService(entityId, domain, "turn_off");
           void safeUpdateAttribute(
             endpoint,
             OnOff.id,
@@ -1046,6 +1071,7 @@ export class CompositeDeviceEntity {
             });
         } else {
           this.setCommandLockout(entityId, "onOff", false);
+          this.cancelDebouncedService(entityId, domain, "turn_on");
           void safeUpdateAttribute(
             endpoint,
             OnOff.id,
@@ -1067,6 +1093,11 @@ export class CompositeDeviceEntity {
         const currentState = this.states.get(entityId);
         const nextOn = !isOn(currentState!);
         this.setCommandLockout(entityId, "onOff", nextOn);
+        this.cancelDebouncedService(
+          entityId,
+          domain,
+          nextOn ? "turn_off" : "turn_on",
+        );
         void this.platform.ha
           .callService(domain, nextOn ? "turn_on" : "turn_off", entityId)
           .catch((err) => {

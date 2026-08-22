@@ -1,3 +1,11 @@
+## [1.4.33] - 2026-08-22
+
+### Fixed
+- **FAN+Luz en Apple Home:** al apagar una luz regulable, Apple Home puede
+  enviar primero un nivel `1` y enseguida `Off`. El encendido diferido creado
+  por el nivel mínimo ahora se cancela al recibir `Off` (y viceversa), evitando
+  que la luz se vuelva a encender y que Home Assistant y Apple Home discrepen.
+
 ## [1.4.32] - 2026-08-22
 
 ### Removed
