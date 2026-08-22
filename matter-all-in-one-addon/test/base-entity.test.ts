@@ -207,86 +207,151 @@ describe("BaseEntity FanControl full features", () => {
     );
   });
 
-  it('prevents light bounce-back by suppressing stale HA onOff echo during lockout', async () => {
-    const entity = new BaseEntity(platform as any, state({}), MatterDeviceTypes.onOffLight);
-    const endpoint = await entity.createEndpoint() as any;
+  it("prevents light bounce-back by suppressing stale HA onOff echo during lockout", async () => {
+    const entity = new BaseEntity(
+      platform as any,
+      state({}),
+      MatterDeviceTypes.onOffLight,
+    );
+    const endpoint = (await entity.createEndpoint()) as any;
     await entity.syncInitialState();
 
     // User commands off in Apple Home
-    await endpoint.invokeCommand('off');
-    expect(platform.ha.callService).toHaveBeenLastCalledWith('light', 'turn_off', 'light.govee_test');
+    await endpoint.invokeCommand("off");
+    expect(platform.ha.callService).toHaveBeenLastCalledWith(
+      "light",
+      "turn_off",
+      "light.govee_test",
+    );
 
     // Stale echo arrives from HA before hardware finishes turning off
     await entity.updateState(state({}));
     // Should NOT echo back onOff=true to Matter endpoint
-    expect(endpoint.attributes.get('6:onOff')).not.toBe(true);
+    expect(endpoint.attributes.get("6:onOff")).not.toBe(true);
 
     // Final settled state arrives from HA
-    await entity.updateState({ entity_id: 'light.govee_test', state: 'off', attributes: {} } as any);
-    expect(endpoint.attributes.get('6:onOff')).toBe(false);
+    await entity.updateState({
+      entity_id: "light.govee_test",
+      state: "off",
+      attributes: {},
+    } as any);
+    expect(endpoint.attributes.get("6:onOff")).toBe(false);
+  });
+
+  it("keeps a BLE light off when its stale on-state arrives after the normal echo window", async () => {
+    vi.useFakeTimers();
+    try {
+      const entity = new BaseEntity(
+        platform as any,
+        state({}),
+        MatterDeviceTypes.onOffLight,
+      );
+      const endpoint = (await entity.createEndpoint()) as any;
+      await entity.syncInitialState();
+
+      await endpoint.invokeCommand("off");
+      await vi.advanceTimersByTimeAsync(7_000);
+
+      // BLE integrations can publish their pre-command state well after six seconds.
+      await entity.updateState(state({}));
+      expect(endpoint.attributes.get("6:onOff")).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
-describe('BaseEntity fan and diffuser speed & mode controls', () => {
+describe("BaseEntity fan and diffuser speed & mode controls", () => {
   function fanState(attributes: Record<string, unknown> = {}) {
     return {
-      entity_id: 'fan.living_room_fan',
-      state: 'on',
+      entity_id: "fan.living_room_fan",
+      state: "on",
       attributes: {
-        friendly_name: 'Living Room Fan',
+        friendly_name: "Living Room Fan",
         percentage: 50,
-        preset_mode: 'manual',
-        preset_modes: ['manual', 'auto', 'sleep'],
+        preset_mode: "manual",
+        preset_modes: ["manual", "auto", "sleep"],
         ...attributes,
       },
-      last_changed: '',
-      last_updated: '',
+      last_changed: "",
+      last_updated: "",
     } as any;
   }
 
-  it('handles slider percentage changes (10%, 80%, 0%) via percentSetting attribute writes', async () => {
-    const entity = new BaseEntity(platform as any, fanState(), MatterDeviceTypes.fan);
-    const endpoint = await entity.createEndpoint() as any;
+  it("handles slider percentage changes (10%, 80%, 0%) via percentSetting attribute writes", async () => {
+    const entity = new BaseEntity(
+      platform as any,
+      fanState(),
+      MatterDeviceTypes.fan,
+    );
+    const endpoint = (await entity.createEndpoint()) as any;
     await entity.syncInitialState();
 
     // Move slider to 10%
-    await endpoint.invokeAttributeChange(514, 'percentSetting', 10);
+    await endpoint.invokeAttributeChange(514, "percentSetting", 10);
     await new Promise((r) => setTimeout(r, 60));
-    expect(platform.ha.callService).toHaveBeenLastCalledWith('fan', 'set_percentage', 'fan.living_room_fan', {
-      percentage: 10,
-    });
+    expect(platform.ha.callService).toHaveBeenLastCalledWith(
+      "fan",
+      "set_percentage",
+      "fan.living_room_fan",
+      {
+        percentage: 10,
+      },
+    );
 
     // Move slider to 80%
-    await endpoint.invokeAttributeChange(514, 'percentSetting', 80);
+    await endpoint.invokeAttributeChange(514, "percentSetting", 80);
     await new Promise((r) => setTimeout(r, 60));
-    expect(platform.ha.callService).toHaveBeenLastCalledWith('fan', 'set_percentage', 'fan.living_room_fan', {
-      percentage: 80,
-    });
+    expect(platform.ha.callService).toHaveBeenLastCalledWith(
+      "fan",
+      "set_percentage",
+      "fan.living_room_fan",
+      {
+        percentage: 80,
+      },
+    );
 
     // Move slider to 0% (turns off)
-    await endpoint.invokeAttributeChange(514, 'percentSetting', 0);
+    await endpoint.invokeAttributeChange(514, "percentSetting", 0);
     await new Promise((r) => setTimeout(r, 60));
-    expect(platform.ha.callService).toHaveBeenLastCalledWith('fan', 'turn_off', 'fan.living_room_fan');
+    expect(platform.ha.callService).toHaveBeenLastCalledWith(
+      "fan",
+      "turn_off",
+      "fan.living_room_fan",
+    );
   });
 
-  it('handles fanMode changes (Auto vs Manual) via fanMode attribute writes', async () => {
-    const entity = new BaseEntity(platform as any, fanState(), MatterDeviceTypes.fan);
-    const endpoint = await entity.createEndpoint() as any;
+  it("handles fanMode changes (Auto vs Manual) via fanMode attribute writes", async () => {
+    const entity = new BaseEntity(
+      platform as any,
+      fanState(),
+      MatterDeviceTypes.fan,
+    );
+    const endpoint = (await entity.createEndpoint()) as any;
     await entity.syncInitialState();
 
     // Select Auto in Apple Home (fanMode 5)
-    await endpoint.invokeAttributeChange(514, 'fanMode', 5);
+    await endpoint.invokeAttributeChange(514, "fanMode", 5);
     await new Promise((r) => setTimeout(r, 60));
-    expect(platform.ha.callService).toHaveBeenLastCalledWith('fan', 'set_preset_mode', 'fan.living_room_fan', {
-      preset_mode: 'auto',
-    });
+    expect(platform.ha.callService).toHaveBeenLastCalledWith(
+      "fan",
+      "set_preset_mode",
+      "fan.living_room_fan",
+      {
+        preset_mode: "auto",
+      },
+    );
 
     // Select Manual in Apple Home (fanMode 4)
-    await endpoint.invokeAttributeChange(514, 'fanMode', 4);
+    await endpoint.invokeAttributeChange(514, "fanMode", 4);
     await new Promise((r) => setTimeout(r, 60));
-    expect(platform.ha.callService).toHaveBeenLastCalledWith('fan', 'set_preset_mode', 'fan.living_room_fan', {
-      preset_mode: 'manual',
-    });
+    expect(platform.ha.callService).toHaveBeenLastCalledWith(
+      "fan",
+      "set_preset_mode",
+      "fan.living_room_fan",
+      {
+        preset_mode: "manual",
+      },
+    );
   });
 });
-

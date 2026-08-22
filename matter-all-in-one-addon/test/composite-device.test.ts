@@ -205,6 +205,7 @@ describe("CompositeDeviceEntity", () => {
           state: state("fan.combo", "on", {
             percentage: 50,
             direction: "forward",
+            preset_modes: ["Manual", "Auto"],
           }),
         },
         {
@@ -235,6 +236,22 @@ describe("CompositeDeviceEntity", () => {
       "set_percentage",
       "fan.combo",
       { percentage: 33 },
+    );
+
+    // Manual and Auto must preserve the fan preset in fan+light accessories.
+    await fanEndpoint.invokeAttributeChange(0x0202, "fanMode", 4);
+    expect(platform.ha.callService).toHaveBeenCalledWith(
+      "fan",
+      "set_preset_mode",
+      "fan.combo",
+      { preset_mode: "Manual" },
+    );
+    await fanEndpoint.invokeAttributeChange(0x0202, "fanMode", 5);
+    expect(platform.ha.callService).toHaveBeenCalledWith(
+      "fan",
+      "set_preset_mode",
+      "fan.combo",
+      { preset_mode: "Auto" },
     );
 
     // Simulate fan direction reverse

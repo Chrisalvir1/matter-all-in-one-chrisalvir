@@ -35,6 +35,11 @@ describe("core converters", () => {
     expect(fanConverter.toHaPercentage(67)).toBe(67);
   });
 
+  it("maps Smart/Eco presets to Auto when the advertised sequence has no Smart mode", () => {
+    expect(fanConverter.presetModeToFanMode("smart", true)).toBe(5);
+    expect(fanConverter.presetModeToFanMode("eco", true)).toBe(5);
+  });
+
   it("maps lock states and commands safely", () => {
     expect(lockConverter.toLockState(state("locked"))).toBe(
       MatterLockState.Locked,

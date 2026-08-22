@@ -2226,11 +2226,16 @@ export class HomeAssistant extends EventEmitter {
     const nextPromise = prevQueue.catch(() => {}).then(executeCall);
     this.deviceCommandQueues.set(queueKey, nextPromise);
 
-    nextPromise.finally(() => {
-      if (this.deviceCommandQueues.get(queueKey) === nextPromise) {
-        this.deviceCommandQueues.delete(queueKey);
-      }
-    });
+    // Do not leave the promise returned by finally() rejected. This is most
+    // visible with BLE devices: a service timeout is handled by the caller,
+    // but an unhandled cleanup promise can still terminate the bridge.
+    void nextPromise
+      .finally(() => {
+        if (this.deviceCommandQueues.get(queueKey) === nextPromise) {
+          this.deviceCommandQueues.delete(queueKey);
+        }
+      })
+      .catch(() => undefined);
 
     return nextPromise;
   }

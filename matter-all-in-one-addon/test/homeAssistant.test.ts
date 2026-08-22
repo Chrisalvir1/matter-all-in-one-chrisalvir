@@ -108,4 +108,30 @@ describe("HomeAssistant connection recovery", () => {
     expect(fanEndIndex).toBeLessThan(lightStartIndex);
     expect(lightStartIndex).toBeLessThan(lightEndIndex);
   });
+
+  it("recovers the BLE device queue after a failed service call", async () => {
+    const ha = new HomeAssistant("ws://127.0.0.1:8123", "test-token", 0, 0);
+    ha.hassEntities.set("fan.ble_fan", {
+      id: "ent-1",
+      entity_id: "fan.ble_fan",
+      device_id: "dev-ble-combo",
+    } as any);
+
+    let calls = 0;
+    (ha as any).request = async () => {
+      calls++;
+      if (calls === 1) throw new Error("BLE service timeout");
+      return { success: true, result: { context: {}, response: {} } };
+    };
+
+    await expect(
+      ha.callService("fan", "turn_on", "fan.ble_fan"),
+    ).rejects.toThrow("BLE service timeout");
+    await expect(
+      ha.callService("fan", "turn_off", "fan.ble_fan"),
+    ).resolves.toEqual({
+      context: {},
+      response: {},
+    });
+  });
 });

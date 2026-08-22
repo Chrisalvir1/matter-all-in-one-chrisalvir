@@ -155,7 +155,10 @@ export class CompositeDeviceEntity {
     entityId: string,
     attribute: string,
     haValue: any,
-    windowMs = 6000,
+    // A shared BLE fan/light device can confirm after the normal 6-second
+    // echo window. Preserve the user's power or mode choice for one service
+    // timeout, while still accepting its matching confirmation immediately.
+    windowMs = attribute === "onOff" || attribute === "fanMode" ? 30_000 : 6000,
   ): boolean {
     const key = `${entityId}:${attribute}`;
     const last = this.lastCommands.get(key);
@@ -363,14 +366,15 @@ export class CompositeDeviceEntity {
     );
   }
 
-  private isUpdatingFromHa = false;
+  /** Tracks the endpoint being synchronized, avoiding cross-endpoint races. */
+  private readonly updatingEntities = new Set<string>();
 
   async updateEntity(
     entityId: string,
     state: HassState,
     initial = false,
   ): Promise<void> {
-    this.isUpdatingFromHa = true;
+    this.updatingEntities.add(entityId);
     try {
       this.states.set(entityId, state);
       const endpoint = this.endpoints.get(entityId);
@@ -754,7 +758,7 @@ export class CompositeDeviceEntity {
         }
       }
     } finally {
-      this.isUpdatingFromHa = false;
+      this.updatingEntities.delete(entityId);
     }
   }
 
@@ -1101,7 +1105,7 @@ export class CompositeDeviceEntity {
           "percentSetting",
           (newValue: number | null) => {
             if (typeof newValue !== "number") return;
-            if (this.isUpdatingFromHa) return;
+            if (this.updatingEntities.has(entityId)) return;
             this.setCommandLockout(entityId, "percentage", newValue);
 
             if (newValue === 0) {
@@ -1131,7 +1135,8 @@ export class CompositeDeviceEntity {
           "fanMode",
           (newMode: number) => {
             if (typeof newMode !== "number") return;
-            if (this.isUpdatingFromHa) return;
+            if (this.updatingEntities.has(entityId)) return;
+            this.setCommandLockout(entityId, "fanMode", newMode);
             if (newMode === 0) {
               this.setCommandLockout(entityId, "percentage", 0);
               this.setCommandLockout(entityId, "onOff", false);
@@ -1143,12 +1148,27 @@ export class CompositeDeviceEntity {
                 40,
               );
             } else if (newMode === 4) {
-              // On
-              void this.platform.ha
-                .callService("fan", "turn_on", entityId)
-                .catch(() => {});
+              // On / Manual
+              this.setCommandLockout(entityId, "onOff", true);
+              const presets: string[] =
+                this.states.get(entityId)?.attributes.preset_modes ?? [];
+              const manualPreset = presets.find(
+                (preset) => preset.toLowerCase() === "manual",
+              );
+              if (manualPreset) {
+                void this.platform.ha
+                  .callService("fan", "set_preset_mode", entityId, {
+                    preset_mode: manualPreset,
+                  })
+                  .catch(() => {});
+              } else {
+                void this.platform.ha
+                  .callService("fan", "turn_on", entityId)
+                  .catch(() => {});
+              }
             } else if (newMode === 1) {
               // Low
+              this.setCommandLockout(entityId, "onOff", true);
               this.setCommandLockout(entityId, "percentage", 33);
               this.callServiceDebounced(
                 entityId,
@@ -1159,6 +1179,7 @@ export class CompositeDeviceEntity {
               );
             } else if (newMode === 2) {
               // Medium
+              this.setCommandLockout(entityId, "onOff", true);
               this.setCommandLockout(entityId, "percentage", 66);
               this.callServiceDebounced(
                 entityId,
@@ -1169,6 +1190,7 @@ export class CompositeDeviceEntity {
               );
             } else if (newMode === 3) {
               // High
+              this.setCommandLockout(entityId, "onOff", true);
               this.setCommandLockout(entityId, "percentage", 100);
               this.callServiceDebounced(
                 entityId,
@@ -1179,12 +1201,16 @@ export class CompositeDeviceEntity {
               );
             } else if (newMode === 5) {
               // Auto
+              this.setCommandLockout(entityId, "onOff", true);
               const presets: string[] =
                 this.states.get(entityId)?.attributes.preset_modes ?? [];
-              if (presets.includes("auto")) {
+              const autoPreset = presets.find(
+                (preset) => preset.toLowerCase() === "auto",
+              );
+              if (autoPreset) {
                 void this.platform.ha
                   .callService("fan", "set_preset_mode", entityId, {
-                    preset_mode: "auto",
+                    preset_mode: autoPreset,
                   })
                   .catch(() => {});
               } else {
@@ -1202,7 +1228,8 @@ export class CompositeDeviceEntity {
             "airflowDirection",
             async (newDir: number) => {
               if (typeof newDir !== "number") return;
-              if (this.isUpdatingFromHa) return;
+              if (this.updatingEntities.has(entityId)) return;
+              this.setCommandLockout(entityId, "airflowDirection", newDir);
               const direction = newDir === 1 ? "reverse" : "forward";
               await this.platform.ha
                 .callService("fan", "set_direction", entityId, { direction })
@@ -1225,7 +1252,7 @@ export class CompositeDeviceEntity {
           "percentSetting",
           async (newValue: number) => {
             if (typeof newValue !== "number") return;
-            if (this.isUpdatingFromHa) return;
+            if (this.updatingEntities.has(entityId)) return;
             const currentState = this.states.get(entityId);
             const minHum = currentState?.attributes.min_humidity ?? 40;
             const maxHum = currentState?.attributes.max_humidity ?? 80;
@@ -1312,7 +1339,7 @@ export class CompositeDeviceEntity {
           "fanMode",
           async (newMode: number) => {
             if (typeof newMode !== "number") return;
-            if (this.isUpdatingFromHa) return;
+            if (this.updatingEntities.has(entityId)) return;
             const currentState = this.states.get(entityId);
             const availableModes: string[] =
               currentState?.attributes.available_modes ?? [];

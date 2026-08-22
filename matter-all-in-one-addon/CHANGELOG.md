@@ -1,3 +1,13 @@
+## [1.4.29] - 2026-08-22
+
+### Fixed
+- **Estabilidad para ventiladores BLE y accesorios FAN+Luz:**
+  - Las fallas o tiempos de espera de servicios BLE ya no dejan una promesa rechazada sin controlar que pueda detener el bridge.
+  - El bloqueo de intención para `OnOff` y `fanMode` se extiende a 30 segundos, evitando que estados atrasados vuelvan a encender una luz recién apagada en Apple Home.
+  - Los endpoints de un FAN+Luz se sincronizan de forma independiente para evitar carreras durante actualizaciones paralelas de Home Assistant.
+  - Los modos Manual, Auto y Reversa conservan el preset real de Home Assistant tanto en ventiladores individuales como compuestos.
+  - Los presets Eco/Smart se exponen como Auto, compatible con la secuencia Matter anunciada.
+
 ## [1.4.28] - 2026-08-20
 
 ### Fixed

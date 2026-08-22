@@ -79,7 +79,10 @@ export class BaseEntity {
   private shouldIgnoreStateUpdate(
     attribute: string,
     haValue: any,
-    windowMs = 6000,
+    // BLE integrations can take the full HA service timeout to report their
+    // physical state. Keep power/mode intent through that period so a late
+    // stale report cannot make Apple Home bounce back.
+    windowMs = attribute === "onOff" || attribute === "fanMode" ? 30_000 : 6000,
   ): boolean {
     const key = `${this.entityId}:${attribute}`;
     const last = this.lastCommands.get(key);
@@ -526,18 +529,23 @@ export class BaseEntity {
             (newMode: number) => {
               if (typeof newMode !== "number") return;
               if (this.isUpdatingFromHa) return;
+              this.setCommandLockout("fanMode", newMode);
               if (newMode === 0) {
                 this.setCommandLockout("percentage", 0);
                 this.setCommandLockout("onOff", false);
                 this.callServiceDebounced("fan", "turn_off", undefined, 40);
               } else if (newMode === 4) {
                 // On / Manual
+                this.setCommandLockout("onOff", true);
                 const presets: string[] =
                   this.state.attributes.preset_modes ?? [];
-                if (presets.includes("manual")) {
+                const manualPreset = presets.find(
+                  (preset) => preset.toLowerCase() === "manual",
+                );
+                if (manualPreset) {
                   void this.platform.ha
                     .callService("fan", "set_preset_mode", this.entityId, {
-                      preset_mode: "manual",
+                      preset_mode: manualPreset,
                     })
                     .catch(() => {});
                 } else {
@@ -547,6 +555,7 @@ export class BaseEntity {
                 }
               } else if (newMode === 1) {
                 // Low
+                this.setCommandLockout("onOff", true);
                 this.setCommandLockout("percentage", 33);
                 this.callServiceDebounced(
                   "fan",
@@ -556,6 +565,7 @@ export class BaseEntity {
                 );
               } else if (newMode === 2) {
                 // Medium
+                this.setCommandLockout("onOff", true);
                 this.setCommandLockout("percentage", 66);
                 this.callServiceDebounced(
                   "fan",
@@ -565,6 +575,7 @@ export class BaseEntity {
                 );
               } else if (newMode === 3) {
                 // High
+                this.setCommandLockout("onOff", true);
                 this.setCommandLockout("percentage", 100);
                 this.callServiceDebounced(
                   "fan",
@@ -574,12 +585,16 @@ export class BaseEntity {
                 );
               } else if (newMode === 5) {
                 // Auto
+                this.setCommandLockout("onOff", true);
                 const presets: string[] =
                   this.state.attributes.preset_modes ?? [];
-                if (presets.includes("auto")) {
+                const autoPreset = presets.find(
+                  (preset) => preset.toLowerCase() === "auto",
+                );
+                if (autoPreset) {
                   void this.platform.ha
                     .callService("fan", "set_preset_mode", this.entityId, {
-                      preset_mode: "auto",
+                      preset_mode: autoPreset,
                     })
                     .catch(() => {});
                 } else {
@@ -600,6 +615,7 @@ export class BaseEntity {
               (newDir: number) => {
                 if (typeof newDir !== "number") return;
                 if (this.isUpdatingFromHa) return;
+                this.setCommandLockout("airflowDirection", newDir);
                 const direction = newDir === 1 ? "reverse" : "forward";
                 void this.platform.ha
                   .callService("fan", "set_direction", this.entityId, {
@@ -909,13 +925,18 @@ export class BaseEntity {
     }
   }
 
-  protected isUpdatingFromHa = false;
+  private haUpdateDepth = 0;
+
+  /** True while HA-originated changes are being written into this endpoint. */
+  protected get isUpdatingFromHa(): boolean {
+    return this.haUpdateDepth > 0;
+  }
 
   public async updateState(
     newState: HassState,
     isInitialSync = false,
   ): Promise<void> {
-    this.isUpdatingFromHa = true;
+    this.haUpdateDepth++;
     try {
       this.state = newState;
       if (!this.endpoint) return;
@@ -1256,7 +1277,7 @@ export class BaseEntity {
         }
       }
     } finally {
-      this.isUpdatingFromHa = false;
+      this.haUpdateDepth--;
     }
   }
 }
