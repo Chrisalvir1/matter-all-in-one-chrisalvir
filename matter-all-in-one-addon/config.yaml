@@ -1,6 +1,6 @@
 name: "Matter All-in-One chrisalvir"
 description: "All-in-one bridge and custom UI for Home Assistant entities exported to Apple Home, Google Home, SmartThings and Alexa over Matter"
-version: "1.4.29"
+version: "1.4.30"
 slug: "matter_all_in_one_bridge"
 image: "ghcr.io/chrisalvir1/matter-all-in-one-chrisalvir"
 init: false
@@ -13,11 +13,11 @@ arch:
 hassio_api: true
 homeassistant_api: true
 hassio_role: homeassistant
-options:
-  ipv4_only: true
 schema:
   host: str?
   token: str?
   group_by_device_id: bool?
   mdnsinterface: str?
+  # Kept only so existing user configuration remains valid. Matter's required
+  # LAN-only IPv6 link-local transport is no longer disabled by this option.
   ipv4_only: bool?

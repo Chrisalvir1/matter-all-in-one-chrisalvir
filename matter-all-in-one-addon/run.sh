@@ -9,7 +9,6 @@ OPTIONS_FILE="/data/options.json"
 HOST=$(jq -r '.host // empty' "$OPTIONS_FILE")
 TOKEN=$(jq -r '.token // empty' "$OPTIONS_FILE")
 MDNSINTERFACE=$(jq -r '.mdnsinterface // empty' "$OPTIONS_FILE")
-IPV4_ONLY=$(jq -r '.ipv4_only // false' "$OPTIONS_FILE")
 GROUP_BY_DEVICE_ID=$(jq -r '.group_by_device_id // true' "$OPTIONS_FILE")
 
 # Fallback to supervisor API if defaults are used
@@ -103,16 +102,8 @@ else
     echo "[Info] mDNS will use all available interfaces so route changes do not strand Matter devices."
 fi
 
-# IPv4-only is hardcoded ON for maximum stability with Apple Home on local networks.
-# IPv6 link-local routing inside Docker containers is unreliable and causes
-# Matter.js network errors that crash the Addon silently. IPv4 is always sufficient
-# for Matter on a home LAN where the Apple TV / HomePod is on the same subnet.
-if [ "$IPV4_ONLY" = "false" ]; then
-    echo "[Info] Note: ipv4_only override requested but IPv4 is always enabled for stability."
-fi
-echo "[Info] IPv4-only mode active: all Matter communication will use IPv4."
-set -- "$@" -ipv4
-
-# Start Matterbridge
-echo "[Info] Launching Matterbridge with IPv4-only networking (maximum stability)..."
+# Matter uses IPv6 link-local addresses on the LAN. This is independent from
+# Internet/WAN IPv6 and is required for reliable Apple Home communication.
+# Do not pass -ipv4 here: it prevents the required local Matter transport.
+echo "[Info] Launching Matterbridge with LAN IPv6 link-local support enabled."
 exec "$@"

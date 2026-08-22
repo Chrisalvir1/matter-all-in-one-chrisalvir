@@ -1,3 +1,13 @@
+## [1.4.30] - 2026-08-22
+
+### Fixed
+- **Transporte Matter para Apple Home:** se elimina el forzado de IPv4. Matter
+  requiere IPv6 link-local dentro de la red local (por ejemplo `fe80::…%end0`),
+  aunque el proveedor de Internet no ofrezca IPv6 WAN. Bloquearlo provocaba
+  sesiones inestables y el ciclo de `No Response` en Apple Home.
+- Se conserva la selección explícita de la interfaz mDNS LAN (`end0`) para no
+  anunciar Matter por las interfaces virtuales Docker.
+
 ## [1.4.29] - 2026-08-22
 
 ### Fixed
