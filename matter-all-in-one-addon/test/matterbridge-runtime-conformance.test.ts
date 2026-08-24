@@ -51,7 +51,7 @@ describe('Matterbridge 3.10.6 Runtime Conformance & Integration Tests', () => {
     };
   });
 
-  it('Living room fan: supported_features=53 -> DIR enabled, AUT disabled, speedMax=6, sequence=OffLowMedHigh', async () => {
+  it('Living room fan: supported_features=53 -> DIR enabled, MultiSpeed+Auto+Step for Apple Home slider/mode, speedMax=6', async () => {
     const fanState: any = {
       entity_id: 'fan.ventilador_de_sala_main_fan',
       state: 'on',
@@ -67,20 +67,20 @@ describe('Matterbridge 3.10.6 Runtime Conformance & Integration Tests', () => {
     expect(hasFanDirection(fanState)).toBe(true);
     expect(hasFanAuto(fanState)).toBe(false);
     expect(getFanSpeedCount(fanState)).toBe(6);
-    expect(getFanModeSequence(fanState)).toBe(FanControl.FanModeSequence.OffLowMedHigh);
+    expect(getFanModeSequence(fanState)).toBe(FanControl.FanModeSequence.OffLowMedHighAuto);
 
     const features = getFanControlFeatures(fanState);
     expect(features).toContain(FanControl.Feature.MultiSpeed);
     expect(features).toContain(FanControl.Feature.Step);
+    expect(features).toContain(FanControl.Feature.Auto);
     expect(features).toContain(FanControl.Feature.AirflowDirection);
-    expect(features).not.toContain(FanControl.Feature.Auto);
 
     const entity = new BaseEntity(platform, fanState, MatterDeviceTypes.fan);
     const endpoint = await entity.createEndpoint();
     expect(endpoint).toBeDefined();
   });
 
-  it('Guest room fan: supported_features=53 -> DIR enabled, AUT disabled, speedMax=6, sequence=OffLowMedHigh', async () => {
+  it('Guest room fan: supported_features=53 -> DIR enabled, speedMax=6, sequence=OffLowMedHighAuto', async () => {
     const fanState: any = {
       entity_id: 'fan.ventilador_visitas_main_fan',
       state: 'off',
@@ -96,10 +96,10 @@ describe('Matterbridge 3.10.6 Runtime Conformance & Integration Tests', () => {
     expect(hasFanDirection(fanState)).toBe(true);
     expect(hasFanAuto(fanState)).toBe(false);
     expect(getFanSpeedCount(fanState)).toBe(6);
-    expect(getFanModeSequence(fanState)).toBe(FanControl.FanModeSequence.OffLowMedHigh);
+    expect(getFanModeSequence(fanState)).toBe(FanControl.FanModeSequence.OffLowMedHighAuto);
   });
 
-  it('Bedroom fan: supported_features=63, presets=[sleep, breeze] -> DIR enabled, AUT disabled, sleep/breeze not Auto', async () => {
+  it('Bedroom fan: supported_features=63, presets=[sleep, breeze] -> DIR enabled, MultiSpeed+Auto+Step', async () => {
     const fanState: any = {
       entity_id: 'fan.ventilador_de_recamara_main_fan',
       state: 'on',
@@ -116,13 +116,13 @@ describe('Matterbridge 3.10.6 Runtime Conformance & Integration Tests', () => {
     expect(hasFanDirection(fanState)).toBe(true);
     expect(hasFanAuto(fanState)).toBe(false); // sleep/breeze are NOT Auto!
     expect(getFanSpeedCount(fanState)).toBe(6);
-    expect(getFanModeSequence(fanState)).toBe(FanControl.FanModeSequence.OffLowMedHigh);
+    expect(getFanModeSequence(fanState)).toBe(FanControl.FanModeSequence.OffLowMedHighAuto);
 
     const features = getFanControlFeatures(fanState);
     expect(features).toContain(FanControl.Feature.MultiSpeed);
     expect(features).toContain(FanControl.Feature.Step);
+    expect(features).toContain(FanControl.Feature.Auto);
     expect(features).toContain(FanControl.Feature.AirflowDirection);
-    expect(features).not.toContain(FanControl.Feature.Auto);
   });
 
   it('Fan with genuine Auto preset: supported_features=57, presets=[low, auto] -> AUT enabled, sequence=OffLowMedHighAuto', async () => {
@@ -198,6 +198,8 @@ describe('Matterbridge 3.10.6 Runtime Conformance & Integration Tests', () => {
     expect(lightChild).toBeDefined();
     expect(lightChild?.deviceName).toBe('Luz Ventilador Sala');
     expect(lightChild?.nodeLabel).toBe('Luz Ventilador Sala');
+    expect(lightChild?.hasClusterServer(LevelControl.id)).toBe(true);
+    expect(lightChild?.hasClusterServer(ColorControl.id)).toBe(true);
   });
 
   it('Color Temperature Clamping: clamps mireds strictly against physical limits on all paths', () => {

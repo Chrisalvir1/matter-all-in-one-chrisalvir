@@ -1018,7 +1018,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     const mbVersion = String((this as any).matterbridge?.matterbridgeVersion ?? 'unknown');
     this.log.notice(`[Runtime] Matterbridge runtime: ${mbVersion}`);
     this.log.notice(`[Runtime] Node.js runtime: ${process.version}`);
-    this.log.notice(`[Runtime] Plugin version: 1.4.37`);
+    this.log.notice(`[Runtime] Plugin version: 1.4.38`);
     await this.loadEntityDiagnostics();
     await this.startUiServer();
     this.startMatterConnectionMonitor();
@@ -1371,10 +1371,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       return;
 
     // Check device override
-    const effectiveProfile =
+    const explicitOverride =
       override ??
-      this.getAutomaticProfile(entityId, state) ??
-      getDefaultExportProfileId(domain);
+      this.getAutomaticProfile(entityId, state);
+    const effectiveProfile = explicitOverride;
     if (override === "_DISABLED_") {
       this.log.debug(
         `Skipping ${entityId} because it is disabled by override.`,
@@ -1382,14 +1382,14 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       return;
     }
 
-    // Retrieve corresponding Matter Device Type
+    // Retrieve corresponding Matter Device Type based on actual capabilities
     let deviceType = getDeviceTypeForEntity(
       domain,
       deviceClass,
       state.attributes,
     );
-    if (effectiveProfile && (MatterDeviceTypes as any)[effectiveProfile]) {
-      deviceType = (MatterDeviceTypes as any)[effectiveProfile];
+    if (explicitOverride && (MatterDeviceTypes as any)[explicitOverride]) {
+      deviceType = (MatterDeviceTypes as any)[explicitOverride];
       this.log.info(
         `Applying ${override ? "override" : "automatic profile"} for ${entityId}: ${deviceType.name}`,
       );

@@ -334,6 +334,41 @@ export class BaseEntity {
             }
           });
         }
+
+        if (this.endpoint.hasAttributeServer(FanControl.id, 'fanMode')) {
+          this.endpoint.subscribeAttribute(FanControl.id, 'fanMode', async (newMode: any) => {
+            if (typeof newMode === 'number') {
+              this.platform.log.debug(`[${this.entityId}] FanControl.fanMode changed: ${newMode}`);
+              if (newMode === FanControl.FanMode.Off) {
+                this.setCommandLockout('fan_state', 'off');
+                await this.platform.ha.callService('fan', 'turn_off', this.entityId);
+              } else if (newMode === FanControl.FanMode.Auto) {
+                if (hasFanAuto(this.state)) {
+                  await this.platform.ha.callService('fan', 'set_preset_mode', this.entityId, { preset_mode: 'auto' });
+                } else {
+                  await this.platform.ha.callService('fan', 'turn_on', this.entityId);
+                }
+              } else if (newMode === FanControl.FanMode.Low) {
+                const speedMax = getFanSpeedCount(this.state);
+                const pct = snapToPhysicalLevel(33.33, speedMax);
+                this.setCommandLockout('fan_percentage', pct);
+                await this.platform.ha.callService('fan', 'set_percentage', this.entityId, { percentage: pct });
+              } else if (newMode === FanControl.FanMode.Medium) {
+                const speedMax = getFanSpeedCount(this.state);
+                const pct = snapToPhysicalLevel(66.67, speedMax);
+                this.setCommandLockout('fan_percentage', pct);
+                await this.platform.ha.callService('fan', 'set_percentage', this.entityId, { percentage: pct });
+              } else if (newMode === FanControl.FanMode.High) {
+                const speedMax = getFanSpeedCount(this.state);
+                const pct = snapToPhysicalLevel(100, speedMax);
+                this.setCommandLockout('fan_percentage', pct);
+                await this.platform.ha.callService('fan', 'set_percentage', this.entityId, { percentage: pct });
+              } else if (newMode === FanControl.FanMode.On) {
+                await this.platform.ha.callService('fan', 'turn_on', this.entityId);
+              }
+            }
+          });
+        }
       }
 
       // ── Fan direction handler ────────────────────────────────────────────

@@ -85,7 +85,8 @@ export class MockMatterbridgeEndpoint {
   ) {}
 
   public hasClusterServer(cluster: any): boolean {
-    return this.clusterServers.has(cluster.id);
+    const id = typeof cluster === 'number' ? cluster : cluster?.id;
+    return this.clusterServers.has(id);
   }
 
   public addClusterServer(clusterServer: any) {

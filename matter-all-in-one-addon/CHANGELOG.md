@@ -1,3 +1,10 @@
+## [1.4.38] - 2026-08-24
+
+### Fixed
+- **Apple Home Fan UI Restored:** Restored full fan UI in Apple Home (including multi-speed slider 1..6 and Manual/Auto mode selector) by ensuring `FanControl.Feature.Auto`, `MultiSpeed`, `Step`, and `OffLowMedHighAuto` are exposed on all fans while maintaining 100% Matter 1.6 conformance.
+- **Fan Light Kelvin & Brightness Restored:** Fixed automatic profile resolution so `getDefaultExportProfileId` does not downgrade light entities from `ColorTemperatureLight` / `ExtendedColorLight` to `DimmableLight`. Preserves full color temperature (Kelvin) and brightness controls across composite and standalone lights.
+- **FanMode Command Handlers:** Added dynamic subscribers for Matter `fanMode` attribute changes in both base and composite fan entities.
+
 ## [1.4.37] - 2026-08-24
 
 ### Fixed

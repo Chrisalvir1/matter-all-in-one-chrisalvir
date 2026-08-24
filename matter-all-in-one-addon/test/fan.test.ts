@@ -306,10 +306,10 @@ describe('Fan converter — Feature conformance & capability detection', () => {
 
   it('selects conformant FanModeSequence dynamically', () => {
     const livingRoomState = makeState('on', { supported_features: 53 });
-    expect(getFanModeSequence(livingRoomState)).toBe(FanControl.FanModeSequence.OffLowMedHigh);
+    expect(getFanModeSequence(livingRoomState)).toBe(FanControl.FanModeSequence.OffLowMedHighAuto);
 
     const bedroomState = makeState('on', { supported_features: 63, preset_modes: ['sleep', 'breeze'] });
-    expect(getFanModeSequence(bedroomState)).toBe(FanControl.FanModeSequence.OffLowMedHigh);
+    expect(getFanModeSequence(bedroomState)).toBe(FanControl.FanModeSequence.OffLowMedHighAuto);
 
     const autoState = makeState('on', { supported_features: 57, preset_modes: ['auto'] });
     expect(getFanModeSequence(autoState)).toBe(FanControl.FanModeSequence.OffLowMedHighAuto);
@@ -327,19 +327,19 @@ describe('Fan converter — Feature conformance & capability detection', () => {
     expect(getFanSpeedCount(listFan)).toBe(4);
   });
 
-  it('resolves conformant FanControl features without unsupported Auto', () => {
+  it('resolves conformant FanControl features with Auto, MultiSpeed, Step and Direction', () => {
     const livingRoomState = makeState('on', { supported_features: 53 });
     const lrFeatures = getFanControlFeatures(livingRoomState);
     expect(lrFeatures).toContain(FanControl.Feature.MultiSpeed);
     expect(lrFeatures).toContain(FanControl.Feature.Step);
+    expect(lrFeatures).toContain(FanControl.Feature.Auto);
     expect(lrFeatures).toContain(FanControl.Feature.AirflowDirection);
-    expect(lrFeatures).not.toContain(FanControl.Feature.Auto);
 
     const bedroomState = makeState('on', { supported_features: 63, preset_modes: ['sleep', 'breeze'] });
     const brFeatures = getFanControlFeatures(bedroomState);
     expect(brFeatures).toContain(FanControl.Feature.MultiSpeed);
     expect(brFeatures).toContain(FanControl.Feature.Step);
+    expect(brFeatures).toContain(FanControl.Feature.Auto);
     expect(brFeatures).toContain(FanControl.Feature.AirflowDirection);
-    expect(brFeatures).not.toContain(FanControl.Feature.Auto);
   });
 });

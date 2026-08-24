@@ -221,27 +221,25 @@ export function hasFanAuto(state: HassState): boolean {
 
 /**
  * Select the conformant FanModeSequence according to the exact enabled features.
- * When Auto is NOT enabled, OffLowMedHigh is required.
- * When Auto IS enabled, OffLowMedHighAuto is required.
+ * When Auto is enabled, OffLowMedHighAuto is required.
  */
-export function getFanModeSequence(state: HassState): FanControl.FanModeSequence {
-  return hasFanAuto(state)
-    ? FanControl.FanModeSequence.OffLowMedHighAuto
-    : FanControl.FanModeSequence.OffLowMedHigh;
+export function getFanModeSequence(_state?: HassState): FanControl.FanModeSequence {
+  return FanControl.FanModeSequence.OffLowMedHighAuto;
 }
 
 /**
  * Resolve dynamic Matter FanControl features supported by the fan.
- * Auto (AUT) is only included if the HA fan explicitly exposes Auto preset.
- * AirflowDirection (DIR) is only included if HA fan supports direction (bit 4).
+ * Includes MultiSpeed, Auto and Step for full Apple Home manual/auto and slider support.
+ * AirflowDirection (DIR) is included when HA fan supports direction (bit 4).
  */
 export function getFanControlFeatures(state: HassState): any[] {
-  const features: any[] = [FanControl.Feature.MultiSpeed, FanControl.Feature.Step];
+  const features: any[] = [
+    FanControl.Feature.MultiSpeed,
+    FanControl.Feature.Auto,
+    FanControl.Feature.Step,
+  ];
   if (hasFanDirection(state)) {
     features.push(FanControl.Feature.AirflowDirection);
-  }
-  if (hasFanAuto(state)) {
-    features.push(FanControl.Feature.Auto);
   }
   return features;
 }

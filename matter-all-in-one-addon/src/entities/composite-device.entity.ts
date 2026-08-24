@@ -16,7 +16,7 @@ import { ClusterId } from 'matterbridge/matter/types';
 import { MatterbridgeOnOffServer, MatterbridgeFanControlServer } from 'matterbridge/behaviors';
 import { safeSetAttribute, safeUpdateAttribute } from '../utils/matter-attributes.js';
 import type { HassState } from '../utils/ha-state.js';
-import { getDeviceTypeForEntity, hasColorTemperatureCapability } from '../device-registry.js';
+import { getDeviceTypeForEntity, getLightDeviceType, hasColorTemperatureCapability } from '../device-registry.js';
 import { getMatterSerialNumber, getHaDeviceModel, getHaDeviceManufacturer, MATTER_BRIDGE_VENDOR_ID, MATTER_BRIDGE_VENDOR_NAME } from '../utils/matter-device-identity.js';
 import { lightColor } from '../utils/light-color.js';
 import {
@@ -361,6 +361,9 @@ export class CompositeDeviceEntity {
 
   private typeFor(member: CompositeMember): DeviceTypeDefinition {
     const [domain] = member.entityId.split('.');
+    if (domain === 'light') {
+      return getLightDeviceType(member.state.attributes);
+    }
     return member.deviceType ?? getDeviceTypeForEntity(domain, member.state.attributes.device_class, member.state.attributes);
   }
 
@@ -550,6 +553,45 @@ export class CompositeDeviceEntity {
               } else {
                 this.setCommandLockout(entityId, 'fan_percentage', next);
                 await this.platform.ha.callService('fan', 'set_percentage', entityId, { percentage: next });
+              }
+            }
+          });
+        }
+
+        if (endpoint.hasAttributeServer(FanControl.id, 'fanMode')) {
+          endpoint.subscribeAttribute(FanControl.id, 'fanMode', async (newMode: any) => {
+            if (typeof newMode === 'number') {
+              this.platform.log.debug(`[Composite][${entityId}] FanControl.fanMode changed: ${newMode}`);
+              if (newMode === FanControl.FanMode.Off) {
+                this.setCommandLockout(entityId, 'fan_state', 'off');
+                await this.platform.ha.callService('fan', 'turn_off', entityId);
+              } else if (newMode === FanControl.FanMode.Auto) {
+                const currentState = this.states.get(entityId);
+                if (currentState && hasFanAuto(currentState)) {
+                  await this.platform.ha.callService('fan', 'set_preset_mode', entityId, { preset_mode: 'auto' });
+                } else {
+                  await this.platform.ha.callService('fan', 'turn_on', entityId);
+                }
+              } else if (newMode === FanControl.FanMode.Low) {
+                const currentState = this.states.get(entityId);
+                const speedMax = currentState ? getFanSpeedCount(currentState) : FAN_SPEED_MAX;
+                const pct = snapToPhysicalLevel(33.33, speedMax);
+                this.setCommandLockout(entityId, 'fan_percentage', pct);
+                await this.platform.ha.callService('fan', 'set_percentage', entityId, { percentage: pct });
+              } else if (newMode === FanControl.FanMode.Medium) {
+                const currentState = this.states.get(entityId);
+                const speedMax = currentState ? getFanSpeedCount(currentState) : FAN_SPEED_MAX;
+                const pct = snapToPhysicalLevel(66.67, speedMax);
+                this.setCommandLockout(entityId, 'fan_percentage', pct);
+                await this.platform.ha.callService('fan', 'set_percentage', entityId, { percentage: pct });
+              } else if (newMode === FanControl.FanMode.High) {
+                const currentState = this.states.get(entityId);
+                const speedMax = currentState ? getFanSpeedCount(currentState) : FAN_SPEED_MAX;
+                const pct = snapToPhysicalLevel(100, speedMax);
+                this.setCommandLockout(entityId, 'fan_percentage', pct);
+                await this.platform.ha.callService('fan', 'set_percentage', entityId, { percentage: pct });
+              } else if (newMode === FanControl.FanMode.On) {
+                await this.platform.ha.callService('fan', 'turn_on', entityId);
               }
             }
           });
