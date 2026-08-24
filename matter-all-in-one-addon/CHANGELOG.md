@@ -1,3 +1,10 @@
+## [1.4.39] - 2026-08-24
+
+### Consolidated Fixes & Enhancements
+- **Complete Fan Controls:** Verified Apple Home support for multi-speed physical fans (1..6 levels) and Manual/Auto modes via `FanControl.Feature.MultiSpeed`, `Auto`, and `Step` with `OffLowMedHighAuto`.
+- **Accurate Light Device Types:** Preserved full color temperature (Kelvin) and brightness capabilities for `ColorTemperatureLight` and `ExtendedColorLight`.
+- **Zero-Conflict Composite Architecture:** Validated multi-gang switches, composite fans with multiple switch channels, and atomic device exports under Matterbridge 3.10.6.
+
 ## [1.4.38] - 2026-08-24
 
 ### Fixed
