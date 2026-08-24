@@ -13,7 +13,7 @@
 import { DeviceTypeDefinition, MatterbridgeEndpoint } from 'matterbridge';
 import { BooleanState, ColorControl, FanControl, LevelControl, OccupancySensing, RelativeHumidityMeasurement, TemperatureMeasurement, OnOff, DoorLock } from 'matterbridge/matter/clusters';
 import { ClusterId } from 'matterbridge/matter/types';
-import { MatterbridgeOnOffServer } from 'matterbridge/behaviors';
+import { MatterbridgeOnOffServer, MatterbridgeFanControlServer } from 'matterbridge/behaviors';
 import { safeSetAttribute, safeUpdateAttribute } from '../utils/matter-attributes.js';
 import type { HassState } from '../utils/ha-state.js';
 import { getDeviceTypeForEntity, hasColorTemperatureCapability } from '../device-registry.js';
@@ -30,6 +30,10 @@ import {
   FAN_MODE_SEQUENCE,
   FAN_SPEED_MAX,
   hasFanDirection,
+  hasFanAuto,
+  getFanSpeedCount,
+  getFanModeSequence,
+  getFanControlFeatures,
   fanSpeed,
   withinHysteresis,
 } from '../converters/fan.converter.js';
@@ -182,6 +186,9 @@ export class CompositeDeviceEntity {
       endpointIndex++;
 
       const child = this.endpoint.addChildDeviceTypeWithClusterServer(endpointId(member.entityId), memberType, clusterIds);
+      const childFriendlyName = (member.state.attributes.friendly_name ?? (domain === 'light' ? 'Luz' : domain === 'fan' ? 'Ventilador' : memberType.name)).substring(0, 32).trim();
+      child.deviceName = childFriendlyName;
+      (child as any).nodeLabel = childFriendlyName;
       
       if (domain === 'light' || domain === 'switch' || domain === 'fan' || domain === 'media_player' || domain === 'vacuum') {
         const isLighting = domain === 'light';
@@ -230,12 +237,13 @@ export class CompositeDeviceEntity {
       await update(endpoint, OnOff.id, 'onOff', on, this.platform.log);
       if (!endpoint.hasAttributeServer(FanControl.id, 'percentCurrent')) return;
 
+      const speedMax = getFanSpeedCount(state);
       const pct = fanPercentage(state);
-      const speed = fanSpeed(pct);
+      const speed = fanSpeed(pct, speedMax);
       const fanMode = haStateToFanMode(state);
 
       this.platform.log.debug(
-        `[Composite][${entityId}] Fan update: state=${state.state}, on=${on}, pct=${pct}, speed=${speed}, fanMode=${fanMode}, dir=${state.attributes.direction ?? 'N/A'}, osc=${state.attributes.oscillating ?? 'N/A'}, preset=${state.attributes.preset_mode ?? 'N/A'}`,
+        `[Composite][${entityId}] Fan update: state=${state.state}, on=${on}, pct=${pct}, speed=${speed}/${speedMax}, fanMode=${fanMode}, dir=${state.attributes.direction ?? 'N/A'}, osc=${state.attributes.oscillating ?? 'N/A'}, preset=${state.attributes.preset_mode ?? 'N/A'}`,
       );
 
       if (!initial && this.shouldIgnoreStateUpdate(entityId, 'fan_percentage', pct)) {
@@ -285,16 +293,19 @@ export class CompositeDeviceEntity {
 
         const attrs = state.attributes as any;
         const colorMode = attrs.color_mode;
-        const rawMireds = attrs.color_temp ?? (attrs.color_temp_kelvin ? lightColor.kelvinToMireds(attrs.color_temp_kelvin) : undefined);
-        const mireds = rawMireds !== undefined ? lightColor.clampMireds(rawMireds, attrs) : undefined;
-        const xy = Array.isArray(attrs.xy_color) && attrs.xy_color.length >= 2 ? attrs.xy_color : undefined;
-        const hs = lightColor.getHsColor(state);
 
         const range = lightColor.getMiredsRange(attrs);
         await update(endpoint, ColorControl.id, 'colorTempPhysicalMinMireds', range.minMireds, this.platform.log);
         await update(endpoint, ColorControl.id, 'colorTempPhysicalMaxMireds', range.maxMireds, this.platform.log);
         await update(endpoint, ColorControl.id, 'coupleColorTempMinMireds', range.minMireds, this.platform.log);
         await update(endpoint, ColorControl.id, 'coupleColorTempMaxMireds', range.maxMireds, this.platform.log);
+
+        const minPhys = (endpoint as any).state?.colorControl?.colorTempPhysicalMinMireds ?? range.minMireds;
+        const maxPhys = (endpoint as any).state?.colorControl?.colorTempPhysicalMaxMireds ?? range.maxMireds;
+        const rawMireds = attrs.color_temp ?? (attrs.color_temp_kelvin ? lightColor.kelvinToMireds(attrs.color_temp_kelvin) : undefined);
+        const mireds = rawMireds !== undefined ? lightColor.clampMireds(rawMireds, attrs, { minMireds: minPhys, maxMireds: maxPhys }) : undefined;
+        const xy = Array.isArray(attrs.xy_color) && attrs.xy_color.length >= 2 ? attrs.xy_color : undefined;
+        const hs = lightColor.getHsColor(state);
 
         if (mireds !== undefined && (colorMode === 'color_temp' || (!hs && !xy))) {
           if (!initial && this.shouldIgnoreStateUpdate(entityId, 'color_temp', mireds)) {
@@ -383,6 +394,7 @@ export class CompositeDeviceEntity {
     const nodeName = this.name.substring(0, 32).trim();
     endpoint.deviceType = type.code;
     endpoint.deviceName = nodeName;
+    (endpoint as any).nodeLabel = nodeName;
     endpoint.uniqueId = `device_${this.deviceId}`.substring(0, 32);
     endpoint.serialNumber = getMatterSerialNumber(this.platform, primaryEntityId);
     endpoint.vendorId = MATTER_BRIDGE_VENDOR_ID;
@@ -416,27 +428,33 @@ export class CompositeDeviceEntity {
       }
       const on = isFanOn(member.state);
       const pct = fanPercentage(member.state);
-      const speed = fanSpeed(pct);
+      const speedMax = getFanSpeedCount(member.state);
+      const speed = fanSpeed(pct, speedMax);
       const fanMode = haStateToFanMode(member.state);
       const hasDir = hasFanDirection(member.state);
+      const fanFeatures = getFanControlFeatures(member.state);
+      const fanModeSequence = getFanModeSequence(member.state);
 
       this.platform.log.debug(
-        `[Composite] Fan root init: ${member.entityId}, on=${on}, pct=${pct}, speed=${speed}, dir=${member.state.attributes.direction ?? 'N/A'}`,
+        `[Composite] Fan root init: ${member.entityId}, on=${on}, pct=${pct}, speed=${speed}/${speedMax}, sequence=${fanModeSequence}, dir=${member.state.attributes.direction ?? 'N/A'}`,
       );
 
+      const fanClusterBehavior = MatterbridgeFanControlServer.with(...fanFeatures);
+      const fanStateConfig: any = {
+        fanMode,
+        fanModeSequence,
+        percentSetting: pct,
+        percentCurrent: pct,
+        speedMax,
+        speedSetting: speed,
+        speedCurrent: speed,
+      };
+
       if (hasDir) {
-        const dir = haDirectionToMatter(fanDirection(member.state));
-        endpoint.createCompleteFanControlClusterServer(
-          fanMode, FAN_MODE_SEQUENCE, pct, pct,
-          FAN_SPEED_MAX, speed, speed,
-          undefined, undefined, undefined, undefined,
-          dir,
-        );
-      } else {
-        endpoint.createMultiSpeedFanControlClusterServer(
-          fanMode, FAN_MODE_SEQUENCE, pct, pct, FAN_SPEED_MAX, speed, speed,
-        );
+        fanStateConfig.airflowDirection = haDirectionToMatter(fanDirection(member.state));
       }
+
+      endpoint.behaviors.require(fanClusterBehavior, fanStateConfig);
       endpoint.behaviors.require(MatterbridgeOnOffServer.with());
       endpoint.addRequiredClusterServers();
       return;
@@ -491,8 +509,9 @@ export class CompositeDeviceEntity {
           const direction = data?.request?.direction ?? data?.direction;
           const currentState = this.states.get(entityId);
           const current = currentState ? fanPercentage(currentState) : 50;
+          const speedMax = currentState ? getFanSpeedCount(currentState) : FAN_SPEED_MAX;
           const delta = direction === FanControl.StepDirection.Increase ? 10 : -10;
-          const next = snapToPhysicalLevel(Math.max(0, Math.min(100, current + delta)));
+          const next = snapToPhysicalLevel(Math.max(0, Math.min(100, current + delta)), speedMax);
           this.platform.log.debug(
             `[Composite][${entityId}] FanControl.step: dir=${direction}, current=${current}%, next=${next}%`,
           );
@@ -507,7 +526,9 @@ export class CompositeDeviceEntity {
 
         endpoint.subscribeAttribute(FanControl.id, 'percentSetting', async (newValue: any) => {
           if (typeof newValue === 'number') {
-            const next = snapToPhysicalLevel(newValue);
+            const currentState = this.states.get(entityId);
+            const speedMax = currentState ? getFanSpeedCount(currentState) : FAN_SPEED_MAX;
+            const next = snapToPhysicalLevel(newValue, speedMax);
             this.platform.log.debug(`[Composite][${entityId}] FanControl.percentSetting changed: ${newValue}% -> snapped ${next}%`);
             if (next === 0) {
               this.setCommandLockout(entityId, 'fan_state', 'off');
@@ -522,8 +543,10 @@ export class CompositeDeviceEntity {
         if (endpoint.hasAttributeServer(FanControl.id, 'speedSetting')) {
           endpoint.subscribeAttribute(FanControl.id, 'speedSetting', async (newValue: any) => {
             if (typeof newValue === 'number') {
-              const pct = newValue === 0 ? 0 : (newValue / FAN_SPEED_MAX) * 100;
-              const next = snapToPhysicalLevel(pct);
+              const currentState = this.states.get(entityId);
+              const speedMax = currentState ? getFanSpeedCount(currentState) : FAN_SPEED_MAX;
+              const pct = newValue === 0 ? 0 : (newValue / speedMax) * 100;
+              const next = snapToPhysicalLevel(pct, speedMax);
               this.platform.log.debug(`[Composite][${entityId}] FanControl.speedSetting changed: ${newValue} -> pct ${next}%`);
               if (next === 0) {
                 this.setCommandLockout(entityId, 'fan_state', 'off');
@@ -605,7 +628,9 @@ export class CompositeDeviceEntity {
           const rawMireds = data?.colorTemperatureMireds ?? data?.request?.colorTemperatureMireds;
           if (typeof rawMireds === 'number' && rawMireds > 0) {
             const state = this.states.get(entityId)!;
-            const mireds = lightColor.clampMireds(rawMireds, state.attributes);
+            const minPhys = (endpoint as any).state?.colorControl?.colorTempPhysicalMinMireds;
+            const maxPhys = (endpoint as any).state?.colorControl?.colorTempPhysicalMaxMireds;
+            const mireds = lightColor.clampMireds(rawMireds, state.attributes, { minMireds: minPhys, maxMireds: maxPhys });
             const payload = lightColor.buildColorPayload(state.attributes.supported_color_modes ?? [], state.attributes.color_mode, { mireds });
             const usesKelvin = state.attributes.color_temp_kelvin !== undefined || state.attributes.min_color_temp_kelvin !== undefined || state.attributes.max_color_temp_kelvin !== undefined;
             if (usesKelvin) {

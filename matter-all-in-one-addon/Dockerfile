@@ -20,7 +20,7 @@ LABEL io.hass.type="app" \
   org.opencontainers.image.licenses="Apache-2.0"
 
 RUN apk add --no-cache jq \
-  && npm install -g matterbridge@3.10.5 --omit=dev --no-fund --no-audit
+  && npm install -g matterbridge@3.10.6 --omit=dev --no-fund --no-audit
 
 WORKDIR /app
 COPY package.json package-lock.json ./

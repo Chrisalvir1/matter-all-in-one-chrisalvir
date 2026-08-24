@@ -1,3 +1,15 @@
+## [1.4.35] - 2026-08-24
+
+### Matterbridge Runtime & Conformance
+- **Host Container Runtime Upgrade:** Upgraded Dockerfile to install global `matterbridge@3.10.6` on Home Assistant add-on host container.
+- **FanControl Conformance Fix:** Resolved `enum-value-conformance: Matter does not allow enum value OffLowMedHigh (ID 0) here` by dynamically constructing `MatterbridgeFanControlServer` behaviors matching exact device capabilities instead of unconditionally injecting `Feature.Auto`.
+- **Dynamic Fan Features:** `FanControl.Feature.Auto` is now strictly enabled only when `preset_modes` includes `'auto'`. `FanModeSequence` dynamically selects `OffLowMedHighAuto` (with Auto) or `OffLowMedHigh` (without Auto).
+- **Fan Direction (DIR):** Strict capability detection using `FanEntityFeature.DIRECTION (4)`. Enabled for all physical BLE fans (`supported_features = 53` and `63`).
+- **Dynamic Fan Speeds:** `speedMax` dynamically derived from `percentage_step`, `speed_count`, or `speed_list` (`speedMax = 6` for percentage_step ~16.67%).
+- **Color Temperature Bounds Clamping:** Clamped `colorTemperatureMireds` strictly against physical endpoint limits (`colorTempPhysicalMinMireds` / `colorTempPhysicalMaxMireds`) on all state sync and command paths.
+- **Composite Device Atomic Export:** Verified Root ServerNode and child functional endpoints are fully active and initialized before confirming export.
+- **Runtime Diagnostics:** Added startup diagnostic logging for Matterbridge host runtime version, Node.js version, and plugin version.
+
 ## [1.4.34] - 2026-08-24
 
 ### Matterbridge

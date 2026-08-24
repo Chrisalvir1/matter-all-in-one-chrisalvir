@@ -24,10 +24,20 @@
 import { FanControl } from 'matterbridge/matter/clusters';
 import type { HassState } from '../utils/ha-state.js';
 
+// ── HA Fan Entity Features (Authoritative bitmask from Home Assistant) ─────────
+export const FanEntityFeature = {
+  SET_SPEED: 1,    // 1 << 0
+  OSCILLATE: 2,    // 1 << 1
+  DIRECTION: 4,    // 1 << 2 (Bit 4)
+  PRESET_MODE: 8,  // 1 << 3 (Bit 8)
+  TURN_OFF: 16,    // 1 << 4
+  TURN_ON: 32,     // 1 << 5
+} as const;
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 /**
- * The three fans each have 6 physical speed steps.
+ * The three physical fans have 6 discrete speeds (step ≈ 16.667 %).
  * Representative percentages: 16.67, 33.33, 50, 66.67, 83.33, 100.
  * Using the midpoints between steps as thresholds.
  */
@@ -80,8 +90,26 @@ export function fanPercentage(state: HassState): number {
 }
 
 /**
+ * Derive speedMax dynamically from HA state attributes.
+ * Uses speed_count, speed_list length, or 100 / percentage_step.
+ */
+export function getFanSpeedCount(state: HassState): number {
+  if (typeof state.attributes.speed_count === 'number' && state.attributes.speed_count > 0) {
+    return Math.min(100, Math.max(1, Math.round(state.attributes.speed_count)));
+  }
+  if (Array.isArray(state.attributes.speed_list) && state.attributes.speed_list.length > 0) {
+    return Math.min(100, Math.max(1, state.attributes.speed_list.length));
+  }
+  const step = state.attributes.percentage_step;
+  if (typeof step === 'number' && step > 0 && step <= 100) {
+    return Math.min(100, Math.max(1, Math.round(100 / step)));
+  }
+  return FAN_SPEED_MAX;
+}
+
+/**
  * Normalise an arbitrary percentage to the nearest physical speed level
- * percentage (using the 6-speed lookup table).
+ * percentage (using the 6-speed lookup table when speedMax=6, or dynamic calculation).
  *
  * Examples:
  *   32 → 33.33  (level 2)
@@ -89,35 +117,43 @@ export function fanPercentage(state: HassState): number {
  *  100 → 100    (level 6)
  *    0 → 0      (off, returned as-is)
  */
-export function normaliseToPhysicalSpeed(pct: number): number {
+export function normaliseToPhysicalSpeed(pct: number, speedMax: number = FAN_SPEED_MAX): number {
   if (pct <= 0) return 0;
-  if (pct > 100) return 100;
-  for (const level of FAN_SPEED_LEVELS) {
-    if (pct >= level.threshold_lo && pct <= level.threshold_hi) {
-      return level.pct;
+  if (pct >= 100) return 100;
+  if (speedMax === 6) {
+    for (const level of FAN_SPEED_LEVELS) {
+      if (pct >= level.threshold_lo && pct <= level.threshold_hi) {
+        return level.pct;
+      }
     }
   }
-  // Fallback: return unchanged (rounding already happened in caller)
-  return Math.round(pct);
+  const step = 100 / speedMax;
+  const level = Math.round(pct / step);
+  return Number((Math.max(1, Math.min(speedMax, level)) * step).toFixed(2));
 }
 
 /**
  * Given a requested percentage (0-100), snap it to the nearest physical level
  * percentage.  Returns 0 when pct === 0 (represents off/minimum in some UIs).
  */
-export function snapToPhysicalLevel(pct: number): number {
+export function snapToPhysicalLevel(pct: number, speedMax: number = FAN_SPEED_MAX): number {
   if (pct <= 0) return 0;
-  // Find the level whose nominal pct is closest
-  let closest = FAN_SPEED_LEVELS[0] as (typeof FAN_SPEED_LEVELS)[number];
-  let minDelta = Math.abs(pct - closest.pct);
-  for (const level of FAN_SPEED_LEVELS) {
-    const delta = Math.abs(pct - level.pct);
-    if (delta < minDelta) {
-      minDelta = delta;
-      closest = level;
+  if (pct >= 100) return 100;
+  if (speedMax === 6) {
+    let closest: (typeof FAN_SPEED_LEVELS)[number] = FAN_SPEED_LEVELS[0];
+    let minDelta = Math.abs(pct - closest.pct);
+    for (const level of FAN_SPEED_LEVELS) {
+      const delta = Math.abs(pct - level.pct);
+      if (delta < minDelta) {
+        minDelta = delta;
+        closest = level;
+      }
     }
+    return closest.pct;
   }
-  return closest.pct;
+  const step = 100 / speedMax;
+  const level = Math.round(pct / step);
+  return Number((Math.max(1, Math.min(speedMax, level)) * step).toFixed(2));
 }
 
 /**
@@ -156,6 +192,61 @@ export function fanDirection(state: HassState): string | undefined {
 }
 
 /**
+ * Check if the Home Assistant fan entity exposes direction control capability.
+ * Uses FanEntityFeature.DIRECTION (4) as the authoritative capability flag.
+ */
+export function hasFanDirection(state: HassState): boolean {
+  const supported = state.attributes.supported_features;
+  if (typeof supported === 'number') {
+    return (supported & FanEntityFeature.DIRECTION) !== 0;
+  }
+  return false;
+}
+
+/**
+ * Check if the Home Assistant fan entity exposes a true Auto capability/preset.
+ * Sleep/breeze presets are NOT equivalent to Matter Auto.
+ */
+export function hasFanAuto(state: HassState): boolean {
+  const supported = state.attributes.supported_features;
+  if (typeof supported === 'number' && !(supported & FanEntityFeature.PRESET_MODE)) {
+    return false;
+  }
+  const presets = state.attributes.preset_modes;
+  if (Array.isArray(presets)) {
+    return presets.some((mode) => typeof mode === 'string' && mode.toLowerCase().trim() === 'auto');
+  }
+  return false;
+}
+
+/**
+ * Select the conformant FanModeSequence according to the exact enabled features.
+ * When Auto is NOT enabled, OffLowMedHigh is required.
+ * When Auto IS enabled, OffLowMedHighAuto is required.
+ */
+export function getFanModeSequence(state: HassState): FanControl.FanModeSequence {
+  return hasFanAuto(state)
+    ? FanControl.FanModeSequence.OffLowMedHighAuto
+    : FanControl.FanModeSequence.OffLowMedHigh;
+}
+
+/**
+ * Resolve dynamic Matter FanControl features supported by the fan.
+ * Auto (AUT) is only included if the HA fan explicitly exposes Auto preset.
+ * AirflowDirection (DIR) is only included if HA fan supports direction (bit 4).
+ */
+export function getFanControlFeatures(state: HassState): any[] {
+  const features: any[] = [FanControl.Feature.MultiSpeed, FanControl.Feature.Step];
+  if (hasFanDirection(state)) {
+    features.push(FanControl.Feature.AirflowDirection);
+  }
+  if (hasFanAuto(state)) {
+    features.push(FanControl.Feature.Auto);
+  }
+  return features;
+}
+
+/**
  * Determine the appropriate Matter FanMode from HA fan state.
  *
  * - Off when state is off.
@@ -175,10 +266,7 @@ export function haStateToFanMode(state: HassState): FanControl.FanMode {
   return FanControl.FanMode.High;
 }
 
-/**
- * Determine FanModeSequence for fans with 6 speed levels.
- * OffLowMedHigh maps to our 3-tier Low/Medium/High without Auto.
- */
+/** Default sequence for fans without Auto. */
 export const FAN_MODE_SEQUENCE = FanControl.FanModeSequence.OffLowMedHigh;
 
 // ── Support for presets ───────────────────────────────────────────────────────
@@ -186,11 +274,9 @@ export const FAN_MODE_SEQUENCE = FanControl.FanModeSequence.OffLowMedHigh;
 /**
  * Supported HA preset modes for the bedroom fan.
  * Matter 1.6 / FanControl has `WindSetting` (sleepWind, naturalWind) which maps to
- * `sleep` and `breeze` respectively.  However `MatterbridgeFanControlServer` in
- * 3.10.6 only enables auto+step features.
+ * `sleep` and `breeze` respectively.
  *
- * Therefore presets are tracked only in HA; we do NOT advertise them to Matter/HomeKit.
- * This is documented and intentional.
+ * Presets are tracked only in HA; we do NOT advertise them as Auto.
  */
 export const FAN_PRESET_TO_WIND: Record<string, string> = {
   sleep: 'sleepWind',
@@ -200,28 +286,20 @@ export const FAN_PRESET_TO_WIND: Record<string, string> = {
 // ── Public converter interface (backwards-compatible) ─────────────────────────
 
 /**
- * Determine if HA fan exposes direction control (bit 3 in supported_features).
- * 1 = SET_SPEED, 4 = OSCILLATE, 8 = DIRECTION, 32 = PRESET_MODE
+ * Return the physical speed level (1..speedMax) or 0 (Off) based on the percentage.
  */
-export function hasFanDirection(state: HassState): boolean {
-  if (typeof state.attributes.supported_features === 'number') {
-    return (state.attributes.supported_features & 8) !== 0;
-  }
-  return typeof state.attributes.direction === 'string';
-}
-
-/**
- * Return the physical speed level (1-6) or 0 (Off) based on the percentage.
- */
-export function fanSpeed(pct: number): number {
+export function fanSpeed(pct: number, speedMax: number = FAN_SPEED_MAX): number {
   if (pct <= 0) return 0;
-  if (pct > 100) return 6;
-  for (const level of FAN_SPEED_LEVELS) {
-    if (pct >= level.threshold_lo && pct <= level.threshold_hi) {
-      return level.speed;
+  if (pct >= 100) return speedMax;
+  if (speedMax === 6) {
+    for (const level of FAN_SPEED_LEVELS) {
+      if (pct >= level.threshold_lo && pct <= level.threshold_hi) {
+        return level.speed;
+      }
     }
   }
-  return 0;
+  const speed = Math.round((pct / 100) * speedMax);
+  return Math.max(1, Math.min(speedMax, speed));
 }
 
 export const fanConverter = {
@@ -236,14 +314,14 @@ export const fanConverter = {
   /**
    * Map Matter speed percentage back to the nearest physical HA percentage.
    */
-  toHaPercentage(percent: number): number {
-    return snapToPhysicalLevel(percent);
+  toHaPercentage(percent: number, speedMax: number = FAN_SPEED_MAX): number {
+    return snapToPhysicalLevel(percent, speedMax);
   },
 
   /** True only when state/is_on says on. */
   isOn: isFanOn,
 
-  /** Snap arbitrary percent to closest 6-speed level. */
+  /** Snap arbitrary percent to closest speed level. */
   snapToPhysicalLevel,
 
   /** Normalise raw HA percent to nearest level name. */
@@ -261,12 +339,28 @@ export const fanConverter = {
   /** Current direction from state (not last_direction). */
   fanDirection,
 
-  /** Determine if HA fan exposes direction control (bit 3 in supported_features). */
+  /** Determine if HA fan exposes direction control (bit 4 in supported_features). */
   hasFanDirection,
 
-  /** Return the physical speed level (1-6) or 0 (Off) based on the percentage. */
+  /** Determine if HA fan exposes Auto preset. */
+  hasFanAuto,
+
+  /** Dynamic speed count. */
+  getFanSpeedCount,
+
+  /** Dynamic FanModeSequence. */
+  getFanModeSequence,
+
+  /** Dynamic FanControl features. */
+  getFanControlFeatures,
+
+  /** Return the physical speed level (1..speedMax) or 0 (Off) based on the percentage. */
   fanSpeed,
 
   /** Derive FanMode from HA state. */
   haStateToFanMode,
+
+  /** HA Fan Entity Feature Constants */
+  FanEntityFeature,
 };
+

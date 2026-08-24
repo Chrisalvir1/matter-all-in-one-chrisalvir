@@ -4,7 +4,7 @@
 import { DeviceTypeDefinition, MatterbridgeEndpoint } from 'matterbridge';
 import { OnOff, LevelControl, ColorControl, FanControl, OccupancySensing, BooleanState, TemperatureMeasurement, RelativeHumidityMeasurement } from 'matterbridge/matter/clusters';
 import { ClusterId } from 'matterbridge/matter/types';
-import { MatterbridgeOnOffServer } from 'matterbridge/behaviors';
+import { MatterbridgeOnOffServer, MatterbridgeFanControlServer } from 'matterbridge/behaviors';
 import { HomeAssistantPlatform } from '../platform.js';
 import { HassState } from '../utils/ha-state.js';
 import { safeSetAttribute, safeUpdateAttribute } from '../utils/matter-attributes.js';
@@ -22,6 +22,10 @@ import {
   withinHysteresis,
   FAN_MODE_SEQUENCE,
   hasFanDirection,
+  hasFanAuto,
+  getFanSpeedCount,
+  getFanModeSequence,
+  getFanControlFeatures,
   fanSpeed,
   FAN_SPEED_MAX,
 } from '../converters/fan.converter.js';
@@ -207,43 +211,32 @@ export class BaseEntity {
     if (domain === 'fan' && isFanProfile) {
       const on = isFanOn(this.state);
       const pct = fanPercentage(this.state);
-      const speed = fanSpeed(pct);
+      const speedMax = getFanSpeedCount(this.state);
+      const speed = fanSpeed(pct, speedMax);
       const fanMode = haStateToFanMode(this.state);
+      const fanFeatures = getFanControlFeatures(this.state);
+      const fanModeSequence = getFanModeSequence(this.state);
 
       this.platform.log.debug(
-        `[${this.entityId}] Fan init: state=${this.state.state}, on=${on}, pct=${pct}, speed=${speed}, direction=${this.state.attributes.direction ?? 'N/A'}`,
+        `[${this.entityId}] Fan init: state=${this.state.state}, on=${on}, pct=${pct}, speed=${speed}/${speedMax}, sequence=${fanModeSequence}, dir=${this.state.attributes.direction ?? 'N/A'}`,
       );
 
+      const fanClusterBehavior = MatterbridgeFanControlServer.with(...fanFeatures);
+      const fanStateConfig: any = {
+        fanMode,
+        fanModeSequence,
+        percentSetting: pct,
+        percentCurrent: pct,
+        speedMax,
+        speedSetting: speed,
+        speedCurrent: speed,
+      };
+
       if (hasDirectionSupport) {
-        // Use complete cluster server with AirflowDirection support
-        const dir = haDirectionToMatter(fanDirection(this.state));
-        this.endpoint.createCompleteFanControlClusterServer(
-          fanMode,
-          FAN_MODE_SEQUENCE,
-          pct,              // percentSetting
-          pct,              // percentCurrent
-          FAN_SPEED_MAX,    // speedMax = 6 physical levels
-          speed,            // speedSetting
-          speed,            // speedCurrent
-          undefined,        // rockSupport
-          undefined,        // rockSetting
-          undefined,        // windSupport
-          undefined,        // windSetting
-          dir,              // airflowDirection
-        );
-      } else {
-        // No direction support — use MultiSpeed cluster (speed levels + percent)
-        this.endpoint.createMultiSpeedFanControlClusterServer(
-          fanMode,
-          FAN_MODE_SEQUENCE,
-          pct,              // percentSetting
-          pct,              // percentCurrent
-          FAN_SPEED_MAX,    // speedMax = 6 physical levels
-          speed,            // speedSetting
-          speed,            // speedCurrent
-        );
+        fanStateConfig.airflowDirection = haDirectionToMatter(fanDirection(this.state));
       }
 
+      this.endpoint.behaviors.require(fanClusterBehavior, fanStateConfig);
       this.endpoint.behaviors.require(MatterbridgeOnOffServer.with());
     } else if (domain === 'light' || domain === 'switch' || domain === 'media_player' || domain === 'vacuum' || domain === 'fan') {
       const isLighting = domain === 'light';
@@ -294,8 +287,9 @@ export class BaseEntity {
           const direction = data?.request?.direction ?? data?.direction;
           // Read current % from HA state, NOT from last_percentage
           const current = fanPercentage(this.state);
+          const speedMax = getFanSpeedCount(this.state);
           const delta = direction === FanControl.StepDirection.Increase ? 10 : -10;
-          const next = snapToPhysicalLevel(Math.max(0, Math.min(100, current + delta)));
+          const next = snapToPhysicalLevel(Math.max(0, Math.min(100, current + delta)), speedMax);
           this.platform.log.debug(
             `[${this.entityId}] FanControl.step: dir=${direction}, current=${current}%, next=${next}%`,
           );
@@ -310,7 +304,8 @@ export class BaseEntity {
 
         this.endpoint.subscribeAttribute(FanControl.id, 'percentSetting', async (newValue: any) => {
           if (typeof newValue === 'number') {
-            const next = snapToPhysicalLevel(newValue);
+            const speedMax = getFanSpeedCount(this.state);
+            const next = snapToPhysicalLevel(newValue, speedMax);
             this.platform.log.debug(`[${this.entityId}] FanControl.percentSetting changed: ${newValue}% -> snapped ${next}%`);
             if (next === 0) {
               this.setCommandLockout('fan_state', 'off');
@@ -325,8 +320,9 @@ export class BaseEntity {
         if (this.endpoint.hasAttributeServer(FanControl.id, 'speedSetting')) {
           this.endpoint.subscribeAttribute(FanControl.id, 'speedSetting', async (newValue: any) => {
             if (typeof newValue === 'number') {
-              const pct = newValue === 0 ? 0 : (newValue / FAN_SPEED_MAX) * 100;
-              const next = snapToPhysicalLevel(pct);
+              const speedMax = getFanSpeedCount(this.state);
+              const pct = newValue === 0 ? 0 : (newValue / speedMax) * 100;
+              const next = snapToPhysicalLevel(pct, speedMax);
               this.platform.log.debug(`[${this.entityId}] FanControl.speedSetting changed: ${newValue} -> pct ${next}%`);
               if (next === 0) {
                 this.setCommandLockout('fan_state', 'off');
@@ -535,16 +531,18 @@ export class BaseEntity {
         const attrs = newState.attributes as any;
         const colorMode = attrs.color_mode;
         
-        const rawMireds = attrs.color_temp ?? (attrs.color_temp_kelvin ? lightColor.kelvinToMireds(attrs.color_temp_kelvin) : undefined);
-        const mireds = rawMireds !== undefined ? lightColor.clampMireds(rawMireds, attrs) : undefined;
-        const xy = Array.isArray(attrs.xy_color) && attrs.xy_color.length >= 2 ? attrs.xy_color : undefined;
-        const hs = lightColor.getHsColor(newState);
-
         const range = lightColor.getMiredsRange(attrs);
         await updateFn(this.endpoint, ColorControl.id, 'colorTempPhysicalMinMireds', range.minMireds, this.platform.log);
         await updateFn(this.endpoint, ColorControl.id, 'colorTempPhysicalMaxMireds', range.maxMireds, this.platform.log);
         await updateFn(this.endpoint, ColorControl.id, 'coupleColorTempMinMireds', range.minMireds, this.platform.log);
         await updateFn(this.endpoint, ColorControl.id, 'coupleColorTempMaxMireds', range.maxMireds, this.platform.log);
+
+        const minPhys = (this.endpoint as any).state?.colorControl?.colorTempPhysicalMinMireds ?? range.minMireds;
+        const maxPhys = (this.endpoint as any).state?.colorControl?.colorTempPhysicalMaxMireds ?? range.maxMireds;
+        const rawMireds = attrs.color_temp ?? (attrs.color_temp_kelvin ? lightColor.kelvinToMireds(attrs.color_temp_kelvin) : undefined);
+        const mireds = rawMireds !== undefined ? lightColor.clampMireds(rawMireds, attrs, { minMireds: minPhys, maxMireds: maxPhys }) : undefined;
+        const xy = Array.isArray(attrs.xy_color) && attrs.xy_color.length >= 2 ? attrs.xy_color : undefined;
+        const hs = lightColor.getHsColor(newState);
 
         if (mireds !== undefined && (colorMode === 'color_temp' || (!hs && !xy))) {
           if (!isInitialSync && this.shouldIgnoreStateUpdate('color_temp', mireds)) {
@@ -590,8 +588,9 @@ export class BaseEntity {
 
       if (domain === 'fan' && this.endpoint.hasAttributeServer(FanControl.id, 'percentCurrent')) {
         // ON/OFF comes from state/is_on ONLY — never from percentage > 0
+        const speedMax = getFanSpeedCount(newState);
         const pct = fanPercentage(newState);
-        const speed = fanSpeed(pct);
+        const speed = fanSpeed(pct, speedMax);
         const newFanMode = haStateToFanMode(newState);
 
         this.platform.log.debug(

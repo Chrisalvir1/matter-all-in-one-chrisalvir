@@ -1015,6 +1015,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
    */
   override async onStart(reason?: string) {
     this.log.info(`Starting HomeAssistant platform: ${reason ?? ""}`);
+    const mbVersion = String((this as any).matterbridge?.matterbridgeVersion ?? 'unknown');
+    this.log.notice(`[Runtime] Matterbridge runtime: ${mbVersion}`);
+    this.log.notice(`[Runtime] Node.js runtime: ${process.version}`);
+    this.log.notice(`[Runtime] Plugin version: 1.4.35`);
     await this.loadEntityDiagnostics();
     await this.startUiServer();
     this.startMatterConnectionMonitor();
@@ -1616,6 +1620,14 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       );
     }
     if (!serverNode.lifecycle?.isOnline) await serverNode.start();
+    // Atomic verification: verify that all member endpoints exist and root is online
+    for (const member of candidate.members) {
+      const ep = composite.endpoints.get(member.entityId);
+      if (!ep) {
+        throw new Error(`Composite member ${member.entityId} was not created in composite device ${nodeName}.`);
+      }
+    }
+
     this.compositeDevices.set(candidate.deviceId, composite);
     this.matterbridgeDevices.set(
       this.compositeStorageKey(candidate.deviceId),

@@ -101,11 +101,17 @@ export const lightColor = {
   },
 
   /**
-   * Clamp requested mireds to valid range based on HA attributes.
+   * Clamp requested mireds to valid range based on HA attributes and endpoint limits.
    */
-  clampMireds(mireds: number, attributes: Record<string, any> = {}): number {
-    const { minMireds, maxMireds } = this.getMiredsRange(attributes);
-    return Math.max(minMireds, Math.min(maxMireds, mireds));
+  clampMireds(
+    mireds: number,
+    attributes: Record<string, any> = {},
+    endpointLimits?: { minMireds?: number; maxMireds?: number },
+  ): number {
+    const { minMireds: haMin, maxMireds: haMax } = this.getMiredsRange(attributes);
+    const minM = endpointLimits?.minMireds !== undefined ? Math.max(endpointLimits.minMireds, haMin) : haMin;
+    const maxM = endpointLimits?.maxMireds !== undefined ? Math.min(endpointLimits.maxMireds, haMax) : haMax;
+    return Math.max(minM, Math.min(maxM, mireds));
   },
 
   /**

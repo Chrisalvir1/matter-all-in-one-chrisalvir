@@ -1,11 +1,11 @@
-# Matter All-in-One for Home Assistant — v1.4.33
+# Matter All-in-One for Home Assistant — v1.4.35
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/chrisalvir1/matter-all-in-one-chrisalvir/main/matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
 </div>
 
 > Puente Matter 1.6 para Home Assistant con código QR independiente para apagadores dobles/triples, perfiles conservadores para Apple Home y modelo/marca real en el campo Model.
-> **Base:** `matterbridge@3.10.5` · **Node.js:** `24.19-alpine3.24` · **TypeScript:** `7.0.2` · **Spec:** Matter 1.6 (CSA, 17 Jun 2026)
+> **Base:** `matterbridge@3.10.6` · **Node.js:** `24.19-alpine3.24` · **TypeScript:** `7.0.2` · **Spec:** Matter 1.6 (CSA, 17 Jun 2026)
 
 ---
 
@@ -15,10 +15,10 @@ This file is intentionally structured for both humans and AI agents.
 
 ```yaml
 project: matter-all-in-one-chrisalvir
-version: "1.4.33"
+version: "1.4.35"
 spec: "Matter 1.6"
 engine: matterbridge
-engine_version: "3.10.5"
+engine_version: "3.10.6"
 node_image: "node:24.19.0-alpine3.24"
 bridge_mode: server       # Each HA device = ServerNode; standalone entities keep their own QR
 plugin_mode: dynamic      # MatterbridgeDynamicPlatform
@@ -36,7 +36,7 @@ matterbridge_ui_port: 8284
 |---|---|
 | NFC Commissioning | Not implemented (requires physical NFC hardware). |
 | Joint Fabric | Not implemented (controller / fabric admin feature). |
-| Thermostat Suggestions | Supported via Matterbridge 3.10.5 (`Thermostat.Feature.ThermostatSuggestions`). |
+| Thermostat Suggestions | Supported via Matterbridge 3.10.6 (`Thermostat.Feature.ThermostatSuggestions`). |
 | Security Sensor Event History | Not yet mapped — pending HA event_log integration. |
 
 ---
@@ -44,7 +44,7 @@ matterbridge_ui_port: 8284
 ## Minimum Requirements
 
 - **Apple Home:** HomePod mini / Apple TV 4K (Matter hub); Thread router only needed for Thread accessories.
-- **Matterbridge:** `>= 3.10.2`
+- **Matterbridge:** `>= 3.10.6`
 - **Home Assistant:** `>= 2025.1`
 
 ---

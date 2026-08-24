@@ -28,6 +28,11 @@ import {
   normaliseToPhysicalSpeed,
   withinHysteresis,
   FAN_SPEED_LEVELS,
+  hasFanDirection,
+  hasFanAuto,
+  getFanSpeedCount,
+  getFanModeSequence,
+  getFanControlFeatures,
 } from '../src/converters/fan.converter.js';
 import { FanControl } from 'matterbridge/matter/clusters';
 
@@ -270,5 +275,71 @@ describe('Fan converter — FanMode (test 12)', () => {
     const s = makeState('off', { percentage: 88 });
     // Critical: even though percentage is high, state=off → FanMode.Off
     expect(haStateToFanMode(s)).toBe(FanControl.FanMode.Off);
+  });
+});
+
+describe('Fan converter — Feature conformance & capability detection', () => {
+  it('detects direction capability strictly via FanEntityFeature.DIRECTION (4)', () => {
+    // Living room / Guest room: supported_features = 53 (1 + 4 + 16 + 32)
+    const livingRoomState = makeState('on', { supported_features: 53, percentage: 88, percentage_step: 16.666666666666668 });
+    expect(hasFanDirection(livingRoomState)).toBe(true);
+
+    // Bedroom: supported_features = 63 (1 + 2 + 4 + 8 + 16 + 32)
+    const bedroomState = makeState('on', { supported_features: 63, percentage: 50, percentage_step: 16.666666666666668, preset_modes: ['sleep', 'breeze'] });
+    expect(hasFanDirection(bedroomState)).toBe(true);
+
+    // Fan without bit 4
+    const noDirState = makeState('on', { supported_features: 57 }); // 1 + 8 + 16 + 32 (NO 4)
+    expect(hasFanDirection(noDirState)).toBe(false);
+  });
+
+  it('detects Auto preset strictly and ignores sleep/breeze presets', () => {
+    const livingRoomState = makeState('on', { supported_features: 53 });
+    expect(hasFanAuto(livingRoomState)).toBe(false);
+
+    const bedroomState = makeState('on', { supported_features: 63, preset_modes: ['sleep', 'breeze'] });
+    expect(hasFanAuto(bedroomState)).toBe(false);
+
+    const autoState = makeState('on', { supported_features: 57, preset_modes: ['low', 'medium', 'high', 'auto'] });
+    expect(hasFanAuto(autoState)).toBe(true);
+  });
+
+  it('selects conformant FanModeSequence dynamically', () => {
+    const livingRoomState = makeState('on', { supported_features: 53 });
+    expect(getFanModeSequence(livingRoomState)).toBe(FanControl.FanModeSequence.OffLowMedHigh);
+
+    const bedroomState = makeState('on', { supported_features: 63, preset_modes: ['sleep', 'breeze'] });
+    expect(getFanModeSequence(bedroomState)).toBe(FanControl.FanModeSequence.OffLowMedHigh);
+
+    const autoState = makeState('on', { supported_features: 57, preset_modes: ['auto'] });
+    expect(getFanModeSequence(autoState)).toBe(FanControl.FanModeSequence.OffLowMedHighAuto);
+  });
+
+  it('dynamically derives speedMax from percentage_step, speed_count or speed_list', () => {
+    // 6-speed physical BLE fans
+    const bleFan = makeState('on', { percentage_step: 16.666666666666668 });
+    expect(getFanSpeedCount(bleFan)).toBe(6);
+
+    const threeSpeedFan = makeState('on', { speed_count: 3 });
+    expect(getFanSpeedCount(threeSpeedFan)).toBe(3);
+
+    const listFan = makeState('on', { speed_list: ['low', 'medium', 'high', 'turbo'] });
+    expect(getFanSpeedCount(listFan)).toBe(4);
+  });
+
+  it('resolves conformant FanControl features without unsupported Auto', () => {
+    const livingRoomState = makeState('on', { supported_features: 53 });
+    const lrFeatures = getFanControlFeatures(livingRoomState);
+    expect(lrFeatures).toContain(FanControl.Feature.MultiSpeed);
+    expect(lrFeatures).toContain(FanControl.Feature.Step);
+    expect(lrFeatures).toContain(FanControl.Feature.AirflowDirection);
+    expect(lrFeatures).not.toContain(FanControl.Feature.Auto);
+
+    const bedroomState = makeState('on', { supported_features: 63, preset_modes: ['sleep', 'breeze'] });
+    const brFeatures = getFanControlFeatures(bedroomState);
+    expect(brFeatures).toContain(FanControl.Feature.MultiSpeed);
+    expect(brFeatures).toContain(FanControl.Feature.Step);
+    expect(brFeatures).toContain(FanControl.Feature.AirflowDirection);
+    expect(brFeatures).not.toContain(FanControl.Feature.Auto);
   });
 });
