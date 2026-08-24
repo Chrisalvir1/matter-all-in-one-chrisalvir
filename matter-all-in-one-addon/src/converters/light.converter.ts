@@ -1,38 +1,43 @@
 /**
  * Converter utility for light and switch domains.
+ * Home Assistant is the authoritative state source for Matter All-in-One Creator.
  */
-import { HassState } from "../utils/ha-state.js";
+import { HassState } from '../utils/ha-state.js';
 
 export const lightConverter = {
   /**
    * Map HA state to OnOff boolean.
+   * State and is_on are the sole authority for OnOff; brightness is never used to infer power.
    */
   toOnOff(state: HassState): boolean {
-    return state.state === "on";
+    return state.state === 'on';
   },
 
   /**
-   * Map HA brightness (0..255) to Matter currentLevel (1..254).
+   * Map HA brightness (1..255, with defensive fallback for 0) to Matter currentLevel (1..254).
    *
-   * Matter spec (LevelControl cluster): currentLevel=0 is explicitly
-   * reserved and most controllers (including Apple Home) treat it as
-   * invalid when minLevel > 0.  Govee and other dimmers report minLevel
-   * up to 135, causing a constraint violation and an UnhandledRejection
-   * if we send 0.  We clamp the minimum to 1 here; the off state is
-   * always communicated through the OnOff cluster (onOff=false) rather
-   * than by zeroing currentLevel.
+   * Modern Home Assistant specifies brightness in the range 1..255 (or null when off).
+   * Matter LevelControl cluster specifies CurrentLevel in the range 1..254.
+   *
+   * If an uncompliant integration reports brightness 0, it is defensively clamped to 1
+   * without affecting the OnOff state.
    */
-  toLevel(state: HassState): number {
-    const brightness = state.attributes.brightness;
+  toLevel(state: HassState | number): number {
+    const brightness = typeof state === 'number' ? state : state?.attributes?.brightness;
     if (brightness === undefined || brightness === null) return 1;
-    const raw = Math.round((brightness / 255) * 254);
-    return Math.max(1, raw);
+    // Defensive handling: clamp between 1 and 255 before mapping
+    const clampedHa = Math.max(1, Math.min(255, brightness));
+    const raw = Math.round((clampedHa / 255) * 254);
+    return Math.max(1, Math.min(254, raw));
   },
 
   /**
-   * Map Matter currentLevel (0..254) back to HA brightness (0..255).
+   * Map Matter currentLevel (1..254) back to HA brightness (1..255).
    */
   toHaBrightness(level: number): number {
-    return Math.round((level / 254) * 255);
+    const clampedLevel = Math.max(1, Math.min(254, level));
+    const raw = Math.round((clampedLevel / 254) * 255);
+    return Math.max(1, Math.min(255, raw));
   },
 };
+

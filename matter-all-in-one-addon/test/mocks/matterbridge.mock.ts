@@ -17,6 +17,15 @@ export class MockMatterbridgeEndpoint {
   public softwareVersion: number = 0;
   public softwareVersionString: string = "";
   public behaviors = { require: (...args: any[]) => {} };
+  public createFanControlClusterServer = vi.fn().mockImplementation(() => {
+    this.hasAttributeServer = vi.fn().mockReturnValue(true);
+  });
+  public createCompleteFanControlClusterServer = vi.fn().mockImplementation(() => {
+    this.createFanControlClusterServer();
+  });
+  public createMultiSpeedFanControlClusterServer = vi.fn().mockImplementation(() => {
+    this.createFanControlClusterServer();
+  });
   public clusterServers = new Set<number>();
   public attributes = new Map<string, any>();
   public commandHandlers = new Map<string, (...args: any[]) => any>();

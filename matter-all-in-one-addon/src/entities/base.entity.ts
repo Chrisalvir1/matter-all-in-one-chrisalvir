@@ -1,38 +1,31 @@
 /**
  * Base entity class for exposing Home Assistant entities to Matter.
  */
-import { DeviceTypeDefinition, MatterbridgeEndpoint } from "matterbridge";
+import { DeviceTypeDefinition, MatterbridgeEndpoint } from 'matterbridge';
+import { OnOff, LevelControl, ColorControl, FanControl, OccupancySensing, BooleanState, TemperatureMeasurement, RelativeHumidityMeasurement } from 'matterbridge/matter/clusters';
+import { ClusterId } from 'matterbridge/matter/types';
+import { MatterbridgeOnOffServer } from 'matterbridge/behaviors';
+import { HomeAssistantPlatform } from '../platform.js';
+import { HassState } from '../utils/ha-state.js';
+import { safeSetAttribute, safeUpdateAttribute } from '../utils/matter-attributes.js';
+import { hasColorTemperatureCapability } from '../device-registry.js';
+import { getMatterSerialNumber, getHaDeviceModel, getHaDeviceManufacturer, MATTER_BRIDGE_VENDOR_ID } from '../utils/matter-device-identity.js';
+import { lightColor } from '../utils/light-color.js';
 import {
-  OnOff,
-  LevelControl,
-  ColorControl,
-  FanControl,
-  OccupancySensing,
-  BooleanState,
-  TemperatureMeasurement,
-  RelativeHumidityMeasurement,
-} from "matterbridge/matter/clusters";
-import { ClusterId } from "matterbridge/matter/types";
-import {
-  MatterbridgeOnOffServer,
-  MatterbridgeFanControlServer,
-} from "matterbridge/behaviors";
-import { HomeAssistantPlatform } from "../platform.js";
-import { HassState } from "../utils/ha-state.js";
-import {
-  safeSetAttribute,
-  safeUpdateAttribute,
-} from "../utils/matter-attributes.js";
-import { hasColorTemperatureCapability } from "../device-registry.js";
-import {
-  getMatterSerialNumber,
-  getHaDeviceModel,
-  getHaDeviceManufacturer,
-  MATTER_BRIDGE_VENDOR_ID,
-  MATTER_BRIDGE_VENDOR_NAME,
-} from "../utils/matter-device-identity.js";
-import { lightColor } from "../utils/light-color.js";
-import { fanConverter } from "../converters/fan.converter.js";
+  isFanOn,
+  fanPercentage,
+  fanDirection,
+  haDirectionToMatter,
+  matterDirectionToHa,
+  haStateToFanMode,
+  snapToPhysicalLevel,
+  withinHysteresis,
+  FAN_MODE_SEQUENCE,
+  hasFanDirection,
+  fanSpeed,
+  FAN_SPEED_MAX,
+} from '../converters/fan.converter.js';
+import { lightConverter } from '../converters/light.converter.js';
 
 export class BaseEntity {
   public platform: HomeAssistantPlatform;
@@ -44,46 +37,27 @@ export class BaseEntity {
   public deviceType: DeviceTypeDefinition;
 
   private isDifferent(attribute: string, requested: any, actual: any): boolean {
-    if (attribute === "onOff") {
-      return Boolean(requested) !== Boolean(actual);
-    }
-    if (attribute === "fanMode") {
-      return Number(requested) !== Number(actual);
-    }
-    if (attribute === "hs_color") {
+    if (attribute === 'hs_color') {
       if (!requested || !actual) return true;
-      return (
-        Math.abs(requested[0] - actual[0]) > 3 ||
-        Math.abs(requested[1] - actual[1]) > 2
-      );
+      return Math.abs(requested[0] - actual[0]) > 3 || Math.abs(requested[1] - actual[1]) > 2;
     }
-    if (attribute === "xy_color") {
+    if (attribute === 'xy_color') {
       if (!requested || !actual) return true;
-      return (
-        Math.abs(requested[0] - actual[0]) > 0.01 ||
-        Math.abs(requested[1] - actual[1]) > 0.01
-      );
+      return Math.abs(requested[0] - actual[0]) > 0.01 || Math.abs(requested[1] - actual[1]) > 0.01;
     }
-    if (attribute === "brightness") {
+    if (attribute === 'brightness') {
       return Math.abs(requested - actual) > 5;
     }
-    if (attribute === "percentage") {
-      return Math.abs(requested - actual) > 2;
+    if (attribute === 'fan_percentage') {
+      return !withinHysteresis(requested, actual);
     }
-    if (attribute === "color_temp") {
+    if (attribute === 'color_temp') {
       return Math.abs(requested - actual) > 10;
     }
     return requested !== actual;
   }
 
-  private shouldIgnoreStateUpdate(
-    attribute: string,
-    haValue: any,
-    // BLE integrations can take the full HA service timeout to report their
-    // physical state. Keep power/mode intent through that period so a late
-    // stale report cannot make Apple Home bounce back.
-    windowMs = attribute === "onOff" || attribute === "fanMode" ? 30_000 : 6000,
-  ): boolean {
+  private shouldIgnoreStateUpdate(attribute: string, haValue: any, windowMs = 3000): boolean {
     const key = `${this.entityId}:${attribute}`;
     const last = this.lastCommands.get(key);
     if (!last) return false;
@@ -94,23 +68,24 @@ export class BaseEntity {
       return false;
     }
 
-    // If HA matches the value we commanded, accept without prematurely wiping lockout
-    if (!this.isDifferent(attribute, last.value, haValue)) {
-      return false;
+    if (this.isDifferent(attribute, last.value, haValue)) {
+      this.platform.log.debug(`[${this.entityId}] Reconciling HA feedback for ${attribute} (req=${JSON.stringify(last.value)}, got=${JSON.stringify(haValue)})`);
+      this.lastCommands.delete(key);
+      return false; // Force reconciliation
     }
 
-    // Stale echo within lockout window: ignore it to prevent bouncing in HomeKit
-    this.platform.log.debug(
-      `[${this.entityId}] Ignoring stale HA update for ${attribute} (req=${JSON.stringify(last.value)}, ha=${JSON.stringify(haValue)}, ${elapsed}ms ago)`,
-    );
-    return true;
+    return true; // Ignore, within window and matches
   }
 
   protected setCommandLockout(attribute: string, value: any) {
-    this.lastCommands.set(`${this.entityId}:${attribute}`, {
-      value,
-      timestamp: Date.now(),
-    });
+    this.lastCommands.set(`${this.entityId}:${attribute}`, { value, timestamp: Date.now() });
+  }
+
+  private haUpdateDepth = 0;
+
+  /** True while HA-originated changes are being written into this endpoint. */
+  protected get isUpdatingFromHa(): boolean {
+    return this.haUpdateDepth > 0;
   }
 
   private serviceDebounceTimers = new Map<string, NodeJS.Timeout>();
@@ -142,18 +117,13 @@ export class BaseEntity {
     );
   }
 
-  private hasColorControl(
-    endpoint: MatterbridgeEndpoint = this.endpoint,
-  ): boolean {
+  private hasColorControl(endpoint: MatterbridgeEndpoint = this.endpoint): boolean {
     const hasClusterServer = (endpoint as any).hasClusterServer;
-    if (typeof hasClusterServer === "function") {
+    if (typeof hasClusterServer === 'function') {
       return hasClusterServer.call(endpoint, ColorControl);
     }
     const hasAttributeServer = (endpoint as any).hasAttributeServer;
-    return (
-      typeof hasAttributeServer === "function" &&
-      hasAttributeServer.call(endpoint, ColorControl.id, "colorMode")
-    );
+    return typeof hasAttributeServer === 'function' && hasAttributeServer.call(endpoint, ColorControl.id, 'colorMode');
   }
 
   protected getMatterSerialNumber(): string {
@@ -162,30 +132,14 @@ export class BaseEntity {
 
   public endpoint!: MatterbridgeEndpoint;
 
-  protected applyMatterbridgeFirmware(
-    endpoint: MatterbridgeEndpoint = this.endpoint,
-  ): void {
-    const version = String(
-      (this.platform as any).matterbridge?.matterbridgeVersion ??
-        "Matterbridge",
-    );
-    const [major = 0, minor = 0, patch = 0] = version
-      .split(/[-+.]/)
-      .map((part) => Number.parseInt(part, 10) || 0);
-    endpoint.softwareVersion = Math.min(
-      0xffffffff,
-      major * 1_000_000 + minor * 1_000 + patch,
-    );
-    endpoint.softwareVersionString = version.startsWith("Matterbridge")
-      ? version
-      : `Matterbridge ${version}`;
+  protected applyMatterbridgeFirmware(endpoint: MatterbridgeEndpoint = this.endpoint): void {
+    const version = String((this.platform as any).matterbridge?.matterbridgeVersion ?? 'Matterbridge');
+    const [major = 0, minor = 0, patch = 0] = version.split(/[-+.]/).map((part) => Number.parseInt(part, 10) || 0);
+    endpoint.softwareVersion = Math.min(0xffffffff, major * 1_000_000 + minor * 1_000 + patch);
+    endpoint.softwareVersionString = version.startsWith('Matterbridge') ? version : `Matterbridge ${version}`;
   }
 
-  constructor(
-    platform: HomeAssistantPlatform,
-    state: HassState,
-    deviceType: DeviceTypeDefinition,
-  ) {
+  constructor(platform: HomeAssistantPlatform, state: HassState, deviceType: DeviceTypeDefinition) {
     this.platform = platform;
     this.entityId = state.entity_id;
     this.state = state;
@@ -193,38 +147,20 @@ export class BaseEntity {
   }
 
   protected getRequiredClusterIds(): ClusterId[] {
-    const [domain] = this.entityId.split(".");
+    const [domain] = this.entityId.split('.');
     const clusters: ClusterId[] = [];
 
-    if (
-      domain === "light" ||
-      domain === "switch" ||
-      domain === "media_player" ||
-      domain === "vacuum"
-    ) {
-      const supportedModes: string[] =
-        this.state.attributes.supported_color_modes ?? [];
-      const hasBrightness =
-        supportedModes.includes("brightness") ||
-        this.state.attributes.brightness !== undefined;
-      const isOnOffProfile =
-        this.deviceType.code === 0x0100 || this.deviceType.code === 0x010a;
-      const isDimmableProfile =
-        this.deviceType.code === 0x0101 ||
-        this.deviceType.code === 0x010b ||
-        this.deviceType.code === 0x010c ||
-        this.deviceType.code === 0x010d;
-      const realColorModes = ["hs", "xy", "rgb", "rgbw", "rgbww", "color_temp"];
+    if (domain === 'light' || domain === 'switch' || domain === 'media_player' || domain === 'vacuum') {
+      const supportedModes: string[] = this.state.attributes.supported_color_modes ?? [];
+      const hasBrightness = supportedModes.includes('brightness') || this.state.attributes.brightness !== undefined;
+      const isOnOffProfile = this.deviceType.code === 0x0100 || this.deviceType.code === 0x010a; 
+      const realColorModes = ['hs', 'xy', 'rgb', 'rgbw', 'rgbww', 'color_temp'];
       const hasColorCapability =
         supportedModes.some((m) => realColorModes.includes(m)) ||
         hasColorTemperatureCapability(this.state.attributes);
-      const isColorProfile =
-        this.deviceType.code === 0x010c || this.deviceType.code === 0x010d;
-
-      if (
-        (hasBrightness || hasColorCapability || isDimmableProfile) &&
-        !isOnOffProfile
-      ) {
+      const isColorProfile = this.deviceType.code === 0x010c || this.deviceType.code === 0x010d; 
+      
+      if ((hasBrightness || hasColorCapability) && !isOnOffProfile) {
         clusters.push(LevelControl.id);
       }
       if (hasColorCapability && isColorProfile) {
@@ -240,27 +176,20 @@ export class BaseEntity {
     const uniqueName = rawName.substring(0, 32).trim();
 
     this.endpoint = new MatterbridgeEndpoint([this.deviceType], {
-      id: this.entityId.replaceAll(".", "_"),
-      mode: "server",
+      id: this.entityId.replaceAll('.', '_'),
+      mode: 'server',
     });
 
-    const [domain] = this.entityId.split(".");
+    const [domain] = this.entityId.split('.');
 
     this.endpoint.deviceType = this.deviceType.code;
     this.endpoint.deviceName = uniqueName;
-    this.endpoint.uniqueId = this.entityId.replaceAll(".", "_");
+    this.endpoint.uniqueId = this.entityId.replaceAll('.', '_');
     this.endpoint.serialNumber = this.getMatterSerialNumber();
     this.endpoint.vendorId = MATTER_BRIDGE_VENDOR_ID;
-    this.endpoint.vendorName = getHaDeviceManufacturer(
-      this.platform,
-      this.entityId,
-    );
+    this.endpoint.vendorName = getHaDeviceManufacturer(this.platform, this.entityId);
     this.endpoint.productId = 0x8000;
-    this.endpoint.productName = getHaDeviceModel(
-      this.platform,
-      this.entityId,
-      this.deviceType.name,
-    );
+    this.endpoint.productName = getHaDeviceModel(this.platform, this.entityId, this.deviceType.name);
 
     this.endpoint.createDefaultBasicInformationClusterServer(
       uniqueName,
@@ -271,104 +200,54 @@ export class BaseEntity {
       this.endpoint.productName,
     );
     this.applyMatterbridgeFirmware();
-    const isFanProfile =
-      this.deviceType.code === 0x002b ||
-      this.deviceType.name.toLowerCase() === "fan";
 
-    if ((domain === "fan" || domain === "humidifier") && isFanProfile) {
-      const on = this.state.state === "on";
-      let percentage = 0;
-      let fanMode = 0;
-      let hasDirection = false;
-      let dir = 0;
+    const isFanProfile = this.deviceType.code === 0x002b || this.deviceType.name.toLowerCase() === 'fan';
+    const hasDirectionSupport = hasFanDirection(this.state);
 
-      if (domain === "humidifier") {
-        const minHum = this.state.attributes.min_humidity ?? 40;
-        const maxHum = this.state.attributes.max_humidity ?? 80;
-        const currentTarget = this.state.attributes.humidity;
-        const mode = (this.state.attributes.mode || "").toLowerCase();
-        if (on) {
-          if (typeof currentTarget === "number" && maxHum > minHum) {
-            percentage = Math.round(
-              ((currentTarget - minHum) / (maxHum - minHum)) * 100,
-            );
-          } else if (
-            mode.includes("high") ||
-            mode.includes("alto") ||
-            mode === "3"
-          ) {
-            percentage = 100;
-          } else if (
-            mode.includes("med") ||
-            mode.includes("medio") ||
-            mode === "2"
-          ) {
-            percentage = 66;
-          } else if (
-            mode.includes("low") ||
-            mode.includes("bajo") ||
-            mode === "1"
-          ) {
-            percentage = 33;
-          } else {
-            percentage = 50;
-          }
-          percentage = Math.min(100, Math.max(1, percentage));
-        }
-        fanMode = on
-          ? mode.includes("auto")
-            ? 5
-            : percentage > 66
-              ? 3
-              : percentage > 33
-                ? 2
-                : 1
-          : 0;
-      } else {
-        percentage =
-          typeof this.state.attributes.percentage === "number"
-            ? this.state.attributes.percentage
-            : on
-              ? 100
-              : 0;
-        fanMode = on ? (percentage > 66 ? 3 : percentage > 33 ? 2 : 1) : 0;
-        hasDirection =
-          this.state.attributes.direction !== undefined ||
-          (Number(this.state.attributes.supported_features || 0) & 4) !== 0;
-        dir = this.state.attributes.direction === "reverse" ? 1 : 0;
-      }
+    if (domain === 'fan' && isFanProfile) {
+      const on = isFanOn(this.state);
+      const pct = fanPercentage(this.state);
+      const speed = fanSpeed(pct);
+      const fanMode = haStateToFanMode(this.state);
 
-      const features = [FanControl.Feature.Auto, FanControl.Feature.Step];
-      if (hasDirection) features.push(FanControl.Feature.AirflowDirection);
-
-      this.endpoint.behaviors.require(
-        MatterbridgeFanControlServer.with(...features),
-        {
-          fanMode,
-          fanModeSequence: FanControl.FanModeSequence.OffLowMedHighAuto,
-          percentSetting: percentage,
-          percentCurrent: percentage,
-          airflowDirection: dir,
-        },
+      this.platform.log.debug(
+        `[${this.entityId}] Fan init: state=${this.state.state}, on=${on}, pct=${pct}, speed=${speed}, direction=${this.state.attributes.direction ?? 'N/A'}`,
       );
-      if (!this.endpoint.hasAttributeServer(OnOff.id, "onOff")) {
-        this.endpoint.behaviors.require(MatterbridgeOnOffServer.with());
-      }
-    } else if (
-      domain === "light" ||
-      domain === "switch" ||
-      domain === "media_player" ||
-      domain === "vacuum" ||
-      domain === "fan"
-    ) {
-      const isLighting = domain === "light";
-      if (!this.endpoint.hasAttributeServer(OnOff.id, "onOff")) {
-        this.endpoint.behaviors.require(
-          isLighting
-            ? MatterbridgeOnOffServer.with(OnOff.Feature.Lighting)
-            : MatterbridgeOnOffServer.with(),
+
+      if (hasDirectionSupport) {
+        // Use complete cluster server with AirflowDirection support
+        const dir = haDirectionToMatter(fanDirection(this.state));
+        this.endpoint.createCompleteFanControlClusterServer(
+          fanMode,
+          FAN_MODE_SEQUENCE,
+          pct,              // percentSetting
+          pct,              // percentCurrent
+          FAN_SPEED_MAX,    // speedMax = 6 physical levels
+          speed,            // speedSetting
+          speed,            // speedCurrent
+          undefined,        // rockSupport
+          undefined,        // rockSetting
+          undefined,        // windSupport
+          undefined,        // windSetting
+          dir,              // airflowDirection
+        );
+      } else {
+        // No direction support — use MultiSpeed cluster (speed levels + percent)
+        this.endpoint.createMultiSpeedFanControlClusterServer(
+          fanMode,
+          FAN_MODE_SEQUENCE,
+          pct,              // percentSetting
+          pct,              // percentCurrent
+          FAN_SPEED_MAX,    // speedMax = 6 physical levels
+          speed,            // speedSetting
+          speed,            // speedCurrent
         );
       }
+
+      this.endpoint.behaviors.require(MatterbridgeOnOffServer.with());
+    } else if (domain === 'light' || domain === 'switch' || domain === 'media_player' || domain === 'vacuum' || domain === 'fan') {
+      const isLighting = domain === 'light';
+      this.endpoint.behaviors.require(isLighting ? MatterbridgeOnOffServer.with(OnOff.Feature.Lighting) : MatterbridgeOnOffServer.with());
     }
 
     const clusters = this.getRequiredClusterIds();
@@ -386,10 +265,7 @@ export class BaseEntity {
 
   public adoptEndpoint(endpoint: MatterbridgeEndpoint): void {
     this.endpoint = endpoint;
-    if (
-      endpoint.commandHandler &&
-      (endpoint.commandHandler as any).handler?.length === 0
-    ) {
+    if (endpoint.commandHandler && (endpoint.commandHandler as any).handler?.length === 0) {
       this.registerCommandHandlers(endpoint);
     }
   }
@@ -399,508 +275,220 @@ export class BaseEntity {
   }
 
   protected registerCommandHandlers(_endpoint?: MatterbridgeEndpoint) {
-    const [domain] = this.entityId.split(".");
+    const [domain] = this.entityId.split('.');
 
-    if (
-      domain === "light" ||
-      domain === "switch" ||
-      domain === "fan" ||
-      domain === "media_player" ||
-      domain === "vacuum" ||
-      domain === "humidifier"
-    ) {
-      this.endpoint.addCommandHandler("on", () => {
-        this.setCommandLockout("onOff", true);
-        void safeUpdateAttribute(
-          this.endpoint,
-          OnOff.id,
-          "onOff",
-          true,
-          this.platform.log,
-        );
-        if (domain === "vacuum") {
-          void this.platform.ha
-            .callService(domain, "start", this.entityId)
-            .catch((err) => {
-              this.platform.log.warn(
-                `[${this.entityId}] Error starting vacuum: ${err?.message ?? err}`,
-              );
-            });
-        } else {
-          void this.platform.ha
-            .callService(domain, "turn_on", this.entityId)
-            .catch((err) => {
-              this.platform.log.warn(
-                `[${this.entityId}] Error turning on ${domain}: ${err?.message ?? err}`,
-              );
-            });
-        }
+    if (domain === 'light' || domain === 'switch' || domain === 'fan' || domain === 'media_player' || domain === 'vacuum') {
+      this.endpoint.addCommandHandler('on', async () => {
+        if (domain === 'vacuum') await this.platform.ha.callService(domain, 'start', this.entityId);
+        else await this.platform.ha.callService(domain, 'turn_on', this.entityId);
       });
 
-      this.endpoint.addCommandHandler("off", () => {
-        this.setCommandLockout("onOff", false);
-        void safeUpdateAttribute(
-          this.endpoint,
-          OnOff.id,
-          "onOff",
-          false,
-          this.platform.log,
-        );
-        if (domain === "vacuum") {
-          void this.platform.ha
-            .callService(domain, "return_to_base", this.entityId)
-            .catch((err) => {
-              this.platform.log.warn(
-                `[${this.entityId}] Error returning vacuum: ${err?.message ?? err}`,
-              );
-            });
-        } else {
-          void this.platform.ha
-            .callService(domain, "turn_off", this.entityId)
-            .catch((err) => {
-              this.platform.log.warn(
-                `[${this.entityId}] Error turning off ${domain}: ${err?.message ?? err}`,
-              );
-            });
-        }
+      this.endpoint.addCommandHandler('off', async () => {
+        if (domain === 'vacuum') await this.platform.ha.callService(domain, 'return_to_base', this.entityId);
+        else await this.platform.ha.callService(domain, 'turn_off', this.entityId);
       });
 
-      this.endpoint.addCommandHandler("toggle", () => {
-        const nextOn = this.state.state !== "on";
-        this.setCommandLockout("onOff", nextOn);
-        void this.platform.ha
-          .callService(domain, nextOn ? "turn_on" : "turn_off", this.entityId)
-          .catch((err) => {
-            this.platform.log.warn(
-              `[${this.entityId}] Error toggling ${domain}: ${err?.message ?? err}`,
-            );
-          });
-      });
-
-      if (domain === "fan") {
-        if (
-          this.endpoint.hasAttributeServer(FanControl.id, "percentCurrent") ||
-          this.endpoint.hasAttributeServer(FanControl.id, "percentSetting")
-        ) {
-          this.endpoint.addCommandHandler("FanControl.step", (data: any) => {
-            const direction = data?.request?.direction ?? data?.direction;
-            const current =
-              typeof this.state.attributes.percentage === "number"
-                ? this.state.attributes.percentage
-                : 0;
-            const percentage =
-              direction === 0
-                ? Math.min(100, current + 10)
-                : Math.max(0, current - 10);
-            this.setCommandLockout("percentage", percentage);
-            this.callServiceDebounced(
-              "fan",
-              "set_percentage",
-              { percentage },
-              40,
-            );
-          });
-
-          this.endpoint.subscribeAttribute(
-            FanControl.id,
-            "percentSetting",
-            (newValue: number | null) => {
-              if (typeof newValue !== "number") return;
-              if (this.isUpdatingFromHa) return;
-              this.setCommandLockout("percentage", newValue);
-              if (newValue === 0) {
-                this.setCommandLockout("onOff", false);
-                this.callServiceDebounced("fan", "turn_off", undefined, 40);
-              } else {
-                this.setCommandLockout("onOff", true);
-                this.callServiceDebounced(
-                  "fan",
-                  "set_percentage",
-                  { percentage: newValue },
-                  40,
-                );
-              }
-            },
+      if (domain === 'fan' && this.endpoint.hasAttributeServer(FanControl.id, 'percentCurrent')) {
+        // ── Fan speed (percentage) handler ───────────────────────────────────
+        this.endpoint.addCommandHandler('FanControl.step', async (data: any) => {
+          const direction = data?.request?.direction ?? data?.direction;
+          // Read current % from HA state, NOT from last_percentage
+          const current = fanPercentage(this.state);
+          const delta = direction === FanControl.StepDirection.Increase ? 10 : -10;
+          const next = snapToPhysicalLevel(Math.max(0, Math.min(100, current + delta)));
+          this.platform.log.debug(
+            `[${this.entityId}] FanControl.step: dir=${direction}, current=${current}%, next=${next}%`,
           );
-
-          this.endpoint.subscribeAttribute(
-            FanControl.id,
-            "fanMode",
-            (newMode: number) => {
-              if (typeof newMode !== "number") return;
-              if (this.isUpdatingFromHa) return;
-              this.setCommandLockout("fanMode", newMode);
-              if (newMode === 0) {
-                this.setCommandLockout("percentage", 0);
-                this.setCommandLockout("onOff", false);
-                this.callServiceDebounced("fan", "turn_off", undefined, 40);
-              } else if (newMode === 4) {
-                // On / Manual
-                this.setCommandLockout("onOff", true);
-                const presets: string[] =
-                  this.state.attributes.preset_modes ?? [];
-                const manualPreset = presets.find(
-                  (preset) => preset.toLowerCase() === "manual",
-                );
-                if (manualPreset) {
-                  void this.platform.ha
-                    .callService("fan", "set_preset_mode", this.entityId, {
-                      preset_mode: manualPreset,
-                    })
-                    .catch(() => {});
-                } else {
-                  void this.platform.ha
-                    .callService("fan", "turn_on", this.entityId)
-                    .catch(() => {});
-                }
-              } else if (newMode === 1) {
-                // Low
-                this.setCommandLockout("onOff", true);
-                this.setCommandLockout("percentage", 33);
-                this.callServiceDebounced(
-                  "fan",
-                  "set_percentage",
-                  { percentage: 33 },
-                  40,
-                );
-              } else if (newMode === 2) {
-                // Medium
-                this.setCommandLockout("onOff", true);
-                this.setCommandLockout("percentage", 66);
-                this.callServiceDebounced(
-                  "fan",
-                  "set_percentage",
-                  { percentage: 66 },
-                  40,
-                );
-              } else if (newMode === 3) {
-                // High
-                this.setCommandLockout("onOff", true);
-                this.setCommandLockout("percentage", 100);
-                this.callServiceDebounced(
-                  "fan",
-                  "set_percentage",
-                  { percentage: 100 },
-                  40,
-                );
-              } else if (newMode === 5) {
-                // Auto
-                this.setCommandLockout("onOff", true);
-                const presets: string[] =
-                  this.state.attributes.preset_modes ?? [];
-                const autoPreset = presets.find(
-                  (preset) => preset.toLowerCase() === "auto",
-                );
-                if (autoPreset) {
-                  void this.platform.ha
-                    .callService("fan", "set_preset_mode", this.entityId, {
-                      preset_mode: autoPreset,
-                    })
-                    .catch(() => {});
-                } else {
-                  void this.platform.ha
-                    .callService("fan", "turn_on", this.entityId)
-                    .catch(() => {});
-                }
-              }
-            },
-          );
-
-          if (
-            this.endpoint.hasAttributeServer(FanControl.id, "airflowDirection")
-          ) {
-            this.endpoint.subscribeAttribute(
-              FanControl.id,
-              "airflowDirection",
-              (newDir: number) => {
-                if (typeof newDir !== "number") return;
-                if (this.isUpdatingFromHa) return;
-                this.setCommandLockout("airflowDirection", newDir);
-                const direction = newDir === 1 ? "reverse" : "forward";
-                void this.platform.ha
-                  .callService("fan", "set_direction", this.entityId, {
-                    direction,
-                  })
-                  .catch((err) => {
-                    this.platform.log.warn(
-                      `[${this.entityId}] Error setting fan direction: ${err?.message ?? err}`,
-                    );
-                  });
-              },
-            );
-          }
-        }
-      }
-
-      if (this.endpoint.hasAttributeServer(LevelControl.id, "currentLevel")) {
-        const handleLevel = (
-          level: number | undefined | null,
-          withOnOff: boolean,
-        ) => {
-          if (typeof level !== "number") return;
-          if (level <= 0 && withOnOff) {
-            this.setCommandLockout("onOff", false);
-            this.setCommandLockout("brightness", 0);
-            this.callServiceDebounced(domain, "turn_off", undefined, 40);
+          if (next === 0) {
+            this.setCommandLockout('fan_state', 'off');
+            await this.platform.ha.callService('fan', 'turn_off', this.entityId);
           } else {
-            const haBrightness = Math.max(
-              1,
-              Math.min(255, Math.round((Math.max(1, level) / 254) * 255)),
-            );
-            this.setCommandLockout("brightness", haBrightness);
-            if (withOnOff) this.setCommandLockout("onOff", true);
-            this.callServiceDebounced(
-              domain,
-              "turn_on",
-              { brightness: haBrightness },
-              40,
-            );
+            this.setCommandLockout('fan_percentage', next);
+            await this.platform.ha.callService('fan', 'set_percentage', this.entityId, { percentage: next });
           }
-        };
-
-        this.endpoint.addCommandHandler("moveToLevel", (data: any) => {
-          const level = data?.request?.level ?? data?.level;
-          handleLevel(level, false);
         });
 
-        this.endpoint.addCommandHandler("moveToLevelWithOnOff", (data: any) => {
-          const level = data?.request?.level ?? data?.level;
-          handleLevel(level, true);
+        this.endpoint.subscribeAttribute(FanControl.id, 'percentSetting', async (newValue: any) => {
+          if (typeof newValue === 'number') {
+            const next = snapToPhysicalLevel(newValue);
+            this.platform.log.debug(`[${this.entityId}] FanControl.percentSetting changed: ${newValue}% -> snapped ${next}%`);
+            if (next === 0) {
+              this.setCommandLockout('fan_state', 'off');
+              await this.platform.ha.callService('fan', 'turn_off', this.entityId);
+            } else {
+              this.setCommandLockout('fan_percentage', next);
+              await this.platform.ha.callService('fan', 'set_percentage', this.entityId, { percentage: next });
+            }
+          }
         });
 
-        this.endpoint.addCommandHandler("step", (data: any) => {
-          const req = data?.request ?? data;
-          const current =
-            (this.endpoint as any).getAttribute?.(
-              LevelControl.id,
-              "currentLevel",
-            ) ?? 128;
-          const step = req?.stepSize ?? 25;
-          const next =
-            req?.stepMode === 1
-              ? Math.max(1, current - step)
-              : Math.min(254, current + step);
-          handleLevel(next, false);
+        if (this.endpoint.hasAttributeServer(FanControl.id, 'speedSetting')) {
+          this.endpoint.subscribeAttribute(FanControl.id, 'speedSetting', async (newValue: any) => {
+            if (typeof newValue === 'number') {
+              const pct = newValue === 0 ? 0 : (newValue / FAN_SPEED_MAX) * 100;
+              const next = snapToPhysicalLevel(pct);
+              this.platform.log.debug(`[${this.entityId}] FanControl.speedSetting changed: ${newValue} -> pct ${next}%`);
+              if (next === 0) {
+                this.setCommandLockout('fan_state', 'off');
+                await this.platform.ha.callService('fan', 'turn_off', this.entityId);
+              } else {
+                this.setCommandLockout('fan_percentage', next);
+                await this.platform.ha.callService('fan', 'set_percentage', this.entityId, { percentage: next });
+              }
+            }
+          });
+        }
+      }
+
+      // ── Fan direction handler ────────────────────────────────────────────
+      if (domain === 'fan' && this.endpoint.hasAttributeServer(FanControl.id, 'airflowDirection')) {
+        this.endpoint.addCommandHandler('FanControl.changeDirection' as any, async (data: any) => {
+          const mattDir: FanControl.AirflowDirection = data?.request?.airflowDirection ?? data?.airflowDirection ?? FanControl.AirflowDirection.Forward;
+          const haDir = matterDirectionToHa(mattDir);
+          this.platform.log.debug(`[${this.entityId}] FanControl direction → HA: ${haDir}`);
+          this.setCommandLockout('fan_direction', haDir);
+          await this.platform.ha.callService('fan', 'set_direction', this.entityId, { direction: haDir });
         });
       }
 
-      if (domain === "light" && this.hasColorControl(this.endpoint)) {
+      if (this.endpoint.hasAttributeServer(LevelControl.id, 'currentLevel')) {
+        this.endpoint.addCommandHandler('moveToLevel', async (data: any) => {
+          const level = data?.request?.level ?? data?.level;
+          if (typeof level === 'number') {
+            const haBrightness = lightConverter.toHaBrightness(level);
+            this.setCommandLockout('brightness', haBrightness);
+            await this.platform.ha.callService(domain, 'turn_on', this.entityId, { brightness: haBrightness });
+          }
+        });
+
+        this.endpoint.addCommandHandler('moveToLevelWithOnOff', async (data: any) => {
+          const level = data?.request?.level ?? data?.level;
+          if (typeof level === 'number') {
+            if (level === 0) {
+              await this.platform.ha.callService(domain, 'turn_off', this.entityId);
+            } else {
+              const haBrightness = lightConverter.toHaBrightness(level);
+              this.setCommandLockout('brightness', haBrightness);
+              await this.platform.ha.callService(domain, 'turn_on', this.entityId, { brightness: haBrightness });
+            }
+          }
+        });
+      }
+
+      if (domain === 'light' && this.hasColorControl(this.endpoint)) {
         const sendColor = async (payload: any) => {
-          if (payload.hs_color)
-            this.setCommandLockout("hs_color", payload.hs_color);
-          if (payload.xy_color)
-            this.setCommandLockout("xy_color", payload.xy_color);
-          if (payload.color_temp)
-            this.setCommandLockout("color_temp", payload.color_temp);
-          await this.platform.ha
-            .callService("light", "turn_on", this.entityId, payload)
-            .catch((err) => {
-              this.platform.log.warn(
-                `[${this.entityId}] Error setting light color: ${err?.message ?? err}`,
-              );
-            });
+          if (payload.hs_color) this.setCommandLockout('hs_color', payload.hs_color);
+          if (payload.xy_color) this.setCommandLockout('xy_color', payload.xy_color);
+          if (payload.color_temp) this.setCommandLockout('color_temp', payload.color_temp);
+          await this.platform.ha.callService('light', 'turn_on', this.entityId, payload);
         };
 
         const currentHs = () => lightColor.getHsColor(this.state) ?? [0, 100];
 
-        this.endpoint.addCommandHandler(
-          "moveToHueAndSaturation",
-          async (data: any) => {
-            const req = data?.request ?? data;
-            if (
-              typeof req?.hue === "number" &&
-              typeof req?.saturation === "number"
-            ) {
-              const hs: [number, number] = [
-                lightColor.matterHueToHa(req.hue),
-                lightColor.matterSatToHa(req.saturation),
-              ];
-              const payload = lightColor.buildColorPayload(
-                this.state.attributes.supported_color_modes ?? [],
-                this.state.attributes.color_mode,
-                { hs },
-              );
-              await sendColor(payload);
-            }
-          },
-        );
-
-        this.endpoint.addCommandHandler("moveToHue", async (data: any) => {
+        this.endpoint.addCommandHandler('moveToHueAndSaturation', async (data: any) => {
           const req = data?.request ?? data;
-          if (typeof req?.hue === "number") {
+          if (typeof req?.hue === 'number' && typeof req?.saturation === 'number') {
+            const hs: [number, number] = [lightColor.matterHueToHa(req.hue), lightColor.matterSatToHa(req.saturation)];
+            const payload = lightColor.buildColorPayload(this.state.attributes.supported_color_modes ?? [], this.state.attributes.color_mode, { hs });
+            await sendColor(payload);
+          }
+        });
+
+        this.endpoint.addCommandHandler('moveToHue', async (data: any) => {
+          const req = data?.request ?? data;
+          if (typeof req?.hue === 'number') {
             const [, sat] = currentHs();
-            const hs: [number, number] = [
-              lightColor.matterHueToHa(req.hue),
-              sat,
-            ];
-            const payload = lightColor.buildColorPayload(
-              this.state.attributes.supported_color_modes ?? [],
-              this.state.attributes.color_mode,
-              { hs },
-            );
+            const hs: [number, number] = [lightColor.matterHueToHa(req.hue), sat];
+            const payload = lightColor.buildColorPayload(this.state.attributes.supported_color_modes ?? [], this.state.attributes.color_mode, { hs });
             await sendColor(payload);
           }
         });
 
-        this.endpoint.addCommandHandler("stepHue", async (data: any) => {
+        this.endpoint.addCommandHandler('stepHue', async (data: any) => {
           const req = data?.request ?? data;
-          if (typeof req?.stepSize === "number") {
+          if (typeof req?.stepSize === 'number') {
             const [hue, sat] = currentHs();
-            const sign = req.stepMode === 1 ? -1 : 1;
-            const newHue = lightColor.normalizeHue(
-              hue + sign * lightColor.matterHueToHa(req.stepSize),
-            );
+            const sign = req.stepMode === 1 ? -1 : 1; // 1 = down, 0 = up per cluster spec usually, wait 3.10.4 spec 1 is down
+            const newHue = lightColor.normalizeHue(hue + (sign * lightColor.matterHueToHa(req.stepSize)));
             const hs: [number, number] = [newHue, sat];
-            const payload = lightColor.buildColorPayload(
-              this.state.attributes.supported_color_modes ?? [],
-              this.state.attributes.color_mode,
-              { hs },
-            );
+            const payload = lightColor.buildColorPayload(this.state.attributes.supported_color_modes ?? [], this.state.attributes.color_mode, { hs });
             await sendColor(payload);
           }
         });
 
-        this.endpoint.addCommandHandler(
-          "enhancedMoveToHue",
-          async (data: any) => {
-            const req = data?.request ?? data;
-            if (typeof req?.enhancedHue === "number") {
-              const [, sat] = currentHs();
-              const hs: [number, number] = [
-                lightColor.matterEnhancedHueToHa(req.enhancedHue),
-                sat,
-              ];
-              const payload = lightColor.buildColorPayload(
-                this.state.attributes.supported_color_modes ?? [],
-                this.state.attributes.color_mode,
-                { hs },
-              );
-              await sendColor(payload);
-            }
-          },
-        );
-
-        this.endpoint.addCommandHandler(
-          "enhancedMoveHue",
-          async (data: any) => {
-            // Handled same as moveHue if direction provided
-          },
-        );
-
-        this.endpoint.addCommandHandler(
-          "enhancedStepHue",
-          async (data: any) => {
-            const req = data?.request ?? data;
-            if (typeof req?.stepSize === "number") {
-              const [hue, sat] = currentHs();
-              const sign = req.stepMode === 1 ? -1 : 1;
-              const newHue = lightColor.normalizeHue(
-                hue + sign * lightColor.matterEnhancedHueToHa(req.stepSize),
-              );
-              const hs: [number, number] = [newHue, sat];
-              const payload = lightColor.buildColorPayload(
-                this.state.attributes.supported_color_modes ?? [],
-                this.state.attributes.color_mode,
-                { hs },
-              );
-              await sendColor(payload);
-            }
-          },
-        );
-
-        this.endpoint.addCommandHandler(
-          "moveToSaturation",
-          async (data: any) => {
-            const req = data?.request ?? data;
-            if (typeof req?.saturation === "number") {
-              const [hue] = currentHs();
-              const hs: [number, number] = [
-                hue,
-                lightColor.matterSatToHa(req.saturation),
-              ];
-              const payload = lightColor.buildColorPayload(
-                this.state.attributes.supported_color_modes ?? [],
-                this.state.attributes.color_mode,
-                { hs },
-              );
-              await sendColor(payload);
-            }
-          },
-        );
-
-        this.endpoint.addCommandHandler("stepSaturation", async (data: any) => {
+        this.endpoint.addCommandHandler('enhancedMoveToHue', async (data: any) => {
           const req = data?.request ?? data;
-          if (typeof req?.stepSize === "number") {
+          if (typeof req?.enhancedHue === 'number') {
+            const [, sat] = currentHs();
+            const hs: [number, number] = [lightColor.matterEnhancedHueToHa(req.enhancedHue), sat];
+            const payload = lightColor.buildColorPayload(this.state.attributes.supported_color_modes ?? [], this.state.attributes.color_mode, { hs });
+            await sendColor(payload);
+          }
+        });
+
+        this.endpoint.addCommandHandler('enhancedMoveHue', async (data: any) => {
+          // Handled same as moveHue if direction provided, usually controller doesn't send move without stop
+        });
+
+        this.endpoint.addCommandHandler('enhancedStepHue', async (data: any) => {
+          const req = data?.request ?? data;
+          if (typeof req?.stepSize === 'number') {
             const [hue, sat] = currentHs();
             const sign = req.stepMode === 1 ? -1 : 1;
-            const newSat = Math.max(
-              0,
-              Math.min(
-                100,
-                sat + sign * lightColor.matterSatToHa(req.stepSize),
-              ),
-            );
-            const hs: [number, number] = [hue, newSat];
-            const payload = lightColor.buildColorPayload(
-              this.state.attributes.supported_color_modes ?? [],
-              this.state.attributes.color_mode,
-              { hs },
-            );
+            const newHue = lightColor.normalizeHue(hue + (sign * lightColor.matterEnhancedHueToHa(req.stepSize)));
+            const hs: [number, number] = [newHue, sat];
+            const payload = lightColor.buildColorPayload(this.state.attributes.supported_color_modes ?? [], this.state.attributes.color_mode, { hs });
             await sendColor(payload);
           }
         });
 
-        this.endpoint.addCommandHandler("moveToColor", async (data: any) => {
+        this.endpoint.addCommandHandler('moveToSaturation', async (data: any) => {
           const req = data?.request ?? data;
-          if (
-            typeof req?.colorX === "number" &&
-            typeof req?.colorY === "number"
-          ) {
-            const xy = lightColor.matterXyToHa(req.colorX, req.colorY);
-            const payload = lightColor.buildColorPayload(
-              this.state.attributes.supported_color_modes ?? [],
-              this.state.attributes.color_mode,
-              { xy },
-            );
+          if (typeof req?.saturation === 'number') {
+            const [hue] = currentHs();
+            const hs: [number, number] = [hue, lightColor.matterSatToHa(req.saturation)];
+            const payload = lightColor.buildColorPayload(this.state.attributes.supported_color_modes ?? [], this.state.attributes.color_mode, { hs });
+            await sendColor(payload);
+          }
+        });
+        
+        this.endpoint.addCommandHandler('stepSaturation', async (data: any) => {
+          const req = data?.request ?? data;
+          if (typeof req?.stepSize === 'number') {
+            const [hue, sat] = currentHs();
+            const sign = req.stepMode === 1 ? -1 : 1;
+            const newSat = Math.max(0, Math.min(100, sat + (sign * lightColor.matterSatToHa(req.stepSize))));
+            const hs: [number, number] = [hue, newSat];
+            const payload = lightColor.buildColorPayload(this.state.attributes.supported_color_modes ?? [], this.state.attributes.color_mode, { hs });
             await sendColor(payload);
           }
         });
 
-        this.endpoint.addCommandHandler(
-          "moveToColorTemperature",
-          async (data: any) => {
-            const req = data?.request ?? data;
-            if (
-              typeof req?.colorTemperatureMireds === "number" &&
-              req.colorTemperatureMireds > 0
-            ) {
-              const mireds = req.colorTemperatureMireds;
-              const payload = lightColor.buildColorPayload(
-                this.state.attributes.supported_color_modes ?? [],
-                this.state.attributes.color_mode,
-                { mireds },
-              );
-              const usesKelvin =
-                this.state.attributes.color_temp_kelvin !== undefined ||
-                this.state.attributes.min_color_temp_kelvin !== undefined ||
-                this.state.attributes.max_color_temp_kelvin !== undefined;
-              if (usesKelvin) {
-                this.setCommandLockout("color_temp", mireds);
-                await this.platform.ha
-                  .callService("light", "turn_on", this.entityId, {
-                    color_temp_kelvin: lightColor.miredsToKelvin(mireds),
-                  })
-                  .catch((err) => {
-                    this.platform.log.warn(
-                      `[${this.entityId}] Error setting color temp: ${err?.message ?? err}`,
-                    );
-                  });
-              } else {
-                await sendColor(payload);
-              }
+        this.endpoint.addCommandHandler('moveToColor', async (data: any) => {
+          const req = data?.request ?? data;
+          if (typeof req?.colorX === 'number' && typeof req?.colorY === 'number') {
+            const xy = lightColor.matterXyToHa(req.colorX, req.colorY);
+            const payload = lightColor.buildColorPayload(this.state.attributes.supported_color_modes ?? [], this.state.attributes.color_mode, { xy });
+            await sendColor(payload);
+          }
+        });
+
+        this.endpoint.addCommandHandler('moveToColorTemperature', async (data: any) => {
+          const req = data?.request ?? data;
+          if (typeof req?.colorTemperatureMireds === 'number' && req.colorTemperatureMireds > 0) {
+            const rawMireds = req.colorTemperatureMireds;
+            const mireds = lightColor.clampMireds(rawMireds, this.state.attributes);
+            const payload = lightColor.buildColorPayload(this.state.attributes.supported_color_modes ?? [], this.state.attributes.color_mode, { mireds });
+            const usesKelvin = this.state.attributes.color_temp_kelvin !== undefined || this.state.attributes.min_color_temp_kelvin !== undefined || this.state.attributes.max_color_temp_kelvin !== undefined;
+            if (usesKelvin) {
+              const kelvin = lightColor.clampKelvin(lightColor.miredsToKelvin(mireds), this.state.attributes);
+              this.setCommandLockout('color_temp', mireds);
+              await this.platform.ha.callService('light', 'turn_on', this.entityId, { color_temp_kelvin: kelvin });
+            } else {
+              await sendColor(payload);
             }
-          },
-        );
+          }
+        });
       }
     }
   }
@@ -912,11 +500,8 @@ export class BaseEntity {
   private clampLevel(rawLevel: number, isInitialSync = false): number {
     if (isInitialSync) return Math.min(254, Math.max(1, rawLevel));
     try {
-      const minLevel =
-        (this.endpoint as any).getAttribute?.(LevelControl.id, "minLevel") ?? 1;
-      const maxLevel =
-        (this.endpoint as any).getAttribute?.(LevelControl.id, "maxLevel") ??
-        254;
+      const minLevel = (this.endpoint as any).getAttribute?.(LevelControl.id, 'minLevel') ?? 1;
+      const maxLevel = (this.endpoint as any).getAttribute?.(LevelControl.id, 'maxLevel') ?? 254;
       const lo = Math.max(1, minLevel as number);
       const hi = Math.min(254, maxLevel as number);
       return Math.min(hi, Math.max(lo, rawLevel));
@@ -925,359 +510,166 @@ export class BaseEntity {
     }
   }
 
-  private haUpdateDepth = 0;
-
-  /** True while HA-originated changes are being written into this endpoint. */
-  protected get isUpdatingFromHa(): boolean {
-    return this.haUpdateDepth > 0;
-  }
-
-  public async updateState(
-    newState: HassState,
-    isInitialSync = false,
-  ): Promise<void> {
+  public async updateState(newState: HassState, isInitialSync = false): Promise<void> {
     this.haUpdateDepth++;
     try {
       this.state = newState;
       if (!this.endpoint) return;
 
-      const [domain] = this.entityId.split(".");
+      const [domain] = this.entityId.split('.');
       const updateFn = isInitialSync ? safeSetAttribute : safeUpdateAttribute;
 
-      if (
-        domain === "light" ||
-        domain === "switch" ||
-        domain === "fan" ||
-        domain === "media_player" ||
-        domain === "vacuum"
-      ) {
-        const isOn =
-          domain === "vacuum"
-            ? newState.state === "cleaning"
-            : newState.state === "on";
-
-        if (!isInitialSync && this.shouldIgnoreStateUpdate("onOff", isOn)) {
-          this.platform.log.debug(
-            `[${this.entityId}] Ignoring HA onOff state update due to recent command lockout`,
-          );
+    if (domain === 'light' || domain === 'switch' || domain === 'fan' || domain === 'media_player' || domain === 'vacuum') {
+      // Fan: use isFanOn() which checks state/is_on — NEVER uses percentage > 0
+      if (newState.attributes.brightness !== undefined) {
+        if (!isInitialSync && this.shouldIgnoreStateUpdate('brightness', newState.attributes.brightness)) {
+          this.platform.log.debug(`[${this.entityId}] Ignoring HA brightness state update due to recent command lockout`);
         } else {
-          await updateFn(
-            this.endpoint,
-            OnOff.id,
-            "onOff",
-            isOn,
-            this.platform.log,
-          );
+          const raw = lightConverter.toLevel(newState.attributes.brightness);
+          const level = this.clampLevel(raw, isInitialSync);
+          await updateFn(this.endpoint, LevelControl.id, 'currentLevel', level, this.platform.log);
         }
+      }
 
-        if (newState.attributes.brightness !== undefined) {
-          if (
-            !isInitialSync &&
-            this.shouldIgnoreStateUpdate(
-              "brightness",
-              newState.attributes.brightness,
-            )
-          ) {
-            this.platform.log.debug(
-              `[${this.entityId}] Ignoring HA brightness state update due to recent command lockout`,
-            );
+      if (domain === 'light' && this.hasColorControl()) {
+        const attrs = newState.attributes as any;
+        const colorMode = attrs.color_mode;
+        
+        const rawMireds = attrs.color_temp ?? (attrs.color_temp_kelvin ? lightColor.kelvinToMireds(attrs.color_temp_kelvin) : undefined);
+        const mireds = rawMireds !== undefined ? lightColor.clampMireds(rawMireds, attrs) : undefined;
+        const xy = Array.isArray(attrs.xy_color) && attrs.xy_color.length >= 2 ? attrs.xy_color : undefined;
+        const hs = lightColor.getHsColor(newState);
+
+        const range = lightColor.getMiredsRange(attrs);
+        await updateFn(this.endpoint, ColorControl.id, 'colorTempPhysicalMinMireds', range.minMireds, this.platform.log);
+        await updateFn(this.endpoint, ColorControl.id, 'colorTempPhysicalMaxMireds', range.maxMireds, this.platform.log);
+        await updateFn(this.endpoint, ColorControl.id, 'coupleColorTempMinMireds', range.minMireds, this.platform.log);
+        await updateFn(this.endpoint, ColorControl.id, 'coupleColorTempMaxMireds', range.maxMireds, this.platform.log);
+
+        if (mireds !== undefined && (colorMode === 'color_temp' || (!hs && !xy))) {
+          if (!isInitialSync && this.shouldIgnoreStateUpdate('color_temp', mireds)) {
+            this.platform.log.debug(`[${this.entityId}] Ignoring HA color_temp state update due to recent command lockout`);
           } else {
-            const raw = Math.round(
-              (newState.attributes.brightness / 255) * 254,
-            );
-            const level = this.clampLevel(Math.max(1, raw), isInitialSync);
-            await updateFn(
-              this.endpoint,
-              LevelControl.id,
-              "currentLevel",
-              level,
-              this.platform.log,
-            );
+            await updateFn(this.endpoint, ColorControl.id, 'colorTemperatureMireds', mireds, this.platform.log);
+            await updateFn(this.endpoint, ColorControl.id, 'colorMode', ColorControl.ColorMode.ColorTemperatureMireds, this.platform.log);
           }
-        }
-
-        if (domain === "light" && this.hasColorControl()) {
-          const attrs = newState.attributes as any;
-          const colorMode = attrs.color_mode;
-
-          const mireds =
-            attrs.color_temp ??
-            (attrs.color_temp_kelvin
-              ? lightColor.kelvinToMireds(attrs.color_temp_kelvin)
-              : undefined);
-          const xy =
-            Array.isArray(attrs.xy_color) && attrs.xy_color.length >= 2
-              ? attrs.xy_color
-              : undefined;
-          const hs = lightColor.getHsColor(newState);
-
-          if (
-            mireds !== undefined &&
-            (colorMode === "color_temp" || (!hs && !xy))
-          ) {
-            if (
-              !isInitialSync &&
-              this.shouldIgnoreStateUpdate("color_temp", mireds)
-            ) {
-              this.platform.log.debug(
-                `[${this.entityId}] Ignoring HA color_temp state update due to recent command lockout`,
-              );
-            } else {
-              await updateFn(
-                this.endpoint,
-                ColorControl.id,
-                "colorTemperatureMireds",
-                mireds,
-                this.platform.log,
-              );
-              await updateFn(
-                this.endpoint,
-                ColorControl.id,
-                "colorMode",
-                ColorControl.ColorMode.ColorTemperatureMireds,
-                this.platform.log,
-              );
-            }
-          } else if (xy && (colorMode === "xy" || !hs)) {
-            if (
-              !isInitialSync &&
-              this.shouldIgnoreStateUpdate("xy_color", xy)
-            ) {
-              this.platform.log.debug(
-                `[${this.entityId}] Ignoring HA xy_color state update due to recent command lockout`,
-              );
-            } else {
-              const matterXy = lightColor.haXyToMatter(xy[0], xy[1]);
-              await updateFn(
-                this.endpoint,
-                ColorControl.id,
-                "currentX",
-                matterXy[0],
-                this.platform.log,
-              );
-              await updateFn(
-                this.endpoint,
-                ColorControl.id,
-                "currentY",
-                matterXy[1],
-                this.platform.log,
-              );
-              await updateFn(
-                this.endpoint,
-                ColorControl.id,
-                "colorMode",
-                ColorControl.ColorMode.CurrentXAndCurrentY,
-                this.platform.log,
-              );
-            }
-          } else if (hs) {
-            if (
-              !isInitialSync &&
-              this.shouldIgnoreStateUpdate("hs_color", hs)
-            ) {
-              this.platform.log.debug(
-                `[${this.entityId}] Ignoring HA hs_color state update due to recent command lockout`,
-              );
-            } else {
-              await updateFn(
-                this.endpoint,
-                ColorControl.id,
-                "currentHue",
-                lightColor.haHueToMatter(hs[0]),
-                this.platform.log,
-              );
-              await updateFn(
-                this.endpoint,
-                ColorControl.id,
-                "enhancedCurrentHue",
-                lightColor.haHueToMatterEnhanced(hs[0]),
-                this.platform.log,
-              );
-              await updateFn(
-                this.endpoint,
-                ColorControl.id,
-                "currentSaturation",
-                lightColor.haSatToMatter(hs[1]),
-                this.platform.log,
-              );
-              await updateFn(
-                this.endpoint,
-                ColorControl.id,
-                "colorMode",
-                ColorControl.ColorMode.CurrentHueAndCurrentSaturation,
-                this.platform.log,
-              );
-              if (
-                this.endpoint.hasAttributeServer(
-                  ColorControl.id,
-                  "enhancedColorMode",
-                )
-              ) {
-                await updateFn(
-                  this.endpoint,
-                  ColorControl.id,
-                  "enhancedColorMode",
-                  ColorControl.EnhancedColorMode
-                    .EnhancedCurrentHueAndCurrentSaturation,
-                  this.platform.log,
-                );
-              }
-            }
-          }
-        }
-
-        if (
-          domain === "fan" &&
-          this.endpoint.hasAttributeServer(FanControl.id, "percentCurrent")
-        ) {
-          const percentage = isOn
-            ? typeof newState.attributes.percentage === "number" &&
-              newState.attributes.percentage > 0
-              ? newState.attributes.percentage
-              : 100
-            : 0;
-          if (
-            !isInitialSync &&
-            this.shouldIgnoreStateUpdate("percentage", percentage)
-          ) {
-            this.platform.log.debug(
-              `[${this.entityId}] Ignoring HA fan percentage update due to recent command lockout`,
-            );
+        } else if (xy && (colorMode === 'xy' || (!hs))) {
+          if (!isInitialSync && this.shouldIgnoreStateUpdate('xy_color', xy)) {
+            this.platform.log.debug(`[${this.entityId}] Ignoring HA xy_color state update due to recent command lockout`);
           } else {
-            await updateFn(
-              this.endpoint,
-              FanControl.id,
-              "percentCurrent",
-              percentage,
-              this.platform.log,
-            );
-            await updateFn(
-              this.endpoint,
-              FanControl.id,
-              "percentSetting",
-              percentage,
-              this.platform.log,
-            );
-            const fanMode = fanConverter.presetModeToFanMode(
-              newState.attributes.preset_mode,
-              isOn,
-            );
-            if (
-              !isInitialSync &&
-              this.shouldIgnoreStateUpdate("fanMode", fanMode)
-            ) {
-              this.platform.log.debug(
-                `[${this.entityId}] Ignoring HA fan fanMode update due to recent command lockout`,
-              );
-            } else {
-              await updateFn(
-                this.endpoint,
-                FanControl.id,
-                "fanMode",
-                fanMode,
-                this.platform.log,
-              );
-            }
-            if (
-              this.endpoint.hasAttributeServer(
-                FanControl.id,
-                "airflowDirection",
-              ) &&
-              newState.attributes.direction
-            ) {
-              const dir = newState.attributes.direction === "reverse" ? 1 : 0;
-              await updateFn(
-                this.endpoint,
-                FanControl.id,
-                "airflowDirection",
-                dir,
-                this.platform.log,
-              );
-            }
+            const matterXy = lightColor.haXyToMatter(xy[0], xy[1]);
+            await updateFn(this.endpoint, ColorControl.id, 'currentX', matterXy[0], this.platform.log);
+            await updateFn(this.endpoint, ColorControl.id, 'currentY', matterXy[1], this.platform.log);
+            await updateFn(this.endpoint, ColorControl.id, 'colorMode', ColorControl.ColorMode.CurrentXAndCurrentY, this.platform.log);
           }
-        }
-      } else if (domain === "binary_sensor") {
-        const active = ["on", "open", "detected", "true"].includes(
-          newState.state.toLowerCase(),
-        );
-
-        const updateMatter = async (isActive: boolean) => {
-          if (!this.endpoint) return;
-          if (
-            this.endpoint.hasAttributeServer(OccupancySensing.id, "occupancy")
-          ) {
-            await updateFn(
-              this.endpoint,
-              OccupancySensing.id,
-              "occupancy",
-              { occupied: isActive },
-              this.platform.log,
-            );
-          } else if (
-            this.endpoint.hasAttributeServer(BooleanState.id, "stateValue")
-          ) {
-            await updateFn(
-              this.endpoint,
-              BooleanState.id,
-              "stateValue",
-              isActive,
-              this.platform.log,
-            );
-          }
-        };
-
-        if (active) {
-          if (this.binarySensorLatchTimeout) {
-            clearTimeout(this.binarySensorLatchTimeout);
-            this.binarySensorLatchTimeout = undefined;
-          }
-          await updateMatter(true);
-        } else {
-          if (isInitialSync) {
-            await updateMatter(false);
+        } else if (hs) {
+          if (!isInitialSync && this.shouldIgnoreStateUpdate('hs_color', hs)) {
+            this.platform.log.debug(`[${this.entityId}] Ignoring HA hs_color state update due to recent command lockout`);
           } else {
-            if (!this.binarySensorLatchTimeout) {
-              this.binarySensorLatchTimeout = setTimeout(async () => {
-                this.binarySensorLatchTimeout = undefined;
-                await updateMatter(false);
-              }, 3000);
+            await updateFn(this.endpoint, ColorControl.id, 'currentHue', lightColor.haHueToMatter(hs[0]), this.platform.log);
+            await updateFn(this.endpoint, ColorControl.id, 'enhancedCurrentHue', lightColor.haHueToMatterEnhanced(hs[0]), this.platform.log);
+            await updateFn(this.endpoint, ColorControl.id, 'currentSaturation', lightColor.haSatToMatter(hs[1]), this.platform.log);
+            await updateFn(this.endpoint, ColorControl.id, 'colorMode', ColorControl.ColorMode.CurrentHueAndCurrentSaturation, this.platform.log);
+            if (this.endpoint.hasAttributeServer(ColorControl.id, 'enhancedColorMode')) {
+               await updateFn(this.endpoint, ColorControl.id, 'enhancedColorMode', ColorControl.EnhancedColorMode.EnhancedCurrentHueAndCurrentSaturation, this.platform.log);
             }
-          }
-        }
-      } else if (domain === "sensor") {
-        const numeric = parseFloat(newState.state);
-        if (!isNaN(numeric) && this.endpoint) {
-          if (
-            this.endpoint.hasAttributeServer(
-              TemperatureMeasurement.id,
-              "measuredValue",
-            )
-          ) {
-            await updateFn(
-              this.endpoint,
-              TemperatureMeasurement.id,
-              "measuredValue",
-              Math.round(numeric * 100),
-              this.platform.log,
-            );
-          } else if (
-            this.endpoint.hasAttributeServer(
-              RelativeHumidityMeasurement.id,
-              "measuredValue",
-            )
-          ) {
-            await updateFn(
-              this.endpoint,
-              RelativeHumidityMeasurement.id,
-              "measuredValue",
-              Math.round(numeric * 100),
-              this.platform.log,
-            );
           }
         }
       }
-    } finally {
-      this.haUpdateDepth--;
+
+      // Important: Apply OnOff *after* LevelControl and ColorControl.
+      // This prevents the MatterbridgeLevelControlServer from automatically turning the light ON
+      // when it sees a brightness > 0 update from HA while the light is actually off.
+      const isOn = domain === 'vacuum'
+        ? newState.state === 'cleaning'
+        : domain === 'fan'
+          ? isFanOn(newState)
+          : newState.state === 'on';
+
+      await updateFn(this.endpoint, OnOff.id, 'onOff', isOn, this.platform.log);
+
+      if (domain === 'fan' && this.endpoint.hasAttributeServer(FanControl.id, 'percentCurrent')) {
+        // ON/OFF comes from state/is_on ONLY — never from percentage > 0
+        const pct = fanPercentage(newState);
+        const speed = fanSpeed(pct);
+        const newFanMode = haStateToFanMode(newState);
+
+        this.platform.log.debug(
+          `[${this.entityId}] Fan state update: state=${newState.state}, on=${isOn}, pct=${pct}, speed=${speed}, fanMode=${newFanMode}, direction=${newState.attributes.direction ?? 'N/A'}, oscillating=${newState.attributes.oscillating ?? 'N/A'}, preset=${newState.attributes.preset_mode ?? 'N/A'}`,
+        );
+
+        // Percentage / speed update with hysteresis and lockout
+        if (!isInitialSync && this.shouldIgnoreStateUpdate('fan_percentage', pct)) {
+          this.platform.log.debug(`[${this.entityId}] Ignoring HA fan_percentage update due to command lockout (pct=${pct})`);
+        } else {
+          await updateFn(this.endpoint, FanControl.id, 'percentSetting', pct, this.platform.log);
+          await updateFn(this.endpoint, FanControl.id, 'percentCurrent', pct, this.platform.log);
+          
+          if (this.endpoint.hasAttributeServer(FanControl.id, 'speedCurrent')) {
+            await updateFn(this.endpoint, FanControl.id, 'speedSetting', speed, this.platform.log);
+            await updateFn(this.endpoint, FanControl.id, 'speedCurrent', speed, this.platform.log);
+          }
+        }
+
+        // FanMode update
+        await updateFn(this.endpoint, FanControl.id, 'fanMode', newFanMode, this.platform.log);
+
+        // AirflowDirection update (only when HA exposes direction)
+        if (this.endpoint.hasAttributeServer(FanControl.id, 'airflowDirection')) {
+          const dir = fanDirection(newState);
+          if (dir !== undefined) {
+            if (!isInitialSync && this.shouldIgnoreStateUpdate('fan_direction', dir)) {
+              this.platform.log.debug(`[${this.entityId}] Ignoring HA direction update due to command lockout (dir=${dir})`);
+            } else {
+              const matterDir = haDirectionToMatter(dir);
+              await updateFn(this.endpoint, FanControl.id, 'airflowDirection', matterDir, this.platform.log);
+              this.platform.log.debug(`[${this.entityId}] Fan direction synced: HA=${dir} → Matter=${matterDir}`);
+            }
+          }
+        }
+      }
+    } else if (domain === 'binary_sensor') {
+      const active = ['on', 'open', 'detected', 'true'].includes(newState.state.toLowerCase());
+
+      const updateMatter = async (isActive: boolean) => {
+        if (!this.endpoint) return;
+        if (this.endpoint.hasAttributeServer(OccupancySensing.id, 'occupancy')) {
+          await updateFn(this.endpoint, OccupancySensing.id, 'occupancy', { occupied: isActive }, this.platform.log);
+        } else if (this.endpoint.hasAttributeServer(BooleanState.id, 'stateValue')) {
+          await updateFn(this.endpoint, BooleanState.id, 'stateValue', isActive, this.platform.log);
+        }
+      };
+
+      if (active) {
+        if (this.binarySensorLatchTimeout) {
+          clearTimeout(this.binarySensorLatchTimeout);
+          this.binarySensorLatchTimeout = undefined;
+        }
+        await updateMatter(true);
+      } else {
+        if (isInitialSync) {
+          await updateMatter(false);
+        } else {
+          if (!this.binarySensorLatchTimeout) {
+            this.binarySensorLatchTimeout = setTimeout(async () => {
+              this.binarySensorLatchTimeout = undefined;
+              await updateMatter(false);
+            }, 3000); 
+          }
+        }
+      }
+    } else if (domain === 'sensor') {
+      const numeric = parseFloat(newState.state);
+      if (!isNaN(numeric) && this.endpoint) {
+        if (this.endpoint.hasAttributeServer(TemperatureMeasurement.id, 'measuredValue')) {
+          await updateFn(this.endpoint, TemperatureMeasurement.id, 'measuredValue', Math.round(numeric * 100), this.platform.log);
+        } else if (this.endpoint.hasAttributeServer(RelativeHumidityMeasurement.id, 'measuredValue')) {
+          await updateFn(this.endpoint, RelativeHumidityMeasurement.id, 'measuredValue', Math.round(numeric * 100), this.platform.log);
+        }
+      }
     }
+  } finally {
+    this.haUpdateDepth--;
   }
+}
 }

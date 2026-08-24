@@ -1,3 +1,32 @@
+## [1.4.34] - 2026-08-24
+
+### Matterbridge
+- Updated compatibility to Matterbridge 3.10.6 (`peerDependencies >= 3.10.6`, `devDependencies ^3.10.6`).
+- Updated Matter 1.6 fan architecture and cluster servers.
+
+### Fan improvements
+- Corrected independent fan power and speed state handling (power strictly derived from `state === 'on'` / `is_on === true`).
+- Added native six-speed physical fan mapping (`speedMax = 6`).
+- Improved percent/speed synchronization across `speedSetting`, `speedCurrent`, `percentSetting`, `percentCurrent`.
+- Added airflow direction support (`AirflowDirection.Forward/Reverse`) when provided by Home Assistant `supported_features`.
+- Improved HA ↔ Matter bidirectional synchronization.
+- Eliminated phantom fan states (`state = off` with residual percentage remains reliably off).
+- Added intelligent command deduplication and hysteresis (4%) replacing blind command lockouts.
+
+### Light improvements
+- Fixed phantom light reactivation caused by `MatterbridgeLevelControlServer` / `OnOff` coupling (synchronized `LevelControl` / `ColorControl` before final authoritative `OnOff` state).
+- Home Assistant OnOff state is now authoritative (`state === 'off'` guarantees `Matter OnOff = false`).
+- Improved brightness conversion HA 1..255 ↔ Matter 1..254 with stable rounding and defensive non-zero handling.
+- Improved Kelvin/mired conversion (`mired = 1,000,000 / kelvin`) with proper physical range inversion and clamping (e.g., 2700K ≈ 370 mireds, 6500K ≈ 154 mireds).
+- Improved `ColorTemperatureLight` support (0x010C) with dynamic physical range attributes.
+- Preserved `ExtendedColorLight` support (0x010D) for Govee/Tuya RGB/WW lights without regressions.
+- Improved synchronization after HA/WebSocket reconnects (`isInitialSync = true` restores full authoritative state).
+
+### Stability
+- Improved state recovery and reconnect handling.
+- Improved anti-loop behavior through expected-state acknowledgement.
+- Preserved Matter topology, fabric, Node IDs, endpoint IDs, and existing Apple Home pairing.
+
 ## [1.4.33] - 2026-08-22
 
 ### Fixed

@@ -1,4 +1,4 @@
-import { HassState } from "./ha-state.js";
+import { HassState } from './ha-state.js';
 
 export interface ColorConversionConfig {
   hasColorControl: boolean;
@@ -19,10 +19,7 @@ export const lightColor = {
 
   /** HA Hue (0..360) to Matter Hue (0..254) */
   haHueToMatter(haHue: number): number {
-    return Math.max(
-      0,
-      Math.min(254, Math.round((this.normalizeHue(haHue) / 360) * 254)),
-    );
+    return Math.max(0, Math.min(254, Math.round((this.normalizeHue(haHue) / 360) * 254)));
   },
 
   /** Matter Enhanced Hue (0..65535) to HA Hue (0..360) */
@@ -71,8 +68,63 @@ export const lightColor = {
 
   /** Kelvin to Mireds */
   kelvinToMireds(kelvin: number): number {
-    if (!kelvin || kelvin <= 0) return 153; // default cold
+    if (!kelvin || kelvin <= 0) return 153; // default cold (6500K)
     return Math.round(1_000_000 / kelvin);
+  },
+
+  /**
+   * Convert HA Kelvin min/max to Matter Mireds min/max.
+   *
+   * Inversion Rule:
+   * - HA max_color_temp_kelvin (coldest, e.g. 6500 K) -> Matter min mireds (~154)
+   * - HA min_color_temp_kelvin (warmest, e.g. 2700 K) -> Matter max mireds (~370)
+   */
+  getMiredsRange(attributes: Record<string, any> = {}): { minMireds: number; maxMireds: number } {
+    let minKelvin = attributes.min_color_temp_kelvin;
+    let maxKelvin = attributes.max_color_temp_kelvin;
+
+    // Fallback to legacy mireds attributes if Kelvin limits not present
+    if (minKelvin === undefined && attributes.max_mireds !== undefined) {
+      minKelvin = this.miredsToKelvin(attributes.max_mireds);
+    }
+    if (maxKelvin === undefined && attributes.min_mireds !== undefined) {
+      maxKelvin = this.miredsToKelvin(attributes.min_mireds);
+    }
+
+    const minM = maxKelvin ? Math.max(1, Math.round(1_000_000 / maxKelvin)) : (attributes.min_mireds ?? 153);
+    const maxM = minKelvin ? Math.max(minM, Math.round(1_000_000 / minKelvin)) : (attributes.max_mireds ?? 500);
+
+    return {
+      minMireds: Math.min(minM, maxM),
+      maxMireds: Math.max(minM, maxM),
+    };
+  },
+
+  /**
+   * Clamp requested mireds to valid range based on HA attributes.
+   */
+  clampMireds(mireds: number, attributes: Record<string, any> = {}): number {
+    const { minMireds, maxMireds } = this.getMiredsRange(attributes);
+    return Math.max(minMireds, Math.min(maxMireds, mireds));
+  },
+
+  /**
+   * Clamp requested Kelvin to valid range based on HA attributes.
+   */
+  clampKelvin(kelvin: number, attributes: Record<string, any> = {}): number {
+    let minKelvin = attributes.min_color_temp_kelvin;
+    let maxKelvin = attributes.max_color_temp_kelvin;
+    if (minKelvin === undefined && attributes.max_mireds !== undefined) {
+      minKelvin = this.miredsToKelvin(attributes.max_mireds);
+    }
+    if (maxKelvin === undefined && attributes.min_mireds !== undefined) {
+      maxKelvin = this.miredsToKelvin(attributes.min_mireds);
+    }
+
+    let clamped = kelvin;
+    if (minKelvin !== undefined) clamped = Math.max(minKelvin, clamped);
+    if (maxKelvin !== undefined) clamped = Math.min(maxKelvin, clamped);
+    return clamped;
   },
 
   /** Extract HA HS color from RGB or HS state */
@@ -81,14 +133,9 @@ export const lightColor = {
     if (Array.isArray(attrs.hs_color) && attrs.hs_color.length >= 2) {
       return [attrs.hs_color[0], attrs.hs_color[1]];
     }
-    if (!Array.isArray(attrs.rgb_color) || attrs.rgb_color.length < 3)
-      return undefined;
+    if (!Array.isArray(attrs.rgb_color) || attrs.rgb_color.length < 3) return undefined;
 
-    return this.rgbToHs(
-      attrs.rgb_color[0],
-      attrs.rgb_color[1],
-      attrs.rgb_color[2],
-    );
+    return this.rgbToHs(attrs.rgb_color[0], attrs.rgb_color[1], attrs.rgb_color[2]);
   },
 
   /** Convert RGB to HS */
@@ -99,14 +146,14 @@ export const lightColor = {
     const max = Math.max(red, green, blue);
     const min = Math.min(red, green, blue);
     const delta = max - min;
-
+    
     if (delta === 0) return [0, 0];
-
+    
     let hue = 0;
     if (max === red) hue = 60 * (((green - blue) / delta) % 6);
     else if (max === green) hue = 60 * ((blue - red) / delta + 2);
     else hue = 60 * ((red - green) / delta + 4);
-
+    
     return [this.normalizeHue(hue), Math.round((delta / max) * 100)];
   },
 
@@ -121,9 +168,9 @@ export const lightColor = {
     const Z = (Y / y) * z;
 
     // Convert XYZ to RGB (sRGB D65)
-    let r = X * 3.2406 - Y * 1.5372 - Z * 0.4986;
+    let r =  X * 3.2406 - Y * 1.5372 - Z * 0.4986;
     let g = -X * 0.9689 + Y * 1.8758 + Z * 0.0415;
-    let b = X * 0.0557 - Y * 0.204 + Z * 1.057;
+    let b =  X * 0.0557 - Y * 0.2040 + Z * 1.0570;
 
     // Apply gamma correction
     r = r <= 0.0031308 ? 12.92 * r : 1.055 * Math.pow(r, 1.0 / 2.4) - 0.055;
@@ -142,47 +189,47 @@ export const lightColor = {
   buildColorPayload(
     supportedModes: string[],
     haMode: string | undefined,
-    colorReq: {
-      hs?: [number, number];
-      xy?: [number, number];
-      mireds?: number;
-    },
+    colorReq: { 
+      hs?: [number, number],
+      xy?: [number, number],
+      mireds?: number 
+    }
   ): Record<string, any> {
     const modes = supportedModes || [];
     const payload: Record<string, any> = {};
 
     if (colorReq.mireds !== undefined) {
-      const kelvin = this.miredsToKelvin(colorReq.mireds);
-      // Modern Home Assistant prefers color_temp_kelvin, while legacy integrations use color_temp (mireds)
-      payload.color_temp = colorReq.mireds;
-      payload.color_temp_kelvin = kelvin;
-      return payload;
+      // If a temperature was requested, it takes precedence if supported
+      if (modes.includes('color_temp')) {
+        payload.color_temp = colorReq.mireds;
+        return payload;
+      }
     }
 
     if (colorReq.xy) {
-      if (modes.includes("xy")) {
+      if (modes.includes('xy')) {
         payload.xy_color = colorReq.xy;
         return payload;
       }
-      if (
-        modes.includes("hs") ||
-        modes.includes("rgb") ||
-        modes.includes("rgbw") ||
-        modes.includes("rgbww")
-      ) {
+      if (modes.includes('hs') || modes.includes('rgb') || modes.includes('rgbw') || modes.includes('rgbww')) {
         const hs = this.xyToHs(colorReq.xy[0], colorReq.xy[1]);
         payload.hs_color = hs;
         return payload;
       }
-      payload.xy_color = colorReq.xy;
-      return payload;
     }
 
     if (colorReq.hs) {
-      payload.hs_color = colorReq.hs;
-      return payload;
+      if (modes.includes('hs') || modes.includes('rgb') || modes.includes('rgbw') || modes.includes('rgbww')) {
+        payload.hs_color = colorReq.hs;
+        return payload;
+      }
+      // If only XY is supported
+      if (modes.includes('xy')) {
+        payload.hs_color = colorReq.hs;
+        return payload;
+      }
     }
 
     return payload;
-  },
+  }
 };
