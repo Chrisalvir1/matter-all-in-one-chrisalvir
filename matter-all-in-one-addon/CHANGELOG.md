@@ -1,3 +1,10 @@
+## [1.4.36] - 2026-08-24
+
+### Dependencies & Tooling
+- **Node.js 24.19 Baseline:** Verified and pinned runtime base image `node:24.19.0-alpine3.24` and CI workflows (`node-version: '24.19.x'`).
+- **Dependencies Upgrade:** Updated `vite` to `8.2.2`.
+- **Ecosystem Alignment:** Verified compatibility across TypeScript 7.0.2, Matterbridge 3.10.6, MQTT 5.15.2, WS 8.21.3, and Vitest 5.
+
 ## [1.4.35] - 2026-08-24
 
 ### Matterbridge Runtime & Conformance
