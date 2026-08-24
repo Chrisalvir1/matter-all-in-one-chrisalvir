@@ -551,75 +551,95 @@ export class BaseEntity {
       const updateFn = isInitialSync ? safeSetAttribute : safeUpdateAttribute;
 
     if (domain === 'light' || domain === 'switch' || domain === 'fan' || domain === 'media_player' || domain === 'vacuum') {
-      // Fan: use isFanOn() which checks state/is_on — NEVER uses percentage > 0
-      if (newState.attributes.brightness !== undefined) {
-        if (!isInitialSync && this.shouldIgnoreStateUpdate('brightness', newState.attributes.brightness)) {
-          this.platform.log.debug(`[${this.entityId}] Ignoring HA brightness state update due to recent command lockout`);
-        } else {
-          const raw = lightConverter.toLevel(newState.attributes.brightness);
-          const level = this.clampLevel(raw, isInitialSync);
-          await updateFn(this.endpoint, LevelControl.id, 'currentLevel', level, this.platform.log);
-        }
-      }
-
-      if (domain === 'light' && this.hasColorControl()) {
-        const attrs = newState.attributes as any;
-        const colorMode = attrs.color_mode;
-        
-        const range = lightColor.getMiredsRange(attrs);
-        await updateFn(this.endpoint, ColorControl.id, 'colorTempPhysicalMinMireds', range.minMireds, this.platform.log);
-        await updateFn(this.endpoint, ColorControl.id, 'colorTempPhysicalMaxMireds', range.maxMireds, this.platform.log);
-        await updateFn(this.endpoint, ColorControl.id, 'coupleColorTempMinMireds', range.minMireds, this.platform.log);
-        await updateFn(this.endpoint, ColorControl.id, 'coupleColorTempMaxMireds', range.maxMireds, this.platform.log);
-
-        const minPhys = (this.endpoint as any).state?.colorControl?.colorTempPhysicalMinMireds ?? range.minMireds;
-        const maxPhys = (this.endpoint as any).state?.colorControl?.colorTempPhysicalMaxMireds ?? range.maxMireds;
-        const rawMireds = attrs.color_temp ?? (attrs.color_temp_kelvin ? lightColor.kelvinToMireds(attrs.color_temp_kelvin) : undefined);
-        const mireds = rawMireds !== undefined ? lightColor.clampMireds(rawMireds, attrs, { minMireds: minPhys, maxMireds: maxPhys }) : undefined;
-        const xy = Array.isArray(attrs.xy_color) && attrs.xy_color.length >= 2 ? attrs.xy_color : undefined;
-        const hs = lightColor.getHsColor(newState);
-
-        if (mireds !== undefined && (colorMode === 'color_temp' || (!hs && !xy))) {
-          if (!isInitialSync && this.shouldIgnoreStateUpdate('color_temp', mireds)) {
-            this.platform.log.debug(`[${this.entityId}] Ignoring HA color_temp state update due to recent command lockout`);
-          } else {
-            await updateFn(this.endpoint, ColorControl.id, 'colorTemperatureMireds', mireds, this.platform.log);
-            await updateFn(this.endpoint, ColorControl.id, 'colorMode', ColorControl.ColorMode.ColorTemperatureMireds, this.platform.log);
-          }
-        } else if (xy && (colorMode === 'xy' || (!hs))) {
-          if (!isInitialSync && this.shouldIgnoreStateUpdate('xy_color', xy)) {
-            this.platform.log.debug(`[${this.entityId}] Ignoring HA xy_color state update due to recent command lockout`);
-          } else {
-            const matterXy = lightColor.haXyToMatter(xy[0], xy[1]);
-            await updateFn(this.endpoint, ColorControl.id, 'currentX', matterXy[0], this.platform.log);
-            await updateFn(this.endpoint, ColorControl.id, 'currentY', matterXy[1], this.platform.log);
-            await updateFn(this.endpoint, ColorControl.id, 'colorMode', ColorControl.ColorMode.CurrentXAndCurrentY, this.platform.log);
-          }
-        } else if (hs) {
-          if (!isInitialSync && this.shouldIgnoreStateUpdate('hs_color', hs)) {
-            this.platform.log.debug(`[${this.entityId}] Ignoring HA hs_color state update due to recent command lockout`);
-          } else {
-            await updateFn(this.endpoint, ColorControl.id, 'currentHue', lightColor.haHueToMatter(hs[0]), this.platform.log);
-            await updateFn(this.endpoint, ColorControl.id, 'enhancedCurrentHue', lightColor.haHueToMatterEnhanced(hs[0]), this.platform.log);
-            await updateFn(this.endpoint, ColorControl.id, 'currentSaturation', lightColor.haSatToMatter(hs[1]), this.platform.log);
-            await updateFn(this.endpoint, ColorControl.id, 'colorMode', ColorControl.ColorMode.CurrentHueAndCurrentSaturation, this.platform.log);
-            if (this.endpoint.hasAttributeServer(ColorControl.id, 'enhancedColorMode')) {
-               await updateFn(this.endpoint, ColorControl.id, 'enhancedColorMode', ColorControl.EnhancedColorMode.EnhancedCurrentHueAndCurrentSaturation, this.platform.log);
-            }
-          }
-        }
-      }
-
-      // Important: Apply OnOff *after* LevelControl and ColorControl.
-      // This prevents the MatterbridgeLevelControlServer from automatically turning the light ON
-      // when it sees a brightness > 0 update from HA while the light is actually off.
       const isOn = domain === 'vacuum'
         ? newState.state === 'cleaning'
         : domain === 'fan'
           ? isFanOn(newState)
           : newState.state === 'on';
 
+      const beforeLevel = this.endpoint?.hasAttributeServer?.(LevelControl.id, 'currentLevel')
+        ? this.endpoint.getAttribute(LevelControl.id, 'currentLevel')
+        : undefined;
+      const beforeOnOff = this.endpoint?.hasAttributeServer?.(OnOff.id, 'onOff')
+        ? this.endpoint.getAttribute(OnOff.id, 'onOff')
+        : undefined;
+
+      if (domain === 'light' && isOn) {
+        if (newState.attributes.brightness !== undefined) {
+          if (!isInitialSync && this.shouldIgnoreStateUpdate('brightness', newState.attributes.brightness)) {
+            this.platform.log.debug(`[${this.entityId}] Ignoring HA brightness state update due to recent command lockout`);
+          } else {
+            const raw = lightConverter.toLevel(newState.attributes.brightness);
+            const level = this.clampLevel(raw, isInitialSync);
+            await updateFn(this.endpoint, LevelControl.id, 'currentLevel', level, this.platform.log);
+          }
+        }
+
+        if (this.hasColorControl()) {
+          const attrs = newState.attributes as any;
+          const colorMode = attrs.color_mode;
+          
+          const range = lightColor.getMiredsRange(attrs);
+          await updateFn(this.endpoint, ColorControl.id, 'colorTempPhysicalMinMireds', range.minMireds, this.platform.log);
+          await updateFn(this.endpoint, ColorControl.id, 'colorTempPhysicalMaxMireds', range.maxMireds, this.platform.log);
+          await updateFn(this.endpoint, ColorControl.id, 'coupleColorTempMinMireds', range.minMireds, this.platform.log);
+          await updateFn(this.endpoint, ColorControl.id, 'coupleColorTempMaxMireds', range.maxMireds, this.platform.log);
+
+          const minPhys = (this.endpoint as any).state?.colorControl?.colorTempPhysicalMinMireds ?? range.minMireds;
+          const maxPhys = (this.endpoint as any).state?.colorControl?.colorTempPhysicalMaxMireds ?? range.maxMireds;
+          const rawMireds = attrs.color_temp ?? (attrs.color_temp_kelvin ? lightColor.kelvinToMireds(attrs.color_temp_kelvin) : undefined);
+          const mireds = rawMireds !== undefined ? lightColor.clampMireds(rawMireds, attrs, { minMireds: minPhys, maxMireds: maxPhys }) : undefined;
+          const xy = Array.isArray(attrs.xy_color) && attrs.xy_color.length >= 2 ? attrs.xy_color : undefined;
+          const hs = lightColor.getHsColor(newState);
+
+          if (mireds !== undefined && (colorMode === 'color_temp' || (!hs && !xy))) {
+            if (!isInitialSync && this.shouldIgnoreStateUpdate('color_temp', mireds)) {
+              this.platform.log.debug(`[${this.entityId}] Ignoring HA color_temp state update due to recent command lockout`);
+            } else {
+              await updateFn(this.endpoint, ColorControl.id, 'colorTemperatureMireds', mireds, this.platform.log);
+              await updateFn(this.endpoint, ColorControl.id, 'colorMode', ColorControl.ColorMode.ColorTemperatureMireds, this.platform.log);
+            }
+          } else if (xy && (colorMode === 'xy' || (!hs))) {
+            if (!isInitialSync && this.shouldIgnoreStateUpdate('xy_color', xy)) {
+              this.platform.log.debug(`[${this.entityId}] Ignoring HA xy_color state update due to recent command lockout`);
+            } else {
+              const matterXy = lightColor.haXyToMatter(xy[0], xy[1]);
+              await updateFn(this.endpoint, ColorControl.id, 'currentX', matterXy[0], this.platform.log);
+              await updateFn(this.endpoint, ColorControl.id, 'currentY', matterXy[1], this.platform.log);
+              await updateFn(this.endpoint, ColorControl.id, 'colorMode', ColorControl.ColorMode.CurrentXAndCurrentY, this.platform.log);
+            }
+          } else if (hs) {
+            if (!isInitialSync && this.shouldIgnoreStateUpdate('hs_color', hs)) {
+              this.platform.log.debug(`[${this.entityId}] Ignoring HA hs_color state update due to recent command lockout`);
+            } else {
+              await updateFn(this.endpoint, ColorControl.id, 'currentHue', lightColor.haHueToMatter(hs[0]), this.platform.log);
+              await updateFn(this.endpoint, ColorControl.id, 'enhancedCurrentHue', lightColor.haHueToMatterEnhanced(hs[0]), this.platform.log);
+              await updateFn(this.endpoint, ColorControl.id, 'currentSaturation', lightColor.haSatToMatter(hs[1]), this.platform.log);
+              await updateFn(this.endpoint, ColorControl.id, 'colorMode', ColorControl.ColorMode.CurrentHueAndCurrentSaturation, this.platform.log);
+              if (this.endpoint.hasAttributeServer(ColorControl.id, 'enhancedColorMode')) {
+                 await updateFn(this.endpoint, ColorControl.id, 'enhancedColorMode', ColorControl.EnhancedColorMode.EnhancedCurrentHueAndCurrentSaturation, this.platform.log);
+              }
+            }
+          }
+        }
+      }
+
       await updateFn(this.endpoint, OnOff.id, 'onOff', isOn, this.platform.log);
+
+      if (domain === 'light') {
+        const afterLevel = this.endpoint?.hasAttributeServer?.(LevelControl.id, 'currentLevel')
+          ? this.endpoint.getAttribute(LevelControl.id, 'currentLevel')
+          : undefined;
+        const afterOnOff = this.endpoint?.hasAttributeServer?.(OnOff.id, 'onOff')
+          ? this.endpoint.getAttribute(OnOff.id, 'onOff')
+          : undefined;
+        this.platform.log.debug(
+          `[LIGHT TRACE][${this.entityId}] HA state: ${newState.state} | HA brightness: ${newState.attributes.brightness ?? 'undefined'} | ` +
+          `Matter CurrentLevel before: ${beforeLevel} -> after: ${afterLevel} | ` +
+          `Matter OnOff before: ${beforeOnOff} -> after: ${afterOnOff} | ` +
+          `source: ${isInitialSync ? 'initialSync' : 'haEvent'} | transaction/handler: updateState`
+        );
+      }
 
       if (domain === 'fan' && this.endpoint.hasAttributeServer(FanControl.id, 'percentCurrent')) {
         // ON/OFF comes from state/is_on ONLY — never from percentage > 0

@@ -1,3 +1,9 @@
+## [1.4.40] - 2026-08-24
+
+### Fixed
+- **Light OFF Settled State:** Prevented LevelControl / ColorControl attribute publishing while HA light state is OFF, ensuring `OnOff` strictly remains `false` without level-based ghost power-on or non-zero fill in Apple Home.
+- **Bi-directional Light Trace Logging:** Added real-time structured `[LIGHT TRACE]` logs for tracking exact state transitions (HA state, HA brightness, before/after Matter level and OnOff attributes, source transaction).
+
 ## [1.4.39] - 2026-08-24
 
 ### Consolidated Fixes & Enhancements

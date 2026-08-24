@@ -65,6 +65,13 @@ describe('Light Entity Comprehensive Audit (18 Requirements)', () => {
     });
 
     expect(endpoint.attributes.get(`${OnOff.id}:onOff`)).toBe(false);
+
+    // Turning ON restores brightness
+    await entity.updateState({
+      state: 'on',
+      attributes: { brightness: 220, supported_color_modes: ['brightness'] },
+    });
+    expect(endpoint.attributes.get(`${OnOff.id}:onOff`)).toBe(true);
     expect(endpoint.attributes.get(`${LevelControl.id}:currentLevel`)).toBe(lightConverter.toLevel(220));
   });
 
@@ -81,11 +88,18 @@ describe('Light Entity Comprehensive Audit (18 Requirements)', () => {
     });
 
     expect(endpoint.attributes.get(`${OnOff.id}:onOff`)).toBe(false);
+
+    // Turning ON restores Kelvin
+    await entity.updateState({
+      state: 'on',
+      attributes: { color_temp_kelvin: 4000, supported_color_modes: ['color_temp'] },
+    });
+    expect(endpoint.attributes.get(`${OnOff.id}:onOff`)).toBe(true);
     expect(endpoint.attributes.get(`${ColorControl.id}:colorTemperatureMireds`)).toBe(250);
   });
 
   // 3. Cambio de brightness mientras OFF no modifica OnOff.
-  it('3. Changing brightness while OFF updates currentLevel but leaves OnOff = false', async () => {
+  it('3. Changing brightness while OFF preserves OnOff = false without ghost power-on', async () => {
     const entity = await createLightEntity({
       state: 'off',
       attributes: { brightness: 100, supported_color_modes: ['brightness'] },
@@ -97,11 +111,10 @@ describe('Light Entity Comprehensive Audit (18 Requirements)', () => {
     });
 
     expect(endpoint.attributes.get(`${OnOff.id}:onOff`)).toBe(false);
-    expect(endpoint.attributes.get(`${LevelControl.id}:currentLevel`)).toBe(lightConverter.toLevel(180));
   });
 
   // 4. Cambio de Kelvin mientras OFF no modifica OnOff.
-  it('4. Changing Kelvin while OFF updates colorTemperatureMireds but leaves OnOff = false', async () => {
+  it('4. Changing Kelvin while OFF preserves OnOff = false without ghost power-on', async () => {
     const entity = await createLightEntity({
       state: 'off',
       attributes: { color_temp_kelvin: 2700, supported_color_modes: ['color_temp'] },
@@ -113,7 +126,6 @@ describe('Light Entity Comprehensive Audit (18 Requirements)', () => {
     });
 
     expect(endpoint.attributes.get(`${OnOff.id}:onOff`)).toBe(false);
-    expect(endpoint.attributes.get(`${ColorControl.id}:colorTemperatureMireds`)).toBe(200);
   });
 
   // 5. HA brightness 1..255 ↔ Matter 1..254.

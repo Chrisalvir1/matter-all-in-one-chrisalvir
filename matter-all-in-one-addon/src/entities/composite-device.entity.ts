@@ -277,7 +277,15 @@ export class CompositeDeviceEntity {
     }
 
     if (domain === 'light' || domain === 'switch') {
-      if (domain === 'light') {
+      const isEntityOn = isOn(state);
+      const beforeLevel = endpoint.hasAttributeServer(LevelControl.id, 'currentLevel')
+        ? endpoint.getAttribute(LevelControl.id, 'currentLevel')
+        : undefined;
+      const beforeOnOff = endpoint.hasAttributeServer(OnOff.id, 'onOff')
+        ? endpoint.getAttribute(OnOff.id, 'onOff')
+        : undefined;
+
+      if (domain === 'light' && isEntityOn) {
         if (typeof state.attributes.brightness === 'number') {
           if (!initial && this.shouldIgnoreStateUpdate(entityId, 'brightness', state.attributes.brightness)) {
             this.platform.log.debug(`[${entityId}] Ignoring HA brightness state update due to recent command lockout`);
@@ -333,7 +341,22 @@ export class CompositeDeviceEntity {
         }
       }
 
-      await update(endpoint, OnOff.id, 'onOff', isOn(state), this.platform.log);
+      await update(endpoint, OnOff.id, 'onOff', isEntityOn, this.platform.log);
+
+      if (domain === 'light') {
+        const afterLevel = endpoint.hasAttributeServer(LevelControl.id, 'currentLevel')
+          ? endpoint.getAttribute(LevelControl.id, 'currentLevel')
+          : undefined;
+        const afterOnOff = endpoint.hasAttributeServer(OnOff.id, 'onOff')
+          ? endpoint.getAttribute(OnOff.id, 'onOff')
+          : undefined;
+        this.platform.log.debug(
+          `[LIGHT TRACE][${entityId}] HA state: ${state.state} | HA brightness: ${state.attributes.brightness ?? 'undefined'} | ` +
+          `Matter CurrentLevel before: ${beforeLevel} -> after: ${afterLevel} | ` +
+          `Matter OnOff before: ${beforeOnOff} -> after: ${afterOnOff} | ` +
+          `source: ${initial ? 'initialSync' : 'haEvent'} | transaction/handler: updateEntity`
+        );
+      }
       return;
     }
 

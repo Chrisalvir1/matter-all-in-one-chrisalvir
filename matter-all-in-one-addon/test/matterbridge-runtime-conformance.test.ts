@@ -281,4 +281,106 @@ describe('Matterbridge 3.10.6 Runtime Conformance & Integration Tests', () => {
     expect(composite.endpoints.get('switch.apagador_oficina_canal_3')).toBeDefined();
     expect(composite.endpoints.get('switch.apagador_oficina_canal_4')).toBeDefined();
   });
+
+  it('Light Off Settled State: HA state=on (brightness=200) -> HA state=off (brightness=200) -> Matter OnOff is strictly false', async () => {
+    const lightEntityState: any = {
+      entity_id: 'light.ventilador_de_sala_luz',
+      state: 'on',
+      attributes: {
+        friendly_name: 'Luz Ventilador Sala',
+        brightness: 200,
+        color_temp_kelvin: 3000,
+        supported_color_modes: ['color_temp'],
+        color_mode: 'color_temp',
+      },
+    };
+
+    const entity = new BaseEntity(platform, lightEntityState, MatterDeviceTypes.colorTemperatureLight);
+    await entity.createEndpoint();
+    await entity.syncInitialState();
+
+    expect(entity.endpoint.getAttribute(OnOff.id, 'onOff')).toBe(true);
+
+    // HA reports light turned off, cached brightness remains 200
+    const offState: any = {
+      ...lightEntityState,
+      state: 'off',
+      attributes: {
+        ...lightEntityState.attributes,
+        brightness: 200, // HA caches last brightness
+      },
+    };
+
+    await entity.updateState(offState);
+    expect(entity.endpoint.getAttribute(OnOff.id, 'onOff')).toBe(false);
+  });
+
+  it('Light Off Settled State: HA state=off with brightness=0 never results in Matter OnOff=true', async () => {
+    const lightEntityState: any = {
+      entity_id: 'light.ventilador_de_sala_luz',
+      state: 'off',
+      attributes: {
+        friendly_name: 'Luz Ventilador Sala',
+        brightness: 0,
+        color_temp_kelvin: 3000,
+        supported_color_modes: ['color_temp'],
+        color_mode: 'color_temp',
+      },
+    };
+
+    const entity = new BaseEntity(platform, lightEntityState, MatterDeviceTypes.colorTemperatureLight);
+    await entity.createEndpoint();
+    await entity.syncInitialState();
+
+    expect(entity.endpoint.getAttribute(OnOff.id, 'onOff')).toBe(false);
+
+    // Update again with brightness=0 while off
+    await entity.updateState(lightEntityState);
+    expect(entity.endpoint.getAttribute(OnOff.id, 'onOff')).toBe(false);
+  });
+
+  it('Composite Light Off Settled State: child light endpoint reflects OnOff=false when HA light is off', async () => {
+    const members = [
+      {
+        entityId: 'fan.ventilador_de_sala_main_fan',
+        state: {
+          entity_id: 'fan.ventilador_de_sala_main_fan',
+          state: 'on',
+          attributes: {
+            friendly_name: 'VENTILADOR DE SALA',
+            supported_features: 53,
+            percentage: 88,
+          },
+        } as any,
+      },
+      {
+        entityId: 'light.ventilador_de_sala_luz',
+        state: {
+          entity_id: 'light.ventilador_de_sala_luz',
+          state: 'off',
+          attributes: {
+            friendly_name: 'Luz Ventilador Sala',
+            brightness: 255, // cached brightness from HA
+            color_temp_kelvin: 4000,
+            supported_color_modes: ['color_temp'],
+            color_mode: 'color_temp',
+          },
+        } as any,
+      },
+    ];
+
+    const composite = new CompositeDeviceEntity(
+      platform,
+      'device-sala',
+      'VENTILADOR DE SALA',
+      members,
+    );
+
+    await composite.createEndpoint();
+    await composite.syncInitialState();
+
+    const lightChild = composite.endpoints.get('light.ventilador_de_sala_luz');
+    expect(lightChild).toBeDefined();
+    expect(lightChild?.getAttribute(OnOff.id, 'onOff')).toBe(false);
+  });
 });
