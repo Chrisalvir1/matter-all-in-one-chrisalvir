@@ -216,4 +216,67 @@ describe('Matterbridge 3.10.6 Runtime Conformance & Integration Tests', () => {
     const clampedWarm = lightColor.clampMireds(outOfRangeWarm, attrs, { minMireds: 135, maxMireds: 500 });
     expect(clampedWarm).toBe(370);
   });
+
+  it('Composite Device: creates Root Fan + 3 Child Switches without incompatible implementation error', async () => {
+    const members = [
+      {
+        entityId: 'fan.oficina_apagador_oficina',
+        state: {
+          entity_id: 'fan.oficina_apagador_oficina',
+          state: 'on',
+          attributes: {
+            friendly_name: 'Apagador oficina Canal 1',
+            supported_features: 53,
+            percentage: 50,
+            percentage_step: 16.666666666666668,
+            direction: 'forward',
+          },
+        } as any,
+      },
+      {
+        entityId: 'switch.apagador_oficina_canal_2',
+        state: {
+          entity_id: 'switch.apagador_oficina_canal_2',
+          state: 'on',
+          attributes: {
+            friendly_name: 'Apagador oficina Canal 2',
+          },
+        } as any,
+      },
+      {
+        entityId: 'switch.apagador_oficina_canal_3',
+        state: {
+          entity_id: 'switch.apagador_oficina_canal_3',
+          state: 'on',
+          attributes: {
+            friendly_name: 'Apagador oficina Canal 3',
+          },
+        } as any,
+      },
+      {
+        entityId: 'switch.apagador_oficina_canal_4',
+        state: {
+          entity_id: 'switch.apagador_oficina_canal_4',
+          state: 'off',
+          attributes: {
+            friendly_name: 'Apagador oficina Canal 4',
+          },
+        } as any,
+      },
+    ];
+
+    const composite = new CompositeDeviceEntity(
+      platform,
+      'device_e2dae00dcd761e269a400dbbd6bd887e',
+      'Apagador oficina',
+      members,
+    );
+
+    const rootEndpoint = await composite.createEndpoint();
+    expect(rootEndpoint).toBeDefined();
+    expect(composite.endpoints.size).toBe(4);
+    expect(composite.endpoints.get('switch.apagador_oficina_canal_2')).toBeDefined();
+    expect(composite.endpoints.get('switch.apagador_oficina_canal_3')).toBeDefined();
+    expect(composite.endpoints.get('switch.apagador_oficina_canal_4')).toBeDefined();
+  });
 });

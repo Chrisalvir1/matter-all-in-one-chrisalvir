@@ -4,7 +4,7 @@
   <img src="matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
 </div>
 
-> **Matter All-in-One for Home Assistant (v1.4.36)**
+> **Matter All-in-One for Home Assistant (v1.4.37)**
 > Expone entidades verificadas de Home Assistant como accesorios Matter 1.6 estables, con QR independiente por canal para apagadores/enchufes múltiples, perfiles conservadores para Apple Home y modelo/marca real en HomeKit.
 > **Base:** `matterbridge@3.10.6` · **Node.js:** `24.19-alpine3.24` · **TypeScript:** `7.0.2` · **Spec:** Matter 1.6 (CSA, 17 Jun 2026)
 

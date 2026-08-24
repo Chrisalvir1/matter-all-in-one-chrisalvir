@@ -1,3 +1,8 @@
+## [1.4.37] - 2026-08-24
+
+### Fixed
+- **Composite Device Child Initialization Conflict:** Fixed `Cannot require device_... because incompatible implementation already exists` during composite endpoint activation (e.g. multi-gang switches and composite fans) by removing redundant duplicate `behaviors.require` calls on child endpoints already configured by `addChildDeviceTypeWithClusterServer`.
+
 ## [1.4.36] - 2026-08-24
 
 ### Dependencies & Tooling

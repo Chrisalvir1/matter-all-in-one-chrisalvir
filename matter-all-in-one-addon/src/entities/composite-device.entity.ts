@@ -190,11 +190,6 @@ export class CompositeDeviceEntity {
       child.deviceName = childFriendlyName;
       (child as any).nodeLabel = childFriendlyName;
       
-      if (domain === 'light' || domain === 'switch' || domain === 'fan' || domain === 'media_player' || domain === 'vacuum') {
-        const isLighting = domain === 'light';
-        child.behaviors.require(isLighting ? MatterbridgeOnOffServer.with(OnOff.Feature.Lighting) : MatterbridgeOnOffServer.with());
-      }
-      
       this.addCommandHandlers(child, member);
       this.endpoints.set(member.entityId, child);
     }
@@ -485,6 +480,7 @@ export class CompositeDeviceEntity {
     if (domain === 'light' || domain === 'switch') {
       const isLighting = domain === 'light';
       endpoint.behaviors.require(isLighting ? MatterbridgeOnOffServer.with(OnOff.Feature.Lighting) : MatterbridgeOnOffServer.with());
+      endpoint.addRequiredClusterServers();
     }
   }
 
