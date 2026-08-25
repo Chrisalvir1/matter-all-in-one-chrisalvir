@@ -27,6 +27,7 @@ import {
   snapToPhysicalLevel,
   normaliseToPhysicalSpeed,
   withinHysteresis,
+  hasFanSpeed,
   FAN_SPEED_LEVELS,
   hasFanDirection,
   hasFanAuto,
@@ -278,6 +279,7 @@ describe('Fan converter — FanMode (test 12)', () => {
   });
 });
 
+<<<<<<< HEAD
 describe('Fan converter — Feature conformance & capability detection', () => {
   it('detects direction capability strictly via FanEntityFeature.DIRECTION (4)', () => {
     // Living room / Guest room: supported_features = 53 (1 + 4 + 16 + 32)
@@ -341,5 +343,42 @@ describe('Fan converter — Feature conformance & capability detection', () => {
     expect(brFeatures).toContain(FanControl.Feature.Step);
     expect(brFeatures).toContain(FanControl.Feature.Auto);
     expect(brFeatures).toContain(FanControl.Feature.AirflowDirection);
+  });
+});
+
+describe('Fan converter — hasFanSpeed (distinguish On/Off switches from speed fans)', () => {
+  it('detects SET_SPEED feature (bit 0 = 1)', () => {
+    const s = makeState('on', { supported_features: 1 });
+    expect(hasFanSpeed(s)).toBe(true);
+  });
+
+  it('detects SET_SPEED + DIRECTION (1 + 4 = 5)', () => {
+    const s = makeState('on', { supported_features: 5 });
+    expect(hasFanSpeed(s)).toBe(true);
+  });
+
+  it('returns false for On/Off fan with supported_features=0', () => {
+    const s = makeState('on', { supported_features: 0 });
+    expect(hasFanSpeed(s)).toBe(false);
+  });
+
+  it('returns false for On/Off fan with supported_features=4 (only direction, no speed)', () => {
+    const s = makeState('on', { supported_features: 4 });
+    expect(hasFanSpeed(s)).toBe(false);
+  });
+
+  it('detects speed when percentage attribute is present as a number', () => {
+    const s = makeState('on', { percentage: 50 });
+    expect(hasFanSpeed(s)).toBe(true);
+  });
+
+  it('detects speed when legacy speed_list is present', () => {
+    const s = makeState('on', { speed_list: ['low', 'medium', 'high'] });
+    expect(hasFanSpeed(s)).toBe(true);
+  });
+
+  it('returns false when no speed features or attributes are present', () => {
+    const s = makeState('on', {});
+    expect(hasFanSpeed(s)).toBe(false);
   });
 });

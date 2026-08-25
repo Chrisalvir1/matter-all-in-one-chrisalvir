@@ -73,3 +73,52 @@ describe('BaseEntity direct colour lights', () => {
     });
   });
 });
+
+describe('BaseEntity fan devices (On/Off vs MultiSpeed)', () => {
+  it('creates default FanControl server for pure On/Off fans and does not call set_percentage', async () => {
+    const onOffFanState = {
+      entity_id: 'fan.oficina_apagador_oficina',
+      state: 'off',
+      attributes: { friendly_name: 'Apagador Oficina Fan', supported_features: 0 },
+      last_changed: '',
+      last_updated: '',
+    } as any;
+
+    const entity = new BaseEntity(platform as any, onOffFanState, MatterDeviceTypes.fan);
+    const endpoint = await entity.createEndpoint() as any;
+
+    // Turn ON via Matter command
+    await endpoint.invokeCommand('on');
+    expect(platform.ha.callService).toHaveBeenCalledWith('fan', 'turn_on', 'fan.oficina_apagador_oficina');
+
+    // Simulate HA state update: turned ON with no percentage
+    await entity.updateState({
+      ...onOffFanState,
+      state: 'on',
+      attributes: { friendly_name: 'Apagador Oficina Fan', supported_features: 0 },
+    });
+
+    // Verify it did NOT send a false turn_off or set_percentage
+    expect(platform.ha.callService).not.toHaveBeenCalledWith('fan', 'set_percentage', expect.anything(), expect.anything());
+    expect(platform.ha.callService).not.toHaveBeenCalledWith('fan', 'turn_off', 'fan.oficina_apagador_oficina');
+  });
+
+  it('handles multi-speed fans and calls set_percentage only when speed is supported', async () => {
+    const speedFanState = {
+      entity_id: 'fan.ceiling_speed_fan',
+      state: 'on',
+      attributes: { friendly_name: 'Ceiling Fan', supported_features: 1, percentage: 50 },
+      last_changed: '',
+      last_updated: '',
+    } as any;
+
+    const entity = new BaseEntity(platform as any, speedFanState, MatterDeviceTypes.fan);
+    const endpoint = await entity.createEndpoint() as any;
+
+    // Simulate Matter percentSetting change from HomeKit
+    await endpoint.invokeAttributeChange(0x0202, 'percentSetting', 83.33);
+    expect(platform.ha.callService).toHaveBeenCalledWith('fan', 'set_percentage', 'fan.ceiling_speed_fan', {
+      percentage: 83.33,
+    });
+  });
+});

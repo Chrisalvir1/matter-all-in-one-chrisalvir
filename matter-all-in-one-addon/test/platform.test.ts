@@ -579,4 +579,80 @@ describe("HomeAssistantPlatform", () => {
     expect(updateState).toHaveBeenCalledOnce();
     expect(updateState.mock.calls[0][0].state).toBe("on");
   });
+
+  it("identifies a multi-gang switch with a fan channel as a multi-switch device", async (ctx) => {
+    if (!networkAvailable) return;
+    await platform.onStart();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    // Register Tuya multi-gang controller entities: 1 fan + 3 switches under device 'device-oficina-1'
+    platform.ha.hassEntities.set("fan.oficina_apagador_oficina", {
+      id: "entity-oficina-fan",
+      entity_id: "fan.oficina_apagador_oficina",
+      device_id: "device-oficina-1",
+      platform: "tuya",
+    });
+    platform.ha.hassEntities.set("switch.apagador_salon", {
+      id: "entity-oficina-sw1",
+      entity_id: "switch.apagador_salon",
+      device_id: "device-oficina-1",
+      platform: "tuya",
+    });
+    platform.ha.hassEntities.set("switch.apagador_oficina_2", {
+      id: "entity-oficina-sw2",
+      entity_id: "switch.apagador_oficina_2",
+      device_id: "device-oficina-1",
+      platform: "tuya",
+    });
+
+    await (platform as any).registerHAEntity({
+      entity_id: "fan.oficina_apagador_oficina",
+      state: "off",
+      attributes: { friendly_name: "Apagador oficina Canal 1", supported_features: 0 },
+    });
+    await (platform as any).registerHAEntity({
+      entity_id: "switch.apagador_salon",
+      state: "off",
+      attributes: { friendly_name: "Apagador oficina Canal 2" },
+    });
+    await (platform as any).registerHAEntity({
+      entity_id: "switch.apagador_oficina_2",
+      state: "off",
+      attributes: { friendly_name: "Apagador oficina Canal 3" },
+    });
+
+    expect(platform.isMultiSwitchDevice("device-oficina-1")).toBe(true);
+
+    const res = await fetch(`http://127.0.0.1:${platform.uiServerPort}/api/custom/devices`);
+    const devices = (await res.json()) as any[];
+    const fanDev = devices.find((d) => d.entityId === "fan.oficina_apagador_oficina");
+    const swDev = devices.find((d) => d.entityId === "switch.apagador_salon");
+
+    // Must NOT be grouped as composite; each button is independent!
+    expect(fanDev?.composite).toBe(false);
+    expect(swDev?.composite).toBe(false);
+  });
+
+  it("allows setting profile override on entities", async (ctx) => {
+    if (!networkAvailable) return;
+    await platform.onStart();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    platform.ha.hassEntities.set("switch.living_room_fan_switch", {
+      id: "entity-fan-sw",
+      entity_id: "switch.living_room_fan_switch",
+      device_id: "device-fan-sw",
+      platform: "mock",
+    });
+
+    await (platform as any).registerHAEntity({
+      entity_id: "switch.living_room_fan_switch",
+      state: "off",
+      attributes: { friendly_name: "Fan Switch" },
+    });
+
+    const result = await platform.setDeviceProfile("switch.living_room_fan_switch", "fan");
+    expect(result.success).toBe(true);
+    expect(platform.deviceOverrides["switch.living_room_fan_switch"]).toBe("fan");
+  });
 });

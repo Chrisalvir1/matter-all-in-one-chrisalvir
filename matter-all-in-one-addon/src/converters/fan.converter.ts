@@ -281,7 +281,16 @@ export const FAN_PRESET_TO_WIND: Record<string, string> = {
   breeze: 'naturalWind',
 };
 
-// ── Public converter interface (backwards-compatible) ─────────────────────────
+/**
+ * Determine if HA fan exposes speed/percentage control (bit 0 = SET_SPEED in supported_features).
+ * Returns true if supported_features has SET_SPEED (1) or if percentage is present.
+ */
+export function hasFanSpeed(state: HassState): boolean {
+  if (typeof state.attributes.supported_features === 'number') {
+    return (state.attributes.supported_features & 1) !== 0;
+  }
+  return typeof state.attributes.percentage === 'number' || Array.isArray(state.attributes.speed_list);
+}
 
 /**
  * Return the physical speed level (1..speedMax) or 0 (Off) based on the percentage.
@@ -336,6 +345,9 @@ export const fanConverter = {
 
   /** Current direction from state (not last_direction). */
   fanDirection,
+
+  /** Determine if HA fan exposes speed control. */
+  hasFanSpeed,
 
   /** Determine if HA fan exposes direction control (bit 4 in supported_features). */
   hasFanDirection,

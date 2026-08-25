@@ -460,7 +460,7 @@ function selectEntity(entity) {
   }));
   const currentProfile = profiles.find((profile) => profile.id === (entity.profileId || entity.matterType)) || profiles[0];
   els.profileNote.textContent = currentProfile ? `${currentProfile.description} ${profileCompatibilityText(currentProfile.appleHome)}` : '';
-  els.profileSelect.disabled = entity.auxiliary || entity.composite;
+  els.profileSelect.disabled = Boolean(entity.auxiliary);
 
   const isMqtt = entity.origin === 'mqtt' || entity.entityId.startsWith('mqtt.');
   const mqttMeta = isMqtt

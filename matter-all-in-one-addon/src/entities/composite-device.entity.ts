@@ -28,8 +28,8 @@ import {
   haStateToFanMode,
   snapToPhysicalLevel,
   FAN_MODE_SEQUENCE,
-  FAN_SPEED_MAX,
   hasFanDirection,
+  hasFanSpeed,
   hasFanAuto,
   getFanSpeedCount,
   getFanModeSequence,
@@ -220,6 +220,12 @@ export class CompositeDeviceEntity {
     await Promise.all(this.members.map((m) => this.updateEntity(m.entityId, m.state, true)));
   }
 
+  private haUpdateDepth = new Map<string, number>();
+
+  private isUpdatingFromHa(entityId: string): boolean {
+    return (this.haUpdateDepth.get(entityId) ?? 0) > 0;
+  }
+
   async updateEntity(entityId: string, state: HassState, initial = false): Promise<void> {
     this.states.set(entityId, state);
     const endpoint = this.endpoints.get(entityId);
@@ -227,48 +233,53 @@ export class CompositeDeviceEntity {
     const [domain] = entityId.split('.');
     const update = initial ? safeSetAttribute : safeUpdateAttribute;
 
-    if (domain === 'fan') {
-      const on = isFanOn(state);
-      await update(endpoint, OnOff.id, 'onOff', on, this.platform.log);
-      if (!endpoint.hasAttributeServer(FanControl.id, 'percentCurrent')) return;
+    this.haUpdateDepth.set(entityId, (this.haUpdateDepth.get(entityId) ?? 0) + 1);
+    try {
+      if (domain === 'fan') {
+        const on = isFanOn(state);
+        await update(endpoint, OnOff.id, 'onOff', on, this.platform.log);
+        if (!endpoint.hasAttributeServer(FanControl.id, 'fanMode')) return;
 
-      const speedMax = getFanSpeedCount(state);
-      const pct = fanPercentage(state);
-      const speed = fanSpeed(pct, speedMax);
-      const fanMode = haStateToFanMode(state);
+        const hasSpeed = hasFanSpeed(state);
+        const speedMax = getFanSpeedCount(state);
+        const pct = fanPercentage(state);
+        const speed = fanSpeed(pct, speedMax);
+        const fanMode = haStateToFanMode(state);
 
-      this.platform.log.debug(
-        `[Composite][${entityId}] Fan update: state=${state.state}, on=${on}, pct=${pct}, speed=${speed}/${speedMax}, fanMode=${fanMode}, dir=${state.attributes.direction ?? 'N/A'}, osc=${state.attributes.oscillating ?? 'N/A'}, preset=${state.attributes.preset_mode ?? 'N/A'}`,
-      );
+        this.platform.log.debug(
+          `[Composite][${entityId}] Fan update: state=${state.state}, on=${on}, pct=${pct}, speed=${speed}/${speedMax}, fanMode=${fanMode}, speedSupport=${hasSpeed}, dir=${state.attributes.direction ?? 'N/A'}, osc=${state.attributes.oscillating ?? 'N/A'}, preset=${state.attributes.preset_mode ?? 'N/A'}`,
+        );
 
-      if (!initial && this.shouldIgnoreStateUpdate(entityId, 'fan_percentage', pct)) {
-        this.platform.log.debug(`[Composite][${entityId}] Ignoring fan_percentage update (lockout)`);
-      } else {
-        await update(endpoint, FanControl.id, 'percentCurrent', pct, this.platform.log);
-        await update(endpoint, FanControl.id, 'percentSetting', pct, this.platform.log);
-        
-        if (endpoint.hasAttributeServer(FanControl.id, 'speedCurrent')) {
-          await update(endpoint, FanControl.id, 'speedSetting', speed, this.platform.log);
-          await update(endpoint, FanControl.id, 'speedCurrent', speed, this.platform.log);
-        }
-      }
-
-      await update(endpoint, FanControl.id, 'fanMode', fanMode, this.platform.log);
-
-      // Sync AirflowDirection if the cluster supports it
-      if (endpoint.hasAttributeServer(FanControl.id, 'airflowDirection')) {
-        const dir = fanDirection(state);
-        if (dir !== undefined) {
-          if (!initial && this.shouldIgnoreStateUpdate(entityId, 'fan_direction', dir)) {
-            this.platform.log.debug(`[Composite][${entityId}] Ignoring fan_direction update (lockout)`);
+        if (hasSpeed && endpoint.hasAttributeServer(FanControl.id, 'percentCurrent')) {
+          if (!initial && this.shouldIgnoreStateUpdate(entityId, 'fan_percentage', pct)) {
+            this.platform.log.debug(`[Composite][${entityId}] Ignoring fan_percentage update (lockout)`);
           } else {
-            const matterDir = haDirectionToMatter(dir);
-            await update(endpoint, FanControl.id, 'airflowDirection', matterDir, this.platform.log);
+            await update(endpoint, FanControl.id, 'percentCurrent', pct, this.platform.log);
+            await update(endpoint, FanControl.id, 'percentSetting', pct, this.platform.log);
+            
+            if (endpoint.hasAttributeServer(FanControl.id, 'speedCurrent')) {
+              await update(endpoint, FanControl.id, 'speedSetting', speed, this.platform.log);
+              await update(endpoint, FanControl.id, 'speedCurrent', speed, this.platform.log);
+            }
           }
         }
+
+        await update(endpoint, FanControl.id, 'fanMode', fanMode, this.platform.log);
+
+        // Sync AirflowDirection if the cluster supports it
+        if (endpoint.hasAttributeServer(FanControl.id, 'airflowDirection')) {
+          const dir = fanDirection(state);
+          if (dir !== undefined) {
+            if (!initial && this.shouldIgnoreStateUpdate(entityId, 'fan_direction', dir)) {
+              this.platform.log.debug(`[Composite][${entityId}] Ignoring fan_direction update (lockout)`);
+            } else {
+              const matterDir = haDirectionToMatter(dir);
+              await update(endpoint, FanControl.id, 'airflowDirection', matterDir, this.platform.log);
+            }
+          }
+        }
+        return;
       }
-      return;
-    }
 
     if (domain === 'lock') {
       const matterState = this.toLockState(state);
@@ -380,6 +391,14 @@ export class CompositeDeviceEntity {
         await update(endpoint, BooleanState.id, 'stateValue', active, this.platform.log);
       }
     }
+  } finally {
+      const current = this.haUpdateDepth.get(entityId) ?? 1;
+      if (current <= 1) {
+        this.haUpdateDepth.delete(entityId);
+      } else {
+        this.haUpdateDepth.set(entityId, current - 1);
+      }
+    }
   }
 
   private typeFor(member: CompositeMember): DeviceTypeDefinition {
@@ -453,29 +472,35 @@ export class CompositeDeviceEntity {
       const speed = fanSpeed(pct, speedMax);
       const fanMode = haStateToFanMode(member.state);
       const hasDir = hasFanDirection(member.state);
+      const hasSpeed = hasFanSpeed(member.state);
       const fanFeatures = getFanControlFeatures(member.state);
       const fanModeSequence = getFanModeSequence(member.state);
 
       this.platform.log.debug(
-        `[Composite] Fan root init: ${member.entityId}, on=${on}, pct=${pct}, speed=${speed}/${speedMax}, sequence=${fanModeSequence}, dir=${member.state.attributes.direction ?? 'N/A'}`,
+        `[Composite] Fan root init: ${member.entityId}, on=${on}, pct=${pct}, speed=${speed}/${speedMax}, sequence=${fanModeSequence}, speedSupport=${hasSpeed}, dir=${member.state.attributes.direction ?? 'N/A'}`,
       );
 
-      const fanClusterBehavior = MatterbridgeFanControlServer.with(...fanFeatures);
-      const fanStateConfig: any = {
-        fanMode,
-        fanModeSequence,
-        percentSetting: pct,
-        percentCurrent: pct,
-        speedMax,
-        speedSetting: speed,
-        speedCurrent: speed,
-      };
+      if (hasSpeed) {
+        const fanClusterBehavior = MatterbridgeFanControlServer.with(...fanFeatures);
+        const fanStateConfig: any = {
+          fanMode,
+          fanModeSequence,
+          percentSetting: pct,
+          percentCurrent: pct,
+          speedMax,
+          speedSetting: speed,
+          speedCurrent: speed,
+        };
 
-      if (hasDir) {
-        fanStateConfig.airflowDirection = haDirectionToMatter(fanDirection(member.state));
+        if (hasDir) {
+          fanStateConfig.airflowDirection = haDirectionToMatter(fanDirection(member.state));
+        }
+
+        endpoint.behaviors.require(fanClusterBehavior, fanStateConfig);
+      } else {
+        endpoint.createDefaultFanControlClusterServer(fanMode, FAN_MODE_SEQUENCE);
       }
 
-      endpoint.behaviors.require(fanClusterBehavior, fanStateConfig);
       endpoint.behaviors.require(MatterbridgeOnOffServer.with());
       endpoint.addRequiredClusterServers();
       return;
@@ -526,12 +551,20 @@ export class CompositeDeviceEntity {
         await this.platform.ha.callService('fan', 'turn_off', entityId);
       });
 
-      if (endpoint.hasAttributeServer(FanControl.id, 'percentCurrent')) {
+      const hasSpeed = hasFanSpeed(member.state);
+      if (hasSpeed && endpoint.hasAttributeServer(FanControl.id, 'percentCurrent')) {
         endpoint.addCommandHandler('FanControl.step', async (data: any) => {
+          if (this.isUpdatingFromHa(entityId)) return;
+          const currentState = this.states.get(entityId) ?? member.state;
+          if (!hasFanSpeed(currentState)) return;
           const direction = data?.request?.direction ?? data?.direction;
+<<<<<<< HEAD
           const currentState = this.states.get(entityId);
           const current = currentState ? fanPercentage(currentState) : 50;
           const speedMax = currentState ? getFanSpeedCount(currentState) : FAN_SPEED_MAX;
+=======
+          const current = fanPercentage(currentState);
+>>>>>>> 3f824e0 (fix(fan): support On/Off fans, prevent auto-off feedback loop, and export multi-switch channels independently)
           const delta = direction === FanControl.StepDirection.Increase ? 10 : -10;
           const next = snapToPhysicalLevel(Math.max(0, Math.min(100, current + delta)), speedMax);
           this.platform.log.debug(
@@ -547,6 +580,9 @@ export class CompositeDeviceEntity {
         });
 
         endpoint.subscribeAttribute(FanControl.id, 'percentSetting', async (newValue: any) => {
+          if (this.isUpdatingFromHa(entityId)) return;
+          const currentState = this.states.get(entityId) ?? member.state;
+          if (!hasFanSpeed(currentState)) return;
           if (typeof newValue === 'number') {
             const currentState = this.states.get(entityId);
             const speedMax = currentState ? getFanSpeedCount(currentState) : FAN_SPEED_MAX;
@@ -564,6 +600,9 @@ export class CompositeDeviceEntity {
 
         if (endpoint.hasAttributeServer(FanControl.id, 'speedSetting')) {
           endpoint.subscribeAttribute(FanControl.id, 'speedSetting', async (newValue: any) => {
+            if (this.isUpdatingFromHa(entityId)) return;
+            const currentState = this.states.get(entityId) ?? member.state;
+            if (!hasFanSpeed(currentState)) return;
             if (typeof newValue === 'number') {
               const currentState = this.states.get(entityId);
               const speedMax = currentState ? getFanSpeedCount(currentState) : FAN_SPEED_MAX;

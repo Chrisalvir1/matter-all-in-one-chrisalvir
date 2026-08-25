@@ -688,22 +688,49 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       const hassEntry = (this.ha as any).hassEntities?.get(entity.entityId);
       return hassEntry?.device_id === deviceId;
     });
-    // If the physical device includes an appliance domain (fan, humidifier, lock, etc.), it is a composite device (e.g. diffuser+light, fan+light), NOT a multi-gang wall switch!
+
+    const isNonGeneric = (e: BaseEntity) =>
+      !this.isDpsGenericEntity(e.entityId) && !this.isAuxiliaryEntity(e.entityId);
+
+    const switches = allMembers.filter(
+      (e) => e.entityId.startsWith("switch.") && isNonGeneric(e),
+    );
+    const lights = allMembers.filter(
+      (e) => e.entityId.startsWith("light.") && isNonGeneric(e),
+    );
+    const fans = allMembers.filter(
+      (e) => e.entityId.startsWith("fan.") && isNonGeneric(e),
+    );
+
+    // 1. Any device with 2 or more switch entities is a multi-gang switch/controller
+    if (switches.length >= 2) return true;
+
+    // 2. Any device with 2 or more fan entities (e.g. 2-gang fan controller)
+    if (fans.length >= 2) return true;
+
+    // 3. Any device with a mix of switches and fans (e.g. 1 fan switch + 1 or more switches, like Tuya double switch)
+    if (fans.length >= 1 && switches.length >= 1) {
+      // Exclude secondary buzzer/beeper switches
+      const realSwitches = switches.filter((m) => {
+        const name = (this.ha.hassEntities.get(m.entityId)?.name || m.entityId).toLowerCase();
+        return !/beep|buzz|sound|audio|timb|indicat|display/i.test(name);
+      });
+      if (realSwitches.length >= 1) return true;
+    }
+
+    // 4. Any device with 2 or more switch/light entities without appliance domains (humidifier, lock, climate, vacuum)
     if (
-      allMembers.some((e) =>
-        ["fan", "humidifier", "lock", "climate", "vacuum"].includes(
+      switches.length + lights.length >= 2 &&
+      !allMembers.some((e) =>
+        ["humidifier", "lock", "climate", "vacuum"].includes(
           e.entityId.split(".")[0],
         ),
       )
     ) {
-      return false;
+      return true;
     }
-    const controllable = allMembers.filter((entity) => {
-      const [domain] = entity.entityId.split(".");
-      if (!["switch", "light"].includes(domain)) return false;
-      return !this.isDpsGenericEntity(entity.entityId);
-    });
-    return controllable.length >= 2;
+
+    return false;
   }
 
   private getCompositeCandidate(entityId: string):
@@ -2237,11 +2264,15 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   }
 
   private async saveDeviceOverrides() {
-    await fs.writeFile(
-      "/data/device-overrides.json",
-      JSON.stringify(this.deviceOverrides, null, 2),
-      "utf8",
-    );
+    try {
+      await fs.writeFile(
+        "/data/device-overrides.json",
+        JSON.stringify(this.deviceOverrides, null, 2),
+        "utf8",
+      );
+    } catch (err) {
+      this.log.error(`Failed to save device-overrides.json: ${err}`);
+    }
   }
 
   public async setDeviceProfile(
@@ -2251,16 +2282,6 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     const entity = this.entities.get(entityId);
     if (!entity)
       return { success: false, error: "Device not found in discovery." };
-    if (
-      this.compositeMembership.has(entityId) ||
-      this.getCompositeCandidate(entityId)
-    ) {
-      return {
-        success: false,
-        error:
-          "Los perfiles de un dispositivo compuesto se determinan por las capacidades reales de cada endpoint.",
-      };
-    }
     const [domain] = entityId.split(".");
     if (
       !getExportProfile(domain, profileId) ||

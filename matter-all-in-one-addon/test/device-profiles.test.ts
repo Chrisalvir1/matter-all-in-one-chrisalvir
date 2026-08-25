@@ -32,4 +32,16 @@ describe("device export profiles", () => {
       expect.objectContaining({ appleHome: "supported" }),
     );
   });
+
+  it("offers fan and onOffLight profiles for switches and fans", () => {
+    expect(getExportProfiles("switch")).toContainEqual(
+      expect.objectContaining({ id: "fan", appleHome: "supported" }),
+    );
+    expect(getExportProfiles("fan")).toContainEqual(
+      expect.objectContaining({ id: "onOffLight", appleHome: "supported" }),
+    );
+    expect(getExportProfiles("button")).toContainEqual(
+      expect.objectContaining({ id: "onOffLight", appleHome: "supported" }),
+    );
+  });
 });

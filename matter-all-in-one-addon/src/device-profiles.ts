@@ -59,6 +59,12 @@ const profilesByDomain: Record<string, DeviceExportProfile[]> = {
       appleHome: "supported",
     },
     {
+      id: "fan",
+      label: "Ventilador On/Off",
+      description: "Interruptor mostrado como ventilador en Apple Home.",
+      appleHome: "supported",
+    },
+    {
       id: "roboticVacuumCleaner",
       label: "Aspiradora robot (RVC)",
       description:
@@ -77,6 +83,12 @@ const profilesByDomain: Record<string, DeviceExportProfile[]> = {
       id: "onOffPlugInUnit",
       label: "Enchufe On/Off",
       description: "Alternativa de máxima compatibilidad.",
+      appleHome: "supported",
+    },
+    {
+      id: "onOffLight",
+      label: "Luz On/Off",
+      description: "Ventilador mostrado como luz en Apple Home.",
       appleHome: "supported",
     },
   ],
@@ -157,8 +169,14 @@ const profilesByDomain: Record<string, DeviceExportProfile[]> = {
   button: [
     {
       id: "onOffPlugInUnit",
-      label: "Acción On/Off",
-      description: "Solo para botones independientes.",
+      label: "Enchufe / Interruptor",
+      description: "Botón expuesto como interruptor On/Off.",
+      appleHome: "supported",
+    },
+    {
+      id: "onOffLight",
+      label: "Luz On/Off",
+      description: "Botón expuesto como luz.",
       appleHome: "supported",
     },
   ],
