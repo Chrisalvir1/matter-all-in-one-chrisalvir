@@ -28,6 +28,7 @@ import {
   haStateToFanMode,
   snapToPhysicalLevel,
   FAN_MODE_SEQUENCE,
+  FAN_SPEED_MAX,
   hasFanDirection,
   hasFanSpeed,
   hasFanAuto,
@@ -558,13 +559,8 @@ export class CompositeDeviceEntity {
           const currentState = this.states.get(entityId) ?? member.state;
           if (!hasFanSpeed(currentState)) return;
           const direction = data?.request?.direction ?? data?.direction;
-<<<<<<< HEAD
-          const currentState = this.states.get(entityId);
-          const current = currentState ? fanPercentage(currentState) : 50;
-          const speedMax = currentState ? getFanSpeedCount(currentState) : FAN_SPEED_MAX;
-=======
           const current = fanPercentage(currentState);
->>>>>>> 3f824e0 (fix(fan): support On/Off fans, prevent auto-off feedback loop, and export multi-switch channels independently)
+          const speedMax = getFanSpeedCount(currentState);
           const delta = direction === FanControl.StepDirection.Increase ? 10 : -10;
           const next = snapToPhysicalLevel(Math.max(0, Math.min(100, current + delta)), speedMax);
           this.platform.log.debug(

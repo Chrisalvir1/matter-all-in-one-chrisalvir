@@ -279,7 +279,6 @@ describe('Fan converter — FanMode (test 12)', () => {
   });
 });
 
-<<<<<<< HEAD
 describe('Fan converter — Feature conformance & capability detection', () => {
   it('detects direction capability strictly via FanEntityFeature.DIRECTION (4)', () => {
     // Living room / Guest room: supported_features = 53 (1 + 4 + 16 + 32)

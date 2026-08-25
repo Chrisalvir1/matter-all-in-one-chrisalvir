@@ -22,14 +22,11 @@ import {
   withinHysteresis,
   FAN_MODE_SEQUENCE,
   hasFanDirection,
-<<<<<<< HEAD
+  hasFanSpeed,
   hasFanAuto,
   getFanSpeedCount,
   getFanModeSequence,
   getFanControlFeatures,
-=======
-  hasFanSpeed,
->>>>>>> 3f824e0 (fix(fan): support On/Off fans, prevent auto-off feedback loop, and export multi-switch channels independently)
   fanSpeed,
   FAN_SPEED_MAX,
 } from '../converters/fan.converter.js';
@@ -646,7 +643,6 @@ export class BaseEntity {
 
       await updateFn(this.endpoint, OnOff.id, 'onOff', isOn, this.platform.log);
 
-<<<<<<< HEAD
       if (domain === 'light') {
         const afterLevel = this.endpoint?.hasAttributeServer?.(LevelControl.id, 'currentLevel')
           ? this.endpoint.getAttribute(LevelControl.id, 'currentLevel')
@@ -662,13 +658,9 @@ export class BaseEntity {
         );
       }
 
-      if (domain === 'fan' && this.endpoint.hasAttributeServer(FanControl.id, 'percentCurrent')) {
-        // ON/OFF comes from state/is_on ONLY — never from percentage > 0
-        const speedMax = getFanSpeedCount(newState);
-=======
       if (domain === 'fan' && this.endpoint.hasAttributeServer(FanControl.id, 'fanMode')) {
         const speedSupported = hasFanSpeed(newState);
->>>>>>> 3f824e0 (fix(fan): support On/Off fans, prevent auto-off feedback loop, and export multi-switch channels independently)
+        const speedMax = getFanSpeedCount(newState);
         const pct = fanPercentage(newState);
         const speed = fanSpeed(pct, speedMax);
         const newFanMode = haStateToFanMode(newState);

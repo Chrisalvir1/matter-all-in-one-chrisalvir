@@ -1,3 +1,11 @@
+## [1.4.41] - 2026-08-25
+
+### Fixed
+- **On/Off Fan Relays & Wall Switches:** Pure On/Off fan entities (smart switches or relays configured as fans in Home Assistant without speed support) now use a default FanControl cluster server without MultiSpeed/Step features, completely preventing `fan.set_percentage` validation errors.
+- **Auto-Off Feedback Loop Prevention:** Added re-entrant update guards (`isUpdatingFromHa`) and capability checks in base and composite fan handlers, preventing fans from turning off automatically after being powered on from Home Assistant.
+- **Independent Multi-Switch Wall Controller Export:** Multi-gang wall switches/controllers (e.g. Tuya double switches, Sonoff 4CH, Aqara multi-gang) containing fan or switch channels are now correctly detected as `isMultiSwitchDevice`, exporting each button as an independent Matter accessory with its own QR code, individual activation toggle, and customizable profile.
+- **Custom Profile Selection Unlocked:** Desbloqueada la selección de perfiles en el panel web para todos los dispositivos y ampliado el catálogo de perfiles (ventilador On/Off para interruptores, luz On/Off para ventiladores y botones).
+
 ## [1.4.40] - 2026-08-24
 
 ### Fixed

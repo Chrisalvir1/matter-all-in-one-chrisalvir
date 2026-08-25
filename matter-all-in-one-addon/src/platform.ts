@@ -1045,7 +1045,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     const mbVersion = String((this as any).matterbridge?.matterbridgeVersion ?? 'unknown');
     this.log.notice(`[Runtime] Matterbridge runtime: ${mbVersion}`);
     this.log.notice(`[Runtime] Node.js runtime: ${process.version}`);
-    this.log.notice(`[Runtime] Plugin version: 1.4.40`);
+    this.log.notice(`[Runtime] Plugin version: 1.4.41`);
     await this.loadEntityDiagnostics();
     await this.startUiServer();
     this.startMatterConnectionMonitor();
