@@ -1,3 +1,10 @@
+## [1.4.42] - 2026-08-26
+
+### Multi-Admin & Pairing Fixes
+- **Apertura de Ventana de Emparejamiento Multi-Admin:** Al pulsar «Añadir a otra casa (Multi-Admin)», se abre la ventana de comisión básica (*Basic Commissioning Window*) de 15 minutos en el nodo Matter (`POST /api/custom/open-commissioning/:entityId`), anunciando el dispositivo en mDNS (`_matterc._udp`) y permitiendo que **Google Home, Amazon Alexa, SmartThings** u otros controladores descubran y vinculen el dispositivo sin errores de tipo *CAN'T FIND DEVICE*.
+- **Retención del Código QR:** Corregido el parpadeo y cierre automático del modal del código QR causado por el sondeo de fondo cada 4 segundos (`fetchDevices`) y las actualizaciones SSE.
+- **UI & Indicadores:** Se añade el banner explicativo `#multi-admin-hint` y el estado dinámico `● Modo Multi-Admin Abierto (15 min)` en el panel de control.
+
 ## [1.4.41] - 2026-08-25
 
 ### Fixed

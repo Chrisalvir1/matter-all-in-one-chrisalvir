@@ -655,4 +655,79 @@ describe("HomeAssistantPlatform", () => {
     expect(result.success).toBe(true);
     expect(platform.deviceOverrides["switch.living_room_fan_switch"]).toBe("fan");
   });
+
+  it("opens Matter commissioning window for multi-admin pairing", async () => {
+    let enterCalled = false;
+    const mockEndpoint = {
+      serverNode: {
+        act: vi.fn().mockImplementation(async (callback: (agent: any) => Promise<void>) => {
+          const agent = {
+            commissioning: {
+              enterCommissionableMode: vi.fn().mockImplementation(async () => {
+                enterCalled = true;
+              }),
+            },
+          };
+          await callback(agent);
+        }),
+        state: {
+          commissioning: {
+            pairingCodes: {
+              qrPairingCode: "MT:Y.K9042C00KA0648G00",
+              manualPairingCode: "34970112332",
+            },
+            fabrics: [{ label: "Apple Home", vendorId: 0x1349 }],
+          },
+        },
+      },
+    };
+    (platform as any).matterbridgeDevices.set("light.living_room", mockEndpoint);
+
+    const result = await platform.openMatterCommissioningWindow("light.living_room");
+    expect(result.success).toBe(true);
+    expect(result.pairingCode).toBe("MT:Y.K9042C00KA0648G00");
+    expect(result.manualPairingCode).toBe("34970112332");
+    expect(result.windowTimeout).toBe(900);
+    expect(enterCalled).toBe(true);
+  });
+
+  it("handles POST /api/custom/open-commissioning/:entityId HTTP endpoint", async (ctx) => {
+    if (!networkAvailable) {
+      ctx.skip();
+      return;
+    }
+    await platform.onStart();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    const mockEndpoint = {
+      serverNode: {
+        act: vi.fn().mockImplementation(async (callback: (agent: any) => Promise<void>) => {
+          await callback({
+            commissioning: {
+              enterCommissionableMode: vi.fn().mockResolvedValue(undefined),
+            },
+          });
+        }),
+        state: {
+          commissioning: {
+            pairingCodes: {
+              qrPairingCode: "MT:Y.K9042C00KA0648G00",
+              manualPairingCode: "34970112332",
+            },
+            fabrics: [{ label: "Apple Home" }],
+          },
+        },
+      },
+    };
+    (platform as any).matterbridgeDevices.set("light.living_room", mockEndpoint);
+
+    const res = await fetch(
+      `http://127.0.0.1:${platform.uiServerPort}/api/custom/open-commissioning/light.living_room`,
+      { method: "POST" },
+    );
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as any;
+    expect(json.success).toBe(true);
+    expect(json.pairingCode).toBe("MT:Y.K9042C00KA0648G00");
+  });
 });

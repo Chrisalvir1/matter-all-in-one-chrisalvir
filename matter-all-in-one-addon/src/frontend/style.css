@@ -209,6 +209,9 @@ mark { background: rgba(255,216,77,.28); color: #ffe685; padding: 1px 3px; borde
 .commissioned-hint { padding: 12px; border-radius: 12px; background: rgba(124,168,255,.07); border: 1px solid rgba(124,168,255,.2); font-size: 11px; line-height: 1.45; }
 .commissioned-hint .hint-title { margin: 0 0 5px; font-weight: 700; color: #9ec6ff; font-size: 12px; }
 .commissioned-hint .hint-desc { margin: 0; color: var(--muted); font-size: 11px; }
+.multi-admin-hint { padding: 12px; border-radius: 12px; background: rgba(56,211,159,.08); border: 1px solid rgba(56,211,159,.3); font-size: 11px; line-height: 1.45; }
+.multi-admin-hint .hint-title { margin: 0 0 5px; font-weight: 700; color: #5eead4; font-size: 12px; }
+.multi-admin-hint .hint-desc { margin: 0; color: var(--text); font-size: 11px; }
 .qr-spinner-wrap { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 24px 0; }
 .qr-spinner-label { margin: 0; color: var(--muted); font-size: 12px; }
 /* QR section */

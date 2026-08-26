@@ -740,7 +740,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         config?: CompositeDeviceConfig;
       }
     | undefined {
-    const hassEntry = this.ha.hassEntities.get(entityId);
+    const hassEntry = this.ha?.hassEntities?.get(entityId);
     const deviceId = hassEntry?.device_id;
     if (!deviceId) {
       this.log.debug(
@@ -2073,6 +2073,109 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     }
   }
 
+  /** Open basic commissioning window on a node for multi-admin pairing. */
+  public async openMatterCommissioningWindow(
+    entityId: string,
+  ): Promise<{
+    success: boolean;
+    error?: string;
+    pairingCode?: string | null;
+    manualPairingCode?: string | null;
+    windowTimeout?: number;
+  }> {
+    const compositeDeviceId =
+      this.compositeMembership.get(entityId) ??
+      this.getCompositeCandidate(entityId)?.deviceId;
+    const endpoint = this.getMatterEndpointForEntity(
+      entityId,
+      compositeDeviceId,
+    );
+    const serverNode = endpoint?.serverNode;
+    if (!endpoint || !serverNode) {
+      return {
+        success: false,
+        error:
+          "El accesorio Matter no está activo o su nodo aún no está listo.",
+      };
+    }
+    try {
+      let opened = false;
+
+      // 1. Try Matter.js ServerNode behavior via agent transaction
+      if (typeof (serverNode as any).act === "function") {
+        try {
+          await (serverNode as any).act(async (agent: any) => {
+            const comm =
+              agent.commissioning ??
+              agent.commissioningServer ??
+              agent.behaviors?.commissioning;
+            if (comm && typeof comm.enterCommissionableMode === "function") {
+              await comm.enterCommissionableMode();
+              opened = true;
+            }
+          });
+        } catch (actErr) {
+          this.log.debug(`Agent enterCommissionableMode threw: ${actErr}`);
+        }
+      }
+
+      // 2. Direct DeviceCommissioner call if agent didn't handle it
+      if (!opened) {
+        try {
+          const { DeviceCommissioner } = await import("@matter/protocol");
+          const commissioner = (serverNode as any).env?.get?.(DeviceCommissioner);
+          if (
+            commissioner &&
+            typeof commissioner.allowBasicCommissioning === "function"
+          ) {
+            await commissioner.allowBasicCommissioning();
+            opened = true;
+          }
+        } catch (envErr) {
+          this.log.debug(`Direct allowBasicCommissioning threw: ${envErr}`);
+        }
+      }
+
+      if (!opened) {
+        throw new Error(
+          "No se pudo iniciar el modo emparejable en el nodo Matter.",
+        );
+      }
+
+      const connection = this.getMatterConnectionInfo(endpoint);
+      const timestamp = new Date().toLocaleTimeString("es-MX", {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+      this.recordEntityDiagnostic(
+        entityId,
+        `✓ Ventana de emparejamiento (Multi-Admin) abierta a las ${timestamp} por 15 min. Listo para escanear en Google Home, Alexa o Apple Home.`,
+        "info",
+      );
+      this.pushEntityUpdate(entityId);
+
+      this.log.notice(
+        `Commissioning window opened for ${idn}${compositeDeviceId ? `device:${compositeDeviceId}` : entityId}${rs}`,
+      );
+
+      return {
+        success: true,
+        pairingCode: connection.pairingCode,
+        manualPairingCode: connection.manualPairingCode,
+        windowTimeout: 900,
+      };
+    } catch (error) {
+      this.log.error(
+        `Failed to open commissioning window for ${entityId}: ${error}`,
+      );
+      this.recordEntityDiagnostic(
+        entityId,
+        `No se pudo abrir la ventana de emparejamiento Matter: ${String(error)}`,
+      );
+      return { success: false, error: String(error) };
+    }
+  }
+
   /** Remove a specific fabric from a node without resetting everything. */
   public async removeMatterFabric(
     entityId: string,
@@ -2858,6 +2961,22 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             pathname.substring("/api/custom/refresh-accessory/".length),
           );
           const result = await this.refreshMatterAccessory(entityId);
+          res.writeHead(result.success ? 200 : 400, {
+            "Content-Type": "application/json; charset=utf-8",
+          });
+          res.end(JSON.stringify(result));
+          return;
+        }
+
+        // POST /api/custom/open-commissioning/:entityId
+        if (
+          req.method === "POST" &&
+          pathname.startsWith("/api/custom/open-commissioning/")
+        ) {
+          const entityId = decodeURIComponent(
+            pathname.substring("/api/custom/open-commissioning/".length),
+          );
+          const result = await this.openMatterCommissioningWindow(entityId);
           res.writeHead(result.success ? 200 : 400, {
             "Content-Type": "application/json; charset=utf-8",
           });

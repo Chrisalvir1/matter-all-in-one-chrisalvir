@@ -36,7 +36,8 @@ describe("frontend accessibility contract", () => {
     expect(script).toContain(
       "entity.compositeDeviceId ? `matter:${entity.compositeDeviceId}`",
     );
-    expect(script).toContain("function matchesDeviceFilter(device)");
-    expect(script).toContain("!entity.commissioned");
+    expect(html).toContain('id="multi-admin-hint"');
+    expect(script).toContain("/open-commissioning/");
+    expect(script).toContain("Modo Multi-Admin Abierto");
   });
 });

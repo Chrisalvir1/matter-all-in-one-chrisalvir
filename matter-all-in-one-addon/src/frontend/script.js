@@ -1,7 +1,7 @@
 'use strict';
 
 const API = './api/custom';
-const state = { entities: [], activeDevice: null, activeEntity: null, activeFilter: 'all', statusBusy: false, devicesBusy: false, confirmAction: null, toastTimer: null, pollId: null };
+const state = { entities: [], activeDevice: null, activeEntity: null, activeFilter: 'all', statusBusy: false, devicesBusy: false, confirmAction: null, toastTimer: null, pollId: null, multiAdminOpenEntityId: null };
 const $ = (id) => document.getElementById(id);
 const els = {
   bridgeOrb: $('bridge-orb'), bridgeTitle: $('bridge-title'), bridgeDescription: $('bridge-description'),
@@ -17,7 +17,7 @@ const els = {
   modalExportCount: $('modal-export-count'), selectionPanel: $('selection-panel'), selectionTitle: $('selection-title'),
   selectionDescription: $('selection-description'), selectionMeta: $('selection-meta'), selectionStatus: $('selection-status'),
   qrPanel: $('qr-panel'), qrStatusLabel: $('qr-status-label'), qrSpinnerWrap: $('qr-spinner-wrap'),
-  commissionedHint: $('commissioned-hint'),
+  commissionedHint: $('commissioned-hint'), multiAdminHint: $('multi-admin-hint'),
   deviceQrContainer: $('device-qr-container'), deviceQrCode: $('device-qr-code'), deviceManualCode: $('device-manual-code'), deviceQrButton: $('device-qr-button'),
   resetAccessoryButton: $('reset-accessory-button'), matterActions: $('matter-actions'), reconnectAccessoryButton: $('reconnect-accessory-button'), regenerateCodeButton: $('regenerate-code-button'),
   profileField: $('profile-field'), profileSelect: $('profile-select'), profileNote: $('profile-note'),
@@ -249,6 +249,7 @@ async function fetchDevices(refreshSelection = false) {
 }
 
 function openDevice(device, targetEntity = null) {
+  state.multiAdminOpenEntityId = null;
   state.activeDevice = device;
   els.deviceModalIcon.textContent = icon(device.entities[0]?.domain);
   els.deviceModalName.textContent = device.name;
@@ -300,6 +301,7 @@ function buildEntityRow(entity, isSearchHit = false) {
 function renderQrSection(entity) {
   // Reset QR panel areas
   if (els.commissionedHint) els.commissionedHint.style.display = 'none';
+  if (els.multiAdminHint) els.multiAdminHint.style.display = 'none';
   if (els.deviceQrContainer) els.deviceQrContainer.style.display = 'none';
   if (els.deviceQrCode) els.deviceQrCode.innerHTML = '';
   if (els.deviceManualCode) els.deviceManualCode.textContent = '';
@@ -310,11 +312,20 @@ function renderQrSection(entity) {
   if (els.fabricsSection) els.fabricsSection.hidden = true;
   if (els.fabricsList) els.fabricsList.innerHTML = '';
 
+  const isMultiAdminActive = Boolean(
+    entity &&
+    state.multiAdminOpenEntityId &&
+    state.multiAdminOpenEntityId === entity.entityId
+  );
+
   // Update QR panel status label
   if (els.qrStatusLabel) {
     if (!entity || !entity.exported) {
       els.qrStatusLabel.textContent = 'Sin publicar en Matter';
       els.qrStatusLabel.className = 'qr-status-label';
+    } else if (isMultiAdminActive) {
+      els.qrStatusLabel.textContent = '● Modo Multi-Admin Abierto (15 min)';
+      els.qrStatusLabel.className = 'qr-status-label active';
     } else if (entity.commissioned) {
       els.qrStatusLabel.textContent = '✓ Emparejado';
       els.qrStatusLabel.className = 'qr-status-label commissioned';
@@ -371,6 +382,7 @@ function renderQrSection(entity) {
                   entity.fabricCount = res.remainingFabrics ?? 0;
                   entity.matterFabrics = entity.matterFabrics?.filter(f => String(f.fabricIndex) !== String(fIndex) && String(f.fabricId) !== String(fIndex)) ?? [];
                 }
+                state.multiAdminOpenEntityId = null;
                 await fetchDevices(true);
               } catch (err) {
                 showToast(err.message || 'Error al desconectar.', true);
@@ -382,17 +394,33 @@ function renderQrSection(entity) {
       });
     }
 
-    // Commissioned accessory: show hint and actions, keep basic QR hidden
-    if (els.commissionedHint) els.commissionedHint.style.display = 'block';
-    if (els.deviceQrContainer) els.deviceQrContainer.style.display = 'none';
+    // Commissioned accessory: handle multi-admin mode vs standby
     els.matterActions.hidden = false;
     els.deviceQrButton.style.display = 'block';
-    els.deviceQrButton.textContent = 'Añadir a otra casa (Multi-Admin)';
+    els.deviceQrButton.disabled = false;
     if (els.reconnectAccessoryButton) els.reconnectAccessoryButton.textContent = '↻ Recargar / Sincronizar';
     if (els.regenerateCodeButton) els.regenerateCodeButton.textContent = 'Desconectar todo y nuevo QR';
+
+    if (isMultiAdminActive) {
+      if (els.commissionedHint) els.commissionedHint.style.display = 'none';
+      if (els.multiAdminHint) els.multiAdminHint.style.display = 'block';
+      els.deviceQrButton.textContent = 'Cerrar emparejamiento Multi-Admin';
+      if (entity.pairingCode) {
+        showQrCode(entity);
+      } else {
+        if (els.qrSpinnerWrap) els.qrSpinnerWrap.style.display = 'flex';
+        void pollForPairingCode(entity.entityId);
+      }
+    } else {
+      if (els.commissionedHint) els.commissionedHint.style.display = 'block';
+      if (els.multiAdminHint) els.multiAdminHint.style.display = 'none';
+      if (els.deviceQrContainer) els.deviceQrContainer.style.display = 'none';
+      els.deviceQrButton.textContent = 'Añadir a otra casa (Multi-Admin)';
+    }
   } else if (entity.exported) {
     // Not commissioned: show QR directly and large in the panel ready to pair!
     if (els.commissionedHint) els.commissionedHint.style.display = 'none';
+    if (els.multiAdminHint) els.multiAdminHint.style.display = 'none';
     els.matterActions.hidden = true;
     if (entity.pairingCode) {
       showQrCode(entity);
@@ -406,6 +434,9 @@ function renderQrSection(entity) {
 }
 
 function selectEntity(entity) {
+  if (state.activeEntity?.entityId !== entity?.entityId) {
+    state.multiAdminOpenEntityId = null;
+  }
   state.activeEntity = entity;
   els.entityList.querySelectorAll('.entity-row').forEach((row) => row.classList.toggle('selected', row.dataset.entityId === entity?.entityId));
   if (!entity) {
@@ -665,28 +696,49 @@ async function pollForPairingCode(entityOrId, maxAttempts = 40) {
   }
 }
 
-els.deviceQrButton.addEventListener('click', () => {
-  // For commissioned devices: toggle QR visibility ("Add to another home")
-  if (els.deviceQrContainer.style.display !== 'none') {
-    els.deviceQrContainer.style.display = 'none';
-    const entity = state.activeEntity;
-    if (entity && entity.exported && entity.commissioned) {
-      els.deviceQrButton.textContent = 'Añadir a otra casa (Ver QR)';
-    }
-    return;
-  }
-  // Toggle on: show QR
+els.deviceQrButton.addEventListener('click', async () => {
   const entity = state.activeEntity;
   if (!entity) return;
 
-  if (entity.pairingCode) {
-    showQrCode(entity);
-    if (entity.commissioned) els.deviceQrButton.textContent = 'Ocultar Código QR';
-  } else {
-    // No pairing code yet — show spinner and fast poll
+  // If already open in Multi-Admin mode: toggle off / close
+  if (state.multiAdminOpenEntityId === entity.entityId) {
+    state.multiAdminOpenEntityId = null;
+    renderQrSection(entity);
+    showToast('Ventana de emparejamiento cerrada en pantalla.');
+    return;
+  }
+
+  // If commissioned, open Matter commissioning window via backend API
+  if (entity.commissioned) {
+    els.deviceQrButton.disabled = true;
+    els.deviceQrButton.textContent = 'Abriendo ventana Matter…';
     if (els.qrSpinnerWrap) els.qrSpinnerWrap.style.display = 'flex';
+    if (els.deviceQrContainer) els.deviceQrContainer.style.display = 'none';
+
+    try {
+      const res = await request(`/open-commissioning/${encodeURIComponent(entity.entityId)}`, { method: 'POST' });
+      if (!res.success) throw new Error(res.error || 'No se pudo abrir la ventana de emparejamiento');
+      state.multiAdminOpenEntityId = entity.entityId;
+      if (res.pairingCode) {
+        entity.pairingCode = res.pairingCode;
+        entity.manualPairingCode = res.manualPairingCode;
+      }
+      showToast('✓ Modo Multi-Admin abierto (15 min). Ya puedes escanear en Google Home, Alexa o SmartThings.');
+      renderQrSection(entity);
+    } catch (err) {
+      showToast(err.message || 'Error al abrir ventana de emparejamiento.', true);
+      renderQrSection(entity);
+    }
+    return;
+  }
+
+  // Not commissioned: simple display toggle
+  if (els.deviceQrContainer.style.display !== 'none') {
+    els.deviceQrContainer.style.display = 'none';
+    els.deviceQrButton.textContent = 'Ver Código QR';
+  } else {
+    showQrCode(entity);
     els.deviceQrButton.textContent = 'Ocultar Código QR';
-    void pollForPairingCode(entity.entityId);
   }
 });
 
