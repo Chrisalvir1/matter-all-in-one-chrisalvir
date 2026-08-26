@@ -1,3 +1,8 @@
+## [1.4.44] - 2026-08-26
+
+### Fixed
+- **Prevención de Encendido Fantasma al Apagar Luz en Apple Home:** Cuando Apple Home apaga una luz regulable, envía primero un comando `moveToLevelWithOnOff(level: 1)` y luego `off()`. El encendido mínimo al 6% ahora se debouncerá y cancelará de forma inmediata ante la llegada del comando `off`, garantizando que la luz se apague físicamente y no se vuelva a encender al nivel mínimo.
+
 ## [1.4.43] - 2026-08-26
 
 ### Fan & HomeKit Enhancements

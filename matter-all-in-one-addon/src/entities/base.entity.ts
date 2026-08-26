@@ -93,35 +93,6 @@ export class BaseEntity {
     return this.haUpdateDepth > 0;
   }
 
-  private serviceDebounceTimers = new Map<string, NodeJS.Timeout>();
-
-  protected callServiceDebounced(
-    domain: string,
-    service: string,
-    data?: Record<string, any>,
-    delayMs = 40,
-  ) {
-    const key = `${this.entityId}:${domain}.${service}`;
-    const existing = this.serviceDebounceTimers.get(key);
-    if (existing) clearTimeout(existing);
-
-    this.serviceDebounceTimers.set(
-      key,
-      setTimeout(() => {
-        this.serviceDebounceTimers.delete(key);
-        const promise =
-          data !== undefined
-            ? this.platform.ha.callService(domain, service, this.entityId, data)
-            : this.platform.ha.callService(domain, service, this.entityId);
-        promise.catch((err: any) => {
-          this.platform.log.warn(
-            `[${this.entityId}] Error calling ${domain}.${service}: ${err?.message ?? err}`,
-          );
-        });
-      }, delayMs),
-    );
-  }
-
   private hasColorControl(endpoint: MatterbridgeEndpoint = this.endpoint): boolean {
     const hasClusterServer = (endpoint as any).hasClusterServer;
     if (typeof hasClusterServer === 'function') {
@@ -278,18 +249,73 @@ export class BaseEntity {
     return;
   }
 
+  protected serviceDebounceTimers = new Map<string, NodeJS.Timeout>();
+
+  protected cancelDebouncedService(service: string) {
+    const key = `${this.entityId}:${service}`;
+    const pending = this.serviceDebounceTimers.get(key);
+    if (pending) {
+      clearTimeout(pending);
+      this.serviceDebounceTimers.delete(key);
+    }
+  }
+
+  protected callServiceDebounced(
+    domain: string,
+    service: string,
+    data?: Record<string, any>,
+    delayMs = 60,
+  ) {
+    if (service === 'turn_on') {
+      this.cancelDebouncedService('turn_off');
+    } else if (service === 'turn_off') {
+      this.cancelDebouncedService('turn_on');
+    }
+    const key = `${this.entityId}:${service}`;
+    const existing = this.serviceDebounceTimers.get(key);
+    if (existing) clearTimeout(existing);
+
+    if (delayMs <= 0) {
+      this.serviceDebounceTimers.delete(key);
+      if (data !== undefined) {
+        void this.platform.ha.callService(domain, service, this.entityId, data);
+      } else {
+        void this.platform.ha.callService(domain, service, this.entityId);
+      }
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      this.serviceDebounceTimers.delete(key);
+      if (data !== undefined) {
+        void this.platform.ha.callService(domain, service, this.entityId, data);
+      } else {
+        void this.platform.ha.callService(domain, service, this.entityId);
+      }
+    }, delayMs);
+    this.serviceDebounceTimers.set(key, timer);
+  }
+
   protected registerCommandHandlers(_endpoint?: MatterbridgeEndpoint) {
     const [domain] = this.entityId.split('.');
 
     if (domain === 'light' || domain === 'switch' || domain === 'fan' || domain === 'media_player' || domain === 'vacuum') {
       this.endpoint.addCommandHandler('on', async () => {
         if (domain === 'vacuum') await this.platform.ha.callService(domain, 'start', this.entityId);
-        else await this.platform.ha.callService(domain, 'turn_on', this.entityId);
+        else if (domain === 'light') {
+          this.setCommandLockout('onOff', true);
+          this.cancelDebouncedService('turn_off');
+          this.callServiceDebounced(domain, 'turn_on', undefined, 0);
+        } else await this.platform.ha.callService(domain, 'turn_on', this.entityId);
       });
 
       this.endpoint.addCommandHandler('off', async () => {
         if (domain === 'vacuum') await this.platform.ha.callService(domain, 'return_to_base', this.entityId);
-        else await this.platform.ha.callService(domain, 'turn_off', this.entityId);
+        else if (domain === 'light') {
+          this.setCommandLockout('onOff', false);
+          this.cancelDebouncedService('turn_on');
+          this.callServiceDebounced(domain, 'turn_off', undefined, 0);
+        } else await this.platform.ha.callService(domain, 'turn_off', this.entityId);
       });
 
       if (domain === 'fan' && hasFanSpeed(this.state) && this.endpoint.hasAttributeServer(FanControl.id, 'percentCurrent')) {
@@ -366,20 +392,11 @@ export class BaseEntity {
                   await this.platform.ha.callService('fan', 'turn_on', this.entityId);
                 }
               } else if (newMode === FanControl.FanMode.Low) {
-                const speedMax = getFanSpeedCount(this.state);
-                const pct = snapToPhysicalLevel(33.33, speedMax);
-                this.setCommandLockout('fan_percentage', pct);
-                await this.platform.ha.callService('fan', 'set_percentage', this.entityId, { percentage: pct });
+                await this.platform.ha.callService('fan', 'set_percentage', this.entityId, { percentage: 33.33 });
               } else if (newMode === FanControl.FanMode.Medium) {
-                const speedMax = getFanSpeedCount(this.state);
-                const pct = snapToPhysicalLevel(66.67, speedMax);
-                this.setCommandLockout('fan_percentage', pct);
-                await this.platform.ha.callService('fan', 'set_percentage', this.entityId, { percentage: pct });
+                await this.platform.ha.callService('fan', 'set_percentage', this.entityId, { percentage: 66.67 });
               } else if (newMode === FanControl.FanMode.High) {
-                const speedMax = getFanSpeedCount(this.state);
-                const pct = snapToPhysicalLevel(100, speedMax);
-                this.setCommandLockout('fan_percentage', pct);
-                await this.platform.ha.callService('fan', 'set_percentage', this.entityId, { percentage: pct });
+                await this.platform.ha.callService('fan', 'set_percentage', this.entityId, { percentage: 100 });
               } else if (newMode === FanControl.FanMode.On) {
                 await this.platform.ha.callService('fan', 'turn_on', this.entityId);
               }
@@ -393,8 +410,8 @@ export class BaseEntity {
         this.endpoint.addCommandHandler('FanControl.changeDirection' as any, async (data: any) => {
           const mattDir: FanControl.AirflowDirection = data?.request?.airflowDirection ?? data?.airflowDirection ?? FanControl.AirflowDirection.Forward;
           const haDir = matterDirectionToHa(mattDir);
-          this.platform.log.debug(`[${this.entityId}] FanControl direction → HA: ${haDir}`);
           this.setCommandLockout('fan_direction', haDir);
+          this.platform.log.debug(`[${this.entityId}] FanControl direction → HA: ${haDir}`);
           await this.platform.ha.callService('fan', 'set_direction', this.entityId, { direction: haDir });
         });
       }
@@ -405,7 +422,7 @@ export class BaseEntity {
           if (typeof level === 'number') {
             const haBrightness = lightConverter.toHaBrightness(level);
             this.setCommandLockout('brightness', haBrightness);
-            await this.platform.ha.callService(domain, 'turn_on', this.entityId, { brightness: haBrightness });
+            this.callServiceDebounced(domain, 'turn_on', { brightness: haBrightness }, 0);
           }
         });
 
@@ -413,11 +430,17 @@ export class BaseEntity {
           const level = data?.request?.level ?? data?.level;
           if (typeof level === 'number') {
             if (level === 0) {
-              await this.platform.ha.callService(domain, 'turn_off', this.entityId);
+              this.setCommandLockout('onOff', false);
+              this.cancelDebouncedService('turn_on');
+              this.callServiceDebounced(domain, 'turn_off', undefined, 0);
+            } else if (level === 1) {
+              // Apple Home dimming to off sends level 1 before off. Debounce by 60ms so off can cancel it.
+              this.setCommandLockout('brightness', 1);
+              this.callServiceDebounced(domain, 'turn_on', { brightness: 1 }, 60);
             } else {
               const haBrightness = lightConverter.toHaBrightness(level);
               this.setCommandLockout('brightness', haBrightness);
-              await this.platform.ha.callService(domain, 'turn_on', this.entityId, { brightness: haBrightness });
+              this.callServiceDebounced(domain, 'turn_on', { brightness: haBrightness }, 0);
             }
           }
         });
