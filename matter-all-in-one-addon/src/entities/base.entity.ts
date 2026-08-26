@@ -661,8 +661,8 @@ export class BaseEntity {
       if (domain === 'fan' && this.endpoint.hasAttributeServer(FanControl.id, 'fanMode')) {
         const speedSupported = hasFanSpeed(newState);
         const speedMax = getFanSpeedCount(newState);
-        const pct = fanPercentage(newState);
-        const speed = fanSpeed(pct, speedMax);
+        const pct = isOn ? fanPercentage(newState) : 0;
+        const speed = isOn ? fanSpeed(pct, speedMax) : 0;
         const newFanMode = haStateToFanMode(newState);
 
         this.platform.log.debug(

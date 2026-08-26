@@ -243,8 +243,8 @@ export class CompositeDeviceEntity {
 
         const hasSpeed = hasFanSpeed(state);
         const speedMax = getFanSpeedCount(state);
-        const pct = fanPercentage(state);
-        const speed = fanSpeed(pct, speedMax);
+        const pct = on ? fanPercentage(state) : 0;
+        const speed = on ? fanSpeed(pct, speedMax) : 0;
         const fanMode = haStateToFanMode(state);
 
         this.platform.log.debug(

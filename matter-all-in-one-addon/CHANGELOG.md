@@ -1,3 +1,9 @@
+## [1.4.43] - 2026-08-26
+
+### Fan & HomeKit Enhancements
+- **Eliminación de Porcentaje Residual en Apagado (HomeKit 0%):** Al apagar un ventilador (`state: off`), `percentCurrent`, `speedCurrent` y `percentSetting` se fuerzan a `0` de forma estricta en el cluster `FanControl`, eliminando la visualización errónea de «Apagado (6%)» o deslizadores residuales en Apple Home.
+- **Sincronización Completa de Ventilador Compuesto con Luz (Daminy):** Soporte bidireccional para `fan.ventilador_de_sala_main_fan` y `light.ventilador_de_sala_main_light` con 6 velocidades físicas, modos `sleep`, `breeze` y `auto`, dirección de flujo (adelante/reversa) y control Kelvin / brillo de luz.
+
 ## [1.4.42] - 2026-08-26
 
 ### Multi-Admin & Pairing Fixes
