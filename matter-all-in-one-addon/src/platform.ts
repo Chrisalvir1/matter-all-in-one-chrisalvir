@@ -847,6 +847,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     // under a single device_id.
     const hasPrimaryControllable = members.some(
       (member) =>
+        member.entityId.startsWith("camera.") ||
         member.entityId.startsWith("fan.") ||
         member.entityId.startsWith("lock.") ||
         member.entityId.startsWith("humidifier."),
@@ -926,15 +927,62 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       entityRegistry?.original_name ||
       null;
 
+    const rawManufacturer = deviceRegistry?.manufacturer;
+    const rawModel = deviceRegistry?.model ?? deviceRegistry?.model_id;
+    const platformName = entityRegistry?.platform;
+    const entityState = this.entities.get(entityId)?.state;
+    const attrManufacturer = entityState?.attributes?.manufacturer || entityState?.attributes?.brand;
+    const attrModel = entityState?.attributes?.model || entityState?.attributes?.model_name;
+
+    // Detect brand/manufacturer from platform or attributes or entityId
+    let manufacturer = rawManufacturer || attrManufacturer || null;
+    let model = rawModel || attrModel || null;
+
+    if (!manufacturer && platformName) {
+      const p = platformName.toLowerCase();
+      if (p.includes('nest') || p.includes('google')) manufacturer = 'Google Nest';
+      else if (p.includes('ring')) manufacturer = 'Ring';
+      else if (p.includes('tapo') || p.includes('tplink')) manufacturer = 'TP-Link Tapo';
+      else if (p.includes('ezviz')) manufacturer = 'EZVIZ';
+      else if (p.includes('wyze')) manufacturer = 'Wyze';
+      else if (p.includes('reolink')) manufacturer = 'Reolink';
+      else if (p.includes('unifi') || p.includes('protect')) manufacturer = 'Ubiquiti UniFi';
+      else if (p.includes('eufy')) manufacturer = 'Eufy';
+      else if (p.includes('blink')) manufacturer = 'Blink';
+      else if (p.includes('tuya') || p.includes('smartlife')) manufacturer = 'Tuya';
+      else if (p.includes('sonoff') || p.includes('ewelink')) manufacturer = 'Sonoff';
+      else if (p.includes('shelly')) manufacturer = 'Shelly';
+      else if (p.includes('aqara') || p.includes('xiaomi')) manufacturer = 'Aqara';
+      else if (p.includes('hue')) manufacturer = 'Philips Hue';
+      else if (p.includes('broadlink')) manufacturer = 'Broadlink';
+    }
+
+    if (!manufacturer) {
+      const fullText = `${entityId} ${deviceName || ''} ${entityState?.attributes?.friendly_name || ''}`.toLowerCase();
+      if (fullText.includes('google') || fullText.includes('nest')) manufacturer = 'Google Nest';
+      else if (fullText.includes('ring')) manufacturer = 'Ring';
+      else if (fullText.includes('tapo')) manufacturer = 'TP-Link Tapo';
+      else if (fullText.includes('ezviz')) manufacturer = 'EZVIZ';
+      else if (fullText.includes('wyze')) manufacturer = 'Wyze';
+      else if (fullText.includes('reolink')) manufacturer = 'Reolink';
+      else if (fullText.includes('unifi') || fullText.includes('protect')) manufacturer = 'Ubiquiti UniFi';
+      else if (fullText.includes('eufy')) manufacturer = 'Eufy';
+      else if (fullText.includes('blink')) manufacturer = 'Blink';
+      else if (fullText.includes('tuya')) manufacturer = 'Tuya';
+      else if (fullText.includes('sonoff')) manufacturer = 'Sonoff';
+      else if (fullText.includes('shelly')) manufacturer = 'Shelly';
+      else if (fullText.includes('aqara')) manufacturer = 'Aqara';
+    }
+
     return {
       device_id: deviceId,
       device_name: deviceName,
       area_id: areaId,
       area_name: areaRegistry?.name ?? null,
-      manufacturer: deviceRegistry?.manufacturer ?? null,
-      model: deviceRegistry?.model ?? deviceRegistry?.model_id ?? null,
+      manufacturer: manufacturer ?? null,
+      model: model ?? (manufacturer ? `${manufacturer} Device` : null),
       entity_registry_id: entityRegistry?.id ?? null,
-      platform: entityRegistry?.platform ?? null,
+      platform: platformName ?? null,
     };
   }
 

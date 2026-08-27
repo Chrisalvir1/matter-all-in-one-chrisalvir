@@ -16,7 +16,7 @@ export class MockMatterbridgeEndpoint {
   public productName: string = "";
   public softwareVersion: number = 0;
   public softwareVersionString: string = "";
-  public behaviors = { require: (...args: any[]) => {} };
+  public behaviors = { require: vi.fn(), has: vi.fn().mockReturnValue(true) };
   public createFanControlClusterServer = vi.fn().mockImplementation(() => {
     this.hasAttributeServer = vi.fn().mockReturnValue(true);
   });

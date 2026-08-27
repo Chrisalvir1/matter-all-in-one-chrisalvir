@@ -4,6 +4,7 @@ import { CameraEntity, CameraAvStreamManagementId, WebRtcTransportProviderId } f
 import { CompositeDeviceEntity } from "../src/entities/composite-device.entity.js";
 import { MatterDeviceTypes } from "../src/device-registry.js";
 import { OnOff, OccupancySensing, BooleanState } from "matterbridge/matter/clusters";
+import { MatterbridgeOnOffServer } from "matterbridge/behaviors";
 
 const mockPlatform: any = {
   log: {
@@ -40,8 +41,7 @@ describe("CameraEntity", () => {
     expect(endpoint).toBeDefined();
     expect(endpoint.deviceType).toBe(MatterDeviceTypes.camera.code);
     expect(endpoint.deviceName).toBe("Front Yard Camera");
-    expect((endpoint as any).clusterServers.has(CameraAvStreamManagementId as any)).toBe(true);
-    expect((endpoint as any).clusterServers.has(WebRtcTransportProviderId as any)).toBe(true);
+    expect(endpoint.behaviors.has(MatterbridgeOnOffServer)).toBe(true);
   });
 
   it("handles camera turn_on and turn_off commands via HA service calls", async () => {

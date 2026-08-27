@@ -96,6 +96,7 @@ h2 { margin: 5px 0 7px; font-size: clamp(25px, 3vw, 34px); letter-spacing: -.04e
 .device-meta { min-height: 19px; color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 12px; }
 .tag { padding: 3px 7px; border-radius: 999px; color: #bdc9df; background: rgba(255,255,255,.055); font-size: 9px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.tag-brand { color: #93c5fd; border: 1px solid rgba(147,197,253,.32); background: rgba(147,197,253,.1); font-weight: 750; }
 .tag-warning { color: #ffd895; border: 1px solid rgba(246,200,102,.28); background: rgba(246,200,102,.11); }
 .tag-mqtt { color: #5eead4; border: 1px solid rgba(94,234,212,.35); background: rgba(94,234,212,.12); font-weight: 800; }
 .badge-mqtt { display: inline-block; margin-left: 6px; padding: 2px 6px; border-radius: 4px; color: #042f2e; background: #2dd4bf; font-size: 9px; font-weight: 800; text-transform: uppercase; vertical-align: middle; }

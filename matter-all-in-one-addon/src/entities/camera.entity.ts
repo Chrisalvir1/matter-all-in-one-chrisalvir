@@ -16,13 +16,6 @@ export const WebRtcTransportProviderId = 0x0553 as any as ClusterId;
 export class CameraEntity extends BaseEntity {
   public static readonly matterTypeLabel = "Camera";
 
-  protected override getRequiredClusterIds(): ClusterId[] {
-    const clusters = super.getRequiredClusterIds();
-    clusters.push(CameraAvStreamManagementId);
-    clusters.push(WebRtcTransportProviderId);
-    return clusters;
-  }
-
   public override async createEndpoint(): Promise<MatterbridgeEndpoint> {
     const rawName = this.state.attributes.friendly_name ?? this.entityId;
     const uniqueName = rawName.substring(0, 32).trim();
@@ -32,16 +25,18 @@ export class CameraEntity extends BaseEntity {
       mode: "server",
     });
 
+    const haInfo = (this.platform as any)?.getHaRegistryInfo?.(this.entityId);
+    const manufacturer = this.state.attributes?.manufacturer || this.state.attributes?.brand || haInfo?.manufacturer || "Home Assistant";
+    const model = this.state.attributes?.model || this.state.attributes?.model_name || haInfo?.model || this.deviceType.name;
+
     this.endpoint.deviceType = this.deviceType.code;
     this.endpoint.deviceName = uniqueName;
     this.endpoint.uniqueId = this.entityId.replaceAll(".", "_");
     this.endpoint.serialNumber = this.getMatterSerialNumber();
     this.endpoint.vendorId = this.endpoint.vendorId || 0xfff1;
-    this.endpoint.vendorName =
-      this.state.attributes?.manufacturer || "Home Assistant";
+    this.endpoint.vendorName = manufacturer;
     this.endpoint.productId = 0x8000;
-    this.endpoint.productName =
-      this.state.attributes?.model || this.deviceType.name;
+    this.endpoint.productName = model;
 
     this.endpoint.createDefaultBasicInformationClusterServer(
       uniqueName,
@@ -55,11 +50,6 @@ export class CameraEntity extends BaseEntity {
 
     // Require OnOff behavior for camera streaming / power state control
     this.endpoint.behaviors.require(MatterbridgeOnOffServer.with());
-
-    const clusters = this.getRequiredClusterIds();
-    if (clusters.length > 0) {
-      this.endpoint.addClusterServers(clusters);
-    }
     this.endpoint.addRequiredClusterServers();
 
     await this.addCustomClusterServers();
