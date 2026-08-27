@@ -39,6 +39,8 @@ import {
   withinHysteresis,
 } from '../converters/fan.converter.js';
 import { lightConverter } from '../converters/light.converter.js';
+import { cameraConverter } from '../converters/camera.converter.js';
+import { CameraAvStreamManagementId, WebRtcTransportProviderId } from './camera.entity.js';
 
 type CompositePlatform = {
   log: any;
@@ -147,7 +149,15 @@ export class CompositeDeviceEntity {
     if (this.primaryEntityIdOverride && this.members.some((m) => m.entityId === this.primaryEntityIdOverride)) {
       return this.primaryEntityIdOverride;
     }
-    return this.members.find((m) => m.entityId.startsWith('lock.'))?.entityId ?? this.members.find((m) => m.entityId.startsWith('fan.'))?.entityId ?? this.members[0].entityId;
+    return (
+      this.members.find((m) => m.entityId.startsWith('camera.'))?.entityId ??
+      this.members.find((m) => m.entityId.startsWith('lock.'))?.entityId ??
+      this.members.find((m) => m.entityId.startsWith('humidifier.'))?.entityId ??
+      this.members.find((m) => m.entityId.startsWith('fan.'))?.entityId ??
+      this.members.find((m) => m.entityId.startsWith('climate.'))?.entityId ??
+      this.members.find((m) => m.entityId.startsWith('vacuum.'))?.entityId ??
+      this.members[0].entityId
+    );
   }
 
   async createEndpoint(): Promise<MatterbridgeEndpoint> {
@@ -282,6 +292,12 @@ export class CompositeDeviceEntity {
         return;
       }
 
+    if (domain === 'camera') {
+      const on = cameraConverter.isCameraOn(state);
+      await update(endpoint, OnOff.id, 'onOff', on, this.platform.log);
+      return;
+    }
+
     if (domain === 'lock') {
       const matterState = this.toLockState(state);
       await update(endpoint, DoorLock.id, 'lockState', matterState, this.platform.log);
@@ -412,6 +428,7 @@ export class CompositeDeviceEntity {
 
   private computeClusterIds(member: CompositeMember): ClusterId[] {
     const [domain] = member.entityId.split('.');
+    if (domain === 'camera') return [CameraAvStreamManagementId, WebRtcTransportProviderId];
     if (domain === 'light') return lightClusterIds(member.state, this.typeFor(member));
     if (domain === 'switch') return []; 
     if (domain === 'fan') {
@@ -461,6 +478,12 @@ export class CompositeDeviceEntity {
   private async addRootClusters(endpoint: MatterbridgeEndpoint, member: CompositeMember) {
     const [domain] = member.entityId.split('.');
     
+    if (domain === 'camera') {
+      endpoint.behaviors.require(MatterbridgeOnOffServer.with());
+      endpoint.addRequiredClusterServers();
+      return;
+    }
+
     if (domain === 'fan') {
       if (!isFanProfile(this.typeFor(member))) {
         endpoint.behaviors.require(MatterbridgeOnOffServer.with());
@@ -587,6 +610,20 @@ export class CompositeDeviceEntity {
   private addCommandHandlers(endpoint: MatterbridgeEndpoint, member: CompositeMember) {
     const [domain] = member.entityId.split('.');
     const entityId = member.entityId;
+
+    if (domain === 'camera') {
+      endpoint.addCommandHandler('on', async () => {
+        this.setCommandLockout(entityId, 'camera_state', 'on');
+        this.platform.log.debug(`[Composite][${entityId}] → HA camera turn_on`);
+        await this.platform.ha.callService('camera', 'turn_on', entityId);
+      });
+      endpoint.addCommandHandler('off', async () => {
+        this.setCommandLockout(entityId, 'camera_state', 'off');
+        this.platform.log.debug(`[Composite][${entityId}] → HA camera turn_off`);
+        await this.platform.ha.callService('camera', 'turn_off', entityId);
+      });
+      return;
+    }
 
     if (domain === 'fan') {
       endpoint.addCommandHandler('on', async () => {

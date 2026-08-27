@@ -161,11 +161,15 @@ function renderDevices() {
       $('scan-cameras-empty-btn')?.addEventListener('click', async (e) => {
         e.target.disabled = true;
         showToast('🔍 Escaneando cámaras en toda tu red local (macOS / LAN)...');
-        await request('/scan-cameras', { method: 'POST' });
-        setTimeout(async () => {
+        try {
+          const res = await request('/scan-cameras', { method: 'POST' });
           await fetchDevices();
-          showToast('Escaneo de cámaras finalizado.');
-        }, 4000);
+          showToast(res.message || `Escaneo de cámaras finalizado (${res.count ?? 0} encontradas).`);
+        } catch (err) {
+          showToast(err.message || 'Error al escanear cámaras.', true);
+        } finally {
+          if (e.target) e.target.disabled = false;
+        }
       });
       return;
     }

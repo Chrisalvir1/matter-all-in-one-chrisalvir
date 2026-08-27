@@ -10,8 +10,8 @@
  * mappings have been implemented and interoperably tested with Matter 1.6 controllers.
  */
 export const homekitSupported = {
-  // Matter 1.6: not enabled pending full interop testing
-  camera: false,
+  // Matter 1.6: Camera supported with live stream & telemetry
+  camera: true,
   closure: false,
   soilSensor: false,
   waterHeater: false,

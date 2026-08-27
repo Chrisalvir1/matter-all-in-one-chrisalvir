@@ -44,4 +44,14 @@ describe("device export profiles", () => {
       expect.objectContaining({ id: "onOffLight", appleHome: "supported" }),
     );
   });
+
+  it("offers the official Camera (Matter 1.6 / Live Stream) profile as supported", () => {
+    expect(getExportProfiles("camera")).toContainEqual(
+      expect.objectContaining({
+        id: "camera",
+        appleHome: "supported",
+      }),
+    );
+    expect(getDefaultExportProfileId("camera")).toBe("camera");
+  });
 });

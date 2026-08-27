@@ -71,7 +71,7 @@ describe("HomeAssistantPlatform", () => {
     expect(platform.entities.size).toBeGreaterThan(0);
     expect(platform.entities.has("light.living_room")).toBe(true);
     expect(platform.entities.has("cover.garage_door")).toBe(true);
-    expect(platform.entities.has("camera.backyard")).toBe(false);
+    expect(platform.entities.has("camera.backyard")).toBe(true);
     expect(platform.entities.has("sensor.garden_moisture")).toBe(true);
   });
 
@@ -499,7 +499,6 @@ describe("HomeAssistantPlatform", () => {
         state: "0.25",
         attributes: { device_class: "monetary" },
       },
-      { entity_id: "camera.backyard", state: "recording", attributes: {} },
       {
         entity_id: "alarm_control_panel.home",
         state: "disarmed",

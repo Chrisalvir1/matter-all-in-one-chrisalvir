@@ -718,11 +718,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       if (realSwitches.length >= 1) return true;
     }
 
-    // 4. Any device with 2 or more switch/light entities without appliance domains (humidifier, lock, climate, vacuum)
+    // 4. Any device with 2 or more switch/light entities without appliance domains (camera, humidifier, lock, climate, vacuum)
     if (
       switches.length + lights.length >= 2 &&
       !allMembers.some((e) =>
-        ["humidifier", "lock", "climate", "vacuum"].includes(
+        ["camera", "humidifier", "lock", "climate", "vacuum"].includes(
           e.entityId.split(".")[0],
         ),
       )
@@ -767,6 +767,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     const excluded = new Set(config?.exclude_entities ?? []);
     const explicitlyIncluded = config?.include_entities;
     const supported = new Set([
+      "camera",
       "fan",
       "light",
       "switch",
@@ -941,6 +942,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     const deviceId = this.ha.hassEntities.get(entityId)?.device_id;
     if (!deviceId) return undefined;
     const priority = [
+      "camera",
       "humidifier",
       "vacuum",
       "media_player",
@@ -1344,6 +1346,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     // Export only domains that have a complete device type and command/state
     // mapping. Unimplemented or safety-critical domains must fail closed.
     const allowedDomains = [
+      "camera",
       "light",
       "switch",
       "cover",
@@ -1562,6 +1565,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     const candidate = this.getCompositeCandidate(entityId);
     const primaryEntityId =
       candidate?.config?.primary_entity ??
+      candidate?.members.find((member) =>
+        member.entityId.startsWith("camera."),
+      )?.entityId ??
       candidate?.members.find((member) =>
         member.entityId.startsWith("humidifier."),
       )?.entityId ??
@@ -2767,6 +2773,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               composite?.primaryEntityId ??
               compositeCandidate?.config?.primary_entity ??
               compositeCandidate?.members.find((member) =>
+                member.entityId.startsWith("camera."),
+              )?.entityId ??
+              compositeCandidate?.members.find((member) =>
                 member.entityId.startsWith("humidifier."),
               )?.entityId ??
               compositeCandidate?.members.find((member) =>
@@ -2786,6 +2795,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             const connection = this.getMatterConnectionInfo(endpoint);
 
             const domainLabels: Record<string, string> = {
+              camera: "Camera",
               fan: "Fan",
               humidifier: "Humidifier",
               light: "Light",
@@ -3028,6 +3038,43 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               JSON.stringify({
                 success: false,
                 error: "Invalid request body.",
+              }),
+            );
+          }
+          return;
+        }
+
+        if (
+          req.method === "POST" &&
+          (pathname === "/api/custom/scan-cameras" ||
+            pathname === "/scan-cameras")
+        ) {
+          try {
+            await this.refreshDiscoveryCatalog();
+            const camerasCount = Array.from(this.entities.values()).filter(
+              (e) => e.entityId.startsWith("camera."),
+            ).length;
+            this.log.notice(
+              `Camera scan completed: ${camerasCount} cameras cataloged.`,
+            );
+            res.writeHead(200, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(
+              JSON.stringify({
+                success: true,
+                count: camerasCount,
+                message: `Descubrimiento de cámaras completado (${camerasCount} encontradas)`,
+              }),
+            );
+          } catch (err) {
+            res.writeHead(500, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(
+              JSON.stringify({
+                success: false,
+                error: `Error al escanear cámaras: ${String(err)}`,
               }),
             );
           }

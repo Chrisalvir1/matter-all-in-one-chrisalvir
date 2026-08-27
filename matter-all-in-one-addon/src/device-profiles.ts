@@ -214,9 +214,30 @@ const profilesByDomain: Record<string, DeviceExportProfile[]> = {
       appleHome: "supported",
     },
   ],
+  camera: [
+    {
+      id: "camera",
+      label: "Cámara de seguridad (Live Stream & Matter 1.6)",
+      description: "Tipo Matter Camera oficial con soporte para streaming en vivo y telemetría.",
+      appleHome: "supported",
+    },
+    {
+      id: "occupancySensor",
+      label: "Sensor de movimiento / presencia",
+      description: "Exportar eventos de detección de movimiento de la cámara.",
+      appleHome: "supported",
+    },
+    {
+      id: "onOffPlugInUnit",
+      label: "Interruptor On/Off",
+      description: "Control de encendido, apagado o modo privacidad de la cámara.",
+      appleHome: "supported",
+    },
+  ],
 };
 
 const defaultProfileByDomain: Record<string, string> = {
+  camera: "camera",
   light: "dimmableLight",
   switch: "onOffPlugInUnit",
   fan: "fan",

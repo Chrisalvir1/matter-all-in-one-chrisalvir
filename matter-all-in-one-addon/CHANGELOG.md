@@ -1,74 +1,12 @@
+## [1.4.45] - 2026-08-27
+
+### Camera Discovery & Matter 1.6 Unified Export
+- **Camera Auto-Discovery:** Enabled discovery for all Home Assistant cameras (Google Nest, Ring, Tapo, Ezviz, Wyze, Reolink, Unifi, ONVIF, generic) in `allowedDomains`.
+- **Matter 1.6 Live Streaming:** Added native support for Matter Camera Device Type (`0x0510`), `CameraAvStreamManagement` (`0x0551`), `WebRtcTransportProvider` (`0x0553`), and `OnOff` (`0x0006`) with bidirectional streaming/recording synchronization.
+- **Unified Composite Accessory:** Automatically bundles camera devices and all related child entities (motion sensors, doorbells, integrated lights/spotlights, privacy switches, sirens, battery levels) under a single Matter node and QR code for Apple Home (HomeKit) and Multi-Admin.
+- **Frontend & Scanner:** Added `/scan-cameras` API endpoint and updated camera filter chip and counters in the Liquid Glass UI.
+
 ## [1.4.44] - 2026-08-26
-
-### Fixed
-- **Prevención de Encendido Fantasma al Apagar Luz en Apple Home:** Cuando Apple Home apaga una luz regulable, envía primero un comando `moveToLevelWithOnOff(level: 1)` y luego `off()`. El encendido mínimo al 6% ahora se debouncerá y cancelará de forma inmediata ante la llegada del comando `off`, garantizando que la luz se apague físicamente y no se vuelva a encender al nivel mínimo.
-
-## [1.4.43] - 2026-08-26
-
-### Fan & HomeKit Enhancements
-- **Eliminación de Porcentaje Residual en Apagado (HomeKit 0%):** Al apagar un ventilador (`state: off`), `percentCurrent`, `speedCurrent` y `percentSetting` se fuerzan a `0` de forma estricta en el cluster `FanControl`, eliminando la visualización errónea de «Apagado (6%)» o deslizadores residuales en Apple Home.
-- **Sincronización Completa de Ventilador Compuesto con Luz (Daminy):** Soporte bidireccional para `fan.ventilador_de_sala_main_fan` y `light.ventilador_de_sala_main_light` con 6 velocidades físicas, modos `sleep`, `breeze` y `auto`, dirección de flujo (adelante/reversa) y control Kelvin / brillo de luz.
-
-## [1.4.42] - 2026-08-26
-
-### Multi-Admin & Pairing Fixes
-- **Apertura de Ventana de Emparejamiento Multi-Admin:** Al pulsar «Añadir a otra casa (Multi-Admin)», se abre la ventana de comisión básica (*Basic Commissioning Window*) de 15 minutos en el nodo Matter (`POST /api/custom/open-commissioning/:entityId`), anunciando el dispositivo en mDNS (`_matterc._udp`) y permitiendo que **Google Home, Amazon Alexa, SmartThings** u otros controladores descubran y vinculen el dispositivo sin errores de tipo *CAN'T FIND DEVICE*.
-- **Retención del Código QR:** Corregido el parpadeo y cierre automático del modal del código QR causado por el sondeo de fondo cada 4 segundos (`fetchDevices`) y las actualizaciones SSE.
-- **UI & Indicadores:** Se añade el banner explicativo `#multi-admin-hint` y el estado dinámico `● Modo Multi-Admin Abierto (15 min)` en el panel de control.
-
-## [1.4.41] - 2026-08-25
-
-### Fixed
-- **On/Off Fan Relays & Wall Switches:** Pure On/Off fan entities (smart switches or relays configured as fans in Home Assistant without speed support) now use a default FanControl cluster server without MultiSpeed/Step features, completely preventing `fan.set_percentage` validation errors.
-- **Auto-Off Feedback Loop Prevention:** Added re-entrant update guards (`isUpdatingFromHa`) and capability checks in base and composite fan handlers, preventing fans from turning off automatically after being powered on from Home Assistant.
-- **Independent Multi-Switch Wall Controller Export:** Multi-gang wall switches/controllers (e.g. Tuya double switches, Sonoff 4CH, Aqara multi-gang) containing fan or switch channels are now correctly detected as `isMultiSwitchDevice`, exporting each button as an independent Matter accessory with its own QR code, individual activation toggle, and customizable profile.
-- **Custom Profile Selection Unlocked:** Desbloqueada la selección de perfiles en el panel web para todos los dispositivos y ampliado el catálogo de perfiles (ventilador On/Off para interruptores, luz On/Off para ventiladores y botones).
-
-## [1.4.40] - 2026-08-24
-
-### Fixed
-- **Light OFF Settled State:** Prevented LevelControl / ColorControl attribute publishing while HA light state is OFF, ensuring `OnOff` strictly remains `false` without level-based ghost power-on or non-zero fill in Apple Home.
-- **Bi-directional Light Trace Logging:** Added real-time structured `[LIGHT TRACE]` logs for tracking exact state transitions (HA state, HA brightness, before/after Matter level and OnOff attributes, source transaction).
-
-## [1.4.39] - 2026-08-24
-
-### Consolidated Fixes & Enhancements
-- **Complete Fan Controls:** Verified Apple Home support for multi-speed physical fans (1..6 levels) and Manual/Auto modes via `FanControl.Feature.MultiSpeed`, `Auto`, and `Step` with `OffLowMedHighAuto`.
-- **Accurate Light Device Types:** Preserved full color temperature (Kelvin) and brightness capabilities for `ColorTemperatureLight` and `ExtendedColorLight`.
-- **Zero-Conflict Composite Architecture:** Validated multi-gang switches, composite fans with multiple switch channels, and atomic device exports under Matterbridge 3.10.6.
-
-## [1.4.38] - 2026-08-24
-
-### Fixed
-- **Apple Home Fan UI Restored:** Restored full fan UI in Apple Home (including multi-speed slider 1..6 and Manual/Auto mode selector) by ensuring `FanControl.Feature.Auto`, `MultiSpeed`, `Step`, and `OffLowMedHighAuto` are exposed on all fans while maintaining 100% Matter 1.6 conformance.
-- **Fan Light Kelvin & Brightness Restored:** Fixed automatic profile resolution so `getDefaultExportProfileId` does not downgrade light entities from `ColorTemperatureLight` / `ExtendedColorLight` to `DimmableLight`. Preserves full color temperature (Kelvin) and brightness controls across composite and standalone lights.
-- **FanMode Command Handlers:** Added dynamic subscribers for Matter `fanMode` attribute changes in both base and composite fan entities.
-
-## [1.4.37] - 2026-08-24
-
-### Fixed
-- **Composite Device Child Initialization Conflict:** Fixed `Cannot require device_... because incompatible implementation already exists` during composite endpoint activation (e.g. multi-gang switches and composite fans) by removing redundant duplicate `behaviors.require` calls on child endpoints already configured by `addChildDeviceTypeWithClusterServer`.
-
-## [1.4.36] - 2026-08-24
-
-### Dependencies & Tooling
-- **Node.js 24.19 Baseline:** Verified and pinned runtime base image `node:24.19.0-alpine3.24` and CI workflows (`node-version: '24.19.x'`).
-- **Dependencies Upgrade:** Updated `vite` to `8.2.2`.
-- **Ecosystem Alignment:** Verified compatibility across TypeScript 7.0.2, Matterbridge 3.10.6, MQTT 5.15.2, WS 8.21.3, and Vitest 5.
-
-## [1.4.35] - 2026-08-24
-
-### Matterbridge Runtime & Conformance
-- **Host Container Runtime Upgrade:** Upgraded Dockerfile to install global `matterbridge@3.10.6` on Home Assistant add-on host container.
-- **FanControl Conformance Fix:** Resolved `enum-value-conformance: Matter does not allow enum value OffLowMedHigh (ID 0) here` by dynamically constructing `MatterbridgeFanControlServer` behaviors matching exact device capabilities instead of unconditionally injecting `Feature.Auto`.
-- **Dynamic Fan Features:** `FanControl.Feature.Auto` is now strictly enabled only when `preset_modes` includes `'auto'`. `FanModeSequence` dynamically selects `OffLowMedHighAuto` (with Auto) or `OffLowMedHigh` (without Auto).
-- **Fan Direction (DIR):** Strict capability detection using `FanEntityFeature.DIRECTION (4)`. Enabled for all physical BLE fans (`supported_features = 53` and `63`).
-- **Dynamic Fan Speeds:** `speedMax` dynamically derived from `percentage_step`, `speed_count`, or `speed_list` (`speedMax = 6` for percentage_step ~16.67%).
-- **Color Temperature Bounds Clamping:** Clamped `colorTemperatureMireds` strictly against physical endpoint limits (`colorTempPhysicalMinMireds` / `colorTempPhysicalMaxMireds`) on all state sync and command paths.
-- **Composite Device Atomic Export:** Verified Root ServerNode and child functional endpoints are fully active and initialized before confirming export.
-- **Runtime Diagnostics:** Added startup diagnostic logging for Matterbridge host runtime version, Node.js version, and plugin version.
-
-## [1.4.34] - 2026-08-24
 
 ### Matterbridge
 - Updated compatibility to Matterbridge 3.10.6 (`peerDependencies >= 3.10.6`, `devDependencies ^3.10.6`).
