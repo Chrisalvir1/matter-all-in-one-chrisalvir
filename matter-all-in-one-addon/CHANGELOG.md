@@ -1,9 +1,10 @@
-## [1.4.45] - 2026-08-27
+## [1.4.46] - 2026-08-27
 
-### Camera Discovery & Matter 1.6 Unified Export
+### Camera Discovery, Live Stream & Intelligent Brand Classification
 - **Camera Auto-Discovery:** Enabled discovery for all Home Assistant cameras (Google Nest, Ring, Tapo, Ezviz, Wyze, Reolink, Unifi, ONVIF, generic) in `allowedDomains`.
-- **Matter 1.6 Live Streaming:** Added native support for Matter Camera Device Type (`0x0510`), `CameraAvStreamManagement` (`0x0551`), `WebRtcTransportProvider` (`0x0553`), and `OnOff` (`0x0006`) with bidirectional streaming/recording synchronization.
+- **Matter 1.6 Live Streaming:** Native support for Matter Camera Device Type (`0x0510`), `CameraAvStreamManagement` (`0x0551`), `WebRtcTransportProvider` (`0x0553`), and `OnOff` (`0x0006`) with bidirectional streaming/recording synchronization.
 - **Unified Composite Accessory:** Automatically bundles camera devices and all related child entities (motion sensors, doorbells, integrated lights/spotlights, privacy switches, sirens, battery levels) under a single Matter node and QR code for Apple Home (HomeKit) and Multi-Admin.
+- **Brand & Model Classification:** Automatic manufacturer and model metadata extraction across Google Nest, Ring, TP-Link Tapo, EZVIZ, Wyze, Reolink, UniFi, Eufy, Tuya, Sonoff, Shelly, Aqara with brand badges in the UI.
 - **Frontend & Scanner:** Added `/scan-cameras` API endpoint and updated camera filter chip and counters in the Liquid Glass UI.
 
 ## [1.4.44] - 2026-08-26
