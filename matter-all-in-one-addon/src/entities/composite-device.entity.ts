@@ -428,9 +428,13 @@ export class CompositeDeviceEntity {
 
   private computeClusterIds(member: CompositeMember): ClusterId[] {
     const [domain] = member.entityId.split('.');
-    if (domain === 'camera') return [CameraAvStreamManagementId, WebRtcTransportProviderId];
+    // Camera: published as on/off (power/privacy state).
+    // CameraAvStreamManagement (0x0551) and WebRtcTransportProvider (0x0553)
+    // are NOT added here because Matterbridge's addClusterServers() does not
+    // handle them, which would crash addRequiredClusterServers().
+    if (domain === 'camera') return [OnOff.id];
     if (domain === 'light') return lightClusterIds(member.state, this.typeFor(member));
-    if (domain === 'switch') return []; 
+    if (domain === 'switch') return [];
     if (domain === 'fan') {
       return isFanProfile(this.typeFor(member)) ? [FanControl.id] : [];
     }

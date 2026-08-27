@@ -29,24 +29,28 @@ function state(entityId: string, value: string, attributes: Record<string, any> 
 }
 
 describe("CameraEntity", () => {
-  it("creates a standalone Camera endpoint with required Matter 1.6 streaming clusters", async () => {
+  it("creates a standalone Camera endpoint using the safe onOffPlugInUnit device type (cameraOnOff)", async () => {
     const camState = state("camera.front_yard", "recording", {
       friendly_name: "Front Yard Camera",
       frontend_stream_type: "webrtc",
     });
 
-    const cameraEntity = new CameraEntity(mockPlatform, camState, MatterDeviceTypes.camera);
+    // CameraEntity uses MatterDeviceTypes.cameraOnOff (alias for onOffPlugInUnit)
+    // to avoid crashing addRequiredClusterServers() with the native camera device
+    // type (0x0510) which requires unprovisioned clusters 0x0551 and 0x0553.
+    const cameraEntity = new CameraEntity(mockPlatform, camState, MatterDeviceTypes.cameraOnOff);
     const endpoint = await cameraEntity.createEndpoint();
 
     expect(endpoint).toBeDefined();
-    expect(endpoint.deviceType).toBe(MatterDeviceTypes.camera.code);
+    // cameraOnOff = onOffPlugInUnit, code = 0x010A
+    expect(endpoint.deviceType).toBe(MatterDeviceTypes.cameraOnOff.code);
     expect(endpoint.deviceName).toBe("Front Yard Camera");
     expect(endpoint.behaviors.has(MatterbridgeOnOffServer)).toBe(true);
   });
 
   it("handles camera turn_on and turn_off commands via HA service calls", async () => {
     const camState = state("camera.front_yard", "idle");
-    const cameraEntity = new CameraEntity(mockPlatform, camState, MatterDeviceTypes.camera);
+    const cameraEntity = new CameraEntity(mockPlatform, camState, MatterDeviceTypes.cameraOnOff);
     const endpoint = await cameraEntity.createEndpoint();
 
     await (endpoint as any).invokeCommand("on");
@@ -58,7 +62,7 @@ describe("CameraEntity", () => {
 
   it("synchronizes camera state updates to Matter OnOff cluster", async () => {
     const camState = state("camera.front_yard", "idle");
-    const cameraEntity = new CameraEntity(mockPlatform, camState, MatterDeviceTypes.camera);
+    const cameraEntity = new CameraEntity(mockPlatform, camState, MatterDeviceTypes.cameraOnOff);
     await cameraEntity.createEndpoint();
 
     await cameraEntity.updateState(state("camera.front_yard", "streaming"));

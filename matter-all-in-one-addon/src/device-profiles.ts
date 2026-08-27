@@ -217,9 +217,12 @@ const profilesByDomain: Record<string, DeviceExportProfile[]> = {
   camera: [
     {
       id: "camera",
-      label: "Cámara de seguridad (Live Stream & Matter 1.6)",
-      description: "Tipo Matter Camera oficial con soporte para streaming en vivo y telemetría.",
-      appleHome: "supported",
+      label: "Cámara — Control On/Off (privacidad)",
+      description:
+        "Publica la cámara como interruptor On/Off en Matter. " +
+        "On = cámara activa, Off = modo privacidad. " +
+        "El streaming nativo Matter 1.6 (0x0510) requiere soporte completo de clusters en Matterbridge y aún no está disponible.",
+      appleHome: "experimental",
     },
     {
       id: "occupancySensor",

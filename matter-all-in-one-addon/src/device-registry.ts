@@ -26,6 +26,10 @@ import {
   oven,
   smokeCoAlarm,
   waterLeakDetector,
+  // Matter 1.6 camera device types — provided by Matterbridge with correct
+  // requiredServerClusters so addRequiredClusterServers() does not crash.
+  camera as matterbridgeCamera,
+  snapshotCamera as matterbridgeSnapshotCamera,
 } from "matterbridge";
 
 export const MatterDeviceTypes = {
@@ -48,12 +52,30 @@ export const MatterDeviceTypes = {
   smokeCoAlarm,
   waterLeakDetector,
 
-  camera: {
-    code: 0x0510,
-    name: "Camera",
-    deviceClass: "Simple",
-    category: "Security",
-  } as any as DeviceTypeDefinition,
+  /**
+   * Matter 1.6 Camera device type (0x0510).
+   * Requires CameraAvStreamManagement (0x0551) and WebRtcTransportProvider (0x0553).
+   * Matterbridge's addClusterServers() does NOT auto-provision these clusters,
+   * so this device type will only work with a fully custom cluster implementation.
+   * For practical camera publishing use `cameraOnOff` (below) which registers
+   * as a plain on/off switch representing camera power/privacy state.
+   */
+  camera: matterbridgeCamera,
+
+  /**
+   * SnapshotCamera (0x0145) — requires only CameraAvStreamManagement (0x0551).
+   * Same limitation: addClusterServers() does not handle 0x0551 automatically.
+   */
+  snapshotCamera: matterbridgeSnapshotCamera,
+
+  /**
+   * Safe camera representation: exposes the camera as an on/off plug-in unit.
+   * This allows cameras to be discovered, published, commissioned and controlled
+   * (on = camera active / streaming, off = camera off / privacy mode) without
+   * crashing addRequiredClusterServers(). All real Matter camera clusters are
+   * optional in this mode and are NOT declared.
+   */
+  cameraOnOff: onOffPlugInUnit,
 
   closure: {
     code: 0x000d,
@@ -95,9 +117,16 @@ export interface DeviceRegistryEntry {
 }
 
 export const DEVICE_REGISTRY: Record<string, DeviceRegistryEntry> = {
+  /**
+   * Camera domain: published as an On/Off plug-in unit (power/privacy switch).
+   * Using MatterDeviceTypes.camera (0x0510) directly crashes because
+   * addClusterServers() in Matterbridge 3.10.x does not handle the required
+   * CameraAvStreamManagement (0x0551) and WebRtcTransportProvider (0x0553)
+   * clusters. cameraOnOff is an alias for onOffPlugInUnit and is fully safe.
+   */
   camera: {
-    matterType: MatterDeviceTypes.camera,
-    homekitSupported: homekitSupported.camera,
+    matterType: MatterDeviceTypes.cameraOnOff,
+    homekitSupported: homekitSupported.onOffPlugInUnit,
   },
   cover: {
     matterType: MatterDeviceTypes.windowCovering,

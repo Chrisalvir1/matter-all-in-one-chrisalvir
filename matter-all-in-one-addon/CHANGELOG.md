@@ -1,3 +1,8 @@
+## [1.4.47] - 2026-08-27
+
+### Fixes
+- **Camera Activation Crash (Root Cause Fix):** Resolved the `TypeError: Cannot read properties of undefined (reading 'forEach')` crash when activating or manually registering cameras. The custom camera device type was missing internal cluster definitions expected by Matterbridge's `addRequiredClusterServers`. Cameras now safely map to a privacy/power switch representation (`onOffPlugInUnit`) until true Matter SDK camera streaming cluster support (0x0551/0x0553) lands in Matterbridge.
+
 ## [1.4.46] - 2026-08-27
 
 ### Camera Discovery, Live Stream & Intelligent Brand Classification

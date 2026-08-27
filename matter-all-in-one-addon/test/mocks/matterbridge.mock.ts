@@ -227,11 +227,15 @@ export const mockLog = {
 };
 
 vi.mock("matterbridge", () => {
-  const makeMockDeviceType = (code: number, name: string) => ({
+  const makeMockDeviceType = (code: number, name: string, requiredServerClusters: number[] = []) => ({
     code,
     name,
     deviceClass: "Simple",
     category: "Utility",
+    requiredServerClusters,
+    optionalServerClusters: [],
+    requiredClientClusters: [],
+    optionalClientClusters: [],
   });
 
   return {
@@ -268,29 +272,34 @@ vi.mock("matterbridge", () => {
       }
     },
     MatterbridgeEndpoint: MockMatterbridgeEndpoint,
-    onOffLight: makeMockDeviceType(0x0100, "onOffLight"),
-    dimmableLight: makeMockDeviceType(0x0101, "dimmableLight"),
-    colorTemperatureLight: makeMockDeviceType(0x010c, "colorTemperatureLight"),
-    extendedColorLight: makeMockDeviceType(0x010d, "extendedColorLight"),
-    onOffPlugInUnit: makeMockDeviceType(0x010a, "onOffPlugInUnit"),
-    dimmablePlugInUnit: makeMockDeviceType(0x010b, "dimmablePlugInUnit"),
-    doorLock: makeMockDeviceType(0x000a, "doorLock"),
-    thermostat: makeMockDeviceType(0x0301, "thermostat"),
-    windowCovering: makeMockDeviceType(0x0202, "windowCovering"),
-    temperatureSensor: makeMockDeviceType(0x0302, "temperatureSensor"),
-    humiditySensor: makeMockDeviceType(0x0307, "humiditySensor"),
-    contactSensor: makeMockDeviceType(0x0015, "contactSensor"),
-    occupancySensor: makeMockDeviceType(0x0107, "occupancySensor"),
-    pressureSensor: makeMockDeviceType(0x0305, "pressureSensor"),
-    flowSensor: makeMockDeviceType(0x0306, "flowSensor"),
-    lightSensor: makeMockDeviceType(0x0106, "lightSensor"),
-    roboticVacuumCleaner: makeMockDeviceType(0x0074, "roboticVacuumCleaner"),
-    basicVideoPlayer: makeMockDeviceType(0x0028, "basicVideoPlayer"),
-    fan: makeMockDeviceType(0x002b, "fan"),
-    cooktop: makeMockDeviceType(0x0077, "cooktop"),
-    oven: makeMockDeviceType(0x0078, "oven"),
-    smokeCoAlarm: makeMockDeviceType(0x0076, "smokeCoAlarm"),
-    waterLeakDetector: makeMockDeviceType(0x007b, "waterLeakDetector"),
+    onOffLight: makeMockDeviceType(0x0100, "onOffLight", [0x3, 0x4, 0x62, 0x6]),
+    dimmableLight: makeMockDeviceType(0x0101, "dimmableLight", [0x3, 0x4, 0x62, 0x6, 0x8]),
+    colorTemperatureLight: makeMockDeviceType(0x010c, "colorTemperatureLight", [0x3, 0x4, 0x62, 0x6, 0x8, 0x300]),
+    extendedColorLight: makeMockDeviceType(0x010d, "extendedColorLight", [0x3, 0x4, 0x62, 0x6, 0x8, 0x300]),
+    onOffPlugInUnit: makeMockDeviceType(0x010a, "onOffPlugInUnit", [0x3, 0x4, 0x62, 0x6]),
+    dimmablePlugInUnit: makeMockDeviceType(0x010b, "dimmablePlugInUnit", [0x3, 0x4, 0x62, 0x6, 0x8]),
+    doorLock: makeMockDeviceType(0x000a, "doorLock", [0x3, 0x101]),
+    thermostat: makeMockDeviceType(0x0301, "thermostat", [0x3, 0x201]),
+    windowCovering: makeMockDeviceType(0x0202, "windowCovering", [0x3, 0x102]),
+    temperatureSensor: makeMockDeviceType(0x0302, "temperatureSensor", [0x3, 0x402]),
+    humiditySensor: makeMockDeviceType(0x0307, "humiditySensor", [0x3, 0x405]),
+    contactSensor: makeMockDeviceType(0x0015, "contactSensor", [0x3, 0x45]),
+    occupancySensor: makeMockDeviceType(0x0107, "occupancySensor", [0x3, 0x406]),
+    pressureSensor: makeMockDeviceType(0x0305, "pressureSensor", [0x3, 0x403]),
+    flowSensor: makeMockDeviceType(0x0306, "flowSensor", [0x3, 0x404]),
+    lightSensor: makeMockDeviceType(0x0106, "lightSensor", [0x3, 0x400]),
+    roboticVacuumCleaner: makeMockDeviceType(0x0074, "roboticVacuumCleaner", [0x3]),
+    basicVideoPlayer: makeMockDeviceType(0x0028, "basicVideoPlayer", [0x3]),
+    fan: makeMockDeviceType(0x002b, "fan", [0x3, 0x202]),
+    cooktop: makeMockDeviceType(0x0077, "cooktop", [0x3]),
+    oven: makeMockDeviceType(0x0078, "oven", [0x3]),
+    smokeCoAlarm: makeMockDeviceType(0x0076, "smokeCoAlarm", [0x3, 0x5c]),
+    waterLeakDetector: makeMockDeviceType(0x007b, "waterLeakDetector", [0x3, 0x45]),
+    // Matter 1.6 camera device types.
+    // In production, these require 0x0551 (CameraAvStreamManagement) and 0x0553 (WebRtcTransportProvider).
+    // In tests, requiredServerClusters is empty because the mock addRequiredClusterServers() is a no-op.
+    camera: makeMockDeviceType(0x0510, "camera", []),
+    snapshotCamera: makeMockDeviceType(0x0145, "snapshotCamera", []),
   };
 });
 

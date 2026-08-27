@@ -10,8 +10,10 @@
  * mappings have been implemented and interoperably tested with Matter 1.6 controllers.
  */
 export const homekitSupported = {
-  // Matter 1.6: Camera supported with live stream & telemetry
-  camera: true,
+  // Camera: published as an On/Off switch (privacy/power state control).
+  // Native Matter 1.6 camera streaming (0x0510) is not yet supported by
+  // Matterbridge's addClusterServers(); true native camera support is pending.
+  camera: false,
   closure: false,
   soilSensor: false,
   waterHeater: false,
