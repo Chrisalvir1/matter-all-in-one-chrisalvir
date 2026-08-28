@@ -26,10 +26,6 @@ import {
   oven,
   smokeCoAlarm,
   waterLeakDetector,
-  // Matter 1.6 camera device types — provided by Matterbridge with correct
-  // requiredServerClusters so addRequiredClusterServers() does not crash.
-  camera as matterbridgeCamera,
-  snapshotCamera as matterbridgeSnapshotCamera,
 } from "matterbridge";
 
 export const MatterDeviceTypes = {
@@ -53,27 +49,39 @@ export const MatterDeviceTypes = {
   waterLeakDetector,
 
   /**
-   * Matter 1.6 Camera device type (0x0510).
-   * Requires CameraAvStreamManagement (0x0551) and WebRtcTransportProvider (0x0553).
-   * Matterbridge's addClusterServers() does NOT auto-provision these clusters,
-   * so this device type will only work with a fully custom cluster implementation.
-   * For practical camera publishing use `cameraOnOff` (below) which registers
-   * as a plain on/off switch representing camera power/privacy state.
+   * Matter 1.6 Camera device type (0x0142 / 0x0510).
    */
-  camera: matterbridgeCamera,
+  camera: {
+    name: "Camera",
+    code: 0x0142,
+    deviceClass: "Simple",
+    category: "Camera",
+    deviceScope: "endpoint",
+    revision: 1,
+    requiredServerClusters: [0x0551, 0x0553],
+    optionalServerClusters: [],
+    requiredClientClusters: [],
+    optionalClientClusters: [],
+  } as unknown as DeviceTypeDefinition,
 
   /**
    * SnapshotCamera (0x0145) — requires only CameraAvStreamManagement (0x0551).
-   * Same limitation: addClusterServers() does not handle 0x0551 automatically.
    */
-  snapshotCamera: matterbridgeSnapshotCamera,
+  snapshotCamera: {
+    name: "SnapshotCamera",
+    code: 0x0145,
+    deviceClass: "Simple",
+    category: "Camera",
+    deviceScope: "endpoint",
+    revision: 1,
+    requiredServerClusters: [0x0551],
+    optionalServerClusters: [],
+    requiredClientClusters: [],
+    optionalClientClusters: [],
+  } as unknown as DeviceTypeDefinition,
 
   /**
    * Safe camera representation: exposes the camera as an on/off plug-in unit.
-   * This allows cameras to be discovered, published, commissioned and controlled
-   * (on = camera active / streaming, off = camera off / privacy mode) without
-   * crashing addRequiredClusterServers(). All real Matter camera clusters are
-   * optional in this mode and are NOT declared.
    */
   cameraOnOff: onOffPlugInUnit,
 
@@ -82,21 +90,39 @@ export const MatterDeviceTypes = {
     name: "Closure",
     deviceClass: "Simple",
     category: "Closure",
-  } as any as DeviceTypeDefinition,
+    deviceScope: "endpoint",
+    revision: 1,
+    requiredServerClusters: [],
+    optionalServerClusters: [],
+    requiredClientClusters: [],
+    optionalClientClusters: [],
+  } as unknown as DeviceTypeDefinition,
 
   soilSensor: {
     code: 0x000c,
     name: "SoilSensor",
     deviceClass: "Simple",
     category: "Sensor",
-  } as any as DeviceTypeDefinition,
+    deviceScope: "endpoint",
+    revision: 1,
+    requiredServerClusters: [],
+    optionalServerClusters: [],
+    requiredClientClusters: [],
+    optionalClientClusters: [],
+  } as unknown as DeviceTypeDefinition,
 
   energyTariff: {
     code: 0x000e,
     name: "EnergyTariff",
     deviceClass: "Simple",
     category: "Utility",
-  } as any as DeviceTypeDefinition,
+    deviceScope: "endpoint",
+    revision: 1,
+    requiredServerClusters: [],
+    optionalServerClusters: [],
+    requiredClientClusters: [],
+    optionalClientClusters: [],
+  } as unknown as DeviceTypeDefinition,
 
   petFeeder: onOffPlugInUnit,
 

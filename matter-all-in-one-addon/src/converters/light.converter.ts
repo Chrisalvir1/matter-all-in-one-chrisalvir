@@ -2,7 +2,7 @@
  * Converter utility for light and switch domains.
  * Home Assistant is the authoritative state source for Matter All-in-One Creator.
  */
-import { HassState } from '../utils/ha-state.js';
+import { HassState } from "../utils/ha-state.js";
 
 export const lightConverter = {
   /**
@@ -10,7 +10,7 @@ export const lightConverter = {
    * State and is_on are the sole authority for OnOff; brightness is never used to infer power.
    */
   toOnOff(state: HassState): boolean {
-    return state.state === 'on';
+    return state.state === "on";
   },
 
   /**
@@ -23,7 +23,8 @@ export const lightConverter = {
    * without affecting the OnOff state.
    */
   toLevel(state: HassState | number): number {
-    const brightness = typeof state === 'number' ? state : state?.attributes?.brightness;
+    const brightness =
+      typeof state === "number" ? state : state?.attributes?.brightness;
     if (brightness === undefined || brightness === null) return 1;
     // Defensive handling: clamp between 1 and 255 before mapping
     const clampedHa = Math.max(1, Math.min(255, brightness));
@@ -40,4 +41,3 @@ export const lightConverter = {
     return Math.max(1, Math.min(255, raw));
   },
 };
-

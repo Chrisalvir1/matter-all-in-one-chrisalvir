@@ -6,22 +6,12 @@
  */
 
 export type StreamSourceType =
-  | "webrtc"
-  | "rtsp"
-  | "hls"
-  | "mjpeg"
-  | "ha_proxy"
-  | "unknown";
+  "webrtc" | "rtsp" | "hls" | "mjpeg" | "ha_proxy" | "unknown";
 
 export type VideoCodecType = "h264" | "h265" | "mjpeg" | "unknown";
 
 export type AudioCodecType =
-  | "aac_eld"
-  | "opus"
-  | "aac_lc"
-  | "pcm"
-  | "incompatible"
-  | "none";
+  "aac_eld" | "opus" | "aac_lc" | "pcm" | "incompatible" | "none";
 
 export type StreamStrategy =
   | "passthrough_h264"
@@ -52,10 +42,12 @@ export interface CameraCapabilitiesInfo {
   transcodingReason?: string;
   /** Resolved snapshot image endpoint URL (JPEG). */
   snapshotUrl?: string;
+  /** True if snapshot image fetching is supported. */
+  snapshotSupported?: boolean;
   /** Original Home Assistant frontend_stream_type attribute. */
   frontendStreamType?: string;
   /** Raw supported_features bitmask from Home Assistant. */
-  supportedFeatures: number;
+  supportedFeatures?: number;
 }
 
 export interface ResolvedStreamSource {

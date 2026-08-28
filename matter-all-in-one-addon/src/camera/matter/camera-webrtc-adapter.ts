@@ -1,5 +1,11 @@
-import type { CameraCapabilitiesInfo, ResolvedStreamSource } from "../camera-types.js";
-import { CameraSessionManager, MatterActiveSession } from "./camera-session-manager.js";
+import type {
+  CameraCapabilitiesInfo,
+  ResolvedStreamSource,
+} from "../camera-types.js";
+import {
+  CameraSessionManager,
+  MatterActiveSession,
+} from "./camera-session-manager.js";
 
 export class CameraWebRtcAdapter {
   constructor(
@@ -16,14 +22,18 @@ export class CameraWebRtcAdapter {
     streamUsage?: number;
   }): Promise<{ webRtcSessionId: number; videoStreamId?: number }> {
     const session = request.webRtcSessionId
-      ? this.sessionManager.getSession(request.webRtcSessionId) || this.sessionManager.allocateSession(request.streamUsage || 1)
+      ? this.sessionManager.getSession(request.webRtcSessionId) ||
+        this.sessionManager.allocateSession(request.streamUsage || 1)
       : this.sessionManager.allocateSession(request.streamUsage || 1);
 
     session.offerSdp = request.sdp;
     this.sessionManager.touchSession(session.sessionId);
 
     this.platform?.log?.debug?.(
-      "[MatterCameraWebRtc][" + this.entityId + "] Handled provideOffer for session " + session.sessionId,
+      "[MatterCameraWebRtc][" +
+        this.entityId +
+        "] Handled provideOffer for session " +
+        session.sessionId,
     );
 
     return {
@@ -35,11 +45,20 @@ export class CameraWebRtcAdapter {
   public async handleSolicitOffer(request: {
     streamUsage: number;
     originatingEndpointId: any;
-  }): Promise<{ webRtcSessionId: number; deferredOffer: boolean; videoStreamId?: number }> {
-    const session = this.sessionManager.allocateSession(request.streamUsage || 1);
+  }): Promise<{
+    webRtcSessionId: number;
+    deferredOffer: boolean;
+    videoStreamId?: number;
+  }> {
+    const session = this.sessionManager.allocateSession(
+      request.streamUsage || 1,
+    );
 
     this.platform?.log?.debug?.(
-      "[MatterCameraWebRtc][" + this.entityId + "] Handled solicitOffer for session " + session.sessionId,
+      "[MatterCameraWebRtc][" +
+        this.entityId +
+        "] Handled solicitOffer for session " +
+        session.sessionId,
     );
 
     return {
@@ -66,7 +85,13 @@ export class CameraWebRtcAdapter {
   }): Promise<void> {
     this.sessionManager.endSession(request.webRtcSessionId);
     this.platform?.log?.debug?.(
-      "[MatterCameraWebRtc][" + this.entityId + "] Session " + request.webRtcSessionId + " ended (reason " + request.reason + ")",
+      "[MatterCameraWebRtc][" +
+        this.entityId +
+        "] Session " +
+        request.webRtcSessionId +
+        " ended (reason " +
+        request.reason +
+        ")",
     );
   }
 }

@@ -11,7 +11,9 @@ const mockPlatform = {
     error: vi.fn(),
   },
   ha: {
-    callService: vi.fn().mockResolvedValue({ sdp: "v=0\r\no=- 12345 2 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\n" }),
+    callService: vi.fn().mockResolvedValue({
+      sdp: "v=0\r\no=- 12345 2 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\n",
+    }),
   },
 };
 
@@ -65,8 +67,17 @@ describe("CameraWebRtcAdapter (Matter WebRTC Transport Provider 0x0553)", () => 
       requiresBridge: false,
     };
 
-    const adapter = new CameraWebRtcAdapter(mockPlatform, "camera.hallway", capabilities, streamSource, mgr);
-    const res = await adapter.handleSolicitOffer({ streamUsage: 1, originatingEndpointId: 1 });
+    const adapter = new CameraWebRtcAdapter(
+      mockPlatform,
+      "camera.hallway",
+      capabilities,
+      streamSource,
+      mgr,
+    );
+    const res = await adapter.handleSolicitOffer({
+      streamUsage: 1,
+      originatingEndpointId: 1,
+    });
     expect(res).toBeDefined();
     expect(res.webRtcSessionId).toBeGreaterThan(0);
   });

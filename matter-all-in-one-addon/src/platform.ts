@@ -26,6 +26,10 @@ import { LockEntity } from "./entities/lock.entity.js";
 import crypto from "crypto";
 import { uuid } from "hap-nodejs";
 import type { HomeKitCameraStorageRecord } from "./camera/camera-types.js";
+import {
+  resolveFfmpegPath,
+  getFfmpegVersion,
+} from "./camera/homekit/ffmpeg-helper.js";
 import { CameraEntity } from "./entities/camera.entity.js";
 import { SoilSensorEntity } from "./entities/soil_sensor.entity.js";
 import { EnergyTariffEntity } from "./entities/energy_tariff.entity.js";
@@ -186,7 +190,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   private readonly sseSubscribers = new Set<http.ServerResponse>();
 
   /** Persistent HomeKit Camera records for standalone Apple Home accessories. */
-  public readonly homekitCameraRecords = new Map<string, HomeKitCameraStorageRecord>();
+  public readonly homekitCameraRecords = new Map<
+    string,
+    HomeKitCameraStorageRecord
+  >();
 
   public async saveHomeKitCameraRecords(): Promise<void> {
     try {
@@ -212,28 +219,46 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           }
         }
       }
-      this.log.info(`Loaded ${this.homekitCameraRecords.size} HomeKit camera configurations.`);
+      this.log.info(
+        `Loaded ${this.homekitCameraRecords.size} HomeKit camera configurations.`,
+      );
     } catch {
       this.log.debug("No homekit-cameras.json found, starting fresh.");
     }
   }
 
-  public getOrCreateHomeKitCameraRecord(entityId: string): HomeKitCameraStorageRecord {
+  public getOrCreateHomeKitCameraRecord(
+    entityId: string,
+  ): HomeKitCameraStorageRecord {
     let record = this.homekitCameraRecords.get(entityId);
     if (!record) {
-      const rawName = this.entities.get(entityId)?.state?.attributes?.friendly_name || entityId;
+      const rawName =
+        this.entities.get(entityId)?.state?.attributes?.friendly_name ||
+        entityId;
       const info = this.getHaRegistryInfo(entityId);
 
-      const usedPorts = new Set(Array.from(this.homekitCameraRecords.values()).map((r) => r.port));
+      const usedPorts = new Set(
+        Array.from(this.homekitCameraRecords.values()).map((r) => r.port),
+      );
       let nextPort = 51830;
       while (usedPorts.has(nextPort)) nextPort++;
 
       const hash = crypto.createHash("sha256").update(entityId).digest("hex");
-      const username = `0E:${hash.substring(0, 2)}:${hash.substring(2, 4)}:${hash.substring(4, 6)}:${hash.substring(6, 8)}:${hash.substring(8, 10)}`.toUpperCase();
+      const username =
+        `0E:${hash.substring(0, 2)}:${hash.substring(2, 4)}:${hash.substring(4, 6)}:${hash.substring(6, 8)}:${hash.substring(8, 10)}`.toUpperCase();
 
-      const pinPart1 = ((Math.abs(parseInt(hash.substring(10, 13), 16)) % 900) + 100).toString();
-      const pinPart2 = ((Math.abs(parseInt(hash.substring(13, 15), 16)) % 90) + 10).toString();
-      const pinPart3 = ((Math.abs(parseInt(hash.substring(15, 18), 16)) % 900) + 100).toString();
+      const pinPart1 = (
+        (Math.abs(parseInt(hash.substring(10, 13), 16)) % 900) +
+        100
+      ).toString();
+      const pinPart2 = (
+        (Math.abs(parseInt(hash.substring(13, 15), 16)) % 90) +
+        10
+      ).toString();
+      const pinPart3 = (
+        (Math.abs(parseInt(hash.substring(15, 18), 16)) % 900) +
+        100
+      ).toString();
       const pincode = `${pinPart1}-${pinPart2}-${pinPart3}`;
       const setupId = hash.substring(18, 22).toUpperCase();
 
@@ -767,7 +792,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     });
 
     const isNonGeneric = (e: BaseEntity) =>
-      !this.isDpsGenericEntity(e.entityId) && !this.isAuxiliaryEntity(e.entityId);
+      !this.isDpsGenericEntity(e.entityId) &&
+      !this.isAuxiliaryEntity(e.entityId);
 
     const switches = allMembers.filter(
       (e) => e.entityId.startsWith("switch.") && isNonGeneric(e),
@@ -789,7 +815,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     if (fans.length >= 1 && switches.length >= 1) {
       // Exclude secondary buzzer/beeper switches
       const realSwitches = switches.filter((m) => {
-        const name = (this.ha.hassEntities.get(m.entityId)?.name || m.entityId).toLowerCase();
+        const name = (
+          this.ha.hassEntities.get(m.entityId)?.name || m.entityId
+        ).toLowerCase();
         return !/beep|buzz|sound|audio|timb|indicat|display/i.test(name);
       });
       if (realSwitches.length >= 1) return true;
@@ -1015,8 +1043,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     const rawModel = deviceRegistry?.model ?? deviceRegistry?.model_id;
     const platformName = entityRegistry?.platform;
     const entityState = this.entities.get(entityId)?.state;
-    const attrManufacturer = entityState?.attributes?.manufacturer || entityState?.attributes?.brand;
-    const attrModel = entityState?.attributes?.model || entityState?.attributes?.model_name;
+    const attrManufacturer =
+      entityState?.attributes?.manufacturer || entityState?.attributes?.brand;
+    const attrModel =
+      entityState?.attributes?.model || entityState?.attributes?.model_name;
 
     // Detect brand/manufacturer from platform or attributes or entityId
     let manufacturer = rawManufacturer || attrManufacturer || null;
@@ -1024,38 +1054,47 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
     if (!manufacturer && platformName) {
       const p = platformName.toLowerCase();
-      if (p.includes('nest') || p.includes('google')) manufacturer = 'Google Nest';
-      else if (p.includes('ring')) manufacturer = 'Ring';
-      else if (p.includes('tapo') || p.includes('tplink')) manufacturer = 'TP-Link Tapo';
-      else if (p.includes('ezviz')) manufacturer = 'EZVIZ';
-      else if (p.includes('wyze')) manufacturer = 'Wyze';
-      else if (p.includes('reolink')) manufacturer = 'Reolink';
-      else if (p.includes('unifi') || p.includes('protect')) manufacturer = 'Ubiquiti UniFi';
-      else if (p.includes('eufy')) manufacturer = 'Eufy';
-      else if (p.includes('blink')) manufacturer = 'Blink';
-      else if (p.includes('tuya') || p.includes('smartlife')) manufacturer = 'Tuya';
-      else if (p.includes('sonoff') || p.includes('ewelink')) manufacturer = 'Sonoff';
-      else if (p.includes('shelly')) manufacturer = 'Shelly';
-      else if (p.includes('aqara') || p.includes('xiaomi')) manufacturer = 'Aqara';
-      else if (p.includes('hue')) manufacturer = 'Philips Hue';
-      else if (p.includes('broadlink')) manufacturer = 'Broadlink';
+      if (p.includes("nest") || p.includes("google"))
+        manufacturer = "Google Nest";
+      else if (p.includes("ring")) manufacturer = "Ring";
+      else if (p.includes("tapo") || p.includes("tplink"))
+        manufacturer = "TP-Link Tapo";
+      else if (p.includes("ezviz")) manufacturer = "EZVIZ";
+      else if (p.includes("wyze")) manufacturer = "Wyze";
+      else if (p.includes("reolink")) manufacturer = "Reolink";
+      else if (p.includes("unifi") || p.includes("protect"))
+        manufacturer = "Ubiquiti UniFi";
+      else if (p.includes("eufy")) manufacturer = "Eufy";
+      else if (p.includes("blink")) manufacturer = "Blink";
+      else if (p.includes("tuya") || p.includes("smartlife"))
+        manufacturer = "Tuya";
+      else if (p.includes("sonoff") || p.includes("ewelink"))
+        manufacturer = "Sonoff";
+      else if (p.includes("shelly")) manufacturer = "Shelly";
+      else if (p.includes("aqara") || p.includes("xiaomi"))
+        manufacturer = "Aqara";
+      else if (p.includes("hue")) manufacturer = "Philips Hue";
+      else if (p.includes("broadlink")) manufacturer = "Broadlink";
     }
 
     if (!manufacturer) {
-      const fullText = `${entityId} ${deviceName || ''} ${entityState?.attributes?.friendly_name || ''}`.toLowerCase();
-      if (fullText.includes('google') || fullText.includes('nest')) manufacturer = 'Google Nest';
-      else if (fullText.includes('ring')) manufacturer = 'Ring';
-      else if (fullText.includes('tapo')) manufacturer = 'TP-Link Tapo';
-      else if (fullText.includes('ezviz')) manufacturer = 'EZVIZ';
-      else if (fullText.includes('wyze')) manufacturer = 'Wyze';
-      else if (fullText.includes('reolink')) manufacturer = 'Reolink';
-      else if (fullText.includes('unifi') || fullText.includes('protect')) manufacturer = 'Ubiquiti UniFi';
-      else if (fullText.includes('eufy')) manufacturer = 'Eufy';
-      else if (fullText.includes('blink')) manufacturer = 'Blink';
-      else if (fullText.includes('tuya')) manufacturer = 'Tuya';
-      else if (fullText.includes('sonoff')) manufacturer = 'Sonoff';
-      else if (fullText.includes('shelly')) manufacturer = 'Shelly';
-      else if (fullText.includes('aqara')) manufacturer = 'Aqara';
+      const fullText =
+        `${entityId} ${deviceName || ""} ${entityState?.attributes?.friendly_name || ""}`.toLowerCase();
+      if (fullText.includes("google") || fullText.includes("nest"))
+        manufacturer = "Google Nest";
+      else if (fullText.includes("ring")) manufacturer = "Ring";
+      else if (fullText.includes("tapo")) manufacturer = "TP-Link Tapo";
+      else if (fullText.includes("ezviz")) manufacturer = "EZVIZ";
+      else if (fullText.includes("wyze")) manufacturer = "Wyze";
+      else if (fullText.includes("reolink")) manufacturer = "Reolink";
+      else if (fullText.includes("unifi") || fullText.includes("protect"))
+        manufacturer = "Ubiquiti UniFi";
+      else if (fullText.includes("eufy")) manufacturer = "Eufy";
+      else if (fullText.includes("blink")) manufacturer = "Blink";
+      else if (fullText.includes("tuya")) manufacturer = "Tuya";
+      else if (fullText.includes("sonoff")) manufacturer = "Sonoff";
+      else if (fullText.includes("shelly")) manufacturer = "Shelly";
+      else if (fullText.includes("aqara")) manufacturer = "Aqara";
     }
 
     return {
@@ -1176,7 +1215,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
    */
   override async onStart(reason?: string) {
     this.log.info(`Starting HomeAssistant platform: ${reason ?? ""}`);
-    const mbVersion = String((this as any).matterbridge?.matterbridgeVersion ?? 'unknown');
+    const mbVersion = String(
+      (this as any).matterbridge?.matterbridgeVersion ?? "unknown",
+    );
     this.log.notice(`[Runtime] Matterbridge runtime: ${mbVersion}`);
     this.log.notice(`[Runtime] Node.js runtime: ${process.version}`);
     this.log.notice(`[Runtime] Plugin version: 1.4.41`);
@@ -1536,8 +1577,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
     // Check device override
     const explicitOverride =
-      override ??
-      this.getAutomaticProfile(entityId, state);
+      override ?? this.getAutomaticProfile(entityId, state);
     const effectiveProfile = explicitOverride;
     if (override === "_DISABLED_") {
       this.log.debug(
@@ -1699,9 +1739,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     const candidate = this.getCompositeCandidate(entityId);
     const primaryEntityId =
       candidate?.config?.primary_entity ??
-      candidate?.members.find((member) =>
-        member.entityId.startsWith("camera."),
-      )?.entityId ??
+      candidate?.members.find((member) => member.entityId.startsWith("camera."))
+        ?.entityId ??
       candidate?.members.find((member) =>
         member.entityId.startsWith("humidifier."),
       )?.entityId ??
@@ -1791,7 +1830,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     for (const member of candidate.members) {
       const ep = composite.endpoints.get(member.entityId);
       if (!ep) {
-        throw new Error(`Composite member ${member.entityId} was not created in composite device ${nodeName}.`);
+        throw new Error(
+          `Composite member ${member.entityId} was not created in composite device ${nodeName}.`,
+        );
       }
     }
 
@@ -1824,7 +1865,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       const homekitAcc = await cameraEntity.setupHomeKitAccessory(record);
       await homekitAcc.publish();
       record.published = true;
-      record.strategy = cameraEntity.capabilities?.strategy || "passthrough_h264";
+      record.strategy =
+        cameraEntity.capabilities?.strategy || "passthrough_h264";
       record.state = cameraEntity.state?.state || "idle";
       await this.saveHomeKitCameraRecords();
       this.exportedDevices.add(entityId);
@@ -2023,7 +2065,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
       if (entityId.startsWith("camera.")) {
         this.exportedDevices.delete(entityId);
-        const cameraEntity = this.entities.get(entityId) as CameraEntity | undefined;
+        const cameraEntity = this.entities.get(entityId) as
+          CameraEntity | undefined;
         if (cameraEntity?.homekitAccessory) {
           await cameraEntity.homekitAccessory.unpublish();
         }
@@ -2245,10 +2288,49 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     }
   }
 
+  /**
+   * Reset HomeKit camera pairing: unpublishes the HAP accessory, regenerates MAC/setupID/PIN,
+   * updates persisted records, and republishes the accessory as fresh so it can be added to another home.
+   */
+  public async resetCameraPairing(entityId: string): Promise<{
+    success: boolean;
+    error?: string;
+    record?: HomeKitCameraStorageRecord;
+    setupUri?: string;
+  }> {
+    try {
+      const cameraEntity = this.entities.get(entityId) as
+        CameraEntity | undefined;
+      if (!cameraEntity) {
+        return {
+          success: false,
+          error: "Camera entity not found in discovery.",
+        };
+      }
+      if (!cameraEntity.homekitAccessory) {
+        const record = this.getOrCreateHomeKitCameraRecord(entityId);
+        await cameraEntity.setupHomeKitAccessory(record);
+      }
+      const newRecord = await cameraEntity.homekitAccessory!.resetPairing();
+      this.homekitCameraRecords.set(entityId, newRecord);
+      await this.saveHomeKitCameraRecords();
+      this.log.notice(
+        `Reset HomeKit pairing for ${entityId}: New PIN ${newRecord.pincode}, port ${newRecord.port}, MAC ${newRecord.username}`,
+      );
+      this.pushEntityUpdate(entityId);
+      return {
+        success: true,
+        record: newRecord,
+        setupUri: cameraEntity.homekitAccessory?.setupUri,
+      };
+    } catch (err) {
+      this.log.error(`Failed to reset camera pairing for ${entityId}: ${err}`);
+      return { success: false, error: String(err) };
+    }
+  }
+
   /** Open basic commissioning window on a node for multi-admin pairing. */
-  public async openMatterCommissioningWindow(
-    entityId: string,
-  ): Promise<{
+  public async openMatterCommissioningWindow(entityId: string): Promise<{
     success: boolean;
     error?: string;
     pairingCode?: string | null;
@@ -2295,7 +2377,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       if (!opened) {
         try {
           const { DeviceCommissioner } = await import("@matter/protocol");
-          const commissioner = (serverNode as any).env?.get?.(DeviceCommissioner);
+          const commissioner = (serverNode as any).env?.get?.(
+            DeviceCommissioner,
+          );
           if (
             commissioner &&
             typeof commissioner.allowBasicCommissioning === "function"
@@ -3036,15 +3120,44 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                       pincode:
                         this.homekitCameraRecords.get(e.entityId)?.pincode ??
                         "031-45-154",
+                      username: this.homekitCameraRecords.get(e.entityId)
+                        ?.username,
                       setupUri:
                         (e as CameraEntity).homekitAccessory?.setupUri || "",
                       strategy:
                         this.homekitCameraRecords.get(e.entityId)?.strategy ||
                         (e as CameraEntity).capabilities?.strategy ||
                         "passthrough_h264",
-                      hasAudio: (e as CameraEntity).capabilities?.hasAudio ?? false,
-                      audioCodec: (e as CameraEntity).capabilities?.audioCodec ?? "none",
-                      videoCodec: (e as CameraEntity).capabilities?.videoCodec ?? "h264",
+                      hasAudio:
+                        (e as CameraEntity).capabilities?.hasAudio ?? false,
+                      audioCodec:
+                        (e as CameraEntity).capabilities?.audioCodec ?? "none",
+                      videoCodec:
+                        (e as CameraEntity).capabilities?.videoCodec ?? "h264",
+                      liveViewStatus: (e as CameraEntity).capabilities
+                        ?.hasLiveStream
+                        ? (e as CameraEntity).capabilities?.strategy ===
+                          "passthrough_h264"
+                          ? "Passthrough H.264 (Sin transcodificación)"
+                          : (e as CameraEntity).capabilities?.strategy ===
+                              "passthrough_video_only"
+                            ? "Passthrough H.264 (Video-only)"
+                            : "Transcodificación H.264 activa"
+                        : "Sin fuente validada",
+                      snapshotStatus: "Disponible (Home Assistant Proxy)",
+                      audioStatus: (e as CameraEntity).capabilities?.hasAudio
+                        ? `Audio activo (${(e as CameraEntity).capabilities?.audioCodec})`
+                        : "Sin audio (Video-only)",
+                      recordingStatus: "No implementado (HKSV no soportado)",
+                      pairingState: this.homekitCameraRecords.get(e.entityId)
+                        ?.published
+                        ? "Publicado; emparejamiento administrado en Apple Home"
+                        : "No emparejado (Listo para añadir a Apple Home)",
+                      motionSensorSupported: true,
+                      ffmpegAvailable: Boolean(resolveFfmpegPath()),
+                      ffmpegPath:
+                        resolveFfmpegPath() || "No instalado en el sistema",
+                      ffmpegVersion: getFfmpegVersion() || "N/A",
                     }
                   : null,
             };
@@ -3097,9 +3210,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           res.writeHead(200, {
             "Content-Type": "application/json; charset=utf-8",
           });
-          res.end(
-            JSON.stringify([...result, ...mqttResults]),
-          );
+          res.end(JSON.stringify([...result, ...mqttResults]));
           return;
         }
 
@@ -3144,6 +3255,22 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             pathname.substring("/api/custom/reset-accessory/".length),
           );
           const result = await this.resetMatterAccessory(entityId);
+          res.writeHead(result.success ? 200 : 400, {
+            "Content-Type": "application/json; charset=utf-8",
+          });
+          res.end(JSON.stringify(result));
+          return;
+        }
+
+        // POST /api/custom/reset-camera-pairing/:entityId
+        if (
+          req.method === "POST" &&
+          pathname.startsWith("/api/custom/reset-camera-pairing/")
+        ) {
+          const entityId = decodeURIComponent(
+            pathname.substring("/api/custom/reset-camera-pairing/".length),
+          );
+          const result = await this.resetCameraPairing(entityId);
           res.writeHead(result.success ? 200 : 400, {
             "Content-Type": "application/json; charset=utf-8",
           });

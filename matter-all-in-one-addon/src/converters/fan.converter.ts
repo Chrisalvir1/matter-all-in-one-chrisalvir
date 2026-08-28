@@ -21,17 +21,17 @@
  * 5. AirflowDirection: `forward` → Forward (0), `reverse` → Reverse (1).
  *    Only use `last_direction` for restoration, never as the current direction.
  */
-import { FanControl } from 'matterbridge/matter/clusters';
-import type { HassState } from '../utils/ha-state.js';
+import { FanControl } from "matterbridge/matter/clusters";
+import type { HassState } from "../utils/ha-state.js";
 
 // ── HA Fan Entity Features (Authoritative bitmask from Home Assistant) ─────────
 export const FanEntityFeature = {
-  SET_SPEED: 1,    // 1 << 0
-  OSCILLATE: 2,    // 1 << 1
-  DIRECTION: 4,    // 1 << 2 (Bit 4)
-  PRESET_MODE: 8,  // 1 << 3 (Bit 8)
-  TURN_OFF: 16,    // 1 << 4
-  TURN_ON: 32,     // 1 << 5
+  SET_SPEED: 1, // 1 << 0
+  OSCILLATE: 2, // 1 << 1
+  DIRECTION: 4, // 1 << 2 (Bit 4)
+  PRESET_MODE: 8, // 1 << 3 (Bit 8)
+  TURN_OFF: 16, // 1 << 4
+  TURN_ON: 32, // 1 << 5
 } as const;
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -42,12 +42,12 @@ export const FanEntityFeature = {
  * Using the midpoints between steps as thresholds.
  */
 export const FAN_SPEED_LEVELS = [
-  { speed: 1, pct: 16.67, threshold_lo: 0,    threshold_hi: 25   },
-  { speed: 2, pct: 33.33, threshold_lo: 25,   threshold_hi: 41.7 },
-  { speed: 3, pct: 50,    threshold_lo: 41.7, threshold_hi: 58.3 },
-  { speed: 4, pct: 66.67, threshold_lo: 58.3, threshold_hi: 75   },
-  { speed: 5, pct: 83.33, threshold_lo: 75,   threshold_hi: 91.7 },
-  { speed: 6, pct: 100,   threshold_lo: 91.7, threshold_hi: 100  },
+  { speed: 1, pct: 16.67, threshold_lo: 0, threshold_hi: 25 },
+  { speed: 2, pct: 33.33, threshold_lo: 25, threshold_hi: 41.7 },
+  { speed: 3, pct: 50, threshold_lo: 41.7, threshold_hi: 58.3 },
+  { speed: 4, pct: 66.67, threshold_lo: 58.3, threshold_hi: 75 },
+  { speed: 5, pct: 83.33, threshold_lo: 75, threshold_hi: 91.7 },
+  { speed: 6, pct: 100, threshold_lo: 91.7, threshold_hi: 100 },
 ] as const;
 
 /** Max discrete speed level supported by the physical fans. */
@@ -68,10 +68,11 @@ export const SPEED_HYSTERESIS_PCT = 4;
  * `percentage > 0` MUST NOT be used as an on indicator.
  */
 export function isFanOn(state: HassState): boolean {
-  if (state.state === 'on') return true;
-  if (state.state === 'off') return false;
+  if (state.state === "on") return true;
+  if (state.state === "off") return false;
   // Some integrations use boolean `is_on` inside attributes
-  if (typeof state.attributes.is_on === 'boolean') return state.attributes.is_on;
+  if (typeof state.attributes.is_on === "boolean")
+    return state.attributes.is_on;
   // Unavailable / unknown → treat as off for safety
   return false;
 }
@@ -85,7 +86,7 @@ export function isFanOn(state: HassState): boolean {
  */
 export function fanPercentage(state: HassState): number {
   const raw = state.attributes.percentage;
-  if (typeof raw === 'number' && raw >= 0 && raw <= 100) return raw;
+  if (typeof raw === "number" && raw >= 0 && raw <= 100) return raw;
   return 0;
 }
 
@@ -94,14 +95,20 @@ export function fanPercentage(state: HassState): number {
  * Uses speed_count, speed_list length, or 100 / percentage_step.
  */
 export function getFanSpeedCount(state: HassState): number {
-  if (typeof state.attributes.speed_count === 'number' && state.attributes.speed_count > 0) {
+  if (
+    typeof state.attributes.speed_count === "number" &&
+    state.attributes.speed_count > 0
+  ) {
     return Math.min(100, Math.max(1, Math.round(state.attributes.speed_count)));
   }
-  if (Array.isArray(state.attributes.speed_list) && state.attributes.speed_list.length > 0) {
+  if (
+    Array.isArray(state.attributes.speed_list) &&
+    state.attributes.speed_list.length > 0
+  ) {
     return Math.min(100, Math.max(1, state.attributes.speed_list.length));
   }
   const step = state.attributes.percentage_step;
-  if (typeof step === 'number' && step > 0 && step <= 100) {
+  if (typeof step === "number" && step > 0 && step <= 100) {
     return Math.min(100, Math.max(1, Math.round(100 / step)));
   }
   return FAN_SPEED_MAX;
@@ -117,7 +124,10 @@ export function getFanSpeedCount(state: HassState): number {
  *  100 → 100    (level 6)
  *    0 → 0      (off, returned as-is)
  */
-export function normaliseToPhysicalSpeed(pct: number, speedMax: number = FAN_SPEED_MAX): number {
+export function normaliseToPhysicalSpeed(
+  pct: number,
+  speedMax: number = FAN_SPEED_MAX,
+): number {
   if (pct <= 0) return 0;
   if (pct >= 100) return 100;
   if (speedMax === 6) {
@@ -136,7 +146,10 @@ export function normaliseToPhysicalSpeed(pct: number, speedMax: number = FAN_SPE
  * Given a requested percentage (0-100), snap it to the nearest physical level
  * percentage.  Returns 0 when pct === 0 (represents off/minimum in some UIs).
  */
-export function snapToPhysicalLevel(pct: number, speedMax: number = FAN_SPEED_MAX): number {
+export function snapToPhysicalLevel(
+  pct: number,
+  speedMax: number = FAN_SPEED_MAX,
+): number {
   if (pct <= 0) return 0;
   if (pct >= 100) return 100;
   if (speedMax === 6) {
@@ -160,7 +173,10 @@ export function snapToPhysicalLevel(pct: number, speedMax: number = FAN_SPEED_MA
  * Return true if the requested percentage is within the hysteresis band of the
  * current percentage, meaning we should skip re-sending the command to HA.
  */
-export function withinHysteresis(requestedPct: number, currentPct: number): boolean {
+export function withinHysteresis(
+  requestedPct: number,
+  currentPct: number,
+): boolean {
   return Math.abs(requestedPct - currentPct) < SPEED_HYSTERESIS_PCT;
 }
 
@@ -170,16 +186,22 @@ export function withinHysteresis(requestedPct: number, currentPct: number): bool
  * HA reports `forward` or `reverse`; anything else defaults to Forward.
  * NEVER use `last_direction` as the current direction.
  */
-export function haDirectionToMatter(direction: string | undefined): FanControl.AirflowDirection {
-  if (direction === 'reverse') return FanControl.AirflowDirection.Reverse;
+export function haDirectionToMatter(
+  direction: string | undefined,
+): FanControl.AirflowDirection {
+  if (direction === "reverse") return FanControl.AirflowDirection.Reverse;
   return FanControl.AirflowDirection.Forward;
 }
 
 /**
  * Map a Matter AirflowDirection to the HA direction string.
  */
-export function matterDirectionToHa(direction: FanControl.AirflowDirection): 'forward' | 'reverse' {
-  return direction === FanControl.AirflowDirection.Reverse ? 'reverse' : 'forward';
+export function matterDirectionToHa(
+  direction: FanControl.AirflowDirection,
+): "forward" | "reverse" {
+  return direction === FanControl.AirflowDirection.Reverse
+    ? "reverse"
+    : "forward";
 }
 
 /**
@@ -188,7 +210,7 @@ export function matterDirectionToHa(direction: FanControl.AirflowDirection): 'fo
  */
 export function fanDirection(state: HassState): string | undefined {
   const dir = state.attributes.direction;
-  return typeof dir === 'string' ? dir : undefined;
+  return typeof dir === "string" ? dir : undefined;
 }
 
 /**
@@ -197,7 +219,7 @@ export function fanDirection(state: HassState): string | undefined {
  */
 export function hasFanDirection(state: HassState): boolean {
   const supported = state.attributes.supported_features;
-  if (typeof supported === 'number') {
+  if (typeof supported === "number") {
     return (supported & FanEntityFeature.DIRECTION) !== 0;
   }
   return false;
@@ -209,12 +231,18 @@ export function hasFanDirection(state: HassState): boolean {
  */
 export function hasFanAuto(state: HassState): boolean {
   const supported = state.attributes.supported_features;
-  if (typeof supported === 'number' && !(supported & FanEntityFeature.PRESET_MODE)) {
+  if (
+    typeof supported === "number" &&
+    !(supported & FanEntityFeature.PRESET_MODE)
+  ) {
     return false;
   }
   const presets = state.attributes.preset_modes;
   if (Array.isArray(presets)) {
-    return presets.some((mode) => typeof mode === 'string' && mode.toLowerCase().trim() === 'auto');
+    return presets.some(
+      (mode) =>
+        typeof mode === "string" && mode.toLowerCase().trim() === "auto",
+    );
   }
   return false;
 }
@@ -223,7 +251,9 @@ export function hasFanAuto(state: HassState): boolean {
  * Select the conformant FanModeSequence according to the exact enabled features.
  * When Auto is enabled, OffLowMedHighAuto is required.
  */
-export function getFanModeSequence(_state?: HassState): FanControl.FanModeSequence {
+export function getFanModeSequence(
+  _state?: HassState,
+): FanControl.FanModeSequence {
   return FanControl.FanModeSequence.OffLowMedHighAuto;
 }
 
@@ -277,8 +307,8 @@ export const FAN_MODE_SEQUENCE = FanControl.FanModeSequence.OffLowMedHigh;
  * Presets are tracked only in HA; we do NOT advertise them as Auto.
  */
 export const FAN_PRESET_TO_WIND: Record<string, string> = {
-  sleep: 'sleepWind',
-  breeze: 'naturalWind',
+  sleep: "sleepWind",
+  breeze: "naturalWind",
 };
 
 /**
@@ -286,16 +316,22 @@ export const FAN_PRESET_TO_WIND: Record<string, string> = {
  * Returns true if supported_features has SET_SPEED (1) or if percentage is present.
  */
 export function hasFanSpeed(state: HassState): boolean {
-  if (typeof state.attributes.supported_features === 'number') {
+  if (typeof state.attributes.supported_features === "number") {
     return (state.attributes.supported_features & 1) !== 0;
   }
-  return typeof state.attributes.percentage === 'number' || Array.isArray(state.attributes.speed_list);
+  return (
+    typeof state.attributes.percentage === "number" ||
+    Array.isArray(state.attributes.speed_list)
+  );
 }
 
 /**
  * Return the physical speed level (1..speedMax) or 0 (Off) based on the percentage.
  */
-export function fanSpeed(pct: number, speedMax: number = FAN_SPEED_MAX): number {
+export function fanSpeed(
+  pct: number,
+  speedMax: number = FAN_SPEED_MAX,
+): number {
   if (pct <= 0) return 0;
   if (pct >= 100) return speedMax;
   if (speedMax === 6) {
@@ -373,4 +409,3 @@ export const fanConverter = {
   /** HA Fan Entity Feature Constants */
   FanEntityFeature,
 };
-

@@ -2,7 +2,7 @@
  * CameraEntity — Home Assistant Camera entity with Dual-Track Export:
  *
  * TRACK A (HomeKit / HAP): Dedicated standalone HomeKit Camera accessory with RTP/SRTP live view,
- *                          snapshots, and audio passthrough for Apple Home.
+ *                          snapshots, motion sensors, and audio passthrough for Apple Home.
  * TRACK B (Matter 1.5/1.6): Experimental Matter Camera accessory with Camera AV Stream Management (0x0551)
  *                          and WebRTC Transport Provider (0x0553) cluster servers.
  */
@@ -10,10 +10,7 @@ import { BaseEntity } from "./base.entity.js";
 import { ClusterId } from "matterbridge/matter/types";
 import { MatterbridgeEndpoint } from "matterbridge";
 import type { HassState } from "../utils/ha-state.js";
-import { cameraConverter } from "../converters/camera.converter.js";
-import {
-  detectCameraCapabilities,
-} from "../camera/camera-capabilities.js";
+import { detectCameraCapabilities } from "../camera/camera-capabilities.js";
 import { CameraSourceResolver } from "../camera/camera-source-resolver.js";
 import { CameraSessionManager } from "../camera/matter/camera-session-manager.js";
 import { CameraWebRtcAdapter } from "../camera/matter/camera-webrtc-adapter.js";
@@ -107,6 +104,21 @@ export class CameraEntity extends BaseEntity {
     return this.homekitAccessory;
   }
 
+  /**
+   * Updates HomeKit accessory state, including linked motion sensor detection.
+   */
+  public updateHomeKitState(state: HassState): void {
+    this.state = state;
+    if (this.homekitAccessory) {
+      const motionDetected = Boolean(
+        state.attributes?.motion ||
+        state.attributes?.motion_detected ||
+        state.attributes?.occupancy,
+      );
+      this.homekitAccessory.updateMotionState(motionDetected);
+    }
+  }
+
   protected override registerCommandHandlers(
     endpoint?: MatterbridgeEndpoint,
   ): void {
@@ -128,9 +140,11 @@ export class CameraEntity extends BaseEntity {
 
   public override async updateState(
     state: HassState,
-    isInitialSync = false,
+    _isInitialSync = false,
   ): Promise<void> {
     this.state = state;
+    this.updateHomeKitState(state);
+
     if (!this.endpoint) return;
 
     this.capabilities = detectCameraCapabilities(state, this.streamSource);

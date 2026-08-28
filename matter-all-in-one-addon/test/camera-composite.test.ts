@@ -1,9 +1,17 @@
 import { describe, expect, it, vi } from "vitest";
 import "./mocks/matterbridge.mock.js";
-import { CameraEntity, CameraAvStreamManagementId, WebRtcTransportProviderId } from "../src/entities/camera.entity.js";
+import {
+  CameraEntity,
+  CameraAvStreamManagementId,
+  WebRtcTransportProviderId,
+} from "../src/entities/camera.entity.js";
 import { CompositeDeviceEntity } from "../src/entities/composite-device.entity.js";
 import { MatterDeviceTypes } from "../src/device-registry.js";
-import { OnOff, OccupancySensing, BooleanState } from "matterbridge/matter/clusters";
+import {
+  OnOff,
+  OccupancySensing,
+  BooleanState,
+} from "matterbridge/matter/clusters";
 import { MatterbridgeOnOffServer } from "matterbridge/behaviors";
 
 const mockPlatform: any = {
@@ -17,7 +25,11 @@ const mockPlatform: any = {
   ha: { callService: vi.fn().mockResolvedValue(undefined) },
 };
 
-function state(entityId: string, value: string, attributes: Record<string, any> = {}) {
+function state(
+  entityId: string,
+  value: string,
+  attributes: Record<string, any> = {},
+) {
   return {
     entity_id: entityId,
     state: value,
@@ -35,7 +47,11 @@ describe("CameraEntity", () => {
       frontend_stream_type: "webrtc",
     });
 
-    const cameraEntity = new CameraEntity(mockPlatform, camState, MatterDeviceTypes.camera);
+    const cameraEntity = new CameraEntity(
+      mockPlatform,
+      camState,
+      MatterDeviceTypes.camera,
+    );
     const endpoint = await cameraEntity.createEndpoint();
 
     expect(endpoint).toBeDefined();
@@ -49,7 +65,11 @@ describe("CameraEntity", () => {
       stream_source: "rtsp://camera.local/live",
     });
 
-    const cameraEntity = new CameraEntity(mockPlatform, camState, MatterDeviceTypes.camera);
+    const cameraEntity = new CameraEntity(
+      mockPlatform,
+      camState,
+      MatterDeviceTypes.camera,
+    );
     const record = {
       entityId: "camera.front_yard",
       uuid: "e4a2d8a0-1234-5678-9abc-def012345678",
@@ -74,19 +94,35 @@ describe("CameraEntity", () => {
 
   it("handles camera turn_on and turn_off commands via HA service calls", async () => {
     const camState = state("camera.front_yard", "idle");
-    const cameraEntity = new CameraEntity(mockPlatform, camState, MatterDeviceTypes.camera);
+    const cameraEntity = new CameraEntity(
+      mockPlatform,
+      camState,
+      MatterDeviceTypes.camera,
+    );
     const endpoint = await cameraEntity.createEndpoint();
 
     await (endpoint as any).invokeCommand("on");
-    expect(mockPlatform.ha.callService).toHaveBeenCalledWith("camera", "turn_on", "camera.front_yard");
+    expect(mockPlatform.ha.callService).toHaveBeenCalledWith(
+      "camera",
+      "turn_on",
+      "camera.front_yard",
+    );
 
     await (endpoint as any).invokeCommand("off");
-    expect(mockPlatform.ha.callService).toHaveBeenCalledWith("camera", "turn_off", "camera.front_yard");
+    expect(mockPlatform.ha.callService).toHaveBeenCalledWith(
+      "camera",
+      "turn_off",
+      "camera.front_yard",
+    );
   });
 
   it("synchronizes camera state updates", async () => {
     const camState = state("camera.front_yard", "idle");
-    const cameraEntity = new CameraEntity(mockPlatform, camState, MatterDeviceTypes.camera);
+    const cameraEntity = new CameraEntity(
+      mockPlatform,
+      camState,
+      MatterDeviceTypes.camera,
+    );
     await cameraEntity.createEndpoint();
 
     await cameraEntity.updateState(state("camera.front_yard", "streaming"));
@@ -102,7 +138,9 @@ describe("Composite Camera Device (Unified All-in-One Accessory)", () => {
     const members = [
       {
         entityId: "camera.entrance_cam",
-        state: state("camera.entrance_cam", "idle", { friendly_name: "Cámara Entrada" }),
+        state: state("camera.entrance_cam", "idle", {
+          friendly_name: "Cámara Entrada",
+        }),
       },
       {
         entityId: "binary_sensor.entrance_motion",
@@ -146,27 +184,57 @@ describe("Composite Camera Device (Unified All-in-One Accessory)", () => {
     expect(composite.endpoints.get("camera.entrance_cam")).toBe(root);
 
     // 2. Child endpoints must all be attached to the same ServerNode
-    expect(composite.endpoints.get("binary_sensor.entrance_motion")).toBeDefined();
-    expect(composite.endpoints.get("binary_sensor.entrance_doorbell")).toBeDefined();
+    expect(
+      composite.endpoints.get("binary_sensor.entrance_motion"),
+    ).toBeDefined();
+    expect(
+      composite.endpoints.get("binary_sensor.entrance_doorbell"),
+    ).toBeDefined();
     expect(composite.endpoints.get("light.entrance_spotlight")).toBeDefined();
-    expect(composite.endpoints.get("switch.entrance_privacy_mode")).toBeDefined();
+    expect(
+      composite.endpoints.get("switch.entrance_privacy_mode"),
+    ).toBeDefined();
 
-    expect((root as any).children.has("binary_sensor_entrance_motion")).toBe(true);
-    expect((root as any).children.has("binary_sensor_entrance_doorbell")).toBe(true);
+    expect((root as any).children.has("binary_sensor_entrance_motion")).toBe(
+      true,
+    );
+    expect((root as any).children.has("binary_sensor_entrance_doorbell")).toBe(
+      true,
+    );
     expect((root as any).children.has("light_entrance_spotlight")).toBe(true);
-    expect((root as any).children.has("switch_entrance_privacy_mode")).toBe(true);
+    expect((root as any).children.has("switch_entrance_privacy_mode")).toBe(
+      true,
+    );
 
     // 3. Root camera command handlers
-    await (composite.endpoints.get("camera.entrance_cam") as any).invokeCommand("on");
-    expect(mockPlatform.ha.callService).toHaveBeenCalledWith("camera", "turn_on", "camera.entrance_cam");
+    await (composite.endpoints.get("camera.entrance_cam") as any).invokeCommand(
+      "on",
+    );
+    expect(mockPlatform.ha.callService).toHaveBeenCalledWith(
+      "camera",
+      "turn_on",
+      "camera.entrance_cam",
+    );
 
     // 4. Spotlight child command handler
-    await (composite.endpoints.get("light.entrance_spotlight") as any).invokeCommand("on");
-    expect(mockPlatform.ha.callService).toHaveBeenCalledWith("light", "turn_on", "light.entrance_spotlight");
+    await (
+      composite.endpoints.get("light.entrance_spotlight") as any
+    ).invokeCommand("on");
+    expect(mockPlatform.ha.callService).toHaveBeenCalledWith(
+      "light",
+      "turn_on",
+      "light.entrance_spotlight",
+    );
 
     // 5. Privacy switch child command handler
-    await (composite.endpoints.get("switch.entrance_privacy_mode") as any).invokeCommand("on");
-    expect(mockPlatform.ha.callService).toHaveBeenCalledWith("switch", "turn_on", "switch.entrance_privacy_mode");
+    await (
+      composite.endpoints.get("switch.entrance_privacy_mode") as any
+    ).invokeCommand("on");
+    expect(mockPlatform.ha.callService).toHaveBeenCalledWith(
+      "switch",
+      "turn_on",
+      "switch.entrance_privacy_mode",
+    );
   });
 
   it("updates child motion and doorbell states across the unified node", async () => {
@@ -177,7 +245,9 @@ describe("Composite Camera Device (Unified All-in-One Accessory)", () => {
       },
       {
         entityId: "binary_sensor.tapo_motion",
-        state: state("binary_sensor.tapo_motion", "on", { device_class: "occupancy" }),
+        state: state("binary_sensor.tapo_motion", "on", {
+          device_class: "occupancy",
+        }),
       },
     ];
 

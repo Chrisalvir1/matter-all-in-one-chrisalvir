@@ -607,7 +607,10 @@ describe("HomeAssistantPlatform", () => {
     await (platform as any).registerHAEntity({
       entity_id: "fan.oficina_apagador_oficina",
       state: "off",
-      attributes: { friendly_name: "Apagador oficina Canal 1", supported_features: 0 },
+      attributes: {
+        friendly_name: "Apagador oficina Canal 1",
+        supported_features: 0,
+      },
     });
     await (platform as any).registerHAEntity({
       entity_id: "switch.apagador_salon",
@@ -622,9 +625,13 @@ describe("HomeAssistantPlatform", () => {
 
     expect(platform.isMultiSwitchDevice("device-oficina-1")).toBe(true);
 
-    const res = await fetch(`http://127.0.0.1:${platform.uiServerPort}/api/custom/devices`);
+    const res = await fetch(
+      `http://127.0.0.1:${platform.uiServerPort}/api/custom/devices`,
+    );
     const devices = (await res.json()) as any[];
-    const fanDev = devices.find((d) => d.entityId === "fan.oficina_apagador_oficina");
+    const fanDev = devices.find(
+      (d) => d.entityId === "fan.oficina_apagador_oficina",
+    );
     const swDev = devices.find((d) => d.entityId === "switch.apagador_salon");
 
     // Must NOT be grouped as composite; each button is independent!
@@ -650,25 +657,36 @@ describe("HomeAssistantPlatform", () => {
       attributes: { friendly_name: "Fan Switch" },
     });
 
-    const result = await platform.setDeviceProfile("switch.living_room_fan_switch", "fan");
+    const result = await platform.setDeviceProfile(
+      "switch.living_room_fan_switch",
+      "fan",
+    );
     expect(result.success).toBe(true);
-    expect(platform.deviceOverrides["switch.living_room_fan_switch"]).toBe("fan");
+    expect(platform.deviceOverrides["switch.living_room_fan_switch"]).toBe(
+      "fan",
+    );
   });
 
   it("opens Matter commissioning window for multi-admin pairing", async () => {
     let enterCalled = false;
     const mockEndpoint = {
       serverNode: {
-        act: vi.fn().mockImplementation(async (callback: (agent: any) => Promise<void>) => {
-          const agent = {
-            commissioning: {
-              enterCommissionableMode: vi.fn().mockImplementation(async () => {
-                enterCalled = true;
-              }),
+        act: vi
+          .fn()
+          .mockImplementation(
+            async (callback: (agent: any) => Promise<void>) => {
+              const agent = {
+                commissioning: {
+                  enterCommissionableMode: vi
+                    .fn()
+                    .mockImplementation(async () => {
+                      enterCalled = true;
+                    }),
+                },
+              };
+              await callback(agent);
             },
-          };
-          await callback(agent);
-        }),
+          ),
         state: {
           commissioning: {
             pairingCodes: {
@@ -680,9 +698,13 @@ describe("HomeAssistantPlatform", () => {
         },
       },
     };
-    (platform as any).matterbridgeDevices.set("light.living_room", mockEndpoint);
+    (platform as any).matterbridgeDevices.set(
+      "light.living_room",
+      mockEndpoint,
+    );
 
-    const result = await platform.openMatterCommissioningWindow("light.living_room");
+    const result =
+      await platform.openMatterCommissioningWindow("light.living_room");
     expect(result.success).toBe(true);
     expect(result.pairingCode).toBe("MT:Y.K9042C00KA0648G00");
     expect(result.manualPairingCode).toBe("34970112332");
@@ -700,13 +722,17 @@ describe("HomeAssistantPlatform", () => {
 
     const mockEndpoint = {
       serverNode: {
-        act: vi.fn().mockImplementation(async (callback: (agent: any) => Promise<void>) => {
-          await callback({
-            commissioning: {
-              enterCommissionableMode: vi.fn().mockResolvedValue(undefined),
+        act: vi
+          .fn()
+          .mockImplementation(
+            async (callback: (agent: any) => Promise<void>) => {
+              await callback({
+                commissioning: {
+                  enterCommissionableMode: vi.fn().mockResolvedValue(undefined),
+                },
+              });
             },
-          });
-        }),
+          ),
         state: {
           commissioning: {
             pairingCodes: {
@@ -718,7 +744,10 @@ describe("HomeAssistantPlatform", () => {
         },
       },
     };
-    (platform as any).matterbridgeDevices.set("light.living_room", mockEndpoint);
+    (platform as any).matterbridgeDevices.set(
+      "light.living_room",
+      mockEndpoint,
+    );
 
     const res = await fetch(
       `http://127.0.0.1:${platform.uiServerPort}/api/custom/open-commissioning/light.living_room`,

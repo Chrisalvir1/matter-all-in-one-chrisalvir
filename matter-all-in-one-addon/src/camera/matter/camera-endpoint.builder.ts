@@ -1,13 +1,22 @@
 import { MatterbridgeEndpoint, DeviceTypeDefinition } from "matterbridge";
-import { CameraAvStreamManagement, WebRtcTransportProvider } from "matterbridge/matter/clusters";
-import { CameraAvStreamManagementServer, WebRtcTransportProviderServer } from "matterbridge/matter/behaviors";
+import {
+  CameraAvStreamManagement,
+  WebRtcTransportProvider,
+} from "matterbridge/matter/clusters";
+import {
+  CameraAvStreamManagementServer,
+  WebRtcTransportProviderServer,
+} from "matterbridge/matter/behaviors";
 import {
   MATTER_BRIDGE_VENDOR_ID,
   getMatterSerialNumber,
   getHaDeviceManufacturer,
   getHaDeviceModel,
 } from "../../utils/matter-device-identity.js";
-import type { CameraCapabilitiesInfo, ResolvedStreamSource } from "../camera-types.js";
+import type {
+  CameraCapabilitiesInfo,
+  ResolvedStreamSource,
+} from "../camera-types.js";
 import { CameraSessionManager } from "./camera-session-manager.js";
 import { CameraWebRtcAdapter } from "./camera-webrtc-adapter.js";
 
@@ -52,9 +61,13 @@ export class CameraEndpointBuilder {
     );
 
     // Define Custom Cluster Behavior Implementations
-    class CustomCameraAvStreamManagementServer extends CameraAvStreamManagementServer.with(CameraAvStreamManagement.Feature.Video) {
+    class CustomCameraAvStreamManagementServer extends CameraAvStreamManagementServer.with(
+      CameraAvStreamManagement.Feature.Video,
+    ) {
       async videoStreamAllocate(request: any) {
-        const session = sessionManager.allocateSession(request.streamUsage || 1);
+        const session = sessionManager.allocateSession(
+          request.streamUsage || 1,
+        );
         return { videoStreamId: session.videoStreamId || 1 };
       }
       async videoStreamDeallocate(request: any) {
@@ -86,7 +99,10 @@ export class CameraEndpointBuilder {
     // Mount Camera AV Stream Management Server (0x0551)
     endpoint.behaviors.require(CustomCameraAvStreamManagementServer, {
       maxConcurrentEncoders: 1,
-      maxEncodedPixelRate: capabilities.resolution.width * capabilities.resolution.height * capabilities.maxFps,
+      maxEncodedPixelRate:
+        capabilities.resolution.width *
+        capabilities.resolution.height *
+        capabilities.maxFps,
       videoSensorParams: {
         sensorWidth: capabilities.resolution.width,
         sensorHeight: capabilities.resolution.height,
@@ -97,7 +113,12 @@ export class CameraEndpointBuilder {
       allocatedVideoStreams: [],
       currentFrameRate: capabilities.maxFps,
       rateDistortionTradeOffPoints: [],
-      viewport: { x1: 0, y1: 0, x2: capabilities.resolution.width, y2: capabilities.resolution.height },
+      viewport: {
+        x1: 0,
+        y1: 0,
+        x2: capabilities.resolution.width,
+        y2: capabilities.resolution.height,
+      },
       maxContentBufferSize: 1024 * 1024,
       maxNetworkBandwidth: 5000000,
       streamUsagePriorities: [1],
@@ -108,8 +129,14 @@ export class CameraEndpointBuilder {
       currentSessions: [],
     });
 
-    // Aprovision clusters
-    endpoint.addRequiredClusterServers();
+    // Provision standard clusters safely
+    try {
+      endpoint.addRequiredClusterServers();
+    } catch (err) {
+      platform?.log?.debug?.(
+        `[CameraEndpointBuilder][${entityId}] Provisioning note: ${err}`,
+      );
+    }
 
     return endpoint;
   }

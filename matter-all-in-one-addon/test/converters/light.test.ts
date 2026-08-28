@@ -1,16 +1,19 @@
-import { describe, it, expect } from 'vitest';
-import { lightConverter } from '../../src/converters/light.converter.js';
+import { describe, it, expect } from "vitest";
+import { lightConverter } from "../../src/converters/light.converter.js";
 
-describe('lightConverter', () => {
-  it('should convert state to OnOff strictly based on state', () => {
-    const activeState = { state: 'on', attributes: {} } as any;
-    const inactiveState = { state: 'off', attributes: { brightness: 255 } } as any;
+describe("lightConverter", () => {
+  it("should convert state to OnOff strictly based on state", () => {
+    const activeState = { state: "on", attributes: {} } as any;
+    const inactiveState = {
+      state: "off",
+      attributes: { brightness: 255 },
+    } as any;
 
     expect(lightConverter.toOnOff(activeState)).toBe(true);
     expect(lightConverter.toOnOff(inactiveState)).toBe(false);
   });
 
-  it('should convert HA brightness (1..255) to Matter level (1..254)', () => {
+  it("should convert HA brightness (1..255) to Matter level (1..254)", () => {
     // Min HA brightness
     expect(lightConverter.toLevel(1)).toBe(1);
     // Max HA brightness
@@ -21,7 +24,7 @@ describe('lightConverter', () => {
     expect(lightConverter.toLevel(0)).toBe(1);
   });
 
-  it('should convert Matter level (1..254) to HA brightness (1..255)', () => {
+  it("should convert Matter level (1..254) to HA brightness (1..255)", () => {
     // Min Matter level
     expect(lightConverter.toHaBrightness(1)).toBe(1);
     // Max Matter level

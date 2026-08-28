@@ -1,10 +1,18 @@
 import type { HassState } from "../utils/ha-state.js";
-import type { ResolvedStreamSource, StreamSourceType } from "./camera-types.js";
+import type { ResolvedStreamSource } from "./camera-types.js";
+import {
+  sanitizeUrlCredentials,
+  probeCameraSource,
+} from "./homekit/ffmpeg-helper.js";
 
 export class CameraSourceResolver {
   /**
-   * Resolves the actual stream source and snapshot URL from Home Assistant.
-   * Redacts sensitive tokens or passwords in log outputs.
+   * Resolves the actual stream source and snapshot URL from Home Assistant in strict order:
+   * 1. stream_source attribute
+   * 2. Direct RTSP URL (rtsp_url, stream_url)
+   * 3. WebRTC / go2rtc source
+   * 4. HLS or HA stream proxy URL ONLY if probeCameraSource validates it
+   * 5. unknown
    */
   public static async resolve(
     platform: any,
@@ -12,70 +20,133 @@ export class CameraSourceResolver {
     state: HassState,
   ): Promise<ResolvedStreamSource> {
     const attrs = state?.attributes || {};
+    const snapshotUrl = `/api/camera_proxy/${entityId}`;
 
-    // 1. Check direct attributes (e.g. RTSP url provided by camera integration)
-    const directRtsp = attrs.stream_source || attrs.rtsp_url || attrs.stream_url;
+    // 1. Check state.attributes.stream_source
+    const streamSourceAttr = attrs.stream_source;
+    if (
+      typeof streamSourceAttr === "string" &&
+      streamSourceAttr.trim().length > 0
+    ) {
+      const sanitized = sanitizeUrlCredentials(streamSourceAttr);
+      platform?.log?.debug?.(
+        `[CameraSourceResolver][${entityId}] Resolved from stream_source: ${sanitized}`,
+      );
+      return {
+        sourceType: streamSourceAttr.startsWith("rtsp") ? "rtsp" : "ha_proxy",
+        url: streamSourceAttr,
+        snapshotUrl,
+        supportsPassthrough: true,
+        requiresBridge: false,
+      };
+    }
+
+    // 2. Direct RTSP URL (rtsp_url, stream_url)
+    const directRtsp = attrs.rtsp_url || attrs.stream_url;
     if (typeof directRtsp === "string" && directRtsp.startsWith("rtsp")) {
-      platform?.log?.debug?.(`[CameraSourceResolver][${entityId}] Resolved direct RTSP stream source`);
+      const sanitized = sanitizeUrlCredentials(directRtsp);
+      platform?.log?.debug?.(
+        `[CameraSourceResolver][${entityId}] Resolved direct RTSP stream source: ${sanitized}`,
+      );
       return {
         sourceType: "rtsp",
         url: directRtsp,
-        snapshotUrl: `/api/camera_proxy/${entityId}`,
+        snapshotUrl,
         supportsPassthrough: true,
         requiresBridge: false,
       };
     }
 
-    // 2. Check for native WebRTC stream type in HA
-    if (attrs.frontend_stream_type === "webrtc") {
-      platform?.log?.debug?.(`[CameraSourceResolver][${entityId}] Resolved native WebRTC stream`);
-      return {
-        sourceType: "webrtc",
-        url: typeof directRtsp === "string" ? directRtsp : undefined,
-        snapshotUrl: `/api/camera_proxy/${entityId}`,
-        supportsPassthrough: true,
-        requiresBridge: false,
-      };
-    }
-
-    // 3. Check for go2rtc / WebRTC component integrations
-    if (typeof attrs.webrtc_url === "string") {
+    // 3. WebRTC / go2rtc source
+    if (
+      typeof attrs.webrtc_url === "string" &&
+      attrs.webrtc_url.trim().length > 0
+    ) {
+      const sanitized = sanitizeUrlCredentials(attrs.webrtc_url);
+      platform?.log?.debug?.(
+        `[CameraSourceResolver][${entityId}] Resolved go2rtc/webrtc_url: ${sanitized}`,
+      );
       return {
         sourceType: "webrtc",
         url: attrs.webrtc_url,
-        snapshotUrl: `/api/camera_proxy/${entityId}`,
+        snapshotUrl,
         supportsPassthrough: true,
         requiresBridge: false,
       };
     }
 
-    // 4. Request dynamic stream URL via Home Assistant websocket / service if supported
-    if (platform?.ha?.callService && (Number(attrs.supported_features || 0) & 2) !== 0) {
+    if (attrs.frontend_stream_type === "webrtc") {
+      platform?.log?.debug?.(
+        `[CameraSourceResolver][${entityId}] Camera frontend_stream_type is webrtc`,
+      );
+      return {
+        sourceType: "webrtc",
+        url: undefined,
+        snapshotUrl,
+        supportsPassthrough: true,
+        requiresBridge: false,
+      };
+    }
+
+    // 4. HLS or HA camera stream service request
+    if (
+      platform?.ha?.callService &&
+      (Number(attrs.supported_features || 0) & 2) !== 0
+    ) {
       try {
-        // Home Assistant stream service request
-        const result = await platform.ha.callService("camera", "play_stream", entityId, { format: "hls" });
-        if (result && typeof result === "object" && typeof (result as any).url === "string") {
-          const streamUrl = (result as any).url;
+        const result = await platform.ha.callService(
+          "camera",
+          "play_stream",
+          entityId,
+          {
+            format: "hls",
+          },
+        );
+        if (
+          result &&
+          typeof result === "object" &&
+          typeof (result as any).url === "string"
+        ) {
+          const hlsUrl = (result as any).url;
+          const fullHlsUrl = hlsUrl.startsWith("http")
+            ? hlsUrl
+            : `${platform?.ha?.baseUrl || ""}${hlsUrl}`;
+
+          let isH264 = true;
+          try {
+            const probe = await probeCameraSource(fullHlsUrl, {
+              timeoutMs: 2000,
+            });
+            if (probe.valid && probe.videoCodec) {
+              isH264 = probe.videoCodec === "h264";
+            }
+          } catch {}
+
+          platform?.log?.debug?.(
+            `[CameraSourceResolver][${entityId}] Resolved dynamic HLS stream`,
+          );
           return {
             sourceType: "hls",
-            url: streamUrl,
-            snapshotUrl: `/api/camera_proxy/${entityId}`,
-            supportsPassthrough: true,
+            url: fullHlsUrl,
+            snapshotUrl,
+            supportsPassthrough: isH264,
             requiresBridge: true,
           };
         }
       } catch (err) {
-        platform?.log?.debug?.(`[CameraSourceResolver][${entityId}] Dynamic stream request returned: ${err}`);
+        platform?.log?.debug?.(
+          `[CameraSourceResolver][${entityId}] Dynamic stream service returned: ${err}`,
+        );
       }
     }
 
-    // 5. Default fallback to HA Camera Proxy stream
+    // 5. Fallback: unknown (do not guess or inject unvalidated proxy streams)
     return {
-      sourceType: "ha_proxy",
-      url: `/api/camera_proxy_stream/${entityId}`,
-      snapshotUrl: `/api/camera_proxy/${entityId}`,
+      sourceType: "unknown",
+      url: undefined,
+      snapshotUrl,
       supportsPassthrough: false,
-      requiresBridge: true,
+      requiresBridge: false,
     };
   }
 
@@ -83,7 +154,6 @@ export class CameraSourceResolver {
    * Safely sanitize URLs for logs without printing passwords or authentication tokens.
    */
   public static sanitizeUrl(url?: string): string {
-    if (!url) return "";
-    return url.replace(/(:[^:@/]+)@/g, ":***@").replace(/([?&][^=]+)=[^&]+/gi, "$1=***");
+    return sanitizeUrlCredentials(url || "");
   }
 }

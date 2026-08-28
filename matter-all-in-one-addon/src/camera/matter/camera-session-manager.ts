@@ -20,7 +20,9 @@ export class CameraSessionManager {
   public allocateSession(streamUsage = 1): MatterActiveSession {
     if (this.sessions.size >= this.maxConcurrentSessions) {
       // Clean up oldest inactive session if limit reached
-      const oldest = Array.from(this.sessions.values()).sort((a, b) => a.lastActivity - b.lastActivity)[0];
+      const oldest = Array.from(this.sessions.values()).sort(
+        (a, b) => a.lastActivity - b.lastActivity,
+      )[0];
       if (oldest) this.sessions.delete(oldest.sessionId);
     }
 
@@ -59,6 +61,8 @@ export class CameraSessionManager {
   }
 
   public getActiveSessions(): MatterActiveSession[] {
-    return Array.from(this.sessions.values()).filter(s => s.state === "active");
+    return Array.from(this.sessions.values()).filter(
+      (s) => s.state === "active",
+    );
   }
 }

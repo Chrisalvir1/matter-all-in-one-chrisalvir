@@ -15,15 +15,38 @@ describe("cameraConverter", () => {
   });
 
   it("should determine whether camera is active / powered on", () => {
-    expect(cameraConverter.isCameraOn({ state: "idle", attributes: {} } as any)).toBe(true);
-    expect(cameraConverter.isCameraOn({ state: "streaming", attributes: {} } as any)).toBe(true);
-    expect(cameraConverter.isCameraOn({ state: "off", attributes: {} } as any)).toBe(false);
-    expect(cameraConverter.isCameraOn({ state: "unavailable", attributes: {} } as any)).toBe(false);
+    expect(
+      cameraConverter.isCameraOn({ state: "idle", attributes: {} } as any),
+    ).toBe(true);
+    expect(
+      cameraConverter.isCameraOn({ state: "streaming", attributes: {} } as any),
+    ).toBe(true);
+    expect(
+      cameraConverter.isCameraOn({ state: "off", attributes: {} } as any),
+    ).toBe(false);
+    expect(
+      cameraConverter.isCameraOn({
+        state: "unavailable",
+        attributes: {},
+      } as any),
+    ).toBe(false);
   });
 
   it("should identify WebRTC capabilities", () => {
-    expect(cameraConverter.hasWebRtc({ state: "idle", attributes: { frontend_stream_type: "webrtc" } } as any)).toBe(true);
-    expect(cameraConverter.hasWebRtc({ state: "idle", attributes: { supported_features: 2 } } as any)).toBe(true);
-    expect(cameraConverter.hasWebRtc({ state: "idle", attributes: {} } as any)).toBe(false);
+    expect(
+      cameraConverter.hasWebRtc({
+        state: "idle",
+        attributes: { frontend_stream_type: "webrtc" },
+      } as any),
+    ).toBe(true);
+    expect(
+      cameraConverter.hasWebRtc({
+        state: "idle",
+        attributes: { supported_features: 2 },
+      } as any),
+    ).toBe(true);
+    expect(
+      cameraConverter.hasWebRtc({ state: "idle", attributes: {} } as any),
+    ).toBe(false);
   });
 });
