@@ -2379,6 +2379,29 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     }
   }
 
+  /** Save an explicit camera-to-motion-sensor link for MQTT/cloud cameras. */
+  public async setCameraMotionSensor(
+    entityId: string,
+    motionEntityId?: string,
+  ): Promise<{ success: boolean; error?: string }> {
+    if (!entityId.startsWith("camera.") || !this.entities.has(entityId)) {
+      return { success: false, error: "Camera entity not found." };
+    }
+    if (
+      motionEntityId &&
+      (!motionEntityId.startsWith("binary_sensor.") ||
+        !this.ha.hassStates.has(motionEntityId))
+    ) {
+      return { success: false, error: "Choose an existing binary_sensor." };
+    }
+    const record = this.getOrCreateHomeKitCameraRecord(entityId);
+    record.motionEntityId = motionEntityId || undefined;
+    record.lastUpdated = new Date().toISOString();
+    await this.saveHomeKitCameraRecords();
+    this.pushEntityUpdate(entityId);
+    return { success: true };
+  }
+
   /** Toggle HKSV recording support for a camera accessory. */
   public async toggleCameraHksv(
     entityId: string,
@@ -3264,9 +3287,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                         setupUri:
                           (e as CameraEntity).homekitAccessory?.setupUri || "",
                         strategy:
-                          rec?.strategy ||
-                          cap?.strategy ||
-                          "unsupported",
+                          rec?.strategy || cap?.strategy || "unsupported",
                         hasAudio: cap?.hasAudio ?? false,
                         audioCodec: cap?.audioCodec ?? "none",
                         videoCodec: cap?.videoCodec ?? "h264",
@@ -3434,6 +3455,34 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           } catch {}
 
           const result = await this.toggleCameraHksv(entityId, enabled);
+          res.writeHead(result.success ? 200 : 400, {
+            "Content-Type": "application/json; charset=utf-8",
+          });
+          res.end(JSON.stringify(result));
+          return;
+        }
+
+        // POST /api/custom/camera-motion-sensor/:entityId
+        if (
+          req.method === "POST" &&
+          pathname.startsWith("/api/custom/camera-motion-sensor/")
+        ) {
+          const entityId = decodeURIComponent(
+            pathname.substring("/api/custom/camera-motion-sensor/".length),
+          );
+          let bodyStr = "";
+          for await (const chunk of req) bodyStr += chunk.toString();
+          let motionEntityId: string | undefined;
+          try {
+            const parsed = JSON.parse(bodyStr);
+            if (typeof parsed.motionEntityId === "string") {
+              motionEntityId = parsed.motionEntityId || undefined;
+            }
+          } catch {}
+          const result = await this.setCameraMotionSensor(
+            entityId,
+            motionEntityId,
+          );
           res.writeHead(result.success ? 200 : 400, {
             "Content-Type": "application/json; charset=utf-8",
           });

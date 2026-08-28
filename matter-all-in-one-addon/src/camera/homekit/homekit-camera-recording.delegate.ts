@@ -340,8 +340,11 @@ export class HomeKitCameraRecordingDelegate
 
     args.push("-fflags", "+nobuffer", "-flags", "low_delay", "-i", sourceUrl);
 
-    // Video pipeline: passthrough if H.264, else transcode
-    const isH264 = this.capabilities.videoCodec === "h264";
+    // camera_proxy_stream is multipart MJPEG; the physical camera codec must
+    // not be used to decide whether that proxy can be copied.
+    const isH264 =
+      this.capabilities.videoCodec === "h264" &&
+      this.streamSource.sourceType !== "ha_proxy";
     if (isH264) {
       args.push("-map", "0:v:0", "-vcodec", "copy");
     } else {
@@ -355,8 +358,16 @@ export class HomeKitCameraRecordingDelegate
         "libx264",
         "-pix_fmt",
         "yuv420p",
+        "-profile:v",
+        "baseline",
+        "-level:v",
+        "3.1",
         "-r",
         String(res[2] || 30),
+        "-g",
+        String(Math.max(1, (res[2] || 30) * 2)),
+        "-keyint_min",
+        String(Math.max(1, res[2] || 30)),
         "-preset",
         "ultrafast",
         "-tune",
@@ -432,7 +443,9 @@ export class HomeKitCameraRecordingDelegate
       this.ffmpegProcess.stderr?.on("data", (data: Buffer) => {
         const msg = data.toString().trim();
         if (msg) {
-          this.platform?.log?.debug?.(`[HKSV][${this.entityId}][ffmpeg] ${msg}`);
+          this.platform?.log?.debug?.(
+            `[HKSV][${this.entityId}][ffmpeg] ${msg}`,
+          );
         }
       });
 

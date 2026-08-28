@@ -290,6 +290,9 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
       videoCryptoSuite: session.videoCryptoSuite,
       videoKeySaltBase64: session.videoKeySalt.toString("base64"),
       strategy:
+        // HA's camera_proxy_stream endpoint is multipart MJPEG even when the
+        // physical camera itself encodes H.264, so it must be transcoded.
+        this.streamSource.sourceType === "ha_proxy" ||
         this.capabilities.strategy === "transcode_required"
           ? "transcode_required"
           : this.capabilities.strategy === "passthrough_video_only"

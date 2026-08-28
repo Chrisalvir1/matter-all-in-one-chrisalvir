@@ -232,8 +232,16 @@ export class HomeKitCameraAccessory {
    * Discovers the real motion or occupancy sensor entity associated with this camera in Home Assistant.
    */
   public findLinkedMotionEntity(): string | undefined {
-    const deviceId =
-      this.platform?.ha?.hassEntities?.get(this.entityId)?.device_id;
+    if (
+      this.record.motionEntityId &&
+      this.platform?.ha?.hassStates?.has(this.record.motionEntityId)
+    ) {
+      return this.record.motionEntityId;
+    }
+
+    const deviceId = this.platform?.ha?.hassEntities?.get(
+      this.entityId,
+    )?.device_id;
     const cameraBase = this.entityId.split(".")[1];
 
     // 1. Match by Home Assistant device_id in entity registry
@@ -339,8 +347,7 @@ export class HomeKitCameraAccessory {
    */
   public isPaired(): boolean {
     return Boolean(
-      this.record.isPaired ||
-      (this.accessory as any)._server?.paired,
+      this.record.isPaired || (this.accessory as any)._server?.paired,
     );
   }
 

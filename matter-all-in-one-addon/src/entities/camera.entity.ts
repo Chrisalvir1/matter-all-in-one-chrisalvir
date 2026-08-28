@@ -107,11 +107,12 @@ export class CameraEntity extends BaseEntity {
   public async setupHomeKitAccessory(
     record: HomeKitCameraStorageRecord,
   ): Promise<HomeKitCameraAccessory> {
-    const { capabilities, streamSource } = await this.refreshCapabilities();
+    // Entity discovery is periodic. Rebuilding a paired HAP accessory on each
+    // pass drops active Live View/HKSV sessions and makes Apple Home reconnect
+    // in a loop. An explicit pairing reset remains the only rebuild path.
+    if (this.homekitAccessory) return this.homekitAccessory;
 
-    if (this.homekitAccessory) {
-      await this.homekitAccessory.unpublish();
-    }
+    const { capabilities, streamSource } = await this.refreshCapabilities();
 
     this.homekitAccessory = new HomeKitCameraAccessory(
       this.platform,

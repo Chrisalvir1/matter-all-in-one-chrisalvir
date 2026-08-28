@@ -1,3 +1,11 @@
+## [1.4.56] - 2026-08-27
+
+### HomeKit camera reliability
+
+- Transcode Home Assistant's `camera_proxy_stream` multipart MJPEG output to H.264 instead of incorrectly copying it as H.264 RTP.
+- Keep paired HomeKit camera accessories alive during periodic Home Assistant discovery, avoiding live-stream interruptions.
+- Add an explicit motion-sensor association for cameras whose MQTT or cloud entities are not linked in the Home Assistant device registry.
+
 ## [1.4.55] - 2026-08-27
 
 ### Fast Graceful Shutdown, SSE Hardening & Zero-Hang Camera Gating

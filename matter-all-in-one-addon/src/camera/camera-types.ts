@@ -75,6 +75,8 @@ export interface HomeKitCameraStorageRecord {
   manufacturer: string;
   model: string;
   serialNumber: string;
+  /** Explicit motion sensor for cameras whose HA entities are not co-registered. */
+  motionEntityId?: string;
   isPaired?: boolean;
   hksvCapable?: boolean;
   hksvEnabled?: boolean;

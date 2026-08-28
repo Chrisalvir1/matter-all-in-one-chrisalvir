@@ -282,8 +282,12 @@ function probeWithFfprobe(
         try {
           const data = JSON.parse(stdoutData);
           const streams = Array.isArray(data.streams) ? data.streams : [];
-          const videoStream = streams.find((s: any) => s.codec_type === "video");
-          const audioStream = streams.find((s: any) => s.codec_type === "audio");
+          const videoStream = streams.find(
+            (s: any) => s.codec_type === "video",
+          );
+          const audioStream = streams.find(
+            (s: any) => s.codec_type === "audio",
+          );
 
           if (videoStream) {
             let fps: number | undefined;
@@ -299,7 +303,8 @@ function probeWithFfprobe(
             resolve({
               valid: true,
               videoCodec: (videoStream.codec_name || "").toLowerCase(),
-              audioCodec: (audioStream?.codec_name || "").toLowerCase() || undefined,
+              audioCodec:
+                (audioStream?.codec_name || "").toLowerCase() || undefined,
               width: videoStream.width,
               height: videoStream.height,
               fps,
@@ -442,9 +447,7 @@ export interface StreamPipelineConfig {
   videoCryptoSuite: SRTPCryptoSuites;
   videoKeySaltBase64: string;
   strategy:
-    | "passthrough_h264"
-    | "passthrough_video_only"
-    | "transcode_required";
+    "passthrough_h264" | "passthrough_video_only" | "transcode_required";
   fps?: number;
   bitrateKbps?: number;
   httpBearerToken?: string;
@@ -485,8 +488,16 @@ export function buildFfmpegStreamArgs(config: StreamPipelineConfig): string[] {
       "libx264",
       "-pix_fmt",
       "yuv420p",
+      "-profile:v",
+      "baseline",
+      "-level:v",
+      "3.1",
       "-r",
       String(fps),
+      "-g",
+      String(Math.max(1, fps * 2)),
+      "-keyint_min",
+      String(Math.max(1, fps)),
       "-b:v",
       `${bitrate}k`,
       "-bufsize",
