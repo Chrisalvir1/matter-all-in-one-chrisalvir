@@ -1,3 +1,14 @@
+## [1.4.50] - 2026-08-27
+
+### HomeKit Live View Streaming & Matter Isolation
+- **FFmpeg en Contenedor:** Instalación de `ffmpeg` y `jq` en el runtime de Dockerfile (`apk add --no-cache ffmpeg jq`).
+- **Detección Dinámica de Binarios:** Detección de `resolveFfmpegPath()`, `resolveFfprobePath()`, versión y sanitización de URLs en logs (`sanitizeUrlCredentials`).
+- **Diagnóstico y Prioridad de Fuentes:** Inspección previa con `probeCameraSource()` (ffprobe/ffmpeg) y resolución estricta (`stream_source` -> RTSP directo -> WebRTC/go2rtc -> HLS validado -> unknown).
+- **Pipeline de Streaming HomeKit HAP:** Negociación SRTP (`AES_CM_128_HMAC_SHA1_80`), passthrough H.264 / AAC sin transcodificación, transcodificación selectiva para H.265/MJPEG y terminación limpia con `SIGTERM`/`SIGKILL`.
+- **Sensor de Movimiento y Reinicio de Emparejamiento:** `Service.MotionSensor` integrado en el accesorio de la cámara para notificaciones en Apple Home y endpoint `POST /api/custom/reset-camera-pairing/:entityId` para regenerar PIN/MAC y permitir mover la cámara a otra casa.
+- **Corrección `undefined.forEach`:** Definiciones completas de clusters en `DeviceTypeDefinition` (`camera`, `snapshotCamera`, `closure`, `soilSensor`, `energyTariff`) y aislamiento total del Track B experimental.
+- **Separación en UI:** Tarjetas visualmente independientes para Apple Home (HomeKit HAP) y Matter Experimental.
+
 ## [1.4.49] - 2026-08-27
 
 ### Fixes
