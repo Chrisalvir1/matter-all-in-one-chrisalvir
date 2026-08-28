@@ -33,8 +33,8 @@ describe("frontend accessibility contract", () => {
     expect(html).toContain('id="fabrics-section"');
     expect(script).toContain("/remove-fabric/");
     expect(script).toContain("Desconectar de");
-    expect(script).toContain(
-      "entity.compositeDeviceId ? `matter:${entity.compositeDeviceId}`",
+    expect(script).toMatch(
+      /entity\.compositeDeviceId\s*\?\s*`matter:\$\{entity\.compositeDeviceId\}`/,
     );
     expect(html).toContain('id="multi-admin-hint"');
     expect(script).toContain("/open-commissioning/");
