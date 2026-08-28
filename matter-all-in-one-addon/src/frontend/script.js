@@ -992,36 +992,68 @@ setInterval(() => void fetchStatus(), 8000);
 // Refresh fabrics and commissioning state without requiring a page reload.
 setInterval(() => void fetchDevices(true), 4000);
 
-// --- SSE: Real-time push for fabric/commissioning changes ---
+// --- SSE: Real-time push for fabric/commissioning changes with auto-reconnect & backoff ---
+let currentSSE = null;
+let sseRetryDelay = 1000;
+let sseReconnectTimer = null;
+
 function connectSSE() {
+  if (sseReconnectTimer) {
+    clearTimeout(sseReconnectTimer);
+    sseReconnectTimer = null;
+  }
+  if (currentSSE) {
+    try {
+      currentSSE.close();
+    } catch {}
+    currentSSE = null;
+  }
+
   try {
     const sse = new EventSource(`${API}/events`);
+    currentSSE = sse;
+
+    sse.onopen = () => {
+      sseRetryDelay = 1000;
+      void fetchDevices(true);
+    };
+
     sse.onmessage = (ev) => {
       try {
         const update = JSON.parse(ev.data);
         if (!update || !update.entityId) return;
-        // Merge update into state.entities
-        const idx = state.entities.findIndex((e) => e.entityId === update.entityId);
+        const idx = state.entities.findIndex(
+          (e) => e.entityId === update.entityId,
+        );
         if (idx !== -1) {
           state.entities[idx] = { ...state.entities[idx], ...update };
           renderDevices();
-          // If modal is open for this entity, update the selection panel
-          if (state.activeEntity?.entityId === update.entityId && els.deviceModal.classList.contains('open')) {
+          if (
+            state.activeEntity?.entityId === update.entityId &&
+            els.deviceModal.classList.contains("open")
+          ) {
             state.activeEntity = state.entities[idx];
             selectEntity(state.activeEntity);
           }
         }
       } catch {
-        // ignore malformed SSE data
+        // ignore non-JSON or ping messages
       }
     };
+
     sse.onerror = () => {
-      sse.close();
-      // Reconnect after 5s if SSE drops
-      setTimeout(connectSSE, 5000);
+      if (currentSSE === sse) {
+        try {
+          sse.close();
+        } catch {}
+        currentSSE = null;
+      }
+      const delay = sseRetryDelay;
+      sseRetryDelay = Math.min(sseRetryDelay * 2, 15000);
+      sseReconnectTimer = setTimeout(connectSSE, delay);
     };
   } catch {
-    // SSE not supported or blocked — fallback to polling only
+    sseReconnectTimer = setTimeout(connectSSE, 10000);
   }
 }
 connectSSE();

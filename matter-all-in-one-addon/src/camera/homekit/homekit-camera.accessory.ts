@@ -93,10 +93,13 @@ export class HomeKitCameraAccessory {
     }
 
     const isHksvActive =
-      record.hksvEnabled !== false && capabilities.hksvCapable !== false;
+      record.hksvEnabled !== false &&
+      capabilities.hksvCapable === true &&
+      capabilities.hasLiveStream === true &&
+      Boolean(streamSource?.url);
 
     const controllerOptions: CameraControllerOptions = {
-      cameraStreamCount: isHksvActive ? 1 : 2,
+      cameraStreamCount: 2,
       delegate: this.delegate,
       streamingOptions: {
         supportedCryptoSuites: [SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80],

@@ -48,8 +48,12 @@ describe("HomeAssistant connection recovery", () => {
     );
     ha.on("error", () => undefined);
 
-    await expect(ha.connect()).rejects.toThrow("connection timed out");
-    expect(ha.connected).toBe(false);
+    try {
+      await expect(ha.connect()).rejects.toThrow("connection timed out");
+      expect(ha.connected).toBe(false);
+    } finally {
+      await ha.close();
+    }
   });
 
   it("propagates snapshot failures so an incomplete recovery is not reported as healthy", async () => {

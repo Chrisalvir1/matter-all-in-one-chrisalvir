@@ -1342,15 +1342,64 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
    */
   override async onShutdown(reason?: string) {
     this.log.warn(`Shutting down platform: ${reason ?? ""}`);
+
+    // 1. Log memory usage diagnostics at shutdown
+    try {
+      const mem = process.memoryUsage();
+      this.log.info(
+        `[Shutdown] Process memory: RSS ${(mem.rss / 1024 / 1024).toFixed(1)} MB | Heap ${(mem.heapUsed / 1024 / 1024).toFixed(1)} / ${(mem.heapTotal / 1024 / 1024).toFixed(1)} MB | External ${(mem.external / 1024 / 1024).toFixed(1)} MB`,
+      );
+    } catch {}
+
+    // 2. Immediately close and destroy all active SSE client streams
+    for (const sub of this.sseSubscribers) {
+      try {
+        if (!sub.destroyed && !sub.writableEnded) {
+          sub.end("event: shutdown\ndata: {}\n\n");
+          sub.destroy();
+        }
+      } catch {}
+    }
+    this.sseSubscribers.clear();
+
+    // 3. Stop UI HTTP Server
     if (this.uiServer) {
       const server = this.uiServer;
       this.uiServer = undefined;
+      try {
+        (server as any).closeAllConnections?.();
+      } catch {}
       await new Promise<void>((resolve) => {
         if (!server.listening) return resolve();
-        server.close(() => resolve());
+        const t = setTimeout(() => resolve(), 1000);
+        server.close(() => {
+          clearTimeout(t);
+          resolve();
+        });
       });
       this.log.info("Custom UI Server stopped.");
     }
+
+    // 4. Teardown all HomeKit cameras (terminate FFmpeg processes, clear pre-buffer RAM, unpublish HAP)
+    for (const entity of this.entities.values()) {
+      if (entity instanceof CameraEntity && entity.homekitAccessory) {
+        try {
+          await entity.homekitAccessory.unpublish();
+        } catch (err) {
+          this.log.debug(
+            `[Shutdown] Error unpublishing camera ${entity.entityId}: ${err}`,
+          );
+        }
+      }
+    }
+
+    // 5. Persist records and overrides to disk
+    try {
+      this.saveHomeKitCameraRecords();
+      await this.saveDeviceOverrides();
+    } catch {}
+
+    // 6. Stop intervals and close connections
     if (this.syncRetryTimeout) clearTimeout(this.syncRetryTimeout);
     if (this.matterConnectionMonitor)
       clearInterval(this.matterConnectionMonitor);
@@ -1359,6 +1408,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     this.haAvailabilityStates.clear();
     if (this.mqttManager) this.mqttManager.disconnect();
     await this.ha?.close();
+    this.log.info("Shutdown completed cleanly.");
   }
 
   /**
@@ -2642,6 +2692,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       });
       const msg = `data: ${payload}\n\n`;
       for (const sub of this.sseSubscribers) {
+        if (sub.destroyed || sub.writableEnded) {
+          this.sseSubscribers.delete(sub);
+          continue;
+        }
         try {
           sub.write(msg);
         } catch {
@@ -3606,24 +3660,38 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         if (req.method === "GET" && pathname === "/api/custom/events") {
           res.writeHead(200, {
             "Content-Type": "text/event-stream; charset=utf-8",
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-cache, no-transform",
             Connection: "keep-alive",
             "X-Accel-Buffering": "no",
           });
-          res.write(":ok\n\n");
+          res.flushHeaders?.();
           this.sseSubscribers.add(res);
-          req.on("close", () => this.sseSubscribers.delete(res));
-          req.on("error", () => this.sseSubscribers.delete(res));
-          // Keep-alive ping every 20s
+
+          const cleanup = () => {
+            clearInterval(ping);
+            this.sseSubscribers.delete(res);
+          };
+
           const ping = setInterval(() => {
+            if (res.destroyed || res.writableEnded) {
+              cleanup();
+              return;
+            }
             try {
               res.write(":ping\n\n");
             } catch {
-              clearInterval(ping);
-              this.sseSubscribers.delete(res);
+              cleanup();
             }
-          }, 20000);
-          req.on("close", () => clearInterval(ping));
+          }, 15000);
+
+          req.on("close", cleanup);
+          req.on("error", cleanup);
+          req.on("aborted", cleanup);
+          res.on("close", cleanup);
+          res.on("error", cleanup);
+          res.on("finish", cleanup);
+
+          res.write(":ok\n\n");
           return;
         }
 

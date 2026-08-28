@@ -1,3 +1,18 @@
+## [1.4.55] - 2026-08-27
+
+### Fast Graceful Shutdown, SSE Hardening & Zero-Hang Camera Gating
+- **Diagnóstico y Apagado Limpio Rápido (`onShutdown`):**
+  - Cierre inmediato de todos los clientes y streams SSE (`sseSubscribers`) al recibir SIGTERM, evitando que sockets abiertos impidan el apagado de Node.js (resolviendo el exit code 137).
+  - Cierre de servidores HTTP con `server.closeAllConnections()`, despublicación y terminación forzada de todos los procesos FFmpeg de Live View y HKSV, y limpieza de RAM de prebuffers.
+  - Registro de telemetría de memoria en el apagado (RSS, Heap, External).
+- **Protección y Hardening de Server-Sent Events (SSE Backend & Frontend):**
+  - Verificación `!sub.destroyed && !sub.writableEnded` antes de cada emisión, eliminando errores `Cannot write to closing transport` y `Response payload is not completed`.
+  - Headers optimizados: `Cache-Control: no-cache, no-transform`, `X-Accel-Buffering: no`, y heartbeat cada 15s.
+  - Frontend con reconexión automática, backoff progresivo (1s a 15s) y limpieza de instancias de `EventSource`.
+- **Gating Estricto para Cámaras sin Streaming Real:**
+  - Si una cámara no expone una fuente continua validada (`hasLiveStream === false`), no se registran opciones de grabación HKSV en HAP, evitando que Apple Home quede en estado de "cargando" indefinido.
+  - Los estados se reportan con total fidelidad en la interfaz web y HomeKit.
+
 ## [1.4.54] - 2026-08-27
 
 ### Camera Proxy Stream Continuous Pipeline & URL Normalization

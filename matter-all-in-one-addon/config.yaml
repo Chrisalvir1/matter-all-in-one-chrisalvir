@@ -1,6 +1,6 @@
 name: "Matter All-in-One (Chrisalvir)"
 description: "Universal Matter 1.4+ bridge for Home Assistant with native HomeKit HAP Secure Video (HKSV), live view streaming and enterprise discovery."
-version: "1.4.54"
+version: "1.4.55"
 slug: "matter_all_in_one_bridge"
 image: "ghcr.io/chrisalvir1/matter-all-in-one-chrisalvir"
 init: false
