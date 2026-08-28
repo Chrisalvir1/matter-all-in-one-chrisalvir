@@ -7,7 +7,7 @@ import type {
   AudioCodecType,
   StreamStrategy,
 } from "./camera-types.js";
-import type { ProbeResult } from "./homekit/ffmpeg-helper.js";
+import { type ProbeResult, resolveFfmpegPath } from "./homekit/ffmpeg-helper.js";
 
 /**
  * Detects real camera capabilities and determines the optimal streaming strategy.
@@ -161,6 +161,7 @@ export function detectCameraCapabilities(
     requiresTranscoding,
     transcodingReason,
     snapshotSupported: true,
+    hksvCapable: hasLiveStream && Boolean(resolveFfmpegPath()),
     snapshotUrl:
       resolvedSource?.snapshotUrl || `/api/camera_proxy/${state.entity_id}`,
   };

@@ -10,9 +10,15 @@ import {
   H264Level,
   AudioStreamingCodecType,
   AudioStreamingSamplerate,
+  MediaContainerType,
+  VideoCodecType,
+  AudioRecordingCodecType,
+  AudioBitrate,
+  AudioRecordingSamplerate,
   uuid,
 } from "hap-nodejs";
 import { HomeKitCameraStreamingDelegate } from "./homekit-camera-stream.delegate.js";
+import { HomeKitCameraRecordingDelegate } from "./homekit-camera-recording.delegate.js";
 import type {
   CameraCapabilitiesInfo,
   ResolvedStreamSource,
@@ -23,6 +29,7 @@ export class HomeKitCameraAccessory {
   public accessory: Accessory;
   public controller: CameraController;
   public delegate: HomeKitCameraStreamingDelegate;
+  public recordingDelegate?: HomeKitCameraRecordingDelegate;
   public motionService?: Service;
   private isPublished = false;
 
@@ -49,7 +56,7 @@ export class HomeKitCameraAccessory {
         Characteristic.SerialNumber,
         record.serialNumber || entityId.replaceAll(".", "_"),
       )
-      ?.setCharacteristic(Characteristic.FirmwareRevision, "1.4.51");
+      ?.setCharacteristic(Characteristic.FirmwareRevision, "1.4.52");
 
     this.delegate = new HomeKitCameraStreamingDelegate(
       platform,
@@ -58,8 +65,18 @@ export class HomeKitCameraAccessory {
       streamSource,
     );
 
+    // Integrated Motion Sensor service for camera motion activity notifications in Apple Home
+    this.motionService = this.accessory.addService(
+      Service.MotionSensor,
+      `${record.name || entityId} Motion`,
+    );
+    this.motionService.setCharacteristic(Characteristic.MotionDetected, false);
+
+    const isHksvActive =
+      record.hksvEnabled !== false && capabilities.hksvCapable !== false;
+
     const controllerOptions: CameraControllerOptions = {
-      cameraStreamCount: 2,
+      cameraStreamCount: isHksvActive ? 1 : 2,
       delegate: this.delegate,
       streamingOptions: {
         supportedCryptoSuites: [SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80],
@@ -105,19 +122,89 @@ export class HomeKitCameraAccessory {
       },
     };
 
+    if (isHksvActive) {
+      this.recordingDelegate = new HomeKitCameraRecordingDelegate(
+        platform,
+        entityId,
+        record,
+        capabilities,
+        streamSource,
+      );
+
+      this.record.hksvCapable = true;
+      this.record.hksvEnabled = true;
+      if (!this.record.hksvState) {
+        this.record.hksvState = "waiting_hub";
+      }
+
+      controllerOptions.sensors = {
+        motion: this.motionService,
+      };
+
+      controllerOptions.recording = {
+        options: {
+          prebufferLength: 4000,
+          mediaContainerConfiguration: [
+            {
+              type: MediaContainerType.FRAGMENTED_MP4,
+              fragmentLength: 4000,
+            },
+          ],
+          video: {
+            type: VideoCodecType.H264,
+            parameters: {
+              profiles: [
+                H264Profile.BASELINE,
+                H264Profile.MAIN,
+                H264Profile.HIGH,
+              ],
+              levels: [
+                H264Level.LEVEL3_1,
+                H264Level.LEVEL3_2,
+                H264Level.LEVEL4_0,
+              ],
+            },
+            resolutions: [
+              [1920, 1080, 30],
+              [1280, 720, 30],
+              [1920, 1080, 15],
+              [1280, 720, 15],
+            ],
+          },
+          audio: {
+            codecs: [
+              {
+                type: AudioRecordingCodecType.AAC_LC,
+                audioChannels: 1,
+                bitrateMode: AudioBitrate.VARIABLE,
+                samplerate: [
+                  AudioRecordingSamplerate.KHZ_8,
+                  AudioRecordingSamplerate.KHZ_16,
+                  AudioRecordingSamplerate.KHZ_24,
+                  AudioRecordingSamplerate.KHZ_32,
+                  AudioRecordingSamplerate.KHZ_44_1,
+                  AudioRecordingSamplerate.KHZ_48,
+                ],
+              },
+            ],
+          },
+        },
+        delegate: this.recordingDelegate,
+      };
+    } else {
+      this.record.hksvCapable = Boolean(capabilities.hksvCapable);
+      this.record.hksvEnabled = false;
+      this.record.hksvState = capabilities.hksvCapable
+        ? "configurable"
+        : "not_capable";
+    }
+
     this.controller = new CameraController(controllerOptions);
     this.accessory.configureController(this.controller);
-
-    // Integrated Motion Sensor service for camera motion activity notifications in Apple Home
-    this.motionService = this.accessory.addService(
-      Service.MotionSensor,
-      `${record.name || entityId} Motion`,
-    );
-    this.motionService.setCharacteristic(Characteristic.MotionDetected, false);
   }
 
   /**
-   * Updates the camera's linked motion sensor state in Apple Home.
+   * Updates the camera's linked motion sensor state in Apple Home and notifies HKSV.
    */
   public updateMotionState(motionDetected: boolean): void {
     if (this.motionService) {
@@ -129,6 +216,7 @@ export class HomeKitCameraAccessory {
         `[HomeKitCamera][${this.entityId}] Motion sensor state updated: ${motionDetected}`,
       );
     }
+    this.recordingDelegate?.handleMotionDetected(motionDetected);
   }
 
   /**
@@ -186,6 +274,7 @@ export class HomeKitCameraAccessory {
    */
   public async unpublish(): Promise<void> {
     this.delegate.cleanupAllSessions();
+    this.recordingDelegate?.destroy();
     if (!this.isPublished) return;
     try {
       await this.accessory.unpublish();
@@ -244,7 +333,7 @@ export class HomeKitCameraAccessory {
         Characteristic.SerialNumber,
         this.record.serialNumber || this.entityId.replaceAll(".", "_"),
       )
-      ?.setCharacteristic(Characteristic.FirmwareRevision, "1.4.51");
+      ?.setCharacteristic(Characteristic.FirmwareRevision, "1.4.52");
 
     this.controller = new CameraController({
       cameraStreamCount: 2,

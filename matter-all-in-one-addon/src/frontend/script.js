@@ -698,60 +698,106 @@ function showQrCode(entity) {
       ? `PIN HomeKit: ${entity.homekitCamera.pincode}`
       : (entity.manualPairingCode || entity.pairingCode);
     const hk = entity.homekitCamera;
-    const strategyDesc = hk.liveViewStatus || 'Passthrough H.264 (Sin transcodificación)';
-    const snapshotDesc = hk.snapshotStatus || 'Disponible (Home Assistant Proxy)';
-    const audioDesc = hk.audioStatus || 'Audio activo (AAC)';
-    const recDesc = hk.recordingStatus || 'No implementado (HKSV no soportado)';
-    const pairingDesc = hk.pairingState || 'Publicado; emparejamiento administrado en Apple Home';
-    const ffmpegDesc = hk.ffmpegVersion ? `FFmpeg: ${hk.ffmpegVersion}` : 'FFmpeg disponible';
+    const strategyDesc =
+      hk.liveViewStatus || "Passthrough H.264 (Sin transcodificación)";
+    const snapshotDesc =
+      hk.snapshotStatus || "Disponible (Home Assistant Proxy)";
+    const audioDesc = hk.audioStatus || "Audio activo (AAC)";
+    const recDesc = hk.recordingStatus || "🔴 HKSV no compatible";
+    const pairingDesc =
+      hk.pairingState || "Publicado; emparejamiento administrado en Apple Home";
+    const ffmpegDesc = hk.ffmpegVersion
+      ? `FFmpeg: ${hk.ffmpegVersion}`
+      : "FFmpeg disponible";
+    const hksvActionBtn = hk.hksvCapable
+      ? `<button id="toggle-camera-hksv-btn" type="button" style="width:100%;margin-top:6px;padding:6px 10px;background:${hk.hksvEnabled ? "#475569" : "#10b981"};color:#ffffff;border:none;border-radius:6px;font-size:0.78rem;font-weight:600;cursor:pointer;">${hk.hksvEnabled ? "⏹ Desactivar HKSV (Solo Live View)" : "▶️ Habilitar HKSV (Grabación en iCloud)"}</button>`
+      : "";
 
     els.deviceManualCode.innerHTML = `
       <div style="text-align:left;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:10px 12px;margin-top:8px;font-size:0.8rem;line-height:1.4;">
         <div style="font-size:0.95rem;font-weight:700;color:var(--text-primary);margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;">
           <span>🍎 Apple Home (HomeKit HAP)</span>
-          <span style="font-size:0.75rem;padding:2px 6px;background:rgba(16,185,129,0.15);color:#10b981;border-radius:4px;">Nativo Live View</span>
+          <span style="font-size:0.75rem;padding:2px 6px;background:rgba(16,185,129,0.15);color:#10b981;border-radius:4px;">Nativo Live View & HKSV</span>
         </div>
         <div style="font-weight:600;font-size:0.9rem;color:#38bdf8;margin-bottom:6px;">${escapeHtml(pin)}</div>
         <div style="color:var(--text-secondary);margin-bottom:2px;">• <strong>Live View:</strong> ${escapeHtml(strategyDesc)}</div>
         <div style="color:var(--text-secondary);margin-bottom:2px;">• <strong>Snapshot:</strong> ${escapeHtml(snapshotDesc)}</div>
         <div style="color:var(--text-secondary);margin-bottom:2px;">• <strong>Audio:</strong> ${escapeHtml(audioDesc)}</div>
-        <div style="color:var(--text-secondary);margin-bottom:2px;">• <strong>Grabación:</strong> ${escapeHtml(recDesc)}</div>
-        <div style="color:var(--text-secondary);margin-bottom:2px;">• <strong>Sensor Movimiento:</strong> Integrado (HomeKit MotionSensor)</div>
+        <div style="color:var(--text-secondary);margin-bottom:2px;">• <strong>Grabación (HKSV):</strong> ${escapeHtml(recDesc)}</div>
+        <div style="color:var(--text-muted);font-size:0.75rem;margin-bottom:4px;padding-left:8px;">↳ Requisitos: Home Hub requerido (Apple TV 4K / HomePod) · iCloud+ requerido</div>
+        <div style="color:var(--text-secondary);margin-bottom:2px;">• <strong>Sensor Movimiento:</strong> Integrado (HomeKit MotionSensor — Trigger HKSV)</div>
         <div style="color:var(--text-secondary);margin-bottom:2px;">• <strong>Estado Pairing:</strong> ${escapeHtml(pairingDesc)}</div>
         <div style="color:var(--text-secondary);margin-bottom:8px;">• <strong>Motor:</strong> ${escapeHtml(ffmpegDesc)} · Puerto: ${hk.port}</div>
+        ${hksvActionBtn}
         <button id="reset-camera-pairing-btn" type="button" style="width:100%;margin-top:4px;padding:6px 10px;background:#3b82f6;color:#ffffff;border:none;border-radius:6px;font-size:0.8rem;font-weight:600;cursor:pointer;">🔄 Reiniciar emparejamiento / Añadir a otra casa</button>
       </div>
       <div style="margin-top:12px;text-align:left;background:rgba(255,255,255,0.02);border:1px dashed rgba(255,255,255,0.1);border-radius:8px;padding:8px 10px;font-size:0.75rem;color:var(--text-secondary);">
-        <div style="font-weight:600;color:var(--text-primary);margin-bottom:2px;">🧪 Matter Camera 1.5/1.6 (Backend Experimental)</div>
-        <div>Device Type: 0x0142 · Clusters: 0x0551, 0x0553. <em>Nota: Apple Home no utiliza Matter para live view de cámaras; usa el QR HomeKit superior.</em></div>
+        <div style="font-weight:600;color:var(--text-primary);margin-bottom:2px;">🧪 Matter Camera 1.5/1.6 (Backend Desacoplado)</div>
+        <div>Device Type: 0x0142 · Clusters: 0x0551, 0x0553. <em>Nota: Apple Home no utiliza Matter para live view ni grabación; usa el QR HomeKit superior.</em></div>
       </div>
     `;
 
-    const resetBtn = document.getElementById('reset-camera-pairing-btn');
+    const toggleHksvBtn = document.getElementById("toggle-camera-hksv-btn");
+    if (toggleHksvBtn) {
+      toggleHksvBtn.addEventListener("click", async () => {
+        try {
+          toggleHksvBtn.disabled = true;
+          const nextState = !hk.hksvEnabled;
+          const res = await request(
+            `/camera-hksv/${encodeURIComponent(entity.entityId)}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ enabled: nextState }),
+            },
+          );
+          if (!res.success)
+            throw new Error(res.error || "No se pudo cambiar el estado HKSV");
+          showToast(
+            nextState
+              ? "HKSV habilitado. Configura la grabación en la app Casa."
+              : "HKSV pausado para esta cámara.",
+          );
+          await fetchDevices(true);
+        } catch (err) {
+          showToast(err.message || "Error al actualizar HKSV", true);
+          toggleHksvBtn.disabled = false;
+        }
+      });
+    }
+
+    const resetBtn = document.getElementById("reset-camera-pairing-btn");
     if (resetBtn) {
-      resetBtn.addEventListener('click', () => {
+      resetBtn.addEventListener("click", () => {
         openConfirm(
-          'Reiniciar emparejamiento HomeKit',
+          "Reiniciar emparejamiento HomeKit",
           `Se generará un nuevo código PIN y MAC para la cámara ${entity.entityId}. Deberás volver a escanear el nuevo código QR en Apple Home.`,
           async () => {
             try {
               resetBtn.disabled = true;
-              resetBtn.textContent = 'Reiniciando…';
-              const res = await request(`/reset-camera-pairing/${encodeURIComponent(entity.entityId)}`, { method: 'POST' });
-              if (!res.success) throw new Error(res.error || 'No se pudo reiniciar emparejamiento.');
-              showToast('Emparejamiento HomeKit reiniciado con éxito.');
+              resetBtn.textContent = "Reiniciando…";
+              const res = await request(
+                `/reset-camera-pairing/${encodeURIComponent(entity.entityId)}`,
+                { method: "POST" },
+              );
+              if (!res.success)
+                throw new Error(
+                  res.error || "No se pudo reiniciar emparejamiento.",
+                );
+              showToast("Emparejamiento HomeKit reiniciado con éxito.");
               await fetchDevices(true);
             } catch (err) {
-              showToast(err.message || 'Error al reiniciar.', true);
+              showToast(err.message || "Error al reiniciar.", true);
               resetBtn.disabled = false;
-              resetBtn.textContent = '🔄 Reiniciar emparejamiento / Añadir a otra casa';
+              resetBtn.textContent =
+                "🔄 Reiniciar emparejamiento / Añadir a otra casa";
             }
-          }
+          },
         );
       });
     }
 
-    els.deviceQrContainer.style.display = 'block';
+    els.deviceQrContainer.style.display = "block";
     return;
   }
 

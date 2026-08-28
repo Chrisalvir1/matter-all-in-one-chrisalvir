@@ -44,6 +44,8 @@ export interface CameraCapabilitiesInfo {
   snapshotUrl?: string;
   /** True if snapshot image fetching is supported. */
   snapshotSupported?: boolean;
+  /** True if camera and system satisfy all technical requirements for HKSV. */
+  hksvCapable?: boolean;
   /** Original Home Assistant frontend_stream_type attribute. */
   frontendStreamType?: string;
   /** Raw supported_features bitmask from Home Assistant. */
@@ -74,6 +76,16 @@ export interface HomeKitCameraStorageRecord {
   model: string;
   serialNumber: string;
   isPaired?: boolean;
+  hksvCapable?: boolean;
+  hksvEnabled?: boolean;
+  hksvVerified?: boolean;
+  hksvState?:
+    | "not_capable"
+    | "configurable"
+    | "waiting_hub"
+    | "ready"
+    | "verified"
+    | "error";
   lastUpdated?: string;
 }
 

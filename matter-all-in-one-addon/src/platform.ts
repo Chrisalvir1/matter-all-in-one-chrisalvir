@@ -2329,6 +2329,37 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     }
   }
 
+  /** Toggle HKSV recording support for a camera accessory. */
+  public async toggleCameraHksv(
+    entityId: string,
+    enabled: boolean,
+  ): Promise<{
+    success: boolean;
+    error?: string;
+    record?: HomeKitCameraStorageRecord;
+  }> {
+    try {
+      const record = this.homekitCameraRecords.get(entityId);
+      if (!record) {
+        return {
+          success: false,
+          error: `Camera record not found for ${entityId}`,
+        };
+      }
+      record.hksvEnabled = enabled;
+      record.hksvState = enabled
+        ? record.hksvVerified
+          ? "verified"
+          : "waiting_hub"
+        : "configurable";
+      await this.saveHomeKitCameraRecords();
+      this.pushEntityUpdate(entityId);
+      return { success: true, record };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  }
+
   /** Open basic commissioning window on a node for multi-admin pairing. */
   public async openMatterCommissioningWindow(entityId: string): Promise<{
     success: boolean;
@@ -3110,60 +3141,84 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                 : [],
               homekitCamera:
                 domain === "camera"
-                  ? {
-                      published:
-                        this.homekitCameraRecords.get(e.entityId)?.published ??
-                        false,
-                      isPaired:
-                        (e as CameraEntity).homekitAccessory?.isPaired() ??
-                        this.homekitCameraRecords.get(e.entityId)?.isPaired ??
-                        false,
-                      port:
-                        this.homekitCameraRecords.get(e.entityId)?.port ??
-                        51830,
-                      pincode:
-                        this.homekitCameraRecords.get(e.entityId)?.pincode ??
-                        "031-45-154",
-                      username: this.homekitCameraRecords.get(e.entityId)
-                        ?.username,
-                      setupUri:
-                        (e as CameraEntity).homekitAccessory?.setupUri || "",
-                      strategy:
-                        this.homekitCameraRecords.get(e.entityId)?.strategy ||
-                        (e as CameraEntity).capabilities?.strategy ||
-                        "passthrough_h264",
-                      hasAudio:
-                        (e as CameraEntity).capabilities?.hasAudio ?? false,
-                      audioCodec:
-                        (e as CameraEntity).capabilities?.audioCodec ?? "none",
-                      videoCodec:
-                        (e as CameraEntity).capabilities?.videoCodec ?? "h264",
-                      liveViewStatus: (e as CameraEntity).capabilities
-                        ?.hasLiveStream
-                        ? (e as CameraEntity).capabilities?.strategy ===
-                          "passthrough_h264"
-                          ? "Passthrough H.264 (Sin transcodificación)"
-                          : (e as CameraEntity).capabilities?.strategy ===
-                              "passthrough_video_only"
-                            ? "Passthrough H.264 (Video-only)"
-                            : "Transcodificación H.264 activa"
-                        : "Disponible (Home Assistant Stream)",
-                      snapshotStatus: "Disponible (Home Assistant Proxy)",
-                      audioStatus: (e as CameraEntity).capabilities?.hasAudio
-                        ? `Audio activo (${(e as CameraEntity).capabilities?.audioCodec})`
-                        : "Sin audio (Video-only)",
-                      recordingStatus: "No implementado (HKSV no soportado)",
-                      pairingState:
-                        (e as CameraEntity).homekitAccessory?.isPaired() ||
-                        this.homekitCameraRecords.get(e.entityId)?.isPaired
-                          ? "✅ Vinculado a Apple Home (Activo)"
-                          : "⏳ Listo para vincular (Escanea el código QR en Apple Home)",
-                      motionSensorSupported: true,
-                      ffmpegAvailable: Boolean(resolveFfmpegPath()),
-                      ffmpegPath:
-                        resolveFfmpegPath() || "No instalado en el sistema",
-                      ffmpegVersion: getFfmpegVersion() || "N/A",
-                    }
+                  ? (() => {
+                      const rec = this.homekitCameraRecords.get(e.entityId);
+                      const cap = (e as CameraEntity).capabilities;
+                      const hksvCapable =
+                        rec?.hksvCapable ?? cap?.hksvCapable ?? false;
+                      const hksvEnabled = rec?.hksvEnabled ?? true;
+                      const hksvVerified = rec?.hksvVerified ?? false;
+                      const hksvState =
+                        rec?.hksvState ??
+                        (hksvCapable
+                          ? hksvEnabled
+                            ? "waiting_hub"
+                            : "configurable"
+                          : "not_capable");
+
+                      let recordingStatus =
+                        "🔴 HKSV no compatible (Solo Live View y Snapshots)";
+                      if (hksvVerified) {
+                        recordingStatus =
+                          "✅ HKSV verificado (Grabando en iCloud)";
+                      } else if (hksvState === "ready") {
+                        recordingStatus =
+                          "🟡 HKSV habilitado, esperando evento";
+                      } else if (hksvState === "waiting_hub") {
+                        recordingStatus = "⏳ Esperando Home Hub / iCloud+";
+                      } else if (hksvState === "configurable") {
+                        recordingStatus = "⚙️ HKSV configurable";
+                      } else if (hksvState === "error") {
+                        recordingStatus =
+                          "⚠️ HKSV con error (Live View activo)";
+                      }
+
+                      return {
+                        published: rec?.published ?? false,
+                        isPaired:
+                          (e as CameraEntity).homekitAccessory?.isPaired() ??
+                          rec?.isPaired ??
+                          false,
+                        hksvCapable,
+                        hksvEnabled,
+                        hksvVerified,
+                        hksvState,
+                        port: rec?.port ?? 51830,
+                        pincode: rec?.pincode ?? "031-45-154",
+                        username: rec?.username,
+                        setupUri:
+                          (e as CameraEntity).homekitAccessory?.setupUri || "",
+                        strategy:
+                          rec?.strategy ||
+                          cap?.strategy ||
+                          "passthrough_h264",
+                        hasAudio: cap?.hasAudio ?? false,
+                        audioCodec: cap?.audioCodec ?? "none",
+                        videoCodec: cap?.videoCodec ?? "h264",
+                        liveViewStatus: cap?.hasLiveStream
+                          ? cap?.strategy === "passthrough_h264"
+                            ? "Passthrough H.264 (Sin transcodificación)"
+                            : cap?.strategy === "passthrough_video_only"
+                              ? "Passthrough H.264 (Video-only)"
+                              : "Transcodificación H.264 activa"
+                          : "Disponible (Home Assistant Stream)",
+                        snapshotStatus: "Disponible (Home Assistant Proxy)",
+                        audioStatus: cap?.hasAudio
+                          ? `Audio activo (${cap?.audioCodec})`
+                          : "Sin audio (Video-only)",
+                        recordingStatus,
+                        pairingState:
+                          (e as CameraEntity).homekitAccessory?.isPaired() ||
+                          rec?.isPaired
+                            ? "✅ Vinculado a Apple Home (Activo)"
+                            : "⏳ Listo para vincular (Escanea el código QR en Apple Home)",
+                        motionSensorSupported: true,
+                        ffmpegAvailable: Boolean(resolveFfmpegPath()),
+                        ffmpegPath:
+                          resolveFfmpegPath() || "No instalado en el sistema",
+                        ffmpegVersion: getFfmpegVersion() || "N/A",
+                      };
+                    })()
                   : null,
             };
           });
@@ -3276,6 +3331,30 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             pathname.substring("/api/custom/reset-camera-pairing/".length),
           );
           const result = await this.resetCameraPairing(entityId);
+          res.writeHead(result.success ? 200 : 400, {
+            "Content-Type": "application/json; charset=utf-8",
+          });
+          res.end(JSON.stringify(result));
+          return;
+        }
+
+        // POST /api/custom/camera-hksv/:entityId
+        if (
+          req.method === "POST" &&
+          pathname.startsWith("/api/custom/camera-hksv/")
+        ) {
+          const entityId = decodeURIComponent(
+            pathname.substring("/api/custom/camera-hksv/".length),
+          );
+          let bodyStr = "";
+          for await (const chunk of req) bodyStr += chunk.toString();
+          let enabled = true;
+          try {
+            const parsed = JSON.parse(bodyStr);
+            if (typeof parsed.enabled === "boolean") enabled = parsed.enabled;
+          } catch {}
+
+          const result = await this.toggleCameraHksv(entityId, enabled);
           res.writeHead(result.success ? 200 : 400, {
             "Content-Type": "application/json; charset=utf-8",
           });

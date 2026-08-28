@@ -1,3 +1,21 @@
+## [1.4.52] - 2026-08-27
+
+### HomeKit Secure Video (HKSV) Production Pipeline for Apple Home (iOS 27+)
+- **Segmentación ISO BMFF y Parser fMP4 (`fmp4-parser.ts`):**
+  - Implementado parser binario nativo de alta eficiencia para cajas `ftyp`, `moov`, `moof`, `mdat`.
+  - Validación e inspección rigurosa de fotogramas clave (Keyframe / IDR sync sample) en las banderas `trun` / `traf` de cada fragmento `MEDIA_FRAGMENT`.
+- **HKSV Recording Delegate (`homekit-camera-recording.delegate.ts`):**
+  - Implementación completa de `CameraRecordingDelegate` de `hap-nodejs` para grabación en iCloud con HomePod mini y Apple TV 4K.
+  - Ring buffer circular de pre-roll en memoria RAM (4000ms - 8000ms) con límites estrictos de recursos (16 MB máx. por cámara).
+  - Negociación dinámica de resoluciones y codecs de audio (AAC-LC a 8k, 16k, 24k, 32k, 44.1k, 48k o video-only `-an` si el audio es incompatible).
+  - Verificación estricta de ciclo de vida (`hksvVerified`) confirmada únicamente tras entrega de `MEDIA_INITIALIZATION` y múltiples `MEDIA_FRAGMENT` con acuse limpio de Home Hub.
+- **Aislamiento Total de Procesos:**
+  - FFmpeg fMP4 desacoplado e independiente de las sesiones Live View RTP/SRTP.
+  - La pausación o fallo de HKSV nunca interrumpe Live View, snapshots ni el accesorio HomeKit.
+- **Gating de Capacidad y Estados Honestos en UI:**
+  - Estados transparentes: `🔴 HKSV no compatible`, `⚙️ HKSV configurable`, `⏳ Esperando Home Hub / iCloud+`, `🟡 HKSV habilitado, esperando evento`, `✅ HKSV verificado (Grabando en iCloud)`.
+  - Botón interactivo para activar/desactivar HKSV por cámara vía `POST /api/custom/camera-hksv/:entityId`.
+
 ## [1.4.51] - 2026-08-27
 
 ### Camera Live Stream Engine & Apple Home Pairing Reliability
