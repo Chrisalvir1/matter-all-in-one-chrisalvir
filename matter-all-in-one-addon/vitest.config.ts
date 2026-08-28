@@ -5,7 +5,10 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['test/**/*.test.ts'],
-    fileParallelism: false,
+    pool: 'forks',
+    forks: {
+      singleFork: true,
+    },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
