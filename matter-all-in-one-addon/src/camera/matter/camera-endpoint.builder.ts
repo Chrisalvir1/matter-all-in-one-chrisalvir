@@ -1,6 +1,6 @@
 import { MatterbridgeEndpoint, DeviceTypeDefinition } from "matterbridge";
-import { CameraAvStreamManagement, WebRtcTransportProvider } from "@matter/main/clusters";
-import { CameraAvStreamManagementServer, WebRtcTransportProviderServer } from "@matter/main/behaviors";
+import { CameraAvStreamManagement, WebRtcTransportProvider } from "matterbridge/matter/clusters";
+import { CameraAvStreamManagementServer, WebRtcTransportProviderServer } from "matterbridge/matter/behaviors";
 import {
   MATTER_BRIDGE_VENDOR_ID,
   getMatterSerialNumber,

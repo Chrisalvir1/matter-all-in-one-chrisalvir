@@ -41,7 +41,7 @@ export class HomeKitCameraAccessory {
       ?.setCharacteristic(Characteristic.Manufacturer, record.manufacturer || "Home Assistant")
       ?.setCharacteristic(Characteristic.Model, record.model || "Camera")
       ?.setCharacteristic(Characteristic.SerialNumber, record.serialNumber || entityId.replaceAll(".", "_"))
-      ?.setCharacteristic(Characteristic.FirmwareRevision, "1.4.48");
+      ?.setCharacteristic(Characteristic.FirmwareRevision, "1.4.49");
 
     this.delegate = new HomeKitCameraStreamingDelegate(
       platform,

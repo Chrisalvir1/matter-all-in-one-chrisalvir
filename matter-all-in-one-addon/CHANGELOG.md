@@ -1,3 +1,8 @@
+## [1.4.49] - 2026-08-27
+
+### Fixes
+- **Matter Module Resolution Fix:** Imported `CameraAvStreamManagement` and `WebRtcTransportProvider` cluster and behavior servers from `matterbridge/matter/clusters` and `matterbridge/matter/behaviors` rather than external `@matter/main` package, ensuring 100% reliable startup in production Docker containers.
+
 ## [1.4.48] - 2026-08-27
 
 ### Dual-Track Camera Streaming & Apple Home Native Live View
