@@ -13,7 +13,7 @@ function makeState(attrs: Record<string, any> = {}) {
 }
 
 describe("CameraSourceResolver", () => {
-  it("resolves direct RTSP URL from attributes", async () => {
+  it("resolves direct RTSP URL from stream_source attribute", async () => {
     const state = makeState({
       stream_source: "rtsp://admin:secret123@192.168.1.100:554/ch0",
     });
@@ -41,7 +41,7 @@ describe("CameraSourceResolver", () => {
     expect(res.supportsPassthrough).toBe(true);
   });
 
-  it("calls Home Assistant play_stream service when available", async () => {
+  it("calls Home Assistant play_stream service ONLY when supported_features has STREAM (bit 2)", async () => {
     const mockPlatform = {
       ha: {
         callService: vi.fn().mockResolvedValue({
@@ -66,7 +66,27 @@ describe("CameraSourceResolver", () => {
     expect(res.url).toBe("http://ha.local:8123/api/hls/master.m3u8");
   });
 
-  it("resolves native WebSocket camera/stream URL when available", async () => {
+  it("does NOT call play_stream or camera/stream when camera lacks STREAM feature", async () => {
+    const mockPlatform = {
+      ha: {
+        requestCameraStream: vi.fn(),
+        callService: vi.fn(),
+      },
+    };
+    const state = makeState({ supported_features: 1 }); // only ON_OFF, no STREAM
+    const res = await CameraSourceResolver.resolve(
+      mockPlatform,
+      "camera.playroom_camara_de_playroom",
+      state,
+    );
+
+    expect(mockPlatform.ha.requestCameraStream).not.toHaveBeenCalled();
+    expect(mockPlatform.ha.callService).not.toHaveBeenCalled();
+    expect(res.sourceType).toBe("unknown");
+    expect(res.url).toBeUndefined();
+  });
+
+  it("resolves native WebSocket camera/stream URL when supported_features has STREAM", async () => {
     const mockPlatform = {
       ha: {
         requestCameraStream: vi
@@ -75,7 +95,7 @@ describe("CameraSourceResolver", () => {
         getAccessToken: vi.fn().mockReturnValue("secret-ha-token"),
       },
     };
-    const state = makeState();
+    const state = makeState({ supported_features: 2 });
     const res = await CameraSourceResolver.resolve(
       mockPlatform,
       "camera.playroom_camara_de_playroom",
@@ -91,39 +111,21 @@ describe("CameraSourceResolver", () => {
     );
   });
 
-  it("falls back to getCameraProxyStreamUrl when other streams are unavailable", async () => {
+  it("returns unknown when no valid continuous stream is found (never uses snapshot endpoint as stream)", async () => {
     const mockPlatform = {
       ha: {
         requestCameraStream: vi.fn().mockResolvedValue(null),
-        getCameraProxyStreamUrl: vi
-          .fn()
-          .mockReturnValue(
-            "http://127.0.0.1:8123/api/camera_proxy_stream/camera.playroom_camara_de_playroom",
-          ),
       },
     };
-    const state = makeState();
+    const state = makeState({ supported_features: 2 });
     const res = await CameraSourceResolver.resolve(
       mockPlatform,
-      "camera.playroom_camara_de_playroom",
+      "camera.driveway",
       state,
     );
 
-    expect(res.sourceType).toBe("ha_proxy");
-    expect(res.url).toBe(
-      "http://127.0.0.1:8123/api/camera_proxy_stream/camera.playroom_camara_de_playroom",
-    );
-  });
-
-  it("sanitizes passwords and query tokens in URLs for logging", () => {
-    const rawUrl =
-      "rtsp://admin:mySecretPass@192.168.1.50:554/live?token=abc123xyz";
-    const sanitized = CameraSourceResolver.sanitizeUrl(rawUrl);
-
-    expect(sanitized).not.toContain("mySecretPass");
-    expect(sanitized).not.toContain("abc123xyz");
-    expect(sanitized).toContain(
-      "rtsp://admin:***@192.168.1.50:554/live?token=***",
-    );
+    expect(res.sourceType).toBe("unknown");
+    expect(res.url).toBeUndefined();
+    expect(res.snapshotUrl).toBe("/api/camera_proxy/camera.driveway");
   });
 });

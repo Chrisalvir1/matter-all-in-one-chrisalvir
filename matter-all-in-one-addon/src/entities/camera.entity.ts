@@ -62,23 +62,43 @@ export class CameraEntity extends BaseEntity {
    * Builds the Matter Camera endpoint using real Camera clusters (0x0551 & 0x0553).
    */
   public override async createEndpoint(): Promise<MatterbridgeEndpoint> {
-    const { capabilities, streamSource } = await this.refreshCapabilities();
+    try {
+      const { capabilities, streamSource } = await this.refreshCapabilities();
 
-    this.endpoint = await CameraEndpointBuilder.build(
-      this.platform,
-      this.entityId,
-      this.deviceType,
-      capabilities,
-      streamSource,
-      this.sessionManager,
-      this.webrtcAdapter!,
-      this.state.attributes.friendly_name,
-    );
+      this.endpoint = await CameraEndpointBuilder.build(
+        this.platform,
+        this.entityId,
+        this.deviceType,
+        capabilities,
+        streamSource,
+        this.sessionManager,
+        this.webrtcAdapter!,
+        this.state.attributes.friendly_name,
+      );
 
-    await this.addCustomClusterServers();
-    this.registerCommandHandlers();
+      await this.addCustomClusterServers();
+      this.registerCommandHandlers();
 
-    return this.endpoint;
+      return this.endpoint;
+    } catch (err) {
+      this.platform?.log?.warn?.(
+        `[MatterCamera][${this.entityId}] Track B Matter clusters isolated due to: ${err}. HomeKit Track A remains fully active.`,
+      );
+      const fallbackEndpoint = new MatterbridgeEndpoint([this.deviceType], {
+        id: this.entityId.replaceAll(".", "_"),
+        mode: "server",
+      });
+      fallbackEndpoint.createDefaultBasicInformationClusterServer(
+        this.state.attributes.friendly_name || this.entityId,
+        this.entityId.replaceAll(".", "_"),
+        0xfff1,
+        "Home Assistant",
+        0x8000,
+        "Camera",
+      );
+      this.endpoint = fallbackEndpoint;
+      return this.endpoint;
+    }
   }
 
   /**

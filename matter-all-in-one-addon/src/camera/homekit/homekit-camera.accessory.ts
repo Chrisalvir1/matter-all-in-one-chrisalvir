@@ -31,6 +31,7 @@ export class HomeKitCameraAccessory {
   public delegate: HomeKitCameraStreamingDelegate;
   public recordingDelegate?: HomeKitCameraRecordingDelegate;
   public motionService?: Service;
+  public linkedMotionEntityId?: string;
   private isPublished = false;
 
   constructor(
@@ -65,12 +66,31 @@ export class HomeKitCameraAccessory {
       streamSource,
     );
 
-    // Integrated Motion Sensor service for camera motion activity notifications in Apple Home
-    this.motionService = this.accessory.addService(
-      Service.MotionSensor,
-      `${record.name || entityId} Motion`,
-    );
-    this.motionService.setCharacteristic(Characteristic.MotionDetected, false);
+    // Discover real associated Motion Sensor from Home Assistant
+    this.linkedMotionEntityId = this.findLinkedMotionEntity();
+
+    if (this.linkedMotionEntityId) {
+      this.motionService = this.accessory.addService(
+        Service.MotionSensor,
+        `${record.name || entityId} Motion`,
+      );
+      const isMotionOn =
+        this.platform?.ha?.hassStates?.get(this.linkedMotionEntityId)?.state ===
+        "on";
+      this.motionService.setCharacteristic(
+        Characteristic.MotionDetected,
+        isMotionOn,
+      );
+      this.motionService.setCharacteristic(Characteristic.StatusActive, true);
+      this.platform?.log?.notice?.(
+        `[HomeKitCamera][${this.entityId}] Linked real MotionSensor: ${this.linkedMotionEntityId} (initial state: ${isMotionOn ? "ON" : "OFF"})`,
+      );
+    } else {
+      this.motionService = undefined;
+      this.platform?.log?.debug?.(
+        `[HomeKitCamera][${this.entityId}] No real MotionSensor entity found in Home Assistant`,
+      );
+    }
 
     const isHksvActive =
       record.hksvEnabled !== false && capabilities.hksvCapable !== false;
@@ -122,6 +142,12 @@ export class HomeKitCameraAccessory {
       },
     };
 
+    if (this.motionService) {
+      controllerOptions.sensors = {
+        motion: this.motionService,
+      };
+    }
+
     if (isHksvActive) {
       this.recordingDelegate = new HomeKitCameraRecordingDelegate(
         platform,
@@ -136,10 +162,6 @@ export class HomeKitCameraAccessory {
       if (!this.record.hksvState) {
         this.record.hksvState = "waiting_hub";
       }
-
-      controllerOptions.sensors = {
-        motion: this.motionService,
-      };
 
       controllerOptions.recording = {
         options: {
@@ -201,6 +223,56 @@ export class HomeKitCameraAccessory {
 
     this.controller = new CameraController(controllerOptions);
     this.accessory.configureController(this.controller);
+  }
+
+  /**
+   * Discovers the real motion or occupancy sensor entity associated with this camera in Home Assistant.
+   */
+  public findLinkedMotionEntity(): string | undefined {
+    const deviceId =
+      this.platform?.ha?.hassEntities?.get(this.entityId)?.device_id;
+    const cameraBase = this.entityId.split(".")[1];
+
+    // 1. Match by Home Assistant device_id in entity registry
+    if (deviceId && this.platform?.ha?.hassEntities) {
+      for (const [eId, reg] of this.platform.ha.hassEntities.entries()) {
+        if (reg.device_id === deviceId && eId.startsWith("binary_sensor.")) {
+          const st = this.platform.ha.hassStates?.get(eId);
+          const devClass = st?.attributes?.device_class;
+          if (
+            devClass === "motion" ||
+            devClass === "occupancy" ||
+            devClass === "presence" ||
+            eId.includes("motion") ||
+            eId.includes("movimiento")
+          ) {
+            return eId;
+          }
+        }
+      }
+    }
+
+    // 2. Match by entity name prefix
+    if (this.platform?.ha?.hassStates) {
+      for (const [eId, st] of this.platform.ha.hassStates.entries()) {
+        if (eId.startsWith("binary_sensor.")) {
+          const devClass = st?.attributes?.device_class;
+          if (
+            (devClass === "motion" ||
+              devClass === "occupancy" ||
+              devClass === "presence" ||
+              eId.includes("motion") ||
+              eId.includes("movimiento")) &&
+            (eId.includes(cameraBase) ||
+              cameraBase.includes(eId.replace("binary_sensor.", "")))
+          ) {
+            return eId;
+          }
+        }
+      }
+    }
+
+    return undefined;
   }
 
   /**

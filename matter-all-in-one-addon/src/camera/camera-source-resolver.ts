@@ -9,10 +9,10 @@ export class CameraSourceResolver {
   /**
    * Resolves the actual stream source and snapshot URL from Home Assistant in strict order:
    * 1. stream_source attribute
-   * 2. Direct RTSP URL (rtsp_url, stream_url)
+   * 2. Direct RTSP URL (rtsp_url, stream_url, rtsp_stream, rtsp_stream_url)
    * 3. WebRTC / go2rtc source
-   * 4. HLS or HA stream proxy URL ONLY if probeCameraSource validates it
-   * 5. unknown
+   * 4. HLS stream (camera/stream or play_stream) ONLY if supported_features has STREAM (bit 2)
+   * 5. unknown (if no continuous stream exists, return unknown; never inject snapshot endpoints as streams)
    */
   public static async resolve(
     platform: any,
@@ -21,6 +21,8 @@ export class CameraSourceResolver {
   ): Promise<ResolvedStreamSource> {
     const attrs = state?.attributes || {};
     const snapshotUrl = `/api/camera_proxy/${entityId}`;
+    const supportedFeatures = Number(attrs.supported_features || 0);
+    const hasStreamSupport = (supportedFeatures & 2) !== 0; // CameraEntityFeature.STREAM = 2
 
     // 1. Check state.attributes.stream_source
     const streamSourceAttr = attrs.stream_source;
@@ -41,8 +43,12 @@ export class CameraSourceResolver {
       };
     }
 
-    // 2. Direct RTSP URL (rtsp_url, stream_url)
-    const directRtsp = attrs.rtsp_url || attrs.stream_url;
+    // 2. Direct RTSP URL (rtsp_url, stream_url, rtsp_stream, rtsp_stream_url)
+    const directRtsp =
+      attrs.rtsp_url ||
+      attrs.stream_url ||
+      attrs.rtsp_stream ||
+      attrs.rtsp_stream_url;
     if (typeof directRtsp === "string" && directRtsp.startsWith("rtsp")) {
       const sanitized = sanitizeUrlCredentials(directRtsp);
       platform?.log?.debug?.(
@@ -88,8 +94,8 @@ export class CameraSourceResolver {
       };
     }
 
-    // 4. HA Native HLS stream via WebSocket (camera/stream)
-    if (platform?.ha?.requestCameraStream) {
+    // 4. HA Native HLS stream via WebSocket (camera/stream) ONLY if supported_features has STREAM
+    if (hasStreamSupport && platform?.ha?.requestCameraStream) {
       try {
         const streamUrl = await platform.ha.requestCameraStream(entityId);
         if (streamUrl && typeof streamUrl === "string") {
@@ -98,7 +104,7 @@ export class CameraSourceResolver {
           let isH264 = true;
           try {
             const probe = await probeCameraSource(streamUrl, {
-              timeoutMs: 2000,
+              timeoutMs: 2500,
               httpBearerToken: token,
             });
             if (probe.valid && probe.videoCodec) {
@@ -124,11 +130,8 @@ export class CameraSourceResolver {
       }
     }
 
-    // 4b. HA camera.play_stream service fallback
-    if (
-      platform?.ha?.callService &&
-      (Number(attrs.supported_features || 0) & 2) !== 0
-    ) {
+    // 4b. HA camera.play_stream service fallback (ONLY if supported_features has STREAM)
+    if (hasStreamSupport && platform?.ha?.callService) {
       try {
         const result = await platform.ha.callService(
           "camera",
@@ -163,24 +166,14 @@ export class CameraSourceResolver {
       }
     }
 
-    // 5. HA Camera Proxy Stream fallback (/api/camera_proxy_stream/{entityId})
-    if (platform?.ha?.getCameraProxyStreamUrl) {
-      const proxyUrl = platform.ha.getCameraProxyStreamUrl(entityId);
-      if (proxyUrl) {
-        platform?.log?.debug?.(
-          `[CameraSourceResolver][${entityId}] Resolved HA camera_proxy_stream URL: ${sanitizeUrlCredentials(proxyUrl)}`,
-        );
-        return {
-          sourceType: "ha_proxy",
-          url: proxyUrl,
-          snapshotUrl,
-          supportsPassthrough: false,
-          requiresBridge: true,
-        };
-      }
+    // 5. If camera does not support streaming, log clearly and return unknown
+    if (!hasStreamSupport) {
+      platform?.log?.debug?.(
+        `[CameraSourceResolver][${entityId}] Camera does not have STREAM feature (supported_features=${supportedFeatures}). Live stream not exposed by Home Assistant.`,
+      );
     }
 
-    // 6. Fallback: unknown (do not guess or inject unvalidated proxy streams)
+    // 6. Fallback: unknown (never guess or inject snapshot endpoints as streams)
     return {
       sourceType: "unknown",
       url: undefined,

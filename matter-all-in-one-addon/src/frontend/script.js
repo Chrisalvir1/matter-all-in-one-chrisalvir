@@ -713,6 +713,12 @@ function showQrCode(entity) {
       ? `<button id="toggle-camera-hksv-btn" type="button" style="width:100%;margin-top:6px;padding:6px 10px;background:${hk.hksvEnabled ? "#475569" : "#10b981"};color:#ffffff;border:none;border-radius:6px;font-size:0.78rem;font-weight:600;cursor:pointer;">${hk.hksvEnabled ? "⏹ Desactivar HKSV (Solo Live View)" : "▶️ Habilitar HKSV (Grabación en iCloud)"}</button>`
       : "";
 
+    const motionDesc =
+      hk.motionSensorStatus ||
+      (hk.motionSensorSupported
+        ? "Integrado (HomeKit MotionSensor — Trigger HKSV)"
+        : "MotionSensor no disponible desde Home Assistant");
+
     els.deviceManualCode.innerHTML = `
       <div style="text-align:left;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:10px 12px;margin-top:8px;font-size:0.8rem;line-height:1.4;">
         <div style="font-size:0.95rem;font-weight:700;color:var(--text-primary);margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;">
@@ -725,7 +731,7 @@ function showQrCode(entity) {
         <div style="color:var(--text-secondary);margin-bottom:2px;">• <strong>Audio:</strong> ${escapeHtml(audioDesc)}</div>
         <div style="color:var(--text-secondary);margin-bottom:2px;">• <strong>Grabación (HKSV):</strong> ${escapeHtml(recDesc)}</div>
         <div style="color:var(--text-muted);font-size:0.75rem;margin-bottom:4px;padding-left:8px;">↳ Requisitos: Home Hub requerido (Apple TV 4K / HomePod) · iCloud+ requerido</div>
-        <div style="color:var(--text-secondary);margin-bottom:2px;">• <strong>Sensor Movimiento:</strong> Integrado (HomeKit MotionSensor — Trigger HKSV)</div>
+        <div style="color:var(--text-secondary);margin-bottom:2px;">• <strong>Sensor Movimiento:</strong> ${escapeHtml(motionDesc)}</div>
         <div style="color:var(--text-secondary);margin-bottom:2px;">• <strong>Estado Pairing:</strong> ${escapeHtml(pairingDesc)}</div>
         <div style="color:var(--text-secondary);margin-bottom:8px;">• <strong>Motor:</strong> ${escapeHtml(ffmpegDesc)} · Puerto: ${hk.port}</div>
         ${hksvActionBtn}

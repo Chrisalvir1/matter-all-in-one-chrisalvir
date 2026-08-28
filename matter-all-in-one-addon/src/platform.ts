@@ -2732,6 +2732,21 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     if (this.isEntityExported(entityId))
       this.queueStateUpdate(entityId, newState);
 
+    if (entityId.startsWith("binary_sensor.")) {
+      for (const cam of this.entities.values()) {
+        if (cam instanceof CameraEntity && cam.homekitAccessory) {
+          const isLinked =
+            cam.homekitAccessory.linkedMotionEntityId === entityId ||
+            (this.ha.hassEntities.get(entityId)?.device_id &&
+              this.ha.hassEntities.get(entityId)?.device_id ===
+                this.ha.hassEntities.get(cam.entityId)?.device_id);
+          if (isLinked) {
+            cam.homekitAccessory.updateMotionState(newState.state === "on");
+          }
+        }
+      }
+    }
+
     if (entityId.startsWith("select.")) {
       const deviceId = this.ha.hassEntities.get(entityId)?.device_id;
       for (const [vId, vEntity] of this.entities.entries()) {
@@ -3156,9 +3171,15 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                             : "configurable"
                           : "not_capable");
 
+                      const linkedMotion = (e as CameraEntity).homekitAccessory
+                        ?.linkedMotionEntityId;
+
                       let recordingStatus =
-                        "🔴 HKSV no compatible (Solo Live View y Snapshots)";
-                      if (hksvVerified) {
+                        "🔴 HKSV bloqueado (Sin fuente STREAM)";
+                      if (!cap?.hasLiveStream) {
+                        recordingStatus =
+                          "🔴 HKSV bloqueado (Live View / Fuente no disponible)";
+                      } else if (hksvVerified) {
                         recordingStatus =
                           "✅ HKSV verificado (Grabando en iCloud)";
                       } else if (hksvState === "ready") {
@@ -3191,7 +3212,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                         strategy:
                           rec?.strategy ||
                           cap?.strategy ||
-                          "passthrough_h264",
+                          "unsupported",
                         hasAudio: cap?.hasAudio ?? false,
                         audioCodec: cap?.audioCodec ?? "none",
                         videoCodec: cap?.videoCodec ?? "h264",
@@ -3201,7 +3222,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                             : cap?.strategy === "passthrough_video_only"
                               ? "Passthrough H.264 (Video-only)"
                               : "Transcodificación H.264 activa"
-                          : "Disponible (Home Assistant Stream)",
+                          : "Live View no disponible: Home Assistant no expone una fuente reproducible.",
                         snapshotStatus: "Disponible (Home Assistant Proxy)",
                         audioStatus: cap?.hasAudio
                           ? `Audio activo (${cap?.audioCodec})`
@@ -3212,7 +3233,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                           rec?.isPaired
                             ? "✅ Vinculado a Apple Home (Activo)"
                             : "⏳ Listo para vincular (Escanea el código QR en Apple Home)",
-                        motionSensorSupported: true,
+                        motionSensorSupported: Boolean(linkedMotion),
+                        motionSensorEntityId: linkedMotion || null,
+                        motionSensorStatus: linkedMotion
+                          ? `Integrado (Vinculado a ${linkedMotion})`
+                          : "MotionSensor no disponible desde Home Assistant",
                         ffmpegAvailable: Boolean(resolveFfmpegPath()),
                         ffmpegPath:
                           resolveFfmpegPath() || "No instalado en el sistema",

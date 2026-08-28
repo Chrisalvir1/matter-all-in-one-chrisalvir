@@ -1,3 +1,19 @@
+## [1.4.53] - 2026-08-27
+
+### Camera Source Validation, Real MotionSensor Discovery & Track B Isolation
+- **Detección y Validación Estricta de Fuente de Video (`camera-source-resolver.ts`):**
+  - Validación previa del bit `SUPPORT_STREAM` (`supported_features & 2 !== 0`) antes de solicitar streams HLS o invocar `camera.play_stream`, eliminando el error en Home Assistant `does not support play stream service`.
+  - Orden estricto de resolución: `stream_source` -> RTSP directo (`rtsp_url`, `stream_url`, `rtsp_stream`) -> WebRTC / go2rtc -> HLS validado por ffprobe.
+  - Eliminado el uso de endpoints de snapshot como stream continuo. Las cámaras sin streaming reproducible se reportan con transparencia como `Live View no disponible: Home Assistant no expone una fuente reproducible.` y bloquean HKSV.
+- **Descubrimiento y Sincronización de MotionSensor Real (`homekit-camera.accessory.ts`):**
+  - Vinculación automática con la entidad real `binary_sensor.*` (clase `motion` / `occupancy` / `presence`) asociada a la cámara en el registro de dispositivos de Home Assistant.
+  - Sincronización de estados en tiempo real (`StatusActive`, `MotionDetected`) y propagación de eventos como disparador de grabación HKSV.
+  - Si la cámara no cuenta con sensor de movimiento real en Home Assistant, no se crea un sensor simulado y la UI indica `MotionSensor no disponible desde Home Assistant`.
+- **Aislamiento Total de Matter Track B (`camera.entity.ts`):**
+  - Aislamiento en bloque `try/catch` de la inicialización de clusters Matter experimentales (0x0551 / 0x0553), previniendo que errores internos de Matter impacten el funcionamiento de Track A (HomeKit HAP).
+- **Reinicio de Emparejamiento HAP Seguro:**
+  - Regeneración completa de identidad (nueva MAC HAP `0E:...`, setupId aleatorio, nuevo PIN y UUID) y purga de sesiones/caché para permitir mover cámaras individualmente entre diferentes casas de Apple Home.
+
 ## [1.4.52] - 2026-08-27
 
 ### HomeKit Secure Video (HKSV) Production Pipeline for Apple Home (iOS 27+)

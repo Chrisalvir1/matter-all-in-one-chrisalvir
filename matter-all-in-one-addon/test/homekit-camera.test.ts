@@ -371,4 +371,116 @@ describe("HomeKitCameraAccessory", () => {
     acc.record.isPaired = true;
     expect(acc.isPaired()).toBe(true);
   });
+
+  it("links real Home Assistant binary_sensor motion entity when available", () => {
+    const platformWithMotion = {
+      log: { debug: vi.fn(), info: vi.fn(), notice: vi.fn(), warn: vi.fn(), error: vi.fn() },
+      ha: {
+        hassEntities: new Map([
+          ["camera.playroom", { device_id: "dev-playroom-1" }],
+          ["binary_sensor.playroom_motion", { device_id: "dev-playroom-1" }],
+        ]),
+        hassStates: new Map([
+          [
+            "binary_sensor.playroom_motion",
+            {
+              entity_id: "binary_sensor.playroom_motion",
+              state: "on",
+              attributes: { device_class: "motion" },
+            },
+          ],
+        ]),
+      },
+    };
+
+    const record = {
+      entityId: "camera.playroom",
+      uuid: "e4a2d8a0-1234-5678-9abc-def012345699",
+      username: "0E:AA:BB:CC:DD:EE",
+      pincode: "111-22-333",
+      setupId: "PLAY",
+      port: 51834,
+      published: false,
+      strategy: "passthrough_h264" as const,
+      state: "idle",
+      name: "Playroom Camera",
+    };
+
+    const acc = new HomeKitCameraAccessory(
+      platformWithMotion,
+      "camera.playroom",
+      record,
+      {
+        hasLiveStream: true,
+        streamSourceType: "rtsp",
+        videoCodec: "h264",
+        hasAudio: false,
+        audioCodec: "none",
+        resolution: { width: 1920, height: 1080 },
+        maxFps: 30,
+        strategy: "passthrough_video_only",
+        requiresTranscoding: false,
+        snapshotSupported: true,
+      },
+      {
+        sourceType: "rtsp",
+        url: "rtsp://playroom.local/live",
+        supportsPassthrough: true,
+        requiresBridge: false,
+      },
+    );
+
+    expect(acc.linkedMotionEntityId).toBe("binary_sensor.playroom_motion");
+    expect(acc.motionService).toBeDefined();
+  });
+
+  it("does not create fake motion sensor service when HA has no associated motion entity", () => {
+    const platformWithoutMotion = {
+      log: { debug: vi.fn(), info: vi.fn(), notice: vi.fn(), warn: vi.fn(), error: vi.fn() },
+      ha: {
+        hassEntities: new Map([["camera.standalone", { device_id: "dev-standalone-1" }]]),
+        hassStates: new Map(),
+      },
+    };
+
+    const record = {
+      entityId: "camera.standalone",
+      uuid: "e4a2d8a0-1234-5678-9abc-def012345690",
+      username: "0E:AA:BB:CC:DD:E0",
+      pincode: "111-22-330",
+      setupId: "STND",
+      port: 51835,
+      published: false,
+      strategy: "passthrough_h264" as const,
+      state: "idle",
+      name: "Standalone Camera",
+    };
+
+    const acc = new HomeKitCameraAccessory(
+      platformWithoutMotion,
+      "camera.standalone",
+      record,
+      {
+        hasLiveStream: true,
+        streamSourceType: "rtsp",
+        videoCodec: "h264",
+        hasAudio: false,
+        audioCodec: "none",
+        resolution: { width: 1920, height: 1080 },
+        maxFps: 30,
+        strategy: "passthrough_video_only",
+        requiresTranscoding: false,
+        snapshotSupported: true,
+      },
+      {
+        sourceType: "rtsp",
+        url: "rtsp://camera.local/live",
+        supportsPassthrough: true,
+        requiresBridge: false,
+      },
+    );
+
+    expect(acc.linkedMotionEntityId).toBeUndefined();
+    expect(acc.motionService).toBeUndefined();
+  });
 });

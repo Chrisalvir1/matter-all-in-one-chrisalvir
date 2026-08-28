@@ -136,7 +136,7 @@ export function detectCameraCapabilities(
   if (!hasLiveStream) {
     strategy = "unsupported";
     transcodingReason =
-      "No validated stream source available or entity is unavailable.";
+      "Live View no disponible: Home Assistant no expone una fuente reproducible.";
   } else if (videoCodec === "h264") {
     if (hasAudio && audioCodec !== "incompatible" && audioCodec !== "none") {
       strategy = "passthrough_h264";
