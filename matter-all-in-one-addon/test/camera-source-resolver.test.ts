@@ -66,11 +66,16 @@ describe("CameraSourceResolver", () => {
     expect(res.url).toBe("http://ha.local:8123/api/hls/master.m3u8");
   });
 
-  it("does NOT call play_stream or camera/stream when camera lacks STREAM feature", async () => {
+  it("does NOT call play_stream or camera/stream when camera lacks STREAM feature, falls back to camera_proxy_stream", async () => {
     const mockPlatform = {
       ha: {
         requestCameraStream: vi.fn(),
         callService: vi.fn(),
+        getCameraProxyStreamUrl: vi
+          .fn()
+          .mockReturnValue(
+            "http://127.0.0.1:8123/api/camera_proxy_stream/camera.playroom_camara_de_playroom",
+          ),
       },
     };
     const state = makeState({ supported_features: 1 }); // only ON_OFF, no STREAM
@@ -82,8 +87,10 @@ describe("CameraSourceResolver", () => {
 
     expect(mockPlatform.ha.requestCameraStream).not.toHaveBeenCalled();
     expect(mockPlatform.ha.callService).not.toHaveBeenCalled();
-    expect(res.sourceType).toBe("unknown");
-    expect(res.url).toBeUndefined();
+    expect(res.sourceType).toBe("ha_proxy");
+    expect(res.url).toBe(
+      "http://127.0.0.1:8123/api/camera_proxy_stream/camera.playroom_camara_de_playroom",
+    );
   });
 
   it("resolves native WebSocket camera/stream URL when supported_features has STREAM", async () => {
@@ -111,10 +118,11 @@ describe("CameraSourceResolver", () => {
     );
   });
 
-  it("returns unknown when no valid continuous stream is found (never uses snapshot endpoint as stream)", async () => {
+  it("returns unknown when no stream endpoint can be resolved", async () => {
     const mockPlatform = {
       ha: {
         requestCameraStream: vi.fn().mockResolvedValue(null),
+        getCameraProxyStreamUrl: vi.fn().mockReturnValue(null),
       },
     };
     const state = makeState({ supported_features: 2 });

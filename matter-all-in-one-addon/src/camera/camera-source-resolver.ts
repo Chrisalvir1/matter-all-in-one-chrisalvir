@@ -12,7 +12,8 @@ export class CameraSourceResolver {
    * 2. Direct RTSP URL (rtsp_url, stream_url, rtsp_stream, rtsp_stream_url)
    * 3. WebRTC / go2rtc source
    * 4. HLS stream (camera/stream or play_stream) ONLY if supported_features has STREAM (bit 2)
-   * 5. unknown (if no continuous stream exists, return unknown; never inject snapshot endpoints as streams)
+   * 5. Home Assistant Continuous Camera Proxy Stream (/api/camera_proxy_stream/{entityId})
+   * 6. unknown (if entity is unavailable or no endpoint can be resolved)
    */
   public static async resolve(
     platform: any,
@@ -166,14 +167,26 @@ export class CameraSourceResolver {
       }
     }
 
-    // 5. If camera does not support streaming, log clearly and return unknown
-    if (!hasStreamSupport) {
-      platform?.log?.debug?.(
-        `[CameraSourceResolver][${entityId}] Camera does not have STREAM feature (supported_features=${supportedFeatures}). Live stream not exposed by Home Assistant.`,
-      );
+    // 5. HA Camera Proxy Continuous Stream endpoint (/api/camera_proxy_stream/{entityId})
+    // For cameras without HLS/RTSP support in HA (Generic MJPEG, Tapo, Tuya, ESP32),
+    // Home Assistant provides a continuous multipart video feed consumable by FFmpeg.
+    if (platform?.ha?.getCameraProxyStreamUrl) {
+      const proxyUrl = platform.ha.getCameraProxyStreamUrl(entityId);
+      if (proxyUrl) {
+        platform?.log?.debug?.(
+          `[CameraSourceResolver][${entityId}] Resolved HA camera_proxy_stream endpoint: ${sanitizeUrlCredentials(proxyUrl)}`,
+        );
+        return {
+          sourceType: "ha_proxy",
+          url: proxyUrl,
+          snapshotUrl,
+          supportsPassthrough: false,
+          requiresBridge: true,
+        };
+      }
     }
 
-    // 6. Fallback: unknown (never guess or inject snapshot endpoints as streams)
+    // 6. Fallback: unknown
     return {
       sourceType: "unknown",
       url: undefined,

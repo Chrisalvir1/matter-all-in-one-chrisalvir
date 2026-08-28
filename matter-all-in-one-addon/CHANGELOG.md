@@ -1,3 +1,12 @@
+## [1.4.54] - 2026-08-27
+
+### Camera Proxy Stream Continuous Pipeline & URL Normalization
+- **Resolución Universal de Continuous Proxy Stream:**
+  - Integrado soporte automático para cámaras sin stream HLS ni RTSP (`supported_features & 2 === 0`) utilizando el endpoint continuo `/api/camera_proxy_stream/{entity_id}` con autenticación Bearer token.
+  - FFmpeg transcodifica el stream continuo de Home Assistant en H.264 de latencia ultrabaja (`-preset ultrafast -tune zerolatency`) para Live View y fragmentos fMP4 para HomeKit Secure Video.
+  - Normalizado el generador `getHttpBaseUrl()` para eliminar sufijos WebSocket (`/api/websocket`, `/core/websocket`) asegurando URLs HTTP 100% válidas.
+  - Se eliminan por completo los errores `Cannot start stream: resolved stream source URL is missing` y `does not support play stream service`.
+
 ## [1.4.53] - 2026-08-27
 
 ### Camera Source Validation, Real MotionSensor Discovery & Track B Isolation

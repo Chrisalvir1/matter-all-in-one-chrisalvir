@@ -2244,9 +2244,13 @@ export class HomeAssistant extends EventEmitter {
    * Returns the HTTP/HTTPS base URL corresponding to the WebSocket endpoint.
    */
   public getHttpBaseUrl(): string {
-    return this.wsUrl
+    const url = this.wsUrl
       .replace(/^ws:\/\//, "http://")
       .replace(/^wss:\/\//, "https://");
+    return url
+      .replace(/\/api\/websocket\/?$/, "")
+      .replace(/\/core\/websocket\/?$/, "/core")
+      .replace(/\/websocket\/?$/, "");
   }
 
   /**
