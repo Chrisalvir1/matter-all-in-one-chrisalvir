@@ -17,6 +17,30 @@ const mockPlatform = {
     error: vi.fn(),
   },
   ha: {
+    hassEntities: new Map([
+      ["camera.backyard", { device_id: "dev-backyard" }],
+      ["binary_sensor.backyard_motion", { device_id: "dev-backyard" }],
+      ["camera.driveway", { device_id: "dev-driveway" }],
+      ["binary_sensor.driveway_motion", { device_id: "dev-driveway" }],
+    ]),
+    hassStates: new Map([
+      [
+        "binary_sensor.backyard_motion",
+        {
+          entity_id: "binary_sensor.backyard_motion",
+          state: "off",
+          attributes: { device_class: "motion" },
+        },
+      ],
+      [
+        "binary_sensor.driveway_motion",
+        {
+          entity_id: "binary_sensor.driveway_motion",
+          state: "off",
+          attributes: { device_class: "motion" },
+        },
+      ],
+    ]),
     fetchSnapshot: vi
       .fn()
       .mockResolvedValue(Buffer.from([0xff, 0xd8, 0xff, 0xe0])), // JPEG header
