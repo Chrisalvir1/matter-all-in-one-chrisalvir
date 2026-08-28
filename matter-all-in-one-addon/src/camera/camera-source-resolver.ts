@@ -88,7 +88,43 @@ export class CameraSourceResolver {
       };
     }
 
-    // 4. HLS or HA camera stream service request
+    // 4. HA Native HLS stream via WebSocket (camera/stream)
+    if (platform?.ha?.requestCameraStream) {
+      try {
+        const streamUrl = await platform.ha.requestCameraStream(entityId);
+        if (streamUrl && typeof streamUrl === "string") {
+          const token =
+            platform.ha.getAccessToken?.() || platform.ha.wsAccessToken;
+          let isH264 = true;
+          try {
+            const probe = await probeCameraSource(streamUrl, {
+              timeoutMs: 2000,
+              httpBearerToken: token,
+            });
+            if (probe.valid && probe.videoCodec) {
+              isH264 = probe.videoCodec === "h264";
+            }
+          } catch {}
+
+          platform?.log?.debug?.(
+            `[CameraSourceResolver][${entityId}] Resolved native HA HLS stream: ${sanitizeUrlCredentials(streamUrl)}`,
+          );
+          return {
+            sourceType: "hls",
+            url: streamUrl,
+            snapshotUrl,
+            supportsPassthrough: isH264,
+            requiresBridge: true,
+          };
+        }
+      } catch (err) {
+        platform?.log?.debug?.(
+          `[CameraSourceResolver][${entityId}] Native camera/stream request returned: ${err}`,
+        );
+      }
+    }
+
+    // 4b. HA camera.play_stream service fallback
     if (
       platform?.ha?.callService &&
       (Number(attrs.supported_features || 0) & 2) !== 0
@@ -110,37 +146,41 @@ export class CameraSourceResolver {
           const hlsUrl = (result as any).url;
           const fullHlsUrl = hlsUrl.startsWith("http")
             ? hlsUrl
-            : `${platform?.ha?.baseUrl || ""}${hlsUrl}`;
+            : `${platform?.ha?.getHttpBaseUrl?.() || platform?.ha?.baseUrl || ""}${hlsUrl}`;
 
-          let isH264 = true;
-          try {
-            const probe = await probeCameraSource(fullHlsUrl, {
-              timeoutMs: 2000,
-            });
-            if (probe.valid && probe.videoCodec) {
-              isH264 = probe.videoCodec === "h264";
-            }
-          } catch {}
-
-          platform?.log?.debug?.(
-            `[CameraSourceResolver][${entityId}] Resolved dynamic HLS stream`,
-          );
           return {
             sourceType: "hls",
             url: fullHlsUrl,
             snapshotUrl,
-            supportsPassthrough: isH264,
+            supportsPassthrough: true,
             requiresBridge: true,
           };
         }
       } catch (err) {
         platform?.log?.debug?.(
-          `[CameraSourceResolver][${entityId}] Dynamic stream service returned: ${err}`,
+          `[CameraSourceResolver][${entityId}] Dynamic play_stream service returned: ${err}`,
         );
       }
     }
 
-    // 5. Fallback: unknown (do not guess or inject unvalidated proxy streams)
+    // 5. HA Camera Proxy Stream fallback (/api/camera_proxy_stream/{entityId})
+    if (platform?.ha?.getCameraProxyStreamUrl) {
+      const proxyUrl = platform.ha.getCameraProxyStreamUrl(entityId);
+      if (proxyUrl) {
+        platform?.log?.debug?.(
+          `[CameraSourceResolver][${entityId}] Resolved HA camera_proxy_stream URL: ${sanitizeUrlCredentials(proxyUrl)}`,
+        );
+        return {
+          sourceType: "ha_proxy",
+          url: proxyUrl,
+          snapshotUrl,
+          supportsPassthrough: false,
+          requiresBridge: true,
+        };
+      }
+    }
+
+    // 6. Fallback: unknown (do not guess or inject unvalidated proxy streams)
     return {
       sourceType: "unknown",
       url: undefined,

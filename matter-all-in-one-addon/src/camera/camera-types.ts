@@ -73,6 +73,7 @@ export interface HomeKitCameraStorageRecord {
   manufacturer: string;
   model: string;
   serialNumber: string;
+  isPaired?: boolean;
   lastUpdated?: string;
 }
 

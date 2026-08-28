@@ -173,6 +173,7 @@ export async function probeCameraSource(
   sourceUrl: string,
   options: {
     timeoutMs?: number;
+    httpBearerToken?: string;
     customFfprobePath?: string;
     customFfmpegPath?: string;
   } = {},
@@ -182,7 +183,12 @@ export async function probeCameraSource(
 
   if (ffprobePath) {
     try {
-      const result = await probeWithFfprobe(ffprobePath, sourceUrl, timeoutMs);
+      const result = await probeWithFfprobe(
+        ffprobePath,
+        sourceUrl,
+        timeoutMs,
+        options.httpBearerToken,
+      );
       if (result.valid) {
         return result;
       }
@@ -194,7 +200,12 @@ export async function probeCameraSource(
   const ffmpegPath = options.customFfmpegPath || resolveFfmpegPath();
   if (ffmpegPath) {
     try {
-      return await probeWithFfmpeg(ffmpegPath, sourceUrl, timeoutMs);
+      return await probeWithFfmpeg(
+        ffmpegPath,
+        sourceUrl,
+        timeoutMs,
+        options.httpBearerToken,
+      );
     } catch (err) {
       return {
         valid: false,
@@ -207,7 +218,7 @@ export async function probeCameraSource(
   return {
     valid: false,
     hasAudio: false,
-    error: "FFmpeg/FFprobe binary not found on system",
+    error: "No FFprobe or FFmpeg binary available for probing",
   };
 }
 
@@ -215,21 +226,30 @@ function probeWithFfprobe(
   ffprobePath: string,
   sourceUrl: string,
   timeoutMs: number,
+  httpBearerToken?: string,
 ): Promise<ProbeResult> {
   return new Promise((resolve) => {
     const args = [
       "-v",
-      "quiet",
-      "-print_format",
+      "error",
+      "-show_entries",
+      "stream=codec_type,codec_name,width,height,r_frame_rate",
+      "-of",
       "json",
-      "-show_streams",
-      "-show_format",
-      "-analyzeduration",
-      "2000000",
-      "-probesize",
-      "2000000",
-      sourceUrl,
     ];
+
+    if (
+      (sourceUrl.startsWith("http://") || sourceUrl.startsWith("https://")) &&
+      httpBearerToken
+    ) {
+      args.push("-headers", `Authorization: Bearer ${httpBearerToken}\r\n`);
+    }
+
+    if (sourceUrl.startsWith("rtsp://")) {
+      args.push("-rtsp_transport", "tcp");
+    }
+
+    args.push(sourceUrl);
 
     const child = spawn(ffprobePath, args, {
       stdio: ["ignore", "pipe", "pipe"],
@@ -258,47 +278,38 @@ function probeWithFfprobe(
 
     child.on("close", (code) => {
       clearTimeout(timer);
-      if (code === 0 && stdoutData) {
+      if (code === 0 && stdoutData.trim()) {
         try {
-          const json = JSON.parse(stdoutData);
-          const streams = json.streams || [];
-          const videoStream = streams.find(
-            (s: any) => s.codec_type === "video",
-          );
-          const audioStream = streams.find(
-            (s: any) => s.codec_type === "audio",
-          );
+          const data = JSON.parse(stdoutData);
+          const streams = Array.isArray(data.streams) ? data.streams : [];
+          const videoStream = streams.find((s: any) => s.codec_type === "video");
+          const audioStream = streams.find((s: any) => s.codec_type === "audio");
 
-          let fps: number | undefined;
-          if (videoStream?.r_frame_rate) {
-            const parts = String(videoStream.r_frame_rate).split("/");
-            if (parts.length === 2 && Number(parts[1]) > 0) {
-              fps = Math.round(Number(parts[0]) / Number(parts[1]));
-            } else {
-              fps = Number(videoStream.r_frame_rate) || undefined;
+          if (videoStream) {
+            let fps: number | undefined;
+            if (videoStream.r_frame_rate) {
+              const parts = videoStream.r_frame_rate.split("/");
+              if (parts.length === 2 && parseInt(parts[1], 10) > 0) {
+                fps = Math.round(
+                  parseInt(parts[0], 10) / parseInt(parts[1], 10),
+                );
+              }
             }
-          }
 
-          resolve({
-            valid: Boolean(videoStream),
-            videoCodec: videoStream?.codec_name?.toLowerCase(),
-            audioCodec: audioStream?.codec_name?.toLowerCase(),
-            width: videoStream?.width ? Number(videoStream.width) : undefined,
-            height: videoStream?.height
-              ? Number(videoStream.height)
-              : undefined,
-            fps,
-            hasAudio: Boolean(audioStream),
-            probeMethod: "ffprobe",
-          });
-          return;
-        } catch (parseErr) {
-          resolve({
-            valid: false,
-            hasAudio: false,
-            error: `Failed to parse ffprobe json: ${parseErr}`,
-          });
-          return;
+            resolve({
+              valid: true,
+              videoCodec: (videoStream.codec_name || "").toLowerCase(),
+              audioCodec: (audioStream?.codec_name || "").toLowerCase() || undefined,
+              width: videoStream.width,
+              height: videoStream.height,
+              fps,
+              hasAudio: Boolean(audioStream),
+              probeMethod: "ffprobe",
+            });
+            return;
+          }
+        } catch {
+          // JSON parse failed, fall through to error
         }
       }
 
@@ -324,6 +335,7 @@ function probeWithFfmpeg(
   ffmpegPath: string,
   sourceUrl: string,
   timeoutMs: number,
+  httpBearerToken?: string,
 ): Promise<ProbeResult> {
   return new Promise((resolve) => {
     const args = [
@@ -332,14 +344,20 @@ function probeWithFfmpeg(
       "2000000",
       "-probesize",
       "2000000",
-      "-i",
-      sourceUrl,
-      "-t",
-      "1",
-      "-f",
-      "null",
-      "-",
     ];
+
+    if (
+      (sourceUrl.startsWith("http://") || sourceUrl.startsWith("https://")) &&
+      httpBearerToken
+    ) {
+      args.push("-headers", `Authorization: Bearer ${httpBearerToken}\r\n`);
+    }
+
+    if (sourceUrl.startsWith("rtsp://")) {
+      args.push("-rtsp_transport", "tcp");
+    }
+
+    args.push("-i", sourceUrl, "-t", "1", "-f", "null", "-");
 
     const child = spawn(ffmpegPath, args, {
       stdio: ["ignore", "ignore", "pipe"],
@@ -424,9 +442,12 @@ export interface StreamPipelineConfig {
   videoCryptoSuite: SRTPCryptoSuites;
   videoKeySaltBase64: string;
   strategy:
-    "passthrough_h264" | "passthrough_video_only" | "transcode_required";
+    | "passthrough_h264"
+    | "passthrough_video_only"
+    | "transcode_required";
   fps?: number;
   bitrateKbps?: number;
+  httpBearerToken?: string;
   includeAudio?: boolean;
   audioPort?: number;
   audioSsrc?: number;
@@ -479,16 +500,34 @@ export function buildFfmpegStreamArgs(config: StreamPipelineConfig): string[] {
     );
   }
 
-  const args: string[] = [
-    "-hide_banner",
-    "-loglevel",
-    "warning",
+  const inputArgs: string[] = ["-hide_banner", "-loglevel", "warning"];
+
+  if (
+    (config.sourceUrl.startsWith("http://") ||
+      config.sourceUrl.startsWith("https://")) &&
+    config.httpBearerToken
+  ) {
+    inputArgs.push(
+      "-headers",
+      `Authorization: Bearer ${config.httpBearerToken}\r\n`,
+    );
+  }
+
+  if (config.sourceUrl.startsWith("rtsp://")) {
+    inputArgs.push("-rtsp_transport", "tcp");
+  }
+
+  inputArgs.push(
     "-fflags",
     "+nobuffer",
     "-flags",
     "low_delay",
     "-i",
     config.sourceUrl,
+  );
+
+  const args: string[] = [
+    ...inputArgs,
     ...videoPayloadArgs,
     "-f",
     "rtp",

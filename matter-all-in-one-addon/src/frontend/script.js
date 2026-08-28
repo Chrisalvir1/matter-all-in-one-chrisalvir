@@ -348,6 +348,18 @@ function renderQrSection(entity) {
   if (!entity || entity.auxiliary || !entity.exported) return;
 
   if (entity.domain === 'camera' && entity.homekitCamera) {
+    if (els.commissionedHint) els.commissionedHint.style.display = 'none';
+    if (els.multiAdminHint) els.multiAdminHint.style.display = 'none';
+    if (els.matterActions) els.matterActions.hidden = true;
+    if (els.fabricsSection) els.fabricsSection.hidden = true;
+    if (els.deviceQrButton) els.deviceQrButton.style.display = 'none';
+    if (els.qrStatusLabel) {
+      const isPaired = Boolean(entity.homekitCamera.isPaired);
+      els.qrStatusLabel.textContent = isPaired
+        ? '✓ Emparejado a Apple Home'
+        : '🍎 Listo para Apple Home (HomeKit Live View)';
+      els.qrStatusLabel.className = `qr-status-label ${isPaired ? 'commissioned' : 'active'}`;
+    }
     showQrCode(entity);
     return;
   }
@@ -474,26 +486,35 @@ function selectEntity(entity) {
 
   // Home name badge next to title
   let homeLabel = '';
-  if (entity.exported && entity.commissioned && entity.homeName) {
+  if (entity.domain === 'camera' && entity.homekitCamera) {
+    const isPaired = Boolean(entity.homekitCamera.isPaired);
+    homeLabel = isPaired
+      ? `<span class="home-badge commissioned" title="Emparejado con Apple Home">🍎 Apple Home</span>`
+      : `<span class="home-badge" title="Listo para Apple Home">🍎 HomeKit HAP</span>`;
+  } else if (entity.exported && entity.commissioned && entity.homeName) {
     homeLabel = `<span class="home-badge" title="Etiqueta del controlador Matter">🏠 ${escapeHtml(entity.homeName)}</span>`;
   } else if (entity.exported && entity.commissioned) {
     homeLabel = `<span class="home-badge commissioned" title="Emparejado">✓ Emparejado</span>`;
   }
   els.selectionTitle.innerHTML = `<span class="selection-title-text">${escapeHtml(titleText)}</span>${homeLabel ? ' ' + homeLabel : ''}`;
 
-  els.selectionDescription.textContent = entity.auxiliary
-    ? `Acción auxiliar de ${entity.primaryEntityId || 'su dispositivo principal'}. No se expone como accesorio Matter independiente.`
-    : entity.composite && entity.entityId !== entity.compositePrimaryEntityId
-      ? entity.exported
-        ? 'Endpoint integrado en el mismo accesorio Matter de este dispositivo físico. Comparte su código QR y emparejamiento.'
-        : 'Endpoint que se integrará en el accesorio Matter del dispositivo físico. Activa la entidad principal para publicar el grupo completo.'
-    : entity.exported
-      ? (entity.commissioned
-          ? `Accesorio Matter activo y conectado a ${controllerSummary || 'Matter'}. Puedes añadirlo a otra casa con el botón o desconectarlo cuando lo desees.`
-          : 'Accesorio Matter listo para emparejar. Escanea el código QR en Apple Home, Google Home u otro controlador.')
-      : entity.composite
-        ? 'Entidad principal del dispositivo Matter compuesto. Al activarla se publicarán todos sus endpoints compatibles con un único código QR.'
-        : 'Actívala para publicar la entidad como accesorio Matter independiente.';
+  els.selectionDescription.textContent = entity.domain === 'camera' && entity.homekitCamera
+    ? (entity.homekitCamera.isPaired
+        ? 'Accesorio HomeKit IP Camera activo y vinculado a Apple Home con soporte para Live View RTP/SRTP y sensor de movimiento.'
+        : 'Cámara HomeKit HAP lista para emparejar. Abre la app Casa (Apple Home) en tu iPhone o iPad y escanea el código QR de abajo o ingresa el código PIN.')
+    : entity.auxiliary
+      ? `Acción auxiliar de ${entity.primaryEntityId || 'su dispositivo principal'}. No se expone como accesorio Matter independiente.`
+      : entity.composite && entity.entityId !== entity.compositePrimaryEntityId
+        ? entity.exported
+          ? 'Endpoint integrado en el mismo accesorio Matter de este dispositivo físico. Comparte su código QR y emparejamiento.'
+          : 'Endpoint que se integrará en el accesorio Matter del dispositivo físico. Activa la entidad principal para publicar el grupo completo.'
+      : entity.exported
+        ? (entity.commissioned
+            ? `Accesorio Matter activo y conectado a ${controllerSummary || 'Matter'}. Puedes añadirlo a otra casa con el botón o desconectarlo cuando lo desees.`
+            : 'Accesorio Matter listo para emparejar. Escanea el código QR en Apple Home, Google Home u otro controlador.')
+        : entity.composite
+          ? 'Entidad principal del dispositivo Matter compuesto. Al activarla se publicarán todos sus endpoints compatibles con un único código QR.'
+          : 'Actívala para publicar la entidad como accesorio Matter independiente.';
 
   const profiles = Array.isArray(entity.profiles) ? entity.profiles : [];
   els.profileField.hidden = entity.auxiliary || profiles.length === 0;
@@ -513,25 +534,31 @@ function selectEntity(entity) {
     ? `<div><dt>Origen</dt><dd><span class="badge-mqtt">MQTT Auto-Discovery</span></dd></div>${entity.attributes?.state_topic ? `<div><dt>Tópico Estado</dt><dd title="${escapeHtml(entity.attributes.state_topic)}">${escapeHtml(entity.attributes.state_topic)}</dd></div>` : ''}${entity.attributes?.command_topic ? `<div><dt>Tópico Comando</dt><dd title="${escapeHtml(entity.attributes.command_topic)}">${escapeHtml(entity.attributes.command_topic)}</dd></div>` : ''}`
     : `<div><dt>Estado HA</dt><dd>${escapeHtml(stateLabel(entity.state))}</dd></div>`;
   
-  const connectionMeta = entity.exported && entity.commissioned
-    ? `<div><dt>Controladores</dt><dd title="${escapeHtml(controllerSummary)}">${escapeHtml(controllerSummary || 'Controlador Matter sin VID reportado')}</dd></div><div><dt>Casas vinculadas</dt><dd>${escapeHtml(entity.fabricCount || 1)}</dd></div>`
-    : '';
+  const connectionMeta = entity.domain === 'camera' && entity.homekitCamera
+    ? `<div><dt>Protocolo</dt><dd>HomeKit HAP (Live View RTP)</dd></div><div><dt>Estado</dt><dd>${escapeHtml(entity.homekitCamera.isPaired ? 'Emparejado a Apple Home' : 'Listo para escanear')}</dd></div>`
+    : entity.exported && entity.commissioned
+      ? `<div><dt>Controladores</dt><dd title="${escapeHtml(controllerSummary)}">${escapeHtml(controllerSummary || 'Controlador Matter sin VID reportado')}</dd></div><div><dt>Casas vinculadas</dt><dd>${escapeHtml(entity.fabricCount || 1)}</dd></div>`
+      : '';
 
-  const typeText = entity.deviceTypeLabel || (entity.domain === 'fan' ? 'Fan' : (entity.domain === 'humidifier' ? 'Humidifier' : (entity.matterType || 'Predeterminado')));
+  const typeText = entity.deviceTypeLabel || (entity.domain === 'camera' ? 'Cámara HomeKit HAP' : (entity.domain === 'fan' ? 'Fan' : (entity.domain === 'humidifier' ? 'Humidifier' : (entity.matterType || 'Predeterminado'))));
   const brandMeta = entity.manufacturer ? `<div><dt>Marca</dt><dd>${escapeHtml(entity.manufacturer)}</dd></div>` : '';
   const modelMeta = entity.model ? `<div><dt>Modelo</dt><dd>${escapeHtml(entity.model)}</dd></div>` : '';
-  els.selectionMeta.innerHTML = `<div><dt>Entidad</dt><dd>${escapeHtml(entity.entityId)}</dd></div><div><dt>Tipo Matter</dt><dd>${escapeHtml(typeText)}</dd></div>${brandMeta}${modelMeta}${mqttMeta}${connectionMeta}`;
+  els.selectionMeta.innerHTML = `<div><dt>Entidad</dt><dd>${escapeHtml(entity.entityId)}</dd></div><div><dt>Tipo</dt><dd>${escapeHtml(typeText)}</dd></div>${brandMeta}${modelMeta}${mqttMeta}${connectionMeta}`;
 
-  els.selectionStatus.className = `selection-status${entity.exported ? ' active' : ''}${entity.commissioned ? ' commissioned' : ''}`;
-  els.selectionStatus.textContent = entity.auxiliary
-    ? 'Acción auxiliar: no se crea un mosaico ni un accesorio Matter separado.'
-    : entity.exported
-      ? (entity.commissioned
-          ? `✓ Emparejado${entity.homeName ? ' · ' + entity.homeName : ''}`
-          : '✓ Publicado en Matter — Listo para emparejar')
-      : entity.composite && entity.entityId !== entity.compositePrimaryEntityId
-        ? 'Integrada: se publica junto con la entidad principal'
-      : 'Aún no se publica en Matter';
+  els.selectionStatus.className = `selection-status${entity.exported ? ' active' : ''}${entity.commissioned || entity.homekitCamera?.isPaired ? ' commissioned' : ''}`;
+  els.selectionStatus.textContent = entity.domain === 'camera' && entity.homekitCamera
+    ? (entity.homekitCamera.isPaired
+        ? '✓ Vinculado a Apple Home — Live View y Sensores activos'
+        : `● Publicado en puerto ${entity.homekitCamera.port} — Listo para escanear`)
+    : entity.auxiliary
+      ? 'Acción auxiliar: no se crea un mosaico ni un accesorio Matter separado.'
+      : entity.exported
+        ? (entity.commissioned
+            ? `✓ Emparejado${entity.homeName ? ' · ' + entity.homeName : ''}`
+            : '✓ Publicado en Matter — Listo para emparejar')
+        : entity.composite && entity.entityId !== entity.compositePrimaryEntityId
+          ? 'Integrada: se publica junto con la entidad principal'
+        : 'Aún no se publica en Matter';
 
   renderDiagnostics(entity);
   renderQrSection(entity);

@@ -17,6 +17,7 @@ import type {
   CameraCapabilitiesInfo,
   ResolvedStreamSource,
 } from "../camera-types.js";
+import { CameraSourceResolver } from "../camera-source-resolver.js";
 import {
   resolveFfmpegPath,
   getFfmpegVersion,
@@ -46,7 +47,7 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
     private readonly platform: any,
     private readonly entityId: string,
     private readonly capabilities: CameraCapabilitiesInfo,
-    private readonly streamSource: ResolvedStreamSource,
+    private streamSource: ResolvedStreamSource,
   ) {}
 
   /**
@@ -199,7 +200,11 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
         return;
       }
 
-      this.startFfmpegStream(session, request as StartStreamRequest, callback);
+      void this.startFfmpegStream(
+        session,
+        request as StartStreamRequest,
+        callback,
+      );
     } else if (request.type === StreamRequestTypes.STOP) {
       this.stopFfmpegStream(sessionId);
       callback();
@@ -215,11 +220,11 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
   /**
    * Spawns ffmpeg with optimal stream strategy (H.264 Passthrough / Video-only / Transcode fallback).
    */
-  private startFfmpegStream(
+  private async startFfmpegStream(
     session: HomeKitStreamSession,
     request: StartStreamRequest,
     callback: StreamRequestCallback,
-  ): void {
+  ): Promise<void> {
     const ffmpegPath = resolveFfmpegPath();
     if (!ffmpegPath) {
       const errMsg =
@@ -231,7 +236,34 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
       return;
     }
 
-    const sourceUrl = this.streamSource.url;
+    // Refresh stream URL dynamically on demand if missing or dynamic
+    let sourceUrl = this.streamSource.url;
+    if (
+      !sourceUrl ||
+      this.streamSource.sourceType === "hls" ||
+      this.streamSource.sourceType === "ha_proxy" ||
+      this.streamSource.sourceType === "unknown"
+    ) {
+      const state = this.platform?.ha?.hassStates?.get(this.entityId);
+      if (state) {
+        try {
+          const fresh = await CameraSourceResolver.resolve(
+            this.platform,
+            this.entityId,
+            state,
+          );
+          if (fresh && fresh.url) {
+            this.streamSource = fresh;
+            sourceUrl = fresh.url;
+          }
+        } catch (err) {
+          this.platform?.log?.debug?.(
+            `[HomeKitCamera][${this.entityId}] Dynamic stream resolve attempt: ${err}`,
+          );
+        }
+      }
+    }
+
     if (!sourceUrl) {
       const errMsg =
         "Cannot start stream: resolved stream source URL is missing.";
@@ -242,6 +274,8 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
       return;
     }
 
+    const token =
+      this.platform?.ha?.getAccessToken?.() || this.platform?.ha?.wsAccessToken;
     const ffmpegVer = getFfmpegVersion(ffmpegPath) || "unknown";
     const sanitizedSource = sanitizeUrlCredentials(sourceUrl);
     const videoReq = request.video;
@@ -263,6 +297,7 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
             : "passthrough_h264",
       fps,
       bitrateKbps: videoReq.max_bit_rate || 2000,
+      httpBearerToken: token,
       includeAudio:
         this.capabilities.hasAudio &&
         Boolean(session.audioPort && session.audioKeySalt && request.audio),

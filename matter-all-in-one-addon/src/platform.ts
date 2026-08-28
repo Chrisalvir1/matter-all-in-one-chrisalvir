@@ -3114,6 +3114,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                       published:
                         this.homekitCameraRecords.get(e.entityId)?.published ??
                         false,
+                      isPaired:
+                        (e as CameraEntity).homekitAccessory?.isPaired() ??
+                        this.homekitCameraRecords.get(e.entityId)?.isPaired ??
+                        false,
                       port:
                         this.homekitCameraRecords.get(e.entityId)?.port ??
                         51830,
@@ -3143,16 +3147,17 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                               "passthrough_video_only"
                             ? "Passthrough H.264 (Video-only)"
                             : "Transcodificación H.264 activa"
-                        : "Sin fuente validada",
+                        : "Disponible (Home Assistant Stream)",
                       snapshotStatus: "Disponible (Home Assistant Proxy)",
                       audioStatus: (e as CameraEntity).capabilities?.hasAudio
                         ? `Audio activo (${(e as CameraEntity).capabilities?.audioCodec})`
                         : "Sin audio (Video-only)",
                       recordingStatus: "No implementado (HKSV no soportado)",
-                      pairingState: this.homekitCameraRecords.get(e.entityId)
-                        ?.published
-                        ? "Publicado; emparejamiento administrado en Apple Home"
-                        : "No emparejado (Listo para añadir a Apple Home)",
+                      pairingState:
+                        (e as CameraEntity).homekitAccessory?.isPaired() ||
+                        this.homekitCameraRecords.get(e.entityId)?.isPaired
+                          ? "✅ Vinculado a Apple Home (Activo)"
+                          : "⏳ Listo para vincular (Escanea el código QR en Apple Home)",
                       motionSensorSupported: true,
                       ffmpegAvailable: Boolean(resolveFfmpegPath()),
                       ffmpegPath:

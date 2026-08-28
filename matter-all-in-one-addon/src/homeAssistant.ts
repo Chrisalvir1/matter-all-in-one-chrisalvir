@@ -2239,4 +2239,79 @@ export class HomeAssistant extends EventEmitter {
 
     return nextPromise;
   }
+
+  /**
+   * Returns the HTTP/HTTPS base URL corresponding to the WebSocket endpoint.
+   */
+  public getHttpBaseUrl(): string {
+    return this.wsUrl
+      .replace(/^ws:\/\//, "http://")
+      .replace(/^wss:\/\//, "https://");
+  }
+
+  /**
+   * Returns the active WebSocket / REST access token if configured.
+   */
+  public getAccessToken(): string | undefined {
+    return this.wsAccessToken;
+  }
+
+  /**
+   * Requests a live camera HLS stream URL via Home Assistant WebSocket API (`camera/stream`).
+   */
+  public async requestCameraStream(entityId: string): Promise<string | null> {
+    try {
+      const response = await this.request({
+        type: "camera/stream",
+        entity_id: entityId,
+      });
+      if (
+        response.success &&
+        response.result &&
+        typeof response.result === "object" &&
+        typeof (response.result as any).url === "string"
+      ) {
+        const httpBase = this.getHttpBaseUrl();
+        const relUrl = (response.result as any).url;
+        return relUrl.startsWith("http") ? relUrl : `${httpBase}${relUrl}`;
+      }
+    } catch (err) {
+      this.log.debug(
+        `[HomeAssistant] camera/stream request failed for ${entityId}: ${err}`,
+      );
+    }
+    return null;
+  }
+
+  /**
+   * Fetches a raw JPEG image snapshot from Home Assistant `/api/camera_proxy/{entity_id}`.
+   */
+  public async fetchSnapshot(entityId: string): Promise<Buffer | null> {
+    try {
+      const httpBase = this.getHttpBaseUrl();
+      const url = `${httpBase}/api/camera_proxy/${entityId}`;
+      const headers: Record<string, string> = {};
+      if (this.wsAccessToken) {
+        headers["Authorization"] = `Bearer ${this.wsAccessToken}`;
+      }
+      const response = await fetch(url, { headers });
+      if (response.ok) {
+        const arrayBuf = await response.arrayBuffer();
+        return Buffer.from(arrayBuf);
+      }
+    } catch (err) {
+      this.log.debug(
+        `[HomeAssistant] fetchSnapshot failed for ${entityId}: ${err}`,
+      );
+    }
+    return null;
+  }
+
+  /**
+   * Returns the official Home Assistant camera proxy stream endpoint URL.
+   */
+  public getCameraProxyStreamUrl(entityId: string): string {
+    const httpBase = this.getHttpBaseUrl();
+    return `${httpBase}/api/camera_proxy_stream/${entityId}`;
+  }
 }

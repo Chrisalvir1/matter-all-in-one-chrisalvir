@@ -320,4 +320,55 @@ describe("HomeKitCameraAccessory", () => {
 
     expect(callbackCalled).toBe(true);
   });
+
+  it("checks isPaired status correctly on HomeKitCameraAccessory", () => {
+    const record = {
+      entityId: "camera.patio",
+      uuid: "e4a2d8a0-1234-5678-9abc-def012345688",
+      username: "0E:AA:BB:CC:DD:FF",
+      pincode: "111-22-444",
+      setupId: "PATI",
+      port: 51833,
+      published: false,
+      isPaired: false,
+      strategy: "passthrough_h264" as const,
+      state: "idle",
+      name: "Patio Camera",
+      manufacturer: "Tapo",
+      model: "C210",
+      serialNumber: "camera_patio",
+    };
+
+    const capabilities = {
+      hasLiveStream: true,
+      streamSourceType: "rtsp" as const,
+      videoCodec: "h264" as const,
+      hasAudio: false,
+      audioCodec: "none" as const,
+      resolution: { width: 1920, height: 1080 },
+      maxFps: 30,
+      strategy: "passthrough_video_only" as const,
+      requiresTranscoding: false,
+      snapshotSupported: true,
+    };
+
+    const streamSource = {
+      sourceType: "rtsp" as const,
+      url: "rtsp://camera.local/stream",
+      supportsPassthrough: true,
+      requiresBridge: false,
+    };
+
+    const acc = new HomeKitCameraAccessory(
+      mockPlatform,
+      "camera.patio",
+      record,
+      capabilities,
+      streamSource,
+    );
+
+    expect(acc.isPaired()).toBe(false);
+    acc.record.isPaired = true;
+    expect(acc.isPaired()).toBe(true);
+  });
 });

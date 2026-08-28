@@ -107,4 +107,25 @@ describe("FFmpeg Helper", () => {
     expect(args).not.toContain("-acodec");
     expect(args).not.toContain("0:a:0");
   });
+
+  it("injects HTTP Authorization headers when streaming from authenticated Home Assistant HTTP/HLS URL", () => {
+    const config: StreamPipelineConfig = {
+      sourceUrl: "http://127.0.0.1:8123/api/hls/test-stream/master.m3u8",
+      targetAddress: "192.168.1.200",
+      videoPort: 51234,
+      videoSsrc: 1,
+      videoPayloadType: 99,
+      videoCryptoSuite: SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
+      videoKeySaltBase64: Buffer.alloc(30).toString("base64"),
+      strategy: "passthrough_h264",
+      httpBearerToken: "my-long-lived-access-token",
+    };
+
+    const args = buildFfmpegStreamArgs(config);
+    expect(args).toContain("-headers");
+    expect(args).toContain(
+      "Authorization: Bearer my-long-lived-access-token\r\n",
+    );
+    expect(args).toContain("http://127.0.0.1:8123/api/hls/test-stream/master.m3u8");
+  });
 });

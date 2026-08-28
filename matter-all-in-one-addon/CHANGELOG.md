@@ -1,3 +1,17 @@
+## [1.4.51] - 2026-08-27
+
+### Camera Live Stream Engine & Apple Home Pairing Reliability
+- **Resolución Dinámica de Stream HA (`camera/stream` & `camera_proxy_stream`):**
+  - Implementada integración directa con la API WebSocket nativa de Home Assistant (`ha.requestCameraStream`), obteniendo el endpoint HLS maestro (`/api/hls/...`) compatible con passthrough H.264.
+  - Añadido fallback universal mediante `/api/camera_proxy_stream/${entityId}` garantizando que cualquier cámara existente en Home Assistant cuente con una fuente de video funcional.
+  - Inyección de cabeceras de autorización HTTP Bearer (`Authorization: Bearer <TOKEN>`) en los argumentos de FFmpeg y probes para endpoints seguros de Home Assistant.
+- **Resolución On-Demand en Streaming Delegate:**
+  - `startFfmpegStream` resuelve la URL de forma asíncrona y dinámica bajo demanda al recibir la solicitud `START` de Apple Home, eliminando permanentemente el error `resolved stream source URL is missing`.
+- **Estado de Emparejamiento e Indicadores en UI:**
+  - Detección precisa del estado de vinculación (`isPaired()`, eventos `paired`/`unpaired`).
+  - Distinción visual en la interfaz web de la cámara entre estado emparejado (`✅ Vinculado a Apple Home (Activo)`) y en espera (`⏳ Listo para vincular`).
+  - Ocultamiento de controles irrelevantes de Matter Multi-Admin en tarjetas de cámaras HomeKit HAP y botón dedicado de regeneración de credenciales.
+
 ## [1.4.50] - 2026-08-27
 
 ### HomeKit Live View Streaming & Matter Isolation

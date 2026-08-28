@@ -66,6 +66,55 @@ describe("CameraSourceResolver", () => {
     expect(res.url).toBe("http://ha.local:8123/api/hls/master.m3u8");
   });
 
+  it("resolves native WebSocket camera/stream URL when available", async () => {
+    const mockPlatform = {
+      ha: {
+        requestCameraStream: vi
+          .fn()
+          .mockResolvedValue("http://127.0.0.1:8123/api/hls/test-stream/master.m3u8"),
+        getAccessToken: vi.fn().mockReturnValue("secret-ha-token"),
+      },
+    };
+    const state = makeState();
+    const res = await CameraSourceResolver.resolve(
+      mockPlatform,
+      "camera.playroom_camara_de_playroom",
+      state,
+    );
+
+    expect(mockPlatform.ha.requestCameraStream).toHaveBeenCalledWith(
+      "camera.playroom_camara_de_playroom",
+    );
+    expect(res.sourceType).toBe("hls");
+    expect(res.url).toBe(
+      "http://127.0.0.1:8123/api/hls/test-stream/master.m3u8",
+    );
+  });
+
+  it("falls back to getCameraProxyStreamUrl when other streams are unavailable", async () => {
+    const mockPlatform = {
+      ha: {
+        requestCameraStream: vi.fn().mockResolvedValue(null),
+        getCameraProxyStreamUrl: vi
+          .fn()
+          .mockReturnValue(
+            "http://127.0.0.1:8123/api/camera_proxy_stream/camera.playroom_camara_de_playroom",
+          ),
+      },
+    };
+    const state = makeState();
+    const res = await CameraSourceResolver.resolve(
+      mockPlatform,
+      "camera.playroom_camara_de_playroom",
+      state,
+    );
+
+    expect(res.sourceType).toBe("ha_proxy");
+    expect(res.url).toBe(
+      "http://127.0.0.1:8123/api/camera_proxy_stream/camera.playroom_camara_de_playroom",
+    );
+  });
+
   it("sanitizes passwords and query tokens in URLs for logging", () => {
     const rawUrl =
       "rtsp://admin:mySecretPass@192.168.1.50:554/live?token=abc123xyz";

@@ -49,7 +49,7 @@ export class HomeKitCameraAccessory {
         Characteristic.SerialNumber,
         record.serialNumber || entityId.replaceAll(".", "_"),
       )
-      ?.setCharacteristic(Characteristic.FirmwareRevision, "1.4.50");
+      ?.setCharacteristic(Characteristic.FirmwareRevision, "1.4.51");
 
     this.delegate = new HomeKitCameraStreamingDelegate(
       platform,
@@ -137,6 +137,26 @@ export class HomeKitCameraAccessory {
   public async publish(): Promise<void> {
     if (this.isPublished) return;
 
+    this.accessory.on("paired", () => {
+      this.record.isPaired = true;
+      this.platform?.log?.notice?.(
+        `[HomeKitCamera][${this.entityId}] ✅ Camera successfully paired to Apple Home!`,
+      );
+      if (this.platform?.saveHomeKitCameraRecords) {
+        this.platform.saveHomeKitCameraRecords();
+      }
+    });
+
+    this.accessory.on("unpaired", () => {
+      this.record.isPaired = false;
+      this.platform?.log?.notice?.(
+        `[HomeKitCamera][${this.entityId}] Camera unpaired from Apple Home. Ready for new pairing.`,
+      );
+      if (this.platform?.saveHomeKitCameraRecords) {
+        this.platform.saveHomeKitCameraRecords();
+      }
+    });
+
     await this.accessory.publish({
       username: this.record.username,
       pincode: this.record.pincode,
@@ -148,6 +168,16 @@ export class HomeKitCameraAccessory {
     this.isPublished = true;
     this.platform?.log?.notice?.(
       `[HomeKitCamera][${this.entityId}] Published standalone HomeKit Camera on port ${this.record.port} with PIN: ${this.record.pincode}`,
+    );
+  }
+
+  /**
+   * Returns true if this camera accessory is actively paired to an Apple Home controller.
+   */
+  public isPaired(): boolean {
+    return Boolean(
+      this.record.isPaired ||
+      (this.accessory as any)._server?.paired,
     );
   }
 
@@ -194,6 +224,7 @@ export class HomeKitCameraAccessory {
     this.record.setupId = newSetupId;
     this.record.pincode = newPincode;
     this.record.published = false;
+    this.record.isPaired = false;
 
     // Create fresh instance with new UUID / identity
     const newUuid = uuid.generate(
@@ -213,7 +244,7 @@ export class HomeKitCameraAccessory {
         Characteristic.SerialNumber,
         this.record.serialNumber || this.entityId.replaceAll(".", "_"),
       )
-      ?.setCharacteristic(Characteristic.FirmwareRevision, "1.4.49");
+      ?.setCharacteristic(Characteristic.FirmwareRevision, "1.4.51");
 
     this.controller = new CameraController({
       cameraStreamCount: 2,
