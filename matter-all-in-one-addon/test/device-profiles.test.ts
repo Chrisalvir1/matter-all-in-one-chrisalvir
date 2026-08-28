@@ -45,12 +45,16 @@ describe("device export profiles", () => {
     );
   });
 
-  it("offers the Camera profile as experimental (published as on/off switch pending full camera cluster support)", () => {
+  it("offers the Camera profiles: Apple Home Live View (supported) and Matter Camera (experimental)", () => {
     expect(getExportProfiles("camera")).toContainEqual(
       expect.objectContaining({
         id: "camera",
-        // Camera is published as an on/off plug-in unit until Matterbridge
-        // supports CameraAvStreamManagement (0x0551) + WebRtcTransportProvider (0x0553)
+        appleHome: "supported",
+      }),
+    );
+    expect(getExportProfiles("camera")).toContainEqual(
+      expect.objectContaining({
+        id: "matterCamera",
         appleHome: "experimental",
       }),
     );

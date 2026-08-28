@@ -1,104 +1,110 @@
 /**
- * CameraEntity — exposes a Home Assistant camera as a Matter On/Off accessory.
+ * CameraEntity — Home Assistant Camera entity with Dual-Track Export:
  *
- * Design note (Matterbridge 3.10.x compatibility):
- *   The native Matter 1.6 Camera device type (0x0510) requires clusters
- *   CameraAvStreamManagement (0x0551) and WebRtcTransportProvider (0x0553).
- *   Matterbridge's addClusterServers() does NOT auto-provision these clusters,
- *   so registering 0x0510 crashes with:
- *     TypeError: Cannot read properties of undefined (reading 'forEach')
- *   in addRequiredClusterServers() → deviceType.requiredServerClusters.forEach().
- *
- *   Until Matterbridge ships full camera cluster support, cameras are published
- *   as an On/Off Plug-in Unit (0x010A) representing camera power / privacy state:
- *     on  → camera active / streaming
- *     off → camera off / privacy mode
- *
- *   DEVICE_REGISTRY maps the `camera` domain to MatterDeviceTypes.cameraOnOff
- *   (alias for onOffPlugInUnit) so BaseEntity.createEndpoint() is NOT used.
- *   Instead, CameraEntity has its own createEndpoint() that correctly sets up
- *   the endpoint with the standard OnOff behavior and no camera-specific clusters.
+ * TRACK A (HomeKit / HAP): Dedicated standalone HomeKit Camera accessory with RTP/SRTP live view,
+ *                          snapshots, and audio passthrough for Apple Home.
+ * TRACK B (Matter 1.5/1.6): Experimental Matter Camera accessory with Camera AV Stream Management (0x0551)
+ *                          and WebRTC Transport Provider (0x0553) cluster servers.
  */
 import { BaseEntity } from "./base.entity.js";
 import { ClusterId } from "matterbridge/matter/types";
-import { OnOff } from "matterbridge/matter/clusters";
-import { MatterbridgeOnOffServer } from "matterbridge/behaviors";
 import { MatterbridgeEndpoint } from "matterbridge";
-import { HassState } from "../utils/ha-state.js";
+import type { HassState } from "../utils/ha-state.js";
 import { cameraConverter } from "../converters/camera.converter.js";
 import {
-  safeSetAttribute,
-  safeUpdateAttribute,
-} from "../utils/matter-attributes.js";
-import {
-  MATTER_BRIDGE_VENDOR_ID,
-  getMatterSerialNumber,
-  getHaDeviceManufacturer,
-  getHaDeviceModel,
-} from "../utils/matter-device-identity.js";
+  detectCameraCapabilities,
+} from "../camera/camera-capabilities.js";
+import { CameraSourceResolver } from "../camera/camera-source-resolver.js";
+import { CameraSessionManager } from "../camera/matter/camera-session-manager.js";
+import { CameraWebRtcAdapter } from "../camera/matter/camera-webrtc-adapter.js";
+import { CameraEndpointBuilder } from "../camera/matter/camera-endpoint.builder.js";
+import { HomeKitCameraAccessory } from "../camera/homekit/homekit-camera.accessory.js";
+import type {
+  CameraCapabilitiesInfo,
+  ResolvedStreamSource,
+  HomeKitCameraStorageRecord,
+} from "../camera/camera-types.js";
 
-/** Reserved for future use when Matterbridge supports camera cluster auto-provisioning. */
 export const CameraAvStreamManagementId = 0x0551 as any as ClusterId;
 export const WebRtcTransportProviderId = 0x0553 as any as ClusterId;
 
 export class CameraEntity extends BaseEntity {
   public static readonly matterTypeLabel = "Camera";
 
+  public capabilities?: CameraCapabilitiesInfo;
+  public streamSource?: ResolvedStreamSource;
+  public readonly sessionManager = new CameraSessionManager();
+  public webrtcAdapter?: CameraWebRtcAdapter;
+  public homekitAccessory?: HomeKitCameraAccessory;
+
   /**
-   * Custom endpoint creation for cameras.
-   *
-   * The device type is onOffPlugInUnit (via MatterDeviceTypes.cameraOnOff alias).
-   * Its requiredServerClusters = [Identify(0x3), Groups(0x4), ScenesManagement(0x62), OnOff(0x6)].
-   * addClusterServers() handles all of these — no crash.
-   *
-   * We do NOT call BaseEntity.createEndpoint() because the base class does not
-   * add MatterbridgeOnOffServer for the `camera` domain (only for light/switch/fan/etc.).
+   * Initializes or updates detected capabilities and resolved stream source.
+   */
+  public async refreshCapabilities(): Promise<{
+    capabilities: CameraCapabilitiesInfo;
+    streamSource: ResolvedStreamSource;
+  }> {
+    this.streamSource = await CameraSourceResolver.resolve(
+      this.platform,
+      this.entityId,
+      this.state,
+    );
+    this.capabilities = detectCameraCapabilities(this.state, this.streamSource);
+    this.webrtcAdapter = new CameraWebRtcAdapter(
+      this.platform,
+      this.entityId,
+      this.capabilities,
+      this.streamSource,
+      this.sessionManager,
+    );
+
+    return { capabilities: this.capabilities, streamSource: this.streamSource };
+  }
+
+  /**
+   * Builds the Matter Camera endpoint using real Camera clusters (0x0551 & 0x0553).
    */
   public override async createEndpoint(): Promise<MatterbridgeEndpoint> {
-    const rawName = this.state.attributes.friendly_name ?? this.entityId;
-    const uniqueName = rawName.substring(0, 32).trim();
+    const { capabilities, streamSource } = await this.refreshCapabilities();
 
-    this.endpoint = new MatterbridgeEndpoint([this.deviceType], {
-      id: this.entityId.replaceAll(".", "_"),
-      mode: "server",
-    });
-
-    const manufacturer = getHaDeviceManufacturer(this.platform, this.entityId);
-    const model = getHaDeviceModel(this.platform, this.entityId, "Camera");
-
-    this.endpoint.deviceType = this.deviceType.code;
-    this.endpoint.deviceName = uniqueName;
-    this.endpoint.uniqueId = this.entityId.replaceAll(".", "_");
-    this.endpoint.serialNumber = getMatterSerialNumber(this.platform, this.entityId);
-    this.endpoint.vendorId = MATTER_BRIDGE_VENDOR_ID;
-    this.endpoint.vendorName = manufacturer;
-    this.endpoint.productId = 0x8000;
-    this.endpoint.productName = model;
-
-    this.endpoint.createDefaultBasicInformationClusterServer(
-      uniqueName,
-      this.endpoint.serialNumber,
-      MATTER_BRIDGE_VENDOR_ID,
-      manufacturer,
-      0x8000,
-      model,
+    this.endpoint = await CameraEndpointBuilder.build(
+      this.platform,
+      this.entityId,
+      this.deviceType,
+      capabilities,
+      streamSource,
+      this.sessionManager,
+      this.webrtcAdapter!,
+      this.state.attributes.friendly_name,
     );
-    this.applyMatterbridgeFirmware();
-
-    // Add OnOff behavior: camera on = streaming/active, off = stopped/privacy.
-    // This must be required before addRequiredClusterServers() so the behavior
-    // is registered before the cluster server is provisioned.
-    this.endpoint.behaviors.require(MatterbridgeOnOffServer.with());
-
-    // addRequiredClusterServers() iterates deviceType.requiredServerClusters.
-    // deviceType = onOffPlugInUnit (cameraOnOff) → requiredServerClusters exists,
-    // no undefined.forEach() crash.
-    this.endpoint.addRequiredClusterServers();
 
     await this.addCustomClusterServers();
     this.registerCommandHandlers();
 
     return this.endpoint;
+  }
+
+  /**
+   * Sets up or updates the HomeKit standalone accessory for Apple Home live streaming.
+   */
+  public async setupHomeKitAccessory(
+    record: HomeKitCameraStorageRecord,
+  ): Promise<HomeKitCameraAccessory> {
+    const { capabilities, streamSource } = await this.refreshCapabilities();
+
+    if (this.homekitAccessory) {
+      await this.homekitAccessory.unpublish();
+    }
+
+    this.homekitAccessory = new HomeKitCameraAccessory(
+      this.platform,
+      this.entityId,
+      record,
+      capabilities,
+      streamSource,
+    );
+
+    return this.homekitAccessory;
   }
 
   protected override registerCommandHandlers(
@@ -127,13 +133,9 @@ export class CameraEntity extends BaseEntity {
     this.state = state;
     if (!this.endpoint) return;
 
-    const isOn = cameraConverter.isCameraOn(state);
-    const update = isInitialSync ? safeSetAttribute : safeUpdateAttribute;
-
+    this.capabilities = detectCameraCapabilities(state, this.streamSource);
     this.platform.log.debug(
-      `[${this.entityId}] Camera update: ha_state=${state.state}, matter_on=${isOn}, streaming=${cameraConverter.toStreamingState(state)}`,
+      `[${this.entityId}] Camera state update: state=${state.state}, liveStream=${this.capabilities.hasLiveStream}, strategy=${this.capabilities.strategy}`,
     );
-
-    await update(this.endpoint, OnOff.id, "onOff", isOn, this.platform.log);
   }
 }

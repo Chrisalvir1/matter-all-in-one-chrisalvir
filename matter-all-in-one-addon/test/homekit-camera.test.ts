@@ -1,0 +1,142 @@
+import { describe, expect, it, vi } from "vitest";
+import { HomeKitCameraAccessory } from "../src/camera/homekit/homekit-camera.accessory.js";
+import { HomeKitCameraStreamingDelegate } from "../src/camera/homekit/homekit-camera-stream.delegate.js";
+import { SRTPCryptoSuites, Categories } from "hap-nodejs";
+
+const mockPlatform = {
+  log: {
+    debug: vi.fn(),
+    info: vi.fn(),
+    notice: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  },
+  ha: {
+    fetchSnapshot: vi.fn().mockResolvedValue(Buffer.from([0xff, 0xd8, 0xff, 0xe0])), // JPEG header
+  },
+};
+
+describe("HomeKitCameraAccessory", () => {
+  it("initializes standalone HomeKit accessory with correct metadata", () => {
+    const record = {
+      entityId: "camera.backyard",
+      uuid: "e4a2d8a0-1234-5678-9abc-def012345678",
+      username: "0E:11:22:33:44:55",
+      pincode: "123-45-678",
+      setupId: "12AB",
+      port: 51830,
+      published: false,
+      strategy: "passthrough_h264" as const,
+      state: "idle",
+      name: "Backyard Camera",
+      manufacturer: "Google Nest",
+      model: "Cam Outdoor",
+      serialNumber: "camera_backyard",
+    };
+
+    const capabilities = {
+      hasLiveStream: true,
+      streamSourceType: "rtsp" as const,
+      videoCodec: "h264" as const,
+      hasAudio: true,
+      audioCodec: "aac_lc" as const,
+      resolution: { width: 1920, height: 1080 },
+      maxFps: 30,
+      strategy: "passthrough_h264" as const,
+      requiresTranscoding: false,
+      supportedFeatures: 2,
+    };
+
+    const streamSource = {
+      sourceType: "rtsp" as const,
+      url: "rtsp://camera.local/live",
+      supportsPassthrough: true,
+      requiresBridge: false,
+    };
+
+    const acc = new HomeKitCameraAccessory(mockPlatform, "camera.backyard", record, capabilities, streamSource);
+    expect(acc.accessory.displayName).toBe("Backyard Camera");
+    expect(acc.controller).toBeDefined();
+    expect(acc.delegate).toBeDefined();
+  });
+
+  it("handles snapshot requests using Home Assistant image fetch", async () => {
+    const capabilities = {
+      hasLiveStream: true,
+      streamSourceType: "rtsp" as const,
+      videoCodec: "h264" as const,
+      hasAudio: false,
+      audioCodec: "none" as const,
+      resolution: { width: 1920, height: 1080 },
+      maxFps: 30,
+      strategy: "passthrough_video_only" as const,
+      requiresTranscoding: false,
+      supportedFeatures: 2,
+    };
+
+    const streamSource = {
+      sourceType: "rtsp" as const,
+      url: "rtsp://camera.local/live",
+      supportsPassthrough: true,
+      requiresBridge: false,
+    };
+
+    const delegate = new HomeKitCameraStreamingDelegate(mockPlatform, "camera.backyard", capabilities, streamSource);
+
+    const snapshotBuffer = await new Promise<Buffer>((resolve, reject) => {
+      delegate.handleSnapshotRequest({ width: 1920, height: 1080, reason: 0 }, (err, buf) => {
+        if (err) reject(err);
+        else resolve(buf!);
+      });
+    });
+
+    expect(snapshotBuffer).toBeDefined();
+    expect(snapshotBuffer.length).toBe(4);
+  });
+
+  it("handles prepareStream negotiation and returns SRTP parameters", () => {
+    const capabilities = {
+      hasLiveStream: true,
+      streamSourceType: "rtsp" as const,
+      videoCodec: "h264" as const,
+      hasAudio: true,
+      audioCodec: "aac_lc" as const,
+      resolution: { width: 1920, height: 1080 },
+      maxFps: 30,
+      strategy: "passthrough_h264" as const,
+      requiresTranscoding: false,
+      supportedFeatures: 2,
+    };
+
+    const streamSource = {
+      sourceType: "rtsp" as const,
+      url: "rtsp://camera.local/live",
+      supportsPassthrough: true,
+      requiresBridge: false,
+    };
+
+    const delegate = new HomeKitCameraStreamingDelegate(mockPlatform, "camera.backyard", capabilities, streamSource);
+
+    const key = Buffer.alloc(16, 1);
+    const salt = Buffer.alloc(14, 2);
+
+    let response: any;
+    delegate.prepareStream({
+      sessionID: "session-123",
+      targetAddress: "192.168.1.50",
+      video: {
+        port: 5000,
+        srtpCryptoSuite: SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
+        srtp_key: key,
+        srtp_salt: salt,
+      },
+      addressVersion: "ipv4",
+    }, (err, res) => {
+      response = res;
+    });
+
+    expect(response).toBeDefined();
+    expect(response.video.port).toBe(5000);
+    expect(response.video.ssrc).toBe(1);
+  });
+});

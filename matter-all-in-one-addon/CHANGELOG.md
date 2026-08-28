@@ -1,7 +1,21 @@
-## [1.4.47] - 2026-08-27
+## [1.4.48] - 2026-08-27
 
-### Fixes
-- **Camera Activation Crash (Root Cause Fix):** Resolved the `TypeError: Cannot read properties of undefined (reading 'forEach')` crash when activating or manually registering cameras. The custom camera device type was missing internal cluster definitions expected by Matterbridge's `addRequiredClusterServers`. Cameras now safely map to a privacy/power switch representation (`onOffPlugInUnit`) until true Matter SDK camera streaming cluster support (0x0551/0x0553) lands in Matterbridge.
+### Dual-Track Camera Streaming & Apple Home Native Live View
+- **TRACK A (HomeKit / HAP Camera — Soporte Completo en Apple Home):**
+  - Publica cada cámara de Home Assistant como un accesorio HomeKit IP Camera independiente mediante el protocolo HAP (`hap-nodejs`) con streaming en vivo RTP/SRTP.
+  - **Live View & Audio:** Soporte para vista en vivo en tiempo real, snapshots periódicos y audio compatible (AAC-LC/Opus) o modo solo video cuando el codec de origen es incompatible.
+  - **Estrategia sin transcodificación (Passthrough H.264):** Reutiliza directamente el stream de video de Home Assistant (`-c:v copy`) minimizando el uso de CPU.
+  - **Transcodificación selectiva:** Únicamente se aplica transcodificación ultrarrápida (`-c:v libx264 -preset ultrafast -tune zerolatency`) cuando el codec de entrada no es compatible (ej. H.265/MJPEG).
+  - **Emparejamiento persistente y estable:** Cada cámara genera y almacena de forma persistente su `UUID`, dirección MAC (`0E:...`), `setupID`, PIN de 8 dígitos (`xxx-xx-xxx`) y puerto TCP dedicado (51830+) en `/data/homekit-cameras.json`.
+  - **Panel Web & Códigos QR:** Muestra el código QR individual de HomeKit, PIN de emparejamiento, puerto y badges de estrategia de streaming (`Passthrough H.264`, `Audio compatible` / `Solo video`).
+- **TRACK B (Matter 1.5/1.6 Camera — Experimental):**
+  - Módulo experimental desacoplado que implementa el tipo de dispositivo de cámara Matter (`0x0142`) junto a los clusters `CameraAvStreamManagement` (`0x0551`) y `WebRtcTransportProvider` (`0x0553`).
+  - Gestor de sesiones activas y adaptador SDP/WebRTC aislado de la ruta de ejecución de HomeKit.
+- **Resolución y Detección de Capacidades:**
+  - Inspección automática de `frontend_stream_type`, `supported_features`, `stream_source`, codecs de video y audio.
+  - Sanitización automática de contraseñas y tokens en URLs antes de ser registradas en logs.
+- **Aislamiento de Composites:**
+  - Las cámaras se exportan como accesorios independientes para garantizar emparejamiento estable y streaming directo sin colisiones con grupos de sensores.
 
 ## [1.4.46] - 2026-08-27
 

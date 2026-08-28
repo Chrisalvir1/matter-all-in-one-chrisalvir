@@ -118,15 +118,14 @@ export interface DeviceRegistryEntry {
 
 export const DEVICE_REGISTRY: Record<string, DeviceRegistryEntry> = {
   /**
-   * Camera domain: published as an On/Off plug-in unit (power/privacy switch).
-   * Using MatterDeviceTypes.camera (0x0510) directly crashes because
-   * addClusterServers() in Matterbridge 3.10.x does not handle the required
-   * CameraAvStreamManagement (0x0551) and WebRtcTransportProvider (0x0553)
-   * clusters. cameraOnOff is an alias for onOffPlugInUnit and is fully safe.
+   * Camera domain:
+   * - TRACK A (HomeKit/HAP): Standalone HomeKit Camera accessory for Apple Home Live View.
+   * - TRACK B (Matter): Matter Camera device type (0x0142) with CameraAvStreamManagement (0x0551)
+   *                     and WebRtcTransportProvider (0x0553) clusters.
    */
   camera: {
-    matterType: MatterDeviceTypes.cameraOnOff,
-    homekitSupported: homekitSupported.onOffPlugInUnit,
+    matterType: MatterDeviceTypes.camera,
+    homekitSupported: true,
   },
   cover: {
     matterType: MatterDeviceTypes.windowCovering,

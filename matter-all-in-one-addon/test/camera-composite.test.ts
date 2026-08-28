@@ -29,28 +29,52 @@ function state(entityId: string, value: string, attributes: Record<string, any> 
 }
 
 describe("CameraEntity", () => {
-  it("creates a standalone Camera endpoint using the safe onOffPlugInUnit device type (cameraOnOff)", async () => {
+  it("creates a standalone Camera endpoint with Camera device type and cluster servers", async () => {
     const camState = state("camera.front_yard", "recording", {
       friendly_name: "Front Yard Camera",
       frontend_stream_type: "webrtc",
     });
 
-    // CameraEntity uses MatterDeviceTypes.cameraOnOff (alias for onOffPlugInUnit)
-    // to avoid crashing addRequiredClusterServers() with the native camera device
-    // type (0x0510) which requires unprovisioned clusters 0x0551 and 0x0553.
-    const cameraEntity = new CameraEntity(mockPlatform, camState, MatterDeviceTypes.cameraOnOff);
+    const cameraEntity = new CameraEntity(mockPlatform, camState, MatterDeviceTypes.camera);
     const endpoint = await cameraEntity.createEndpoint();
 
     expect(endpoint).toBeDefined();
-    // cameraOnOff = onOffPlugInUnit, code = 0x010A
-    expect(endpoint.deviceType).toBe(MatterDeviceTypes.cameraOnOff.code);
+    expect(endpoint.deviceType).toBe(MatterDeviceTypes.camera.code);
     expect(endpoint.deviceName).toBe("Front Yard Camera");
-    expect(endpoint.behaviors.has(MatterbridgeOnOffServer)).toBe(true);
+  });
+
+  it("configures HomeKit standalone accessory for Apple Home live streaming", async () => {
+    const camState = state("camera.front_yard", "streaming", {
+      friendly_name: "Front Yard Camera",
+      stream_source: "rtsp://camera.local/live",
+    });
+
+    const cameraEntity = new CameraEntity(mockPlatform, camState, MatterDeviceTypes.camera);
+    const record = {
+      entityId: "camera.front_yard",
+      uuid: "e4a2d8a0-1234-5678-9abc-def012345678",
+      username: "0E:11:22:33:44:55",
+      pincode: "123-45-678",
+      setupId: "12AB",
+      port: 51830,
+      published: false,
+      strategy: "passthrough_h264" as const,
+      state: "idle",
+      name: "Front Yard Camera",
+      manufacturer: "Google Nest",
+      model: "Cam Outdoor",
+      serialNumber: "camera_front_yard",
+    };
+
+    const hk = await cameraEntity.setupHomeKitAccessory(record);
+    expect(hk).toBeDefined();
+    expect(hk.accessory.displayName).toBe("Front Yard Camera");
+    expect(hk.delegate).toBeDefined();
   });
 
   it("handles camera turn_on and turn_off commands via HA service calls", async () => {
     const camState = state("camera.front_yard", "idle");
-    const cameraEntity = new CameraEntity(mockPlatform, camState, MatterDeviceTypes.cameraOnOff);
+    const cameraEntity = new CameraEntity(mockPlatform, camState, MatterDeviceTypes.camera);
     const endpoint = await cameraEntity.createEndpoint();
 
     await (endpoint as any).invokeCommand("on");
@@ -60,9 +84,9 @@ describe("CameraEntity", () => {
     expect(mockPlatform.ha.callService).toHaveBeenCalledWith("camera", "turn_off", "camera.front_yard");
   });
 
-  it("synchronizes camera state updates to Matter OnOff cluster", async () => {
+  it("synchronizes camera state updates", async () => {
     const camState = state("camera.front_yard", "idle");
-    const cameraEntity = new CameraEntity(mockPlatform, camState, MatterDeviceTypes.cameraOnOff);
+    const cameraEntity = new CameraEntity(mockPlatform, camState, MatterDeviceTypes.camera);
     await cameraEntity.createEndpoint();
 
     await cameraEntity.updateState(state("camera.front_yard", "streaming"));

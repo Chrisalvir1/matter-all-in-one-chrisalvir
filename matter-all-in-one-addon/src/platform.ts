@@ -23,6 +23,9 @@ import {
 import { BaseEntity } from "./entities/base.entity.js";
 import { ClosureEntity } from "./entities/closure.entity.js";
 import { LockEntity } from "./entities/lock.entity.js";
+import crypto from "crypto";
+import { uuid } from "hap-nodejs";
+import type { HomeKitCameraStorageRecord } from "./camera/camera-types.js";
 import { CameraEntity } from "./entities/camera.entity.js";
 import { SoilSensorEntity } from "./entities/soil_sensor.entity.js";
 import { EnergyTariffEntity } from "./entities/energy_tariff.entity.js";
@@ -181,6 +184,80 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   private syncRetryAttempt = 0;
   /** SSE subscribers for real-time UI push events. */
   private readonly sseSubscribers = new Set<http.ServerResponse>();
+
+  /** Persistent HomeKit Camera records for standalone Apple Home accessories. */
+  public readonly homekitCameraRecords = new Map<string, HomeKitCameraStorageRecord>();
+
+  public async saveHomeKitCameraRecords(): Promise<void> {
+    try {
+      const list = Array.from(this.homekitCameraRecords.values());
+      await fs.writeFile(
+        "/data/homekit-cameras.json",
+        JSON.stringify(list, null, 2),
+        "utf8",
+      );
+    } catch (err) {
+      this.log.debug(`Failed to save homekit-cameras.json: ${err}`);
+    }
+  }
+
+  public async loadHomeKitCameraRecords(): Promise<void> {
+    try {
+      const raw = await fs.readFile("/data/homekit-cameras.json", "utf8");
+      const list = JSON.parse(raw);
+      if (Array.isArray(list)) {
+        for (const rec of list) {
+          if (rec && rec.entityId) {
+            this.homekitCameraRecords.set(rec.entityId, rec);
+          }
+        }
+      }
+      this.log.info(`Loaded ${this.homekitCameraRecords.size} HomeKit camera configurations.`);
+    } catch {
+      this.log.debug("No homekit-cameras.json found, starting fresh.");
+    }
+  }
+
+  public getOrCreateHomeKitCameraRecord(entityId: string): HomeKitCameraStorageRecord {
+    let record = this.homekitCameraRecords.get(entityId);
+    if (!record) {
+      const rawName = this.entities.get(entityId)?.state?.attributes?.friendly_name || entityId;
+      const info = this.getHaRegistryInfo(entityId);
+
+      const usedPorts = new Set(Array.from(this.homekitCameraRecords.values()).map((r) => r.port));
+      let nextPort = 51830;
+      while (usedPorts.has(nextPort)) nextPort++;
+
+      const hash = crypto.createHash("sha256").update(entityId).digest("hex");
+      const username = `0E:${hash.substring(0, 2)}:${hash.substring(2, 4)}:${hash.substring(4, 6)}:${hash.substring(6, 8)}:${hash.substring(8, 10)}`.toUpperCase();
+
+      const pinPart1 = ((Math.abs(parseInt(hash.substring(10, 13), 16)) % 900) + 100).toString();
+      const pinPart2 = ((Math.abs(parseInt(hash.substring(13, 15), 16)) % 90) + 10).toString();
+      const pinPart3 = ((Math.abs(parseInt(hash.substring(15, 18), 16)) % 900) + 100).toString();
+      const pincode = `${pinPart1}-${pinPart2}-${pinPart3}`;
+      const setupId = hash.substring(18, 22).toUpperCase();
+
+      record = {
+        entityId,
+        uuid: uuid.generate(`homekit:camera:${entityId}`),
+        username,
+        pincode,
+        setupId,
+        port: nextPort,
+        published: false,
+        strategy: "passthrough_h264",
+        state: "idle",
+        name: rawName,
+        manufacturer: info.manufacturer || "Home Assistant",
+        model: info.model || "Camera",
+        serialNumber: entityId.replaceAll(".", "_"),
+        lastUpdated: new Date().toISOString(),
+      };
+      this.homekitCameraRecords.set(entityId, record);
+      void this.saveHomeKitCameraRecords();
+    }
+    return record;
+  }
 
   private get groupingEnabled(): boolean {
     return (
@@ -845,9 +922,16 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     // fan+light and SwitchBot lock+contact sensor under one QR code.
     // Also, BTHome sensors often group multiple sensors (temp, humidity, battery)
     // under a single device_id.
+    // Cameras are published as dedicated standalone accessories (HomeKit/HAP & Matter)
+    if (members.some((member) => member.entityId.startsWith("camera."))) {
+      this.log.debug(
+        `[Composite] ${entityId}: contains a camera entity — excluded from generic composite to publish as standalone camera accessory`,
+      );
+      return undefined;
+    }
+
     const hasPrimaryControllable = members.some(
       (member) =>
-        member.entityId.startsWith("camera.") ||
         member.entityId.startsWith("fan.") ||
         member.entityId.startsWith("lock.") ||
         member.entityId.startsWith("humidifier."),
@@ -1316,6 +1400,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         );
       }
 
+      await this.loadHomeKitCameraRecords();
+
       // Optional device-level composite definitions. This file intentionally
       // lives beside entity overrides so advanced users can tune grouping
       // without changing the add-on image.
@@ -1732,6 +1818,22 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     const entity = this.entities.get(entityId);
     if (!entity) throw new Error(`Entity ${entityId} was not discovered.`);
 
+    if (entityId.startsWith("camera.")) {
+      const cameraEntity = entity as CameraEntity;
+      const record = this.getOrCreateHomeKitCameraRecord(entityId);
+      const homekitAcc = await cameraEntity.setupHomeKitAccessory(record);
+      await homekitAcc.publish();
+      record.published = true;
+      record.strategy = cameraEntity.capabilities?.strategy || "passthrough_h264";
+      record.state = cameraEntity.state?.state || "idle";
+      await this.saveHomeKitCameraRecords();
+      this.exportedDevices.add(entityId);
+      this.log.notice(
+        `Exported HomeKit standalone camera accessory for ${idn}${entityId}${rs} (port ${record.port}, PIN: ${record.pincode})`,
+      );
+      return;
+    }
+
     try {
       const endpoint = await entity.createEndpoint();
       if (!forceRecreate) {
@@ -1916,6 +2018,22 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         }
         await this.saveExportedDevices();
         this.log.notice(`Manually unregistered MQTT endpoint ${entityId}`);
+        return { success: true };
+      }
+
+      if (entityId.startsWith("camera.")) {
+        this.exportedDevices.delete(entityId);
+        const cameraEntity = this.entities.get(entityId) as CameraEntity | undefined;
+        if (cameraEntity?.homekitAccessory) {
+          await cameraEntity.homekitAccessory.unpublish();
+        }
+        const record = this.homekitCameraRecords.get(entityId);
+        if (record) {
+          record.published = false;
+          await this.saveHomeKitCameraRecords();
+        }
+        await this.saveExportedDevices();
+        this.log.notice(`Manually unregistered HomeKit camera ${entityId}`);
         return { success: true };
       }
 
@@ -2906,6 +3024,29 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               logs: this.isEntityExported(e.entityId)
                 ? this.getEntityErrorLogs(e.entityId, endpoint, allErrorLogs)
                 : [],
+              homekitCamera:
+                domain === "camera"
+                  ? {
+                      published:
+                        this.homekitCameraRecords.get(e.entityId)?.published ??
+                        false,
+                      port:
+                        this.homekitCameraRecords.get(e.entityId)?.port ??
+                        51830,
+                      pincode:
+                        this.homekitCameraRecords.get(e.entityId)?.pincode ??
+                        "031-45-154",
+                      setupUri:
+                        (e as CameraEntity).homekitAccessory?.setupUri || "",
+                      strategy:
+                        this.homekitCameraRecords.get(e.entityId)?.strategy ||
+                        (e as CameraEntity).capabilities?.strategy ||
+                        "passthrough_h264",
+                      hasAudio: (e as CameraEntity).capabilities?.hasAudio ?? false,
+                      audioCodec: (e as CameraEntity).capabilities?.audioCodec ?? "none",
+                      videoCodec: (e as CameraEntity).capabilities?.videoCodec ?? "h264",
+                    }
+                  : null,
             };
           });
           const mqttResults = Array.from(this.mqttEntities.values()).map(

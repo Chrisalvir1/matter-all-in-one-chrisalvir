@@ -328,8 +328,11 @@ function renderQrSection(entity) {
   // Update QR panel status label
   if (els.qrStatusLabel) {
     if (!entity || !entity.exported) {
-      els.qrStatusLabel.textContent = 'Sin publicar en Matter';
+      els.qrStatusLabel.textContent = 'Sin publicar';
       els.qrStatusLabel.className = 'qr-status-label';
+    } else if (entity.domain === 'camera' && entity.homekitCamera) {
+      els.qrStatusLabel.textContent = '🍎 Listo para Apple Home (HomeKit Live View)';
+      els.qrStatusLabel.className = 'qr-status-label active';
     } else if (isMultiAdminActive) {
       els.qrStatusLabel.textContent = '● Modo Multi-Admin Abierto (15 min)';
       els.qrStatusLabel.className = 'qr-status-label active';
@@ -343,6 +346,11 @@ function renderQrSection(entity) {
   }
 
   if (!entity || entity.auxiliary || !entity.exported) return;
+
+  if (entity.domain === 'camera' && entity.homekitCamera) {
+    showQrCode(entity);
+    return;
+  }
 
   const matterFabrics = Array.isArray(entity.matterFabrics) ? entity.matterFabrics : [];
 
@@ -641,7 +649,38 @@ async function toggleEntity(entity, checkbox) {
 function openConfirm(title, description, action) { els.confirmTitle.textContent = title; els.confirmDescription.textContent = description; state.confirmAction = action; setModalOpen(els.confirmModal, true); }
 
 function showQrCode(entity) {
-  if (!entity || !entity.pairingCode) return;
+  if (!entity) return;
+
+  if (entity.domain === 'camera' && entity.homekitCamera) {
+    if (els.qrSpinnerWrap) els.qrSpinnerWrap.style.display = 'none';
+    els.deviceQrCode.innerHTML = '';
+    const setupUri = entity.homekitCamera.setupUri || entity.pairingCode;
+    if (typeof QRCode !== 'undefined' && setupUri) {
+      new QRCode(els.deviceQrCode, {
+        text: setupUri,
+        width: 232,
+        height: 232,
+        colorDark: '#0b1020',
+        colorLight: '#ffffff',
+        correctLevel: QRCode.CorrectLevel.M,
+      });
+    } else {
+      els.deviceQrCode.textContent = 'Librería QR no cargada.';
+    }
+    const pin = entity.homekitCamera.pincode
+      ? `PIN HomeKit: ${entity.homekitCamera.pincode}`
+      : (entity.manualPairingCode || entity.pairingCode);
+    const strategyDesc = entity.homekitCamera.strategy === 'passthrough_h264'
+      ? '🟢 Streaming en vivo (Passthrough H.264 sin transcodificación)'
+      : entity.homekitCamera.strategy === 'passthrough_video_only'
+      ? '🟡 Streaming en vivo (Passthrough H.264 solo video)'
+      : '🟠 Streaming en vivo (Transcodificación)';
+    els.deviceManualCode.innerHTML = `<strong>${escapeHtml(pin)}</strong><br><small style="color:var(--text-secondary);font-size:0.75rem;">${strategyDesc} · Puerto: ${entity.homekitCamera.port}</small>`;
+    els.deviceQrContainer.style.display = 'block';
+    return;
+  }
+
+  if (!entity.pairingCode) return;
   if (els.qrSpinnerWrap) els.qrSpinnerWrap.style.display = 'none';
   els.deviceQrCode.innerHTML = '';
   if (typeof QRCode !== 'undefined') {

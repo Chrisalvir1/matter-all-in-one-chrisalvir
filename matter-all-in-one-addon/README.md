@@ -100,7 +100,7 @@ Matter 1.6 Network (mDNS + BLE commissioning)
 | `src/entities/composite-device.entity.ts` | Fan+Light grouped by HA device_id or explicit include list |
 | `src/converters/vacuum.converter.ts` | HA vacuum state → Matter RVC attributes |
 | `run.sh` | Startup: mDNS interface detection, plugin registration, proxy |
-| `Dockerfile` | Imagen multi-stage reproducible con `node:24.18-alpine3.24` y `matterbridge@3.10.2` |
+| `Dockerfile` | Imagen multi-stage reproducible con `node:24.19.0-alpine3.24` y `matterbridge@3.10.6` |
 
 ---
 

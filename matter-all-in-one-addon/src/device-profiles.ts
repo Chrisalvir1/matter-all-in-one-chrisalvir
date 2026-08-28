@@ -217,23 +217,22 @@ const profilesByDomain: Record<string, DeviceExportProfile[]> = {
   camera: [
     {
       id: "camera",
-      label: "Cámara — Control On/Off (privacidad)",
+      label: "Cámara Apple Home (Live View & Passthrough H.264)",
       description:
-        "Publica la cámara como interruptor On/Off en Matter. " +
-        "On = cámara activa, Off = modo privacidad. " +
-        "El streaming nativo Matter 1.6 (0x0510) requiere soporte completo de clusters en Matterbridge y aún no está disponible.",
+        "Exporta la cámara a Apple Home vía HomeKit (HAP) con streaming de video H.264 sin transcodificación, snapshots periódicos y audio opcional.",
+      appleHome: "supported",
+    },
+    {
+      id: "matterCamera",
+      label: "Cámara Matter 1.5/1.6 (WebRTC Experimental)",
+      description:
+        "Backend experimental de cámara Matter usando clusters Camera AV Stream Management (0x0551) y WebRTC Transport Provider (0x0553).",
       appleHome: "experimental",
     },
     {
       id: "occupancySensor",
       label: "Sensor de movimiento / presencia",
       description: "Exportar eventos de detección de movimiento de la cámara.",
-      appleHome: "supported",
-    },
-    {
-      id: "onOffPlugInUnit",
-      label: "Interruptor On/Off",
-      description: "Control de encendido, apagado o modo privacidad de la cámara.",
       appleHome: "supported",
     },
   ],

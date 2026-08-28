@@ -10,10 +10,9 @@
  * mappings have been implemented and interoperably tested with Matter 1.6 controllers.
  */
 export const homekitSupported = {
-  // Camera: published as an On/Off switch (privacy/power state control).
-  // Native Matter 1.6 camera streaming (0x0510) is not yet supported by
-  // Matterbridge's addClusterServers(); true native camera support is pending.
-  camera: false,
+  // Camera: Fully supported in Apple Home via HomeKit/HAP Camera Streaming (RTP/SRTP)
+  // with H.264 passthrough and optional compatible audio.
+  camera: true,
   closure: false,
   soilSensor: false,
   waterHeater: false,
