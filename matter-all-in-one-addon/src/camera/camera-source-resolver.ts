@@ -131,42 +131,6 @@ export class CameraSourceResolver {
       }
     }
 
-    // 4b. HA camera.play_stream service fallback (ONLY if supported_features has STREAM)
-    if (hasStreamSupport && platform?.ha?.callService) {
-      try {
-        const result = await platform.ha.callService(
-          "camera",
-          "play_stream",
-          entityId,
-          {
-            format: "hls",
-          },
-        );
-        if (
-          result &&
-          typeof result === "object" &&
-          typeof (result as any).url === "string"
-        ) {
-          const hlsUrl = (result as any).url;
-          const fullHlsUrl = hlsUrl.startsWith("http")
-            ? hlsUrl
-            : `${platform?.ha?.getHttpBaseUrl?.() || platform?.ha?.baseUrl || ""}${hlsUrl}`;
-
-          return {
-            sourceType: "hls",
-            url: fullHlsUrl,
-            snapshotUrl,
-            supportsPassthrough: true,
-            requiresBridge: true,
-          };
-        }
-      } catch (err) {
-        platform?.log?.debug?.(
-          `[CameraSourceResolver][${entityId}] Dynamic play_stream service returned: ${err}`,
-        );
-      }
-    }
-
     // 5. HA Camera Proxy Continuous Stream endpoint (/api/camera_proxy_stream/{entityId})
     // For cameras without HLS/RTSP support in HA (Generic MJPEG, Tapo, Tuya, ESP32),
     // Home Assistant provides a continuous multipart video feed consumable by FFmpeg.

@@ -41,12 +41,15 @@ describe("CameraSourceResolver", () => {
     expect(res.supportsPassthrough).toBe(true);
   });
 
-  it("calls Home Assistant play_stream service ONLY when supported_features has STREAM (bit 2)", async () => {
+  it("never calls the media-player-only play_stream service", async () => {
     const mockPlatform = {
       ha: {
-        callService: vi.fn().mockResolvedValue({
-          url: "http://ha.local:8123/api/hls/master.m3u8",
-        }),
+        callService: vi.fn(),
+        getCameraProxyStreamUrl: vi
+          .fn()
+          .mockReturnValue(
+            "http://ha.local:8123/api/camera_proxy_stream/camera.driveway",
+          ),
       },
     };
     const state = makeState({ supported_features: 2 });
@@ -56,14 +59,11 @@ describe("CameraSourceResolver", () => {
       state,
     );
 
-    expect(mockPlatform.ha.callService).toHaveBeenCalledWith(
-      "camera",
-      "play_stream",
-      "camera.driveway",
-      { format: "hls" },
+    expect(mockPlatform.ha.callService).not.toHaveBeenCalled();
+    expect(res.sourceType).toBe("ha_proxy");
+    expect(res.url).toBe(
+      "http://ha.local:8123/api/camera_proxy_stream/camera.driveway",
     );
-    expect(res.sourceType).toBe("hls");
-    expect(res.url).toBe("http://ha.local:8123/api/hls/master.m3u8");
   });
 
   it("does NOT call play_stream or camera/stream when camera lacks STREAM feature, falls back to camera_proxy_stream", async () => {
@@ -98,7 +98,9 @@ describe("CameraSourceResolver", () => {
       ha: {
         requestCameraStream: vi
           .fn()
-          .mockResolvedValue("http://127.0.0.1:8123/api/hls/test-stream/master.m3u8"),
+          .mockResolvedValue(
+            "http://127.0.0.1:8123/api/hls/test-stream/master.m3u8",
+          ),
         getAccessToken: vi.fn().mockReturnValue("secret-ha-token"),
       },
     };

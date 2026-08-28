@@ -327,7 +327,7 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
       session.process = proc;
 
       proc.stderr.on("data", (data) => {
-        this.platform?.log?.debug?.(
+        this.platform?.log?.warn?.(
           `[HomeKitCamera][${this.entityId}][ffmpeg] ${data.toString().trim()}`,
         );
       });

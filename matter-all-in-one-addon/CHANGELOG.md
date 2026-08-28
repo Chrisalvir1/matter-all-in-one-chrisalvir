@@ -1,3 +1,10 @@
+## [1.4.57] - 2026-08-27
+
+### Camera source reliability
+
+- Remove the invalid `camera.play_stream` fallback; it cannot return a HomeKit stream URL and caused repeated Home Assistant errors for cameras without that service.
+- Surface FFmpeg input/output errors at warning level so failed Live View sessions can be diagnosed from the add-on log.
+
 ## [1.4.56] - 2026-08-27
 
 ### HomeKit camera reliability
