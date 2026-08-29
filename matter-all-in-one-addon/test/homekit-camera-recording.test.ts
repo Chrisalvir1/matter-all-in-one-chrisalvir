@@ -114,6 +114,9 @@ describe("HomeKitCameraRecordingDelegate", () => {
       capabilities,
       streamSource,
     );
+    vi.spyOn(delegate as any, "startPrebufferPipeline").mockResolvedValue(
+      undefined,
+    );
 
     expect(record.hksvState).toBe("waiting_hub");
 
@@ -145,6 +148,9 @@ describe("HomeKitCameraRecordingDelegate", () => {
       record,
       capabilities,
       streamSource,
+    );
+    vi.spyOn(delegate as any, "startPrebufferPipeline").mockResolvedValue(
+      undefined,
     );
 
     const config = createMockConfiguration();
@@ -211,6 +217,9 @@ describe("HomeKitCameraRecordingDelegate", () => {
       record,
       capabilities,
       streamSource,
+    );
+    vi.spyOn(delegate as any, "startPrebufferPipeline").mockResolvedValue(
+      undefined,
     );
 
     const config = createMockConfiguration();

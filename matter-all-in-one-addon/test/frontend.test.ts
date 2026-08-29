@@ -18,7 +18,9 @@ describe("frontend accessibility contract", () => {
       "utf8",
     );
     expect(script).toContain("modal.hidden = !open;");
-    expect(stylesheet).toContain(".modal-backdrop[hidden] { display: none; }");
+    expect(stylesheet).toMatch(
+      /\.modal-backdrop\[hidden\]\s*\{\s*display:\s*none;/,
+    );
   });
 
   it("provides per-accessory Matter recovery controls and an explicit diagnostics state", async () => {

@@ -142,23 +142,21 @@ export class VacuumEntity extends BaseEntity {
         )?.mode ?? 1)
       : 1;
 
-    this.endpoint = new RoboticVacuumCleaner(
-      uniqueName,
-      serialNumber,
-      "server",
-      RUN_MODE_ID_IDLE,
+    this.endpoint = new RoboticVacuumCleaner(uniqueName, serialNumber, {
+      mode: "server",
+      currentRunMode: RUN_MODE_ID_IDLE,
       supportedRunModes,
-      initialCleanMode,
+      currentCleanMode: initialCleanMode,
       supportedCleanModes,
-      null,
-      null,
-      0,
+      currentPhase: null,
+      phaseList: null,
+      operationalState: 0,
       operationalStateList,
-      [],
-      [],
-      null,
-      [],
-    );
+      supportedAreas: [],
+      selectedAreas: [],
+      currentArea: null,
+      supportedMaps: [],
+    });
 
     this.endpoint.deviceType = this.deviceType.code;
     this.endpoint.deviceName = uniqueName;

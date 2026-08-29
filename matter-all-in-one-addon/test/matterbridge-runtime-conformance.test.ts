@@ -30,7 +30,7 @@ vi.mock("../src/utils/matter-attributes.js", () => ({
   }),
 }));
 
-describe("Matterbridge 3.10.6 Runtime Conformance & Integration Tests", () => {
+describe("Matterbridge 3.10.7 Runtime Conformance & Integration Tests", () => {
   let platform: any;
 
   beforeEach(() => {

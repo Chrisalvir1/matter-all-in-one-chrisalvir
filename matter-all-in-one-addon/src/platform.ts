@@ -179,6 +179,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   >();
   private diagnosticSaveTimer?: NodeJS.Timeout;
   private matterConnectionMonitor?: NodeJS.Timeout;
+  /** Serialize destructive/transport operations for the same Matter node. */
+  private readonly matterAccessoryOperations = new Map<
+    string,
+    Promise<unknown>
+  >();
   private stateUpdateFlushScheduled = false;
   private stateUpdateFlushInFlight?: Promise<void>;
   private syncInFlight?: Promise<void>;
@@ -592,14 +597,39 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           entityId,
           compositeDeviceId,
         );
-        this.observeMatterConnection(
-          entityId,
-          this.getMatterConnectionInfo(endpoint),
-        );
+        const current = this.getMatterConnectionInfo(endpoint);
+        const previous = this.matterConnectionStates.get(entityId);
+        this.observeMatterConnection(entityId, current);
+        if (
+          !previous ||
+          previous.fabricCount !== current.fabricCount ||
+          previous.pairingCode !== current.pairingCode ||
+          previous.manualPairingCode !== current.manualPairingCode
+        ) {
+          this.pushEntityUpdate(entityId);
+        }
       } catch (error) {
         this.log.debug(
           `[Matter] Unable to inspect pairing state for ${entityId}: ${String(error)}`,
         );
+      }
+    }
+  }
+
+  private async runMatterAccessoryOperation<T>(
+    entityId: string,
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    const key = this.compositeMembership.get(entityId) ?? entityId;
+    const previous =
+      this.matterAccessoryOperations.get(key) ?? Promise.resolve();
+    const current = previous.catch(() => undefined).then(operation);
+    this.matterAccessoryOperations.set(key, current);
+    try {
+      return await current;
+    } finally {
+      if (this.matterAccessoryOperations.get(key) === current) {
+        this.matterAccessoryOperations.delete(key);
       }
     }
   }
@@ -656,6 +686,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       compositeDeviceId && `device:${compositeDeviceId}`,
       endpoint?.uniqueId,
       endpoint?.serialNumber,
+      endpoint?.deviceName,
     ].filter(
       (value): value is string => typeof value === "string" && value.length > 0,
     );
@@ -663,7 +694,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       .filter((line) =>
         identifiers.some((identifier) => line.includes(identifier)),
       )
-      .slice(-10)
+      .slice(-20)
       .reverse();
   }
 
@@ -2316,12 +2347,27 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       };
     }
     try {
+      const composite = compositeDeviceId
+        ? this.compositeDevices.get(compositeDeviceId)
+        : undefined;
+      const entitiesToSync = composite
+        ? composite.members.map((member) => this.entities.get(member.entityId))
+        : [this.entities.get(entityId)];
+      await Promise.all(
+        entitiesToSync.map((entity) => entity?.syncInitialState?.()),
+      );
       // `close()` permanently disposes a Matter.js ServerNode and cannot be
       // followed by start(). A soft reset refreshes its live operational state
       // and sessions without deleting fabrics or the pairing credentials.
       await serverNode.reset();
       await serverNode.start();
       this.clearMatterAccessoryProblems(entityId, compositeDeviceId);
+      this.recordEntityDiagnostic(
+        entityId,
+        "Sincronización completada: estado de Home Assistant reaplicado y nodo Matter reiniciado.",
+        "info",
+      );
+      this.pushEntityUpdate(entityId);
       this.log.notice(
         `Matter connection refresh requested for ${idn}${compositeDeviceId ? `device:${compositeDeviceId}` : entityId}${rs}`,
       );
@@ -3414,7 +3460,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           const entityId = decodeURIComponent(
             pathname.substring("/api/custom/reset-accessory/".length),
           );
-          const result = await this.resetMatterAccessory(entityId);
+          const result = await this.runMatterAccessoryOperation(entityId, () =>
+            this.resetMatterAccessory(entityId),
+          );
           res.writeHead(result.success ? 200 : 400, {
             "Content-Type": "application/json; charset=utf-8",
           });
@@ -3498,7 +3546,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           const entityId = decodeURIComponent(
             pathname.substring("/api/custom/refresh-accessory/".length),
           );
-          const result = await this.refreshMatterAccessory(entityId);
+          const result = await this.runMatterAccessoryOperation(entityId, () =>
+            this.refreshMatterAccessory(entityId),
+          );
           res.writeHead(result.success ? 200 : 400, {
             "Content-Type": "application/json; charset=utf-8",
           });
@@ -3532,7 +3582,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             .split("/");
           const entityId = decodeURIComponent(parts[0]);
           const fabricIndex = parts[1] || "1";
-          const result = await this.removeMatterFabric(entityId, fabricIndex);
+          const result = await this.runMatterAccessoryOperation(entityId, () =>
+            this.removeMatterFabric(entityId, fabricIndex),
+          );
           res.writeHead(result.success ? 200 : 400, {
             "Content-Type": "application/json; charset=utf-8",
           });

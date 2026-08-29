@@ -197,6 +197,7 @@ describe("HomeKitCameraAccessory", () => {
       capabilities,
       streamSource,
     );
+    vi.spyOn(acc, "publish").mockImplementation(async () => undefined);
     const oldPin = acc.record.pincode;
     const oldUsername = acc.record.username;
 
@@ -398,7 +399,13 @@ describe("HomeKitCameraAccessory", () => {
 
   it("links real Home Assistant binary_sensor motion entity when available", () => {
     const platformWithMotion = {
-      log: { debug: vi.fn(), info: vi.fn(), notice: vi.fn(), warn: vi.fn(), error: vi.fn() },
+      log: {
+        debug: vi.fn(),
+        info: vi.fn(),
+        notice: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+      },
       ha: {
         hassEntities: new Map([
           ["camera.playroom", { device_id: "dev-playroom-1" }],
@@ -460,9 +467,17 @@ describe("HomeKitCameraAccessory", () => {
 
   it("does not create fake motion sensor service when HA has no associated motion entity", () => {
     const platformWithoutMotion = {
-      log: { debug: vi.fn(), info: vi.fn(), notice: vi.fn(), warn: vi.fn(), error: vi.fn() },
+      log: {
+        debug: vi.fn(),
+        info: vi.fn(),
+        notice: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+      },
       ha: {
-        hassEntities: new Map([["camera.standalone", { device_id: "dev-standalone-1" }]]),
+        hassEntities: new Map([
+          ["camera.standalone", { device_id: "dev-standalone-1" }],
+        ]),
         hassStates: new Map(),
       },
     };

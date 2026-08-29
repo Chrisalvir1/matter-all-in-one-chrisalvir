@@ -12,6 +12,8 @@ const state = {
   toastTimer: null,
   pollId: null,
   multiAdminOpenEntityId: null,
+  qrPollingEntityId: null,
+  diagnosticsText: "",
 };
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -38,6 +40,7 @@ const els = {
   diagnosticsHeadingText: $("diagnostics-heading-text"),
   diagnosticsSummary: $("diagnostics-summary"),
   diagnosticsList: $("diagnostics-list"),
+  copyDiagnosticsButton: $("copy-diagnostics-button"),
   fabricsSection: $("fabrics-section"),
   fabricsList: $("fabrics-list"),
   deviceModal: $("device-modal"),
@@ -564,12 +567,18 @@ function buildEntityRow(entity, isSearchHit = false) {
 }
 
 function renderQrSection(entity) {
+  const qrEntityId = entity?.entityId || "";
+  const qrChanged = els.deviceQrCode?.dataset.entityId !== qrEntityId;
   // Reset QR panel areas
   if (els.commissionedHint) els.commissionedHint.style.display = "none";
   if (els.multiAdminHint) els.multiAdminHint.style.display = "none";
   if (els.deviceQrContainer) els.deviceQrContainer.style.display = "none";
-  if (els.deviceQrCode) els.deviceQrCode.innerHTML = "";
-  if (els.deviceManualCode) els.deviceManualCode.textContent = "";
+  if (els.deviceQrCode && qrChanged) {
+    els.deviceQrCode.innerHTML = "";
+    els.deviceQrCode.dataset.entityId = qrEntityId;
+    delete els.deviceQrCode.dataset.pairingCode;
+  }
+  if (els.deviceManualCode && qrChanged) els.deviceManualCode.textContent = "";
   if (els.qrSpinnerWrap) els.qrSpinnerWrap.style.display = "none";
   if (els.deviceQrButton) els.deviceQrButton.style.display = "none";
   if (els.resetAccessoryButton) els.resetAccessoryButton.style.display = "none";
@@ -883,6 +892,16 @@ function renderDiagnostics(entity) {
     ? entity.diagnostics
     : [];
   const logs = Array.isArray(entity.logs) ? entity.logs : [];
+  state.diagnosticsText = [
+    `Entidad: ${entity?.entityId || ""}`,
+    ...diagnostics.map(
+      (item) =>
+        `[${item.timestamp}] ${String(item.level).toUpperCase()}: ${item.message}`,
+    ),
+    ...logs.map((line) => `[LOG] ${line}`),
+  ].join("\n");
+  if (els.copyDiagnosticsButton)
+    els.copyDiagnosticsButton.disabled = !state.diagnosticsText.trim();
 
   if (!entity || !entity.exported) {
     els.diagnosticsPanel.hidden = true;
@@ -939,6 +958,15 @@ function renderDiagnostics(entity) {
   }
   els.diagnosticsList.replaceChildren(...rows);
 }
+
+els.copyDiagnosticsButton?.addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(state.diagnosticsText);
+    showToast("Diagnóstico y logs copiados.");
+  } catch {
+    showToast("No se pudo copiar el diagnóstico.", true);
+  }
+});
 
 function profileCompatibilityText(compatibility) {
   if (compatibility === "supported")
@@ -1046,19 +1074,23 @@ function showQrCode(entity) {
 
   if (entity.domain === "camera" && entity.homekitCamera) {
     if (els.qrSpinnerWrap) els.qrSpinnerWrap.style.display = "none";
-    els.deviceQrCode.innerHTML = "";
     const setupUri = entity.homekitCamera.setupUri || entity.pairingCode;
-    if (typeof QRCode !== "undefined" && setupUri) {
-      new QRCode(els.deviceQrCode, {
-        text: setupUri,
-        width: 232,
-        height: 232,
-        colorDark: "#0b1020",
-        colorLight: "#ffffff",
-        correctLevel: QRCode.CorrectLevel.M,
-      });
-    } else {
-      els.deviceQrCode.textContent = "Librería QR no cargada.";
+    if (els.deviceQrCode.dataset.pairingCode !== setupUri) {
+      els.deviceQrCode.innerHTML = "";
+      els.deviceQrCode.dataset.entityId = entity.entityId;
+      els.deviceQrCode.dataset.pairingCode = setupUri || "";
+      if (typeof QRCode !== "undefined" && setupUri) {
+        new QRCode(els.deviceQrCode, {
+          text: setupUri,
+          width: 232,
+          height: 232,
+          colorDark: "#0b1020",
+          colorLight: "#ffffff",
+          correctLevel: QRCode.CorrectLevel.M,
+        });
+      } else {
+        els.deviceQrCode.textContent = "Librería QR no cargada.";
+      }
     }
     const pin = entity.homekitCamera.pincode
       ? `PIN HomeKit: ${entity.homekitCamera.pincode}`
@@ -1208,8 +1240,11 @@ function showQrCode(entity) {
   }
 
   if (!entity.pairingCode) return;
+  if (els.deviceQrCode.dataset.pairingCode === entity.pairingCode) return;
   if (els.qrSpinnerWrap) els.qrSpinnerWrap.style.display = "none";
   els.deviceQrCode.innerHTML = "";
+  els.deviceQrCode.dataset.entityId = entity.entityId;
+  els.deviceQrCode.dataset.pairingCode = entity.pairingCode;
   if (typeof QRCode !== "undefined") {
     new QRCode(els.deviceQrCode, {
       text: entity.pairingCode,
@@ -1248,6 +1283,8 @@ async function pollForPairingCode(entityOrId, maxAttempts = 40) {
       ? entityOrId.entityId
       : entityOrId;
   if (!targetEntityId) return;
+  if (state.qrPollingEntityId === targetEntityId) return;
+  state.qrPollingEntityId = targetEntityId;
 
   // Cancel any previous spinner
   if (els.qrSpinnerWrap) els.qrSpinnerWrap.style.display = "flex";
@@ -1282,6 +1319,8 @@ async function pollForPairingCode(entityOrId, maxAttempts = 40) {
         '<p style="color:var(--muted);font-size:0.85rem;">No se pudo generar el código QR. Presiona Recargar.</p>';
     if (els.deviceQrContainer) els.deviceQrContainer.style.display = "block";
   }
+  if (state.qrPollingEntityId === targetEntityId)
+    state.qrPollingEntityId = null;
 }
 
 els.deviceQrButton.addEventListener("click", async () => {
@@ -1348,7 +1387,13 @@ const doResetAccessory = () => {
     "Desconectar todo y generar nuevo QR",
     `Se desvincularán todos los controladores Matter de ${displayName(entity)} (Apple Home, Google Home, SmartThings, Alexa, etc.) y se regenerarán sus credenciales con un nuevo código QR limpio.`,
     async () => {
+      const buttons = [
+        els.resetAccessoryButton,
+        els.regenerateCodeButton,
+      ].filter(Boolean);
       try {
+        buttons.forEach((button) => (button.disabled = true));
+        if (els.qrSpinnerWrap) els.qrSpinnerWrap.style.display = "flex";
         const result = await request(
           `/reset-accessory/${encodeURIComponent(entity.entityId)}`,
           { method: "POST" },
@@ -1379,6 +1424,8 @@ const doResetAccessory = () => {
           error.message || "No se pudo restablecer el accesorio.",
           true,
         );
+      } finally {
+        buttons.forEach((button) => (button.disabled = false));
       }
     },
   );
