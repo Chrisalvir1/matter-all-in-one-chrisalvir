@@ -464,15 +464,28 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             .filter((label): label is string => label !== null),
         ),
       ];
+      // Matter.js 0.17 keeps onboarding data on the CommissioningServer
+      // behavior. The compatibility state is still used by older
+      // Matterbridge runtimes, but a commissioned node may no longer mirror
+      // its codes into serverNode.state.commissioning.
+      const behaviorCommissioning =
+        endpoint?.serverNode?.behaviors?.commissioning?.state ??
+        endpoint?.serverNode?.behaviors?.commissioning ??
+        endpoint?.serverNode?.commissioning?.state ??
+        endpoint?.serverNode?.commissioning ??
+        {};
       const pairingCodes =
         commissioning.pairingCodes ??
         nodeState.pairingCodes ??
+        behaviorCommissioning.pairingCodes ??
         endpoint?.serverNode?.pairingCodes ??
         endpoint?.pairingCodes ??
         {};
       const qrPairingCode =
         pairingCodes.qrPairingCode ??
         pairingCodes.qrCode ??
+        behaviorCommissioning.qrPairingCode ??
+        behaviorCommissioning.qrCode ??
         endpoint?.serverNode?.state?.commissioning?.pairingCodes
           ?.qrPairingCode ??
         endpoint?.qrPairingCode ??
@@ -480,6 +493,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       const manualPairingCode =
         pairingCodes.manualPairingCode ??
         pairingCodes.manualCode ??
+        behaviorCommissioning.manualPairingCode ??
+        behaviorCommissioning.manualCode ??
         endpoint?.serverNode?.state?.commissioning?.pairingCodes
           ?.manualPairingCode ??
         endpoint?.manualPairingCode ??

@@ -206,6 +206,29 @@ describe("HomeAssistantPlatform", () => {
     ]);
   });
 
+  it("reads pairing codes from the current Matter.js commissioning behavior", () => {
+    const connection = (platform as any).getMatterConnectionInfo({
+      serverNode: {
+        state: {
+          operationalCredentials: { fabrics: [{ label: "Apple Home" }] },
+        },
+        behaviors: {
+          commissioning: {
+            state: {
+              pairingCodes: {
+                qrPairingCode: "MT:Y.K9042C00KA0648G00",
+                manualPairingCode: "34970112332",
+              },
+            },
+          },
+        },
+      },
+    });
+
+    expect(connection.pairingCode).toBe("MT:Y.K9042C00KA0648G00");
+    expect(connection.manualPairingCode).toBe("34970112332");
+  });
+
   it("shows an accessory as unpaired when HomeKit removes its final live Matter fabric", () => {
     const connection = (platform as any).getMatterConnectionInfo({
       serverNode: {

@@ -41,5 +41,8 @@ describe("frontend accessibility contract", () => {
     expect(html).toContain('id="multi-admin-hint"');
     expect(script).toContain("/open-commissioning/");
     expect(script).toContain("Modo Multi-Admin Abierto");
+    expect(script).toContain(
+      "make it\n  // visible again instead of returning with an empty panel",
+    );
   });
 });

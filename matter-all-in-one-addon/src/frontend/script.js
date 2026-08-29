@@ -1240,7 +1240,17 @@ function showQrCode(entity) {
   }
 
   if (!entity.pairingCode) return;
-  if (els.deviceQrCode.dataset.pairingCode === entity.pairingCode) return;
+  // renderQrSection hides the container before every refresh. If this is the
+  // same valid Multi-Admin code, retain the already generated QR but make it
+  // visible again instead of returning with an empty panel.
+  if (els.deviceQrCode.dataset.pairingCode === entity.pairingCode) {
+    if (els.qrSpinnerWrap) els.qrSpinnerWrap.style.display = "none";
+    if (els.deviceManualCode.textContent !== entity.manualPairingCode)
+      els.deviceManualCode.textContent =
+        entity.manualPairingCode || entity.pairingCode;
+    els.deviceQrContainer.style.display = "block";
+    return;
+  }
   if (els.qrSpinnerWrap) els.qrSpinnerWrap.style.display = "none";
   els.deviceQrCode.innerHTML = "";
   els.deviceQrCode.dataset.entityId = entity.entityId;
