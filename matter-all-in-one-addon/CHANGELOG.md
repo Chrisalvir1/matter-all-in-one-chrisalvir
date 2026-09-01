@@ -1,3 +1,12 @@
+## [1.4.64] - 2026-09-01
+
+### Fix Manual Pairing Code Display, Multi-Admin Availability & Real-Time Sync
+
+- **Separación Limpia de Código Manual y Tarjeta de Cámara:** Se solucionó el problema por el cual los detalles de cámara HomeKit (Live View, snapshot, audio, HKSV, botones de vinculación) se inyectaban dentro del elemento inline `<code>` provocando que el texto se envolviera letra por letra verticalmente. Ahora el código manual/PIN se muestra en un bloque monoespaciado limpio (`XXXX-XXX-XXXX` para Matter, PIN para HomeKit) con botón de copiado de un clic, y los controles de cámara se renderizan en un contenedor dedicado de ancho completo (`camera-details-box`).
+- **Disponibilidad del Botón Multi-Admin:** Se corrigió la condición de despliegue del botón «Añadir a otra casa (Multi-Admin)». Ahora aparece inmediatamente para cualquier accesorio comisionado (incluso antes de consultar la lista de fabrics o con recuento positivo). Además, para accesorios aún no vinculados, se añade una guía clara indicando que Multi-Admin se activará tras su primer enlace.
+- **Transmisión de Estado en Tiempo Real (SSE):** El backend en `platform.ts` ahora emite eventos `state_changed` a través de Server-Sent Events en cuanto Home Assistant notifica un cambio de estado, permitiendo que la UI actualice entidades BLE (ventiladores, bombillos, cerraduras) de forma instantánea sin demora de polling ni consumo extra de CPU.
+- **Heartbeat de Polling Responsivo:** Se ajustó el intervalo de sondeo a 10s cuando SSE está activo (consumo <0.2% en RPi 5) y 5s en reconexión, asegurando sincronización constante.
+
 ## [1.4.63] - 2026-09-01
 
 ### Fix Matter Devices QR Rendering & Anti-Cache Headers

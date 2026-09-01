@@ -9,7 +9,7 @@
       name="description"
       content="Gestiona de forma segura las entidades de Home Assistant exportadas mediante Matter."
     />
-    <link rel="stylesheet" href="style.css?v=1.4.63" />
+    <link rel="stylesheet" href="style.css?v=1.4.64" />
   </head>
   <body>
     <div class="ambient ambient-one"></div>
@@ -307,8 +307,10 @@
                   </div>
                 </div>
               </div>
-              <div class="qr-manual-box">
-                <span class="manual-code-label">CÓDIGO NUMÉRICO MANUAL</span>
+              <div class="qr-manual-box" id="qr-manual-box">
+                <span class="manual-code-label" id="manual-code-label"
+                  >CÓDIGO NUMÉRICO MANUAL</span
+                >
                 <div class="manual-code-row">
                   <code id="device-manual-code" class="manual-code-display"
                     >—————</code
@@ -325,6 +327,11 @@
                   </button>
                 </div>
               </div>
+              <div
+                id="camera-details-container"
+                class="camera-details-box"
+                style="display: none"
+              ></div>
               <div class="qr-card-actions">
                 <button
                   class="button-download-qr"
@@ -335,7 +342,7 @@
                   <span>💾 Descargar QR (PNG)</span>
                 </button>
               </div>
-              <small class="qr-note"
+              <small class="qr-note" id="qr-scan-note"
                 >Escanea con Apple Home, Google Home, Alexa o SmartThings</small
               >
             </div>
@@ -356,6 +363,30 @@
               >
                 Añadir a otra casa (Ver QR)
               </button>
+              <div
+                id="uncommissioned-multiadmin-hint"
+                style="
+                  display: none;
+                  text-align: center;
+                  margin-bottom: 8px;
+                "
+              >
+                <p
+                  style="
+                    font-size: 0.76rem;
+                    color: var(--text-muted);
+                    margin: 0;
+                    padding: 4px 8px;
+                    background: rgba(255, 255, 255, 0.03);
+                    border-radius: 6px;
+                  "
+                >
+                  💡 <em
+                    >Multi-Admin estará disponible tras vincular este accesorio
+                    en tu primera casa.</em
+                  >
+                </p>
+              </div>
               <div class="matter-actions" id="matter-actions" hidden>
                 <button
                   class="button button-secondary action-btn"
@@ -523,7 +554,7 @@
     </div>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="qrcode.min.js?v=1.4.63"></script>
-    <script src="script.js?v=1.4.63"></script>
+    <script src="qrcode.min.js?v=1.4.64"></script>
+    <script src="script.js?v=1.4.64"></script>
   </body>
 </html>

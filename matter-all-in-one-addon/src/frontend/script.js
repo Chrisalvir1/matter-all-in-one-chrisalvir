@@ -63,6 +63,9 @@ const els = {
   deviceQrContainer: $("device-qr-container"),
   deviceQrCode: $("device-qr-code"),
   deviceManualCode: $("device-manual-code"),
+  manualCodeLabel: $("manual-code-label"),
+  cameraDetailsContainer: $("camera-details-container"),
+  uncommissionedMultiadminHint: $("uncommissioned-multiadmin-hint"),
   copyManualCodeBtn: $("copy-manual-code-btn"),
   downloadQrBtn: $("download-qr-btn"),
   qrCenterLogo: $("qr-center-logo"),
@@ -639,28 +642,48 @@ function renderQrSection(entity) {
     ? entity.matterFabrics
     : [];
 
-  if (entity.commissioned && matterFabrics.length > 0) {
+  const isCommissioned = Boolean(
+    entity.commissioned ||
+      (entity.fabricCount ?? 0) > 0 ||
+      matterFabrics.length > 0,
+  );
+
+  if (isCommissioned) {
+    if (els.uncommissionedMultiadminHint)
+      els.uncommissionedMultiadminHint.style.display = "none";
     // Show connected ecosystems list
     if (els.fabricsSection && els.fabricsList) {
       els.fabricsSection.hidden = false;
-      els.fabricsList.innerHTML = matterFabrics
-        .map((fabric) => {
-          const vendor = fabric.controller || "Controlador Matter";
-          const house = fabric.label || entity.homeName || "Casa";
-          const idx = fabric.fabricIndex || fabric.fabricId || "1";
-          const icon = getControllerIcon(vendor);
-          return `<div class="fabric-item">
-          <div class="fabric-info">
-            <div class="fabric-controller-line">
-              <strong class="fabric-name">${icon} ${escapeHtml(vendor)}</strong>
+      if (matterFabrics.length > 0) {
+        els.fabricsList.innerHTML = matterFabrics
+          .map((fabric) => {
+            const vendor = fabric.controller || "Controlador Matter";
+            const house = fabric.label || entity.homeName || "Casa";
+            const idx = fabric.fabricIndex || fabric.fabricId || "1";
+            const icon = getControllerIcon(vendor);
+            return `<div class="fabric-item">
+            <div class="fabric-info">
+              <div class="fabric-controller-line">
+                <strong class="fabric-name">${icon} ${escapeHtml(vendor)}</strong>
+              </div>
+              <div class="fabric-home-name">🏠 Casa: <strong>${escapeHtml(house)}</strong></div>
+              <span class="fabric-detail">Fabric ID: ${escapeHtml(fabric.fabricId || idx)}</span>
             </div>
-            <div class="fabric-home-name">🏠 Casa: <strong>${escapeHtml(house)}</strong></div>
-            <span class="fabric-detail">Fabric ID: ${escapeHtml(fabric.fabricId || idx)}</span>
-          </div>
-          <button class="fabric-disconnect-btn" type="button" data-fabric-index="${escapeHtml(idx)}" data-controller="${escapeHtml(vendor)}" title="Desconectar este accesorio de ${escapeHtml(vendor)}">Desconectar</button>
-        </div>`;
-        })
-        .join("");
+            <button class="fabric-disconnect-btn" type="button" data-fabric-index="${escapeHtml(idx)}" data-controller="${escapeHtml(vendor)}" title="Desconectar este accesorio de ${escapeHtml(vendor)}">Desconectar</button>
+          </div>`;
+          })
+          .join("");
+      } else {
+        els.fabricsList.innerHTML = `
+          <div class="fabric-item">
+            <div class="fabric-info">
+              <div class="fabric-controller-line">
+                <strong class="fabric-name">✓ Conectado a Matter</strong>
+              </div>
+              <span class="fabric-detail">Emparejado a tu ecosistema</span>
+            </div>
+          </div>`;
+      }
 
       els.fabricsList
         .querySelectorAll(".fabric-disconnect-btn")
@@ -721,7 +744,7 @@ function renderQrSection(entity) {
     if (isMultiAdminActive) {
       if (els.commissionedHint) els.commissionedHint.style.display = "none";
       if (els.multiAdminHint) els.multiAdminHint.style.display = "block";
-      els.deviceQrButton.textContent = "Cerrar emparejamiento Multi-Admin";
+      els.deviceQrButton.textContent = "✕ Cerrar ventana Multi-Admin";
       if (entity.pairingCode) {
         showQrCode(entity);
       } else {
@@ -732,9 +755,11 @@ function renderQrSection(entity) {
       if (els.commissionedHint) els.commissionedHint.style.display = "block";
       if (els.multiAdminHint) els.multiAdminHint.style.display = "none";
       if (els.deviceQrContainer) els.deviceQrContainer.style.display = "none";
-      els.deviceQrButton.textContent = "Añadir a otra casa (Multi-Admin)";
+      els.deviceQrButton.textContent = "🌐 Añadir a otra casa (Multi-Admin)";
     }
   } else if (entity.exported) {
+    if (els.uncommissionedMultiadminHint)
+      els.uncommissionedMultiadminHint.style.display = "block";
     // Not commissioned: show QR directly and large in the panel ready to pair!
     if (els.commissionedHint) els.commissionedHint.style.display = "none";
     if (els.multiAdminHint) els.multiAdminHint.style.display = "none";
@@ -1079,8 +1104,10 @@ function showQrCode(entity) {
     if (els.qrSpinnerWrap) els.qrSpinnerWrap.style.display = "none";
     const setupUri = entity.homekitCamera.setupUri || entity.pairingCode;
     const pin = entity.homekitCamera.pincode
-      ? `PIN HomeKit: ${entity.homekitCamera.pincode}`
+      ? entity.homekitCamera.pincode
       : entity.manualPairingCode || entity.pairingCode;
+    if (els.manualCodeLabel)
+      els.manualCodeLabel.textContent = "PIN HOMEKIT (MANUAL)";
     renderQrCodePayload(entity, setupUri, pin);
     const hk = entity.homekitCamera;
     const strategyDesc =
@@ -1095,7 +1122,7 @@ function showQrCode(entity) {
       ? `FFmpeg: ${hk.ffmpegVersion}`
       : "FFmpeg disponible";
     const hksvActionBtn = hk.hksvCapable
-      ? `<button id="toggle-camera-hksv-btn" type="button" style="width:100%;margin-top:6px;padding:6px 10px;background:${hk.hksvEnabled ? "#475569" : "#10b981"};color:#ffffff;border:none;border-radius:6px;font-size:0.78rem;font-weight:600;cursor:pointer;">${hk.hksvEnabled ? "⏹ Desactivar HKSV (Solo Live View)" : "▶️ Habilitar HKSV (Grabación en iCloud)"}</button>`
+      ? `<button id="toggle-camera-hksv-btn" type="button" style="width:100%;margin-top:6px;padding:8px 12px;background:${hk.hksvEnabled ? "#475569" : "#10b981"};color:#ffffff;border:none;border-radius:8px;font-size:0.8rem;font-weight:600;cursor:pointer;">${hk.hksvEnabled ? "⏹ Desactivar HKSV (Solo Live View)" : "▶️ Habilitar HKSV (Grabación en iCloud)"}</button>`
       : "";
 
     const motionDesc =
@@ -1104,13 +1131,13 @@ function showQrCode(entity) {
         ? "Integrado (HomeKit MotionSensor — Trigger HKSV)"
         : "MotionSensor no disponible desde Home Assistant");
 
-    els.deviceManualCode.innerHTML = `
-      <div style="text-align:left;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:10px 12px;margin-top:8px;font-size:0.8rem;line-height:1.4;">
+    if (els.cameraDetailsContainer) {
+      els.cameraDetailsContainer.style.display = "block";
+      els.cameraDetailsContainer.innerHTML = `
         <div style="font-size:0.95rem;font-weight:700;color:var(--text-primary);margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;">
           <span>🍎 Apple Home (HomeKit HAP)</span>
-          <span style="font-size:0.75rem;padding:2px 6px;background:rgba(16,185,129,0.15);color:#10b981;border-radius:4px;">Nativo Live View & HKSV</span>
+          <span style="font-size:0.75rem;padding:2px 6px;background:rgba(16,185,129,0.15);color:#10b981;border-radius:4px;font-weight:600;">Nativo Live View & HKSV</span>
         </div>
-        <div style="font-weight:600;font-size:0.9rem;color:#38bdf8;margin-bottom:6px;">${escapeHtml(pin)}</div>
         <div style="color:var(--text-secondary);margin-bottom:2px;">• <strong>Live View:</strong> ${escapeHtml(strategyDesc)}</div>
         <div style="color:var(--text-secondary);margin-bottom:2px;">• <strong>Snapshot:</strong> ${escapeHtml(snapshotDesc)}</div>
         <div style="color:var(--text-secondary);margin-bottom:2px;">• <strong>Audio:</strong> ${escapeHtml(audioDesc)}</div>
@@ -1122,12 +1149,12 @@ function showQrCode(entity) {
         ${hksvActionBtn}
         <button id="set-camera-motion-btn" type="button" style="width:100%;margin-top:4px;padding:6px 10px;background:#475569;color:#ffffff;border:none;border-radius:6px;font-size:0.8rem;font-weight:600;cursor:pointer;">⚙️ Vincular sensor de movimiento</button>
         <button id="reset-camera-pairing-btn" type="button" style="width:100%;margin-top:4px;padding:6px 10px;background:#3b82f6;color:#ffffff;border:none;border-radius:6px;font-size:0.8rem;font-weight:600;cursor:pointer;">🔄 Reiniciar emparejamiento / Añadir a otra casa</button>
-      </div>
-      <div style="margin-top:12px;text-align:left;background:rgba(255,255,255,0.02);border:1px dashed rgba(255,255,255,0.1);border-radius:8px;padding:8px 10px;font-size:0.75rem;color:var(--text-secondary);">
-        <div style="font-weight:600;color:var(--text-primary);margin-bottom:2px;">🧪 Matter Camera 1.5/1.6 (Backend Desacoplado)</div>
-        <div>Device Type: 0x0142 · Clusters: 0x0551, 0x0553. <em>Nota: Apple Home no utiliza Matter para live view ni grabación; usa el QR HomeKit superior.</em></div>
-      </div>
-    `;
+        <div style="margin-top:12px;text-align:left;background:rgba(255,255,255,0.02);border:1px dashed rgba(255,255,255,0.1);border-radius:8px;padding:8px 10px;font-size:0.75rem;color:var(--text-secondary);">
+          <div style="font-weight:600;color:var(--text-primary);margin-bottom:2px;">🧪 Matter Camera 1.5/1.6 (Backend Desacoplado)</div>
+          <div>Device Type: 0x0142 · Clusters: 0x0551, 0x0553. <em>Nota: Apple Home no utiliza Matter para live view ni grabación; usa el QR HomeKit superior.</em></div>
+        </div>
+      `;
+    }
 
     const toggleHksvBtn = document.getElementById("toggle-camera-hksv-btn");
     if (toggleHksvBtn) {
@@ -1281,15 +1308,34 @@ function renderQrCodePayload(entity, code, manualCodeText) {
   if (els.deviceQrContainer) els.deviceQrContainer.style.display = "block";
 }
 
+function formatManualCode(code) {
+  if (!code) return "—————";
+  const str = String(code).trim();
+  if (str.includes("-") || str.includes(" ")) return str;
+  if (/^\d{11}$/.test(str)) {
+    return `${str.slice(0, 4)}-${str.slice(4, 7)}-${str.slice(7)}`;
+  }
+  if (/^\d{21}$/.test(str)) {
+    return `${str.slice(0, 4)}-${str.slice(4, 7)}-${str.slice(7, 11)}-${str.slice(11, 15)}-${str.slice(15, 19)}-${str.slice(19)}`;
+  }
+  return str;
+}
+
 function renderDeviceQr(entity) {
-  if (!entity.pairingCode) return;
+  if (!entity || !entity.pairingCode) return;
+  if (els.manualCodeLabel)
+    els.manualCodeLabel.textContent = "CÓDIGO NUMÉRICO MANUAL";
+  if (els.cameraDetailsContainer) {
+    els.cameraDetailsContainer.style.display = "none";
+    els.cameraDetailsContainer.innerHTML = "";
+  }
   // renderQrSection hides the container before every refresh. If this is the
   // same valid Multi-Admin code, retain the already generated QR but make it
   // visible again instead of returning with an empty panel.
   renderQrCodePayload(
     entity,
     entity.pairingCode,
-    entity.manualPairingCode || entity.pairingCode,
+    formatManualCode(entity.manualPairingCode || entity.pairingCode),
   );
 }
 
@@ -1297,18 +1343,19 @@ function renderDeviceQr(entity) {
 els.copyManualCodeBtn?.addEventListener("click", async () => {
   const codeText = els.deviceManualCode?.textContent?.trim();
   if (!codeText || codeText === "—————") return;
+  const cleanCode = codeText.replace(/\s+/g, "");
   try {
-    await navigator.clipboard.writeText(codeText);
+    await navigator.clipboard.writeText(cleanCode);
     const copyTextEl = els.copyManualCodeBtn.querySelector(".copy-text");
     if (copyTextEl) copyTextEl.textContent = "¡Copiado!";
     els.copyManualCodeBtn.classList.add("copied");
-    showToast("✓ Código copiado al portapapeles: " + codeText);
+    showToast("✓ Código copiado al portapapeles: " + cleanCode);
     setTimeout(() => {
       if (copyTextEl) copyTextEl.textContent = "Copiar";
       els.copyManualCodeBtn.classList.remove("copied");
     }, 2500);
   } catch {
-    showToast("Código: " + codeText);
+    showToast("Código: " + cleanCode);
   }
 });
 
@@ -1660,9 +1707,9 @@ function isSSEActive() {
 function scheduleNextDevicesPoll() {
   if (devicesPollTimer) clearTimeout(devicesPollTimer);
   if (document.hidden) return;
-  // If SSE is active, rely on push updates (<1% CPU) with a 60s safety heartbeat.
-  // If SSE is reconnecting, use an active 12s polling fallback.
-  const interval = isSSEActive() ? 60000 : 12000;
+  // Responsive 10s poll heartbeat when SSE is active (<0.2% CPU on RPi 5),
+  // and 5s fallback when reconnecting to keep BLE fans and states in real-time.
+  const interval = isSSEActive() ? 10000 : 5000;
   devicesPollTimer = setTimeout(async () => {
     if (!document.hidden) {
       await fetchDevices(true);
@@ -1674,7 +1721,7 @@ function scheduleNextDevicesPoll() {
 function scheduleNextStatusPoll() {
   if (statusPollTimer) clearTimeout(statusPollTimer);
   if (document.hidden) return;
-  const interval = isSSEActive() ? 45000 : 15000;
+  const interval = isSSEActive() ? 30000 : 10000;
   statusPollTimer = setTimeout(async () => {
     if (!document.hidden) {
       await fetchStatus();
@@ -1728,7 +1775,18 @@ function connectSSE() {
           (e) => e.entityId === update.entityId,
         );
         if (idx !== -1) {
-          state.entities[idx] = { ...state.entities[idx], ...update };
+          if (update.type === "state_changed") {
+            state.entities[idx].state = update.state;
+            if (state.entities[idx].rawState) {
+              state.entities[idx].rawState.state = update.state;
+              Object.assign(
+                state.entities[idx].rawState.attributes || {},
+                update.attributes || {},
+              );
+            }
+          } else {
+            state.entities[idx] = { ...state.entities[idx], ...update };
+          }
           renderDevices();
           if (
             state.activeEntity?.entityId === update.entityId &&

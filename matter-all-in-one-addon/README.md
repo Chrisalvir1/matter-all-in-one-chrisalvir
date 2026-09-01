@@ -15,7 +15,7 @@ This file is intentionally structured for both humans and AI agents.
 
 ```yaml
 project: matter-all-in-one-chrisalvir
-version: "1.4.63"
+version: "1.4.64"
 spec: "Matter 1.6"
 engine: matterbridge
 engine_version: "3.10.7"
@@ -113,7 +113,7 @@ Matter 1.6 Network (mDNS + BLE commissioning)
 npm install -g matterbridge@3.10.7
 
 # 2. Instalar el plugin
-npm install -g matter-all-in-one-chrisalvir@1.4.63
+npm install -g matter-all-in-one-chrisalvir@1.4.64
 ```
 
 En Home Assistant, el add-on usa `ghcr.io/chrisalvir1/matter-all-in-one-chrisalvir` con un manifiesto multi-arquitectura para `amd64` y `aarch64`. Una actualización solo descarga la imagen precompilada desde GHCR — no recompila dependencias en el host.

@@ -2791,6 +2791,30 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     }
   }
 
+  /** Broadcast an arbitrary event message to all connected SSE clients. */
+  private broadcastSseMessage(
+    type: string,
+    data: Record<string, unknown>,
+  ): void {
+    if (this.sseSubscribers.size === 0) return;
+    try {
+      const msg = `data: ${JSON.stringify({ type, ...data })}\n\n`;
+      for (const sub of this.sseSubscribers) {
+        if (sub.destroyed || sub.writableEnded) {
+          this.sseSubscribers.delete(sub);
+          continue;
+        }
+        try {
+          sub.write(msg);
+        } catch {
+          this.sseSubscribers.delete(sub);
+        }
+      }
+    } catch {
+      // non-critical
+    }
+  }
+
   private async saveDeviceOverrides() {
     try {
       await fs.writeFile(
@@ -2947,6 +2971,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             this.log.error(`${message} (${entityId})`);
             this.recordEntityDiagnostic(entityId, message);
           }
+        });
+        updates.forEach(([entityId, state]) => {
+          this.broadcastSseMessage("state_changed", {
+            entityId,
+            state: state.state,
+            attributes: state.attributes,
+          });
         });
       }
     })().finally(() => {
