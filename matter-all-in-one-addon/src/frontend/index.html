@@ -289,9 +289,52 @@
                 vincularlo a tu otra casa.
               </p>
             </div>
-            <div id="device-qr-container" style="display: none">
-              <div id="device-qr-code"></div>
-              <p id="device-manual-code"></p>
+            <div
+              id="device-qr-container"
+              class="qr-liquid-glass-card"
+              style="display: none"
+            >
+              <div class="qr-visual-wrapper">
+                <div class="qr-frame-glow" aria-hidden="true"></div>
+                <div class="qr-frame">
+                  <div id="device-qr-code"></div>
+                  <div
+                    class="qr-center-logo"
+                    id="qr-center-logo"
+                    aria-hidden="true"
+                  >
+                    <img src="logo.png" alt="Matter Logo" class="qr-logo-img" />
+                  </div>
+                </div>
+              </div>
+              <div class="qr-manual-box">
+                <span class="manual-code-label">CÓDIGO NUMÉRICO MANUAL</span>
+                <div class="manual-code-row">
+                  <code id="device-manual-code" class="manual-code-display"
+                    >—————</code
+                  >
+                  <button
+                    class="button-copy-code"
+                    id="copy-manual-code-btn"
+                    type="button"
+                    title="Copiar código al portapapeles"
+                    aria-label="Copiar código manual"
+                  >
+                    <span class="copy-icon">📋</span>
+                    <span class="copy-text">Copiar</span>
+                  </button>
+                </div>
+              </div>
+              <div class="qr-card-actions">
+                <button
+                  class="button-download-qr"
+                  id="download-qr-btn"
+                  type="button"
+                  title="Descargar código QR en alta resolución"
+                >
+                  <span>💾 Descargar QR (PNG)</span>
+                </button>
+              </div>
               <small class="qr-note"
                 >Escanea con Apple Home, Google Home, Alexa o SmartThings</small
               >

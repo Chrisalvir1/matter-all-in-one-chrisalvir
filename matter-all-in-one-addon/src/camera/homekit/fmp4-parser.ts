@@ -158,8 +158,7 @@ export class Fmp4Segmenter extends EventEmitter {
       const subBox = trafBuffer.subarray(offset, offset + boxSize);
 
       if (boxType === "trun" && subBox.length >= 16) {
-        const flags =
-          (subBox[9] << 16) | (subBox[10] << 8) | subBox[11];
+        const flags = (subBox[9] << 16) | (subBox[10] << 8) | subBox[11];
         const hasFirstSampleFlags = (flags & 0x000004) !== 0;
 
         let sampleOffset = 16;

@@ -1,3 +1,13 @@
+## [1.4.62] - 2026-09-01
+
+### Liquid Glass QR, CPU Optimization (RPi 5) & Expanded Test Coverage
+
+- **Liquid Glass Premium QR:** Rediseño completo del panel QR con estilo Liquid Glass de alta gama (efecto cristal translúcido, marco con resplandor neon y logo central oficial integrado con nivel de corrección de error H de alta recuperación).
+- **Herramientas de Emparejamiento Rápido:** Botón para copiar el código manual numérico al portapapeles con un clic y botón para descargar el código QR en PNG de alta resolución (1024x1024).
+- **Optimización Drástica de CPU (Raspberry Pi 5):** Polling adaptativo gobernado por Server-Sent Events (SSE). Suspende las peticiones HTTP continuas mientras el stream SSE esté conectado y pausa el tráfico de red cuando la pestaña está en segundo plano o minimizada (`document.hidden`), reduciendo el consumo de CPU al mínimo en reposo.
+- **Formateo y Estilo:** Corregidas todas las violaciones de Prettier (`npm run lint` 100% limpio).
+- **Nuevas Pruebas Unitarias:** Cobertura expandida a 30 suites y 252 tests, incluyendo pruebas completas para `LockEntity`, `ClosureEntity`, `CooktopEntity`, `OvenEntity`, `SoilSensorEntity`, `PetFeederEntity` y `EnergyTariffEntity`.
+
 ## [1.4.61] - 2026-09-01
 
 ### Runtime & Dependency Upgrades

@@ -140,13 +140,23 @@ describe("HomeAssistant connection recovery", () => {
   });
 
   it("correctly derives HTTP base URL and camera proxy stream endpoints", () => {
-    const haWs = new HomeAssistant("ws://homeassistant:8123/api/websocket", "token", 0, 0);
+    const haWs = new HomeAssistant(
+      "ws://homeassistant:8123/api/websocket",
+      "token",
+      0,
+      0,
+    );
     expect(haWs.getHttpBaseUrl()).toBe("http://homeassistant:8123");
     expect(haWs.getCameraProxyStreamUrl("camera.playroom")).toBe(
       "http://homeassistant:8123/api/camera_proxy_stream/camera.playroom",
     );
 
-    const haSup = new HomeAssistant("ws://supervisor/core/websocket", "token", 0, 0);
+    const haSup = new HomeAssistant(
+      "ws://supervisor/core/websocket",
+      "token",
+      0,
+      0,
+    );
     expect(haSup.getHttpBaseUrl()).toBe("http://supervisor/core");
     expect(haSup.getCameraProxyStreamUrl("camera.playroom")).toBe(
       "http://supervisor/core/api/camera_proxy_stream/camera.playroom",

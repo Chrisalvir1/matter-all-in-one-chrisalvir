@@ -367,6 +367,14 @@ vi.mock("matterbridge/devices", () => ({
     }
   },
   BasicVideoPlayer: class extends MockMatterbridgeEndpoint {},
-  Cooktop: class extends MockMatterbridgeEndpoint {},
-  Oven: class extends MockMatterbridgeEndpoint {},
+  Cooktop: class extends MockMatterbridgeEndpoint {
+    public addSurface = vi
+      .fn()
+      .mockImplementation(() => new MockMatterbridgeEndpoint([], {}));
+  },
+  Oven: class extends MockMatterbridgeEndpoint {
+    public addCabinet = vi
+      .fn()
+      .mockImplementation(() => new MockMatterbridgeEndpoint([], {}));
+  },
 }));

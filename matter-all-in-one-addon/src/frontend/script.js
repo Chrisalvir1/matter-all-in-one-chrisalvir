@@ -63,6 +63,9 @@ const els = {
   deviceQrContainer: $("device-qr-container"),
   deviceQrCode: $("device-qr-code"),
   deviceManualCode: $("device-manual-code"),
+  copyManualCodeBtn: $("copy-manual-code-btn"),
+  downloadQrBtn: $("download-qr-btn"),
+  qrCenterLogo: $("qr-center-logo"),
   deviceQrButton: $("device-qr-button"),
   resetAccessoryButton: $("reset-accessory-button"),
   matterActions: $("matter-actions"),
@@ -1075,26 +1078,10 @@ function showQrCode(entity) {
   if (entity.domain === "camera" && entity.homekitCamera) {
     if (els.qrSpinnerWrap) els.qrSpinnerWrap.style.display = "none";
     const setupUri = entity.homekitCamera.setupUri || entity.pairingCode;
-    if (els.deviceQrCode.dataset.pairingCode !== setupUri) {
-      els.deviceQrCode.innerHTML = "";
-      els.deviceQrCode.dataset.entityId = entity.entityId;
-      els.deviceQrCode.dataset.pairingCode = setupUri || "";
-      if (typeof QRCode !== "undefined" && setupUri) {
-        new QRCode(els.deviceQrCode, {
-          text: setupUri,
-          width: 232,
-          height: 232,
-          colorDark: "#0b1020",
-          colorLight: "#ffffff",
-          correctLevel: QRCode.CorrectLevel.M,
-        });
-      } else {
-        els.deviceQrCode.textContent = "Librería QR no cargada.";
-      }
-    }
     const pin = entity.homekitCamera.pincode
       ? `PIN HomeKit: ${entity.homekitCamera.pincode}`
       : entity.manualPairingCode || entity.pairingCode;
+    renderQrCodePayload(entity, setupUri, pin);
     const hk = entity.homekitCamera;
     const strategyDesc =
       hk.liveViewStatus || "Passthrough H.264 (Sin transcodificación)";
@@ -1238,39 +1225,159 @@ function showQrCode(entity) {
     els.deviceQrContainer.style.display = "block";
     return;
   }
+}
 
+function renderQrCodePayload(entity, code, manualCodeText) {
+  if (!code) {
+    if (els.deviceQrContainer) els.deviceQrContainer.style.display = "none";
+    if (els.qrCenterLogo) els.qrCenterLogo.style.display = "none";
+    return;
+  }
+
+  if (els.qrSpinnerWrap) els.qrSpinnerWrap.style.display = "none";
+  if (els.deviceManualCode) {
+    els.deviceManualCode.textContent = manualCodeText || code;
+  }
+
+  // renderQrSection hides the container before every refresh. If this is the
+  // same valid Multi-Admin code, retain the already generated QR but make it
+  // visible again instead of returning with an empty panel.
+  if (els.deviceQrCode && els.deviceQrCode.dataset.pairingCode === code) {
+    if (els.deviceQrContainer) els.deviceQrContainer.style.display = "block";
+    if (els.qrCenterLogo) els.qrCenterLogo.style.display = "flex";
+    return;
+  }
+
+  if (els.deviceQrCode) {
+    els.deviceQrCode.innerHTML = "";
+    els.deviceQrCode.dataset.entityId = entity?.entityId || "";
+    els.deviceQrCode.dataset.pairingCode = code;
+
+    try {
+      if (typeof QRCode !== "undefined") {
+        new QRCode(els.deviceQrCode, {
+          text: code,
+          width: 224,
+          height: 224,
+          colorDark: "#09101f",
+          colorLight: "#ffffff",
+          correctLevel: QRCode.CorrectLevel.H,
+        });
+        if (els.qrCenterLogo) els.qrCenterLogo.style.display = "flex";
+      } else {
+        els.deviceQrCode.textContent = "Librería QR no cargada.";
+        if (els.qrCenterLogo) els.qrCenterLogo.style.display = "none";
+      }
+    } catch (err) {
+      console.error("Error al renderizar código QR:", err);
+      els.deviceQrCode.textContent = "Error al generar código QR.";
+      if (els.qrCenterLogo) els.qrCenterLogo.style.display = "none";
+    }
+  }
+
+  if (els.deviceQrContainer) els.deviceQrContainer.style.display = "block";
+}
+
+function renderDeviceQr(entity) {
   if (!entity.pairingCode) return;
   // renderQrSection hides the container before every refresh. If this is the
   // same valid Multi-Admin code, retain the already generated QR but make it
   // visible again instead of returning with an empty panel.
-  if (els.deviceQrCode.dataset.pairingCode === entity.pairingCode) {
-    if (els.qrSpinnerWrap) els.qrSpinnerWrap.style.display = "none";
-    if (els.deviceManualCode.textContent !== entity.manualPairingCode)
-      els.deviceManualCode.textContent =
-        entity.manualPairingCode || entity.pairingCode;
-    els.deviceQrContainer.style.display = "block";
-    return;
-  }
-  if (els.qrSpinnerWrap) els.qrSpinnerWrap.style.display = "none";
-  els.deviceQrCode.innerHTML = "";
-  els.deviceQrCode.dataset.entityId = entity.entityId;
-  els.deviceQrCode.dataset.pairingCode = entity.pairingCode;
-  if (typeof QRCode !== "undefined") {
-    new QRCode(els.deviceQrCode, {
-      text: entity.pairingCode,
-      width: 232,
-      height: 232,
-      colorDark: "#0b1020",
-      colorLight: "#ffffff",
-      correctLevel: QRCode.CorrectLevel.M,
-    });
-  } else {
-    els.deviceQrCode.textContent = "Librería QR no cargada.";
-  }
-  els.deviceManualCode.textContent =
-    entity.manualPairingCode || entity.pairingCode;
-  els.deviceQrContainer.style.display = "block";
+  renderQrCodePayload(
+    entity,
+    entity.pairingCode,
+    entity.manualPairingCode || entity.pairingCode,
+  );
 }
+
+// Copy manual pairing code with 1 click
+els.copyManualCodeBtn?.addEventListener("click", async () => {
+  const codeText = els.deviceManualCode?.textContent?.trim();
+  if (!codeText || codeText === "—————") return;
+  try {
+    await navigator.clipboard.writeText(codeText);
+    const copyTextEl = els.copyManualCodeBtn.querySelector(".copy-text");
+    if (copyTextEl) copyTextEl.textContent = "¡Copiado!";
+    els.copyManualCodeBtn.classList.add("copied");
+    showToast("✓ Código copiado al portapapeles: " + codeText);
+    setTimeout(() => {
+      if (copyTextEl) copyTextEl.textContent = "Copiar";
+      els.copyManualCodeBtn.classList.remove("copied");
+    }, 2500);
+  } catch {
+    showToast("Código: " + codeText);
+  }
+});
+
+// Download high-resolution QR image (PNG)
+els.downloadQrBtn?.addEventListener("click", () => {
+  const pairingCode = els.deviceQrCode?.dataset.pairingCode;
+  if (!pairingCode) return;
+  const entityName =
+    state.activeEntity?.name || state.activeDevice?.name || "matter-accessory";
+  const filename = `${entityName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-qr.png`;
+
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1024;
+    canvas.height = 1024;
+    const ctx = canvas.getContext("2d");
+
+    if (typeof QRCode !== "undefined" && QRCode.toCanvas) {
+      QRCode.toCanvas(canvas, pairingCode, {
+        width: 900,
+        margin: 2,
+        errorCorrectionLevel: "H",
+        color: { dark: "#09101f", light: "#ffffff" },
+      })
+        .then(() => {
+          const logoImg = new Image();
+          logoImg.onload = () => {
+            const logoSize = 180;
+            const pos = (1024 - logoSize) / 2;
+            ctx.fillStyle = "#ffffff";
+            ctx.beginPath();
+            ctx.roundRect(pos - 12, pos - 12, logoSize + 24, logoSize + 24, 28);
+            ctx.fill();
+            ctx.shadowColor = "rgba(0,0,0,0.25)";
+            ctx.shadowBlur = 18;
+            ctx.drawImage(logoImg, pos, pos, logoSize, logoSize);
+
+            const a = document.createElement("a");
+            a.download = filename;
+            a.href = canvas.toDataURL("image/png");
+            a.click();
+            showToast("✓ Código QR descargado exitosamente");
+          };
+          logoImg.onerror = () => {
+            const a = document.createElement("a");
+            a.download = filename;
+            a.href = canvas.toDataURL("image/png");
+            a.click();
+            showToast("✓ Código QR descargado");
+          };
+          logoImg.src = "logo.png";
+        })
+        .catch(() => {
+          QRCode.toDataURL(pairingCode, {
+            width: 1024,
+            errorCorrectionLevel: "H",
+          }).then((url) => {
+            const a = document.createElement("a");
+            a.download = filename;
+            a.href = url;
+            a.click();
+            showToast("✓ Código QR descargado");
+          });
+        });
+    } else {
+      showToast("Descarga no disponible en este navegador", true);
+    }
+  } catch (err) {
+    console.error("Error al descargar QR:", err);
+    showToast("Error al exportar código QR", true);
+  }
+});
 
 els.deviceSearch.addEventListener("input", renderDevices);
 document.querySelectorAll(".filter-chip").forEach((button) =>
@@ -1536,16 +1643,56 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
-void fetchStatus();
-void fetchDevices();
-setInterval(() => void fetchStatus(), 8000);
-// Refresh fabrics and commissioning state without requiring a page reload.
-setInterval(() => void fetchDevices(true), 4000);
-
-// --- SSE: Real-time push for fabric/commissioning changes with auto-reconnect & backoff ---
+// --- Adaptive Polling & Lifecycle Management (CPU Optimized for Raspberry Pi 5) ---
 let currentSSE = null;
 let sseRetryDelay = 1000;
 let sseReconnectTimer = null;
+let devicesPollTimer = null;
+let statusPollTimer = null;
+
+function isSSEActive() {
+  return currentSSE && currentSSE.readyState === EventSource.OPEN;
+}
+
+function scheduleNextDevicesPoll() {
+  if (devicesPollTimer) clearTimeout(devicesPollTimer);
+  if (document.hidden) return;
+  // If SSE is active, rely on push updates (<1% CPU) with a 60s safety heartbeat.
+  // If SSE is reconnecting, use an active 12s polling fallback.
+  const interval = isSSEActive() ? 60000 : 12000;
+  devicesPollTimer = setTimeout(async () => {
+    if (!document.hidden) {
+      await fetchDevices(true);
+    }
+    scheduleNextDevicesPoll();
+  }, interval);
+}
+
+function scheduleNextStatusPoll() {
+  if (statusPollTimer) clearTimeout(statusPollTimer);
+  if (document.hidden) return;
+  const interval = isSSEActive() ? 45000 : 15000;
+  statusPollTimer = setTimeout(async () => {
+    if (!document.hidden) {
+      await fetchStatus();
+    }
+    scheduleNextStatusPoll();
+  }, interval);
+}
+
+// React instantly when user switches back to the Home Assistant tab:
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) {
+    void fetchStatus();
+    void fetchDevices(true);
+    if (!isSSEActive()) connectSSE();
+    scheduleNextDevicesPoll();
+    scheduleNextStatusPoll();
+  } else {
+    if (devicesPollTimer) clearTimeout(devicesPollTimer);
+    if (statusPollTimer) clearTimeout(statusPollTimer);
+  }
+});
 
 function connectSSE() {
   if (sseReconnectTimer) {
@@ -1566,6 +1713,8 @@ function connectSSE() {
     sse.onopen = () => {
       sseRetryDelay = 1000;
       void fetchDevices(true);
+      scheduleNextDevicesPoll();
+      scheduleNextStatusPoll();
     };
 
     sse.onmessage = (ev) => {
@@ -1598,15 +1747,22 @@ function connectSSE() {
         } catch {}
         currentSSE = null;
       }
+      scheduleNextDevicesPoll();
       const delay = sseRetryDelay;
       sseRetryDelay = Math.min(sseRetryDelay * 2, 15000);
       sseReconnectTimer = setTimeout(connectSSE, delay);
     };
   } catch {
+    scheduleNextDevicesPoll();
     sseReconnectTimer = setTimeout(connectSSE, 10000);
   }
 }
+
+void fetchStatus();
+void fetchDevices();
 connectSSE();
+scheduleNextDevicesPoll();
+scheduleNextStatusPoll();
 
 // MQTT Configuration
 const mqttHostInput = $("mqtt-host");

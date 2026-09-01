@@ -126,6 +126,8 @@ describe("FFmpeg Helper", () => {
     expect(args).toContain(
       "Authorization: Bearer my-long-lived-access-token\r\n",
     );
-    expect(args).toContain("http://127.0.0.1:8123/api/hls/test-stream/master.m3u8");
+    expect(args).toContain(
+      "http://127.0.0.1:8123/api/hls/test-stream/master.m3u8",
+    );
   });
 });
