@@ -3023,7 +3023,12 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         if (req.method === "GET" && pathname === "/") {
           const content = await this.readFrontendFile("index.html");
           if (content) {
-            res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+            res.writeHead(200, {
+              "Content-Type": "text/html; charset=utf-8",
+              "Cache-Control": "no-cache, no-store, must-revalidate",
+              Pragma: "no-cache",
+              Expires: "0",
+            });
             res.end(content);
           } else {
             res.writeHead(404);
@@ -3047,7 +3052,12 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         if (req.method === "GET" && pathname === "/style.css") {
           const content = await this.readFrontendFile("style.css");
           if (content) {
-            res.writeHead(200, { "Content-Type": "text/css; charset=utf-8" });
+            res.writeHead(200, {
+              "Content-Type": "text/css; charset=utf-8",
+              "Cache-Control": "no-cache, no-store, must-revalidate",
+              Pragma: "no-cache",
+              Expires: "0",
+            });
             res.end(content);
           } else {
             res.writeHead(404);
@@ -3061,6 +3071,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           if (content) {
             res.writeHead(200, {
               "Content-Type": "application/javascript; charset=utf-8",
+              "Cache-Control": "no-cache, no-store, must-revalidate",
+              Pragma: "no-cache",
+              Expires: "0",
             });
             res.end(content);
           } else {
@@ -3075,6 +3088,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           if (content) {
             res.writeHead(200, {
               "Content-Type": "application/javascript; charset=utf-8",
+              "Cache-Control": "no-cache, no-store, must-revalidate",
+              Pragma: "no-cache",
+              Expires: "0",
             });
             res.end(content);
           } else {

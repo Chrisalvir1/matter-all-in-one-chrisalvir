@@ -1225,6 +1225,9 @@ function showQrCode(entity) {
     els.deviceQrContainer.style.display = "block";
     return;
   }
+
+  // Standard Matter accessories (lights, switches, plugs, locks, fans, covers, sensors, appliances)
+  renderDeviceQr(entity);
 }
 
 function renderQrCodePayload(entity, code, manualCodeText) {

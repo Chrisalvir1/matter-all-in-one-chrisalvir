@@ -1,3 +1,10 @@
+## [1.4.63] - 2026-09-01
+
+### Fix Matter Devices QR Rendering & Anti-Cache Headers
+
+- **Fix QR Rendering for Standard Matter Devices:** Corregido el renderizado de códigos QR para todos los dispositivos que no son cámaras (`light`, `switch`, `lock`, `fan`, `cover`, `sensor`, electrodomésticos). `showQrCode` ahora invoca correctamente `renderDeviceQr`, permitiendo que se visualice la nueva tarjeta Liquid Glass con el logo oficial.
+- **Encabezados Anti-Caché y Cache-Busting:** Añadidos encabezados HTTP `Cache-Control: no-cache, no-store, must-revalidate` en `platform.ts` y parámetros de versión (`?v=1.4.63`) a los scripts y hojas de estilo en `index.html` para evitar que Safari o el iframe de Ingress en Home Assistant sirvan versiones antiguas en caché.
+
 ## [1.4.62] - 2026-09-01
 
 ### Liquid Glass QR, CPU Optimization (RPi 5) & Expanded Test Coverage
