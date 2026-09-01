@@ -1,3 +1,12 @@
+## [1.4.61] - 2026-09-01
+
+### Runtime & Dependency Upgrades
+
+- **Vitest 5.0.0-rc.4 & Coverage V8:** Actualizado runner de pruebas unitarias y cobertura V8 a `5.0.0-rc.4` con optimizaciones en `expect` y aislamiento de módulos VM.
+- **Node.js 26.8.1:** Actualizada la imagen base de contenedor a `node:26.8.1-alpine3.24`, `.nvmrc`, `build.yaml` y GitHub Actions workflows.
+- **Matterbridge 3.10.7 & Vite 8.2.2:** Sincronización con las últimas versiones de Matterbridge y Vite.
+- **Tipos de Node:** Actualizado `@types/node` a `^26.4.0`.
+
 ## [1.4.57] - 2026-08-27
 
 ### Camera source reliability

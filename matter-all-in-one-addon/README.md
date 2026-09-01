@@ -15,11 +15,11 @@ This file is intentionally structured for both humans and AI agents.
 
 ```yaml
 project: matter-all-in-one-chrisalvir
-version: "1.4.40"
+version: "1.4.61"
 spec: "Matter 1.6"
 engine: matterbridge
-engine_version: "3.10.6"
-node_image: "node:24.19.0-alpine3.24"
+engine_version: "3.10.7"
+node_image: "node:26.8.1-alpine3.24"
 bridge_mode: server       # Each HA device = ServerNode; standalone entities keep their own QR
 plugin_mode: dynamic      # MatterbridgeDynamicPlatform
 ha_integration: websocket # WebSocket to HA supervisor API
@@ -100,7 +100,7 @@ Matter 1.6 Network (mDNS + BLE commissioning)
 | `src/entities/composite-device.entity.ts` | Fan+Light grouped by HA device_id or explicit include list |
 | `src/converters/vacuum.converter.ts` | HA vacuum state → Matter RVC attributes |
 | `run.sh` | Startup: mDNS interface detection, plugin registration, proxy |
-| `Dockerfile` | Imagen multi-stage reproducible con `node:24.19.0-alpine3.24` y `matterbridge@3.10.6` |
+| `Dockerfile` | Imagen multi-stage reproducible con `node:26.8.1-alpine3.24` y `matterbridge@3.10.7` |
 
 ---
 
@@ -110,10 +110,10 @@ Matter 1.6 Network (mDNS + BLE commissioning)
 
 ```bash
 # 1. Instalar Matterbridge (última versión requerida)
-npm install -g matterbridge@3.10.2
+npm install -g matterbridge@3.10.7
 
 # 2. Instalar el plugin
-npm install -g matter-all-in-one-chrisalvir@1.2.62
+npm install -g matter-all-in-one-chrisalvir@1.4.61
 ```
 
 En Home Assistant, el add-on usa `ghcr.io/chrisalvir1/matter-all-in-one-chrisalvir` con un manifiesto multi-arquitectura para `amd64` y `aarch64`. Una actualización solo descarga la imagen precompilada desde GHCR — no recompila dependencias en el host.
