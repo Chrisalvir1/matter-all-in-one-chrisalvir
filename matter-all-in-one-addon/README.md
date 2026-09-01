@@ -1,11 +1,11 @@
-# Matter All-in-One for Home Assistant — v1.4.40
+# Matter All-in-One for Home Assistant — v1.4.65
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/chrisalvir1/matter-all-in-one-chrisalvir/main/matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
 </div>
 
 > Puente Matter 1.6 para Home Assistant con código QR independiente para apagadores dobles/triples, perfiles conservadores para Apple Home y modelo/marca real en el campo Model.
-> **Base:** `matterbridge@3.10.6` · **Node.js:** `24.19-alpine3.24` · **TypeScript:** `7.0.2` · **Spec:** Matter 1.6 (CSA, 17 Jun 2026)
+> **Base:** `matterbridge@3.10.7` · **Node.js:** `26.8.1-alpine3.24` · **TypeScript:** `7.0.2` · **Spec:** Matter 1.6 (CSA, 17 Jun 2026)
 
 ---
 
@@ -15,7 +15,7 @@ This file is intentionally structured for both humans and AI agents.
 
 ```yaml
 project: matter-all-in-one-chrisalvir
-version: "1.4.64"
+version: "1.4.65"
 spec: "Matter 1.6"
 engine: matterbridge
 engine_version: "3.10.7"

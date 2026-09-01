@@ -1,3 +1,14 @@
+## [1.4.65] - 2026-09-01
+
+### Scrypted-First Camera Passthrough, Matter 1.6 Joint Fabric & HKSV iOS 27
+
+- **Arquitectura Scrypted-First Passthrough (Cero Recodificación de Vídeo):** Conexión directa a servidores Scrypted externos con aceleración GPU (Ubuntu, Mac, Windows, HA). Adquisición de streams H.264 nativos listos para Matter y HomeKit mediante *video stream-copy* directo (`-vcodec copy`), liberando la CPU del host de transcodificaciones innecesarias.
+- **Matter Camera 1.5 & Matter 1.6 Joint Fabric:** Implementación de clusters oficiales de cámara CSA (`0x0551` Camera AV Stream Management y `0x0553` WebRTC Transport Provider) con soporte para Joint Fabric multi-admin compartido entre Apple Home, Google Home, Alexa y SmartThings. Integración de clusters de sensores incrustados (`0x040D` Occupancy Sensing y `0x0552` Boolean State Doorbell) directamente en el endpoint de la cámara.
+- **Apple HomeKit HKSV (iOS 27, tvOS 27, homeOS 27):** Publicación como accesorio independiente HomeKit HAP con HomeKit Secure Video habilitado por defecto. Búfer circular pre-buffer fMP4 en RAM (4 segundos) que alimenta directamente el flujo HDS hacia el Apple Home Hub (Apple TV 4K / HomePod) para su análisis y almacenamiento en iCloud+.
+- **Seguridad Criptográfica Empresarial (Zero-Plaintext):** Cifrado autenticado AES-256-GCM para tokens Scrypted y credenciales NAS con clave de instalación de 256 bits generada en `/data/encryption-key.bin` (`0o600`), blindada contra derivaciones públicas por metadata o machine-id, con separación estricta de propósitos mediante datos adicionales autenticados (AAD).
+- **Fast Boot (< 1s) & Persistencia Atómica:** Arranque ultrarrápido desde `/data/scrypted-cameras-store.json` que monta los accesorios de inmediato sin bloquearse por la red externa, respaldado por guardado atómico (archivo `.tmp` + `fsync` + `rename`). Máquina de 5 estados con backoff exponencial (5m → 10m → 30m → 60m).
+- **UI Liquid Glass con Cámaras Agrupadas por Modelo:** Panel de control con agrupación visual por modelos (ej. `📹 Tapo C125`, `📹 Aqara G3`), pills en tiempo real para sensores asociados (Movimiento, Timbre, Persona, Paquete) incrustados dentro de la tarjeta, código Matter formateado con copiado en 1 clic y modales para configuración de exportación multi-destino y almacenamiento NAS/Servidor local.
+
 ## [1.4.64] - 2026-09-01
 
 ### Fix Manual Pairing Code Display, Multi-Admin Availability & Real-Time Sync

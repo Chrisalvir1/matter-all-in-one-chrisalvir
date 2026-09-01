@@ -159,6 +159,26 @@
           >
             Necesitan atención <span id="issue-count">0</span>
           </button>
+          <button class="filter-chip filter-chip-scrypted" id="btn-connect-scrypted" type="button">
+            🔌 Conectar con Scrypted
+          </button>
+        </div>
+
+        <div class="scrypted-header-bar" id="scrypted-header-bar" hidden>
+          <div class="scrypted-header-left">
+            <span class="scrypted-header-badge" id="scrypted-status-pill">🔌 Scrypted</span>
+            <span class="scrypted-header-host" id="scrypted-host-display">127.0.0.1:10443</span>
+            <span class="scrypted-header-count" id="scrypted-cameras-count">0 cámaras</span>
+            <span class="scrypted-header-time" id="scrypted-last-update">🕐 Actualizando...</span>
+          </div>
+          <div class="scrypted-header-actions">
+            <button class="button button-sm button-secondary" id="scrypted-refresh-now-btn" type="button">
+              🔄 Actualizar ahora
+            </button>
+            <button class="button button-sm button-secondary" id="scrypted-manage-btn" type="button">
+              ⚙️ Servidor
+            </button>
+          </div>
         </div>
 
         <section
@@ -553,8 +573,248 @@
       </section>
     </div>
 
+    <!-- Modal: Conexión con Scrypted -->
+    <div
+      class="modal-backdrop"
+      id="scrypted-connect-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="scrypted-modal-title"
+      hidden
+    >
+      <section class="modal modal-settings">
+        <button
+          class="icon-button"
+          id="scrypted-modal-close"
+          type="button"
+          aria-label="Cerrar"
+        >
+          ×
+        </button>
+        <p class="eyebrow">SERVIDOR REMOTO</p>
+        <h2 id="scrypted-modal-title">🔌 Conectar con Scrypted</h2>
+        <p class="lead compact">
+          Scrypted procesa los streams en su host (Ubuntu / Mac / Win) con aceleración por GPU y entrega flujos H.264 nativos para Matter y HomeKit sin recodificación local.
+        </p>
+
+        <form id="scrypted-connect-form" class="settings-form">
+          <label class="form-field">
+            <span>URL del Servidor Scrypted</span>
+            <input
+              type="text"
+              id="scrypted-server-url"
+              placeholder="http://192.168.1.50:10443"
+              required
+            />
+            <small class="field-hint">Dirección IP y puerto web de tu servidor Scrypted.</small>
+          </label>
+
+          <label class="form-field">
+            <span>Token de Autenticación (Opcional / Cifrado AES-256-GCM)</span>
+            <input
+              type="password"
+              id="scrypted-server-token"
+              placeholder="••••••••••••••••"
+              autocomplete="off"
+            />
+            <small class="field-hint">El token se almacena cifrado y nunca se expone en texto plano.</small>
+          </label>
+
+          <div id="scrypted-test-result" class="test-result-box" hidden></div>
+
+          <div class="confirm-actions" style="margin-top: 1.5rem;">
+            <button
+              class="button button-secondary"
+              id="scrypted-test-btn"
+              type="button"
+            >
+              🔍 Comprobar conexión
+            </button>
+            <button
+              class="button button-primary"
+              id="scrypted-load-cameras-btn"
+              type="submit"
+            >
+              ✅ Cargar cámaras
+            </button>
+            <button
+              class="button button-secondary"
+              id="scrypted-cancel-btn"
+              type="button"
+            >
+              ❌ Cancelar
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <!-- Modal: Configuración por Cámara -->
+    <div
+      class="modal-backdrop"
+      id="camera-config-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="cam-cfg-title"
+      hidden
+    >
+      <section class="modal modal-wide">
+        <button
+          class="icon-button"
+          id="cam-cfg-close"
+          type="button"
+          aria-label="Cerrar"
+        >
+          ×
+        </button>
+        <p class="eyebrow">CONFIGURACIÓN MULTI-DESTINO</p>
+        <h2 id="cam-cfg-title">Configurar Cámara</h2>
+        <p class="lead compact" id="cam-cfg-subtitle"></p>
+
+        <form id="camera-config-form" class="settings-form">
+          <input type="hidden" id="cam-cfg-id" />
+
+          <h3 style="font-size: 1rem; margin-top: 1rem;">Exportación a Plataformas</h3>
+          <div class="toggles-grid">
+            <label class="checkbox-row">
+              <input type="checkbox" id="cam-toggle-matter" checked />
+              <span><strong>Matter Camera 1.5 (Joint Fabric 1.6)</strong> · Expone el accesorio en el puente Matter compartido</span>
+            </label>
+            <label class="checkbox-row disabled">
+              <input type="checkbox" id="cam-toggle-hksv" checked disabled />
+              <span><strong>Apple Home HKSV (iOS 27 / tvOS 27 / homeOS 27)</strong> · Activo por defecto con prebuffer fMP4 en iCloud</span>
+            </label>
+            <label class="checkbox-row">
+              <input type="checkbox" id="cam-toggle-google" />
+              <span><strong>Google Home</strong> · Matter WebRTC (grabación en nube depende de suscripción Google Home Premium)</span>
+            </label>
+            <label class="checkbox-row">
+              <input type="checkbox" id="cam-toggle-alexa" />
+              <span><strong>Amazon Alexa</strong> · Matter WebRTC (grabación en nube depende de Ring Protect / fabricante)</span>
+            </label>
+            <label class="checkbox-row">
+              <input type="checkbox" id="cam-toggle-st" />
+              <span><strong>Samsung SmartThings</strong> · Matter WebRTC (grabación en Samsung Cloud)</span>
+            </label>
+            <label class="checkbox-row">
+              <input type="checkbox" id="cam-toggle-nas" />
+              <span><strong>Grabación Local NAS / Servidor</strong> · Copia directa de stream H.264 sin recodificación</span>
+            </label>
+          </div>
+
+          <h3 style="font-size: 1rem; margin-top: 1.5rem;">Sensores Integrados en el Accesorio</h3>
+          <div id="cam-cfg-sensors-list" class="sensors-checkbox-list"></div>
+
+          <div class="confirm-actions" style="margin-top: 2rem;">
+            <button class="button button-primary" type="submit">
+              💾 Guardar
+            </button>
+            <button class="button button-secondary" id="cam-cfg-cancel" type="button">
+              ❌ Cancelar
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <!-- Modal: Configuración NAS / Servidor -->
+    <div
+      class="modal-backdrop"
+      id="nas-config-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="nas-cfg-title"
+      hidden
+    >
+      <section class="modal modal-settings">
+        <button
+          class="icon-button"
+          id="nas-cfg-close"
+          type="button"
+          aria-label="Cerrar"
+        >
+          ×
+        </button>
+        <p class="eyebrow">ALMACENAMIENTO LOCAL</p>
+        <h2 id="nas-cfg-title">💾 Configurar NAS / Servidor Local</h2>
+        <p class="lead compact">
+          Guarda una copia continua o por eventos de las cámaras Scrypted en tu recurso compartido local.
+        </p>
+
+        <form id="nas-config-form" class="settings-form">
+          <input type="hidden" id="nas-cfg-camera-id" />
+
+          <label class="form-field">
+            <span>Protocolo de Red</span>
+            <select id="nas-protocol">
+              <option value="smb">SMB / CIFS (Windows / Synology / QNAP / Samba)</option>
+              <option value="nfs">NFS (Network File System)</option>
+            </select>
+          </label>
+
+          <label class="form-field">
+            <span>Endpoint / Recurso Compartido</span>
+            <input
+              type="text"
+              id="nas-endpoint"
+              placeholder="smb://nas.local/security"
+              required
+            />
+          </label>
+
+          <label class="form-field">
+            <span>Credenciales (Cifradas AES-256-GCM)</span>
+            <input
+              type="password"
+              id="nas-credentials"
+              placeholder="usuario:contraseña"
+            />
+            <small class="field-hint">Se almacenan de forma segura con clave de instalación aislada.</small>
+          </label>
+
+          <label class="form-field">
+            <span>Ruta de Almacenamiento</span>
+            <input
+              type="text"
+              id="nas-path"
+              placeholder="/camaras/grabaciones"
+              required
+            />
+          </label>
+
+          <div style="display: flex; gap: 1rem;">
+            <label class="form-field" style="flex: 1;">
+              <span>Retención (Días)</span>
+              <input type="number" id="nas-retention" min="1" max="365" value="30" />
+            </label>
+            <label class="form-field" style="flex: 1;">
+              <span>Espacio Máximo (GB)</span>
+              <input type="number" id="nas-max-space" min="10" max="10000" value="500" />
+            </label>
+          </div>
+
+          <label class="form-field">
+            <span>Formato de Video</span>
+            <select id="nas-format">
+              <option value="fmp4">fMP4 (Fragmented MP4 - Seguro contra cortes)</option>
+              <option value="mp4">MP4 Estándar</option>
+            </select>
+          </label>
+
+          <div class="confirm-actions" style="margin-top: 1.5rem;">
+            <button class="button button-primary" type="submit">
+              💾 Guardar configuración
+            </button>
+            <button class="button button-secondary" id="nas-cfg-cancel" type="button">
+              ❌ Cancelar
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="qrcode.min.js?v=1.4.64"></script>
-    <script src="script.js?v=1.4.64"></script>
+    <script src="qrcode.min.js?v=1.4.65"></script>
+    <script src="script.js?v=1.4.65"></script>
   </body>
 </html>

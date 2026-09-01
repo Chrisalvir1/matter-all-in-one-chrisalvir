@@ -14,6 +14,8 @@ const state = {
   multiAdminOpenEntityId: null,
   qrPollingEntityId: null,
   diagnosticsText: "",
+  scryptedCameras: [],
+  scryptedConfig: null,
 };
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -89,6 +91,49 @@ const els = {
   confirmCancel: $("confirm-cancel"),
   confirmAccept: $("confirm-accept"),
   toast: $("toast"),
+  btnConnectScrypted: $("btn-connect-scrypted"),
+  scryptedHeaderBar: $("scrypted-header-bar"),
+  scryptedStatusPill: $("scrypted-status-pill"),
+  scryptedHostDisplay: $("scrypted-host-display"),
+  scryptedCamerasCount: $("scrypted-cameras-count"),
+  scryptedLastUpdate: $("scrypted-last-update"),
+  scryptedRefreshNowBtn: $("scrypted-refresh-now-btn"),
+  scryptedManageBtn: $("scrypted-manage-btn"),
+  scryptedConnectModal: $("scrypted-connect-modal"),
+  scryptedModalClose: $("scrypted-modal-close"),
+  scryptedConnectForm: $("scrypted-connect-form"),
+  scryptedServerUrl: $("scrypted-server-url"),
+  scryptedServerToken: $("scrypted-server-token"),
+  scryptedTestResult: $("scrypted-test-result"),
+  scryptedTestBtn: $("scrypted-test-btn"),
+  scryptedLoadCamerasBtn: $("scrypted-load-cameras-btn"),
+  scryptedCancelBtn: $("scrypted-cancel-btn"),
+  cameraConfigModal: $("camera-config-modal"),
+  camCfgClose: $("cam-cfg-close"),
+  camCfgForm: $("camera-config-form"),
+  camCfgId: $("cam-cfg-id"),
+  camCfgTitle: $("cam-cfg-title"),
+  camCfgSubtitle: $("cam-cfg-subtitle"),
+  camToggleMatter: $("cam-toggle-matter"),
+  camToggleHksv: $("cam-toggle-hksv"),
+  camToggleGoogle: $("cam-toggle-google"),
+  camToggleAlexa: $("cam-toggle-alexa"),
+  camToggleSt: $("cam-toggle-st"),
+  camToggleNas: $("cam-toggle-nas"),
+  camCfgSensorsList: $("cam-cfg-sensors-list"),
+  camCfgCancel: $("cam-cfg-cancel"),
+  nasConfigModal: $("nas-config-modal"),
+  nasCfgClose: $("nas-cfg-close"),
+  nasCfgForm: $("nas-config-form"),
+  nasCfgCameraId: $("nas-cfg-camera-id"),
+  nasProtocol: $("nas-protocol"),
+  nasEndpoint: $("nas-endpoint"),
+  nasCredentials: $("nas-credentials"),
+  nasPath: $("nas-path"),
+  nasRetention: $("nas-retention"),
+  nasMaxSpace: $("nas-max-space"),
+  nasFormat: $("nas-format"),
+  nasCfgCancel: $("nas-cfg-cancel"),
 };
 
 const ICONS = {
@@ -322,37 +367,42 @@ function renderDevices() {
   els.statPaired.textContent = String(pairedNodes);
   els.pendingCount.textContent = String(pendingNodes);
   if (els.mqttCount) els.mqttCount.textContent = String(mqttDevicesCount);
-  if (els.cameraCount) els.cameraCount.textContent = String(cameraDevicesCount);
+  const totalCameras =
+    cameraDevicesCount + (state.scryptedCameras ? state.scryptedCameras.length : 0);
+  if (els.cameraCount) els.cameraCount.textContent = String(totalCameras);
   els.issueCount.textContent = String(issues);
   els.overviewMessage.textContent = exportedNodes
     ? `${exportedNodes} accesorio${exportedNodes === 1 ? "" : "s"} listo${exportedNodes === 1 ? "" : "s"} para Matter`
     : "Selecciona un dispositivo para comenzar";
   els.deviceCount.textContent = `${devices.length} dispositivo${devices.length === 1 ? "" : "s"} · ${exportedNodes} accesorio${exportedNodes === 1 ? "" : "s"} activo${exportedNodes === 1 ? "" : "s"} en Matter`;
   els.deviceList.setAttribute("aria-busy", "false");
-  if (!devices.length) {
-    if (state.activeFilter === "cameras") {
+
+  if (state.activeFilter === "cameras") {
+    if (els.scryptedHeaderBar) {
+      els.scryptedHeaderBar.hidden = false;
+      updateScryptedHeader();
+    }
+    const scryptedElements = buildScryptedCameraElements(query);
+    const haCameraCards = devices.map(buildDeviceCard);
+
+    if (scryptedElements.length === 0 && haCameraCards.length === 0) {
       els.deviceList.innerHTML =
-        '<div class="empty-state"><p>No se han descubierto cámaras aún en tu red local.</p><button class="button button-primary" type="button" id="scan-cameras-empty-btn">🔍 Escanear Cámaras en Red (macOS / LAN)</button></div>';
-      $("scan-cameras-empty-btn")?.addEventListener("click", async (e) => {
-        e.target.disabled = true;
-        showToast(
-          "🔍 Escaneando cámaras en toda tu red local (macOS / LAN)...",
-        );
-        try {
-          const res = await request("/scan-cameras", { method: "POST" });
-          await fetchDevices();
-          showToast(
-            res.message ||
-              `Escaneo de cámaras finalizado (${res.count ?? 0} encontradas).`,
-          );
-        } catch (err) {
-          showToast(err.message || "Error al escanear cámaras.", true);
-        } finally {
-          if (e.target) e.target.disabled = false;
-        }
+        '<div class="empty-state"><p>No se han descubierto cámaras aún. Conecta tu servidor Scrypted o escanea tu red.</p><button class="button button-primary" type="button" id="scan-cameras-empty-btn">🔌 Conectar con Scrypted</button></div>';
+      $("scan-cameras-empty-btn")?.addEventListener("click", () => {
+        openScryptedModal();
       });
       return;
     }
+
+    els.deviceList.replaceChildren(...scryptedElements, ...haCameraCards);
+    return;
+  } else {
+    if (els.scryptedHeaderBar) {
+      els.scryptedHeaderBar.hidden = true;
+    }
+  }
+
+  if (!devices.length) {
     els.deviceList.innerHTML =
       '<div class="empty-state"><p>No hay dispositivos que coincidan con la búsqueda.</p></div>';
     return;
@@ -473,6 +523,7 @@ async function fetchDevices(refreshSelection = false) {
   els.deviceList.setAttribute("aria-busy", "true");
   try {
     state.entities = await request("/devices");
+    await fetchScrypted();
     renderDevices();
     if (
       refreshSelection &&
@@ -1770,6 +1821,18 @@ function connectSSE() {
     sse.onmessage = (ev) => {
       try {
         const update = JSON.parse(ev.data);
+        if (update && update.type === "scrypted_status") {
+          if (!state.scryptedConfig) state.scryptedConfig = {};
+          state.scryptedConfig.connectionStatus = update.status;
+          updateScryptedHeader();
+          return;
+        }
+        if (update && update.type === "cameras_updated") {
+          state.scryptedCameras = update.cameras || [];
+          updateScryptedHeader();
+          renderDevices();
+          return;
+        }
         if (!update || !update.entityId) return;
         const idx = state.entities.findIndex(
           (e) => e.entityId === update.entityId,
@@ -1875,4 +1938,494 @@ if (mqttSaveButton) {
 // Load config when settings modal opens
 els.settingsButton?.addEventListener("click", () => {
   void loadMqttConfig();
+});
+
+// ==========================================================================
+// SCRYPTED CAMERA INTEGRATION & MODEL GROUPING
+// ==========================================================================
+
+async function fetchScrypted() {
+  try {
+    const [cfg, cams] = await Promise.all([
+      request("/scrypted/config").catch(() => null),
+      request("/cameras").catch(() => null),
+    ]);
+    if (cfg) state.scryptedConfig = cfg;
+    if (cams && Array.isArray(cams.cameras)) {
+      state.scryptedCameras = cams.cameras;
+    }
+    updateScryptedHeader();
+  } catch (err) {
+    console.debug("[Scrypted] Error fetching state:", err);
+  }
+}
+
+function updateScryptedHeader() {
+  if (!els.scryptedHeaderBar) return;
+  const cfg = state.scryptedConfig;
+  const count = state.scryptedCameras ? state.scryptedCameras.length : 0;
+
+  if (els.scryptedHostDisplay) {
+    let hostLabel = "No configurado";
+    if (cfg && cfg.serverUrl) {
+      try {
+        hostLabel = new URL(cfg.serverUrl).host;
+      } catch {
+        hostLabel = cfg.serverUrl;
+      }
+    }
+    els.scryptedHostDisplay.textContent = hostLabel;
+  }
+
+  if (els.scryptedCamerasCount) {
+    els.scryptedCamerasCount.textContent = `${count} cámara${count === 1 ? "" : "s"}`;
+  }
+
+  if (els.scryptedStatusPill) {
+    const status = cfg?.connectionStatus || "not_configured";
+    if (status === "connected") {
+      els.scryptedStatusPill.textContent = "🟢 Conectado";
+      els.scryptedStatusPill.style.borderColor = "rgba(52, 211, 153, 0.6)";
+    } else if (status === "disconnected_using_cache") {
+      els.scryptedStatusPill.textContent = "⚠️ Desconectado (usando caché)";
+      els.scryptedStatusPill.style.borderColor = "rgba(251, 191, 36, 0.6)";
+    } else if (status === "reconnecting") {
+      els.scryptedStatusPill.textContent = "🔄 Reconectando...";
+      els.scryptedStatusPill.style.borderColor = "rgba(56, 189, 248, 0.6)";
+    } else if (status === "error") {
+      els.scryptedStatusPill.textContent = "🔴 Error de conexión";
+      els.scryptedStatusPill.style.borderColor = "rgba(239, 68, 68, 0.6)";
+    } else {
+      els.scryptedStatusPill.textContent = "🔌 No configurado";
+      els.scryptedStatusPill.style.borderColor = "rgba(255, 255, 255, 0.2)";
+    }
+  }
+
+  if (els.scryptedLastUpdate) {
+    if (cfg?.lastConnected) {
+      const date = new Date(cfg.lastConnected);
+      els.scryptedLastUpdate.textContent = `🕐 Actualizado ${date.toLocaleTimeString()}`;
+    } else {
+      els.scryptedLastUpdate.textContent = "🕐 No sincronizado";
+    }
+  }
+}
+
+function buildScryptedCameraElements(query) {
+  if (!state.scryptedCameras || state.scryptedCameras.length === 0) return [];
+
+  const filtered = state.scryptedCameras.filter((cam) => {
+    if (!query) return true;
+    return (
+      (cam.name || "").toLowerCase().includes(query) ||
+      (cam.model || "").toLowerCase().includes(query) ||
+      (cam.cameraId || "").toLowerCase().includes(query)
+    );
+  });
+
+  // Group by camera model
+  const groups = new Map();
+  for (const cam of filtered) {
+    const model = cam.model || "Cámara IP";
+    if (!groups.has(model)) groups.set(model, []);
+    groups.get(model).push(cam);
+  }
+
+  const sections = [];
+  for (const [modelName, cameras] of groups.entries()) {
+    sections.push(buildScryptedModelSection(modelName, cameras));
+  }
+  return sections;
+}
+
+function buildScryptedModelSection(modelName, cameras) {
+  const section = document.createElement("div");
+  section.className = "camera-model-group";
+
+  const header = document.createElement("div");
+  header.className = "camera-model-header";
+  header.innerHTML = `
+    <div class="camera-model-title">
+      <span>📹</span>
+      <span>${escapeHtml(modelName)}</span>
+    </div>
+    <span class="camera-model-badge">${cameras.length} cámara${cameras.length === 1 ? "" : "s"}</span>
+  `;
+
+  const grid = document.createElement("div");
+  grid.className = "camera-model-grid";
+  for (const camera of cameras) {
+    grid.appendChild(buildScryptedCameraCard(camera));
+  }
+
+  section.appendChild(header);
+  section.appendChild(grid);
+  return section;
+}
+
+function buildScryptedCameraCard(camera) {
+  const card = document.createElement("article");
+  card.className = "scrypted-camera-card";
+  card.dataset.cameraId = camera.cameraId;
+
+  const isOnline = camera.status?.connection === "online";
+  const statusDot = isOnline ? "🟢" : "🔴";
+  const statusText = isOnline ? "En línea" : "Desconectado";
+  const matterCode = camera.identity?.matterPairingCode || "ABCD-1234-EFGH";
+
+  const videoCodec =
+    camera.capabilities?.observed?.videoCodec?.toUpperCase() || "H.264";
+  const profile = camera.capabilities?.observed?.profile
+    ? ` (${camera.capabilities.observed.profile})`
+    : "";
+  const res = camera.capabilities?.observed?.resolution
+    ? `${camera.capabilities.observed.resolution.width}x${camera.capabilities.observed.resolution.height}`
+    : "1920x1080";
+  const fps = camera.capabilities?.observed?.fps || 30;
+  const audio = camera.capabilities?.observed?.hasAudio
+    ? "AAC estéreo"
+    : "Sin audio";
+
+  const sensorsHtml = (camera.sensors || [])
+    .map((s) => {
+      const icon =
+        s.type === "motion"
+          ? "🏃"
+          : s.type === "doorbell"
+            ? "🔔"
+            : s.type === "person"
+              ? "👤"
+              : s.type === "package"
+                ? "📦"
+                : s.type === "light"
+                  ? "💡"
+                  : "🏠";
+      const stateLabel = s.state ? "Detectado" : "Inactivo";
+      const activeClass = s.state ? " active" : "";
+      return `<span class="sensor-pill${activeClass}"><span class="dot"></span>${icon} ${escapeHtml(s.name)}: ${stateLabel}</span>`;
+    })
+    .join("");
+
+  const exp = camera.exportConfig || {};
+
+  card.innerHTML = `
+    <div class="card-top-row">
+      <div class="card-title-group">
+        <h4>${escapeHtml(camera.name)}</h4>
+        <div class="card-subtitle">${statusDot} ${statusText} · ${escapeHtml(camera.model || "Cámara")}</div>
+      </div>
+      <span class="codec-pill">● Sin recodificación local</span>
+    </div>
+
+    <div class="matter-code-container" title="Este código comisiona el puente Matter completo (Joint Fabric 1.6). Todas las cámaras y sensores se descubrirán automáticamente en Apple Home, Google Home, Alexa y SmartThings.">
+      <span class="matter-code-text">${escapeHtml(matterCode)}</span>
+      <div class="matter-code-actions">
+        <button class="btn-mini btn-copy-code" type="button">📋 Copiar</button>
+        <button class="btn-mini btn-share-code" type="button">📱 Compartir</button>
+      </div>
+    </div>
+
+    <div class="camera-tech-specs">
+      <div><strong>Video:</strong> ${videoCodec}${profile} · ${res} @ ${fps}fps (Passthrough directo)</div>
+      <div><strong>Audio:</strong> ${audio} · Remuxing fMP4 HKSV</div>
+    </div>
+
+    <div class="sensors-inside-card">
+      <div class="sensors-label">Sensores Asociados en Tiempo Real</div>
+      <div class="sensors-pills-row">
+        ${sensorsHtml || '<span style="font-size:0.75rem; color:var(--text-secondary);">Sin sensores configurados</span>'}
+      </div>
+    </div>
+
+    <div class="export-destinations-summary">
+      <div class="export-item ${exp.matterEnabled ? "enabled" : ""}">
+        ${exp.matterEnabled ? "☑️" : "☐"} Matter Camera 1.5 (Joint Fabric 1.6)
+      </div>
+      <div class="export-item ${exp.hksvEnabledByDefault ? "enabled" : ""}">
+        ${exp.hksvEnabledByDefault ? "☑️" : "☐"} Apple Home HKSV (iOS 27 / tvOS 27 / homeOS 27)
+      </div>
+      <div class="export-item ${exp.googleHomeEnabled ? "enabled" : ""}">
+        ${exp.googleHomeEnabled ? "☑️" : "☐"} Google Home (Matter WebRTC · Grabación depende de Google)
+      </div>
+      <div class="export-item ${exp.alexaEnabled ? "enabled" : ""}">
+        ${exp.alexaEnabled ? "☑️" : "☐"} Amazon Alexa (Matter WebRTC · Grabación depende de Alexa)
+      </div>
+      <div class="export-item ${exp.smartThingsEnabled ? "enabled" : ""}">
+        ${exp.smartThingsEnabled ? "☑️" : "☐"} SmartThings (Matter WebRTC · Grabación depende de ST)
+      </div>
+      <div class="export-item ${exp.nasEnabled ? "enabled" : ""}">
+        ${exp.nasEnabled ? "☑️" : "☐"} Grabación Local NAS / Servidor
+      </div>
+    </div>
+
+    <div class="card-actions-row">
+      ${exp.nasEnabled ? '<button class="button button-sm button-secondary btn-cfg-nas" type="button">💾 NAS</button>' : ""}
+      <button class="button button-sm button-secondary btn-cfg-camera" type="button">⚙️ Configurar</button>
+      <button class="button button-sm button-danger btn-del-camera" type="button">🗑️ Eliminar</button>
+    </div>
+  `;
+
+  card.querySelector(".btn-copy-code")?.addEventListener("click", () => {
+    navigator.clipboard.writeText(matterCode);
+    showToast(`Código Matter copiado: ${matterCode}`);
+  });
+
+  card.querySelector(".btn-share-code")?.addEventListener("click", () => {
+    if (navigator.share) {
+      navigator
+        .share({
+          title: `Vincular ${camera.name} en Matter`,
+          text: `Código Matter para ${camera.name}: ${matterCode}`,
+        })
+        .catch(() => {});
+    } else {
+      navigator.clipboard.writeText(matterCode);
+      showToast(`Código Matter copiado: ${matterCode}`);
+    }
+  });
+
+  card.querySelector(".btn-cfg-camera")?.addEventListener("click", () => {
+    openCameraConfigModal(camera);
+  });
+
+  card.querySelector(".btn-cfg-nas")?.addEventListener("click", () => {
+    openNasConfigModal(camera);
+  });
+
+  card.querySelector(".btn-del-camera")?.addEventListener("click", () => {
+    state.confirmAction = async () => {
+      try {
+        await request(`/cameras/${camera.cameraId}`, { method: "DELETE" });
+        showToast(`Cámara ${camera.name} eliminada.`);
+        await fetchScrypted();
+        renderDevices();
+      } catch (err) {
+        showToast(err.message || "Error al eliminar cámara", true);
+      }
+    };
+    els.confirmTitle.textContent = `¿Eliminar ${camera.name}?`;
+    els.confirmDescription.textContent =
+      "Esta acción desmontará los accesorios HomeKit y endpoints Matter asociados.";
+    setModalOpen(els.confirmModal, true);
+  });
+
+  return card;
+}
+
+function openScryptedModal() {
+  if (els.scryptedServerUrl && state.scryptedConfig?.serverUrl) {
+    els.scryptedServerUrl.value = state.scryptedConfig.serverUrl;
+  }
+  if (els.scryptedServerToken) {
+    els.scryptedServerToken.value = "";
+  }
+  if (els.scryptedTestResult) {
+    els.scryptedTestResult.hidden = true;
+    els.scryptedTestResult.className = "test-result-box";
+  }
+  setModalOpen(els.scryptedConnectModal, true);
+}
+
+function openCameraConfigModal(camera) {
+  if (!els.cameraConfigModal) return;
+  els.camCfgId.value = camera.cameraId;
+  els.camCfgTitle.textContent = `⚙️ Configurar ${camera.name}`;
+  els.camCfgSubtitle.textContent = `Modelo: ${camera.model || "Cámara IP"} · ID: ${camera.cameraId}`;
+
+  const exp = camera.exportConfig || {};
+  els.camToggleMatter.checked = exp.matterEnabled !== false;
+  els.camToggleGoogle.checked = Boolean(exp.googleHomeEnabled);
+  els.camToggleAlexa.checked = Boolean(exp.alexaEnabled);
+  els.camToggleSt.checked = Boolean(exp.smartThingsEnabled);
+  els.camToggleNas.checked = Boolean(exp.nasEnabled);
+
+  // Populate sensors list
+  if (els.camCfgSensorsList) {
+    els.camCfgSensorsList.innerHTML = (camera.sensors || [])
+      .map(
+        (s) => `
+        <label class="checkbox-row">
+          <input type="checkbox" name="sensor_${s.sensorId}" data-sensor-id="${s.sensorId}" ${s.enabled !== false ? "checked" : ""} />
+          <span>${escapeHtml(s.name)} (${s.type})</span>
+        </label>
+      `,
+      )
+      .join("");
+  }
+
+  setModalOpen(els.cameraConfigModal, true);
+}
+
+function openNasConfigModal(camera) {
+  if (!els.nasConfigModal) return;
+  els.nasCfgCameraId.value = camera.cameraId;
+  els.nasCfgTitle.textContent = `💾 NAS / Servidor para ${camera.name}`;
+  setModalOpen(els.nasConfigModal, true);
+}
+
+// Event Listeners for Scrypted Controls
+els.btnConnectScrypted?.addEventListener("click", () => {
+  openScryptedModal();
+});
+els.scryptedManageBtn?.addEventListener("click", () => {
+  openScryptedModal();
+});
+els.scryptedModalClose?.addEventListener("click", () => {
+  setModalOpen(els.scryptedConnectModal, false);
+});
+els.scryptedCancelBtn?.addEventListener("click", () => {
+  setModalOpen(els.scryptedConnectModal, false);
+});
+
+els.scryptedTestBtn?.addEventListener("click", async () => {
+  const serverUrl = els.scryptedServerUrl?.value?.trim();
+  const token = els.scryptedServerToken?.value?.trim();
+  if (!serverUrl) {
+    showToast("Ingresa la URL del servidor Scrypted", true);
+    return;
+  }
+  els.scryptedTestBtn.disabled = true;
+  els.scryptedTestResult.hidden = false;
+  els.scryptedTestResult.className = "test-result-box";
+  els.scryptedTestResult.textContent = "Comprobando conexión con Scrypted...";
+
+  try {
+    const result = await request("/scrypted/connection-test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ serverUrl, token }),
+    });
+    if (result.ok) {
+      els.scryptedTestResult.className = "test-result-box success";
+      els.scryptedTestResult.textContent = `✅ ${result.message} (${result.serverInfo?.latencyMs || 0}ms)`;
+    } else {
+      els.scryptedTestResult.className = "test-result-box error";
+      els.scryptedTestResult.textContent = `❌ ${result.message}`;
+    }
+  } catch (err) {
+    els.scryptedTestResult.className = "test-result-box error";
+    els.scryptedTestResult.textContent = `❌ Error: ${err.message || err}`;
+  } finally {
+    els.scryptedTestBtn.disabled = false;
+  }
+});
+
+els.scryptedConnectForm?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const serverUrl = els.scryptedServerUrl?.value?.trim();
+  const token = els.scryptedServerToken?.value?.trim();
+  if (!serverUrl) return;
+
+  els.scryptedLoadCamerasBtn.disabled = true;
+  try {
+    await request("/scrypted/config", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ serverUrl, token, autoReconnect: true }),
+    });
+    const loadResult = await request("/scrypted/load-cameras", {
+      method: "POST",
+    });
+    setModalOpen(els.scryptedConnectModal, false);
+    showToast(loadResult.message || "Cámaras cargadas con éxito.");
+    state.activeFilter = "cameras";
+    document.querySelectorAll(".filter-chip").forEach((chip) => {
+      chip.classList.toggle("active", chip.dataset.filter === "cameras");
+    });
+    await fetchScrypted();
+    renderDevices();
+  } catch (err) {
+    showToast(err.message || "Error al cargar cámaras de Scrypted", true);
+  } finally {
+    els.scryptedLoadCamerasBtn.disabled = false;
+  }
+});
+
+els.scryptedRefreshNowBtn?.addEventListener("click", async () => {
+  els.scryptedRefreshNowBtn.disabled = true;
+  showToast("Actualizando cámaras desde Scrypted...");
+  try {
+    const res = await request("/scrypted/load-cameras", { method: "POST" });
+    showToast(res.message || "Sincronización completada.");
+    await fetchScrypted();
+    renderDevices();
+  } catch (err) {
+    showToast(err.message || "Error al sincronizar con Scrypted", true);
+  } finally {
+    els.scryptedRefreshNowBtn.disabled = false;
+  }
+});
+
+els.camCfgClose?.addEventListener("click", () => {
+  setModalOpen(els.cameraConfigModal, false);
+});
+els.camCfgCancel?.addEventListener("click", () => {
+  setModalOpen(els.cameraConfigModal, false);
+});
+
+els.camCfgForm?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const cameraId = els.camCfgId.value;
+  if (!cameraId) return;
+
+  const exportConfig = {
+    matterEnabled: els.camToggleMatter.checked,
+    hksvEnabledByDefault: true,
+    googleHomeEnabled: els.camToggleGoogle.checked,
+    alexaEnabled: els.camToggleAlexa.checked,
+    smartThingsEnabled: els.camToggleSt.checked,
+    nasEnabled: els.camToggleNas.checked,
+  };
+
+  try {
+    await request(`/cameras/${cameraId}/export-config`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(exportConfig),
+    });
+    setModalOpen(els.cameraConfigModal, false);
+    showToast("Configuración de exportación guardada.");
+    await fetchScrypted();
+    renderDevices();
+  } catch (err) {
+    showToast(err.message || "Error al guardar configuración", true);
+  }
+});
+
+els.nasCfgClose?.addEventListener("click", () => {
+  setModalOpen(els.nasConfigModal, false);
+});
+els.nasCfgCancel?.addEventListener("click", () => {
+  setModalOpen(els.nasConfigModal, false);
+});
+
+els.nasCfgForm?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const cameraId = els.nasCfgCameraId.value;
+  if (!cameraId) return;
+
+  const nasData = {
+    enabled: true,
+    protocol: els.nasProtocol?.value || "smb",
+    endpoint: els.nasEndpoint?.value || "",
+    credentials: els.nasCredentials?.value || "",
+    path: els.nasPath?.value || "/",
+    retentionDays: Number(els.nasRetention?.value) || 30,
+    maxSpaceGb: Number(els.nasMaxSpace?.value) || 500,
+    format: els.nasFormat?.value || "fmp4",
+  };
+
+  try {
+    await request(`/cameras/${cameraId}/nas-config`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(nasData),
+    });
+    setModalOpen(els.nasConfigModal, false);
+    showToast("Configuración NAS guardada.");
+    await fetchScrypted();
+    renderDevices();
+  } catch (err) {
+    showToast(err.message || "Error al guardar configuración NAS", true);
+  }
 });

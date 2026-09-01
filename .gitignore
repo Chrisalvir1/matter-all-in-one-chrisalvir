@@ -24,3 +24,5 @@ TODO.md
 ts_homeassistant.json
 certificates/serverToken
 persist/
+data/
+matter-all-in-one-addon/data/
