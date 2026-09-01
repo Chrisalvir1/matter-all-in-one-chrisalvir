@@ -238,7 +238,12 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     }
   }
 
+  private scryptedInitialized = false;
+
   public async initScrypted(): Promise<void> {
+    if (this.scryptedInitialized) return;
+    this.scryptedInitialized = true;
+
     try {
       const store = await ScryptedStorage.load();
       this.log.info(
@@ -267,6 +272,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       }
 
       const manager = ScryptedReconnectManager.getInstance();
+      manager.removeAllListeners("status_change");
+      manager.removeAllListeners("cameras_updated");
+
       manager.on("status_change", (payload) => {
         this.broadcastSseMessage("scrypted_status", payload);
       });
@@ -1326,6 +1334,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     await this.loadEntityDiagnostics();
     await this.startUiServer();
     this.startMatterConnectionMonitor();
+    void this.initScrypted();
 
     // Load MQTT Config if exists
     try {
@@ -1509,6 +1518,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     this.matterConnectionStates.clear();
     this.haAvailabilityStates.clear();
     if (this.mqttManager) this.mqttManager.disconnect();
+    try {
+      ScryptedReconnectManager.getInstance().stop();
+    } catch {}
+    this.scryptedInitialized = false;
     await this.ha?.close();
     this.log.info("Shutdown completed cleanly.");
   }
@@ -1594,7 +1607,6 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       }
 
       await this.loadHomeKitCameraRecords();
-      await this.initScrypted();
 
       // Optional device-level composite definitions. This file intentionally
       // lives beside entity overrides so advanced users can tune grouping

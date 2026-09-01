@@ -276,6 +276,10 @@ export class ScryptedReconnectManager extends EventEmitter {
     });
   }
 
+  public stop(): void {
+    this.destroy();
+  }
+
   public destroy(): void {
     if (this.retryTimer) clearTimeout(this.retryTimer);
     if (this.pollTimer) clearInterval(this.pollTimer);
