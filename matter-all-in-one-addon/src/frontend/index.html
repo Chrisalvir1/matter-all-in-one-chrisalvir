@@ -9,7 +9,7 @@
       name="description"
       content="Gestiona de forma segura las entidades de Home Assistant exportadas mediante Matter."
     />
-    <link rel="stylesheet" href="style.css?v=1.4.64" />
+    <link rel="stylesheet" href="style.css?v=1.4.66" />
   </head>
   <body>
     <div class="ambient ambient-one"></div>
@@ -159,27 +159,25 @@
           >
             Necesitan atención <span id="issue-count">0</span>
           </button>
-          <button class="filter-chip filter-chip-scrypted" id="btn-connect-scrypted" type="button">
+          <button class="filter-chip filter-chip-scrypted" id="btn-connect-scrypted" type="button" hidden>
             🔌 Conectar con Scrypted
           </button>
         </div>
 
         <div class="scrypted-header-bar" id="scrypted-header-bar" hidden>
-          <div class="scrypted-header-left">
-            <span class="scrypted-header-badge" id="scrypted-status-pill">🔌 Scrypted</span>
-            <span class="scrypted-header-host" id="scrypted-host-display">127.0.0.1:10443</span>
-            <span class="scrypted-header-count" id="scrypted-cameras-count">0 cámaras</span>
-            <span class="scrypted-header-time" id="scrypted-last-update">🕐 Actualizando...</span>
-          </div>
-          <div class="scrypted-header-actions">
-            <button class="button button-sm button-secondary" id="scrypted-refresh-now-btn" type="button">
-              🔄 Actualizar ahora
-            </button>
-            <button class="button button-sm button-secondary" id="scrypted-manage-btn" type="button">
-              ⚙️ Servidor
-            </button>
-          </div>
+          <span class="status-badge connected" id="scrypted-status-pill">✅ Conectado</span>
+          <span class="host-info" id="scrypted-host-display">🔌 Scrypted: 192.168.1.50:10443</span>
+          <span class="camera-count" id="scrypted-cameras-count">📹 0 cámaras</span>
+          <span class="last-updated" id="scrypted-last-update">🕐 Actualizado ahora</span>
+          <button class="btn-sync" id="scrypted-sync-btn" onclick="syncNewCameras()" title="Sincronizar nuevas cámaras desde Scrypted">
+            🔄 Sincronizar nuevas cámaras
+          </button>
+          <button class="button button-sm button-secondary" id="scrypted-manage-btn" type="button">
+            ⚙️ Servidor
+          </button>
         </div>
+
+        <div id="cameras-container" class="cameras-container" hidden></div>
 
         <section
           class="device-grid"
@@ -814,7 +812,7 @@
     </div>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="qrcode.min.js?v=1.4.65"></script>
-    <script src="script.js?v=1.4.65"></script>
+    <script src="qrcode.min.js?v=1.4.66"></script>
+    <script src="script.js?v=1.4.66"></script>
   </body>
 </html>

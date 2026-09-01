@@ -78,6 +78,14 @@ export interface CameraNasConfig {
   format?: "fmp4" | "mp4";
 }
 
+export interface CameraLogEntry {
+  timestamp: string;
+  level: "info" | "warn" | "error";
+  category: "rtsp" | "homekit" | "matter" | "hksv" | "sensor" | "general";
+  message: string;
+  details?: Record<string, any> | string;
+}
+
 export interface CameraRecord {
   cameraId: string; // Scrypted unique ID
   sourceId: string;
@@ -126,6 +134,9 @@ export interface CameraRecord {
     lastFetched?: string;
     lastVerified?: string;
     lastSourceChangeDetected?: string;
+    lastError?: string;
+    lastErrorAt?: string;
+    logs?: CameraLogEntry[];
   };
 }
 

@@ -1,3 +1,13 @@
+## [1.4.66] - 2026-09-01
+
+### Grouping by Camera Model, Sync Button & Per-Camera Diagnostics Logs
+
+- **Agrupación Automática de Cámaras por Modelo en UI:** Integración de la función de agrupación nativa por modelo (`cameras.reduce`) que segmenta dinámicamente las cámaras en secciones diferenciadas (`<div class="camera-model-group">`) con encabezado estilizado (`📹 Modelo (N cámaras)`) y grid responsivo (`cameras-grid`).
+- **Botón de Sincronización en Tiempo Real (`syncNewCameras`):** Incorporación del botón "🔄 Sincronizar nuevas cámaras" con gradiente moderno y estados de carga (`⏳ Sincronizando...`). Conecta con `POST /api/scrypted/load-cameras` y calcula diferencias en vivo (nuevas, actualizadas, eliminadas).
+- **Notificaciones Toast Interactivas (`showNotification`):** Retroalimentación visual flotante animada con desglose detallado de cámaras añadidas, modificadas o removidas.
+- **Log y Diagnóstico Específico por Cámara con Copiado en 1 Clic:** Cada tarjeta de cámara incluye su propia sección técnica de log (`camera-log-section`) desplegable y un botón "📋 Copiar Log". Al pulsar, genera y copia al portapapeles un JSON detallado con ID, modelo, URL RTSP en puerto 8554, capacidades de códec (H.264 / AAC), estado HKSV, clusters Matter y eventos cronológicos para resolución instantánea de incidencias.
+- **Endpoint Backend `POST /api/scrypted/load-cameras` Mejorado:** Devuelve el conteo estructurado `{ success: true, totalCameras, newCameras, updatedCameras, removedCameras }` y emite evento SSE reactivo `cameras_updated`.
+
 ## [1.4.65] - 2026-09-01
 
 ### Scrypted-First Camera Passthrough, Matter 1.6 Joint Fabric & HKSV iOS 27

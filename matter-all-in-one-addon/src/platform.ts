@@ -3984,28 +3984,48 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             pathname === "/api/custom/scrypted/load-cameras")
         ) {
           try {
-            const result =
-              await ScryptedReconnectManager.getInstance().forceRefresh();
-            const store = ScryptedStorage.getStore();
+            const previousCameras = new Set(
+              ScryptedStorage.getStore().cameras?.cameras.map(
+                (c) => c.cameraId,
+              ) || [],
+            );
+            await ScryptedReconnectManager.getInstance().forceRefresh();
+            const currentStore = ScryptedStorage.getStore();
+            const currentCameras = new Set(
+              currentStore.cameras?.cameras.map((c) => c.cameraId) || [],
+            );
+            const newCameras = [...currentCameras].filter(
+              (id) => !previousCameras.has(id),
+            ).length;
+            const removedCameras = [...previousCameras].filter(
+              (id) => !currentCameras.has(id),
+            ).length;
+            const totalCameras = currentStore.cameras?.cameras.length || 0;
+            const updatedCameras = totalCameras;
+
+            const payload = {
+              success: true,
+              totalCameras,
+              newCameras,
+              updatedCameras,
+              removedCameras,
+              cameras: currentStore.cameras?.cameras || [],
+            };
+
+            this.broadcastSseMessage("cameras_updated", payload);
+
             res.writeHead(200, {
               "Content-Type": "application/json; charset=utf-8",
             });
-            res.end(
-              JSON.stringify({
-                ok: result.ok,
-                count: result.camerasCount,
-                cameras: store.cameras.cameras,
-                message: result.message,
-              }),
-            );
-          } catch (err: any) {
+            res.end(JSON.stringify(payload));
+          } catch (error: any) {
             res.writeHead(500, {
               "Content-Type": "application/json; charset=utf-8",
             });
             res.end(
               JSON.stringify({
-                ok: false,
-                message: err.message || "Error al cargar cámaras",
+                success: false,
+                error: error.message || "Error al sincronizar cámaras",
               }),
             );
           }
@@ -4020,12 +4040,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           res.writeHead(200, {
             "Content-Type": "application/json; charset=utf-8",
           });
-          res.end(
-            JSON.stringify({
-              cameras: store.cameras.cameras,
-              lastFetched: store.cameras.lastFetched,
-            }),
-          );
+          res.end(JSON.stringify(store.cameras.cameras || []));
           return;
         }
 

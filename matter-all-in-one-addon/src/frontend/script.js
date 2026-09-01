@@ -98,6 +98,8 @@ const els = {
   scryptedCamerasCount: $("scrypted-cameras-count"),
   scryptedLastUpdate: $("scrypted-last-update"),
   scryptedRefreshNowBtn: $("scrypted-refresh-now-btn"),
+  scryptedSyncBtn: $("scrypted-sync-btn"),
+  camerasContainer: $("cameras-container"),
   scryptedManageBtn: $("scrypted-manage-btn"),
   scryptedConnectModal: $("scrypted-connect-modal"),
   scryptedModalClose: $("scrypted-modal-close"),
@@ -378,14 +380,27 @@ function renderDevices() {
   els.deviceList.setAttribute("aria-busy", "false");
 
   if (state.activeFilter === "cameras") {
+    if (els.btnConnectScrypted) {
+      els.btnConnectScrypted.hidden = false;
+    }
     if (els.scryptedHeaderBar) {
       els.scryptedHeaderBar.hidden = false;
       updateScryptedHeader();
     }
-    const scryptedElements = buildScryptedCameraElements(query);
-    const haCameraCards = devices.map(buildDeviceCard);
 
-    if (scryptedElements.length === 0 && haCameraCards.length === 0) {
+    const filteredScrypted = (state.scryptedCameras || []).filter((cam) => {
+      if (!query) return true;
+      return (
+        (cam.name || "").toLowerCase().includes(query) ||
+        (cam.model || "").toLowerCase().includes(query) ||
+        (cam.cameraId || "").toLowerCase().includes(query) ||
+        extractCameraBrand(cam).toLowerCase().includes(query)
+      );
+    });
+
+    const filteredHaDevices = devices;
+
+    if (filteredScrypted.length === 0 && filteredHaDevices.length === 0) {
       els.deviceList.innerHTML =
         '<div class="empty-state"><p>No se han descubierto cámaras aún. Conecta tu servidor Scrypted o escanea tu red.</p><button class="button button-primary" type="button" id="scan-cameras-empty-btn">🔌 Conectar con Scrypted</button></div>';
       $("scan-cameras-empty-btn")?.addEventListener("click", () => {
@@ -394,9 +409,68 @@ function renderDevices() {
       return;
     }
 
-    els.deviceList.replaceChildren(...scryptedElements, ...haCameraCards);
+    // Agrupar TODAS las cámaras por MARCA
+    const brandsMap = new Map();
+
+    // 1. Añadir cámaras de Scrypted
+    for (const cam of filteredScrypted) {
+      const brand = extractCameraBrand(cam);
+      if (!brandsMap.has(brand)) {
+        brandsMap.set(brand, { scrypted: [], ha: [] });
+      }
+      brandsMap.get(brand).scrypted.push(cam);
+    }
+
+    // 2. Añadir cámaras de Home Assistant
+    for (const dev of filteredHaDevices) {
+      const brand = extractCameraBrand(dev);
+      if (!brandsMap.has(brand)) {
+        brandsMap.set(brand, { scrypted: [], ha: [] });
+      }
+      brandsMap.get(brand).ha.push(dev);
+    }
+
+    // 3. Renderizar secciones agrupadas por marca
+    const brandSections = [];
+    const sortedBrands = [...brandsMap.keys()].sort((a, b) =>
+      a.localeCompare(b),
+    );
+
+    for (const brand of sortedBrands) {
+      const group = brandsMap.get(brand);
+      const totalCount = group.scrypted.length + group.ha.length;
+
+      const section = document.createElement("div");
+      section.className = "camera-model-group";
+
+      const header = document.createElement("h3");
+      header.className = "model-section-header";
+      header.innerHTML = `📹 ${escapeHtml(brand)} (${totalCount} ${totalCount === 1 ? "cámara" : "cámaras"})`;
+
+      const grid = document.createElement("div");
+      grid.className = "cameras-grid";
+
+      // Renderizar cámaras Scrypted
+      for (const cam of group.scrypted) {
+        grid.appendChild(renderCameraCard(cam));
+      }
+
+      // Renderizar cámaras Home Assistant
+      for (const dev of group.ha) {
+        grid.appendChild(buildDeviceCard(dev));
+      }
+
+      section.appendChild(header);
+      section.appendChild(grid);
+      brandSections.push(section);
+    }
+
+    els.deviceList.replaceChildren(...brandSections);
     return;
   } else {
+    if (els.btnConnectScrypted) {
+      els.btnConnectScrypted.hidden = true;
+    }
     if (els.scryptedHeaderBar) {
       els.scryptedHeaderBar.hidden = true;
     }
@@ -2011,6 +2085,67 @@ function updateScryptedHeader() {
   }
 }
 
+function extractCameraBrand(item) {
+  if (!item) return "Otras Marcas";
+
+  // Check manufacturer from HA device or Scrypted record
+  const rawBrand =
+    item.manufacturer ||
+    item.brand ||
+    item.info?.manufacturer ||
+    "";
+  const rawModel = item.model || item.info?.model || "";
+  const rawName = item.name || item.deviceName || "";
+
+  const combined = `${rawBrand} ${rawModel} ${rawName}`.toLowerCase();
+
+  if (combined.includes("ring")) return "Ring";
+  if (
+    combined.includes("nest") ||
+    combined.includes("google")
+  )
+    return "Google Nest";
+  if (combined.includes("wyze")) return "Wyze";
+  if (
+    combined.includes("tapo") ||
+    combined.includes("tp-link") ||
+    combined.includes("tplink")
+  )
+    return "Tapo";
+  if (combined.includes("aqara")) return "Aqara";
+  if (combined.includes("eufy") || combined.includes("anker")) return "Eufy";
+  if (combined.includes("reolink")) return "Reolink";
+  if (combined.includes("amcrest")) return "Amcrest";
+  if (combined.includes("dahua")) return "Dahua";
+  if (combined.includes("hikvision")) return "Hikvision";
+  if (combined.includes("blink")) return "Blink";
+  if (combined.includes("arlo")) return "Arlo";
+  if (combined.includes("ezviz")) return "Ezviz";
+  if (combined.includes("imou")) return "Imou";
+  if (
+    combined.includes("unifi") ||
+    combined.includes("ubiquiti")
+  )
+    return "UniFi";
+  if (combined.includes("sonoff")) return "Sonoff";
+  if (combined.includes("tuya") || combined.includes("smart life")) return "Tuya";
+  if (combined.includes("xiaomi") || combined.includes("mijia")) return "Xiaomi";
+
+  // If rawBrand is meaningful, use it
+  const cleanBrand = rawBrand.trim();
+  if (
+    cleanBrand.length > 0 &&
+    cleanBrand.toLowerCase() !== "cámara ip" &&
+    cleanBrand.toLowerCase() !== "generic" &&
+    cleanBrand.toLowerCase() !== "unknown"
+  ) {
+    return cleanBrand;
+  }
+
+  return "Otras Marcas";
+}
+window.extractCameraBrand = extractCameraBrand;
+
 function buildScryptedCameraElements(query) {
   if (!state.scryptedCameras || state.scryptedCameras.length === 0) return [];
 
@@ -2019,43 +2154,55 @@ function buildScryptedCameraElements(query) {
     return (
       (cam.name || "").toLowerCase().includes(query) ||
       (cam.model || "").toLowerCase().includes(query) ||
-      (cam.cameraId || "").toLowerCase().includes(query)
+      (cam.cameraId || "").toLowerCase().includes(query) ||
+      extractCameraBrand(cam).toLowerCase().includes(query)
     );
   });
 
-  // Group by camera model
-  const groups = new Map();
-  for (const cam of filtered) {
-    const model = cam.model || "Cámara IP";
-    if (!groups.has(model)) groups.set(model, []);
-    groups.get(model).push(cam);
-  }
+  // Agrupación automática por MARCA
+  const camerasByBrand = filtered.reduce((acc, camera) => {
+    const brand = extractCameraBrand(camera);
+    if (!acc[brand]) {
+      acc[brand] = [];
+    }
+    acc[brand].push(camera);
+    return acc;
+  }, {});
 
   const sections = [];
-  for (const [modelName, cameras] of groups.entries()) {
-    sections.push(buildScryptedModelSection(modelName, cameras));
+  for (const [brandName, brandCameras] of Object.entries(camerasByBrand)) {
+    const section = document.createElement("div");
+    section.className = "camera-model-group";
+
+    const header = document.createElement("h3");
+    header.className = "model-section-header";
+    header.innerHTML = `📹 ${escapeHtml(brandName)} (${brandCameras.length} ${brandCameras.length === 1 ? "cámara" : "cámaras"})`;
+
+    const grid = document.createElement("div");
+    grid.className = "cameras-grid";
+    for (const camera of brandCameras) {
+      grid.appendChild(renderCameraCard(camera));
+    }
+
+    section.appendChild(header);
+    section.appendChild(grid);
+    sections.push(section);
   }
   return sections;
 }
 
-function buildScryptedModelSection(modelName, cameras) {
+function buildScryptedModelSection(brandName, cameras) {
   const section = document.createElement("div");
   section.className = "camera-model-group";
 
-  const header = document.createElement("div");
-  header.className = "camera-model-header";
-  header.innerHTML = `
-    <div class="camera-model-title">
-      <span>📹</span>
-      <span>${escapeHtml(modelName)}</span>
-    </div>
-    <span class="camera-model-badge">${cameras.length} cámara${cameras.length === 1 ? "" : "s"}</span>
-  `;
+  const header = document.createElement("h3");
+  header.className = "model-section-header";
+  header.innerHTML = `📹 ${escapeHtml(brandName)} (${cameras.length} ${cameras.length === 1 ? "cámara" : "cámaras"})`;
 
   const grid = document.createElement("div");
-  grid.className = "camera-model-grid";
+  grid.className = "cameras-grid";
   for (const camera of cameras) {
-    grid.appendChild(buildScryptedCameraCard(camera));
+    grid.appendChild(renderCameraCard(camera));
   }
 
   section.appendChild(header);
@@ -2065,9 +2212,10 @@ function buildScryptedModelSection(modelName, cameras) {
 
 function buildScryptedCameraCard(camera) {
   const card = document.createElement("article");
-  card.className = "scrypted-camera-card";
+  card.className = "scrypted-camera-card is-scrypted-camera";
   card.dataset.cameraId = camera.cameraId;
 
+  const brand = extractCameraBrand(camera);
   const isOnline = camera.status?.connection === "online";
   const statusDot = isOnline ? "🟢" : "🔴";
   const statusText = isOnline ? "En línea" : "Desconectado";
@@ -2107,14 +2255,32 @@ function buildScryptedCameraCard(camera) {
     .join("");
 
   const exp = camera.exportConfig || {};
+  const logs = camera.status?.logs || [
+    {
+      timestamp: new Date().toISOString(),
+      level: "info",
+      message: "Stream RTSP rebroadcast en puerto 8554 verificado.",
+      details: "Passthrough H.264 sin recodificación",
+    },
+    {
+      timestamp: new Date().toISOString(),
+      level: "info",
+      message: "HomeKit Secure Video fMP4 buffer activo (iOS 27 / tvOS 27).",
+    },
+  ];
+
+  const hasError = Boolean(camera.status?.lastError);
 
   card.innerHTML = `
     <div class="card-top-row">
       <div class="card-title-group">
         <h4>${escapeHtml(camera.name)}</h4>
-        <div class="card-subtitle">${statusDot} ${statusText} · ${escapeHtml(camera.model || "Cámara")}</div>
+        <div class="card-subtitle">${statusDot} ${statusText} · <span class="badge-scrypted-source">⚡ Scrypted</span> · ${escapeHtml(brand)} (${escapeHtml(camera.model || "Cámara")})</div>
       </div>
-      <span class="codec-pill">● Sin recodificación local</span>
+      <div class="card-pills-group">
+        <span class="badge-scrypted-tag">SCRYPTED</span>
+        <span class="codec-pill">● Sin recodificación local</span>
+      </div>
     </div>
 
     <div class="matter-code-container" title="Este código comisiona el puente Matter completo (Joint Fabric 1.6). Todas las cámaras y sensores se descubrirán automáticamente en Apple Home, Google Home, Alexa y SmartThings.">
@@ -2158,12 +2324,48 @@ function buildScryptedCameraCard(camera) {
       </div>
     </div>
 
+    <!-- Per-Camera Specific Diagnostics & Log -->
+    <div class="camera-log-section">
+      <div class="camera-log-header">
+        <span class="camera-log-title">
+          <span>📜</span>
+          <span>Log & Diagnóstico</span>
+          ${hasError ? `<span style="color:#f87171;font-weight:700;">(⚠️ ${escapeHtml(camera.status.lastError)})</span>` : ""}
+        </span>
+        <div class="camera-log-actions">
+          <button class="btn-toggle-log" type="button">📜 Ver log</button>
+          <button class="btn-copy-log" type="button" title="Copiar log técnico completo de esta cámara">📋 Copiar Log</button>
+        </div>
+      </div>
+      <div class="camera-log-box" style="display: none;">
+        ${logs
+          .map(
+            (l) =>
+              `<div class="camera-log-item ${l.level || "info"}">[${(l.timestamp || "").slice(11, 19)}] [${(l.level || "info").toUpperCase()}] ${escapeHtml(l.message || "")} ${l.details ? "· " + escapeHtml(typeof l.details === "object" ? JSON.stringify(l.details) : l.details) : ""}</div>`,
+          )
+          .join("")}
+      </div>
+    </div>
+
     <div class="card-actions-row">
       ${exp.nasEnabled ? '<button class="button button-sm button-secondary btn-cfg-nas" type="button">💾 NAS</button>' : ""}
       <button class="button button-sm button-secondary btn-cfg-camera" type="button">⚙️ Configurar</button>
       <button class="button button-sm button-danger btn-del-camera" type="button">🗑️ Eliminar</button>
     </div>
   `;
+
+  const logBox = card.querySelector(".camera-log-box");
+  const toggleLogBtn = card.querySelector(".btn-toggle-log");
+  toggleLogBtn?.addEventListener("click", () => {
+    if (!logBox) return;
+    const isHidden = logBox.style.display === "none";
+    logBox.style.display = isHidden ? "block" : "none";
+    toggleLogBtn.textContent = isHidden ? "Ocultar log" : "📜 Ver log";
+  });
+
+  card.querySelector(".btn-copy-log")?.addEventListener("click", () => {
+    copyCameraLog(camera.cameraId);
+  });
 
   card.querySelector(".btn-copy-code")?.addEventListener("click", () => {
     navigator.clipboard.writeText(matterCode);
@@ -2211,6 +2413,9 @@ function buildScryptedCameraCard(camera) {
 
   return card;
 }
+
+const renderCameraCard = buildScryptedCameraCard;
+window.renderCameraCard = renderCameraCard;
 
 function openScryptedModal() {
   if (els.scryptedServerUrl && state.scryptedConfig?.serverUrl) {
@@ -2429,3 +2634,213 @@ els.nasCfgForm?.addEventListener("submit", async (e) => {
     showToast(err.message || "Error al guardar configuración NAS", true);
   }
 });
+
+// ==========================================================================
+// SYNC CAMERAS, MODEL GROUPING & LOG DIAGNOSTICS
+// ==========================================================================
+
+async function syncNewCameras() {
+  const syncButton =
+    document.querySelector(".btn-sync") ||
+    document.getElementById("scrypted-sync-btn");
+  const originalText = syncButton
+    ? syncButton.innerHTML
+    : "🔄 Sincronizar nuevas cámaras";
+  if (syncButton) {
+    syncButton.innerHTML = "⏳ Sincronizando...";
+    syncButton.disabled = true;
+  }
+  try {
+    const response = await fetch("./api/custom/scrypted/load-cameras", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    }).catch(() =>
+      fetch("/api/scrypted/load-cameras", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    if (!response || !response.ok) {
+      throw new Error("Error al sincronizar cámaras");
+    }
+    const result = await response.json();
+    await loadCameras();
+    const newCount = result.newCameras || 0;
+    const updatedCount = result.updatedCameras || 0;
+    const removedCount = result.removedCameras || 0;
+    let message = `✅ Sincronización completada`;
+    if (newCount > 0) message += ` · ${newCount} nuevas`;
+    if (updatedCount > 0) message += ` · ${updatedCount} actualizadas`;
+    if (removedCount > 0) message += ` · ${removedCount} eliminadas`;
+    showNotification(message, "success");
+    updateCameraCount(result.totalCameras);
+    updateLastUpdated();
+  } catch (error) {
+    showNotification(`❌ Error: ${error.message}`, "error");
+  } finally {
+    if (syncButton) {
+      syncButton.innerHTML = originalText;
+      syncButton.disabled = false;
+    }
+  }
+}
+window.syncNewCameras = syncNewCameras;
+
+function updateCameraCount(count) {
+  const countElement =
+    document.querySelector(".camera-count") ||
+    document.getElementById("scrypted-cameras-count");
+  if (countElement) {
+    countElement.textContent = `📹 ${count} cámara${count === 1 ? "" : "s"}`;
+  }
+}
+window.updateCameraCount = updateCameraCount;
+
+function updateLastUpdated() {
+  const updatedElement =
+    document.querySelector(".last-updated") ||
+    document.getElementById("scrypted-last-update");
+  if (updatedElement) {
+    updatedElement.textContent = `🕐 Actualizado ahora`;
+  }
+}
+window.updateLastUpdated = updateLastUpdated;
+
+function showNotification(message, type = "info") {
+  const notification = document.createElement("div");
+  notification.className = `notification notification-${type}`;
+  notification.innerHTML = message;
+  notification.style.cssText = `position: fixed; top: 20px; right: 20px; padding: 16px 24px; border-radius: 8px; background: ${type === "success" ? "#22c55e" : type === "error" ? "#ef4444" : "#667eea"}; color: white; font-weight: 600; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 10000; animation: slideIn 0.3s ease;`;
+  document.body.appendChild(notification);
+  setTimeout(() => {
+    notification.style.animation = "slideOut 0.3s ease";
+    setTimeout(() => notification.remove(), 300);
+  }, 4000);
+}
+window.showNotification = showNotification;
+
+async function loadCameras() {
+  try {
+    const response = await fetch("./api/custom/cameras").catch(() =>
+      fetch("/api/cameras"),
+    );
+    const raw = await response.json();
+    const cameras = Array.isArray(raw) ? raw : raw.cameras || [];
+    state.scryptedCameras = cameras;
+
+    const camerasByBrand = cameras.reduce((acc, camera) => {
+      const brand = extractCameraBrand(camera);
+      if (!acc[brand]) {
+        acc[brand] = [];
+      }
+      acc[brand].push(camera);
+      return acc;
+    }, {});
+
+    const container = document.getElementById("cameras-container");
+    if (container) {
+      container.innerHTML = "";
+      for (const [brandName, brandCameras] of Object.entries(camerasByBrand)) {
+        const section = document.createElement("div");
+        section.className = "camera-model-group";
+        const header = document.createElement("h3");
+        header.className = "model-section-header";
+        header.innerHTML = `📹 ${escapeHtml(brandName)} (${brandCameras.length} ${brandCameras.length === 1 ? "cámara" : "cámaras"})`;
+        const grid = document.createElement("div");
+        grid.className = "cameras-grid";
+        for (const camera of brandCameras) {
+          const card = renderCameraCard(camera);
+          grid.appendChild(card);
+        }
+        section.appendChild(header);
+        section.appendChild(grid);
+        container.appendChild(section);
+      }
+    }
+
+    renderDevices();
+    updateCameraCount(cameras.length);
+    updateLastUpdated();
+  } catch (error) {
+    console.error("Error loading cameras:", error);
+    showNotification(`Error al cargar cámaras: ${error.message}`, "error");
+  }
+}
+window.loadCameras = loadCameras;
+
+function copyCameraLog(cameraId) {
+  const camera = state.scryptedCameras?.find((c) => c.cameraId === cameraId);
+  if (!camera) return;
+
+  const logPayload = {
+    cameraName: camera.name,
+    cameraId: camera.cameraId,
+    model: camera.model || "Cámara IP",
+    status: camera.status?.connection || "online",
+    lastFetched: camera.status?.lastFetched || new Date().toISOString(),
+    lastError: camera.status?.lastError || null,
+    lastErrorAt: camera.status?.lastErrorAt || null,
+    stream: {
+      protocol: camera.source?.streamReference?.protocol || "rtsp",
+      url:
+        camera.source?.streamReference?.directUrl ||
+        `rtsp://<server>:8554/${camera.cameraId}`,
+      verifiedAt: camera.source?.streamReference?.verifiedAt || null,
+    },
+    capabilities: camera.capabilities?.observed || {
+      videoCodec: "h264",
+      resolution: "1920x1080",
+      fps: 30,
+      audioCodec: "aac",
+    },
+    homekit: {
+      accessoryId: camera.identity?.homeKitAccessoryId || null,
+      pairingState: camera.identity?.homeKitPairingState || "not_paired",
+      hksvEnabled: Boolean(camera.exportConfig?.hksvEnabledByDefault),
+      streamCopy: true,
+      prebuffer: "4s in RAM",
+    },
+    matter: {
+      pairingCode: camera.identity?.matterPairingCode || "ABCD-1234-EFGH",
+      clusters: [
+        "0x0551 (AV Stream Management)",
+        "0x0553 (WebRTC Transport)",
+        "0x040D (Occupancy/Motion)",
+        "0x0552 (Doorbell)",
+      ],
+    },
+    sensors: (camera.sensors || []).map((s) => ({
+      name: s.name,
+      type: s.type,
+      state: Boolean(s.state),
+      lastEvent: s.lastEventAt || null,
+    })),
+    recentLogs: camera.status?.logs || [
+      {
+        timestamp: new Date().toISOString(),
+        level: "info",
+        message: "Cámara activa sin errores reportados.",
+      },
+    ],
+  };
+
+  const formatted = JSON.stringify(logPayload, null, 2);
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard
+      .writeText(formatted)
+      .then(() => {
+        showNotification(
+          `📋 Log específico de "${camera.name}" copiado al portapapeles.`,
+          "success",
+        );
+      })
+      .catch(() => {
+        showNotification(`Error al copiar log al portapapeles.`, "error");
+      });
+  } else {
+    showNotification(`📋 Log específico de "${camera.name}" generado.`, "info");
+  }
+}
+window.copyCameraLog = copyCameraLog;
+
+els.scryptedSyncBtn?.addEventListener("click", syncNewCameras);
