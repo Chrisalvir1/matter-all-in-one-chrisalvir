@@ -214,6 +214,30 @@ export interface HomeKitAccessoryIdentity {
   storagePath?: string;
 }
 
+export interface MatterFabricSummary {
+  fabricIndex: number;
+  fabricId: string;
+  nodeId: string;
+  label?: string;
+  ecosystemHint?:
+    | "apple_home"
+    | "google_home"
+    | "amazon_alexa"
+    | "samsung_smartthings"
+    | "other";
+}
+
+export interface CameraBindingState {
+  matterCommissioned: boolean;
+  matterState: "commissioned" | "pending" | "unknown";
+  fabricCount: number;
+  fabrics: MatterFabricSummary[];
+  fabricsCheckedAt?: string;
+  multiAdminState: "available" | "in_use" | "full" | "unavailable";
+  homeKitPairingState: "paired" | "not_paired" | "unverifiable";
+  homeName?: string;
+}
+
 export interface CameraExportConfig {
   matterEnabled: boolean;
   homeKitEnabled: boolean;
@@ -298,6 +322,9 @@ export interface CameraRecord {
     homeKitSetupId?: string;
     homeKitPort?: number;
   };
+
+  /** Consolidated binding and administration state (Matter fabrics, multi-admin, HAP) */
+  bindingState?: CameraBindingState;
 
   source: {
     kind: "scrypted";

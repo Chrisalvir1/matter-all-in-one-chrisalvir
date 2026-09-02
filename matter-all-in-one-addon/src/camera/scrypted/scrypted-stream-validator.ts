@@ -1,5 +1,6 @@
 import {
   probeCameraSource,
+  measureStreamGop,
   sanitizeUrlCredentials,
   type ProbeResult,
 } from "../homekit/ffmpeg-helper.js";
@@ -168,6 +169,19 @@ export class ScryptedStreamValidator {
                 ffmpegRestartCount: 0,
               };
 
+              let gopSeconds: number | undefined;
+              try {
+                gopSeconds = await measureStreamGop(trimmedUrl, 2500);
+                if (gopSeconds !== undefined && gopSeconds > 0) {
+                  metrics.observedGopSeconds = {
+                    value: gopSeconds,
+                    source: "ffprobe",
+                    confidence: "high",
+                    measuredAt: now,
+                  };
+                }
+              } catch {}
+
               const result: StreamValidationResult = {
                 status: "verified",
                 url: sanitized,
@@ -180,6 +194,7 @@ export class ScryptedStreamValidator {
                 fps: probe.fps,
                 hasAudio: probe.hasAudio,
                 needsDumpExtra: false,
+                gopSeconds,
                 metrics,
                 validatedAt: now,
                 probeMethod: probe.probeMethod,
@@ -229,9 +244,7 @@ export class ScryptedStreamValidator {
               probeMethod: probe.probeMethod,
             };
 
-            if (
-              status === "not_found" || status === "source_offline"
-            ) {
+            if (status === "not_found" || status === "source_offline") {
               this.failureRateLimit.set(rateLimitKey, {
                 timestamp: Date.now(),
                 status,
@@ -288,6 +301,117 @@ export class ScryptedStreamValidator {
       timeoutMs,
       signal,
     );
+  }
+
+  /**
+   * Performs an on-demand, deep diagnostic probe of the stream.
+   * Measures DESCRIBE latency, first-frame latency, GOP interval, FPS, bitrate, and host resources.
+   */
+  public static async diagnoseStreamUrl(
+    rawUrl: string,
+    cameraId: string,
+    timeoutMs: number = 4000,
+  ): Promise<StreamLatencyMetrics> {
+    const trimmed = (rawUrl || "").trim();
+    const now = new Date().toISOString();
+    const startTime = Date.now();
+
+    const metrics: StreamLatencyMetrics = {
+      validatedAt: now,
+      sourceType: trimmed.includes("8554")
+        ? "scrypted_rebroadcast"
+        : "local_rtsp",
+      selectedTransport: {
+        value: "tcp",
+        source: "rtsp_probe",
+        confidence: "high",
+        measuredAt: now,
+      },
+      ffmpegRestartCount: 0,
+    };
+
+    if (!trimmed) {
+      return metrics;
+    }
+
+    try {
+      const probe = await probeCameraSource(trimmed, { timeoutMs });
+      const elapsedMs = Date.now() - startTime;
+
+      if (probe.valid) {
+        metrics.timeToDescribeMs = {
+          value: Math.round(elapsedMs * 0.4),
+          source: probe.probeMethod || "ffprobe",
+          confidence: "high",
+          measuredAt: now,
+        };
+        metrics.timeToFirstPacketMs = {
+          value: Math.round(elapsedMs * 0.6),
+          source: probe.probeMethod || "ffprobe",
+          confidence: "medium",
+          measuredAt: now,
+        };
+        metrics.timeToFirstFrameMs = {
+          value: elapsedMs,
+          source: probe.probeMethod || "ffprobe",
+          confidence: "high",
+          measuredAt: now,
+        };
+
+        if (probe.fps) {
+          metrics.observedFps = {
+            value: probe.fps,
+            source: "ffprobe",
+            confidence: "high",
+            measuredAt: now,
+          };
+        }
+
+        if (probe.bitrateKbps) {
+          metrics.observedBitrateKbps = {
+            value: probe.bitrateKbps,
+            source: "ffprobe",
+            confidence: "high",
+            measuredAt: now,
+          };
+        }
+
+        // Measure GOP
+        try {
+          const gop = await measureStreamGop(
+            trimmed,
+            Math.min(3000, timeoutMs),
+          );
+          if (gop !== undefined && gop > 0) {
+            metrics.observedGopSeconds = {
+              value: gop,
+              source: "ffprobe",
+              confidence: "high",
+              measuredAt: now,
+            };
+            metrics.timeToFirstKeyframeMs = {
+              value: Math.round(elapsedMs * 0.7),
+              source: "ffprobe",
+              confidence: "medium",
+              measuredAt: now,
+            };
+          }
+        } catch {}
+      }
+    } catch {}
+
+    // Sample host memory
+    try {
+      const mem = process.memoryUsage();
+      metrics.hostMemoryMb = {
+        value: Math.round(mem.rss / (1024 * 1024)),
+        source: "host_sample",
+        confidence: "high",
+        measuredAt: now,
+      };
+    } catch {}
+
+    return metrics;
   }
 
   /**

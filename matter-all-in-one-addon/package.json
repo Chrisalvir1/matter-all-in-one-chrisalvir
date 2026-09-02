@@ -1,7 +1,7 @@
 {
   "name": "matter-all-in-one-chrisalvir",
-  "version": "1.4.77",
-  "description": "Standards-based Matter bridge for Home Assistant - HomeKit compatible mappings",
+  "version": "1.4.78",
+  "description": "Matter all-in-one Home Assistant Add-on with complete Scrypted, BLE, Smart Dimmers, Vacuum, AC, Climate, Lock and Multi-Platform ecosystem compatibility",
   "author": "chrisalvir",
   "license": "Apache-2.0",
   "repository": "https://github.com/Chrisalvir1/matter-all-in-one-chrisalvir",

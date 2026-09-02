@@ -10,6 +10,8 @@ export interface ProbeResult {
   height?: number;
   fps?: number;
   hasAudio: boolean;
+  bitrateKbps?: number;
+  gopSeconds?: number;
   error?: string;
   probeMethod?: "ffprobe" | "ffmpeg";
 }
@@ -438,6 +440,82 @@ function probeWithFfmpeg(
   });
 }
 
+/**
+ * Measures the observed Keyframe / GOP interval in seconds by analyzing a 2-3s sample of the video stream.
+ * Returns undefined if keyframes cannot be observed within the sample window.
+ */
+export async function measureStreamGop(
+  sourceUrl: string,
+  timeoutMs: number = 3000,
+): Promise<number | undefined> {
+  const ffprobePath = resolveFfprobePath();
+  if (!ffprobePath) return undefined;
+
+  return new Promise<number | undefined>((resolve) => {
+    const args = [
+      "-v",
+      "error",
+      "-select_streams",
+      "v:0",
+      "-show_entries",
+      "frame=pkt_pts_time,key_frame",
+      "-read_intervals",
+      "%+3",
+      "-of",
+      "json",
+    ];
+
+    if (sourceUrl.startsWith("rtsp://")) {
+      args.push("-rtsp_transport", "tcp");
+    }
+    args.push(sourceUrl);
+
+    const child = spawn(ffprobePath, args, {
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    let stdoutData = "";
+
+    const timer = setTimeout(() => {
+      try {
+        child.kill("SIGKILL");
+      } catch {}
+      resolve(undefined);
+    }, timeoutMs);
+
+    child.stdout.on("data", (chunk) => {
+      stdoutData += chunk.toString();
+    });
+
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      if (code === 0 && stdoutData.trim()) {
+        try {
+          const parsed = JSON.parse(stdoutData);
+          const frames = Array.isArray(parsed.frames) ? parsed.frames : [];
+          const keyframes = frames.filter(
+            (f: any) => f.key_frame === 1 && f.pkt_pts_time !== undefined,
+          );
+          if (keyframes.length >= 2) {
+            const t1 = parseFloat(keyframes[0].pkt_pts_time);
+            const t2 = parseFloat(keyframes[1].pkt_pts_time);
+            if (!isNaN(t1) && !isNaN(t2) && t2 > t1) {
+              const diff = Math.round((t2 - t1) * 10) / 10;
+              resolve(diff > 0 ? diff : undefined);
+              return;
+            }
+          }
+        } catch {}
+      }
+      resolve(undefined);
+    });
+
+    child.on("error", () => {
+      clearTimeout(timer);
+      resolve(undefined);
+    });
+  });
+}
+
 export interface StreamPipelineConfig {
   sourceUrl: string;
   targetAddress: string;
@@ -470,7 +548,8 @@ export function buildFfmpegStreamArgs(config: StreamPipelineConfig): string[] {
       ? "AES_CM_256_HMAC_SHA1_80"
       : "AES_CM_128_HMAC_SHA1_80";
 
-  const videoSrtpUrl = `srtp://${config.targetAddress}:${config.videoPort}?rtcpport=${config.videoPort}&localrtcpport=${config.videoPort}&pkt_size=1316`;
+  // Omit localrtcpport to allow FFmpeg to bind to an ephemeral local port without host-network port collisions
+  const videoSrtpUrl = `srtp://${config.targetAddress}:${config.videoPort}?rtcpport=${config.videoPort}&pkt_size=1316`;
 
   const isPassthrough =
     config.strategy === "passthrough_h264" ||
@@ -482,7 +561,7 @@ export function buildFfmpegStreamArgs(config: StreamPipelineConfig): string[] {
     // Passthrough H.264 (Remux directly without transcoding CPU overhead)
     videoPayloadArgs.push("-vcodec", "copy");
     if (config.needsDumpExtra) {
-      videoPayloadArgs.push("-bsf:v", "dump_extra");
+      videoPayloadArgs.push("-bsf:v", "dump_extra=freq=keyframe");
     }
   } else {
     // Transcode fallback for H.265 / MJPEG / incompatible formats
@@ -532,16 +611,13 @@ export function buildFfmpegStreamArgs(config: StreamPipelineConfig): string[] {
   if (config.sourceUrl.startsWith("rtsp://")) {
     const transport = config.transport || "tcp";
     inputArgs.push("-rtsp_transport", transport);
+    inputArgs.push("-fflags", "+nobuffer+genpts");
+    inputArgs.push("-use_wallclock_as_timestamps", "1");
+  } else {
+    inputArgs.push("-fflags", "+nobuffer");
   }
 
-  inputArgs.push(
-    "-fflags",
-    "+nobuffer",
-    "-flags",
-    "low_delay",
-    "-i",
-    config.sourceUrl,
-  );
+  inputArgs.push("-flags", "low_delay", "-i", config.sourceUrl);
 
   const args: string[] = [
     ...inputArgs,
@@ -559,20 +635,20 @@ export function buildFfmpegStreamArgs(config: StreamPipelineConfig): string[] {
     videoSrtpUrl,
   ];
 
-  // Optional audio pipeline
+  // Optional audio pipeline (using tolerant -map 0:a:0? so stream won't crash if audio track is missing)
   if (
     config.includeAudio &&
     config.audioPort &&
     config.audioKeySaltBase64 &&
     config.strategy !== "passthrough_video_only"
   ) {
-    const audioSrtpUrl = `srtp://${config.targetAddress}:${config.audioPort}?rtcpport=${config.audioPort}&localrtcpport=${config.audioPort}&pkt_size=188`;
+    const audioSrtpUrl = `srtp://${config.targetAddress}:${config.audioPort}?rtcpport=${config.audioPort}&pkt_size=188`;
 
     let audioArgs: string[];
     if (config.audioCodec === "opus") {
       audioArgs = [
         "-map",
-        "0:a:0",
+        "0:a:0?",
         "-acodec",
         "libopus",
         "-application",
@@ -585,11 +661,11 @@ export function buildFfmpegStreamArgs(config: StreamPipelineConfig): string[] {
         "1",
       ];
     } else if (config.audioCodec === "aac") {
-      audioArgs = ["-map", "0:a:0", "-acodec", "copy"];
+      audioArgs = ["-map", "0:a:0?", "-acodec", "copy"];
     } else {
       audioArgs = [
         "-map",
-        "0:a:0",
+        "0:a:0?",
         "-acodec",
         "aac",
         "-ar",

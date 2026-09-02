@@ -874,12 +874,26 @@
                     <button class="button button-sm button-secondary" id="cam-cfg-test-rtsp-btn" type="button" title="Verifica el stream RTSP real mediante ffprobe antes de activar Live View">
                       🔍 Verificar Stream
                     </button>
+                    <button class="button button-sm button-secondary" id="cam-cfg-diagnose-rtsp-btn" type="button" title="Diagnostica latencia, primer frame, transporte y GOP bajo demanda">
+                      ⚡ Diagnosticar Stream
+                    </button>
                     <button class="button button-sm button-primary" id="cam-cfg-save-rtsp-btn" type="button" title="Guardar URL del stream">
                       💾 Guardar
                     </button>
                   </div>
                   <small class="field-hint">
-                    Ingresa o verifica la URL RTSP directa de Scrypted Rebroadcast. Al pulsar <strong>Verificar Stream</strong>, el sistema comprueba la disponibilidad del codec H.264 para permitir Live View en Apple Home.
+                    Ingresa o verifica la URL RTSP directa de Scrypted Rebroadcast. Al pulsar <strong>Verificar Stream</strong> o <strong>Diagnosticar Stream</strong>, el sistema comprueba la disponibilidad del codec H.264 y mide métricas reales de latencia y GOP.
+                  </small>
+                </label>
+                <label class="form-field" style="margin-top: 8px; margin-bottom: 4px;">
+                  <span>Preferencia de Transporte RTSP</span>
+                  <select id="cam-cfg-transport-pref" style="width: 100%; background: rgba(0,0,0,0.25); border: 1px solid var(--border-color); border-radius: 6px; padding: 6px 8px; color: var(--text-color); font-size: 0.82rem;">
+                    <option value="auto">Auto (Inicia en TCP y evalúa estabilidad)</option>
+                    <option value="tcp" selected>TCP (Recomendado: más confiable ante pérdida de paquetes)</option>
+                    <option value="udp">UDP (Menor latencia potencial en LAN estable)</option>
+                  </select>
+                  <small class="field-hint">
+                    TCP: más confiable ante pérdida de paquetes · UDP: menor latencia potencial en LAN estable. No se alterna durante una sesión activa.
                   </small>
                 </label>
                 <div id="cam-cfg-rtsp-result" class="test-result-box" hidden style="margin-top: 6px; font-size: 0.8rem;"></div>

@@ -58,7 +58,7 @@ describe("FFmpeg Helper", () => {
     expect(args).toContain("-srtp_out_suite");
     expect(args).toContain("AES_CM_128_HMAC_SHA1_80");
     expect(args).toContain(
-      "srtp://192.168.1.200:51234?rtcpport=51234&localrtcpport=51234&pkt_size=1316",
+      "srtp://192.168.1.200:51234?rtcpport=51234&pkt_size=1316",
     );
     expect(args).toContain("-acodec");
     expect(args).toContain("copy");
@@ -190,14 +190,14 @@ describe("FFmpeg Helper", () => {
 
     const argsWith = buildFfmpegStreamArgs(configWithDumpExtra);
     expect(argsWith).toContain("-bsf:v");
-    expect(argsWith).toContain("dump_extra");
+    expect(argsWith.some((arg) => arg.includes("dump_extra"))).toBe(true);
 
     const configWithout: StreamPipelineConfig = {
       ...configWithDumpExtra,
       needsDumpExtra: false,
     };
     const argsWithout = buildFfmpegStreamArgs(configWithout);
-    expect(argsWithout).not.toContain("dump_extra");
+    expect(argsWithout.some((arg) => arg.includes("dump_extra"))).toBe(false);
   });
 
   it("respects RTSP transport configuration (udp vs tcp)", () => {

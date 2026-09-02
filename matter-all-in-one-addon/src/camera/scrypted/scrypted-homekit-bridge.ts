@@ -6,6 +6,11 @@ import type {
   ResolvedStreamSource,
   HomeKitCameraStorageRecord,
 } from "../camera-types.js";
+import {
+  resolveDisplayManufacturer,
+  resolveDisplayModel,
+  resolveDisplaySerialNumber,
+} from "./scrypted-storage.js";
 
 export class ScryptedHomeKitBridge {
   private static activeAccessories = new Map<string, HomeKitCameraAccessory>();
@@ -160,13 +165,18 @@ export class ScryptedHomeKitBridge {
     }
 
     storageRecord.name = camera.name;
-    storageRecord.manufacturer = "Matter all in one Chrisalvir";
+    storageRecord.manufacturer =
+      camera.displayManufacturer ||
+      resolveDisplayManufacturer(camera) ||
+      "Marca no identificada";
     storageRecord.model =
-      camera.sourceModel || camera.displayModel || camera.model || "Cámara IP";
+      camera.displayModel ||
+      resolveDisplayModel(camera) ||
+      "Modelo no identificado";
     storageRecord.serialNumber =
-      camera.serialNumber ||
-      (camera.identity as any)?.serialNumber ||
-      `SCRYPTED-${camera.cameraId.toUpperCase().substring(0, 12)}`;
+      camera.displaySerialNumber ||
+      resolveDisplaySerialNumber(camera) ||
+      "Serial no disponible";
     storageRecord.pincode = "031-45-154";
     storageRecord.setupId =
       storageRecord.setupId || this.generateSetupId(camera.cameraId);

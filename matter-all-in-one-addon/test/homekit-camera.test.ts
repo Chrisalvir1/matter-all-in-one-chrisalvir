@@ -197,15 +197,16 @@ describe("HomeKitCameraAccessory", () => {
       capabilities,
       streamSource,
     );
-    vi.spyOn(acc, "publish").mockImplementation(async () => undefined);
     const oldPin = acc.record.pincode;
     const oldUsername = acc.record.username;
+    const oldUuid = acc.record.uuid;
 
     const newRecord = await acc.resetPairing();
-    expect(newRecord.pincode).not.toBe(oldPin);
-    expect(newRecord.username).not.toBe(oldUsername);
-    expect(newRecord.username.startsWith("0E:")).toBe(true);
-    expect(newRecord.pincode).toMatch(/^\d{3}-\d{2}-\d{3}$/);
+    expect(newRecord.pincode).toBe(oldPin);
+    expect(newRecord.username).toBe(oldUsername);
+    expect(newRecord.uuid).toBe(oldUuid);
+    expect(newRecord.isPaired).toBe(false);
+    expect(newRecord.published).toBe(true);
   });
 
   it("handles snapshot requests using Home Assistant image fetch", async () => {

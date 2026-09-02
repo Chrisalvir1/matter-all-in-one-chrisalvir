@@ -4535,18 +4535,62 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             pathname === "/api/custom/scrypted/cameras")
         ) {
           const store = await ScryptedStorage.load();
+          const matterInfo = this.getMatterConnectionInfo(this.matterbridge);
+          const activeHomeName =
+            matterInfo.homeName ||
+            (this.ha as any)?.hassConfig?.location_name ||
+            undefined;
+
           const enriched = (store.cameras.cameras || []).map((cam) => {
             const acc = ScryptedHomeKitBridge.getAccessory(cam.cameraId);
             let setupUri: string | undefined;
-            let isPaired = false;
+            let pairingState: "paired" | "not_paired" | "unverifiable" =
+              "not_paired";
             try {
               if (acc) {
-                isPaired = acc.isPaired();
-                if (acc.isPublished && !isPaired) {
+                pairingState = acc.getPairingState();
+                if (acc.isPublished && pairingState !== "paired") {
                   setupUri = acc.setupUri;
                 }
               }
             } catch {}
+
+            const isPaired = pairingState === "paired";
+
+            const bindingState = {
+              matterCommissioned: matterInfo.commissioned,
+              matterState: matterInfo.commissioned
+                ? ("commissioned" as const)
+                : ("pending" as const),
+              fabricCount: matterInfo.fabricCount,
+              fabrics: (matterInfo.fabrics || []).map((f: any) => ({
+                fabricIndex: Number(f.fabricIndex || 1),
+                fabricId: f.fabricId
+                  ? `0x${BigInt(f.fabricId).toString(16).toUpperCase()}`
+                  : "Desconocido",
+                nodeId: f.nodeId || "Desconocido",
+                label: f.label || undefined,
+                ecosystemHint:
+                  f.vendorId === 4937
+                    ? ("apple_home" as const)
+                    : f.vendorId === 24582
+                      ? ("google_home" as const)
+                      : f.vendorId === 4447
+                        ? ("amazon_alexa" as const)
+                        : f.vendorId === 4448
+                          ? ("samsung_smartthings" as const)
+                          : ("other" as const),
+              })),
+              fabricsCheckedAt: new Date().toISOString(),
+              multiAdminState:
+                matterInfo.fabricCount > 1
+                  ? ("in_use" as const)
+                  : matterInfo.fabricCount === 1
+                    ? ("in_use" as const)
+                    : ("available" as const),
+              homeKitPairingState: pairingState,
+              homeName: activeHomeName,
+            };
 
             return {
               ...cam,
@@ -4554,8 +4598,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                 cam.displaySerialNumber ||
                 cam.serialNumber ||
                 "Serial no disponible",
+              bindingState,
               identity: {
                 ...cam.identity,
+                matterPairingCode:
+                  cam.identity?.matterPairingCode ||
+                  matterInfo.pairingCode ||
+                  undefined,
                 homeKitAccessoryId: `scrypted.${cam.cameraId}`,
                 homeKitSetupUri: isPaired
                   ? undefined
@@ -4824,6 +4873,63 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               camera,
             }),
           );
+          return;
+        }
+
+        // POST /api/custom/cameras/:id/diagnose-stream
+        const diagnoseStreamMatch = pathname.match(
+          /\/cameras\/([^/]+)\/diagnose-stream$/,
+        );
+        if (req.method === "POST" && diagnoseStreamMatch) {
+          const cameraId = decodeURIComponent(diagnoseStreamMatch[1]);
+          let bodyStr = "";
+          for await (const chunk of req) bodyStr += chunk.toString();
+          let parsed: any = {};
+          try {
+            parsed = JSON.parse(bodyStr);
+          } catch {}
+
+          const store = await ScryptedStorage.load();
+          const camera = store.cameras.cameras.find(
+            (c) => c.cameraId === cameraId,
+          );
+          if (!camera) {
+            res.writeHead(404, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ error: "Cámara no encontrada" }));
+            return;
+          }
+
+          const targetUrl =
+            String(parsed.streamUrl || "").trim() ||
+            camera.source.streamReference?.directUrl ||
+            "";
+
+          const metrics = await ScryptedStreamValidator.diagnoseStreamUrl(
+            targetUrl,
+            cameraId,
+            parsed.timeoutMs ? Number(parsed.timeoutMs) : 4000,
+          );
+
+          camera.capabilities.latencyMetrics = metrics;
+          if (metrics.observedGopSeconds?.value) {
+            if (!camera.capabilities.observed) {
+              camera.capabilities.observed = {
+                videoCodec: "h264",
+                resolution: { width: 1920, height: 1080 },
+                hasAudio: false,
+              };
+            }
+            camera.capabilities.observed.gopSeconds =
+              metrics.observedGopSeconds.value;
+          }
+          await ScryptedStorage.save(store);
+
+          res.writeHead(200, {
+            "Content-Type": "application/json; charset=utf-8",
+          });
+          res.end(JSON.stringify({ success: true, metrics, camera }));
           return;
         }
 

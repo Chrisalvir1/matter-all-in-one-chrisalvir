@@ -146,7 +146,9 @@ const els = {
   camModalResetPairBtn: $("cam-modal-reset-pair-btn"),
   camCfgRtspUrl: $("cam-cfg-rtsp-url"),
   camCfgTestRtspBtn: $("cam-cfg-test-rtsp-btn"),
+  camCfgDiagnoseRtspBtn: $("cam-cfg-diagnose-rtsp-btn"),
   camCfgSaveRtspBtn: $("cam-cfg-save-rtsp-btn"),
+  camCfgTransportPref: $("cam-cfg-transport-pref"),
   camCfgRtspResult: $("cam-cfg-rtsp-result"),
   camModalVideoSpec: $("cam-modal-video-spec"),
   camModalAudioSpec: $("cam-modal-audio-spec"),
@@ -2356,22 +2358,76 @@ function buildScryptedCameraCard(camera) {
     camera.capabilities?.observed?.hasAudio !== false &&
     camera.capabilities?.observed?.audioCodec !== "none";
 
+  const binding = camera.bindingState;
+  const isMatterCommissioned = Boolean(binding?.matterCommissioned);
+  const realHomeName = binding?.homeName || state.status?.homeName;
+
   const isPaired = camera.identity?.homeKitPairingState === "paired";
-  const activeHome =
-    state.status?.homeName ||
-    (state.entities || []).find((e) => e.homeName)?.homeName ||
-    "El Chante de Gecko & Chris";
+  const hapStateText = isPaired
+    ? "🍏 HomeKit: Emparejada"
+    : camera.identity?.homeKitPairingState === "unverifiable"
+      ? "HomeKit: Estado no verificable"
+      : "HomeKit: No emparejada";
+
+  const matterStateText = isMatterCommissioned
+    ? "Comisionada"
+    : binding?.matterState === "pending"
+      ? "Pendiente de vincular"
+      : "Estado desconocido";
+
+  const fabricCount = binding?.fabricCount || 0;
+  const multiAdminText =
+    binding?.multiAdminState === "full"
+      ? "Completo"
+      : binding?.multiAdminState === "in_use"
+        ? `Vinculada a ${fabricCount} fabric${fabricCount === 1 ? "" : "s"}`
+        : binding?.multiAdminState === "unavailable"
+          ? "No disponible"
+          : "Disponible";
+
+  const homeBadge = realHomeName
+    ? `<span class="home-badge commissioned" title="Etiqueta del controlador Matter">🏠 ${escapeHtml(realHomeName)}</span>`
+    : "";
+
+  const fabricsListHtml =
+    binding?.fabrics && binding.fabrics.length > 0
+      ? binding.fabrics
+          .map((f) => {
+            const shortFid =
+              f.fabricId && f.fabricId.length > 10
+                ? `${f.fabricId.slice(0, 6)}...${f.fabricId.slice(-4)}`
+                : f.fabricId || "N/A";
+            const label = f.label || "Fabric sin etiqueta";
+            return `<span class="tag" style="font-size: 0.68rem; background: rgba(255,255,255,0.06);">#${f.fabricIndex} ${escapeHtml(label)} (FID: ${escapeHtml(shortFid)})</span>`;
+          })
+          .join(" ")
+      : '<span style="color: var(--text-secondary); font-size: 0.72rem;">Sin fabrics comisionadas</span>';
 
   card.innerHTML = `
     <div class="card-top">
       <span class="device-icon" style="font-size: 1.4rem;">📹</span>
       <div class="card-pills-group">
         <span class="badge-scrypted-tag">SCRYPTED</span>
-        ${isPaired ? `<span class="tag" style="background: rgba(16, 185, 129, 0.2); border-color: rgba(52, 211, 153, 0.5); color: #6ee7b7; font-size: 0.72rem; font-weight: 600;">🍏 HomeKit: Emparejada</span>` : '<span class="tag" style="font-size: 0.72rem;">HomeKit: No emparejada</span>'}
+        ${homeBadge}
+        ${isMatterCommissioned ? `<span class="tag" style="background: rgba(59, 130, 246, 0.2); border-color: rgba(96, 165, 250, 0.5); color: #93c5fd; font-size: 0.72rem; font-weight: 600;">⚡ Matter: ${matterStateText}</span>` : `<span class="tag" style="font-size: 0.72rem;">⚡ Matter: ${matterStateText}</span>`}
+        ${isPaired ? `<span class="tag" style="background: rgba(16, 185, 129, 0.2); border-color: rgba(52, 211, 153, 0.5); color: #6ee7b7; font-size: 0.72rem; font-weight: 600;">${hapStateText}</span>` : `<span class="tag" style="font-size: 0.72rem;">${hapStateText}</span>`}
       </div>
     </div>
     <h3 title="${escapeHtml(camera.name)}">${escapeHtml(camera.name)}</h3>
     <p class="device-meta">${statusDot} ${statusText} · ${escapeHtml(brand)}${modelDisplay && modelDisplay !== "Modelo no identificado" ? ` (${escapeHtml(modelDisplay)})` : ""}</p>
+    
+    <!-- Bloque central de vinculación y administración -->
+    <div class="camera-admin-block" style="background: rgba(0,0,0,0.22); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 8px 10px; margin: 8px 0; font-size: 0.75rem;">
+      <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+        <span>🏠 <strong>Casa:</strong> ${realHomeName ? escapeHtml(realHomeName) : '<em style="color:var(--text-secondary);">nombre no expuesto por Matter</em>'}</span>
+        <span>Multi-admin: <strong>${escapeHtml(multiAdminText)}</strong></span>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: 4px;">
+        <span style="color: var(--text-secondary);">Fabrics (${fabricCount}):</span>
+        ${fabricsListHtml}
+      </div>
+    </div>
+
     <div class="tags">
       <span class="tag tag-brand">${escapeHtml(brand)}</span>
       <span class="badge-scrypted-source">⚡ Scrypted</span>
@@ -2381,7 +2437,7 @@ function buildScryptedCameraCard(camera) {
       ${sensorsCount > 0 ? `<span class="tag">${sensorsCount} sensor${sensorsCount === 1 ? "" : "es"}</span>` : ""}
     </div>
     <div class="card-footer">
-      <span class="entity-summary">${isPaired ? "🍏 HomeKit: Emparejada" : "Toca para ver QR y detalles"}</span>
+      <span class="entity-summary">${isPaired ? "🍏 HAP: Emparejada" : "Toca para ver QR y detalles"}</span>
       <button class="button button-secondary" type="button">Configurar</button>
     </div>
   `;
@@ -2529,7 +2585,10 @@ function openCameraConfigModal(camera) {
     }
 
     const isPaired = camera.identity?.homeKitPairingState === "paired";
+    const binding = camera.bindingState;
+    const realHomeName = binding?.homeName || state.status?.homeName;
     const fabricLabel =
+      binding?.fabrics?.[0]?.label ||
       state.status?.fabricLabel ||
       state.status?.homeName ||
       "Fabric Matter 1";
@@ -2539,7 +2598,7 @@ function openCameraConfigModal(camera) {
         isHomeKit && isPaired ? "block" : "none";
       if (els.camModalPairedHomeName) {
         els.camModalPairedHomeName.textContent =
-          "no disponible desde HAP (la app Casa administra la asignación)";
+          realHomeName || "nombre no expuesto por Matter";
       }
       const fabricEl = $("cam-modal-paired-fabric-name");
       if (fabricEl) {
@@ -2673,7 +2732,7 @@ function openCameraConfigModal(camera) {
     els.camModalUnpairBtn.onclick = async () => {
       if (
         !confirm(
-          `¿Restablecer emparejamiento HomeKit para "${camera.name}"?\nEsta acción eliminará la vinculación actual de HomeKit y generará un nuevo PIN/QR para emparejar de nuevo con Apple Home. No afectará a Scrypted ni a Matter.`,
+          `¿Restablecer emparejamiento HomeKit para "${camera.name}"?\nEsta acción eliminará únicamente la vinculación actual en HAP para que puedas escanear el QR de nuevo con el mismo identificador. No afectará a Scrypted ni a Matter.`,
         )
       ) {
         return;
@@ -2829,69 +2888,166 @@ function openCameraConfigModal(camera) {
 
   renderCamModalQr();
 
-  // 2. Technical specs & Real Identity
-  const mfr =
-    camera.displayManufacturer ||
-    camera.sourceManufacturer ||
-    "Marca no identificada";
-  const mdl =
-    camera.displayModel ||
-    camera.sourceModel ||
-    "Modelo no identificado";
-  const sn =
-    camera.displaySerialNumber ||
-    camera.serialNumber ||
-    "Serial no disponible";
+  function renderTechnicalSpecs() {
+    const mfr =
+      camera.displayManufacturer ||
+      camera.sourceManufacturer ||
+      "Marca no identificada";
+    const mdl =
+      camera.displayModel ||
+      camera.sourceModel ||
+      "Modelo no identificado";
+    const sn =
+      camera.displaySerialNumber ||
+      camera.serialNumber ||
+      "Serial no disponible";
 
-  const videoCodec =
-    camera.capabilities?.observed?.videoCodec?.toUpperCase() || "H.264";
-  const profile = camera.capabilities?.observed?.profile
-    ? ` (${camera.capabilities.observed.profile})`
-    : "";
-  const res = camera.capabilities?.observed?.resolution
-    ? `${camera.capabilities.observed.resolution.width}x${camera.capabilities.observed.resolution.height}`
-    : "1920x1080";
-  const fps = camera.capabilities?.observed?.fps || 30;
+    const videoCodec =
+      camera.capabilities?.observed?.videoCodec?.toUpperCase() || "H.264";
+    const profile = camera.capabilities?.observed?.profile
+      ? ` (${camera.capabilities.observed.profile})`
+      : "";
+    const res = camera.capabilities?.observed?.resolution
+      ? `${camera.capabilities.observed.resolution.width}x${camera.capabilities.observed.resolution.height}`
+      : "1920x1080";
+    const fps = camera.capabilities?.observed?.fps || 30;
 
-  const hasAudio =
-    camera.capabilities?.observed?.hasAudio !== false &&
-    camera.capabilities?.observed?.audioCodec !== "none";
-  const audioCodec =
-    camera.capabilities?.observed?.audioCodec?.toUpperCase() || "AAC";
-  const audioDesc = hasAudio
-    ? `${audioCodec} · Entrada de audio activa`
-    : "Sin audio";
+    const hasAudio =
+      camera.capabilities?.observed?.hasAudio !== false &&
+      camera.capabilities?.observed?.audioCodec !== "none";
+    const audioCodec =
+      camera.capabilities?.observed?.audioCodec?.toUpperCase() || "AAC";
+    const audioDesc = hasAudio
+      ? `${audioCodec} · Entrada de audio activa`
+      : "Sin audio";
 
-  const metrics = camera.capabilities?.latencyMetrics;
-  const descVal = metrics?.timeToDescribeMs?.value;
-  const descTime =
-    descVal != null
-      ? `${descVal} ms (${metrics?.timeToDescribeMs?.confidence || "alta"})`
-      : "No disponible";
-  const frameVal = metrics?.timeToFirstFrameMs?.value;
-  const frameTime =
-    frameVal != null
-      ? `${frameVal} ms (${metrics?.timeToFirstFrameMs?.confidence || "alta"})`
-      : "No disponible";
-  const transport =
-    metrics?.selectedTransport?.value ||
-    camera.exportConfig?.rtspTransportPreference ||
-    "tcp";
-  const gop =
-    camera.capabilities?.observed?.gopSeconds != null
-      ? `${camera.capabilities.observed.gopSeconds}s`
-      : "No disponible";
+    const metrics = camera.capabilities?.latencyMetrics;
+    const descVal = metrics?.timeToDescribeMs?.value;
+    const descTime =
+      descVal != null
+        ? `${descVal} ms (${metrics?.timeToDescribeMs?.confidence || "alta"})`
+        : "No disponible";
+    const frameVal = metrics?.timeToFirstFrameMs?.value;
+    const frameTime =
+      frameVal != null
+        ? `${frameVal} ms (${metrics?.timeToFirstFrameMs?.confidence || "alta"})`
+        : "No disponible";
+    const transport =
+      metrics?.selectedTransport?.value ||
+      camera.exportConfig?.rtspTransportPreference ||
+      "tcp";
 
-  if (els.camModalVideoSpec) {
-    els.camModalVideoSpec.innerHTML = `
-      <div style="margin-bottom: 4px;"><strong>🏷️ Identidad:</strong> ${escapeHtml(mfr)} · ${escapeHtml(mdl)} · SN: <code>${escapeHtml(sn)}</code></div>
-      <div style="margin-bottom: 4px;"><strong>📹 Video:</strong> ${escapeHtml(videoCodec)}${escapeHtml(profile)} · ${escapeHtml(res)} @ ${fps}fps (Passthrough directo H.264 sin recodificación)</div>
-      <div style="margin-bottom: 4px;"><strong>🔊 Audio:</strong> ${escapeHtml(audioDesc)} · <span style="opacity:0.8;">Talkback: no compatible</span></div>
-      <div style="font-size: 0.8rem; color: var(--text-secondary); background: rgba(0,0,0,0.2); padding: 6px 8px; border-radius: 6px; margin-top: 6px;">
-        <strong>⏱️ Diagnóstico:</strong> DESCRIBE: ${descTime} · 1er Frame: ${frameTime} · Transporte: ${transport.toUpperCase()} · GOP: ${gop}
-      </div>
-    `;
+    const gopVal =
+      camera.capabilities?.observed?.gopSeconds ??
+      metrics?.observedGopSeconds?.value;
+    let gopDesc = "No disponible (pulsa Diagnosticar Stream abajo)";
+    if (gopVal != null) {
+      if (gopVal <= 2) {
+        gopDesc = `${gopVal}s (adecuado para Live View y HKSV fluido)`;
+      } else if (gopVal > 4) {
+        gopDesc = `${gopVal}s (recomendación: ajustar keyframe upstream a 1–2 s)`;
+      } else {
+        gopDesc = `${gopVal}s`;
+      }
+    }
+
+    if (els.camModalVideoSpec) {
+      els.camModalVideoSpec.innerHTML = `
+        <div style="margin-bottom: 4px;"><strong>🏷️ Identidad:</strong> ${escapeHtml(mfr)} · ${escapeHtml(mdl)} · SN: <code>${escapeHtml(sn)}</code></div>
+        <div style="margin-bottom: 4px;"><strong>📹 Video:</strong> ${escapeHtml(videoCodec)}${escapeHtml(profile)} · ${escapeHtml(res)} @ ${fps}fps (Passthrough directo H.264 sin recodificación)</div>
+        <div style="margin-bottom: 4px;"><strong>🔊 Audio:</strong> ${escapeHtml(audioDesc)} · <span style="opacity:0.8;">Talkback: no compatible</span></div>
+        <div style="font-size: 0.8rem; color: var(--text-secondary); background: rgba(0,0,0,0.2); padding: 6px 8px; border-radius: 6px; margin-top: 6px;">
+          <strong>⏱️ Diagnóstico:</strong> DESCRIBE: ${descTime} · 1er Frame: ${frameTime} · Transporte: ${transport.toUpperCase()} · GOP: ${gopDesc}
+        </div>
+      `;
+    }
   }
+
+  renderTechnicalSpecs();
+
+  if (els.camCfgDiagnoseRtspBtn) {
+    els.camCfgDiagnoseRtspBtn.onclick = async () => {
+      const url = els.camCfgRtspUrl?.value?.trim();
+      if (!url) {
+        showToast("Ingresa una URL RTSP para diagnosticar", true);
+        return;
+      }
+      els.camCfgDiagnoseRtspBtn.disabled = true;
+      if (els.camCfgRtspResult) {
+        els.camCfgRtspResult.hidden = false;
+        els.camCfgRtspResult.className = "test-result-box";
+        els.camCfgRtspResult.textContent =
+          "Diagnosticando stream RTSP (DESCRIBE, primer frame, transporte y GOP)...";
+      }
+      try {
+        const res = await request(
+          `/cameras/${camera.cameraId}/diagnose-stream`,
+          {
+            method: "POST",
+            body: JSON.stringify({ streamUrl: url, timeoutMs: 4000 }),
+          },
+        );
+        if (res.success && res.metrics) {
+          camera.capabilities.latencyMetrics = res.metrics;
+          if (res.camera?.capabilities?.observed?.gopSeconds) {
+            if (!camera.capabilities.observed) {
+              camera.capabilities.observed = res.camera.capabilities.observed;
+            } else {
+              camera.capabilities.observed.gopSeconds =
+                res.camera.capabilities.observed.gopSeconds;
+            }
+          }
+          renderTechnicalSpecs();
+          if (els.camCfgRtspResult) {
+            els.camCfgRtspResult.className = "test-result-box success";
+            const gopText =
+              res.metrics.observedGopSeconds?.value != null
+                ? ` · GOP: ${res.metrics.observedGopSeconds.value}s`
+                : "";
+            els.camCfgRtspResult.textContent = `✓ Diagnóstico completado. DESCRIBE: ${res.metrics.timeToDescribeMs?.value || "N/A"}ms · 1er Frame: ${res.metrics.timeToFirstFrameMs?.value || "N/A"}ms · Transporte: ${(res.metrics.selectedTransport?.value || "tcp").toUpperCase()}${gopText}`;
+          }
+          showToast("✓ Diagnóstico de stream completado");
+        } else {
+          showToast(res.error || "Error al diagnosticar stream", true);
+        }
+      } catch (err) {
+        showToast(err.message || "Error al diagnosticar stream", true);
+      } finally {
+        els.camCfgDiagnoseRtspBtn.disabled = false;
+      }
+    };
+  }
+
+  if (els.camCfgTransportPref) {
+    els.camCfgTransportPref.value =
+      camera.exportConfig?.rtspTransportPreference || "tcp";
+    els.camCfgTransportPref.onchange = async () => {
+      const selected = els.camCfgTransportPref.value;
+      if (!camera.exportConfig) {
+        camera.exportConfig = {
+          matterEnabled: true,
+          homeKitEnabled: true,
+          hksvEnabledByDefault: true,
+          googleHomeEnabled: false,
+          alexaEnabled: false,
+          smartThingsEnabled: false,
+          nasEnabled: false,
+        };
+      }
+      camera.exportConfig.rtspTransportPreference = selected;
+      try {
+        await request(`/cameras/${camera.cameraId}/export-config`, {
+          method: "POST",
+          body: JSON.stringify(camera.exportConfig),
+        });
+        showToast(`✓ Preferencia RTSP: ${selected.toUpperCase()}`);
+        renderTechnicalSpecs();
+      } catch (err) {
+        showToast("Error al guardar preferencia de transporte", true);
+      }
+    };
+  }
+
   if (els.camModalAudioSpec) {
     els.camModalAudioSpec.style.display = "none";
   }

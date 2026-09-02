@@ -121,13 +121,18 @@ export class HomeKitCameraAccessory {
       capabilities.hasLiveStream === true &&
       Boolean(streamSource?.url);
 
-    // Announce ONLY real resolutions actually offered by the camera and validated
+    const controllerOptions = this.buildCameraControllerOptions(isHksvActive);
+    this.controller = new CameraController(controllerOptions);
+    this.accessory.configureController(this.controller);
+  }
+
+  private buildDeclaredResolutions(): [number, number, number][] {
     const declaredResolutions: [number, number, number][] = [];
-    const profiles = (streamSource?.metadata as any)?.profiles;
+    const profiles = (this.streamSource?.metadata as any)?.profiles;
     if (Array.isArray(profiles) && profiles.length > 0) {
       for (const p of profiles) {
         if (p.resolution && p.resolution.width && p.resolution.height) {
-          const fps = p.fps || capabilities.maxFps || 30;
+          const fps = p.fps || this.capabilities.maxFps || 30;
           declaredResolutions.push([
             p.resolution.width,
             p.resolution.height,
@@ -138,13 +143,13 @@ export class HomeKitCameraAccessory {
     }
 
     if (
-      capabilities.resolution &&
-      capabilities.resolution.width &&
-      capabilities.resolution.height
+      this.capabilities.resolution &&
+      this.capabilities.resolution.width &&
+      this.capabilities.resolution.height
     ) {
-      const w = capabilities.resolution.width;
-      const h = capabilities.resolution.height;
-      const fps = capabilities.maxFps || 30;
+      const w = this.capabilities.resolution.width;
+      const h = this.capabilities.resolution.height;
+      const fps = this.capabilities.maxFps || 30;
       if (!declaredResolutions.some(([rw, rh]) => rw === w && rh === h)) {
         declaredResolutions.push([w, h, fps]);
       }
@@ -157,6 +162,13 @@ export class HomeKitCameraAccessory {
         [640, 360, 30],
       );
     }
+    return declaredResolutions;
+  }
+
+  private buildCameraControllerOptions(
+    isHksvActive: boolean,
+  ): CameraControllerOptions {
+    const declaredResolutions = this.buildDeclaredResolutions();
 
     const controllerOptions: CameraControllerOptions = {
       cameraStreamCount: 2,
@@ -178,7 +190,7 @@ export class HomeKitCameraAccessory {
           },
           resolutions: declaredResolutions,
         },
-        audio: capabilities.hasAudio
+        audio: this.capabilities.hasAudio
           ? {
               codecs: [
                 {
@@ -203,11 +215,11 @@ export class HomeKitCameraAccessory {
 
     if (isHksvActive) {
       this.recordingDelegate = new HomeKitCameraRecordingDelegate(
-        platform,
-        entityId,
-        record,
-        capabilities,
-        streamSource,
+        this.platform,
+        this.entityId,
+        this.record,
+        this.capabilities,
+        this.streamSource,
       );
 
       this.record.hksvCapable = true;
@@ -239,12 +251,7 @@ export class HomeKitCameraAccessory {
                 H264Level.LEVEL4_0,
               ],
             },
-            resolutions: [
-              [1920, 1080, 30],
-              [1280, 720, 30],
-              [1920, 1080, 15],
-              [1280, 720, 15],
-            ],
+            resolutions: declaredResolutions,
           },
           audio: {
             codecs: [
@@ -267,15 +274,14 @@ export class HomeKitCameraAccessory {
         delegate: this.recordingDelegate,
       };
     } else {
-      this.record.hksvCapable = Boolean(capabilities.hksvCapable);
+      this.record.hksvCapable = Boolean(this.capabilities.hksvCapable);
       this.record.hksvEnabled = false;
-      this.record.hksvState = capabilities.hksvCapable
+      this.record.hksvState = this.capabilities.hksvCapable
         ? "configurable"
         : "not_capable";
     }
 
-    this.controller = new CameraController(controllerOptions);
-    this.accessory.configureController(this.controller);
+    return controllerOptions;
   }
 
   /**
@@ -397,18 +403,32 @@ export class HomeKitCameraAccessory {
    * Uses HAP-NodeJS AccessoryInfo.load(hapUsername) as official public API.
    */
   public isPaired(): boolean {
+    return this.getPairingState() === "paired";
+  }
+
+  /**
+   * Evaluates the authentic HAP pairing state:
+   * - "paired": AccessoryInfo.load(hapUsername).paired() is true
+   * - "not_paired": AccessoryInfo.load(hapUsername) loaded and paired() is false
+   * - "unverifiable": hapUsername is missing or storage cannot be inspected
+   */
+  public getPairingState(): "paired" | "not_paired" | "unverifiable" {
     try {
       const hapUsername = this.record?.username;
-      if (!hapUsername) return false;
-      const info = AccessoryInfo.load(hapUsername);
+      if (!hapUsername) return "unverifiable";
+      const info = AccessoryInfo.load(hapUsername as any);
       if (info && typeof info.paired === "function") {
-        return info.paired();
+        return info.paired() ? "paired" : "not_paired";
       }
-      return Boolean(
-        this.record.isPaired || (this.accessory as any)._server?.paired,
-      );
+      if (this.record?.isPaired !== undefined) {
+        return this.record.isPaired ? "paired" : "not_paired";
+      }
+      return "unverifiable";
     } catch {
-      return Boolean(this.record.isPaired);
+      if (this.record?.isPaired !== undefined) {
+        return this.record.isPaired ? "paired" : "not_paired";
+      }
+      return "unverifiable";
     }
   }
 
@@ -433,42 +453,34 @@ export class HomeKitCameraAccessory {
   }
 
   /**
-   * Cleans up all paired controllers, regenerates identity (username/MAC, setupId, pincode),
-   * and republishes the camera accessory as fresh so it can be added to a new Apple Home.
+   * Cleans up paired controllers by removing HAP pairing data on disk via official AccessoryInfo.remove(hapUsername),
+   * while preserving strictly the stable username (MAC), UUID, setupId, and pincode.
    */
   public async resetPairing(): Promise<HomeKitCameraStorageRecord> {
     await this.unpublish();
 
-    // Generate fresh credentials
-    const hex = () =>
-      Math.floor(Math.random() * 256)
-        .toString(16)
-        .padStart(2, "0")
-        .toUpperCase();
-    const newUsername = `0E:${hex()}:${hex()}:${hex()}:${hex()}:${hex()}`;
-    const newSetupId = Math.random().toString(36).substring(2, 6).toUpperCase();
-    const p1 = Math.floor(100 + Math.random() * 900);
-    const p2 = Math.floor(10 + Math.random() * 90);
-    const p3 = Math.floor(100 + Math.random() * 900);
-    const newPincode = `${p1}-${p2}-${p3}`;
+    try {
+      if (this.record.username) {
+        AccessoryInfo.remove(this.record.username as any);
+      }
+    } catch (err) {
+      this.platform?.log?.warn?.(
+        `[HomeKitCamera][${this.entityId}] Error removing HAP pairing record: ${err}`,
+      );
+    }
 
-    this.record.username = newUsername;
-    this.record.setupId = newSetupId;
-    this.record.pincode = newPincode;
     this.record.published = false;
     this.record.isPaired = false;
 
-    // Create fresh instance with new UUID / identity
-    const newUuid = uuid.generate(
-      `homekit:camera:${this.entityId}:${Date.now()}`,
+    // Invariant: Rebuild accessory using the exact same UUID, username, setupId, and pincode
+    this.accessory = new Accessory(
+      this.record.name || this.entityId,
+      this.record.uuid,
     );
-    this.record.uuid = newUuid;
-
-    this.accessory = new Accessory(this.record.name || this.entityId, newUuid);
-    const manufacturer = "Matter all in one Chrisalvir";
-    const model = this.record.model || "Cámara IP";
-    const serialNumber =
-      this.record.serialNumber || this.entityId.replaceAll(".", "_");
+    const manufacturer =
+      this.record.manufacturer || "Matter all in one Chrisalvir";
+    const model = this.record.model || "Modelo no identificado";
+    const serialNumber = this.record.serialNumber || "Serial no disponible";
     const firmware =
       this.platform?.matterbridge?.matterbridgeVersion || "1.4.72";
 
@@ -479,52 +491,14 @@ export class HomeKitCameraAccessory {
       ?.setCharacteristic(Characteristic.SerialNumber, serialNumber)
       ?.setCharacteristic(Characteristic.FirmwareRevision, firmware);
 
-    this.controller = new CameraController({
-      cameraStreamCount: 2,
-      delegate: this.delegate,
-      streamingOptions: {
-        supportedCryptoSuites: [SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80],
-        video: {
-          codec: {
-            profiles: [
-              H264Profile.BASELINE,
-              H264Profile.MAIN,
-              H264Profile.HIGH,
-            ],
-            levels: [
-              H264Level.LEVEL3_1,
-              H264Level.LEVEL3_2,
-              H264Level.LEVEL4_0,
-            ],
-          },
-          resolutions: [
-            [1920, 1080, 30],
-            [1280, 720, 30],
-            [1024, 768, 30],
-            [640, 480, 30],
-            [640, 360, 30],
-            [480, 360, 30],
-            [480, 270, 30],
-            [320, 240, 30],
-            [320, 180, 30],
-          ],
-        },
-        audio: this.capabilities.hasAudio
-          ? {
-              codecs: [
-                {
-                  type: AudioStreamingCodecType.AAC_ELD,
-                  samplerate: AudioStreamingSamplerate.KHZ_16,
-                },
-                {
-                  type: AudioStreamingCodecType.OPUS,
-                  samplerate: AudioStreamingSamplerate.KHZ_16,
-                },
-              ],
-            }
-          : undefined,
-      },
-    });
+    const isHksvActive =
+      this.record.hksvEnabled !== false &&
+      this.capabilities.hksvCapable === true &&
+      this.capabilities.hasLiveStream === true &&
+      Boolean(this.streamSource?.url);
+
+    const controllerOptions = this.buildCameraControllerOptions(isHksvActive);
+    this.controller = new CameraController(controllerOptions);
     this.accessory.configureController(this.controller);
 
     const isScrypted =

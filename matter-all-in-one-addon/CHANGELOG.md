@@ -1,3 +1,18 @@
+## [1.4.78] - 2026-09-02
+
+### Reparación Global Arquitectónica: Fluidez de Live View Apple Home, Identidad Real y Matter Multi-Admin
+
+- **Resolución Definitiva de "Sin Respuesta" y Cortes tras 5-10s en Apple Home:** Eliminada la directiva conflictiva `&localrtcpport` en la URL SRTP de salida de FFmpeg. Ahora FFmpeg enlaza dinámicamente un puerto efímero local sin colisionar con el puerto del cliente, permitiendo el intercambio bidireccional de paquetes RTCP y garantizando Live View continuo y estable por más de 30 segundos.
+- **Eliminación de Pantallas Verdes y Espera de Keyframes:** Inyección condicional del bitstream filter `-bsf:v dump_extra=freq=keyframe` para asegurar que cada I-frame incluya las cabeceras SPS/PPS necesarias para inicializar el decodificador de Apple Home de inmediato.
+- **Streaming en Vivo Sincronizado:** Incorporadas las banderas de FFmpeg `-fflags +nobuffer+genpts` y `-use_wallclock_as_timestamps 1` para garantizar marcas de tiempo RTP estrictamente monótonas en streams RTSP.
+- **Mapeo de Audio Tolerante:** Mapeo con `-map 0:a:0?` para evitar el cierre forzado de FFmpeg en cámaras que temporalmente no entreguen pista de audio.
+- **Visualización de Casa Matter / Apple Home:** Las tarjetas de cámara y el modal ahora muestran el badge `🏠 [Nombre de Casa]` (ej. `El Chante de Gecko & Chris`) igual que los dispositivos IoT Matter, o `🏠 Casa: nombre no expuesto por Matter` si el controlador no expone etiqueta.
+- **Visibilidad Completa de Fabrics Matter y Multi-Admin:** Desglose detallado en el dashboard y modal con lista de telas comisionadas, Fabric ID, Node ID y estado Multi-Admin (`Disponible`, `Vinculada a N fabrics`, `Completo`).
+- **Preservación Estricta de Invariantes de Identidad:** La acción `Restablecer emparejamiento HomeKit` ahora invoca de manera limpia y oficial `AccessoryInfo.remove(hapUsername)` de HAP-NodeJS, preservando estrictamente el `uuid`, `username` (MAC HAP), `setupId` y `pincode` de la cámara sin mutar su identidad ni afectar la capa Matter.
+- **Diagnóstico Activo de Stream Bajo Demanda:** Nuevo botón interactivo `⚡ Diagnosticar Stream` en el panel web y endpoint `POST /api/custom/cameras/:id/diagnose-stream`, que mide en tiempo real los tiempos de DESCRIBE, primer frame, transporte y GOP con diagnóstico contextual (adecuado <= 2s vs recomendación > 4s).
+- **Preferencia de Transporte RTSP:** Nuevo selector en modal (`Auto`, `TCP`, `UDP`) con explicación clara de fiabilidad vs latencia.
+- **Evaluador Aislado de Elegibilidad HEVC Preview:** Implementado `evaluateHevcEligibility` de acuerdo con la guía Apple HomeKit Secure Video de junio 2026, manteniendo `h264_legacy` como modo predeterminado y seguro en producción.
+
 ## [1.4.72] - 2026-09-01
 
 ### Real-Time Apple Home / Matter Unpairing, Home Name Display & RTSP Stream URL Configuration
