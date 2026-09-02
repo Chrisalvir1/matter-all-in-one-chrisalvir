@@ -1,0 +1,99 @@
+name: Root Camera Repair v1.4.84
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/root-camera-repair-v1.4.84.yml'
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: root-camera-repair-v1.4.84
+  cancel-in-progress: false
+
+jobs:
+  repair-test-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.20.0
+          registry-url: https://registry.npmjs.org
+          cache: npm
+          cache-dependency-path: matter-all-in-one-addon/package-lock.json
+
+      - name: Apply root camera repair
+        run: |
+          python3 .github/scripts/apply-v1.4.84-root-camera-fix-v2.py
+          python3 - <<'PY'
+          import json
+          p='matter-all-in-one-addon/package-lock.json'
+          j=json.load(open(p))
+          j['version']='1.4.84'
+          if '' in j.get('packages',{}): j['packages']['']['version']='1.4.84'
+          open(p,'w').write(json.dumps(j,indent=2)+'\n')
+          PY
+
+      - name: Assert root invariants
+        run: |
+          grep -q 'localVideoPort' matter-all-in-one-addon/src/camera/homekit/homekit-camera-stream.delegate.ts
+          grep -q 'generateSynchronisationSource' matter-all-in-one-addon/src/camera/homekit/homekit-camera-stream.delegate.ts
+          grep -q 'localrtcpport' matter-all-in-one-addon/src/camera/homekit/ffmpeg-helper.ts
+          grep -q 'strategy: "transcode_required"' matter-all-in-one-addon/src/camera/scrypted/scrypted-homekit-bridge.ts
+          grep -q 'cameraStreamCount: 1' matter-all-in-one-addon/src/camera/homekit/homekit-camera.accessory.ts
+          ! grep -q 'videoSsrc: 1' matter-all-in-one-addon/src/camera/homekit/homekit-camera-stream.delegate.ts
+          ! grep -q 'response.video.port = request.video.port' matter-all-in-one-addon/src/camera/homekit/homekit-camera-stream.delegate.ts
+          ! grep -q 'hksvEnabledByDefault: true' matter-all-in-one-addon/src/camera/scrypted/scrypted-client.ts
+          ! grep -q 'Plugin version: 1.4.41' matter-all-in-one-addon/src/platform.ts
+
+      - name: Install dependencies
+        working-directory: matter-all-in-one-addon
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: matter-all-in-one-addon
+        run: npm run typecheck
+
+      - name: Tests
+        working-directory: matter-all-in-one-addon
+        run: npm test -- --run
+
+      - name: Build
+        working-directory: matter-all-in-one-addon
+        run: npm run build
+
+      - name: Docker build amd64
+        run: docker build --platform linux/amd64 -t matter-all-in-one-chrisalvir:1.4.84 matter-all-in-one-addon
+
+      - name: Commit validated repair
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add matter-all-in-one-addon
+          git commit -m 'fix(camera): repair HAP Live View from session root (v1.4.84)'
+          git push origin HEAD:main
+
+      - name: Create annotated tag
+        run: |
+          git tag -a v1.4.84 -m 'v1.4.84 - Root HAP camera repair' -m 'Repairs HAP reset graph, RTP local ports, SSRC, IPv6 SRTP, negotiated video and AAC-ELD. HKSV and Matter Camera remain opt-in experimental.'
+          git push origin v1.4.84
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create v1.4.84 --title 'v1.4.84 - Root HAP Camera Repair' --notes $'Root repair for Scrypted → Apple Home camera Live View.\n\n- Rebuilds a valid HAP service graph after pairing reset.\n- Uses accessory-local RTCP ports and unique SSRCs per session.\n- Fixes IPv6 SRTP URLs and restores localrtcpport.\n- Honors Apple-negotiated resolution, profile, level and MTU.\n- Produces AAC-ELD audio.\n- Disables HKSV/Matter Camera/NVR by default to keep the production path minimal.\n\nValidation in CI covers typecheck, tests, build and Docker. Physical Live View validation is still required before declaring the runtime issue resolved.'
+
+      - name: Publish npm 1.4.84
+        working-directory: matter-all-in-one-addon
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
