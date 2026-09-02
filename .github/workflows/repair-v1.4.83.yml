@@ -1,4 +1,4 @@
-name: Repair and release v1.4.83
+name: Validate and release v1.4.83
 
 on:
   push:
@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  repair-test-release:
+  validate-release:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -26,8 +26,21 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Apply deterministic repairs
-        run: python3 .github/scripts/apply-v1.4.83.py
+      - name: Finalize release source invariants
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          accessory = Path("matter-all-in-one-addon/src/camera/homekit/homekit-camera.accessory.ts")
+          accessory.write_text(accessory.read_text().replace(
+              'this.platform?.matterbridge?.matterbridgeVersion || "1.4.72"',
+              'this.platform?.matterbridge?.matterbridgeVersion || "unknown"',
+          ))
+          repair = Path(".github/scripts/apply-v1.4.83.py")
+          repair.write_text(repair.read_text().replace(
+              "node:24.20.0-alpine3.22",
+              "node:24.20.0-alpine3.24",
+          ))
+          PY
 
       - name: Setup Node.js 24.20 LTS
         uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af
@@ -35,18 +48,6 @@ jobs:
           node-version: "24.20.0"
           cache: npm
           cache-dependency-path: matter-all-in-one-addon/package-lock.json
-
-      - name: Synchronize package lock
-        working-directory: matter-all-in-one-addon
-        run: npm install --package-lock-only --legacy-peer-deps --no-fund --no-audit
-
-      - name: Commit repaired source and lockfile
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .github/workflows/build.yml .github/workflows/publish.yml matter-all-in-one-addon README.md
-          git commit -m "fix(camera): HAP Live View pipeline and Node 24.20 LTS (v1.4.83)"
-          git push origin HEAD:main
 
       - name: Install dependencies
         working-directory: matter-all-in-one-addon
@@ -67,7 +68,7 @@ jobs:
       - name: Verify release invariants
         run: |
           set -euo pipefail
-          grep -q 'ARG BUILD_FROM=node:24.20.0' matter-all-in-one-addon/Dockerfile
+          grep -q 'ARG BUILD_FROM=node:24.20.0-alpine3.24' matter-all-in-one-addon/Dockerfile
           grep -q 'node-version:.*24.20' .github/workflows/build.yml
           grep -q 'node-version:.*24.20' .github/workflows/publish.yml
           grep -q 'transport !== "auto"' matter-all-in-one-addon/src/camera/homekit/ffmpeg-helper.ts
@@ -75,10 +76,21 @@ jobs:
           grep -q 'let activeCamQrMode = "homekit"' matter-all-in-one-addon/src/frontend/script.js
           grep -q 'computeHomeKitSetupUri' matter-all-in-one-addon/src/frontend/script.js
           ! grep -q 'ABCD-1234-EFGH' matter-all-in-one-addon/src/frontend/script.js
+          ! grep -q 'matterbridgeVersion || "1.4.72"' matter-all-in-one-addon/src/camera/homekit/homekit-camera.accessory.ts
           test "$(node -p "require('./matter-all-in-one-addon/package.json').version")" = "1.4.83"
 
       - name: Build Docker image
         run: docker build --tag matter-all-in-one:v1.4.83 matter-all-in-one-addon
+
+      - name: Commit final source
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/scripts/apply-v1.4.83.py matter-all-in-one-addon/src/camera/homekit/homekit-camera.accessory.ts
+          if ! git diff --cached --quiet; then
+            git commit -m "fix(camera): finalize v1.4.83 runtime metadata"
+            git push origin HEAD:main
+          fi
 
       - name: Create tag and GitHub release
         env:
@@ -87,8 +99,9 @@ jobs:
           git fetch origin main --tags
           git checkout main
           git reset --hard origin/main
+          test -z "$(git tag -l v1.4.83)"
           git tag -a v1.4.83 -m "v1.4.83 - HAP Live View and Node 24.20 LTS"
           git push origin v1.4.83
           gh release create v1.4.83 --verify-tag \
             --title "v1.4.83 - HAP Live View and Node 24.20 LTS" \
-            --notes "Node.js 24.20 LTS; refreshed Scrypted HAP stream sources; valid RTSP transport handling; FFmpeg startup guard; H.264 SPS/PPS keyframes; HAP QR for Apple Home; Matter Camera remains separate and experimental. Typecheck, unit tests, plugin build and Docker build completed before this release. The release triggers the existing Publish to NPM workflow. Physical Apple Home and Scrypted runtime validation remains required."
+            --notes "Node.js 24.20.0 LTS on the published Alpine 3.24 image; refreshed Scrypted HAP sources; valid RTSP auto handling; FFmpeg startup guard; H.264 SPS/PPS keyframes; real HAP X-HM pairing path for Apple Home; Matter Camera remains separate and experimental. Typecheck, unit tests, plugin build, release invariants and Docker build passed before publication. This release triggers Publish to NPM. Physical Apple Home/Scrypted runtime validation remains required."
