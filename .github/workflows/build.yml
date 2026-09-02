@@ -43,30 +43,58 @@ jobs:
       - name: Typecheck
         id: typecheck
         continue-on-error: true
-        run: npm run typecheck 2>&1 | tee /tmp/v1.4.84-typecheck.txt
+        run: npm run typecheck 2>&1 | tee /tmp/typecheck.txt
 
-      - name: Report typecheck result on PR
+      - name: Build plugin
+        id: plugin_build
+        continue-on-error: true
+        run: npm run build 2>&1 | tee /tmp/build.txt
+
+      - name: Run unit tests
+        id: tests
+        continue-on-error: true
+        run: npm run test 2>&1 | tee /tmp/tests.txt
+
+      - name: Build add-on container
+        id: docker_build
+        continue-on-error: true
+        if: matrix.os == 'ubuntu-latest' && github.event_name != 'push'
+        run: docker build --tag matter-all-in-one:test . 2>&1 | tee /tmp/docker.txt
+
+      - name: Report isolated validation on PR
         if: always() && github.event_name == 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
+          TYPECHECK_OUTCOME: ${{ steps.typecheck.outcome }}
+          BUILD_OUTCOME: ${{ steps.plugin_build.outcome }}
+          TEST_OUTCOME: ${{ steps.tests.outcome }}
+          DOCKER_OUTCOME: ${{ steps.docker_build.outcome }}
         run: |
           python3 - <<'PY'
+          import os
           from pathlib import Path
-          text = Path('/tmp/v1.4.84-typecheck.txt').read_text(errors='replace')[-50000:]
-          Path('/tmp/v1.4.84-comment.txt').write_text('## v1.4.84 isolated typecheck\n\n```text\n' + text + '\n```\n')
+          sections=[]
+          for name,path,key in [
+            ('Typecheck','/tmp/typecheck.txt','TYPECHECK_OUTCOME'),
+            ('Build','/tmp/build.txt','BUILD_OUTCOME'),
+            ('Tests','/tmp/tests.txt','TEST_OUTCOME'),
+            ('Docker','/tmp/docker.txt','DOCKER_OUTCOME'),
+          ]:
+            text=Path(path).read_text(errors='replace')[-20000:] if Path(path).exists() else '(no output)'
+            sections.append(f"### {name}: {os.getenv(key)}\n```text\n{text}\n```")
+          Path('/tmp/validation-comment.txt').write_text('## v1.4.84 isolated validation\n\n'+'\n\n'.join(sections)+'\n')
           PY
-          gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/v1.4.84-comment.txt
+          gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/validation-comment.txt
 
-      - name: Stop on typecheck failure
-        if: steps.typecheck.outcome == 'failure'
-        run: exit 1
-
-      - name: Build plugin
-        run: npm run build
-
-      - name: Run unit tests
-        run: npm run test
-
-      - name: Build add-on container
-        if: matrix.os == 'ubuntu-latest' && github.event_name != 'push'
-        run: docker build --tag matter-all-in-one:test .
+      - name: Enforce all validation stages
+        if: always()
+        env:
+          TYPECHECK_OUTCOME: ${{ steps.typecheck.outcome }}
+          BUILD_OUTCOME: ${{ steps.plugin_build.outcome }}
+          TEST_OUTCOME: ${{ steps.tests.outcome }}
+          DOCKER_OUTCOME: ${{ steps.docker_build.outcome }}
+        run: |
+          test "$TYPECHECK_OUTCOME" = success
+          test "$BUILD_OUTCOME" = success
+          test "$TEST_OUTCOME" = success
+          test "$DOCKER_OUTCOME" = success
