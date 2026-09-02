@@ -9,7 +9,7 @@
       name="description"
       content="Gestiona de forma segura las entidades de Home Assistant exportadas mediante Matter."
     />
-    <link rel="stylesheet" href="style.css?v=1.4.70" />
+    <link rel="stylesheet" href="style.css?v=1.4.71" />
   </head>
   <body>
     <div class="ambient ambient-one"></div>
@@ -790,6 +790,14 @@
                 >
                   <span>📱 Compartir</span>
                 </button>
+                <button
+                  class="button button-sm button-secondary"
+                  id="cam-modal-reset-pair-btn"
+                  type="button"
+                  title="Reiniciar emparejamiento HomeKit y generar código nuevo"
+                >
+                  <span>🔄 Reiniciar vinculación</span>
+                </button>
               </div>
               <small class="qr-note" id="cam-modal-qr-note">Escanea con la app Casa de Apple (iPhone / iPad / Mac) para vincular con Vídeo Seguro de HomeKit (HKSV) y Live View.</small>
               <div id="cam-modal-paired-badge" style="display: none; margin-top: 8px; font-size: 0.8rem; font-weight: 600; color: #34d399; text-align: center;">
@@ -974,7 +982,7 @@
     </div>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="qrcode.min.js?v=1.4.70"></script>
-    <script src="script.js?v=1.4.70"></script>
+    <script src="qrcode.min.js?v=1.4.71"></script>
+    <script src="script.js?v=1.4.71"></script>
   </body>
 </html>

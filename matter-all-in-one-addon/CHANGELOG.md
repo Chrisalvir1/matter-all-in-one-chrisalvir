@@ -1,3 +1,11 @@
+## [1.4.71] - 2026-09-01
+
+### Robust HomeKit Setup URI Calculation & Instant Pairing Reset
+
+- **Cálculo Canónico del Setup URI en el Frontend:** Implementado algoritmo nativo de HomeKit (`BigInt` / Base36) para garantizar que el código QR generado sea 100% canónico (`X-HM://00GW95DQA...`), evitando cualquier fallo de accesorio no encontrado en Apple Home si la interfaz se carga de forma asíncrona.
+- **Botón "🔄 Reiniciar vinculación":** Nuevo botón en la tarjeta de código QR del modal de la cámara que permite regenerar inmediatamente las credenciales HomeKit de la cámara (nuevo Setup ID y puerto), eliminando cualquier estado residual o caché de emparejamiento anterior en Apple Home.
+- **Persistencia Estricta de PIN HomeKit:** Garantizado que el PIN `031-45-154` y los identificadores MAC y Setup ID se asignen y conserven estrictamente en `ScryptedHomeKitBridge`.
+
 ## [1.4.70] - 2026-09-01
 
 ### Fix Apple HomeKit Camera HAP Pairing, Live HKSV Setup URI & Audio/Mic Detection

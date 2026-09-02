@@ -2479,6 +2479,53 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     setupUri?: string;
   }> {
     try {
+      if (entityId.startsWith("scrypted.")) {
+        const cameraId = entityId.substring("scrypted.".length);
+        let acc = ScryptedHomeKitBridge.getAccessory(cameraId);
+        if (!acc) {
+          const store = await ScryptedStorage.load();
+          const cam = store.cameras.cameras.find(
+            (c) => c.cameraId === cameraId,
+          );
+          if (cam) {
+            await ScryptedHomeKitBridge.mountCamera(this, cam);
+            acc = ScryptedHomeKitBridge.getAccessory(cameraId);
+          }
+        }
+        if (!acc) {
+          return {
+            success: false,
+            error: `Cámara Scrypted "${cameraId}" no encontrada.`,
+          };
+        }
+
+        const newRecord = await acc.resetPairing();
+        newRecord.pincode = "031-45-154";
+        this.homekitCameraRecords.set(entityId, newRecord);
+        await this.saveHomeKitCameraRecords();
+
+        const store = await ScryptedStorage.load();
+        const cam = store.cameras.cameras.find((c) => c.cameraId === cameraId);
+        if (cam) {
+          cam.identity.homeKitSetupUri = acc.setupUri;
+          cam.identity.homeKitPincode = newRecord.pincode;
+          cam.identity.homeKitSetupId = newRecord.setupId;
+          cam.identity.homeKitPort = newRecord.port;
+          cam.identity.homeKitPairingState = "not_paired";
+          await ScryptedStorage.save(store);
+        }
+
+        this.log.notice(
+          `[ScryptedHomeKit] Reset HomeKit pairing for ${entityId}: New port ${newRecord.port}, setupId ${newRecord.setupId}, URI ${acc.setupUri}`,
+        );
+
+        return {
+          success: true,
+          record: newRecord,
+          setupUri: acc.setupUri,
+        };
+      }
+
       const cameraEntity = this.entities.get(entityId) as
         CameraEntity | undefined;
       if (!cameraEntity) {

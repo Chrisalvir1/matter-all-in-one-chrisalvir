@@ -114,6 +114,11 @@ export class ScryptedHomeKitBridge {
     storageRecord.name = camera.name;
     storageRecord.manufacturer = camera.displayManufacturer || "Scrypted";
     storageRecord.model = camera.displayModel || camera.model || "Cámara IP";
+    storageRecord.pincode = "031-45-154";
+    storageRecord.setupId =
+      storageRecord.setupId || this.generateSetupId(camera.cameraId);
+    storageRecord.username =
+      storageRecord.username || this.generateMacAddress(camera.cameraId);
 
     const accessory = new HomeKitCameraAccessory(
       platform,

@@ -140,6 +140,7 @@ const els = {
   camModalCopyCodeBtn: $("cam-modal-copy-code-btn"),
   camModalDownloadQrBtn: $("cam-modal-download-qr-btn"),
   camModalShareCodeBtn: $("cam-modal-share-code-btn"),
+  camModalResetPairBtn: $("cam-modal-reset-pair-btn"),
   camModalVideoSpec: $("cam-modal-video-spec"),
   camModalAudioSpec: $("cam-modal-audio-spec"),
   camModalErrorTag: $("cam-modal-error-tag"),
@@ -2426,6 +2427,43 @@ function openScryptedModal() {
   setModalOpen(els.scryptedConnectModal, true);
 }
 
+function generateCameraSetupId(id) {
+  let hash = 0;
+  const str = String(id || "camera");
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash * 37 + str.charCodeAt(i)) >>> 0;
+  }
+  return (hash & 0xffff)
+    .toString(36)
+    .toUpperCase()
+    .padStart(4, "S")
+    .substring(0, 4);
+}
+
+function computeHomeKitSetupUri(setupId, pincode = "031-45-154", category = 17) {
+  try {
+    const pin = parseInt(String(pincode).replace(/-/g, ""), 10);
+    const low = (pin | (1 << 28) | (category & 1 ? 1 << 31 : 0)) >>> 0;
+    const high = (category >> 1) >>> 0;
+    const num = BigInt(high) * 4294967296n + BigInt(low);
+    let enc = num.toString(36).toUpperCase();
+    while (enc.length < 9) enc = "0" + enc;
+    const cleanSetupId = String(setupId || "SC01")
+      .toUpperCase()
+      .padStart(4, "S")
+      .substring(0, 4);
+    return "X-HM://" + enc + cleanSetupId;
+  } catch {
+    return (
+      "X-HM://00GW95DQA" +
+      String(setupId || "SC01")
+        .toUpperCase()
+        .padStart(4, "S")
+        .substring(0, 4)
+    );
+  }
+}
+
 function openCameraConfigModal(camera) {
   if (!els.cameraConfigModal) return;
 
@@ -2489,10 +2527,15 @@ function openCameraConfigModal(camera) {
 
     if (isHomeKit) {
       // HomeKit Setup URI (X-HM://...)
+      const setupId =
+        camera.identity?.homeKitSetupId ||
+        generateCameraSetupId(camera.cameraId);
+      const pincode = camera.identity?.homeKitPincode || "031-45-154";
+
       pairingPayload =
         camera.identity?.homeKitSetupUri ||
-        `X-HM://${camera.identity?.homeKitSetupId || "0000"}`;
-      manualCodeDisplay = camera.identity?.homeKitPincode || "031-45-154";
+        computeHomeKitSetupUri(setupId, pincode, 17);
+      manualCodeDisplay = pincode;
     } else {
       // Matter pairing code
       const bridgeEntity =
@@ -2555,6 +2598,34 @@ function openCameraConfigModal(camera) {
     els.camQrTabMatter.onclick = () => {
       activeCamQrMode = "matter";
       renderCamModalQr();
+    };
+  }
+
+  if (els.camModalResetPairBtn) {
+    els.camModalResetPairBtn.onclick = async () => {
+      els.camModalResetPairBtn.disabled = true;
+      showToast("Reiniciando vinculación HomeKit...");
+      try {
+        const res = await request(
+          `/custom/reset-camera-pairing/scrypted.${camera.cameraId}`,
+          { method: "POST" },
+        );
+        if (res.success && res.setupUri) {
+          camera.identity.homeKitSetupUri = res.setupUri;
+          camera.identity.homeKitPincode = res.record?.pincode || "031-45-154";
+          camera.identity.homeKitSetupId = res.record?.setupId;
+          camera.identity.homeKitPort = res.record?.port;
+          camera.identity.homeKitPairingState = "not_paired";
+          renderCamModalQr();
+          showToast("✓ Vinculación reiniciada. Escanea el nuevo código QR.");
+        } else {
+          showToast(res.error || "No se pudo reiniciar la vinculación", true);
+        }
+      } catch (err) {
+        showToast(err.message || "Error al reiniciar vinculación", true);
+      } finally {
+        els.camModalResetPairBtn.disabled = false;
+      }
     };
   }
 
