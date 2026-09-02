@@ -3715,13 +3715,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         }
 
         // POST /api/custom/reset-camera-pairing/:entityId
-        if (
-          req.method === "POST" &&
-          pathname.startsWith("/api/custom/reset-camera-pairing/")
-        ) {
-          const entityId = decodeURIComponent(
-            pathname.substring("/api/custom/reset-camera-pairing/".length),
-          );
+        const resetPairMatch = pathname.match(
+          /\/reset-camera-pairing\/([^/]+)$/,
+        );
+        if (req.method === "POST" && resetPairMatch) {
+          const entityId = decodeURIComponent(resetPairMatch[1]);
           const result = await this.resetCameraPairing(entityId);
           res.writeHead(result.success ? 200 : 400, {
             "Content-Type": "application/json; charset=utf-8",
@@ -3731,13 +3729,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         }
 
         // POST /api/custom/camera-hksv/:entityId
-        if (
-          req.method === "POST" &&
-          pathname.startsWith("/api/custom/camera-hksv/")
-        ) {
-          const entityId = decodeURIComponent(
-            pathname.substring("/api/custom/camera-hksv/".length),
-          );
+        const hksvMatch = pathname.match(/\/camera-hksv\/([^/]+)$/);
+        if (req.method === "POST" && hksvMatch) {
+          const entityId = decodeURIComponent(hksvMatch[1]);
           let bodyStr = "";
           for await (const chunk of req) bodyStr += chunk.toString();
           let enabled = true;
@@ -4460,20 +4454,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           }
           return;
         }
-
-        if (
-          req.method === "PATCH" &&
-          (pathname.startsWith("/api/cameras/") ||
-            pathname.startsWith("/api/custom/cameras/")) &&
-          pathname.endsWith("/identity")
-        ) {
-          const prefix = pathname.startsWith("/api/custom/cameras/")
-            ? "/api/custom/cameras/"
-            : "/api/cameras/";
-          const cameraId = pathname.substring(
-            prefix.length,
-            pathname.length - "/identity".length,
-          );
+        // PATCH /api/custom/cameras/:id/identity
+        const identityMatch = pathname.match(/\/cameras\/([^/]+)\/identity$/);
+        if (req.method === "PATCH" && identityMatch) {
+          const cameraId = decodeURIComponent(identityMatch[1]);
           try {
             const body = await this.readRequestBody(req);
             const data = JSON.parse(body);
@@ -4587,19 +4571,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           return;
         }
 
-        if (
-          req.method === "GET" &&
-          (pathname.startsWith("/api/cameras/") ||
-            pathname.startsWith("/api/custom/cameras/")) &&
-          pathname.endsWith("/state")
-        ) {
-          const prefix = pathname.startsWith("/api/custom/cameras/")
-            ? "/api/custom/cameras/"
-            : "/api/cameras/";
-          const cameraId = pathname.substring(
-            prefix.length,
-            pathname.length - "/state".length,
-          );
+        const stateMatch = pathname.match(/\/cameras\/([^/]+)\/state$/);
+        if (req.method === "GET" && stateMatch) {
+          const cameraId = decodeURIComponent(stateMatch[1]);
           const store = await ScryptedStorage.load();
           const camera = store.cameras.cameras.find(
             (c) => c.cameraId === cameraId,
@@ -4624,23 +4598,14 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           return;
         }
 
-        if (
-          req.method === "POST" &&
-          (pathname.startsWith("/api/cameras/") ||
-            pathname.startsWith("/api/custom/cameras/")) &&
-          pathname.endsWith("/refresh")
-        ) {
-          const prefix = pathname.startsWith("/api/custom/cameras/")
-            ? "/api/custom/cameras/"
-            : "/api/cameras/";
-          const cameraId = pathname.substring(
-            prefix.length,
-            pathname.length - "/refresh".length,
-          );
+        const refreshMatch = pathname.match(/\/cameras\/([^/]+)\/refresh$/);
+        if (req.method === "POST" && refreshMatch) {
+          const cameraId = decodeURIComponent(refreshMatch[1]);
           const store = await ScryptedStorage.load();
           const camera = store.cameras.cameras.find(
             (c) => c.cameraId === cameraId,
           );
+
           if (!camera) {
             res.writeHead(404, {
               "Content-Type": "application/json; charset=utf-8",
@@ -4673,19 +4638,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         }
 
         // POST /api/custom/cameras/:id/stream-url
-        if (
-          req.method === "POST" &&
-          (pathname.startsWith("/api/cameras/") ||
-            pathname.startsWith("/api/custom/cameras/")) &&
-          pathname.endsWith("/stream-url")
-        ) {
-          const prefix = pathname.startsWith("/api/custom/cameras/")
-            ? "/api/custom/cameras/"
-            : "/api/cameras/";
-          const cameraId = pathname.substring(
-            prefix.length,
-            pathname.length - "/stream-url".length,
-          );
+        const streamUrlMatch = pathname.match(
+          /\/cameras\/([^/]+)\/stream-url$/,
+        );
+        if (req.method === "POST" && streamUrlMatch) {
+          const cameraId = decodeURIComponent(streamUrlMatch[1]);
           let bodyStr = "";
           for await (const chunk of req) bodyStr += chunk.toString();
           let parsed: any = {};
@@ -4780,19 +4737,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         }
 
         // POST /api/custom/cameras/:id/verify-stream
-        if (
-          req.method === "POST" &&
-          (pathname.startsWith("/api/cameras/") ||
-            pathname.startsWith("/api/custom/cameras/")) &&
-          pathname.endsWith("/verify-stream")
-        ) {
-          const prefix = pathname.startsWith("/api/custom/cameras/")
-            ? "/api/custom/cameras/"
-            : "/api/cameras/";
-          const cameraId = pathname.substring(
-            prefix.length,
-            pathname.length - "/verify-stream".length,
-          );
+        const verifyStreamMatch = pathname.match(
+          /\/cameras\/([^/]+)\/verify-stream$/,
+        );
+        if (req.method === "POST" && verifyStreamMatch) {
+          const cameraId = decodeURIComponent(verifyStreamMatch[1]);
           let bodyStr = "";
           for await (const chunk of req) bodyStr += chunk.toString();
           let parsed: any = {};
@@ -4860,19 +4809,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         }
 
         // POST /api/custom/cameras/:id/select-profile
-        if (
-          req.method === "POST" &&
-          (pathname.startsWith("/api/cameras/") ||
-            pathname.startsWith("/api/custom/cameras/")) &&
-          pathname.endsWith("/select-profile")
-        ) {
-          const prefix = pathname.startsWith("/api/custom/cameras/")
-            ? "/api/custom/cameras/"
-            : "/api/cameras/";
-          const cameraId = pathname.substring(
-            prefix.length,
-            pathname.length - "/select-profile".length,
-          );
+        const selectProfileMatch = pathname.match(
+          /\/cameras\/([^/]+)\/select-profile$/,
+        );
+        if (req.method === "POST" && selectProfileMatch) {
+          const cameraId = decodeURIComponent(selectProfileMatch[1]);
           let bodyStr = "";
           for await (const chunk of req) bodyStr += chunk.toString();
           let parsed: any = {};
@@ -4893,6 +4834,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             cameraId,
             profileId,
           );
+
           if (!ok) {
             res.writeHead(404, {
               "Content-Type": "application/json; charset=utf-8",
@@ -4928,19 +4870,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           return;
         }
 
-        if (
-          req.method === "PUT" &&
-          (pathname.startsWith("/api/cameras/") ||
-            pathname.startsWith("/api/custom/cameras/")) &&
-          pathname.endsWith("/export-config")
-        ) {
-          const prefix = pathname.startsWith("/api/custom/cameras/")
-            ? "/api/custom/cameras/"
-            : "/api/cameras/";
-          const cameraId = pathname.substring(
-            prefix.length,
-            pathname.length - "/export-config".length,
-          );
+        const exportConfigMatch = pathname.match(
+          /\/cameras\/([^/]+)\/export-config$/,
+        );
+        if (req.method === "PUT" && exportConfigMatch) {
+          const cameraId = decodeURIComponent(exportConfigMatch[1]);
           try {
             const body = await this.readRequestBody(req);
             const exportConfig = JSON.parse(body);
@@ -4988,19 +4922,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           return;
         }
 
-        if (
-          req.method === "GET" &&
-          (pathname.startsWith("/api/cameras/") ||
-            pathname.startsWith("/api/custom/cameras/")) &&
-          pathname.endsWith("/recording-status")
-        ) {
-          const prefix = pathname.startsWith("/api/custom/cameras/")
-            ? "/api/custom/cameras/"
-            : "/api/cameras/";
-          const cameraId = pathname.substring(
-            prefix.length,
-            pathname.length - "/recording-status".length,
-          );
+        const recordingStatusMatch = pathname.match(
+          /\/cameras\/([^/]+)\/recording-status$/,
+        );
+        if (req.method === "GET" && recordingStatusMatch) {
+          const cameraId = decodeURIComponent(recordingStatusMatch[1]);
           const store = await ScryptedStorage.load();
           const camera = store.cameras.cameras.find(
             (c) => c.cameraId === cameraId,
@@ -5037,19 +4963,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           return;
         }
 
-        if (
-          req.method === "PUT" &&
-          (pathname.startsWith("/api/cameras/") ||
-            pathname.startsWith("/api/custom/cameras/")) &&
-          pathname.endsWith("/nas-config")
-        ) {
-          const prefix = pathname.startsWith("/api/custom/cameras/")
-            ? "/api/custom/cameras/"
-            : "/api/cameras/";
-          const cameraId = pathname.substring(
-            prefix.length,
-            pathname.length - "/nas-config".length,
-          );
+        const nasConfigMatch = pathname.match(
+          /\/cameras\/([^/]+)\/nas-config$/,
+        );
+        if (req.method === "PUT" && nasConfigMatch) {
+          const cameraId = decodeURIComponent(nasConfigMatch[1]);
           try {
             const body = await this.readRequestBody(req);
             const data = JSON.parse(body);
@@ -5096,15 +5014,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           return;
         }
 
-        if (
-          req.method === "DELETE" &&
-          (pathname.startsWith("/api/cameras/") ||
-            pathname.startsWith("/api/custom/cameras/"))
-        ) {
-          const prefix = pathname.startsWith("/api/custom/cameras/")
-            ? "/api/custom/cameras/"
-            : "/api/cameras/";
-          const cameraId = pathname.substring(prefix.length);
+        const deleteCamMatch = pathname.match(/\/cameras\/([^/]+)$/);
+        if (req.method === "DELETE" && deleteCamMatch) {
+          const cameraId = decodeURIComponent(deleteCamMatch[1]);
           ScryptedHomeKitBridge.unmountCamera(cameraId);
           await ScryptedMatterBridge.unmountCamera(this, cameraId);
           const removed = await ScryptedStorage.removeCamera(cameraId);

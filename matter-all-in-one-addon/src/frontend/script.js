@@ -2629,7 +2629,7 @@ function openCameraConfigModal(camera) {
       showToast("Reiniciando vinculación HomeKit...");
       try {
         const res = await request(
-          `/custom/reset-camera-pairing/scrypted.${camera.cameraId}`,
+          `/reset-camera-pairing/scrypted.${camera.cameraId}`,
           { method: "POST" },
         );
         if (res.success && res.setupUri) {
@@ -2664,9 +2664,10 @@ function openCameraConfigModal(camera) {
       showToast("Desvinculando de Apple Home en tiempo real...");
       try {
         const res = await request(
-          `/custom/reset-camera-pairing/scrypted.${camera.cameraId}`,
+          `/reset-camera-pairing/scrypted.${camera.cameraId}`,
           { method: "POST" },
         );
+
         if (res.success && res.setupUri) {
           camera.identity.homeKitSetupUri = res.setupUri;
           camera.identity.homeKitPincode = res.record?.pincode || "031-45-154";
@@ -2719,7 +2720,7 @@ function openCameraConfigModal(camera) {
       }
       try {
         const res = await request(
-          `/custom/cameras/${camera.cameraId}/verify-stream`,
+          `/cameras/${camera.cameraId}/verify-stream`,
           {
             method: "POST",
             body: JSON.stringify({ streamUrl: url }),
@@ -2768,7 +2769,6 @@ function openCameraConfigModal(camera) {
     };
   }
 
-
   if (els.camCfgSaveRtspBtn) {
     els.camCfgSaveRtspBtn.onclick = async () => {
       const url = els.camCfgRtspUrl?.value?.trim();
@@ -2780,7 +2780,7 @@ function openCameraConfigModal(camera) {
       showToast("Guardando URL del stream...");
       try {
         const res = await request(
-          `/custom/cameras/${camera.cameraId}/stream-url`,
+          `/cameras/${camera.cameraId}/stream-url`,
           {
             method: "POST",
             body: JSON.stringify({ streamUrl: url }),
@@ -2807,6 +2807,7 @@ function openCameraConfigModal(camera) {
       }
     };
   }
+
 
   renderCamModalQr();
 
