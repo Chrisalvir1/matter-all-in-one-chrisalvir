@@ -9,7 +9,7 @@
       name="description"
       content="Gestiona de forma segura las entidades de Home Assistant exportadas mediante Matter."
     />
-    <link rel="stylesheet" href="style.css?v=1.4.68" />
+    <link rel="stylesheet" href="style.css?v=1.4.69" />
   </head>
   <body>
     <div class="ambient ambient-one"></div>
@@ -697,6 +697,7 @@
     </div>
 
     <!-- Modal: Configuración por Cámara -->
+    <!-- Modal: Detalle de Cámara, Código QR Liquid Glass y Configuración -->
     <div
       class="modal-backdrop"
       id="camera-config-modal"
@@ -714,53 +715,143 @@
         >
           ×
         </button>
-        <p class="eyebrow">CONFIGURACIÓN MULTI-DESTINO</p>
-        <h2 id="cam-cfg-title">Configurar Cámara</h2>
-        <p class="lead compact" id="cam-cfg-subtitle"></p>
+        <header class="modal-header">
+          <span class="modal-icon" style="font-size: 1.8rem;">📹</span>
+          <div>
+            <p class="eyebrow">CÁMARA SCRYPTED · MATTER JOINT FABRIC & HOMEKIT</p>
+            <h2 id="cam-cfg-title">Configurar Cámara</h2>
+            <p class="entity-id" id="cam-cfg-subtitle"></p>
+          </div>
+        </header>
 
-        <form id="camera-config-form" class="settings-form">
-          <input type="hidden" id="cam-cfg-id" />
-
-          <h3 style="font-size: 1rem; margin-top: 1rem;">Exportación a Plataformas</h3>
-          <div class="toggles-grid">
-            <label class="checkbox-row">
-              <input type="checkbox" id="cam-toggle-matter" checked />
-              <span><strong>Matter Camera 1.5 (Joint Fabric 1.6)</strong> · Expone el accesorio en el puente Matter compartido</span>
-            </label>
-            <label class="checkbox-row disabled">
-              <input type="checkbox" id="cam-toggle-hksv" checked disabled />
-              <span><strong>Apple Home HKSV (iOS 27 / tvOS 27 / homeOS 27)</strong> · Activo por defecto con prebuffer fMP4 en iCloud</span>
-            </label>
-            <label class="checkbox-row">
-              <input type="checkbox" id="cam-toggle-google" />
-              <span><strong>Google Home</strong> · Matter WebRTC (grabación en nube depende de suscripción Google Home Premium)</span>
-            </label>
-            <label class="checkbox-row">
-              <input type="checkbox" id="cam-toggle-alexa" />
-              <span><strong>Amazon Alexa</strong> · Matter WebRTC (grabación en nube depende de Ring Protect / fabricante)</span>
-            </label>
-            <label class="checkbox-row">
-              <input type="checkbox" id="cam-toggle-st" />
-              <span><strong>Samsung SmartThings</strong> · Matter WebRTC (grabación en Samsung Cloud)</span>
-            </label>
-            <label class="checkbox-row">
-              <input type="checkbox" id="cam-toggle-nas" />
-              <span><strong>Grabación Local NAS / Servidor</strong> · Copia directa de stream H.264 sin recodificación</span>
-            </label>
+        <div class="camera-modal-layout">
+          <!-- Columna 1: Código QR Liquid Glass Matter -->
+          <div class="qr-panel" style="max-width: 320px; width: 100%;">
+            <p class="card-label">CÓDIGO MATTER (JOINT FABRIC 1.6)</p>
+            <div class="qr-liquid-glass-card">
+              <div class="qr-visual-wrapper">
+                <div class="qr-frame-glow" aria-hidden="true"></div>
+                <div class="qr-frame">
+                  <div id="cam-modal-qr-code"></div>
+                  <div class="qr-center-logo" id="cam-modal-qr-logo" aria-hidden="true">
+                    <img src="logo.png" alt="Matter Logo" class="qr-logo-img" />
+                  </div>
+                </div>
+              </div>
+              <div class="qr-manual-box">
+                <span class="manual-code-label">CÓDIGO NUMÉRICO MANUAL</span>
+                <div class="manual-code-row">
+                  <code id="cam-modal-manual-code" class="manual-code-display">—————</code>
+                  <button
+                    class="button-copy-code"
+                    id="cam-modal-copy-code-btn"
+                    type="button"
+                    title="Copiar código al portapapeles"
+                    aria-label="Copiar código manual"
+                  >
+                    <span class="copy-icon">📋</span>
+                    <span class="copy-text">Copiar</span>
+                  </button>
+                </div>
+              </div>
+              <div class="qr-card-actions" style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
+                <button
+                  class="button-download-qr"
+                  id="cam-modal-download-qr-btn"
+                  type="button"
+                  title="Descargar código QR en alta resolución"
+                >
+                  <span>💾 Descargar QR (PNG)</span>
+                </button>
+                <button
+                  class="button button-sm button-secondary"
+                  id="cam-modal-share-code-btn"
+                  type="button"
+                  title="Compartir código"
+                >
+                  <span>📱 Compartir</span>
+                </button>
+              </div>
+              <small class="qr-note">Escanea con Apple Home, Google Home, Alexa o SmartThings para emparejar mediante Matter.</small>
+            </div>
           </div>
 
-          <h3 style="font-size: 1rem; margin-top: 1.5rem;">Sensores Integrados en el Accesorio</h3>
-          <div id="cam-cfg-sensors-list" class="sensors-checkbox-list"></div>
+          <!-- Columna 2: Especificaciones, Sensores, Exportación y Logs -->
+          <div class="selection-panel" style="flex: 1;">
+            <!-- Ficha Técnica -->
+            <div class="camera-modal-specs-box" style="margin-bottom: 1.25rem;">
+              <p class="card-label" style="margin-bottom: 6px;">ESPECIFICACIONES TÉCNICAS (SCRYPTED)</p>
+              <div id="cam-modal-video-spec" style="font-size: 0.85rem; color: var(--text); margin-bottom: 4px;"><strong>📹 Video:</strong> H.264 · 1920x1080 @ 30fps (Passthrough directo)</div>
+              <div id="cam-modal-audio-spec" style="font-size: 0.85rem; color: var(--text);"><strong>🔊 Audio:</strong> Sin audio · Remuxing fMP4 HKSV</div>
+            </div>
 
-          <div class="confirm-actions" style="margin-top: 2rem;">
-            <button class="button button-primary" type="submit">
-              💾 Guardar
-            </button>
-            <button class="button button-secondary" id="cam-cfg-cancel" type="button">
-              ❌ Cancelar
-            </button>
+            <form id="camera-config-form" class="settings-form">
+              <input type="hidden" id="cam-cfg-id" />
+
+              <p class="card-label">EXPORTACIÓN A PLATAFORMAS</p>
+              <div class="toggles-grid" style="margin-bottom: 1.25rem;">
+                <label class="checkbox-row">
+                  <input type="checkbox" id="cam-toggle-matter" checked />
+                  <span><strong>Matter Camera 1.5 (Joint Fabric 1.6)</strong> · Expone el accesorio en el puente Matter compartido</span>
+                </label>
+                <label class="checkbox-row disabled">
+                  <input type="checkbox" id="cam-toggle-hksv" checked disabled />
+                  <span><strong>Apple Home HKSV (iOS 27 / tvOS 27 / homeOS 27)</strong> · Activo por defecto con prebuffer fMP4 en iCloud</span>
+                </label>
+                <label class="checkbox-row">
+                  <input type="checkbox" id="cam-toggle-google" />
+                  <span><strong>Google Home</strong> · Matter WebRTC (grabación en nube depende de suscripción Google Home Premium)</span>
+                </label>
+                <label class="checkbox-row">
+                  <input type="checkbox" id="cam-toggle-alexa" />
+                  <span><strong>Amazon Alexa</strong> · Matter WebRTC (grabación en nube depende de Ring Protect / fabricante)</span>
+                </label>
+                <label class="checkbox-row">
+                  <input type="checkbox" id="cam-toggle-st" />
+                  <span><strong>Samsung SmartThings</strong> · Matter WebRTC (grabación en Samsung Cloud)</span>
+                </label>
+                <label class="checkbox-row">
+                  <input type="checkbox" id="cam-toggle-nas" />
+                  <span><strong>Grabación Local NAS / Servidor</strong> · Copia directa de stream H.264 sin recodificación</span>
+                </label>
+              </div>
+
+              <p class="card-label">SENSORES ASOCIADOS EN TIEMPO REAL</p>
+              <div id="cam-cfg-sensors-list" class="sensors-checkbox-list" style="margin-bottom: 1.25rem;"></div>
+
+              <!-- Log y Diagnóstico de la cámara -->
+              <div class="camera-log-section" style="margin-bottom: 1.5rem;">
+                <div class="camera-log-header">
+                  <span class="camera-log-title">
+                    <span>📜</span>
+                    <strong style="margin-left: 4px;">Log & Diagnóstico</strong>
+                    <span id="cam-modal-error-tag" style="color:#f87171;font-weight:700;display:none;margin-left:6px;"></span>
+                  </span>
+                  <div class="camera-log-actions">
+                    <button class="btn-toggle-log" id="cam-modal-toggle-log" type="button">📜 Ver log</button>
+                    <button class="btn-copy-log" id="cam-modal-copy-log" type="button" title="Copiar log técnico completo de esta cámara">📋 Copiar Log</button>
+                  </div>
+                </div>
+                <div class="camera-log-box" id="cam-modal-log-box" style="display: none; max-height: 140px; overflow-y: auto;"></div>
+              </div>
+
+              <div class="confirm-actions" style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; align-items: center;">
+                <button class="button button-secondary" id="cam-modal-nas-btn" type="button" style="display: none;">
+                  💾 Configurar NAS
+                </button>
+                <button class="button button-danger" id="cam-modal-delete-btn" type="button">
+                  🗑️ Eliminar Cámara
+                </button>
+                <button class="button button-secondary" id="cam-cfg-cancel" type="button">
+                  Cancelar
+                </button>
+                <button class="button button-primary" type="submit">
+                  💾 Guardar
+                </button>
+              </div>
+            </form>
           </div>
-        </form>
+        </div>
       </section>
     </div>
 
@@ -861,7 +952,7 @@
     </div>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="qrcode.min.js?v=1.4.68"></script>
-    <script src="script.js?v=1.4.68"></script>
+    <script src="qrcode.min.js?v=1.4.69"></script>
+    <script src="script.js?v=1.4.69"></script>
   </body>
 </html>

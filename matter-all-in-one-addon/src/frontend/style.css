@@ -1361,7 +1361,8 @@ mark {
   align-items: center;
 }
 
-#device-qr-code {
+#device-qr-code,
+#cam-modal-qr-code {
   width: 224px;
   height: 224px;
   display: flex;
@@ -1370,8 +1371,11 @@ mark {
 }
 
 #device-qr-code svg,
+#cam-modal-qr-code svg,
 #device-qr-code canvas,
-#device-qr-code img {
+#cam-modal-qr-code canvas,
+#device-qr-code img,
+#cam-modal-qr-code img {
   width: 100% !important;
   height: 100% !important;
   display: block;
@@ -2042,21 +2046,49 @@ mark {
 
 /* Individual Scrypted Camera Card */
 .scrypted-camera-card {
+  position: relative;
   background: rgba(255, 255, 255, 0.04);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 16px;
-  padding: 16px;
+  border-radius: 18px;
+  padding: 18px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  min-height: 220px;
+  cursor: pointer;
+  transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
 }
 
 .scrypted-camera-card:hover {
-  border-color: rgba(56, 189, 248, 0.35);
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3);
+  transform: translateY(-4px);
+  border-color: rgba(56, 189, 248, 0.45);
+  background: rgba(25, 39, 67, 0.8);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.35);
+}
+
+.camera-modal-layout {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 22px;
+  padding-top: 18px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  align-items: start;
+}
+
+@media (max-width: 860px) {
+  .camera-modal-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.camera-modal-specs-box {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  padding: 12px 14px;
 }
 
 .card-top-row {

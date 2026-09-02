@@ -128,6 +128,20 @@ const els = {
   camToggleNas: $("cam-toggle-nas"),
   camCfgSensorsList: $("cam-cfg-sensors-list"),
   camCfgCancel: $("cam-cfg-cancel"),
+  camModalQrCode: $("cam-modal-qr-code"),
+  camModalQrLogo: $("cam-modal-qr-logo"),
+  camModalManualCode: $("cam-modal-manual-code"),
+  camModalCopyCodeBtn: $("cam-modal-copy-code-btn"),
+  camModalDownloadQrBtn: $("cam-modal-download-qr-btn"),
+  camModalShareCodeBtn: $("cam-modal-share-code-btn"),
+  camModalVideoSpec: $("cam-modal-video-spec"),
+  camModalAudioSpec: $("cam-modal-audio-spec"),
+  camModalErrorTag: $("cam-modal-error-tag"),
+  camModalToggleLog: $("cam-modal-toggle-log"),
+  camModalCopyLog: $("cam-modal-copy-log"),
+  camModalLogBox: $("cam-modal-log-box"),
+  camModalNasBtn: $("cam-modal-nas-btn"),
+  camModalDeleteBtn: $("cam-modal-delete-btn"),
   nasConfigModal: $("nas-config-modal"),
   nasCfgClose: $("nas-cfg-close"),
   nasCfgForm: $("nas-config-form"),
@@ -2314,211 +2328,46 @@ function buildScryptedModelSection(brandName, cameras) {
 
 function buildScryptedCameraCard(camera) {
   const card = document.createElement("article");
-  card.className = "scrypted-camera-card is-scrypted-camera";
+  card.className = "device-card scrypted-camera-card is-scrypted-camera";
   card.dataset.cameraId = camera.cameraId;
 
   const brand = extractCameraBrand(camera);
   const isOnline = camera.status?.connection === "online";
   const statusDot = isOnline ? "🟢" : "🔴";
   const statusText = isOnline ? "En línea" : "Desconectado";
-  const matterCode = camera.identity?.matterPairingCode || "ABCD-1234-EFGH";
-
-  const videoCodec =
-    camera.capabilities?.observed?.videoCodec?.toUpperCase() || "H.264";
-  const profile = camera.capabilities?.observed?.profile
-    ? ` (${camera.capabilities.observed.profile})`
-    : "";
-  const res = camera.capabilities?.observed?.resolution
-    ? `${camera.capabilities.observed.resolution.width}x${camera.capabilities.observed.resolution.height}`
-    : "1920x1080";
-  const fps = camera.capabilities?.observed?.fps || 30;
-  const audio = camera.capabilities?.observed?.hasAudio
-    ? "AAC estéreo"
-    : "Sin audio";
-
-  const sensorsHtml = (camera.sensors || [])
-    .map((s) => {
-      const icon =
-        s.type === "motion"
-          ? "🏃"
-          : s.type === "doorbell"
-            ? "🔔"
-            : s.type === "person"
-              ? "👤"
-              : s.type === "package"
-                ? "📦"
-                : s.type === "light"
-                  ? "💡"
-                  : "🏠";
-      const stateLabel = s.state ? "Detectado" : "Inactivo";
-      const activeClass = s.state ? " active" : "";
-      return `<span class="sensor-pill${activeClass}"><span class="dot"></span>${icon} ${escapeHtml(s.name)}: ${stateLabel}</span>`;
-    })
-    .join("");
-
-  const exp = camera.exportConfig || {};
-  const logs = camera.status?.logs || [
-    {
-      timestamp: new Date().toISOString(),
-      level: "info",
-      message: "Stream RTSP rebroadcast en puerto 8554 verificado.",
-      details: "Passthrough H.264 sin recodificación",
-    },
-    {
-      timestamp: new Date().toISOString(),
-      level: "info",
-      message: "HomeKit Secure Video fMP4 buffer activo (iOS 27 / tvOS 27).",
-    },
-  ];
-
-  const hasError = Boolean(camera.status?.lastError);
-  const brandOrigin =
-    camera.identityOverride?.manufacturerSource === "manual"
-      ? "Configurado manualmente"
-      : camera.sourceManufacturer
-        ? "Detectado por Scrypted"
-        : "No identificado";
   const modelDisplay =
-    camera.displayModel || camera.model || "Modelo no identificado";
+    camera.displayModel || camera.model || "";
+  const sensorsCount = camera.sensors?.length || 0;
 
   card.innerHTML = `
-    <div class="card-top-row">
-      <div class="card-title-group">
-        <h4>${escapeHtml(camera.name)}</h4>
-        <div class="card-subtitle">${statusDot} ${statusText} · <span class="badge-scrypted-source">⚡ Scrypted</span> · ${escapeHtml(brand)} (${escapeHtml(modelDisplay)}) · <span class="badge-brand-origin">${escapeHtml(brandOrigin)}</span></div>
-      </div>
+    <div class="card-top">
+      <span class="device-icon" style="font-size: 1.4rem;">📹</span>
       <div class="card-pills-group">
         <span class="badge-scrypted-tag">SCRYPTED</span>
-        <span class="codec-pill">● Sin recodificación local</span>
+        <span class="export-badge active">1/1</span>
       </div>
     </div>
-
-    <div class="matter-code-container" title="Este código comisiona el puente Matter completo (Joint Fabric 1.6). Todas las cámaras y sensores se descubrirán automáticamente en Apple Home, Google Home, Alexa y SmartThings.">
-      <span class="matter-code-text">${escapeHtml(matterCode)}</span>
-      <div class="matter-code-actions">
-        <button class="btn-mini btn-copy-code" type="button">📋 Copiar</button>
-        <button class="btn-mini btn-share-code" type="button">📱 Compartir</button>
-      </div>
+    <h3 title="${escapeHtml(camera.name)}">${escapeHtml(camera.name)}</h3>
+    <p class="device-meta">${statusDot} ${statusText} · ${escapeHtml(brand)}${modelDisplay && modelDisplay !== "Modelo no identificado" ? ` (${escapeHtml(modelDisplay)})` : ""}</p>
+    <div class="tags">
+      <span class="tag tag-brand">${escapeHtml(brand)}</span>
+      <span class="badge-scrypted-source">⚡ Scrypted</span>
+      <span class="codec-pill">● Passthrough H.264</span>
+      ${sensorsCount > 0 ? `<span class="tag">${sensorsCount} sensor${sensorsCount === 1 ? "" : "es"}</span>` : ""}
     </div>
-
-    <div class="camera-tech-specs">
-      <div><strong>Video:</strong> ${videoCodec}${profile} · ${res} @ ${fps}fps (Passthrough directo)</div>
-      <div><strong>Audio:</strong> ${audio} · Remuxing fMP4 HKSV</div>
-    </div>
-
-    <div class="sensors-inside-card">
-      <div class="sensors-label">Sensores Asociados en Tiempo Real</div>
-      <div class="sensors-pills-row">
-        ${sensorsHtml || '<span style="font-size:0.75rem; color:var(--text-secondary);">Sin sensores configurados</span>'}
-      </div>
-    </div>
-
-    <div class="export-destinations-summary">
-      <div class="export-item ${exp.matterEnabled ? "enabled" : ""}">
-        ${exp.matterEnabled ? "☑️" : "☐"} Matter Camera 1.5 (Joint Fabric 1.6)
-      </div>
-      <div class="export-item ${exp.hksvEnabledByDefault ? "enabled" : ""}">
-        ${exp.hksvEnabledByDefault ? "☑️" : "☐"} Apple Home HKSV (iOS 27 / tvOS 27 / homeOS 27)
-      </div>
-      <div class="export-item ${exp.googleHomeEnabled ? "enabled" : ""}">
-        ${exp.googleHomeEnabled ? "☑️" : "☐"} Google Home (Matter WebRTC · Grabación depende de Google)
-      </div>
-      <div class="export-item ${exp.alexaEnabled ? "enabled" : ""}">
-        ${exp.alexaEnabled ? "☑️" : "☐"} Amazon Alexa (Matter WebRTC · Grabación depende de Alexa)
-      </div>
-      <div class="export-item ${exp.smartThingsEnabled ? "enabled" : ""}">
-        ${exp.smartThingsEnabled ? "☑️" : "☐"} SmartThings (Matter WebRTC · Grabación depende de ST)
-      </div>
-      <div class="export-item ${exp.nasEnabled ? "enabled" : ""}">
-        ${exp.nasEnabled ? "☑️" : "☐"} Grabación Local NAS / Servidor
-      </div>
-    </div>
-
-    <!-- Per-Camera Specific Diagnostics & Log -->
-    <div class="camera-log-section">
-      <div class="camera-log-header">
-        <span class="camera-log-title">
-          <span>📜</span>
-          <span>Log & Diagnóstico</span>
-          ${hasError ? `<span style="color:#f87171;font-weight:700;">(⚠️ ${escapeHtml(camera.status.lastError)})</span>` : ""}
-        </span>
-        <div class="camera-log-actions">
-          <button class="btn-toggle-log" type="button">📜 Ver log</button>
-          <button class="btn-copy-log" type="button" title="Copiar log técnico completo de esta cámara">📋 Copiar Log</button>
-        </div>
-      </div>
-      <div class="camera-log-box" style="display: none;">
-        ${logs
-          .map(
-            (l) =>
-              `<div class="camera-log-item ${l.level || "info"}">[${(l.timestamp || "").slice(11, 19)}] [${(l.level || "info").toUpperCase()}] ${escapeHtml(l.message || "")} ${l.details ? "· " + escapeHtml(typeof l.details === "object" ? JSON.stringify(l.details) : l.details) : ""}</div>`,
-          )
-          .join("")}
-      </div>
-    </div>
-
-    <div class="card-actions-row">
-      ${exp.nasEnabled ? '<button class="button button-sm button-secondary btn-cfg-nas" type="button">💾 NAS</button>' : ""}
-      <button class="button button-sm button-secondary btn-cfg-camera" type="button">⚙️ Configurar</button>
-      <button class="button button-sm button-danger btn-del-camera" type="button">🗑️ Eliminar</button>
+    <div class="card-footer">
+      <span class="entity-summary">Toca para ver QR y detalles</span>
+      <button class="button button-secondary" type="button">Configurar</button>
     </div>
   `;
 
-  const logBox = card.querySelector(".camera-log-box");
-  const toggleLogBtn = card.querySelector(".btn-toggle-log");
-  toggleLogBtn?.addEventListener("click", () => {
-    if (!logBox) return;
-    const isHidden = logBox.style.display === "none";
-    logBox.style.display = isHidden ? "block" : "none";
-    toggleLogBtn.textContent = isHidden ? "Ocultar log" : "📜 Ver log";
-  });
-
-  card.querySelector(".btn-copy-log")?.addEventListener("click", () => {
-    copyCameraLog(camera.cameraId);
-  });
-
-  card.querySelector(".btn-copy-code")?.addEventListener("click", () => {
-    navigator.clipboard.writeText(matterCode);
-    showToast(`Código Matter copiado: ${matterCode}`);
-  });
-
-  card.querySelector(".btn-share-code")?.addEventListener("click", () => {
-    if (navigator.share) {
-      navigator
-        .share({
-          title: `Vincular ${camera.name} en Matter`,
-          text: `Código Matter para ${camera.name}: ${matterCode}`,
-        })
-        .catch(() => {});
-    } else {
-      navigator.clipboard.writeText(matterCode);
-      showToast(`Código Matter copiado: ${matterCode}`);
-    }
-  });
-
-  card.querySelector(".btn-cfg-camera")?.addEventListener("click", () => {
+  card.addEventListener("click", () => {
     openCameraConfigModal(camera);
   });
 
-  card.querySelector(".btn-cfg-nas")?.addEventListener("click", () => {
-    openNasConfigModal(camera);
-  });
-
-  card.querySelector(".btn-del-camera")?.addEventListener("click", () => {
-    state.confirmAction = async () => {
-      try {
-        await request(`/cameras/${camera.cameraId}`, { method: "DELETE" });
-        showToast(`Cámara ${camera.name} eliminada.`);
-        await fetchScrypted();
-        renderDevices();
-      } catch (err) {
-        showToast(err.message || "Error al eliminar cámara", true);
-      }
-    };
-    els.confirmTitle.textContent = `¿Eliminar ${camera.name}?`;
-    els.confirmDescription.textContent =
-      "Esta acción desmontará los accesorios HomeKit y endpoints Matter asociados.";
-    setModalOpen(els.confirmModal, true);
+  card.querySelector("button")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    openCameraConfigModal(camera);
   });
 
   return card;
@@ -2567,29 +2416,199 @@ function openScryptedModal() {
 
 function openCameraConfigModal(camera) {
   if (!els.cameraConfigModal) return;
+
+  const brand = extractCameraBrand(camera);
+  const isOnline = camera.status?.connection === "online";
+  const statusDot = isOnline ? "🟢" : "🔴";
+  const statusText = isOnline ? "En línea" : "Desconectado";
+  const modelDisplay =
+    camera.displayModel || camera.model || "Modelo no identificado";
+
   els.camCfgId.value = camera.cameraId;
-  els.camCfgTitle.textContent = `⚙️ Configurar ${camera.name}`;
-  els.camCfgSubtitle.textContent = `Modelo: ${camera.displayModel || camera.model || "Cámara IP"} · ID: ${camera.cameraId}`;
+  els.camCfgTitle.textContent = camera.name;
+  els.camCfgSubtitle.textContent = `${statusDot} ${statusText} · ${brand}${modelDisplay && modelDisplay !== "Modelo no identificado" ? ` (${modelDisplay})` : ""} · ID: ${camera.cameraId}`;
 
+  // 1. Render Liquid Glass QR Code (New Matter QR feature)
+  const bridgeEntity =
+    (state.entities || []).find(
+      (e) => e.pairingCode && (e.isBridge || e.entityId?.includes("bridge")),
+    ) || (state.entities || []).find((e) => e.pairingCode);
+
+  const pairingCode =
+    camera.identity?.matterPairingCode ||
+    bridgeEntity?.pairingCode ||
+    "ABCD-1234-EFGH";
+
+  const manualCode =
+    camera.identity?.matterPairingCode ||
+    bridgeEntity?.manualPairingCode ||
+    pairingCode;
+
+  if (els.camModalManualCode) {
+    els.camModalManualCode.textContent = formatManualCode(manualCode);
+  }
+
+  if (els.camModalQrCode) {
+    els.camModalQrCode.innerHTML = "";
+    els.camModalQrCode.dataset.pairingCode = pairingCode;
+    els.camModalQrCode.dataset.cameraId = camera.cameraId;
+
+    try {
+      if (typeof QRCode !== "undefined") {
+        new QRCode(els.camModalQrCode, {
+          text: pairingCode,
+          width: 224,
+          height: 224,
+          colorDark: "#09101f",
+          colorLight: "#ffffff",
+          correctLevel: QRCode.CorrectLevel.H,
+        });
+        if (els.camModalQrLogo) els.camModalQrLogo.style.display = "flex";
+      } else {
+        els.camModalQrCode.textContent = "Librería QR no cargada.";
+        if (els.camModalQrLogo) els.camModalQrLogo.style.display = "none";
+      }
+    } catch (err) {
+      console.error("Error al renderizar QR de cámara:", err);
+      els.camModalQrCode.textContent = "Error al generar código QR.";
+      if (els.camModalQrLogo) els.camModalQrLogo.style.display = "none";
+    }
+  }
+
+  // 2. Technical specs
+  const videoCodec =
+    camera.capabilities?.observed?.videoCodec?.toUpperCase() || "H.264";
+  const profile = camera.capabilities?.observed?.profile
+    ? ` (${camera.capabilities.observed.profile})`
+    : "";
+  const res = camera.capabilities?.observed?.resolution
+    ? `${camera.capabilities.observed.resolution.width}x${camera.capabilities.observed.resolution.height}`
+    : "1920x1080";
+  const fps = camera.capabilities?.observed?.fps || 30;
+  const audio = camera.capabilities?.observed?.hasAudio
+    ? "AAC estéreo"
+    : "Sin audio";
+
+  if (els.camModalVideoSpec) {
+    els.camModalVideoSpec.innerHTML = `<strong>📹 Video:</strong> ${escapeHtml(videoCodec)}${escapeHtml(profile)} · ${escapeHtml(res)} @ ${fps}fps (Passthrough directo sin recodificación)`;
+  }
+  if (els.camModalAudioSpec) {
+    els.camModalAudioSpec.innerHTML = `<strong>🔊 Audio:</strong> ${escapeHtml(audio)} · Remuxing fMP4 HKSV activo (iOS 27 / tvOS 27)`;
+  }
+
+  // 3. Platform toggles
   const exp = camera.exportConfig || {};
-  els.camToggleMatter.checked = exp.matterEnabled !== false;
-  els.camToggleGoogle.checked = Boolean(exp.googleHomeEnabled);
-  els.camToggleAlexa.checked = Boolean(exp.alexaEnabled);
-  els.camToggleSt.checked = Boolean(exp.smartThingsEnabled);
-  els.camToggleNas.checked = Boolean(exp.nasEnabled);
+  if (els.camToggleMatter)
+    els.camToggleMatter.checked = exp.matterEnabled !== false;
+  if (els.camToggleGoogle)
+    els.camToggleGoogle.checked = Boolean(exp.googleHomeEnabled);
+  if (els.camToggleAlexa)
+    els.camToggleAlexa.checked = Boolean(exp.alexaEnabled);
+  if (els.camToggleSt)
+    els.camToggleSt.checked = Boolean(exp.smartThingsEnabled);
+  if (els.camToggleNas)
+    els.camToggleNas.checked = Boolean(exp.nasEnabled);
 
-  // Populate sensors list
+  // 4. Sensors list
   if (els.camCfgSensorsList) {
-    els.camCfgSensorsList.innerHTML = (camera.sensors || [])
+    const sensors = camera.sensors || [];
+    if (sensors.length > 0) {
+      els.camCfgSensorsList.innerHTML = sensors
+        .map((s) => {
+          const icon =
+            s.type === "motion"
+              ? "🏃"
+              : s.type === "doorbell"
+                ? "🔔"
+                : s.type === "person"
+                  ? "👤"
+                  : s.type === "package"
+                    ? "📦"
+                    : s.type === "light"
+                      ? "💡"
+                      : "🏠";
+          const stateLabel = s.state ? "🟢 Detectado" : "⚪ Inactivo";
+          return `
+          <label class="checkbox-row" style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <input type="checkbox" name="sensor_${s.sensorId}" data-sensor-id="${s.sensorId}" ${s.enabled !== false ? "checked" : ""} />
+              <span>${icon} ${escapeHtml(s.name)}</span>
+            </div>
+            <span style="font-size: 0.8rem; color: var(--text-secondary);">${stateLabel}</span>
+          </label>
+        `;
+        })
+        .join("");
+    } else {
+      els.camCfgSensorsList.innerHTML =
+        '<p style="color:var(--text-secondary); font-size:0.85rem; margin: 4px 0;">Sin sensores detectados.</p>';
+    }
+  }
+
+  // 5. Camera Logs
+  const logs = camera.status?.logs || [
+    {
+      timestamp: new Date().toISOString(),
+      level: "info",
+      message: "Stream RTSP rebroadcast en puerto 8554 verificado.",
+      details: "Passthrough H.264 sin recodificación",
+    },
+    {
+      timestamp: new Date().toISOString(),
+      level: "info",
+      message: "HomeKit Secure Video fMP4 buffer activo (iOS 27 / tvOS 27).",
+    },
+  ];
+
+  if (els.camModalErrorTag) {
+    if (camera.status?.lastError) {
+      els.camModalErrorTag.style.display = "inline";
+      els.camModalErrorTag.textContent = `(⚠️ ${camera.status.lastError})`;
+    } else {
+      els.camModalErrorTag.style.display = "none";
+    }
+  }
+
+  if (els.camModalLogBox) {
+    els.camModalLogBox.style.display = "none";
+    els.camModalLogBox.innerHTML = logs
       .map(
-        (s) => `
-        <label class="checkbox-row">
-          <input type="checkbox" name="sensor_${s.sensorId}" data-sensor-id="${s.sensorId}" ${s.enabled !== false ? "checked" : ""} />
-          <span>${escapeHtml(s.name)} (${s.type})</span>
-        </label>
-      `,
+        (l) =>
+          `<div class="camera-log-item ${l.level || "info"}">[${(l.timestamp || "").slice(11, 19)}] [${(l.level || "info").toUpperCase()}] ${escapeHtml(l.message || "")} ${l.details ? "· " + escapeHtml(typeof l.details === "object" ? JSON.stringify(l.details) : l.details) : ""}</div>`,
       )
       .join("");
+  }
+  if (els.camModalToggleLog) {
+    els.camModalToggleLog.textContent = "📜 Ver log";
+  }
+
+  // 6. Action buttons
+  if (els.camModalNasBtn) {
+    els.camModalNasBtn.style.display = exp.nasEnabled ? "inline-block" : "none";
+    els.camModalNasBtn.onclick = () => {
+      setModalOpen(els.cameraConfigModal, false);
+      openNasConfigModal(camera);
+    };
+  }
+
+  if (els.camModalDeleteBtn) {
+    els.camModalDeleteBtn.onclick = () => {
+      setModalOpen(els.cameraConfigModal, false);
+      state.confirmAction = async () => {
+        try {
+          await request(`/cameras/${camera.cameraId}`, { method: "DELETE" });
+          showToast(`Cámara ${camera.name} eliminada.`);
+          await fetchScrypted();
+          renderDevices();
+        } catch (err) {
+          showToast(err.message || "Error al eliminar cámara", true);
+        }
+      };
+      els.confirmTitle.textContent = `¿Eliminar ${camera.name}?`;
+      els.confirmDescription.textContent =
+        "Esta acción desmontará los accesorios HomeKit y endpoints Matter asociados.";
+      setModalOpen(els.confirmModal, true);
+    };
   }
 
   setModalOpen(els.cameraConfigModal, true);
@@ -2759,6 +2778,140 @@ els.camCfgClose?.addEventListener("click", () => {
 });
 els.camCfgCancel?.addEventListener("click", () => {
   setModalOpen(els.cameraConfigModal, false);
+});
+
+// Copy manual pairing code from camera modal
+els.camModalCopyCodeBtn?.addEventListener("click", async () => {
+  const codeText = els.camModalManualCode?.textContent?.trim();
+  if (!codeText || codeText === "—————") return;
+  const cleanCode = codeText.replace(/\s+/g, "");
+  try {
+    await navigator.clipboard.writeText(cleanCode);
+    const copyTextEl = els.camModalCopyCodeBtn.querySelector(".copy-text");
+    if (copyTextEl) copyTextEl.textContent = "¡Copiado!";
+    els.camModalCopyCodeBtn.classList.add("copied");
+    setTimeout(() => {
+      if (copyTextEl) copyTextEl.textContent = "Copiar";
+      els.camModalCopyCodeBtn.classList.remove("copied");
+    }, 2000);
+    showToast("✓ Código copiado al portapapeles: " + cleanCode);
+  } catch {
+    showToast("Código: " + cleanCode);
+  }
+});
+
+// Share code
+els.camModalShareCodeBtn?.addEventListener("click", () => {
+  const codeText = els.camModalManualCode?.textContent?.trim() || "";
+  const cameraId = els.camCfgId?.value;
+  const camera = state.scryptedCameras?.find((c) => c.cameraId === cameraId);
+  const cameraName = camera?.name || "Cámara";
+  if (navigator.share) {
+    navigator
+      .share({
+        title: `Vincular ${cameraName} en Matter`,
+        text: `Código Matter para ${cameraName}: ${codeText}`,
+      })
+      .catch(() => {});
+  } else {
+    navigator.clipboard.writeText(codeText);
+    showToast(`✓ Código copiado: ${codeText}`);
+  }
+});
+
+// Download camera QR
+els.camModalDownloadQrBtn?.addEventListener("click", () => {
+  const pairingCode = els.camModalQrCode?.dataset.pairingCode;
+  if (!pairingCode) return;
+  const cameraId = els.camCfgId?.value;
+  const camera = state.scryptedCameras?.find((c) => c.cameraId === cameraId);
+  const cameraName = camera?.name || "camera-matter";
+  const filename = `${cameraName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-matter-qr.png`;
+
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1024;
+    canvas.height = 1024;
+    const ctx = canvas.getContext("2d");
+
+    if (typeof QRCode !== "undefined" && QRCode.toCanvas) {
+      QRCode.toCanvas(canvas, pairingCode, {
+        width: 900,
+        margin: 2,
+        errorCorrectionLevel: "H",
+        color: { dark: "#09101f", light: "#ffffff" },
+      })
+        .then(() => {
+          const logoImg = new Image();
+          logoImg.onload = () => {
+            const logoSize = 180;
+            const pos = (1024 - logoSize) / 2;
+            ctx.fillStyle = "#ffffff";
+            ctx.beginPath();
+            ctx.roundRect(pos - 12, pos - 12, logoSize + 24, logoSize + 24, 28);
+            ctx.fill();
+            ctx.shadowColor = "rgba(0,0,0,0.25)";
+            ctx.shadowBlur = 18;
+            ctx.drawImage(logoImg, pos, pos, logoSize, logoSize);
+
+            const a = document.createElement("a");
+            a.download = filename;
+            a.href = canvas.toDataURL("image/png");
+            a.click();
+            showToast("✓ Código QR de la cámara descargado exitosamente");
+          };
+          logoImg.onerror = () => {
+            const a = document.createElement("a");
+            a.download = filename;
+            a.href = canvas.toDataURL("image/png");
+            a.click();
+            showToast("✓ Código QR de la cámara descargado");
+          };
+          logoImg.src = "logo.png";
+        })
+        .catch(() => {
+          const existing =
+            els.camModalQrCode?.querySelector("canvas") ||
+            els.camModalQrCode?.querySelector("img");
+          if (existing) {
+            const a = document.createElement("a");
+            a.download = filename;
+            a.href = existing.src || existing.toDataURL?.("image/png");
+            a.click();
+            showToast("✓ Código QR descargado");
+          }
+        });
+    } else {
+      const existing =
+        els.camModalQrCode?.querySelector("canvas") ||
+        els.camModalQrCode?.querySelector("img");
+      if (existing) {
+        const a = document.createElement("a");
+        a.download = filename;
+        a.href = existing.src || existing.toDataURL?.("image/png");
+        a.click();
+        showToast("✓ Código QR descargado");
+      }
+    }
+  } catch (err) {
+    showToast("Error al exportar QR: " + (err.message || err), true);
+  }
+});
+
+// Toggle camera log
+els.camModalToggleLog?.addEventListener("click", () => {
+  if (!els.camModalLogBox) return;
+  const isHidden = els.camModalLogBox.style.display === "none";
+  els.camModalLogBox.style.display = isHidden ? "block" : "none";
+  els.camModalToggleLog.textContent = isHidden ? "Ocultar log" : "📜 Ver log";
+});
+
+// Copy camera log
+els.camModalCopyLog?.addEventListener("click", () => {
+  const cameraId = els.camCfgId?.value;
+  if (cameraId) {
+    copyCameraLog(cameraId);
+  }
 });
 
 els.camCfgForm?.addEventListener("submit", async (e) => {

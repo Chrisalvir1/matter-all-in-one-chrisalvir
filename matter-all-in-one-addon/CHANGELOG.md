@@ -1,3 +1,11 @@
+## [1.4.69] - 2026-09-01
+
+### Minimalist Camera Cards, Interactive Details Modal & Liquid Glass Matter QR Code
+
+- **Tarjetas de Cámara Minimalistas y Limpias:** En la cuadrícula principal agrupada por marca, las tarjetas de cámara ahora solo muestran la información esencial (icono de cámara, nombre, marca, modelo, estado en línea y tags clave), eliminando la sobrecarga visual de códigos, especificaciones, sensores y checkboxes del grid principal.
+- **Modal Completo de Detalle y Configuración:** Al hacer clic en cualquier tarjeta o en el botón "Configurar", se abre el modal ampliado de la cámara con toda la información técnica detallada: especificaciones de video y audio en tiempo real, sensores asociados con estado en vivo, toggles de exportación a plataformas (Matter, Apple Home HKSV, Google Home, Alexa, SmartThings, NAS), visor de logs y acciones.
+- **Código QR Liquid Glass Matter Integrado:** El modal de cámara incorpora el nuevo componente Liquid Glass QR con código QR de comisionamiento Matter en alta definición, logotipo central de Matter, código numérico manual formateado, botón de copia rápida al portapapeles con animación ("¡Copiado!"), botón para compartir y botón de descarga en PNG de alta resolución (1024x1024 con canvas y sombra).
+
 ## [1.4.68] - 2026-09-01
 
 ### Fix Scrypted Device Enumeration & Real-Time Camera Loading in UI
