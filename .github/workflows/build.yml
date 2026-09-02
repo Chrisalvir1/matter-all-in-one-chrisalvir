@@ -11,6 +11,10 @@ on:
       - "**/*.md"
   workflow_dispatch:
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   build:
     runs-on: ${{ matrix.os }}
@@ -37,7 +41,25 @@ jobs:
         run: npm ci --legacy-peer-deps --no-fund --no-audit
 
       - name: Typecheck
-        run: npm run typecheck
+        id: typecheck
+        continue-on-error: true
+        run: npm run typecheck 2>&1 | tee /tmp/v1.4.84-typecheck.txt
+
+      - name: Report typecheck result on PR
+        if: always() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          text = Path('/tmp/v1.4.84-typecheck.txt').read_text(errors='replace')[-50000:]
+          Path('/tmp/v1.4.84-comment.txt').write_text('## v1.4.84 isolated typecheck\n\n```text\n' + text + '\n```\n')
+          PY
+          gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/v1.4.84-comment.txt
+
+      - name: Stop on typecheck failure
+        if: steps.typecheck.outcome == 'failure'
+        run: exit 1
 
       - name: Build plugin
         run: npm run build
