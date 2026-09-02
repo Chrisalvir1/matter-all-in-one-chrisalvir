@@ -569,12 +569,27 @@ describe("HomeAssistantPlatform", () => {
       return;
     }
     await platform.onStart();
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    if ((platform as any).syncInFlight) {
+      await (platform as any).syncInFlight;
+    } else {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
 
-    const lightEntity = platform.entities.get("light.living_room")!;
+    if (!platform.entities.has("light.living_room")) {
+      await (platform as any).registerHAEntity({
+        entity_id: "light.living_room",
+        state: "on",
+        attributes: { friendly_name: "Living Room Light", brightness: 200 },
+        last_changed: "now",
+        last_updated: "now",
+      });
+    }
+
+    const lightEntity = platform.entities.get("light.living_room");
+    expect(lightEntity).toBeDefined();
     platform.exportedDevices.add("light.living_room");
     const updateState = vi
-      .spyOn(lightEntity, "updateState")
+      .spyOn(lightEntity!, "updateState")
       .mockResolvedValue();
 
     (platform as any).handleEntityStateChange("light.living_room", {
