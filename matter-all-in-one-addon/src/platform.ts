@@ -56,6 +56,7 @@ import { ScryptedClient } from "./camera/scrypted/scrypted-client.js";
 import { ScryptedReconnectManager } from "./camera/scrypted/scrypted-reconnect-manager.js";
 import { ScryptedHomeKitBridge } from "./camera/scrypted/scrypted-homekit-bridge.js";
 import { ScryptedMatterBridge } from "./camera/scrypted/scrypted-matter-bridge.js";
+import { ScryptedStreamValidator } from "./camera/scrypted/scrypted-stream-validator.js";
 
 export interface HomeAssistantPlatformConfig extends PlatformConfig {
   host?: string; // Optional: auto-detected from network/supervisor if not set
@@ -4775,6 +4776,155 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             "Content-Type": "application/json; charset=utf-8",
           });
           res.end(JSON.stringify({ ok: reachable, host, port }));
+          return;
+        }
+
+        // POST /api/custom/cameras/:id/verify-stream
+        if (
+          req.method === "POST" &&
+          (pathname.startsWith("/api/cameras/") ||
+            pathname.startsWith("/api/custom/cameras/")) &&
+          pathname.endsWith("/verify-stream")
+        ) {
+          const prefix = pathname.startsWith("/api/custom/cameras/")
+            ? "/api/custom/cameras/"
+            : "/api/cameras/";
+          const cameraId = pathname.substring(
+            prefix.length,
+            pathname.length - "/verify-stream".length,
+          );
+          let bodyStr = "";
+          for await (const chunk of req) bodyStr += chunk.toString();
+          let parsed: any = {};
+          try {
+            parsed = JSON.parse(bodyStr);
+          } catch {}
+
+          const store = await ScryptedStorage.load();
+          const camera = store.cameras.cameras.find(
+            (c) => c.cameraId === cameraId,
+          );
+          if (!camera) {
+            res.writeHead(404, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ error: "Cámara no encontrada" }));
+            return;
+          }
+
+          const targetUrl =
+            String(parsed.streamUrl || "").trim() ||
+            camera.source.streamReference?.directUrl ||
+            "";
+
+          const validation = await ScryptedStreamValidator.validateStreamUrl(
+            targetUrl,
+            cameraId,
+            parsed.timeoutMs ? Number(parsed.timeoutMs) : 8000,
+          );
+
+          await ScryptedStorage.updateCameraStreamValidation(
+            cameraId,
+            validation.status,
+            validation.error,
+          );
+
+          if (validation.status === "verified") {
+            camera.status.connection = "online";
+            camera.status.cache = "fresh";
+            await ScryptedStorage.save(store);
+
+            // Remount with verified stream
+            try {
+              await ScryptedHomeKitBridge.unmountCamera(cameraId);
+              await ScryptedHomeKitBridge.mountCamera(this, camera);
+            } catch (remountErr) {
+              this.log.warn(
+                `[Scrypted] Remount after verification note: ${remountErr}`,
+              );
+            }
+          }
+
+          res.writeHead(200, {
+            "Content-Type": "application/json; charset=utf-8",
+          });
+          res.end(
+            JSON.stringify({
+              ok: validation.status === "verified",
+              status: validation.status,
+              validation,
+              camera,
+            }),
+          );
+          return;
+        }
+
+        // POST /api/custom/cameras/:id/select-profile
+        if (
+          req.method === "POST" &&
+          (pathname.startsWith("/api/cameras/") ||
+            pathname.startsWith("/api/custom/cameras/")) &&
+          pathname.endsWith("/select-profile")
+        ) {
+          const prefix = pathname.startsWith("/api/custom/cameras/")
+            ? "/api/custom/cameras/"
+            : "/api/cameras/";
+          const cameraId = pathname.substring(
+            prefix.length,
+            pathname.length - "/select-profile".length,
+          );
+          let bodyStr = "";
+          for await (const chunk of req) bodyStr += chunk.toString();
+          let parsed: any = {};
+          try {
+            parsed = JSON.parse(bodyStr);
+          } catch {}
+
+          const profileId = String(parsed.profileId || "").trim();
+          if (!profileId) {
+            res.writeHead(400, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ error: "profileId es requerido" }));
+            return;
+          }
+
+          const ok = await ScryptedStorage.selectCameraStreamProfile(
+            cameraId,
+            profileId,
+          );
+          if (!ok) {
+            res.writeHead(404, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(
+              JSON.stringify({ error: "Perfil o cámara no encontrados" }),
+            );
+            return;
+          }
+
+          const store = await ScryptedStorage.load();
+          const cam = store.cameras.cameras.find(
+            (c) => c.cameraId === cameraId,
+          );
+          if (cam) {
+            try {
+              await ScryptedHomeKitBridge.unmountCamera(cameraId);
+              await ScryptedHomeKitBridge.mountCamera(this, cam);
+            } catch {}
+          }
+
+          res.writeHead(200, {
+            "Content-Type": "application/json; charset=utf-8",
+          });
+          res.end(
+            JSON.stringify({
+              success: true,
+              cameraId,
+              profileId,
+              camera: cam,
+            }),
+          );
           return;
         }
 

@@ -35,6 +35,17 @@ export interface ScryptedCredentials {
   authenticationMode: "username_password" | "api_token" | "auto";
 }
 
+export type StreamValidationStatus =
+  | "not_checked"
+  | "port_reachable"
+  | "verified"
+  | "not_found"
+  | "unauthorized"
+  | "timeout"
+  | "unsupported"
+  | "invalid"
+  | "source_offline";
+
 export interface StreamReference {
   protocol: "rtsp" | "webrtc" | "snapshot";
   host?: string;
@@ -42,6 +53,26 @@ export interface StreamReference {
   path?: string;
   directUrl?: string;
   verifiedAt?: string;
+  validationStatus?: StreamValidationStatus;
+  validationError?: string;
+}
+
+export interface ScryptedStreamProfile {
+  id: string;
+  name: string;
+  purpose?: "hd" | "remote" | "local" | "low_resolution" | "stream" | string;
+  container?: string;
+  videoCodec?: string;
+  audioCodec?: string;
+  resolution?: { width: number; height: number };
+  fps?: number;
+  bitrateKbps?: number;
+  hasAudio?: boolean;
+  directUrl?: string;
+  discoveredAt: string;
+  validationStatus: StreamValidationStatus;
+  validationError?: string;
+  lastValidatedAt?: string;
 }
 
 export interface StreamCapabilities {
@@ -159,6 +190,11 @@ export interface CameraRecord {
     deviceId: string;
     streamReference?: StreamReference;
     snapshotReference?: StreamReference;
+    profiles?: ScryptedStreamProfile[];
+    selectedProfileId?: string;
+    streamValidationStatus?: StreamValidationStatus;
+    streamValidationError?: string;
+    streamValidatedAt?: string;
   };
 
   capabilities: {

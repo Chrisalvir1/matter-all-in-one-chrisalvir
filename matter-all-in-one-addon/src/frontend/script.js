@@ -2687,21 +2687,16 @@ function openCameraConfigModal(camera) {
     };
   }
 
-  // RTSP Stream controls - Always auto-fill with Scrypted stream URL
-  let autoRtspUrl = camera.source?.streamReference?.directUrl;
-  if (!autoRtspUrl) {
-    const rawServer =
-      camera.source?.serverId || state.scrypted?.serverUrl || "";
-    try {
-      if (rawServer) {
-        const u = new URL(rawServer);
-        autoRtspUrl = `rtsp://${u.hostname}:8554/${camera.cameraId}`;
-      }
-    } catch {}
-  }
+  // RTSP Stream controls - Use real directUrl or real discovered profile, NEVER invent from cameraId
+  const realRtspUrl =
+    camera.source?.streamReference?.directUrl ||
+    camera.source?.profiles?.find((p) => p.directUrl)?.directUrl ||
+    "";
+
   if (els.camCfgRtspUrl) {
-    els.camCfgRtspUrl.value =
-      autoRtspUrl || `rtsp://<scrypted-ip>:8554/${camera.cameraId}`;
+    els.camCfgRtspUrl.value = realRtspUrl;
+    els.camCfgRtspUrl.placeholder =
+      "rtsp://<ip>:<puerto>/<ruta-rebroadcast-scrypted>";
   }
   if (els.camCfgRtspResult) {
     els.camCfgRtspResult.hidden = true;
@@ -2712,7 +2707,7 @@ function openCameraConfigModal(camera) {
     els.camCfgTestRtspBtn.onclick = async () => {
       const url = els.camCfgRtspUrl?.value?.trim();
       if (!url) {
-        showToast("Ingresa una URL RTSP para probar", true);
+        showToast("Ingresa una URL RTSP para verificar", true);
         return;
       }
       els.camCfgTestRtspBtn.disabled = true;
@@ -2720,32 +2715,59 @@ function openCameraConfigModal(camera) {
         els.camCfgRtspResult.hidden = false;
         els.camCfgRtspResult.className = "test-result-box";
         els.camCfgRtspResult.textContent =
-          "Probando conexión con el stream RTSP...";
+          "Verificando stream RTSP (ffprobe)...";
       }
       try {
-        const res = await request("/cameras/probe-stream", {
-          method: "POST",
-          body: JSON.stringify({ streamUrl: url }),
-        });
+        const res = await request(
+          `/custom/cameras/${camera.cameraId}/verify-stream`,
+          {
+            method: "POST",
+            body: JSON.stringify({ streamUrl: url }),
+          },
+        );
         if (els.camCfgRtspResult) {
-          if (res.ok) {
+          if (res.ok && res.status === "verified") {
+            const v = res.validation || {};
+            const resStr = v.resolution
+              ? ` · ${v.resolution.width}x${v.resolution.height}`
+              : "";
+            const codecStr = v.videoCodec ? ` (${v.videoCodec.toUpperCase()})` : "";
             els.camCfgRtspResult.className = "test-result-box success";
-            els.camCfgRtspResult.textContent = `✓ Puerto RTSP accesible en ${res.host}:${res.port}`;
+            els.camCfgRtspResult.textContent = `✓ Stream verificado${codecStr}${resStr}. Live View listo para Apple Home.`;
+            camera.status.connection = "online";
+            camera.status.cache = "fresh";
+          } else if (res.status === "not_found") {
+            els.camCfgRtspResult.className = "test-result-box error";
+            els.camCfgRtspResult.textContent =
+              "❌ Error 404 (Not Found): La ruta RTSP no existe en el servidor. Verifica la ruta en el plugin Rebroadcast de Scrypted.";
+          } else if (res.status === "unauthorized") {
+            els.camCfgRtspResult.className = "test-result-box error";
+            els.camCfgRtspResult.textContent =
+              "❌ Error 401/403: Autenticación requerida. Agrega usuario:contraseña@ en la URL.";
+          } else if (res.status === "source_offline") {
+            els.camCfgRtspResult.className = "test-result-box error";
+            els.camCfgRtspResult.textContent =
+              "❌ No se pudo conectar al servidor RTSP. Revisa IP, puerto o firewall.";
+          } else if (res.status === "timeout") {
+            els.camCfgRtspResult.className = "test-result-box error";
+            els.camCfgRtspResult.textContent =
+              "❌ Tiempo de espera agotado al conectar al stream RTSP.";
           } else {
             els.camCfgRtspResult.className = "test-result-box error";
-            els.camCfgRtspResult.textContent = `❌ No se pudo conectar a ${res.host}:${res.port}. Verifica IP, puerto o firewall.`;
+            els.camCfgRtspResult.textContent = `❌ ${res.validation?.error || "Stream inválido o no compatible"}`;
           }
         }
       } catch (err) {
         if (els.camCfgRtspResult) {
           els.camCfgRtspResult.className = "test-result-box error";
-          els.camCfgRtspResult.textContent = `❌ Error al probar stream: ${err.message}`;
+          els.camCfgRtspResult.textContent = `❌ Error al verificar stream: ${err.message}`;
         }
       } finally {
         els.camCfgTestRtspBtn.disabled = false;
       }
     };
   }
+
 
   if (els.camCfgSaveRtspBtn) {
     els.camCfgSaveRtspBtn.onclick = async () => {
@@ -2863,19 +2885,24 @@ function openCameraConfigModal(camera) {
   }
 
   // 5. Camera Logs
+  const streamStatusMsg =
+    camera.source?.streamValidationStatus === "verified"
+      ? "Stream RTSP verificado con éxito. Live View listo."
+      : camera.source?.streamReference?.directUrl
+        ? "Stream RTSP configurado (pendiente de verificación)."
+        : "Sin stream RTSP configurado. Verifica el stream en Scrypted.";
+
   const logs = camera.status?.logs || [
     {
       timestamp: new Date().toISOString(),
       level: "info",
-      message: "Stream RTSP rebroadcast en puerto 8554 verificado.",
-      details: "Passthrough H.264 sin recodificación",
-    },
-    {
-      timestamp: new Date().toISOString(),
-      level: "info",
-      message: "HomeKit Secure Video fMP4 buffer activo (iOS 27 / tvOS 27).",
+      message: streamStatusMsg,
+      details: camera.source?.streamReference?.directUrl
+        ? `URL: ${camera.source.streamReference.directUrl}`
+        : "URL no asignada",
     },
   ];
+
 
   if (els.camModalErrorTag) {
     if (camera.status?.lastError) {
@@ -3485,11 +3512,12 @@ function copyCameraLog(cameraId) {
     lastErrorAt: camera.status?.lastErrorAt || null,
     stream: {
       protocol: camera.source?.streamReference?.protocol || "rtsp",
-      url:
-        camera.source?.streamReference?.directUrl ||
-        `rtsp://<server>:8554/${camera.cameraId}`,
+      url: camera.source?.streamReference?.directUrl || null,
+      validationStatus:
+        camera.source?.streamValidationStatus || "not_checked",
       verifiedAt: camera.source?.streamReference?.verifiedAt || null,
     },
+
     capabilities: camera.capabilities?.observed || {
       videoCodec: "h264",
       resolution: "1920x1080",

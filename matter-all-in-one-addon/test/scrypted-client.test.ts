@@ -275,3 +275,93 @@ describe("ScryptedClient — probeRtspPort", () => {
     expect(result).toBe(false);
   });
 });
+
+describe("ScryptedClient — fetchStreamProfiles", () => {
+  it("returns empty array when device is not found", async () => {
+    const fakeSession: any = {
+      sdk: {
+        systemManager: {
+          getDeviceById: () => null,
+        },
+      },
+    };
+    const profiles = await ScryptedClient.fetchStreamProfiles(
+      fakeSession,
+      "999",
+    );
+    expect(profiles).toEqual([]);
+  });
+
+  it("extracts real stream profiles when getVideoStreamOptions is available", async () => {
+    const fakeDevice = {
+      getVideoStreamOptions: vi.fn().mockResolvedValue([
+        {
+          id: "hd",
+          name: "Main HD Stream",
+          container: "rtsp",
+          url: "rtsp://192.168.110.46:8554/live_tapo_c125",
+          video: {
+            codec: "h264",
+            width: 1920,
+            height: 1080,
+            fps: 30,
+            bitrate: 2000000,
+          },
+          audio: { codec: "aac" },
+        },
+      ]),
+    };
+
+    const fakeSession: any = {
+      sdk: {
+        systemManager: {
+          getDeviceById: (id: string) => (id === "34" ? fakeDevice : null),
+        },
+      },
+    };
+
+    const profiles = await ScryptedClient.fetchStreamProfiles(
+      fakeSession,
+      "34",
+    );
+    expect(profiles).toHaveLength(1);
+    expect(profiles[0].id).toBe("hd");
+    expect(profiles[0].name).toBe("Main HD Stream");
+    expect(profiles[0].directUrl).toBe(
+      "rtsp://192.168.110.46:8554/live_tapo_c125",
+    );
+    expect(profiles[0].videoCodec).toBe("h264");
+    expect(profiles[0].resolution).toEqual({ width: 1920, height: 1080 });
+    expect(profiles[0].fps).toBe(30);
+    expect(profiles[0].hasAudio).toBe(true);
+    expect(profiles[0].validationStatus).toBe("not_checked");
+  });
+
+  it("rejects invented URL pattern (/:cameraId) in stream options", async () => {
+    const fakeDevice = {
+      getVideoStreamOptions: vi.fn().mockResolvedValue([
+        {
+          id: "fake",
+          name: "Fake Stream",
+          url: "rtsp://192.168.110.46:8554/34", // PROHIBITED INVENTED PATTERN
+        },
+      ]),
+    };
+
+    const fakeSession: any = {
+      sdk: {
+        systemManager: {
+          getDeviceById: () => fakeDevice,
+        },
+      },
+    };
+
+    const profiles = await ScryptedClient.fetchStreamProfiles(
+      fakeSession,
+      "34",
+    );
+    expect(profiles).toHaveLength(1);
+    expect(profiles[0].directUrl).toBeUndefined();
+    expect(profiles[0].validationStatus).toBe("unsupported");
+  });
+});

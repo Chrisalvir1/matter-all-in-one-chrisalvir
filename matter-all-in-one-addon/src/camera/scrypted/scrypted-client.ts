@@ -4,7 +4,9 @@ import type {
   CameraSensorRecord,
   ScryptedErrorCode,
   ScryptedCredentials,
+  ScryptedStreamProfile,
 } from "./scrypted-types.js";
+import { isInventedRtspUrl } from "./scrypted-storage.js";
 
 /** INTERNAL ONLY — never persist, serialize or log. */
 export interface ScryptedSession {
@@ -540,7 +542,180 @@ export class ScryptedClient {
       `[Scrypted] Discovered ${deviceIds.length} total devices in systemState, identified ${cameras.length} cameras.`,
     );
 
+    // Enrich cameras with real stream profiles from Scrypted SDK
+    for (const camera of cameras) {
+      try {
+        const profiles = await ScryptedClient.fetchStreamProfiles(
+          session,
+          camera.cameraId,
+        );
+        if (profiles.length > 0) {
+          camera.source.profiles = profiles;
+          camera.source.selectedProfileId = profiles[0].id;
+          if (profiles[0].directUrl) {
+            camera.source.streamReference = {
+              protocol: "rtsp",
+              directUrl: profiles[0].directUrl,
+              validationStatus: profiles[0].validationStatus,
+            };
+            camera.source.streamValidationStatus = profiles[0].validationStatus;
+          }
+        }
+      } catch (profileErr) {
+        console.warn(
+          `[Scrypted] Failed to fetch stream profiles for ${camera.cameraId}:`,
+          profileErr,
+        );
+      }
+    }
+
     return cameras;
+  }
+
+  /**
+   * Fetches real stream profiles for a given camera device using the official Scrypted SDK.
+   * Calls device.getVideoStreamOptions() and optionally resolves direct stream URLs
+   * using mediaManager.convertMediaObjectToUrl(mo, "text/x-uri").
+   *
+   * NEVER invents an RTSP URL. Returns [] if no stream options are available.
+   */
+  public static async fetchStreamProfiles(
+    session: ScryptedSession,
+    deviceId: string,
+  ): Promise<ScryptedStreamProfile[]> {
+    const systemManager = session.sdk?.systemManager;
+    const mediaManager = session.sdk?.mediaManager;
+    if (!systemManager) return [];
+
+    let dev: any = null;
+    try {
+      if (typeof systemManager.getDeviceById === "function") {
+        dev = systemManager.getDeviceById(deviceId);
+      }
+    } catch (err) {
+      console.warn(`[Scrypted] getDeviceById(${deviceId}) failed:`, err);
+      return [];
+    }
+
+    if (!dev) return [];
+
+    const profiles: ScryptedStreamProfile[] = [];
+    const now = new Date().toISOString();
+
+    // 1. Check if device supports getVideoStreamOptions()
+    if (typeof dev.getVideoStreamOptions === "function") {
+      try {
+        const streamOptions: any[] = (await dev.getVideoStreamOptions()) || [];
+        if (Array.isArray(streamOptions)) {
+          for (const opt of streamOptions) {
+            if (!opt) continue;
+            const profileId = String(
+              opt.id || opt.name || `stream_${profiles.length}`,
+            );
+            const profileName = String(
+              opt.name || opt.id || `Stream ${profiles.length + 1}`,
+            );
+
+            let directUrl: string | undefined = undefined;
+
+            // If opt.url exists (direct RTSP from Rebroadcast plugin)
+            if (typeof opt.url === "string" && opt.url.trim().length > 0) {
+              directUrl = opt.url.trim();
+            } else if (
+              typeof dev.getVideoStream === "function" &&
+              mediaManager
+            ) {
+              try {
+                const mo = await dev.getVideoStream({ id: opt.id });
+                if (
+                  mo &&
+                  typeof mediaManager.convertMediaObjectToUrl === "function"
+                ) {
+                  const resolvedUrl =
+                    await mediaManager.convertMediaObjectToUrl(
+                      mo,
+                      "text/x-uri",
+                    );
+                  if (
+                    typeof resolvedUrl === "string" &&
+                    resolvedUrl.trim().length > 0
+                  ) {
+                    directUrl = resolvedUrl.trim();
+                  }
+                }
+              } catch {
+                // Not all profiles can be converted to static URL directly; that's normal
+              }
+            }
+
+            // Safety check: NEVER accept an invented URL (path is /<cameraId>)
+            if (directUrl && isInventedRtspUrl(directUrl, deviceId)) {
+              directUrl = undefined;
+            }
+
+            profiles.push({
+              id: profileId,
+              name: profileName,
+              container: opt.container,
+              videoCodec: opt.video?.codec,
+              audioCodec: opt.audio?.codec,
+              resolution:
+                opt.video?.width && opt.video?.height
+                  ? { width: opt.video.width, height: opt.video.height }
+                  : undefined,
+              fps: opt.video?.fps,
+              bitrateKbps: opt.video?.bitrate
+                ? Math.round(opt.video.bitrate / 1000)
+                : undefined,
+              hasAudio: Boolean(opt.audio),
+              directUrl,
+              discoveredAt: now,
+              validationStatus: directUrl ? "not_checked" : "unsupported",
+            });
+          }
+        }
+      } catch (optErr) {
+        console.warn(
+          `[Scrypted][${deviceId}] Error calling getVideoStreamOptions:`,
+          optErr,
+        );
+      }
+    }
+
+    // 2. If no profiles returned from getVideoStreamOptions but device has getVideoStream,
+    // attempt default getVideoStream()
+    if (
+      profiles.length === 0 &&
+      typeof dev.getVideoStream === "function" &&
+      mediaManager
+    ) {
+      try {
+        const mo = await dev.getVideoStream();
+        if (mo && typeof mediaManager.convertMediaObjectToUrl === "function") {
+          const resolvedUrl = await mediaManager.convertMediaObjectToUrl(
+            mo,
+            "text/x-uri",
+          );
+          if (
+            typeof resolvedUrl === "string" &&
+            resolvedUrl.trim().length > 0 &&
+            !isInventedRtspUrl(resolvedUrl.trim(), deviceId)
+          ) {
+            profiles.push({
+              id: "default",
+              name: "Default Stream",
+              directUrl: resolvedUrl.trim(),
+              discoveredAt: now,
+              validationStatus: "not_checked",
+            });
+          }
+        }
+      } catch {
+        // Fallback also failed — return empty profiles
+      }
+    }
+
+    return profiles;
   }
 
   /**

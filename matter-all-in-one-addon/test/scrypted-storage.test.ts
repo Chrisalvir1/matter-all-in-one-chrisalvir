@@ -498,4 +498,65 @@ describe("updateCameras — never fabricates RTSP URLs from cameraId", () => {
     // verifiedAt must NOT be set — user-entered URLs are unverified until explicit validation
     expect(saved?.source.streamReference?.verifiedAt).toBeUndefined();
   });
+
+  it("updateCameraStreamProfiles stores discovered profiles and updates active stream", async () => {
+    const cam = makeCamera("51");
+    await ScryptedStorage.updateCameras([cam]);
+
+    const profiles = [
+      {
+        id: "stream_1",
+        name: "Main HD",
+        directUrl: "rtsp://192.168.1.50:8554/main_hd",
+        discoveredAt: new Date().toISOString(),
+        validationStatus: "not_checked" as const,
+      },
+      {
+        id: "stream_2",
+        name: "Substream",
+        directUrl: "rtsp://192.168.1.50:8554/sub",
+        discoveredAt: new Date().toISOString(),
+        validationStatus: "not_checked" as const,
+      },
+    ];
+
+    const updated = await ScryptedStorage.updateCameraStreamProfiles(
+      "51",
+      profiles,
+    );
+    expect(updated).toBe(true);
+
+    const store = await ScryptedStorage.load();
+    const saved = store.cameras.cameras.find((c) => c.cameraId === "51");
+    expect(saved?.source.profiles).toHaveLength(2);
+    expect(saved?.source.selectedProfileId).toBe("stream_1");
+    expect(saved?.source.streamReference?.directUrl).toBe(
+      "rtsp://192.168.1.50:8554/main_hd",
+    );
+
+    // Test selectCameraStreamProfile
+    const selected = await ScryptedStorage.selectCameraStreamProfile(
+      "51",
+      "stream_2",
+    );
+    expect(selected).toBe(true);
+
+    const storeAfterSelect = await ScryptedStorage.load();
+    const savedAfterSelect = storeAfterSelect.cameras.cameras.find(
+      (c) => c.cameraId === "51",
+    );
+    expect(savedAfterSelect?.source.selectedProfileId).toBe("stream_2");
+    expect(savedAfterSelect?.source.streamReference?.directUrl).toBe(
+      "rtsp://192.168.1.50:8554/sub",
+    );
+
+    // Test updateCameraStreamValidation
+    await ScryptedStorage.updateCameraStreamValidation("51", "verified");
+    const storeAfterValidation = await ScryptedStorage.load();
+    const savedValid = storeAfterValidation.cameras.cameras.find(
+      (c) => c.cameraId === "51",
+    );
+    expect(savedValid?.source.streamValidationStatus).toBe("verified");
+    expect(savedValid?.source.streamReference?.verifiedAt).toBeTruthy();
+  });
 });

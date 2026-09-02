@@ -856,30 +856,32 @@
 
               <div class="camera-stream-config-box" style="margin-bottom: 1.25rem; padding: 12px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                  <p class="card-label" style="margin-bottom: 0;">STREAM DE VIDEO SCRYPTED (AUTOMÁTICO)</p>
-                  <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; font-size: 0.72rem; padding: 2px 6px; border-radius: 4px;">⚡ Enlace directo</span>
+                  <p class="card-label" style="margin-bottom: 0;">STREAM DE VIDEO RTSP / SCRYPTED</p>
+                  <span class="badge" id="cam-cfg-rtsp-badge" style="background: rgba(59, 130, 246, 0.15); color: #60a5fa; font-size: 0.72rem; padding: 2px 6px; border-radius: 4px;">📡 Scrypted Rebroadcast</span>
                 </div>
                 <label class="form-field" style="margin-bottom: 4px;">
-                  <span>Dirección RTSP de Scrypted Rebroadcast</span>
+                  <span>Dirección RTSP de la cámara</span>
                   <div style="display: flex; gap: 8px; align-items: center;">
                     <input
                       type="text"
                       id="cam-cfg-rtsp-url"
+                      placeholder="rtsp://<ip>:<puerto>/<nombre-stream-scrypted>"
                       style="flex: 1; font-family: monospace; font-size: 0.82rem; background: rgba(0,0,0,0.25);"
                     />
-                    <button class="button button-sm button-secondary" id="cam-cfg-test-rtsp-btn" type="button" title="Comprobar si el puerto RTSP de Scrypted responde">
-                      🔍 Probar conexión
+                    <button class="button button-sm button-secondary" id="cam-cfg-test-rtsp-btn" type="button" title="Verifica el stream RTSP real mediante ffprobe antes de activar Live View">
+                      🔍 Verificar Stream
                     </button>
-                    <button class="button button-sm button-primary" id="cam-cfg-save-rtsp-btn" type="button" title="Guardar ajustes">
+                    <button class="button button-sm button-primary" id="cam-cfg-save-rtsp-btn" type="button" title="Guardar URL del stream">
                       💾 Guardar
                     </button>
                   </div>
                   <small class="field-hint">
-                    ✓ Enlazado automáticamente desde la IP de tu servidor Scrypted. Si tu instalación usa credenciales o un stream específico en Scrypted Rebroadcast, puedes ajustarlo aquí.
+                    Ingresa o verifica la URL RTSP directa de Scrypted Rebroadcast. Al pulsar <strong>Verificar Stream</strong>, el sistema comprueba la disponibilidad del codec H.264 para permitir Live View en Apple Home.
                   </small>
                 </label>
                 <div id="cam-cfg-rtsp-result" class="test-result-box" hidden style="margin-top: 6px; font-size: 0.8rem;"></div>
               </div>
+
 
               <p class="card-label">SENSORES ASOCIADOS EN TIEMPO REAL</p>
               <div id="cam-cfg-sensors-list" class="sensors-checkbox-list" style="margin-bottom: 1.25rem;"></div>

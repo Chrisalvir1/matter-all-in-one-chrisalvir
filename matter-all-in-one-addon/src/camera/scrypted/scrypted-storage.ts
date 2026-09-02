@@ -10,6 +10,8 @@ import type {
   CameraIdentityOverride,
   ScryptedCredentials,
   EncryptedSecret,
+  ScryptedStreamProfile,
+  StreamValidationStatus,
 } from "./scrypted-types.js";
 
 const SCHEMA_VERSION = 2;
@@ -368,6 +370,23 @@ export class ScryptedStorage {
         source: {
           ...fresh.source,
           streamReference: effectiveStreamReference,
+          profiles:
+            fresh.source?.profiles && fresh.source.profiles.length > 0
+              ? fresh.source.profiles
+              : existing?.source?.profiles,
+          selectedProfileId:
+            fresh.source?.selectedProfileId ||
+            existing?.source?.selectedProfileId,
+          streamValidationStatus:
+            fresh.source?.streamValidationStatus ||
+            existing?.source?.streamValidationStatus ||
+            "not_checked",
+          streamValidationError:
+            fresh.source?.streamValidationError ||
+            existing?.source?.streamValidationError,
+          streamValidatedAt:
+            fresh.source?.streamValidatedAt ||
+            existing?.source?.streamValidatedAt,
         },
         exportConfig: existing
           ? { ...fresh.exportConfig, ...existing.exportConfig }
@@ -503,6 +522,150 @@ export class ScryptedStorage {
       // verifiedAt is NOT set here — user-entered URL is "not_checked" until
       // a real RTSP DESCRIBE validation is performed via "Verificar stream"
     };
+    await this.save(store);
+    return true;
+  }
+
+  /**
+   * Updates stream profiles discovered by the Scrypted SDK.
+   */
+  public static async updateCameraStreamProfiles(
+    cameraId: string,
+    profiles: ScryptedStreamProfile[],
+    selectedProfileId?: string,
+  ): Promise<boolean> {
+    const store = await this.load();
+    const cam = store.cameras.cameras.find((c) => c.cameraId === cameraId);
+    if (!cam) return false;
+
+    cam.source.profiles = profiles;
+    if (selectedProfileId) {
+      cam.source.selectedProfileId = selectedProfileId;
+    } else if (!cam.source.selectedProfileId && profiles.length > 0) {
+      cam.source.selectedProfileId = profiles[0].id;
+    }
+
+    // If selected profile has a directUrl, update streamReference
+    const activeProfile =
+      profiles.find((p) => p.id === cam.source.selectedProfileId) ||
+      profiles[0];
+    if (
+      activeProfile?.directUrl &&
+      !isInventedRtspUrl(activeProfile.directUrl, cameraId)
+    ) {
+      let host: string | undefined;
+      let port: number | undefined;
+      let path: string | undefined;
+      try {
+        const u = new URL(activeProfile.directUrl);
+        host = u.hostname || undefined;
+        port = u.port
+          ? parseInt(u.port, 10)
+          : u.protocol === "rtsps:"
+            ? 322
+            : 554;
+        path = u.pathname || undefined;
+      } catch {}
+
+      cam.source.streamReference = {
+        protocol: "rtsp",
+        directUrl: activeProfile.directUrl,
+        host,
+        port,
+        path,
+        validationStatus: activeProfile.validationStatus,
+      };
+      cam.source.streamValidationStatus = activeProfile.validationStatus;
+    }
+
+    await this.save(store);
+    return true;
+  }
+
+  /**
+   * Sets the active stream profile for a camera.
+   */
+  public static async selectCameraStreamProfile(
+    cameraId: string,
+    profileId: string,
+  ): Promise<boolean> {
+    const store = await this.load();
+    const cam = store.cameras.cameras.find((c) => c.cameraId === cameraId);
+    if (!cam || !cam.source.profiles) return false;
+
+    const profile = cam.source.profiles.find((p) => p.id === profileId);
+    if (!profile) return false;
+
+    cam.source.selectedProfileId = profileId;
+    if (profile.directUrl && !isInventedRtspUrl(profile.directUrl, cameraId)) {
+      let host: string | undefined;
+      let port: number | undefined;
+      let path: string | undefined;
+      try {
+        const u = new URL(profile.directUrl);
+        host = u.hostname || undefined;
+        port = u.port
+          ? parseInt(u.port, 10)
+          : u.protocol === "rtsps:"
+            ? 322
+            : 554;
+        path = u.pathname || undefined;
+      } catch {}
+
+      cam.source.streamReference = {
+        protocol: "rtsp",
+        directUrl: profile.directUrl,
+        host,
+        port,
+        path,
+        validationStatus: profile.validationStatus,
+      };
+      cam.source.streamValidationStatus = profile.validationStatus;
+    } else {
+      cam.source.streamReference = undefined;
+      cam.source.streamValidationStatus = "unsupported";
+    }
+
+    await this.save(store);
+    return true;
+  }
+
+  /**
+   * Updates stream validation status and optional error/timestamp.
+   */
+  public static async updateCameraStreamValidation(
+    cameraId: string,
+    status: StreamValidationStatus,
+    error?: string,
+  ): Promise<boolean> {
+    const store = await this.load();
+    const cam = store.cameras.cameras.find((c) => c.cameraId === cameraId);
+    if (!cam) return false;
+
+    const now = new Date().toISOString();
+    cam.source.streamValidationStatus = status;
+    cam.source.streamValidationError = error;
+    cam.source.streamValidatedAt = now;
+
+    if (cam.source.streamReference) {
+      cam.source.streamReference.validationStatus = status;
+      cam.source.streamReference.validationError = error;
+      if (status === "verified") {
+        cam.source.streamReference.verifiedAt = now;
+      }
+    }
+
+    if (cam.source.selectedProfileId && cam.source.profiles) {
+      const p = cam.source.profiles.find(
+        (prof) => prof.id === cam.source.selectedProfileId,
+      );
+      if (p) {
+        p.validationStatus = status;
+        p.validationError = error;
+        p.lastValidatedAt = now;
+      }
+    }
+
     await this.save(store);
     return true;
   }
