@@ -2058,8 +2058,12 @@ async function fetchScrypted() {
       request("/cameras").catch(() => null),
     ]);
     if (cfg) state.scryptedConfig = cfg;
-    if (cams && Array.isArray(cams.cameras)) {
-      state.scryptedCameras = cams.cameras;
+    if (cams) {
+      state.scryptedCameras = Array.isArray(cams)
+        ? cams
+        : Array.isArray(cams.cameras)
+          ? cams.cameras
+          : [];
     }
     updateScryptedHeader();
   } catch (err) {
@@ -2718,11 +2722,16 @@ els.scryptedConnectForm?.addEventListener("submit", async (e) => {
       );
     }
 
+    if (result.cameras && Array.isArray(result.cameras)) {
+      state.scryptedCameras = result.cameras;
+    }
+
     state.activeFilter = "cameras";
     document.querySelectorAll(".filter-chip").forEach((chip) => {
       chip.classList.toggle("active", chip.dataset.filter === "cameras");
     });
     await fetchScrypted();
+    await loadCameras();
     renderDevices();
   } catch (err) {
     setModalState("error");
@@ -2848,7 +2857,11 @@ async function syncNewCameras() {
       throw new Error("Error al sincronizar cámaras");
     }
     const result = await response.json();
+    if (result.cameras && Array.isArray(result.cameras)) {
+      state.scryptedCameras = result.cameras;
+    }
     await loadCameras();
+    renderDevices();
     const newCount = result.newCameras || 0;
     const updatedCount = result.updatedCameras || 0;
     const removedCount = result.removedCameras || 0;

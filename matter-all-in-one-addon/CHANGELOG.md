@@ -1,3 +1,11 @@
+## [1.4.68] - 2026-09-01
+
+### Fix Scrypted Device Enumeration & Real-Time Camera Loading in UI
+
+- **Corrección en la Enumeración de Dispositivos Scrypted (`systemState`):** Soporte completo para el formato real de `@scrypted/client` y `systemManager.getSystemState()`, donde las propiedades de cada dispositivo se devuelven encapsuladas en objetos `{ value: ... }` y la clave raíz representa el `id` del dispositivo. Ahora se extraen y desenvuelven correctamente `interfaces`, `type`, `providedType`, `name`, `manufacturer` y `model`, permitiendo descubrir e identificar todas las cámaras (Tapo, Reolink, Ring, Aqara, etc.) expuestas por Scrypted.
+- **Sincronización Inmediata en el Frontend:** Corrección en `fetchScrypted()` y `syncNewCameras()` para procesar respuestas de la API tanto en formato de array plano `[ ... ]` como en objeto `{ cameras: [ ... ] }`. Se garantiza que `state.scryptedCameras` se actualice de inmediato tras la conexión exitosa o al pulsar "🔄 Sincronizar nuevas cámaras" y se invoque `loadCameras()` y `renderDevices()` sin requerir refrescar la página manualmente.
+- **Inclusión de `cameras` en el Payload de Conexión:** El endpoint `POST /api/scrypted/connect-and-load-cameras` ahora devuelve la lista completa de cámaras descubiertas en la respuesta JSON para renderizado instantáneo en el navegador.
+
 ## [1.4.67] - 2026-09-01
 
 ### Official Scrypted SDK Client, Brand Grouping, Secure Authentication & Layout Fixes

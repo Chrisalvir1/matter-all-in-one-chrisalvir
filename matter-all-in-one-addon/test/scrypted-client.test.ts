@@ -218,6 +218,44 @@ describe("ScryptedClient — listCameras (mocked session)", () => {
     expect(cameras[0].sensors.some((s) => s.type === "doorbell")).toBe(true);
   });
 
+  it("correctly decodes Scrypted real systemState with { value: ... } property wrappers and key as device ID", async () => {
+    const fakeSession = {
+      sdk: {
+        systemManager: {
+          getSystemState: async () => ({
+            "34": {
+              interfaces: {
+                value: ["Camera", "VideoCamera", "MotionSensor", "Doorbell"],
+              },
+              type: { value: "Camera" },
+              name: { value: "Tapo C125 Sala" },
+              info: { value: { manufacturer: "Tapo", model: "C125" } },
+            },
+            "99": {
+              interfaces: { value: ["OnOff"] },
+              type: { value: "Switch" },
+              name: { value: "Enchufe Luces" },
+            },
+          }),
+        },
+      },
+      connectedAt: new Date().toISOString(),
+      serverUrl: "https://192.168.110.46:10443",
+      username: "admin",
+    };
+
+    const cameras = await ScryptedClient.listCameras(fakeSession);
+    expect(cameras).toHaveLength(1);
+    expect(cameras[0].cameraId).toBe("34");
+    expect(cameras[0].name).toBe("Tapo C125 Sala");
+    expect(cameras[0].sourceManufacturer).toBe("Tapo");
+    expect(cameras[0].sourceModel).toBe("C125");
+    expect(cameras[0].displayManufacturer).toBe("Tapo");
+    expect(cameras[0].displayModel).toBe("C125");
+    expect(cameras[0].sensors.some((s) => s.type === "motion")).toBe(true);
+    expect(cameras[0].sensors.some((s) => s.type === "doorbell")).toBe(true);
+  });
+
   it("disconnect calls sdk.disconnect", async () => {
     const disconnectFn = vi.fn();
     const fakeSession = {

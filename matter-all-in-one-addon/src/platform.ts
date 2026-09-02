@@ -4182,6 +4182,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               removedCameras: 0,
               skippedCameras: 0,
               noCamerasFound: totalCameras === 0,
+              cameras: currentCameras,
               lastFetched:
                 currentStore.cameras?.lastFetched || new Date().toISOString(),
             };

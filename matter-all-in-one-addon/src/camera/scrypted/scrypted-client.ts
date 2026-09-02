@@ -24,6 +24,17 @@ export interface ScryptedConnectionResult {
 }
 
 /**
+ * Helper to unwrap Scrypted state property wrappers ({ value: ... })
+ * When querying Scrypted's systemState directly, each property is wrapped in an object: { value: ... }
+ */
+export function unwrapScryptedValue<T = any>(val: any): T {
+  if (val !== null && typeof val === "object" && "value" in val) {
+    return val.value;
+  }
+  return val;
+}
+
+/**
  * Resolves manufacturer/model from Scrypted device info.
  * Returns undefined if not available — callers must handle fallback.
  */
@@ -32,11 +43,30 @@ function extractDeviceInfo(device: any): {
   model?: string;
   serialNumber?: string;
 } {
-  const info = device?.info ?? {};
+  const rawInfo = unwrapScryptedValue(device?.info) ?? {};
+  const manufacturer =
+    unwrapScryptedValue(rawInfo.manufacturer) ||
+    unwrapScryptedValue(device?.manufacturer) ||
+    undefined;
+  const model =
+    unwrapScryptedValue(rawInfo.model) ||
+    unwrapScryptedValue(device?.model) ||
+    undefined;
+  const serialNumber =
+    unwrapScryptedValue(rawInfo.serialNumber) ||
+    unwrapScryptedValue(device?.serialNumber) ||
+    undefined;
+
   return {
-    manufacturer: info.manufacturer || device.manufacturer || undefined,
-    model: info.model || device.model || undefined,
-    serialNumber: info.serialNumber || device.serialNumber || undefined,
+    manufacturer:
+      typeof manufacturer === "string" && manufacturer.trim()
+        ? manufacturer.trim()
+        : undefined,
+    model: typeof model === "string" && model.trim() ? model.trim() : undefined,
+    serialNumber:
+      typeof serialNumber === "string" && serialNumber.trim()
+        ? serialNumber.trim()
+        : undefined,
   };
 }
 
@@ -45,17 +75,35 @@ function extractDeviceInfo(device: any): {
  */
 function isCameraDevice(device: any): boolean {
   if (!device || typeof device !== "object") return false;
-  const interfaces: string[] = Array.isArray(device.interfaces)
-    ? device.interfaces.map((i: any) => String(i))
+
+  const rawType = unwrapScryptedValue(device.type);
+  const rawProvidedType = unwrapScryptedValue(device.providedType);
+  const type = String(rawType || "").toLowerCase();
+  const providedType = String(rawProvidedType || "").toLowerCase();
+
+  const rawIfaces = unwrapScryptedValue(device.interfaces);
+  const interfaces: string[] = Array.isArray(rawIfaces)
+    ? rawIfaces.map((i: any) => String(unwrapScryptedValue(i)))
     : [];
-  const type = String(device.type || "").toLowerCase();
+
+  const rawProvidedIfaces = unwrapScryptedValue(device.providedInterfaces);
+  const providedInterfaces: string[] = Array.isArray(rawProvidedIfaces)
+    ? rawProvidedIfaces.map((i: any) => String(unwrapScryptedValue(i)))
+    : [];
+
+  const allInterfaces = [...interfaces, ...providedInterfaces];
+
   return (
     type.includes("camera") ||
-    interfaces.includes("Camera") ||
-    interfaces.includes("VideoCamera") ||
-    interfaces.includes("VideoCameraConfiguration") ||
-    interfaces.includes("VideoRecorder") ||
-    interfaces.includes("VideoClips")
+    type.includes("doorbell") ||
+    providedType.includes("camera") ||
+    providedType.includes("doorbell") ||
+    allInterfaces.includes("Camera") ||
+    allInterfaces.includes("VideoCamera") ||
+    allInterfaces.includes("VideoCameraConfiguration") ||
+    allInterfaces.includes("VideoRecorder") ||
+    allInterfaces.includes("VideoClips") ||
+    allInterfaces.includes("RTCSignalingChannel")
   );
 }
 
@@ -63,21 +111,41 @@ function isCameraDevice(device: any): boolean {
  * Maps a Scrypted device to a CameraRecord with real data from the SDK.
  * Streams are marked as 'unverified' — no RTSP URL is constructed or assumed.
  */
-function mapDeviceToCameraRecord(device: any, serverUrl: string): CameraRecord {
-  const id = String(
-    device.id ??
-      device._id ??
-      `scrypted_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-  );
-  const name = String(device.name ?? `Scrypted Camera ${id}`);
+function mapDeviceToCameraRecord(
+  device: any,
+  serverUrl: string,
+  fallbackId?: string,
+): CameraRecord {
+  const rawId =
+    unwrapScryptedValue(device.id) ??
+    unwrapScryptedValue(device._id) ??
+    fallbackId ??
+    `scrypted_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  const id = String(rawId);
+
+  const rawName = unwrapScryptedValue(device.name);
+  const name =
+    typeof rawName === "string" && rawName.trim().length > 0
+      ? rawName.trim()
+      : `Scrypted Camera ${id}`;
+
   const { manufacturer, model } = extractDeviceInfo(device);
-  const interfaces: string[] = Array.isArray(device.interfaces)
-    ? device.interfaces.map((i: any) => String(i))
+
+  const rawIfaces = unwrapScryptedValue(device.interfaces);
+  const interfaces: string[] = Array.isArray(rawIfaces)
+    ? rawIfaces.map((i: any) => String(unwrapScryptedValue(i)))
     : [];
+
+  const rawProvidedIfaces = unwrapScryptedValue(device.providedInterfaces);
+  const providedInterfaces: string[] = Array.isArray(rawProvidedIfaces)
+    ? rawProvidedIfaces.map((i: any) => String(unwrapScryptedValue(i)))
+    : [];
+
+  const allInterfaces = [...interfaces, ...providedInterfaces];
 
   const sensors: CameraSensorRecord[] = [];
 
-  if (interfaces.includes("MotionSensor")) {
+  if (allInterfaces.includes("MotionSensor")) {
     sensors.push({
       sensorId: `${id}_motion`,
       type: "motion",
@@ -87,7 +155,7 @@ function mapDeviceToCameraRecord(device: any, serverUrl: string): CameraRecord {
     });
   }
 
-  if (interfaces.includes("Doorbell")) {
+  if (allInterfaces.includes("Doorbell")) {
     sensors.push({
       sensorId: `${id}_doorbell`,
       type: "doorbell",
@@ -98,8 +166,8 @@ function mapDeviceToCameraRecord(device: any, serverUrl: string): CameraRecord {
   }
 
   if (
-    interfaces.includes("ObjectDetection") ||
-    interfaces.includes("BinarySensor")
+    allInterfaces.includes("ObjectDetection") ||
+    allInterfaces.includes("BinarySensor")
   ) {
     sensors.push({
       sensorId: `${id}_person`,
@@ -362,35 +430,94 @@ export class ScryptedClient {
       throw new Error("unsupported_api: systemManager not available");
     }
 
-    let deviceList: any[] = [];
+    let rawState: Record<string, any> = {};
     try {
-      const state = await systemManager.getSystemState();
-      if (state && typeof state === "object") {
-        deviceList = Object.values(state);
+      if (typeof systemManager.getSystemState === "function") {
+        rawState = (await systemManager.getSystemState()) || {};
       }
-    } catch {
+    } catch (err) {
+      console.warn("[Scrypted] Error calling getSystemState():", err);
+      rawState = {};
+    }
+
+    const deviceIds = Object.keys(rawState);
+    const cameras: CameraRecord[] = [];
+    const seenIds = new Set<string>();
+
+    for (const id of deviceIds) {
       try {
-        const ids: string[] = (systemManager as any).getDeviceIds?.() ?? [];
-        deviceList = await Promise.all(
-          ids.map((id: string) => systemManager.getDeviceById(id)),
-        );
+        let dev: any = null;
+        if (typeof systemManager.getDeviceById === "function") {
+          try {
+            dev = systemManager.getDeviceById(id);
+          } catch {
+            dev = null;
+          }
+        }
+
+        const stateDev = rawState[id];
+
+        // Merge properties from proxy and raw state to guarantee all fields are accessible
+        const combined = {
+          id,
+          name: dev?.name ?? unwrapScryptedValue(stateDev?.name),
+          type: dev?.type ?? unwrapScryptedValue(stateDev?.type),
+          providedType:
+            dev?.providedType ?? unwrapScryptedValue(stateDev?.providedType),
+          interfaces:
+            dev?.interfaces ?? unwrapScryptedValue(stateDev?.interfaces),
+          providedInterfaces:
+            dev?.providedInterfaces ??
+            unwrapScryptedValue(stateDev?.providedInterfaces),
+          info: dev?.info ?? unwrapScryptedValue(stateDev?.info),
+          manufacturer:
+            dev?.manufacturer ?? unwrapScryptedValue(stateDev?.manufacturer),
+          model: dev?.model ?? unwrapScryptedValue(stateDev?.model),
+          serialNumber:
+            dev?.serialNumber ?? unwrapScryptedValue(stateDev?.serialNumber),
+        };
+
+        if (isCameraDevice(combined) && !seenIds.has(id)) {
+          seenIds.add(id);
+          cameras.push(
+            mapDeviceToCameraRecord(combined, session.serverUrl, id),
+          );
+        }
       } catch {
-        deviceList = [];
+        // Skip device that cannot be mapped
       }
     }
 
-    const cameras: CameraRecord[] = [];
-    for (const device of deviceList) {
-      if (!device) continue;
-      const dev = device.__proxy_props ? device : device;
-      try {
-        if (isCameraDevice(dev)) {
-          cameras.push(mapDeviceToCameraRecord(dev, session.serverUrl));
-        }
-      } catch {
-        // Skip devices that cannot be mapped
+    // Fallback: If deviceIds was empty or an array of objects
+    if (cameras.length === 0) {
+      let fallbackList: any[] = [];
+      if (Array.isArray(rawState)) {
+        fallbackList = rawState;
+      } else if (typeof (systemManager as any).getDeviceIds === "function") {
+        try {
+          const ids: string[] = (systemManager as any).getDeviceIds();
+          fallbackList = ids.map((id) => systemManager.getDeviceById(id));
+        } catch {}
+      } else if (Object.keys(rawState).length > 0) {
+        fallbackList = Object.values(rawState);
+      }
+
+      for (const dev of fallbackList) {
+        if (!dev) continue;
+        try {
+          const id = String(unwrapScryptedValue(dev.id) || "");
+          if (isCameraDevice(dev) && id && !seenIds.has(id)) {
+            seenIds.add(id);
+            cameras.push(mapDeviceToCameraRecord(dev, session.serverUrl, id));
+          }
+        } catch {}
       }
     }
+
+    console.log(
+      `[Scrypted] Discovered ${deviceIds.length} total devices in systemState, identified ${cameras.length} cameras.`,
+    );
+
     return cameras;
   }
 
