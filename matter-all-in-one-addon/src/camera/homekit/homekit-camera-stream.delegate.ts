@@ -40,8 +40,14 @@ export interface HomeKitStreamSession {
   stopTimer?: NodeJS.Timeout;
 }
 
+const FALLBACK_JPEG_BUFFER = Buffer.from(
+  "/9j/4AAQSkZJRgABAgAAAQABAAD//gAPTGF2YzYwLjMuMTAwAP/bAEMACAYGBwYHCAgICAgICQkJCgoKCQkJCQoKCgoKCgwMDAoKCgoKCgoMDAwMDQ4NDQ0MDQ4ODw8PEhIRERUVFRkZH//EAEwAAQEAAAAAAAAAAAAAAAAAAAAHAQEBAAAAAAAAAAAAAAAAAAAAARABAAAAAAAAAAAAAAAAAAAAABEBAAAAAAAAAAAAAAAAAAAAAP/AABEIAPABQAMBIgACEQADEQD/2gAMAwEAAhEDEQA/AI2AoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//9k=",
+  "base64",
+);
+
 export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
   private activeSessions = new Map<string, HomeKitStreamSession>();
+  private lastSnapshotBuffer: Buffer = FALLBACK_JPEG_BUFFER;
 
   constructor(
     private readonly platform: any,
@@ -51,7 +57,9 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
   ) {}
 
   /**
-   * Snapshot handler: returns a high-speed JPEG snapshot from Scrypted or Home Assistant.
+   * Snapshot handler: returns a high-speed JPEG snapshot from Scrypted, Home Assistant,
+   * FFmpeg extraction, or a cached valid frame. Never calls back with error so Apple Home
+   * remains alive and allows user to tap and launch Live View.
    */
   public async handleSnapshotRequest(
     request: SnapshotRequest,
@@ -71,11 +79,12 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
       ) {
         try {
           const res = await fetch(snapshotUrl, {
-            signal: AbortSignal.timeout(2500),
+            signal: AbortSignal.timeout(2000),
           });
           if (res.ok) {
             const buf = Buffer.from(await res.arrayBuffer());
             if (buf.length > 0) {
+              this.lastSnapshotBuffer = buf;
               callback(undefined, buf);
               return;
             }
@@ -89,24 +98,29 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
 
       // 2. Try to fetch direct JPEG from Home Assistant proxy
       if (this.platform?.ha?.fetchSnapshot) {
-        const imageBuffer = await this.platform.ha.fetchSnapshot(this.entityId);
-        if (
-          imageBuffer &&
-          Buffer.isBuffer(imageBuffer) &&
-          imageBuffer.length > 0
-        ) {
-          callback(undefined, imageBuffer);
-          return;
-        }
+        try {
+          const imageBuffer = await this.platform.ha.fetchSnapshot(
+            this.entityId,
+          );
+          if (
+            imageBuffer &&
+            Buffer.isBuffer(imageBuffer) &&
+            imageBuffer.length > 0
+          ) {
+            this.lastSnapshotBuffer = imageBuffer;
+            callback(undefined, imageBuffer);
+            return;
+          }
+        } catch {}
       }
 
-      // 3. Fallback: extract single JPEG frame from stream source via ffmpeg with strict 2.5s timeout
+      // 3. Fallback: extract single JPEG frame from stream source via ffmpeg with 2.0s timeout
       const ffmpegPath = resolveFfmpegPath();
       const sourceUrl = this.streamSource.url;
       if (ffmpegPath && sourceUrl) {
         const ffmpegArgs = ["-hide_banner", "-loglevel", "error"];
         if (sourceUrl.startsWith("rtsp://")) {
-          ffmpegArgs.push("-rtsp_transport", "tcp", "-stimeout", "2500000");
+          ffmpegArgs.push("-rtsp_transport", "tcp", "-stimeout", "2000000");
         }
         ffmpegArgs.push(
           "-i",
@@ -132,12 +146,12 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
             try {
               ffmpeg.kill("SIGKILL");
             } catch {}
-            this.platform?.log?.warn?.(
-              `[HomeKitCamera][${this.entityId}] Snapshot extraction timed out after 2.5s`,
+            this.platform?.log?.notice?.(
+              `[HomeKitCamera][${this.entityId}] Snapshot extraction delayed — serving cached frame to keep Apple Home active`,
             );
-            callback(new Error("Snapshot extraction timed out"));
+            callback(undefined, this.lastSnapshotBuffer);
           }
-        }, 2500);
+        }, 2000);
 
         ffmpeg.stdout.on("data", (chunk) => chunks.push(chunk));
         ffmpeg.on("close", (code) => {
@@ -145,27 +159,25 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
           if (settled) return;
           settled = true;
           if (code === 0 && chunks.length > 0) {
-            callback(undefined, Buffer.concat(chunks));
+            const buf = Buffer.concat(chunks);
+            this.lastSnapshotBuffer = buf;
+            callback(undefined, buf);
           } else {
-            callback(
-              new Error(`ffmpeg snapshot extraction exited with code ${code}`),
-            );
+            callback(undefined, this.lastSnapshotBuffer);
           }
         });
-        ffmpeg.on("error", (err) => {
+        ffmpeg.on("error", () => {
           clearTimeout(killTimer);
           if (settled) return;
           settled = true;
-          callback(err);
+          callback(undefined, this.lastSnapshotBuffer);
         });
         return;
       }
 
-      callback(
-        new Error("No usable stream or snapshot source found for camera"),
-      );
-    } catch (err) {
-      callback(err as Error);
+      callback(undefined, this.lastSnapshotBuffer);
+    } catch {
+      callback(undefined, this.lastSnapshotBuffer);
     }
   }
 

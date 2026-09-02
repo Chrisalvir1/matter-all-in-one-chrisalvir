@@ -60,9 +60,11 @@ export function sanitizeUrlCredentials(url: string): string {
 /**
  * Resolves the FFmpeg binary path in priority order:
  * 1. process.env.FFMPEG_PATH
- * 2. /usr/bin/ffmpeg
+ * 2. /usr/bin/ffmpeg (Docker/Alpine)
  * 3. /usr/local/bin/ffmpeg
- * 4. ffmpeg (in system PATH)
+ * 4. /opt/homebrew/bin/ffmpeg (macOS Apple Silicon)
+ * 5. node_modules/ffmpeg-static/ffmpeg (bundled fallback)
+ * 6. ffmpeg (in system PATH)
  */
 export function resolveFfmpegPath(): string | null {
   const candidates: string[] = [];
@@ -71,11 +73,19 @@ export function resolveFfmpegPath(): string | null {
     candidates.push(process.env.FFMPEG_PATH.trim());
   }
 
-  candidates.push("/usr/bin/ffmpeg", "/usr/local/bin/ffmpeg", "ffmpeg");
+  candidates.push(
+    "/usr/bin/ffmpeg",
+    "/usr/local/bin/ffmpeg",
+    "/opt/homebrew/bin/ffmpeg",
+    "/bin/ffmpeg",
+    "./node_modules/ffmpeg-static/ffmpeg",
+    "../node_modules/ffmpeg-static/ffmpeg",
+    "ffmpeg",
+  );
 
   for (const candidate of candidates) {
     try {
-      if (candidate.startsWith("/")) {
+      if (candidate.startsWith("/") || candidate.startsWith(".")) {
         if (fs.existsSync(candidate)) {
           const stats = fs.statSync(candidate);
           if (stats.isFile()) {
@@ -103,9 +113,10 @@ export function resolveFfmpegPath(): string | null {
 /**
  * Resolves the FFprobe binary path in priority order:
  * 1. process.env.FFPROBE_PATH
- * 2. /usr/bin/ffprobe
+ * 2. /usr/bin/ffprobe (Docker/Alpine)
  * 3. /usr/local/bin/ffprobe
- * 4. ffprobe (in system PATH)
+ * 4. /opt/homebrew/bin/ffprobe (macOS Apple Silicon)
+ * 5. ffprobe (in system PATH)
  */
 export function resolveFfprobePath(): string | null {
   const candidates: string[] = [];
@@ -114,11 +125,17 @@ export function resolveFfprobePath(): string | null {
     candidates.push(process.env.FFPROBE_PATH.trim());
   }
 
-  candidates.push("/usr/bin/ffprobe", "/usr/local/bin/ffprobe", "ffprobe");
+  candidates.push(
+    "/usr/bin/ffprobe",
+    "/usr/local/bin/ffprobe",
+    "/opt/homebrew/bin/ffprobe",
+    "/bin/ffprobe",
+    "ffprobe",
+  );
 
   for (const candidate of candidates) {
     try {
-      if (candidate.startsWith("/")) {
+      if (candidate.startsWith("/") || candidate.startsWith(".")) {
         if (fs.existsSync(candidate)) {
           const stats = fs.statSync(candidate);
           if (stats.isFile()) {

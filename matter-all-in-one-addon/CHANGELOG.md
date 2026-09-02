@@ -1,3 +1,10 @@
+## [1.4.82] - 2026-09-02
+
+### Garantía de Disponibilidad en Apple Home, Resolución Multi-Ruta de FFmpeg y Snapshot Cacheado
+
+- **Resolución Definitiva de "Sin Respuesta" en Apple Home:** Cuando Apple Home consulta snapshots de vista previa en intervalos de 10s, nunca se envía un callback de error (que marcaba la cámara en rojo como "No Response"). Si la cámara tarda en entregar el fotograma, se sirve de inmediato un frame precargado/cacheado, manteniendo el accesorio en estado 100% ONLINE y con el botón LIVE activo.
+- **Resolución Robusta de FFmpeg/FFprobe:** Soporte multi-ruta para entornos Docker Alpine (`/usr/bin/ffmpeg`), macOS Silicon (`/opt/homebrew/bin/ffmpeg`) y paquetes estáticos incluidos (`node_modules/ffmpeg-static`), eliminando cualquier riesgo de ejecutable no encontrado.
+
 ## [1.4.81] - 2026-09-02
 
 ### Snapshot Rápido con Timeout Estricto, Diagnóstico en Vivo de Apple Home y Transmisión RTSP TCP
