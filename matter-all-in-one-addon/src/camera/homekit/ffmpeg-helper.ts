@@ -553,7 +553,7 @@ export interface StreamPipelineConfig {
   audioKeySaltBase64?: string;
   audioCodec?: string;
   needsDumpExtra?: boolean;
-  transport?: "tcp" | "udp";
+  transport?: "auto" | "tcp" | "udp";
 }
 
 /**
@@ -627,7 +627,9 @@ export function buildFfmpegStreamArgs(config: StreamPipelineConfig): string[] {
 
   if (config.sourceUrl.startsWith("rtsp://")) {
     const transport = config.transport || "tcp";
-    inputArgs.push("-rtsp_transport", transport);
+    if (transport !== "auto") {
+      inputArgs.push("-rtsp_transport", transport);
+    }
     inputArgs.push("-fflags", "+nobuffer+genpts");
     inputArgs.push("-use_wallclock_as_timestamps", "1");
   } else {

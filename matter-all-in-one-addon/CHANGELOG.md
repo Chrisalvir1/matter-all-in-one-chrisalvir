@@ -1,3 +1,15 @@
+## [1.4.83] - 2026-09-02
+
+### HAP Live View, Scrypted refresh and Node.js 24.20 LTS
+
+- Node.js 24.20 LTS in Docker, CI, publishing and local development.
+- Apple Home uses the HAP X-HM setup URI; Matter Camera remains separate and experimental.
+- Published HAP cameras rebuild when Scrypted URL, validation, capabilities or transport changes.
+- `auto` no longer produces invalid `-rtsp_transport auto` FFmpeg arguments.
+- HAP START reports early FFmpeg failures instead of returning immediate success.
+- H.264 SPS/PPS repeat at keyframes to prevent green-frame startup.
+- Manufacturer is `Matter All-in-One Chrisalvir`; firmware reports Matterbridge runtime version.
+
 ## [1.4.82] - 2026-09-02
 
 ### Garantía de Disponibilidad en Apple Home, Resolución Multi-Ruta de FFmpeg y Snapshot Cacheado

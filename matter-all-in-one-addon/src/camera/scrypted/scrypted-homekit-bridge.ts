@@ -14,6 +14,7 @@ import {
 
 export class ScryptedHomeKitBridge {
   private static activeAccessories = new Map<string, HomeKitCameraAccessory>();
+  private static sourceFingerprints = new Map<string, string>();
 
   /**
    * Mounts or updates an independent HomeKit HAP camera accessory for a Scrypted camera.
@@ -27,12 +28,29 @@ export class ScryptedHomeKitBridge {
       return null;
     }
 
+    const sourceFingerprint = JSON.stringify({
+      url: camera.source.streamReference?.directUrl || null,
+      validationStatus:
+        camera.source.streamValidationStatus ||
+        camera.source.streamReference?.validationStatus ||
+        "not_checked",
+      observed: camera.capabilities?.observed || null,
+      transport: camera.exportConfig?.rtspTransportPreference || "auto",
+    });
     const existing = this.activeAccessories.get(camera.cameraId);
-    if (existing && existing.isPublished) {
+    if (
+      existing &&
+      existing.isPublished &&
+      this.sourceFingerprints.get(camera.cameraId) === sourceFingerprint
+    ) {
       return existing;
     }
     if (existing) {
-      this.unmountCamera(camera.cameraId);
+      platform?.log?.notice?.(
+        `[ScryptedHomeKitBridge] Rebuilding ${camera.cameraId}: source configuration changed`,
+      );
+      await existing.unpublish();
+      this.activeAccessories.delete(camera.cameraId);
     }
 
     // RULE: Never invent an RTSP URL from cameraId.
@@ -50,7 +68,6 @@ export class ScryptedHomeKitBridge {
     const confirmedError =
       validationStatus === "not_found" ||
       validationStatus === "unauthorized" ||
-      validationStatus === "timeout" ||
       validationStatus === "unsupported" ||
       validationStatus === "invalid" ||
       validationStatus === "source_offline";
@@ -177,10 +194,7 @@ export class ScryptedHomeKitBridge {
     }
 
     storageRecord.name = camera.name;
-    storageRecord.manufacturer =
-      camera.displayManufacturer ||
-      resolveDisplayManufacturer(camera) ||
-      "Marca no identificada";
+    storageRecord.manufacturer = "Matter All-in-One Chrisalvir";
     storageRecord.model =
       camera.displayModel ||
       resolveDisplayModel(camera) ||
@@ -224,6 +238,7 @@ export class ScryptedHomeKitBridge {
     }
 
     this.activeAccessories.set(camera.cameraId, accessory);
+    this.sourceFingerprints.set(camera.cameraId, sourceFingerprint);
 
     // Populate camera identity with real HomeKit credentials and setup URI
     let setupUri: string | undefined;
@@ -253,6 +268,7 @@ export class ScryptedHomeKitBridge {
         existing.accessory.unpublish();
       } catch {}
       this.activeAccessories.delete(cameraId);
+      this.sourceFingerprints.delete(cameraId);
     }
   }
 

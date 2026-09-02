@@ -2646,7 +2646,7 @@ function openCameraConfigModal(camera) {
       pairingPayload =
         camera.identity?.matterPairingCode ||
         bridgeEntity?.pairingCode ||
-        "ABCD-1234-EFGH";
+        "";
 
       const manualCode =
         camera.identity?.matterPairingCode ||
@@ -3749,7 +3749,7 @@ function copyCameraLog(cameraId) {
       prebuffer: "4s in RAM",
     },
     matter: {
-      pairingCode: camera.identity?.matterPairingCode || "ABCD-1234-EFGH",
+      pairingCode: camera.identity?.matterPairingCode || "",
       clusters: [
         "0x0551 (AV Stream Management)",
         "0x0553 (WebRTC Transport)",

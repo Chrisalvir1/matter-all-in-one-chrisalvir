@@ -193,7 +193,7 @@ export class ScryptedStreamValidator {
                     : undefined,
                 fps: probe.fps,
                 hasAudio: probe.hasAudio,
-                needsDumpExtra: false,
+                needsDumpExtra: probe.videoCodec.toLowerCase() === "h264",
                 gopSeconds,
                 metrics,
                 validatedAt: now,

@@ -363,7 +363,6 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
     if (
       validationStatus === "not_found" ||
       validationStatus === "unauthorized" ||
-      validationStatus === "timeout" ||
       validationStatus === "unsupported" ||
       validationStatus === "invalid" ||
       validationStatus === "source_offline"
@@ -476,6 +475,19 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
         stdio: ["ignore", "ignore", "pipe"],
       });
       session.process = proc;
+      let startCallbackSettled = false;
+      const readinessTimer = setTimeout(() => {
+        if (startCallbackSettled) return;
+        startCallbackSettled = true;
+        if (proc.exitCode === null && !proc.killed) {
+          this.platform?.log?.notice?.(
+            `[HomeKitCamera][${this.entityId}] FFmpeg survived startup guard; accepting HAP START`,
+          );
+          callback();
+        } else {
+          callback(new Error("FFmpeg exited before Live View became ready"));
+        }
+      }, 1500);
 
       proc.stderr.on("data", (data) => {
         this.platform?.log?.warn?.(
@@ -484,19 +496,27 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
       });
 
       proc.on("close", (code) => {
-        this.platform?.log?.debug?.(
+        this.platform?.log?.notice?.(
           `[HomeKitCamera][${this.entityId}] FFmpeg process closed with code ${code}`,
         );
         session.process = undefined;
+        if (!startCallbackSettled) {
+          startCallbackSettled = true;
+          clearTimeout(readinessTimer);
+          callback(new Error(`FFmpeg exited during HAP startup (code ${code})`));
+        }
       });
 
       proc.on("error", (err) => {
         this.platform?.log?.error?.(
           `[HomeKitCamera][${this.entityId}] FFmpeg process error: ${err.message}`,
         );
+        if (!startCallbackSettled) {
+          startCallbackSettled = true;
+          clearTimeout(readinessTimer);
+          callback(err);
+        }
       });
-
-      callback();
     } catch (err) {
       this.platform?.log?.error?.(
         `[HomeKitCamera][${this.entityId}] Failed to spawn FFmpeg: ${err}`,

@@ -1,4 +1,4 @@
-ARG BUILD_FROM=node:26.8.1-alpine3.24
+ARG BUILD_FROM=node:24.20.0-alpine3.22
 FROM ${BUILD_FROM} AS builder
 
 WORKDIR /app

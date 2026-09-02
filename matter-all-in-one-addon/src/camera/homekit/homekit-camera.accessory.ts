@@ -50,7 +50,7 @@ export class HomeKitCameraAccessory {
     const manufacturer = record.manufacturer || "Matter all in one Chrisalvir";
     const model = record.model || "Modelo no identificado";
     const serialNumber = record.serialNumber || "Serial no disponible";
-    const firmware = platform?.matterbridge?.matterbridgeVersion || "1.4.72";
+    const firmware = platform?.matterbridge?.matterbridgeVersion || "unknown";
 
     this.accessory
       .getService(Service.AccessoryInformation)
