@@ -18,8 +18,9 @@ export type ScryptedDiscoveryResult = {
 };
 
 function isCamera(device: ScryptedDiscoveryDevice): boolean {
-  const type = `${device.type ?? ""} ${device.deviceType ?? ""}`.toLowerCase();
-  return type.includes("camera") || type.includes("doorbell") || type === "";
+  const type = `${device.type ?? ""} ${device.deviceType ?? ""}`.trim().toLowerCase();
+  if (!type) return true;
+  return type.includes("camera") || type.includes("doorbell");
 }
 
 export function adaptScryptedDiscovery(
