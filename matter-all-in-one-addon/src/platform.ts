@@ -286,11 +286,19 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           }
           const endpoint = ScryptedMatterBridge.getEndpoint(deviceId);
           if (endpoint) {
-            try {
-              (endpoint as any).setAttribute?.(0x0406, "occupancy", {
-                occupied: motionOn,
-              });
-            } catch {}
+            // Guard: only call setAttribute if the endpoint has a valid numeric ID.
+            // Endpoints in the inactive state (id === undefined) crash Matterbridge with
+            // "Endpoint scrypted_XX:undefined is in the inactive state".
+            const endpointId = (endpoint as any).id;
+            if (endpointId !== undefined && endpointId !== null) {
+              try {
+                (endpoint as any).setAttribute?.(0x0406, "occupancy", {
+                  occupied: motionOn,
+                });
+              } catch {
+                // Silently swallow — endpoint may have been deregistered between check and call
+              }
+            }
           }
           this.broadcastSseMessage("camera_motion", { deviceId, motionOn });
         },
@@ -313,7 +321,21 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             await ScryptedHomeKitBridge.mountCamera(this, cam);
           }
           if (cam.exportConfig.matterEnabled) {
-            await ScryptedMatterBridge.mountCamera(this, cam);
+            // Skip re-mounting Matter endpoints that are already successfully registered.
+            // Re-registering causes "already registered" errors and leaves endpoints inactive.
+            const existingEndpoint = ScryptedMatterBridge.getEndpoint(
+              cam.cameraId,
+            );
+            const existingId = existingEndpoint
+              ? (existingEndpoint as any).id
+              : undefined;
+            if (
+              !existingEndpoint ||
+              existingId === undefined ||
+              existingId === null
+            ) {
+              await ScryptedMatterBridge.mountCamera(this, cam);
+            }
           }
         }
         this.broadcastSseMessage("cameras_updated", cameras);
@@ -4625,6 +4647,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             res.end(JSON.stringify({ error: "Cámara no encontrada" }));
             return;
           }
+          // TCP probe is diagnostic only — tests Scrypted server reachability.
+          // It does NOT verify that the RTSP stream path exists or returns valid SDP.
+          // Only a full RTSP DESCRIBE with valid SDP may set cache to "fresh".
           let scryptedHost = "127.0.0.1";
           try {
             if (camera.source.serverId) {
@@ -4633,12 +4658,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           } catch {}
           const host = camera.source.streamReference?.host || scryptedHost;
           const port = camera.source.streamReference?.port || 8554;
-          const streamAvailable = await ScryptedClient.probeRtspPort(
-            host,
-            port,
-          );
-          camera.status.connection = streamAvailable ? "online" : "offline";
-          camera.status.cache = streamAvailable ? "fresh" : "unverified";
+          const portReachable = await ScryptedClient.probeRtspPort(host, port);
+          // Only update connection status — never mark cache as "fresh" from TCP probe
+          camera.status.connection = portReachable ? "online" : "offline";
+          // cache stays at its current value — TCP probe does NOT verify RTSP path
           camera.status.lastVerified = new Date().toISOString();
           await ScryptedStorage.save(store);
           res.writeHead(200, {

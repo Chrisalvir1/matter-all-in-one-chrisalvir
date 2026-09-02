@@ -69,6 +69,23 @@ export function resolveDisplayModel(
   if (legacy && !isBlankOrUnknown(legacy)) return legacy;
   return undefined;
 }
+/**
+ * Returns true if the given URL was fabricated using the prohibited pattern
+ * `rtsp://<host>:8554/<cameraId>` where <cameraId> is a Scrypted numeric device ID.
+ *
+ * A Scrypted device ID (e.g. "51") is NEVER a valid RTSP path for Scrypted Rebroadcast.
+ * This helper guards against stale invented URLs that may exist in persisted data.
+ */
+export function isInventedRtspUrl(url: string, cameraId: string): boolean {
+  if (!url || !cameraId) return false;
+  try {
+    const u = new URL(url);
+    // Prohibited: path is exactly /<cameraId> OR any path that is just /<digits>
+    return u.pathname === `/${cameraId}` || /^\/\d+$/.test(u.pathname);
+  } catch {
+    return false;
+  }
+}
 
 export class ScryptedStorage {
   private static storePath =
@@ -298,24 +315,22 @@ export class ScryptedStorage {
       const existing = existingMap.get(fresh.cameraId);
       const identityOverride = existing?.identityOverride;
 
-      let scryptedHost = "127.0.0.1";
-      try {
-        const rawUrl = store.scrypted.serverUrl || fresh.source.serverId;
-        if (rawUrl) scryptedHost = new URL(rawUrl).hostname;
-      } catch {}
+      // RULE: Never invent an RTSP URL from cameraId. The Scrypted device ID is NOT
+      // a Rebroadcast path. Leave streamReference undefined until the user configures
+      // a real URL or the SDK resolves a real profile via getVideoStreamOptions().
+      // A manually-set directUrl is preserved only if it does not match the prohibited
+      // invented pattern (path = /<numeric id>).
+      const existingDirectUrl = existing?.source?.streamReference?.directUrl;
+      const freshDirectUrl = fresh.source?.streamReference?.directUrl;
 
-      const effectiveStreamReference = existing?.source?.streamReference
-        ?.directUrl
-        ? existing.source.streamReference
-        : fresh.source?.streamReference?.directUrl
-          ? fresh.source.streamReference
-          : {
-              protocol: "rtsp" as const,
-              host: scryptedHost,
-              port: 8554,
-              path: `/${fresh.cameraId}`,
-              directUrl: `rtsp://${scryptedHost}:8554/${fresh.cameraId}`,
-            };
+      const effectiveStreamReference:
+        import("./scrypted-types.js").StreamReference | undefined =
+        existingDirectUrl &&
+        !isInventedRtspUrl(existingDirectUrl, fresh.cameraId)
+          ? existing!.source.streamReference
+          : freshDirectUrl && !isInventedRtspUrl(freshDirectUrl, fresh.cameraId)
+            ? fresh.source.streamReference
+            : undefined; // No URL — never fabricate one
 
       const updated: CameraRecord = {
         ...fresh,
@@ -455,27 +470,38 @@ export class ScryptedStorage {
     const cam = store.cameras.cameras.find((c) => c.cameraId === cameraId);
     if (!cam) return false;
 
-    let host = "127.0.0.1";
-    let port = 8554;
-    let path = `/${cameraId}`;
+    const trimmed = streamUrl.trim();
+    if (!trimmed) return false;
+
+    // Reject obviously invented URLs (path = /<cameraId> or any pure numeric path)
+    if (isInventedRtspUrl(trimmed, cameraId)) {
+      return false;
+    }
+
+    let host: string | undefined;
+    let port: number | undefined;
+    let path: string | undefined;
     try {
-      const u = new URL(streamUrl);
-      host = u.hostname;
+      const u = new URL(trimmed);
+      host = u.hostname || undefined;
       port = u.port
         ? parseInt(u.port, 10)
         : u.protocol === "rtsps:"
           ? 322
           : 554;
-      path = u.pathname;
-    } catch {}
+      path = u.pathname || undefined;
+    } catch {
+      // If URL doesn't parse, store directUrl without decomposed fields
+    }
 
     cam.source.streamReference = {
       protocol: "rtsp",
-      directUrl: streamUrl.trim(),
+      directUrl: trimmed,
       host,
       port,
       path,
-      verifiedAt: new Date().toISOString(),
+      // verifiedAt is NOT set here — user-entered URL is "not_checked" until
+      // a real RTSP DESCRIBE validation is performed via "Verificar stream"
     };
     await this.save(store);
     return true;

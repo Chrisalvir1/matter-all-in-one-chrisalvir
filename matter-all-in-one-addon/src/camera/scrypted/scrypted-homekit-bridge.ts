@@ -30,33 +30,30 @@ export class ScryptedHomeKitBridge {
       this.unmountCamera(camera.cameraId);
     }
 
-    let scryptedHost = "127.0.0.1";
-    try {
-      if (camera.source.serverId) {
-        scryptedHost = new URL(camera.source.serverId).hostname;
-      }
-    } catch {}
-
-    const streamUrl =
-      camera.source.streamReference?.directUrl ||
-      `rtsp://${camera.source.streamReference?.host || scryptedHost}:8554/${camera.cameraId}`;
+    // RULE: Never invent an RTSP URL from cameraId.
+    // If no real directUrl is present, leave url undefined — FFmpeg must NOT start.
+    const directUrl = camera.source.streamReference?.directUrl;
+    const streamVerified = Boolean(directUrl);
 
     const capabilities: CameraCapabilitiesInfo = {
-      hasLiveStream: true,
-      streamSourceType: "rtsp",
+      hasLiveStream: streamVerified,
+      streamSourceType: directUrl ? "rtsp" : "unknown",
       videoCodec: "h264",
-      hasAudio: camera.capabilities?.observed?.hasAudio ?? true,
-      audioCodec: "aac_lc",
+      hasAudio: streamVerified
+        ? (camera.capabilities?.observed?.hasAudio ?? false)
+        : false,
+      audioCodec: streamVerified ? "aac_lc" : "none",
       resolution: camera.capabilities?.observed?.resolution || {
         width: 1920,
         height: 1080,
       },
       maxFps: camera.capabilities?.observed?.fps || 30,
-      strategy: "passthrough_h264",
+      strategy: streamVerified ? "passthrough_h264" : "unsupported",
       requiresTranscoding: false,
       snapshotSupported: true,
       snapshotUrl: camera.source.snapshotReference?.directUrl,
-      hksvCapable: camera.exportConfig.hksvEnabledByDefault !== false,
+      hksvCapable:
+        streamVerified && camera.exportConfig.hksvEnabledByDefault !== false,
     };
 
     const hasDoorbell = camera.sensors.some(
@@ -64,14 +61,15 @@ export class ScryptedHomeKitBridge {
     );
 
     const resolvedSource: ResolvedStreamSource = {
-      sourceType: "rtsp",
-      url: streamUrl,
+      sourceType: directUrl ? "rtsp" : "unknown",
+      url: directUrl, // undefined when no real stream available
       snapshotUrl: camera.source.snapshotReference?.directUrl,
-      supportsPassthrough: true,
+      supportsPassthrough: streamVerified,
       requiresBridge: false,
       metadata: {
         isScrypted: true,
         scryptedCameraId: camera.cameraId,
+        streamVerified,
         model:
           camera.sourceModel ||
           camera.displayModel ||

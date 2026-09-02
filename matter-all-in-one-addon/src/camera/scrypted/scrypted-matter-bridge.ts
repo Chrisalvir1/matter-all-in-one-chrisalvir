@@ -26,44 +26,59 @@ export class ScryptedMatterBridge {
       return null;
     }
 
-    let scryptedHost = "127.0.0.1";
-    try {
-      if (camera.source.serverId) {
-        scryptedHost = new URL(camera.source.serverId).hostname;
+    // If this camera already has an active, registered endpoint, return it.
+    // Never try to re-register an already-commissioned endpoint — that causes
+    // "already registered" errors and leaves the endpoint in inactive state.
+    const existing = this.activeEndpoints.get(camera.cameraId);
+    if (existing) {
+      const existingId = (existing as any).id;
+      if (existingId !== undefined && existingId !== null) {
+        // Update display name if it changed, but do NOT recreate the endpoint
+        return existing;
       }
-    } catch {}
+      // Endpoint exists but has no ID (registration failed previously) — remove and retry
+      this.activeEndpoints.delete(camera.cameraId);
+      this.sessionManagers.delete(camera.cameraId);
+      this.adapters.delete(camera.cameraId);
+    }
 
-    const streamUrl =
-      camera.source.streamReference?.directUrl ||
-      `rtsp://${camera.source.streamReference?.host || scryptedHost}:8554/${camera.cameraId}`;
+    // RULE: Never invent an RTSP URL from cameraId.
+    // Use real directUrl only. If absent, stream is undefined — Matter endpoint
+    // is still created (for metadata/control) but stream will not start.
+    const directUrl = camera.source.streamReference?.directUrl;
+    const streamVerified = Boolean(directUrl);
 
     const capabilities: CameraCapabilitiesInfo = {
-      hasLiveStream: true,
-      streamSourceType: "rtsp",
+      hasLiveStream: streamVerified,
+      streamSourceType: directUrl ? "rtsp" : "unknown",
       videoCodec: "h264",
-      hasAudio: camera.capabilities.observed?.hasAudio ?? true,
-      audioCodec: "aac_lc",
+      hasAudio: streamVerified
+        ? (camera.capabilities.observed?.hasAudio ?? false)
+        : false,
+      audioCodec: streamVerified ? "aac_lc" : "none",
       resolution: camera.capabilities.observed?.resolution || {
         width: 1920,
         height: 1080,
       },
       maxFps: camera.capabilities.observed?.fps || 30,
-      strategy: "passthrough_h264",
+      strategy: streamVerified ? "passthrough_h264" : "unsupported",
       requiresTranscoding: false,
       snapshotSupported: true,
       snapshotUrl: camera.source.snapshotReference?.directUrl,
-      hksvCapable: camera.exportConfig.hksvEnabledByDefault !== false,
+      hksvCapable:
+        streamVerified && camera.exportConfig.hksvEnabledByDefault !== false,
     };
 
     const resolvedSource: ResolvedStreamSource = {
-      sourceType: "rtsp",
-      url: streamUrl,
+      sourceType: directUrl ? "rtsp" : "unknown",
+      url: directUrl, // undefined when no real stream available
       snapshotUrl: camera.source.snapshotReference?.directUrl,
-      supportsPassthrough: true,
+      supportsPassthrough: streamVerified,
       requiresBridge: false,
       metadata: {
         isScrypted: true,
         scryptedCameraId: camera.cameraId,
+        streamVerified,
         model: camera.displayModel || camera.model,
         manufacturer: camera.displayManufacturer,
       },
@@ -101,14 +116,21 @@ export class ScryptedMatterBridge {
     if (platform?.registerDevice) {
       try {
         await platform.registerDevice(endpoint);
+        // Only store the endpoint in the active map after successful registration.
+        // If registration fails (already registered), do not store so we don't
+        // accumulate endpoints with undefined IDs that cause setAttribute errors.
+        this.activeEndpoints.set(camera.cameraId, endpoint);
       } catch (err) {
         platform?.log?.warn?.(
-          `[ScryptedMatterBridge][${camera.cameraId}] Registration deferred: ${err}`,
+          `[ScryptedMatterBridge][${camera.cameraId}] Registration failed (may already be registered): ${err}`,
         );
+        // Do NOT set activeEndpoints — endpoint ID will be undefined, causing setAttribute errors
+        return null;
       }
+    } else {
+      this.activeEndpoints.set(camera.cameraId, endpoint);
     }
 
-    this.activeEndpoints.set(camera.cameraId, endpoint);
     return endpoint;
   }
 

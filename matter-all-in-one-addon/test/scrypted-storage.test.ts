@@ -333,3 +333,169 @@ describe("ScryptedStorage persistent cache suite", () => {
     expect(storeAfterClear.cameras.cameras[0].identityOverride).toBeUndefined();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Critical regression tests: Prohibited URL pattern (rtsp://ip:8554/cameraId)
+// ---------------------------------------------------------------------------
+import { isInventedRtspUrl } from "../src/camera/scrypted/scrypted-storage.js";
+
+describe("isInventedRtspUrl — prohibited pattern detection", () => {
+  it("detects rtsp://ip:8554/<cameraId> as invented", () => {
+    expect(isInventedRtspUrl("rtsp://192.168.1.1:8554/51", "51")).toBe(true);
+    expect(isInventedRtspUrl("rtsp://192.168.110.46:8554/51", "51")).toBe(true);
+    expect(isInventedRtspUrl("rtsp://10.0.0.1:8554/29", "29")).toBe(true);
+  });
+
+  it("detects any /<digits> path as invented regardless of cameraId match", () => {
+    // Any pure-numeric path is treated as invented even if cameraId differs
+    expect(isInventedRtspUrl("rtsp://192.168.1.1:8554/123", "99")).toBe(true);
+  });
+
+  it("does NOT flag real Scrypted Rebroadcast paths as invented", () => {
+    expect(
+      isInventedRtspUrl("rtsp://192.168.1.1:8554/tapo_c210_main", "51"),
+    ).toBe(false);
+    expect(isInventedRtspUrl("rtsp://192.168.1.1:8554/cam_main", "51")).toBe(
+      false,
+    );
+    expect(
+      isInventedRtspUrl("rtsp://192.168.1.1:8554/live/channel0", "51"),
+    ).toBe(false);
+    expect(
+      isInventedRtspUrl("rtsp://192.168.1.1:554/Streaming/Channels/101", "51"),
+    ).toBe(false);
+  });
+
+  it("handles invalid URLs gracefully without throwing", () => {
+    expect(isInventedRtspUrl("not-a-url", "51")).toBe(false);
+    expect(isInventedRtspUrl("", "51")).toBe(false);
+    expect(isInventedRtspUrl("rtsp://192.168.1.1:8554/51", "")).toBe(false);
+  });
+});
+
+describe("updateCameras — never fabricates RTSP URLs from cameraId", () => {
+  const tempStorePath = `/tmp/test-store-url-prohibition-${Date.now()}.json`;
+
+  beforeEach(async () => {
+    ScryptedStorage.setStorePath(tempStorePath);
+    try {
+      await fs.unlink(tempStorePath);
+    } catch {}
+  });
+
+  function makeCamera(id: string, directUrl?: string): CameraRecord {
+    return {
+      cameraId: id,
+      sourceId: `scrypted_${id}`,
+      deviceId: id,
+      name: `Camera ${id}`,
+      enabled: true,
+      displayManufacturer: "TAPO",
+      identity: {},
+      source: {
+        kind: "scrypted",
+        serverId: "https://192.168.110.46:10443",
+        deviceId: id,
+        ...(directUrl
+          ? { streamReference: { protocol: "rtsp", directUrl } }
+          : {}),
+      },
+      capabilities: {
+        qualityMode: "maximum_compatible",
+        allowAutomaticFallback: false,
+      },
+      sensors: [],
+      exportConfig: {
+        matterEnabled: true,
+        homeKitEnabled: true,
+        hksvEnabledByDefault: true,
+        googleHomeEnabled: false,
+        alexaEnabled: false,
+        smartThingsEnabled: false,
+        nasEnabled: false,
+      },
+      status: { connection: "online", cache: "unverified" },
+    };
+  }
+
+  it("leaves streamReference undefined when camera has no real URL", async () => {
+    const cam = makeCamera("51"); // No directUrl
+    await ScryptedStorage.updateCameras([cam]);
+    const store = await ScryptedStorage.load();
+    const saved = store.cameras.cameras.find((c) => c.cameraId === "51");
+    expect(saved?.source.streamReference).toBeUndefined();
+  });
+
+  it("never generates rtsp://ip:8554/<cameraId> for any camera", async () => {
+    const cameras = ["51", "53", "29", "28", "31", "50", "59"].map(makeCamera);
+    await ScryptedStorage.updateCameras(cameras);
+    const store = await ScryptedStorage.load();
+    for (const cam of store.cameras.cameras) {
+      const url = cam.source.streamReference?.directUrl;
+      if (url) {
+        const urlStr = String(url);
+        expect(isInventedRtspUrl(urlStr, cam.cameraId)).toBe(false);
+        expect(urlStr).not.toMatch(/\/\d+$/);
+      }
+    }
+  });
+
+  it("preserves a valid manually-set real URL through sync", async () => {
+    const realUrl = "rtsp://192.168.110.46:8554/tapo_main";
+    const cam = makeCamera("51", realUrl);
+    await ScryptedStorage.updateCameras([cam]);
+
+    // Sync again with fresh camera (no URL) — must preserve the manually-set URL
+    const freshCam = makeCamera("51");
+    await ScryptedStorage.updateCameras([freshCam]);
+
+    const store = await ScryptedStorage.load();
+    const saved = store.cameras.cameras.find((c) => c.cameraId === "51");
+    expect(saved?.source.streamReference?.directUrl).toBe(realUrl);
+  });
+
+  it("cleans up stale invented URL from previous versions on sync", async () => {
+    // Simulate a camera that has the old invented URL in storage
+    const camWithInventedUrl = makeCamera(
+      "51",
+      "rtsp://192.168.110.46:8554/51",
+    );
+    await ScryptedStorage.updateCameras([camWithInventedUrl]);
+
+    // Sync with fresh camera — invented URL must be discarded
+    const freshCam = makeCamera("51");
+    await ScryptedStorage.updateCameras([freshCam]);
+
+    const store = await ScryptedStorage.load();
+    const saved = store.cameras.cameras.find((c) => c.cameraId === "51");
+    // Old invented URL was stale and should NOT be preserved
+    expect(saved?.source.streamReference).toBeUndefined();
+  });
+
+  it("updateCameraStreamUrl rejects invented paths", async () => {
+    const cam = makeCamera("51");
+    await ScryptedStorage.updateCameras([cam]);
+    const result = await ScryptedStorage.updateCameraStreamUrl(
+      "51",
+      "rtsp://192.168.1.1:8554/51",
+    );
+    expect(result).toBe(false);
+  });
+
+  it("updateCameraStreamUrl accepts real paths", async () => {
+    const cam = makeCamera("51");
+    await ScryptedStorage.updateCameras([cam]);
+    const result = await ScryptedStorage.updateCameraStreamUrl(
+      "51",
+      "rtsp://192.168.1.1:8554/tapo_main",
+    );
+    expect(result).toBe(true);
+    const store = await ScryptedStorage.load();
+    const saved = store.cameras.cameras.find((c) => c.cameraId === "51");
+    expect(saved?.source.streamReference?.directUrl).toBe(
+      "rtsp://192.168.1.1:8554/tapo_main",
+    );
+    // verifiedAt must NOT be set — user-entered URLs are unverified until explicit validation
+    expect(saved?.source.streamReference?.verifiedAt).toBeUndefined();
+  });
+});

@@ -266,12 +266,28 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
 
     if (!sourceUrl) {
       const errMsg =
-        "Cannot start stream: resolved stream source URL is missing.";
+        "Sin fuente de stream verificada. Configura o verifica el stream RTSP en la UI de Matter All-in-One.";
       this.platform?.log?.error?.(
         `[HomeKitCamera][${this.entityId}] ${errMsg}`,
       );
       callback(new Error(errMsg));
       return;
+    }
+
+    // Guard: block FFmpeg against obviously invented RTSP paths (/:digits pattern)
+    // These come from the prohibited rtsp://ip:8554/<scryptedId> pattern and always 404.
+    try {
+      const parsedUrl = new URL(sourceUrl);
+      if (/^\/\d+$/.test(parsedUrl.pathname)) {
+        const errMsg = `URL de stream inválida (ruta '${parsedUrl.pathname}' parece un ID de dispositivo, no una ruta RTSP real). Verifica el stream en la UI.`;
+        this.platform?.log?.error?.(
+          `[HomeKitCamera][${this.entityId}] Bloqueando FFmpeg: ${errMsg}`,
+        );
+        callback(new Error(errMsg));
+        return;
+      }
+    } catch {
+      // URL parse failed — let FFmpeg handle it
     }
 
     const token =
