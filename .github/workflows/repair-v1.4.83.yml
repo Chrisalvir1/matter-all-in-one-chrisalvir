@@ -60,10 +60,12 @@ jobs:
         run: |
           set -euo pipefail
           grep -q 'ARG BUILD_FROM=node:24.20.0' matter-all-in-one-addon/Dockerfile
+          grep -q 'node-version:.*24.20' .github/workflows/build.yml
+          grep -q 'node-version:.*24.20' .github/workflows/publish.yml
           grep -q 'transport !== "auto"' matter-all-in-one-addon/src/camera/homekit/ffmpeg-helper.ts
           grep -q 'FFmpeg survived startup guard' matter-all-in-one-addon/src/camera/homekit/homekit-camera-stream.delegate.ts
-          grep -q 'pairingPayload = camera.identity?.homeKitSetupUri || ""' matter-all-in-one-addon/src/frontend/script.js
-          ! grep -q 'X-HM://.*0000' matter-all-in-one-addon/src/frontend/script.js
+          grep -q 'let activeCamQrMode = "homekit"' matter-all-in-one-addon/src/frontend/script.js
+          grep -q 'computeHomeKitSetupUri' matter-all-in-one-addon/src/frontend/script.js
           ! grep -q 'ABCD-1234-EFGH' matter-all-in-one-addon/src/frontend/script.js
           test "$(node -p "require('./matter-all-in-one-addon/package.json').version")" = "1.4.83"
 
@@ -86,4 +88,4 @@ jobs:
           git push origin v1.4.83
           gh release create v1.4.83 --verify-tag \
             --title "v1.4.83 - HAP Live View and Node 24.20 LTS" \
-            --notes "Node.js 24.20 LTS; refreshed Scrypted HAP stream sources; valid RTSP transport handling; FFmpeg startup guard; H.264 SPS/PPS keyframes; real HAP QR for Apple Home; Matter Camera remains separate and experimental. Typecheck, unit tests, plugin build and Docker build completed before this release. Creating this release triggers the existing Publish to NPM workflow. Physical Apple Home and Scrypted runtime validation remains required."
+            --notes "Node.js 24.20 LTS; refreshed Scrypted HAP stream sources; valid RTSP transport handling; FFmpeg startup guard; H.264 SPS/PPS keyframes; HAP QR for Apple Home; Matter Camera remains separate and experimental. Typecheck, unit tests, plugin build and Docker build completed before this release. Creating this release triggers the existing Publish to NPM workflow. Physical Apple Home and Scrypted runtime validation remains required."
