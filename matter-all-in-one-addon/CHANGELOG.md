@@ -1,3 +1,11 @@
+## [1.4.80] - 2026-09-02
+
+### Corrección Definitiva de "No Response" y Live View en Apple Home — Cámaras Scrypted HAP
+
+- **Bug crítico corregido — Cámaras Scrypted nunca arrancaban Live View en Apple Home:** El puente HAP bloqueaba preventivamente FFmpeg cuando `streamValidationStatus` era `"not_checked"` (valor por defecto al emparejar por primera vez), haciendo que la cámara siempre mostrara "Sin Respuesta" aunque tuviera URL RTSP válida. Se corrigió la lógica: ahora solo se bloquea con estados de error confirmados (`not_found`, `unauthorized`, `unsupported`, `invalid`, `source_offline`), tratando `"not_checked"` y `"port_reachable"` como válidos.
+- **Validación on-demand mejorada:** Cuando Apple Home inicia un Live View con estado `"not_checked"`, el delegate realiza una prueba rápida de 3 s y sólo bloquea FFmpeg si el resultado es un error fatal. Si la prueba da `timeout` o `port_reachable`, FFmpeg inicia de todas formas (y fallará en < 5 s si el stream realmente está inaccesible, con mensaje claro en logs).
+- **Logging de diagnóstico:** Nuevas trazas `[HomeKitCamera] On-demand probe result: <estado>` para identificar en tiempo real el estado de cada intento de Live View sin necesidad de herramientas externas.
+
 ## [1.4.79] - 2026-09-02
 
 ### Puente Matter 1.5+ Camera con WebRTC Real, Audio Opus y Aislamiento Honesto de Ecosistemas

@@ -320,17 +320,34 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
         );
         validationStatus = probe.status;
         metadata.validationStatus = probe.status;
-        if (probe.status !== "verified") {
-          const errMsg = `Validación inicial del stream falló (${probe.status}: ${probe.error || "error desconocido"}).`;
+        this.platform?.log?.debug?.(
+          `[HomeKitCamera][${this.entityId}] On-demand probe result: ${probe.status}`,
+        );
+        // Only block on confirmed fatal errors — port_reachable and verified are both fine
+        const fatalProbeError =
+          probe.status === "not_found" ||
+          probe.status === "unauthorized" ||
+          probe.status === "unsupported" ||
+          probe.status === "invalid" ||
+          probe.status === "source_offline";
+        if (fatalProbeError) {
+          const errMsg = `El stream no está disponible (${probe.status}: ${probe.error || "error desconocido"}). Verifica el stream en la interfaz.`;
           this.platform?.log?.warn?.(
             `[HomeKitCamera][${this.entityId}] Bloqueando FFmpeg: ${errMsg}`,
           );
           callback(new Error(errMsg));
           return;
         }
+        // timeout during probe: proceed optimistically — FFmpeg will fail fast if truly unreachable
+        if (probe.status === "timeout") {
+          this.platform?.log?.warn?.(
+            `[HomeKitCamera][${this.entityId}] Probe timeout — intentando FFmpeg de todas formas`,
+          );
+        }
       } catch (err: any) {
+        // Import or network error — proceed optimistically; FFmpeg will report failure
         this.platform?.log?.warn?.(
-          `[HomeKitCamera][${this.entityId}] Error en validación inicial: ${err?.message || err}`,
+          `[HomeKitCamera][${this.entityId}] Error en validación on-demand: ${err?.message || err} — continuando`,
         );
       }
     }

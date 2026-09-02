@@ -42,8 +42,20 @@ export class ScryptedHomeKitBridge {
       camera.source.streamValidationStatus ||
       camera.source.streamReference?.validationStatus ||
       "not_checked";
-    const streamVerified =
-      validationStatus === "verified" && Boolean(directUrl);
+    // A camera is considered ready to stream if:
+    //   1. It has a real directUrl, AND
+    //   2. The validation status is not a confirmed failure.
+    // "not_checked" is treated as potentially valid — the HAP delegate will
+    // attempt a fast on-demand probe (3 s) when Apple Home starts a stream.
+    const confirmedError =
+      validationStatus === "not_found" ||
+      validationStatus === "unauthorized" ||
+      validationStatus === "timeout" ||
+      validationStatus === "unsupported" ||
+      validationStatus === "invalid" ||
+      validationStatus === "source_offline";
+
+    const streamVerified = Boolean(directUrl) && !confirmedError;
 
     const capabilities: CameraCapabilitiesInfo = {
       hasLiveStream: streamVerified,
