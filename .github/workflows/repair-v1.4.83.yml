@@ -40,6 +40,14 @@ jobs:
         working-directory: matter-all-in-one-addon
         run: npm install --package-lock-only --legacy-peer-deps --no-fund --no-audit
 
+      - name: Commit repaired source and lockfile
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/build.yml .github/workflows/publish.yml matter-all-in-one-addon README.md
+          git commit -m "fix(camera): HAP Live View pipeline and Node 24.20 LTS (v1.4.83)"
+          git push origin HEAD:main
+
       - name: Install dependencies
         working-directory: matter-all-in-one-addon
         run: npm ci --legacy-peer-deps --no-fund --no-audit
@@ -72,20 +80,15 @@ jobs:
       - name: Build Docker image
         run: docker build --tag matter-all-in-one:v1.4.83 matter-all-in-one-addon
 
-      - name: Commit repaired source
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .github/workflows/build.yml .github/workflows/publish.yml matter-all-in-one-addon README.md
-          git commit -m "fix(camera): HAP Live View pipeline and Node 24.20 LTS (v1.4.83)"
-          git push origin HEAD:main
-
       - name: Create tag and GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          git fetch origin main --tags
+          git checkout main
+          git reset --hard origin/main
           git tag -a v1.4.83 -m "v1.4.83 - HAP Live View and Node 24.20 LTS"
           git push origin v1.4.83
           gh release create v1.4.83 --verify-tag \
             --title "v1.4.83 - HAP Live View and Node 24.20 LTS" \
-            --notes "Node.js 24.20 LTS; refreshed Scrypted HAP stream sources; valid RTSP transport handling; FFmpeg startup guard; H.264 SPS/PPS keyframes; HAP QR for Apple Home; Matter Camera remains separate and experimental. Typecheck, unit tests, plugin build and Docker build completed before this release. Creating this release triggers the existing Publish to NPM workflow. Physical Apple Home and Scrypted runtime validation remains required."
+            --notes "Node.js 24.20 LTS; refreshed Scrypted HAP stream sources; valid RTSP transport handling; FFmpeg startup guard; H.264 SPS/PPS keyframes; HAP QR for Apple Home; Matter Camera remains separate and experimental. Typecheck, unit tests, plugin build and Docker build completed before this release. The release triggers the existing Publish to NPM workflow. Physical Apple Home and Scrypted runtime validation remains required."
