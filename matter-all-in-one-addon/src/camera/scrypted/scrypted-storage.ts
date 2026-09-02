@@ -298,6 +298,25 @@ export class ScryptedStorage {
       const existing = existingMap.get(fresh.cameraId);
       const identityOverride = existing?.identityOverride;
 
+      let scryptedHost = "127.0.0.1";
+      try {
+        const rawUrl = store.scrypted.serverUrl || fresh.source.serverId;
+        if (rawUrl) scryptedHost = new URL(rawUrl).hostname;
+      } catch {}
+
+      const effectiveStreamReference = existing?.source?.streamReference
+        ?.directUrl
+        ? existing.source.streamReference
+        : fresh.source?.streamReference?.directUrl
+          ? fresh.source.streamReference
+          : {
+              protocol: "rtsp" as const,
+              host: scryptedHost,
+              port: 8554,
+              path: `/${fresh.cameraId}`,
+              directUrl: `rtsp://${scryptedHost}:8554/${fresh.cameraId}`,
+            };
+
       const updated: CameraRecord = {
         ...fresh,
         // Preserve manual identity overrides — never overwritten by sync
@@ -317,12 +336,8 @@ export class ScryptedStorage {
           matterPairingCode:
             existing?.identity?.matterPairingCode ||
             fresh.identity?.matterPairingCode,
-          homeKitAccessoryId:
-            existing?.identity?.homeKitAccessoryId ||
-            fresh.identity?.homeKitAccessoryId,
-          homeKitPairingState:
-            existing?.identity?.homeKitPairingState ||
-            fresh.identity?.homeKitPairingState,
+          homeKitAccessoryId: existing?.identity?.homeKitAccessoryId,
+          homeKitPairingState: existing?.identity?.homeKitPairingState,
           homeKitSetupUri:
             existing?.identity?.homeKitSetupUri ||
             fresh.identity?.homeKitSetupUri,
@@ -337,9 +352,7 @@ export class ScryptedStorage {
         },
         source: {
           ...fresh.source,
-          streamReference: existing?.source?.streamReference?.directUrl
-            ? existing.source.streamReference
-            : fresh.source?.streamReference,
+          streamReference: effectiveStreamReference,
         },
         exportConfig: existing
           ? { ...fresh.exportConfig, ...existing.exportConfig }

@@ -2687,9 +2687,21 @@ function openCameraConfigModal(camera) {
     };
   }
 
-  // RTSP Stream controls
+  // RTSP Stream controls - Always auto-fill with Scrypted stream URL
+  let autoRtspUrl = camera.source?.streamReference?.directUrl;
+  if (!autoRtspUrl) {
+    const rawServer =
+      camera.source?.serverId || state.scrypted?.serverUrl || "";
+    try {
+      if (rawServer) {
+        const u = new URL(rawServer);
+        autoRtspUrl = `rtsp://${u.hostname}:8554/${camera.cameraId}`;
+      }
+    } catch {}
+  }
   if (els.camCfgRtspUrl) {
-    els.camCfgRtspUrl.value = camera.source?.streamReference?.directUrl || "";
+    els.camCfgRtspUrl.value =
+      autoRtspUrl || `rtsp://<scrypted-ip>:8554/${camera.cameraId}`;
   }
   if (els.camCfgRtspResult) {
     els.camCfgRtspResult.hidden = true;

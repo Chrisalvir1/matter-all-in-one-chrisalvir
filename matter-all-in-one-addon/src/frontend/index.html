@@ -855,25 +855,27 @@
               </div>
 
               <div class="camera-stream-config-box" style="margin-bottom: 1.25rem; padding: 12px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px;">
-                <p class="card-label" style="margin-bottom: 6px;">STREAM DE VIDEO RTSP</p>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                  <p class="card-label" style="margin-bottom: 0;">STREAM DE VIDEO SCRYPTED (AUTOMÁTICO)</p>
+                  <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; font-size: 0.72rem; padding: 2px 6px; border-radius: 4px;">⚡ Enlace directo</span>
+                </div>
                 <label class="form-field" style="margin-bottom: 4px;">
-                  <span>URL de Stream RTSP (Scrypted / Red Local)</span>
+                  <span>Dirección RTSP de Scrypted Rebroadcast</span>
                   <div style="display: flex; gap: 8px; align-items: center;">
                     <input
                       type="text"
                       id="cam-cfg-rtsp-url"
-                      placeholder="rtsp://192.168.1.50:8554/51"
-                      style="flex: 1; font-family: monospace; font-size: 0.82rem;"
+                      style="flex: 1; font-family: monospace; font-size: 0.82rem; background: rgba(0,0,0,0.25);"
                     />
-                    <button class="button button-sm button-secondary" id="cam-cfg-test-rtsp-btn" type="button" title="Comprobar si el puerto RTSP responde">
-                      🔍 Probar
+                    <button class="button button-sm button-secondary" id="cam-cfg-test-rtsp-btn" type="button" title="Comprobar si el puerto RTSP de Scrypted responde">
+                      🔍 Probar conexión
                     </button>
-                    <button class="button button-sm button-primary" id="cam-cfg-save-rtsp-btn" type="button" title="Guardar y aplicar inmediatamente">
+                    <button class="button button-sm button-primary" id="cam-cfg-save-rtsp-btn" type="button" title="Guardar ajustes">
                       💾 Guardar
                     </button>
                   </div>
                   <small class="field-hint">
-                    Dirección RTSP provista por el servidor Scrypted. Si tu cámara requiere usuario/clave o un stream específico en Scrypted Rebroadcast, colócalo aquí (ej. <code>rtsp://user:pass@192.168.1.50:8554/51</code>).
+                    ✓ Enlazado automáticamente desde la IP de tu servidor Scrypted. Si tu instalación usa credenciales o un stream específico en Scrypted Rebroadcast, puedes ajustarlo aquí.
                   </small>
                 </label>
                 <div id="cam-cfg-rtsp-result" class="test-result-box" hidden style="margin-top: 6px; font-size: 0.8rem;"></div>
