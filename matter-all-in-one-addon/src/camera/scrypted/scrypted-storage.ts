@@ -317,8 +317,23 @@ export class ScryptedStorage {
           matterPairingCode:
             existing?.identity?.matterPairingCode ||
             fresh.identity?.matterPairingCode,
-          homeKitAccessoryId: existing?.identity?.homeKitAccessoryId,
-          homeKitPairingState: existing?.identity?.homeKitPairingState,
+          homeKitAccessoryId:
+            existing?.identity?.homeKitAccessoryId ||
+            fresh.identity?.homeKitAccessoryId,
+          homeKitPairingState:
+            existing?.identity?.homeKitPairingState ||
+            fresh.identity?.homeKitPairingState,
+          homeKitSetupUri:
+            existing?.identity?.homeKitSetupUri ||
+            fresh.identity?.homeKitSetupUri,
+          homeKitPincode:
+            existing?.identity?.homeKitPincode ||
+            fresh.identity?.homeKitPincode,
+          homeKitSetupId:
+            existing?.identity?.homeKitSetupId ||
+            fresh.identity?.homeKitSetupId,
+          homeKitPort:
+            existing?.identity?.homeKitPort || fresh.identity?.homeKitPort,
         },
         exportConfig: existing
           ? { ...fresh.exportConfig, ...existing.exportConfig }

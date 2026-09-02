@@ -178,6 +178,21 @@ function mapDeviceToCameraRecord(
     });
   }
 
+  if (
+    allInterfaces.includes("AudioSensor") ||
+    allInterfaces.includes("Microphone") ||
+    allInterfaces.includes("Intercom") ||
+    allInterfaces.includes("TwoWayAudio")
+  ) {
+    sensors.push({
+      sensorId: `${id}_audio`,
+      type: "occupancy",
+      name: `${name} – Micrófono / Audio`,
+      enabled: true,
+      state: false,
+    });
+  }
+
   const resolvedManufacturer = manufacturer ?? undefined;
   const resolvedModel = model ?? undefined;
 

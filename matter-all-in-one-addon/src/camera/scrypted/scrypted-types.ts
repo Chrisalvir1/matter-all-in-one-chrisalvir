@@ -144,6 +144,10 @@ export interface CameraRecord {
     matterPairingCode?: string;
     homeKitAccessoryId?: string;
     homeKitPairingState?: "not_paired" | "paired" | "unpaired";
+    homeKitSetupUri?: string;
+    homeKitPincode?: string;
+    homeKitSetupId?: string;
+    homeKitPort?: number;
   };
 
   source: {

@@ -22,6 +22,14 @@ export class ScryptedHomeKitBridge {
       return null;
     }
 
+    const existing = this.activeAccessories.get(camera.cameraId);
+    if (existing && existing.isPublished) {
+      return existing;
+    }
+    if (existing) {
+      this.unmountCamera(camera.cameraId);
+    }
+
     const streamUrl =
       camera.source.streamReference?.directUrl ||
       `rtsp://${camera.source.streamReference?.host || "127.0.0.1"}:8554/${camera.cameraId}`;
@@ -30,13 +38,13 @@ export class ScryptedHomeKitBridge {
       hasLiveStream: true,
       streamSourceType: "rtsp",
       videoCodec: "h264",
-      hasAudio: camera.capabilities.observed?.hasAudio ?? true,
+      hasAudio: camera.capabilities?.observed?.hasAudio ?? true,
       audioCodec: "aac_lc",
-      resolution: camera.capabilities.observed?.resolution || {
+      resolution: camera.capabilities?.observed?.resolution || {
         width: 1920,
         height: 1080,
       },
-      maxFps: camera.capabilities.observed?.fps || 30,
+      maxFps: camera.capabilities?.observed?.fps || 30,
       strategy: "passthrough_h264",
       requiresTranscoding: false,
       snapshotSupported: true,
@@ -58,28 +66,58 @@ export class ScryptedHomeKitBridge {
       },
     };
 
-    const storageRecord: HomeKitCameraStorageRecord = {
-      entityId: `scrypted.${camera.cameraId}`,
-      uuid: "",
-      username: this.generateMacAddress(camera.cameraId),
-      pincode: "031-45-154",
-      setupId: this.generateSetupId(camera.cameraId),
-      port: 0,
-      published: false,
-      strategy: "passthrough_h264",
-      state: "idle",
-      name: camera.name,
-      manufacturer: camera.displayManufacturer || "Scrypted",
-      model: camera.displayModel || camera.model || "Cámara IP",
-      serialNumber: `SCRYPTED-${camera.cameraId.toUpperCase().substring(0, 12)}`,
-      hksvCapable: capabilities.hksvCapable,
-      hksvEnabled: capabilities.hksvCapable,
-      hksvState: capabilities.hksvCapable ? "ready" : "not_capable",
-    };
+    const entityId = `scrypted.${camera.cameraId}`;
+    let storageRecord: HomeKitCameraStorageRecord;
+
+    if (typeof platform?.getOrCreateHomeKitCameraRecord === "function") {
+      storageRecord = platform.getOrCreateHomeKitCameraRecord(entityId);
+    } else {
+      const usedPorts = new Set(
+        Array.from(this.activeAccessories.values()).map(
+          (a) => a.record?.port || 0,
+        ),
+      );
+      let nextPort = 51830;
+      while (usedPorts.has(nextPort)) nextPort++;
+
+      storageRecord = {
+        entityId,
+        uuid: "",
+        username: this.generateMacAddress(camera.cameraId),
+        pincode: "031-45-154",
+        setupId: this.generateSetupId(camera.cameraId),
+        port: nextPort,
+        published: false,
+        strategy: "passthrough_h264",
+        state: "idle",
+        name: camera.name,
+        manufacturer: camera.displayManufacturer || "Scrypted",
+        model: camera.displayModel || camera.model || "Cámara IP",
+        serialNumber: `SCRYPTED-${camera.cameraId.toUpperCase().substring(0, 12)}`,
+        hksvCapable: capabilities.hksvCapable,
+        hksvEnabled: capabilities.hksvCapable,
+        hksvState: capabilities.hksvCapable ? "ready" : "not_capable",
+      };
+    }
+
+    if (!storageRecord.port || storageRecord.port === 0) {
+      let nextPort = 51830;
+      const usedPorts = new Set(
+        Array.from(this.activeAccessories.values()).map(
+          (a) => a.record?.port || 0,
+        ),
+      );
+      while (usedPorts.has(nextPort)) nextPort++;
+      storageRecord.port = nextPort;
+    }
+
+    storageRecord.name = camera.name;
+    storageRecord.manufacturer = camera.displayManufacturer || "Scrypted";
+    storageRecord.model = camera.displayModel || camera.model || "Cámara IP";
 
     const accessory = new HomeKitCameraAccessory(
       platform,
-      `scrypted.${camera.cameraId}`,
+      entityId,
       storageRecord,
       capabilities,
       resolvedSource,
@@ -93,7 +131,38 @@ export class ScryptedHomeKitBridge {
       accessory.linkedMotionEntityId = motionSensor.sensorId;
     }
 
+    try {
+      await accessory.publish();
+      storageRecord.published = true;
+      platform?.log?.notice?.(
+        `[ScryptedHomeKitBridge] 📷 Publicada cámara HomeKit "${camera.name}" en puerto ${storageRecord.port} (PIN: ${storageRecord.pincode}, URI: ${accessory.setupUri})`,
+      );
+    } catch (err: any) {
+      platform?.log?.error?.(
+        `[ScryptedHomeKitBridge] Error al publicar cámara HomeKit "${camera.name}": ${err?.message || err}`,
+      );
+    }
+
     this.activeAccessories.set(camera.cameraId, accessory);
+
+    // Populate camera identity with real HomeKit credentials and setup URI
+    let setupUri: string | undefined;
+    try {
+      if (accessory.isPublished) {
+        setupUri = accessory.setupUri;
+      }
+    } catch {}
+
+    camera.identity = {
+      ...camera.identity,
+      homeKitAccessoryId: entityId,
+      homeKitSetupUri: setupUri,
+      homeKitPincode: storageRecord.pincode,
+      homeKitSetupId: storageRecord.setupId,
+      homeKitPort: storageRecord.port,
+      homeKitPairingState: accessory.isPaired() ? "paired" : "not_paired",
+    };
+
     return accessory;
   }
 

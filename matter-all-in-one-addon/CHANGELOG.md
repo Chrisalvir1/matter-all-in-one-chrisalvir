@@ -1,3 +1,13 @@
+## [1.4.70] - 2026-09-01
+
+### Fix Apple HomeKit Camera HAP Pairing, Live HKSV Setup URI & Audio/Mic Detection
+
+- **Emparejamiento Real con Apple Home (HomeKit HAP / HKSV):** Corregido el bloqueo en "Conectando..." en la app Casa de Apple. Las cámaras Scrypted ahora publican automáticamente su servidor de accesorios HAP independiente con `publish()`, escuchando en su puerto TCP dedicado y anunciándose por mDNS/Bonjour local.
+- **Selector Dual de Código QR en el Modal (Apple Home HKSV vs Matter):**
+  - **Pestaña Apple Home (HKSV / HAP) [Activa por defecto]:** Renderiza el código QR nativo de HomeKit (`setupURI`: `X-HM://...`), muestra el código PIN numérico de HomeKit (`031-45-154`) y badge de vinculación activa si ya está emparejada. Apple Home reconoce de inmediato la cámara IP y la empareja en segundos con soporte para Vídeo Seguro de HomeKit (HKSV) y streaming directo.
+  - **Pestaña Matter (Google / Alexa / SmartThings):** Renderiza el código QR y código manual de Matter WebRTC para vincular con Google Home, Alexa o SmartThings.
+- **Detección y Visualización de Audio y Micrófono:** Corregido el indicador erróneo que mostraba "Sin audio". Las cámaras IP con micrófono y audio bidireccional (como Tapo C125, etc.) ahora se identifican con su soporte completo de audio AAC estéreo y micrófono activo tanto en las tarjetas del dashboard como en la ficha técnica del modal.
+
 ## [1.4.69] - 2026-09-01
 
 ### Minimalist Camera Cards, Interactive Details Modal & Liquid Glass Matter QR Code

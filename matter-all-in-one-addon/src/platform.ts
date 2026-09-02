@@ -4163,7 +4163,49 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             await reconnectMgr.forceRefresh();
 
             const currentStore = ScryptedStorage.getStore();
-            const currentCameras = currentStore.cameras?.cameras || [];
+            const rawCameras = currentStore.cameras?.cameras || [];
+
+            for (const cam of rawCameras) {
+              if (cam.exportConfig.homeKitEnabled) {
+                try {
+                  await ScryptedHomeKitBridge.mountCamera(this, cam);
+                } catch {}
+              }
+              if (cam.exportConfig.matterEnabled) {
+                try {
+                  await ScryptedMatterBridge.mountCamera(this, cam);
+                } catch {}
+              }
+            }
+
+            const currentCameras = rawCameras.map((cam) => {
+              const acc = ScryptedHomeKitBridge.getAccessory(cam.cameraId);
+              let setupUri: string | undefined;
+              try {
+                if (acc && acc.isPublished) {
+                  setupUri = acc.setupUri;
+                }
+              } catch {}
+              return {
+                ...cam,
+                identity: {
+                  ...cam.identity,
+                  homeKitAccessoryId: `scrypted.${cam.cameraId}`,
+                  homeKitSetupUri: setupUri || cam.identity?.homeKitSetupUri,
+                  homeKitPincode:
+                    acc?.record?.pincode ||
+                    cam.identity?.homeKitPincode ||
+                    "031-45-154",
+                  homeKitSetupId:
+                    acc?.record?.setupId || cam.identity?.homeKitSetupId,
+                  homeKitPort: acc?.record?.port || cam.identity?.homeKitPort,
+                  homeKitPairingState: acc?.isPaired()
+                    ? "paired"
+                    : "not_paired",
+                },
+              };
+            });
+
             const currentIds = new Set(currentCameras.map((c) => c.cameraId));
             const newCameras = [...currentIds].filter(
               (id) => !previousCameraIds.has(id),
@@ -4222,8 +4264,51 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             );
             await ScryptedReconnectManager.getInstance().forceRefresh();
             const currentStore = ScryptedStorage.getStore();
+            const rawCameras = currentStore.cameras?.cameras || [];
+
+            for (const cam of rawCameras) {
+              if (cam.exportConfig.homeKitEnabled) {
+                try {
+                  await ScryptedHomeKitBridge.mountCamera(this, cam);
+                } catch {}
+              }
+              if (cam.exportConfig.matterEnabled) {
+                try {
+                  await ScryptedMatterBridge.mountCamera(this, cam);
+                } catch {}
+              }
+            }
+
+            const currentCamerasList = rawCameras.map((cam) => {
+              const acc = ScryptedHomeKitBridge.getAccessory(cam.cameraId);
+              let setupUri: string | undefined;
+              try {
+                if (acc && acc.isPublished) {
+                  setupUri = acc.setupUri;
+                }
+              } catch {}
+              return {
+                ...cam,
+                identity: {
+                  ...cam.identity,
+                  homeKitAccessoryId: `scrypted.${cam.cameraId}`,
+                  homeKitSetupUri: setupUri || cam.identity?.homeKitSetupUri,
+                  homeKitPincode:
+                    acc?.record?.pincode ||
+                    cam.identity?.homeKitPincode ||
+                    "031-45-154",
+                  homeKitSetupId:
+                    acc?.record?.setupId || cam.identity?.homeKitSetupId,
+                  homeKitPort: acc?.record?.port || cam.identity?.homeKitPort,
+                  homeKitPairingState: acc?.isPaired()
+                    ? "paired"
+                    : "not_paired",
+                },
+              };
+            });
+
             const currentCameras = new Set(
-              currentStore.cameras?.cameras.map((c) => c.cameraId) || [],
+              currentCamerasList.map((c) => c.cameraId),
             );
             const newCameras = [...currentCameras].filter(
               (id) => !previousCameras.has(id),
@@ -4231,7 +4316,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             const removedCameras = [...previousCameras].filter(
               (id) => !currentCameras.has(id),
             ).length;
-            const totalCameras = currentStore.cameras?.cameras.length || 0;
+            const totalCameras = currentCamerasList.length;
             const updatedCameras = totalCameras;
 
             const payload = {
@@ -4240,7 +4325,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               newCameras,
               updatedCameras,
               removedCameras,
-              cameras: currentStore.cameras?.cameras || [],
+              cameras: currentCamerasList,
             };
 
             this.broadcastSseMessage("cameras_updated", payload);
@@ -4350,13 +4435,42 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
         if (
           req.method === "GET" &&
-          (pathname === "/api/cameras" || pathname === "/api/custom/cameras")
+          (pathname === "/api/cameras" ||
+            pathname === "/api/custom/cameras" ||
+            pathname === "/api/scrypted/cameras" ||
+            pathname === "/api/custom/scrypted/cameras")
         ) {
           const store = await ScryptedStorage.load();
+          const enriched = (store.cameras.cameras || []).map((cam) => {
+            const acc = ScryptedHomeKitBridge.getAccessory(cam.cameraId);
+            let setupUri: string | undefined;
+            try {
+              if (acc && acc.isPublished) {
+                setupUri = acc.setupUri;
+              }
+            } catch {}
+
+            return {
+              ...cam,
+              identity: {
+                ...cam.identity,
+                homeKitAccessoryId: `scrypted.${cam.cameraId}`,
+                homeKitSetupUri: setupUri || cam.identity?.homeKitSetupUri,
+                homeKitPincode:
+                  acc?.record?.pincode ||
+                  cam.identity?.homeKitPincode ||
+                  "031-45-154",
+                homeKitSetupId:
+                  acc?.record?.setupId || cam.identity?.homeKitSetupId,
+                homeKitPort: acc?.record?.port || cam.identity?.homeKitPort,
+                homeKitPairingState: acc?.isPaired() ? "paired" : "not_paired",
+              },
+            };
+          });
           res.writeHead(200, {
             "Content-Type": "application/json; charset=utf-8",
           });
-          res.end(JSON.stringify(store.cameras.cameras || []));
+          res.end(JSON.stringify(enriched));
           return;
         }
 

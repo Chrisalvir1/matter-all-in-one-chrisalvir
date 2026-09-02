@@ -128,6 +128,12 @@ const els = {
   camToggleNas: $("cam-toggle-nas"),
   camCfgSensorsList: $("cam-cfg-sensors-list"),
   camCfgCancel: $("cam-cfg-cancel"),
+  camQrTabHomekit: $("cam-qr-tab-homekit"),
+  camQrTabMatter: $("cam-qr-tab-matter"),
+  camModalQrTypeLabel: $("cam-modal-qr-type-label"),
+  camModalManualLabel: $("cam-modal-manual-label"),
+  camModalQrNote: $("cam-modal-qr-note"),
+  camModalPairedBadge: $("cam-modal-paired-badge"),
   camModalQrCode: $("cam-modal-qr-code"),
   camModalQrLogo: $("cam-modal-qr-logo"),
   camModalManualCode: $("cam-modal-manual-code"),
@@ -2335,16 +2341,21 @@ function buildScryptedCameraCard(camera) {
   const isOnline = camera.status?.connection === "online";
   const statusDot = isOnline ? "🟢" : "🔴";
   const statusText = isOnline ? "En línea" : "Desconectado";
-  const modelDisplay =
-    camera.displayModel || camera.model || "";
+  const modelDisplay = camera.displayModel || camera.model || "";
   const sensorsCount = camera.sensors?.length || 0;
+
+  const hasAudio =
+    camera.capabilities?.observed?.hasAudio !== false &&
+    camera.capabilities?.observed?.audioCodec !== "none";
+
+  const isPaired = camera.identity?.homeKitPairingState === "paired";
 
   card.innerHTML = `
     <div class="card-top">
       <span class="device-icon" style="font-size: 1.4rem;">📹</span>
       <div class="card-pills-group">
         <span class="badge-scrypted-tag">SCRYPTED</span>
-        <span class="export-badge active">1/1</span>
+        ${isPaired ? '<span class="tag" style="background: rgba(16, 185, 129, 0.2); border-color: rgba(52, 211, 153, 0.5); color: #6ee7b7; font-size: 0.72rem;">🍏 HomeKit OK</span>' : '<span class="export-badge active">1/1</span>'}
       </div>
     </div>
     <h3 title="${escapeHtml(camera.name)}">${escapeHtml(camera.name)}</h3>
@@ -2353,6 +2364,7 @@ function buildScryptedCameraCard(camera) {
       <span class="tag tag-brand">${escapeHtml(brand)}</span>
       <span class="badge-scrypted-source">⚡ Scrypted</span>
       <span class="codec-pill">● Passthrough H.264</span>
+      ${hasAudio ? '<span class="tag" style="background: rgba(16, 185, 129, 0.15); border-color: rgba(52, 211, 153, 0.4); color: #6ee7b7;">🎤 Audio y Micrófono activo</span>' : '<span class="tag">Sin audio</span>'}
       ${sensorsCount > 0 ? `<span class="tag">${sensorsCount} sensor${sensorsCount === 1 ? "" : "es"}</span>` : ""}
     </div>
     <div class="card-footer">
@@ -2428,40 +2440,97 @@ function openCameraConfigModal(camera) {
   els.camCfgTitle.textContent = camera.name;
   els.camCfgSubtitle.textContent = `${statusDot} ${statusText} · ${brand}${modelDisplay && modelDisplay !== "Modelo no identificado" ? ` (${modelDisplay})` : ""} · ID: ${camera.cameraId}`;
 
-  // 1. Render Liquid Glass QR Code (New Matter QR feature)
-  const bridgeEntity =
-    (state.entities || []).find(
-      (e) => e.pairingCode && (e.isBridge || e.entityId?.includes("bridge")),
-    ) || (state.entities || []).find((e) => e.pairingCode);
+  // 1. Render Dual-Target Liquid Glass QR Code (HomeKit HKSV vs Matter)
+  let activeCamQrMode = "homekit";
 
-  const pairingCode =
-    camera.identity?.matterPairingCode ||
-    bridgeEntity?.pairingCode ||
-    "ABCD-1234-EFGH";
-
-  const manualCode =
-    camera.identity?.matterPairingCode ||
-    bridgeEntity?.manualPairingCode ||
-    pairingCode;
-
-  if (els.camModalManualCode) {
-    els.camModalManualCode.textContent = formatManualCode(manualCode);
-  }
-
-  if (els.camModalQrCode) {
+  function renderCamModalQr() {
+    if (!els.camModalQrCode) return;
     els.camModalQrCode.innerHTML = "";
-    els.camModalQrCode.dataset.pairingCode = pairingCode;
+
+    const isHomeKit = activeCamQrMode === "homekit";
+
+    if (els.camQrTabHomekit) {
+      els.camQrTabHomekit.className = isHomeKit
+        ? "button button-sm button-primary"
+        : "button button-sm button-secondary";
+    }
+    if (els.camQrTabMatter) {
+      els.camQrTabMatter.className = !isHomeKit
+        ? "button button-sm button-primary"
+        : "button button-sm button-secondary";
+    }
+
+    if (els.camModalQrTypeLabel) {
+      els.camModalQrTypeLabel.textContent = isHomeKit
+        ? "CÓDIGO APPLE HOME (HKSV / HAP)"
+        : "CÓDIGO MATTER (JOINT FABRIC 1.6)";
+    }
+
+    if (els.camModalManualLabel) {
+      els.camModalManualLabel.textContent = isHomeKit
+        ? "CÓDIGO DE EMPAREJAMIENTO (PIN)"
+        : "CÓDIGO NUMÉRICO MANUAL";
+    }
+
+    if (els.camModalQrNote) {
+      els.camModalQrNote.textContent = isHomeKit
+        ? "Escanea con la app Casa de Apple (iPhone / iPad / Mac) para vincular con Vídeo Seguro de HomeKit (HKSV), streaming en directo y grabación en iCloud."
+        : "Escanea con Google Home, Alexa o SmartThings para vincular mediante Matter WebRTC.";
+    }
+
+    const isPaired = camera.identity?.homeKitPairingState === "paired";
+    if (els.camModalPairedBadge) {
+      els.camModalPairedBadge.style.display =
+        isHomeKit && isPaired ? "block" : "none";
+    }
+
+    let pairingPayload = "";
+    let manualCodeDisplay = "";
+
+    if (isHomeKit) {
+      // HomeKit Setup URI (X-HM://...)
+      pairingPayload =
+        camera.identity?.homeKitSetupUri ||
+        `X-HM://${camera.identity?.homeKitSetupId || "0000"}`;
+      manualCodeDisplay = camera.identity?.homeKitPincode || "031-45-154";
+    } else {
+      // Matter pairing code
+      const bridgeEntity =
+        (state.entities || []).find(
+          (e) =>
+            e.pairingCode && (e.isBridge || e.entityId?.includes("bridge")),
+        ) || (state.entities || []).find((e) => e.pairingCode);
+
+      pairingPayload =
+        camera.identity?.matterPairingCode ||
+        bridgeEntity?.pairingCode ||
+        "ABCD-1234-EFGH";
+
+      const manualCode =
+        camera.identity?.matterPairingCode ||
+        bridgeEntity?.manualPairingCode ||
+        pairingPayload;
+
+      manualCodeDisplay = formatManualCode(manualCode);
+    }
+
+    if (els.camModalManualCode) {
+      els.camModalManualCode.textContent = manualCodeDisplay;
+    }
+
+    els.camModalQrCode.dataset.pairingCode = pairingPayload;
+    els.camModalQrCode.dataset.qrMode = activeCamQrMode;
     els.camModalQrCode.dataset.cameraId = camera.cameraId;
 
     try {
       if (typeof QRCode !== "undefined") {
         new QRCode(els.camModalQrCode, {
-          text: pairingCode,
+          text: pairingPayload,
           width: 224,
           height: 224,
           colorDark: "#09101f",
           colorLight: "#ffffff",
-          correctLevel: QRCode.CorrectLevel.H,
+          correctLevel: QRCode.CorrectLevel.M,
         });
         if (els.camModalQrLogo) els.camModalQrLogo.style.display = "flex";
       } else {
@@ -2475,6 +2544,22 @@ function openCameraConfigModal(camera) {
     }
   }
 
+  if (els.camQrTabHomekit) {
+    els.camQrTabHomekit.onclick = () => {
+      activeCamQrMode = "homekit";
+      renderCamModalQr();
+    };
+  }
+
+  if (els.camQrTabMatter) {
+    els.camQrTabMatter.onclick = () => {
+      activeCamQrMode = "matter";
+      renderCamModalQr();
+    };
+  }
+
+  renderCamModalQr();
+
   // 2. Technical specs
   const videoCodec =
     camera.capabilities?.observed?.videoCodec?.toUpperCase() || "H.264";
@@ -2485,15 +2570,19 @@ function openCameraConfigModal(camera) {
     ? `${camera.capabilities.observed.resolution.width}x${camera.capabilities.observed.resolution.height}`
     : "1920x1080";
   const fps = camera.capabilities?.observed?.fps || 30;
-  const audio = camera.capabilities?.observed?.hasAudio
-    ? "AAC estéreo"
+
+  const hasAudio =
+    camera.capabilities?.observed?.hasAudio !== false &&
+    camera.capabilities?.observed?.audioCodec !== "none";
+  const audioDesc = hasAudio
+    ? "AAC estéreo · Micrófono activo (Audio bidireccional)"
     : "Sin audio";
 
   if (els.camModalVideoSpec) {
     els.camModalVideoSpec.innerHTML = `<strong>📹 Video:</strong> ${escapeHtml(videoCodec)}${escapeHtml(profile)} · ${escapeHtml(res)} @ ${fps}fps (Passthrough directo sin recodificación)`;
   }
   if (els.camModalAudioSpec) {
-    els.camModalAudioSpec.innerHTML = `<strong>🔊 Audio:</strong> ${escapeHtml(audio)} · Remuxing fMP4 HKSV activo (iOS 27 / tvOS 27)`;
+    els.camModalAudioSpec.innerHTML = `<strong>🔊 Audio:</strong> ${escapeHtml(audioDesc)} · Remuxing fMP4 HKSV activo (iOS 27 / tvOS 27)`;
   }
 
   // 3. Platform toggles
@@ -2806,11 +2895,15 @@ els.camModalShareCodeBtn?.addEventListener("click", () => {
   const cameraId = els.camCfgId?.value;
   const camera = state.scryptedCameras?.find((c) => c.cameraId === cameraId);
   const cameraName = camera?.name || "Cámara";
+  const qrMode = els.camModalQrCode?.dataset.qrMode || "homekit";
+  const modeLabel =
+    qrMode === "homekit" ? "Apple Home (HKSV)" : "Matter (Joint Fabric 1.6)";
+
   if (navigator.share) {
     navigator
       .share({
-        title: `Vincular ${cameraName} en Matter`,
-        text: `Código Matter para ${cameraName}: ${codeText}`,
+        title: `Vincular ${cameraName} en ${modeLabel}`,
+        text: `Código de vinculación ${modeLabel} para ${cameraName}: ${codeText}`,
       })
       .catch(() => {});
   } else {
@@ -2825,8 +2918,9 @@ els.camModalDownloadQrBtn?.addEventListener("click", () => {
   if (!pairingCode) return;
   const cameraId = els.camCfgId?.value;
   const camera = state.scryptedCameras?.find((c) => c.cameraId === cameraId);
-  const cameraName = camera?.name || "camera-matter";
-  const filename = `${cameraName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-matter-qr.png`;
+  const cameraName = camera?.name || "camera";
+  const qrMode = els.camModalQrCode?.dataset.qrMode || "homekit";
+  const filename = `${cameraName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${qrMode}-qr.png`;
 
   try {
     const canvas = document.createElement("canvas");

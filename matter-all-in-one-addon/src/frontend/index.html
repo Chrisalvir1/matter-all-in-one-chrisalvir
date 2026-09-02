@@ -9,7 +9,7 @@
       name="description"
       content="Gestiona de forma segura las entidades de Home Assistant exportadas mediante Matter."
     />
-    <link rel="stylesheet" href="style.css?v=1.4.69" />
+    <link rel="stylesheet" href="style.css?v=1.4.70" />
   </head>
   <body>
     <div class="ambient ambient-one"></div>
@@ -725,21 +725,40 @@
         </header>
 
         <div class="camera-modal-layout">
-          <!-- Columna 1: Código QR Liquid Glass Matter -->
+          <!-- Columna 1: Código QR Liquid Glass (Apple Home HKSV / Matter) -->
           <div class="qr-panel" style="max-width: 320px; width: 100%;">
-            <p class="card-label">CÓDIGO MATTER (JOINT FABRIC 1.6)</p>
+            <div class="qr-target-tabs" style="display: flex; gap: 6px; margin-bottom: 12px;">
+              <button
+                class="button button-sm button-primary"
+                id="cam-qr-tab-homekit"
+                type="button"
+                style="flex: 1; padding: 6px 8px; font-size: 0.78rem;"
+              >
+                🍏 Apple Home (HKSV)
+              </button>
+              <button
+                class="button button-sm button-secondary"
+                id="cam-qr-tab-matter"
+                type="button"
+                style="flex: 1; padding: 6px 8px; font-size: 0.78rem;"
+              >
+                ⚡ Matter (Google / Alexa)
+              </button>
+            </div>
+
+            <p class="card-label" id="cam-modal-qr-type-label">CÓDIGO APPLE HOME (HKSV / HAP)</p>
             <div class="qr-liquid-glass-card">
               <div class="qr-visual-wrapper">
                 <div class="qr-frame-glow" aria-hidden="true"></div>
                 <div class="qr-frame">
                   <div id="cam-modal-qr-code"></div>
                   <div class="qr-center-logo" id="cam-modal-qr-logo" aria-hidden="true">
-                    <img src="logo.png" alt="Matter Logo" class="qr-logo-img" />
+                    <img src="logo.png" alt="Logo" class="qr-logo-img" />
                   </div>
                 </div>
               </div>
               <div class="qr-manual-box">
-                <span class="manual-code-label">CÓDIGO NUMÉRICO MANUAL</span>
+                <span class="manual-code-label" id="cam-modal-manual-label">CÓDIGO DE EMPAREJAMIENTO (PIN)</span>
                 <div class="manual-code-row">
                   <code id="cam-modal-manual-code" class="manual-code-display">—————</code>
                   <button
@@ -772,7 +791,10 @@
                   <span>📱 Compartir</span>
                 </button>
               </div>
-              <small class="qr-note">Escanea con Apple Home, Google Home, Alexa o SmartThings para emparejar mediante Matter.</small>
+              <small class="qr-note" id="cam-modal-qr-note">Escanea con la app Casa de Apple (iPhone / iPad / Mac) para vincular con Vídeo Seguro de HomeKit (HKSV) y Live View.</small>
+              <div id="cam-modal-paired-badge" style="display: none; margin-top: 8px; font-size: 0.8rem; font-weight: 600; color: #34d399; text-align: center;">
+                ✅ Vinculada en Apple Home
+              </div>
             </div>
           </div>
 
@@ -952,7 +974,7 @@
     </div>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="qrcode.min.js?v=1.4.69"></script>
-    <script src="script.js?v=1.4.69"></script>
+    <script src="qrcode.min.js?v=1.4.70"></script>
+    <script src="script.js?v=1.4.70"></script>
   </body>
 </html>

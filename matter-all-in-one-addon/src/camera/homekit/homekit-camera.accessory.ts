@@ -32,7 +32,7 @@ export class HomeKitCameraAccessory {
   public recordingDelegate?: HomeKitCameraRecordingDelegate;
   public motionService?: Service;
   public linkedMotionEntityId?: string;
-  private isPublished = false;
+  public isPublished = false;
 
   constructor(
     public readonly platform: any,
