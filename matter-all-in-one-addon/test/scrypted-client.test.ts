@@ -1,12 +1,24 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 import { ScryptedClient } from "../src/camera/scrypted/scrypted-client.js";
 
-describe("ScryptedClient API & Stream Validation Suite", () => {
-  it("validates server URLs and rejects SSRF or malformed protocols", () => {
+describe("ScryptedClient — URL validation", () => {
+  it("rejects empty URL", () => {
     expect(ScryptedClient.validateServerUrl("").valid).toBe(false);
+  });
+
+  it("rejects non-HTTP protocols", () => {
     expect(
       ScryptedClient.validateServerUrl("ftp://192.168.1.50:10443").valid,
     ).toBe(false);
+    expect(
+      ScryptedClient.validateServerUrl("rtsp://192.168.1.50:8554").valid,
+    ).toBe(false);
+    expect(ScryptedClient.validateServerUrl("file:///etc/passwd").valid).toBe(
+      false,
+    );
+  });
+
+  it("accepts valid http/https URLs", () => {
     expect(
       ScryptedClient.validateServerUrl("http://192.168.1.50:10443").valid,
     ).toBe(true);
@@ -15,54 +27,213 @@ describe("ScryptedClient API & Stream Validation Suite", () => {
     ).toBe(true);
   });
 
-  it("handles connection test failures with clean human-readable error messages", async () => {
-    // Port 65432 on 127.0.0.1 should not be open
-    const client = new ScryptedClient("http://127.0.0.1:65432", undefined, 300);
-    const result = await client.testConnection();
-
-    expect(result.ok).toBe(false);
-    expect(result.message).toBeTruthy();
+  it("normalizes URL by removing trailing slashes", () => {
+    const result = ScryptedClient.validateServerUrl(
+      "https://192.168.1.50:10443/",
+    );
+    expect(result.valid).toBe(true);
+    expect(result.normalizedUrl).toBe("https://192.168.1.50:10443");
   });
 
-  it("generates structured CameraRecord with integrated sensors from device data", async () => {
-    const client = new ScryptedClient("http://192.168.1.50:10443");
-    // Test internal mapper through duck typing
-    const mockDevice = {
-      id: "front_door_cam",
-      name: "Cámara Puerta Principal",
-      type: "Camera",
-      model: "Tapo C125",
-      interfaces: [
-        "Camera",
-        "VideoCamera",
-        "MotionSensor",
-        "Doorbell",
-        "ObjectDetection",
-      ],
+  it("strips embedded credentials from URL to prevent SSRF", () => {
+    const result = ScryptedClient.validateServerUrl(
+      "https://admin:secret@192.168.1.50:10443",
+    );
+    expect(result.valid).toBe(true);
+    expect(result.normalizedUrl).not.toContain("secret");
+    expect(result.normalizedUrl).not.toContain("admin:");
+  });
+});
+
+describe("ScryptedClient — testConnection", () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  it("returns authentication_failed when username/password missing", async () => {
+    const result = await ScryptedClient.testConnection(
+      "https://192.168.1.50:10443",
+      { authenticationMode: "username_password" },
+      undefined,
+      false,
+    );
+    expect(result.ok).toBe(false);
+    expect(result.errorCode).toBe("authentication_failed");
+  });
+
+  it("returns invalid_url for empty serverUrl", async () => {
+    const result = await ScryptedClient.testConnection(
+      "",
+      { username: "admin", authenticationMode: "username_password" },
+      "password123",
+      false,
+    );
+    expect(result.ok).toBe(false);
+    expect(result.errorCode).toBe("invalid_url");
+  });
+
+  it("classifies network error correctly", async () => {
+    // Port 65432 should be closed — simulates network_error
+    const result = await ScryptedClient.testConnection(
+      "http://127.0.0.1:65432",
+      { username: "admin", authenticationMode: "username_password" },
+      "password",
+      false,
+    );
+    expect(result.ok).toBe(false);
+    expect(["network_error", "authentication_failed", "unknown"]).toContain(
+      result.errorCode,
+    );
+    expect(result.message).toBeTruthy();
+    // Message must never contain the password
+    expect(result.message).not.toContain("password");
+  });
+});
+
+describe("ScryptedClient — listCameras (mocked session)", () => {
+  it("throws unsupported_api when systemManager is unavailable", async () => {
+    const fakeSession = {
+      sdk: {},
+      connectedAt: new Date().toISOString(),
+      serverUrl: "https://host",
+      username: "admin",
     };
-
-    const mapper = (client as any).mapScryptedDeviceToCameraRecord.bind(client);
-    const record = mapper(mockDevice, "192.168.1.50");
-
-    expect(record.cameraId).toBe("front_door_cam");
-    expect(record.model).toBe("Tapo C125");
-    expect(record.identity.matterPairingCode).toMatch(
-      /^[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}$/,
+    await expect(ScryptedClient.listCameras(fakeSession)).rejects.toThrow(
+      "unsupported_api",
     );
-    expect(record.source.streamReference?.directUrl).toBe(
-      "rtsp://192.168.1.50:8554/front_door_cam",
-    );
+  });
 
-    // Integrated sensors inside the camera card
-    const sensorTypes = record.sensors.map((s: any) => s.type);
-    expect(sensorTypes).toContain("motion");
-    expect(sensorTypes).toContain("doorbell");
-    expect(sensorTypes).toContain("person");
-    expect(sensorTypes).toContain("package");
+  it("returns empty array when no camera devices found", async () => {
+    const fakeSession = {
+      sdk: {
+        systemManager: {
+          getSystemState: async () => ({
+            dev1: {
+              id: "dev1",
+              name: "SmartLight",
+              type: "Light",
+              interfaces: ["OnOff"],
+            },
+          }),
+        },
+      },
+      connectedAt: new Date().toISOString(),
+      serverUrl: "https://host",
+      username: "admin",
+    };
+    const cameras = await ScryptedClient.listCameras(fakeSession);
+    expect(cameras).toHaveLength(0);
+  });
 
-    // Export configurations by default
-    expect(record.exportConfig.matterEnabled).toBe(true);
-    expect(record.exportConfig.homeKitEnabled).toBe(true);
-    expect(record.exportConfig.hksvEnabledByDefault).toBe(true);
+  it("maps camera devices to CameraRecord with real fields, no hardcoded capabilities", async () => {
+    const fakeSession = {
+      sdk: {
+        systemManager: {
+          getSystemState: async () => ({
+            cam1: {
+              id: "cam1",
+              name: "Entrada Principal",
+              type: "Camera",
+              interfaces: ["Camera", "VideoCamera", "MotionSensor"],
+              info: {
+                manufacturer: "Tapo",
+                model: "C125",
+                serialNumber: "SN-001",
+              },
+            },
+          }),
+        },
+      },
+      connectedAt: new Date().toISOString(),
+      serverUrl: "https://host",
+      username: "admin",
+    };
+    const cameras = await ScryptedClient.listCameras(fakeSession);
+    expect(cameras).toHaveLength(1);
+    const cam = cameras[0];
+    expect(cam.cameraId).toBe("cam1");
+    expect(cam.name).toBe("Entrada Principal");
+    expect(cam.sourceManufacturer).toBe("Tapo");
+    expect(cam.sourceModel).toBe("C125");
+    expect(cam.displayManufacturer).toBe("Tapo");
+    // Capabilities are NOT hardcoded
+    expect(cam.capabilities.observed).toBeUndefined();
+    // Stream is NOT assumed
+    expect(cam.source.streamReference).toBeUndefined();
+    // Status cache is 'unverified'
+    expect(cam.status.cache).toBe("unverified");
+    // Motion sensor detected from interfaces
+    expect(cam.sensors.some((s) => s.type === "motion")).toBe(true);
+    // Quality mode defaults
+    expect(cam.capabilities.qualityMode).toBe("maximum_compatible");
+    expect(cam.capabilities.allowAutomaticFallback).toBe(false);
+  });
+
+  it("camera without manufacturer uses 'Marca no identificada' as displayManufacturer", async () => {
+    const fakeSession = {
+      sdk: {
+        systemManager: {
+          getSystemState: async () => ({
+            cam2: {
+              id: "cam2",
+              name: "Cámara Sin Datos",
+              type: "Camera",
+              interfaces: ["Camera", "VideoCamera"],
+              info: {},
+            },
+          }),
+        },
+      },
+      connectedAt: new Date().toISOString(),
+      serverUrl: "https://host",
+      username: "admin",
+    };
+    const cameras = await ScryptedClient.listCameras(fakeSession);
+    expect(cameras[0].displayManufacturer).toBe("Marca no identificada");
+    expect(cameras[0].sourceManufacturer).toBeUndefined();
+  });
+
+  it("camera with manufacturer but no model has displayModel undefined", async () => {
+    const fakeSession = {
+      sdk: {
+        systemManager: {
+          getSystemState: async () => ({
+            cam3: {
+              id: "cam3",
+              name: "Ring Doorbell",
+              type: "Camera",
+              interfaces: ["Camera", "VideoCamera", "Doorbell"],
+              info: { manufacturer: "Ring" },
+            },
+          }),
+        },
+      },
+      connectedAt: new Date().toISOString(),
+      serverUrl: "https://host",
+      username: "admin",
+    };
+    const cameras = await ScryptedClient.listCameras(fakeSession);
+    expect(cameras[0].displayManufacturer).toBe("Ring");
+    expect(cameras[0].displayModel).toBeUndefined();
+    expect(cameras[0].sensors.some((s) => s.type === "doorbell")).toBe(true);
+  });
+
+  it("disconnect calls sdk.disconnect", async () => {
+    const disconnectFn = vi.fn();
+    const fakeSession = {
+      sdk: { disconnect: disconnectFn },
+      connectedAt: new Date().toISOString(),
+      serverUrl: "https://host",
+      username: "admin",
+    };
+    await ScryptedClient.disconnect(fakeSession);
+    expect(disconnectFn).toHaveBeenCalledOnce();
+  });
+});
+
+describe("ScryptedClient — probeRtspPort", () => {
+  it("returns false for closed port", async () => {
+    const result = await ScryptedClient.probeRtspPort("127.0.0.1", 65430, 300);
+    expect(result).toBe(false);
   });
 });

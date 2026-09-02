@@ -3865,18 +3865,26 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             pathname === "/api/custom/scrypted/config")
         ) {
           const store = await ScryptedStorage.load();
+          const creds = store.scrypted.credentials ?? {
+            authenticationMode: "username_password",
+          };
           res.writeHead(200, {
             "Content-Type": "application/json; charset=utf-8",
           });
           res.end(
             JSON.stringify({
               serverUrl: store.scrypted.serverUrl || "",
+              username: creds.username || "",
+              hasPassword: Boolean(creds.passwordEncrypted),
+              hasApiToken: Boolean(creds.apiTokenEncrypted),
+              authenticationMode: creds.authenticationMode,
+              allowSelfSignedCertificate:
+                store.scrypted.allowSelfSignedCertificate ?? false,
               connectionStatus: store.scrypted.connectionStatus,
               autoReconnect: store.scrypted.autoReconnect ?? true,
               pollIntervalMinutes: store.scrypted.pollIntervalMinutes ?? 15,
               lastConnected: store.scrypted.lastConnected || null,
-              hasToken: Boolean(store.scrypted.tokenEncrypted),
-              tokenPreview: store.scrypted.tokenEncrypted ? "••••••••" : "",
+              schemaVersion: store.schemaVersion ?? 2,
             }),
           );
           return;
@@ -3891,8 +3899,57 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             const body = await this.readRequestBody(req);
             const data = JSON.parse(body);
             const store = await ScryptedStorage.load();
+
+            if (!store.scrypted.credentials) {
+              store.scrypted.credentials = {
+                authenticationMode: "username_password",
+              };
+            }
+
             if (data.serverUrl !== undefined) {
               store.scrypted.serverUrl = String(data.serverUrl).trim();
+            }
+            if (data.username !== undefined) {
+              store.scrypted.credentials.username = String(data.username)
+                .replace(/[\x00-\x1f\x7f]/g, "")
+                .trim()
+                .slice(0, 128);
+            }
+            if (
+              data.password &&
+              typeof data.password === "string" &&
+              data.password.trim().length > 0
+            ) {
+              store.scrypted.credentials.passwordEncrypted =
+                await ScryptedCrypto.encrypt(
+                  data.password,
+                  "scrypted_password",
+                );
+              store.scrypted.credentials.authenticationMode =
+                "username_password";
+            }
+            if (data.clearPassword === true) {
+              store.scrypted.credentials.passwordEncrypted = undefined;
+            }
+            if (
+              data.apiToken &&
+              typeof data.apiToken === "string" &&
+              data.apiToken.trim().length > 0
+            ) {
+              store.scrypted.credentials.apiTokenEncrypted =
+                await ScryptedCrypto.encrypt(
+                  data.apiToken.trim(),
+                  "scrypted_api_token",
+                );
+              store.scrypted.credentials.authenticationMode = "api_token";
+            }
+            if (data.clearApiToken === true) {
+              store.scrypted.credentials.apiTokenEncrypted = undefined;
+            }
+            if (data.allowSelfSignedCertificate !== undefined) {
+              store.scrypted.allowSelfSignedCertificate = Boolean(
+                data.allowSelfSignedCertificate,
+              );
             }
             if (data.autoReconnect !== undefined) {
               store.scrypted.autoReconnect = Boolean(data.autoReconnect);
@@ -3901,20 +3958,12 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               store.scrypted.pollIntervalMinutes =
                 Number(data.pollIntervalMinutes) || 15;
             }
-            if (
-              data.token &&
-              typeof data.token === "string" &&
-              data.token.trim().length > 0
-            ) {
-              store.scrypted.tokenEncrypted = await ScryptedCrypto.encrypt(
-                data.token.trim(),
-                "scrypted_auth",
-              );
-            }
+
             await ScryptedStorage.save(store);
             void ScryptedReconnectManager.getInstance().attemptConnection(
               false,
             );
+
             res.writeHead(200, {
               "Content-Type": "application/json; charset=utf-8",
             });
@@ -3939,6 +3988,48 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         }
 
         if (
+          req.method === "DELETE" &&
+          (pathname === "/api/scrypted/config" ||
+            pathname === "/api/custom/scrypted/config")
+        ) {
+          try {
+            const reconnectMgr = ScryptedReconnectManager.getInstance();
+            reconnectMgr.destroy();
+            const store = await ScryptedStorage.load();
+            store.scrypted.credentials = {
+              authenticationMode: "username_password",
+            };
+            store.scrypted.serverUrl = "";
+            store.scrypted.serverId = "";
+            store.scrypted.allowSelfSignedCertificate = false;
+            store.scrypted.connectionStatus = "not_configured";
+            store.scrypted.lastConnected = undefined;
+            await ScryptedStorage.save(store);
+            res.writeHead(200, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(
+              JSON.stringify({
+                success: true,
+                message:
+                  "Configuración de Scrypted eliminada. Las cámaras en caché se conservan.",
+              }),
+            );
+          } catch (err: any) {
+            res.writeHead(500, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(
+              JSON.stringify({
+                success: false,
+                error: "Error al eliminar configuración",
+              }),
+            );
+          }
+          return;
+        }
+
+        if (
           req.method === "POST" &&
           (pathname === "/api/scrypted/connection-test" ||
             pathname === "/api/custom/scrypted/connection-test")
@@ -3946,20 +4037,25 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           try {
             const body = await this.readRequestBody(req);
             const data = JSON.parse(body);
-            let token = data.token;
-            if (!token) {
-              const store = await ScryptedStorage.load();
-              if (store.scrypted.tokenEncrypted) {
-                try {
-                  token = await ScryptedCrypto.decrypt(
-                    store.scrypted.tokenEncrypted,
-                    "scrypted_auth",
-                  );
-                } catch {}
-              }
-            }
-            const client = new ScryptedClient(data.serverUrl, token);
-            const result = await client.testConnection();
+            const testServerUrl =
+              typeof data.serverUrl === "string" ? data.serverUrl.trim() : "";
+            const testUsername =
+              typeof data.username === "string"
+                ? data.username.trim()
+                : undefined;
+            const testPassword =
+              typeof data.password === "string" ? data.password : undefined;
+            const allowSelfSigned = Boolean(data.allowSelfSignedCertificate);
+
+            const result = await ScryptedClient.testConnection(
+              testServerUrl,
+              {
+                username: testUsername,
+                authenticationMode: "username_password",
+              },
+              testPassword,
+              allowSelfSigned,
+            );
             res.writeHead(200, {
               "Content-Type": "application/json; charset=utf-8",
             });
@@ -3971,7 +4067,141 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             res.end(
               JSON.stringify({
                 ok: false,
-                message: err.message || "Error en prueba de conexión",
+                message: "Error en prueba de conexión",
+              }),
+            );
+          }
+          return;
+        }
+
+        if (
+          req.method === "POST" &&
+          (pathname === "/api/scrypted/connect-and-load-cameras" ||
+            pathname === "/api/custom/scrypted/connect-and-load-cameras")
+        ) {
+          try {
+            const body = await this.readRequestBody(req);
+            const data = JSON.parse(body);
+            const serverUrl =
+              typeof data.serverUrl === "string" ? data.serverUrl.trim() : "";
+            const username =
+              typeof data.username === "string"
+                ? data.username.trim()
+                : undefined;
+            const password =
+              typeof data.password === "string" ? data.password : undefined;
+            const allowSelfSigned = Boolean(data.allowSelfSignedCertificate);
+            const apiToken =
+              typeof data.apiToken === "string" && data.apiToken.trim()
+                ? data.apiToken.trim()
+                : undefined;
+
+            if (!serverUrl || !username || !password) {
+              res.writeHead(400, {
+                "Content-Type": "application/json; charset=utf-8",
+              });
+              res.end(
+                JSON.stringify({
+                  success: false,
+                  error: "Faltan URL, usuario o contraseña",
+                }),
+              );
+              return;
+            }
+
+            // Test credentials via SDK before saving anything
+            const credentials = {
+              username,
+              authenticationMode: "username_password" as const,
+            };
+            const testResult = await ScryptedClient.testConnection(
+              serverUrl,
+              credentials,
+              password,
+              allowSelfSigned,
+            );
+            if (!testResult.ok) {
+              res.writeHead(401, {
+                "Content-Type": "application/json; charset=utf-8",
+              });
+              res.end(
+                JSON.stringify({
+                  success: false,
+                  error: testResult.message,
+                  errorCode: testResult.errorCode,
+                }),
+              );
+              return;
+            }
+
+            // Auth OK — save credentials securely
+            const store = await ScryptedStorage.load();
+            store.scrypted.serverUrl = serverUrl;
+            store.scrypted.allowSelfSignedCertificate = allowSelfSigned;
+            if (!store.scrypted.credentials) {
+              store.scrypted.credentials = {
+                authenticationMode: "username_password",
+              };
+            }
+            store.scrypted.credentials.username = username;
+            store.scrypted.credentials.authenticationMode = "username_password";
+            store.scrypted.credentials.passwordEncrypted =
+              await ScryptedCrypto.encrypt(password, "scrypted_password");
+            if (apiToken) {
+              store.scrypted.credentials.apiTokenEncrypted =
+                await ScryptedCrypto.encrypt(apiToken, "scrypted_api_token");
+            }
+            store.scrypted.autoReconnect = data.autoReconnect !== false;
+            await ScryptedStorage.save(store);
+
+            // Connect full session and load cameras
+            const previousCameraIds = new Set(
+              store.cameras.cameras.map((c) => c.cameraId),
+            );
+            const reconnectMgr = ScryptedReconnectManager.getInstance();
+            reconnectMgr.resetAuthFailure();
+            await reconnectMgr.forceRefresh();
+
+            const currentStore = ScryptedStorage.getStore();
+            const currentCameras = currentStore.cameras?.cameras || [];
+            const currentIds = new Set(currentCameras.map((c) => c.cameraId));
+            const newCameras = [...currentIds].filter(
+              (id) => !previousCameraIds.has(id),
+            ).length;
+            const updatedCameras = [...currentIds].filter((id) =>
+              previousCameraIds.has(id),
+            ).length;
+            const totalCameras = currentCameras.length;
+
+            const responsePayload = {
+              success: true,
+              authenticationMode: "username_password",
+              totalCameras,
+              newCameras,
+              updatedCameras,
+              removedCameras: 0,
+              skippedCameras: 0,
+              noCamerasFound: totalCameras === 0,
+              lastFetched:
+                currentStore.cameras?.lastFetched || new Date().toISOString(),
+            };
+
+            this.broadcastSseMessage("cameras_updated", {
+              cameras: currentCameras,
+            });
+
+            res.writeHead(200, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify(responsePayload));
+          } catch (err: any) {
+            res.writeHead(500, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(
+              JSON.stringify({
+                success: false,
+                error: "Error al conectar y cargar cámaras",
               }),
             );
           }
@@ -4026,6 +4256,91 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               JSON.stringify({
                 success: false,
                 error: error.message || "Error al sincronizar cámaras",
+              }),
+            );
+          }
+          return;
+        }
+
+        if (
+          req.method === "PATCH" &&
+          (pathname.startsWith("/api/cameras/") ||
+            pathname.startsWith("/api/custom/cameras/")) &&
+          pathname.endsWith("/identity")
+        ) {
+          const prefix = pathname.startsWith("/api/custom/cameras/")
+            ? "/api/custom/cameras/"
+            : "/api/cameras/";
+          const cameraId = pathname.substring(
+            prefix.length,
+            pathname.length - "/identity".length,
+          );
+          try {
+            const body = await this.readRequestBody(req);
+            const data = JSON.parse(body);
+
+            if (data.clear === true) {
+              const ok = await ScryptedStorage.updateCameraIdentityOverride(
+                cameraId,
+                null,
+              );
+              res.writeHead(ok ? 200 : 404, {
+                "Content-Type": "application/json; charset=utf-8",
+              });
+              res.end(
+                JSON.stringify({
+                  success: ok,
+                  message: ok ? "Override eliminado" : "Cámara no encontrada",
+                }),
+              );
+              return;
+            }
+
+            const manufacturer =
+              typeof data.manufacturer === "string"
+                ? data.manufacturer
+                    .replace(/[\x00-\x1f\x7f]/g, "")
+                    .trim()
+                    .slice(0, 128)
+                : undefined;
+            const model =
+              typeof data.model === "string"
+                ? data.model
+                    .replace(/[\x00-\x1f\x7f]/g, "")
+                    .trim()
+                    .slice(0, 128)
+                : undefined;
+
+            const override = {
+              manufacturer,
+              model,
+              manufacturerSource: manufacturer ? "manual" : "unknown",
+              modelSource: model ? "manual" : "unknown",
+            } as import("./camera/scrypted/scrypted-types.js").CameraIdentityOverride;
+
+            const ok = await ScryptedStorage.updateCameraIdentityOverride(
+              cameraId,
+              override,
+            );
+            res.writeHead(ok ? 200 : 404, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(
+              JSON.stringify({
+                success: ok,
+                message: ok
+                  ? "Identidad actualizada"
+                  : "Cámara no encontrada o marca inválida",
+              }),
+            );
+          } catch (err: any) {
+            res.writeHead(400, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(
+              JSON.stringify({
+                success: false,
+                error: "Error al actualizar identidad",
               }),
             );
           }

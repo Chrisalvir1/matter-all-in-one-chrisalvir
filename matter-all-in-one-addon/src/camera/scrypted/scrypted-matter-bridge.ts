@@ -57,7 +57,8 @@ export class ScryptedMatterBridge {
       metadata: {
         isScrypted: true,
         scryptedCameraId: camera.cameraId,
-        model: camera.model,
+        model: camera.displayModel || camera.model,
+        manufacturer: camera.displayManufacturer,
       },
     };
 

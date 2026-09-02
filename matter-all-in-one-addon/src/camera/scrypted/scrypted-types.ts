@@ -1,6 +1,6 @@
 /**
  * Scrypted Camera Integration Types & Data Contracts
- * Spec: Matter 1.6 (Joint Fabric) / Matter Camera 1.5 / HomeKit HAP & HKSV (iOS 27)
+ * Schema version: 2
  */
 
 export type ScryptedConnectionStatus =
@@ -10,12 +10,29 @@ export type ScryptedConnectionStatus =
   | "error"
   | "reconnecting";
 
+export type ScryptedErrorCode =
+  | "invalid_url"
+  | "network_error"
+  | "tls_error"
+  | "authentication_failed"
+  | "unsupported_api"
+  | "permission_denied"
+  | "no_cameras_found"
+  | "unknown";
+
 export interface EncryptedSecret {
   iv: string; // Base64 (12 bytes)
   authTag: string; // Base64 (16 bytes)
   ciphertext: string; // Base64
   purpose: string;
   version: number;
+}
+
+export interface ScryptedCredentials {
+  username?: string;
+  passwordEncrypted?: EncryptedSecret;
+  apiTokenEncrypted?: EncryptedSecret;
+  authenticationMode: "username_password" | "api_token" | "auto";
 }
 
 export interface StreamReference {
@@ -86,13 +103,40 @@ export interface CameraLogEntry {
   details?: Record<string, any> | string;
 }
 
+/**
+ * Manual identity override — editable per camera by the user within Matter All-in-One.
+ * Never modifies Scrypted configuration.
+ */
+export interface CameraIdentityOverride {
+  manufacturer?: string;
+  model?: string;
+  manufacturerSource: "scrypted" | "manual" | "unknown";
+  modelSource: "scrypted" | "manual" | "unknown";
+  updatedAt?: string;
+}
+
 export interface CameraRecord {
   cameraId: string; // Scrypted unique ID
   sourceId: string;
   deviceId: string;
   name: string;
   enabled: boolean;
-  model: string; // Camera model (e.g. "Tapo C125", "Aqara G3", "Generic")
+
+  /** Raw manufacturer as reported by Scrypted. Updated on sync. Never overrides identityOverride. */
+  sourceManufacturer?: string;
+  /** Raw model as reported by Scrypted. Updated on sync. Never overrides identityOverride. */
+  sourceModel?: string;
+
+  /** Manual override for brand/model. Preserved across syncs, restarts, reconnections. */
+  identityOverride?: CameraIdentityOverride;
+
+  /** Resolved display manufacturer: override → source → 'Marca no identificada' */
+  displayManufacturer: string;
+  /** Resolved display model: override → source → 'Modelo no identificado' */
+  displayModel?: string;
+
+  /** @deprecated Use sourceModel / displayModel. Kept for backwards compat. */
+  model?: string;
 
   identity: {
     matterNodeId?: number;
@@ -113,7 +157,12 @@ export interface CameraRecord {
   capabilities: {
     observed?: StreamCapabilities;
     lastVerified?: string;
+    lastFetched?: string;
     fingerprint?: string;
+    configurationFingerprint?: string;
+    qualityMode?:
+      "maximum_compatible" | "manual_profile" | "optimized_compatible";
+    allowAutomaticFallback?: boolean;
   };
 
   sensors: CameraSensorRecord[];
@@ -130,34 +179,44 @@ export interface CameraRecord {
 
   status: {
     connection: "online" | "offline" | "unknown";
-    cache: "fresh" | "stale" | "unverified";
+    cache: "fresh" | "stale" | "unverified" | "source_missing";
     lastFetched?: string;
     lastVerified?: string;
     lastSourceChangeDetected?: string;
+    sourceUpdatedAt?: string;
     lastError?: string;
     lastErrorAt?: string;
+    errorCode?: ScryptedErrorCode;
     logs?: CameraLogEntry[];
   };
 }
 
 export interface ScryptedPersistentStore {
+  schemaVersion: number; // Current: 2
+
   installation: {
     installationId: string;
     createdAt: string;
     encryptionKeyRef: string;
   };
+
   scrypted: {
     serverId: string;
     serverUrl: string;
-    tokenEncrypted?: EncryptedSecret;
+    credentials: ScryptedCredentials;
+    allowSelfSignedCertificate: boolean;
     lastConnected?: string;
     connectionStatus: ScryptedConnectionStatus;
     autoReconnect: boolean;
     pollIntervalMinutes: number;
+    /** @deprecated Schema v1. Migrated to credentials.apiTokenEncrypted. Kept only for migration. */
+    tokenEncrypted?: EncryptedSecret;
   };
+
   cameras: {
     lastFetched?: string;
     cameras: CameraRecord[];
   };
+
   nas?: Record<string, CameraNasConfig>;
 }

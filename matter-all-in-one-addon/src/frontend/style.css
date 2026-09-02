@@ -1960,8 +1960,59 @@ mark {
   box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
 }
 
-/* Grouping by Camera Model */
+/* Camera Brand Grouping — occupies full row in the main device grid */
+.camera-brand-group {
+  grid-column: 1 / -1;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0 0 24px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
+  padding: 24px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.camera-brand-group__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 20px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+  flex-wrap: wrap;
+}
+
+.camera-brand-group__header h3 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 0;
+  color: #ffffff;
+}
+
+.brand-camera-count {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 500;
+}
+
+/* Camera grid inside brand group — responsive, no horizontal overflow */
+.camera-brand-group .cameras-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
+  gap: 16px;
+  width: 100%;
+}
+
+/* Legacy: keep camera-model-group for backwards compatibility but spanning full width */
 .camera-model-group {
+  grid-column: 1 / -1;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
   margin-bottom: 32px;
   background: rgba(255, 255, 255, 0.05);
   border-radius: 16px;
@@ -1972,7 +2023,7 @@ mark {
 }
 
 .model-section-header {
-  font-size: 1.35rem;
+  font-size: 1.25rem;
   font-weight: 700;
   margin: 0 0 20px 0;
   color: #ffffff;
@@ -1985,8 +2036,8 @@ mark {
 
 .cameras-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
+  gap: 16px;
 }
 
 /* Individual Scrypted Camera Card */
@@ -2048,6 +2099,12 @@ mark {
   padding: 1px 6px;
   border-radius: 6px;
   letter-spacing: 0.02em;
+}
+
+.badge-brand-origin {
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.5);
+  font-style: italic;
 }
 
 .badge-scrypted-tag {

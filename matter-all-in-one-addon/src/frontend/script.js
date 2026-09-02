@@ -105,6 +105,10 @@ const els = {
   scryptedModalClose: $("scrypted-modal-close"),
   scryptedConnectForm: $("scrypted-connect-form"),
   scryptedServerUrl: $("scrypted-server-url"),
+  scryptedUsername: $("scrypted-username"),
+  scryptedPassword: $("scrypted-password"),
+  scryptedAllowSelfSigned: $("scrypted-allow-self-signed"),
+  scryptedApiToken: $("scrypted-api-token"),
   scryptedServerToken: $("scrypted-server-token"),
   scryptedTestResult: $("scrypted-test-result"),
   scryptedTestBtn: $("scrypted-test-btn"),
@@ -154,14 +158,16 @@ const ICONS = {
   media_player: "▶",
 };
 const PRIORITY = [
+  "camera",
+  "doorbell",
+  "siren",
   "light",
-  "switch",
   "cover",
   "lock",
   "climate",
   "fan",
   "vacuum",
-  "camera",
+  "switch",
   "humidifier",
   "sensor",
   "binary_sensor",
@@ -430,22 +436,49 @@ function renderDevices() {
       brandsMap.get(brand).ha.push(dev);
     }
 
-    // 3. Renderizar secciones agrupadas por marca
+    // 3. Renderizar secciones agrupadas por marca (alfabético, 'Marca no identificada' siempre al final)
     const brandSections = [];
-    const sortedBrands = [...brandsMap.keys()].sort((a, b) =>
-      a.localeCompare(b),
-    );
+    const sortedBrands = [...brandsMap.keys()].sort((a, b) => {
+      const isAUnknown = a.toLowerCase() === "marca no identificada";
+      const isBUnknown = b.toLowerCase() === "marca no identificada";
+      if (isAUnknown && !isBUnknown) return 1;
+      if (!isAUnknown && isBUnknown) return -1;
+      return a.localeCompare(b, "es", { sensitivity: "base" });
+    });
 
     for (const brand of sortedBrands) {
       const group = brandsMap.get(brand);
       const totalCount = group.scrypted.length + group.ha.length;
 
-      const section = document.createElement("div");
-      section.className = "camera-model-group";
+      // Ordenar cámaras por nombre dentro de cada grupo
+      group.scrypted.sort((a, b) =>
+        (a.name || "").localeCompare(b.name || "", "es", {
+          sensitivity: "base",
+        }),
+      );
+      group.ha.sort((a, b) =>
+        (a.name || a.deviceName || "").localeCompare(
+          b.name || b.deviceName || "",
+          "es",
+          { sensitivity: "base" },
+        ),
+      );
 
-      const header = document.createElement("h3");
-      header.className = "model-section-header";
-      header.innerHTML = `📹 ${escapeHtml(brand)} (${totalCount} ${totalCount === 1 ? "cámara" : "cámaras"})`;
+      const section = document.createElement("section");
+      section.className = "camera-brand-group";
+
+      const header = document.createElement("header");
+      header.className = "camera-brand-group__header";
+
+      const h3 = document.createElement("h3");
+      h3.textContent = `📹 ${brand}`;
+
+      const countSpan = document.createElement("span");
+      countSpan.className = "brand-camera-count";
+      countSpan.textContent = `${totalCount} ${totalCount === 1 ? "cámara" : "cámaras"}`;
+
+      header.appendChild(h3);
+      header.appendChild(countSpan);
 
       const grid = document.createElement("div");
       grid.className = "cameras-grid";
@@ -2085,10 +2118,55 @@ function updateScryptedHeader() {
   }
 }
 
-function extractCameraBrand(item) {
-  if (!item) return "Otras Marcas";
+function normalizeForGroup(value) {
+  if (!value || typeof value !== "string") return null;
+  const v = value.trim().toLowerCase();
+  const unknownValues = [
+    "",
+    "unknown",
+    "n/a",
+    "na",
+    "desconocido",
+    "sin marca",
+    "other",
+    "otras marcas",
+    "generic",
+    "cámara ip",
+    "camara ip",
+    "marca no identificada",
+    "modelo no identificado",
+  ];
+  return unknownValues.includes(v) ? null : v;
+}
 
-  // Check manufacturer from HA device or Scrypted record
+function extractCameraBrand(item) {
+  if (!item) return "Marca no identificada";
+
+  // 1. Check server-resolved displayManufacturer
+  if (item.displayManufacturer) {
+    const norm = normalizeForGroup(item.displayManufacturer);
+    if (norm !== null) {
+      return item.displayManufacturer.trim();
+    }
+  }
+
+  // 2. Check manual override
+  if (item.identityOverride?.manufacturer) {
+    const norm = normalizeForGroup(item.identityOverride.manufacturer);
+    if (norm !== null) {
+      return item.identityOverride.manufacturer.trim();
+    }
+  }
+
+  // 3. Check sourceManufacturer
+  if (item.sourceManufacturer) {
+    const norm = normalizeForGroup(item.sourceManufacturer);
+    if (norm !== null) {
+      return item.sourceManufacturer.trim();
+    }
+  }
+
+  // 4. Check raw manufacturer or brand fields (e.g. from HA devices)
   const rawBrand =
     item.manufacturer ||
     item.brand ||
@@ -2096,15 +2174,10 @@ function extractCameraBrand(item) {
     "";
   const rawModel = item.model || item.info?.model || "";
   const rawName = item.name || item.deviceName || "";
-
   const combined = `${rawBrand} ${rawModel} ${rawName}`.toLowerCase();
 
   if (combined.includes("ring")) return "Ring";
-  if (
-    combined.includes("nest") ||
-    combined.includes("google")
-  )
-    return "Google Nest";
+  if (combined.includes("nest") || combined.includes("google")) return "Google Nest";
   if (combined.includes("wyze")) return "Wyze";
   if (
     combined.includes("tapo") ||
@@ -2122,27 +2195,17 @@ function extractCameraBrand(item) {
   if (combined.includes("arlo")) return "Arlo";
   if (combined.includes("ezviz")) return "Ezviz";
   if (combined.includes("imou")) return "Imou";
-  if (
-    combined.includes("unifi") ||
-    combined.includes("ubiquiti")
-  )
-    return "UniFi";
+  if (combined.includes("unifi") || combined.includes("ubiquiti")) return "UniFi";
   if (combined.includes("sonoff")) return "Sonoff";
   if (combined.includes("tuya") || combined.includes("smart life")) return "Tuya";
   if (combined.includes("xiaomi") || combined.includes("mijia")) return "Xiaomi";
 
-  // If rawBrand is meaningful, use it
-  const cleanBrand = rawBrand.trim();
-  if (
-    cleanBrand.length > 0 &&
-    cleanBrand.toLowerCase() !== "cámara ip" &&
-    cleanBrand.toLowerCase() !== "generic" &&
-    cleanBrand.toLowerCase() !== "unknown"
-  ) {
-    return cleanBrand;
+  const normRaw = normalizeForGroup(rawBrand);
+  if (normRaw !== null) {
+    return rawBrand.trim();
   }
 
-  return "Otras Marcas";
+  return "Marca no identificada";
 }
 window.extractCameraBrand = extractCameraBrand;
 
@@ -2153,13 +2216,13 @@ function buildScryptedCameraElements(query) {
     if (!query) return true;
     return (
       (cam.name || "").toLowerCase().includes(query) ||
-      (cam.model || "").toLowerCase().includes(query) ||
+      (cam.displayModel || cam.model || "").toLowerCase().includes(query) ||
       (cam.cameraId || "").toLowerCase().includes(query) ||
       extractCameraBrand(cam).toLowerCase().includes(query)
     );
   });
 
-  // Agrupación automática por MARCA
+  // Agrupación automática únicamente por MARCA
   const camerasByBrand = filtered.reduce((acc, camera) => {
     const brand = extractCameraBrand(camera);
     if (!acc[brand]) {
@@ -2169,14 +2232,36 @@ function buildScryptedCameraElements(query) {
     return acc;
   }, {});
 
-  const sections = [];
-  for (const [brandName, brandCameras] of Object.entries(camerasByBrand)) {
-    const section = document.createElement("div");
-    section.className = "camera-model-group";
+  const sortedBrands = Object.keys(camerasByBrand).sort((a, b) => {
+    const isAUnknown = a.toLowerCase() === "marca no identificada";
+    const isBUnknown = b.toLowerCase() === "marca no identificada";
+    if (isAUnknown && !isBUnknown) return 1;
+    if (!isAUnknown && isBUnknown) return -1;
+    return a.localeCompare(b, "es", { sensitivity: "base" });
+  });
 
-    const header = document.createElement("h3");
-    header.className = "model-section-header";
-    header.innerHTML = `📹 ${escapeHtml(brandName)} (${brandCameras.length} ${brandCameras.length === 1 ? "cámara" : "cámaras"})`;
+  const sections = [];
+  for (const brandName of sortedBrands) {
+    const brandCameras = camerasByBrand[brandName];
+    brandCameras.sort((a, b) =>
+      (a.name || "").localeCompare(b.name || "", "es", { sensitivity: "base" }),
+    );
+
+    const section = document.createElement("section");
+    section.className = "camera-brand-group";
+
+    const header = document.createElement("header");
+    header.className = "camera-brand-group__header";
+
+    const h3 = document.createElement("h3");
+    h3.textContent = `📹 ${brandName}`;
+
+    const countSpan = document.createElement("span");
+    countSpan.className = "brand-camera-count";
+    countSpan.textContent = `${brandCameras.length} ${brandCameras.length === 1 ? "cámara" : "cámaras"}`;
+
+    header.appendChild(h3);
+    header.appendChild(countSpan);
 
     const grid = document.createElement("div");
     grid.className = "cameras-grid";
@@ -2192,12 +2277,25 @@ function buildScryptedCameraElements(query) {
 }
 
 function buildScryptedModelSection(brandName, cameras) {
-  const section = document.createElement("div");
-  section.className = "camera-model-group";
+  cameras.sort((a, b) =>
+    (a.name || "").localeCompare(b.name || "", "es", { sensitivity: "base" }),
+  );
 
-  const header = document.createElement("h3");
-  header.className = "model-section-header";
-  header.innerHTML = `📹 ${escapeHtml(brandName)} (${cameras.length} ${cameras.length === 1 ? "cámara" : "cámaras"})`;
+  const section = document.createElement("section");
+  section.className = "camera-brand-group";
+
+  const header = document.createElement("header");
+  header.className = "camera-brand-group__header";
+
+  const h3 = document.createElement("h3");
+  h3.textContent = `📹 ${brandName}`;
+
+  const countSpan = document.createElement("span");
+  countSpan.className = "brand-camera-count";
+  countSpan.textContent = `${cameras.length} ${cameras.length === 1 ? "cámara" : "cámaras"}`;
+
+  header.appendChild(h3);
+  header.appendChild(countSpan);
 
   const grid = document.createElement("div");
   grid.className = "cameras-grid";
@@ -2270,12 +2368,20 @@ function buildScryptedCameraCard(camera) {
   ];
 
   const hasError = Boolean(camera.status?.lastError);
+  const brandOrigin =
+    camera.identityOverride?.manufacturerSource === "manual"
+      ? "Configurado manualmente"
+      : camera.sourceManufacturer
+        ? "Detectado por Scrypted"
+        : "No identificado";
+  const modelDisplay =
+    camera.displayModel || camera.model || "Modelo no identificado";
 
   card.innerHTML = `
     <div class="card-top-row">
       <div class="card-title-group">
         <h4>${escapeHtml(camera.name)}</h4>
-        <div class="card-subtitle">${statusDot} ${statusText} · <span class="badge-scrypted-source">⚡ Scrypted</span> · ${escapeHtml(brand)} (${escapeHtml(camera.model || "Cámara")})</div>
+        <div class="card-subtitle">${statusDot} ${statusText} · <span class="badge-scrypted-source">⚡ Scrypted</span> · ${escapeHtml(brand)} (${escapeHtml(modelDisplay)}) · <span class="badge-brand-origin">${escapeHtml(brandOrigin)}</span></div>
       </div>
       <div class="card-pills-group">
         <span class="badge-scrypted-tag">SCRYPTED</span>
@@ -2417,17 +2523,41 @@ function buildScryptedCameraCard(camera) {
 const renderCameraCard = buildScryptedCameraCard;
 window.renderCameraCard = renderCameraCard;
 
+function clearScryptedSecretInputs() {
+  if (els.scryptedPassword) els.scryptedPassword.value = "";
+  if (els.scryptedApiToken) els.scryptedApiToken.value = "";
+  if (els.scryptedServerToken) els.scryptedServerToken.value = "";
+}
+
+function setModalState(modalState) {
+  const isBusy = modalState === "testing" || modalState === "loading_cameras";
+  if (els.scryptedTestBtn) els.scryptedTestBtn.disabled = isBusy;
+  if (els.scryptedLoadCamerasBtn) els.scryptedLoadCamerasBtn.disabled = isBusy;
+  if (els.scryptedCancelBtn) els.scryptedCancelBtn.disabled = isBusy;
+}
+
 function openScryptedModal() {
   if (els.scryptedServerUrl && state.scryptedConfig?.serverUrl) {
     els.scryptedServerUrl.value = state.scryptedConfig.serverUrl;
   }
-  if (els.scryptedServerToken) {
-    els.scryptedServerToken.value = "";
+  if (els.scryptedUsername && state.scryptedConfig?.username) {
+    els.scryptedUsername.value = state.scryptedConfig.username;
+  }
+  clearScryptedSecretInputs();
+  if (
+    els.scryptedAllowSelfSigned &&
+    state.scryptedConfig?.allowSelfSignedCertificate !== undefined
+  ) {
+    els.scryptedAllowSelfSigned.checked = Boolean(
+      state.scryptedConfig.allowSelfSignedCertificate,
+    );
   }
   if (els.scryptedTestResult) {
     els.scryptedTestResult.hidden = true;
     els.scryptedTestResult.className = "test-result-box";
+    els.scryptedTestResult.textContent = "";
   }
+  setModalState("idle");
   setModalOpen(els.scryptedConnectModal, true);
 }
 
@@ -2435,7 +2565,7 @@ function openCameraConfigModal(camera) {
   if (!els.cameraConfigModal) return;
   els.camCfgId.value = camera.cameraId;
   els.camCfgTitle.textContent = `⚙️ Configurar ${camera.name}`;
-  els.camCfgSubtitle.textContent = `Modelo: ${camera.model || "Cámara IP"} · ID: ${camera.cameraId}`;
+  els.camCfgSubtitle.textContent = `Modelo: ${camera.displayModel || camera.model || "Cámara IP"} · ID: ${camera.cameraId}`;
 
   const exp = camera.exportConfig || {};
   els.camToggleMatter.checked = exp.matterEnabled !== false;
@@ -2476,63 +2606,118 @@ els.scryptedManageBtn?.addEventListener("click", () => {
   openScryptedModal();
 });
 els.scryptedModalClose?.addEventListener("click", () => {
+  clearScryptedSecretInputs();
   setModalOpen(els.scryptedConnectModal, false);
 });
 els.scryptedCancelBtn?.addEventListener("click", () => {
+  clearScryptedSecretInputs();
   setModalOpen(els.scryptedConnectModal, false);
 });
 
 els.scryptedTestBtn?.addEventListener("click", async () => {
   const serverUrl = els.scryptedServerUrl?.value?.trim();
-  const token = els.scryptedServerToken?.value?.trim();
+  const username = els.scryptedUsername?.value?.trim();
+  const password = els.scryptedPassword?.value || "";
+  const allowSelfSigned = els.scryptedAllowSelfSigned?.checked ?? false;
+
   if (!serverUrl) {
     showToast("Ingresa la URL del servidor Scrypted", true);
     return;
   }
-  els.scryptedTestBtn.disabled = true;
-  els.scryptedTestResult.hidden = false;
-  els.scryptedTestResult.className = "test-result-box";
-  els.scryptedTestResult.textContent = "Comprobando conexión con Scrypted...";
+  if (!username) {
+    showToast("Ingresa el usuario de Scrypted", true);
+    return;
+  }
+  if (!password) {
+    showToast("Ingresa la contraseña de Scrypted", true);
+    return;
+  }
+
+  setModalState("testing");
+  if (els.scryptedTestResult) {
+    els.scryptedTestResult.hidden = false;
+    els.scryptedTestResult.className = "test-result-box";
+    els.scryptedTestResult.textContent = "Comprobando conexión con Scrypted...";
+  }
 
   try {
     const result = await request("/scrypted/connection-test", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ serverUrl, token }),
+      body: JSON.stringify({
+        serverUrl,
+        username,
+        password,
+        allowSelfSignedCertificate: allowSelfSigned,
+      }),
     });
     if (result.ok) {
-      els.scryptedTestResult.className = "test-result-box success";
-      els.scryptedTestResult.textContent = `✅ ${result.message} (${result.serverInfo?.latencyMs || 0}ms)`;
+      if (els.scryptedTestResult) {
+        els.scryptedTestResult.className = "test-result-box success";
+        els.scryptedTestResult.textContent = `✅ ${result.message}`;
+        if (result.latencyMs != null) {
+          els.scryptedTestResult.textContent += ` (${result.latencyMs}ms)`;
+        }
+      }
+      setModalState("connected");
     } else {
-      els.scryptedTestResult.className = "test-result-box error";
-      els.scryptedTestResult.textContent = `❌ ${result.message}`;
+      if (els.scryptedTestResult) {
+        els.scryptedTestResult.className = "test-result-box error";
+        els.scryptedTestResult.textContent = `❌ ${result.message}`;
+      }
+      setModalState("error");
     }
   } catch (err) {
-    els.scryptedTestResult.className = "test-result-box error";
-    els.scryptedTestResult.textContent = `❌ Error: ${err.message || err}`;
-  } finally {
-    els.scryptedTestBtn.disabled = false;
+    if (els.scryptedTestResult) {
+      els.scryptedTestResult.className = "test-result-box error";
+      els.scryptedTestResult.textContent = `❌ Error: ${err.message || err}`;
+    }
+    setModalState("error");
   }
 });
 
 els.scryptedConnectForm?.addEventListener("submit", async (e) => {
   e.preventDefault();
   const serverUrl = els.scryptedServerUrl?.value?.trim();
-  const token = els.scryptedServerToken?.value?.trim();
-  if (!serverUrl) return;
+  const username = els.scryptedUsername?.value?.trim();
+  const password = els.scryptedPassword?.value || "";
+  const allowSelfSigned = els.scryptedAllowSelfSigned?.checked ?? false;
+  const apiToken = els.scryptedApiToken?.value?.trim() || undefined;
 
-  els.scryptedLoadCamerasBtn.disabled = true;
+  if (!serverUrl || !username || !password) {
+    showToast("Completa URL, usuario y contraseña", true);
+    return;
+  }
+
+  setModalState("loading_cameras");
   try {
-    await request("/scrypted/config", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ serverUrl, token, autoReconnect: true }),
-    });
-    const loadResult = await request("/scrypted/load-cameras", {
+    const result = await request("/scrypted/connect-and-load-cameras", {
       method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        serverUrl,
+        username,
+        password,
+        allowSelfSignedCertificate: allowSelfSigned,
+        ...(apiToken ? { apiToken } : {}),
+        autoReconnect: true,
+      }),
     });
+
+    clearScryptedSecretInputs();
     setModalOpen(els.scryptedConnectModal, false);
-    showToast(loadResult.message || "Cámaras cargadas con éxito.");
+
+    if (result.noCamerasFound) {
+      showToast(
+        "La conexión fue correcta, pero Scrypted no expuso cámaras compatibles.",
+      );
+    } else {
+      const total = result.totalCameras || 0;
+      showToast(
+        `✅ ${total} cámara${total === 1 ? "" : "s"} importada${total === 1 ? "" : "s"} desde Scrypted.`,
+      );
+    }
+
     state.activeFilter = "cameras";
     document.querySelectorAll(".filter-chip").forEach((chip) => {
       chip.classList.toggle("active", chip.dataset.filter === "cameras");
@@ -2540,9 +2725,8 @@ els.scryptedConnectForm?.addEventListener("submit", async (e) => {
     await fetchScrypted();
     renderDevices();
   } catch (err) {
-    showToast(err.message || "Error al cargar cámaras de Scrypted", true);
-  } finally {
-    els.scryptedLoadCamerasBtn.disabled = false;
+    setModalState("error");
+    showToast(err.message || "Error al conectar con Scrypted", true);
   }
 });
 
@@ -2728,30 +2912,61 @@ async function loadCameras() {
     const cameras = Array.isArray(raw) ? raw : raw.cameras || [];
     state.scryptedCameras = cameras;
 
-    const camerasByBrand = cameras.reduce((acc, camera) => {
-      const brand = extractCameraBrand(camera);
-      if (!acc[brand]) {
-        acc[brand] = [];
+    // Group cameras by effective brand, normalize for deduplication
+    const brandMap = new Map();
+    for (const camera of cameras) {
+      const displayBrand = extractCameraBrand(camera);
+      const key = normalizeForGroup(displayBrand) ?? "__unknown__";
+      if (!brandMap.has(key)) {
+        brandMap.set(key, { displayName: displayBrand, cameras: [] });
       }
-      acc[brand].push(camera);
-      return acc;
-    }, {});
+      brandMap.get(key).cameras.push(camera);
+    }
+
+    // Sort alphabetically, 'Marca no identificada' always last
+    const sortedBrands = [...brandMap.entries()].sort(([ka, a], [kb, b]) => {
+      if (ka === "__unknown__") return 1;
+      if (kb === "__unknown__") return -1;
+      return a.displayName.localeCompare(b.displayName, "es", {
+        sensitivity: "base",
+      });
+    });
 
     const container = document.getElementById("cameras-container");
     if (container) {
       container.innerHTML = "";
-      for (const [brandName, brandCameras] of Object.entries(camerasByBrand)) {
-        const section = document.createElement("div");
-        section.className = "camera-model-group";
-        const header = document.createElement("h3");
-        header.className = "model-section-header";
-        header.innerHTML = `📹 ${escapeHtml(brandName)} (${brandCameras.length} ${brandCameras.length === 1 ? "cámara" : "cámaras"})`;
+      for (const [, { displayName, cameras: brandCameras }] of sortedBrands) {
+        // Sort cameras by name within each brand
+        brandCameras.sort((a, b) =>
+          (a.name || "").localeCompare(b.name || "", "es", {
+            sensitivity: "base",
+          }),
+        );
+
+        const section = document.createElement("section");
+        section.className = "camera-brand-group";
+        section.dataset.brand = normalizeForGroup(displayName) ?? "unknown";
+
+        const header = document.createElement("header");
+        header.className = "camera-brand-group__header";
+
+        const h3 = document.createElement("h3");
+        h3.textContent = `📹 ${displayName}`;
+
+        const countSpan = document.createElement("span");
+        countSpan.className = "brand-camera-count";
+        countSpan.textContent = `${brandCameras.length} ${brandCameras.length === 1 ? "cámara" : "cámaras"}`;
+
+        header.appendChild(h3);
+        header.appendChild(countSpan);
+
         const grid = document.createElement("div");
         grid.className = "cameras-grid";
         for (const camera of brandCameras) {
           const card = renderCameraCard(camera);
           grid.appendChild(card);
         }
+
         section.appendChild(header);
         section.appendChild(grid);
         container.appendChild(section);

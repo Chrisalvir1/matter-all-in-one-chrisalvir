@@ -1,3 +1,16 @@
+## [1.4.67] - 2026-09-01
+
+### Official Scrypted SDK Client, Brand Grouping, Secure Authentication & Layout Fixes
+
+- **Integración Oficial con `@scrypted/client` SDK:** Eliminación completa de endpoints REST ficticios y llamadas manuales no soportadas. Conexión auténtica y segura mediante el SDK oficial (`loginScryptedClient` para validación de credenciales y `connectScryptedClient` para sesiones WebSockets/RPC nativas).
+- **Autenticación Estándar y Segura (Usuario y Contraseña):** Flujo principal simplificado mediante URL, usuario y contraseña. Cifrado AES-256-GCM con propósito AAD estricto (`scrypted_password`). Opciones avanzadas colapsables para API token opcional.
+- **Soporte de Certificados HTTPS Autofirmados:** Opción explícita en el modal para permitir certificados autofirmados en redes locales privadas sin comprometer la seguridad general.
+- **Manejo Inteligente de Errores y Reconexión:** Detección de fallos de credenciales (`authentication_failed`) con detención inmediata de reintentos agresivos para evitar bloqueos por fuerza bruta, y modo de degradación elegante `disconnected_using_cache` ante cortes de red con backoff de 5, 10, 30 y 60 minutos.
+- **Agrupación Exclusiva por Marca/Fabricante:** Interfaz organizada en secciones `<section class="camera-brand-group">` por fabricante real (Tapo, Aqara, Ring, etc.), ordenadas alfabéticamente con «Marca no identificada» al final y cámaras ordenadas por nombre.
+- **Corrección de Layout CSS en Grid de Dispositivos:** `.camera-brand-group` configurado con `grid-column: 1 / -1; width: 100%` para ocupar toda la fila del grid sin romperse ni desalinearse, y grid interno responsivo sin overflow horizontal en móviles.
+- **Corrección de Prioridad de Íconos:** Arreglo en la matriz `PRIORITY` colocando cámaras y timbres antes de `switch`, impidiendo que las cámaras IP se muestren erróneamente con el ícono de enchufe.
+- **Migración Automática de Esquema (v1 → v2):** Migración fluida del almacén persistente `/data/scrypted-cameras-store.json` con respaldo `.bak` automático y soporte de sobrescrituras manuales de identidad (`CameraIdentityOverride`) que se preservan entre reinicios y sincronizaciones.
+
 ## [1.4.66] - 2026-09-01
 
 ### Grouping by Camera Model, Sync Button & Per-Camera Diagnostics Logs

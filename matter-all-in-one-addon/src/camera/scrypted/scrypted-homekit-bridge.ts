@@ -53,7 +53,8 @@ export class ScryptedHomeKitBridge {
       metadata: {
         isScrypted: true,
         scryptedCameraId: camera.cameraId,
-        model: camera.model,
+        model: camera.displayModel || camera.model,
+        manufacturer: camera.displayManufacturer,
       },
     };
 
@@ -68,8 +69,8 @@ export class ScryptedHomeKitBridge {
       strategy: "passthrough_h264",
       state: "idle",
       name: camera.name,
-      manufacturer: "Scrypted",
-      model: camera.model || "Cámara IP",
+      manufacturer: camera.displayManufacturer || "Scrypted",
+      model: camera.displayModel || camera.model || "Cámara IP",
       serialNumber: `SCRYPTED-${camera.cameraId.toUpperCase().substring(0, 12)}`,
       hksvCapable: capabilities.hksvCapable,
       hksvEnabled: capabilities.hksvCapable,

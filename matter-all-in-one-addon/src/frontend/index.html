@@ -9,7 +9,7 @@
       name="description"
       content="Gestiona de forma segura las entidades de Home Assistant exportadas mediante Matter."
     />
-    <link rel="stylesheet" href="style.css?v=1.4.66" />
+    <link rel="stylesheet" href="style.css?v=1.4.67" />
   </head>
   <body>
     <div class="ambient ambient-one"></div>
@@ -601,22 +601,71 @@
             <input
               type="text"
               id="scrypted-server-url"
-              placeholder="http://192.168.1.50:10443"
+              placeholder="https://192.168.1.50:10443"
+              autocomplete="url"
               required
             />
-            <small class="field-hint">Dirección IP y puerto web de tu servidor Scrypted.</small>
+            <small class="field-hint"
+              >Usa la dirección web de Scrypted accesible desde Home Assistant.
+              Normalmente utiliza HTTPS y el puerto configurado por tu
+              instalación.</small
+            >
           </label>
 
           <label class="form-field">
-            <span>Token de Autenticación (Opcional / Cifrado AES-256-GCM)</span>
+            <span>Usuario de Scrypted</span>
+            <input
+              type="text"
+              id="scrypted-username"
+              placeholder="admin"
+              autocomplete="username"
+              required
+            />
+          </label>
+
+          <label class="form-field">
+            <span>Contraseña de Scrypted</span>
             <input
               type="password"
-              id="scrypted-server-token"
-              placeholder="••••••••••••••••"
-              autocomplete="off"
+              id="scrypted-password"
+              autocomplete="current-password"
+              required
             />
-            <small class="field-hint">El token se almacena cifrado y nunca se expone en texto plano.</small>
+            <small class="field-hint"
+              >Tu contraseña se cifra antes de guardarse. No necesitas crear ni
+              ingresar una clave AES.</small
+            >
           </label>
+
+          <label class="form-field form-field--inline">
+            <input
+              type="checkbox"
+              id="scrypted-allow-self-signed"
+            />
+            <span>Permitir certificado HTTPS autofirmado</span>
+          </label>
+          <small class="field-hint field-hint--standalone"
+            >Actívalo sólo si confías en este servidor Scrypted de tu red local.
+            Un certificado autofirmado reduce la verificación de identidad del
+            servidor.</small
+          >
+
+          <details id="scrypted-advanced-section">
+            <summary>Opciones avanzadas</summary>
+            <label class="form-field" style="margin-top: 0.75rem;">
+              <span>Token o API Key (Opcional)</span>
+              <input
+                type="password"
+                id="scrypted-api-token"
+                autocomplete="off"
+              />
+              <small class="field-hint"
+                >Normalmente no necesitas este campo. Déjalo vacío salvo que una
+                integración documentada de Scrypted te haya proporcionado
+                explícitamente un token o API key compatible.</small
+              >
+            </label>
+          </details>
 
           <div id="scrypted-test-result" class="test-result-box" hidden></div>
 
@@ -633,14 +682,14 @@
               id="scrypted-load-cameras-btn"
               type="submit"
             >
-              ✅ Cargar cámaras
+              ✅ Guardar y cargar cámaras
             </button>
             <button
               class="button button-secondary"
               id="scrypted-cancel-btn"
               type="button"
             >
-              ❌ Cancelar
+              ✕ Cancelar
             </button>
           </div>
         </form>
@@ -812,7 +861,7 @@
     </div>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="qrcode.min.js?v=1.4.66"></script>
-    <script src="script.js?v=1.4.66"></script>
+    <script src="qrcode.min.js?v=1.4.67"></script>
+    <script src="script.js?v=1.4.67"></script>
   </body>
 </html>

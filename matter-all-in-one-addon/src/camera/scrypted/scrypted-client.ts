@@ -2,387 +2,491 @@ import net from "node:net";
 import type {
   CameraRecord,
   CameraSensorRecord,
-  StreamCapabilities,
+  ScryptedErrorCode,
+  ScryptedCredentials,
 } from "./scrypted-types.js";
 
-export interface ScryptedConnectionTestResult {
+/** INTERNAL ONLY — never persist, serialize or log. */
+export interface ScryptedSession {
+  readonly sdk: any; // ScryptedClientStatic — opaque handle
+  readonly connectedAt: string;
+  readonly serverUrl: string;
+  readonly username?: string;
+}
+
+export interface ScryptedConnectionResult {
   ok: boolean;
+  errorCode?: ScryptedErrorCode;
   message: string;
-  serverInfo?: {
-    version?: string;
-    serverUrl: string;
-    latencyMs: number;
+  authenticationMode?: "username_password" | "api_token";
+  latencyMs?: number;
+  serverId?: string;
+}
+
+/**
+ * Resolves manufacturer/model from Scrypted device info.
+ * Returns undefined if not available — callers must handle fallback.
+ */
+function extractDeviceInfo(device: any): {
+  manufacturer?: string;
+  model?: string;
+  serialNumber?: string;
+} {
+  const info = device?.info ?? {};
+  return {
+    manufacturer: info.manufacturer || device.manufacturer || undefined,
+    model: info.model || device.model || undefined,
+    serialNumber: info.serialNumber || device.serialNumber || undefined,
   };
 }
 
+/**
+ * Returns true if the Scrypted device exposes camera-related interfaces.
+ */
+function isCameraDevice(device: any): boolean {
+  if (!device || typeof device !== "object") return false;
+  const interfaces: string[] = Array.isArray(device.interfaces)
+    ? device.interfaces.map((i: any) => String(i))
+    : [];
+  const type = String(device.type || "").toLowerCase();
+  return (
+    type.includes("camera") ||
+    interfaces.includes("Camera") ||
+    interfaces.includes("VideoCamera") ||
+    interfaces.includes("VideoCameraConfiguration") ||
+    interfaces.includes("VideoRecorder") ||
+    interfaces.includes("VideoClips")
+  );
+}
+
+/**
+ * Maps a Scrypted device to a CameraRecord with real data from the SDK.
+ * Streams are marked as 'unverified' — no RTSP URL is constructed or assumed.
+ */
+function mapDeviceToCameraRecord(device: any, serverUrl: string): CameraRecord {
+  const id = String(
+    device.id ??
+      device._id ??
+      `scrypted_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+  );
+  const name = String(device.name ?? `Scrypted Camera ${id}`);
+  const { manufacturer, model } = extractDeviceInfo(device);
+  const interfaces: string[] = Array.isArray(device.interfaces)
+    ? device.interfaces.map((i: any) => String(i))
+    : [];
+
+  const sensors: CameraSensorRecord[] = [];
+
+  if (interfaces.includes("MotionSensor")) {
+    sensors.push({
+      sensorId: `${id}_motion`,
+      type: "motion",
+      name: `${name} – Movimiento`,
+      enabled: true,
+      state: false,
+    });
+  }
+
+  if (interfaces.includes("Doorbell")) {
+    sensors.push({
+      sensorId: `${id}_doorbell`,
+      type: "doorbell",
+      name: `${name} – Timbre`,
+      enabled: true,
+      state: false,
+    });
+  }
+
+  if (
+    interfaces.includes("ObjectDetection") ||
+    interfaces.includes("BinarySensor")
+  ) {
+    sensors.push({
+      sensorId: `${id}_person`,
+      type: "person",
+      name: `${name} – Persona`,
+      enabled: true,
+      state: false,
+    });
+  }
+
+  const resolvedManufacturer = manufacturer ?? undefined;
+  const resolvedModel = model ?? undefined;
+
+  return {
+    cameraId: id,
+    sourceId: `scrypted_${id}`,
+    deviceId: id,
+    name,
+    enabled: true,
+    sourceManufacturer: resolvedManufacturer,
+    sourceModel: resolvedModel,
+    model: resolvedModel, // compat
+    displayManufacturer: resolvedManufacturer ?? "Marca no identificada",
+    displayModel: resolvedModel,
+    identity: {},
+    source: {
+      kind: "scrypted",
+      serverId: serverUrl,
+      deviceId: id,
+      // Streams are NOT assumed. They remain unverified until the SDK
+      // provides a real RTSP/WebRTC URL through the VideoCamera interface.
+    },
+    capabilities: {
+      // No capabilities are assumed. Marked unverified until validated.
+      qualityMode: "maximum_compatible",
+      allowAutomaticFallback: false,
+    },
+    sensors,
+    exportConfig: {
+      matterEnabled: true,
+      homeKitEnabled: true,
+      hksvEnabledByDefault: true,
+      googleHomeEnabled: false,
+      alexaEnabled: false,
+      smartThingsEnabled: false,
+      nasEnabled: false,
+    },
+    status: {
+      connection: "online",
+      cache: "unverified",
+      lastFetched: new Date().toISOString(),
+    },
+  };
+}
+
+/**
+ * ScryptedClient — official SDK-based client for Scrypted integration.
+ *
+ * Authentication uses `@scrypted/client` exclusively:
+ * - `loginScryptedClient` tests credentials via POST /login internally.
+ * - `connectScryptedClient` establishes a full WebSocket/RPC session.
+ *
+ * No manual HTTP Basic Auth, Bearer tokens, cookies or REST endpoints
+ * are used or assumed.
+ */
 export class ScryptedClient {
-  constructor(
-    private readonly serverUrl: string,
-    private readonly token?: string,
-    private readonly timeoutMs: number = 6000,
-  ) {}
+  private readonly serverUrl: string;
+  private readonly token?: string;
+  private readonly timeoutMs: number;
+
+  constructor(serverUrl: string, token?: string, timeoutMs: number = 6000) {
+    this.serverUrl = serverUrl;
+    this.token = token;
+    this.timeoutMs = timeoutMs;
+  }
 
   /**
-   * Sanitizes and validates the server URL against SSRF vulnerabilities.
+   * Instance helper for backward compatibility in existing code.
+   */
+  public async testConnection(): Promise<ScryptedConnectionResult> {
+    return ScryptedClient.testConnection(
+      this.serverUrl,
+      {
+        username: "admin",
+        authenticationMode: "username_password",
+      },
+      this.token,
+      false,
+    );
+  }
+
+  /**
+   * Validates and normalizes the server URL.
+   * Rejects non-HTTP/HTTPS, malformed URLs and removes trailing slashes.
    */
   public static validateServerUrl(rawUrl: string): {
     valid: boolean;
     error?: string;
+    normalizedUrl?: string;
     url?: URL;
   } {
-    if (!rawUrl || typeof rawUrl !== "string") {
+    if (!rawUrl || typeof rawUrl !== "string" || rawUrl.trim().length === 0) {
       return {
         valid: false,
         error: "La URL del servidor no puede estar vacía",
       };
     }
     try {
-      const parsed = new URL(rawUrl);
+      const parsed = new URL(rawUrl.trim());
       if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
         return {
           valid: false,
           error: "Protocolo inválido (debe ser http:// o https://)",
         };
       }
-      return { valid: true, url: parsed };
+      // Strip credentials from URL to prevent SSRF via embedded auth
+      parsed.username = "";
+      parsed.password = "";
+      // Remove trailing slash for consistency
+      const normalized = parsed.toString().replace(/\/+$/, "");
+      return { valid: true, normalizedUrl: normalized, url: parsed };
     } catch {
       return { valid: false, error: "Formato de URL inválido" };
     }
   }
 
   /**
-   * Performs an active health check / connection test against Scrypted.
+   * Tests connection using the official @scrypted/client SDK.
+   * Uses loginScryptedClient internally (POST /login to Scrypted server).
+   * Does NOT persist anything on failure.
    */
-  public async testConnection(): Promise<ScryptedConnectionTestResult> {
-    const check = ScryptedClient.validateServerUrl(this.serverUrl);
-    if (!check.valid || !check.url) {
-      return { ok: false, message: check.error || "URL no válida" };
-    }
-
-    const startTime = Date.now();
-    try {
-      const headers: Record<string, string> = {
-        Accept: "application/json, text/plain, */*",
-        "User-Agent": "MatterAllInOne-ScryptedClient/1.4.64",
-      };
-      if (this.token && this.token.trim().length > 0) {
-        headers["Authorization"] = `Bearer ${this.token.trim()}`;
-      }
-
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), this.timeoutMs);
-
-      // Probe Scrypted web/API root
-      const response = await fetch(`${this.serverUrl.replace(/\/+$/, "")}/`, {
-        method: "GET",
-        headers,
-        signal: controller.signal,
-      });
-      clearTimeout(timer);
-
-      const latencyMs = Date.now() - startTime;
-      const isOk =
-        response.status >= 200 &&
-        response.status < 400 &&
-        response.status !== 401 &&
-        response.status !== 403;
-
-      if (response.status === 401 || response.status === 403) {
-        return {
-          ok: false,
-          message:
-            "Credenciales inválidas: Scrypted rechazó la autenticación (401/403).",
-        };
-      }
-
-      if (!isOk) {
-        return {
-          ok: false,
-          message: `Scrypted respondió con código de estado HTTP ${response.status}`,
-        };
-      }
-
-      const serverHeader = response.headers.get("server") || "Scrypted Engine";
-      return {
-        ok: true,
-        message: "Conexión exitosa con el servidor Scrypted.",
-        serverInfo: {
-          version: serverHeader,
-          serverUrl: this.serverUrl,
-          latencyMs,
-        },
-      };
-    } catch (err: any) {
-      const latencyMs = Date.now() - startTime;
-      if (err.name === "AbortError") {
-        return {
-          ok: false,
-          message: `Tiempo de espera agotado tras ${this.timeoutMs}ms intentando conectar con ${this.serverUrl}`,
-        };
-      }
+  public static async testConnection(
+    serverUrl: string,
+    credentials: Pick<
+      ScryptedCredentials,
+      "username" | "passwordEncrypted" | "authenticationMode"
+    >,
+    password: string | undefined,
+    allowSelfSignedCertificate: boolean = false,
+  ): Promise<ScryptedConnectionResult> {
+    const urlCheck = ScryptedClient.validateServerUrl(serverUrl);
+    if (!urlCheck.valid || !urlCheck.normalizedUrl) {
       return {
         ok: false,
-        message: `No se pudo conectar con el servidor Scrypted (${err.message || err})`,
+        errorCode: "invalid_url",
+        message: "La URL de Scrypted no es válida.",
       };
+    }
+
+    const username = credentials.username;
+    if (!username || !password) {
+      return {
+        ok: false,
+        errorCode: "authentication_failed",
+        message:
+          "No se pudo iniciar sesión en Scrypted. Verifica usuario y contraseña.",
+      };
+    }
+
+    const start = Date.now();
+    try {
+      const scryptedModule: any = await import("@scrypted/client");
+      const loginScryptedClient = scryptedModule.loginScryptedClient;
+
+      if (typeof loginScryptedClient !== "function") {
+        return {
+          ok: false,
+          errorCode: "unsupported_api",
+          message:
+            "Esta versión de Scrypted no ofrece las interfaces requeridas por la integración.",
+        };
+      }
+
+      const loginResult = await loginScryptedClient({
+        baseUrl: urlCheck.normalizedUrl,
+        username,
+        password,
+      });
+
+      if (loginResult?.error) {
+        return {
+          ok: false,
+          errorCode: "authentication_failed",
+          message:
+            "No se pudo iniciar sesión en Scrypted. Verifica usuario y contraseña.",
+          latencyMs: Date.now() - start,
+        };
+      }
+
+      const latencyMs = Date.now() - start;
+      return {
+        ok: true,
+        message:
+          "Conexión correcta. Se autenticó mediante: usuario y contraseña",
+        authenticationMode: "username_password",
+        latencyMs,
+        serverId: loginResult?.serverId,
+      };
+    } catch (err: any) {
+      const latencyMs = Date.now() - start;
+      return ScryptedClient.classifyError(err, latencyMs);
     }
   }
 
   /**
-   * Fetches the device registry from Scrypted and maps all video cameras to CameraRecord objects.
+   * Establishes a full SDK session via connectScryptedClient.
+   * The returned session object must stay in memory only.
+   * Call disconnect(session) when done.
    */
-  public async loadCameras(): Promise<CameraRecord[]> {
-    const check = ScryptedClient.validateServerUrl(this.serverUrl);
-    if (!check.valid || !check.url) {
-      throw new Error(check.error || "URL no válida");
+  public static async connect(
+    serverUrl: string,
+    credentials: Pick<ScryptedCredentials, "username" | "authenticationMode">,
+    password: string | undefined,
+  ): Promise<ScryptedSession> {
+    const urlCheck = ScryptedClient.validateServerUrl(serverUrl);
+    if (!urlCheck.valid || !urlCheck.normalizedUrl) {
+      throw new Error(`invalid_url: ${urlCheck.error}`);
     }
 
-    const headers: Record<string, string> = {
-      Accept: "application/json",
-      "User-Agent": "MatterAllInOne-ScryptedClient/1.4.64",
+    const username = credentials.username;
+    if (!username || !password) {
+      throw new Error(
+        "authentication_failed: username and password are required",
+      );
+    }
+
+    const scryptedModule: any = await import("@scrypted/client");
+    const connectScryptedClient = scryptedModule.connectScryptedClient;
+
+    if (typeof connectScryptedClient !== "function") {
+      throw new Error(
+        "unsupported_api: connectScryptedClient function not found in @scrypted/client",
+      );
+    }
+
+    const sdk = await connectScryptedClient({
+      baseUrl: urlCheck.normalizedUrl,
+      pluginId: "@scrypted/core",
+      username,
+      password,
+    });
+
+    return {
+      sdk,
+      connectedAt: new Date().toISOString(),
+      serverUrl: urlCheck.normalizedUrl,
+      username,
     };
-    if (this.token && this.token.trim().length > 0) {
-      headers["Authorization"] = `Bearer ${this.token.trim()}`;
+  }
+
+  /**
+   * Enumerates all camera devices from the Scrypted server via systemManager.
+   * Only reads real device data — no capabilities are hardcoded.
+   */
+  public static async listCameras(
+    session: ScryptedSession,
+  ): Promise<CameraRecord[]> {
+    const systemManager = session.sdk?.systemManager;
+    if (!systemManager) {
+      throw new Error("unsupported_api: systemManager not available");
     }
 
-    const baseUrl = this.serverUrl.replace(/\/+$/, "");
-    const host = check.url.hostname;
-
-    let devicesData: any = null;
-    const endpointsToTry = [
-      `${baseUrl}/api/v1/devices`,
-      `${baseUrl}/endpoint/@scrypted/core/devices`,
-      `${baseUrl}/api/devices`,
-    ];
-
-    for (const ep of endpointsToTry) {
+    let deviceList: any[] = [];
+    try {
+      const state = await systemManager.getSystemState();
+      if (state && typeof state === "object") {
+        deviceList = Object.values(state);
+      }
+    } catch {
       try {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), this.timeoutMs);
-        const res = await fetch(ep, {
-          method: "GET",
-          headers,
-          signal: controller.signal,
-        });
-        clearTimeout(timer);
-        if (res.ok) {
-          devicesData = await res.json();
-          break;
+        const ids: string[] = (systemManager as any).getDeviceIds?.() ?? [];
+        deviceList = await Promise.all(
+          ids.map((id: string) => systemManager.getDeviceById(id)),
+        );
+      } catch {
+        deviceList = [];
+      }
+    }
+
+    const cameras: CameraRecord[] = [];
+    for (const device of deviceList) {
+      if (!device) continue;
+      const dev = device.__proxy_props ? device : device;
+      try {
+        if (isCameraDevice(dev)) {
+          cameras.push(mapDeviceToCameraRecord(dev, session.serverUrl));
         }
       } catch {
-        // Try next endpoint
+        // Skip devices that cannot be mapped
       }
     }
+    return cameras;
+  }
 
-    // If Scrypted REST devices endpoint is available, parse devices;
-    // Otherwise, generate structured discovery from Scrypted Core.
-    const cameraRecords: CameraRecord[] = [];
-
-    if (Array.isArray(devicesData)) {
-      for (const dev of devicesData) {
-        if (this.isCameraDevice(dev)) {
-          cameraRecords.push(this.mapScryptedDeviceToCameraRecord(dev, host));
-        }
-      }
-    } else if (devicesData && typeof devicesData === "object") {
-      const list = Object.values(devicesData);
-      for (const dev of list) {
-        if (this.isCameraDevice(dev)) {
-          cameraRecords.push(this.mapScryptedDeviceToCameraRecord(dev, host));
-        }
-      }
+  /**
+   * Disconnects an active SDK session.
+   */
+  public static async disconnect(session: ScryptedSession): Promise<void> {
+    try {
+      session.sdk?.disconnect?.();
+    } catch {
+      // Best effort
     }
-
-    return cameraRecords;
   }
 
-  private isCameraDevice(dev: any): boolean {
-    if (!dev || typeof dev !== "object") return false;
-    const type = String(dev.type || "").toLowerCase();
-    const interfaces = Array.isArray(dev.interfaces)
-      ? dev.interfaces.map((i: any) => String(i).toLowerCase())
-      : [];
-    return (
-      type.includes("camera") ||
-      interfaces.includes("camera") ||
-      interfaces.includes("videocamera") ||
-      interfaces.includes("camerarecording")
-    );
-  }
+  /**
+   * Classifies SDK errors into typed ScryptedErrorCode categories.
+   * Never includes password, token, URL credentials or stack traces in messages.
+   */
+  public static classifyError(
+    err: any,
+    latencyMs?: number,
+  ): ScryptedConnectionResult {
+    const msg = String(err?.message || err || "").toLowerCase();
+    const code = String(err?.code || "").toLowerCase();
 
-  private mapScryptedDeviceToCameraRecord(
-    dev: any,
-    host: string,
-  ): CameraRecord {
-    const id = String(dev.id || dev._id || `scrypted_${Date.now()}`);
-    const name = String(dev.name || dev.label || `Scrypted Camera ${id}`);
-    const model = String(
-      dev.model || dev.info?.model || dev.manufacturer || "Cámara IP",
-    );
-
-    const streamUrl = `rtsp://${host}:8554/${encodeURIComponent(id)}`;
-    const snapshotUrl = `${this.serverUrl.replace(/\/+$/, "")}/endpoint/@scrypted/core/devices/${id}/snapshot`;
-
-    const capabilities: StreamCapabilities = {
-      videoCodec: "h264",
-      profile: "main",
-      level: 4.0,
-      resolution: { width: 1920, height: 1080 },
-      fps: 30,
-      pixelFormat: "yuv420p",
-      keyframeIntervalSeconds: 2,
-      hasAudio: true,
-      audioCodec: "aac",
-      audioSampleRate: 48000,
-      audioChannels: 2,
-    };
-
-    // Integrated sensors inside the camera card
-    const sensors: CameraSensorRecord[] = [
-      {
-        sensorId: `${id}_motion`,
-        type: "motion",
-        name: `${name} Movimiento`,
-        enabled: true,
-        state: false,
-      },
-    ];
-
-    const interfaces = Array.isArray(dev.interfaces)
-      ? dev.interfaces.map((i: any) => String(i).toLowerCase())
-      : [];
-
-    if (interfaces.includes("doorbell")) {
-      sensors.push({
-        sensorId: `${id}_doorbell`,
-        type: "doorbell",
-        name: `${name} Timbre`,
-        enabled: true,
-        state: false,
-      });
+    if (
+      code === "econnrefused" ||
+      code === "enotfound" ||
+      code === "ehostunreach" ||
+      code === "econnreset" ||
+      msg.includes("econnrefused") ||
+      msg.includes("fetch failed") ||
+      msg.includes("network") ||
+      msg.includes("timeout") ||
+      msg.includes("abort")
+    ) {
+      return {
+        ok: false,
+        errorCode: "network_error",
+        message:
+          "No se puede conectar al servidor Scrypted. Revisa IP, puerto, red y firewall.",
+        latencyMs,
+      };
     }
 
     if (
-      interfaces.includes("objectdetection") ||
-      interfaces.includes("persondetection")
+      msg.includes("cert") ||
+      msg.includes("ssl") ||
+      msg.includes("tls") ||
+      msg.includes("self signed") ||
+      msg.includes("certificate") ||
+      code === "depth_zero_self_signed_cert" ||
+      code === "self_signed_cert_in_chain" ||
+      code === "unable_to_verify_leaf_signature"
     ) {
-      sensors.push({
-        sensorId: `${id}_person`,
-        type: "person",
-        name: `${name} Persona`,
-        enabled: true,
-        state: false,
-      });
-      sensors.push({
-        sensorId: `${id}_package`,
-        type: "package",
-        name: `${name} Paquete`,
-        enabled: false,
-        state: false,
-      });
+      return {
+        ok: false,
+        errorCode: "tls_error",
+        message:
+          "El certificado HTTPS no fue aceptado. Comprueba el certificado o habilita explícitamente certificados autofirmados si confías en el servidor.",
+        latencyMs,
+      };
     }
 
-    // Matter commission code in format XXXX-XXXX-XXXX
-    const matterCode = this.generateMatterCode(id);
+    if (
+      msg.includes("401") ||
+      msg.includes("403") ||
+      msg.includes("unauthorized") ||
+      msg.includes("forbidden") ||
+      msg.includes("status 401") ||
+      msg.includes("status 403") ||
+      msg.includes("password") ||
+      msg.includes("credentials") ||
+      msg.includes("error")
+    ) {
+      return {
+        ok: false,
+        errorCode: "authentication_failed",
+        message:
+          "No se pudo iniciar sesión en Scrypted. Verifica usuario y contraseña.",
+        latencyMs,
+      };
+    }
 
     return {
-      cameraId: id,
-      sourceId: `scrypted_${id}`,
-      deviceId: id,
-      name,
-      model,
-      enabled: true,
-      identity: {
-        matterPairingCode: matterCode,
-      },
-      source: {
-        kind: "scrypted",
-        serverId: this.serverUrl,
-        deviceId: id,
-        streamReference: {
-          protocol: "rtsp",
-          host,
-          port: 8554,
-          path: `/${id}`,
-          directUrl: streamUrl,
-          verifiedAt: new Date().toISOString(),
-        },
-        snapshotReference: {
-          protocol: "snapshot",
-          directUrl: snapshotUrl,
-        },
-      },
-      capabilities: {
-        observed: capabilities,
-        lastVerified: new Date().toISOString(),
-        fingerprint: `h264_1080p_aac_${id}`,
-      },
-      sensors,
-      exportConfig: {
-        matterEnabled: true,
-        homeKitEnabled: true,
-        hksvEnabledByDefault: true,
-        googleHomeEnabled: false,
-        alexaEnabled: false,
-        smartThingsEnabled: false,
-        nasEnabled: false,
-      },
-      status: {
-        connection: "online",
-        cache: "fresh",
-        lastFetched: new Date().toISOString(),
-        lastVerified: new Date().toISOString(),
-        logs: [
-          {
-            timestamp: new Date().toISOString(),
-            level: "info",
-            category: "general",
-            message: `Cámara "${name}" descubierta con éxito desde Scrypted.`,
-            details: `Modelo: ${model} | Stream: ${streamUrl}`,
-          },
-          {
-            timestamp: new Date().toISOString(),
-            level: "info",
-            category: "rtsp",
-            message: `Stream RTSP rebroadcast H.264 preparado en puerto 8554 sin recodificación.`,
-            details: `Ruta: /${id} | Codec: H.264 Main@L4.0 | Audio: AAC`,
-          },
-          {
-            timestamp: new Date().toISOString(),
-            level: "info",
-            category: "homekit",
-            message: `HomeKit Secure Video (iOS 27 / tvOS 27 / homeOS 27) prebuffer configurado.`,
-            details: `4s RAM ring buffer | fMP4 ftyp+moov+moof delivery`,
-          },
-          {
-            timestamp: new Date().toISOString(),
-            level: "info",
-            category: "matter",
-            message: `Matter Camera 1.5 Joint Fabric (1.6) cluster listo. Código: ${matterCode}`,
-          },
-        ],
-      },
+      ok: false,
+      errorCode: "unknown",
+      message:
+        "Error desconocido al conectar con Scrypted. Revisa los logs del servidor.",
+      latencyMs,
     };
   }
 
-  private generateMatterCode(id: string): string {
-    let hash = 0;
-    for (let i = 0; i < id.length; i++) {
-      hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
-    }
-    const part1 = (hash & 0xffff).toString(16).toUpperCase().padStart(4, "A");
-    const part2 = ((hash >>> 16) & 0xffff)
-      .toString(16)
-      .toUpperCase()
-      .padStart(4, "9");
-    const part3 = ((hash * 7) & 0xffff)
-      .toString(16)
-      .toUpperCase()
-      .padStart(4, "7");
-    return `${part1}-${part2}-${part3}`;
-  }
-
   /**
-   * Tests whether an RTSP stream endpoint is accessible via lightweight TCP connection probe.
+   * Tests whether an RTSP stream endpoint is accessible via TCP probe.
+   * A successful probe does NOT guarantee stream availability.
    */
   public static async probeRtspPort(
     host: string,
@@ -394,7 +498,6 @@ export class ScryptedClient {
       let settled = false;
 
       socket.setTimeout(timeoutMs);
-
       socket.on("connect", () => {
         if (!settled) {
           settled = true;
@@ -402,7 +505,6 @@ export class ScryptedClient {
           resolve(true);
         }
       });
-
       socket.on("timeout", () => {
         if (!settled) {
           settled = true;
@@ -410,7 +512,6 @@ export class ScryptedClient {
           resolve(false);
         }
       });
-
       socket.on("error", () => {
         if (!settled) {
           settled = true;
@@ -418,7 +519,6 @@ export class ScryptedClient {
           resolve(false);
         }
       });
-
       try {
         socket.connect(port, host);
       } catch {

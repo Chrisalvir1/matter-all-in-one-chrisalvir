@@ -7,7 +7,68 @@ import type {
   CameraExportConfig,
   CameraNasConfig,
   ScryptedConnectionStatus,
+  CameraIdentityOverride,
+  ScryptedCredentials,
+  EncryptedSecret,
 } from "./scrypted-types.js";
+
+const SCHEMA_VERSION = 2;
+
+/**
+ * Returns true for values that should be treated as 'no data'.
+ */
+function isBlankOrUnknown(value?: string): boolean {
+  if (!value) return true;
+  const v = value.trim().toLowerCase();
+  return (
+    v === "" ||
+    v === "unknown" ||
+    v === "n/a" ||
+    v === "na" ||
+    v === "desconocido" ||
+    v === "sin marca" ||
+    v === "other" ||
+    v === "otras marcas" ||
+    v === "generic" ||
+    v === "cámara ip" ||
+    v === "camara ip" ||
+    v === "marca no identificada" ||
+    v === "modelo no identificado"
+  );
+}
+
+/**
+ * Resolves the effective display manufacturer for a camera.
+ * Rules: identityOverride.manufacturer → sourceManufacturer → 'Marca no identificada'
+ */
+export function resolveDisplayManufacturer(
+  camera: Partial<CameraRecord>,
+): string {
+  const override = camera.identityOverride?.manufacturer?.trim();
+  if (override && !isBlankOrUnknown(override)) return override;
+  const source = camera.sourceManufacturer?.trim();
+  if (source && !isBlankOrUnknown(source)) return source;
+  // Also check legacy model/manufacturer field if any
+  const legacy = (camera as any).manufacturer?.trim();
+  if (legacy && !isBlankOrUnknown(legacy)) return legacy;
+  return "Marca no identificada";
+}
+
+/**
+ * Resolves the effective display model for a camera.
+ * Rules: identityOverride.model → sourceModel → undefined (caller shows 'Modelo no identificado')
+ */
+export function resolveDisplayModel(
+  camera: Partial<CameraRecord>,
+): string | undefined {
+  const override = camera.identityOverride?.model?.trim();
+  if (override && !isBlankOrUnknown(override)) return override;
+  const source = camera.sourceModel?.trim();
+  if (source && !isBlankOrUnknown(source)) return source;
+  const legacy = camera.model?.trim();
+  if (legacy && !isBlankOrUnknown(legacy)) return legacy;
+  return undefined;
+}
 
 export class ScryptedStorage {
   private static storePath =
@@ -28,6 +89,7 @@ export class ScryptedStorage {
 
   private static createDefaultStore(): ScryptedPersistentStore {
     return {
+      schemaVersion: SCHEMA_VERSION,
       installation: {
         installationId: crypto.randomUUID(),
         createdAt: new Date().toISOString(),
@@ -36,6 +98,10 @@ export class ScryptedStorage {
       scrypted: {
         serverId: "",
         serverUrl: "",
+        credentials: {
+          authenticationMode: "username_password",
+        },
+        allowSelfSignedCertificate: false,
         connectionStatus: "not_configured",
         autoReconnect: true,
         pollIntervalMinutes: 15,
@@ -48,6 +114,67 @@ export class ScryptedStorage {
   }
 
   /**
+   * Migrates a v1 store (tokenEncrypted) to v2 (credentials structure).
+   * Creates a .bak file before migration.
+   */
+  private static async migrateV1ToV2(
+    raw: any,
+  ): Promise<ScryptedPersistentStore> {
+    try {
+      const bakPath = `${this.storePath}.bak`;
+      await fs.writeFile(bakPath, JSON.stringify(raw, null, 2), {
+        mode: 0o600,
+      });
+    } catch {
+      // Best effort
+    }
+
+    const legacyToken: EncryptedSecret | undefined =
+      raw.scrypted?.tokenEncrypted;
+    const credentials: ScryptedCredentials = {
+      authenticationMode: legacyToken ? "api_token" : "username_password",
+      apiTokenEncrypted: legacyToken
+        ? { ...legacyToken, purpose: "scrypted_api_token" }
+        : undefined,
+    };
+
+    const migrated: ScryptedPersistentStore = {
+      schemaVersion: SCHEMA_VERSION,
+      installation: raw.installation ?? {
+        installationId: crypto.randomUUID(),
+        createdAt: new Date().toISOString(),
+        encryptionKeyRef: "primary",
+      },
+      scrypted: {
+        serverId: raw.scrypted?.serverId ?? "",
+        serverUrl: raw.scrypted?.serverUrl ?? "",
+        credentials,
+        allowSelfSignedCertificate: false,
+        lastConnected: raw.scrypted?.lastConnected,
+        connectionStatus: raw.scrypted?.connectionStatus ?? "not_configured",
+        autoReconnect: raw.scrypted?.autoReconnect ?? true,
+        pollIntervalMinutes: raw.scrypted?.pollIntervalMinutes ?? 15,
+      },
+      cameras: {
+        lastFetched: raw.cameras?.lastFetched,
+        cameras: (raw.cameras?.cameras ?? []).map((c: any) => ({
+          ...c,
+          sourceManufacturer: c.sourceManufacturer ?? c.manufacturer,
+          sourceModel: c.sourceModel ?? c.model,
+          displayManufacturer: resolveDisplayManufacturer(c),
+          displayModel: resolveDisplayModel(c),
+          status: {
+            ...c.status,
+            cache: c.status?.cache ?? "stale",
+          },
+        })),
+      },
+      nas: raw.nas ?? {},
+    };
+    return migrated;
+  }
+
+  /**
    * Loads the persistent store into memory, creating defaults if not yet initialized.
    */
   public static async load(): Promise<ScryptedPersistentStore> {
@@ -57,8 +184,14 @@ export class ScryptedStorage {
       const raw = await fs.readFile(this.storePath, "utf8");
       const parsed = JSON.parse(raw);
       if (parsed && typeof parsed === "object" && parsed.installation) {
-        this.memoryStore = parsed;
-        return parsed;
+        if ((parsed.schemaVersion ?? 1) < SCHEMA_VERSION) {
+          const migrated = await this.migrateV1ToV2(parsed);
+          this.memoryStore = migrated;
+          await this.save(migrated);
+          return migrated;
+        }
+        this.memoryStore = parsed as ScryptedPersistentStore;
+        return this.memoryStore;
       }
     } catch {
       // File does not exist or has invalid JSON; fall through to initialize
@@ -87,8 +220,8 @@ export class ScryptedStorage {
     this.memoryStore = store;
     const jsonContent = JSON.stringify(store, null, 2);
 
-    let targetPath = this.storePath;
-    let tmpPath = `${targetPath}.tmp`;
+    const targetPath = this.storePath;
+    const tmpPath = `${targetPath}.tmp`;
 
     try {
       await fs.mkdir(path.dirname(targetPath), { recursive: true });
@@ -128,11 +261,114 @@ export class ScryptedStorage {
     await this.save(store);
   }
 
-  public static async updateCameras(cameras: CameraRecord[]): Promise<void> {
+  /**
+   * Clears only the passwordEncrypted field. Does not affect apiTokenEncrypted.
+   */
+  public static async clearPassword(): Promise<void> {
     const store = await this.load();
-    store.cameras.cameras = cameras;
+    if (store.scrypted.credentials) {
+      store.scrypted.credentials.passwordEncrypted = undefined;
+    }
+    await this.save(store);
+  }
+
+  /**
+   * Clears only the apiTokenEncrypted field. Does not affect passwordEncrypted.
+   */
+  public static async clearApiToken(): Promise<void> {
+    const store = await this.load();
+    if (store.scrypted.credentials) {
+      store.scrypted.credentials.apiTokenEncrypted = undefined;
+    }
+    await this.save(store);
+  }
+
+  /**
+   * Updates cameras, computing display values and preserving identityOverride.
+   */
+  public static async updateCameras(
+    freshCameras: CameraRecord[],
+  ): Promise<void> {
+    const store = await this.load();
+    const existingMap = new Map<string, CameraRecord>(
+      store.cameras.cameras.map((c) => [c.cameraId, c]),
+    );
+
+    const merged = freshCameras.map((fresh) => {
+      const existing = existingMap.get(fresh.cameraId);
+      const identityOverride = existing?.identityOverride;
+
+      const updated: CameraRecord = {
+        ...fresh,
+        // Preserve manual identity overrides — never overwritten by sync
+        identityOverride,
+        // Recompute display values using new source data and preserved override
+        displayManufacturer: resolveDisplayManufacturer({
+          ...fresh,
+          identityOverride,
+        }),
+        displayModel: resolveDisplayModel({
+          ...fresh,
+          identityOverride,
+        }),
+        // Preserve export config and identity codes
+        identity: {
+          ...fresh.identity,
+          matterPairingCode:
+            existing?.identity?.matterPairingCode ||
+            fresh.identity?.matterPairingCode,
+          homeKitAccessoryId: existing?.identity?.homeKitAccessoryId,
+          homeKitPairingState: existing?.identity?.homeKitPairingState,
+        },
+        exportConfig: existing
+          ? { ...fresh.exportConfig, ...existing.exportConfig }
+          : fresh.exportConfig,
+        status: {
+          ...fresh.status,
+          cache: "fresh" as const,
+          lastFetched: new Date().toISOString(),
+        },
+      };
+      return updated;
+    });
+
+    store.cameras.cameras = merged;
     store.cameras.lastFetched = new Date().toISOString();
     await this.save(store);
+  }
+
+  /**
+   * Updates camera identity override (manual brand/model).
+   * If override is null, removes the override and restores source values.
+   */
+  public static async updateCameraIdentityOverride(
+    cameraId: string,
+    override: CameraIdentityOverride | null,
+  ): Promise<boolean> {
+    const store = await this.load();
+    const cam = store.cameras.cameras.find((c) => c.cameraId === cameraId);
+    if (!cam) return false;
+
+    if (override === null) {
+      cam.identityOverride = undefined;
+    } else {
+      if (
+        override.manufacturerSource === "manual" &&
+        !override.manufacturer?.trim()
+      ) {
+        return false;
+      }
+      cam.identityOverride = {
+        ...override,
+        updatedAt: new Date().toISOString(),
+      };
+    }
+
+    // Recompute display values
+    cam.displayManufacturer = resolveDisplayManufacturer(cam);
+    cam.displayModel = resolveDisplayModel(cam);
+    await this.save(store);
+    return true;
   }
 
   public static async updateCameraExportConfig(
