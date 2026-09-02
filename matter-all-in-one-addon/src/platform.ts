@@ -274,6 +274,35 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       const manager = ScryptedReconnectManager.getInstance();
       manager.removeAllListeners("status_change");
       manager.removeAllListeners("cameras_updated");
+      manager.removeAllListeners("camera_motion");
+      manager.removeAllListeners("camera_doorbell");
+
+      manager.on(
+        "camera_motion",
+        ({ deviceId, motionOn }: { deviceId: string; motionOn: boolean }) => {
+          const accessory = ScryptedHomeKitBridge.getAccessory(deviceId);
+          if (accessory) {
+            accessory.updateMotionState(motionOn);
+          }
+          const endpoint = ScryptedMatterBridge.getEndpoint(deviceId);
+          if (endpoint) {
+            try {
+              (endpoint as any).setAttribute?.(0x0406, "occupancy", {
+                occupied: motionOn,
+              });
+            } catch {}
+          }
+          this.broadcastSseMessage("camera_motion", { deviceId, motionOn });
+        },
+      );
+
+      manager.on("camera_doorbell", ({ deviceId }: { deviceId: string }) => {
+        const accessory = ScryptedHomeKitBridge.getAccessory(deviceId);
+        if (accessory) {
+          accessory.updateMotionState(true);
+        }
+        this.broadcastSseMessage("camera_doorbell", { deviceId });
+      });
 
       manager.on("status_change", (payload) => {
         this.broadcastSseMessage("scrypted_status", payload);
@@ -3315,6 +3344,21 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
         if (req.method === "GET" && pathname === "/api/custom/status") {
           const version = await this.getPackageVersion();
+          let activeHomeName: string | null = null;
+          let activeFabrics: any[] = [];
+          let isCommissioned = false;
+
+          for (const ent of this.entities.values()) {
+            const ep = this.getMatterEndpointForEntity(ent.entityId);
+            const conn = this.getMatterConnectionInfo(ep);
+            if (conn.commissioned && conn.fabrics.length > 0) {
+              isCommissioned = true;
+              activeFabrics = conn.fabrics;
+              activeHomeName = conn.homeName;
+              break;
+            }
+          }
+
           res.writeHead(200, {
             "Content-Type": "application/json; charset=utf-8",
           });
@@ -3324,12 +3368,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               version,
               matterbridgeVersion: this.matterbridge.matterbridgeVersion,
               bridgeMode: this.matterbridge.bridgeMode,
-              // Pairing is managed by Matterbridge's official frontend.  The
-              // plugin deliberately does not scrape private Matterbridge state.
               qrPairingCode: "",
               manualPairingCode: "",
-              commissioned: false,
-              pairedFabrics: [],
+              commissioned: isCommissioned,
+              homeName: activeHomeName,
+              pairedFabrics: activeFabrics,
               systemInfo: {
                 os: "Linux",
                 nodeVersion: process.version,
@@ -4582,7 +4625,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             res.end(JSON.stringify({ error: "Cámara no encontrada" }));
             return;
           }
-          const host = camera.source.streamReference?.host || "127.0.0.1";
+          let scryptedHost = "127.0.0.1";
+          try {
+            if (camera.source.serverId) {
+              scryptedHost = new URL(camera.source.serverId).hostname;
+            }
+          } catch {}
+          const host = camera.source.streamReference?.host || scryptedHost;
           const port = camera.source.streamReference?.port || 8554;
           const streamAvailable = await ScryptedClient.probeRtspPort(
             host,
@@ -4596,6 +4645,113 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             "Content-Type": "application/json; charset=utf-8",
           });
           res.end(JSON.stringify({ success: true, camera }));
+          return;
+        }
+
+        // POST /api/custom/cameras/:id/stream-url
+        if (
+          req.method === "POST" &&
+          (pathname.startsWith("/api/cameras/") ||
+            pathname.startsWith("/api/custom/cameras/")) &&
+          pathname.endsWith("/stream-url")
+        ) {
+          const prefix = pathname.startsWith("/api/custom/cameras/")
+            ? "/api/custom/cameras/"
+            : "/api/cameras/";
+          const cameraId = pathname.substring(
+            prefix.length,
+            pathname.length - "/stream-url".length,
+          );
+          let bodyStr = "";
+          for await (const chunk of req) bodyStr += chunk.toString();
+          let parsed: any = {};
+          try {
+            parsed = JSON.parse(bodyStr);
+          } catch {}
+
+          const streamUrl = String(parsed.streamUrl || "").trim();
+          if (!streamUrl) {
+            res.writeHead(400, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ error: "streamUrl es requerido" }));
+            return;
+          }
+
+          const updated = await ScryptedStorage.updateCameraStreamUrl(
+            cameraId,
+            streamUrl,
+          );
+          if (!updated) {
+            res.writeHead(404, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ error: "Cámara no encontrada" }));
+            return;
+          }
+
+          // Remount camera in HomeKit with the new stream URL
+          const store = await ScryptedStorage.load();
+          const cam = store.cameras.cameras.find(
+            (c) => c.cameraId === cameraId,
+          );
+          if (cam) {
+            try {
+              await ScryptedHomeKitBridge.unmountCamera(cameraId);
+              await ScryptedHomeKitBridge.mountCamera(this, cam);
+            } catch (mountErr) {
+              this.log.error(
+                `Error remounting camera ${cameraId} after stream URL update: ${mountErr}`,
+              );
+            }
+          }
+
+          res.writeHead(200, {
+            "Content-Type": "application/json; charset=utf-8",
+          });
+          res.end(JSON.stringify({ success: true, streamUrl }));
+          return;
+        }
+
+        // POST /api/custom/cameras/probe-stream
+        if (
+          req.method === "POST" &&
+          (pathname === "/api/cameras/probe-stream" ||
+            pathname === "/api/custom/cameras/probe-stream")
+        ) {
+          let bodyStr = "";
+          for await (const chunk of req) bodyStr += chunk.toString();
+          let parsed: any = {};
+          try {
+            parsed = JSON.parse(bodyStr);
+          } catch {}
+
+          const rawUrl = String(parsed.streamUrl || "").trim();
+          let host = "127.0.0.1";
+          let port = 8554;
+
+          try {
+            const u = new URL(rawUrl);
+            host = u.hostname;
+            port = u.port
+              ? parseInt(u.port, 10)
+              : u.protocol === "rtsps:"
+                ? 322
+                : 554;
+          } catch {
+            if (parsed.host) host = String(parsed.host);
+            if (parsed.port) port = Number(parsed.port);
+          }
+
+          const reachable = await ScryptedClient.probeRtspPort(
+            host,
+            port,
+            3000,
+          );
+          res.writeHead(200, {
+            "Content-Type": "application/json; charset=utf-8",
+          });
+          res.end(JSON.stringify({ ok: reachable, host, port }));
           return;
         }
 

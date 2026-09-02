@@ -14,6 +14,7 @@ export class ScryptedReconnectManager extends EventEmitter {
   private inFlightCheck = false;
   private activeSession: ScryptedSession | null = null;
   private authFailedPermanent = false;
+  private eventListenerRegister: any = null;
 
   private constructor() {
     super();
@@ -168,6 +169,7 @@ export class ScryptedReconnectManager extends EventEmitter {
 
         // Refresh camera states in background
         await this.refreshCameras(session);
+        this.setupLiveEventListeners(session);
         this.schedulePeriodicPolling(store.scrypted.pollIntervalMinutes);
         this.inFlightCheck = false;
         return true;
@@ -338,11 +340,56 @@ export class ScryptedReconnectManager extends EventEmitter {
     this.destroy();
   }
 
+  private setupLiveEventListeners(session: ScryptedSession): void {
+    try {
+      if (this.eventListenerRegister) {
+        try {
+          this.eventListenerRegister.removeListener?.();
+        } catch {}
+        this.eventListenerRegister = null;
+      }
+
+      const systemManager = session.sdk?.systemManager;
+      if (typeof systemManager?.listen === "function") {
+        this.eventListenerRegister = systemManager.listen(
+          (eventSource: any, eventDetails: any, eventData: any) => {
+            const deviceId = String(
+              eventSource?.id ?? eventSource?._id ?? eventSource ?? "",
+            );
+            const iface = String(eventDetails?.eventInterface || "");
+            const prop = String(eventDetails?.property || "");
+
+            if (
+              iface === "MotionSensor" ||
+              prop === "motionDetected" ||
+              iface === "BinarySensor"
+            ) {
+              const motionOn = Boolean(eventData);
+              this.emit("camera_motion", { deviceId, motionOn });
+            }
+
+            if (iface === "Doorbell") {
+              this.emit("camera_doorbell", { deviceId });
+            }
+          },
+        );
+      }
+    } catch {
+      // Best effort
+    }
+  }
+
   public destroy(): void {
     if (this.retryTimer) clearTimeout(this.retryTimer);
     if (this.pollTimer) clearInterval(this.pollTimer);
     this.retryTimer = null;
     this.pollTimer = null;
+    if (this.eventListenerRegister) {
+      try {
+        this.eventListenerRegister.removeListener?.();
+      } catch {}
+      this.eventListenerRegister = null;
+    }
     if (this.activeSession) {
       void ScryptedClient.disconnect(this.activeSession);
       this.activeSession = null;

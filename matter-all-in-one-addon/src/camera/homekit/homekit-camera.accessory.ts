@@ -46,18 +46,17 @@ export class HomeKitCameraAccessory {
     this.accessory = new Accessory(record.name || entityId, accessoryUuid);
 
     // Configure Accessory Information Service
+    const manufacturer = "Matter all in one Chrisalvir";
+    const model = record.model || "Cámara IP";
+    const serialNumber = record.serialNumber || entityId.replaceAll(".", "_");
+    const firmware = platform?.matterbridge?.matterbridgeVersion || "1.4.72";
+
     this.accessory
       .getService(Service.AccessoryInformation)
-      ?.setCharacteristic(
-        Characteristic.Manufacturer,
-        record.manufacturer || "Home Assistant",
-      )
-      ?.setCharacteristic(Characteristic.Model, record.model || "Camera")
-      ?.setCharacteristic(
-        Characteristic.SerialNumber,
-        record.serialNumber || entityId.replaceAll(".", "_"),
-      )
-      ?.setCharacteristic(Characteristic.FirmwareRevision, "1.4.52");
+      ?.setCharacteristic(Characteristic.Manufacturer, manufacturer)
+      ?.setCharacteristic(Characteristic.Model, model)
+      ?.setCharacteristic(Characteristic.SerialNumber, serialNumber)
+      ?.setCharacteristic(Characteristic.FirmwareRevision, firmware);
 
     this.delegate = new HomeKitCameraStreamingDelegate(
       platform,
@@ -69,27 +68,50 @@ export class HomeKitCameraAccessory {
     // Discover real associated Motion Sensor from Home Assistant
     this.linkedMotionEntityId = this.findLinkedMotionEntity();
 
-    if (this.linkedMotionEntityId) {
+    const isScrypted =
+      entityId.startsWith("scrypted.") ||
+      Boolean((streamSource?.metadata as any)?.isScrypted);
+
+    if (this.linkedMotionEntityId || isScrypted) {
       this.motionService = this.accessory.addService(
         Service.MotionSensor,
-        `${record.name || entityId} Motion`,
+        `${record.name || entityId} Movimiento`,
       );
-      const isMotionOn =
-        this.platform?.ha?.hassStates?.get(this.linkedMotionEntityId)?.state ===
-        "on";
+      const isMotionOn = this.linkedMotionEntityId
+        ? this.platform?.ha?.hassStates?.get(this.linkedMotionEntityId)
+            ?.state === "on"
+        : false;
       this.motionService.setCharacteristic(
         Characteristic.MotionDetected,
         isMotionOn,
       );
       this.motionService.setCharacteristic(Characteristic.StatusActive, true);
       this.platform?.log?.notice?.(
-        `[HomeKitCamera][${this.entityId}] Linked real MotionSensor: ${this.linkedMotionEntityId} (initial state: ${isMotionOn ? "ON" : "OFF"})`,
+        `[HomeKitCamera][${this.entityId}] Attached MotionSensor service (linked entity: ${this.linkedMotionEntityId || "Scrypted"})`,
       );
     } else {
       this.motionService = undefined;
       this.platform?.log?.debug?.(
         `[HomeKitCamera][${this.entityId}] No real MotionSensor entity found in Home Assistant`,
       );
+    }
+
+    // If doorbell sensor is present, attach Doorbell service
+    const hasDoorbell = Boolean((streamSource?.metadata as any)?.hasDoorbell);
+    if (hasDoorbell) {
+      try {
+        const doorbellService = this.accessory.addService(
+          Service.Doorbell,
+          `${record.name || entityId} Timbre`,
+        );
+        doorbellService.setCharacteristic(
+          Characteristic.ProgrammableSwitchEvent,
+          0,
+        );
+        this.platform?.log?.notice?.(
+          `[HomeKitCamera][${this.entityId}] Attached integrated Doorbell service`,
+        );
+      } catch {}
     }
 
     const isHksvActive =
@@ -404,18 +426,19 @@ export class HomeKitCameraAccessory {
     this.record.uuid = newUuid;
 
     this.accessory = new Accessory(this.record.name || this.entityId, newUuid);
+    const manufacturer = "Matter all in one Chrisalvir";
+    const model = this.record.model || "Cámara IP";
+    const serialNumber =
+      this.record.serialNumber || this.entityId.replaceAll(".", "_");
+    const firmware =
+      this.platform?.matterbridge?.matterbridgeVersion || "1.4.72";
+
     this.accessory
       .getService(Service.AccessoryInformation)
-      ?.setCharacteristic(
-        Characteristic.Manufacturer,
-        this.record.manufacturer || "Home Assistant",
-      )
-      ?.setCharacteristic(Characteristic.Model, this.record.model || "Camera")
-      ?.setCharacteristic(
-        Characteristic.SerialNumber,
-        this.record.serialNumber || this.entityId.replaceAll(".", "_"),
-      )
-      ?.setCharacteristic(Characteristic.FirmwareRevision, "1.4.52");
+      ?.setCharacteristic(Characteristic.Manufacturer, manufacturer)
+      ?.setCharacteristic(Characteristic.Model, model)
+      ?.setCharacteristic(Characteristic.SerialNumber, serialNumber)
+      ?.setCharacteristic(Characteristic.FirmwareRevision, firmware);
 
     this.controller = new CameraController({
       cameraStreamCount: 2,
@@ -465,11 +488,22 @@ export class HomeKitCameraAccessory {
     });
     this.accessory.configureController(this.controller);
 
-    this.motionService = this.accessory.addService(
-      Service.MotionSensor,
-      `${this.record.name || this.entityId} Motion`,
-    );
-    this.motionService.setCharacteristic(Characteristic.MotionDetected, false);
+    const isScrypted =
+      this.entityId.startsWith("scrypted.") ||
+      Boolean((this.streamSource?.metadata as any)?.isScrypted);
+
+    if (this.linkedMotionEntityId || isScrypted) {
+      this.motionService = this.accessory.addService(
+        Service.MotionSensor,
+        `${this.record.name || this.entityId} Movimiento`,
+      );
+      this.motionService.setCharacteristic(
+        Characteristic.MotionDetected,
+        false,
+      );
+    } else {
+      this.motionService = undefined;
+    }
 
     await this.publish();
     this.record.published = true;

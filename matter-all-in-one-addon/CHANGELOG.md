@@ -1,3 +1,12 @@
+## [1.4.72] - 2026-09-01
+
+### Real-Time Apple Home / Matter Unpairing, Home Name Display & RTSP Stream URL Configuration
+
+- **Visualización de Casa Vinculada en Tiempo Real:** La interfaz ahora detecta y muestra el nombre exacto de la casa vinculada (ej. `El Chante de Gecko & Chris`) tanto en las tarjetas de cámara como en el modal de configuración y en la barra de estado del puente.
+- **Desvinculación en Tiempo Real (Unpair):** Nuevo botón `❌ Desvincular de Apple Home en tiempo real` en el modal de la cámara. Al pulsarlo, el accesorio HAP se desvincula instantáneamente de Apple Home, purga los controladores emparejados, genera credenciales limpias y actualiza el código QR en vivo sin reiniciar el add-on.
+- **Configuración y Prueba de Stream RTSP:** Se añadió un bloque de configuración de URL RTSP en el modal de la cámara con botón `🔍 Probar` (comprobación TCP de puerto en tiempo real) y `💾 Guardar` (persiste la URL en `ScryptedStorage` y reconecta el streaming de HomeKit al instante).
+- **Resolución Correcta de IP de Scrypted (Eliminación de 404 en 127.0.0.1):** Las transmisiones y pruebas ya no caen en el fallback erróneo de `127.0.0.1`, sino que resuelven dinámicamente el host real del servidor Scrypted a partir de su URL configurada.
+
 ## [1.4.71] - 2026-09-01
 
 ### Robust HomeKit Setup URI Calculation & Instant Pairing Reset

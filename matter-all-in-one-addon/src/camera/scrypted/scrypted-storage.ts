@@ -335,6 +335,12 @@ export class ScryptedStorage {
           homeKitPort:
             existing?.identity?.homeKitPort || fresh.identity?.homeKitPort,
         },
+        source: {
+          ...fresh.source,
+          streamReference: existing?.source?.streamReference?.directUrl
+            ? existing.source.streamReference
+            : fresh.source?.streamReference,
+        },
         exportConfig: existing
           ? { ...fresh.exportConfig, ...existing.exportConfig }
           : fresh.exportConfig,
@@ -426,5 +432,39 @@ export class ScryptedStorage {
       await this.save(store);
     }
     return removed;
+  }
+
+  public static async updateCameraStreamUrl(
+    cameraId: string,
+    streamUrl: string,
+  ): Promise<boolean> {
+    const store = await this.load();
+    const cam = store.cameras.cameras.find((c) => c.cameraId === cameraId);
+    if (!cam) return false;
+
+    let host = "127.0.0.1";
+    let port = 8554;
+    let path = `/${cameraId}`;
+    try {
+      const u = new URL(streamUrl);
+      host = u.hostname;
+      port = u.port
+        ? parseInt(u.port, 10)
+        : u.protocol === "rtsps:"
+          ? 322
+          : 554;
+      path = u.pathname;
+    } catch {}
+
+    cam.source.streamReference = {
+      protocol: "rtsp",
+      directUrl: streamUrl.trim(),
+      host,
+      port,
+      path,
+      verifiedAt: new Date().toISOString(),
+    };
+    await this.save(store);
+    return true;
   }
 }

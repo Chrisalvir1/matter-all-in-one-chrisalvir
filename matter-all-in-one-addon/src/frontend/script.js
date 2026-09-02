@@ -134,6 +134,9 @@ const els = {
   camModalManualLabel: $("cam-modal-manual-label"),
   camModalQrNote: $("cam-modal-qr-note"),
   camModalPairedBadge: $("cam-modal-paired-badge"),
+  camModalPairedBox: $("cam-modal-paired-box"),
+  camModalPairedHomeName: $("cam-modal-paired-home-name"),
+  camModalUnpairBtn: $("cam-modal-unpair-btn"),
   camModalQrCode: $("cam-modal-qr-code"),
   camModalQrLogo: $("cam-modal-qr-logo"),
   camModalManualCode: $("cam-modal-manual-code"),
@@ -141,6 +144,10 @@ const els = {
   camModalDownloadQrBtn: $("cam-modal-download-qr-btn"),
   camModalShareCodeBtn: $("cam-modal-share-code-btn"),
   camModalResetPairBtn: $("cam-modal-reset-pair-btn"),
+  camCfgRtspUrl: $("cam-cfg-rtsp-url"),
+  camCfgTestRtspBtn: $("cam-cfg-test-rtsp-btn"),
+  camCfgSaveRtspBtn: $("cam-cfg-save-rtsp-btn"),
+  camCfgRtspResult: $("cam-cfg-rtsp-result"),
   camModalVideoSpec: $("cam-modal-video-spec"),
   camModalAudioSpec: $("cam-modal-audio-spec"),
   camModalErrorTag: $("cam-modal-error-tag"),
@@ -2350,13 +2357,17 @@ function buildScryptedCameraCard(camera) {
     camera.capabilities?.observed?.audioCodec !== "none";
 
   const isPaired = camera.identity?.homeKitPairingState === "paired";
+  const activeHome =
+    state.status?.homeName ||
+    (state.entities || []).find((e) => e.homeName)?.homeName ||
+    "El Chante de Gecko & Chris";
 
   card.innerHTML = `
     <div class="card-top">
       <span class="device-icon" style="font-size: 1.4rem;">📹</span>
       <div class="card-pills-group">
         <span class="badge-scrypted-tag">SCRYPTED</span>
-        ${isPaired ? '<span class="tag" style="background: rgba(16, 185, 129, 0.2); border-color: rgba(52, 211, 153, 0.5); color: #6ee7b7; font-size: 0.72rem;">🍏 HomeKit OK</span>' : '<span class="export-badge active">1/1</span>'}
+        ${isPaired ? `<span class="tag" style="background: rgba(16, 185, 129, 0.2); border-color: rgba(52, 211, 153, 0.5); color: #6ee7b7; font-size: 0.72rem; font-weight: 600;">🍏 Casa: ${escapeHtml(activeHome)}</span>` : '<span class="export-badge active">1/1</span>'}
       </div>
     </div>
     <h3 title="${escapeHtml(camera.name)}">${escapeHtml(camera.name)}</h3>
@@ -2369,7 +2380,7 @@ function buildScryptedCameraCard(camera) {
       ${sensorsCount > 0 ? `<span class="tag">${sensorsCount} sensor${sensorsCount === 1 ? "" : "es"}</span>` : ""}
     </div>
     <div class="card-footer">
-      <span class="entity-summary">Toca para ver QR y detalles</span>
+      <span class="entity-summary">${isPaired ? `🍏 Vinculada a Apple Home (${escapeHtml(activeHome)})` : "Toca para ver QR y detalles"}</span>
       <button class="button button-secondary" type="button">Configurar</button>
     </div>
   `;
@@ -2517,9 +2528,20 @@ function openCameraConfigModal(camera) {
     }
 
     const isPaired = camera.identity?.homeKitPairingState === "paired";
-    if (els.camModalPairedBadge) {
-      els.camModalPairedBadge.style.display =
+    const activeHome =
+      state.status?.homeName ||
+      (state.entities || []).find((e) => e.homeName)?.homeName ||
+      "El Chante de Gecko & Chris";
+
+    if (els.camModalPairedBox) {
+      els.camModalPairedBox.style.display =
         isHomeKit && isPaired ? "block" : "none";
+      if (els.camModalPairedHomeName) {
+        els.camModalPairedHomeName.textContent = activeHome;
+      }
+    }
+    if (els.camModalPairedBadge) {
+      els.camModalPairedBadge.style.display = "none";
     }
 
     let pairingPayload = "";
@@ -2625,6 +2647,129 @@ function openCameraConfigModal(camera) {
         showToast(err.message || "Error al reiniciar vinculación", true);
       } finally {
         els.camModalResetPairBtn.disabled = false;
+      }
+    };
+  }
+
+  if (els.camModalUnpairBtn) {
+    els.camModalUnpairBtn.onclick = async () => {
+      if (
+        !confirm(
+          `¿Desvincular "${camera.name}" de Apple Home en tiempo real?\nLa vinculación actual se eliminará y quedará lista para escanear de nuevo.`,
+        )
+      ) {
+        return;
+      }
+      els.camModalUnpairBtn.disabled = true;
+      showToast("Desvinculando de Apple Home en tiempo real...");
+      try {
+        const res = await request(
+          `/custom/reset-camera-pairing/scrypted.${camera.cameraId}`,
+          { method: "POST" },
+        );
+        if (res.success && res.setupUri) {
+          camera.identity.homeKitSetupUri = res.setupUri;
+          camera.identity.homeKitPincode = res.record?.pincode || "031-45-154";
+          camera.identity.homeKitSetupId = res.record?.setupId;
+          camera.identity.homeKitPort = res.record?.port;
+          camera.identity.homeKitPairingState = "not_paired";
+          renderCamModalQr();
+          showToast("✓ Cámara desvinculada de Apple Home en tiempo real.");
+          loadCameras().catch(() => {});
+        } else {
+          showToast(res.error || "No se pudo desvincular", true);
+        }
+      } catch (err) {
+        showToast(err.message || "Error al desvincular", true);
+      } finally {
+        els.camModalUnpairBtn.disabled = false;
+      }
+    };
+  }
+
+  // RTSP Stream controls
+  if (els.camCfgRtspUrl) {
+    els.camCfgRtspUrl.value = camera.source?.streamReference?.directUrl || "";
+  }
+  if (els.camCfgRtspResult) {
+    els.camCfgRtspResult.hidden = true;
+    els.camCfgRtspResult.textContent = "";
+  }
+
+  if (els.camCfgTestRtspBtn) {
+    els.camCfgTestRtspBtn.onclick = async () => {
+      const url = els.camCfgRtspUrl?.value?.trim();
+      if (!url) {
+        showToast("Ingresa una URL RTSP para probar", true);
+        return;
+      }
+      els.camCfgTestRtspBtn.disabled = true;
+      if (els.camCfgRtspResult) {
+        els.camCfgRtspResult.hidden = false;
+        els.camCfgRtspResult.className = "test-result-box";
+        els.camCfgRtspResult.textContent =
+          "Probando conexión con el stream RTSP...";
+      }
+      try {
+        const res = await request("/cameras/probe-stream", {
+          method: "POST",
+          body: JSON.stringify({ streamUrl: url }),
+        });
+        if (els.camCfgRtspResult) {
+          if (res.ok) {
+            els.camCfgRtspResult.className = "test-result-box success";
+            els.camCfgRtspResult.textContent = `✓ Puerto RTSP accesible en ${res.host}:${res.port}`;
+          } else {
+            els.camCfgRtspResult.className = "test-result-box error";
+            els.camCfgRtspResult.textContent = `❌ No se pudo conectar a ${res.host}:${res.port}. Verifica IP, puerto o firewall.`;
+          }
+        }
+      } catch (err) {
+        if (els.camCfgRtspResult) {
+          els.camCfgRtspResult.className = "test-result-box error";
+          els.camCfgRtspResult.textContent = `❌ Error al probar stream: ${err.message}`;
+        }
+      } finally {
+        els.camCfgTestRtspBtn.disabled = false;
+      }
+    };
+  }
+
+  if (els.camCfgSaveRtspBtn) {
+    els.camCfgSaveRtspBtn.onclick = async () => {
+      const url = els.camCfgRtspUrl?.value?.trim();
+      if (!url) {
+        showToast("Ingresa una URL RTSP válida", true);
+        return;
+      }
+      els.camCfgSaveRtspBtn.disabled = true;
+      showToast("Guardando URL del stream...");
+      try {
+        const res = await request(
+          `/custom/cameras/${camera.cameraId}/stream-url`,
+          {
+            method: "POST",
+            body: JSON.stringify({ streamUrl: url }),
+          },
+        );
+        if (res.success) {
+          if (!camera.source.streamReference) {
+            camera.source.streamReference = { protocol: "rtsp" };
+          }
+          camera.source.streamReference.directUrl = url;
+          showToast("✓ Stream RTSP actualizado y reconectado en vivo");
+          if (els.camCfgRtspResult) {
+            els.camCfgRtspResult.hidden = false;
+            els.camCfgRtspResult.className = "test-result-box success";
+            els.camCfgRtspResult.textContent = `✓ URL de stream guardada y aplicada: ${url}`;
+          }
+        } else {
+          showToast(res.error || "Error al guardar stream", true);
+        }
+      } catch (err) {
+        showToast(err.message || "Error al guardar stream", true);
+      } finally {
+        els.camCfgSaveRtspBtn.disabled = false;
       }
     };
   }

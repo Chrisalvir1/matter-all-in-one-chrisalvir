@@ -39,13 +39,22 @@ export class CameraEndpointBuilder {
       mode: "server",
     });
 
-    const manufacturer = getHaDeviceManufacturer(platform, entityId);
-    const model = getHaDeviceModel(platform, entityId, "Camera");
+    const isScrypted = Boolean(streamSource?.metadata?.isScrypted);
+    const manufacturer = isScrypted
+      ? "Matter all in one Chrisalvir"
+      : getHaDeviceManufacturer(platform, entityId);
+    const model = isScrypted
+      ? (streamSource?.metadata?.model as string) || "Cámara IP"
+      : getHaDeviceModel(platform, entityId, "Camera");
+    const serialNumber = isScrypted
+      ? ((streamSource?.metadata as any)?.serialNumber as string) ||
+        entityId.replaceAll(".", "_")
+      : getMatterSerialNumber(platform, entityId);
 
     endpoint.deviceType = deviceType.code;
     endpoint.deviceName = uniqueName;
     endpoint.uniqueId = entityId.replaceAll(".", "_");
-    endpoint.serialNumber = getMatterSerialNumber(platform, entityId);
+    endpoint.serialNumber = serialNumber;
     endpoint.vendorId = MATTER_BRIDGE_VENDOR_ID;
     endpoint.vendorName = manufacturer;
     endpoint.productId = 0x8000;

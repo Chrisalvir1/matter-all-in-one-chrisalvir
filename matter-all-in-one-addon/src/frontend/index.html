@@ -9,7 +9,7 @@
       name="description"
       content="Gestiona de forma segura las entidades de Home Assistant exportadas mediante Matter."
     />
-    <link rel="stylesheet" href="style.css?v=1.4.71" />
+    <link rel="stylesheet" href="style.css?v=1.4.72" />
   </head>
   <body>
     <div class="ambient ambient-one"></div>
@@ -799,9 +799,17 @@
                   <span>🔄 Reiniciar vinculación</span>
                 </button>
               </div>
-              <small class="qr-note" id="cam-modal-qr-note">Escanea con la app Casa de Apple (iPhone / iPad / Mac) para vincular con Vídeo Seguro de HomeKit (HKSV) y Live View.</small>
-              <div id="cam-modal-paired-badge" style="display: none; margin-top: 8px; font-size: 0.8rem; font-weight: 600; color: #34d399; text-align: center;">
-                ✅ Vinculada en Apple Home
+              <div id="cam-modal-paired-box" class="paired-status-card" style="display: none; margin-top: 12px; padding: 12px; background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(52, 211, 153, 0.3); border-radius: 10px; text-align: center;">
+                <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 6px;">
+                  <span style="font-size: 1.2rem;">🍏</span>
+                  <strong style="color: #34d399; font-size: 0.95rem;">Vinculada en Apple Home</strong>
+                </div>
+                <p id="cam-modal-paired-home" style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 10px;">
+                  Casa: <strong id="cam-modal-paired-home-name" style="color: var(--text);">Apple Home</strong>
+                </p>
+                <button class="button button-sm button-danger-outline" id="cam-modal-unpair-btn" type="button" style="width: 100%; border-color: #ef4444; color: #f87171; background: rgba(239, 68, 68, 0.1); cursor: pointer;" title="Desvincula la cámara de Apple Home en tiempo real">
+                  ❌ Desvincular de Apple Home en tiempo real
+                </button>
               </div>
             </div>
           </div>
@@ -844,6 +852,31 @@
                   <input type="checkbox" id="cam-toggle-nas" />
                   <span><strong>Grabación Local NAS / Servidor</strong> · Copia directa de stream H.264 sin recodificación</span>
                 </label>
+              </div>
+
+              <div class="camera-stream-config-box" style="margin-bottom: 1.25rem; padding: 12px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px;">
+                <p class="card-label" style="margin-bottom: 6px;">STREAM DE VIDEO RTSP</p>
+                <label class="form-field" style="margin-bottom: 4px;">
+                  <span>URL de Stream RTSP (Scrypted / Red Local)</span>
+                  <div style="display: flex; gap: 8px; align-items: center;">
+                    <input
+                      type="text"
+                      id="cam-cfg-rtsp-url"
+                      placeholder="rtsp://192.168.1.50:8554/51"
+                      style="flex: 1; font-family: monospace; font-size: 0.82rem;"
+                    />
+                    <button class="button button-sm button-secondary" id="cam-cfg-test-rtsp-btn" type="button" title="Comprobar si el puerto RTSP responde">
+                      🔍 Probar
+                    </button>
+                    <button class="button button-sm button-primary" id="cam-cfg-save-rtsp-btn" type="button" title="Guardar y aplicar inmediatamente">
+                      💾 Guardar
+                    </button>
+                  </div>
+                  <small class="field-hint">
+                    Dirección RTSP provista por el servidor Scrypted. Si tu cámara requiere usuario/clave o un stream específico en Scrypted Rebroadcast, colócalo aquí (ej. <code>rtsp://user:pass@192.168.1.50:8554/51</code>).
+                  </small>
+                </label>
+                <div id="cam-cfg-rtsp-result" class="test-result-box" hidden style="margin-top: 6px; font-size: 0.8rem;"></div>
               </div>
 
               <p class="card-label">SENSORES ASOCIADOS EN TIEMPO REAL</p>
@@ -982,7 +1015,7 @@
     </div>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="qrcode.min.js?v=1.4.71"></script>
-    <script src="script.js?v=1.4.71"></script>
+    <script src="qrcode.min.js?v=1.4.72"></script>
+    <script src="script.js?v=1.4.72"></script>
   </body>
 </html>

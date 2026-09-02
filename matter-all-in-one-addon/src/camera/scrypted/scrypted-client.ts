@@ -129,7 +129,7 @@ function mapDeviceToCameraRecord(
       ? rawName.trim()
       : `Scrypted Camera ${id}`;
 
-  const { manufacturer, model } = extractDeviceInfo(device);
+  const { manufacturer, model, serialNumber } = extractDeviceInfo(device);
 
   const rawIfaces = unwrapScryptedValue(device.interfaces);
   const interfaces: string[] = Array.isArray(rawIfaces)
@@ -196,6 +196,13 @@ function mapDeviceToCameraRecord(
   const resolvedManufacturer = manufacturer ?? undefined;
   const resolvedModel = model ?? undefined;
 
+  let scryptedHost = "127.0.0.1";
+  try {
+    if (serverUrl) {
+      scryptedHost = new URL(serverUrl).hostname;
+    }
+  } catch {}
+
   return {
     cameraId: id,
     sourceId: `scrypted_${id}`,
@@ -207,13 +214,13 @@ function mapDeviceToCameraRecord(
     model: resolvedModel, // compat
     displayManufacturer: resolvedManufacturer ?? "Marca no identificada",
     displayModel: resolvedModel,
+    serialNumber: serialNumber || undefined,
     identity: {},
     source: {
       kind: "scrypted",
       serverId: serverUrl,
       deviceId: id,
-      // Streams are NOT assumed. They remain unverified until the SDK
-      // provides a real RTSP/WebRTC URL through the VideoCamera interface.
+      // Streams are NOT assumed. They remain unverified until configured or verified.
     },
     capabilities: {
       // No capabilities are assumed. Marked unverified until validated.

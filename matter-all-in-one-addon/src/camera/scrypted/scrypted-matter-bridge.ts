@@ -26,9 +26,16 @@ export class ScryptedMatterBridge {
       return null;
     }
 
+    let scryptedHost = "127.0.0.1";
+    try {
+      if (camera.source.serverId) {
+        scryptedHost = new URL(camera.source.serverId).hostname;
+      }
+    } catch {}
+
     const streamUrl =
       camera.source.streamReference?.directUrl ||
-      `rtsp://${camera.source.streamReference?.host || "127.0.0.1"}:8554/${camera.cameraId}`;
+      `rtsp://${camera.source.streamReference?.host || scryptedHost}:8554/${camera.cameraId}`;
 
     const capabilities: CameraCapabilitiesInfo = {
       hasLiveStream: true,

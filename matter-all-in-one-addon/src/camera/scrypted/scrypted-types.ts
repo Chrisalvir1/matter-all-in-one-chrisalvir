@@ -138,6 +138,9 @@ export interface CameraRecord {
   /** @deprecated Use sourceModel / displayModel. Kept for backwards compat. */
   model?: string;
 
+  /** Real serial number reported by Scrypted / device */
+  serialNumber?: string;
+
   identity: {
     matterNodeId?: number;
     matterEndpointId?: number;

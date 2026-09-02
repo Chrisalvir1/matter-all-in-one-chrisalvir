@@ -30,9 +30,16 @@ export class ScryptedHomeKitBridge {
       this.unmountCamera(camera.cameraId);
     }
 
+    let scryptedHost = "127.0.0.1";
+    try {
+      if (camera.source.serverId) {
+        scryptedHost = new URL(camera.source.serverId).hostname;
+      }
+    } catch {}
+
     const streamUrl =
       camera.source.streamReference?.directUrl ||
-      `rtsp://${camera.source.streamReference?.host || "127.0.0.1"}:8554/${camera.cameraId}`;
+      `rtsp://${camera.source.streamReference?.host || scryptedHost}:8554/${camera.cameraId}`;
 
     const capabilities: CameraCapabilitiesInfo = {
       hasLiveStream: true,
@@ -52,6 +59,10 @@ export class ScryptedHomeKitBridge {
       hksvCapable: camera.exportConfig.hksvEnabledByDefault !== false,
     };
 
+    const hasDoorbell = camera.sensors.some(
+      (s: CameraSensorRecord) => s.type === "doorbell",
+    );
+
     const resolvedSource: ResolvedStreamSource = {
       sourceType: "rtsp",
       url: streamUrl,
@@ -61,8 +72,17 @@ export class ScryptedHomeKitBridge {
       metadata: {
         isScrypted: true,
         scryptedCameraId: camera.cameraId,
-        model: camera.displayModel || camera.model,
-        manufacturer: camera.displayManufacturer,
+        model:
+          camera.sourceModel ||
+          camera.displayModel ||
+          camera.model ||
+          "Cámara IP",
+        manufacturer: "Matter all in one Chrisalvir",
+        serialNumber:
+          camera.serialNumber ||
+          (camera.identity as any)?.serialNumber ||
+          `SCRYPTED-${camera.cameraId.toUpperCase().substring(0, 12)}`,
+        hasDoorbell,
       },
     };
 
@@ -83,20 +103,24 @@ export class ScryptedHomeKitBridge {
       storageRecord = {
         entityId,
         uuid: "",
-        username: this.generateMacAddress(camera.cameraId),
-        pincode: "031-45-154",
-        setupId: this.generateSetupId(camera.cameraId),
+        name: camera.name,
+        manufacturer: "Matter all in one Chrisalvir",
+        model:
+          camera.sourceModel ||
+          camera.displayModel ||
+          camera.model ||
+          "Cámara IP",
+        serialNumber:
+          camera.serialNumber ||
+          (camera.identity as any)?.serialNumber ||
+          `SCRYPTED-${camera.cameraId.toUpperCase().substring(0, 12)}`,
         port: nextPort,
+        pincode: "031-45-154",
+        username: this.generateMacAddress(camera.cameraId),
+        setupId: this.generateSetupId(camera.cameraId),
         published: false,
         strategy: "passthrough_h264",
         state: "idle",
-        name: camera.name,
-        manufacturer: camera.displayManufacturer || "Scrypted",
-        model: camera.displayModel || camera.model || "Cámara IP",
-        serialNumber: `SCRYPTED-${camera.cameraId.toUpperCase().substring(0, 12)}`,
-        hksvCapable: capabilities.hksvCapable,
-        hksvEnabled: capabilities.hksvCapable,
-        hksvState: capabilities.hksvCapable ? "ready" : "not_capable",
       };
     }
 
@@ -112,8 +136,13 @@ export class ScryptedHomeKitBridge {
     }
 
     storageRecord.name = camera.name;
-    storageRecord.manufacturer = camera.displayManufacturer || "Scrypted";
-    storageRecord.model = camera.displayModel || camera.model || "Cámara IP";
+    storageRecord.manufacturer = "Matter all in one Chrisalvir";
+    storageRecord.model =
+      camera.sourceModel || camera.displayModel || camera.model || "Cámara IP";
+    storageRecord.serialNumber =
+      camera.serialNumber ||
+      (camera.identity as any)?.serialNumber ||
+      `SCRYPTED-${camera.cameraId.toUpperCase().substring(0, 12)}`;
     storageRecord.pincode = "031-45-154";
     storageRecord.setupId =
       storageRecord.setupId || this.generateSetupId(camera.cameraId);
