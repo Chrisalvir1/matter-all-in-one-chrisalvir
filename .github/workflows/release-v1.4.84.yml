@@ -72,6 +72,6 @@ jobs:
           if gh release view v1.4.84 >/dev/null 2>&1; then
             echo "Release v1.4.84 already exists"
           else
-            gh release create v1.4.84 --verify-tag \
+            gh release create v1.4.84 \
               --title "v1.4.84 - Root HAP Live View Session Repair" \
               --notes "Rebuilds the Scrypted-to-Apple Home production HAP camera bridge from the session layer: accessory-local RTCP ports, unique per-session SSRCs, correct remote/local port separation, IPv4/IPv6 SRTP with localrtcpport, exact Apple-negotiated H.264 dimensions/FPS/profile/level/bitrate/MTU, AAC-ELD audio, one production stream, HKSV/NVR disabled by default, stable Scrypted identity, valid JPEG fallback, and explicit SetupEndpoints/START/STOP diagnostics. Matter Camera remains experimental. Node.js and Docker use 24.20.0 LTS. Typecheck, 324 tests, build and Docker passed. Physical Apple Home validation on real cameras remains required before calling Live View proven."
