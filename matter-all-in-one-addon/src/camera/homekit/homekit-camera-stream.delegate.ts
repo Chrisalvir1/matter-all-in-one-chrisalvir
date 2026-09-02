@@ -1,568 +1,490 @@
 import {
+  CameraController,
   CameraStreamingDelegate,
+  H264Level,
+  H264Profile,
   PrepareStreamCallback,
   PrepareStreamRequest,
   PrepareStreamResponse,
+  ReconfigureStreamRequest,
   SnapshotRequest,
   SnapshotRequestCallback,
-  StreamingRequest,
+  SRTPCryptoSuites,
+  StartStreamRequest,
   StreamRequestCallback,
   StreamRequestTypes,
-  StartStreamRequest,
-  ReconfigureStreamRequest,
-  SRTPCryptoSuites,
+  StreamingRequest,
 } from "hap-nodejs";
-import { spawn, ChildProcess } from "child_process";
+import { spawn, type ChildProcess } from "node:child_process";
+import dgram from "node:dgram";
 import type {
   CameraCapabilitiesInfo,
   ResolvedStreamSource,
 } from "../camera-types.js";
-import { CameraSourceResolver } from "../camera-source-resolver.js";
 import {
-  resolveFfmpegPath,
   getFfmpegVersion,
+  resolveFfmpegPath,
   sanitizeUrlCredentials,
-  buildFfmpegStreamArgs,
-  StreamPipelineConfig,
 } from "./ffmpeg-helper.js";
 
 export interface HomeKitStreamSession {
   sessionId: string;
   process?: ChildProcess;
-  videoPort: number;
-  audioPort?: number;
   targetAddress: string;
+  videoPort: number;
+  localVideoPort: number;
   videoSsrc: number;
-  audioSsrc?: number;
   videoCryptoSuite: SRTPCryptoSuites;
   videoKeySalt: Buffer;
+  audioPort?: number;
+  localAudioPort?: number;
+  audioSsrc?: number;
+  audioCryptoSuite?: SRTPCryptoSuites;
   audioKeySalt?: Buffer;
-  stopTimer?: NodeJS.Timeout;
 }
 
 const FALLBACK_JPEG_BUFFER = Buffer.from(
-  "/9j/4AAQSkZJRgABAgAAAQABAAD//gAPTGF2YzYwLjMuMTAwAP/bAEMACAYGBwYHCAgICAgICQkJCgoKCQkJCQoKCgoKCgwMDAoKCgoKCgoMDAwMDQ4NDQ0MDQ4ODw8PEhIRERUVFRkZH//EAEwAAQEAAAAAAAAAAAAAAAAAAAAHAQEBAAAAAAAAAAAAAAAAAAAAARABAAAAAAAAAAAAAAAAAAAAABEBAAAAAAAAAAAAAAAAAAAAAP/AABEIAPABQAMBIgACEQADEQD/2gAMAwEAAhEDEQA/AI2AoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//9k=",
+  "/9j/4AAQSkZJRgABAgAAAQABAAD//gAPTGF2YzYwLjMuMTAwAP/bAEMACAYGBwYHCAgICAgICQkJCgoKCQkJCQoKCgoKCgwMDAoKCgoKCgoMDAwMDQ4NDQ0MDQ4ODw8PEhIRERUVFRkZH//EAEwAAQEAAAAAAAAAAAAAAAAAAAAHAQEBAAAAAAAAAAAAAAAAAAAAARABAAAAAAAAAAAAAAAAAAAAABEBAAAAAAAAAAAAAAAAAAAAAP/AABEIAPABQAMBIgACEQADEQD/2gAMAwEAAhEDEQA/AI2AoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//9k=",
   "base64",
 );
 
+function isJpeg(buffer: Buffer): boolean {
+  return (
+    buffer.length > 128 &&
+    buffer[0] === 0xff &&
+    buffer[1] === 0xd8 &&
+    buffer[buffer.length - 2] === 0xff &&
+    buffer[buffer.length - 1] === 0xd9
+  );
+}
+
+function formatHost(address: string): string {
+  if (!address.includes(":")) return address;
+  const escaped = address.replaceAll("%", "%25");
+  return escaped.startsWith("[") ? escaped : `[${escaped}]`;
+}
+
+function suiteName(suite: SRTPCryptoSuites): string {
+  return suite === SRTPCryptoSuites.AES_CM_256_HMAC_SHA1_80
+    ? "AES_CM_256_HMAC_SHA1_80"
+    : "AES_CM_128_HMAC_SHA1_80";
+}
+
+function h264Profile(profile: H264Profile): string {
+  if (profile === H264Profile.HIGH) return "high";
+  if (profile === H264Profile.MAIN) return "main";
+  return "baseline";
+}
+
+function h264Level(level: H264Level): string {
+  if (level === H264Level.LEVEL4_0) return "4.0";
+  if (level === H264Level.LEVEL3_2) return "3.2";
+  return "3.1";
+}
+
 export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
-  private activeSessions = new Map<string, HomeKitStreamSession>();
+  private readonly activeSessions = new Map<string, HomeKitStreamSession>();
   private lastSnapshotBuffer: Buffer = FALLBACK_JPEG_BUFFER;
 
   constructor(
     private readonly platform: any,
     private readonly entityId: string,
     private readonly capabilities: CameraCapabilitiesInfo,
-    private streamSource: ResolvedStreamSource,
+    private readonly streamSource: ResolvedStreamSource,
   ) {}
 
-  /**
-   * Snapshot handler: returns a high-speed JPEG snapshot from Scrypted, Home Assistant,
-   * FFmpeg extraction, or a cached valid frame. Never calls back with error so Apple Home
-   * remains alive and allows user to tap and launch Live View.
-   */
   public async handleSnapshotRequest(
     request: SnapshotRequest,
     callback: SnapshotRequestCallback,
   ): Promise<void> {
-    this.platform?.log?.notice?.(
-      `[HomeKitCamera][${this.entityId}] Snapshot requested: ${request.width}x${request.height}`,
-    );
+    const started = Date.now();
+    let completed = false;
+    const finish = (source: string, buffer: Buffer): void => {
+      if (completed) return;
+      completed = true;
+      const selected = isJpeg(buffer) ? buffer : this.lastSnapshotBuffer;
+      if (isJpeg(selected)) this.lastSnapshotBuffer = selected;
+      this.platform?.log?.notice?.(
+        `[HomeKitCamera][${this.entityId}] Snapshot source=${source} bytes=${selected.length} duration=${Date.now() - started}ms validJpeg=${isJpeg(selected)}`,
+      );
+      callback(undefined, selected);
+    };
 
     try {
-      // 1. Try to fetch direct snapshot from Scrypted snapshotUrl if available
       const snapshotUrl = this.streamSource.snapshotUrl;
-      if (
-        snapshotUrl &&
-        (snapshotUrl.startsWith("http://") ||
-          snapshotUrl.startsWith("https://"))
-      ) {
+      if (snapshotUrl?.startsWith("http://") || snapshotUrl?.startsWith("https://")) {
         try {
-          const res = await fetch(snapshotUrl, {
-            signal: AbortSignal.timeout(2000),
+          const response = await fetch(snapshotUrl!, {
+            signal: AbortSignal.timeout(2500),
           });
-          if (res.ok) {
-            const buf = Buffer.from(await res.arrayBuffer());
-            if (buf.length > 0) {
-              this.lastSnapshotBuffer = buf;
-              callback(undefined, buf);
+          if (response.ok) {
+            const buffer = Buffer.from(await response.arrayBuffer());
+            if (isJpeg(buffer)) {
+              finish("scrypted-http", buffer);
               return;
             }
           }
-        } catch (snapErr: any) {
+        } catch (error) {
           this.platform?.log?.debug?.(
-            `[HomeKitCamera][${this.entityId}] Direct HTTP snapshot failed: ${snapErr?.message || snapErr}`,
+            `[HomeKitCamera][${this.entityId}] Snapshot HTTP failed: ${String(error)}`,
           );
         }
       }
 
-      // 2. Try to fetch direct JPEG from Home Assistant proxy
-      if (this.platform?.ha?.fetchSnapshot) {
-        try {
-          const imageBuffer = await this.platform.ha.fetchSnapshot(
-            this.entityId,
-          );
-          if (
-            imageBuffer &&
-            Buffer.isBuffer(imageBuffer) &&
-            imageBuffer.length > 0
-          ) {
-            this.lastSnapshotBuffer = imageBuffer;
-            callback(undefined, imageBuffer);
-            return;
-          }
-        } catch {}
-      }
-
-      // 3. Fallback: extract single JPEG frame from stream source via ffmpeg with 2.0s timeout
       const ffmpegPath = resolveFfmpegPath();
       const sourceUrl = this.streamSource.url;
-      if (ffmpegPath && sourceUrl) {
-        const ffmpegArgs = ["-hide_banner", "-loglevel", "error"];
-        if (sourceUrl.startsWith("rtsp://")) {
-          ffmpegArgs.push("-rtsp_transport", "tcp", "-stimeout", "2000000");
-        }
-        ffmpegArgs.push(
-          "-i",
-          sourceUrl,
-          "-frames:v",
-          "1",
-          "-f",
-          "image2",
-          "-q:v",
-          "3",
-          "pipe:1",
-        );
-
-        const ffmpeg = spawn(ffmpegPath, ffmpegArgs, {
-          stdio: ["ignore", "pipe", "ignore"],
-        });
-        const chunks: Buffer[] = [];
-        let settled = false;
-
-        const killTimer = setTimeout(() => {
-          if (!settled) {
-            settled = true;
-            try {
-              ffmpeg.kill("SIGKILL");
-            } catch {}
-            this.platform?.log?.notice?.(
-              `[HomeKitCamera][${this.entityId}] Snapshot extraction delayed — serving cached frame to keep Apple Home active`,
-            );
-            callback(undefined, this.lastSnapshotBuffer);
-          }
-        }, 2000);
-
-        ffmpeg.stdout.on("data", (chunk) => chunks.push(chunk));
-        ffmpeg.on("close", (code) => {
-          clearTimeout(killTimer);
-          if (settled) return;
-          settled = true;
-          if (code === 0 && chunks.length > 0) {
-            const buf = Buffer.concat(chunks);
-            this.lastSnapshotBuffer = buf;
-            callback(undefined, buf);
-          } else {
-            callback(undefined, this.lastSnapshotBuffer);
-          }
-        });
-        ffmpeg.on("error", () => {
-          clearTimeout(killTimer);
-          if (settled) return;
-          settled = true;
-          callback(undefined, this.lastSnapshotBuffer);
-        });
+      if (!ffmpegPath || !sourceUrl) {
+        finish("fallback-no-source", this.lastSnapshotBuffer);
         return;
       }
 
-      callback(undefined, this.lastSnapshotBuffer);
-    } catch {
-      callback(undefined, this.lastSnapshotBuffer);
+      const args = ["-hide_banner", "-loglevel", "error"];
+      if (sourceUrl.startsWith("rtsp://")) {
+        args.push("-rtsp_transport", "tcp", "-timeout", "2500000");
+      }
+      args.push(
+        "-i",
+        sourceUrl,
+        "-frames:v",
+        "1",
+        "-vf",
+        `scale=${request.width}:${request.height}:force_original_aspect_ratio=decrease,pad=${request.width}:${request.height}:(ow-iw)/2:(oh-ih)/2`,
+        "-f",
+        "image2",
+        "-q:v",
+        "3",
+        "pipe:1",
+      );
+
+      const process = spawn(ffmpegPath, args, {
+        stdio: ["ignore", "pipe", "ignore"],
+      });
+      const chunks: Buffer[] = [];
+      const timer = setTimeout(() => {
+        try {
+          process.kill("SIGKILL");
+        } catch {}
+        finish("fallback-timeout", this.lastSnapshotBuffer);
+      }, 3000);
+      process.stdout.on("data", (chunk: Buffer) => chunks.push(chunk));
+      process.once("error", () => {
+        clearTimeout(timer);
+        finish("fallback-ffmpeg-error", this.lastSnapshotBuffer);
+      });
+      process.once("close", () => {
+        clearTimeout(timer);
+        const buffer = Buffer.concat(chunks);
+        finish(isJpeg(buffer) ? "ffmpeg" : "fallback-invalid-jpeg", buffer);
+      });
+    } catch (error) {
+      this.platform?.log?.warn?.(
+        `[HomeKitCamera][${this.entityId}] Snapshot exception: ${String(error)}`,
+      );
+      finish("fallback-exception", this.lastSnapshotBuffer);
     }
   }
 
-  /**
-   * Prepare stream handler: negotiates SRTP crypto keys and target ports with Apple Home.
-   */
   public prepareStream(
     request: PrepareStreamRequest,
     callback: PrepareStreamCallback,
   ): void {
-    const sessionId = request.sessionID;
-    const targetAddress = request.targetAddress;
-
-    const videoPort = request.video.port;
-    const videoCryptoSuite = request.video.srtpCryptoSuite;
-    const videoKey = request.video.srtp_key;
-    const videoSalt = request.video.srtp_salt;
-    const videoKeySalt = Buffer.concat([videoKey, videoSalt]);
-
-    const session: HomeKitStreamSession = {
-      sessionId,
-      targetAddress,
-      videoPort,
-      videoSsrc: 1,
-      videoCryptoSuite,
-      videoKeySalt,
-    };
-
-    if (request.audio) {
-      session.audioPort = request.audio.port;
-      session.audioSsrc = 2;
-      session.audioKeySalt = Buffer.concat([
-        request.audio.srtp_key,
-        request.audio.srtp_salt,
-      ]);
-    }
-
-    this.activeSessions.set(sessionId, session);
-
-    const response: PrepareStreamResponse = {
-      video: {
-        port: videoPort,
-        ssrc: session.videoSsrc,
-        srtp_key: videoKey,
-        srtp_salt: videoSalt,
-      },
-    };
-
-    if (request.audio && session.audioPort) {
-      response.audio = {
-        port: session.audioPort,
-        ssrc: session.audioSsrc!,
-        srtp_key: request.audio.srtp_key,
-        srtp_salt: request.audio.srtp_salt,
-      };
-    }
-
-    this.platform?.log?.notice?.(
-      `[HomeKitCamera][${this.entityId}] 🎬 Prepare stream session ${sessionId} (target: ${targetAddress}:${videoPort})`,
-    );
-
-    callback(undefined, response);
+    void this.prepareStreamAsync(request, callback);
   }
 
-  /**
-   * Stream lifecycle handler: starts, reconfigures, or stops the RTP stream process.
-   */
+  private async prepareStreamAsync(
+    request: PrepareStreamRequest,
+    callback: PrepareStreamCallback,
+  ): Promise<void> {
+    try {
+      const localVideoPort = await this.allocateUdpPort([
+        request.video.port,
+      ]);
+      const localAudioPort = request.audio
+        ? await this.allocateUdpPort([request.audio.port, localVideoPort])
+        : undefined;
+      const session: HomeKitStreamSession = {
+        sessionId: request.sessionID,
+        targetAddress: request.targetAddress,
+        videoPort: request.video.port,
+        localVideoPort,
+        videoSsrc: CameraController.generateSynchronisationSource(),
+        videoCryptoSuite: request.video.srtpCryptoSuite,
+        videoKeySalt: Buffer.concat([
+          request.video.srtp_key,
+          request.video.srtp_salt,
+        ]),
+      };
+      if (request.audio && localAudioPort) {
+        session.audioPort = request.audio.port;
+        session.localAudioPort = localAudioPort;
+        session.audioSsrc = CameraController.generateSynchronisationSource();
+        session.audioCryptoSuite = request.audio.srtpCryptoSuite;
+        session.audioKeySalt = Buffer.concat([
+          request.audio.srtp_key,
+          request.audio.srtp_salt,
+        ]);
+      }
+      this.activeSessions.set(request.sessionID, session);
+
+      const response: PrepareStreamResponse = {
+        video: {
+          port: localVideoPort,
+          ssrc: session.videoSsrc,
+          srtp_key: request.video.srtp_key,
+          srtp_salt: request.video.srtp_salt,
+        },
+      };
+      if (request.audio && localAudioPort) {
+        response.audio = {
+          port: localAudioPort,
+          ssrc: session.audioSsrc!,
+          srtp_key: request.audio.srtp_key,
+          srtp_salt: request.audio.srtp_salt,
+        };
+      }
+      this.platform?.log?.notice?.(
+        `[HomeKitCamera][${this.entityId}] HAP SetupEndpoints session=${request.sessionID} remote=${request.targetAddress}:${request.video.port} localVideoRTCP=${localVideoPort} videoSSRC=${session.videoSsrc}${localAudioPort ? ` localAudioRTCP=${localAudioPort} audioSSRC=${session.audioSsrc}` : ""}`,
+      );
+      callback(undefined, response);
+    } catch (error) {
+      callback(error as Error);
+    }
+  }
+
+  private allocateUdpPort(excluded: number[]): Promise<number> {
+    return new Promise((resolve, reject) => {
+      const socket = dgram.createSocket("udp4");
+      socket.once("error", (error) => {
+        try {
+          socket.close();
+        } catch {}
+        reject(error);
+      });
+      socket.bind(0, "0.0.0.0", () => {
+        const address = socket.address();
+        const port = typeof address === "string" ? 0 : address.port;
+        socket.close(() => {
+          if (!port || excluded.includes(port)) {
+            void this.allocateUdpPort(excluded).then(resolve, reject);
+          } else {
+            resolve(port);
+          }
+        });
+      });
+    });
+  }
+
   public handleStreamRequest(
     request: StreamingRequest,
     callback: StreamRequestCallback,
   ): void {
-    const sessionId = request.sessionID;
-    const session = this.activeSessions.get(sessionId);
-
     if (request.type === StreamRequestTypes.START) {
+      const session = this.activeSessions.get(request.sessionID);
       if (!session) {
-        callback(
-          new Error(`Cannot start stream: session ${sessionId} not prepared`),
-        );
+        callback(new Error(`Session ${request.sessionID} was not prepared`));
         return;
       }
-
-      this.platform?.log?.notice?.(
-        `[HomeKitCamera][${this.entityId}] 🟢 Starting live stream for Apple Home (Session: ${sessionId})`,
-      );
-
-      void this.startFfmpegStream(
-        session,
-        request as StartStreamRequest,
-        callback,
-      );
-    } else if (request.type === StreamRequestTypes.STOP) {
-      this.platform?.log?.notice?.(
-        `[HomeKitCamera][${this.entityId}] 🔴 Stopping live stream for Apple Home (Session: ${sessionId})`,
-      );
-      this.stopFfmpegStream(sessionId);
-      callback();
-    } else if (request.type === StreamRequestTypes.RECONFIGURE) {
-      const reconfig = request as ReconfigureStreamRequest;
-      this.platform?.log?.notice?.(
-        `[HomeKitCamera][${this.entityId}] 🔄 Reconfigure stream: ${reconfig.video.width}x${reconfig.video.height} @ ${reconfig.video.max_bit_rate} kbps`,
-      );
-      callback();
+      void this.startStream(session, request as StartStreamRequest, callback);
+      return;
     }
+    if (request.type === StreamRequestTypes.RECONFIGURE) {
+      const video = (request as ReconfigureStreamRequest).video;
+      this.platform?.log?.notice?.(
+        `[HomeKitCamera][${this.entityId}] HAP RECONFIGURE ${video.width}x${video.height}@${video.fps}`,
+      );
+      callback();
+      return;
+    }
+    this.stopStream(request.sessionID);
+    callback();
   }
 
-  /**
-   * Spawns ffmpeg with optimal stream strategy (H.264 Passthrough / Video-only / Transcode fallback).
-   */
-  private async startFfmpegStream(
+  private async startStream(
     session: HomeKitStreamSession,
     request: StartStreamRequest,
     callback: StreamRequestCallback,
   ): Promise<void> {
     const ffmpegPath = resolveFfmpegPath();
-    if (!ffmpegPath) {
-      const errMsg =
-        "FFmpeg binary not found on system. Please ensure FFmpeg is installed in the container.";
-      this.platform?.log?.error?.(
-        `[HomeKitCamera][${this.entityId}] ${errMsg}`,
-      );
-      callback(new Error(errMsg));
+    const sourceUrl = this.streamSource.url;
+    if (!ffmpegPath || !sourceUrl) {
+      callback(new Error("FFmpeg or RTSP source is unavailable"));
+      return;
+    }
+    const validationStatus = String(
+      this.streamSource.metadata?.validationStatus || "not_checked",
+    );
+    if (["not_found", "unauthorized", "unsupported", "invalid", "source_offline"].includes(validationStatus)) {
+      callback(new Error(`RTSP source is not usable: ${validationStatus}`));
       return;
     }
 
-    // Refresh stream URL dynamically on demand if missing or dynamic
-    let sourceUrl = this.streamSource.url;
+    const video = request.video;
+    const fps = Math.max(1, Math.min(video.fps || 30, 30));
+    const bitrate = Math.max(128, video.max_bit_rate || 2000);
+    const mtu = video.mtu || 1378;
+    const host = formatHost(session.targetAddress);
+    const videoUrl =
+      `srtp://${host}:${session.videoPort}` +
+      `?rtcpport=${session.videoPort}&localrtcpport=${session.localVideoPort}&pkt_size=${mtu}`;
+    const args: string[] = ["-hide_banner", "-loglevel", "warning"];
+    if (sourceUrl.startsWith("rtsp://")) {
+      args.push(
+        "-rtsp_transport",
+        "tcp",
+        "-timeout",
+        "5000000",
+        "-fflags",
+        "+nobuffer+genpts",
+      );
+    }
+    args.push("-i", sourceUrl);
+    args.push(
+      "-map",
+      "0:v:0",
+      "-an",
+      "-c:v",
+      "libx264",
+      "-pix_fmt",
+      "yuv420p",
+      "-profile:v",
+      h264Profile(video.profile),
+      "-level:v",
+      h264Level(video.level),
+      "-vf",
+      `scale=${video.width}:${video.height}:force_original_aspect_ratio=decrease,pad=${video.width}:${video.height}:(ow-iw)/2:(oh-ih)/2`,
+      "-r",
+      String(fps),
+      "-g",
+      String(fps * 2),
+      "-keyint_min",
+      String(fps),
+      "-b:v",
+      `${bitrate}k`,
+      "-maxrate",
+      `${bitrate}k`,
+      "-bufsize",
+      `${bitrate * 2}k`,
+      "-preset",
+      "ultrafast",
+      "-tune",
+      "zerolatency",
+      "-f",
+      "rtp",
+      "-payload_type",
+      String(video.pt || 99),
+      "-ssrc",
+      String(session.videoSsrc),
+      "-srtp_out_suite",
+      suiteName(session.videoCryptoSuite),
+      "-srtp_out_params",
+      session.videoKeySalt.toString("base64"),
+      videoUrl,
+    );
+
     if (
-      !sourceUrl ||
-      this.streamSource.sourceType === "hls" ||
-      this.streamSource.sourceType === "ha_proxy" ||
-      this.streamSource.sourceType === "unknown"
+      this.capabilities.hasAudio &&
+      request.audio &&
+      session.audioPort &&
+      session.localAudioPort &&
+      session.audioSsrc &&
+      session.audioKeySalt
     ) {
-      const state = this.platform?.ha?.hassStates?.get(this.entityId);
-      if (state) {
-        try {
-          const fresh = await CameraSourceResolver.resolve(
-            this.platform,
-            this.entityId,
-            state,
-          );
-          if (fresh && fresh.url) {
-            this.streamSource = fresh;
-            sourceUrl = fresh.url;
-          }
-        } catch (err) {
-          this.platform?.log?.debug?.(
-            `[HomeKitCamera][${this.entityId}] Dynamic stream resolve attempt: ${err}`,
-          );
-        }
-      }
-    }
-
-    if (!sourceUrl) {
-      const errMsg =
-        "Sin fuente de stream verificada. Configura o verifica el stream RTSP en la UI de Matter All-in-One.";
-      this.platform?.log?.error?.(
-        `[HomeKitCamera][${this.entityId}] ${errMsg}`,
+      const audioUrl =
+        `srtp://${host}:${session.audioPort}` +
+        `?rtcpport=${session.audioPort}&localrtcpport=${session.localAudioPort}&pkt_size=188`;
+      args.push(
+        "-map",
+        "0:a:0?",
+        "-vn",
+        "-c:a",
+        "aac",
+        "-profile:a",
+        "aac_eld",
+        "-ar",
+        "16000",
+        "-ac",
+        "1",
+        "-b:a",
+        "32k",
+        "-f",
+        "rtp",
+        "-payload_type",
+        String(request.audio.pt || 110),
+        "-ssrc",
+        String(session.audioSsrc),
+        "-srtp_out_suite",
+        suiteName(session.audioCryptoSuite || session.videoCryptoSuite),
+        "-srtp_out_params",
+        session.audioKeySalt.toString("base64"),
+        audioUrl,
       );
-      callback(new Error(errMsg));
-      return;
     }
-
-    // Guard: block FFmpeg against obviously invented RTSP paths (/:digits pattern)
-    try {
-      const parsedUrl = new URL(sourceUrl);
-      if (/^\/\d+$/.test(parsedUrl.pathname)) {
-        const errMsg = `URL de stream inválida (ruta '${parsedUrl.pathname}' parece un ID de dispositivo, no una ruta RTSP real). Verifica el stream en la UI.`;
-        this.platform?.log?.error?.(
-          `[HomeKitCamera][${this.entityId}] Bloqueando FFmpeg: ${errMsg}`,
-        );
-        callback(new Error(errMsg));
-        return;
-      }
-    } catch {
-      // URL parse failed — let FFmpeg handle it
-    }
-
-    // Guard: block FFmpeg if stream is known to be in an error/unreachable state
-    const metadata = this.streamSource?.metadata || {};
-    let validationStatus = metadata.validationStatus;
-
-    if (
-      validationStatus === "not_found" ||
-      validationStatus === "unauthorized" ||
-      validationStatus === "unsupported" ||
-      validationStatus === "invalid" ||
-      validationStatus === "source_offline"
-    ) {
-      const errMsg = `El stream no está disponible (estado: ${validationStatus}). Verifica el stream en la interfaz antes de iniciar Live View.`;
-      this.platform?.log?.warn?.(
-        `[HomeKitCamera][${this.entityId}] Bloqueando FFmpeg: ${errMsg}`,
-      );
-      callback(new Error(errMsg));
-      return;
-    }
-
-    if (validationStatus === "not_checked" && sourceUrl) {
-      try {
-        const { ScryptedStreamValidator } =
-          await import("../scrypted/scrypted-stream-validator.js");
-        const probe = await ScryptedStreamValidator.validateStreamUrl(
-          sourceUrl,
-          metadata.scryptedCameraId,
-          3000,
-        );
-        validationStatus = probe.status;
-        metadata.validationStatus = probe.status;
-        this.platform?.log?.debug?.(
-          `[HomeKitCamera][${this.entityId}] On-demand probe result: ${probe.status}`,
-        );
-        // Only block on confirmed fatal errors — port_reachable and verified are both fine
-        const fatalProbeError =
-          probe.status === "not_found" ||
-          probe.status === "unauthorized" ||
-          probe.status === "unsupported" ||
-          probe.status === "invalid" ||
-          probe.status === "source_offline";
-        if (fatalProbeError) {
-          const errMsg = `El stream no está disponible (${probe.status}: ${probe.error || "error desconocido"}). Verifica el stream en la interfaz.`;
-          this.platform?.log?.warn?.(
-            `[HomeKitCamera][${this.entityId}] Bloqueando FFmpeg: ${errMsg}`,
-          );
-          callback(new Error(errMsg));
-          return;
-        }
-        // timeout during probe: proceed optimistically — FFmpeg will fail fast if truly unreachable
-        if (probe.status === "timeout") {
-          this.platform?.log?.warn?.(
-            `[HomeKitCamera][${this.entityId}] Probe timeout — intentando FFmpeg de todas formas`,
-          );
-        }
-      } catch (err: any) {
-        // Import or network error — proceed optimistically; FFmpeg will report failure
-        this.platform?.log?.warn?.(
-          `[HomeKitCamera][${this.entityId}] Error en validación on-demand: ${err?.message || err} — continuando`,
-        );
-      }
-    }
-
-    const token =
-      this.platform?.ha?.getAccessToken?.() || this.platform?.ha?.wsAccessToken;
-    const ffmpegVer = getFfmpegVersion(ffmpegPath) || "unknown";
-    const sanitizedSource = sanitizeUrlCredentials(sourceUrl);
-    const videoReq = request.video;
-    const fps = videoReq.fps || this.capabilities.maxFps || 30;
-
-    const pipelineConfig: StreamPipelineConfig = {
-      sourceUrl,
-      targetAddress: session.targetAddress,
-      videoPort: session.videoPort,
-      videoSsrc: session.videoSsrc,
-      videoPayloadType: videoReq.pt || 99,
-      videoCryptoSuite: session.videoCryptoSuite,
-      videoKeySaltBase64: session.videoKeySalt.toString("base64"),
-      strategy:
-        // HA's camera_proxy_stream endpoint is multipart MJPEG even when the
-        // physical camera itself encodes H.264, so it must be transcoded.
-        this.streamSource.sourceType === "ha_proxy" ||
-        this.capabilities.strategy === "transcode_required"
-          ? "transcode_required"
-          : this.capabilities.strategy === "passthrough_video_only"
-            ? "passthrough_video_only"
-            : "passthrough_h264",
-      fps,
-      bitrateKbps: videoReq.max_bit_rate || 2000,
-      httpBearerToken: token,
-      needsDumpExtra: Boolean(metadata.needsDumpExtra),
-      transport: metadata.transport || "tcp",
-      includeAudio:
-        this.capabilities.hasAudio &&
-        Boolean(session.audioPort && session.audioKeySalt && request.audio),
-      audioPort: session.audioPort,
-      audioSsrc: session.audioSsrc,
-      audioPayloadType: request.audio?.pt || 110,
-      audioKeySaltBase64: session.audioKeySalt
-        ? session.audioKeySalt.toString("base64")
-        : undefined,
-      audioCodec:
-        metadata.enableLocalAudioAdaptation && this.capabilities.hasAudio
-          ? "opus"
-          : this.capabilities.audioCodec === "aac_lc"
-            ? "aac"
-            : "transcode",
-    };
-
-    const ffmpegArgs = buildFfmpegStreamArgs(pipelineConfig);
 
     this.platform?.log?.notice?.(
-      `[HomeKitCamera][${this.entityId}] Starting stream with FFmpeg (${ffmpegPath} v${ffmpegVer}) | Source: ${sanitizedSource} | Codec: ${this.capabilities.videoCodec} | Strategy: ${this.capabilities.strategy} | Target: ${session.targetAddress}:${session.videoPort}`,
+      `[HomeKitCamera][${this.entityId}] HAP START ${video.width}x${video.height}@${fps} profile=${h264Profile(video.profile)} level=${h264Level(video.level)} mtu=${mtu} source=${sanitizeUrlCredentials(sourceUrl)} ffmpeg=${ffmpegPath} ${getFfmpegVersion(ffmpegPath) || "unknown"}`,
     );
 
+    let callbackSettled = false;
+    const settle = (error?: Error): void => {
+      if (callbackSettled) return;
+      callbackSettled = true;
+      callback(error);
+    };
     try {
-      const proc = spawn(ffmpegPath, ffmpegArgs, {
+      const process = spawn(ffmpegPath, args, {
         stdio: ["ignore", "ignore", "pipe"],
       });
-      session.process = proc;
-      let startCallbackSettled = false;
-      const readinessTimer = setTimeout(() => {
-        if (startCallbackSettled) return;
-        startCallbackSettled = true;
-        if (proc.exitCode === null && !proc.killed) {
+      session.process = process;
+      let stderr = "";
+      process.stderr.on("data", (chunk: Buffer) => {
+        stderr = `${stderr}${chunk.toString()}`.slice(-6000);
+      });
+      const guard = setTimeout(() => {
+        if (process.exitCode === null && !process.killed) {
           this.platform?.log?.notice?.(
-            `[HomeKitCamera][${this.entityId}] FFmpeg survived startup guard; accepting HAP START`,
+            `[HomeKitCamera][${this.entityId}] HAP START callback success; FFmpeg active session=${session.sessionId}`,
           );
-          callback();
+          settle();
         } else {
-          callback(new Error("FFmpeg exited before Live View became ready"));
+          settle(new Error("FFmpeg exited during HAP startup"));
         }
-      }, 1500);
-
-      proc.stderr.on("data", (data) => {
-        this.platform?.log?.warn?.(
-          `[HomeKitCamera][${this.entityId}][ffmpeg] ${data.toString().trim()}`,
-        );
+      }, 1200);
+      process.once("error", (error) => {
+        clearTimeout(guard);
+        settle(error);
       });
-
-      proc.on("close", (code) => {
-        this.platform?.log?.notice?.(
-          `[HomeKitCamera][${this.entityId}] FFmpeg process closed with code ${code}`,
-        );
+      process.once("close", (code) => {
+        clearTimeout(guard);
         session.process = undefined;
-        if (!startCallbackSettled) {
-          startCallbackSettled = true;
-          clearTimeout(readinessTimer);
-          callback(new Error(`FFmpeg exited during HAP startup (code ${code})`));
-        }
-      });
-
-      proc.on("error", (err) => {
-        this.platform?.log?.error?.(
-          `[HomeKitCamera][${this.entityId}] FFmpeg process error: ${err.message}`,
+        this.platform?.log?.warn?.(
+          `[HomeKitCamera][${this.entityId}] FFmpeg closed code=${code} ${stderr.trim()}`,
         );
-        if (!startCallbackSettled) {
-          startCallbackSettled = true;
-          clearTimeout(readinessTimer);
-          callback(err);
+        if (!callbackSettled) {
+          settle(new Error(`FFmpeg exited during HAP startup (code ${code})`));
         }
       });
-    } catch (err) {
-      this.platform?.log?.error?.(
-        `[HomeKitCamera][${this.entityId}] Failed to spawn FFmpeg: ${err}`,
-      );
-      callback(err as Error);
+    } catch (error) {
+      settle(error as Error);
     }
   }
 
-  /**
-   * Gracefully stops the FFmpeg process with SIGTERM followed by SIGKILL timeout.
-   */
-  private stopFfmpegStream(sessionId: string): void {
+  private stopStream(sessionId: string): void {
     const session = this.activeSessions.get(sessionId);
     if (!session) return;
-
     if (session.process) {
-      const proc = session.process;
       try {
-        proc.kill("SIGTERM");
-        const killTimer = setTimeout(() => {
-          try {
-            if (proc.killed === false) proc.kill("SIGKILL");
-          } catch {}
-        }, 2000);
-        proc.once("close", () => clearTimeout(killTimer));
-      } catch {
-        try {
-          proc.kill("SIGKILL");
-        } catch {}
-      }
-      session.process = undefined;
+        session.process.kill("SIGTERM");
+      } catch {}
     }
-
     this.activeSessions.delete(sessionId);
-    this.platform?.log?.debug?.(
-      `[HomeKitCamera][${this.entityId}] Stopped and cleaned up stream session ${sessionId}`,
+    this.platform?.log?.notice?.(
+      `[HomeKitCamera][${this.entityId}] HAP STOP cleanup session=${sessionId}`,
     );
   }
 
-  /**
-   * Cleans up all active sessions (e.g. on unpublish or bridge shutdown).
-   */
   public cleanupAllSessions(): void {
-    for (const sessionId of this.activeSessions.keys()) {
-      this.stopFfmpegStream(sessionId);
+    for (const sessionId of [...this.activeSessions.keys()]) {
+      this.stopStream(sessionId);
     }
-    this.activeSessions.clear();
   }
 }
