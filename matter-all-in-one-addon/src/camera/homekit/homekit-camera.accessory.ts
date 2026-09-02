@@ -482,7 +482,7 @@ export class HomeKitCameraAccessory {
     const model = this.record.model || "Modelo no identificado";
     const serialNumber = this.record.serialNumber || "Serial no disponible";
     const firmware =
-      this.platform?.matterbridge?.matterbridgeVersion || "1.4.72";
+      this.platform?.matterbridge?.matterbridgeVersion || "unknown";
 
     this.accessory
       .getService(Service.AccessoryInformation)

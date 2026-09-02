@@ -36,7 +36,7 @@ pkg_path.write_text(json.dumps(pkg, indent=2, ensure_ascii=False) + "\n")
 config = ROOT / "config.yaml"
 config.write_text(re.sub(r'^version:.*$', 'version: "1.4.83"', config.read_text(), flags=re.M))
 (ROOT / ".nvmrc").write_text("24.20.0\n")
-regex(ROOT / "Dockerfile", r"ARG BUILD_FROM=node:[^\n]+", "ARG BUILD_FROM=node:24.20.0-alpine3.22")
+regex(ROOT / "Dockerfile", r"ARG BUILD_FROM=node:[^\n]+", "ARG BUILD_FROM=node:24.20.0-alpine3.24")
 for workflow in [Path(".github/workflows/build.yml"), Path(".github/workflows/publish.yml")]:
     workflow.write_text(re.sub(r"node-version: ['\"]?26\.8(?:\.x)?['\"]?", "node-version: '24.20.x'", workflow.read_text()))
 
