@@ -1,0 +1,245 @@
+name: Repair and release v1.4.83
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/repair-v1.4.83.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: release-v1.4.83
+  cancel-in-progress: false
+
+jobs:
+  repair-test-release:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+
+      - name: Apply v1.4.83 repairs
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          import json, re
+
+          root = Path('matter-all-in-one-addon')
+
+          def replace(path, old, new, count=1):
+              p = Path(path)
+              text = p.read_text()
+              found = text.count(old)
+              if found < count:
+                  raise SystemExit(f'Expected at least {count} matches in {path}, found {found}: {old[:100]!r}')
+              p.write_text(text.replace(old, new, count))
+
+          # Node 24.20 LTS everywhere, including Docker and CI.
+          replace(root / 'Dockerfile', 'ARG BUILD_FROM=node:26.8.1-alpine3.24', 'ARG BUILD_FROM=node:24.20.0-alpine3.22')
+          (root / '.nvmrc').write_text('24.20.0\n')
+          for wf in ['.github/workflows/build.yml', '.github/workflows/publish.yml']:
+              p = Path(wf)
+              text = p.read_text().replace('26.8.x', '24.20.x')
+              p.write_text(text)
+
+          pkg_path = root / 'package.json'
+          pkg = json.loads(pkg_path.read_text())
+          pkg['version'] = '1.4.83'
+          pkg['engines']['node'] = '>=24.20.0 <25'
+          pkg['matterbridge']['version'] = '1.4.83'
+          pkg_path.write_text(json.dumps(pkg, indent=2, ensure_ascii=False) + '\n')
+
+          config = root / 'config.yaml'
+          config.write_text(re.sub(r'^version:.*$', 'version: "1.4.83"', config.read_text(), flags=re.M))
+
+          # RTSP auto means omit the ffmpeg transport option; TCP/UDP remain explicit.
+          helper = root / 'src/camera/homekit/ffmpeg-helper.ts'
+          replace(helper, '  transport?: "tcp" | "udp";', '  transport?: "auto" | "tcp" | "udp";')
+          replace(helper,
+              '  if (config.sourceUrl.startsWith("rtsp://")) {\n    const transport = config.transport || "tcp";\n    inputArgs.push("-rtsp_transport", transport);\n    inputArgs.push("-fflags", "+nobuffer+genpts");',
+              '  if (config.sourceUrl.startsWith("rtsp://")) {\n    const transport = config.transport || "tcp";\n    // FFmpeg does not accept the UI value "auto" as an explicit rtsp_transport.\n    // Omitting the option enables FFmpeg protocol auto-selection.\n    if (transport !== "auto") {\n      inputArgs.push("-rtsp_transport", transport);\n    }\n    inputArgs.push("-fflags", "+nobuffer+genpts");')
+          replace(helper,
+              '  fps?: number;\n  bitrateKbps?: number;',
+              '  fps?: number;\n  bitrateKbps?: number;\n  targetWidth?: number;\n  targetHeight?: number;')
+          replace(helper,
+              '    videoPayloadArgs.push(\n      "-vcodec",',
+              '    if (config.targetWidth && config.targetHeight) {\n      videoPayloadArgs.push("-vf", `scale=${config.targetWidth}:${config.targetHeight}:flags=fast_bilinear`);\n    }\n    videoPayloadArgs.push(\n      "-vcodec",')
+          replace(helper,
+              '  const args: string[] = [\n    ...inputArgs,',
+              '  const args: string[] = [\n    ...inputArgs,\n    "-progress",\n    "pipe:1",\n    "-nostats",')
+
+          # A validated H.264 stream receives SPS/PPS on keyframes to prevent green frames.
+          validator = root / 'src/camera/scrypted/scrypted-stream-validator.ts'
+          replace(validator,
+              '                needsDumpExtra: false,',
+              '                needsDumpExtra: probe.videoCodec.toLowerCase() === "h264",')
+
+          # Refresh a published HAP accessory whenever its source/capabilities change.
+          bridge = root / 'src/camera/scrypted/scrypted-homekit-bridge.ts'
+          replace(bridge,
+              '    const existing = this.activeAccessories.get(camera.cameraId);\n    if (existing && existing.isPublished) {\n      return existing;\n    }\n    if (existing) {\n      this.unmountCamera(camera.cameraId);\n    }',
+              '    const existing = this.activeAccessories.get(camera.cameraId);\n    if (existing && existing.isPublished) {\n      const nextUrl = camera.source.streamReference?.directUrl;\n      const nextValidation =\n        camera.source.streamValidationStatus ||\n        camera.source.streamReference?.validationStatus ||\n        "not_checked";\n      const nextObserved = JSON.stringify(camera.capabilities?.observed || {});\n      const currentObserved = JSON.stringify({\n        videoCodec: existing.capabilities.videoCodec,\n        audioCodec: existing.capabilities.audioCodec,\n        resolution: existing.capabilities.resolution,\n        fps: existing.capabilities.maxFps,\n        hasAudio: existing.capabilities.hasAudio,\n      });\n      const unchanged =\n        existing.streamSource?.url === nextUrl &&\n        existing.streamSource?.metadata?.validationStatus === nextValidation &&\n        (nextObserved === "{}" || currentObserved.includes(String(camera.capabilities?.observed?.videoCodec || "")));\n      if (unchanged) return existing;\n\n      platform?.log?.notice?.(\n        `[ScryptedHomeKitBridge] Refreshing HAP camera ${camera.cameraId}: stream source or capabilities changed`,\n      );\n      await existing.unpublish();\n      this.activeAccessories.delete(camera.cameraId);\n    } else if (existing) {\n      await existing.unpublish();\n      this.activeAccessories.delete(camera.cameraId);\n    }')
+          replace(bridge,
+              '    storageRecord.manufacturer =\n      camera.displayManufacturer ||\n      resolveDisplayManufacturer(camera) ||\n      "Marca no identificada";',
+              '    storageRecord.manufacturer = "Matter All-in-One Chrisalvir";')
+
+          # HAP identity uses the actual Matterbridge runtime version; never a fake plugin fallback.
+          accessory = root / 'src/camera/homekit/homekit-camera.accessory.ts'
+          text = accessory.read_text()
+          text = text.replace('platform?.matterbridge?.matterbridgeVersion || "1.4.72"', 'platform?.matterbridge?.matterbridgeVersion || "unknown"')
+          # Advertise one audio codec that the pipeline can deterministically produce.
+          old_codecs = '''              codecs: [
+                {
+                  type: AudioStreamingCodecType.AAC_ELD,
+                  samplerate: AudioStreamingSamplerate.KHZ_16,
+                },
+                {
+                  type: AudioStreamingCodecType.OPUS,
+                  samplerate: AudioStreamingSamplerate.KHZ_16,
+                },
+              ],'''
+          new_codecs = '''              codecs: [
+                {
+                  type: AudioStreamingCodecType.OPUS,
+                  samplerate: AudioStreamingSamplerate.KHZ_16,
+                },
+              ],'''
+          if old_codecs not in text:
+              raise SystemExit('HAP streaming audio codec block not found')
+          accessory.write_text(text.replace(old_codecs, new_codecs, 1))
+
+          # Respect negotiated dimensions, transcode incompatible video, force Opus, and gate START success.
+          delegate = root / 'src/camera/homekit/homekit-camera-stream.delegate.ts'
+          replace(delegate,
+              '      validationStatus === "unauthorized" ||\n      validationStatus === "timeout" ||\n      validationStatus === "unsupported" ||',
+              '      validationStatus === "unauthorized" ||\n      validationStatus === "unsupported" ||')
+          replace(delegate,
+              '      bitrateKbps: videoReq.max_bit_rate || 2000,\n      httpBearerToken: token,',
+              '      bitrateKbps: videoReq.max_bit_rate || 2000,\n      targetWidth: videoReq.width,\n      targetHeight: videoReq.height,\n      httpBearerToken: token,')
+          replace(delegate,
+              '      strategy:\n        // HA\'s camera_proxy_stream endpoint is multipart MJPEG even when the\n        // physical camera itself encodes H.264, so it must be transcoded.\n        this.streamSource.sourceType === "ha_proxy" ||\n        this.capabilities.strategy === "transcode_required"\n          ? "transcode_required"',
+              '      strategy:\n        // Transcode when the source cannot satisfy the exact HAP negotiation.\n        this.streamSource.sourceType === "ha_proxy" ||\n        this.capabilities.strategy === "transcode_required" ||\n        this.capabilities.videoCodec !== "h264" ||\n        this.capabilities.resolution.width > videoReq.width ||\n        this.capabilities.resolution.height > videoReq.height\n          ? "transcode_required"')
+          replace(delegate,
+              '      audioCodec:\n        metadata.enableLocalAudioAdaptation && this.capabilities.hasAudio\n          ? "opus"\n          : this.capabilities.audioCodec === "aac_lc"\n            ? "aac"\n            : "transcode",',
+              '      // HAP advertises Opus 16 kHz; always produce exactly that codec.\n      audioCodec: this.capabilities.hasAudio ? "opus" : undefined,')
+          replace(delegate,
+              '      const proc = spawn(ffmpegPath, ffmpegArgs, {\n        stdio: ["ignore", "ignore", "pipe"],\n      });\n      session.process = proc;\n\n      proc.stderr.on("data", (data) => {',
+              '      const proc = spawn(ffmpegPath, ffmpegArgs, {\n        stdio: ["ignore", "pipe", "pipe"],\n      });\n      session.process = proc;\n      let startCallbackSettled = false;\n      const settleStart = (error?: Error) => {\n        if (startCallbackSettled) return;\n        startCallbackSettled = true;\n        clearTimeout(readinessTimer);\n        callback(error);\n      };\n      const readinessTimer = setTimeout(() => {\n        if (proc.exitCode === null && !proc.killed) {\n          this.platform?.log?.notice?.(\n            `[HomeKitCamera][${this.entityId}] RTP pipeline remained active; accepting HAP START`,\n          );\n          settleStart();\n        } else {\n          settleStart(new Error("FFmpeg exited before producing a live stream"));\n        }\n      }, 4000);\n\n      proc.stdout?.on("data", (data) => {\n        const progress = data.toString();\n        if (/frame=\\d+|progress=continue|progress=end/.test(progress)) {\n          this.platform?.log?.notice?.(\n            `[HomeKitCamera][${this.entityId}] First FFmpeg media progress observed`,\n          );\n          settleStart();\n        }\n      });\n\n      proc.stderr.on("data", (data) => {')
+          replace(delegate,
+              '      proc.on("close", (code) => {\n        this.platform?.log?.debug?.(\n          `[HomeKitCamera][${this.entityId}] FFmpeg process closed with code ${code}`,\n        );\n        session.process = undefined;\n      });\n\n      proc.on("error", (err) => {\n        this.platform?.log?.error?.(\n          `[HomeKitCamera][${this.entityId}] FFmpeg process error: ${err.message}`,\n        );\n      });\n\n      callback();',
+              '      proc.on("close", (code) => {\n        this.platform?.log?.notice?.(\n          `[HomeKitCamera][${this.entityId}] FFmpeg process closed with code ${code}`,\n        );\n        session.process = undefined;\n        if (!startCallbackSettled) {\n          settleStart(new Error(`FFmpeg exited before Live View became ready (code ${code})`));\n        }\n      });\n\n      proc.on("error", (err) => {\n        this.platform?.log?.error?.(\n          `[HomeKitCamera][${this.entityId}] FFmpeg process error: ${err.message}`,\n        );\n        settleStart(err);\n      });')
+
+          # Apple tab must be HAP and cannot fabricate a setup URI.
+          frontend = root / 'src/frontend/script.js'
+          replace(frontend,
+              '      pairingPayload =\n        camera.identity?.homeKitSetupUri ||\n        `X-HM://${camera.identity?.homeKitSetupId || "0000"}`;',
+              '      pairingPayload = camera.identity?.homeKitSetupUri || "";\n      if (!pairingPayload && els.camModalQrNote) {\n        els.camModalQrNote.textContent =\n          "Apple Home requiere el código HAP X-HM real. El accesorio todavía no lo ha publicado; actualiza la cámara.";\n      }')
+          replace(frontend,
+              '        bridgeEntity?.pairingCode ||\n        "ABCD-1234-EFGH";',
+              '        bridgeEntity?.pairingCode ||\n        "";')
+          replace(frontend,
+              '    try {\n      if (typeof QRCode !== "undefined") {',
+              '    try {\n      if (!pairingPayload) {\n        els.camModalQrCode.textContent = "Código no disponible";\n        if (els.camModalQrLogo) els.camModalQrLogo.style.display = "none";\n        return;\n      }\n      if (typeof QRCode !== "undefined") {')
+
+          # Bust UI caches and synchronize visible version strings.
+          index = root / 'src/frontend/index.html'
+          index.write_text(index.read_text().replace('1.4.82', '1.4.83'))
+          for readme in [Path('README.md'), root / 'README.md']:
+              if readme.exists():
+                  readme.write_text(re.sub(r'v1\.4\.82', 'v1.4.83', readme.read_text()))
+
+          changelog = root / 'CHANGELOG.md'
+          entry = '''## [1.4.83] - 2026-09-02
+
+### Reparación verificable de Live View HAP, Node 24.20 LTS e identidad de cámaras
+
+- Node.js 24.20 LTS en Docker, CI, publicación y desarrollo.
+- Apple Home usa exclusivamente el QR HAP real (`X-HM://`); Matter permanece separado y experimental.
+- Remontaje HAP cuando cambia URL, validación o capacidades del stream Scrypted.
+- `rtspTransportPreference=auto` ya no genera `-rtsp_transport auto` inválido.
+- START HAP espera progreso real de FFmpeg o una tubería viva antes de responder éxito.
+- Transcodificación cuando la fuente excede la resolución negociada; passthrough H.264 compatible conserva máxima calidad.
+- Audio Live View normalizado a Opus 16 kHz y SPS/PPS repetidos para H.264 validado.
+- Manufacturer HAP fijo: Matter All-in-One Chrisalvir; modelo y serial permanecen editables/reales.
+
+'''
+          changelog.write_text(entry + changelog.read_text())
+          PY
+
+      - name: Setup Node.js 24.20 LTS
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af
+        with:
+          node-version: '24.20.x'
+          cache: npm
+          cache-dependency-path: matter-all-in-one-addon/package-lock.json
+
+      - name: Synchronize lockfile
+        working-directory: matter-all-in-one-addon
+        run: npm install --package-lock-only --legacy-peer-deps --no-fund --no-audit
+
+      - name: Install, typecheck, test and build
+        working-directory: matter-all-in-one-addon
+        run: |
+          npm ci --legacy-peer-deps --no-fund --no-audit
+          npm run typecheck
+          npm run test
+          npm run build
+
+      - name: Verify repair invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'ARG BUILD_FROM=node:24.20.0' matter-all-in-one-addon/Dockerfile
+          grep -q 'node-version:.*24.20' .github/workflows/build.yml
+          grep -q 'transport !== "auto"' matter-all-in-one-addon/src/camera/homekit/ffmpeg-helper.ts
+          grep -q 'First FFmpeg media progress observed' matter-all-in-one-addon/src/camera/homekit/homekit-camera-stream.delegate.ts
+          grep -q 'pairingPayload = camera.identity?.homeKitSetupUri || ""' matter-all-in-one-addon/src/frontend/script.js
+          ! grep -q 'X-HM://.*0000' matter-all-in-one-addon/src/frontend/script.js
+          ! grep -q 'ABCD-1234-EFGH' matter-all-in-one-addon/src/frontend/script.js
+          test "$(node -p "require('./matter-all-in-one-addon/package.json').version")" = '1.4.83'
+
+      - name: Build Docker image with Node 24.20
+        run: docker build --tag matter-all-in-one:v1.4.83 matter-all-in-one-addon
+
+      - name: Commit, tag and push
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add .
+          git commit -m "fix(camera): verified HAP Live View pipeline and Node 24.20 LTS (v1.4.83)"
+          git push origin HEAD:main
+          git tag -a v1.4.83 -m "v1.4.83 - Verified HAP Live View pipeline"
+          git push origin v1.4.83
+          gh release create v1.4.83 \
+            --title "v1.4.83 - Verified HAP Live View pipeline and Node 24.20 LTS" \
+            --notes "$(cat <<'EOF'
+          ## v1.4.83
+
+          Reparación ordenada de la ruta Scrypted → HAP → Apple Home:
+
+          - Node.js 24.20 LTS en Docker, CI y publicación.
+          - QR de Apple Home confirmado como HAP real `X-HM://`; nunca se fabrica un QR.
+          - Matter Camera queda separado y experimental para controladores compatibles.
+          - Los accesorios HAP se actualizan cuando cambia el stream Scrypted.
+          - Se elimina `-rtsp_transport auto` inválido.
+          - El START espera progreso de FFmpeg y falla explícitamente si el proceso muere.
+          - La salida respeta la resolución negociada y normaliza audio a Opus 16 kHz.
+          - SPS/PPS se repiten en keyframes H.264 para prevenir pantalla verde.
+          - Manufacturer: Matter All-in-One Chrisalvir; modelo/serial reales o manuales.
+
+          Validación automatizada: typecheck, suite Vitest, build TypeScript y build Docker.
+
+          Nota: la confirmación final de video en un iPhone requiere una prueba física contra Scrypted y Apple Home; CI valida el pipeline y evita falsos positivos, pero no puede sustituir al controlador real.
+          EOF
+          )"
