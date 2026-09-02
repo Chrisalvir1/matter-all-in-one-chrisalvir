@@ -215,7 +215,7 @@ export class ScryptedHomeKitBridge {
       await accessory.publish();
       storageRecord.published = true;
       platform?.log?.notice?.(
-        `[ScryptedHomeKitBridge] 📷 Publicada cámara HomeKit "${camera.name}" en puerto ${storageRecord.port} (PIN: ${storageRecord.pincode}, URI: ${accessory.setupUri})`,
+        `[ScryptedHomeKitBridge] 📷 Publicada cámara HomeKit "${camera.name}" en puerto ${storageRecord.port} (PIN: ${storageRecord.pincode}, Stream: ${directUrl ? "configurado" : "⚠️ NO CONFIGURADO EN SCRYPTED"})`,
       );
     } catch (err: any) {
       platform?.log?.error?.(

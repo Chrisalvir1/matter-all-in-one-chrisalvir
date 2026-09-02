@@ -51,18 +51,43 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
   ) {}
 
   /**
-   * Snapshot handler: returns a high-speed JPEG snapshot from Home Assistant.
+   * Snapshot handler: returns a high-speed JPEG snapshot from Scrypted or Home Assistant.
    */
   public async handleSnapshotRequest(
     request: SnapshotRequest,
     callback: SnapshotRequestCallback,
   ): Promise<void> {
-    this.platform?.log?.debug?.(
+    this.platform?.log?.notice?.(
       `[HomeKitCamera][${this.entityId}] Snapshot requested: ${request.width}x${request.height}`,
     );
 
     try {
-      // 1. Try to fetch direct JPEG from Home Assistant proxy
+      // 1. Try to fetch direct snapshot from Scrypted snapshotUrl if available
+      const snapshotUrl = this.streamSource.snapshotUrl;
+      if (
+        snapshotUrl &&
+        (snapshotUrl.startsWith("http://") ||
+          snapshotUrl.startsWith("https://"))
+      ) {
+        try {
+          const res = await fetch(snapshotUrl, {
+            signal: AbortSignal.timeout(2500),
+          });
+          if (res.ok) {
+            const buf = Buffer.from(await res.arrayBuffer());
+            if (buf.length > 0) {
+              callback(undefined, buf);
+              return;
+            }
+          }
+        } catch (snapErr: any) {
+          this.platform?.log?.debug?.(
+            `[HomeKitCamera][${this.entityId}] Direct HTTP snapshot failed: ${snapErr?.message || snapErr}`,
+          );
+        }
+      }
+
+      // 2. Try to fetch direct JPEG from Home Assistant proxy
       if (this.platform?.ha?.fetchSnapshot) {
         const imageBuffer = await this.platform.ha.fetchSnapshot(this.entityId);
         if (
@@ -75,14 +100,15 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
         }
       }
 
-      // 2. Fallback: extract single JPEG frame from stream source via ffmpeg
+      // 3. Fallback: extract single JPEG frame from stream source via ffmpeg with strict 2.5s timeout
       const ffmpegPath = resolveFfmpegPath();
       const sourceUrl = this.streamSource.url;
       if (ffmpegPath && sourceUrl) {
-        const ffmpegArgs = [
-          "-hide_banner",
-          "-loglevel",
-          "error",
+        const ffmpegArgs = ["-hide_banner", "-loglevel", "error"];
+        if (sourceUrl.startsWith("rtsp://")) {
+          ffmpegArgs.push("-rtsp_transport", "tcp", "-stimeout", "2500000");
+        }
+        ffmpegArgs.push(
           "-i",
           sourceUrl,
           "-frames:v",
@@ -92,15 +118,32 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
           "-q:v",
           "3",
           "pipe:1",
-        ];
+        );
 
         const ffmpeg = spawn(ffmpegPath, ffmpegArgs, {
           stdio: ["ignore", "pipe", "ignore"],
         });
         const chunks: Buffer[] = [];
+        let settled = false;
+
+        const killTimer = setTimeout(() => {
+          if (!settled) {
+            settled = true;
+            try {
+              ffmpeg.kill("SIGKILL");
+            } catch {}
+            this.platform?.log?.warn?.(
+              `[HomeKitCamera][${this.entityId}] Snapshot extraction timed out after 2.5s`,
+            );
+            callback(new Error("Snapshot extraction timed out"));
+          }
+        }, 2500);
 
         ffmpeg.stdout.on("data", (chunk) => chunks.push(chunk));
         ffmpeg.on("close", (code) => {
+          clearTimeout(killTimer);
+          if (settled) return;
+          settled = true;
           if (code === 0 && chunks.length > 0) {
             callback(undefined, Buffer.concat(chunks));
           } else {
@@ -109,7 +152,12 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
             );
           }
         });
-        ffmpeg.on("error", (err) => callback(err));
+        ffmpeg.on("error", (err) => {
+          clearTimeout(killTimer);
+          if (settled) return;
+          settled = true;
+          callback(err);
+        });
         return;
       }
 
@@ -175,8 +223,8 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
       };
     }
 
-    this.platform?.log?.debug?.(
-      `[HomeKitCamera][${this.entityId}] Prepared stream session ${sessionId} (target: ${targetAddress}:${videoPort})`,
+    this.platform?.log?.notice?.(
+      `[HomeKitCamera][${this.entityId}] 🎬 Prepare stream session ${sessionId} (target: ${targetAddress}:${videoPort})`,
     );
 
     callback(undefined, response);
@@ -200,18 +248,25 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
         return;
       }
 
+      this.platform?.log?.notice?.(
+        `[HomeKitCamera][${this.entityId}] 🟢 Starting live stream for Apple Home (Session: ${sessionId})`,
+      );
+
       void this.startFfmpegStream(
         session,
         request as StartStreamRequest,
         callback,
       );
     } else if (request.type === StreamRequestTypes.STOP) {
+      this.platform?.log?.notice?.(
+        `[HomeKitCamera][${this.entityId}] 🔴 Stopping live stream for Apple Home (Session: ${sessionId})`,
+      );
       this.stopFfmpegStream(sessionId);
       callback();
     } else if (request.type === StreamRequestTypes.RECONFIGURE) {
       const reconfig = request as ReconfigureStreamRequest;
-      this.platform?.log?.debug?.(
-        `[HomeKitCamera][${this.entityId}] Reconfigure stream: ${reconfig.video.width}x${reconfig.video.height} @ ${reconfig.video.max_bit_rate} kbps`,
+      this.platform?.log?.notice?.(
+        `[HomeKitCamera][${this.entityId}] 🔄 Reconfigure stream: ${reconfig.video.width}x${reconfig.video.height} @ ${reconfig.video.max_bit_rate} kbps`,
       );
       callback();
     }

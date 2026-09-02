@@ -1,3 +1,11 @@
+## [1.4.81] - 2026-09-02
+
+### Snapshot Rápido con Timeout Estricto, Diagnóstico en Vivo de Apple Home y Transmisión RTSP TCP
+
+- **Snapshot Inmune a Bloqueos (Sin Más "No Response"):** Apple Home solicita snapshots periódicos para renderizar los thumbnails. Se implementó consulta directa HTTP a Scrypted (`snapshotUrl`), fallback seguro a Home Assistant y extracción FFmpeg con `-rtsp_transport tcp -stimeout 2500000` con temporizador estricto de terminación a los 2.5 s (`SIGKILL`), garantizando que la app Casa nunca se quede esperando y marque el accesorio como "Sin respuesta".
+- **Trazabilidad Completa en Vivo de Live View:** Visibilidad inmediata de cada ciclo de vida HAP: `Snapshot requested`, `🎬 Prepare stream session`, `🟢 Starting live stream for Apple Home` y `🔴 Stopping live stream` en nivel notice.
+- **Detección Temprana de Stream Configurado en Scrypted:** Registro en arranque del estado de configuración RTSP de cada cámara.
+
 ## [1.4.80] - 2026-09-02
 
 ### Corrección Definitiva de "No Response" y Live View en Apple Home — Cámaras Scrypted HAP
