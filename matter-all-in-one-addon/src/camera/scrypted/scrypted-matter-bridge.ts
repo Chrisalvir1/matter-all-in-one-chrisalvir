@@ -9,10 +9,22 @@ import type {
   ResolvedStreamSource,
 } from "../camera-types.js";
 
+export interface SensorBinding {
+  cameraId: string;
+  sensorId: string;
+  sensorType: string;
+  clusterId: number;
+  attributeName: string;
+  lastValue?: any;
+  status: "active" | "pending" | "inactive";
+  lastWarningAt?: number;
+}
+
 export class ScryptedMatterBridge {
   private static activeEndpoints = new Map<string, MatterbridgeEndpoint>();
   private static sessionManagers = new Map<string, CameraSessionManager>();
   private static adapters = new Map<string, CameraWebRtcAdapter>();
+  private static sensorBindings = new Map<string, SensorBinding>();
 
   /**
    * Mounts a Matter Camera 1.5/1.6 endpoint with WebRTC clusters and integrated sensor clusters.
@@ -148,6 +160,8 @@ export class ScryptedMatterBridge {
       this.activeEndpoints.delete(cameraId);
       this.sessionManagers.delete(cameraId);
       this.adapters.delete(cameraId);
+      this.sensorBindings.delete(`${cameraId}:occupancy`);
+      this.sensorBindings.delete(`${cameraId}:doorbell`);
     }
   }
 
@@ -157,27 +171,147 @@ export class ScryptedMatterBridge {
     return this.activeEndpoints.get(cameraId);
   }
 
+  public static getSensorBinding(
+    cameraId: string,
+    sensorType: string,
+  ): SensorBinding | undefined {
+    return this.sensorBindings.get(`${cameraId}:${sensorType}`);
+  }
+
+  /**
+   * Safely updates an attribute on a Matter endpoint only when all invariants are satisfied:
+   * 1. Binding exists and is tracked.
+   * 2. Endpoint exists and has an assigned integer ID (Number.isInteger).
+   * 3. Endpoint is active on the node.
+   * 4. Cluster and attribute exist on the endpoint.
+   * 5. Value has actually changed (prevents redundant Matter broadcasts).
+   */
+  public static setSensorAttributeSafely(
+    binding: SensorBinding | undefined,
+    value: any,
+    endpoint?: MatterbridgeEndpoint,
+    log?: any,
+  ): boolean {
+    if (!binding) return false;
+
+    const targetEndpoint =
+      endpoint || this.activeEndpoints.get(binding.cameraId);
+    if (!targetEndpoint) {
+      binding.status = "inactive";
+      return false;
+    }
+
+    const endpointId =
+      (targetEndpoint as any).id ?? (targetEndpoint as any).number;
+    if (
+      endpointId === undefined ||
+      endpointId === null ||
+      !Number.isInteger(Number(endpointId))
+    ) {
+      binding.status = "pending";
+      const now = Date.now();
+      if (!binding.lastWarningAt || now - binding.lastWarningAt > 60000) {
+        binding.lastWarningAt = now;
+        log?.warn?.(
+          `[ScryptedMatterBridge] Endpoint para sensor ${binding.sensorType} (cámara ${binding.cameraId}) está en estado inactivo/sin ID numérico. Omitiendo setAttribute para evitar errores de Matter.`,
+        );
+      }
+      return false;
+    }
+
+    // Value change check
+    if (binding.lastValue === value) {
+      return true; // No-op, already at this state
+    }
+
+    // Check cluster presence
+    const hasAttr =
+      typeof (targetEndpoint as any).hasAttributeServer === "function"
+        ? (targetEndpoint as any).hasAttributeServer(
+            binding.clusterId,
+            binding.attributeName,
+          )
+        : false;
+
+    if (!hasAttr) {
+      binding.status = "inactive";
+      return false;
+    }
+
+    try {
+      if (typeof (targetEndpoint as any).setAttribute === "function") {
+        (targetEndpoint as any).setAttribute(
+          binding.clusterId,
+          binding.attributeName,
+          value,
+          log,
+        );
+        binding.lastValue = value;
+        binding.status = "active";
+        return true;
+      }
+    } catch (err: any) {
+      binding.status = "inactive";
+      const now = Date.now();
+      if (!binding.lastWarningAt || now - binding.lastWarningAt > 60000) {
+        binding.lastWarningAt = now;
+        log?.warn?.(
+          `[ScryptedMatterBridge] Error al actualizar sensor ${binding.sensorType} en cámara ${binding.cameraId}: ${err?.message || err}`,
+        );
+      }
+      return false;
+    }
+    return false;
+  }
+
+  public static updateSensorState(
+    cameraId: string,
+    sensorType: string,
+    value: any,
+    log?: any,
+  ): boolean {
+    const binding = this.sensorBindings.get(`${cameraId}:${sensorType}`);
+    const endpoint = this.activeEndpoints.get(cameraId);
+    return this.setSensorAttributeSafely(binding, value, endpoint, log);
+  }
+
   private static attachIntegratedSensorClusters(
     endpoint: MatterbridgeEndpoint,
     camera: CameraRecord,
   ): void {
-    // Attach Motion Sensor Cluster (0x040D) if motion sensor exists
-    const hasMotion = camera.sensors.some(
-      (s: CameraSensorRecord) => s.type === "motion" && s.enabled,
+    // Attach Real Occupancy Sensor Cluster (0x0406) only if genuine occupancy sensor exists
+    const hasOccupancy = camera.sensors.some(
+      (s: CameraSensorRecord) => s.type === "occupancy" && s.enabled,
     );
-    if (hasMotion) {
+    if (hasOccupancy) {
       try {
         endpoint.createDefaultOccupancySensingClusterServer(false);
+        this.sensorBindings.set(`${camera.cameraId}:occupancy`, {
+          cameraId: camera.cameraId,
+          sensorId: `${camera.cameraId}_occupancy`,
+          sensorType: "occupancy",
+          clusterId: 0x0406,
+          attributeName: "occupancy",
+          status: "pending",
+        });
       } catch {}
     }
 
-    // Attach Doorbell Cluster (0x0552) if doorbell sensor exists
+    // Attach Doorbell Cluster (0x0552 / BooleanState 0x0045) if doorbell sensor exists
     const hasDoorbell = camera.sensors.some(
       (s: CameraSensorRecord) => s.type === "doorbell" && s.enabled,
     );
     if (hasDoorbell) {
       try {
         endpoint.createDefaultBooleanStateClusterServer(false);
+        this.sensorBindings.set(`${camera.cameraId}:doorbell`, {
+          cameraId: camera.cameraId,
+          sensorId: `${camera.cameraId}_doorbell`,
+          sensorType: "doorbell",
+          clusterId: 0x0045,
+          attributeName: "stateValue",
+          status: "pending",
+        });
       } catch {}
     }
   }

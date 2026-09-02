@@ -33,16 +33,25 @@ export class ScryptedHomeKitBridge {
     // RULE: Never invent an RTSP URL from cameraId.
     // If no real directUrl is present, leave url undefined — FFmpeg must NOT start.
     const directUrl = camera.source.streamReference?.directUrl;
-    const streamVerified = Boolean(directUrl);
+    const validationStatus =
+      camera.source.streamValidationStatus ||
+      camera.source.streamReference?.validationStatus ||
+      "not_checked";
+    const streamVerified =
+      validationStatus === "verified" && Boolean(directUrl);
 
     const capabilities: CameraCapabilitiesInfo = {
       hasLiveStream: streamVerified,
       streamSourceType: directUrl ? "rtsp" : "unknown",
-      videoCodec: "h264",
+      videoCodec: camera.capabilities?.observed?.videoCodec || "h264",
       hasAudio: streamVerified
         ? (camera.capabilities?.observed?.hasAudio ?? false)
         : false,
-      audioCodec: streamVerified ? "aac_lc" : "none",
+      audioCodec: streamVerified
+        ? camera.capabilities?.observed?.audioCodec === "opus"
+          ? "opus"
+          : "aac_lc"
+        : "none",
       resolution: camera.capabilities?.observed?.resolution || {
         width: 1920,
         height: 1080,
@@ -60,6 +69,21 @@ export class ScryptedHomeKitBridge {
       (s: CameraSensorRecord) => s.type === "doorbell",
     );
 
+    const modelName =
+      camera.identityOverride?.model ||
+      camera.sourceModel ||
+      camera.displayModel ||
+      "Modelo no identificado";
+    const manufacturerName =
+      camera.identityOverride?.manufacturer ||
+      camera.sourceManufacturer ||
+      camera.displayManufacturer ||
+      "Marca no identificada";
+    const serial =
+      camera.identityOverride?.serialNumber ||
+      camera.serialNumber ||
+      "Serial no disponible";
+
     const resolvedSource: ResolvedStreamSource = {
       sourceType: directUrl ? "rtsp" : "unknown",
       url: directUrl, // undefined when no real stream available
@@ -70,17 +94,19 @@ export class ScryptedHomeKitBridge {
         isScrypted: true,
         scryptedCameraId: camera.cameraId,
         streamVerified,
-        model:
-          camera.sourceModel ||
-          camera.displayModel ||
-          camera.model ||
-          "Cámara IP",
-        manufacturer: "Matter all in one Chrisalvir",
-        serialNumber:
-          camera.serialNumber ||
-          (camera.identity as any)?.serialNumber ||
-          `SCRYPTED-${camera.cameraId.toUpperCase().substring(0, 12)}`,
+        validationStatus,
+        profiles: camera.source.profiles,
+        model: modelName,
+        manufacturer: manufacturerName,
+        serialNumber: serial,
         hasDoorbell,
+        needsDumpExtra: camera.capabilities?.observed?.needsDumpExtra,
+        transport:
+          camera.exportConfig?.rtspTransportPreference ||
+          camera.exportConfig?.homeKitExportConfig?.rtspTransportPreference ||
+          "auto",
+        enableLocalAudioAdaptation:
+          camera.exportConfig?.homeKitExportConfig?.enableLocalAudioAdaptation,
       },
     };
 
@@ -89,6 +115,13 @@ export class ScryptedHomeKitBridge {
 
     if (typeof platform?.getOrCreateHomeKitCameraRecord === "function") {
       storageRecord = platform.getOrCreateHomeKitCameraRecord(entityId);
+      // Update identity in existing record if needed
+      if (modelName !== "Modelo no identificado") {
+        storageRecord.model = modelName;
+      }
+      if (serial !== "Serial no disponible") {
+        storageRecord.serialNumber = serial;
+      }
     } else {
       const usedPorts = new Set(
         Array.from(this.activeAccessories.values()).map(
@@ -103,15 +136,8 @@ export class ScryptedHomeKitBridge {
         uuid: "",
         name: camera.name,
         manufacturer: "Matter all in one Chrisalvir",
-        model:
-          camera.sourceModel ||
-          camera.displayModel ||
-          camera.model ||
-          "Cámara IP",
-        serialNumber:
-          camera.serialNumber ||
-          (camera.identity as any)?.serialNumber ||
-          `SCRYPTED-${camera.cameraId.toUpperCase().substring(0, 12)}`,
+        model: modelName,
+        serialNumber: serial,
         port: nextPort,
         pincode: "031-45-154",
         username: this.generateMacAddress(camera.cameraId),

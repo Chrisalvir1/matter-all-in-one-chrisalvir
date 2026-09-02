@@ -73,6 +73,8 @@ export interface ScryptedStreamProfile {
   validationStatus: StreamValidationStatus;
   validationError?: string;
   lastValidatedAt?: string;
+  gopSeconds?: number;
+  needsDumpExtra?: boolean;
 }
 
 export interface StreamCapabilities {
@@ -83,6 +85,8 @@ export interface StreamCapabilities {
   fps?: number;
   pixelFormat?: string;
   keyframeIntervalSeconds?: number;
+  gopSeconds?: number;
+  needsDumpExtra?: boolean;
   hasAudio: boolean;
   audioCodec?: "aac" | "opus" | "pcma" | "pcmu" | "none" | "unknown";
   audioSampleRate?: number;
@@ -105,6 +109,111 @@ export interface CameraSensorRecord {
   lastEventAt?: string;
 }
 
+export type HomeKitCameraMode = "h264_legacy" | "hevc_preview" | "auto";
+export type RtspTransportPreference = "auto" | "tcp" | "udp";
+
+export type MetricConfidence = "high" | "medium" | "low";
+export type MetricSource =
+  | "rtsp_probe"
+  | "ffprobe"
+  | "ffmpeg"
+  | "scrypted_sdk"
+  | "host_sample"
+  | "unavailable";
+
+export interface MetricValue<T> {
+  value: T;
+  source: MetricSource;
+  confidence: MetricConfidence;
+  measuredAt: string;
+}
+
+export interface StreamLatencyMetrics {
+  validatedAt: string;
+  sourceType: "local_rtsp" | "scrypted_rebroadcast" | "cloud";
+  timeToDescribeMs?: MetricValue<number>;
+  timeToFirstPacketMs?: MetricValue<number>;
+  timeToFirstKeyframeMs?: MetricValue<number>;
+  timeToFirstFrameMs?: MetricValue<number>;
+  observedGopSeconds?: MetricValue<number>;
+  observedFps?: MetricValue<number>;
+  observedBitrateKbps?: MetricValue<number>;
+  selectedTransport: MetricValue<"tcp" | "udp">;
+  packetLossEstimate?: MetricValue<number>;
+  ffmpegRestartCount: number;
+  hostCpuPercent?: MetricValue<number>;
+  hostMemoryMb?: MetricValue<number>;
+  cameraToScryptedMs?: MetricValue<number>;
+  scryptedToAddonMs?: MetricValue<number>;
+  addonToHomeKitMs?: MetricValue<number>;
+  controllerFirstFrameMs?: MetricValue<number>;
+}
+
+export interface HevcStreamTierInfo {
+  tier: "highest" | "high" | "medium" | "low";
+  profileId: string;
+  width: number;
+  height: number;
+  fps: number;
+  bitrateAverageKbps?: number;
+  bitrateMaxKbps?: number;
+  directUrl?: string;
+  verified: boolean;
+}
+
+export interface HevcTierAvailability {
+  high?: HevcStreamTierInfo;
+  medium?: HevcStreamTierInfo;
+  low?: HevcStreamTierInfo;
+  highest?: HevcStreamTierInfo;
+  concurrentVerified: boolean;
+  concurrencyTestedAt?: string;
+}
+
+export interface HevcAudioSpec {
+  opusTierCount: number;
+  captureSampleRate: 16000 | 24000;
+  transmissionSampleRate: 48000;
+  channels: 1;
+  packetTimeMs: 20;
+  codec: "opus";
+  requiresLocalAdaptation: boolean;
+}
+
+export interface HevcEligibilityCheck {
+  id: string;
+  name: string;
+  category: "source" | "bridge" | "interop";
+  passed: boolean;
+  details: string;
+}
+
+export interface HevcEligibilityResult {
+  eligible: boolean;
+  reason?: string;
+  evaluatedAt: string;
+  tierAvailability?: HevcTierAvailability;
+  audioSpec?: HevcAudioSpec;
+  checks: HevcEligibilityCheck[];
+}
+
+export interface HomeKitExportConfig {
+  mode: HomeKitCameraMode;
+  fallbackToH264: boolean;
+  rtspTransportPreference?: RtspTransportPreference;
+  selectedH264ProfileId?: string;
+  selectedHevcProfileId?: string;
+  hevcEligibility?: HevcEligibilityResult;
+  enableLocalAudioAdaptation?: boolean;
+}
+
+export interface HomeKitAccessoryIdentity {
+  hapUsername: string;
+  accessoryUuid: string;
+  displayName: string;
+  storagePath?: string;
+}
+
 export interface CameraExportConfig {
   matterEnabled: boolean;
   homeKitEnabled: boolean;
@@ -113,6 +222,8 @@ export interface CameraExportConfig {
   alexaEnabled: boolean;
   smartThingsEnabled: boolean;
   nasEnabled: boolean;
+  rtspTransportPreference?: RtspTransportPreference;
+  homeKitExportConfig?: HomeKitExportConfig;
 }
 
 export interface CameraNasConfig {
@@ -141,8 +252,10 @@ export interface CameraLogEntry {
 export interface CameraIdentityOverride {
   manufacturer?: string;
   model?: string;
+  serialNumber?: string;
   manufacturerSource: "scrypted" | "manual" | "unknown";
   modelSource: "scrypted" | "manual" | "unknown";
+  serialNumberSource?: "scrypted" | "manual" | "unknown";
   updatedAt?: string;
 }
 
@@ -165,6 +278,8 @@ export interface CameraRecord {
   displayManufacturer: string;
   /** Resolved display model: override → source → 'Modelo no identificado' */
   displayModel?: string;
+  /** Resolved display serial number: override → source → 'Serial no disponible' */
+  displaySerialNumber?: string;
 
   /** @deprecated Use sourceModel / displayModel. Kept for backwards compat. */
   model?: string;
@@ -206,6 +321,7 @@ export interface CameraRecord {
     qualityMode?:
       "maximum_compatible" | "manual_profile" | "optimized_compatible";
     allowAutomaticFallback?: boolean;
+    latencyMetrics?: StreamLatencyMetrics;
   };
 
   sensors: CameraSensorRecord[];

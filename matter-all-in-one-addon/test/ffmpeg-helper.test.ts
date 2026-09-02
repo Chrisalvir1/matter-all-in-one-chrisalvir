@@ -130,4 +130,126 @@ describe("FFmpeg Helper", () => {
       "http://127.0.0.1:8123/api/hls/test-stream/master.m3u8",
     );
   });
+
+  it("preserves 1440p stream via stream-copy without downscaling or libx264", () => {
+    const config: StreamPipelineConfig = {
+      sourceUrl: "rtsp://192.168.110.219:554/stream1",
+      targetAddress: "192.168.1.150",
+      videoPort: 51234,
+      videoSsrc: 1,
+      videoPayloadType: 99,
+      videoCryptoSuite: SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
+      videoKeySaltBase64: Buffer.alloc(30).toString("base64"),
+      strategy: "passthrough_h264",
+      fps: 20,
+      bitrateKbps: 4000,
+    };
+
+    const args = buildFfmpegStreamArgs(config);
+    expect(args).toContain("-vcodec");
+    expect(args).toContain("copy");
+    expect(args).not.toContain("libx264");
+    expect(args).not.toContain("-vf");
+    expect(args).not.toContain("scale");
+    expect(args).not.toContain("-bsf:v");
+  });
+
+  it("preserves 4K stream via stream-copy without downscaling", () => {
+    const config: StreamPipelineConfig = {
+      sourceUrl: "rtsp://192.168.110.220:554/live4k",
+      targetAddress: "192.168.1.150",
+      videoPort: 51234,
+      videoSsrc: 1,
+      videoPayloadType: 99,
+      videoCryptoSuite: SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
+      videoKeySaltBase64: Buffer.alloc(30).toString("base64"),
+      strategy: "passthrough_h264",
+      fps: 30,
+      bitrateKbps: 8000,
+    };
+
+    const args = buildFfmpegStreamArgs(config);
+    expect(args).toContain("-vcodec");
+    expect(args).toContain("copy");
+    expect(args).not.toContain("libx264");
+    expect(args).not.toContain("scale");
+  });
+
+  it("applies -bsf:v dump_extra only when needsDumpExtra is explicitly true", () => {
+    const configWithDumpExtra: StreamPipelineConfig = {
+      sourceUrl: "rtsp://192.168.1.50:554/stream1",
+      targetAddress: "192.168.1.200",
+      videoPort: 51234,
+      videoSsrc: 1,
+      videoPayloadType: 99,
+      videoCryptoSuite: SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
+      videoKeySaltBase64: Buffer.alloc(30).toString("base64"),
+      strategy: "passthrough_h264",
+      needsDumpExtra: true,
+    };
+
+    const argsWith = buildFfmpegStreamArgs(configWithDumpExtra);
+    expect(argsWith).toContain("-bsf:v");
+    expect(argsWith).toContain("dump_extra");
+
+    const configWithout: StreamPipelineConfig = {
+      ...configWithDumpExtra,
+      needsDumpExtra: false,
+    };
+    const argsWithout = buildFfmpegStreamArgs(configWithout);
+    expect(argsWithout).not.toContain("dump_extra");
+  });
+
+  it("respects RTSP transport configuration (udp vs tcp)", () => {
+    const udpConfig: StreamPipelineConfig = {
+      sourceUrl: "rtsp://192.168.1.50:554/stream1",
+      targetAddress: "192.168.1.200",
+      videoPort: 51234,
+      videoSsrc: 1,
+      videoPayloadType: 99,
+      videoCryptoSuite: SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
+      videoKeySaltBase64: Buffer.alloc(30).toString("base64"),
+      strategy: "passthrough_h264",
+      transport: "udp",
+    };
+
+    const udpArgs = buildFfmpegStreamArgs(udpConfig);
+    const transportIdx = udpArgs.indexOf("-rtsp_transport");
+    expect(transportIdx).toBeGreaterThan(-1);
+    expect(udpArgs[transportIdx + 1]).toBe("udp");
+
+    const tcpConfig: StreamPipelineConfig = {
+      ...udpConfig,
+      transport: "tcp",
+    };
+    const tcpArgs = buildFfmpegStreamArgs(tcpConfig);
+    const tcpTransportIdx = tcpArgs.indexOf("-rtsp_transport");
+    expect(tcpArgs[tcpTransportIdx + 1]).toBe("tcp");
+  });
+
+  it("configures Opus audio adaptation correctly when opus is specified", () => {
+    const config: StreamPipelineConfig = {
+      sourceUrl: "rtsp://192.168.1.50:554/stream1",
+      targetAddress: "192.168.1.200",
+      videoPort: 51234,
+      videoSsrc: 1,
+      videoPayloadType: 99,
+      videoCryptoSuite: SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
+      videoKeySaltBase64: Buffer.alloc(30).toString("base64"),
+      strategy: "passthrough_h264",
+      includeAudio: true,
+      audioPort: 51236,
+      audioSsrc: 2,
+      audioPayloadType: 110,
+      audioKeySaltBase64: Buffer.alloc(30).toString("base64"),
+      audioCodec: "opus",
+    };
+
+    const args = buildFfmpegStreamArgs(config);
+    expect(args).toContain("-acodec");
+    expect(args).toContain("libopus");
+    expect(args).toContain("-application");
+    expect(args).toContain("lowdelay");
+    expect(args).toContain("16k");
+  });
 });

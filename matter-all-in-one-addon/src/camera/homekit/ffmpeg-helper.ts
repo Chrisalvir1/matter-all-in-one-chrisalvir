@@ -457,6 +457,8 @@ export interface StreamPipelineConfig {
   audioPayloadType?: number;
   audioKeySaltBase64?: string;
   audioCodec?: string;
+  needsDumpExtra?: boolean;
+  transport?: "tcp" | "udp";
 }
 
 /**
@@ -479,6 +481,9 @@ export function buildFfmpegStreamArgs(config: StreamPipelineConfig): string[] {
   if (isPassthrough) {
     // Passthrough H.264 (Remux directly without transcoding CPU overhead)
     videoPayloadArgs.push("-vcodec", "copy");
+    if (config.needsDumpExtra) {
+      videoPayloadArgs.push("-bsf:v", "dump_extra");
+    }
   } else {
     // Transcode fallback for H.265 / MJPEG / incompatible formats
     const bitrate = config.bitrateKbps || 2000;
@@ -525,7 +530,8 @@ export function buildFfmpegStreamArgs(config: StreamPipelineConfig): string[] {
   }
 
   if (config.sourceUrl.startsWith("rtsp://")) {
-    inputArgs.push("-rtsp_transport", "tcp");
+    const transport = config.transport || "tcp";
+    inputArgs.push("-rtsp_transport", transport);
   }
 
   inputArgs.push(
@@ -562,21 +568,38 @@ export function buildFfmpegStreamArgs(config: StreamPipelineConfig): string[] {
   ) {
     const audioSrtpUrl = `srtp://${config.targetAddress}:${config.audioPort}?rtcpport=${config.audioPort}&localrtcpport=${config.audioPort}&pkt_size=188`;
 
-    const audioArgs =
-      config.audioCodec === "aac"
-        ? ["-map", "0:a:0", "-acodec", "copy"]
-        : [
-            "-map",
-            "0:a:0",
-            "-acodec",
-            "aac",
-            "-ar",
-            "16k",
-            "-b:a",
-            "32k",
-            "-ac",
-            "1",
-          ];
+    let audioArgs: string[];
+    if (config.audioCodec === "opus") {
+      audioArgs = [
+        "-map",
+        "0:a:0",
+        "-acodec",
+        "libopus",
+        "-application",
+        "lowdelay",
+        "-ar",
+        "16k",
+        "-b:a",
+        "24k",
+        "-ac",
+        "1",
+      ];
+    } else if (config.audioCodec === "aac") {
+      audioArgs = ["-map", "0:a:0", "-acodec", "copy"];
+    } else {
+      audioArgs = [
+        "-map",
+        "0:a:0",
+        "-acodec",
+        "aac",
+        "-ar",
+        "16k",
+        "-b:a",
+        "32k",
+        "-ac",
+        "1",
+      ];
+    }
 
     args.push(
       ...audioArgs,

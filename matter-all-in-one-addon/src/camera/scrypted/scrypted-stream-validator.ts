@@ -6,6 +6,7 @@ import {
 import type {
   StreamValidationStatus,
   ScryptedStreamProfile,
+  StreamLatencyMetrics,
 } from "./scrypted-types.js";
 import { isInventedRtspUrl } from "./scrypted-storage.js";
 
@@ -18,19 +19,41 @@ export interface StreamValidationResult {
   resolution?: { width: number; height: number };
   fps?: number;
   hasAudio?: boolean;
+  needsDumpExtra?: boolean;
+  gopSeconds?: number;
+  metrics?: StreamLatencyMetrics;
   validatedAt: string;
   probeMethod?: "ffprobe" | "ffmpeg";
 }
 
+interface CacheEntry {
+  result: StreamValidationResult;
+  expiresAt: number;
+}
+
 export class ScryptedStreamValidator {
+  /** Global queue to ensure only one probe runs at a time */
+  private static queue: Promise<any> = Promise.resolve();
+
+  /** Cache of recent validation results keyed by sanitized URL (30s TTL) */
+  private static cache = new Map<string, CacheEntry>();
+
+  /** Rate limit map by cameraId to prevent infinite probe loops on dead streams */
+  private static failureRateLimit = new Map<
+    string,
+    { timestamp: number; status: StreamValidationStatus }
+  >();
+
   /**
    * Validates a stream URL via ffprobe/ffmpeg without keeping the stream open.
    * Classifies results into typed StreamValidationStatus.
+   * Enforces single-concurrency queue, timeout, and result caching.
    */
   public static async validateStreamUrl(
     url: string,
     cameraId?: string,
-    timeoutMs: number = 8000,
+    timeoutMs: number = 3000,
+    signal?: AbortSignal,
   ): Promise<StreamValidationResult> {
     const now = new Date().toISOString();
     const sanitized = sanitizeUrlCredentials(url);
@@ -56,67 +79,189 @@ export class ScryptedStreamValidator {
       };
     }
 
-    try {
-      const probe: ProbeResult = await probeCameraSource(trimmedUrl, {
-        timeoutMs,
-      });
+    // Check cache
+    const cached = this.cache.get(sanitized);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.result;
+    }
 
-      if (probe.valid && probe.videoCodec) {
-        return {
-          status: "verified",
-          url: sanitized,
-          videoCodec: probe.videoCodec,
-          audioCodec: probe.audioCodec,
-          resolution:
-            probe.width && probe.height
-              ? { width: probe.width, height: probe.height }
-              : undefined,
-          fps: probe.fps,
-          hasAudio: probe.hasAudio,
-          validatedAt: now,
-          probeMethod: probe.probeMethod,
-        };
-      }
-
-      // Analyze error string to determine specific failure status
-      const errMsg = String(probe.error || "").toLowerCase();
-      let status: StreamValidationStatus = "invalid";
-
-      if (errMsg.includes("404") || errMsg.includes("not found")) {
-        status = "not_found";
-      } else if (
-        errMsg.includes("401") ||
-        errMsg.includes("403") ||
-        errMsg.includes("unauthorized") ||
-        errMsg.includes("forbidden")
-      ) {
-        status = "unauthorized";
-      } else if (errMsg.includes("timeout") || errMsg.includes("timed out")) {
-        status = "timeout";
-      } else if (
-        errMsg.includes("connection refused") ||
-        errMsg.includes("econnrefused") ||
-        errMsg.includes("host unreachable") ||
-        errMsg.includes("network unreachable")
-      ) {
-        status = "source_offline";
-      }
-
+    // Check rate limit for recent offline/not_found failures on this stream (30s backoff)
+    const rateLimitKey = cameraId ? `${cameraId}:${sanitized}` : sanitized;
+    const recentFailure = this.failureRateLimit.get(rateLimitKey);
+    if (
+      recentFailure &&
+      Date.now() - recentFailure.timestamp < 30000 &&
+      (recentFailure.status === "not_found" ||
+        recentFailure.status === "source_offline")
+    ) {
       return {
-        status,
+        status: recentFailure.status,
         url: sanitized,
-        error: probe.error || "No se pudo obtener información del stream",
-        validatedAt: now,
-        probeMethod: probe.probeMethod,
-      };
-    } catch (err: any) {
-      return {
-        status: "invalid",
-        url: sanitized,
-        error: String(err?.message || err),
+        error: `Reintento en espera (backoff activo para ${recentFailure.status})`,
         validatedAt: now,
       };
     }
+
+    if (signal?.aborted) {
+      return {
+        status: "timeout",
+        url: sanitized,
+        error: "Validación cancelada por el usuario o timeout",
+        validatedAt: now,
+      };
+    }
+
+    // Serialize probe execution through global queue
+    return new Promise<StreamValidationResult>((resolve) => {
+      this.queue = this.queue
+        .then(async () => {
+          if (signal?.aborted) {
+            resolve({
+              status: "timeout",
+              url: sanitized,
+              error: "Validación cancelada",
+              validatedAt: now,
+            });
+            return;
+          }
+
+          const startTime = Date.now();
+          try {
+            const probe: ProbeResult = await probeCameraSource(trimmedUrl, {
+              timeoutMs,
+            });
+
+            const elapsedMs = Date.now() - startTime;
+
+            if (probe.valid && probe.videoCodec) {
+              const metrics: StreamLatencyMetrics = {
+                validatedAt: now,
+                sourceType: trimmedUrl.includes("8554")
+                  ? "scrypted_rebroadcast"
+                  : "local_rtsp",
+                timeToDescribeMs: {
+                  value: elapsedMs,
+                  source: probe.probeMethod || "ffprobe",
+                  confidence: "high",
+                  measuredAt: now,
+                },
+                timeToFirstFrameMs: {
+                  value: elapsedMs,
+                  source: probe.probeMethod || "ffprobe",
+                  confidence: "high",
+                  measuredAt: now,
+                },
+                selectedTransport: {
+                  value: "tcp",
+                  source: "rtsp_probe",
+                  confidence: "high",
+                  measuredAt: now,
+                },
+                observedFps: probe.fps
+                  ? {
+                      value: probe.fps,
+                      source: "ffprobe",
+                      confidence: "high",
+                      measuredAt: now,
+                    }
+                  : undefined,
+                ffmpegRestartCount: 0,
+              };
+
+              const result: StreamValidationResult = {
+                status: "verified",
+                url: sanitized,
+                videoCodec: probe.videoCodec,
+                audioCodec: probe.audioCodec,
+                resolution:
+                  probe.width && probe.height
+                    ? { width: probe.width, height: probe.height }
+                    : undefined,
+                fps: probe.fps,
+                hasAudio: probe.hasAudio,
+                needsDumpExtra: false,
+                metrics,
+                validatedAt: now,
+                probeMethod: probe.probeMethod,
+              };
+
+              this.cache.set(sanitized, {
+                result,
+                expiresAt: Date.now() + 30000,
+              });
+              this.failureRateLimit.delete(rateLimitKey);
+              resolve(result);
+              return;
+            }
+
+            // Analyze error string to determine specific failure status
+            const errMsg = String(probe.error || "").toLowerCase();
+            let status: StreamValidationStatus = "invalid";
+
+            if (errMsg.includes("404") || errMsg.includes("not found")) {
+              status = "not_found";
+            } else if (
+              errMsg.includes("401") ||
+              errMsg.includes("403") ||
+              errMsg.includes("unauthorized") ||
+              errMsg.includes("forbidden")
+            ) {
+              status = "unauthorized";
+            } else if (
+              errMsg.includes("timeout") ||
+              errMsg.includes("timed out")
+            ) {
+              status = "timeout";
+            } else if (
+              errMsg.includes("connection refused") ||
+              errMsg.includes("econnrefused") ||
+              errMsg.includes("host unreachable") ||
+              errMsg.includes("network unreachable")
+            ) {
+              status = "source_offline";
+            }
+
+            const failureResult: StreamValidationResult = {
+              status,
+              url: sanitized,
+              error: probe.error || "No se pudo obtener información del stream",
+              validatedAt: now,
+              probeMethod: probe.probeMethod,
+            };
+
+            if (
+              status === "not_found" || status === "source_offline"
+            ) {
+              this.failureRateLimit.set(rateLimitKey, {
+                timestamp: Date.now(),
+                status,
+              });
+            }
+
+            this.cache.set(sanitized, {
+              result: failureResult,
+              expiresAt: Date.now() + 15000,
+            });
+            resolve(failureResult);
+          } catch (err: any) {
+            const errResult: StreamValidationResult = {
+              status: "invalid",
+              url: sanitized,
+              error: String(err?.message || err),
+              validatedAt: now,
+            };
+            resolve(errResult);
+          }
+        })
+        .catch(() => {
+          resolve({
+            status: "invalid",
+            url: sanitized,
+            error: "Error interno en cola de validación",
+            validatedAt: now,
+          });
+        });
+    });
   }
 
   /**
@@ -125,7 +270,8 @@ export class ScryptedStreamValidator {
   public static async validateProfile(
     profile: ScryptedStreamProfile,
     cameraId?: string,
-    timeoutMs: number = 8000,
+    timeoutMs: number = 3000,
+    signal?: AbortSignal,
   ): Promise<StreamValidationResult> {
     if (!profile.directUrl) {
       return {
@@ -136,6 +282,19 @@ export class ScryptedStreamValidator {
       };
     }
 
-    return await this.validateStreamUrl(profile.directUrl, cameraId, timeoutMs);
+    return await this.validateStreamUrl(
+      profile.directUrl,
+      cameraId,
+      timeoutMs,
+      signal,
+    );
+  }
+
+  /**
+   * Clears in-memory validation cache and rate limits.
+   */
+  public static clearCache(): void {
+    this.cache.clear();
+    this.failureRateLimit.clear();
   }
 }

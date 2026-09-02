@@ -1,5 +1,6 @@
 import {
   Accessory,
+  AccessoryInfo,
   Service,
   Characteristic,
   Categories,
@@ -45,10 +46,10 @@ export class HomeKitCameraAccessory {
       record.uuid || uuid.generate(`homekit:camera:${entityId}`);
     this.accessory = new Accessory(record.name || entityId, accessoryUuid);
 
-    // Configure Accessory Information Service
-    const manufacturer = "Matter all in one Chrisalvir";
-    const model = record.model || "Cámara IP";
-    const serialNumber = record.serialNumber || entityId.replaceAll(".", "_");
+    // Configure Accessory Information Service using real technical identity
+    const manufacturer = record.manufacturer || "Matter all in one Chrisalvir";
+    const model = record.model || "Modelo no identificado";
+    const serialNumber = record.serialNumber || "Serial no disponible";
     const firmware = platform?.matterbridge?.matterbridgeVersion || "1.4.72";
 
     this.accessory
@@ -120,6 +121,43 @@ export class HomeKitCameraAccessory {
       capabilities.hasLiveStream === true &&
       Boolean(streamSource?.url);
 
+    // Announce ONLY real resolutions actually offered by the camera and validated
+    const declaredResolutions: [number, number, number][] = [];
+    const profiles = (streamSource?.metadata as any)?.profiles;
+    if (Array.isArray(profiles) && profiles.length > 0) {
+      for (const p of profiles) {
+        if (p.resolution && p.resolution.width && p.resolution.height) {
+          const fps = p.fps || capabilities.maxFps || 30;
+          declaredResolutions.push([
+            p.resolution.width,
+            p.resolution.height,
+            fps,
+          ]);
+        }
+      }
+    }
+
+    if (
+      capabilities.resolution &&
+      capabilities.resolution.width &&
+      capabilities.resolution.height
+    ) {
+      const w = capabilities.resolution.width;
+      const h = capabilities.resolution.height;
+      const fps = capabilities.maxFps || 30;
+      if (!declaredResolutions.some(([rw, rh]) => rw === w && rh === h)) {
+        declaredResolutions.push([w, h, fps]);
+      }
+    }
+
+    if (declaredResolutions.length === 0) {
+      declaredResolutions.push(
+        [1920, 1080, 30],
+        [1280, 720, 30],
+        [640, 360, 30],
+      );
+    }
+
     const controllerOptions: CameraControllerOptions = {
       cameraStreamCount: 2,
       delegate: this.delegate,
@@ -138,17 +176,7 @@ export class HomeKitCameraAccessory {
               H264Level.LEVEL4_0,
             ],
           },
-          resolutions: [
-            [1920, 1080, 30],
-            [1280, 720, 30],
-            [1024, 768, 30],
-            [640, 480, 30],
-            [640, 360, 30],
-            [480, 360, 30],
-            [480, 270, 30],
-            [320, 240, 30],
-            [320, 180, 30],
-          ],
+          resolutions: declaredResolutions,
         },
         audio: capabilities.hasAudio
           ? {
@@ -366,11 +394,22 @@ export class HomeKitCameraAccessory {
 
   /**
    * Returns true if this camera accessory is actively paired to an Apple Home controller.
+   * Uses HAP-NodeJS AccessoryInfo.load(hapUsername) as official public API.
    */
   public isPaired(): boolean {
-    return Boolean(
-      this.record.isPaired || (this.accessory as any)._server?.paired,
-    );
+    try {
+      const hapUsername = this.record?.username;
+      if (!hapUsername) return false;
+      const info = AccessoryInfo.load(hapUsername);
+      if (info && typeof info.paired === "function") {
+        return info.paired();
+      }
+      return Boolean(
+        this.record.isPaired || (this.accessory as any)._server?.paired,
+      );
+    } catch {
+      return Boolean(this.record.isPaired);
+    }
   }
 
   /**

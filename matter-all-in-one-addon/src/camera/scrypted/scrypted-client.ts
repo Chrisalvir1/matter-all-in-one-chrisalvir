@@ -54,10 +54,49 @@ function extractDeviceInfo(device: any): {
     unwrapScryptedValue(rawInfo.model) ||
     unwrapScryptedValue(device?.model) ||
     undefined;
-  const serialNumber =
+
+  // Priority for serial:
+  // 1. device.info.serialNumber (manufacturer serial)
+  // 2. plugin-provided serial (device.info.serial)
+  // 3. nativeId explicitly labeled as technical ID
+  // Never use IP address as serial. Never publish MAC automatically as serial by default.
+  let serialNumber =
     unwrapScryptedValue(rawInfo.serialNumber) ||
     unwrapScryptedValue(device?.serialNumber) ||
     undefined;
+
+  if (!serialNumber) {
+    const pluginSerial =
+      unwrapScryptedValue(rawInfo.serial) ||
+      unwrapScryptedValue(device?.serial);
+    if (
+      pluginSerial &&
+      typeof pluginSerial === "string" &&
+      !net.isIP(pluginSerial)
+    ) {
+      serialNumber = pluginSerial;
+    }
+  }
+
+  if (!serialNumber) {
+    const nativeId = unwrapScryptedValue(device?.nativeId);
+    if (
+      nativeId &&
+      typeof nativeId === "string" &&
+      !net.isIP(nativeId) &&
+      nativeId.length >= 6
+    ) {
+      serialNumber = nativeId;
+    }
+  }
+
+  if (
+    serialNumber &&
+    typeof serialNumber === "string" &&
+    net.isIP(serialNumber)
+  ) {
+    serialNumber = undefined;
+  }
 
   return {
     manufacturer:
@@ -216,6 +255,7 @@ function mapDeviceToCameraRecord(
     model: resolvedModel, // compat
     displayManufacturer: resolvedManufacturer ?? "Marca no identificada",
     displayModel: resolvedModel,
+    displaySerialNumber: serialNumber || "Serial no disponible",
     serialNumber: serialNumber || undefined,
     identity: {},
     source: {

@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
+import net from "node:net";
 import path from "node:path";
 import type {
   ScryptedPersistentStore,
@@ -70,6 +71,33 @@ export function resolveDisplayModel(
   const legacy = camera.model?.trim();
   if (legacy && !isBlankOrUnknown(legacy)) return legacy;
   return undefined;
+}
+
+/**
+ * Resolves the effective display serial number for a camera.
+ * Priority:
+ * 1. identityOverride.serialNumber (manual user override in Matter All-in-One)
+ * 2. camera.serialNumber (real manufacturer serial from device.info.serialNumber)
+ * 3. plugin serial from metadata if present
+ * 4. nativeId explicitly labeled as technical ID
+ * 5. Fallback: 'Serial no disponible'
+ * Note: Never uses IP address as serial number. Never exposes raw MAC unless user explicitly consented.
+ */
+export function resolveDisplaySerialNumber(
+  camera: Partial<CameraRecord>,
+): string {
+  const override = camera.identityOverride?.serialNumber?.trim();
+  if (override && !isBlankOrUnknown(override)) return override;
+  const rawSerial = camera.serialNumber?.trim();
+  if (
+    rawSerial &&
+    !isBlankOrUnknown(rawSerial) &&
+    !rawSerial.startsWith("SCRYPTED-") &&
+    !net.isIP(rawSerial)
+  ) {
+    return rawSerial;
+  }
+  return "Serial no disponible";
 }
 /**
  * Returns true if the given URL was fabricated using the prohibited pattern
@@ -347,6 +375,10 @@ export class ScryptedStorage {
           ...fresh,
           identityOverride,
         }),
+        displaySerialNumber: resolveDisplaySerialNumber({
+          ...fresh,
+          identityOverride,
+        }),
         // Preserve export config and identity codes
         identity: {
           ...fresh.identity,
@@ -435,6 +467,10 @@ export class ScryptedStorage {
     // Recompute display values
     cam.displayManufacturer = resolveDisplayManufacturer(cam);
     cam.displayModel = resolveDisplayModel(cam);
+    cam.displaySerialNumber = resolveDisplaySerialNumber(cam);
+    if (override?.serialNumber) {
+      cam.serialNumber = override.serialNumber;
+    }
     await this.save(store);
     return true;
   }
@@ -631,12 +667,14 @@ export class ScryptedStorage {
   }
 
   /**
-   * Updates stream validation status and optional error/timestamp.
+   * Updates stream validation status and optional error/timestamp, observed capabilities and metrics.
    */
   public static async updateCameraStreamValidation(
     cameraId: string,
     status: StreamValidationStatus,
     error?: string,
+    capabilities?: Partial<import("./scrypted-types.js").StreamCapabilities>,
+    metrics?: import("./scrypted-types.js").StreamLatencyMetrics,
   ): Promise<boolean> {
     const store = await this.load();
     const cam = store.cameras.cameras.find((c) => c.cameraId === cameraId);
@@ -646,6 +684,22 @@ export class ScryptedStorage {
     cam.source.streamValidationStatus = status;
     cam.source.streamValidationError = error;
     cam.source.streamValidatedAt = now;
+
+    if (capabilities) {
+      cam.capabilities.observed = {
+        ...(cam.capabilities.observed || {
+          videoCodec: "h264",
+          resolution: { width: 1920, height: 1080 },
+          hasAudio: false,
+        }),
+        ...capabilities,
+      };
+      cam.capabilities.lastVerified = now;
+    }
+
+    if (metrics) {
+      cam.capabilities.latencyMetrics = metrics;
+    }
 
     if (cam.source.streamReference) {
       cam.source.streamReference.validationStatus = status;
@@ -663,6 +717,15 @@ export class ScryptedStorage {
         p.validationStatus = status;
         p.validationError = error;
         p.lastValidatedAt = now;
+        if (capabilities?.resolution) p.resolution = capabilities.resolution;
+        if (capabilities?.fps) p.fps = capabilities.fps;
+        if (capabilities?.hasAudio !== undefined)
+          p.hasAudio = capabilities.hasAudio;
+        if (capabilities?.audioCodec) p.audioCodec = capabilities.audioCodec;
+        if (capabilities?.gopSeconds !== undefined)
+          p.gopSeconds = capabilities.gopSeconds;
+        if (capabilities?.needsDumpExtra !== undefined)
+          p.needsDumpExtra = capabilities.needsDumpExtra;
       }
     }
 

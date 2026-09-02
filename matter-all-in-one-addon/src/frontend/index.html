@@ -802,13 +802,16 @@
               <div id="cam-modal-paired-box" class="paired-status-card" style="display: none; margin-top: 12px; padding: 12px; background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(52, 211, 153, 0.3); border-radius: 10px; text-align: center;">
                 <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 6px;">
                   <span style="font-size: 1.2rem;">🍏</span>
-                  <strong style="color: #34d399; font-size: 0.95rem;">Vinculada en Apple Home</strong>
+                  <strong style="color: #34d399; font-size: 0.95rem;">HomeKit: Emparejada</strong>
                 </div>
-                <p id="cam-modal-paired-home" style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 10px;">
-                  Casa: <strong id="cam-modal-paired-home-name" style="color: var(--text);">Apple Home</strong>
+                <p id="cam-modal-paired-home" style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 4px;">
+                  Casa Apple Home: <span style="color: var(--text-secondary); font-style: italic;">no disponible desde HAP (la app Casa administra la asignación)</span>
                 </p>
-                <button class="button button-sm button-danger-outline" id="cam-modal-unpair-btn" type="button" style="width: 100%; border-color: #ef4444; color: #f87171; background: rgba(239, 68, 68, 0.1); cursor: pointer;" title="Desvincula la cámara de Apple Home en tiempo real">
-                  ❌ Desvincular de Apple Home en tiempo real
+                <p id="cam-modal-paired-fabric" style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 10px;">
+                  Fabric Matter: <strong id="cam-modal-paired-fabric-name" style="color: var(--text);">No vinculada a Fabric</strong>
+                </p>
+                <button class="button button-sm button-danger-outline" id="cam-modal-unpair-btn" type="button" style="width: 100%; border-color: #ef4444; color: #f87171; background: rgba(239, 68, 68, 0.1); cursor: pointer;" title="Restablecer emparejamiento HomeKit de esta cámara">
+                  🔄 Restablecer emparejamiento HomeKit
                 </button>
               </div>
             </div>
@@ -907,7 +910,7 @@
                   💾 Configurar NAS
                 </button>
                 <button class="button button-danger" id="cam-modal-delete-btn" type="button">
-                  🗑️ Eliminar Cámara
+                  🗑️ Eliminar de la exportación
                 </button>
                 <button class="button button-secondary" id="cam-cfg-cancel" type="button">
                   Cancelar

@@ -285,22 +285,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           if (accessory) {
             accessory.updateMotionState(motionOn);
           }
-          const endpoint = ScryptedMatterBridge.getEndpoint(deviceId);
-          if (endpoint) {
-            // Guard: only call setAttribute if the endpoint has a valid numeric ID.
-            // Endpoints in the inactive state (id === undefined) crash Matterbridge with
-            // "Endpoint scrypted_XX:undefined is in the inactive state".
-            const endpointId = (endpoint as any).id;
-            if (endpointId !== undefined && endpointId !== null) {
-              try {
-                (endpoint as any).setAttribute?.(0x0406, "occupancy", {
-                  occupied: motionOn,
-                });
-              } catch {
-                // Silently swallow — endpoint may have been deregistered between check and call
-              }
-            }
-          }
+          // Motion is not mapped to occupancy (0x0406). Update Matter sensor safely only if tracked.
+          ScryptedMatterBridge.updateSensorState(
+            deviceId,
+            "motion",
+            motionOn,
+            this.log,
+          );
           this.broadcastSseMessage("camera_motion", { deviceId, motionOn });
         },
       );
@@ -310,6 +301,12 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         if (accessory) {
           accessory.updateMotionState(true);
         }
+        ScryptedMatterBridge.updateSensorState(
+          deviceId,
+          "doorbell",
+          true,
+          this.log,
+        );
         this.broadcastSseMessage("camera_doorbell", { deviceId });
       });
 
@@ -4541,18 +4538,28 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           const enriched = (store.cameras.cameras || []).map((cam) => {
             const acc = ScryptedHomeKitBridge.getAccessory(cam.cameraId);
             let setupUri: string | undefined;
+            let isPaired = false;
             try {
-              if (acc && acc.isPublished) {
-                setupUri = acc.setupUri;
+              if (acc) {
+                isPaired = acc.isPaired();
+                if (acc.isPublished && !isPaired) {
+                  setupUri = acc.setupUri;
+                }
               }
             } catch {}
 
             return {
               ...cam,
+              displaySerialNumber:
+                cam.displaySerialNumber ||
+                cam.serialNumber ||
+                "Serial no disponible",
               identity: {
                 ...cam.identity,
                 homeKitAccessoryId: `scrypted.${cam.cameraId}`,
-                homeKitSetupUri: setupUri || cam.identity?.homeKitSetupUri,
+                homeKitSetupUri: isPaired
+                  ? undefined
+                  : setupUri || cam.identity?.homeKitSetupUri,
                 homeKitPincode:
                   acc?.record?.pincode ||
                   cam.identity?.homeKitPincode ||
@@ -4560,7 +4567,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                 homeKitSetupId:
                   acc?.record?.setupId || cam.identity?.homeKitSetupId,
                 homeKitPort: acc?.record?.port || cam.identity?.homeKitPort,
-                homeKitPairingState: acc?.isPaired() ? "paired" : "not_paired",
+                homeKitPairingState: isPaired ? "paired" : "not_paired",
               },
             };
           });
@@ -4776,6 +4783,18 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             cameraId,
             validation.status,
             validation.error,
+            validation.status === "verified"
+              ? {
+                  videoCodec: validation.videoCodec as any,
+                  audioCodec: validation.audioCodec as any,
+                  resolution: validation.resolution,
+                  fps: validation.fps,
+                  hasAudio: validation.hasAudio ?? false,
+                  needsDumpExtra: validation.needsDumpExtra,
+                  gopSeconds: validation.gopSeconds,
+                }
+              : undefined,
+            validation.metrics,
           );
 
           if (validation.status === "verified") {

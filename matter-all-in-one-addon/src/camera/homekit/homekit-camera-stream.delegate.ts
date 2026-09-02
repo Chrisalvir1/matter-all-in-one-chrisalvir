@@ -275,7 +275,6 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
     }
 
     // Guard: block FFmpeg against obviously invented RTSP paths (/:digits pattern)
-    // These come from the prohibited rtsp://ip:8554/<scryptedId> pattern and always 404.
     try {
       const parsedUrl = new URL(sourceUrl);
       if (/^\/\d+$/.test(parsedUrl.pathname)) {
@@ -288,6 +287,52 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
       }
     } catch {
       // URL parse failed — let FFmpeg handle it
+    }
+
+    // Guard: block FFmpeg if stream is known to be in an error/unreachable state
+    const metadata = this.streamSource?.metadata || {};
+    let validationStatus = metadata.validationStatus;
+
+    if (
+      validationStatus === "not_found" ||
+      validationStatus === "unauthorized" ||
+      validationStatus === "timeout" ||
+      validationStatus === "unsupported" ||
+      validationStatus === "invalid" ||
+      validationStatus === "source_offline"
+    ) {
+      const errMsg = `El stream no está disponible (estado: ${validationStatus}). Verifica el stream en la interfaz antes de iniciar Live View.`;
+      this.platform?.log?.warn?.(
+        `[HomeKitCamera][${this.entityId}] Bloqueando FFmpeg: ${errMsg}`,
+      );
+      callback(new Error(errMsg));
+      return;
+    }
+
+    if (validationStatus === "not_checked" && sourceUrl) {
+      try {
+        const { ScryptedStreamValidator } =
+          await import("../scrypted/scrypted-stream-validator.js");
+        const probe = await ScryptedStreamValidator.validateStreamUrl(
+          sourceUrl,
+          metadata.scryptedCameraId,
+          3000,
+        );
+        validationStatus = probe.status;
+        metadata.validationStatus = probe.status;
+        if (probe.status !== "verified") {
+          const errMsg = `Validación inicial del stream falló (${probe.status}: ${probe.error || "error desconocido"}).`;
+          this.platform?.log?.warn?.(
+            `[HomeKitCamera][${this.entityId}] Bloqueando FFmpeg: ${errMsg}`,
+          );
+          callback(new Error(errMsg));
+          return;
+        }
+      } catch (err: any) {
+        this.platform?.log?.warn?.(
+          `[HomeKitCamera][${this.entityId}] Error en validación inicial: ${err?.message || err}`,
+        );
+      }
     }
 
     const token =
@@ -317,6 +362,8 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
       fps,
       bitrateKbps: videoReq.max_bit_rate || 2000,
       httpBearerToken: token,
+      needsDumpExtra: Boolean(metadata.needsDumpExtra),
+      transport: metadata.transport || "tcp",
       includeAudio:
         this.capabilities.hasAudio &&
         Boolean(session.audioPort && session.audioKeySalt && request.audio),
@@ -327,7 +374,11 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
         ? session.audioKeySalt.toString("base64")
         : undefined,
       audioCodec:
-        this.capabilities.audioCodec === "aac_lc" ? "aac" : "transcode",
+        metadata.enableLocalAudioAdaptation && this.capabilities.hasAudio
+          ? "opus"
+          : this.capabilities.audioCodec === "aac_lc"
+            ? "aac"
+            : "transcode",
     };
 
     const ffmpegArgs = buildFfmpegStreamArgs(pipelineConfig);

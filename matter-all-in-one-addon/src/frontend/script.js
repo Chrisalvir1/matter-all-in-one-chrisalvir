@@ -2367,7 +2367,7 @@ function buildScryptedCameraCard(camera) {
       <span class="device-icon" style="font-size: 1.4rem;">📹</span>
       <div class="card-pills-group">
         <span class="badge-scrypted-tag">SCRYPTED</span>
-        ${isPaired ? `<span class="tag" style="background: rgba(16, 185, 129, 0.2); border-color: rgba(52, 211, 153, 0.5); color: #6ee7b7; font-size: 0.72rem; font-weight: 600;">🍏 Casa: ${escapeHtml(activeHome)}</span>` : '<span class="export-badge active">1/1</span>'}
+        ${isPaired ? `<span class="tag" style="background: rgba(16, 185, 129, 0.2); border-color: rgba(52, 211, 153, 0.5); color: #6ee7b7; font-size: 0.72rem; font-weight: 600;">🍏 HomeKit: Emparejada</span>` : '<span class="tag" style="font-size: 0.72rem;">HomeKit: No emparejada</span>'}
       </div>
     </div>
     <h3 title="${escapeHtml(camera.name)}">${escapeHtml(camera.name)}</h3>
@@ -2376,11 +2376,12 @@ function buildScryptedCameraCard(camera) {
       <span class="tag tag-brand">${escapeHtml(brand)}</span>
       <span class="badge-scrypted-source">⚡ Scrypted</span>
       <span class="codec-pill">● Passthrough H.264</span>
-      ${hasAudio ? '<span class="tag" style="background: rgba(16, 185, 129, 0.15); border-color: rgba(52, 211, 153, 0.4); color: #6ee7b7;">🎤 Audio y Micrófono activo</span>' : '<span class="tag">Sin audio</span>'}
+      ${hasAudio ? '<span class="tag" style="background: rgba(16, 185, 129, 0.15); border-color: rgba(52, 211, 153, 0.4); color: #6ee7b7;">🎤 Entrada de audio</span>' : '<span class="tag">Sin audio</span>'}
+      <span class="tag" style="opacity: 0.7;">Talkback: no compatible</span>
       ${sensorsCount > 0 ? `<span class="tag">${sensorsCount} sensor${sensorsCount === 1 ? "" : "es"}</span>` : ""}
     </div>
     <div class="card-footer">
-      <span class="entity-summary">${isPaired ? `🍏 Vinculada a Apple Home (${escapeHtml(activeHome)})` : "Toca para ver QR y detalles"}</span>
+      <span class="entity-summary">${isPaired ? "🍏 HomeKit: Emparejada" : "Toca para ver QR y detalles"}</span>
       <button class="button button-secondary" type="button">Configurar</button>
     </div>
   `;
@@ -2528,20 +2529,37 @@ function openCameraConfigModal(camera) {
     }
 
     const isPaired = camera.identity?.homeKitPairingState === "paired";
-    const activeHome =
+    const fabricLabel =
+      state.status?.fabricLabel ||
       state.status?.homeName ||
-      (state.entities || []).find((e) => e.homeName)?.homeName ||
-      "El Chante de Gecko & Chris";
+      "Fabric Matter 1";
 
     if (els.camModalPairedBox) {
       els.camModalPairedBox.style.display =
         isHomeKit && isPaired ? "block" : "none";
       if (els.camModalPairedHomeName) {
-        els.camModalPairedHomeName.textContent = activeHome;
+        els.camModalPairedHomeName.textContent =
+          "no disponible desde HAP (la app Casa administra la asignación)";
+      }
+      const fabricEl = $("cam-modal-paired-fabric-name");
+      if (fabricEl) {
+        fabricEl.textContent = fabricLabel;
       }
     }
     if (els.camModalPairedBadge) {
       els.camModalPairedBadge.style.display = "none";
+    }
+
+    const qrWrapper = els.camModalQrCode?.closest(".qr-visual-wrapper");
+    const manualBox = els.camModalManualCode?.closest(".qr-manual-box");
+
+    if (isHomeKit && isPaired) {
+      if (qrWrapper) qrWrapper.style.display = "none";
+      if (manualBox) manualBox.style.display = "none";
+      return;
+    } else {
+      if (qrWrapper) qrWrapper.style.display = "block";
+      if (manualBox) manualBox.style.display = "block";
     }
 
     let pairingPayload = "";
@@ -2655,13 +2673,13 @@ function openCameraConfigModal(camera) {
     els.camModalUnpairBtn.onclick = async () => {
       if (
         !confirm(
-          `¿Desvincular "${camera.name}" de Apple Home en tiempo real?\nLa vinculación actual se eliminará y quedará lista para escanear de nuevo.`,
+          `¿Restablecer emparejamiento HomeKit para "${camera.name}"?\nEsta acción eliminará la vinculación actual de HomeKit y generará un nuevo PIN/QR para emparejar de nuevo con Apple Home. No afectará a Scrypted ni a Matter.`,
         )
       ) {
         return;
       }
       els.camModalUnpairBtn.disabled = true;
-      showToast("Desvinculando de Apple Home en tiempo real...");
+      showToast("Restableciendo emparejamiento HomeKit...");
       try {
         const res = await request(
           `/reset-camera-pairing/scrypted.${camera.cameraId}`,
@@ -2675,13 +2693,13 @@ function openCameraConfigModal(camera) {
           camera.identity.homeKitPort = res.record?.port;
           camera.identity.homeKitPairingState = "not_paired";
           renderCamModalQr();
-          showToast("✓ Cámara desvinculada de Apple Home en tiempo real.");
+          showToast("✓ Emparejamiento HomeKit restablecido. Escanea el nuevo código.");
           loadCameras().catch(() => {});
         } else {
-          showToast(res.error || "No se pudo desvincular", true);
+          showToast(res.error || "No se pudo restablecer", true);
         }
       } catch (err) {
-        showToast(err.message || "Error al desvincular", true);
+        showToast(err.message || "Error al restablecer", true);
       } finally {
         els.camModalUnpairBtn.disabled = false;
       }
@@ -2811,7 +2829,20 @@ function openCameraConfigModal(camera) {
 
   renderCamModalQr();
 
-  // 2. Technical specs
+  // 2. Technical specs & Real Identity
+  const mfr =
+    camera.displayManufacturer ||
+    camera.sourceManufacturer ||
+    "Marca no identificada";
+  const mdl =
+    camera.displayModel ||
+    camera.sourceModel ||
+    "Modelo no identificado";
+  const sn =
+    camera.displaySerialNumber ||
+    camera.serialNumber ||
+    "Serial no disponible";
+
   const videoCodec =
     camera.capabilities?.observed?.videoCodec?.toUpperCase() || "H.264";
   const profile = camera.capabilities?.observed?.profile
@@ -2825,15 +2856,44 @@ function openCameraConfigModal(camera) {
   const hasAudio =
     camera.capabilities?.observed?.hasAudio !== false &&
     camera.capabilities?.observed?.audioCodec !== "none";
+  const audioCodec =
+    camera.capabilities?.observed?.audioCodec?.toUpperCase() || "AAC";
   const audioDesc = hasAudio
-    ? "AAC estéreo · Micrófono activo (Audio bidireccional)"
+    ? `${audioCodec} · Entrada de audio activa`
     : "Sin audio";
 
+  const metrics = camera.capabilities?.latencyMetrics;
+  const descVal = metrics?.timeToDescribeMs?.value;
+  const descTime =
+    descVal != null
+      ? `${descVal} ms (${metrics?.timeToDescribeMs?.confidence || "alta"})`
+      : "No disponible";
+  const frameVal = metrics?.timeToFirstFrameMs?.value;
+  const frameTime =
+    frameVal != null
+      ? `${frameVal} ms (${metrics?.timeToFirstFrameMs?.confidence || "alta"})`
+      : "No disponible";
+  const transport =
+    metrics?.selectedTransport?.value ||
+    camera.exportConfig?.rtspTransportPreference ||
+    "tcp";
+  const gop =
+    camera.capabilities?.observed?.gopSeconds != null
+      ? `${camera.capabilities.observed.gopSeconds}s`
+      : "No disponible";
+
   if (els.camModalVideoSpec) {
-    els.camModalVideoSpec.innerHTML = `<strong>📹 Video:</strong> ${escapeHtml(videoCodec)}${escapeHtml(profile)} · ${escapeHtml(res)} @ ${fps}fps (Passthrough directo sin recodificación)`;
+    els.camModalVideoSpec.innerHTML = `
+      <div style="margin-bottom: 4px;"><strong>🏷️ Identidad:</strong> ${escapeHtml(mfr)} · ${escapeHtml(mdl)} · SN: <code>${escapeHtml(sn)}</code></div>
+      <div style="margin-bottom: 4px;"><strong>📹 Video:</strong> ${escapeHtml(videoCodec)}${escapeHtml(profile)} · ${escapeHtml(res)} @ ${fps}fps (Passthrough directo H.264 sin recodificación)</div>
+      <div style="margin-bottom: 4px;"><strong>🔊 Audio:</strong> ${escapeHtml(audioDesc)} · <span style="opacity:0.8;">Talkback: no compatible</span></div>
+      <div style="font-size: 0.8rem; color: var(--text-secondary); background: rgba(0,0,0,0.2); padding: 6px 8px; border-radius: 6px; margin-top: 6px;">
+        <strong>⏱️ Diagnóstico:</strong> DESCRIBE: ${descTime} · 1er Frame: ${frameTime} · Transporte: ${transport.toUpperCase()} · GOP: ${gop}
+      </div>
+    `;
   }
   if (els.camModalAudioSpec) {
-    els.camModalAudioSpec.innerHTML = `<strong>🔊 Audio:</strong> ${escapeHtml(audioDesc)} · Remuxing fMP4 HKSV activo (iOS 27 / tvOS 27)`;
+    els.camModalAudioSpec.style.display = "none";
   }
 
   // 3. Platform toggles
@@ -2942,16 +3002,16 @@ function openCameraConfigModal(camera) {
       state.confirmAction = async () => {
         try {
           await request(`/cameras/${camera.cameraId}`, { method: "DELETE" });
-          showToast(`Cámara ${camera.name} eliminada.`);
+          showToast(`Cámara "${camera.name}" retirada de la exportación.`);
           await fetchScrypted();
           renderDevices();
         } catch (err) {
-          showToast(err.message || "Error al eliminar cámara", true);
+          showToast(err.message || "Error al retirar de la exportación", true);
         }
       };
-      els.confirmTitle.textContent = `¿Eliminar ${camera.name}?`;
+      els.confirmTitle.textContent = `¿Retirar "${camera.name}" de la exportación?`;
       els.confirmDescription.textContent =
-        "Esta acción desmontará los accesorios HomeKit y endpoints Matter asociados.";
+        "Esta acción despublicará la cámara y detendrá el streaming en HomeKit y Matter. No modificará tu configuración en Scrypted ni borrará las claves de pairing HAP/Matter.";
       setModalOpen(els.confirmModal, true);
     };
   }
