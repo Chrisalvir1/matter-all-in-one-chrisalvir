@@ -2581,7 +2581,7 @@ function openCameraConfigModal(camera) {
     if (els.camModalQrNote) {
       els.camModalQrNote.textContent = isHomeKit
         ? "Escanea con la app Casa de Apple (iPhone / iPad / Mac) para vincular con Vídeo Seguro de HomeKit (HKSV), streaming en directo y grabación en iCloud."
-        : "Escanea con Google Home, Alexa o SmartThings para vincular mediante Matter WebRTC.";
+        : "Escanea con un controlador compatible con Matter 1.5+ Camera (ej. Samsung SmartThings). Nota: Apple Home requiere la pestaña Apple Home (HAP) para Live View.";
     }
 
     const isPaired = camera.identity?.homeKitPairingState === "paired";

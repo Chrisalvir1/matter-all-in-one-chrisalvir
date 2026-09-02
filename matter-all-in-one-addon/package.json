@@ -1,6 +1,6 @@
 {
   "name": "matter-all-in-one-chrisalvir",
-  "version": "1.4.78",
+  "version": "1.4.79",
   "description": "Matter all-in-one Home Assistant Add-on with complete Scrypted, BLE, Smart Dimmers, Vacuum, AC, Climate, Lock and Multi-Platform ecosystem compatibility",
   "author": "chrisalvir",
   "license": "Apache-2.0",
@@ -24,6 +24,7 @@
     "@scrypted/types": "^0.5.55",
     "hap-nodejs": "^0.14.3",
     "mqtt": "^5.15.2",
+    "werift": "^0.24.4",
     "ws": "^8.21.3"
   },
   "peerDependencies": {

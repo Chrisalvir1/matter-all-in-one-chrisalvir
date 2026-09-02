@@ -150,6 +150,13 @@ export class ScryptedMatterBridge {
     platform: any,
     cameraId: string,
   ): Promise<void> {
+    const sessionManager = this.sessionManagers.get(cameraId);
+    if (sessionManager) {
+      try {
+        await sessionManager.cleanupAllSessions();
+      } catch {}
+    }
+
     const existing = this.activeEndpoints.get(cameraId);
     if (existing) {
       if (platform?.unregisterDevice) {

@@ -409,10 +409,26 @@ export class ScryptedStorage {
           selectedProfileId:
             fresh.source?.selectedProfileId ||
             existing?.source?.selectedProfileId,
-          streamValidationStatus:
-            fresh.source?.streamValidationStatus ||
-            existing?.source?.streamValidationStatus ||
-            "not_checked",
+          streamValidationStatus: (() => {
+            const isSameDirectUrl = Boolean(
+              effectiveStreamReference?.directUrl &&
+              existing?.source?.streamReference?.directUrl ===
+                effectiveStreamReference.directUrl,
+            );
+            if (
+              isSameDirectUrl &&
+              existing?.source?.streamValidationStatus === "verified"
+            ) {
+              return "verified";
+            }
+            if (
+              fresh.source?.streamValidationStatus &&
+              fresh.source.streamValidationStatus !== "not_checked"
+            ) {
+              return fresh.source.streamValidationStatus;
+            }
+            return existing?.source?.streamValidationStatus || "not_checked";
+          })(),
           streamValidationError:
             fresh.source?.streamValidationError ||
             existing?.source?.streamValidationError,

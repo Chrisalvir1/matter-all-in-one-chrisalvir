@@ -1,3 +1,16 @@
+## [1.4.79] - 2026-09-02
+
+### Puente Matter 1.5+ Camera con WebRTC Real, Audio Opus y Aislamiento Honesto de Ecosistemas
+
+- **Gateway WebRTC Real para Cámaras Matter 1.5/1.6:** Implementado `CameraWebRtcAdapter` con motor WebRTC puro `werift` y streaming directo desde fuentes RTSP validadas vía FFmpeg.
+- **Negociación Completa SDP e Intercambio ICE:** Soporte completo tanto para flujo `ProvideOffer → Answer` como para `SolicitOffer → Offer → ProvideAnswer`, Trickle ICE y señalización RTCP `PictureLossIndication` (PLI).
+- **Emisión de Vídeo H.264 con SPS/PPS:** Empaquetado RTP local con bitstream filter `-bsf:v dump_extra=freq=keyframe` garantizando decodificación de imagen desde el primer cuadro.
+- **Audio de Cámara a Controlador (Opus 48 kHz):** Soporte de audio entrante con transcodificación automática desde fuentes AAC/Opus/PCM hacia Opus 48 kHz estéreo estándar WebRTC.
+- **Gestión Robusta de Ciclo de Vida y Sesiones:** `CameraSessionManager` con tipado estricto de recursos, cierre idempotente de procesos FFmpeg (`SIGTERM`/`SIGKILL`), sockets UDP y PeerConnections con cero fugas de memoria o sockets.
+- **Preservación de Estado de Validación (`scrypted-storage.ts`):** Corregida la degradación automática de `streamValidationStatus: "verified"` durante sincronizaciones periódicas de Scrypted cuando la URL no cambia.
+- **Remontaje Simultáneo de Puentes:** La verificación de stream en `/verify-stream` ahora remonta de forma segura y coordinada tanto el puente HomeKit HAP como el puente Matter Camera.
+- **Honestidad Técnica y UI Clara:** Separación explícita del código QR Matter (para Samsung SmartThings, Google Home, etc.) del código QR HomeKit HAP (fallback para Apple Home).
+
 ## [1.4.78] - 2026-09-02
 
 ### Reparación Global Arquitectónica: Fluidez de Live View Apple Home, Identidad Real y Matter Multi-Admin

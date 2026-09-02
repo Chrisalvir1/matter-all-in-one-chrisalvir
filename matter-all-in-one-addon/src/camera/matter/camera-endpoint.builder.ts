@@ -69,33 +69,43 @@ export class CameraEndpointBuilder {
       model,
     );
 
-    // Define Custom Cluster Behavior Implementations
+    const hasAudio = Boolean(capabilities.hasAudio);
+
     class CustomCameraAvStreamManagementServer extends CameraAvStreamManagementServer.with(
       CameraAvStreamManagement.Feature.Video,
     ) {
       async videoStreamAllocate(request: any) {
         const session = sessionManager.allocateSession(
-          request.streamUsage || 1,
+          request.streamUsage ?? 3,
         );
         return { videoStreamId: session.videoStreamId || 1 };
       }
-      async videoStreamDeallocate(request: any) {
-        // deallocation logic
+      async videoStreamDeallocate(_request: any) {
+        // Safe deallocate
       }
-      async setStreamPriorities(request: any) {
-        // stream priorities
+      async audioStreamAllocate(request: any) {
+        const session = sessionManager.allocateSession(
+          request.streamUsage ?? 3,
+        );
+        return { audioStreamId: session.audioStreamId || 2 };
+      }
+      async audioStreamDeallocate(_request: any) {
+        // Safe deallocate
+      }
+      async setStreamPriorities(_request: any) {
+        // Accept stream priorities
       }
     }
 
     class CustomWebRtcTransportProviderServer extends WebRtcTransportProviderServer {
       async solicitOffer(request: any) {
-        return await adapter.handleSolicitOffer(request);
+        return await adapter.handleSolicitOffer(request, endpoint);
       }
       async provideOffer(request: any) {
-        return await adapter.handleProvideOffer(request);
+        return await adapter.handleProvideOffer(request, endpoint);
       }
       async provideAnswer(request: any) {
-        // provideAnswer
+        await adapter.handleProvideAnswer(request);
       }
       async provideIceCandidates(request: any) {
         await adapter.handleProvideIceCandidates(request);
@@ -105,33 +115,52 @@ export class CameraEndpointBuilder {
       }
     }
 
-    // Mount Camera AV Stream Management Server (0x0551)
-    endpoint.behaviors.require(CustomCameraAvStreamManagementServer, {
-      maxConcurrentEncoders: 1,
-      maxEncodedPixelRate:
-        capabilities.resolution.width *
-        capabilities.resolution.height *
-        capabilities.maxFps,
+    const width = capabilities.resolution?.width || 1920;
+    const height = capabilities.resolution?.height || 1080;
+    const fps = capabilities.maxFps || 30;
+
+    const avState: any = {
+      maxConcurrentEncoders: 2,
+      maxEncodedPixelRate: width * height * fps,
       videoSensorParams: {
-        sensorWidth: capabilities.resolution.width,
-        sensorHeight: capabilities.resolution.height,
-        maxFps: capabilities.maxFps,
+        sensorWidth: width,
+        sensorHeight: height,
+        maxFps: fps,
       },
       minViewportResolution: { width: 320, height: 240 },
-      supportedStreamUsages: [1], // LiveStream
+      supportedStreamUsages: [3], // StreamUsage.LiveView = 3
       allocatedVideoStreams: [],
-      currentFrameRate: capabilities.maxFps,
-      rateDistortionTradeOffPoints: [],
+      currentFrameRate: fps,
+      rateDistortionTradeOffPoints: [
+        {
+          codec: 0, // VideoCodec.H264 = 0
+          resolution: { width, height },
+          minBitRate: 500000,
+        },
+      ],
       viewport: {
         x1: 0,
         y1: 0,
-        x2: capabilities.resolution.width,
-        y2: capabilities.resolution.height,
+        x2: width,
+        y2: height,
       },
       maxContentBufferSize: 1024 * 1024,
-      maxNetworkBandwidth: 5000000,
-      streamUsagePriorities: [1],
-    });
+      maxNetworkBandwidth: 10000000,
+      streamUsagePriorities: [3],
+    };
+
+    if (hasAudio) {
+      avState.microphoneCapabilities = {
+        maxNumberOfChannels: 2,
+        supportedCodecs: [0], // AudioCodec.Opus = 0
+        supportedSampleRates: [48000],
+        supportedBitDepths: [16],
+      };
+      avState.allocatedAudioStreams = [];
+    }
+
+    // Mount Camera AV Stream Management Server (0x0551)
+    endpoint.behaviors.require(CustomCameraAvStreamManagementServer, avState);
 
     // Mount WebRTC Transport Provider Server (0x0553)
     endpoint.behaviors.require(CustomWebRtcTransportProviderServer, {

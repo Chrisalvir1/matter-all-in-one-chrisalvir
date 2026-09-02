@@ -4853,11 +4853,24 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
             // Remount with verified stream
             try {
-              await ScryptedHomeKitBridge.unmountCamera(cameraId);
-              await ScryptedHomeKitBridge.mountCamera(this, camera);
+              if (camera.exportConfig?.homeKitEnabled) {
+                await ScryptedHomeKitBridge.unmountCamera(cameraId);
+                await ScryptedHomeKitBridge.mountCamera(this, camera);
+              }
             } catch (remountErr) {
               this.log.warn(
-                `[Scrypted] Remount after verification note: ${remountErr}`,
+                `[Scrypted] Remount HAP after verification note: ${remountErr}`,
+              );
+            }
+
+            try {
+              if (camera.exportConfig?.matterEnabled) {
+                await ScryptedMatterBridge.unmountCamera(this, cameraId);
+                await ScryptedMatterBridge.mountCamera(this, camera);
+              }
+            } catch (remountErr) {
+              this.log.warn(
+                `[Scrypted] Remount Matter after verification note: ${remountErr}`,
               );
             }
           }

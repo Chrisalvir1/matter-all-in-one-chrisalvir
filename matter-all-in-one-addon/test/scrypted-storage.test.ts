@@ -558,5 +558,21 @@ describe("updateCameras — never fabricates RTSP URLs from cameraId", () => {
     );
     expect(savedValid?.source.streamValidationStatus).toBe("verified");
     expect(savedValid?.source.streamReference?.verifiedAt).toBeTruthy();
+
+    // Verify updateCameras does NOT degrade verified status if directUrl matches
+    const syncCamera: CameraRecord = {
+      ...savedValid!,
+      source: {
+        ...savedValid!.source,
+        streamValidationStatus: "not_checked" as const, // Incoming sync default
+      },
+    };
+    await ScryptedStorage.updateCameras([syncCamera]);
+
+    const storeAfterSync = await ScryptedStorage.load();
+    const cameraAfterSync = storeAfterSync.cameras.cameras.find(
+      (c) => c.cameraId === "51",
+    );
+    expect(cameraAfterSync?.source.streamValidationStatus).toBe("verified");
   });
 });
