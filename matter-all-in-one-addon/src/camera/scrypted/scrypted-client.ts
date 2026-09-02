@@ -7,6 +7,11 @@ import type {
   ScryptedStreamProfile,
 } from "./scrypted-types.js";
 import { isInventedRtspUrl } from "./scrypted-storage.js";
+import {
+  adaptScryptedClientDiscovery,
+  type ScryptedClientDiscoveryResponse,
+} from "./scrypted-client-discovery-adapter.js";
+import { ScryptedRuntimeFacade } from "./scrypted-runtime-facade.js";
 
 /** INTERNAL ONLY — never persist, serialize or log. */
 export interface ScryptedSession {
@@ -298,14 +303,30 @@ function mapDeviceToCameraRecord(
  * are used or assumed.
  */
 export class ScryptedClient {
+  public static runtimeFacade: ScryptedRuntimeFacade = new ScryptedRuntimeFacade();
+  public runtimeFacade: ScryptedRuntimeFacade;
+
   private readonly serverUrl: string;
   private readonly token?: string;
   private readonly timeoutMs: number;
 
-  constructor(serverUrl: string, token?: string, timeoutMs: number = 6000) {
+  constructor(
+    serverUrl: string,
+    token?: string,
+    timeoutMs: number = 6000,
+    runtimeFacade: ScryptedRuntimeFacade = ScryptedClient.runtimeFacade,
+  ) {
     this.serverUrl = serverUrl;
     this.token = token;
     this.timeoutMs = timeoutMs;
+    this.runtimeFacade = runtimeFacade;
+  }
+
+  /**
+   * Instance helper for backward compatibility in existing code.
+   */
+  public async listCameras(session: ScryptedSession): Promise<CameraRecord[]> {
+    return ScryptedClient.listCameras.call(this, session);
   }
 
   /**
@@ -504,82 +525,145 @@ export class ScryptedClient {
       rawState = {};
     }
 
-    const deviceIds = Object.keys(rawState);
+    const response: ScryptedClientDiscoveryResponse = {
+      devices:
+        rawState?.devices ??
+        (Array.isArray(rawState) ? rawState : undefined) ??
+        (systemManager as any)?.devices ??
+        (session.sdk as any)?.devices ??
+        (session as any)?.devices,
+      cameras:
+        rawState?.cameras ??
+        (systemManager as any)?.cameras ??
+        (session.sdk as any)?.cameras ??
+        (session as any)?.cameras,
+    };
+
     const cameras: CameraRecord[] = [];
     const seenIds = new Set<string>();
 
-    for (const id of deviceIds) {
-      try {
-        let dev: any = null;
-        if (typeof systemManager.getDeviceById === "function") {
-          try {
-            dev = systemManager.getDeviceById(id);
-          } catch {
-            dev = null;
-          }
-        }
+    if (this && this.runtimeFacade) {
+      const snapshot = adaptScryptedClientDiscovery(
+        this.runtimeFacade,
+        response,
+      );
+      if (snapshot.cameras && snapshot.cameras.length > 0) {
+        const rawList = Array.isArray(response.devices)
+          ? response.devices
+          : Array.isArray(response.cameras)
+            ? response.cameras
+            : [];
 
-        const stateDev = rawState[id];
-
-        // Merge properties from proxy and raw state to guarantee all fields are accessible
-        const combined = {
-          id,
-          name: dev?.name ?? unwrapScryptedValue(stateDev?.name),
-          type: dev?.type ?? unwrapScryptedValue(stateDev?.type),
-          providedType:
-            dev?.providedType ?? unwrapScryptedValue(stateDev?.providedType),
-          interfaces:
-            dev?.interfaces ?? unwrapScryptedValue(stateDev?.interfaces),
-          providedInterfaces:
-            dev?.providedInterfaces ??
-            unwrapScryptedValue(stateDev?.providedInterfaces),
-          info: dev?.info ?? unwrapScryptedValue(stateDev?.info),
-          manufacturer:
-            dev?.manufacturer ?? unwrapScryptedValue(stateDev?.manufacturer),
-          model: dev?.model ?? unwrapScryptedValue(stateDev?.model),
-          serialNumber:
-            dev?.serialNumber ?? unwrapScryptedValue(stateDev?.serialNumber),
-        };
-
-        if (isCameraDevice(combined) && !seenIds.has(id)) {
-          seenIds.add(id);
-          cameras.push(
-            mapDeviceToCameraRecord(combined, session.serverUrl, id),
-          );
-        }
-      } catch {
-        // Skip device that cannot be mapped
-      }
-    }
-
-    // Fallback: If deviceIds was empty or an array of objects
-    if (cameras.length === 0) {
-      let fallbackList: any[] = [];
-      if (Array.isArray(rawState)) {
-        fallbackList = rawState;
-      } else if (typeof (systemManager as any).getDeviceIds === "function") {
-        try {
-          const ids: string[] = (systemManager as any).getDeviceIds();
-          fallbackList = ids.map((id) => systemManager.getDeviceById(id));
-        } catch {}
-      } else if (Object.keys(rawState).length > 0) {
-        fallbackList = Object.values(rawState);
-      }
-
-      for (const dev of fallbackList) {
-        if (!dev) continue;
-        try {
-          const id = String(unwrapScryptedValue(dev.id) || "");
-          if (isCameraDevice(dev) && id && !seenIds.has(id)) {
+        for (const item of snapshot.cameras) {
+          const id = item.normalized.id;
+          if (!seenIds.has(id)) {
             seenIds.add(id);
-            cameras.push(mapDeviceToCameraRecord(dev, session.serverUrl, id));
+            const rawDev =
+              rawList.find((d: any) => d && String(d.id) === id) ?? {};
+            cameras.push(
+              mapDeviceToCameraRecord(
+                {
+                  ...rawDev,
+                  id,
+                  name: item.normalized.name,
+                  manufacturer:
+                    item.normalized.brand !== "Marca no identificada"
+                      ? item.normalized.brand
+                      : rawDev?.manufacturer,
+                  model: item.normalized.model ?? rawDev?.model,
+                },
+                session.serverUrl,
+                id,
+              ),
+            );
           }
-        } catch {}
+        }
       }
     }
+
+    const deviceIds = Object.keys(rawState);
+
+    if (cameras.length === 0) {
+      for (const id of deviceIds) {
+        try {
+          let dev: any = null;
+          if (typeof systemManager.getDeviceById === "function") {
+            try {
+              dev = systemManager.getDeviceById(id);
+            } catch {
+              dev = null;
+            }
+          }
+
+          const stateDev = rawState[id];
+
+          // Merge properties from proxy and raw state to guarantee all fields are accessible
+          const combined = {
+            id,
+            name: dev?.name ?? unwrapScryptedValue(stateDev?.name),
+            type: dev?.type ?? unwrapScryptedValue(stateDev?.type),
+            providedType:
+              dev?.providedType ?? unwrapScryptedValue(stateDev?.providedType),
+            interfaces:
+              dev?.interfaces ?? unwrapScryptedValue(stateDev?.interfaces),
+            providedInterfaces:
+              dev?.providedInterfaces ??
+              unwrapScryptedValue(stateDev?.providedInterfaces),
+            info: dev?.info ?? unwrapScryptedValue(stateDev?.info),
+            manufacturer:
+              dev?.manufacturer ?? unwrapScryptedValue(stateDev?.manufacturer),
+            model: dev?.model ?? unwrapScryptedValue(stateDev?.model),
+            serialNumber:
+              dev?.serialNumber ?? unwrapScryptedValue(stateDev?.serialNumber),
+          };
+
+          if (isCameraDevice(combined) && !seenIds.has(id)) {
+            seenIds.add(id);
+            cameras.push(
+              mapDeviceToCameraRecord(combined, session.serverUrl, id),
+            );
+          }
+        } catch {
+          // Skip device that cannot be mapped
+        }
+      }
+
+      // Fallback: If deviceIds was empty or an array of objects
+      if (cameras.length === 0) {
+        let fallbackList: any[] = [];
+        if (Array.isArray(rawState)) {
+          fallbackList = rawState;
+        } else if (typeof (systemManager as any).getDeviceIds === "function") {
+          try {
+            const ids: string[] = (systemManager as any).getDeviceIds();
+            fallbackList = ids.map((id) => systemManager.getDeviceById(id));
+          } catch {}
+        } else if (Object.keys(rawState).length > 0) {
+          fallbackList = Object.values(rawState);
+        }
+
+        for (const dev of fallbackList) {
+          if (!dev) continue;
+          try {
+            const id = String(unwrapScryptedValue(dev.id) || "");
+            if (isCameraDevice(dev) && id && !seenIds.has(id)) {
+              seenIds.add(id);
+              cameras.push(mapDeviceToCameraRecord(dev, session.serverUrl, id));
+            }
+          } catch {}
+        }
+      }
+    }
+
+    const totalCount =
+      Array.isArray(response.devices)
+        ? response.devices.length
+        : Array.isArray(response.cameras)
+          ? response.cameras.length
+          : deviceIds.length;
 
     console.log(
-      `[Scrypted] Discovered ${deviceIds.length} total devices in systemState, identified ${cameras.length} cameras.`,
+      `[Scrypted] Discovered ${totalCount} total devices in systemState, identified ${cameras.length} cameras.`,
     );
 
     // Enrich cameras with real stream profiles from Scrypted SDK

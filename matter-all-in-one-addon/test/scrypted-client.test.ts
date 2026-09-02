@@ -256,6 +256,110 @@ describe("ScryptedClient — listCameras (mocked session)", () => {
     expect(cameras[0].sensors.some((s) => s.type === "doorbell")).toBe(true);
   });
 
+  it("uses adaptScryptedClientDiscovery for devices response", async () => {
+    const fakeSession = {
+      sdk: {
+        systemManager: {
+          getSystemState: async () => ({
+            devices: [
+              {
+                id: "cam-dev-1",
+                name: "Camara Entrada",
+                type: "Camera",
+                manufacturer: "Reolink",
+                model: "E1 Pro",
+              },
+            ],
+          }),
+        },
+      },
+      connectedAt: new Date().toISOString(),
+      serverUrl: "https://host",
+      username: "admin",
+    };
+
+    const spy = vi.spyOn(ScryptedClient.runtimeFacade, "ingestDevices");
+    const cameras = await ScryptedClient.listCameras(fakeSession);
+
+    expect(spy).toHaveBeenCalled();
+    expect(cameras).toHaveLength(1);
+    expect(cameras[0].cameraId).toBe("cam-dev-1");
+    expect(cameras[0].name).toBe("Camara Entrada");
+    expect(cameras[0].sourceManufacturer).toBe("Reolink");
+    expect(cameras[0].sourceModel).toBe("E1 Pro");
+    spy.mockRestore();
+  });
+
+  it("uses adaptScryptedClientDiscovery for cameras response without retaining transport fields", async () => {
+    const fakeSession = {
+      sdk: {
+        systemManager: {
+          getSystemState: async () => ({
+            cameras: [
+              {
+                id: "cam-cam-1",
+                name: "Camara Patio",
+                type: "Camera",
+                manufacturer: "Tapo",
+                model: "C200",
+                rtsp: "rtsp://secret-url",
+                ffmpeg: { command: "ffmpeg" },
+                webrtc: { session: "test" },
+              },
+            ],
+          }),
+        },
+      },
+      connectedAt: new Date().toISOString(),
+      serverUrl: "https://host",
+      username: "admin",
+    };
+
+    const spy = vi.spyOn(ScryptedClient.runtimeFacade, "ingestDevices");
+    const cameras = await ScryptedClient.listCameras(fakeSession);
+
+    expect(spy).toHaveBeenCalled();
+    expect(cameras).toHaveLength(1);
+    expect(cameras[0].cameraId).toBe("cam-cam-1");
+    expect(cameras[0].name).toBe("Camara Patio");
+    expect((cameras[0] as any).rtsp).toBeUndefined();
+    expect((cameras[0] as any).ffmpeg).toBeUndefined();
+    expect((cameras[0] as any).webrtc).toBeUndefined();
+    expect(cameras[0].source.streamReference).toBeUndefined();
+    spy.mockRestore();
+  });
+
+  it("maintains fallback behavior if runtime is not available", async () => {
+    const originalFacade = ScryptedClient.runtimeFacade;
+    (ScryptedClient as any).runtimeFacade = undefined;
+
+    try {
+      const fakeSession = {
+        sdk: {
+          systemManager: {
+            getSystemState: async () => ({
+              "cam-legacy-1": {
+                id: "cam-legacy-1",
+                name: "Legacy Camera",
+                type: "Camera",
+                interfaces: ["Camera"],
+              },
+            }),
+          },
+        },
+        connectedAt: new Date().toISOString(),
+        serverUrl: "https://host",
+        username: "admin",
+      };
+
+      const cameras = await ScryptedClient.listCameras(fakeSession);
+      expect(cameras).toHaveLength(1);
+      expect(cameras[0].cameraId).toBe("cam-legacy-1");
+    } finally {
+      ScryptedClient.runtimeFacade = originalFacade;
+    }
+  });
+
   it("disconnect calls sdk.disconnect", async () => {
     const disconnectFn = vi.fn();
     const fakeSession = {
