@@ -1,3 +1,10 @@
+## [1.4.95] - 2026-09-02
+
+### Diagnóstico Preciso de Errores RTSP (401, 404, Conexión Rechazada)
+
+#### Detección de Errores en Tiempo Real
+- **Registro Detallado (`-v warning` y `-stimeout`):** Se ajusta el sondeo de `ffprobe` para capturar con exactitud las respuestas del servidor RTSP (401 Unauthorized, 404 Not Found, Connection Refused), mostrando en la interfaz el error real y la solución exacta en vez del mensaje genérico.
+
 ## [1.4.94] - 2026-09-02
 
 ### Captura de Miniaturas Limpias (Snapshots) al Salir del Stream

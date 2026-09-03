@@ -276,7 +276,7 @@ function probeWithFfprobe(
   return new Promise((resolve) => {
     const args = [
       "-v",
-      "error",
+      "warning",
       "-show_entries",
       "stream=codec_type,codec_name,width,height,r_frame_rate",
       "-of",
@@ -291,7 +291,12 @@ function probeWithFfprobe(
     }
 
     if (sourceUrl.startsWith("rtsp://")) {
-      args.push("-rtsp_transport", "tcp");
+      args.push(
+        "-rtsp_transport",
+        "tcp",
+        "-stimeout",
+        String(Math.max(1000000, timeoutMs * 1000)),
+      );
     }
 
     args.push(sourceUrl);
