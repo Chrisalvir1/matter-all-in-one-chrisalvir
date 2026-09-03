@@ -1,6 +1,6 @@
 name: "Matter All-in-One (Chrisalvir)"
 description: "Universal Matter bridge for Home Assistant with production Apple Home HAP camera Live View and experimental Matter Camera support."
-version: "1.4.93"
+version: "1.4.94"
 slug: "matter_all_in_one_bridge"
 image: "ghcr.io/chrisalvir1/matter-all-in-one-chrisalvir"
 init: false

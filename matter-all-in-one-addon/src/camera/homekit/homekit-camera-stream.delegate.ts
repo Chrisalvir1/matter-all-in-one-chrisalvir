@@ -107,8 +107,11 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
       this.isTakingSnapshot = false;
       if (completed) return;
       completed = true;
-      const selected = isJpeg(buffer) ? buffer : this.lastSnapshotBuffer;
-      if (isJpeg(selected)) {
+      const selected =
+        isJpeg(buffer) && buffer.length > 2048
+          ? buffer
+          : this.lastSnapshotBuffer;
+      if (isJpeg(selected) && selected !== FALLBACK_JPEG_BUFFER) {
         this.lastSnapshotBuffer = selected;
         this.lastSnapshotTime = Date.now();
       }
@@ -119,11 +122,11 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
     };
 
     // If live streaming is active or a snapshot was taken within the last 5s,
-    // reuse the cached snapshot to avoid opening competing RTSP connections that
-    // cause live video to freeze on cameras with limited hardware sessions (e.g. Tapo).
+    // reuse the cached snapshot ONLY if it is a real image (not the black fallback).
     const now = Date.now();
     if (
       this.lastSnapshotBuffer &&
+      this.lastSnapshotBuffer !== FALLBACK_JPEG_BUFFER &&
       (this.activeSessions.size > 0 || this.isTakingSnapshot || now - this.lastSnapshotTime < 5000)
     ) {
       finish("cached-session-guard", this.lastSnapshotBuffer);
@@ -141,7 +144,7 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
           });
           if (response.ok) {
             const buffer = Buffer.from(await response.arrayBuffer());
-            if (isJpeg(buffer)) {
+            if (isJpeg(buffer) && buffer.length > 2048) {
               finish("scrypted-http", buffer);
               return;
             }
@@ -162,15 +165,24 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
 
       const args = ["-hide_banner", "-loglevel", "error"];
       if (sourceUrl.startsWith("rtsp://")) {
-        args.push("-rtsp_transport", "tcp", "-timeout", "2500000");
+        args.push(
+          "-rtsp_transport",
+          "tcp",
+          "-timeout",
+          "4000000",
+          "-fflags",
+          "+genpts+discardcorrupt",
+        );
       }
       args.push(
+        "-skip_frame",
+        "nokey",
         "-i",
         sourceUrl,
         "-frames:v",
         "1",
         "-vf",
-        `scale=${request.width}:${request.height}:force_original_aspect_ratio=decrease,pad=${request.width}:${request.height}:(ow-iw)/2:(oh-ih)/2`,
+        `scale=w='min(${request.width},iw)':h='min(${request.height},ih)':force_original_aspect_ratio=decrease:force_divisible_by=2`,
         "-f",
         "image2",
         "-q:v",
@@ -187,7 +199,7 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
           process.kill("SIGKILL");
         } catch {}
         finish("fallback-timeout", this.lastSnapshotBuffer);
-      }, 3000);
+      }, 4500);
       process.stdout.on("data", (chunk: Buffer) => chunks.push(chunk));
       process.once("error", () => {
         clearTimeout(timer);
@@ -196,13 +208,18 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
       process.once("close", () => {
         clearTimeout(timer);
         const buffer = Buffer.concat(chunks);
-        finish(isJpeg(buffer) ? "ffmpeg" : "fallback-invalid-jpeg", buffer);
+        finish(
+          isJpeg(buffer) && buffer.length > 2048
+            ? "ffmpeg"
+            : "fallback-invalid-jpeg",
+          buffer,
+        );
       });
     } catch (error) {
       this.platform?.log?.warn?.(
-        `[HomeKitCamera][${this.entityId}] Snapshot exception: ${String(error)}`,
+        `[HomeKitCamera][${this.entityId}] Snapshot fatal error: ${String(error)}`,
       );
-      finish("fallback-exception", this.lastSnapshotBuffer);
+      finish("fatal-error", this.lastSnapshotBuffer);
     }
   }
 

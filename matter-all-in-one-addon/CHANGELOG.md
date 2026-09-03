@@ -1,3 +1,12 @@
+## [1.4.94] - 2026-09-02
+
+### Captura de Miniaturas Limpias (Snapshots) al Salir del Stream
+
+#### Eliminación de Miniaturas Negras en Cuadrícula de HomeKit
+- **Esperar por I-Frame (`-skip_frame nokey`):** Al tomar un snapshot, FFmpeg descarta paquetes P incompletos y captura únicamente cuadros clave completos (I-Frame/IDR), evitando que la miniatura de la cámara en Apple Home quede en negro tras salir del Live View.
+- **Protección de Caché:** `lastSnapshotBuffer` ya no cachea la imagen de reserva negra (`FALLBACK_JPEG_BUFFER`), asegurando que siempre se intente obtener una captura real y válida de la cámara.
+- **Eliminación de bordes grises:** Se retira el filtro `pad` en snapshots, preservando el aspecto nativo sin marcos artificiales en los mosaicos de HomeKit.
+
 ## [1.4.93] - 2026-09-02
 
 ### Eliminación del Artefacto Gris de Video, Descarte de Cuadros Corruptos y Activación Universal de Audio en Vivo
