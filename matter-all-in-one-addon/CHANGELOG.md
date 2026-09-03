@@ -1,3 +1,11 @@
+## [1.4.87] - 2026-09-02
+
+### Fix Apple Home Live View: AAC-ELD Profile Crash in Alpine FFmpeg
+
+- **Causa raíz corregida:** El perfil `aac_eld` (Enhanced Low Delay AAC) no está soportado por el encoder AAC nativo de FFmpeg en Alpine Linux (requiere `libfdk_aac`, que no se distribuye por restricciones de licencia).
+- **Corrección:** El encoder de audio HAP ahora usa el perfil `aac_low` (AAC-LC estándar), compatible con el encoder nativo de FFmpeg y con HomeKit. Se añade además `-af aresample=16000` para garantizar la tasa de muestreo correcta independientemente del audio de la cámara.
+- **Resultado:** El pipeline de FFmpeg ya no falla al iniciar la sesión HAP, eliminando el `No Response` en Apple Home / Live View.
+
 ## [1.4.86] - 2026-09-02
 
 ### Scrypted Camera Stream Profile Discovery, Storage Persistence & Hardened Diagnostics
