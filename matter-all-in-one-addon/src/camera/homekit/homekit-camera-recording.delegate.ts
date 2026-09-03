@@ -47,6 +47,7 @@ export class HomeKitCameraRecordingDelegate
   private isMotionActive = false;
   private currentStreamId?: number;
   private streamAbortController?: AbortController;
+  private isStartingPipeline = false;
 
   constructor(
     private readonly platform: any,
@@ -148,8 +149,8 @@ export class HomeKitCameraRecordingDelegate
 
     // 1. Deliver MEDIA_INITIALIZATION segment (ftyp + moov)
     if (!this.initializationSegment) {
-      // If initialization segment not yet ready, wait briefly for it
-      await this.waitForInitialization(2000);
+      // Wait up to 5000ms for FFmpeg to produce the fMP4 moov box
+      await this.waitForInitialization(5000);
     }
 
     if (this.initializationSegment) {
@@ -183,7 +184,13 @@ export class HomeKitCameraRecordingDelegate
     let postRollFragmentsRemaining = 2; // At least 2 post-roll fragments after motion clears
     while (!signal?.aborted) {
       const nextFragment = await this.waitForNextFragment(signal, 5000);
-      if (!nextFragment || signal?.aborted) break;
+      if (!nextFragment || signal?.aborted) {
+        yield {
+          data: Buffer.alloc(0),
+          isLast: true,
+        };
+        break;
+      }
 
       this.deliveredFragmentsInSession++;
 
@@ -283,16 +290,18 @@ export class HomeKitCameraRecordingDelegate
   }
 
   private async startPrebufferPipeline(): Promise<void> {
-    if (this.ffmpegProcess) return;
+    if (this.ffmpegProcess || this.isStartingPipeline) return;
+    this.isStartingPipeline = true;
 
-    const ffmpegPath = resolveFfmpegPath();
-    if (!ffmpegPath) {
-      this.platform?.log?.warn?.(
-        `[HKSV][${this.entityId}] Cannot start HKSV pre-buffer: FFmpeg not found`,
-      );
-      this.record.hksvState = "not_capable";
-      return;
-    }
+    try {
+      const ffmpegPath = resolveFfmpegPath();
+      if (!ffmpegPath) {
+        this.platform?.log?.warn?.(
+          `[HKSV][${this.entityId}] Cannot start HKSV pre-buffer: FFmpeg not found`,
+        );
+        this.record.hksvState = "not_capable";
+        return;
+      }
 
     // Refresh dynamic URL if needed
     let sourceUrl = this.streamSource.url;
@@ -430,9 +439,8 @@ export class HomeKitCameraRecordingDelegate
       `[HKSV][${this.entityId}] Spawning HKSV pre-buffer pipeline: ${sanitizedUrl}`,
     );
 
-    try {
-      this.segmenter.reset();
-      this.ffmpegProcess = spawn(ffmpegPath, args, {
+    this.segmenter.reset();
+    this.ffmpegProcess = spawn(ffmpegPath, args, {
         stdio: ["ignore", "pipe", "pipe"],
       });
 
@@ -467,10 +475,13 @@ export class HomeKitCameraRecordingDelegate
         `[HKSV][${this.entityId}] Failed to spawn HKSV FFmpeg process: ${err}`,
       );
       this.ffmpegProcess = undefined;
+    } finally {
+      this.isStartingPipeline = false;
     }
   }
 
   private stopPrebufferPipeline(): void {
+    this.isStartingPipeline = false;
     if (this.ffmpegProcess) {
       try {
         this.ffmpegProcess.kill("SIGTERM");

@@ -3,6 +3,8 @@ import {
   AccessoryInfo,
   AudioRecordingCodecType,
   AudioRecordingSamplerate,
+  AudioStreamingCodecType,
+  AudioStreamingSamplerate,
   CameraController,
   type CameraControllerOptions,
   Categories,
@@ -118,7 +120,7 @@ export class HomeKitCameraAccessory {
   private buildControllerOptions(): CameraControllerOptions {
     const isStreamingUsable = Boolean(this.streamSource.url);
     const options: CameraControllerOptions = {
-      cameraStreamCount: 1,
+      cameraStreamCount: 2,
       delegate: this.delegate,
       streamingOptions: {
         supportedCryptoSuites: [SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80],
@@ -129,7 +131,14 @@ export class HomeKitCameraAccessory {
           },
           resolutions: this.buildDeclaredResolutions(),
         },
-        audio: undefined,
+        audio: {
+          codecs: [
+            {
+              type: AudioStreamingCodecType.AAC_ELD,
+              samplerate: AudioStreamingSamplerate.KHZ_16,
+            },
+          ],
+        },
       },
       sensors: this.motionService ? { motion: this.motionService } : undefined,
     };

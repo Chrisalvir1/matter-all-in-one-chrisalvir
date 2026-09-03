@@ -1,3 +1,19 @@
+## [1.4.90] - 2026-09-02
+
+### Corrección Crítica de Negociación de Live View en iOS (AAC-ELD y Concurrencia HKSV)
+
+#### Restauración de AAC-ELD en Streaming HAP
+- **Causa raíz de "No Response":** En v1.4.88 y v1.4.89 se configuró `audio: undefined` en `CameraController`. HAP-NodeJS, al no recibir códecs de audio, publica un códec de respaldo (OPUS a 16kHz/24kHz). Los dispositivos iOS (iPhone/iPad) **rechazan** de inmediato cualquier cámara que no soporte **AAC-ELD**, abortando la conexión antes de enviar `prepareStream`. Esto causaba que la cámara mostrara "No Response" constante en Apple Home.
+- **Solución:** Se declara formalmente `AudioStreamingCodecType.AAC_ELD` a 16kHz en las opciones de streaming del controlador de HomeKit, permitiendo a iOS negociar la sesión y abrir el Live View.
+
+#### Concurrencia de Streams (cameraStreamCount: 2)
+- **Soporte de 2 streams paralelos:** Permite que el Apple Home Hub realice grabaciones/análisis HKSV en segundo plano sin bloquear el Live View del iPhone.
+
+#### Robustez del Pipeline HKSV y Control de Procesos
+- **Protección contra procesos duplicados:** Se añade guardia de sincronización `isStartingPipeline` para evitar que la inicialización concurrente cree múltiples instancias de FFmpeg contra la misma cámara RTSP.
+- **Tiempo de inicialización ampliado:** Se aumenta la espera de inicialización a 5s para garantizar la entrega del segmento `moov` (ftyp) al Home Hub.
+- **Terminación limpia de grabaciones:** Se asegura que el generador de paquetes fMP4 siempre envíe `RecordingPacket.isLast: true` al cerrar streams de grabación.
+
 ## [1.4.89] - 2026-09-02
 
 ### Corrección Crítica de Transmisión (Probesize), HomeKit Secure Video (HKSV) y 4K
