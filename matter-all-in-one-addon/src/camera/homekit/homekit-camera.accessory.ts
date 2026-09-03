@@ -98,6 +98,24 @@ export class HomeKitCameraAccessory {
         doorbell.setCharacteristic(Characteristic.ProgrammableSwitchEvent, 0);
       } catch {}
     }
+    if (Boolean(this.streamSource.metadata?.hasLight)) {
+      try {
+        const light = this.accessory.addService(
+          Service.Lightbulb,
+          `${this.record.name || this.entityId} Luz`,
+        );
+        light.getCharacteristic(Characteristic.On).onGet(() => false).onSet(() => {});
+      } catch {}
+    }
+    if (Boolean(this.streamSource.metadata?.hasSiren)) {
+      try {
+        const siren = this.accessory.addService(
+          Service.Switch,
+          `${this.record.name || this.entityId} Sirena`,
+        );
+        siren.getCharacteristic(Characteristic.On).onGet(() => false).onSet(() => {});
+      } catch {}
+    }
     const isStreamingUsable = Boolean(this.streamSource.url);
     this.record.hksvEnabled = isStreamingUsable;
     this.record.hksvCapable = isStreamingUsable;

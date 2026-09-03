@@ -239,31 +239,36 @@ function mapDeviceToCameraRecord(
     });
   }
 
-  if (
-    allInterfaces.includes("ObjectDetection") ||
-    allInterfaces.includes("BinarySensor")
-  ) {
+  if (allInterfaces.includes("Light") || allInterfaces.includes("OnOff")) {
     sensors.push({
-      sensorId: `${id}_person`,
-      type: "person",
-      name: `${name} – Persona`,
+      sensorId: `${id}_light`,
+      type: "light",
+      name: `${name} – Luz / Foco`,
+      enabled: true,
+      state: false,
+    });
+  }
+
+  if (allInterfaces.includes("Siren") || allInterfaces.includes("Alarm")) {
+    sensors.push({
+      sensorId: `${id}_siren`,
+      type: "siren",
+      name: `${name} – Sirena / Alarma`,
       enabled: true,
       state: false,
     });
   }
 
   if (
-    allInterfaces.includes("AudioSensor") ||
-    allInterfaces.includes("Microphone") ||
-    allInterfaces.includes("Intercom") ||
-    allInterfaces.includes("TwoWayAudio")
+    allInterfaces.includes("PanTilt") ||
+    allInterfaces.includes("PanTiltZoom")
   ) {
     sensors.push({
-      sensorId: `${id}_audio`,
-      type: "occupancy",
-      name: `${name} – Micrófono / Audio`,
+      sensorId: `${id}_ptz`,
+      type: "ptz",
+      name: `${name} – Control PTZ (Giro)`,
       enabled: true,
-      state: false,
+      state: true,
     });
   }
 

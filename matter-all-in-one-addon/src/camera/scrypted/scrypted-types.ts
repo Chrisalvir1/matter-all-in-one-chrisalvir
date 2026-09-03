@@ -102,10 +102,12 @@ export interface CameraSensorRecord {
   type:
     | "motion"
     | "doorbell"
+    | "light"
+    | "siren"
+    | "ptz"
     | "person"
     | "package"
     | "vehicle"
-    | "light"
     | "occupancy";
   name: string;
   enabled: boolean;

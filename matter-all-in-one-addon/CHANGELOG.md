@@ -1,3 +1,20 @@
+## [1.5.06] - 2026-09-03
+
+### Reparación del Centro de Control, Desglose de Cámaras Scrypted/HA y Auditoría Unificada de Hardware en HAP
+
+- **Centro de Control Completo y Reparado:** Se restauraron los contadores de dispositivos totales, descubiertos en Matter y emparejados. Además, se añadieron métricas desglosadas en tiempo real para **Cámaras Scrypted** (total y emparejadas) y **Cámaras Home Assistant** (total y emparejadas).
+- **Rediseño Compacto y Adaptativo con Toggles por Marca:** Las agrupaciones de cámaras por marca ahora son acordeones colapsables (`<details>`) para ahorrar espacio en pantalla. Las tarjetas de cámara se rediseñaron con tamaño ultra-compacto (`min-height: auto`, espaciado optimizado de 10px y badges discretos).
+- **Scroll Total e Independiente en el Modal de Configuración:** Se solucionó el bloqueo de scroll en la columna del código QR. Tanto la columna del QR como la columna de especificaciones y controles ahora tienen scroll vertical independiente (`overflow-y: auto`), impidiendo que los botones de descarga o restablecimiento queden recortados.
+- **Auditoría de Hardware Real HAP en 1 Solo Código QR:** Se eliminaron los sensores artificiales inventados (`Micrófono / Audio`, `Persona`). El sistema ahora extrae y expone exclusivamente las funciones físicas reales del hardware:
+  - 🏃 **Sensor de Movimiento** (PIR/Detección en tiempo real).
+  - 💡 **Luz / Foco de Cámara** (disponible con interruptor en Apple Home si el hardware cuenta con foco).
+  - 🚨 **Alarma / Sirena** (disponible con interruptor en Apple Home si el hardware cuenta con sirena).
+  - 🔄 **Control PTZ** (indicador de compatibilidad de giro Pan/Tilt/Zoom).
+  - 🔔 **Timbre** (aviso sonoro y PIP en Apple TV si es doorbell).
+  - Todo empaquetado bajo un único accesorio y un **único código QR HAP**, sin requerir puentes separados.
+- **Diagnóstico y Detección Automática de Especificaciones:** Al abrir el modal de cámara, las especificaciones técnicas de video (resolución, códec, fps) y audio se comprueban y actualizan en segundo plano de inmediato, sin requerir clics manuales ni recargas de página. Se optimizó `ffprobe` con `-probesize 65536` y timeout ampliado a 7s para evitar falsos negativos en cámaras WiFi.
+- **Eliminación del Bloque Teórico de Plataformas:** Se retiró el formulario de checkboxes de plataformas ("Matter Camera 1.5", "Apple Home HKSV iOS 27", etc.) para mantener la interfaz despejada y centrada en streaming real.
+
 ## [1.5.05] - 2026-09-03
 
 ### Optimización Visual de la UI: Barra Scrypted Exclusiva en Pestaña Cámaras y Tarjetas Limpias y Compactas

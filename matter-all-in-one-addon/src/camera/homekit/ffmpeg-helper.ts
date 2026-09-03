@@ -223,7 +223,7 @@ export async function probeCameraSource(
     customFfmpegPath?: string;
   } = {},
 ): Promise<ProbeResult> {
-  const timeoutMs = options.timeoutMs ?? 4000;
+  const timeoutMs = options.timeoutMs ?? 7000;
   const ffprobePath = options.customFfprobePath || resolveFfprobePath();
 
   if (ffprobePath) {
@@ -294,6 +294,14 @@ function probeWithFfprobe(
       args.push(
         "-rtsp_transport",
         "tcp",
+        "-probesize",
+        "65536",
+        "-analyzeduration",
+        "100000",
+        "-fflags",
+        "+nobuffer",
+        "-flags",
+        "low_delay",
       );
     }
 
@@ -393,10 +401,10 @@ function probeWithFfmpeg(
   return new Promise((resolve) => {
     const args = [
       "-hide_banner",
-      "-analyzeduration",
-      "2000000",
       "-probesize",
-      "2000000",
+      "65536",
+      "-analyzeduration",
+      "100000",
     ];
 
     if (
@@ -407,7 +415,14 @@ function probeWithFfmpeg(
     }
 
     if (sourceUrl.startsWith("rtsp://")) {
-      args.push("-rtsp_transport", "tcp");
+      args.push(
+        "-rtsp_transport",
+        "tcp",
+        "-fflags",
+        "+nobuffer",
+        "-flags",
+        "low_delay",
+      );
     }
 
     args.push("-i", sourceUrl, "-t", "1", "-f", "null", "-");

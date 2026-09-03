@@ -307,7 +307,7 @@ h2 {
 }
 .overview {
   display: grid;
-  grid-template-columns: minmax(250px, 1fr) repeat(3, minmax(104px, auto));
+  grid-template-columns: minmax(200px, 1.2fr) repeat(auto-fit, minmax(105px, 1fr));
   align-items: stretch;
   gap: 1px;
   margin-bottom: 16px;
@@ -1972,123 +1972,196 @@ mark {
   box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
 }
 
-/* Camera Brand Grouping — occupies full row in the main device grid */
+/* Camera Brand Grouping — compact, collapsible & adaptive */
 .camera-brand-group {
   grid-column: 1 / -1;
   min-width: 0;
   width: 100%;
   box-sizing: border-box;
-  margin: 0 0 24px;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 16px;
-  padding: 24px;
+  margin: 0 0 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 12px;
+  padding: 12px 14px;
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: background 0.15s ease;
+}
+
+.camera-brand-group summary {
+  list-style: none;
+}
+.camera-brand-group summary::-webkit-details-marker {
+  display: none;
 }
 
 .camera-brand-group__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  margin: 0 0 20px;
-  padding-bottom: 12px;
-  border-bottom: 2px solid rgba(255, 255, 255, 0.1);
-  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0;
+  padding: 2px 0 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  cursor: pointer;
+  user-select: none;
+}
+
+.camera-brand-group[open] .camera-brand-group__header {
+  margin-bottom: 12px;
 }
 
 .camera-brand-group__header h3 {
-  font-size: 1.25rem;
+  font-size: 0.95rem;
   font-weight: 700;
   margin: 0;
   color: #ffffff;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .brand-camera-count {
-  font-size: 0.85rem;
-  color: rgba(255, 255, 255, 0.6);
-  font-weight: 500;
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.65);
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.07);
+  padding: 2px 8px;
+  border-radius: 999px;
 }
 
-/* Camera grid inside brand group — responsive, no horizontal overflow */
-.camera-brand-group .cameras-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
-  gap: 16px;
-  width: 100%;
-}
-
-/* Legacy: keep camera-model-group for backwards compatibility but spanning full width */
-.camera-model-group {
-  grid-column: 1 / -1;
-  min-width: 0;
-  width: 100%;
-  box-sizing: border-box;
-  margin-bottom: 32px;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 16px;
-  padding: 24px;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.model-section-header {
-  font-size: 1.25rem;
-  font-weight: 700;
-  margin: 0 0 20px 0;
-  color: #ffffff;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding-bottom: 12px;
-  border-bottom: 2px solid rgba(255, 255, 255, 0.1);
-}
-
+/* Camera grid inside brand group — adaptive & compact */
+.camera-brand-group .cameras-grid,
 .cameras-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
+  width: 100%;
 }
 
-/* Individual Scrypted Camera Card */
-.scrypted-camera-card {
+/* Individual Scrypted & HA Camera Card — Ultra compact & adaptive */
+.scrypted-camera-card,
+.ha-camera-card {
   position: relative;
-  background: rgba(255, 255, 255, 0.04);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 18px;
-  padding: 18px;
+  background: rgba(255, 255, 255, 0.035);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 10px 12px;
   display: flex;
   flex-direction: column;
-  min-height: 220px;
+  min-height: auto;
+  gap: 4px;
   cursor: pointer;
-  transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+  transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
 }
 
-.scrypted-camera-card:hover {
-  transform: translateY(-4px);
+.scrypted-camera-card:hover,
+.ha-camera-card:hover {
+  transform: translateY(-2px);
   border-color: rgba(56, 189, 248, 0.45);
   background: rgba(25, 39, 67, 0.8);
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.35);
+}
+
+.scrypted-camera-card .card-top,
+.ha-camera-card .card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2px;
+}
+
+.scrypted-camera-card h3,
+.ha-camera-card h3 {
+  font-size: 0.88rem;
+  font-weight: 700;
+  margin: 2px 0;
+  line-height: 1.3;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scrypted-camera-card .device-meta,
+.ha-camera-card .device-meta {
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scrypted-camera-card .tags,
+.ha-camera-card .tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.scrypted-camera-card .tag,
+.ha-camera-card .tag {
+  font-size: 0.68rem;
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+
+.scrypted-camera-card .card-footer,
+.ha-camera-card .card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.scrypted-camera-card .card-footer button,
+.ha-camera-card .card-footer button {
+  padding: 3px 9px;
+  font-size: 0.72rem;
+  border-radius: 6px;
 }
 
 .camera-modal-layout {
   display: grid;
-  grid-template-columns: 320px minmax(0, 1fr);
+  grid-template-columns: 330px minmax(0, 1fr);
   gap: 22px;
-  padding-top: 18px;
+  padding-top: 14px;
   flex: 1;
   min-height: 0;
+  max-height: calc(88vh - 100px);
+  overflow: hidden;
+  align-items: stretch;
+}
+
+.camera-modal-layout .qr-panel {
+  max-height: 100%;
   overflow-y: auto;
-  align-items: start;
+  padding-right: 8px;
+  scrollbar-width: thin;
+}
+
+.camera-modal-layout .selection-panel {
+  max-height: 100%;
+  overflow-y: auto;
+  padding-right: 8px;
+  scrollbar-width: thin;
 }
 
 @media (max-width: 860px) {
   .camera-modal-layout {
     grid-template-columns: 1fr;
+    max-height: none;
+    overflow-y: auto;
+  }
+  .camera-modal-layout .qr-panel,
+  .camera-modal-layout .selection-panel {
+    max-height: none;
+    overflow-y: visible;
   }
 }
 
