@@ -142,10 +142,32 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
     this.isTakingSnapshot = true;
 
     try {
+      if (
+        this.platform?.ha?.fetchSnapshot &&
+        typeof this.platform.ha.fetchSnapshot === "function" &&
+        this.entityId.startsWith("camera.")
+      ) {
+        try {
+          const buffer = await this.platform.ha.fetchSnapshot(this.entityId);
+          if (buffer && isJpeg(buffer) && buffer.length > 512) {
+            finish("ha-fetch-snapshot", buffer);
+            return;
+          }
+        } catch {}
+      }
+
       const snapshotUrl = this.streamSource.snapshotUrl;
       if (snapshotUrl?.startsWith("http://") || snapshotUrl?.startsWith("https://")) {
         try {
-          const response = await fetch(snapshotUrl!, {
+          const headers: Record<string, string> = {};
+          const token =
+            this.platform?.ha?.getAccessToken?.() ||
+            this.platform?.ha?.wsAccessToken;
+          if (token) {
+            headers["Authorization"] = `Bearer ${token}`;
+          }
+          const response = await fetch(snapshotUrl, {
+            headers,
             signal: AbortSignal.timeout(2500),
           });
           if (response.ok) {
@@ -174,15 +196,18 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
         args.push(
           "-rtsp_transport",
           "tcp",
-          "-timeout",
-          "4000000",
-          "-fflags",
-          "+genpts+discardcorrupt",
+          "-stimeout",
+          "5000000",
         );
+      } else if (sourceUrl.startsWith("http://") || sourceUrl.startsWith("https://")) {
+        const token =
+          this.platform?.ha?.getAccessToken?.() ||
+          this.platform?.ha?.wsAccessToken;
+        if (token) {
+          args.push("-headers", `Authorization: Bearer ${token}\r\n`);
+        }
       }
       args.push(
-        "-skip_frame",
-        "nokey",
         "-i",
         sourceUrl,
         "-frames:v",
@@ -381,6 +406,13 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
         "-fflags",
         "+nobuffer",
       );
+    } else if (sourceUrl.startsWith("http://") || sourceUrl.startsWith("https://")) {
+      const token =
+        this.platform?.ha?.getAccessToken?.() ||
+        this.platform?.ha?.wsAccessToken;
+      if (token) {
+        args.push("-headers", `Authorization: Bearer ${token}\r\n`);
+      }
     }
     args.push("-i", sourceUrl);
 
@@ -441,13 +473,29 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
       const hasFdk = supportsFdkAac();
       const audioBitrate = Math.min(request.audio.max_bit_rate || 24, 24);
 
-      args.push(
-        "-map",
-        "0:a:0?",
-        "-vn",
-        "-af",
-        "aresample=async=1:first_pts=0,volume=3.0",
-      );
+      const needsSilentAudio =
+        this.streamSource.sourceType === "ha_proxy" ||
+        !this.capabilities.hasAudio;
+
+      if (needsSilentAudio) {
+        args.push(
+          "-f",
+          "lavfi",
+          "-i",
+          "anullsrc=channel_layout=mono:sample_rate=16000",
+          "-map",
+          "1:a:0",
+          "-vn",
+        );
+      } else {
+        args.push(
+          "-map",
+          "0:a:0",
+          "-vn",
+          "-af",
+          "aresample=async=1:first_pts=0,volume=3.0",
+        );
+      }
 
       if (isOpus) {
         args.push(

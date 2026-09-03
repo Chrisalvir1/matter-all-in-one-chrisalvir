@@ -1,3 +1,13 @@
+## [1.5.00] - 2026-09-02
+
+### Arquitectura Universal de Video en Vivo Estable y Corrección de Fallo de Pantalla Negra
+
+#### Resolución Definitiva de Transmisión de Cámaras (Tapo, Wyze, Ezviz, Ring, Vimtag, Scrypted)
+- **Eliminación del Bloqueo WebRTC (`url: undefined`):** Se corrigió la condición que abortaba la resolución de URL para cámaras de Home Assistant con `frontend_stream_type: "webrtc"`, asignando el flujo continuo de proxy `${httpBase}/api/camera_proxy_stream/{entityId}` o HLS.
+- **Autenticación Bearer en FFmpeg y Snapshots:** Se agregaron encabezados de autorización HTTP (`Authorization: Bearer <token>`) para que FFmpeg y las solicitudes de instantáneas no sean rechazadas con error `401 Unauthorized` por Home Assistant.
+- **Inyección Segura de Audio Silencioso (`anullsrc`):** Se previene el error crítico de FFmpeg `Output file #1 does not contain any stream` cuando una cámara o proxy carece de canal de audio, inyectando un flujo silencioso generado en memoria para cumplir los requisitos de Apple HomeKit sin congelar el video.
+- **Snapshots Auténticos Directos:** Se utiliza `fetchSnapshot(entityId)` para descargar las imágenes reales de la cámara en menos de 150ms, evitando el fallback estático negro.
+
 ## [1.4.99] - 2026-09-02
 
 ### Eliminación Completa de go2rtc y Flujo Directo de Cámara Nativo de Alta Calidad

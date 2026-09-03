@@ -21,7 +21,10 @@ export class CameraSourceResolver {
     state: HassState,
   ): Promise<ResolvedStreamSource> {
     const attrs = state?.attributes || {};
-    const snapshotUrl = `/api/camera_proxy/${entityId}`;
+    const httpBase = platform?.ha?.getHttpBaseUrl?.() || "";
+    const snapshotUrl = httpBase
+      ? `${httpBase}/api/camera_proxy/${entityId}`
+      : `/api/camera_proxy/${entityId}`;
     const supportedFeatures = Number(attrs.supported_features || 0);
     const hasStreamSupport = (supportedFeatures & 2) !== 0; // CameraEntityFeature.STREAM = 2
 
@@ -66,14 +69,14 @@ export class CameraSourceResolver {
       };
     }
 
-    // 3. WebRTC / go2rtc source
+    // 3. WebRTC direct URL if provided
     if (
       typeof attrs.webrtc_url === "string" &&
       attrs.webrtc_url.trim().length > 0
     ) {
       const sanitized = sanitizeUrlCredentials(attrs.webrtc_url);
       platform?.log?.debug?.(
-        `[CameraSourceResolver][${entityId}] Resolved go2rtc/webrtc_url: ${sanitized}`,
+        `[CameraSourceResolver][${entityId}] Resolved webrtc_url: ${sanitized}`,
       );
       return {
         sourceType: "webrtc",
@@ -88,17 +91,21 @@ export class CameraSourceResolver {
       platform?.log?.debug?.(
         `[CameraSourceResolver][${entityId}] Camera frontend_stream_type is webrtc`,
       );
+      const fallbackProxyUrl = platform?.ha?.getCameraProxyStreamUrl?.(entityId);
       return {
         sourceType: "webrtc",
-        url: undefined,
+        url: fallbackProxyUrl || undefined,
         snapshotUrl,
         supportsPassthrough: true,
         requiresBridge: false,
       };
     }
 
-    // 4. HA Native HLS stream via WebSocket (camera/stream) ONLY if supported_features has STREAM
-    if (hasStreamSupport && platform?.ha?.requestCameraStream) {
+    // 4. HA Native stream via WebSocket (camera/stream)
+    const canAttemptStream =
+      hasStreamSupport ||
+      attrs.frontend_stream_type === "hls";
+    if (canAttemptStream && platform?.ha?.requestCameraStream) {
       try {
         const streamUrl = await platform.ha.requestCameraStream(entityId);
         if (streamUrl && typeof streamUrl === "string") {
