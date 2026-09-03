@@ -1,3 +1,14 @@
+## [1.4.93] - 2026-09-02
+
+### Eliminación del Artefacto Gris de Video, Descarte de Cuadros Corruptos y Activación Universal de Audio en Vivo
+
+#### Corrección Crítica de Video
+- **Eliminación del filtro `pad`:** Se sustituyó el filtro de relleno por escalado nativo con preservación de relación de aspecto (`scale=w='min(width,iw)':h='min(height,ih)':force_original_aspect_ratio=decrease`). Esto elimina de raíz el rectángulo/barra gris estática que aparecía en streams de Vimtag y Scrypted Rebroadcast.
+- **Descarte de paquetes incompletos (`+discardcorrupt -flags low_delay`):** FFmpeg descarta paquetes iniciales huérfanos hasta recibir el primer cuadro clave (IDR/I-Frame), evitando que la pantalla quede negra o a medio cargar.
+
+#### Activación Universal de Audio
+- **Eliminación de la restricción `this.capabilities.hasAudio`:** El pipeline de audio (`-map 0:a:0? -c:a libfdk_aac`) se activa ahora de forma incondicional en cuanto iOS solicita audio, permitiendo escuchar en vivo todas las cámaras (Vimtag, Tapo, Ezviz, ONVIF) sin requerir validación previa de metadatos.
+
 ## [1.4.92] - 2026-09-02
 
 ### Validación y Diagnóstico Instantáneo sin Bloqueo de Caché para RTSP Directo

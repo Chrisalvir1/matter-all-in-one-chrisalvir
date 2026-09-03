@@ -356,7 +356,9 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
         "-timeout",
         "5000000",
         "-fflags",
-        "+nobuffer+genpts",
+        "+genpts+discardcorrupt",
+        "-flags",
+        "low_delay",
       );
     }
     args.push("-i", sourceUrl);
@@ -373,7 +375,7 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
       "-level:v",
       h264Level(video.level),
       "-vf",
-      `scale=${video.width}:${video.height}:force_original_aspect_ratio=decrease,pad=${video.width}:${video.height}:(ow-iw)/2:(oh-ih)/2`,
+      `scale=w='min(${video.width},iw)':h='min(${video.height},ih)':force_original_aspect_ratio=decrease:force_divisible_by=2`,
       "-r",
       String(fps),
       "-g",
@@ -406,7 +408,6 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
     );
 
     if (
-      this.capabilities.hasAudio &&
       request.audio &&
       session.audioPort &&
       session.localAudioPort &&
