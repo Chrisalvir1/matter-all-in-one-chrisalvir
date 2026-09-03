@@ -1,15 +1,20 @@
 import {
   Accessory,
   AccessoryInfo,
+  AudioRecordingCodecType,
+  AudioRecordingSamplerate,
   CameraController,
   type CameraControllerOptions,
   Categories,
   Characteristic,
+  EventTriggerOption,
   H264Level,
   H264Profile,
+  MediaContainerType,
   Service,
   SRTPCryptoSuites,
   uuid,
+  VideoCodecType,
 } from "hap-nodejs";
 import type {
   CameraCapabilitiesInfo,
@@ -17,11 +22,13 @@ import type {
   ResolvedStreamSource,
 } from "../camera-types.js";
 import { HomeKitCameraStreamingDelegate } from "./homekit-camera-stream.delegate.js";
+import { HomeKitCameraRecordingDelegate } from "./homekit-camera-recording.delegate.js";
 
 export class HomeKitCameraAccessory {
   public accessory: Accessory;
   public controller!: CameraController;
   public delegate!: HomeKitCameraStreamingDelegate;
+  public recordingDelegate?: HomeKitCameraRecordingDelegate;
   public motionService?: Service;
   public linkedMotionEntityId?: string;
   public isPublished = false;
@@ -45,6 +52,13 @@ export class HomeKitCameraAccessory {
     this.delegate = new HomeKitCameraStreamingDelegate(
       this.platform,
       this.entityId,
+      this.capabilities,
+      this.streamSource,
+    );
+    this.recordingDelegate = new HomeKitCameraRecordingDelegate(
+      this.platform,
+      this.entityId,
+      this.record,
       this.capabilities,
       this.streamSource,
     );
@@ -72,9 +86,10 @@ export class HomeKitCameraAccessory {
         doorbell.setCharacteristic(Characteristic.ProgrammableSwitchEvent, 0);
       } catch {}
     }
-    this.record.hksvEnabled = false;
-    this.record.hksvCapable = false;
-    this.record.hksvState = "not_capable";
+    const isStreamingUsable = Boolean(this.streamSource.url);
+    this.record.hksvEnabled = isStreamingUsable;
+    this.record.hksvCapable = isStreamingUsable;
+    this.record.hksvState = isStreamingUsable ? "waiting_hub" : "not_capable";
     this.controller = new CameraController(this.buildControllerOptions());
     this.accessory.configureController(this.controller);
   }
@@ -101,7 +116,8 @@ export class HomeKitCameraAccessory {
   }
 
   private buildControllerOptions(): CameraControllerOptions {
-    return {
+    const isStreamingUsable = Boolean(this.streamSource.url);
+    const options: CameraControllerOptions = {
       cameraStreamCount: 1,
       delegate: this.delegate,
       streamingOptions: {
@@ -113,25 +129,61 @@ export class HomeKitCameraAccessory {
           },
           resolutions: this.buildDeclaredResolutions(),
         },
-        // Audio disabled intentionally: Alpine Linux FFmpeg does not include
-        // libfdk_aac, which is the only encoder supporting AAC-ELD (the only
-        // codec accepted by HomeKit HAP). Declaring AAC-ELD but sending AAC-LC
-        // causes iOS to receive no audio or corrupted audio. We disable audio
-        // here so the HAP video pipeline runs cleanly and iOS does not display
-        // a misleading mute icon.
         audio: undefined,
       },
       sensors: this.motionService ? { motion: this.motionService } : undefined,
     };
+
+    if (isStreamingUsable && this.recordingDelegate) {
+      options.recording = {
+        options: {
+          prebufferLength: 4000,
+          overrideEventTriggerOptions: [EventTriggerOption.MOTION],
+          mediaContainerConfiguration: {
+            type: MediaContainerType.FRAGMENTED_MP4,
+            fragmentLength: 4000,
+          },
+          video: {
+            type: VideoCodecType.H264,
+            parameters: {
+              profiles: [H264Profile.BASELINE, H264Profile.MAIN, H264Profile.HIGH],
+              levels: [H264Level.LEVEL3_1, H264Level.LEVEL3_2, H264Level.LEVEL4_0],
+            },
+            resolutions: [
+              [1920, 1080, 30],
+              [1280, 720, 30],
+            ],
+          },
+          audio: {
+            codecs: {
+              type: AudioRecordingCodecType.AAC_LC,
+              audioChannels: 1,
+              samplerate: [
+                AudioRecordingSamplerate.KHZ_16,
+                AudioRecordingSamplerate.KHZ_32,
+              ],
+            },
+          },
+        },
+        delegate: this.recordingDelegate,
+      };
+    }
+
+    return options;
   }
 
   private buildDeclaredResolutions(): [number, number, number][] {
     const source = this.capabilities.resolution || { width: 1920, height: 1080 };
     const sourceFps = Math.max(15, Math.min(this.capabilities.maxFps || 30, 30));
+    const maxDeclaredWidth = Math.max(source.width, 3840);
+    const maxDeclaredHeight = Math.max(source.height, 2160);
     const ladder: [number, number, number][] = [
-      // Include the native source resolution first so HomeKit can negotiate
-      // the highest quality the camera actually supports
+      // Native source resolution first so HomeKit can negotiate max quality
       [source.width, source.height, sourceFps],
+      // 4K UHD (3840x2160)
+      [3840, 2160, sourceFps],
+      // 2K QHD (2560x1440 for Tapo, etc.)
+      [2560, 1440, sourceFps],
       [1920, 1080, sourceFps],
       [1280, 960, sourceFps],
       [1280, 720, sourceFps],
@@ -144,12 +196,12 @@ export class HomeKitCameraAccessory {
       [320, 240, 15],
       [320, 180, 30],
     ];
-    // Deduplicate and keep only resolutions at or below source, highest first
+    // Deduplicate and keep only resolutions at or below max bounds, highest first
     const seen = new Set<string>();
     const supported: [number, number, number][] = [];
     for (const [w, h, fps] of ladder) {
       const key = `${w}x${h}`;
-      if (!seen.has(key) && w <= source.width && h <= source.height) {
+      if (!seen.has(key) && w <= maxDeclaredWidth && h <= maxDeclaredHeight) {
         seen.add(key);
         supported.push([w, h, fps]);
       }
@@ -204,6 +256,7 @@ export class HomeKitCameraAccessory {
       Characteristic.MotionDetected,
       motionDetected,
     );
+    this.recordingDelegate?.handleMotionDetected(motionDetected);
   }
 
   public async publish(): Promise<void> {
@@ -228,7 +281,7 @@ export class HomeKitCameraAccessory {
     });
     this.isPublished = true;
     this.platform?.log?.notice?.(
-      `[HomeKitCamera][${this.entityId}] Published production HAP camera port=${this.record.port} HKSV=disabled`,
+      `[HomeKitCamera][${this.entityId}] Published production HAP camera port=${this.record.port} HKSV=${this.record.hksvEnabled ? "enabled" : "disabled"}`,
     );
   }
 
@@ -252,6 +305,7 @@ export class HomeKitCameraAccessory {
 
   public async unpublish(): Promise<void> {
     this.delegate?.cleanupAllSessions();
+    this.recordingDelegate?.updateRecordingActive(false);
     if (!this.isPublished) return;
     try {
       await this.accessory.unpublish();

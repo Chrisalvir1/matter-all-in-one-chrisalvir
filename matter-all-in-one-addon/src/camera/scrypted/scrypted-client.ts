@@ -1149,9 +1149,39 @@ export class ScryptedClient {
   }
 
   /**
+   * Helper that converts a MediaObject to a URI string using mediaManager.
+   * Tries convertMediaObjectToUrl, then convertMediaObjectToLocalUrl,
+   * then convertMediaObjectToInsecureLocalUrl for maximum compatibility.
+   */
+  private static async resolveMediaObjectUri(
+    mediaManager: any,
+    mo: any,
+  ): Promise<string | undefined> {
+    if (!mediaManager || !mo) return undefined;
+    const methods = [
+      "convertMediaObjectToUrl",
+      "convertMediaObjectToLocalUrl",
+      "convertMediaObjectToInsecureLocalUrl",
+    ];
+    for (const method of methods) {
+      if (typeof mediaManager[method] === "function") {
+        try {
+          const resolved = await mediaManager[method](mo, "text/x-uri");
+          if (typeof resolved === "string" && resolved.trim().length > 0) {
+            return resolved.trim();
+          }
+        } catch {
+          // Try next converter
+        }
+      }
+    }
+    return undefined;
+  }
+
+  /**
    * Fetches real stream profiles for a given camera device using the official Scrypted SDK.
    * Calls device.getVideoStreamOptions() and optionally resolves direct stream URLs
-   * using mediaManager.convertMediaObjectToUrl(mo, "text/x-uri").
+   * using mediaManager converters.
    *
    * NEVER invents an RTSP URL. Returns [] if no stream options are available.
    */
@@ -1202,21 +1232,21 @@ export class ScryptedClient {
               mediaManager
             ) {
               try {
-                const mo = await dev.getVideoStream({ id: opt.id });
-                if (
-                  mo &&
-                  typeof mediaManager.convertMediaObjectToUrl === "function"
-                ) {
-                  const resolvedUrl =
-                    await mediaManager.convertMediaObjectToUrl(
-                      mo,
-                      "text/x-uri",
-                    );
-                  if (
-                    typeof resolvedUrl === "string" &&
-                    resolvedUrl.trim().length > 0
-                  ) {
-                    directUrl = resolvedUrl.trim();
+                let mo: any = null;
+                try {
+                  mo = await dev.getVideoStream({ id: opt.id });
+                } catch {
+                  try {
+                    mo = await dev.getVideoStream({ id: opt.id, destination: "local" });
+                  } catch {}
+                }
+                if (mo) {
+                  const resolvedUrl = await ScryptedClient.resolveMediaObjectUri(
+                    mediaManager,
+                    mo,
+                  );
+                  if (resolvedUrl) {
+                    directUrl = resolvedUrl;
                   }
                 }
               } catch {
@@ -1266,21 +1296,27 @@ export class ScryptedClient {
       mediaManager
     ) {
       try {
-        const mo = await dev.getVideoStream();
-        if (mo && typeof mediaManager.convertMediaObjectToUrl === "function") {
-          const resolvedUrl = await mediaManager.convertMediaObjectToUrl(
+        let mo: any = null;
+        try {
+          mo = await dev.getVideoStream();
+        } catch {
+          try {
+            mo = await dev.getVideoStream({ destination: "local" });
+          } catch {}
+        }
+        if (mo) {
+          const resolvedUrl = await ScryptedClient.resolveMediaObjectUri(
+            mediaManager,
             mo,
-            "text/x-uri",
           );
           if (
-            typeof resolvedUrl === "string" &&
-            resolvedUrl.trim().length > 0 &&
-            !isInventedRtspUrl(resolvedUrl.trim(), deviceId)
+            resolvedUrl &&
+            !isInventedRtspUrl(resolvedUrl, deviceId)
           ) {
             profiles.push({
               id: "default",
               name: "Default Stream",
-              directUrl: resolvedUrl.trim(),
+              directUrl: resolvedUrl,
               discoveredAt: now,
               validationStatus: "not_checked",
             });

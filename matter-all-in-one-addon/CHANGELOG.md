@@ -1,3 +1,23 @@
+## [1.4.89] - 2026-09-02
+
+### Corrección Crítica de Transmisión (Probesize), HomeKit Secure Video (HKSV) y 4K
+
+#### Corrección Crítica de Live View (Regresión de Probesize 32 bytes)
+- **Causa raíz:** `-probesize 32` y `-analyzeduration 0` causaban que FFmpeg limitara el buffer de prueba de paquetes a solo 32 bytes literales. Como los encabezados H.264 (NAL units SPS/PPS/SEI) superan los 32 bytes (ej. `SEI type 764 size 34 truncated at 32`), FFmpeg descartaba los frames de video, generando advertencias de timestamps (`Non-monotonic DTS`), buffer de audio invertido y cerrando con código 255 por "Output file is empty".
+- **Solución:** Se eliminan `-probesize 32` y `-analyzeduration 0`. Se restaura el timeout de RTSP a 5s y se preserva `+nobuffer+genpts` para baja latencia sin truncar paquetes H.264.
+
+#### Activación de HomeKit Secure Video (HKSV) — Grabación en iCloud
+- **Opciones de grabación desbloqueadas:** Se conecta `HomeKitCameraRecordingDelegate` con el `CameraController` de HAP-NodeJS mediante `CameraRecordingOptions` (contenedor fMP4/fragmented MP4, video H.264 1080p/720p, audio AAC-LC a 16kHz/32kHz).
+- **Ver y Grabar (Stream & Allow Recording):** Apple Home ahora muestra las opciones completas de grabación en iCloud y activa los clips cuando el sensor de movimiento detecta actividad.
+
+#### Soporte de 4K UHD y Bitrate Elevado
+- **Resoluciones 4K:** Ladder ampliado con soporte de 3840×2160 (4K) y 2560×1440 (2K).
+- **Bitrate máximo:** Capped a 8000kbps (8 Mbps) para soportar la fidelidad requerida por cámaras 4K y 2K.
+
+#### Resolución de Streams para Cámaras Scrypted (Ezviz, Wyze, Ring, Vimtag)
+- **Resolución Multi-Método en MediaManager:** Para cámaras conectadas a Scrypted vía SDK, `resolveMediaObjectUri` ahora prueba secuencialmente `convertMediaObjectToUrl`, `convertMediaObjectToLocalUrl` y `convertMediaObjectToInsecureLocalUrl`. Esto permite resolver endpoints locales generados por Scrypted sin requerir conexión a Scrypted Cloud.
+- **Soporte de Destino Local:** Se intenta `getVideoStream({ id, destination: "local" })` para activar restreamers locales de Scrypted.
+
 ## [1.4.88] - 2026-09-02
 
 ### Mejoras de calidad, latencia y metadatos en Apple Home Live View
