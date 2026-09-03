@@ -25,6 +25,7 @@ import {
   getFfmpegVersion,
   resolveFfmpegPath,
   sanitizeUrlCredentials,
+  supportsFdkAac,
 } from "./ffmpeg-helper.js";
 
 export interface HomeKitStreamSession {
@@ -86,6 +87,9 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
   private readonly activeSessions = new Map<string, HomeKitStreamSession>();
   private lastSnapshotBuffer: Buffer = FALLBACK_JPEG_BUFFER;
 
+  private isTakingSnapshot = false;
+  private lastSnapshotTime = 0;
+
   constructor(
     private readonly platform: any,
     private readonly entityId: string,
@@ -100,15 +104,33 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
     const started = Date.now();
     let completed = false;
     const finish = (source: string, buffer: Buffer): void => {
+      this.isTakingSnapshot = false;
       if (completed) return;
       completed = true;
       const selected = isJpeg(buffer) ? buffer : this.lastSnapshotBuffer;
-      if (isJpeg(selected)) this.lastSnapshotBuffer = selected;
+      if (isJpeg(selected)) {
+        this.lastSnapshotBuffer = selected;
+        this.lastSnapshotTime = Date.now();
+      }
       this.platform?.log?.notice?.(
         `[HomeKitCamera][${this.entityId}] Snapshot source=${source} bytes=${selected.length} duration=${Date.now() - started}ms validJpeg=${isJpeg(selected)}`,
       );
       callback(undefined, selected);
     };
+
+    // If live streaming is active or a snapshot was taken within the last 5s,
+    // reuse the cached snapshot to avoid opening competing RTSP connections that
+    // cause live video to freeze on cameras with limited hardware sessions (e.g. Tapo).
+    const now = Date.now();
+    if (
+      this.lastSnapshotBuffer &&
+      (this.activeSessions.size > 0 || this.isTakingSnapshot || now - this.lastSnapshotTime < 5000)
+    ) {
+      finish("cached-session-guard", this.lastSnapshotBuffer);
+      return;
+    }
+
+    this.isTakingSnapshot = true;
 
     try {
       const snapshotUrl = this.streamSource.snapshotUrl;
@@ -310,18 +332,17 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
       callback(new Error("FFmpeg or RTSP source is unavailable"));
       return;
     }
-    const validationStatus = String(
-      this.streamSource.metadata?.validationStatus || "not_checked",
-    );
-    if (["not_found", "unauthorized", "unsupported", "invalid", "source_offline"].includes(validationStatus)) {
-      callback(new Error(`RTSP source is not usable: ${validationStatus}`));
-      return;
-    }
 
     const video = request.video;
     const fps = Math.max(1, Math.min(video.fps || 30, 30));
-    // Use the bitrate HomeKit negotiates, capped at 8000k to support 4K/2K resolutions.
-    const bitrate = Math.max(512, Math.min(video.max_bit_rate || 4000, 8000));
+    // HomeKit on iOS can request default low bitrates (e.g. 299k).
+    // Ensure a high-fidelity floor: at least 2500k for 1080p, 4000k for 1440p (Tapo) / 4K.
+    const qualityFloor =
+      video.width >= 2560 ? 4000 : video.width >= 1920 ? 2500 : 1500;
+    const bitrate = Math.max(
+      qualityFloor,
+      Math.min(video.max_bit_rate || 4000, 8000),
+    );
     const mtu = video.mtu || 1378;
     const host = formatHost(session.targetAddress);
     const videoUrl =
@@ -366,7 +387,9 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
       "-bufsize",
       `${bitrate * 2}k`,
       "-preset",
-      "ultrafast",
+      "veryfast",
+      "-crf",
+      "21",
       "-tune",
       "zerolatency",
       "-f",
@@ -393,6 +416,7 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
       const audioUrl =
         `srtp://${host}:${session.audioPort}` +
         `?rtcpport=${session.audioPort}&localrtcpport=${session.localAudioPort}&pkt_size=188`;
+      const hasFdk = supportsFdkAac();
       args.push(
         "-map",
         "0:a:0?",
@@ -400,9 +424,14 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
         "-af",
         "aresample=16000",
         "-c:a",
-        "aac",
+        hasFdk ? "libfdk_aac" : "aac",
         "-profile:a",
-        "aac_low",
+        hasFdk ? "aac_eld" : "aac_low",
+      );
+      if (hasFdk) {
+        args.push("-flags", "+global_header");
+      }
+      args.push(
         "-ar",
         "16000",
         "-ac",

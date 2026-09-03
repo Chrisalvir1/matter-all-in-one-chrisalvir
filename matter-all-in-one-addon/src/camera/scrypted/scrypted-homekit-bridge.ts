@@ -49,14 +49,7 @@ export class ScryptedHomeKitBridge {
       this.activeAccessories.delete(camera.cameraId);
     }
 
-    const fatalStatus = [
-      "not_found",
-      "unauthorized",
-      "unsupported",
-      "invalid",
-      "source_offline",
-    ].includes(validationStatus);
-    const hasSource = Boolean(directUrl) && !fatalStatus;
+    const hasSource = Boolean(directUrl);
     const observed = camera.capabilities?.observed;
     const capabilities: CameraCapabilitiesInfo = {
       hasLiveStream: hasSource,
@@ -100,7 +93,7 @@ export class ScryptedHomeKitBridge {
       sourceType: directUrl ? "rtsp" : "unknown",
       url: directUrl,
       snapshotUrl: camera.source.snapshotReference?.directUrl,
-      supportsPassthrough: false,
+      supportsPassthrough: validationStatus === "verified",
       requiresBridge: true,
       metadata: {
         isScrypted: true,

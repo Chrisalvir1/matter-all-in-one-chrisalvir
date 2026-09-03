@@ -74,8 +74,8 @@ export function resolveFfmpegPath(): string | null {
   }
 
   candidates.push(
-    "/usr/bin/ffmpeg",
     "/usr/local/bin/ffmpeg",
+    "/usr/bin/ffmpeg",
     "/opt/homebrew/bin/ffmpeg",
     "/bin/ffmpeg",
     "./node_modules/ffmpeg-static/ffmpeg",
@@ -110,11 +110,37 @@ export function resolveFfmpegPath(): string | null {
   return null;
 }
 
+let cachedFdkSupport: boolean | null = null;
+
+/**
+ * Checks if the available FFmpeg binary supports the Fraunhofer FDK AAC encoder
+ * (libfdk_aac), which is required for Apple HomeKit native AAC-ELD real-time audio.
+ */
+export function supportsFdkAac(): boolean {
+  if (cachedFdkSupport !== null) return cachedFdkSupport;
+  const ffmpeg = resolveFfmpegPath();
+  if (!ffmpeg) {
+    cachedFdkSupport = false;
+    return false;
+  }
+  try {
+    const probe = spawnSync(ffmpeg, ["-encoders"], {
+      timeout: 2000,
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    cachedFdkSupport =
+      probe.stdout?.toString().includes("libfdk_aac") ?? false;
+  } catch {
+    cachedFdkSupport = false;
+  }
+  return cachedFdkSupport;
+}
+
 /**
  * Resolves the FFprobe binary path in priority order:
  * 1. process.env.FFPROBE_PATH
- * 2. /usr/bin/ffprobe (Docker/Alpine)
- * 3. /usr/local/bin/ffprobe
+ * 2. /usr/local/bin/ffprobe
+ * 3. /usr/bin/ffprobe (Docker/Alpine)
  * 4. /opt/homebrew/bin/ffprobe (macOS Apple Silicon)
  * 5. ffprobe (in system PATH)
  */
@@ -126,8 +152,8 @@ export function resolveFfprobePath(): string | null {
   }
 
   candidates.push(
-    "/usr/bin/ffprobe",
     "/usr/local/bin/ffprobe",
+    "/usr/bin/ffprobe",
     "/opt/homebrew/bin/ffprobe",
     "/bin/ffprobe",
     "ffprobe",

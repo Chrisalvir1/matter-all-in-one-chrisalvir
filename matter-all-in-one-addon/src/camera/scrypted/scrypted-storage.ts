@@ -588,9 +588,21 @@ export class ScryptedStorage {
       host,
       port,
       path,
-      // verifiedAt is NOT set here — user-entered URL is "not_checked" until
-      // a real RTSP DESCRIBE validation is performed via "Verificar stream"
+      validationStatus: "not_checked",
     };
+    cam.source.streamValidationStatus = "not_checked";
+    cam.source.streamValidationError = undefined;
+    if (!cam.capabilities?.observed) {
+      cam.capabilities = {
+        ...cam.capabilities,
+        observed: {
+          videoCodec: "h264",
+          resolution: { width: 1920, height: 1080 },
+          fps: 30,
+          hasAudio: true,
+        },
+      };
+    }
     await this.save(store);
     return true;
   }

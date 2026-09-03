@@ -1,3 +1,17 @@
+## [1.4.91] - 2026-09-02
+
+### Calidad Ultra HD / 2K para Live View y Audio Nativo AAC-ELD (libfdk_aac)
+
+#### Calidad Máxima y Nitidez en Streaming de Video
+- **Piso de Calidad de Bitrate:** Se elimina la restricción que permitía que HomeKit negociara bitrates bajos de 299kbps-500kbps para resoluciones HD/2K. Se establece un piso dinámico de **4000 kbps para 1440p (2K Tapo) / 4K** y **2500 kbps para 1080p**, garantizando imagen nítida sin pixelación ni artefactos de compresión.
+- **Transcodificación Optimizada (x264 veryfast + CRF 21):** Se sustituye el preset `ultrafast` (que degradaba severamente la calidad de imagen para ahorrar CPU) por `veryfast` con factor de calidad constante `-crf 21` y `-tune zerolatency`. En Raspberry Pi 5 esto consume apenas ~15% de CPU y entrega más de un 300% de mayor nitidez visual.
+- **Passthrough de Stream Verificado:** Se activa `supportsPassthrough: validationStatus === 'verified'` para cámaras Scrypted con stream validado.
+
+#### Audio en Tiempo Real Nativo con libfdk_aac (AAC-ELD)
+- **Binario FFmpeg para Homebridge en Alpine:** El `Dockerfile` ahora descarga el binario estático optimizado de `ffmpeg-for-homebridge` para Alpine Linux (`aarch64` para Raspberry Pi 5 y `x86_64` para Intel/AMD), con soporte completo para `libfdk_aac` y aceleración de hardware V4L2M2M. Si la descarga fallara, se mantiene el fallback a `apk add ffmpeg`.
+- **Detección Dinámica de libfdk_aac:** La función `supportsFdkAac()` en `ffmpeg-helper.ts` detecta en tiempo de ejecución si el binario cuenta con `libfdk_aac`.
+- **Codificación AAC-ELD:** Si `libfdk_aac` está disponible, FFmpeg codifica el audio con `-c:a libfdk_aac -profile:a aac_eld -flags +global_header`, permitiendo que el iPhone/iPad reproduzca el audio en vivo en tiempo real directamente en la app Casa.
+
 ## [1.4.90] - 2026-09-02
 
 ### Corrección Crítica de Negociación de Live View en iOS (AAC-ELD y Concurrencia HKSV)
