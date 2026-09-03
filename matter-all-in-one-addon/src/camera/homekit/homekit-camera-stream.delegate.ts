@@ -196,8 +196,6 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
         args.push(
           "-rtsp_transport",
           "tcp",
-          "-stimeout",
-          "5000000",
         );
       } else if (sourceUrl.startsWith("http://") || sourceUrl.startsWith("https://")) {
         const token =
@@ -401,8 +399,6 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
       args.push(
         "-rtsp_transport",
         "tcp",
-        "-stimeout",
-        "5000000",
         "-fflags",
         "+nobuffer",
       );
@@ -416,55 +412,101 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
     }
     args.push("-i", sourceUrl);
 
-    const videoBitrate = Math.max(
-      3500,
-      Math.min(video.max_bit_rate || 5000, 8000),
-    );
-    args.push(
-      "-map",
-      "0:v:0",
-      "-an",
-      "-c:v",
-      "libx264",
-      "-pix_fmt",
-      "yuv420p",
-      "-profile:v",
-      "main",
-      "-preset",
-      "ultrafast",
-      "-tune",
-      "zerolatency",
-      "-r",
-      String(fps),
-      "-g",
-      String(fps),
-      "-keyint_min",
-      String(fps),
-      "-b:v",
-      `${videoBitrate}k`,
-      "-maxrate",
-      `${videoBitrate}k`,
-      "-bufsize",
-      `${videoBitrate * 2}k`,
-      "-f",
-      "rtp",
-      "-payload_type",
-      String(video.pt || 99),
-      "-ssrc",
-      String(session.videoSsrc),
-      "-srtp_out_suite",
-      suiteName(session.videoCryptoSuite),
-      "-srtp_out_params",
-      session.videoKeySalt.toString("base64"),
-      videoUrl,
-    );
-
-    if (
+    const hasAudioRequested = Boolean(
       request.audio &&
       session.audioPort &&
       session.localAudioPort &&
       session.audioSsrc &&
       session.audioKeySalt
+    );
+    const isHaProxy = this.streamSource.sourceType === "ha_proxy";
+    const needsSilentAudio =
+      hasAudioRequested &&
+      (isHaProxy || this.capabilities.hasAudio === false);
+
+    if (needsSilentAudio) {
+      args.push(
+        "-f",
+        "lavfi",
+        "-i",
+        "anullsrc=channel_layout=mono:sample_rate=16000",
+      );
+    }
+
+    const isH264 =
+      this.capabilities.videoCodec === "h264" ||
+      !this.capabilities.videoCodec ||
+      this.capabilities.videoCodec === "unknown";
+
+    if (this.streamSource.supportsPassthrough && isH264) {
+      args.push(
+        "-map",
+        "0:v:0",
+        "-an",
+        "-c:v",
+        "copy",
+        "-f",
+        "rtp",
+        "-payload_type",
+        String(video.pt || 99),
+        "-ssrc",
+        String(session.videoSsrc),
+        "-srtp_out_suite",
+        suiteName(session.videoCryptoSuite),
+        "-srtp_out_params",
+        session.videoKeySalt.toString("base64"),
+        videoUrl,
+      );
+    } else {
+      const videoBitrate = Math.max(
+        3500,
+        Math.min(video.max_bit_rate || 5000, 8000),
+      );
+      args.push(
+        "-map",
+        "0:v:0",
+        "-an",
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        "-profile:v",
+        "main",
+        "-preset",
+        "ultrafast",
+        "-tune",
+        "zerolatency",
+        "-r",
+        String(fps),
+        "-g",
+        String(fps),
+        "-keyint_min",
+        String(fps),
+        "-b:v",
+        `${videoBitrate}k`,
+        "-maxrate",
+        `${videoBitrate}k`,
+        "-bufsize",
+        `${videoBitrate * 2}k`,
+        "-f",
+        "rtp",
+        "-payload_type",
+        String(video.pt || 99),
+        "-ssrc",
+        String(session.videoSsrc),
+        "-srtp_out_suite",
+        suiteName(session.videoCryptoSuite),
+        "-srtp_out_params",
+        session.videoKeySalt.toString("base64"),
+        videoUrl,
+      );
+    }
+
+    if (
+      hasAudioRequested &&
+      session.audioKeySalt &&
+      session.audioSsrc &&
+      request.audio
     ) {
       const audioUrl =
         `srtp://${host}:${session.audioPort}` +
@@ -473,16 +515,8 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
       const hasFdk = supportsFdkAac();
       const audioBitrate = Math.min(request.audio.max_bit_rate || 24, 24);
 
-      const needsSilentAudio =
-        this.streamSource.sourceType === "ha_proxy" ||
-        !this.capabilities.hasAudio;
-
       if (needsSilentAudio) {
         args.push(
-          "-f",
-          "lavfi",
-          "-i",
-          "anullsrc=channel_layout=mono:sample_rate=16000",
           "-map",
           "1:a:0",
           "-vn",

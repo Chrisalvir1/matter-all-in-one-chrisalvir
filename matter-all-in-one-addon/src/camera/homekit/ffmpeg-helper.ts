@@ -294,8 +294,6 @@ function probeWithFfprobe(
       args.push(
         "-rtsp_transport",
         "tcp",
-        "-stimeout",
-        String(Math.max(1000000, timeoutMs * 1000)),
       );
     }
 

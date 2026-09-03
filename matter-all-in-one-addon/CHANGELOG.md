@@ -1,3 +1,11 @@
+## [1.5.01] - 2026-09-02
+
+### Corrección Crítica de Argumentos FFmpeg y Restauración de Passthrough Nativo
+
+- **Eliminación Total de `-stimeout`:** Se eliminó por completo el flag `-stimeout` que no es reconocido por FFmpeg 8.0 Alpine (`Unrecognized option 'stimeout'. Error splitting the argument list: Option not found`) y provocaba la salida con error código 8 en todas las cámaras.
+- **Corrección de Orden de Entradas de FFmpeg:** Todos los inputs (`-i sourceUrl` y `-i anullsrc`) ahora se declaran estrictamente al inicio de la línea de comando antes de cualquier mapeo de salida, previniendo errores de análisis de argumentos.
+- **Restauración de Passthrough Nativo Directo (`-c:v copy`):** Para todas las cámaras H.264 (Tapo, Vimtag, Scrypted, Ezviz, Wyze), el video se transfiere directo sin recodificación, con 0% de carga de CPU, latencia ultra baja y máxima calidad de sensor.
+
 ## [1.5.00] - 2026-09-02
 
 ### Arquitectura Universal de Video en Vivo Estable y Corrección de Fallo de Pantalla Negra
