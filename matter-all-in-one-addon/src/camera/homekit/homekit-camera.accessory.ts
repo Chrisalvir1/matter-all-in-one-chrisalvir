@@ -1,8 +1,6 @@
 import {
   Accessory,
   AccessoryInfo,
-  AudioStreamingCodecType,
-  AudioStreamingSamplerate,
   CameraController,
   type CameraControllerOptions,
   Categories,
@@ -115,18 +113,13 @@ export class HomeKitCameraAccessory {
           },
           resolutions: this.buildDeclaredResolutions(),
         },
-        audio: this.capabilities.hasAudio
-          ? {
-              comfort_noise: false,
-              codecs: [
-                {
-                  type: AudioStreamingCodecType.AAC_ELD,
-                  audioChannels: 1,
-                  samplerate: AudioStreamingSamplerate.KHZ_16,
-                },
-              ],
-            }
-          : undefined,
+        // Audio disabled intentionally: Alpine Linux FFmpeg does not include
+        // libfdk_aac, which is the only encoder supporting AAC-ELD (the only
+        // codec accepted by HomeKit HAP). Declaring AAC-ELD but sending AAC-LC
+        // causes iOS to receive no audio or corrupted audio. We disable audio
+        // here so the HAP video pipeline runs cleanly and iOS does not display
+        // a misleading mute icon.
+        audio: undefined,
       },
       sensors: this.motionService ? { motion: this.motionService } : undefined,
     };
@@ -136,6 +129,9 @@ export class HomeKitCameraAccessory {
     const source = this.capabilities.resolution || { width: 1920, height: 1080 };
     const sourceFps = Math.max(15, Math.min(this.capabilities.maxFps || 30, 30));
     const ladder: [number, number, number][] = [
+      // Include the native source resolution first so HomeKit can negotiate
+      // the highest quality the camera actually supports
+      [source.width, source.height, sourceFps],
       [1920, 1080, sourceFps],
       [1280, 960, sourceFps],
       [1280, 720, sourceFps],
@@ -148,9 +144,16 @@ export class HomeKitCameraAccessory {
       [320, 240, 15],
       [320, 180, 30],
     ];
-    const supported = ladder.filter(
-      ([width, height]) => width <= source.width && height <= source.height,
-    );
+    // Deduplicate and keep only resolutions at or below source, highest first
+    const seen = new Set<string>();
+    const supported: [number, number, number][] = [];
+    for (const [w, h, fps] of ladder) {
+      const key = `${w}x${h}`;
+      if (!seen.has(key) && w <= source.width && h <= source.height) {
+        seen.add(key);
+        supported.push([w, h, fps]);
+      }
+    }
     return supported.length ? supported : [[320, 180, 15]];
   }
 

@@ -1,3 +1,23 @@
+## [1.4.88] - 2026-09-02
+
+### Mejoras de calidad, latencia y metadatos en Apple Home Live View
+
+#### Calidad de video
+- **Resolución nativa declarada a HomeKit:** El ladder de resoluciones ahora incluye la resolución real de la cámara (ej. 2560×1440 para Tapo Spot) como primera opción. HomeKit puede negociar la calidad máxima que soporta la cámara en lugar de limitarse a 1920×1080.
+- **Bitrate máximo aumentado a 4000kbps:** Antes estaba limitado a 2000kbps (independientemente de lo que HomeKit solicitara). Ahora el límite es 4000kbps para soportar resoluciones altas.
+
+#### Latencia reducida
+- `-probesize 32 -analyzeduration 0` añadidos al pipeline RTSP: FFmpeg ya no analiza el stream antes de empezar a enviar frames, reduciendo el tiempo inicial de pantalla negra.
+- Timeout de conexión RTSP reducido de 5s a 2s.
+
+#### Audio (sin cambios de comportamiento, sí de honestidad)
+- **Audio desactivado en HAP:** HAP solo soporta AAC-ELD, que requiere `libfdk_aac`. Alpine FFmpeg no incluye ese encoder. Declarar AAC-ELD pero enviar AAC-LC causaba que iOS mostrara el ícono de audio pero sin sonido real. Ahora se desactiva el audio a nivel HAP: no aparece el control de volumen en Apple Home y el pipeline de video nunca se ve interrumpido por un encoder de audio roto.
+
+#### Metadatos en Apple Home
+- **Modelo:** Usa el nombre de la cámara en Scrypted si no hay `sourceModel` disponible. La Tapo Spot mostrará "TAPO-SPOT" en lugar de "Modelo no identificado".
+- **Serial Number:** Usa el serial real del fabricante cuando Scrypted lo expone; si no, genera `CAM-{id}` (ej. "CAM-51") en lugar de "Serial no disponible".
+- **Fabricante:** Ahora muestra "Scrypted (Chrisalvir)".
+
 ## [1.4.87] - 2026-09-02
 
 ### Fix Apple Home Live View: AAC-ELD Profile Crash in Alpine FFmpeg

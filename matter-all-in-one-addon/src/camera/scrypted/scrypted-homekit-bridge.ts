@@ -77,13 +77,22 @@ export class ScryptedHomeKitBridge {
       camera.identityOverride?.model ||
       camera.sourceModel ||
       camera.displayModel ||
-      "Modelo no identificado";
-    const serial =
+      // camera.name is always populated from Scrypted device name
+      camera.name ||
+      "Scrypted Camera";
+    const rawSerial =
       camera.identityOverride?.serialNumber ||
-      camera.serialNumber ||
-      resolveDisplaySerialNumber(camera) ||
-      `SCRYPTED-${camera.cameraId}`;
-    const manufacturer = "Matter all in one Chrisalvir";
+      camera.serialNumber;
+    // Use the real manufacturer serial when available; otherwise fall back to
+    // a stable deterministic identifier derived from the Scrypted device ID.
+    // 'Serial no disponible' is stripped so HomeKit shows something meaningful.
+    const serial =
+      (rawSerial && !rawSerial.startsWith("SCRYPTED-") && rawSerial !== "Serial no disponible"
+        ? rawSerial
+        : undefined) ||
+      resolveDisplaySerialNumber(camera).replace("Serial no disponible", "") ||
+      `CAM-${camera.cameraId}`;
+    const manufacturer = "Scrypted (Chrisalvir)";
     const hasDoorbell = camera.sensors.some(
       (sensor: CameraSensorRecord) => sensor.type === "doorbell",
     );

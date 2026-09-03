@@ -320,7 +320,9 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
 
     const video = request.video;
     const fps = Math.max(1, Math.min(video.fps || 30, 30));
-    const bitrate = Math.max(128, video.max_bit_rate || 2000);
+    // Use the bitrate HomeKit negotiates, capped at 4000k to support higher resolutions.
+    // HomeKit typically requests 2000–4000kbps for 1080p+ streams.
+    const bitrate = Math.max(512, Math.min(video.max_bit_rate || 2000, 4000));
     const mtu = video.mtu || 1378;
     const host = formatHost(session.targetAddress);
     const videoUrl =
@@ -331,8 +333,14 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
       args.push(
         "-rtsp_transport",
         "tcp",
+        // Reduce connection timeout to 2 s (was 5 s) — reduces black-screen wait
         "-timeout",
-        "5000000",
+        "2000000",
+        // Skip stream analysis to start sending frames immediately (low latency)
+        "-probesize",
+        "32",
+        "-analyzeduration",
+        "0",
         "-fflags",
         "+nobuffer+genpts",
       );
