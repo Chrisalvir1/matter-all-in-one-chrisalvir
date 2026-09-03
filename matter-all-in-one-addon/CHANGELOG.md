@@ -1,3 +1,13 @@
+## [1.5.05] - 2026-09-03
+
+### Optimización Visual de la UI: Barra Scrypted Exclusiva en Pestaña Cámaras y Tarjetas Limpias y Compactas
+
+- **Barra de Scrypted y Conexión Exclusiva en Pestaña Cámaras:** La barra de estado de Scrypted ("Conectado", IP, conteo de cámaras, sincronización y servidor) y el botón de conectar ahora solo se muestran al ingresar a la pestaña **Cámaras**. En **Todos**, **En Matter**, **MQTT**, etc., permanecen completamente ocultos para evitar redundancia visual.
+- **Ocultación del Botón Redundante "Conectar con Scrypted":** Si Scrypted ya se encuentra conectado y sincronizado, el botón "Conectar con Scrypted" se oculta automáticamente tanto en la vista general como en la pestaña de cámaras.
+- **Diseño Ultra Compacto y Limpio de Tarjetas de Cámara:** Se eliminó todo el bloque de administración y comisionado masivo de las tarjetas (Matter fabrics, multi-admin, tags de talkback, etc.) que las hacía ver desmesuradamente grandes.
+- **Exhibición Exclusiva de Entidades Reales y SN:** Cada tarjeta ahora muestra de forma minimalista el icono 📹, el estado (`🟢 En línea` / `🔴 Desconectada`), el badge `SCRYPTED` si aplica, el nombre de la cámara, el modelo con su número de serie (`SN: ...`), las entidades y sensores reales (`🏃 Movimiento`, `🔔 Timbre`) y el botón `Configurar` para acceder a la configuración avanzada dentro del modal.
+- **Depuración de Cámaras Duplicadas y Falsas Entidades de HA:** Se filtran entidades no relevantes de Home Assistant (mapas de aspiradoras, pantallas, radares meteorológicos) y duplicados de cámaras ya presentes en Scrypted para un conteo preciso.
+
 ## [1.5.04] - 2026-09-03
 
 ### Persistencia Permanente de Emparejamiento, Convivencia Stream + Grabación HKSV y 60 FPS

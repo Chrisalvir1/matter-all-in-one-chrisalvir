@@ -397,16 +397,27 @@ function renderDevices() {
         entity.origin === "mqtt" || entity.entityId.startsWith("mqtt."),
     ),
   ).length;
-  const cameraDevicesCount = allDevices.filter((device) =>
-    device.entities.some((entity) => entity.domain === "camera"),
-  ).length;
-  els.statDevices.textContent = String(allDevices.length);
-  els.statExported.textContent = String(exportedNodes);
-  els.statPaired.textContent = String(pairedNodes);
-  els.pendingCount.textContent = String(pendingNodes);
-  if (els.mqttCount) els.mqttCount.textContent = String(mqttDevicesCount);
+  // Filter real cameras from HA, avoiding duplicates that are already in Scrypted and non-camera helper entities
+  const scryptedNames = new Set(
+    (state.scryptedCameras || []).map((c) => (c.name || "").toLowerCase().trim()),
+  );
+  const scryptedIds = new Set(
+    (state.scryptedCameras || []).map((c) => String(c.cameraId).toLowerCase().trim()),
+  );
+  const realHaCameraDevices = allDevices.filter((device) =>
+    device.entities.some(
+      (entity) =>
+        entity.domain === "camera" &&
+        !entity.auxiliary &&
+        !entity.entityId.includes("map") &&
+        !entity.entityId.includes("radar") &&
+        !entity.entityId.includes("screen") &&
+        !scryptedNames.has((device.name || "").toLowerCase().trim()) &&
+        !scryptedIds.has((device.id || "").toLowerCase().trim()),
+    ),
+  );
   const totalCameras =
-    cameraDevicesCount + (state.scryptedCameras ? state.scryptedCameras.length : 0);
+    realHaCameraDevices.length + (state.scryptedCameras ? state.scryptedCameras.length : 0);
   if (els.cameraCount) els.cameraCount.textContent = String(totalCameras);
   els.issueCount.textContent = String(issues);
   els.overviewMessage.textContent = exportedNodes
@@ -415,12 +426,20 @@ function renderDevices() {
   els.deviceCount.textContent = `${devices.length} dispositivo${devices.length === 1 ? "" : "s"} · ${exportedNodes} accesorio${exportedNodes === 1 ? "" : "s"} activo${exportedNodes === 1 ? "" : "s"} en Matter`;
   els.deviceList.setAttribute("aria-busy", "false");
 
-  if (state.activeFilter === "cameras") {
+  const isCamerasFilter = state.activeFilter === "cameras";
+  const isScryptedConnected =
+    state.scryptedConfig?.connectionStatus === "connected" ||
+    (state.scryptedCameras && state.scryptedCameras.length > 0);
+
+  if (isCamerasFilter) {
     if (els.btnConnectScrypted) {
-      els.btnConnectScrypted.hidden = false;
+      const showConnect = !isScryptedConnected;
+      els.btnConnectScrypted.hidden = !showConnect;
+      els.btnConnectScrypted.style.display = showConnect ? "" : "none";
     }
     if (els.scryptedHeaderBar) {
       els.scryptedHeaderBar.hidden = false;
+      els.scryptedHeaderBar.style.display = "flex";
       updateScryptedHeader();
     }
 
@@ -457,8 +476,23 @@ function renderDevices() {
       brandsMap.get(brand).scrypted.push(cam);
     }
 
-    // 2. Añadir cámaras de Home Assistant
+    // 2. Añadir cámaras de Home Assistant (eliminando duplicados que ya están en Scrypted y entidades que no son cámaras reales)
     for (const dev of filteredHaDevices) {
+      const devName = (dev.name || "").toLowerCase().trim();
+      const devId = (dev.id || "").toLowerCase().trim();
+      if (scryptedNames.has(devName) || scryptedIds.has(devId)) {
+        continue;
+      }
+      const hasRealCam = dev.entities.some(
+        (e) =>
+          e.domain === "camera" &&
+          !e.auxiliary &&
+          !e.entityId.includes("map") &&
+          !e.entityId.includes("radar") &&
+          !e.entityId.includes("screen"),
+      );
+      if (!hasRealCam) continue;
+
       const brand = extractCameraBrand(dev);
       if (!brandsMap.has(brand)) {
         brandsMap.set(brand, { scrypted: [], ha: [] });
@@ -479,6 +513,7 @@ function renderDevices() {
     for (const brand of sortedBrands) {
       const group = brandsMap.get(brand);
       const totalCount = group.scrypted.length + group.ha.length;
+      if (totalCount === 0) continue;
 
       // Ordenar cámaras por nombre dentro de cada grupo
       group.scrypted.sort((a, b) =>
@@ -520,7 +555,7 @@ function renderDevices() {
 
       // Renderizar cámaras Home Assistant
       for (const dev of group.ha) {
-        grid.appendChild(buildDeviceCard(dev));
+        grid.appendChild(buildHaCameraCard(dev));
       }
 
       section.appendChild(header);
@@ -533,9 +568,11 @@ function renderDevices() {
   } else {
     if (els.btnConnectScrypted) {
       els.btnConnectScrypted.hidden = true;
+      els.btnConnectScrypted.style.display = "none";
     }
     if (els.scryptedHeaderBar) {
       els.scryptedHeaderBar.hidden = true;
+      els.scryptedHeaderBar.style.display = "none";
     }
   }
 
@@ -2137,6 +2174,25 @@ async function fetchScrypted() {
 
 function updateScryptedHeader() {
   if (!els.scryptedHeaderBar) return;
+  if (state.activeFilter !== "cameras") {
+    els.scryptedHeaderBar.hidden = true;
+    els.scryptedHeaderBar.style.display = "none";
+    if (els.btnConnectScrypted) {
+      els.btnConnectScrypted.hidden = true;
+      els.btnConnectScrypted.style.display = "none";
+    }
+    return;
+  }
+  const isScryptedConnected =
+    state.scryptedConfig?.connectionStatus === "connected" ||
+    (state.scryptedCameras && state.scryptedCameras.length > 0);
+
+  if (els.btnConnectScrypted) {
+    const showConnect = !isScryptedConnected;
+    els.btnConnectScrypted.hidden = !showConnect;
+    els.btnConnectScrypted.style.display = showConnect ? "" : "none";
+  }
+
   const cfg = state.scryptedConfig;
   const count = state.scryptedCameras ? state.scryptedCameras.length : 0;
 
@@ -2382,96 +2438,46 @@ function buildScryptedCameraCard(camera) {
   card.dataset.cameraId = camera.cameraId;
 
   const brand = extractCameraBrand(camera);
-  const isOnline = camera.status?.connection === "online";
+  const isOnline = camera.status?.connection === "online" || camera.status?.isOnline !== false;
   const statusDot = isOnline ? "🟢" : "🔴";
-  const statusText = isOnline ? "En línea" : "Desconectado";
+  const statusText = isOnline ? "En línea" : "Desconectada";
   const modelDisplay = camera.displayModel || camera.model || "";
-  const sensorsCount = camera.sensors?.length || 0;
 
-  const hasAudio =
-    camera.capabilities?.observed?.hasAudio !== false &&
-    camera.capabilities?.observed?.audioCodec !== "none";
+  // Serial Number
+  const sn =
+    camera.serialNumber ||
+    camera.source?.deviceId ||
+    (camera.cameraId ? `CAM-${camera.cameraId}` : "");
 
-  const binding = camera.bindingState;
-  const isMatterCommissioned = Boolean(binding?.matterCommissioned);
-  const realHomeName = binding?.homeName || state.status?.homeName;
-
-  const isPaired = camera.identity?.homeKitPairingState === "paired";
-  const hapStateText = isPaired
-    ? "🍏 HomeKit: Emparejada"
-    : camera.identity?.homeKitPairingState === "unverifiable"
-      ? "HomeKit: Estado no verificable"
-      : "HomeKit: No emparejada";
-
-  const matterStateText = isMatterCommissioned
-    ? "Comisionada"
-    : binding?.matterState === "pending"
-      ? "Pendiente de vincular"
-      : "Estado desconocido";
-
-  const fabricCount = binding?.fabricCount || 0;
-  const multiAdminText =
-    binding?.multiAdminState === "full"
-      ? "Completo"
-      : binding?.multiAdminState === "in_use"
-        ? `Vinculada a ${fabricCount} fabric${fabricCount === 1 ? "" : "s"}`
-        : binding?.multiAdminState === "unavailable"
-          ? "No disponible"
-          : "Disponible";
-
-  const homeBadge = realHomeName
-    ? `<span class="home-badge commissioned" title="Etiqueta del controlador Matter">🏠 ${escapeHtml(realHomeName)}</span>`
-    : "";
-
-  const fabricsListHtml =
-    binding?.fabrics && binding.fabrics.length > 0
-      ? binding.fabrics
-          .map((f) => {
-            const shortFid =
-              f.fabricId && f.fabricId.length > 10
-                ? `${f.fabricId.slice(0, 6)}...${f.fabricId.slice(-4)}`
-                : f.fabricId || "N/A";
-            const label = f.label || "Fabric sin etiqueta";
-            return `<span class="tag" style="font-size: 0.68rem; background: rgba(255,255,255,0.06);">#${f.fabricIndex} ${escapeHtml(label)} (FID: ${escapeHtml(shortFid)})</span>`;
-          })
-          .join(" ")
-      : '<span style="color: var(--text-secondary); font-size: 0.72rem;">Sin fabrics comisionadas</span>';
+  // Real sensors only (motion, doorbell)
+  const realSensors = (camera.sensors || []).filter(
+    (s) =>
+      s.type === "motion" ||
+      s.type === "doorbell" ||
+      s.name?.toLowerCase().includes("movimiento") ||
+      s.name?.toLowerCase().includes("timbre") ||
+      s.name?.toLowerCase().includes("motion"),
+  );
+  // Real entities: 1 (Video) + real sensors count
+  const realEntitiesCount = 1 + realSensors.length;
 
   card.innerHTML = `
     <div class="card-top">
       <span class="device-icon" style="font-size: 1.4rem;">📹</span>
       <div class="card-pills-group">
         <span class="badge-scrypted-tag">SCRYPTED</span>
-        ${homeBadge}
-        ${isMatterCommissioned ? `<span class="tag" style="background: rgba(59, 130, 246, 0.2); border-color: rgba(96, 165, 250, 0.5); color: #93c5fd; font-size: 0.72rem; font-weight: 600;">⚡ Matter: ${matterStateText}</span>` : `<span class="tag" style="font-size: 0.72rem;">⚡ Matter: ${matterStateText}</span>`}
-        ${isPaired ? `<span class="tag" style="background: rgba(16, 185, 129, 0.2); border-color: rgba(52, 211, 153, 0.5); color: #6ee7b7; font-size: 0.72rem; font-weight: 600;">${hapStateText}</span>` : `<span class="tag" style="font-size: 0.72rem;">${hapStateText}</span>`}
+        <span class="tag" style="font-size: 0.72rem; ${isOnline ? "background: rgba(16, 185, 129, 0.15); color: #6ee7b7; border-color: rgba(52, 211, 153, 0.4);" : "background: rgba(239, 68, 68, 0.15); color: #fca5a5; border-color: rgba(239, 68, 68, 0.4);"}">
+          ${statusDot} ${statusText}
+        </span>
       </div>
     </div>
     <h3 title="${escapeHtml(camera.name)}">${escapeHtml(camera.name)}</h3>
-    <p class="device-meta">${statusDot} ${statusText} · ${escapeHtml(brand)}${modelDisplay && modelDisplay !== "Modelo no identificado" ? ` (${escapeHtml(modelDisplay)})` : ""}</p>
-    
-    <!-- Bloque central de vinculación y administración -->
-    <div class="camera-admin-block" style="background: rgba(0,0,0,0.22); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 8px 10px; margin: 8px 0; font-size: 0.75rem;">
-      <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-        <span>🏠 <strong>Casa:</strong> ${realHomeName ? escapeHtml(realHomeName) : '<em style="color:var(--text-secondary);">nombre no expuesto por Matter</em>'}</span>
-        <span>Multi-admin: <strong>${escapeHtml(multiAdminText)}</strong></span>
-      </div>
-      <div style="display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: 4px;">
-        <span style="color: var(--text-secondary);">Fabrics (${fabricCount}):</span>
-        ${fabricsListHtml}
-      </div>
-    </div>
-
+    <p class="device-meta">${escapeHtml(brand)}${modelDisplay && modelDisplay !== "Modelo no identificado" ? ` (${escapeHtml(modelDisplay)})` : ""}${sn ? ` · SN: ${escapeHtml(sn)}` : ""}</p>
     <div class="tags">
-      <span class="tag tag-brand">${escapeHtml(brand)}</span>
-      <span class="badge-scrypted-source">⚡ Scrypted</span>
-      <span class="codec-pill">● Passthrough H.264</span>
-      ${hasAudio ? '<span class="tag" style="background: rgba(16, 185, 129, 0.15); border-color: rgba(52, 211, 153, 0.4); color: #6ee7b7;">🎤 Entrada de audio</span>' : '<span class="tag">Sin audio</span>'}
-      <span class="tag" style="opacity: 0.7;">Talkback: no compatible</span>
-      ${sensorsCount > 0 ? `<span class="tag">${sensorsCount} sensor${sensorsCount === 1 ? "" : "es"}</span>` : ""}
+      ${realSensors.map((s) => `<span class="tag">${s.type === "doorbell" || s.name?.toLowerCase().includes("timbre") ? "🔔 Timbre" : "🏃 Movimiento"}</span>`).join("")}
     </div>
     <div class="card-footer">
-      <span class="entity-summary">${isPaired ? "🍏 HAP: Emparejada" : "Toca para ver QR y detalles"}</span>
+      <span class="entity-summary">${realEntitiesCount} entidad${realEntitiesCount === 1 ? "" : "es"}</span>
       <button class="button button-secondary" type="button">Configurar</button>
     </div>
   `;
@@ -2483,6 +2489,62 @@ function buildScryptedCameraCard(camera) {
   card.querySelector("button")?.addEventListener("click", (e) => {
     e.stopPropagation();
     openCameraConfigModal(camera);
+  });
+
+  return card;
+}
+
+function buildHaCameraCard(device) {
+  const card = document.createElement("article");
+  card.className = "device-card ha-camera-card";
+
+  const camEntity = device.entities.find((e) => e.domain === "camera");
+  const isOnline = camEntity
+    ? camEntity.state !== "unavailable" && camEntity.state !== "unknown"
+    : true;
+  const statusDot = isOnline ? "🟢" : "🔴";
+  const statusText = isOnline ? "En línea" : "Desconectada";
+
+  const brand = extractCameraBrand(device);
+  const modelDisplay = device.model || "";
+  const sn = device.id || "";
+
+  // Real sensors belonging to this camera device
+  const realSensors = device.entities.filter(
+    (e) =>
+      e.domain === "binary_sensor" &&
+      (["motion", "occupancy", "presence", "doorbell"].includes(e.attributes?.device_class) ||
+        e.entityId.includes("motion") ||
+        e.entityId.includes("movimiento") ||
+        e.entityId.includes("doorbell") ||
+        e.entityId.includes("timbre")),
+  );
+  const realEntitiesCount = 1 + realSensors.length;
+
+  card.innerHTML = `
+    <div class="card-top">
+      <span class="device-icon" style="font-size: 1.4rem;">📹</span>
+      <div class="card-pills-group">
+        <span class="tag" style="font-size: 0.72rem; ${isOnline ? "background: rgba(16, 185, 129, 0.15); color: #6ee7b7; border-color: rgba(52, 211, 153, 0.4);" : "background: rgba(239, 68, 68, 0.15); color: #fca5a5; border-color: rgba(239, 68, 68, 0.4);"}">
+          ${statusDot} ${statusText}
+        </span>
+      </div>
+    </div>
+    <h3 title="${escapeHtml(device.name)}">${escapeHtml(device.name)}</h3>
+    <p class="device-meta">${escapeHtml(brand)}${modelDisplay && modelDisplay !== "Modelo no identificado" ? ` (${escapeHtml(modelDisplay)})` : ""}${sn ? ` · SN: ${escapeHtml(sn)}` : ""}</p>
+    <div class="tags">
+      ${realSensors.map((s) => `<span class="tag">${s.entityId.includes("doorbell") || s.entityId.includes("timbre") ? "🔔 Timbre" : "🏃 Movimiento"}</span>`).join("")}
+    </div>
+    <div class="card-footer">
+      <span class="entity-summary">${realEntitiesCount} entidad${realEntitiesCount === 1 ? "" : "es"}</span>
+      <button class="button button-secondary" type="button">Configurar</button>
+    </div>
+  `;
+
+  card.addEventListener("click", () => openDevice(device, camEntity));
+  card.querySelector("button")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    openDevice(device, camEntity);
   });
 
   return card;

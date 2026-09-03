@@ -1907,6 +1907,14 @@ mark {
   border-color: rgba(16, 185, 129, 0.6) !important;
 }
 
+[hidden],
+.scrypted-header-bar[hidden],
+#scrypted-header-bar[hidden],
+.filter-chip-scrypted[hidden],
+#btn-connect-scrypted[hidden] {
+  display: none !important;
+}
+
 .scrypted-header-bar {
   display: flex;
   align-items: center;
