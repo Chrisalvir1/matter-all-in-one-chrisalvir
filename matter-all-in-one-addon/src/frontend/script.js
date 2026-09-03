@@ -358,6 +358,32 @@ function groupEntities(entities) {
   return [...groups.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
+function getCollapsedCameraBrands() {
+  try {
+    return new Set(
+      JSON.parse(localStorage.getItem("matter_collapsed_camera_brands") || "[]"),
+    );
+  } catch {
+    return new Set();
+  }
+}
+
+function setCameraBrandCollapsed(brand, collapsed) {
+  try {
+    const set = getCollapsedCameraBrands();
+    const key = String(brand || "").toLowerCase().trim();
+    if (collapsed) {
+      set.add(key);
+    } else {
+      set.delete(key);
+    }
+    localStorage.setItem(
+      "matter_collapsed_camera_brands",
+      JSON.stringify([...set]),
+    );
+  } catch {}
+}
+
 function renderDevices() {
   const query = els.deviceSearch.value.trim().toLowerCase();
   const searched = state.entities.filter((entity) =>
@@ -562,9 +588,13 @@ function renderDevices() {
         ),
       );
 
+      const brandKey = String(brand || "").toLowerCase().trim();
+      const collapsedBrands = getCollapsedCameraBrands();
+      const isCollapsed = collapsedBrands.has(brandKey);
+
       const section = document.createElement("details");
       section.className = "camera-brand-group";
-      section.open = true;
+      section.open = !isCollapsed;
 
       const summary = document.createElement("summary");
       summary.className = "camera-brand-group__header";
@@ -574,7 +604,12 @@ function renderDevices() {
 
       const countSpan = document.createElement("span");
       countSpan.className = "brand-camera-count";
-      countSpan.textContent = `${totalCount} ${totalCount === 1 ? "cámara" : "cámaras"} ▾`;
+      countSpan.textContent = `${totalCount} ${totalCount === 1 ? "cámara" : "cámaras"} ${section.open ? "▾" : "▸"}`;
+
+      section.addEventListener("toggle", () => {
+        setCameraBrandCollapsed(brand, !section.open);
+        countSpan.textContent = `${totalCount} ${totalCount === 1 ? "cámara" : "cámaras"} ${section.open ? "▾" : "▸"}`;
+      });
 
       summary.appendChild(h3);
       summary.appendChild(countSpan);
@@ -2664,20 +2699,24 @@ function computeHomeKitSetupUri(setupId, pincode = "031-45-154", category = 17) 
 
 function openCameraConfigModal(camera) {
   if (!els.cameraConfigModal) return;
+  setModalOpen(els.cameraConfigModal, true);
 
-  const brand = extractCameraBrand(camera);
-  const isOnline = camera.status?.connection === "online";
-  const statusDot = isOnline ? "🟢" : "🔴";
-  const statusText = isOnline ? "En línea" : "Desconectado";
-  const modelDisplay =
-    camera.displayModel || camera.model || "Modelo no identificado";
+  try {
+    const brand = extractCameraBrand(camera);
+    const isOnline = camera.status?.connection === "online";
+    const statusDot = isOnline ? "🟢" : "🔴";
+    const statusText = isOnline ? "En línea" : "Desconectado";
+    const modelDisplay =
+      camera.displayModel || camera.model || "Modelo no identificado";
 
-  els.camCfgId.value = camera.cameraId;
-  els.camCfgTitle.textContent = camera.name;
-  els.camCfgSubtitle.textContent = `${statusDot} ${statusText} · ${brand}${modelDisplay && modelDisplay !== "Modelo no identificado" ? ` (${modelDisplay})` : ""} · ID: ${camera.cameraId}`;
+    if (els.camCfgId) els.camCfgId.value = camera.cameraId;
+    if (els.camCfgTitle) els.camCfgTitle.textContent = camera.name;
+    if (els.camCfgSubtitle) {
+      els.camCfgSubtitle.textContent = `${statusDot} ${statusText} · ${brand}${modelDisplay && modelDisplay !== "Modelo no identificado" ? ` (${modelDisplay})` : ""} · ID: ${camera.cameraId}`;
+    }
 
-  // 1. Render Dual-Target Liquid Glass QR Code (HomeKit HKSV vs Matter)
-  let activeCamQrMode = "homekit";
+    // 1. Render Dual-Target Liquid Glass QR Code (HomeKit HKSV vs Matter)
+    let activeCamQrMode = "homekit";
 
   function renderCamModalQr() {
     if (!els.camModalQrCode) return;
@@ -3363,7 +3402,7 @@ function openCameraConfigModal(camera) {
 
   // 6. Action buttons
   if (els.camModalNasBtn) {
-    els.camModalNasBtn.style.display = exp.nasEnabled ? "inline-block" : "none";
+    els.camModalNasBtn.style.display = camera.exportConfig?.nasEnabled ? "inline-block" : "none";
     els.camModalNasBtn.onclick = () => {
       setModalOpen(els.cameraConfigModal, false);
       openNasConfigModal(camera);
@@ -3388,9 +3427,9 @@ function openCameraConfigModal(camera) {
         "Esta acción despublicará la cámara y detendrá el streaming en HomeKit y Matter. No modificará tu configuración en Scrypted ni borrará las claves de pairing HAP/Matter.";
       setModalOpen(els.confirmModal, true);
     };
+  } catch (err) {
+    console.error("Error al poblar modal de cámara:", err);
   }
-
-  setModalOpen(els.cameraConfigModal, true);
 }
 
 function openNasConfigModal(camera) {

@@ -1,3 +1,11 @@
+## [1.5.07] - 2026-09-03
+
+### Corrección Crítica de Apertura de Modal de Cámaras y Persistencia de Toggles Colapsables
+
+- **Corrección de Apertura de Modal de Configuración:** Se solucionó una excepción JavaScript interna (`ReferenceError: exp is not defined`) que impedía abrir el modal de configuración al hacer clic en las tarjetas de cámara o en el botón "Configurar". El modal ahora se abre de inmediato y de forma resiliente.
+- **Persistencia Permanente del Estado Colapsado de Marcas:** Se implementó almacenamiento persistente en `localStorage` para las secciones de marcas de cámaras. Cuando el usuario contrae o expande una marca (ej. EZVIZ, Tapo, Nest), la preferencia se guarda y se respeta ante refrescos periódicos, sincronizaciones SSE o reinicios del complemento.
+- **Indicadores de Flecha Dinámicos (`▾` / `▸`):** El contador de cámaras de cada marca ahora actualiza dinámicamente su flecha indicadora según si la sección está desplegada o colapsada.
+
 ## [1.5.06] - 2026-09-03
 
 ### Reparación del Centro de Control, Desglose de Cámaras Scrypted/HA y Auditoría Unificada de Hardware en HAP

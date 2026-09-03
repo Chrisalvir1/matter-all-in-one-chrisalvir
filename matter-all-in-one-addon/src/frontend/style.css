@@ -2011,6 +2011,15 @@ mark {
   margin-bottom: 12px;
 }
 
+.camera-brand-group:not([open]) .camera-brand-group__header {
+  border-bottom: none;
+  padding-bottom: 2px;
+}
+
+.camera-brand-group__header:hover {
+  opacity: 0.85;
+}
+
 .camera-brand-group__header h3 {
   font-size: 0.95rem;
   font-weight: 700;
