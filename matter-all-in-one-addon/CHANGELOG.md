@@ -1,3 +1,13 @@
+## [1.4.85] - 2026-09-02
+
+### Scrypted Real HTTP Client, URL Normalization, Secure Tokens & Error Handling
+
+- **Cliente HTTP Real para Scrypted (`ScryptedClient`):** Implementación completa con `fetch` nativo para descubrimiento de cámaras y dispositivos.
+- **Normalización de URL:** `ScryptedClient.normalizeUrl` limpia barras iniciales y finales, evitando dobles barras (`//`).
+- **Autenticación y Seguridad:** Soporte para token opcional enviado estrictamente vía `Authorization: Bearer <token>`, con sanitización total de errores (`sanitizeErrorMessage`) para evitar cualquier filtración de credenciales.
+- **Manejo Seguro de Errores y Timeouts:** Clasificación tipada mediante `ScryptedClientError` (`network_error`, `timeout`, `authentication_failed`, `permission_denied`, `server_error`, `invalid_json`, `incomplete_response`) con soporte para cancelación vía `AbortController`.
+- **Integración con Runtime:** Conectores `createConnection()` y `getFetcher()` compatibles con `ScryptedDiscoveryProvider` y `ScryptedRuntimeConnection`.
+
 ## [1.4.83] - 2026-09-02
 
 ### HAP Live View, Scrypted refresh and Node.js 24.20 LTS
