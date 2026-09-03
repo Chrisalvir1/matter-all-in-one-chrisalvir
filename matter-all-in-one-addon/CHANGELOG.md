@@ -1,3 +1,13 @@
+## [1.4.99] - 2026-09-02
+
+### Eliminación Completa de go2rtc y Flujo Directo de Cámara Nativo de Alta Calidad
+
+#### Conexión Directa sin Errores 404
+- **Eliminación Total de go2rtc:** Se desmantela completamente el motor `go2rtc` que provocaba errores `404 Not Found` en el handshake DESCRIBE de RTSP e impedía el inicio de la transmisión en vivo de las cámaras de Scrypted y Home Assistant.
+- **Ruta Directa al Stream de la Cámara:** FFmpeg se conecta de manera directa a la URL RTSP original de la cámara (`directUrl`), eliminando cualquier intermediario local y garantizando el arranque inmediato de la sesión HAP sin fallos de socket.
+- **Tasa de Bits Elevada (3500k - 8000k):** Se incrementa sustancialmente la tasa de bits para entregar video nítido a máxima resolución 2K/1080p sin compresión excesiva ni downscaling.
+- **Audio Amplificado (3.0x):** Micrófono activo en AAC-ELD con ganancia 3.0x y resincronización de reloj directa desde el stream de la cámara física.
+
 ## [1.4.98] - 2026-09-02
 
 ### Pipeline Universal Zerolatency a 30fps sin Congelamientos y Detección Automática de Audio

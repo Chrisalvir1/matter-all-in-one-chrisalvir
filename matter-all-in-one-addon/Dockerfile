@@ -28,15 +28,6 @@ RUN apk add --no-cache curl jq ffmpeg \
          curl -Lf# "https://github.com/homebridge/ffmpeg-for-homebridge/releases/latest/download/ffmpeg-alpine-arm32v7.tar.gz" | tar xzf - -C / --no-same-owner || true ;; \
      esac \
   && chmod 0755 /usr/local/bin/ffmpeg 2>/dev/null || true \
-  && case "${ARCH}" in \
-       x86_64) GO2RTC_ARCH="amd64" ;; \
-       aarch64) GO2RTC_ARCH="arm64" ;; \
-       armv7l) GO2RTC_ARCH="arm" ;; \
-     esac \
-  && if [ -n "${GO2RTC_ARCH}" ]; then \
-       curl -Lf# "https://github.com/AlexxIT/go2rtc/releases/latest/download/go2rtc_linux_${GO2RTC_ARCH}" -o /usr/local/bin/go2rtc \
-       && chmod 0755 /usr/local/bin/go2rtc || true; \
-     fi \
   && npm install -g matterbridge@3.10.7 --omit=dev --no-fund --no-audit
 
 WORKDIR /app

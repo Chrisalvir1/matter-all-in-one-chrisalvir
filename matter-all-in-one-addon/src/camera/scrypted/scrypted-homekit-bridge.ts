@@ -10,7 +10,6 @@ import {
   resolveDisplayModel,
   resolveDisplaySerialNumber,
 } from "./scrypted-storage.js";
-import { Go2rtcService } from "../go2rtc/go2rtc-service.js";
 
 export class ScryptedHomeKitBridge {
   private static readonly activeAccessories = new Map<
@@ -91,23 +90,10 @@ export class ScryptedHomeKitBridge {
       (sensor: CameraSensorRecord) => sensor.type === "doorbell",
     );
 
-    const go2rtc = Go2rtcService.getInstance();
-    let streamUrl = directUrl;
-    let snapshotUrl = camera.source.snapshotReference?.directUrl;
-
-    if (directUrl && directUrl.startsWith("rtsp://") && go2rtc.isAvailable()) {
-      const streamKey = `scrypted_${camera.cameraId}`;
-      void go2rtc.registerStream(streamKey, directUrl);
-      streamUrl = go2rtc.getRestreamUrl(streamKey);
-      if (!snapshotUrl) {
-        snapshotUrl = go2rtc.getSnapshotUrl(streamKey);
-      }
-    }
-
     const source: ResolvedStreamSource = {
       sourceType: directUrl ? "rtsp" : "unknown",
-      url: streamUrl,
-      snapshotUrl,
+      url: directUrl,
+      snapshotUrl: camera.source.snapshotReference?.directUrl,
       supportsPassthrough: Boolean(directUrl),
       requiresBridge: true,
       metadata: {
@@ -208,10 +194,6 @@ export class ScryptedHomeKitBridge {
     if (accessory) void accessory.unpublish();
     this.activeAccessories.delete(cameraId);
     this.sourceFingerprints.delete(cameraId);
-    const go2rtc = Go2rtcService.getInstance();
-    if (go2rtc.isAvailable()) {
-      void go2rtc.unregisterStream(`scrypted_${cameraId}`);
-    }
   }
 
   public static getAccessory(

@@ -379,14 +379,14 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
         "-stimeout",
         "5000000",
         "-fflags",
-        "+nobuffer+genpts",
+        "+nobuffer",
       );
     }
     args.push("-i", sourceUrl);
 
     const videoBitrate = Math.max(
-      2500,
-      Math.min(video.max_bit_rate || 3000, 4000),
+      3500,
+      Math.min(video.max_bit_rate || 5000, 8000),
     );
     args.push(
       "-map",
@@ -446,7 +446,7 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
         "0:a:0?",
         "-vn",
         "-af",
-        "aresample=async=1:first_pts=0,volume=2.5",
+        "aresample=async=1:first_pts=0,volume=3.0",
       );
 
       if (isOpus) {

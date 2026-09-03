@@ -58,7 +58,6 @@ import { ScryptedHomeKitBridge } from "./camera/scrypted/scrypted-homekit-bridge
 import { ScryptedMatterBridge } from "./camera/scrypted/scrypted-matter-bridge.js";
 import { ScryptedStreamValidator } from "./camera/scrypted/scrypted-stream-validator.js";
 import { sanitizeUrlCredentials } from "./camera/homekit/ffmpeg-helper.js";
-import { Go2rtcService } from "./camera/go2rtc/go2rtc-service.js";
 
 export interface HomeAssistantPlatformConfig extends PlatformConfig {
   host?: string; // Optional: auto-detected from network/supervisor if not set
@@ -1385,7 +1384,6 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     await this.loadEntityDiagnostics();
     await this.startUiServer();
     this.startMatterConnectionMonitor();
-    void Go2rtcService.getInstance().start();
     void this.initScrypted();
 
     // Load MQTT Config if exists
@@ -1572,9 +1570,6 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     if (this.mqttManager) this.mqttManager.disconnect();
     try {
       ScryptedReconnectManager.getInstance().stop();
-    } catch {}
-    try {
-      await Go2rtcService.getInstance().stop();
     } catch {}
     this.scryptedInitialized = false;
     await this.ha?.close();
