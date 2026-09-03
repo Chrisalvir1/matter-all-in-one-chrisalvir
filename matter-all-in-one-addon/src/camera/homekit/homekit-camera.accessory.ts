@@ -296,6 +296,12 @@ export class HomeKitCameraAccessory {
     this.platform?.log?.notice?.(
       `[HomeKitCamera][${this.entityId}] Published production HAP camera port=${this.record.port} HKSV=${this.record.hksvEnabled ? "enabled" : "disabled"}`,
     );
+    setTimeout(() => {
+      void this.delegate.handleSnapshotRequest(
+        { width: 1280, height: 720 },
+        () => {},
+      );
+    }, 1500);
   }
 
   public getPairingState(): "paired" | "not_paired" | "unverifiable" {

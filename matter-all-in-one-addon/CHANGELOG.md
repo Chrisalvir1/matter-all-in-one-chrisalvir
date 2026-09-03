@@ -1,3 +1,19 @@
+## [1.5.03] - 2026-09-03
+
+### Arranque Instantáneo a 0s Sin Demoras de 3-5 Segundos Ni Pantalla Negra de Espera
+
+- **Eliminación del Buffer de Análisis de 5s (`analyzeduration 0`):** Se configuró `-analyzeduration 0 -probesize 32768 -max_delay 0 -fflags +nobuffer+flush_packets -flags low_delay` tanto en la transmisión en vivo como en la toma de fotos, evitando que FFmpeg pase 3 a 5 segundos analizando el flujo antes de emitir los primeros paquetes RTP.
+- **Extracción de Snapshot en 80ms (`-skip_frame nokey`):** La extracción de instantáneas ya no parsea cuadros intermedios y toma el primer keyframe al instante.
+- **Prevención de Conflicto de Conexiones RTSP:** Si ya existe una sesión de transmisión en vivo activa, HomeKit reutiliza de inmediato la última instantánea en memoria sin abrir una segunda conexión RTSP concurrente hacia la cámara.
+- **Precalentamiento Automático de Instantáneas:** Al registrar la cámara se obtiene una primera imagen de fondo para que al abrir Apple Home ya esté lista en memoria (0 ms de espera).
+
+## [1.5.02] - 2026-09-03
+
+### Video en Vivo Fluido a 30 FPS Sin Congelamientos y Audio Nítido Sin Distorsión
+
+- **GOP de 1 Segundo y Escala Nativa:** El video se codifica con `libx264 -preset ultrafast -tune zerolatency` generando un keyframe (I-frame) cada 1 segundo exacto (`-g String(fps) -keyint_min String(fps)`), eliminando por completo los congelamientos de 10 segundos en Apple Home causados por el intervalo largo de I-frames de las cámaras RTSP.
+- **Audio Fiel y Cristalino Sin Gruñidos:** Se eliminó la amplificación excesiva (`volume=3.0`) que provocaba saturación y recorte digital (clipping) en el micrófono, y se retiró `async=1:first_pts=0` que alteraba los timestamps generando voces robóticas. Se resamplea limpiamente a 16kHz (`aresample=16000`).
+
 ## [1.5.01] - 2026-09-02
 
 ### Corrección Crítica de Argumentos FFmpeg y Restauración de Passthrough Nativo

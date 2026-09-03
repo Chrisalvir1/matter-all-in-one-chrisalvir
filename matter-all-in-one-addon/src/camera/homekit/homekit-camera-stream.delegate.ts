@@ -129,6 +129,16 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
       return;
     }
 
+    // If a live stream is actively running, reuse last snapshot immediately to avoid RTSP socket contention
+    if (
+      this.activeSessions.size > 0 &&
+      this.lastSnapshotBuffer &&
+      this.lastSnapshotBuffer !== FALLBACK_JPEG_BUFFER
+    ) {
+      finish("cached-active-stream", this.lastSnapshotBuffer);
+      return;
+    }
+
     const now = Date.now();
     if (
       this.lastSnapshotBuffer &&
@@ -168,7 +178,7 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
           }
           const response = await fetch(snapshotUrl, {
             headers,
-            signal: AbortSignal.timeout(2500),
+            signal: AbortSignal.timeout(2000),
           });
           if (response.ok) {
             const buffer = Buffer.from(await response.arrayBuffer());
@@ -194,10 +204,32 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
       const args = ["-hide_banner", "-loglevel", "error"];
       if (sourceUrl.startsWith("rtsp://")) {
         args.push(
+          "-probesize",
+          "32768",
+          "-analyzeduration",
+          "0",
           "-rtsp_transport",
           "tcp",
+          "-fflags",
+          "+nobuffer+flush_packets",
+          "-flags",
+          "low_delay",
+          "-skip_frame",
+          "nokey",
         );
       } else if (sourceUrl.startsWith("http://") || sourceUrl.startsWith("https://")) {
+        args.push(
+          "-probesize",
+          "32768",
+          "-analyzeduration",
+          "0",
+          "-fflags",
+          "+nobuffer+flush_packets",
+          "-flags",
+          "low_delay",
+          "-skip_frame",
+          "nokey",
+        );
         const token =
           this.platform?.ha?.getAccessToken?.() ||
           this.platform?.ha?.wsAccessToken;
@@ -228,7 +260,7 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
           process.kill("SIGKILL");
         } catch {}
         finish("fallback-timeout", this.lastSnapshotBuffer);
-      }, 4500);
+      }, 3000);
       process.stdout.on("data", (chunk: Buffer) => chunks.push(chunk));
       process.once("error", () => {
         clearTimeout(timer);
@@ -397,12 +429,32 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
     const args: string[] = ["-hide_banner", "-loglevel", "warning"];
     if (sourceUrl.startsWith("rtsp://")) {
       args.push(
+        "-probesize",
+        "32768",
+        "-analyzeduration",
+        "0",
         "-rtsp_transport",
         "tcp",
         "-fflags",
-        "+nobuffer",
+        "+nobuffer+flush_packets",
+        "-flags",
+        "low_delay",
+        "-max_delay",
+        "0",
       );
     } else if (sourceUrl.startsWith("http://") || sourceUrl.startsWith("https://")) {
+      args.push(
+        "-probesize",
+        "32768",
+        "-analyzeduration",
+        "0",
+        "-fflags",
+        "+nobuffer+flush_packets",
+        "-flags",
+        "low_delay",
+        "-max_delay",
+        "0",
+      );
       const token =
         this.platform?.ha?.getAccessToken?.() ||
         this.platform?.ha?.wsAccessToken;
@@ -433,74 +485,50 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
       );
     }
 
-    const isH264 =
-      this.capabilities.videoCodec === "h264" ||
-      !this.capabilities.videoCodec ||
-      this.capabilities.videoCodec === "unknown";
-
-    if (this.streamSource.supportsPassthrough && isH264) {
-      args.push(
-        "-map",
-        "0:v:0",
-        "-an",
-        "-c:v",
-        "copy",
-        "-f",
-        "rtp",
-        "-payload_type",
-        String(video.pt || 99),
-        "-ssrc",
-        String(session.videoSsrc),
-        "-srtp_out_suite",
-        suiteName(session.videoCryptoSuite),
-        "-srtp_out_params",
-        session.videoKeySalt.toString("base64"),
-        videoUrl,
-      );
-    } else {
-      const videoBitrate = Math.max(
-        3500,
-        Math.min(video.max_bit_rate || 5000, 8000),
-      );
-      args.push(
-        "-map",
-        "0:v:0",
-        "-an",
-        "-c:v",
-        "libx264",
-        "-pix_fmt",
-        "yuv420p",
-        "-profile:v",
-        "main",
-        "-preset",
-        "ultrafast",
-        "-tune",
-        "zerolatency",
-        "-r",
-        String(fps),
-        "-g",
-        String(fps),
-        "-keyint_min",
-        String(fps),
-        "-b:v",
-        `${videoBitrate}k`,
-        "-maxrate",
-        `${videoBitrate}k`,
-        "-bufsize",
-        `${videoBitrate * 2}k`,
-        "-f",
-        "rtp",
-        "-payload_type",
-        String(video.pt || 99),
-        "-ssrc",
-        String(session.videoSsrc),
-        "-srtp_out_suite",
-        suiteName(session.videoCryptoSuite),
-        "-srtp_out_params",
-        session.videoKeySalt.toString("base64"),
-        videoUrl,
-      );
-    }
+    const videoBitrate = Math.max(
+      3500,
+      Math.min(video.max_bit_rate || 5000, 8000),
+    );
+    args.push(
+      "-map",
+      "0:v:0",
+      "-an",
+      "-c:v",
+      "libx264",
+      "-pix_fmt",
+      "yuv420p",
+      "-profile:v",
+      h264Profile(video.profile),
+      "-preset",
+      "ultrafast",
+      "-tune",
+      "zerolatency",
+      "-vf",
+      `scale=w='min(${video.width},iw)':h='min(${video.height},ih)':force_original_aspect_ratio=decrease:force_divisible_by=2`,
+      "-r",
+      String(fps),
+      "-g",
+      String(fps),
+      "-keyint_min",
+      String(fps),
+      "-b:v",
+      `${videoBitrate}k`,
+      "-maxrate",
+      `${videoBitrate}k`,
+      "-bufsize",
+      `${videoBitrate * 2}k`,
+      "-f",
+      "rtp",
+      "-payload_type",
+      String(video.pt || 99),
+      "-ssrc",
+      String(session.videoSsrc),
+      "-srtp_out_suite",
+      suiteName(session.videoCryptoSuite),
+      "-srtp_out_params",
+      session.videoKeySalt.toString("base64"),
+      videoUrl,
+    );
 
     if (
       hasAudioRequested &&
@@ -527,7 +555,7 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
           "0:a:0",
           "-vn",
           "-af",
-          "aresample=async=1:first_pts=0,volume=3.0",
+          "aresample=16000",
         );
       }
 
