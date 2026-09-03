@@ -3427,9 +3427,10 @@ function openCameraConfigModal(camera) {
         "Esta acción despublicará la cámara y detendrá el streaming en HomeKit y Matter. No modificará tu configuración en Scrypted ni borrará las claves de pairing HAP/Matter.";
       setModalOpen(els.confirmModal, true);
     };
-  } catch (err) {
-    console.error("Error al poblar modal de cámara:", err);
   }
+} catch (err) {
+  console.error("Error al poblar modal de cámara:", err);
+}
 }
 
 function openNasConfigModal(camera) {

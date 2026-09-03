@@ -1,3 +1,10 @@
+## [1.5.08] - 2026-09-03
+
+### Corrección de Sintaxis en Frontend: Carga Inmediata de Entidades y Estado
+
+- **Resolución de Error de Sintaxis (`SyntaxError: Unexpected token 'catch'`):** Se corrigió una llave de cierre faltante en `src/frontend/script.js` que impedía al motor JavaScript del navegador parsear el archivo. Con esto, la interfaz vuelve a cargar de inmediato todas las entidades, cámaras, estado de Home Assistant y Centro de Control sin quedarse congelada en "Iniciando...".
+- **Verificación de Sintaxis en CI/Build:** Verificado con `node -c src/frontend/script.js` dando salida limpia (código 0).
+
 ## [1.5.07] - 2026-09-03
 
 ### Corrección Crítica de Apertura de Modal de Cámaras y Persistencia de Toggles Colapsables
