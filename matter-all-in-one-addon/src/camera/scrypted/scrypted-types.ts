@@ -18,6 +18,10 @@ export type ScryptedErrorCode =
   | "unsupported_api"
   | "permission_denied"
   | "no_cameras_found"
+  | "timeout"
+  | "server_error"
+  | "invalid_json"
+  | "incomplete_response"
   | "unknown";
 
 export interface EncryptedSecret {

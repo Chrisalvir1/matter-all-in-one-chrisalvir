@@ -1,5 +1,8 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { ScryptedClient } from "../src/camera/scrypted/scrypted-client.js";
+import {
+  ScryptedClient,
+  ScryptedClientError,
+} from "../src/camera/scrypted/scrypted-client.js";
 
 describe("ScryptedClient — URL validation", () => {
   it("rejects empty URL", () => {
@@ -467,5 +470,356 @@ describe("ScryptedClient — fetchStreamProfiles", () => {
     expect(profiles).toHaveLength(1);
     expect(profiles[0].directUrl).toBeUndefined();
     expect(profiles[0].validationStatus).toBe("unsupported");
+  });
+});
+
+describe("ScryptedClient — Real HTTP Client", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("performs successful discovery with valid payload", async () => {
+    const mockPayload = {
+      devices: [
+        { id: "cam-1", name: "Front Door", type: "Camera" },
+        { id: "cam-2", name: "Backyard", type: "Camera" },
+      ],
+    };
+
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => mockPayload,
+    } as any);
+
+    const client = new ScryptedClient(
+      "http://192.168.1.100:10443",
+      "test-token",
+    );
+    const payload = await client.fetchDiscovery();
+
+    expect(fetchSpy).toHaveBeenCalledOnce();
+    expect(payload.devices).toHaveLength(2);
+
+    // Also verify discover() ingests into runtime snapshot
+    fetchSpy.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => mockPayload,
+    } as any);
+    const snapshot = await client.discover();
+    expect(snapshot.connected).toBe(true);
+    expect(snapshot.cameras).toHaveLength(2);
+  });
+
+  it("handles base URL with and without trailing slash without double slashes", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ devices: [{ id: "c1", name: "Cam 1" }] }),
+    } as any);
+
+    const clientWithSlash = new ScryptedClient("https://scrypted.local:10443/");
+    await clientWithSlash.fetchDiscovery();
+    expect(fetchSpy).toHaveBeenLastCalledWith(
+      "https://scrypted.local:10443/api/v1/devices",
+      expect.anything(),
+    );
+
+    const clientWithoutSlash = new ScryptedClient(
+      "https://scrypted.local:10443",
+    );
+    await clientWithoutSlash.fetchDiscovery();
+    expect(fetchSpy).toHaveBeenLastCalledWith(
+      "https://scrypted.local:10443/api/v1/devices",
+      expect.anything(),
+    );
+
+    // Verify helper static method normalizeUrl directly
+    expect(
+      ScryptedClient.normalizeUrl("http://scrypted:10443/", "/api/v1/devices"),
+    ).toBe("http://scrypted:10443/api/v1/devices");
+    expect(
+      ScryptedClient.normalizeUrl("http://scrypted:10443", "api/v1/devices"),
+    ).toBe("http://scrypted:10443/api/v1/devices");
+    expect(
+      ScryptedClient.normalizeUrl(
+        "http://scrypted:10443///",
+        "///api/v1/devices",
+      ),
+    ).toBe("http://scrypted:10443/api/v1/devices");
+  });
+
+  it("sends token correctly in Authorization header", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ devices: [{ id: "c1" }] }),
+    } as any);
+
+    const client = new ScryptedClient(
+      "http://scrypted:10443",
+      "my-secret-token",
+    );
+    await client.fetchDiscovery();
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer my-secret-token",
+        }),
+      }),
+    );
+  });
+
+  it("omits Authorization header in the absence of a token", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ devices: [{ id: "c1" }] }),
+    } as any);
+
+    const client = new ScryptedClient("http://scrypted:10443");
+    await client.fetchDiscovery();
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+      }),
+    );
+  });
+
+  it("handles HTTP errors 401, 403, and 500 safely", async () => {
+    // 401 Unauthorized
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
+      ok: false,
+      status: 401,
+    } as any);
+    const client = new ScryptedClient("http://scrypted:10443", "bad-token");
+    await expect(client.fetchDiscovery()).rejects.toMatchObject({
+      name: "ScryptedClientError",
+      code: "authentication_failed",
+      statusCode: 401,
+    });
+
+    // 403 Forbidden
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
+      ok: false,
+      status: 403,
+    } as any);
+    await expect(client.fetchDiscovery()).rejects.toMatchObject({
+      name: "ScryptedClientError",
+      code: "permission_denied",
+      statusCode: 403,
+    });
+
+    // 500 Internal Server Error
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+    } as any);
+    await expect(client.fetchDiscovery()).rejects.toMatchObject({
+      name: "ScryptedClientError",
+      code: "server_error",
+      statusCode: 500,
+    });
+  });
+
+  it("handles invalid JSON response", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => {
+        throw new SyntaxError("Unexpected token < in JSON at position 0");
+      },
+    } as any);
+
+    const client = new ScryptedClient("http://scrypted:10443");
+    await expect(client.fetchDiscovery()).rejects.toMatchObject({
+      name: "ScryptedClientError",
+      code: "invalid_json",
+    });
+  });
+
+  it("handles incomplete response structure", async () => {
+    const client = new ScryptedClient("http://scrypted:10443");
+
+    // Missing devices and cameras properties
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ status: "ok" }),
+    } as any);
+    await expect(client.fetchDiscovery()).rejects.toMatchObject({
+      name: "ScryptedClientError",
+      code: "incomplete_response",
+    });
+
+    // Devices with no ID
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ devices: [{ name: "Nameless" }] }),
+    } as any);
+    await expect(client.fetchDiscovery()).rejects.toMatchObject({
+      name: "ScryptedClientError",
+      code: "incomplete_response",
+    });
+  });
+
+  it("handles request timeout via AbortController", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementationOnce((_url, init: any) => {
+      return new Promise((_resolve, reject) => {
+        const error = new Error("This operation was aborted");
+        error.name = "AbortError";
+        if (init?.signal?.aborted) {
+          reject(error);
+        } else {
+          init?.signal?.addEventListener("abort", () => reject(error));
+        }
+      });
+    });
+
+    const client = new ScryptedClient("http://scrypted:10443", {
+      timeoutMs: 50,
+    });
+    await expect(client.fetchDiscovery()).rejects.toMatchObject({
+      name: "ScryptedClientError",
+      code: "timeout",
+    });
+  });
+
+  it("handles network error", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValueOnce(
+      new TypeError("fetch failed: ECONNREFUSED 127.0.0.1:10443"),
+    );
+
+    const client = new ScryptedClient("http://scrypted:10443");
+    await expect(client.fetchDiscovery()).rejects.toMatchObject({
+      name: "ScryptedClientError",
+      code: "network_error",
+    });
+  });
+
+  it("handles Scrypted offline and later recovery", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+    // Scrypted is offline (network error)
+    fetchSpy.mockRejectedValueOnce(new TypeError("fetch failed: ECONNREFUSED"));
+    const client = new ScryptedClient("http://scrypted:10443");
+
+    await expect(client.discover()).rejects.toThrow();
+    expect(client.runtimeFacade.getSnapshot().connected).toBe(false);
+
+    // Scrypted is back online (recovery)
+    fetchSpy.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        devices: [{ id: "c1", name: "Camera recovered", type: "Camera" }],
+      }),
+    } as any);
+
+    const recoveredSnapshot = await client.discover();
+    expect(recoveredSnapshot.connected).toBe(true);
+    expect(recoveredSnapshot.cameras).toHaveLength(1);
+    expect(recoveredSnapshot.cameras[0].normalized.name).toBe(
+      "Camera recovered",
+    );
+  });
+
+  it("ensures NO error message ever contains the token", async () => {
+    const SECRET_TOKEN = "SUPER_SECRET_TOKEN_XYZ_777";
+    const client = new ScryptedClient("http://scrypted:10443", SECRET_TOKEN);
+
+    // 1. Network error that contains the secret in raw message
+    vi.spyOn(globalThis, "fetch").mockRejectedValueOnce(
+      new Error(`Failed to connect with token ${SECRET_TOKEN}`),
+    );
+    try {
+      await client.fetchDiscovery();
+      expect.unreachable();
+    } catch (err: any) {
+      expect(err.message).not.toContain(SECRET_TOKEN);
+    }
+
+    // 2. HTTP 401 error
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
+      ok: false,
+      status: 401,
+    } as any);
+    try {
+      await client.fetchDiscovery();
+      expect.unreachable();
+    } catch (err: any) {
+      expect(err.message).not.toContain(SECRET_TOKEN);
+    }
+
+    // 3. HTTP 403 error
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
+      ok: false,
+      status: 403,
+    } as any);
+    try {
+      await client.fetchDiscovery();
+      expect.unreachable();
+    } catch (err: any) {
+      expect(err.message).not.toContain(SECRET_TOKEN);
+    }
+
+    // 4. HTTP 500 error
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+    } as any);
+    try {
+      await client.fetchDiscovery();
+      expect.unreachable();
+    } catch (err: any) {
+      expect(err.message).not.toContain(SECRET_TOKEN);
+    }
+
+    // 5. Incomplete response
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ invalid: true }),
+    } as any);
+    try {
+      await client.fetchDiscovery();
+      expect.unreachable();
+    } catch (err: any) {
+      expect(err.message).not.toContain(SECRET_TOKEN);
+    }
+
+    // 6. Invalid JSON
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => {
+        throw new SyntaxError("Unexpected token");
+      },
+    } as any);
+    try {
+      await client.fetchDiscovery();
+      expect.unreachable();
+    } catch (err: any) {
+      expect(err.message).not.toContain(SECRET_TOKEN);
+    }
+
+    // 7. Timeout
+    vi.spyOn(globalThis, "fetch").mockImplementationOnce(() => {
+      const err = new Error("aborted");
+      err.name = "AbortError";
+      return Promise.reject(err);
+    });
+    try {
+      await client.fetchDiscovery();
+      expect.unreachable();
+    } catch (err: any) {
+      expect(err.message).not.toContain(SECRET_TOKEN);
+    }
   });
 });

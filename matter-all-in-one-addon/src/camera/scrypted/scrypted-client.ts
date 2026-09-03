@@ -12,6 +12,33 @@ import {
   type ScryptedClientDiscoveryResponse,
 } from "./scrypted-client-discovery-adapter.js";
 import { ScryptedRuntimeFacade } from "./scrypted-runtime-facade.js";
+import {
+  createScryptedRuntimeConnection,
+  type ScryptedRuntimeConnection,
+  type ScryptedRuntimeFetcher,
+} from "./scrypted-runtime-connector.js";
+import type { ScryptedDiscoveryPayload } from "./scrypted-runtime-ingest.js";
+import type { ScryptedRuntimeSnapshot } from "./scrypted-runtime-facade.js";
+
+export class ScryptedClientError extends Error {
+  public readonly code: ScryptedErrorCode;
+  public readonly statusCode?: number;
+
+  constructor(message: string, code: ScryptedErrorCode, statusCode?: number) {
+    super(message);
+    this.name = "ScryptedClientError";
+    this.code = code;
+    this.statusCode = statusCode;
+    Object.setPrototypeOf(this, ScryptedClientError.prototype);
+  }
+}
+
+export interface ScryptedClientOptions {
+  token?: string;
+  timeoutMs?: number;
+  runtimeFacade?: ScryptedRuntimeFacade;
+  endpointPath?: string;
+}
 
 /** INTERNAL ONLY — never persist, serialize or log. */
 export interface ScryptedSession {
@@ -303,43 +330,302 @@ function mapDeviceToCameraRecord(
  * are used or assumed.
  */
 export class ScryptedClient {
-  public static runtimeFacade: ScryptedRuntimeFacade = new ScryptedRuntimeFacade();
+  public static runtimeFacade: ScryptedRuntimeFacade =
+    new ScryptedRuntimeFacade();
   public runtimeFacade: ScryptedRuntimeFacade;
 
-  private readonly serverUrl: string;
-  private readonly token?: string;
-  private readonly timeoutMs: number;
+  public readonly serverUrl: string;
+  public readonly token?: string;
+  public readonly timeoutMs: number;
+  public readonly endpointPath: string;
 
   constructor(
     serverUrl: string,
-    token?: string,
+    tokenOrOptions?: string | ScryptedClientOptions,
     timeoutMs: number = 6000,
     runtimeFacade: ScryptedRuntimeFacade = ScryptedClient.runtimeFacade,
   ) {
     this.serverUrl = serverUrl;
-    this.token = token;
-    this.timeoutMs = timeoutMs;
-    this.runtimeFacade = runtimeFacade;
+    if (typeof tokenOrOptions === "object" && tokenOrOptions !== null) {
+      this.token = tokenOrOptions.token;
+      this.timeoutMs = tokenOrOptions.timeoutMs ?? timeoutMs;
+      this.runtimeFacade = tokenOrOptions.runtimeFacade ?? runtimeFacade;
+      this.endpointPath = tokenOrOptions.endpointPath ?? "/api/v1/devices";
+    } else {
+      this.token = tokenOrOptions;
+      this.timeoutMs = timeoutMs;
+      this.runtimeFacade = runtimeFacade;
+      this.endpointPath = "/api/v1/devices";
+    }
+  }
+
+  /**
+   * Normalizes base URL and endpoint path to prevent double slashes.
+   */
+  public static normalizeUrl(
+    baseUrl: string,
+    endpointPath: string = "/api/v1/devices",
+  ): string {
+    const raw = (baseUrl || "").trim();
+    if (!raw) {
+      throw new ScryptedClientError(
+        "La URL del servidor no puede estar vacía",
+        "invalid_url",
+      );
+    }
+    const cleanBase = raw.replace(/\/+$/, "");
+    const cleanPath = (endpointPath || "").trim().replace(/^\/+/, "");
+    return cleanPath ? `${cleanBase}/${cleanPath}` : cleanBase;
+  }
+
+  /**
+   * Removes sensitive token occurrences from error strings.
+   */
+  private sanitizeErrorMessage(message: string): string {
+    if (!this.token || !this.token.trim()) return message;
+    return message.split(this.token).join("[REDACTED]");
+  }
+
+  /**
+   * Performs real HTTP discovery against the Scrypted server.
+   * - Uses fetch
+   * - Normalizes base URL to avoid double slashes
+   * - Supports configurable URL, optional token, configurable timeout with AbortController
+   * - Sends token strictly via Authorization header
+   * - Never logs or includes token in errors
+   * - Safely converts network errors, timeout, HTTP 401/403/500, invalid JSON and incomplete responses.
+   */
+  public async fetchDiscovery(
+    endpointPath?: string,
+  ): Promise<ScryptedDiscoveryPayload> {
+    const targetUrl = ScryptedClient.normalizeUrl(
+      this.serverUrl,
+      endpointPath ?? this.endpointPath,
+    );
+
+    const headers: Record<string, string> = {
+      Accept: "application/json",
+    };
+
+    if (this.token && this.token.trim().length > 0) {
+      headers["Authorization"] = this.token.startsWith("Bearer ")
+        ? this.token.trim()
+        : `Bearer ${this.token.trim()}`;
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      controller.abort();
+    }, this.timeoutMs);
+
+    try {
+      const response = await fetch(targetUrl, {
+        method: "GET",
+        headers,
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new ScryptedClientError(
+            "Error de autenticación en Scrypted (HTTP 401). Verifica el token configurado.",
+            "authentication_failed",
+            401,
+          );
+        }
+        if (response.status === 403) {
+          throw new ScryptedClientError(
+            "Acceso denegado en Scrypted (HTTP 403). Permisos insuficientes.",
+            "permission_denied",
+            403,
+          );
+        }
+        if (response.status >= 500) {
+          throw new ScryptedClientError(
+            `Error interno del servidor Scrypted (HTTP ${response.status}).`,
+            "server_error",
+            response.status,
+          );
+        }
+        throw new ScryptedClientError(
+          `Error HTTP ${response.status} recibido de Scrypted.`,
+          "unknown",
+          response.status,
+        );
+      }
+
+      let data: unknown;
+      try {
+        data = await response.json();
+      } catch {
+        throw new ScryptedClientError(
+          "Respuesta JSON inválida recibida del servidor Scrypted.",
+          "invalid_json",
+        );
+      }
+
+      if (!data || typeof data !== "object") {
+        throw new ScryptedClientError(
+          "Respuesta incompleta del servidor Scrypted: cuerpo de respuesta inválido.",
+          "incomplete_response",
+        );
+      }
+
+      let rawList: unknown[] | undefined;
+      if (Array.isArray(data)) {
+        rawList = data;
+      } else if (Array.isArray((data as any).devices)) {
+        rawList = (data as any).devices;
+      } else if (Array.isArray((data as any).cameras)) {
+        rawList = (data as any).cameras;
+      }
+
+      if (!rawList) {
+        throw new ScryptedClientError(
+          "Respuesta incompleta del servidor Scrypted: falta la propiedad devices o cameras.",
+          "incomplete_response",
+        );
+      }
+
+      const validDevices = rawList.filter(
+        (d): d is Record<string, any> =>
+          Boolean(d) &&
+          typeof d === "object" &&
+          typeof (d as any).id === "string" &&
+          (d as any).id.trim().length > 0,
+      );
+
+      if (rawList.length > 0 && validDevices.length === 0) {
+        throw new ScryptedClientError(
+          "Respuesta incompleta del servidor Scrypted: dispositivos sin identificador válido.",
+          "incomplete_response",
+        );
+      }
+
+      return { devices: validDevices };
+    } catch (err: any) {
+      if (err instanceof ScryptedClientError) {
+        throw err;
+      }
+      if (err?.name === "AbortError" || controller.signal.aborted) {
+        throw new ScryptedClientError(
+          `Tiempo de espera agotado al conectar con Scrypted (${this.timeoutMs}ms).`,
+          "timeout",
+        );
+      }
+      const safeMessage = this.sanitizeErrorMessage(
+        err?.message || "Error de conexión",
+      );
+      throw new ScryptedClientError(
+        `Error de red al conectar con Scrypted: ${safeMessage}`,
+        "network_error",
+      );
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /**
+   * Discovers cameras through HTTP and ingests them into the runtime facade.
+   */
+  public async discover(
+    endpointPath?: string,
+  ): Promise<ScryptedRuntimeSnapshot> {
+    try {
+      const payload = await this.fetchDiscovery(endpointPath);
+      this.runtimeFacade.setConnectionState(true);
+      const snapshot = adaptScryptedClientDiscovery(
+        this.runtimeFacade,
+        payload,
+      );
+      return snapshot;
+    } catch (err) {
+      this.runtimeFacade.setConnectionState(false);
+      throw err;
+    }
+  }
+
+  /**
+   * Returns a runtime connection bound to this client instance.
+   */
+  public createConnection(endpointPath?: string): ScryptedRuntimeConnection {
+    return createScryptedRuntimeConnection(() =>
+      this.fetchDiscovery(endpointPath),
+    );
+  }
+
+  /**
+   * Returns a fetcher function bound to this client instance.
+   */
+  public getFetcher(endpointPath?: string): ScryptedRuntimeFetcher {
+    return () => this.fetchDiscovery(endpointPath);
   }
 
   /**
    * Instance helper for backward compatibility in existing code.
    */
-  public async listCameras(session: ScryptedSession): Promise<CameraRecord[]> {
-    return ScryptedClient.listCameras.call(this, session);
+  public async listCameras(session?: ScryptedSession): Promise<CameraRecord[]> {
+    if (session) {
+      return ScryptedClient.listCameras.call(this, session);
+    }
+    const snapshot = await this.discover();
+    const rawDevices = (snapshot as any)?.cameras ?? [];
+    return rawDevices.map((item: any) =>
+      mapDeviceToCameraRecord(
+        {
+          id: item.normalized.id,
+          name: item.normalized.name,
+          manufacturer:
+            item.normalized.brand !== "Marca no identificada"
+              ? item.normalized.brand
+              : undefined,
+          model: item.normalized.model ?? undefined,
+        },
+        this.serverUrl,
+        item.normalized.id,
+      ),
+    );
   }
 
   /**
    * Instance helper for backward compatibility in existing code.
    */
   public async testConnection(): Promise<ScryptedConnectionResult> {
+    if (this.token) {
+      const start = Date.now();
+      try {
+        await this.fetchDiscovery();
+        return {
+          ok: true,
+          message: "Conexión correcta con Scrypted mediante token API.",
+          authenticationMode: "api_token",
+          latencyMs: Date.now() - start,
+        };
+      } catch (err: any) {
+        if (err instanceof ScryptedClientError) {
+          return {
+            ok: false,
+            errorCode: err.code,
+            message: this.sanitizeErrorMessage(err.message),
+            latencyMs: Date.now() - start,
+          };
+        }
+        return {
+          ok: false,
+          errorCode: "unknown",
+          message: "Error al conectar con Scrypted.",
+          latencyMs: Date.now() - start,
+        };
+      }
+    }
+
     return ScryptedClient.testConnection(
       this.serverUrl,
       {
         username: "admin",
         authenticationMode: "username_password",
       },
-      this.token,
+      undefined,
       false,
     );
   }
@@ -655,12 +941,11 @@ export class ScryptedClient {
       }
     }
 
-    const totalCount =
-      Array.isArray(response.devices)
-        ? response.devices.length
-        : Array.isArray(response.cameras)
-          ? response.cameras.length
-          : deviceIds.length;
+    const totalCount = Array.isArray(response.devices)
+      ? response.devices.length
+      : Array.isArray(response.cameras)
+        ? response.cameras.length
+        : deviceIds.length;
 
     console.log(
       `[Scrypted] Discovered ${totalCount} total devices in systemState, identified ${cameras.length} cameras.`,
