@@ -1,3 +1,23 @@
+## [1.4.86] - 2026-09-02
+
+### Scrypted Camera Stream Profile Discovery, Storage Persistence & Hardened Diagnostics
+
+- **Resolución y Persistencia de Perfiles de Video:**
+  - Integración completa con `getVideoStreamOptions()`, fallback `getVideoStream()` y `mediaManager.convertMediaObjectToUrl(mo, "text/x-uri")` de Scrypted SDK.
+  - Fallback a consulta HTTP REST (`/api/v1/devices/:id/getVideoStreamOptions`) con autenticación Bearer segura.
+  - Preservación y mapeo de perfiles de video directos en `ScryptedCameraInput`, `ScryptedDiscoveryDevice` y `toDevice()`.
+  - Persistencia de `effectiveStreamReference` y perfiles en `ScryptedStorage` para entrega consistente a HomeKit (`ScryptedHomeKitBridge`), Matter (`ScryptedMatterBridge`), snapshots y Live View.
+  - Regla estricta que rechaza URLs RTSP inventadas con formato `/:cameraId`.
+- **Hardening del Endpoint de Diagnóstico (`/diagnose-stream`):**
+  - Devuelve HTTP 400 (`missing_stream_url`) cuando no hay URL de stream en la cámara ni en la petición.
+  - Devuelve HTTP 422 con causas accionables (`not_found`, `unauthorized`, `timeout`, `source_offline`, `ffprobe_missing`, `invalid_stream`) cuando la prueba del stream falla.
+  - Elimina respuestas ficticias con métricas TCP simuladas y valores "N/A".
+  - Logs diagnósticos seguros (cámara, endpoint sanitizado, HTTP status, causa) sin tokens ni credenciales.
+- **Interfaz de Usuario (Liquid Glass UI):**
+  - La interfaz reporta el error real o estado pendiente en vez de simular un transporte TCP exitoso con campos "N/A".
+- **Dispositivos Matter Existentes:**
+  - Preservación total de los 31 dispositivos Matter existentes, credenciales, Fabrics, certificados y Node IDs.
+
 ## [1.4.85] - 2026-09-02
 
 ### Scrypted Real HTTP Client, URL Normalization, Secure Tokens & Error Handling
