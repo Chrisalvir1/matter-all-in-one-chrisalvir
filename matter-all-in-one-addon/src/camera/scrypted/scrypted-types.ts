@@ -151,6 +151,15 @@ export interface StreamLatencyMetrics {
   scryptedToAddonMs?: MetricValue<number>;
   addonToHomeKitMs?: MetricValue<number>;
   controllerFirstFrameMs?: MetricValue<number>;
+  error?: string;
+  failureCause?:
+    | "missing_stream_url"
+    | "unauthorized"
+    | "not_found"
+    | "timeout"
+    | "source_offline"
+    | "ffprobe_missing"
+    | "invalid_stream";
 }
 
 export interface HevcStreamTierInfo {

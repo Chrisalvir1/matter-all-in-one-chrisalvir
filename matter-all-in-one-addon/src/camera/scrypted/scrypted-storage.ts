@@ -353,14 +353,29 @@ export class ScryptedStorage {
       const existingDirectUrl = existing?.source?.streamReference?.directUrl;
       const freshDirectUrl = fresh.source?.streamReference?.directUrl;
 
+      const freshProfileDirectUrl = fresh.source?.profiles?.find(
+        (p) => p.directUrl && !isInventedRtspUrl(p.directUrl, fresh.cameraId),
+      )?.directUrl;
+
+      const effectiveDirectUrl =
+        existingDirectUrl && !isInventedRtspUrl(existingDirectUrl, fresh.cameraId)
+          ? existingDirectUrl
+          : freshDirectUrl && !isInventedRtspUrl(freshDirectUrl, fresh.cameraId)
+            ? freshDirectUrl
+            : freshProfileDirectUrl;
+
       const effectiveStreamReference:
         import("./scrypted-types.js").StreamReference | undefined =
-        existingDirectUrl &&
-        !isInventedRtspUrl(existingDirectUrl, fresh.cameraId)
-          ? existing!.source.streamReference
-          : freshDirectUrl && !isInventedRtspUrl(freshDirectUrl, fresh.cameraId)
-            ? fresh.source.streamReference
-            : undefined; // No URL — never fabricate one
+        effectiveDirectUrl
+          ? {
+              protocol: "rtsp",
+              directUrl: effectiveDirectUrl,
+              validationStatus:
+                existing?.source?.streamReference?.directUrl === effectiveDirectUrl
+                  ? (existing?.source?.streamReference?.validationStatus || "not_checked")
+                  : (fresh.source?.streamReference?.validationStatus || "not_checked"),
+            }
+          : undefined; // No URL — never fabricate one
 
       const updated: CameraRecord = {
         ...fresh,
@@ -402,6 +417,8 @@ export class ScryptedStorage {
         source: {
           ...fresh.source,
           streamReference: effectiveStreamReference,
+          snapshotReference:
+            fresh.source?.snapshotReference || existing?.source?.snapshotReference,
           profiles:
             fresh.source?.profiles && fresh.source.profiles.length > 0
               ? fresh.source.profiles

@@ -575,4 +575,28 @@ describe("updateCameras — never fabricates RTSP URLs from cameraId", () => {
     );
     expect(cameraAfterSync?.source.streamValidationStatus).toBe("verified");
   });
+
+  it("updateCameras persists effectiveStreamReference from fresh camera profiles when streamReference is omitted", async () => {
+    const camWithProfiles = makeCamera("fresh_cam");
+    camWithProfiles.source.streamReference = undefined;
+    camWithProfiles.source.profiles = [
+      {
+        id: "hd",
+        name: "HD Stream",
+        directUrl: "rtsp://192.168.1.88:8554/feed_hd",
+        discoveredAt: new Date().toISOString(),
+        validationStatus: "not_checked",
+      },
+    ];
+
+    await ScryptedStorage.updateCameras([camWithProfiles]);
+
+    const store = await ScryptedStorage.load();
+    const saved = store.cameras.cameras.find((c) => c.cameraId === "fresh_cam");
+    expect(saved?.source.streamReference?.directUrl).toBe(
+      "rtsp://192.168.1.88:8554/feed_hd",
+    );
+    expect(saved?.source.streamReference?.protocol).toBe("rtsp");
+    expect(saved?.source.profiles).toHaveLength(1);
+  });
 });

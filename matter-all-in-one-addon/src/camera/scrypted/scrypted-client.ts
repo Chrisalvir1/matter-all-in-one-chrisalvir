@@ -5,6 +5,7 @@ import type {
   ScryptedErrorCode,
   ScryptedCredentials,
   ScryptedStreamProfile,
+  StreamReference,
 } from "./scrypted-types.js";
 import { isInventedRtspUrl } from "./scrypted-storage.js";
 import {
@@ -276,6 +277,27 @@ function mapDeviceToCameraRecord(
     }
   } catch {}
 
+  const discoveredDirectUrl =
+    (typeof device.directUrl === "string" && device.directUrl.trim()) ||
+    (typeof device.streamUrl === "string" && device.streamUrl.trim()) ||
+    (typeof device.rtspUrl === "string" && device.rtspUrl.trim()) ||
+    (typeof device.streamReference?.directUrl === "string" &&
+      device.streamReference.directUrl.trim()) ||
+    undefined;
+
+  const validDirectUrl =
+    discoveredDirectUrl && !isInventedRtspUrl(discoveredDirectUrl, id)
+      ? discoveredDirectUrl
+      : undefined;
+
+  const streamReference: StreamReference | undefined = validDirectUrl
+    ? {
+        protocol: "rtsp",
+        directUrl: validDirectUrl,
+        validationStatus: "not_checked",
+      }
+    : undefined;
+
   return {
     cameraId: id,
     sourceId: `scrypted_${id}`,
@@ -294,7 +316,9 @@ function mapDeviceToCameraRecord(
       kind: "scrypted",
       serverId: serverUrl,
       deviceId: id,
-      // Streams are NOT assumed. They remain unverified until configured or verified.
+      streamReference,
+      snapshotReference: device.snapshotReference ?? undefined,
+      profiles: Array.isArray(device.profiles) ? device.profiles : undefined,
     },
     capabilities: {
       // No capabilities are assumed. Marked unverified until validated.
@@ -562,6 +586,117 @@ export class ScryptedClient {
   }
 
   /**
+   * Fetches real stream profiles for a given camera device through active SDK session or HTTP.
+   */
+  public async fetchStreamProfiles(
+    deviceId: string,
+  ): Promise<ScryptedStreamProfile[]> {
+    const cleanDeviceId = String(deviceId || "").trim();
+    if (!cleanDeviceId) return [];
+
+    // 1. If an SDK session is active in ScryptedReconnectManager, use it
+    try {
+      const { ScryptedReconnectManager } = await import(
+        "./scrypted-reconnect-manager.js"
+      );
+      const reconnectMgr = ScryptedReconnectManager.getInstance();
+      const activeSession = (reconnectMgr as any)?.activeSession;
+      if (activeSession?.sdk) {
+        const sdkProfiles = await ScryptedClient.fetchStreamProfiles(
+          activeSession,
+          cleanDeviceId,
+        );
+        if (sdkProfiles.length > 0) return sdkProfiles;
+      }
+    } catch {
+      // Fallback to HTTP
+    }
+
+    // 2. Query Scrypted HTTP API
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    const headers: Record<string, string> = { Accept: "application/json" };
+    if (this.token && this.token.trim().length > 0) {
+      headers["Authorization"] = this.token.startsWith("Bearer ")
+        ? this.token.trim()
+        : `Bearer ${this.token.trim()}`;
+    }
+
+    const profilesEndpoint = `/api/v1/devices/${encodeURIComponent(cleanDeviceId)}/getVideoStreamOptions`;
+    const targetUrl = ScryptedClient.normalizeUrl(
+      this.serverUrl,
+      profilesEndpoint,
+    );
+    const now = new Date().toISOString();
+
+    try {
+      const response = await fetch(targetUrl, {
+        method: "GET",
+        headers,
+        signal: controller.signal,
+      });
+
+      if (response.ok) {
+        let streamOptions: any = null;
+        try {
+          streamOptions = await response.json();
+        } catch {
+          streamOptions = null;
+        }
+
+        if (Array.isArray(streamOptions) && streamOptions.length > 0) {
+          const profiles: ScryptedStreamProfile[] = [];
+          for (const opt of streamOptions) {
+            if (!opt) continue;
+            let directUrl =
+              typeof opt.url === "string" && opt.url.trim().length > 0
+                ? opt.url.trim()
+                : undefined;
+
+            if (directUrl && isInventedRtspUrl(directUrl, cleanDeviceId)) {
+              directUrl = undefined;
+            }
+
+            profiles.push({
+              id: String(opt.id || opt.name || `stream_${profiles.length}`),
+              name: String(
+                opt.name || opt.id || `Stream ${profiles.length + 1}`,
+              ),
+              container: opt.container,
+              videoCodec: opt.video?.codec,
+              audioCodec: opt.audio?.codec,
+              resolution:
+                opt.video?.width && opt.video?.height
+                  ? { width: opt.video.width, height: opt.video.height }
+                  : undefined,
+              fps: opt.video?.fps,
+              bitrateKbps: opt.video?.bitrate
+                ? Math.round(opt.video.bitrate / 1000)
+                : undefined,
+              hasAudio: Boolean(opt.audio),
+              directUrl,
+              discoveredAt: now,
+              validationStatus: directUrl ? "not_checked" : "unsupported",
+            });
+          }
+          if (profiles.length > 0) return profiles;
+        }
+      }
+    } catch (err: any) {
+      const safeMsg = this.sanitizeErrorMessage(
+        err?.message || "Error al obtener perfiles HTTP",
+      );
+      console.warn(
+        `[Scrypted][${cleanDeviceId}] Error al obtener perfiles de stream: ${safeMsg}`,
+      );
+    } finally {
+      clearTimeout(timer);
+    }
+
+    return [];
+  }
+
+  /**
    * Instance helper for backward compatibility in existing code.
    */
   public async listCameras(session?: ScryptedSession): Promise<CameraRecord[]> {
@@ -570,7 +705,7 @@ export class ScryptedClient {
     }
     const snapshot = await this.discover();
     const rawDevices = (snapshot as any)?.cameras ?? [];
-    return rawDevices.map((item: any) =>
+    const cameras = rawDevices.map((item: any) =>
       mapDeviceToCameraRecord(
         {
           id: item.normalized.id,
@@ -580,11 +715,42 @@ export class ScryptedClient {
               ? item.normalized.brand
               : undefined,
           model: item.normalized.model ?? undefined,
+          directUrl: item.normalized.directUrl,
+          streamReference: item.normalized.streamReference,
+          snapshotReference: item.normalized.snapshotReference,
+          profiles: item.normalized.profiles,
         },
         this.serverUrl,
         item.normalized.id,
       ),
     );
+
+    for (const camera of cameras) {
+      try {
+        if (!camera.source.streamReference?.directUrl) {
+          const profiles = await this.fetchStreamProfiles(camera.cameraId);
+          if (profiles.length > 0) {
+            camera.source.profiles = profiles;
+            camera.source.selectedProfileId = profiles[0].id;
+            const primary = profiles.find((p) => p.directUrl) || profiles[0];
+            if (primary?.directUrl) {
+              camera.source.streamReference = {
+                protocol: "rtsp",
+                directUrl: primary.directUrl,
+                validationStatus: primary.validationStatus,
+              };
+              camera.source.streamValidationStatus = primary.validationStatus;
+            }
+          }
+        }
+      } catch (profileErr: any) {
+        console.warn(
+          `[Scrypted][${camera.cameraId}] Error al enriquecer perfiles: ${this.sanitizeErrorMessage(profileErr?.message || String(profileErr))}`,
+        );
+      }
+    }
+
+    return cameras;
   }
 
   /**
@@ -961,13 +1127,14 @@ export class ScryptedClient {
         if (profiles.length > 0) {
           camera.source.profiles = profiles;
           camera.source.selectedProfileId = profiles[0].id;
-          if (profiles[0].directUrl) {
+          const primary = profiles.find((p) => p.directUrl) || profiles[0];
+          if (primary?.directUrl) {
             camera.source.streamReference = {
               protocol: "rtsp",
-              directUrl: profiles[0].directUrl,
-              validationStatus: profiles[0].validationStatus,
+              directUrl: primary.directUrl,
+              validationStatus: primary.validationStatus,
             };
-            camera.source.streamValidationStatus = profiles[0].validationStatus;
+            camera.source.streamValidationStatus = primary.validationStatus;
           }
         }
       } catch (profileErr) {

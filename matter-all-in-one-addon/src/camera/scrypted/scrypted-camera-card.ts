@@ -10,6 +10,13 @@ export type ScryptedCameraInput = {
   homeKitEnabled?: boolean;
   matterEnabled?: boolean;
   online?: boolean;
+  directUrl?: string;
+  streamUrl?: string;
+  rtspUrl?: string;
+  streamReference?: unknown;
+  snapshotReference?: unknown;
+  profiles?: unknown[];
+  videoStreamOptions?: unknown[];
 };
 
 export type ScryptedCameraCard = {
