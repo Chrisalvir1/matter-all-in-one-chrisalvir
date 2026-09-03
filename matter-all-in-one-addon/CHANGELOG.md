@@ -1,3 +1,10 @@
+## [1.4.92] - 2026-09-02
+
+### Validación y Diagnóstico Instantáneo sin Bloqueo de Caché para RTSP Directo
+
+#### Invalidación Inmediata de Caché en Verificación y Diagnóstico Bajo Demanda
+- **Pruebas en tiempo real:** Cuando el usuario pulsa "Verificar stream" o "Diagnosticar stream" en el modal de configuración de la cámara, se invoca `ScryptedStreamValidator.clearCache()`, eliminando inmediatamente cualquier caché de fallo o backoff previo de 30s. Si el usuario corrige una IP, puerto, usuario o contraseña, la prueba se ejecuta en tiempo real sin esperas ni reportes obsoletos.
+
 ## [1.4.91] - 2026-09-02
 
 ### Calidad Ultra HD / 2K para Live View y Audio Nativo AAC-ELD (libfdk_aac)

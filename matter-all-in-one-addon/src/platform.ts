@@ -4823,6 +4823,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             camera.source.streamReference?.directUrl ||
             "";
 
+          ScryptedStreamValidator.clearCache();
           const validation = await ScryptedStreamValidator.validateStreamUrl(
             targetUrl,
             cameraId,
@@ -4943,6 +4944,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             `[Scrypted][${cameraId}] Iniciando diagnóstico de stream RTSP: ${sanitizedUrl}`,
           );
 
+          ScryptedStreamValidator.clearCache();
           const metrics = await ScryptedStreamValidator.diagnoseStreamUrl(
             targetUrl,
             cameraId,
