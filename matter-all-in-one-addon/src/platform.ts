@@ -57,6 +57,7 @@ import { ScryptedReconnectManager } from "./camera/scrypted/scrypted-reconnect-m
 import { ScryptedHomeKitBridge } from "./camera/scrypted/scrypted-homekit-bridge.js";
 import { ScryptedMatterBridge } from "./camera/scrypted/scrypted-matter-bridge.js";
 import { ScryptedStreamValidator } from "./camera/scrypted/scrypted-stream-validator.js";
+import { sanitizeUrlCredentials } from "./camera/homekit/ffmpeg-helper.js";
 
 export interface HomeAssistantPlatformConfig extends PlatformConfig {
   host?: string; // Optional: auto-detected from network/supervisor if not set
@@ -4919,6 +4920,29 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             camera.source.streamReference?.directUrl ||
             "";
 
+          if (!targetUrl) {
+            this.log.warn(
+              `[Scrypted][${cameraId}] Diagnóstico rechazado: no hay stream URL configurada ni descubierta.`,
+            );
+            res.writeHead(400, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(
+              JSON.stringify({
+                success: false,
+                error:
+                  "La cámara no tiene una URL de stream RTSP configurada ni descubierta. Ingresa una URL o activa el stream en Scrypted.",
+                cause: "missing_stream_url",
+              }),
+            );
+            return;
+          }
+
+          const sanitizedUrl = sanitizeUrlCredentials(targetUrl);
+          this.log.notice(
+            `[Scrypted][${cameraId}] Iniciando diagnóstico de stream RTSP: ${sanitizedUrl}`,
+          );
+
           const metrics = await ScryptedStreamValidator.diagnoseStreamUrl(
             targetUrl,
             cameraId,
@@ -4939,6 +4963,31 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           }
           await ScryptedStorage.save(store);
 
+          if (metrics.failureCause || metrics.timeToDescribeMs?.value == null) {
+            const cause = metrics.failureCause || "invalid_stream";
+            const errorMsg =
+              metrics.error || "No se pudo obtener información del stream RTSP.";
+            this.log.warn(
+              `[Scrypted][${cameraId}] Diagnóstico fallido: causa=${cause} error="${errorMsg}" target=${sanitizedUrl}`,
+            );
+            res.writeHead(422, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(
+              JSON.stringify({
+                success: false,
+                error: errorMsg,
+                cause,
+                metrics,
+                camera,
+              }),
+            );
+            return;
+          }
+
+          this.log.notice(
+            `[Scrypted][${cameraId}] Diagnóstico completado con éxito: describe=${metrics.timeToDescribeMs.value}ms 1erFrame=${metrics.timeToFirstFrameMs?.value ?? "N/A"}ms target=${sanitizedUrl}`,
+          );
           res.writeHead(200, {
             "Content-Type": "application/json; charset=utf-8",
           });

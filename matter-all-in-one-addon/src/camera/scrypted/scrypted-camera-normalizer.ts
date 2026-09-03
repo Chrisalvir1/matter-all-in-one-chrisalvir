@@ -10,6 +10,13 @@ export type ScryptedDiscoveryDevice = {
   entities?: unknown[] | null;
   homeKitEnabled?: boolean;
   matterEnabled?: boolean;
+  directUrl?: string | null;
+  streamUrl?: string | null;
+  rtspUrl?: string | null;
+  streamReference?: unknown | null;
+  snapshotReference?: unknown | null;
+  profiles?: unknown[] | null;
+  videoStreamOptions?: unknown[] | null;
 };
 
 export type NormalizedScryptedCamera = {
@@ -28,6 +35,10 @@ export type NormalizedScryptedCamera = {
     experimental: true;
     enabled: boolean;
   };
+  directUrl?: string;
+  streamReference?: unknown;
+  snapshotReference?: unknown;
+  profiles?: unknown[];
 };
 
 export const UNKNOWN_BRAND = "Marca no identificada";
@@ -45,6 +56,8 @@ function count(value: unknown): number {
 export function normalizeScryptedCamera(
   device: ScryptedDiscoveryDevice,
 ): NormalizedScryptedCamera {
+  const directUrl =
+    text(device.directUrl) ?? text(device.streamUrl) ?? text(device.rtspUrl);
   return {
     id: device.id,
     name: text(device.name) ?? device.id,
@@ -64,6 +77,10 @@ export function normalizeScryptedCamera(
       experimental: true,
       enabled: device.matterEnabled === true,
     },
+    directUrl,
+    streamReference: device.streamReference ?? undefined,
+    snapshotReference: device.snapshotReference ?? undefined,
+    profiles: Array.isArray(device.profiles) ? device.profiles : undefined,
   };
 }
 

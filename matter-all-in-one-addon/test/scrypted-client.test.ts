@@ -822,4 +822,293 @@ describe("ScryptedClient — Real HTTP Client", () => {
       expect(err.message).not.toContain(SECRET_TOKEN);
     }
   });
+
+  describe("Stream Profile Flow & Real Scrypted Methods", () => {
+    it("resolves stream profile URL using mediaManager.convertMediaObjectToUrl when url is absent", async () => {
+      const fakeMediaObject = { mimeType: "video/mp4" };
+      const fakeDevice = {
+        getVideoStreamOptions: vi.fn().mockResolvedValue([
+          {
+            id: "stream-auto",
+            name: "Auto Transcode Stream",
+            container: "rtsp",
+            video: { codec: "h264", width: 1280, height: 720, fps: 25 },
+          },
+        ]),
+        getVideoStream: vi.fn().mockResolvedValue(fakeMediaObject),
+      };
+
+      const fakeSession: any = {
+        sdk: {
+          systemManager: {
+            getDeviceById: (id: string) => (id === "cam-10" ? fakeDevice : null),
+          },
+          mediaManager: {
+            convertMediaObjectToUrl: vi
+              .fn()
+              .mockResolvedValue("rtsp://192.168.1.100:8554/cam10_rebroadcast"),
+          },
+        },
+      };
+
+      const profiles = await ScryptedClient.fetchStreamProfiles(
+        fakeSession,
+        "cam-10",
+      );
+
+      expect(fakeDevice.getVideoStream).toHaveBeenCalledWith({
+        id: "stream-auto",
+      });
+      expect(
+        fakeSession.sdk.mediaManager.convertMediaObjectToUrl,
+      ).toHaveBeenCalledWith(fakeMediaObject, "text/x-uri");
+      expect(profiles).toHaveLength(1);
+      expect(profiles[0].directUrl).toBe(
+        "rtsp://192.168.1.100:8554/cam10_rebroadcast",
+      );
+      expect(profiles[0].validationStatus).toBe("not_checked");
+    });
+
+    it("handles non-convertible media objects gracefully without crashing or failing remaining profiles", async () => {
+      const fakeDevice = {
+        getVideoStreamOptions: vi.fn().mockResolvedValue([
+          {
+            id: "stream-fail",
+            name: "Unconvertible Stream",
+            container: "webrtc",
+          },
+          {
+            id: "stream-ok",
+            name: "Direct RTSP Stream",
+            url: "rtsp://192.168.1.100:8554/live_ok",
+            video: { codec: "h264", width: 1920, height: 1080 },
+          },
+        ]),
+        getVideoStream: vi.fn().mockRejectedValue(new Error("Cannot create stream")),
+      };
+
+      const fakeSession: any = {
+        sdk: {
+          systemManager: {
+            getDeviceById: () => fakeDevice,
+          },
+          mediaManager: {
+            convertMediaObjectToUrl: vi.fn(),
+          },
+        },
+      };
+
+      const profiles = await ScryptedClient.fetchStreamProfiles(
+        fakeSession,
+        "cam-11",
+      );
+
+      expect(profiles).toHaveLength(2);
+      expect(profiles[0].directUrl).toBeUndefined();
+      expect(profiles[0].validationStatus).toBe("unsupported");
+      expect(profiles[1].directUrl).toBe("rtsp://192.168.1.100:8554/live_ok");
+      expect(profiles[1].validationStatus).toBe("not_checked");
+    });
+
+    it("handles absence of profiles and failed fallback returning empty array", async () => {
+      const fakeDevice = {
+        getVideoStreamOptions: vi.fn().mockResolvedValue([]),
+        getVideoStream: vi.fn().mockRejectedValue(new Error("No video stream")),
+      };
+
+      const fakeSession: any = {
+        sdk: {
+          systemManager: {
+            getDeviceById: () => fakeDevice,
+          },
+          mediaManager: {
+            convertMediaObjectToUrl: vi.fn(),
+          },
+        },
+      };
+
+      const profiles = await ScryptedClient.fetchStreamProfiles(
+        fakeSession,
+        "cam-12",
+      );
+      expect(profiles).toEqual([]);
+    });
+
+    it("fetches stream profiles over HTTP API and extracts directUrl", async () => {
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => [
+          {
+            id: "main",
+            name: "Main High Stream",
+            url: "rtsp://192.168.1.55:8554/tapo_c125_hq",
+            container: "rtsp",
+            video: { codec: "h264", width: 1920, height: 1080, fps: 30 },
+            audio: { codec: "aac" },
+          },
+        ],
+      } as any);
+
+      const client = new ScryptedClient(
+        "http://192.168.1.55:10443",
+        "secret-token-xyz",
+      );
+      const profiles = await client.fetchStreamProfiles("cam-tapo");
+
+      expect(fetchSpy).toHaveBeenCalled();
+      const callArgs = fetchSpy.mock.calls[0];
+      expect(callArgs[0]).toContain(
+        "/api/v1/devices/cam-tapo/getVideoStreamOptions",
+      );
+      expect((callArgs[1]?.headers as any)["Authorization"]).toBe(
+        "Bearer secret-token-xyz",
+      );
+
+      expect(profiles).toHaveLength(1);
+      expect(profiles[0].directUrl).toBe(
+        "rtsp://192.168.1.55:8554/tapo_c125_hq",
+      );
+      expect(profiles[0].videoCodec).toBe("h264");
+    });
+
+    it("rejects invented RTSP URL pattern (/cam-tapo) in HTTP stream profile", async () => {
+      vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => [
+          {
+            id: "invented",
+            name: "Invented Stream",
+            url: "rtsp://192.168.1.55:8554/cam-tapo",
+          },
+        ],
+      } as any);
+
+      const client = new ScryptedClient(
+        "http://192.168.1.55:10443",
+        "token-123",
+      );
+      const profiles = await client.fetchStreamProfiles("cam-tapo");
+
+      expect(profiles).toHaveLength(1);
+      expect(profiles[0].directUrl).toBeUndefined();
+      expect(profiles[0].validationStatus).toBe("unsupported");
+    });
+
+    it("gracefully handles HTTP 401, 403, 404, 500 when fetching profiles without throwing or leaking token", async () => {
+      const statuses = [401, 403, 404, 500];
+      const SECRET = "secret-super-token-999";
+      const client = new ScryptedClient("http://192.168.1.55:10443", SECRET);
+
+      for (const status of statuses) {
+        vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
+          ok: false,
+          status,
+          statusText: "Error",
+          json: async () => ({ error: `HTTP ${status}` }),
+        } as any);
+
+        const profiles = await client.fetchStreamProfiles("device-err");
+        expect(profiles).toEqual([]);
+      }
+    });
+
+    it("gracefully handles HTTP timeout or network error when fetching profiles without leaking token", async () => {
+      const SECRET = "secret-super-token-999";
+      const client = new ScryptedClient("http://192.168.1.55:10443", SECRET);
+
+      vi.spyOn(globalThis, "fetch").mockImplementationOnce(() => {
+        const err = new Error("Connection refused to http://192.168.1.55:10443");
+        return Promise.reject(err);
+      });
+
+      const profiles = await client.fetchStreamProfiles("device-timeout");
+      expect(profiles).toEqual([]);
+    });
+
+    it("listCameras enriches cameras with stream profiles and assigns streamReference", async () => {
+      const client = new ScryptedClient(
+        "http://192.168.1.55:10443",
+        "auth-token",
+      );
+
+      // Mock discover()
+      vi.spyOn(client, "discover").mockResolvedValueOnce({
+        connected: true,
+        cameras: [
+          {
+            normalized: {
+              id: "cam-entry",
+              name: "Entry Camera",
+              brand: "Tapo",
+              model: "C125",
+              source: "scrypted",
+              online: true,
+              entityCount: 1,
+              homeKit: { managedByScrypted: true, enabled: true },
+              matter: { experimental: true, enabled: true },
+            },
+            card: {} as any,
+            presentation: {} as any,
+            detail: {} as any,
+          },
+        ],
+      } as any);
+
+      // Mock fetchStreamProfiles
+      vi.spyOn(client, "fetchStreamProfiles").mockResolvedValueOnce([
+        {
+          id: "stream-1",
+          name: "Main RTSP",
+          directUrl: "rtsp://192.168.1.55:8554/entry_hd",
+          discoveredAt: new Date().toISOString(),
+          validationStatus: "not_checked",
+        },
+      ]);
+
+      const cameras = await client.listCameras();
+
+      expect(cameras).toHaveLength(1);
+      expect(cameras[0].source.profiles).toHaveLength(1);
+      expect(cameras[0].source.selectedProfileId).toBe("stream-1");
+      expect(cameras[0].source.streamReference?.directUrl).toBe(
+        "rtsp://192.168.1.55:8554/entry_hd",
+      );
+      expect(cameras[0].source.streamReference?.protocol).toBe("rtsp");
+    });
+
+    it("recovers from temporary failure when subsequent profile fetch succeeds", async () => {
+      const client = new ScryptedClient("http://192.168.1.55:10443");
+
+      // First call fails (500)
+      vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        json: async () => ({}),
+      } as any);
+
+      const firstAttempt = await client.fetchStreamProfiles("cam-rec");
+      expect(firstAttempt).toEqual([]);
+
+      // Second call recovers (200)
+      vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => [
+          {
+            id: "recovered",
+            name: "Recovered Stream",
+            url: "rtsp://192.168.1.55:8554/rec_stream",
+          },
+        ],
+      } as any);
+
+      const secondAttempt = await client.fetchStreamProfiles("cam-rec");
+      expect(secondAttempt).toHaveLength(1);
+      expect(secondAttempt[0].directUrl).toBe(
+        "rtsp://192.168.1.55:8554/rec_stream",
+      );
+    });
+  });
 });

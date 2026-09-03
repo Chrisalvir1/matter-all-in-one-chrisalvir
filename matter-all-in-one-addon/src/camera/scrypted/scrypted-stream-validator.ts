@@ -213,7 +213,9 @@ export class ScryptedStreamValidator {
             const errMsg = String(probe.error || "").toLowerCase();
             let status: StreamValidationStatus = "invalid";
 
-            if (errMsg.includes("404") || errMsg.includes("not found")) {
+            if (errMsg.includes("no ffprobe or ffmpeg binary available")) {
+              status = "invalid";
+            } else if (errMsg.includes("404") || errMsg.includes("not found")) {
               status = "not_found";
             } else if (
               errMsg.includes("401") ||
@@ -316,6 +318,38 @@ export class ScryptedStreamValidator {
     const now = new Date().toISOString();
     const startTime = Date.now();
 
+    if (!trimmed) {
+      return {
+        validatedAt: now,
+        sourceType: "local_rtsp",
+        selectedTransport: {
+          value: "tcp",
+          source: "unavailable",
+          confidence: "low",
+          measuredAt: now,
+        },
+        ffmpegRestartCount: 0,
+        error: "URL de stream no configurada ni descubierta",
+        failureCause: "missing_stream_url",
+      };
+    }
+
+    if (cameraId && isInventedRtspUrl(trimmed, cameraId)) {
+      return {
+        validatedAt: now,
+        sourceType: "local_rtsp",
+        selectedTransport: {
+          value: "tcp",
+          source: "unavailable",
+          confidence: "low",
+          measuredAt: now,
+        },
+        ffmpegRestartCount: 0,
+        error: `URL rechazada: contiene un ID de dispositivo como ruta ('${trimmed}'), lo cual no es una ruta RTSP real de Scrypted Rebroadcast.`,
+        failureCause: "invalid_stream",
+      };
+    }
+
     const metrics: StreamLatencyMetrics = {
       validatedAt: now,
       sourceType: trimmed.includes("8554")
@@ -330,29 +364,26 @@ export class ScryptedStreamValidator {
       ffmpegRestartCount: 0,
     };
 
-    if (!trimmed) {
-      return metrics;
-    }
-
     try {
       const probe = await probeCameraSource(trimmed, { timeoutMs });
       const elapsedMs = Date.now() - startTime;
 
       if (probe.valid) {
+        const effectiveElapsed = Math.max(1, elapsedMs);
         metrics.timeToDescribeMs = {
-          value: Math.round(elapsedMs * 0.4),
+          value: Math.max(1, Math.round(effectiveElapsed * 0.4)),
           source: probe.probeMethod || "ffprobe",
           confidence: "high",
           measuredAt: now,
         };
         metrics.timeToFirstPacketMs = {
-          value: Math.round(elapsedMs * 0.6),
+          value: Math.max(1, Math.round(effectiveElapsed * 0.6)),
           source: probe.probeMethod || "ffprobe",
           confidence: "medium",
           measuredAt: now,
         };
         metrics.timeToFirstFrameMs = {
-          value: elapsedMs,
+          value: effectiveElapsed,
           source: probe.probeMethod || "ffprobe",
           confidence: "high",
           measuredAt: now,
@@ -397,8 +428,54 @@ export class ScryptedStreamValidator {
             };
           }
         } catch {}
+      } else {
+        const errMsg = String(probe.error || "").toLowerCase();
+        let failureCause: StreamLatencyMetrics["failureCause"] =
+          "invalid_stream";
+
+        if (errMsg.includes("no ffprobe or ffmpeg binary available")) {
+          failureCause = "ffprobe_missing";
+        } else if (errMsg.includes("404") || errMsg.includes("not found")) {
+          failureCause = "not_found";
+        } else if (
+          errMsg.includes("401") ||
+          errMsg.includes("403") ||
+          errMsg.includes("unauthorized") ||
+          errMsg.includes("forbidden")
+        ) {
+          failureCause = "unauthorized";
+        } else if (errMsg.includes("timeout") || errMsg.includes("timed out")) {
+          failureCause = "timeout";
+        } else if (
+          errMsg.includes("connection refused") ||
+          errMsg.includes("econnrefused") ||
+          errMsg.includes("host unreachable") ||
+          errMsg.includes("network unreachable")
+        ) {
+          failureCause = "source_offline";
+        }
+
+        metrics.selectedTransport = {
+          value: "tcp",
+          source: "unavailable",
+          confidence: "low",
+          measuredAt: now,
+        };
+        metrics.error =
+          probe.error || "No se pudo obtener información del stream";
+        metrics.failureCause = failureCause;
       }
-    } catch {}
+    } catch (probeErr: any) {
+      metrics.selectedTransport = {
+        value: "tcp",
+        source: "unavailable",
+        confidence: "low",
+        measuredAt: now,
+      };
+      metrics.error =
+        probeErr?.message || "Excepción al diagnosticar el stream";
+      metrics.failureCause = "invalid_stream";
+    }
 
     // Sample host memory
     try {

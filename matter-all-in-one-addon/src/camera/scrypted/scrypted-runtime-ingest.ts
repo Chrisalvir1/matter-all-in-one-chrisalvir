@@ -38,6 +38,26 @@ function toDevice(value: unknown): ScryptedDiscoveryDevice | null {
     type: typeof value.type === "string" ? value.type : undefined,
     deviceType:
       typeof value.deviceType === "string" ? value.deviceType : undefined,
+    directUrl:
+      typeof value.directUrl === "string"
+        ? value.directUrl
+        : typeof value.streamUrl === "string"
+          ? value.streamUrl
+          : typeof value.rtspUrl === "string"
+            ? value.rtspUrl
+            : undefined,
+    streamUrl: typeof value.streamUrl === "string" ? value.streamUrl : undefined,
+    rtspUrl: typeof value.rtspUrl === "string" ? value.rtspUrl : undefined,
+    streamReference: isRecord(value.streamReference)
+      ? value.streamReference
+      : undefined,
+    snapshotReference: isRecord(value.snapshotReference)
+      ? value.snapshotReference
+      : undefined,
+    profiles: Array.isArray(value.profiles) ? value.profiles : undefined,
+    videoStreamOptions: Array.isArray(value.videoStreamOptions)
+      ? value.videoStreamOptions
+      : undefined,
   };
 }
 

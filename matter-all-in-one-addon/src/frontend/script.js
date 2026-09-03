@@ -2923,15 +2923,7 @@ function openCameraConfigModal(camera) {
 
     const metrics = camera.capabilities?.latencyMetrics;
     const descVal = metrics?.timeToDescribeMs?.value;
-    const descTime =
-      descVal != null
-        ? `${descVal} ms (${metrics?.timeToDescribeMs?.confidence || "alta"})`
-        : "No disponible";
     const frameVal = metrics?.timeToFirstFrameMs?.value;
-    const frameTime =
-      frameVal != null
-        ? `${frameVal} ms (${metrics?.timeToFirstFrameMs?.confidence || "alta"})`
-        : "No disponible";
     const transport =
       metrics?.selectedTransport?.value ||
       camera.exportConfig?.rtspTransportPreference ||
@@ -2940,7 +2932,7 @@ function openCameraConfigModal(camera) {
     const gopVal =
       camera.capabilities?.observed?.gopSeconds ??
       metrics?.observedGopSeconds?.value;
-    let gopDesc = "No disponible (pulsa Diagnosticar Stream abajo)";
+    let gopDesc = "";
     if (gopVal != null) {
       if (gopVal <= 2) {
         gopDesc = `${gopVal}s (adecuado para Live View y HKSV fluido)`;
@@ -2951,13 +2943,29 @@ function openCameraConfigModal(camera) {
       }
     }
 
+    const hasDirectUrl = Boolean(
+      camera.source?.streamReference?.directUrl || els.camCfgRtspUrl?.value?.trim(),
+    );
+
+    let diagnosticHtml = "";
+    if (descVal != null) {
+      const gopPart = gopDesc ? ` · GOP: ${gopDesc}` : "";
+      diagnosticHtml = `<strong>⏱️ Diagnóstico:</strong> DESCRIBE: ${descVal}ms (${metrics?.timeToDescribeMs?.confidence || "alta"}) · 1er Frame: ${frameVal != null ? `${frameVal}ms` : "N/A"} · Transporte: ${transport.toUpperCase()}${gopPart}`;
+    } else if (metrics?.error) {
+      diagnosticHtml = `<strong>⏱️ Diagnóstico:</strong> <span style="color:var(--danger, #ff4d4f); font-weight:600;">❌ Fallo en stream: ${escapeHtml(metrics.error)}</span>`;
+    } else if (hasDirectUrl) {
+      diagnosticHtml = `<strong>⏱️ Diagnóstico:</strong> <em>Pendiente de diagnóstico (pulsa "Diagnosticar Stream" abajo)</em>`;
+    } else {
+      diagnosticHtml = `<strong>⏱️ Diagnóstico:</strong> <span style="opacity:0.8;">Sin stream RTSP configurado ni descubierto</span>`;
+    }
+
     if (els.camModalVideoSpec) {
       els.camModalVideoSpec.innerHTML = `
         <div style="margin-bottom: 4px;"><strong>🏷️ Identidad:</strong> ${escapeHtml(mfr)} · ${escapeHtml(mdl)} · SN: <code>${escapeHtml(sn)}</code></div>
         <div style="margin-bottom: 4px;"><strong>📹 Video:</strong> ${escapeHtml(videoCodec)}${escapeHtml(profile)} · ${escapeHtml(res)} @ ${fps}fps (Passthrough directo H.264 sin recodificación)</div>
         <div style="margin-bottom: 4px;"><strong>🔊 Audio:</strong> ${escapeHtml(audioDesc)} · <span style="opacity:0.8;">Talkback: no compatible</span></div>
         <div style="font-size: 0.8rem; color: var(--text-secondary); background: rgba(0,0,0,0.2); padding: 6px 8px; border-radius: 6px; margin-top: 6px;">
-          <strong>⏱️ Diagnóstico:</strong> DESCRIBE: ${descTime} · 1er Frame: ${frameTime} · Transporte: ${transport.toUpperCase()} · GOP: ${gopDesc}
+          ${diagnosticHtml}
         </div>
       `;
     }
@@ -2987,7 +2995,7 @@ function openCameraConfigModal(camera) {
             body: JSON.stringify({ streamUrl: url, timeoutMs: 4000 }),
           },
         );
-        if (res.success && res.metrics) {
+        if (res.success && res.metrics && res.metrics.timeToDescribeMs?.value != null) {
           camera.capabilities.latencyMetrics = res.metrics;
           if (res.camera?.capabilities?.observed?.gopSeconds) {
             if (!camera.capabilities.observed) {
@@ -3004,13 +3012,30 @@ function openCameraConfigModal(camera) {
               res.metrics.observedGopSeconds?.value != null
                 ? ` · GOP: ${res.metrics.observedGopSeconds.value}s`
                 : "";
-            els.camCfgRtspResult.textContent = `✓ Diagnóstico completado. DESCRIBE: ${res.metrics.timeToDescribeMs?.value || "N/A"}ms · 1er Frame: ${res.metrics.timeToFirstFrameMs?.value || "N/A"}ms · Transporte: ${(res.metrics.selectedTransport?.value || "tcp").toUpperCase()}${gopText}`;
+            els.camCfgRtspResult.textContent = `✓ Diagnóstico completado. DESCRIBE: ${res.metrics.timeToDescribeMs.value}ms · 1er Frame: ${res.metrics.timeToFirstFrameMs?.value || "N/A"}ms · Transporte: ${(res.metrics.selectedTransport?.value || "tcp").toUpperCase()}${gopText}`;
           }
           showToast("✓ Diagnóstico de stream completado");
         } else {
+          if (res.metrics) {
+            camera.capabilities.latencyMetrics = res.metrics;
+            renderTechnicalSpecs();
+          }
+          if (els.camCfgRtspResult) {
+            els.camCfgRtspResult.className = "test-result-box error";
+            const causeStr = res.cause ? ` [${res.cause}]` : "";
+            const errorMsg =
+              res.error ||
+              res.metrics?.error ||
+              "No se pudo obtener información del stream";
+            els.camCfgRtspResult.textContent = `❌ ${errorMsg}${causeStr}`;
+          }
           showToast(res.error || "Error al diagnosticar stream", true);
         }
       } catch (err) {
+        if (els.camCfgRtspResult) {
+          els.camCfgRtspResult.className = "test-result-box error";
+          els.camCfgRtspResult.textContent = `❌ ${err.message || "Error al diagnosticar stream"}`;
+        }
         showToast(err.message || "Error al diagnosticar stream", true);
       } finally {
         els.camCfgDiagnoseRtspBtn.disabled = false;
