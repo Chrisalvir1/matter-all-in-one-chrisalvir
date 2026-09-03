@@ -86,11 +86,41 @@ export class HomeKitCameraRecordingDelegate
     );
 
     if (active) {
-      this.startPrebufferPipeline();
+      if (!this.isPausedByLiveStream) {
+        this.startPrebufferPipeline();
+      }
     } else {
+      this.isPausedByLiveStream = false;
       this.stopPrebufferPipeline();
       this.clearPrebuffer();
     }
+  }
+
+  private isPausedByLiveStream = false;
+
+  /**
+   * Temporarily pause the HKSV pre-buffer FFmpeg process while a Live View stream is active.
+   * This releases the camera's single RTSP hardware socket, preventing RTSP contention and stream freezing.
+   */
+  public pausePrebuffer(): void {
+    if (!this.recordingActive) return;
+    this.isPausedByLiveStream = true;
+    this.platform?.log?.notice?.(
+      `[HKSV][${this.entityId}] Pausing prebuffer to grant full camera bandwidth and RTSP socket to Live View`,
+    );
+    this.stopPrebufferPipeline();
+  }
+
+  /**
+   * Re-activate the HKSV pre-buffer pipeline once all Live View sessions have ended.
+   */
+  public resumePrebuffer(): void {
+    if (!this.recordingActive || !this.isPausedByLiveStream) return;
+    this.isPausedByLiveStream = false;
+    this.platform?.log?.notice?.(
+      `[HKSV][${this.entityId}] Live View session ended; resuming HKSV pre-buffer pipeline`,
+    );
+    this.startPrebufferPipeline();
   }
 
   /**
@@ -290,7 +320,7 @@ export class HomeKitCameraRecordingDelegate
   }
 
   private async startPrebufferPipeline(): Promise<void> {
-    if (this.ffmpegProcess || this.isStartingPipeline) return;
+    if (this.ffmpegProcess || this.isStartingPipeline || this.isPausedByLiveStream) return;
     this.isStartingPipeline = true;
 
     try {
@@ -344,10 +374,33 @@ export class HomeKitCameraRecordingDelegate
     }
 
     if (sourceUrl.startsWith("rtsp://")) {
-      args.push("-rtsp_transport", "tcp");
+      args.push(
+        "-probesize",
+        "32768",
+        "-analyzeduration",
+        "0",
+        "-rtsp_transport",
+        "tcp",
+        "-fflags",
+        "+nobuffer+flush_packets",
+        "-flags",
+        "low_delay",
+        "-max_delay",
+        "0",
+      );
+    } else {
+      args.push(
+        "-probesize",
+        "32768",
+        "-analyzeduration",
+        "0",
+        "-fflags",
+        "+nobuffer+flush_packets",
+        "-flags",
+        "low_delay",
+      );
     }
-
-    args.push("-fflags", "+nobuffer", "-flags", "low_delay", "-i", sourceUrl);
+    args.push("-i", sourceUrl);
 
     // camera_proxy_stream is multipart MJPEG; the physical camera codec must
     // not be used to decide whether that proxy can be copied.

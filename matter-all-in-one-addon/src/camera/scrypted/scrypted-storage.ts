@@ -331,6 +331,21 @@ export class ScryptedStorage {
   }
 
   /**
+   * Updates a single camera by ID with an updater function.
+   */
+  public static async updateCamera(
+    cameraId: string,
+    updater: (camera: CameraRecord) => CameraRecord,
+  ): Promise<void> {
+    const store = await this.load();
+    const idx = store.cameras.cameras.findIndex((c) => c.cameraId === cameraId);
+    if (idx !== -1) {
+      store.cameras.cameras[idx] = updater(store.cameras.cameras[idx]);
+      await this.save(store);
+    }
+  }
+
+  /**
    * Updates cameras, computing display values and preserving identityOverride.
    */
   public static async updateCameras(

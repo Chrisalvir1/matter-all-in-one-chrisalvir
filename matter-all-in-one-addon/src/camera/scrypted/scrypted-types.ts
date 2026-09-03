@@ -334,6 +334,7 @@ export interface CameraRecord {
     homeKitPincode?: string;
     homeKitSetupId?: string;
     homeKitPort?: number;
+    homeKitPairedHome?: string;
   };
 
   /** Consolidated binding and administration state (Matter fabrics, multi-admin, HAP) */

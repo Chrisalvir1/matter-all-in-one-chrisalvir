@@ -1,3 +1,6 @@
+import { EventEmitter } from "node:events";
+import fs from "node:fs/promises";
+import fsSync from "node:fs";
 import {
   AudioStreamingCodecType,
   CameraController,
@@ -84,7 +87,10 @@ function h264Level(level: H264Level): string {
   return "3.1";
 }
 
-export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
+export class HomeKitCameraStreamingDelegate
+  extends EventEmitter
+  implements CameraStreamingDelegate
+{
   private readonly activeSessions = new Map<string, HomeKitStreamSession>();
   private lastSnapshotBuffer: Buffer = FALLBACK_JPEG_BUFFER;
 
@@ -96,7 +102,34 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
     private readonly entityId: string,
     private readonly capabilities: CameraCapabilitiesInfo,
     private readonly streamSource: ResolvedStreamSource,
-  ) {}
+  ) {
+    super();
+    this.loadPersistedSnapshot();
+  }
+
+  private loadPersistedSnapshot(): void {
+    try {
+      const snapPath = `/data/snapshots/${this.entityId.replaceAll(".", "_")}.jpg`;
+      if (fsSync.existsSync(snapPath)) {
+        const buf = fsSync.readFileSync(snapPath);
+        if (isJpeg(buf) && buf.length > 2048) {
+          this.lastSnapshotBuffer = buf;
+          this.lastSnapshotTime = Date.now();
+        }
+      }
+    } catch {}
+  }
+
+  private async persistSnapshotToDisk(buffer: Buffer): Promise<void> {
+    try {
+      const dir = "/data/snapshots";
+      if (!fsSync.existsSync(dir)) {
+        fsSync.mkdirSync(dir, { recursive: true });
+      }
+      const snapPath = `${dir}/${this.entityId.replaceAll(".", "_")}.jpg`;
+      await fs.writeFile(snapPath, buffer);
+    } catch {}
+  }
 
   public async handleSnapshotRequest(
     request: SnapshotRequest,
@@ -115,6 +148,7 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
       if (isJpeg(selected) && selected !== FALLBACK_JPEG_BUFFER) {
         this.lastSnapshotBuffer = selected;
         this.lastSnapshotTime = Date.now();
+        void this.persistSnapshotToDisk(selected);
       }
       this.platform?.log?.notice?.(
         `[HomeKitCamera][${this.entityId}] Snapshot source=${source} bytes=${selected.length} duration=${Date.now() - started}ms validJpeg=${isJpeg(selected)}`,
@@ -152,13 +186,34 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
     this.isTakingSnapshot = true;
 
     try {
+      let haEntityToQuery: string | undefined = this.entityId.startsWith("camera.")
+        ? this.entityId
+        : undefined;
+
+      if (!haEntityToQuery && this.platform?.ha?.hassStates) {
+        const cleanName = this.entityId.replace(/^scrypted\./, "").toLowerCase();
+        const cameraModel = (this.streamSource.metadata?.model || "").toLowerCase();
+        for (const [id, state] of this.platform.ha.hassStates.entries()) {
+          if (!id.startsWith("camera.")) continue;
+          const fn = (state.attributes?.friendly_name || "").toLowerCase();
+          if (
+            id.includes(cleanName) ||
+            fn.includes(cleanName) ||
+            (cameraModel && fn.includes(cameraModel))
+          ) {
+            haEntityToQuery = id;
+            break;
+          }
+        }
+      }
+
       if (
+        haEntityToQuery &&
         this.platform?.ha?.fetchSnapshot &&
-        typeof this.platform.ha.fetchSnapshot === "function" &&
-        this.entityId.startsWith("camera.")
+        typeof this.platform.ha.fetchSnapshot === "function"
       ) {
         try {
-          const buffer = await this.platform.ha.fetchSnapshot(this.entityId);
+          const buffer = await this.platform.ha.fetchSnapshot(haEntityToQuery);
           if (buffer && isJpeg(buffer) && buffer.length > 512) {
             finish("ha-fetch-snapshot", buffer);
             return;
@@ -214,8 +269,6 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
           "+nobuffer+flush_packets",
           "-flags",
           "low_delay",
-          "-skip_frame",
-          "nokey",
         );
       } else if (sourceUrl.startsWith("http://") || sourceUrl.startsWith("https://")) {
         args.push(
@@ -227,8 +280,6 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
           "+nobuffer+flush_packets",
           "-flags",
           "low_delay",
-          "-skip_frame",
-          "nokey",
         );
         const token =
           this.platform?.ha?.getAccessToken?.() ||
@@ -412,7 +463,7 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
     }
 
     const video = request.video;
-    const fps = Math.max(1, Math.min(video.fps || 30, 30));
+    const fps = Math.max(1, Math.min(video.fps || 30, 60));
     // HomeKit on iOS can request default low bitrates (e.g. 299k).
     // Ensure a high-fidelity floor: at least 2500k for 1080p, 4000k for 1440p (Tapo) / 4K.
     const qualityFloor =
@@ -426,6 +477,8 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
     const videoUrl =
       `srtp://${host}:${session.videoPort}` +
       `?rtcpport=${session.videoPort}&localrtcpport=${session.localVideoPort}&pkt_size=${mtu}`;
+
+    this.emit("session-start", session.sessionId);
     const args: string[] = ["-hide_banner", "-loglevel", "warning"];
     if (sourceUrl.startsWith("rtsp://")) {
       args.push(
@@ -641,6 +694,9 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
         if (!callbackSettled) {
           settle(new Error(`FFmpeg exited during HAP startup (code ${code})`));
         }
+        if (this.activeSessions.size === 0) {
+          this.emit("session-end");
+        }
       });
     } catch (error) {
       settle(error as Error);
@@ -659,11 +715,15 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
     this.platform?.log?.notice?.(
       `[HomeKitCamera][${this.entityId}] HAP STOP cleanup session=${sessionId}`,
     );
+    if (this.activeSessions.size === 0) {
+      this.emit("session-end");
+    }
   }
 
   public cleanupAllSessions(): void {
     for (const sessionId of [...this.activeSessions.keys()]) {
       this.stopStream(sessionId);
     }
+    this.emit("session-end");
   }
 }

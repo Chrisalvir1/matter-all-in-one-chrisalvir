@@ -12,6 +12,7 @@ import {
 import { AnsiLogger, CYAN, idn, nf, rs } from "matterbridge/logger";
 import http from "http";
 import fs from "fs/promises";
+import fsSync from "fs";
 import path from "path";
 import { HomeAssistant } from "./homeAssistant.js";
 import { HassState, isUnavailable } from "./utils/ha-state.js";
@@ -24,7 +25,7 @@ import { BaseEntity } from "./entities/base.entity.js";
 import { ClosureEntity } from "./entities/closure.entity.js";
 import { LockEntity } from "./entities/lock.entity.js";
 import crypto from "crypto";
-import { uuid } from "hap-nodejs";
+import { uuid, HAPStorage } from "hap-nodejs";
 import type { HomeKitCameraStorageRecord } from "./camera/camera-types.js";
 import {
   resolveFfmpegPath,
@@ -1384,6 +1385,20 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     await this.loadEntityDiagnostics();
     await this.startUiServer();
     this.startMatterConnectionMonitor();
+
+    // Ensure HAP persistent storage path is /data/hap-persist before mounting any cameras
+    try {
+      const hapPersistDir = fsSync.existsSync("/data")
+        ? "/data/hap-persist"
+        : "./persist";
+      if (!fsSync.existsSync(hapPersistDir)) {
+        fsSync.mkdirSync(hapPersistDir, { recursive: true });
+      }
+      HAPStorage.setCustomStoragePath(hapPersistDir);
+    } catch {}
+
+    // Load persisted camera configurations BEFORE Scrypted fast boot so existing PINs, MACs, and ports are preserved
+    await this.loadHomeKitCameraRecords();
     void this.initScrypted();
 
     // Load MQTT Config if exists

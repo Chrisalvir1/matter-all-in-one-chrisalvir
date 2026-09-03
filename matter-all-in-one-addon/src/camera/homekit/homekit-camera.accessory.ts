@@ -25,6 +25,8 @@ import type {
 } from "../camera-types.js";
 import { HomeKitCameraStreamingDelegate } from "./homekit-camera-stream.delegate.js";
 import { HomeKitCameraRecordingDelegate } from "./homekit-camera-recording.delegate.js";
+import { ScryptedStorage } from "../scrypted/scrypted-storage.js";
+import type { CameraRecord } from "../scrypted/scrypted-types.js";
 
 export class HomeKitCameraAccessory {
   public accessory: Accessory;
@@ -64,6 +66,14 @@ export class HomeKitCameraAccessory {
       this.capabilities,
       this.streamSource,
     );
+
+    // Coordinate Live Stream and HKSV Recording to prevent camera RTSP socket contention
+    this.delegate.on("session-start", () => {
+      this.recordingDelegate?.pausePrebuffer();
+    });
+    this.delegate.on("session-end", () => {
+      this.recordingDelegate?.resumePrebuffer();
+    });
     this.motionService = undefined;
     const isScrypted =
       this.entityId.startsWith("scrypted.") ||
@@ -187,7 +197,7 @@ export class HomeKitCameraAccessory {
 
   private buildDeclaredResolutions(): [number, number, number][] {
     const source = this.capabilities.resolution || { width: 1920, height: 1080 };
-    const sourceFps = Math.max(15, Math.min(this.capabilities.maxFps || 30, 30));
+    const sourceFps = Math.max(15, Math.min(this.capabilities.maxFps || 30, 60));
     const maxDeclaredWidth = Math.max(source.width, 3840);
     const maxDeclaredHeight = Math.max(source.height, 2160);
     const ladder: [number, number, number][] = [
@@ -252,9 +262,7 @@ export class HomeKitCameraAccessory {
         if (!entityId.startsWith("binary_sensor.")) continue;
         const deviceClass = state?.attributes?.device_class;
         if (
-          (["motion", "occupancy", "presence"].includes(deviceClass) ||
-            entityId.includes("motion") ||
-            entityId.includes("movimiento")) &&
+          ["motion", "occupancy", "presence"].includes(deviceClass) &&
           entityId.includes(cameraBase)
         ) {
           return entityId;
@@ -265,7 +273,8 @@ export class HomeKitCameraAccessory {
   }
 
   public updateMotionState(motionDetected: boolean): void {
-    this.motionService?.updateCharacteristic(
+    if (!this.motionService) return;
+    this.motionService.updateCharacteristic(
       Characteristic.MotionDetected,
       motionDetected,
     );
@@ -280,10 +289,15 @@ export class HomeKitCameraAccessory {
         `[HomeKitCamera][${this.entityId}] Camera paired to Apple Home`,
       );
       void this.platform?.saveHomeKitCameraRecords?.();
+      this.notifyPairingStateChanged(true);
     });
     this.accessory.on("unpaired", () => {
       this.record.isPaired = false;
+      this.platform?.log?.notice?.(
+        `[HomeKitCamera][${this.entityId}] Camera un-paired from Apple Home`,
+      );
       void this.platform?.saveHomeKitCameraRecords?.();
+      this.notifyPairingStateChanged(false);
     });
     await this.accessory.publish({
       username: this.record.username,
@@ -304,12 +318,46 @@ export class HomeKitCameraAccessory {
     }, 1500);
   }
 
+  private notifyPairingStateChanged(paired: boolean): void {
+    try {
+      const homeName = this.getPairedHomeName();
+      if (this.entityId.startsWith("scrypted.")) {
+        const scryptedId = this.entityId.replace(/^scrypted\./, "");
+        void ScryptedStorage.updateCamera(scryptedId, (cam: CameraRecord) => {
+          cam.identity = {
+            ...cam.identity,
+            homeKitPairingState: paired ? "paired" : "not_paired",
+            homeKitPairedHome: homeName,
+          };
+          return cam;
+        });
+      }
+      this.platform?.broadcastSseMessage?.("camera_pairing_updated", {
+        entityId: this.entityId,
+        isPaired: paired,
+        homeName,
+      });
+      this.platform?.pushEntityUpdate?.(this.entityId);
+    } catch {}
+  }
+
+  public getPairedHomeName(): string {
+    const haLocation = this.platform?.ha?.hassConfig?.location_name;
+    return haLocation || "Casa (Apple Home)";
+  }
+
   public getPairingState(): "paired" | "not_paired" | "unverifiable" {
     try {
       if (!this.record.username) return "unverifiable";
       const info = AccessoryInfo.load(this.record.username as any);
       if (info && typeof info.paired === "function") {
-        return info.paired() ? "paired" : "not_paired";
+        const isHapPaired = info.paired();
+        if (this.record.isPaired !== isHapPaired) {
+          this.record.isPaired = isHapPaired;
+          void this.platform?.saveHomeKitCameraRecords?.();
+          this.notifyPairingStateChanged(isHapPaired);
+        }
+        return isHapPaired ? "paired" : "not_paired";
       }
     } catch {}
     if (typeof this.record.isPaired === "boolean") {

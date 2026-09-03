@@ -182,6 +182,7 @@ export class ScryptedHomeKitBridge {
       homeKitSetupId: record.setupId,
       homeKitPort: record.port,
       homeKitPairingState: accessory.isPaired() ? "paired" : "not_paired",
+      homeKitPairedHome: accessory.getPairedHomeName(),
     };
     platform?.log?.notice?.(
       `[ScryptedHomeKitBridge] Production HAP camera=${camera.cameraId} source=${directUrl ? "configured" : "missing"} validation=${validationStatus} HKSV=disabled strategy=${record.strategy}`,

@@ -815,14 +815,25 @@ function renderQrSection(entity) {
     if (els.matterActions) els.matterActions.hidden = true;
     if (els.fabricsSection) els.fabricsSection.hidden = true;
     if (els.deviceQrButton) els.deviceQrButton.style.display = "none";
+    const isPaired = Boolean(entity.homekitCamera.isPaired);
+    const homeName = entity.homekitCamera.homeName || "Casa (Apple Home)";
     if (els.qrStatusLabel) {
-      const isPaired = Boolean(entity.homekitCamera.isPaired);
       els.qrStatusLabel.textContent = isPaired
-        ? "✓ Emparejado a Apple Home"
+        ? `✓ Emparejado a ${homeName}`
         : "🍎 Listo para Apple Home (HomeKit Live View)";
       els.qrStatusLabel.className = `qr-status-label ${isPaired ? "commissioned" : "active"}`;
     }
-    showQrCode(entity);
+    if (isPaired) {
+      if (els.deviceQrContainer) els.deviceQrContainer.style.display = "none";
+      if (els.commissionedHint) {
+        els.commissionedHint.style.display = "block";
+        els.commissionedHint.innerHTML = `<strong>🍏 Cámara vinculada a ${escapeHtml(homeName)}</strong><br>Esta cámara está activa en Apple Home con streaming en directo a 60fps y grabación segura (HKSV). Si la eliminas de la app Casa, el código QR volverá a aparecer aquí automáticamente para un nuevo escaneo.`;
+      }
+    } else {
+      if (els.commissionedHint) els.commissionedHint.style.display = "none";
+      if (els.deviceQrContainer) els.deviceQrContainer.style.display = "block";
+      showQrCode(entity);
+    }
     return;
   }
 
@@ -1970,6 +1981,29 @@ function connectSSE() {
           renderDevices();
           return;
         }
+        if (update && update.type === "camera_pairing_updated") {
+          const entityId = update.entityId;
+          const isPaired = Boolean(update.isPaired);
+          const homeName = update.homeName || "Casa (Apple Home)";
+          const ent = state.entities.find((e) => e.entityId === entityId);
+          if (ent) {
+            if (!ent.homekitCamera) ent.homekitCamera = {};
+            ent.homekitCamera.isPaired = isPaired;
+            ent.homekitCamera.homeName = homeName;
+          }
+          const scryptedId = entityId.replace(/^scrypted\./, "");
+          const cam = (state.scryptedCameras || []).find((c) => c.cameraId === scryptedId);
+          if (cam) {
+            if (!cam.identity) cam.identity = {};
+            cam.identity.homeKitPairingState = isPaired ? "paired" : "not_paired";
+            cam.identity.homeKitPairedHome = homeName;
+          }
+          renderDevices();
+          if (state.activeEntity?.entityId === entityId) {
+            populateDeviceModal(ent || state.activeEntity);
+          }
+          return;
+        }
         if (!update || !update.entityId) return;
         const idx = state.entities.findIndex(
           (e) => e.entityId === update.entityId,
@@ -2586,19 +2620,23 @@ function openCameraConfigModal(camera) {
 
     const isPaired = camera.identity?.homeKitPairingState === "paired";
     const binding = camera.bindingState;
-    const realHomeName = binding?.homeName || state.status?.homeName;
-    const fabricLabel =
-      binding?.fabrics?.[0]?.label ||
-      state.status?.fabricLabel ||
+    const realHomeName =
+      camera.identity?.homeKitPairedHome ||
+      binding?.homeName ||
       state.status?.homeName ||
-      "Fabric Matter 1";
+      "Casa (Apple Home)";
+    const fabricLabel = isHomeKit
+      ? "Apple HomeKit (HAP) - Transmisión en directo a 60fps y Grabación (HKSV)"
+      : (binding?.fabrics?.[0]?.label ||
+        state.status?.fabricLabel ||
+        state.status?.homeName ||
+        "Fabric Matter 1");
 
     if (els.camModalPairedBox) {
       els.camModalPairedBox.style.display =
         isHomeKit && isPaired ? "block" : "none";
       if (els.camModalPairedHomeName) {
-        els.camModalPairedHomeName.textContent =
-          realHomeName || "nombre no expuesto por Matter";
+        els.camModalPairedHomeName.textContent = realHomeName;
       }
       const fabricEl = $("cam-modal-paired-fabric-name");
       if (fabricEl) {

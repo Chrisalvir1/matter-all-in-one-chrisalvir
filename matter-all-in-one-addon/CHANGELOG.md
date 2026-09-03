@@ -1,3 +1,13 @@
+## [1.5.04] - 2026-09-03
+
+### Persistencia Permanente de Emparejamiento, Convivencia Stream + Grabación HKSV y 60 FPS
+
+- **Persistencia Total de Emparejamiento en `/data/hap-persist`:** Se configuró `HAPStorage.setCustomStoragePath("/data/hap-persist")` en el punto de entrada y se movió `loadHomeKitCameraRecords()` al inicio de `onStart()`, garantizando que tras reiniciar el complemento o Home Assistant las cámaras conserven sus claves de cifrado, controladores emparejados, puertos y MACs sin perder la conexión jamás.
+- **Convivencia Armoniosa de Stream en Vivo y Grabación HKSV:** El delegado de grabación suspende temporalmente el pre-buffer de fMP4 mientras una sesión de transmisión en vivo está activa (`pausePrebuffer`), liberando el socket RTSP único de la cámara y garantizando 0% colisiones de ancho de banda y 0 congelamientos. Al cerrar la app Casa, el pre-buffer se reanuda de inmediato (`resumePrebuffer`).
+- **Soporte de Video Ultra Fluido hasta 60 FPS:** Se incrementó el límite de cuadros por segundo de 30 a 60 fps en las resoluciones declaradas y en la codificación de FFmpeg (`-g String(fps) -keyint_min String(fps)`).
+- **Arranque Inmediato sin Pantalla Negra:** Se eliminó `-skip_frame nokey`, se implementó búsqueda de instantáneas en Home Assistant para cámaras de Scrypted y se persisten las capturas a disco en `/data/snapshots/`.
+- **UI con Estado en Tiempo Real y Nombre de Casa:** La interfaz ahora detecta en tiempo real cuándo la cámara está emparejada (oculta el QR y muestra *"✓ Emparejado a [Nombre de tu Casa] (Apple Home)"*) y cuando se elimina de Apple Home hace reaparecer el código QR automáticamente.
+
 ## [1.5.03] - 2026-09-03
 
 ### Arranque Instantáneo a 0s Sin Demoras de 3-5 Segundos Ni Pantalla Negra de Espera
