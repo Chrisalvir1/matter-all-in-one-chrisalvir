@@ -1,3 +1,13 @@
+## [1.4.98] - 2026-09-02
+
+### Pipeline Universal Zerolatency a 30fps sin Congelamientos y Detección Automática de Audio
+
+#### Transmisión Fluida a Calidad Completa
+- **Eliminación Definitiva de Congelamientos:** Se implementa codificación H.264 ultrafast con `-tune zerolatency` y forzado estricto de I-Frames cada 1 segundo (`-g 30 -keyint_min 30`). Se eliminan los B-frames de cámaras como Tapo Spot que bloqueaban el decodificador de iOS, garantizando que el segundero avance suavemente en tiempo real a 30 fps en todas las cámaras.
+- **Sin Reducción de Escala:** Se transmite a la resolución completa del sensor (2560x1440 2K o 1080p) con un bitrate elevado de 3000 kbps sin aplicar filtros de escala reductora.
+- **Detección Automática de Micrófono:** Toda cámara con audio disponible activa automáticamente el mapeo de audio a AAC-ELD/OPUS con ganancia de volumen amplificada (3.0x).
+- **Timeout Correcto de Socket RTSP:** Se reemplaza `-timeout` por `-stimeout 5000000` (en microsegundos) para el transporte RTSP/TCP, previniendo desconexiones prematuras de socket.
+
 ## [1.4.97] - 2026-09-02
 
 ### Integración Nativa de go2rtc para Restreaming Transparente, Passthrough Puro y Snapshots en RAM

@@ -376,7 +376,7 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
       args.push(
         "-rtsp_transport",
         "tcp",
-        "-timeout",
+        "-stimeout",
         "5000000",
         "-fflags",
         "+nobuffer+genpts",
@@ -384,74 +384,48 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
     }
     args.push("-i", sourceUrl);
 
-    const isH264 =
-      this.capabilities.videoCodec === "h264" ||
-      !this.capabilities.videoCodec ||
-      this.capabilities.videoCodec === "unknown";
-
-    if (this.streamSource.supportsPassthrough && isH264) {
-      args.push(
-        "-map",
-        "0:v:0",
-        "-an",
-        "-c:v",
-        "copy",
-        "-bsf:v",
-        "dump_extra=freq=keyframe",
-        "-f",
-        "rtp",
-        "-payload_type",
-        String(video.pt || 99),
-        "-ssrc",
-        String(session.videoSsrc),
-        "-srtp_out_suite",
-        suiteName(session.videoCryptoSuite),
-        "-srtp_out_params",
-        session.videoKeySalt.toString("base64"),
-        videoUrl,
-      );
-    } else {
-      args.push(
-        "-map",
-        "0:v:0",
-        "-an",
-        "-c:v",
-        "libx264",
-        "-pix_fmt",
-        "yuv420p",
-        "-profile:v",
-        h264Profile(video.profile),
-        "-level:v",
-        h264Level(video.level),
-        "-r",
-        String(fps),
-        "-g",
-        String(fps * 2),
-        "-keyint_min",
-        String(fps),
-        "-b:v",
-        `${bitrate}k`,
-        "-maxrate",
-        `${bitrate}k`,
-        "-bufsize",
-        `${bitrate * 2}k`,
-        "-preset",
-        "ultrafast",
-        "-tune",
-        "zerolatency",
-        "-f",
-        "rtp",
-        "-payload_type",
-        String(video.pt || 99),
-        "-ssrc",
-        String(session.videoSsrc),
-        "-srtp_out_suite",
-        suiteName(session.videoCryptoSuite),
-        "-srtp_out_params",
-        session.videoKeySalt.toString("base64"),
-        videoUrl,
-      );
-    }
+    const videoBitrate = Math.max(
+      2500,
+      Math.min(video.max_bit_rate || 3000, 4000),
+    );
+    args.push(
+      "-map",
+      "0:v:0",
+      "-an",
+      "-c:v",
+      "libx264",
+      "-pix_fmt",
+      "yuv420p",
+      "-profile:v",
+      "main",
+      "-preset",
+      "ultrafast",
+      "-tune",
+      "zerolatency",
+      "-r",
+      String(fps),
+      "-g",
+      String(fps),
+      "-keyint_min",
+      String(fps),
+      "-b:v",
+      `${videoBitrate}k`,
+      "-maxrate",
+      `${videoBitrate}k`,
+      "-bufsize",
+      `${videoBitrate * 2}k`,
+      "-f",
+      "rtp",
+      "-payload_type",
+      String(video.pt || 99),
+      "-ssrc",
+      String(session.videoSsrc),
+      "-srtp_out_suite",
+      suiteName(session.videoCryptoSuite),
+      "-srtp_out_params",
+      session.videoKeySalt.toString("base64"),
+      videoUrl,
+    );
 
     if (
       request.audio &&

@@ -95,9 +95,7 @@ export function detectCameraCapabilities(
     }
   } else {
     const rawAudioCodec = (attrs.audio_codec || "").toLowerCase();
-    hasAudio = Boolean(
-      attrs.has_audio ?? (rawAudioCodec && rawAudioCodec !== "none"),
-    );
+    hasAudio = attrs.has_audio !== false && rawAudioCodec !== "none";
     if (hasAudio) {
       if (rawAudioCodec.includes("aac") || rawAudioCodec.includes("mp4a")) {
         audioCodec = "aac_lc";
