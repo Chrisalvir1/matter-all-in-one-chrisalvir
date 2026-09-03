@@ -19,7 +19,7 @@ LABEL io.hass.type="app" \
   org.opencontainers.image.source="https://github.com/Chrisalvir1/matter-all-in-one-chrisalvir" \
   org.opencontainers.image.licenses="Apache-2.0"
 
-RUN apk add --no-cache curl jq \
+RUN apk add --no-cache curl jq ffmpeg \
   && ARCH=$(uname -m) \
   && case "${ARCH}" in \
        x86_64|aarch64) \
@@ -27,7 +27,7 @@ RUN apk add --no-cache curl jq \
        armv7l) \
          curl -Lf# "https://github.com/homebridge/ffmpeg-for-homebridge/releases/latest/download/ffmpeg-alpine-arm32v7.tar.gz" | tar xzf - -C / --no-same-owner || true ;; \
      esac \
-  && { [ -f /usr/local/bin/ffmpeg ] || apk add --no-cache ffmpeg; } \
+  && chmod 0755 /usr/local/bin/ffmpeg 2>/dev/null || true \
   && npm install -g matterbridge@3.10.7 --omit=dev --no-fund --no-audit
 
 WORKDIR /app

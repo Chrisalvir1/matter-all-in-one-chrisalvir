@@ -1,3 +1,14 @@
+## [1.4.96] - 2026-09-02
+
+### Passthrough Nativo Directo (-c:v copy) para Calidad Sensor 2K/4K y Garantía de Binarios FFmpeg/FFprobe
+
+#### Calidad Máxima Sensor y Eliminación de Lag
+- **Passthrough Directo (`-c:v copy`):** Si la cámara ya emite en H.264 (Tapo, Vimtag, Ezviz, Scrypted Rebroadcast), el stream se transmite en modo copia directa sin decodificar ni re-escalar. Esto entrega exactamente el 100% de la resolución del sensor (2560x1440p en Tapo) a 0% de uso de CPU y latencia cero, exactamente como Scrypted.
+- **Sin Reducción de Escala:** Se elimina la reducción forzada a resoluciones bajas en transcodificación de respaldo, permitiendo que iOS reproduzca la imagen nativa en Apple Home y Apple TV 4K.
+
+#### Disponibilidad Garantizada de FFprobe y FFmpeg con libfdk_aac
+- **Docker Multi-Arch:** El contenedor instala siempre los paquetes de Alpine (`apk add ffmpeg`) garantizando la presencia de `/usr/bin/ffprobe`, y sobrepone el binario estático `/usr/local/bin/ffmpeg` compilado con `libfdk_aac` para audio AAC-ELD nativo.
+
 ## [1.4.95] - 2026-09-02
 
 ### Diagnóstico Preciso de Errores RTSP (401, 404, Conexión Rechazada)

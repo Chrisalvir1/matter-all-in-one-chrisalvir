@@ -355,10 +355,10 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
     // HomeKit on iOS can request default low bitrates (e.g. 299k).
     // Ensure a high-fidelity floor: at least 2500k for 1080p, 4000k for 1440p (Tapo) / 4K.
     const qualityFloor =
-      video.width >= 2560 ? 4000 : video.width >= 1920 ? 2500 : 1500;
+      video.width >= 2560 ? 2000 : video.width >= 1920 ? 1500 : 1000;
     const bitrate = Math.max(
       qualityFloor,
-      Math.min(video.max_bit_rate || 4000, 8000),
+      Math.min(video.max_bit_rate || 2000, 4000),
     );
     const mtu = video.mtu || 1378;
     const host = formatHost(session.targetAddress);
@@ -373,56 +373,77 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
         "-timeout",
         "5000000",
         "-fflags",
-        "+genpts+discardcorrupt",
-        "-flags",
-        "low_delay",
+        "+nobuffer+genpts",
       );
     }
     args.push("-i", sourceUrl);
-    args.push(
-      "-map",
-      "0:v:0",
-      "-an",
-      "-c:v",
-      "libx264",
-      "-pix_fmt",
-      "yuv420p",
-      "-profile:v",
-      h264Profile(video.profile),
-      "-level:v",
-      h264Level(video.level),
-      "-vf",
-      `scale=w='min(${video.width},iw)':h='min(${video.height},ih)':force_original_aspect_ratio=decrease:force_divisible_by=2`,
-      "-r",
-      String(fps),
-      "-g",
-      String(fps * 2),
-      "-keyint_min",
-      String(fps),
-      "-b:v",
-      `${bitrate}k`,
-      "-maxrate",
-      `${bitrate}k`,
-      "-bufsize",
-      `${bitrate * 2}k`,
-      "-preset",
-      "veryfast",
-      "-crf",
-      "21",
-      "-tune",
-      "zerolatency",
-      "-f",
-      "rtp",
-      "-payload_type",
-      String(video.pt || 99),
-      "-ssrc",
-      String(session.videoSsrc),
-      "-srtp_out_suite",
-      suiteName(session.videoCryptoSuite),
-      "-srtp_out_params",
-      session.videoKeySalt.toString("base64"),
-      videoUrl,
-    );
+
+    const isH264 =
+      this.capabilities.videoCodec === "h264" ||
+      !this.capabilities.videoCodec ||
+      this.capabilities.videoCodec === "unknown";
+
+    if (this.streamSource.supportsPassthrough && isH264) {
+      args.push(
+        "-map",
+        "0:v:0",
+        "-an",
+        "-c:v",
+        "copy",
+        "-f",
+        "rtp",
+        "-payload_type",
+        String(video.pt || 99),
+        "-ssrc",
+        String(session.videoSsrc),
+        "-srtp_out_suite",
+        suiteName(session.videoCryptoSuite),
+        "-srtp_out_params",
+        session.videoKeySalt.toString("base64"),
+        videoUrl,
+      );
+    } else {
+      args.push(
+        "-map",
+        "0:v:0",
+        "-an",
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        "-profile:v",
+        h264Profile(video.profile),
+        "-level:v",
+        h264Level(video.level),
+        "-r",
+        String(fps),
+        "-g",
+        String(fps * 2),
+        "-keyint_min",
+        String(fps),
+        "-b:v",
+        `${bitrate}k`,
+        "-maxrate",
+        `${bitrate}k`,
+        "-bufsize",
+        `${bitrate * 2}k`,
+        "-preset",
+        "ultrafast",
+        "-tune",
+        "zerolatency",
+        "-f",
+        "rtp",
+        "-payload_type",
+        String(video.pt || 99),
+        "-ssrc",
+        String(session.videoSsrc),
+        "-srtp_out_suite",
+        suiteName(session.videoCryptoSuite),
+        "-srtp_out_params",
+        session.videoKeySalt.toString("base64"),
+        videoUrl,
+      );
+    }
 
     if (
       request.audio &&

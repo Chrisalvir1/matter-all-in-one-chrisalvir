@@ -125,7 +125,7 @@ export function supportsFdkAac(): boolean {
   }
   try {
     const probe = spawnSync(ffmpeg, ["-encoders"], {
-      timeout: 2000,
+      timeout: 5000,
       stdio: ["ignore", "pipe", "ignore"],
     });
     cachedFdkSupport =

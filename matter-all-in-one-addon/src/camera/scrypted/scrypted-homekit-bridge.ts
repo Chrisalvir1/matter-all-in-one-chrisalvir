@@ -93,7 +93,7 @@ export class ScryptedHomeKitBridge {
       sourceType: directUrl ? "rtsp" : "unknown",
       url: directUrl,
       snapshotUrl: camera.source.snapshotReference?.directUrl,
-      supportsPassthrough: validationStatus === "verified",
+      supportsPassthrough: Boolean(directUrl),
       requiresBridge: true,
       metadata: {
         isScrypted: true,
