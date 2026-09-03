@@ -137,6 +137,10 @@ export class HomeKitCameraAccessory {
               type: AudioStreamingCodecType.AAC_ELD,
               samplerate: AudioStreamingSamplerate.KHZ_16,
             },
+            {
+              type: AudioStreamingCodecType.OPUS,
+              samplerate: AudioStreamingSamplerate.KHZ_16,
+            },
           ],
         },
       },

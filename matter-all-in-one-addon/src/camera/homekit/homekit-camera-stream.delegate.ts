@@ -1,4 +1,5 @@
 import {
+  AudioStreamingCodecType,
   CameraController,
   CameraStreamingDelegate,
   H264Level,
@@ -121,13 +122,18 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
       callback(undefined, selected);
     };
 
-    // If live streaming is active or a snapshot was taken within the last 5s,
-    // reuse the cached snapshot ONLY if it is a real image (not the black fallback).
+    // NEVER open a competing RTSP connection while live viewing is active.
+    // Cameras like Tapo allow max 2 RTSP connections; opening a 3rd connection kills the live stream.
+    if (this.activeSessions.size > 0) {
+      finish("active-session-protect", this.lastSnapshotBuffer);
+      return;
+    }
+
     const now = Date.now();
     if (
       this.lastSnapshotBuffer &&
       this.lastSnapshotBuffer !== FALLBACK_JPEG_BUFFER &&
-      (this.activeSessions.size > 0 || this.isTakingSnapshot || now - this.lastSnapshotTime < 5000)
+      (this.isTakingSnapshot || now - this.lastSnapshotTime < 5000)
     ) {
       finish("cached-session-guard", this.lastSnapshotBuffer);
       return;
@@ -144,8 +150,8 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
           });
           if (response.ok) {
             const buffer = Buffer.from(await response.arrayBuffer());
-            if (isJpeg(buffer) && buffer.length > 2048) {
-              finish("scrypted-http", buffer);
+            if (isJpeg(buffer) && buffer.length > 512) {
+              finish("http-snapshot", buffer);
               return;
             }
           }
@@ -390,6 +396,8 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
         "-an",
         "-c:v",
         "copy",
+        "-bsf:v",
+        "dump_extra=freq=keyframe",
         "-f",
         "rtp",
         "-payload_type",
@@ -455,28 +463,44 @@ export class HomeKitCameraStreamingDelegate implements CameraStreamingDelegate {
       const audioUrl =
         `srtp://${host}:${session.audioPort}` +
         `?rtcpport=${session.audioPort}&localrtcpport=${session.localAudioPort}&pkt_size=188`;
+      const isOpus = request.audio.codec === AudioStreamingCodecType.OPUS;
       const hasFdk = supportsFdkAac();
+      const audioBitrate = Math.min(request.audio.max_bit_rate || 24, 24);
+
       args.push(
         "-map",
         "0:a:0?",
         "-vn",
         "-af",
-        "aresample=16000",
-        "-c:a",
-        hasFdk ? "libfdk_aac" : "aac",
-        "-profile:a",
-        hasFdk ? "aac_eld" : "aac_low",
+        "aresample=async=1:first_pts=0,volume=2.5",
       );
-      if (hasFdk) {
-        args.push("-flags", "+global_header");
+
+      if (isOpus) {
+        args.push(
+          "-c:a",
+          "libopus",
+          "-application",
+          "lowdelay",
+        );
+      } else {
+        args.push(
+          "-c:a",
+          hasFdk ? "libfdk_aac" : "aac",
+          "-profile:a",
+          hasFdk ? "aac_eld" : "aac_low",
+        );
+        if (hasFdk) {
+          args.push("-flags", "+global_header");
+        }
       }
+
       args.push(
         "-ar",
         "16000",
         "-ac",
         "1",
         "-b:a",
-        "32k",
+        `${audioBitrate}k`,
         "-f",
         "rtp",
         "-payload_type",

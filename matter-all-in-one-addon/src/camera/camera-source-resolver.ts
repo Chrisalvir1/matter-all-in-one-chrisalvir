@@ -4,6 +4,7 @@ import {
   sanitizeUrlCredentials,
   probeCameraSource,
 } from "./homekit/ffmpeg-helper.js";
+import { Go2rtcService } from "./go2rtc/go2rtc-service.js";
 
 export class CameraSourceResolver {
   /**
@@ -25,6 +26,8 @@ export class CameraSourceResolver {
     const supportedFeatures = Number(attrs.supported_features || 0);
     const hasStreamSupport = (supportedFeatures & 2) !== 0; // CameraEntityFeature.STREAM = 2
 
+    const go2rtc = Go2rtcService.getInstance();
+
     // 1. Check state.attributes.stream_source
     const streamSourceAttr = attrs.stream_source;
     if (
@@ -35,6 +38,19 @@ export class CameraSourceResolver {
       platform?.log?.debug?.(
         `[CameraSourceResolver][${entityId}] Resolved from stream_source: ${sanitized}`,
       );
+
+      if (streamSourceAttr.startsWith("rtsp") && go2rtc.isAvailable()) {
+        const streamKey = `ha_${entityId.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+        void go2rtc.registerStream(streamKey, streamSourceAttr);
+        return {
+          sourceType: "rtsp",
+          url: go2rtc.getRestreamUrl(streamKey),
+          snapshotUrl: go2rtc.getSnapshotUrl(streamKey),
+          supportsPassthrough: true,
+          requiresBridge: false,
+        };
+      }
+
       return {
         sourceType: streamSourceAttr.startsWith("rtsp") ? "rtsp" : "ha_proxy",
         url: streamSourceAttr,
@@ -55,6 +71,19 @@ export class CameraSourceResolver {
       platform?.log?.debug?.(
         `[CameraSourceResolver][${entityId}] Resolved direct RTSP stream source: ${sanitized}`,
       );
+
+      if (go2rtc.isAvailable()) {
+        const streamKey = `ha_${entityId.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+        void go2rtc.registerStream(streamKey, directRtsp);
+        return {
+          sourceType: "rtsp",
+          url: go2rtc.getRestreamUrl(streamKey),
+          snapshotUrl: go2rtc.getSnapshotUrl(streamKey),
+          supportsPassthrough: true,
+          requiresBridge: false,
+        };
+      }
+
       return {
         sourceType: "rtsp",
         url: directRtsp,

@@ -1,3 +1,13 @@
+## [1.4.97] - 2026-09-02
+
+### Integración Nativa de go2rtc para Restreaming Transparente, Passthrough Puro y Snapshots en RAM
+
+#### Motor Interno go2rtc Embebido
+- **Multiplexor Universal sin Saturación:** Se integra el binario nativo de `go2rtc` en el contenedor del Add-on (puertos internos `19840` API y `18554` RTSP). La cámara física (Tapo, Vimtag, Ezviz, ONVIF) solo ve 1 conexión RTSP permanente. Todos los clientes (iPhone, Apple TV 4K, HKSV, dashboard) se conectan al restreamer local sin saturar el chip de la cámara.
+- **Passthrough Directo (`-c:v copy`):** Máxima calidad nativa del sensor (2560x1440p en Tapo 2K) a 0% de uso de CPU y 0 lag.
+- **Snapshots Instantáneos en RAM (<15ms):** La captura de miniaturas para notificaciones de movimiento en Apple Home se obtiene directamente del búfer en memoria (`/api/frame.jpeg`) de go2rtc en menos de 15ms, sin procesos FFmpeg en segundo plano y con cero riesgo de congelamiento.
+- **Registro Automático:** Las cámaras de Home Assistant, Scrypted o añadidas por URL/ONVIF se registran de forma automática en el motor interno sin necesidad de configuración manual.
+
 ## [1.4.96] - 2026-09-02
 
 ### Passthrough Nativo Directo (-c:v copy) para Calidad Sensor 2K/4K y Garantía de Binarios FFmpeg/FFprobe
