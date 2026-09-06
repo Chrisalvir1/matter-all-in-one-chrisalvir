@@ -1,3 +1,16 @@
+## [1.5.09] - 2026-09-06
+
+### Migración Integral del Frontend a React 19, TypeScript, Vite y Vitest
+
+- **Arquitectura Frontend Moderna y Modular:** Se eliminó por completo el archivo monolítico legacy `script.js` (más de 4,050 líneas de manipulación DOM manual) y se reemplazó por una aplicación **React 19.2.8** totalmente modular y fuertemente tipada con **TypeScript 7.0.2**.
+- **Empaquetado y HMR Ultrarrápido con Vite 8.2.2:** Integrado con `@vitejs/plugin-react` para compilación en milisegundos y soporte automático de rutas relativas (`base: './'`), garantizando 100% de compatibilidad con Home Assistant Ingress.
+- **Centro de Control Reactivo y Toggles Persistentes:**
+  - Métricas en vivo para Dispositivos, En Matter, Emparejados, Cámaras Scrypted y Cámaras Home Assistant sin parpadeos ni reconstrucción destructiva del DOM.
+  - Secciones por marca de cámara con persistencia de colapsado en `localStorage`.
+- **Generación Nativa de Códigos QR con `qrcode`:** Código QR dual para Apple Home (HAP) y Matter 1.6 integrado con descarga directa de PNG.
+- **Preservación Absoluta de Datos de Emparejamiento:** Ninguna llave criptográfica, fabric de Matter ni configuración de Scrypted en `/data/` fue alterada. Todas las vinculaciones existentes se conservan intactas.
+- **Pruebas y Verificación:** Todas las 49 suites de prueba pasaron exitosamente con **Vitest 5.0.0-rc.4** y chequeo de tipos estricto en backend y frontend.
+
 ## [1.5.08] - 2026-09-03
 
 ### Corrección de Sintaxis en Frontend: Carga Inmediata de Entidades y Estado

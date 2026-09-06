@@ -3232,7 +3232,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       }
 
       try {
-        if (req.method === "GET" && pathname === "/") {
+        if (req.method === "GET" && (pathname === "/" || pathname === "/index.html")) {
           const content = await this.readFrontendFile("index.html");
           if (content) {
             res.writeHead(200, {
@@ -3249,67 +3249,40 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           return;
         }
 
-        if (req.method === "GET" && pathname === "/logo.png") {
-          const content = await this.readBinaryFile("logo.png");
+        // Generic static asset serving for Vite bundle (/assets/*, logo, fonts, etc.)
+        const staticAssetMatch = pathname.match(
+          /^\/(assets\/[^?#]+|[a-zA-Z0-9._-]+\.(?:png|svg|ico|jpg|jpeg|webp|woff2?|ttf|js|css|json|map))$/,
+        );
+        if (req.method === "GET" && staticAssetMatch) {
+          const relPath = staticAssetMatch[1];
+          const content = await this.readBinaryFile(relPath);
           if (content) {
-            res.writeHead(200, { "Content-Type": "image/png" });
-            res.end(content);
-          } else {
-            res.writeHead(404);
-            res.end("Not Found");
-          }
-          return;
-        }
-
-        if (req.method === "GET" && pathname === "/style.css") {
-          const content = await this.readFrontendFile("style.css");
-          if (content) {
+            const ext = path.extname(relPath).toLowerCase();
+            const mimeTypes: Record<string, string> = {
+              ".js": "application/javascript; charset=utf-8",
+              ".css": "text/css; charset=utf-8",
+              ".html": "text/html; charset=utf-8",
+              ".json": "application/json; charset=utf-8",
+              ".png": "image/png",
+              ".jpg": "image/jpeg",
+              ".jpeg": "image/jpeg",
+              ".svg": "image/svg+xml",
+              ".ico": "image/x-icon",
+              ".woff": "font/woff",
+              ".woff2": "font/woff2",
+              ".ttf": "font/ttf",
+              ".map": "application/json",
+            };
+            const isHashedAsset = relPath.startsWith("assets/");
             res.writeHead(200, {
-              "Content-Type": "text/css; charset=utf-8",
-              "Cache-Control": "no-cache, no-store, must-revalidate",
-              Pragma: "no-cache",
-              Expires: "0",
+              "Content-Type": mimeTypes[ext] || "application/octet-stream",
+              "Cache-Control": isHashedAsset
+                ? "public, max-age=31536000, immutable"
+                : "no-cache, no-store, must-revalidate",
             });
             res.end(content);
-          } else {
-            res.writeHead(404);
-            res.end("Not Found");
+            return;
           }
-          return;
-        }
-
-        if (req.method === "GET" && pathname === "/script.js") {
-          const content = await this.readFrontendFile("script.js");
-          if (content) {
-            res.writeHead(200, {
-              "Content-Type": "application/javascript; charset=utf-8",
-              "Cache-Control": "no-cache, no-store, must-revalidate",
-              Pragma: "no-cache",
-              Expires: "0",
-            });
-            res.end(content);
-          } else {
-            res.writeHead(404);
-            res.end("Not Found");
-          }
-          return;
-        }
-
-        if (req.method === "GET" && pathname === "/qrcode.min.js") {
-          const content = await this.readFrontendFile("qrcode.min.js");
-          if (content) {
-            res.writeHead(200, {
-              "Content-Type": "application/javascript; charset=utf-8",
-              "Cache-Control": "no-cache, no-store, must-revalidate",
-              Pragma: "no-cache",
-              Expires: "0",
-            });
-            res.end(content);
-          } else {
-            res.writeHead(404);
-            res.end("Not Found");
-          }
-          return;
         }
 
         if (req.method === "GET" && pathname === "/api/custom/logs") {

@@ -1,6 +1,6 @@
 {
   "name": "matter-all-in-one-chrisalvir",
-  "version": "1.5.08",
+  "version": "1.5.09",
   "description": "Matter all-in-one Home Assistant Add-on with complete Scrypted, BLE, Smart Dimmers, Vacuum, AC, Climate, Lock and Multi-Platform ecosystem compatibility",
   "author": "chrisalvir",
   "license": "Apache-2.0",
@@ -23,7 +23,10 @@
     "@scrypted/client": "^1.3.26",
     "@scrypted/types": "^0.5.55",
     "hap-nodejs": "^0.14.3",
+    "lucide-react": "^1.40.0",
     "mqtt": "^5.15.2",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
     "werift": "^0.24.4",
     "ws": "^8.21.3"
   },
@@ -33,7 +36,10 @@
   "devDependencies": {
     "@types/node": "^24.10.0",
     "@types/qrcode": "^1.5.6",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
     "@types/ws": "^8.18.1",
+    "@vitejs/plugin-react": "^6.1.1",
     "@vitest/coverage-v8": "^5.0.0-rc.4",
     "matterbridge": "^3.10.7",
     "prettier": "^3.9.6",
@@ -44,7 +50,9 @@
   },
   "scripts": {
     "clean": "node scripts/clean-dist.mjs",
-    "build": "npm run clean && tsc -p tsconfig.build.json && mkdir -p dist/frontend && cp src/frontend/* dist/frontend/",
+    "build": "npm run clean && tsc -p tsconfig.build.json && vite build",
+    "build:backend": "tsc -p tsconfig.build.json",
+    "build:frontend": "vite build",
     "dev": "tsc --watch",
     "typecheck": "tsc --noEmit",
     "lint": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\"",
