@@ -4,7 +4,7 @@ FROM ${BUILD_FROM} AS builder
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --legacy-peer-deps --no-fund --no-audit
-COPY tsconfig*.json ./
+COPY tsconfig*.json vite.config.ts ./
 COPY scripts/clean-dist.mjs ./scripts/clean-dist.mjs
 COPY src/ ./src/
 RUN npm run build
