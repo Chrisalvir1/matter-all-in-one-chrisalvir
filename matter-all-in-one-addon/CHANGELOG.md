@@ -1,3 +1,16 @@
+## [1.5.10] - 2026-09-07
+
+### Consolidación y Exportación Independiente de Dispositivos Multi-Canal y Ventiladores On/Off
+
+- **Exportación 100% Independiente de Plugs y Controladores Multi-Canal:**
+  - Plugs y Plugs Dúo (enchufes dobles) se exportan de forma individual como enchufes (`onOffPlugInUnit`), cada uno con su propio código QR.
+  - Controladores Dúo, Triple y Cuádruple (apagadores de pared Tuya / Sonoff / etc.) se exportan como botones e interruptores individuales independientes con su propio código QR y mosaico individual en Apple Home (cero empaquetado en un solo mosaico compuesto con sub-endpoints).
+- **Entidades de Ventilador On/Off Sin Errores de Validación:**
+  - Detección precisa con `hasFanSpeed`: interruptores de ventilador sin soporte de velocidad en Home Assistant utilizan el clúster básico `FanControl` sin atributos de velocidad/pasos, eliminando por completo el error `Entity does not support action fan.set_percentage`.
+- **Prevención de Ciclo de Auto-Apagado:**
+  - Implementada la guarda anti-rebote `isUpdatingFromHa` en controladores y suscriptores de atributos de ventilador para evitar que las entidades se apaguen automáticamente tras encenderse en Home Assistant.
+- **Frontend React 19:** Modal IoT expandido a 3 columnas a pantalla completa y filtros actualizados con pestañas dedicadas.
+
 ## [1.5.09] - 2026-09-06
 
 ### Migración Integral del Frontend a React 19, TypeScript, Vite y Vitest
