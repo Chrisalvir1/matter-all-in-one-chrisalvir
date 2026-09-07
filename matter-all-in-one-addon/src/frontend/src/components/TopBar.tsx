@@ -15,24 +15,34 @@ export const TopBar: React.FC<TopBarProps> = ({
   const isOnline = status?.haStatus === "conectado";
 
   return (
-    <header className="topbar" role="region" aria-label="Barra superior de servicio">
-      <div className="topbar-status">
-        <div className="connection-state topbar-connection">
-          <span
-            className={`connection-dot ${isOnline ? "online" : "offline"}`}
-            id="ha-dot"
+    <header className="topbar" role="banner" aria-label="Barra superior de servicio">
+      <div className="topbar-left">
+        <div className="topbar-brand">
+          <img
+            className="topbar-logo"
+            src="logo.png"
+            alt="Logo"
+            aria-hidden="true"
           />
-          <span id="ha-status">
-            {isOnline
-              ? "Home Assistant conectado"
-              : "Conectando con Home Assistant…"}
-          </span>
+          <div className="topbar-brand-info">
+            <p className="eyebrow">MATTER 1.6 BRIDGE</p>
+            <h1>Matter All In One Chrisalvir</h1>
+          </div>
         </div>
-        {status?.version && (
-          <span className="version-pill" id="version">
-            v{status.version}
-          </span>
-        )}
+
+        <div className="topbar-status-badge" aria-live="polite">
+          <span className={`status-orb ${isOnline ? "online" : "offline"}`} id="bridge-orb" />
+          <div className="topbar-status-desc">
+            <strong id="bridge-title">
+              {status ? (isOnline ? "Conectado a Home Assistant" : "Desconectado") : "Iniciando…"}
+            </strong>
+          </div>
+          {status?.version && (
+            <span className="version-pill" id="version">
+              v{status.version}
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="topbar-actions">

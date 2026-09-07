@@ -1,3 +1,13 @@
+## [1.5.12] - 2026-09-07
+
+### UI: Eliminación de la Barra Lateral Secundaria e Integración en Top Bar Unificada
+
+- **Eliminación Total de la Barra Lateral Izquierda Secundaria:**
+  - Se eliminó la columna lateral (`sidebar`) secundaria que ocupaba 272px de ancho y quedaba vacía al hacer scroll.
+  - La marca de Matter («MATTER 1.6 BRIDGE / Matter All In One Chrisalvir») con su logo y la tarjeta de estado de conexión se integraron directamente en la barra superior unificada (`TopBar`).
+- **Diseño a Pantalla Completa (Full Width):**
+  - El panel principal ahora aprovecha el 100% del ancho de la pantalla, brindando máxima amplitud visual para las tarjetas de dispositivos, el Centro de Control y las cámaras sin espacios vacíos.
+
 ## [1.5.11] - 2026-09-07
 
 ### UI: Barra Superior (Top Bar) para Acciones y Estado del Servicio
