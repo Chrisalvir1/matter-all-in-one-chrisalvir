@@ -2560,3 +2560,20 @@ mark {
     grid-template-columns: 1fr;
   }
 }
+
+/* Fullscreen spacious IoT Device Modal */
+.modal-fullscreen {
+  width: min(98vw, 1720px) !important;
+  max-width: 98vw !important;
+  height: min(96vh, 960px) !important;
+  max-height: 96vh !important;
+}
+
+@media (min-width: 1200px) {
+  .modal-fullscreen .modal-layout {
+    grid-template-columns: 350px minmax(0, 1fr) 420px !important;
+    gap: 24px;
+    height: 100%;
+  }
+}
+

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { api } from "../api/client";
 import { CameraRecord, DeviceRecord, EntityRecord, ScryptedConfigResponse, StatusResponse } from "../types";
 
-export type FilterType = "all" | "cameras" | "active" | "mqtt" | "unpaired" | "unexported" | "issues";
+export type FilterType = "all" | "iot" | "cameras" | "paired" | "unpaired" | "mqtt" | "issues";
 
 export function useAddonState() {
   const [status, setStatus] = useState<StatusResponse | null>(null);
@@ -143,7 +143,7 @@ export function useAddonState() {
     );
   }, [allDevices, scryptedNames, scryptedIds]);
 
-  // Stats for Control Center
+  // Stats for Control Center and Filters
   const stats = useMemo(() => {
     const matterNodeKey = (e: EntityRecord) => e.compositeDeviceId || e.entityId;
     const exportedNodes = new Set(entities.filter((e) => e.exported).map(matterNodeKey)).size;
@@ -165,12 +165,18 @@ export function useAddonState() {
     ).length;
 
     const totalCameras = scryptedTotal + haCamsTotal;
+    const iotDevices = allDevices.filter((d) => !d.entities.every((e) => e.domain === "camera")).length;
+    const pairedTotal = pairedNodes + scryptedPaired + haCamsPaired;
+    const unpairedTotal = pendingNodes + (scryptedTotal - scryptedPaired) + (haCamsTotal - haCamsPaired);
 
     return {
       totalDevices: allDevices.length,
+      iotDevices,
       exportedNodes,
       pairedNodes,
       pendingNodes,
+      pairedTotal,
+      unpairedTotal,
       issues,
       mqttCount,
       scryptedTotal,

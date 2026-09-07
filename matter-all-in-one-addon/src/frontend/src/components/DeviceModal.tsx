@@ -192,7 +192,18 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
       aria-modal="true"
       aria-labelledby="device-modal-name"
     >
-      <section className="modal modal-wide">
+      <section
+        className="modal modal-wide modal-fullscreen"
+        style={{
+          width: "min(98vw, 1720px)",
+          maxWidth: "98vw",
+          height: "min(96vh, 960px)",
+          maxHeight: "96vh",
+          display: "flex",
+          flexDirection: "column",
+          padding: "24px 32px",
+        }}
+      >
         <button
           className="icon-button"
           id="device-modal-close"
@@ -203,12 +214,12 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
           ×
         </button>
 
-        <header className="modal-header">
+        <header className="modal-header" style={{ marginBottom: 8 }}>
           <span className="modal-icon" id="device-modal-icon">
             {getDomainIcon(device.entities[0]?.domain)}
           </span>
           <div>
-            <p className="eyebrow">DISPOSITIVO HOME ASSISTANT</p>
+            <p className="eyebrow">DISPOSITIVO IOT · MATTER ALL-IN-ONE</p>
             <h2 id="device-modal-name">{device.name}</h2>
             <p className="entity-id" id="device-modal-id">
               {device.manufacturer ? `${device.manufacturer} · ` : ""}
@@ -218,9 +229,20 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
           </div>
         </header>
 
-        <div className="modal-layout">
+        <div
+          className="modal-layout"
+          style={{
+            display: "grid",
+            gridTemplateColumns: "350px minmax(0, 1fr) 420px",
+            gap: 24,
+            flex: 1,
+            minHeight: 0,
+            overflow: "hidden",
+            alignItems: "stretch",
+          }}
+        >
           {/* Column 1: Entity List */}
-          <div className="entity-list-col">
+          <div className="entity-list-col" style={{ display: "flex", flexDirection: "column", minHeight: 0, height: "100%" }}>
             <div className="section-header">
               <h3>Entidades disponibles</h3>
               <span id="modal-export-count">
@@ -229,7 +251,16 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                   : `0/${device.entities.length} publicadas`}
               </span>
             </div>
-            <div className="entity-list" id="entity-list">
+            <div
+              className="entity-list"
+              id="entity-list"
+              style={{
+                flex: 1,
+                minHeight: 0,
+                maxHeight: "none",
+                overflowY: "auto",
+              }}
+            >
               {sortedEntities.map((ent) => {
                 const isSelected = activeEntity?.entityId === ent.entityId;
                 return (
@@ -272,8 +303,19 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
           </div>
 
           {/* Column 2: Selection Panel */}
-          <aside className="selection-panel" id="selection-panel">
-            <p className="card-label">SELECCIÓN</p>
+          <aside
+            className="selection-panel"
+            id="selection-panel"
+            style={{
+              flex: 1,
+              minHeight: 0,
+              maxHeight: "none",
+              overflowY: "auto",
+              padding: 22,
+              gap: 14,
+            }}
+          >
+            <p className="card-label">SELECCIÓN Y CONFIGURACIÓN</p>
             <h3 id="selection-title">
               <span className="selection-title-text">
                 {activeEntity?.name || activeEntity?.entityId || "Selecciona una entidad"}
@@ -305,6 +347,10 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                   <dd>{activeEntity.area_name}</dd>
                 </div>
               )}
+              <div>
+                <dt>Estado Matter</dt>
+                <dd>{isCommissioned ? "Emparejado en red Matter" : isExported ? "Listo para vincular" : "Sin publicar"}</dd>
+              </div>
             </dl>
 
             {/* Fabrics section */}
@@ -346,7 +392,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
               </p>
               {logs.length > 0 && (
                 <ul id="diagnostics-list">
-                  {logs.slice(-4).map((l, i) => (
+                  {logs.slice(-6).map((l, i) => (
                     <li key={i}>{typeof l === "string" ? l : (l as any)?.message || JSON.stringify(l)}</li>
                   ))}
                 </ul>
@@ -355,7 +401,18 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
           </aside>
 
           {/* Column 3: QR Panel */}
-          <div className="qr-panel" id="qr-panel">
+          <div
+            className="qr-panel"
+            id="qr-panel"
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              minHeight: 0,
+              height: "100%",
+              overflowY: "auto",
+              paddingRight: 4,
+            }}
+          >
             <p className="card-label">CÓDIGO MATTER</p>
             <div
               className={`qr-status-label${isCommissioned ? " commissioned" : isExported ? " active" : ""}`}
@@ -405,9 +462,9 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
               </div>
             )}
 
-            <div className="accessory-controls" id="accessory-controls">
+            <div className="accessory-controls" id="accessory-controls" style={{ marginTop: "auto", paddingTop: 12 }}>
               {isExported && (
-                <div className="matter-actions" style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 10 }}>
+                <div className="matter-actions" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   <button
                     className="button button-secondary action-btn"
                     id="reconnect-accessory-button"

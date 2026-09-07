@@ -5,9 +5,12 @@ interface FilterBarProps {
   activeFilter: FilterType;
   onFilterChange: (filter: FilterType) => void;
   stats: {
+    totalDevices: number;
+    iotDevices: number;
     totalCameras: number;
+    pairedTotal: number;
+    unpairedTotal: number;
     mqttCount: number;
-    pendingNodes: number;
     issues: number;
   };
   scryptedConfig: {
@@ -40,54 +43,60 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           type="button"
           onClick={() => onFilterChange("all")}
         >
-          Todos
+          TODOS <span className="chip-badge">{stats.totalDevices + stats.totalCameras}</span>
         </button>
+
+        <button
+          className={`filter-chip ${activeFilter === "iot" ? "active" : ""}`}
+          type="button"
+          onClick={() => onFilterChange("iot")}
+        >
+          IOT <span className="chip-badge">{stats.iotDevices}</span>
+        </button>
+
         <button
           className={`filter-chip ${activeFilter === "cameras" ? "active" : ""}`}
           type="button"
           onClick={() => onFilterChange("cameras")}
         >
-          Cámaras 📹 <span className="chip-badge">{stats.totalCameras}</span>
+          CÁMARAS 📹 <span className="chip-badge">{stats.totalCameras}</span>
         </button>
+
         <button
-          className={`filter-chip ${activeFilter === "active" ? "active" : ""}`}
+          className={`filter-chip ${activeFilter === "paired" ? "active" : ""}`}
           type="button"
-          onClick={() => onFilterChange("active")}
+          onClick={() => onFilterChange("paired")}
         >
-          En Matter
+          EN MATTER EMPAREJADOS INCLUYENDO CÁMARAS 🍏 <span className="chip-badge">{stats.pairedTotal}</span>
         </button>
-        <button
-          className={`filter-chip ${activeFilter === "mqtt" ? "active" : ""}`}
-          type="button"
-          onClick={() => onFilterChange("mqtt")}
-        >
-          MQTT 📡 <span className="chip-badge">{stats.mqttCount}</span>
-        </button>
+
         <button
           className={`filter-chip ${activeFilter === "unpaired" ? "active" : ""}`}
           type="button"
           onClick={() => onFilterChange("unpaired")}
         >
-          Por emparejar <span className="chip-badge">{stats.pendingNodes}</span>
+          NO EMPAREJADOS <span className="chip-badge">{stats.unpairedTotal}</span>
         </button>
+
         <button
-          className={`filter-chip ${activeFilter === "unexported" ? "active" : ""}`}
+          className={`filter-chip ${activeFilter === "mqtt" ? "active" : ""}`}
           type="button"
-          onClick={() => onFilterChange("unexported")}
+          onClick={() => onFilterChange("mqtt")}
         >
-          Sin publicar
+          MQTT <span className="chip-badge">{stats.mqttCount}</span>
         </button>
+
         <button
-          className={`filter-chip ${activeFilter === "issues" ? "active" : ""}`}
+          className={`filter-chip filter-chip-warning ${activeFilter === "issues" ? "active" : ""}`}
           type="button"
           onClick={() => onFilterChange("issues")}
         >
-          Necesitan atención <span className="chip-badge">{stats.issues}</span>
+          NECESITA ATENCIÓN <span className="chip-badge">{stats.issues}</span>
         </button>
       </div>
 
-      {/* Scrypted management bar — ONLY visible on 'cameras' tab */}
-      {activeFilter === "cameras" && (
+      {/* Scrypted management bar — visible on 'cameras' or 'all' if cameras exist */}
+      {(activeFilter === "cameras" || activeFilter === "paired") && (
         <div className="scrypted-header-bar" style={{ display: "flex", alignItems: "center", gap: 10, margin: "10px 0 16px" }}>
           {isScryptedConnected ? (
             <>

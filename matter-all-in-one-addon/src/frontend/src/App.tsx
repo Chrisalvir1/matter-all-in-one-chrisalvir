@@ -58,18 +58,28 @@ export const App: React.FC = () => {
     }
 
     switch (activeFilter) {
-      case "active":
-        return list.filter((d) => d.entities.some((e) => e.exported));
+      case "all":
+        return list.filter((d) => !d.entities.every((e) => e.domain === "camera"));
+      case "iot":
+        return list.filter((d) => !d.entities.every((e) => e.domain === "camera"));
+      case "cameras":
+        return [];
+      case "paired":
+        return list.filter(
+          (d) =>
+            !d.entities.every((e) => e.domain === "camera") &&
+            d.entities.some((e) => e.exported && e.commissioned)
+        );
+      case "unpaired":
+        return list.filter(
+          (d) =>
+            !d.entities.every((e) => e.domain === "camera") &&
+            d.entities.some((e) => e.exported && !e.commissioned)
+        );
       case "mqtt":
         return list.filter((d) =>
           d.entities.some((e) => e.origin === "mqtt" || e.entityId.startsWith("mqtt."))
         );
-      case "unpaired":
-        return list.filter((d) =>
-          d.entities.some((e) => e.exported && !e.commissioned)
-        );
-      case "unexported":
-        return list.filter((d) => d.entities.every((e) => !e.exported));
       case "issues":
         return list.filter((d) =>
           d.entities.some((e) => e.exported && e.hasIssue)
@@ -79,25 +89,51 @@ export const App: React.FC = () => {
     }
   }, [allDevices, searchQuery, activeFilter]);
 
-  // Group cameras by brand when activeFilter === "cameras"
+  // Group cameras by brand when relevant to active tab
   const cameraBrandGroups = useMemo(() => {
-    if (activeFilter !== "cameras") return [];
+    if (activeFilter === "iot" || activeFilter === "mqtt") return [];
 
     const map = new Map<string, { scrypted: CameraRecord[]; ha: DeviceRecord[] }>();
 
-    for (const cam of cameras) {
-      if (searchQuery.trim() && !cam.name.toLowerCase().includes(searchQuery.toLowerCase().trim())) {
-        continue;
-      }
+    let scryptedList = cameras;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      scryptedList = scryptedList.filter((c) => c.name.toLowerCase().includes(q));
+    }
+
+    if (activeFilter === "paired") {
+      scryptedList = scryptedList.filter(
+        (c) => c.identity?.homeKitPairingState === "paired" || c.bindingState?.matterCommissioned === true
+      );
+    } else if (activeFilter === "unpaired") {
+      scryptedList = scryptedList.filter(
+        (c) => !(c.identity?.homeKitPairingState === "paired" || c.bindingState?.matterCommissioned === true)
+      );
+    } else if (activeFilter === "issues") {
+      scryptedList = scryptedList.filter((c) => (c as any).status === "offline" || (c as any).hasIssue);
+    }
+
+    for (const cam of scryptedList) {
       const brand = extractCameraBrand(cam);
       if (!map.has(brand)) map.set(brand, { scrypted: [], ha: [] });
       map.get(brand)!.scrypted.push(cam);
     }
 
-    for (const dev of realHaCameraDevices) {
-      if (searchQuery.trim() && !dev.name.toLowerCase().includes(searchQuery.toLowerCase().trim())) {
-        continue;
-      }
+    let haList = realHaCameraDevices;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      haList = haList.filter((d) => d.name.toLowerCase().includes(q));
+    }
+
+    if (activeFilter === "paired") {
+      haList = haList.filter((d) => d.entities.some((e) => e.exported && e.commissioned));
+    } else if (activeFilter === "unpaired") {
+      haList = haList.filter((d) => d.entities.some((e) => e.exported && !e.commissioned));
+    } else if (activeFilter === "issues") {
+      haList = haList.filter((d) => d.entities.some((e) => e.exported && e.hasIssue));
+    }
+
+    for (const dev of haList) {
       const brand = extractCameraBrand(dev);
       if (!map.has(brand)) map.set(brand, { scrypted: [], ha: [] });
       map.get(brand)!.ha.push(dev);
@@ -203,7 +239,17 @@ export const App: React.FC = () => {
             <span id="device-count">
               {activeFilter === "cameras"
                 ? `${stats.totalCameras} cámaras · Clasificadas por marca`
-                : `${filteredDevices.length} dispositivos · ${stats.exportedNodes} activos en Matter`}
+                : activeFilter === "iot"
+                ? `${filteredDevices.length} dispositivos IoT · ${stats.exportedNodes} activos en Matter`
+                : activeFilter === "paired"
+                ? `${stats.pairedTotal} accesorios vinculados en Matter`
+                : activeFilter === "unpaired"
+                ? `${stats.unpairedTotal} accesorios pendientes de emparejar`
+                : activeFilter === "mqtt"
+                ? `${stats.mqttCount} dispositivos MQTT`
+                : activeFilter === "issues"
+                ? `${stats.issues} dispositivos requieren atención`
+                : `${filteredDevices.length + stats.totalCameras} elementos en total · ${stats.exportedNodes} activos en Matter`}
             </span>
             <button className="text-button" id="refresh-button" type="button" onClick={refreshAll}>
               Actualizar
@@ -228,13 +274,9 @@ export const App: React.FC = () => {
                 <span className="spinner" />
                 <p>Cargando entidades de Home Assistant…</p>
               </div>
-            ) : activeFilter === "cameras" ? (
-              cameraBrandGroups.length === 0 ? (
-                <div className="empty-state" style={{ gridColumn: "1 / -1", textAlign: "center", padding: 40 }}>
-                  <p>No se encontraron cámaras configuradas.</p>
-                </div>
-              ) : (
-                cameraBrandGroups.map((group) => (
+            ) : (
+              <>
+                {cameraBrandGroups.map((group) => (
                   <CameraBrandGroup
                     key={group.brand}
                     brand={group.brand}
@@ -243,21 +285,33 @@ export const App: React.FC = () => {
                     onConfigureCamera={(cam) => setSelectedCamera(cam)}
                     onConfigureHaDevice={(dev) => setSelectedDevice(dev)}
                   />
-                ))
-              )
-            ) : filteredDevices.length === 0 ? (
-              <div className="empty-state" style={{ gridColumn: "1 / -1", textAlign: "center", padding: 40 }}>
-                <p>No hay dispositivos que coincidan con los filtros seleccionados.</p>
-              </div>
-            ) : (
-              filteredDevices.map((device) => (
-                <DeviceCard
-                  key={device.id}
-                  device={device}
-                  searchQuery={searchQuery}
-                  onConfigure={() => setSelectedDevice(device)}
-                />
-              ))
+                ))}
+
+                {filteredDevices.map((device) => (
+                  <DeviceCard
+                    key={device.id}
+                    device={device}
+                    searchQuery={searchQuery}
+                    onConfigure={() => setSelectedDevice(device)}
+                  />
+                ))}
+
+                {cameraBrandGroups.length === 0 && filteredDevices.length === 0 && (
+                  <div className="empty-state" style={{ gridColumn: "1 / -1", textAlign: "center", padding: 40 }}>
+                    <p>
+                      {activeFilter === "cameras"
+                        ? "No se encontraron cámaras configuradas."
+                        : activeFilter === "mqtt"
+                        ? "No se encontraron dispositivos MQTT configurados."
+                        : activeFilter === "paired"
+                        ? "No hay dispositivos ni cámaras emparejadas en Matter todavía."
+                        : activeFilter === "issues"
+                        ? "No hay incidencias registradas en este momento."
+                        : "No hay dispositivos que coincidan con los filtros seleccionados."}
+                    </p>
+                  </div>
+                )}
+              </>
             )}
           </section>
         </main>
