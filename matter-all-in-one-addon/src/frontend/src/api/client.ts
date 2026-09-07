@@ -1,8 +1,11 @@
 import { CameraRecord, EntityRecord, ScryptedConfigResponse, StatusResponse } from "../types";
 
-// Base request wrapper with relative prefix (handles Ingress automatically)
+const API_BASE = "./api/custom";
+
+// Base request wrapper with relative prefix (handles Home Assistant Ingress automatically)
 export async function request<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const url = endpoint.startsWith("/") ? endpoint.slice(1) : endpoint;
+  const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+  const url = `${API_BASE}${cleanEndpoint}`;
   const res = await fetch(url, {
     ...options,
     headers: {
@@ -28,59 +31,87 @@ export async function request<T = any>(endpoint: string, options: RequestInit = 
 
 export const api = {
   getStatus: () => request<StatusResponse>("/status"),
-  getDevices: () => request<{ entities: EntityRecord[] }>("/devices"),
-  getCameras: () => request<{ cameras: CameraRecord[] }>("/cameras"),
-  getScryptedConfig: () => request<ScryptedConfigResponse>("/scrypted"),
-  saveScryptedConfig: (data: any) => request("/scrypted", { method: "POST", body: JSON.stringify(data) }),
-  testScryptedConnection: (data: any) => request("/scrypted/test", { method: "POST", body: JSON.stringify(data) }),
-  syncCameras: () => request<{ cameras: CameraRecord[] }>("/scrypted/load-cameras", { method: "POST" }),
-  
+  getDevices: () => request<EntityRecord[]>("/devices"),
+  getCameras: () => request<CameraRecord[]>("/cameras"),
+  getScryptedConfig: () => request<ScryptedConfigResponse>("/scrypted/config"),
+  saveScryptedConfig: (data: any) => request("/scrypted/config", { method: "POST", body: JSON.stringify(data) }),
+  deleteScryptedConfig: () => request("/scrypted/config", { method: "DELETE" }),
+  testScryptedConnection: (data: any) => request("/scrypted/connection-test", { method: "POST", body: JSON.stringify(data) }),
+  syncCameras: () => request<CameraRecord[]>("/scrypted/load-cameras", { method: "POST" }),
+
   verifyCameraStream: (cameraId: string, streamUrl: string) =>
-    request<{ ok: boolean; status: string; validation?: any }>(`/cameras/${cameraId}/verify-stream`, {
-      method: "POST",
-      body: JSON.stringify({ streamUrl }),
-    }),
+    request<{ ok: boolean; status: string; validation?: any }>(
+      `/cameras/${encodeURIComponent(cameraId)}/verify-stream`,
+      {
+        method: "POST",
+        body: JSON.stringify({ streamUrl }),
+      }
+    ),
 
   diagnoseCameraStream: (cameraId: string, streamUrl: string) =>
-    request<{ success: boolean; metrics?: any; camera?: any }>(`/cameras/${cameraId}/diagnose-stream`, {
-      method: "POST",
-      body: JSON.stringify({ streamUrl, timeoutMs: 7000 }),
-    }),
+    request<{ success: boolean; metrics?: any; camera?: any }>(
+      `/cameras/${encodeURIComponent(cameraId)}/diagnose-stream`,
+      {
+        method: "POST",
+        body: JSON.stringify({ streamUrl, timeoutMs: 7000 }),
+      }
+    ),
 
   saveCameraStreamUrl: (cameraId: string, streamUrl: string) =>
-    request(`/cameras/${cameraId}/stream-url`, {
+    request(`/cameras/${encodeURIComponent(cameraId)}/stream-url`, {
       method: "POST",
       body: JSON.stringify({ streamUrl }),
     }),
 
   saveCameraExportConfig: (cameraId: string, config: any) =>
-    request(`/cameras/${cameraId}/export-config`, {
+    request(`/cameras/${encodeURIComponent(cameraId)}/export-config`, {
       method: "PUT",
       body: JSON.stringify(config),
     }),
 
   resetCameraPairing: (scopedId: string) =>
     request<{ success: boolean; setupUri?: string; record?: any; error?: string }>(
-      `/reset-camera-pairing/${scopedId}`,
+      `/reset-camera-pairing/${encodeURIComponent(scopedId)}`,
       { method: "POST" }
     ),
 
-  removeCamera: (cameraId: string) => request(`/cameras/${cameraId}`, { method: "DELETE" }),
+  removeCamera: (cameraId: string) =>
+    request(`/cameras/${encodeURIComponent(cameraId)}`, { method: "DELETE" }),
 
   toggleExport: (entityId: string, exported: boolean) =>
-    request("/export", {
+    request(`/${exported ? "register" : "unregister"}/${encodeURIComponent(entityId)}`, {
       method: "POST",
-      body: JSON.stringify({ entityId, exported }),
+    }),
+
+  setDeviceProfile: (entityId: string, profile: string) =>
+    request(`/device-profile/${encodeURIComponent(entityId)}`, {
+      method: "POST",
+      body: JSON.stringify({ profile }),
     }),
 
   reconnectAccessory: (nodeId: string) =>
     request(`/refresh-accessory/${encodeURIComponent(nodeId)}`, { method: "POST" }),
 
-  removeFabric: (fabricIndex: number) =>
-    request(`/remove-fabric/${fabricIndex}`, { method: "DELETE" }),
+  removeFabric: (entityId: string, fabricIndex: number) =>
+    request(`/remove-fabric/${encodeURIComponent(entityId)}/${fabricIndex}`, {
+      method: "DELETE",
+    }),
 
   openCommissioning: (entityId: string) =>
     request(`/open-commissioning/${encodeURIComponent(entityId)}`, { method: "POST" }),
 
-  restartService: () => request("/api/custom/restart", { method: "POST" }),
+  resetAccessory: (entityId: string) =>
+    request(`/reset-accessory/${encodeURIComponent(entityId)}`, { method: "POST" }),
+
+  getMqttConfig: () => request<any>("/mqtt-config"),
+
+  saveMqttConfig: (data: any) =>
+    request("/mqtt-config", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  restartService: () => request("/restart", { method: "POST" }),
+
+  factoryReset: () => request("/factoryreset", { method: "POST" }),
 };

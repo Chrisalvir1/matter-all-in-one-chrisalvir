@@ -31,8 +31,16 @@ export function useAddonState() {
       ]);
 
       if (statusRes.status === "fulfilled") setStatus(statusRes.value);
-      if (devicesRes.status === "fulfilled") setEntities(devicesRes.value.entities || []);
-      if (camerasRes.status === "fulfilled") setCameras(camerasRes.value.cameras || []);
+      if (devicesRes.status === "fulfilled") {
+        const raw = devicesRes.value;
+        const list = Array.isArray(raw) ? raw : (raw as any)?.entities || [];
+        setEntities(list);
+      }
+      if (camerasRes.status === "fulfilled") {
+        const raw = camerasRes.value;
+        const list = Array.isArray(raw) ? raw : (raw as any)?.cameras || [];
+        setCameras(list);
+      }
       if (scryptedRes.status === "fulfilled") setScryptedConfig(scryptedRes.value);
     } catch (err: any) {
       console.error("Error refreshing addon state:", err);
@@ -51,16 +59,21 @@ export function useAddonState() {
   // Server-Sent Events (SSE) listener
   useEffect(() => {
     let es: EventSource | null = null;
-    let timer: NodeJS.Timeout | null = null;
+    let timer: any = null;
 
     const connectSSE = () => {
       try {
-        es = new EventSource("api/custom/events");
+        es = new EventSource("./api/custom/events");
         es.onmessage = (event) => {
           if (!event.data || event.data.startsWith(":")) return;
           try {
             const data = JSON.parse(event.data);
-            if (data.type === "device_update" || data.type === "camera_update" || data.type === "state_change") {
+            if (
+              data.type === "device_update" ||
+              data.type === "camera_update" ||
+              data.type === "state_change" ||
+              data.type === "scrypted_status"
+            ) {
               refreshAll();
             }
           } catch {}

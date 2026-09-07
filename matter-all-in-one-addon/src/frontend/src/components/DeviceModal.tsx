@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from "react";
-import QRCode from "qrcode";
+import React, { useState, useEffect } from "react";
 import { DeviceRecord, EntityRecord } from "../types";
 import { api } from "../api/client";
+import { QRCodeDisplay } from "./QRCodeDisplay";
 
 interface DeviceModalProps {
   device: DeviceRecord | null;
@@ -9,6 +9,35 @@ interface DeviceModalProps {
   onClose: () => void;
   onRefresh: () => void;
   showToast: (msg: string, isError?: boolean) => void;
+}
+
+function getDomainIcon(domain?: string): string {
+  switch (domain) {
+    case "light":
+      return "💡";
+    case "switch":
+      return "🔌";
+    case "camera":
+      return "📹";
+    case "climate":
+      return "❄️";
+    case "fan":
+      return "🌀";
+    case "cover":
+      return "🪟";
+    case "lock":
+      return "🔒";
+    case "sensor":
+      return "🌡️";
+    case "binary_sensor":
+      return "🔔";
+    case "vacuum":
+      return "🤖";
+    case "humidifier":
+      return "💧";
+    default:
+      return "⚡";
+  }
 }
 
 export const DeviceModal: React.FC<DeviceModalProps> = ({
@@ -21,7 +50,6 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
   const [selectedEntity, setSelectedEntity] = useState<EntityRecord | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const [multiAdminOpen, setMultiAdminOpen] = useState(false);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
     if (!device) return;
@@ -30,25 +58,48 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     setMultiAdminOpen(false);
   }, [device, targetEntity]);
 
-  const pairingCode = selectedEntity?.pairingCode || device?.entities.find((e) => e.pairingCode)?.pairingCode || "";
-
-  useEffect(() => {
-    if (!pairingCode || !canvasRef.current) return;
-    QRCode.toCanvas(canvasRef.current, pairingCode, {
-      width: 180,
-      margin: 2,
-      color: { dark: "#09101f", light: "#ffffff" },
-      errorCorrectionLevel: "M",
-    }).catch((err) => console.error("QR error:", err));
-  }, [pairingCode, selectedEntity]);
-
   if (!device) return null;
+
+  const sortedEntities = [...device.entities].sort((a, b) => {
+    if (targetEntity) {
+      if (a.entityId === targetEntity.entityId) return -1;
+      if (b.entityId === targetEntity.entityId) return 1;
+    }
+    const primaryDelta =
+      Number(b.entityId === b.compositePrimaryEntityId) -
+      Number(a.entityId === a.compositePrimaryEntityId);
+    return (
+      primaryDelta ||
+      Number(b.exported) - Number(a.exported) ||
+      (a.name || a.entityId).localeCompare(b.name || b.entityId)
+    );
+  });
+
+  const activeEntity = selectedEntity || sortedEntities[0] || null;
+
+  // Pairing code: primary entity's code or selected entity's code
+  const pairingCode =
+    activeEntity?.pairingCode ||
+    device.entities.find((e) => e.pairingCode)?.pairingCode ||
+    "";
+  const manualCode =
+    activeEntity?.manualPairingCode ||
+    device.entities.find((e) => e.manualPairingCode)?.manualPairingCode ||
+    pairingCode;
+
+  const isExported = Boolean(activeEntity?.exported);
+  const isCommissioned = Boolean(activeEntity?.commissioned);
 
   const handleToggleExport = async (entity: EntityRecord) => {
     try {
-      await api.toggleExport(entity.entityId, !entity.exported);
-      entity.exported = !entity.exported;
-      showToast(entity.exported ? `✓ ${entity.name} publicado en Matter` : `Retirado de Matter`);
+      const nextState = !entity.exported;
+      await api.toggleExport(entity.entityId, nextState);
+      entity.exported = nextState;
+      showToast(
+        nextState
+          ? `✓ ${entity.name || entity.entityId} publicado en Matter`
+          : `Retirado de Matter`
+      );
       onRefresh();
     } catch (err: any) {
       showToast(err.message || "Error al modificar publicación", true);
@@ -56,11 +107,13 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
   };
 
   const handleReconnect = async () => {
-    if (!selectedEntity) return;
+    if (!activeEntity) return;
     setIsBusy(true);
     showToast("Reconectando accesorio Matter...");
     try {
-      await api.reconnectAccessory(selectedEntity.compositeDeviceId || selectedEntity.entityId);
+      await api.reconnectAccessory(
+        activeEntity.compositeDeviceId || activeEntity.entityId
+      );
       showToast("✓ Accesorio reconectado");
       onRefresh();
     } catch (err: any) {
@@ -71,12 +124,14 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
   };
 
   const handleOpenCommissioning = async () => {
-    if (!selectedEntity) return;
+    if (!activeEntity) return;
     setIsBusy(true);
     try {
-      await api.openCommissioning(selectedEntity.entityId);
+      await api.openCommissioning(activeEntity.entityId);
       setMultiAdminOpen(true);
-      showToast("✓ Modo Multi-Admin Abierto. Puedes emparejar en una segunda plataforma.");
+      showToast(
+        "✓ Modo Multi-Admin Abierto. Puedes emparejar en una segunda plataforma."
+      );
     } catch (err: any) {
       showToast(err.message || "Error al abrir Multi-Admin", true);
     } finally {
@@ -84,20 +139,78 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     }
   };
 
-  const logs = selectedEntity?.logs || [];
+  const handleResetAccessory = async () => {
+    if (!activeEntity) return;
+    if (
+      !confirm(
+        "¿Desconectar este accesorio de todas las casas y generar un nuevo código QR limpio?"
+      )
+    )
+      return;
+    setIsBusy(true);
+    try {
+      await api.resetAccessory(activeEntity.entityId);
+      showToast("✓ Accesorio desvinculado y nuevo QR generado");
+      onRefresh();
+    } catch (err: any) {
+      showToast(err.message || "Error al desvincular", true);
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const handleCopyDiagnostics = () => {
+    if (!activeEntity) return;
+    const diagText = JSON.stringify(
+      {
+        entityId: activeEntity.entityId,
+        name: activeEntity.name,
+        domain: activeEntity.domain,
+        exported: activeEntity.exported,
+        commissioned: activeEntity.commissioned,
+        logs: selectedEntity?.logs || activeEntity.logs || [],
+      },
+      null,
+      2
+    );
+    navigator.clipboard.writeText(diagText).then(() => {
+      showToast("✓ Diagnóstico copiado al portapapeles");
+    });
+  };
+
+  const activeNodesCount = new Set(
+    device.entities.filter((e) => e.exported).map((e) => e.compositeDeviceId || e.entityId)
+  ).size;
+
+  const logs = selectedEntity?.logs || activeEntity?.logs || [];
 
   return (
-    <div className="modal-backdrop open" id="device-modal" role="dialog" aria-modal="true">
-      <section className="modal modal-wide" style={{ maxWidth: 900 }}>
-        <button className="icon-button" type="button" aria-label="Cerrar" onClick={onClose}>
+    <div
+      className="modal-backdrop open"
+      id="device-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="device-modal-name"
+    >
+      <section className="modal modal-wide">
+        <button
+          className="icon-button"
+          id="device-modal-close"
+          type="button"
+          aria-label="Cerrar"
+          onClick={onClose}
+        >
           ×
         </button>
+
         <header className="modal-header">
-          <span className="modal-icon" style={{ fontSize: "1.8rem" }}>⚡</span>
+          <span className="modal-icon" id="device-modal-icon">
+            {getDomainIcon(device.entities[0]?.domain)}
+          </span>
           <div>
-            <p className="eyebrow">DISPOSITIVO FÍSICO MATTER</p>
-            <h2>{device.name}</h2>
-            <p className="entity-id">
+            <p className="eyebrow">DISPOSITIVO HOME ASSISTANT</p>
+            <h2 id="device-modal-name">{device.name}</h2>
+            <p className="entity-id" id="device-modal-id">
               {device.manufacturer ? `${device.manufacturer} · ` : ""}
               {device.model ? `${device.model} · ` : ""}
               {device.area ? `📍 ${device.area}` : device.id}
@@ -105,126 +218,228 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
           </div>
         </header>
 
-        <div className="camera-modal-layout" style={{ gridTemplateColumns: "280px minmax(0, 1fr)" }}>
-          {/* Left Column: QR Code */}
-          <div className="qr-panel" style={{ textAlign: "center" }}>
-            {pairingCode ? (
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 12 }}>
-                <canvas ref={canvasRef} style={{ borderRadius: 10, background: "#fff", padding: 6 }} />
-                <div style={{ marginTop: 8 }}>
-                  <span style={{ fontSize: "0.72rem", color: "var(--dim)", textTransform: "uppercase" }}>
-                    CÓDIGO MANUAL MATTER
-                  </span>
-                  <div style={{ fontSize: "1.1rem", fontWeight: 700, letterSpacing: "0.08em" }}>
-                    {selectedEntity?.manualPairingCode || pairingCode}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div style={{ padding: 20, color: "var(--text-secondary)", fontSize: "0.85rem" }}>
-                Sin código QR disponible para esta entidad.
-              </div>
-            )}
-
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <button
-                className="button button-secondary button-sm"
-                id="reconnect-accessory-button"
-                type="button"
-                onClick={handleReconnect}
-                disabled={isBusy}
-              >
-                Reconectar Accesorio
-              </button>
-              <button
-                className="button button-secondary button-sm"
-                id="regenerate-code-button"
-                type="button"
-                onClick={handleOpenCommissioning}
-                disabled={isBusy}
-              >
-                Abrir Modo Multi-Admin
-              </button>
-              <button
-                className="button button-danger-outline button-sm"
-                id="reset-accessory-button"
-                type="button"
-                onClick={onClose}
-              >
-                Cerrar
-              </button>
+        <div className="modal-layout">
+          {/* Column 1: Entity List */}
+          <div className="entity-list-col">
+            <div className="section-header">
+              <h3>Entidades disponibles</h3>
+              <span id="modal-export-count">
+                {activeNodesCount
+                  ? `${activeNodesCount} accesorio Matter · ${device.entities.filter((e) => e.exported).length}/${device.entities.length} endpoints`
+                  : `0/${device.entities.length} publicadas`}
+              </span>
             </div>
-
-            {multiAdminOpen && (
-              <div id="multi-admin-hint" style={{ marginTop: 10, fontSize: "0.75rem", color: "#34d399", background: "rgba(16,185,129,0.1)", padding: 6, borderRadius: 6 }}>
-                ✓ Modo Multi-Admin Abierto
-              </div>
-            )}
-          </div>
-
-          {/* Right Column: Entities list & details */}
-          <div className="selection-panel">
-            <h4 style={{ margin: "0 0 10px", fontSize: "0.85rem", color: "var(--dim)", textTransform: "uppercase" }}>
-              Canales y Endpoints del Accesorio ({device.entities.length})
-            </h4>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 16 }}>
-              {device.entities.map((ent) => (
-                <div
-                  key={ent.entityId}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    padding: "8px 12px",
-                    borderRadius: 8,
-                    background: selectedEntity?.entityId === ent.entityId ? "rgba(56, 189, 248, 0.12)" : "rgba(255, 255, 255, 0.03)",
-                    border: selectedEntity?.entityId === ent.entityId ? "1px solid rgba(56, 189, 248, 0.4)" : "1px solid rgba(255, 255, 255, 0.06)",
-                    cursor: "pointer",
-                  }}
-                  onClick={() => setSelectedEntity(ent)}
-                >
-                  <div>
-                    <div style={{ fontSize: "0.85rem", fontWeight: 600 }}>{ent.name || ent.entityId}</div>
-                    <div style={{ fontSize: "0.74rem", color: "var(--text-secondary)" }}>
-                      {ent.domain} · {ent.entityId}
+            <div className="entity-list" id="entity-list">
+              {sortedEntities.map((ent) => {
+                const isSelected = activeEntity?.entityId === ent.entityId;
+                return (
+                  <div
+                    key={ent.entityId}
+                    className={`entity-row${ent.exported ? "" : " dimmed"}${isSelected ? " selected" : ""}`}
+                    onClick={() => setSelectedEntity(ent)}
+                  >
+                    <span className="entity-row-icon">
+                      {getDomainIcon(ent.domain)}
+                    </span>
+                    <div>
+                      <div className="entity-row-name">
+                        {ent.name || ent.entityId}
+                      </div>
+                      <div className="entity-row-id">{ent.entityId}</div>
+                      <span
+                        className={`entity-state${ent.state === "on" ? " on" : ""}`}
+                      >
+                        {ent.state || "desconocido"}
+                      </span>
+                    </div>
+                    <div
+                      className="export-control"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <label className="toggle">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(ent.exported)}
+                          onChange={() => handleToggleExport(ent)}
+                        />
+                        <span />
+                      </label>
                     </div>
                   </div>
-                  <label
-                    style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: "0.75rem" }}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={Boolean(ent.exported)}
-                      onChange={() => handleToggleExport(ent)}
-                    />
-                    <span>{ent.exported ? "En Matter" : "Excluido"}</span>
-                  </label>
-                </div>
-              ))}
+                );
+              })}
             </div>
+          </div>
+
+          {/* Column 2: Selection Panel */}
+          <aside className="selection-panel" id="selection-panel">
+            <p className="card-label">SELECCIÓN</p>
+            <h3 id="selection-title">
+              <span className="selection-title-text">
+                {activeEntity?.name || activeEntity?.entityId || "Selecciona una entidad"}
+              </span>
+              {isCommissioned && (
+                <span className="home-badge commissioned">
+                  🏠 Vinculado
+                </span>
+              )}
+            </h3>
+            <p id="selection-description">
+              {isExported
+                ? "Esta entidad está activa y expuesta a través de Matter."
+                : "Activa el interruptor para publicar este canal en Matter."}
+            </p>
+
+            <dl className="selection-meta" id="selection-meta">
+              <div>
+                <dt>Entidad ID</dt>
+                <dd>{activeEntity?.entityId || "—"}</dd>
+              </div>
+              <div>
+                <dt>Dominio</dt>
+                <dd>{activeEntity?.domain || "—"}</dd>
+              </div>
+              {activeEntity?.area_name && (
+                <div>
+                  <dt>Área</dt>
+                  <dd>{activeEntity.area_name}</dd>
+                </div>
+              )}
+            </dl>
 
             {/* Fabrics section */}
-            <div id="fabrics-section" style={{ marginBottom: 14 }}>
-              <h5 style={{ margin: "0 0 6px", fontSize: "0.8rem", color: "var(--dim)" }}>FABRICS / VINCULACIONES</h5>
-              <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>
-                Desconectar de ecosistemas Matter existentes si cambias de controlador.
+            <section className="fabrics-section" id="fabrics-section">
+              <div className="fabrics-heading">
+                <span className="fabrics-icon" aria-hidden="true">🏠</span>
+                <strong>Casas / Controladores Conectados</strong>
               </div>
+              <p className="fabrics-subtitle">
+                Desconectar de ecosistemas Matter existentes si cambias de controlador o si ya eliminaste este accesorio en tu app de Apple Home, Google Home o Alexa.
+              </p>
+            </section>
+
+            {/* Diagnostics Panel */}
+            <section
+              className="diagnostics-panel"
+              id="diagnostics-panel"
+              aria-live="polite"
+            >
+              <div className="diagnostics-heading">
+                <span id="diagnostics-icon" aria-hidden="true">✓</span>
+                <strong id="diagnostics-heading-text">Diagnóstico y logs</strong>
+                <button
+                  id="copy-diagnostics-button"
+                  className="copy-diagnostics-button"
+                  type="button"
+                  onClick={handleCopyDiagnostics}
+                  title="Copiar diagnóstico y logs"
+                >
+                  Copiar
+                </button>
+              </div>
+              <p id="diagnostics-summary">
+                {logs.length === 0 ? (
+                  "Sin errores registrados para este accesorio."
+                ) : (
+                  `${logs.length} eventos registrados`
+                )}
+              </p>
+              {logs.length > 0 && (
+                <ul id="diagnostics-list">
+                  {logs.slice(-4).map((l, i) => (
+                    <li key={i}>{typeof l === "string" ? l : (l as any)?.message || JSON.stringify(l)}</li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </aside>
+
+          {/* Column 3: QR Panel */}
+          <div className="qr-panel" id="qr-panel">
+            <p className="card-label">CÓDIGO MATTER</p>
+            <div
+              className={`qr-status-label${isCommissioned ? " commissioned" : isExported ? " active" : ""}`}
+              id="qr-status-label"
+            >
+              {isCommissioned
+                ? "Vinculado a Matter"
+                : isExported
+                  ? "Listo para emparejar"
+                  : "Sin publicar"}
             </div>
 
-            {/* Diagnostics Logs */}
-            <div style={{ background: "rgba(0,0,0,0.25)", borderRadius: 8, padding: 10, fontSize: "0.75rem" }}>
-              <strong style={{ color: "var(--dim)" }}>HISTORIAL Y DIAGNÓSTICO:</strong>
-              {logs.length === 0 ? (
-                <div style={{ color: "var(--text-secondary)", marginTop: 4 }}>
-                  Sin errores registrados para este accesorio.
+            {isCommissioned && !multiAdminOpen && (
+              <div className="commissioned-hint" style={{ display: "block" }}>
+                <p className="hint-title">🔒 Vinculado a Matter</p>
+                <p className="hint-desc">
+                  Este accesorio ya tiene una casa registrada en Matter. Para
+                  emparejarlo en una segunda plataforma, pulsa «Modo Multi-Admin».
+                </p>
+              </div>
+            )}
+
+            {multiAdminOpen && (
+              <div id="multi-admin-hint" className="multi-admin-hint" style={{ display: "block" }}>
+                <p className="hint-title">🌐 Modo Multi-Admin Abierto (15 min)</p>
+                <p className="hint-desc">
+                  Ventana de emparejamiento abierta. Escanea este código QR en
+                  <strong> Google Home</strong>, <strong>Alexa</strong> o{" "}
+                  <strong>SmartThings</strong>.
+                </p>
+              </div>
+            )}
+
+            {isExported ? (
+              <QRCodeDisplay
+                pairingCode={pairingCode}
+                manualCode={manualCode}
+                entityName={activeEntity?.name || device.name}
+                elementId="device-qr-code"
+              />
+            ) : (
+              <div
+                className="qr-liquid-glass-card"
+                style={{ padding: 24, textAlign: "center", color: "var(--text-secondary)" }}
+              >
+                Activa la entidad para generar el código QR de Matter.
+              </div>
+            )}
+
+            <div className="accessory-controls" id="accessory-controls">
+              {isExported && (
+                <div className="matter-actions" style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 10 }}>
+                  <button
+                    className="button button-secondary action-btn"
+                    id="reconnect-accessory-button"
+                    type="button"
+                    onClick={handleReconnect}
+                    disabled={isBusy}
+                    title="Refresca la conexión con Home Assistant y Matter"
+                  >
+                    ↻ Recargar / Sincronizar
+                  </button>
+
+                  <button
+                    className="button button-secondary action-btn"
+                    id="regenerate-code-button"
+                    type="button"
+                    onClick={handleOpenCommissioning}
+                    disabled={isBusy}
+                  >
+                    Abrir Modo Multi-Admin
+                  </button>
+
+                  <button
+                    className="button button-danger action-btn"
+                    id="reset-accessory-button"
+                    type="button"
+                    onClick={handleResetAccessory}
+                    disabled={isBusy}
+                    title="Desconectar de todas las casas y generar un nuevo código QR"
+                  >
+                    Desconectar todo y nuevo QR
+                  </button>
                 </div>
-              ) : (
-                logs.map((l, i) => (
-                  <div key={i} style={{ marginTop: 2 }}>
-                    [{l.timestamp.slice(11, 19)}] {l.message}
-                  </div>
-                ))
               )}
             </div>
           </div>

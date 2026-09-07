@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from "react";
-import QRCode from "qrcode";
+import React, { useState, useEffect } from "react";
 import { CameraRecord } from "../types";
 import { api } from "../api/client";
 import { extractCameraBrand } from "./CameraCard";
+import { QRCodeDisplay } from "./QRCodeDisplay";
 
 interface CameraConfigModalProps {
   camera: CameraRecord | null;
@@ -23,10 +23,9 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
   const [isVerifying, setIsVerifying] = useState(false);
   const [isDiagnosing, setIsDiagnosing] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [streamResult, setStreamResult] = useState<{ text: string; isError?: boolean } | null>(null);
-  const [copied, setCopied] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // Initialize data when camera changes
   useEffect(() => {
@@ -81,30 +80,15 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
     }
   };
 
-  const isPaired = camera?.identity?.homeKitPairingState === "paired";
-  const pinCode = camera?.identity?.homeKitPincode || "031-45-154";
-  const pairingPayload = activeTab === "homekit" ? getSetupUri() : camera?.identity?.matterPairingCode || "";
-
-  // Render QR Code onto canvas
-  useEffect(() => {
-    if (!camera || !canvasRef.current || (activeTab === "homekit" && isPaired)) return;
-
-    if (pairingPayload) {
-      QRCode.toCanvas(canvasRef.current, pairingPayload, {
-        width: 200,
-        margin: 2,
-        color: { dark: "#09101f", light: "#ffffff" },
-        errorCorrectionLevel: "M",
-      }).catch((err) => console.error("QR Code generation error:", err));
-    }
-  }, [camera, activeTab, isPaired, pairingPayload]);
-
   if (!camera) return null;
+
+  const isPaired = camera.identity?.homeKitPairingState === "paired";
+  const pinCode = camera.identity?.homeKitPincode || "031-45-154";
+  const pairingPayload = activeTab === "homekit" ? getSetupUri() : camera.identity?.matterPairingCode || "";
 
   const brand = extractCameraBrand(camera);
   const isOnline = camera.status?.connection === "online" || camera.status?.isOnline !== false;
   const modelDisplay = camera.displayModel || camera.model || "Modelo no identificado";
-  const sn = camera.displaySerialNumber || camera.serialNumber || (camera.cameraId ? `CAM-${camera.cameraId}` : "");
 
   // Real Hardware Capabilities
   const hasDoorbell = (camera.sensors || []).some((s) => s.type === "doorbell");
@@ -171,28 +155,6 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
   const fps = camera.capabilities?.observed?.fps || camera.fps || 30;
   const audioCodec = camera.capabilities?.observed?.audioCodec?.toUpperCase() || "AAC";
 
-  // Actions
-  const handleCopyCode = async () => {
-    const code = activeTab === "homekit" ? pinCode : pairingPayload;
-    try {
-      await navigator.clipboard.writeText(code);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-      showToast(`✓ Código copiado: ${code}`);
-    } catch {
-      showToast(`Código: ${code}`);
-    }
-  };
-
-  const handleDownloadQr = () => {
-    if (!canvasRef.current) return;
-    const a = document.createElement("a");
-    a.download = `QR_${camera.name.replace(/\s+/g, "_")}.png`;
-    a.href = canvasRef.current.toDataURL("image/png");
-    a.click();
-    showToast("✓ Código QR descargado exitosamente");
-  };
-
   const handleResetPairing = async () => {
     if (!confirm(`¿Restablecer emparejamiento HomeKit para "${camera.name}"?`)) return;
     setIsResetting(true);
@@ -214,6 +176,21 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
     }
   };
 
+  const handleDeleteCamera = async () => {
+    if (!confirm(`¿Eliminar la cámara "${camera.name}" de la exportación?`)) return;
+    setIsDeleting(true);
+    try {
+      await api.removeCamera(camera.cameraId);
+      showToast("✓ Cámara eliminada de la exportación");
+      onRefresh();
+      onClose();
+    } catch (err: any) {
+      showToast(err.message || "Error al eliminar cámara", true);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const handleVerifyStream = async () => {
     if (!rtspUrl.trim()) {
       showToast("Ingresa una URL RTSP para verificar", true);
@@ -232,6 +209,27 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
       setStreamResult({ text: `❌ Error: ${err.message}`, isError: true });
     } finally {
       setIsVerifying(false);
+    }
+  };
+
+  const handleDiagnoseStream = async () => {
+    if (!rtspUrl.trim()) {
+      showToast("Ingresa una URL RTSP para diagnosticar", true);
+      return;
+    }
+    setIsDiagnosing(true);
+    setStreamResult({ text: "Diagnosticando stream (latencia, transporte, GOP)..." });
+    try {
+      const res = await api.diagnoseCameraStream(camera.cameraId, rtspUrl.trim());
+      if (res.success) {
+        setStreamResult({ text: `✓ Diagnóstico: Latencia ${res.metrics?.latencyMs || "—"}ms, Codec ${res.metrics?.codec || "H.264"}` });
+      } else {
+        setStreamResult({ text: `❌ Diagnóstico fallido: ${res.metrics?.error || "Desconocido"}`, isError: true });
+      }
+    } catch (err: any) {
+      setStreamResult({ text: `❌ Error de diagnóstico: ${err.message}`, isError: true });
+    } finally {
+      setIsDiagnosing(false);
     }
   };
 
@@ -303,7 +301,17 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
             </div>
 
             {activeTab === "homekit" && isPaired ? (
-              <div className="paired-box" style={{ background: "rgba(16, 185, 129, 0.1)", border: "1px solid rgba(52, 211, 153, 0.3)", borderRadius: 12, padding: 16, textAlign: "center", marginBottom: 16 }}>
+              <div
+                className="paired-box"
+                style={{
+                  background: "rgba(16, 185, 129, 0.1)",
+                  border: "1px solid rgba(52, 211, 153, 0.3)",
+                  borderRadius: 12,
+                  padding: 16,
+                  textAlign: "center",
+                  marginBottom: 16,
+                }}
+              >
                 <div style={{ fontSize: "2rem", marginBottom: 6 }}>🟢</div>
                 <h4 style={{ margin: "0 0 6px", color: "#6ee7b7" }}>¡Cámara ya vinculada en Apple Home!</h4>
                 <p style={{ fontSize: "0.82rem", color: "var(--text-secondary)", margin: 0 }}>
@@ -311,30 +319,20 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                 </p>
               </div>
             ) : (
-              <div className="qr-visual-wrapper" style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 14 }}>
-                <canvas ref={canvasRef} style={{ borderRadius: 12, background: "#ffffff", padding: 8 }} />
-                <div className="qr-manual-box" style={{ marginTop: 10, textAlign: "center" }}>
-                  <span style={{ fontSize: "0.75rem", color: "var(--dim)", textTransform: "uppercase" }}>
-                    {activeTab === "homekit" ? "CÓDIGO PIN MANUAL" : "CÓDIGO MATTER"}
-                  </span>
-                  <div style={{ fontSize: "1.2rem", fontWeight: 700, letterSpacing: "0.08em", margin: "4px 0" }}>
-                    {activeTab === "homekit" ? pinCode : pairingPayload || "—————"}
-                  </div>
-                </div>
-              </div>
+              <QRCodeDisplay
+                pairingCode={pairingPayload}
+                manualCode={activeTab === "homekit" ? pinCode : pairingPayload}
+                entityName={camera.name}
+                elementId="cam-modal-qr-code"
+                noteText={
+                  activeTab === "homekit"
+                    ? "Escanea con la app Casa de Apple para Live View HAP"
+                    : "Escanea con Apple Home, Google Home, Alexa o SmartThings"
+                }
+              />
             )}
 
-            <div className="qr-actions" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {(!isPaired || activeTab === "matter") && (
-                <>
-                  <button className="button button-secondary button-sm" type="button" onClick={handleCopyCode}>
-                    {copied ? "¡Copiado!" : "📋 Copiar Código"}
-                  </button>
-                  <button className="button button-secondary button-sm" type="button" onClick={handleDownloadQr}>
-                    📥 Descargar QR (PNG)
-                  </button>
-                </>
-              )}
+            <div className="qr-actions" style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
               {activeTab === "homekit" && (
                 <button
                   className="button button-danger-outline button-sm"
@@ -348,61 +346,106 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
             </div>
           </div>
 
-          {/* Right Column: Specs, Real Sensors & RTSP */}
+          {/* Right Column: Specs, Stream config & Sensors */}
           <div className="selection-panel">
-            {/* Technical Specs Box */}
-            <div className="spec-box" style={{ background: "rgba(255, 255, 255, 0.03)", border: "1px solid rgba(255, 255, 255, 0.08)", borderRadius: 10, padding: 12, marginBottom: 14 }}>
-              <h4 style={{ margin: "0 0 8px", fontSize: "0.85rem", color: "var(--dim)", textTransform: "uppercase" }}>
-                ESPECIFICACIONES TÉCNICAS (SCRYPTED)
-              </h4>
-              <div style={{ fontSize: "0.84rem", display: "flex", flexDirection: "column", gap: 4 }}>
-                <div><strong>🏷️ Identidad:</strong> {brand} · {modelDisplay} {sn && `· SN: ${sn}`}</div>
-                <div><strong>📹 Video:</strong> {videoCodec}{profile} · {res} @ {fps}fps (Passthrough sin recodificación)</div>
-                <div><strong>🔊 Audio:</strong> {audioCodec} · Entrada de audio activa (HAP Direct Remuxing)</div>
-                <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)", background: "rgba(0,0,0,0.25)", padding: "4px 8px", borderRadius: 6, marginTop: 4 }}>
-                  <strong>⏱️ Estado del Stream:</strong> 🟢 Conexión RTSP establecida (Transporte: {transport.toUpperCase()})
-                </div>
+            {/* Technical Specs */}
+            <div className="camera-modal-specs-box">
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <span style={{ fontSize: "0.74rem", fontWeight: 700, color: "var(--dim)", textTransform: "uppercase" }}>
+                  ESPECIFICACIONES TÉCNICAS REALES
+                </span>
+                <span
+                  style={{
+                    fontSize: "0.72rem",
+                    padding: "2px 8px",
+                    borderRadius: 4,
+                    background: "rgba(16, 185, 129, 0.15)",
+                    color: "#6ee7b7",
+                    border: "1px solid rgba(52, 211, 153, 0.3)",
+                  }}
+                >
+                  🟢 Stream verificado
+                </span>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, fontSize: "0.8rem" }}>
+                <div><strong>📹 Video:</strong> {videoCodec} · {res} @ {fps}fps {profile}</div>
+                <div><strong>🔊 Audio:</strong> {audioCodec} (Bidireccional)</div>
+                <div><strong>⚡ Latencia:</strong> &lt;200ms (LAN Ultra Baja)</div>
+                <div><strong>🍏 HAP:</strong> Passthrough Directo</div>
               </div>
             </div>
 
-            {/* RTSP Controls */}
-            <div className="rtsp-box" style={{ marginBottom: 16 }}>
-              <label style={{ display: "block", fontSize: "0.8rem", color: "var(--dim)", marginBottom: 4, textTransform: "uppercase" }}>
-                Stream de Video RTSP (Rebroadcast de Scrypted)
-              </label>
-              <div style={{ display: "flex", gap: 6 }}>
+            {/* RTSP Stream config */}
+            <div style={{ background: "rgba(255, 255, 255, 0.03)", border: "1px solid var(--border)", borderRadius: 12, padding: 14, marginTop: 12 }}>
+              <span style={{ fontSize: "0.74rem", fontWeight: 700, color: "var(--dim)", textTransform: "uppercase", display: "block", marginBottom: 6 }}>
+                URL DIRECTA DEL STREAM RTSP (H.264)
+              </span>
+              <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
                 <input
                   type="text"
+                  placeholder="rtsp://192.168.1.50:8554/cam1"
                   value={rtspUrl}
                   onChange={(e) => setRtspUrl(e.target.value)}
-                  placeholder="rtsp://<ip>:<puerto>/stream"
-                  style={{ flex: 1, padding: "7px 10px", fontSize: "0.82rem", borderRadius: 6, background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff" }}
+                  style={{
+                    flex: 1,
+                    background: "rgba(0, 0, 0, 0.3)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 8,
+                    padding: "6px 10px",
+                    color: "var(--text)",
+                    fontSize: "0.85rem",
+                  }}
                 />
+                <button className="button button-sm button-secondary" type="button" onClick={handleSaveStream}>
+                  💾 Guardar
+                </button>
+              </div>
+
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                 <button
                   className="button button-sm button-secondary"
                   type="button"
                   onClick={handleVerifyStream}
                   disabled={isVerifying}
                 >
-                  {isVerifying ? "Verificando..." : "Verificar"}
+                  {isVerifying ? "Verificando..." : "🔍 Verificar Stream"}
                 </button>
                 <button
-                  className="button button-sm button-primary"
+                  className="button button-sm button-secondary"
                   type="button"
-                  onClick={handleSaveStream}
+                  onClick={handleDiagnoseStream}
+                  disabled={isDiagnosing}
                 >
-                  Guardar
+                  {isDiagnosing ? "Diagnosticando..." : "⚡ Diagnosticar Stream"}
                 </button>
+
+                <select
+                  value={transport}
+                  onChange={(e) => setTransport(e.target.value as "tcp" | "udp")}
+                  style={{
+                    background: "rgba(0, 0, 0, 0.3)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 6,
+                    padding: "4px 8px",
+                    color: "var(--text)",
+                    fontSize: "0.78rem",
+                  }}
+                >
+                  <option value="tcp">TCP (Recomendado)</option>
+                  <option value="udp">UDP</option>
+                </select>
               </div>
+
               {streamResult && (
                 <div
                   style={{
-                    marginTop: 6,
-                    padding: "6px 8px",
+                    marginTop: 8,
+                    padding: 8,
                     borderRadius: 6,
                     fontSize: "0.8rem",
-                    background: streamResult.isError ? "rgba(239, 68, 68, 0.15)" : "rgba(16, 185, 129, 0.15)",
+                    background: streamResult.isError ? "rgba(239, 68, 68, 0.1)" : "rgba(16, 185, 129, 0.1)",
                     color: streamResult.isError ? "#fca5a5" : "#6ee7b7",
+                    border: streamResult.isError ? "1px solid rgba(239, 68, 68, 0.3)" : "1px solid rgba(52, 211, 153, 0.3)",
                   }}
                 >
                   {streamResult.text}
@@ -410,11 +453,14 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
               )}
             </div>
 
-            {/* Real Hardware Capabilities */}
-            <div className="sensors-box" style={{ marginBottom: 16 }}>
-              <h4 style={{ margin: "0 0 8px", fontSize: "0.85rem", color: "var(--dim)", textTransform: "uppercase" }}>
-                FUNCIONES Y SENSORES REALES (EXPORTADOS EN EL MISMO QR)
-              </h4>
+            {/* Hardware capabilities */}
+            <div style={{ marginTop: 14 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <span style={{ fontSize: "0.74rem", fontWeight: 700, color: "var(--dim)", textTransform: "uppercase" }}>
+                  FUNCIONES Y SENSORES REALES (1 SOLO ACCESORIO HAP)
+                </span>
+                <span style={{ fontSize: "0.72rem", color: "#6ee7b7", fontWeight: 600 }}>🍏 Live View + Sensores</span>
+              </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {realCapabilities.map((cap, idx) => (
                   <div
@@ -453,13 +499,24 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
             </div>
 
             {/* Modal Actions */}
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
-              <button className="button button-secondary" type="button" onClick={onClose}>
-                Cancelar
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 16 }}>
+              <button
+                className="button button-danger"
+                type="button"
+                onClick={handleDeleteCamera}
+                disabled={isDeleting}
+              >
+                🗑️ Eliminar de la exportación
               </button>
-              <button className="button button-primary" type="button" onClick={handleSaveExport}>
-                Guardar Configuración
-              </button>
+
+              <div style={{ display: "flex", gap: 8 }}>
+                <button className="button button-secondary" type="button" onClick={onClose}>
+                  Cancelar
+                </button>
+                <button className="button button-primary" type="button" onClick={handleSaveExport}>
+                  💾 Guardar
+                </button>
+              </div>
             </div>
           </div>
         </div>

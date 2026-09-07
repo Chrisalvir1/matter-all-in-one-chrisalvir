@@ -8,6 +8,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   plugins: [react()],
   root: path.resolve(__dirname, "src/frontend"),
+  publicDir: path.resolve(__dirname, "src/frontend/public"),
   base: "./",
   build: {
     outDir: path.resolve(__dirname, "dist/frontend"),
@@ -20,11 +21,7 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      "/api": "http://localhost:8099",
-      "/status": "http://localhost:8099",
-      "/devices": "http://localhost:8099",
-      "/cameras": "http://localhost:8099",
-      "/scrypted": "http://localhost:8099",
+      "/api/custom": "http://localhost:8099",
     },
   },
 });
