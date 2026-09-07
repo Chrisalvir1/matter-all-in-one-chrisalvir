@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { useAddonState, FilterType } from "./hooks/useAddonState";
 import { Header } from "./components/Header";
+import { TopBar } from "./components/TopBar";
 import { ControlCenter } from "./components/ControlCenter";
 import { FilterBar } from "./components/FilterBar";
 import { CameraBrandGroup } from "./components/CameraBrandGroup";
@@ -185,14 +186,17 @@ export const App: React.FC = () => {
 
       <div className="app-shell">
         {/* Sidebar Header */}
-        <Header
-          status={status}
-          onOpenSettings={() => setIsSettingsModalOpen(true)}
-          onRestartService={handleRestartService}
-        />
+        <Header status={status} />
 
         {/* Main Content Area */}
         <main className="content">
+          {/* Top Bar with Status and Actions */}
+          <TopBar
+            status={status}
+            onOpenSettings={() => setIsSettingsModalOpen(true)}
+            onRestartService={handleRestartService}
+          />
+
           <header className="content-header">
             <div>
               <p className="eyebrow">

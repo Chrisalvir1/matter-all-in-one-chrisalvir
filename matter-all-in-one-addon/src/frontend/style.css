@@ -226,6 +226,58 @@ button {
   padding: 42px clamp(22px, 4vw, 64px) 60px;
   margin: 0 auto;
 }
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 20px;
+  margin-bottom: 28px;
+  border-bottom: 1px solid var(--border);
+}
+.topbar-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.topbar-connection {
+  padding: 0 !important;
+  font-weight: 500;
+  font-size: 13px;
+  color: var(--text);
+}
+.version-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--dim);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+}
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.button-topbar {
+  height: 38px;
+  padding: 0 16px;
+  font-size: 13px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border-radius: 12px;
+  margin-bottom: 0 !important;
+}
+.button-topbar .btn-icon {
+  font-size: 14px;
+}
+
 .content-header {
   display: flex;
   justify-content: space-between;
@@ -1828,6 +1880,22 @@ mark {
   }
   .content {
     padding: 28px 18px 44px;
+  }
+  .topbar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+    padding-bottom: 16px;
+    margin-bottom: 20px;
+  }
+  .topbar-actions {
+    width: 100%;
+    display: flex;
+    gap: 8px;
+  }
+  .button-topbar {
+    flex: 1;
+    justify-content: center;
   }
   .content-header {
     align-items: stretch;

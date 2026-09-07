@@ -1,3 +1,12 @@
+## [1.5.11] - 2026-09-07
+
+### UI: Barra Superior (Top Bar) para Acciones y Estado del Servicio
+
+- **Nueva Barra Superior (Top Bar) en el Panel Principal:**
+  - Se movieron los botones «Reiniciar Servicio» y «Ajustes del servicio», junto con el estado de conexión de Home Assistant y el indicador de versión, desde la parte inferior del menú lateral (sidebar) hacia una elegante barra superior (Top Bar) en el encabezado principal.
+  - Diseño limpio, accesible y adaptativo para pantallas de escritorio y dispositivos móviles.
+  - El menú lateral queda despejado, mostrando únicamente la marca y la tarjeta de estado del puente.
+
 ## [1.5.10] - 2026-09-07
 
 ### Consolidación y Exportación Independiente de Dispositivos Multi-Canal y Ventiladores On/Off
