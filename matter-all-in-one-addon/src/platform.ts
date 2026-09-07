@@ -1381,7 +1381,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     );
     this.log.notice(`[Runtime] Matterbridge runtime: ${mbVersion}`);
     this.log.notice(`[Runtime] Node.js runtime: ${process.version}`);
-    this.log.notice(`[Runtime] Plugin version: 1.5.12`);
+    this.log.notice(`[Runtime] Plugin version: 1.5.13`);
     await this.loadEntityDiagnostics();
     await this.startUiServer();
     this.startMatterConnectionMonitor();
@@ -3104,6 +3104,79 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             entityId.includes(vId.split(".")[1])
           ) {
             this.queueStateUpdate(vId, vEntity.state);
+          }
+        }
+      }
+    }
+
+    // Cross-coordination for hybrid devices (e.g. Govee H7133 Fan + Climate + Switch Oscillation)
+    const hybridDeviceId = this.ha?.hassEntities?.get(entityId)?.device_id;
+    if (hybridDeviceId) {
+      // 1. Oscillation switch state changes -> sync companion fan oscillation
+      if (entityId.startsWith("switch.") && entityId.includes("oscillation")) {
+        for (const [fId, fEntity] of this.entities.entries()) {
+          if (
+            fId.startsWith("fan.") &&
+            this.ha?.hassEntities?.get(fId)?.device_id === hybridDeviceId
+          ) {
+            fEntity.state = {
+              ...fEntity.state,
+              attributes: {
+                ...fEntity.state.attributes,
+                oscillating: newState.state === "on",
+              },
+            };
+            if (this.isEntityExported(fId)) {
+              this.queueStateUpdate(fId, fEntity.state);
+            }
+          }
+        }
+      }
+
+      // 2. Climate updates -> coordinate companion fan (airflow active when heating, sync room temperature)
+      if (entityId.startsWith("climate.")) {
+        for (const [fId, fEntity] of this.entities.entries()) {
+          if (
+            fId.startsWith("fan.") &&
+            this.ha?.hassEntities?.get(fId)?.device_id === hybridDeviceId
+          ) {
+            let changed = false;
+            const newAttrs = { ...fEntity.state.attributes };
+            if (typeof newState.attributes.current_temperature === "number") {
+              newAttrs.current_temperature =
+                newState.attributes.current_temperature;
+              changed = true;
+            }
+            if (newState.state === "heat" && fEntity.state.state === "off") {
+              fEntity.state = {
+                ...fEntity.state,
+                state: "on",
+                attributes: newAttrs,
+              };
+              changed = true;
+            } else if (changed) {
+              fEntity.state = { ...fEntity.state, attributes: newAttrs };
+            }
+            if (changed && this.isEntityExported(fId)) {
+              this.queueStateUpdate(fId, fEntity.state);
+            }
+          }
+        }
+      }
+
+      // 3. Fan updates -> coordinate companion climate (if fan completely off, reflect climate idle/off)
+      if (entityId.startsWith("fan.")) {
+        for (const [cId, cEntity] of this.entities.entries()) {
+          if (
+            cId.startsWith("climate.") &&
+            this.ha?.hassEntities?.get(cId)?.device_id === hybridDeviceId
+          ) {
+            if (newState.state === "off" && cEntity.state.state !== "off") {
+              cEntity.state = { ...cEntity.state, state: "off" };
+              if (this.isEntityExported(cId)) {
+                this.queueStateUpdate(cId, cEntity.state);
+              }
+            }
           }
         }
       }

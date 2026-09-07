@@ -58,6 +58,17 @@ export class MockMatterbridgeEndpoint {
     return this;
   }
 
+  public createDefaultTemperatureMeasurementClusterServer(value: number = 2000) {
+    this.clusterServers.add(0x0402);
+    this.setAttribute(0x0402, "measuredValue", value);
+    return this;
+  }
+
+  public createDefaultThermostatClusterServer() {
+    this.clusterServers.add(0x0201);
+    return this;
+  }
+
   public addChildDeviceTypeWithClusterServer(
     id: string,
     deviceTypes: any[],

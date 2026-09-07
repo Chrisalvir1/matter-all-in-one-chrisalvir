@@ -58,6 +58,10 @@ import {
   hasFanDirection,
   hasFanSpeed,
   hasFanAuto,
+  hasFanOscillation,
+  isFanOscillating,
+  haStateToRockSetting,
+  rockSettingToHa,
   getFanSpeedCount,
   getFanModeSequence,
   getFanControlFeatures,
@@ -454,6 +458,44 @@ export class CompositeDeviceEntity {
               );
             }
           }
+        }
+
+        if (endpoint.hasAttributeServer(FanControl.id, "rockSetting")) {
+          const isOscillating = isFanOscillating(state);
+          if (
+            !initial &&
+            this.shouldIgnoreStateUpdate(
+              entityId,
+              "fan_oscillating",
+              isOscillating,
+            )
+          ) {
+            this.platform.log.debug(
+              `[Composite][${entityId}] Ignoring fan_oscillating update (lockout)`,
+            );
+          } else {
+            const rockSetting = haStateToRockSetting(state);
+            await update(
+              endpoint,
+              FanControl.id,
+              "rockSetting",
+              rockSetting,
+              this.platform.log,
+            );
+          }
+        }
+
+        if (
+          typeof state.attributes.current_temperature === "number" &&
+          endpoint.hasAttributeServer(TemperatureMeasurement.id, "measuredValue")
+        ) {
+          await update(
+            endpoint,
+            TemperatureMeasurement.id,
+            "measuredValue",
+            Math.round(state.attributes.current_temperature * 100),
+            this.platform.log,
+          );
         }
         return;
       }
@@ -887,14 +929,15 @@ export class CompositeDeviceEntity {
       const fanMode = haStateToFanMode(member.state);
       const hasDir = hasFanDirection(member.state);
       const hasSpeed = hasFanSpeed(member.state);
+      const hasOscillation = hasFanOscillation(member.state);
       const fanFeatures = getFanControlFeatures(member.state);
       const fanModeSequence = getFanModeSequence(member.state);
 
       this.platform.log.debug(
-        `[Composite] Fan root init: ${member.entityId}, on=${on}, pct=${pct}, speed=${speed}/${speedMax}, sequence=${fanModeSequence}, speedSupport=${hasSpeed}, dir=${member.state.attributes.direction ?? "N/A"}`,
+        `[Composite] Fan root init: ${member.entityId}, on=${on}, pct=${pct}, speed=${speed}/${speedMax}, sequence=${fanModeSequence}, speedSupport=${hasSpeed}, oscillationSupport=${hasOscillation}, dir=${member.state.attributes.direction ?? "N/A"}`,
       );
 
-      if (hasSpeed) {
+      if (hasSpeed || hasOscillation) {
         const fanClusterBehavior = MatterbridgeFanControlServer.with(
           ...fanFeatures,
         );
@@ -914,6 +957,11 @@ export class CompositeDeviceEntity {
           );
         }
 
+        if (hasOscillation) {
+          fanStateConfig.rockSupport = { rockLeftRight: true };
+          fanStateConfig.rockSetting = haStateToRockSetting(member.state);
+        }
+
         endpoint.behaviors.require(fanClusterBehavior, fanStateConfig);
       } else {
         endpoint.createDefaultFanControlClusterServer(
@@ -923,6 +971,14 @@ export class CompositeDeviceEntity {
       }
 
       endpoint.behaviors.require(MatterbridgeOnOffServer.with());
+
+      // If ambient temperature is reported on this fan entity (e.g. Govee H7133)
+      if (typeof member.state.attributes.current_temperature === "number") {
+        endpoint.createDefaultTemperatureMeasurementClusterServer(
+          Math.round(member.state.attributes.current_temperature * 100),
+        );
+      }
+
       endpoint.addRequiredClusterServers();
       return;
     }
@@ -1253,6 +1309,46 @@ export class CompositeDeviceEntity {
               entityId,
               { direction: haDir },
             );
+          },
+        );
+      }
+
+      if (endpoint.hasAttributeServer(FanControl.id, "rockSetting")) {
+        endpoint.subscribeAttribute(
+          FanControl.id,
+          "rockSetting",
+          async (newSetting: any) => {
+            if (this.isUpdatingFromHa(entityId)) return;
+            const isOscillating = rockSettingToHa(newSetting);
+            this.setCommandLockout(entityId, "fan_oscillating", isOscillating);
+            this.platform.log.debug(
+              `[Composite][${entityId}] FanControl rockSetting → HA oscillating: ${isOscillating}`,
+            );
+            try {
+              await this.platform.ha.callService(
+                "fan",
+                "oscillate",
+                entityId,
+                { oscillating: isOscillating },
+              );
+            } catch (err) {
+              this.platform.log.debug(
+                `[Composite][${entityId}] fan.oscillate failed, checking switch fallback: ${err}`,
+              );
+              for (const member of this.members) {
+                if (
+                  member.entityId.startsWith("switch.") &&
+                  member.entityId.includes("oscillation")
+                ) {
+                  await this.platform.ha.callService(
+                    "switch",
+                    isOscillating ? "turn_on" : "turn_off",
+                    member.entityId,
+                  );
+                  break;
+                }
+              }
+            }
           },
         );
       }

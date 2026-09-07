@@ -1,3 +1,21 @@
+## [1.5.13] - 2026-09-07
+
+### Soporte Integral Govee H7133 (Oscilación Rocking, Termostato Coordinado, Luz RGB) y Matterbridge 3.10.8
+
+- **Soporte de Oscilación Nativa Matter (`FanControl.Feature.Rocking`):**
+  - Incorporada la característica `Rocking` y el atributo `rockSetting` en el clúster `FanControl` para ventiladores compatibles con oscilación (`FanEntityFeature.OSCILLATE` o atributo `oscillating`).
+  - En Apple Home (iOS 17, 18 y 27), el botón nativo de «Oscilar» aparece automáticamente en la tarjeta de control del ventilador.
+  - Sincronización bidireccional inmediata con `fan.oscillate` y respaldo de conmutación automática ante interruptores complementarios de oscilación (`switch.*_oscillation`).
+- **Medición de Temperatura en Tarjeta de Ventilador:**
+  - Si la entidad o el dispositivo reporta temperatura ambiente (`current_temperature`), se expone el clúster `TemperatureMeasurement` directamente en el endpoint de ventilador para mostrar la temperatura de la habitación en la cabecera del accesorio en Apple Home.
+- **Soporte y Coordinación Bidireccional de Termostato (`climate`):**
+  - Exposición de entidades `climate` como accesorios Matter `Thermostat` con soporte de calefacción (`Heating`), límites de consigna de temperatura y modos de operación (`Off` / `Heat` / `Auto`).
+  - **Coordinación Inteligente entre Alternativa A (Ventilador) y Alternativa B (Calefactor/Termostato):** Al encender el ventilador o activar el calefactor en Apple Home o Home Assistant, los dos perfiles se sincronizan como el mismo dispositivo físico sin bucles infinitos gracias a la protección `isUpdatingFromHa` y candados de comando temporales.
+- **Luz Ambiental RGB / Temperatura de Color Kelvin:**
+  - Exportación de la luz ambiental del equipo como `ExtendedColorLight` (con `ColorControl` y `LevelControl`), permitiendo control independiente de colores, brillo y temperatura de color.
+- **Actualización de Runtime Baseline:**
+  - Actualización a **Matterbridge 3.10.8** como dependencia mínima y de desarrollo, con mejoras en estabilidad de clústeres dinámicos.
+
 ## [1.5.12] - 2026-09-07
 
 ### UI: Eliminación de la Barra Lateral Secundaria e Integración en Top Bar Unificada

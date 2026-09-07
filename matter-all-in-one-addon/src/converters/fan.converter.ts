@@ -258,9 +258,54 @@ export function getFanModeSequence(
 }
 
 /**
+ * Determine if HA fan exposes oscillation capability.
+ * Checks FanEntityFeature.OSCILLATE (2), presence of `oscillating` attribute,
+ * or oscillation-related preset/feature flags.
+ */
+export function hasFanOscillation(state: HassState): boolean {
+  if (typeof state.attributes.oscillating === "boolean") return true;
+  const supported = state.attributes.supported_features;
+  if (typeof supported === "number") {
+    return (supported & FanEntityFeature.OSCILLATE) !== 0;
+  }
+  return false;
+}
+
+/**
+ * Determine current oscillation boolean state from HA fan state.
+ */
+export function isFanOscillating(state: HassState): boolean {
+  return state.attributes.oscillating === true;
+}
+
+/**
+ * Convert HA oscillating state to Matter RockSetting / RockBitmap.
+ */
+export function haStateToRockSetting(
+  state: HassState,
+): { rockLeftRight: boolean } {
+  return { rockLeftRight: isFanOscillating(state) };
+}
+
+/**
+ * Convert Matter RockSetting back to boolean oscillation for HA.
+ */
+export function rockSettingToHa(rockSetting: any): boolean {
+  if (!rockSetting) return false;
+  if (typeof rockSetting === "object") {
+    return Boolean(rockSetting.rockLeftRight);
+  }
+  if (typeof rockSetting === "number") {
+    return (rockSetting & 1) !== 0;
+  }
+  return Boolean(rockSetting);
+}
+
+/**
  * Resolve dynamic Matter FanControl features supported by the fan.
  * Includes MultiSpeed, Auto and Step for full Apple Home manual/auto and slider support.
  * AirflowDirection (DIR) is included when HA fan supports direction (bit 4).
+ * Rocking is included when HA fan supports oscillation (bit 1 or oscillating attribute).
  */
 export function getFanControlFeatures(state: HassState): any[] {
   const features: any[] = [
@@ -270,6 +315,9 @@ export function getFanControlFeatures(state: HassState): any[] {
   ];
   if (hasFanDirection(state)) {
     features.push(FanControl.Feature.AirflowDirection);
+  }
+  if (hasFanOscillation(state)) {
+    features.push(FanControl.Feature.Rocking);
   }
   return features;
 }
@@ -399,6 +447,18 @@ export const fanConverter = {
 
   /** Dynamic FanControl features. */
   getFanControlFeatures,
+
+  /** Determine if HA fan exposes oscillation capability. */
+  hasFanOscillation,
+
+  /** Determine current oscillation boolean state. */
+  isFanOscillating,
+
+  /** Convert HA state to RockSetting bitmap. */
+  haStateToRockSetting,
+
+  /** Convert RockSetting back to HA boolean oscillation. */
+  rockSettingToHa,
 
   /** Return the physical speed level (1..speedMax) or 0 (Off) based on the percentage. */
   fanSpeed,

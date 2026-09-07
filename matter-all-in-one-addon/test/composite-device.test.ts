@@ -224,4 +224,50 @@ describe("CompositeDeviceEntity", () => {
     );
     await expect(restored.syncInitialState()).resolves.toBeUndefined();
   });
+
+  it("handles fan oscillation and ambient temperature measurement in composite fan", async () => {
+    const composite = new CompositeDeviceEntity(
+      platform,
+      "govee-fan-heater",
+      "Govee H7133",
+      [
+        {
+          entityId: "fan.govee",
+          state: state("fan.govee", "on", {
+            percentage: 66.67,
+            oscillating: true,
+            current_temperature: 22.5,
+            supported_features: 3, // speed + oscillation
+          }),
+        },
+        {
+          entityId: "light.govee_light",
+          state: state("light.govee_light", "on", {
+            brightness: 200,
+            rgb_color: [255, 100, 50],
+            supported_color_modes: ["rgb"],
+          }),
+        },
+      ],
+    );
+
+    const root = await composite.createEndpoint();
+    expect(root).toBeDefined();
+    // Verify temperature cluster was registered
+    expect(root.clusterServers.has(0x0402)).toBe(true);
+    expect(root.getAttribute(0x0402, "measuredValue")).toBe(2250);
+
+    // Verify rockSetting attribute subscription and command execution
+    await (root as any).invokeAttributeChange(
+      { id: 0x0202 },
+      "rockSetting",
+      { rockLeftRight: false },
+    );
+    expect(platform.ha.callService).toHaveBeenCalledWith(
+      "fan",
+      "oscillate",
+      "fan.govee",
+      { oscillating: false },
+    );
+  });
 });

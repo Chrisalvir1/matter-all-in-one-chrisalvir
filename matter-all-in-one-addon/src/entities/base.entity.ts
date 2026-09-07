@@ -11,11 +11,13 @@ import {
   BooleanState,
   TemperatureMeasurement,
   RelativeHumidityMeasurement,
+  Thermostat,
 } from "matterbridge/matter/clusters";
 import { ClusterId } from "matterbridge/matter/types";
 import {
   MatterbridgeOnOffServer,
   MatterbridgeFanControlServer,
+  MatterbridgeThermostatServer,
 } from "matterbridge/behaviors";
 import { HomeAssistantPlatform } from "../platform.js";
 import { HassState } from "../utils/ha-state.js";
@@ -44,6 +46,10 @@ import {
   hasFanDirection,
   hasFanSpeed,
   hasFanAuto,
+  hasFanOscillation,
+  isFanOscillating,
+  haStateToRockSetting,
+  rockSettingToHa,
   getFanSpeedCount,
   getFanModeSequence,
   getFanControlFeatures,
@@ -51,6 +57,7 @@ import {
   FAN_SPEED_MAX,
 } from "../converters/fan.converter.js";
 import { lightConverter } from "../converters/light.converter.js";
+import { climateConverter } from "../converters/climate.converter.js";
 
 export class BaseEntity {
   public platform: HomeAssistantPlatform;
@@ -255,6 +262,7 @@ export class BaseEntity {
       this.deviceType.name.toLowerCase() === "fan";
     const hasDirectionSupport = hasFanDirection(this.state);
     const hasSpeedSupport = hasFanSpeed(this.state);
+    const hasOscillationSupport = hasFanOscillation(this.state);
 
     if (domain === "fan" && isFanProfile) {
       const on = isFanOn(this.state);
@@ -266,10 +274,10 @@ export class BaseEntity {
       const fanModeSequence = getFanModeSequence(this.state);
 
       this.platform.log.debug(
-        `[${this.entityId}] Fan init: state=${this.state.state}, on=${on}, pct=${pct}, speed=${speed}/${speedMax}, sequence=${fanModeSequence}, speedSupport=${hasSpeedSupport}, dir=${this.state.attributes.direction ?? "N/A"}`,
+        `[${this.entityId}] Fan init: state=${this.state.state}, on=${on}, pct=${pct}, speed=${speed}/${speedMax}, sequence=${fanModeSequence}, speedSupport=${hasSpeedSupport}, oscillationSupport=${hasOscillationSupport}, dir=${this.state.attributes.direction ?? "N/A"}`,
       );
 
-      if (hasSpeedSupport) {
+      if (hasSpeedSupport || hasOscillationSupport) {
         const fanClusterBehavior = MatterbridgeFanControlServer.with(
           ...fanFeatures,
         );
@@ -289,6 +297,11 @@ export class BaseEntity {
           );
         }
 
+        if (hasOscillationSupport) {
+          fanStateConfig.rockSupport = { rockLeftRight: true };
+          fanStateConfig.rockSetting = haStateToRockSetting(this.state);
+        }
+
         this.endpoint.behaviors.require(fanClusterBehavior, fanStateConfig);
       } else {
         // Pure On/Off fan (e.g. smart switch configured as fan) — use default FanControl server without MultiSpeed
@@ -299,6 +312,51 @@ export class BaseEntity {
       }
 
       this.endpoint.behaviors.require(MatterbridgeOnOffServer.with());
+
+      // If ambient temperature is reported on this fan entity (e.g. Govee H7133 tower fan)
+      if (typeof this.state.attributes.current_temperature === "number") {
+        this.endpoint.createDefaultTemperatureMeasurementClusterServer(
+          Math.round(this.state.attributes.current_temperature * 100),
+        );
+      }
+    } else if (domain === "climate") {
+      const thermostatFeatures: any[] = [Thermostat.Feature.Heating];
+      const hvacModes: string[] = this.state.attributes.hvac_modes ?? [];
+      if (hvacModes.includes("cool")) {
+        thermostatFeatures.push(Thermostat.Feature.Cooling);
+      }
+      if (hvacModes.includes("auto") || hvacModes.includes("heat_cool")) {
+        thermostatFeatures.push(Thermostat.Feature.AutoMode);
+      }
+
+      const thermostatServer = MatterbridgeThermostatServer.with(
+        ...thermostatFeatures,
+      );
+      const currentTemp =
+        typeof this.state.attributes.current_temperature === "number"
+          ? Math.round(this.state.attributes.current_temperature * 100)
+          : 2100;
+      const targetTemp =
+        typeof this.state.attributes.temperature === "number"
+          ? Math.round(this.state.attributes.temperature * 100)
+          : currentTemp;
+      const minTemp = Math.round(
+        (this.state.attributes.min_temp ?? 7) * 100,
+      );
+      const maxTemp = Math.round(
+        (this.state.attributes.max_temp ?? 35) * 100,
+      );
+      const systemMode = climateConverter.toMatterSystemMode(this.state.state);
+
+      this.endpoint.behaviors.require(thermostatServer, {
+        localTemperature: currentTemp,
+        occupiedHeatingSetpoint: targetTemp,
+        minHeatSetpointLimit: minTemp,
+        maxHeatSetpointLimit: maxTemp,
+        absMinHeatSetpointLimit: minTemp,
+        absMaxHeatSetpointLimit: maxTemp,
+        systemMode,
+      });
     } else if (
       domain === "light" ||
       domain === "switch" ||
@@ -628,6 +686,55 @@ export class BaseEntity {
         );
       }
 
+      // ── Fan rocking / oscillation handler ────────────────────────────────
+      if (
+        domain === "fan" &&
+        this.endpoint.hasAttributeServer(FanControl.id, "rockSetting")
+      ) {
+        this.endpoint.subscribeAttribute(
+          FanControl.id,
+          "rockSetting",
+          async (newSetting: any) => {
+            if (this.isUpdatingFromHa) return;
+            const isOscillating = rockSettingToHa(newSetting);
+            this.setCommandLockout("fan_oscillating", isOscillating);
+            this.platform.log.debug(
+              `[${this.entityId}] FanControl rockSetting → HA oscillating: ${isOscillating}`,
+            );
+            try {
+              await this.platform.ha.callService(
+                "fan",
+                "oscillate",
+                this.entityId,
+                { oscillating: isOscillating },
+              );
+            } catch (err) {
+              this.platform.log.debug(
+                `[${this.entityId}] fan.oscillate failed, attempting companion switch fallback: ${err}`,
+              );
+              const devId =
+                this.platform.ha?.hassEntities?.get(this.entityId)?.device_id;
+              if (devId) {
+                for (const [sId] of this.platform.entities.entries()) {
+                  if (
+                    sId.startsWith("switch.") &&
+                    sId.includes("oscillation") &&
+                    this.platform.ha?.hassEntities?.get(sId)?.device_id === devId
+                  ) {
+                    await this.platform.ha.callService(
+                      "switch",
+                      isOscillating ? "turn_on" : "turn_off",
+                      sId,
+                    );
+                    break;
+                  }
+                }
+              }
+            }
+          },
+        );
+      }
+
       if (this.endpoint.hasAttributeServer(LevelControl.id, "currentLevel")) {
         this.endpoint.addCommandHandler("moveToLevel", async (data: any) => {
           const level = data?.request?.level ?? data?.level;
@@ -894,6 +1001,60 @@ export class BaseEntity {
               } else {
                 await sendColor(payload);
               }
+            }
+          },
+        );
+      }
+    }
+
+    // ── Climate / Thermostat handlers ───────────────────────────────────
+    if (domain === "climate") {
+      if (
+        this.endpoint.hasAttributeServer(
+          Thermostat.id,
+          "occupiedHeatingSetpoint",
+        )
+      ) {
+        this.endpoint.subscribeAttribute(
+          Thermostat.id,
+          "occupiedHeatingSetpoint",
+          async (newVal: any) => {
+            if (this.isUpdatingFromHa) return;
+            if (typeof newVal === "number") {
+              const targetC = climateConverter.toCelsius(newVal);
+              this.platform.log.debug(
+                `[${this.entityId}] Thermostat setpoint changed: ${newVal} -> ${targetC}°C`,
+              );
+              this.setCommandLockout("temperature", targetC);
+              await this.platform.ha.callService(
+                "climate",
+                "set_temperature",
+                this.entityId,
+                { temperature: targetC },
+              );
+            }
+          },
+        );
+      }
+
+      if (this.endpoint.hasAttributeServer(Thermostat.id, "systemMode")) {
+        this.endpoint.subscribeAttribute(
+          Thermostat.id,
+          "systemMode",
+          async (newMode: any) => {
+            if (this.isUpdatingFromHa) return;
+            if (typeof newMode === "number") {
+              const hvacMode = climateConverter.toHaHvacMode(newMode);
+              this.platform.log.debug(
+                `[${this.entityId}] Thermostat systemMode changed: ${newMode} -> ${hvacMode}`,
+              );
+              this.setCommandLockout("climate_state", hvacMode);
+              await this.platform.ha.callService(
+                "climate",
+                "set_hvac_mode",
+                this.entityId,
+                { hvac_mode: hvacMode },
+              );
             }
           },
         );
@@ -1289,6 +1450,109 @@ export class BaseEntity {
                 );
               }
             }
+          }
+
+          // Rocking (Oscillation) update
+          if (this.endpoint.hasAttributeServer(FanControl.id, "rockSetting")) {
+            const isOscillating = isFanOscillating(newState);
+            if (
+              !isInitialSync &&
+              this.shouldIgnoreStateUpdate("fan_oscillating", isOscillating)
+            ) {
+              this.platform.log.debug(
+                `[${this.entityId}] Ignoring HA oscillating update due to command lockout (oscillating=${isOscillating})`,
+              );
+            } else {
+              const rockSetting = haStateToRockSetting(newState);
+              await updateFn(
+                this.endpoint,
+                FanControl.id,
+                "rockSetting",
+                rockSetting,
+                this.platform.log,
+              );
+              this.platform.log.debug(
+                `[${this.entityId}] Fan rocking synced: HA=${isOscillating} → Matter=${JSON.stringify(rockSetting)}`,
+              );
+            }
+          }
+
+          // Ambient temperature on fan endpoint
+          if (
+            typeof newState.attributes.current_temperature === "number" &&
+            this.endpoint.hasAttributeServer(
+              TemperatureMeasurement.id,
+              "measuredValue",
+            )
+          ) {
+            await updateFn(
+              this.endpoint,
+              TemperatureMeasurement.id,
+              "measuredValue",
+              Math.round(newState.attributes.current_temperature * 100),
+              this.platform.log,
+            );
+          }
+        }
+      } else if (domain === "climate") {
+        if (
+          this.endpoint.hasAttributeServer(Thermostat.id, "localTemperature") &&
+          typeof newState.attributes.current_temperature === "number"
+        ) {
+          await updateFn(
+            this.endpoint,
+            Thermostat.id,
+            "localTemperature",
+            Math.round(newState.attributes.current_temperature * 100),
+            this.platform.log,
+          );
+        }
+
+        if (
+          this.endpoint.hasAttributeServer(
+            Thermostat.id,
+            "occupiedHeatingSetpoint",
+          ) &&
+          typeof newState.attributes.temperature === "number"
+        ) {
+          if (
+            !isInitialSync &&
+            this.shouldIgnoreStateUpdate(
+              "temperature",
+              newState.attributes.temperature,
+            )
+          ) {
+            this.platform.log.debug(
+              `[${this.entityId}] Ignoring HA climate target temp update due to command lockout`,
+            );
+          } else {
+            await updateFn(
+              this.endpoint,
+              Thermostat.id,
+              "occupiedHeatingSetpoint",
+              Math.round(newState.attributes.temperature * 100),
+              this.platform.log,
+            );
+          }
+        }
+
+        if (this.endpoint.hasAttributeServer(Thermostat.id, "systemMode")) {
+          if (
+            !isInitialSync &&
+            this.shouldIgnoreStateUpdate("climate_state", newState.state)
+          ) {
+            this.platform.log.debug(
+              `[${this.entityId}] Ignoring HA climate state update due to command lockout`,
+            );
+          } else {
+            const systemMode = climateConverter.toMatterSystemMode(newState.state);
+            await updateFn(
+              this.endpoint,
+              Thermostat.id,
+              "systemMode",
+              systemMode,
+              this.platform.log,
+            );
           }
         }
       } else if (domain === "binary_sensor") {

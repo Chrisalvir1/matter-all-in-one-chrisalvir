@@ -31,6 +31,10 @@ import {
   FAN_SPEED_LEVELS,
   hasFanDirection,
   hasFanAuto,
+  hasFanOscillation,
+  isFanOscillating,
+  haStateToRockSetting,
+  rockSettingToHa,
   getFanSpeedCount,
   getFanModeSequence,
   getFanControlFeatures,
@@ -421,5 +425,51 @@ describe("Fan converter — hasFanSpeed (distinguish On/Off switches from speed 
   it("returns false when no speed features or attributes are present", () => {
     const s = makeState("on", {});
     expect(hasFanSpeed(s)).toBe(false);
+  });
+});
+
+describe("Fan converter — Oscillation (Rocking) support", () => {
+  it("detects oscillation via supported_features (bit 1 = 2)", () => {
+    const s = makeState("on", { supported_features: 2 });
+    expect(hasFanOscillation(s)).toBe(true);
+  });
+
+  it("detects oscillation via oscillating attribute", () => {
+    const s = makeState("on", { oscillating: false });
+    expect(hasFanOscillation(s)).toBe(true);
+  });
+
+  it("returns false when neither feature bit nor oscillating attribute is present", () => {
+    const s = makeState("on", { supported_features: 1 });
+    expect(hasFanOscillation(s)).toBe(false);
+  });
+
+  it("identifies oscillating status correctly", () => {
+    expect(isFanOscillating(makeState("on", { oscillating: true }))).toBe(true);
+    expect(isFanOscillating(makeState("on", { oscillating: false }))).toBe(false);
+    expect(isFanOscillating(makeState("on", {}))).toBe(false);
+  });
+
+  it("converts HA oscillating to Matter rockSetting bitmap", () => {
+    expect(haStateToRockSetting(makeState("on", { oscillating: true }))).toEqual({
+      rockLeftRight: true,
+    });
+    expect(haStateToRockSetting(makeState("on", { oscillating: false }))).toEqual({
+      rockLeftRight: false,
+    });
+  });
+
+  it("converts Matter rockSetting back to HA boolean", () => {
+    expect(rockSettingToHa({ rockLeftRight: true })).toBe(true);
+    expect(rockSettingToHa({ rockLeftRight: false })).toBe(false);
+    expect(rockSettingToHa(1)).toBe(true);
+    expect(rockSettingToHa(0)).toBe(false);
+  });
+
+  it("includes FanControl.Feature.Rocking in features when oscillation is supported", () => {
+    const s = makeState("on", { supported_features: 3 }); // SET_SPEED (1) + OSCILLATE (2)
+    const features = getFanControlFeatures(s);
+    expect(features).toContain(FanControl.Feature.Rocking);
+    expect(features).toContain(FanControl.Feature.MultiSpeed);
   });
 });
