@@ -1,5 +1,5 @@
 import { DeviceRecord } from "../types";
-import { getProductImage } from "../data/productImages";
+import { getProductImage } from "./productImages";
 
 export interface AppleColorConfig {
   name: string;
