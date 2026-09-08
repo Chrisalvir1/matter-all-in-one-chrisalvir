@@ -252,7 +252,7 @@ const profilesByDomain: Record<string, DeviceExportProfile[]> = {
 
 const defaultProfileByDomain: Record<string, string> = {
   camera: "camera",
-  light: "dimmableLight",
+  light: "extendedColorLight",
   switch: "onOffPlugInUnit",
   fan: "fan",
   cover: "windowCovering",

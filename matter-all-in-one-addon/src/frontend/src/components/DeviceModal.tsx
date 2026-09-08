@@ -3,6 +3,7 @@ import { DeviceRecord, EntityRecord } from "../types";
 import { api } from "../api/client";
 import { QRCodeDisplay } from "./QRCodeDisplay";
 import { AppleHomeIcon } from "./AppleHomeIcon";
+import { extractLightColorInfo } from "../utils/colors";
 import {
   detectDevice,
   getDeviceVisualOverride,
@@ -193,6 +194,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
       // Also publish companion light & temperature if present
       const lightEnt = device.entities.find((e) => e.domain === "light");
       if (lightEnt && !lightEnt.exported) {
+        await api.setDeviceProfile(lightEnt.entityId, "extendedColorLight").catch(() => {});
         await api.toggleExport(lightEnt.entityId, true).catch(() => {});
         lightEnt.exported = true;
       }
@@ -769,6 +771,123 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                 <dd>{isCommissioned ? "Emparejado en red Matter" : isExported ? "Listo para vincular" : "Sin publicar"}</dd>
               </div>
             </dl>
+
+            {/* Dedicated Light & Color Control Panel */}
+            {activeEntity?.domain === "light" && (() => {
+              const colInfo = extractLightColorInfo(activeEntity.attributes);
+              return (
+                <section
+                  className="light-color-config-section"
+                  style={{
+                    background: "rgba(255, 255, 255, 0.04)",
+                    border: "1px solid rgba(255, 255, 255, 0.08)",
+                    borderRadius: 14,
+                    padding: "14px 16px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 12,
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: 16 }}>💡</span>
+                      <strong style={{ fontSize: 13, color: "var(--text-primary, #fff)" }}>
+                        Color & Perfil Matter de Luz
+                      </strong>
+                    </div>
+                    <span
+                      style={{
+                        fontSize: 11,
+                        padding: "2px 8px",
+                        borderRadius: 12,
+                        background: "rgba(255, 255, 255, 0.08)",
+                        color: "#38BDF8",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {activeEntity.matterType || "extendedColorLight"}
+                    </span>
+                  </div>
+
+                  {/* Live color badge */}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 12,
+                      padding: "10px 12px",
+                      background: "rgba(0, 0, 0, 0.3)",
+                      borderRadius: 10,
+                      border: `1px solid ${colInfo.hex}44`,
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: 24,
+                        height: 24,
+                        borderRadius: "50%",
+                        background: colInfo.hex,
+                        boxShadow: `0 0 12px ${colInfo.hex}`,
+                        border: "2px solid rgba(255, 255, 255, 0.4)",
+                        flexShrink: 0,
+                      }}
+                    />
+                    <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: "#fff" }}>
+                        {colInfo.label}
+                      </span>
+                      <span style={{ fontSize: 11, color: "var(--text-secondary, #94A3B8)" }}>
+                        HEX: {colInfo.hex} {colInfo.kelvin ? `· ${colInfo.kelvin}K` : ""}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Matter profile selector */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    <label style={{ fontSize: 11, color: "var(--text-secondary, #94A3B8)", fontWeight: 500 }}>
+                      Perfil Matter de Exportación
+                    </label>
+                    <select
+                      value={activeEntity.matterType || "extendedColorLight"}
+                      onChange={async (e) => {
+                        const val = e.target.value;
+                        try {
+                          await api.setDeviceProfile(activeEntity.entityId, val);
+                          activeEntity.matterType = val;
+                          showToast(`✓ Perfil cambiado a ${val}`);
+                          onRefresh();
+                        } catch (err: any) {
+                          showToast(err.message || "Error al cambiar perfil", true);
+                        }
+                      }}
+                      style={{
+                        background: "rgba(15, 23, 42, 0.8)",
+                        border: "1px solid rgba(255, 255, 255, 0.15)",
+                        color: "var(--text-primary, #fff)",
+                        padding: "8px 12px",
+                        borderRadius: 8,
+                        fontSize: 13,
+                        outline: "none",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <option value="extendedColorLight">
+                        🎨 extendedColorLight (Color RGB + Kelvin + Brillo) [Recomendado]
+                      </option>
+                      <option value="colorTemperatureLight">
+                        🌡️ colorTemperatureLight (Temperatura Kelvin + Brillo)
+                      </option>
+                      <option value="dimmableLight">
+                        🔅 dimmableLight (Regulable / Brillo)
+                      </option>
+                      <option value="onOffLight">
+                        💡 onOffLight (Encendido / Apagado)
+                      </option>
+                    </select>
+                  </div>
+                </section>
+              );
+            })()}
 
             {/* Custom Visual Silhouette / Hardware Appearance */}
             <section

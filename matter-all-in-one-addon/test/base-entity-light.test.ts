@@ -531,4 +531,49 @@ describe("Light Entity Comprehensive Audit (18 Requirements)", () => {
       },
     );
   });
+
+  // 19. ExtendedColorLight maps rgbw and rgbww modes and attributes.
+  it("19. getLightDeviceType correctly maps rgbw and rgbww to extendedColorLight", () => {
+    const devTypeRgbw = getLightDeviceType({ supported_color_modes: ["rgbw"] });
+    expect(devTypeRgbw.name).toBe("extendedColorLight");
+
+    const devTypeRgbww = getLightDeviceType({
+      supported_color_modes: ["rgbww"],
+    });
+    expect(devTypeRgbww.name).toBe("extendedColorLight");
+
+    const devTypeRgbwAttr = getLightDeviceType({
+      rgbw_color: [255, 100, 50, 0],
+    });
+    expect(devTypeRgbwAttr.name).toBe("extendedColorLight");
+  });
+
+  // 20. lightColor extracts HS from rgb, rgbw, rgbww, xy, and converts to rgb_color payload.
+  it("20. lightColor extracts HS from rgbw, rgbww, xy and builds proper payload", () => {
+    // RGBW extraction
+    const hsFromRgbw = lightColor.getHsColor({
+      entity_id: "light.test_rgbw",
+      state: "on",
+      attributes: { rgbw_color: [255, 0, 0, 50] },
+      last_changed: "",
+      last_updated: "",
+    });
+    expect(hsFromRgbw).toBeDefined();
+    expect(hsFromRgbw![0]).toBe(0);
+    expect(hsFromRgbw![1]).toBe(100);
+
+    // RGB payload fallback when integration only supports rgb mode
+    const payload = lightColor.buildColorPayload(["rgb"], "rgb", {
+      hs: [120, 100],
+    });
+    expect(payload.rgb_color).toBeDefined();
+    expect(payload.rgb_color).toEqual([0, 255, 0]);
+
+    // Dual Kelvin/Mireds payload
+    const tempPayload = lightColor.buildColorPayload(["color_temp"], "color_temp", {
+      mireds: 250,
+    });
+    expect(tempPayload.color_temp).toBe(250);
+    expect(tempPayload.color_temp_kelvin).toBe(4000);
+  });
 });

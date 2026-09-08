@@ -3,7 +3,7 @@ import { DeviceRecord } from "../types";
 import { AppleHomeIcon } from "./AppleHomeIcon";
 import { DeviceCardArt } from "./DeviceCardArt";
 import { LiquidSlider } from "./LiquidSlider";
-import { extractLightColor } from "../utils/colors";
+import { extractLightColor, extractLightColorInfo } from "../utils/colors";
 import {
   detectDevice,
   APPLE_HOMEPOD_COLORS,
@@ -115,7 +115,8 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
   // Light color & brightness for card illumination
   const activeLight = lightEntity || (primaryDomain === "light" ? primaryEntity : undefined);
   const isLightActive = activeLight ? activeLight.state === "on" : false;
-  const [lr, lg, lb] = extractLightColor(activeLight?.attributes);
+  const lightColorInfo = extractLightColorInfo(activeLight?.attributes);
+  const [lr, lg, lb] = lightColorInfo.rgb;
   const lightBrightness = activeLight
     ? typeof activeLight.attributes?.brightness === "number"
       ? activeLight.attributes.brightness / 255
@@ -166,7 +167,9 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
   } else if (primaryDomain === "light") {
     const bri = primaryAttributes.brightness;
     const pct = bri ? Math.round((bri / 255) * 100) : null;
-    statusSummary = isOn ? `Encendida${pct ? ` · ${pct}%` : ""}` : "Apagada";
+    statusSummary = isOn
+      ? `Encendida${pct ? ` · ${pct}%` : ""} · ${lightColorInfo.label}`
+      : "Apagada";
   } else if (primaryDomain === "climate") {
     const curTemp = primaryAttributes.current_temperature;
     statusSummary = `${isOn ? primaryState.toUpperCase() : "APAGADO"}${
@@ -593,15 +596,33 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                       style={{
                         fontSize: "0.72rem",
                         color: lightEntity.state === "on" ? `rgb(${lr}, ${lg}, ${lb})` : "#94a3b8",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
                       }}
                     >
-                      {lightEntity.state === "on"
-                        ? `Encendida${
-                            lightEntity.attributes?.brightness
-                              ? ` · ${Math.round((lightEntity.attributes.brightness / 255) * 100)}%`
-                              : ""
-                          }`
-                        : "Apagada"}
+                      {lightEntity.state === "on" && (
+                        <span
+                          style={{
+                            width: "7px",
+                            height: "7px",
+                            borderRadius: "50%",
+                            background: lightColorInfo.hex,
+                            boxShadow: `0 0 6px ${lightColorInfo.hex}`,
+                            display: "inline-block",
+                            flexShrink: 0,
+                          }}
+                        />
+                      )}
+                      <span>
+                        {lightEntity.state === "on"
+                          ? `Encendida${
+                              lightEntity.attributes?.brightness
+                                ? ` · ${Math.round((lightEntity.attributes.brightness / 255) * 100)}%`
+                                : ""
+                            } · ${lightColorInfo.label}`
+                          : "Apagada"}
+                      </span>
                     </div>
                   </div>
                 </div>

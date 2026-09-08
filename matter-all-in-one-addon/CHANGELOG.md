@@ -1,3 +1,24 @@
+## [1.5.27] - 2026-09-08
+
+### Soporte Completo RGB y Kelvin para Luz Nocturna Govee H7133 y Todas las Luces en Tarjetas
+
+- **Corrección Raíz de Atributos de Luz (`platform.ts`):**
+  - Se corrigió el endpoint `/api/custom/devices` que filtraba y truncaba los atributos del estado a solo `{ friendly_name }`. Ahora se entregan todos los atributos íntegros (`rgb_color`, `rgbw_color`, `rgbww_color`, `hs_color`, `xy_color`, `color_temp_kelvin`, `color_temp`, `brightness`, etc.) al frontend.
+- **Exportación de Luz Nocturna Govee H7133 como `extendedColorLight` (`device-profiles.ts`, `platform.ts`, `device-registry.ts`):**
+  - La luz nocturna del ventilador Govee H7133 (`light.ventilador_playroom_night_light`), tiras LED y luces con capacidades de color se detectan y configuran automáticamente como `extendedColorLight` (Matter ColorControl), habilitando la rueda de colores RGB completa en Apple Home y Google Home.
+  - Al activar el Plan A para H7133, la luz acompañante se configura directamente con perfil `extendedColorLight`.
+- **Motor de Conversión de Color Ampliado (`light-color.ts`):**
+  - Soporte completo en backend para extraer color HS desde `rgbw_color`, `rgbww_color`, `xy_color` y `rgb_color`.
+  - Conversión bidireccional entre HS y RGB (`hsToRgb`, `rgbToHs`).
+  - Envío dual de `color_temp` y `color_temp_kelvin` en cargas útiles dirigidas a Home Assistant.
+  - Conversión automática a `rgb_color` cuando las entidades solo admiten modo de color RGB.
+- **Renderizado Dinámico de RGB y Kelvin en Tarjetas (`colors.ts`, `DeviceCard.tsx`, `matter-apple-card.ts`):**
+  - Utilidad `extractLightColorInfo` que analiza los atributos de HA y extrae el color RGB exacto, código HEX, temperatura Kelvin y etiquetas descriptivas (`4000K · Blanco Neutro`, `Color (#00F0FF)`, `2700K · Blanco Cálido`).
+  - Las tarjetas (`DeviceCard.tsx` y Lovelace `matter-apple-card.ts`) iluminan el borde, brillo y sombras con el color real emitido por la bombilla o tira LED.
+  - Píldora indicadora de color en vivo con punto brillante en los subcontroles de luz y estado principal de la tarjeta.
+- **Panel de Configuración de Luz y Selector de Perfiles Matter (`DeviceModal.tsx`):**
+  - Nuevo panel interactivo al seleccionar cualquier entidad de luz con insignia de color en tiempo real, valores HEX/Kelvin y selector de perfiles Matter (`extendedColorLight`, `colorTemperatureLight`, `dimmableLight`, `onOffLight`).
+
 ## [1.5.26] - 2026-09-08
 
 ### Códigos QR Separados para Plan A (Ventilador) y Plan B (Calefactor) en Govee H7133

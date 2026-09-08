@@ -926,6 +926,30 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     entityId: string,
     state: HassState,
   ): string | undefined {
+    if (entityId.startsWith("light.")) {
+      const id = entityId.toLowerCase();
+      const fn = (state.attributes?.friendly_name || "").toLowerCase();
+      // Night lights (such as Govee H7133 night light), Govee LED, and lights with color capabilities
+      if (
+        id.includes("h713") ||
+        id.includes("night_light") ||
+        id.includes("rgb") ||
+        id.includes("govee") ||
+        id.includes("flow") ||
+        id.includes("lyra") ||
+        id.includes("strip") ||
+        fn.includes("nocturna") ||
+        fn.includes("night light") ||
+        fn.includes("rgb") ||
+        state.attributes?.rgb_color !== undefined ||
+        state.attributes?.hs_color !== undefined ||
+        state.attributes?.xy_color !== undefined ||
+        state.attributes?.color_temp !== undefined ||
+        state.attributes?.color_temp_kelvin !== undefined
+      ) {
+        return "extendedColorLight";
+      }
+    }
     if (!entityId.startsWith("switch.omni_broadlink_")) return undefined;
     const identity = `${entityId} ${state.attributes?.friendly_name ?? ""}`;
     return /(?:^|[_\s-])(everybot|ircedge|robot|aspiradora|vacuum|cleaner)(?:$|[_\s-])/i.test(
@@ -1387,7 +1411,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     );
     this.log.notice(`[Runtime] Matterbridge runtime: ${mbVersion}`);
     this.log.notice(`[Runtime] Node.js runtime: ${process.version}`);
-    this.log.notice(`[Runtime] Plugin version: 1.5.26`);
+    this.log.notice(`[Runtime] Plugin version: 1.5.27`);
     await this.loadEntityDiagnostics();
     await this.startUiServer();
     this.startMatterConnectionMonitor();
@@ -3605,14 +3629,16 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               entityId: e.entityId,
               domain: domain,
               state: e.state.state,
-              attributes: { friendly_name: e.state.attributes?.friendly_name },
+              attributes: { ...e.state.attributes },
               deviceTypeLabel: typeLabel,
               matterType:
                 domain === "fan"
                   ? "fan"
                   : domain === "humidifier"
                     ? "humidifier"
-                    : e.deviceType.name,
+                    : (this.deviceOverrides[e.entityId] ??
+                      this.getAutomaticProfile(e.entityId, e.state) ??
+                      e.deviceType.name),
               // Registry info
               ...this.getHaRegistryInfo(e.entityId),
               // Accessory status

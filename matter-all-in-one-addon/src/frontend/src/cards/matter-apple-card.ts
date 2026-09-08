@@ -47,11 +47,11 @@ export interface DeviceProfile {
   matterExport: string;
 }
 
-const CARD_VERSION = "1.5.21";
+const CARD_VERSION = "1.5.27";
 
 // ── Color Utilities ───────────────────────────────────────────────────────────
 function kelvinToRgb(kelvin: number): [number, number, number] {
-  const temp = Math.max(1000, Math.min(40000, kelvin || 3000)) / 100;
+  const temp = Math.max(1000, Math.min(40000, kelvin || 2700)) / 100;
   let red: number;
   let green: number;
   let blue: number;
@@ -68,6 +68,80 @@ function kelvinToRgb(kelvin: number): [number, number, number] {
   return [Math.round(red), Math.round(green), Math.round(blue)];
 }
 
+function miredsToKelvin(mireds: number): number {
+  if (!mireds || mireds <= 0) return 2700;
+  return Math.round(1000000 / mireds);
+}
+
+function hsToRgb(h: number, s: number, v = 100): [number, number, number] {
+  const hue = ((h % 360) + 360) % 360;
+  const sat = Math.max(0, Math.min(100, s)) / 100;
+  const val = Math.max(0, Math.min(100, v)) / 100;
+  const c = val * sat;
+  const x = c * (1 - Math.abs(((hue / 60) % 2) - 1));
+  const m = val - c;
+  let r1 = 0,
+    g1 = 0,
+    b1 = 0;
+  if (hue < 60) {
+    r1 = c;
+    g1 = x;
+    b1 = 0;
+  } else if (hue < 120) {
+    r1 = x;
+    g1 = c;
+    b1 = 0;
+  } else if (hue < 180) {
+    r1 = 0;
+    g1 = c;
+    b1 = x;
+  } else if (hue < 240) {
+    r1 = 0;
+    g1 = x;
+    b1 = c;
+  } else if (hue < 300) {
+    r1 = x;
+    g1 = 0;
+    b1 = c;
+  } else {
+    r1 = c;
+    g1 = 0;
+    b1 = x;
+  }
+  return [
+    Math.round((r1 + m) * 255),
+    Math.round((g1 + m) * 255),
+    Math.round((b1 + m) * 255),
+  ];
+}
+
+function xyToRgb(x: number, y: number): [number, number, number] {
+  if (y === 0) return [255, 255, 255];
+  const z = 1.0 - x - y;
+  const Y = 1.0;
+  const X = (Y / y) * x;
+  const Z = (Y / y) * z;
+  let r = X * 3.2406 - Y * 1.5372 - Z * 0.4986;
+  let g = -X * 0.9689 + Y * 1.8758 + Z * 0.0415;
+  let b = X * 0.0557 - Y * 0.204 + Z * 1.057;
+  r = r <= 0.0031308 ? 12.92 * r : 1.055 * Math.pow(r, 1.0 / 2.4) - 0.055;
+  g = g <= 0.0031308 ? 12.92 * g : 1.055 * Math.pow(g, 1.0 / 2.4) - 0.055;
+  b = b <= 0.0031308 ? 12.92 * b : 1.055 * Math.pow(b, 1.0 / 2.4) - 0.055;
+  return [
+    Math.max(0, Math.min(255, Math.round(r * 255))),
+    Math.max(0, Math.min(255, Math.round(g * 255))),
+    Math.max(0, Math.min(255, Math.round(b * 255))),
+  ];
+}
+
+function getKelvinDescription(kelvin: number): string {
+  if (kelvin < 2400) return "Cálido Muy Suave";
+  if (kelvin < 3200) return "Blanco Cálido";
+  if (kelvin < 4500) return "Blanco Neutro";
+  if (kelvin < 6000) return "Luz Natural / Día";
+  return "Blanco Frío";
+}
+
 function rgbArrayToHex(rgb: number[]): string {
   if (!Array.isArray(rgb) || rgb.length < 3) return "#FFE082";
   return (
@@ -77,6 +151,86 @@ function rgbArrayToHex(rgb: number[]): string {
       .map((x) => Math.max(0, Math.min(255, Math.round(x))).toString(16).padStart(2, "0"))
       .join("")
   );
+}
+
+interface CardLightColorInfo {
+  rgb: [number, number, number];
+  hex: string;
+  kelvin?: number;
+  label: string;
+}
+
+function extractLightColorInfo(attrs: Record<string, any> = {}): CardLightColorInfo {
+  const colorMode = attrs.color_mode;
+  let kelvin: number | undefined;
+
+  if (typeof attrs.color_temp_kelvin === "number" && attrs.color_temp_kelvin > 0) {
+    kelvin = Math.round(attrs.color_temp_kelvin);
+  } else if (typeof attrs.color_temp === "number" && attrs.color_temp > 0) {
+    kelvin = miredsToKelvin(attrs.color_temp);
+  }
+
+  const isColorTempMode =
+    colorMode === "color_temp" ||
+    (!attrs.rgb_color &&
+      !attrs.hs_color &&
+      !attrs.xy_color &&
+      !attrs.rgbw_color &&
+      !attrs.rgbww_color &&
+      kelvin !== undefined);
+
+  if (isColorTempMode && kelvin !== undefined) {
+    const rgb = kelvinToRgb(kelvin);
+    return {
+      rgb,
+      hex: rgbArrayToHex(rgb),
+      kelvin,
+      label: `${kelvin}K · ${getKelvinDescription(kelvin)}`,
+    };
+  }
+
+  if (Array.isArray(attrs.rgb_color) && attrs.rgb_color.length >= 3) {
+    const rgb: [number, number, number] = [attrs.rgb_color[0], attrs.rgb_color[1], attrs.rgb_color[2]];
+    const hex = rgbArrayToHex(rgb);
+    return { rgb, hex, kelvin, label: `Color (${hex})` };
+  }
+
+  const rgbMulti = attrs.rgbw_color ?? attrs.rgbww_color;
+  if (Array.isArray(rgbMulti) && rgbMulti.length >= 3) {
+    const rgb: [number, number, number] = [rgbMulti[0], rgbMulti[1], rgbMulti[2]];
+    const hex = rgbArrayToHex(rgb);
+    return { rgb, hex, kelvin, label: `Color (${hex})` };
+  }
+
+  if (Array.isArray(attrs.hs_color) && attrs.hs_color.length >= 2) {
+    const rgb = hsToRgb(attrs.hs_color[0], attrs.hs_color[1]);
+    const hex = rgbArrayToHex(rgb);
+    return { rgb, hex, kelvin, label: `Color (${hex})` };
+  }
+
+  if (Array.isArray(attrs.xy_color) && attrs.xy_color.length >= 2) {
+    const rgb = xyToRgb(attrs.xy_color[0], attrs.xy_color[1]);
+    const hex = rgbArrayToHex(rgb);
+    return { rgb, hex, kelvin, label: `Color (${hex})` };
+  }
+
+  if (kelvin !== undefined) {
+    const rgb = kelvinToRgb(kelvin);
+    return {
+      rgb,
+      hex: rgbArrayToHex(rgb),
+      kelvin,
+      label: `${kelvin}K · ${getKelvinDescription(kelvin)}`,
+    };
+  }
+
+  const defaultRgb: [number, number, number] = [255, 209, 89];
+  return {
+    rgb: defaultRgb,
+    hex: rgbArrayToHex(defaultRgb),
+    kelvin: 2700,
+    label: "2700K · Blanco Cálido",
+  };
 }
 
 // ── Device & Model Intelligence ───────────────────────────────────────────────
@@ -680,8 +834,8 @@ function renderKineticSvg(profile: DeviceProfile, stateObj: HassState, isOn: boo
 
   // 3. Govee RGBIC Strip / Neon Light Bar
   if (profile.type === "govee_rgbic_strip") {
-    const rgb = attrs.rgb_color || (attrs.color_temp_kelvin ? kelvinToRgb(attrs.color_temp_kelvin) : [56, 189, 248]);
-    const hexColor = rgbArrayToHex(rgb);
+    const colInfo = extractLightColorInfo(attrs);
+    const hexColor = colInfo.hex;
     const bri = typeof attrs.brightness === "number" ? Math.max(0.3, attrs.brightness / 255) : 1;
 
     return `
@@ -707,8 +861,8 @@ function renderKineticSvg(profile: DeviceProfile, stateObj: HassState, isOn: boo
 
   // 4. Govee Lyra / Aura Lamp
   if (profile.type === "govee_lamp") {
-    const rgb = attrs.rgb_color || (attrs.color_temp_kelvin ? kelvinToRgb(attrs.color_temp_kelvin) : [255, 215, 120]);
-    const hexColor = rgbArrayToHex(rgb);
+    const colInfo = extractLightColorInfo(attrs);
+    const hexColor = colInfo.hex;
     const bri = typeof attrs.brightness === "number" ? Math.max(0.3, attrs.brightness / 255) : 1;
 
     return `
@@ -723,8 +877,8 @@ function renderKineticSvg(profile: DeviceProfile, stateObj: HassState, isOn: boo
 
   // 5. Standard Light Bulb
   if (domain === "light") {
-    const rgb = attrs.rgb_color || (attrs.color_temp_kelvin ? kelvinToRgb(attrs.color_temp_kelvin) : [255, 224, 130]);
-    const hexColor = rgbArrayToHex(rgb);
+    const colInfo = extractLightColorInfo(attrs);
+    const hexColor = colInfo.hex;
     const bri = typeof attrs.brightness === "number" ? Math.max(0.3, attrs.brightness / 255) : 1;
 
     return `
@@ -1055,8 +1209,8 @@ export class MatterAppleCard extends HTMLElement {
     if (domain === "light") {
       const bri = attrs.brightness;
       sliderValue = bri ? Math.round((bri / 255) * 100) : (isOn ? 100 : 0);
-      const rgb = attrs.rgb_color || (attrs.color_temp_kelvin ? kelvinToRgb(attrs.color_temp_kelvin) : [255, 224, 130]);
-      sliderColor = rgbArrayToHex(rgb);
+      const colInfo = extractLightColorInfo(attrs);
+      sliderColor = colInfo.hex;
       sliderIcon = "☼";
     } else if (domain === "fan") {
       sliderValue = typeof attrs.percentage === "number" ? attrs.percentage : (isOn ? 50 : 0);
@@ -1074,7 +1228,8 @@ export class MatterAppleCard extends HTMLElement {
     } else if (domain === "light") {
       const bri = attrs.brightness;
       const pct = bri ? Math.round((bri / 255) * 100) : null;
-      statusText = isOn ? `Encendida${pct ? ` · ${pct}%` : ""}` : "Apagada";
+      const colInfo = extractLightColorInfo(attrs);
+      statusText = isOn ? `Encendida${pct ? ` · ${pct}%` : ""} · ${colInfo.label}` : "Apagada";
     } else if (domain === "climate") {
       const curTemp = attrs.current_temperature;
       statusText = `${isOn ? stateObj.state.toUpperCase() : "APAGADO"}${curTemp ? ` · ${curTemp}°C` : ""}`;
@@ -1087,8 +1242,8 @@ export class MatterAppleCard extends HTMLElement {
     let puckGlow = "rgba(56, 189, 248, 0.35)";
     let cardGlow = "rgba(56, 189, 248, 0.15)";
     if (domain === "light" && isOn) {
-      const rgb = attrs.rgb_color || (attrs.color_temp_kelvin ? kelvinToRgb(attrs.color_temp_kelvin) : [255, 224, 130]);
-      const hex = rgbArrayToHex(rgb);
+      const colInfo = extractLightColorInfo(attrs);
+      const hex = colInfo.hex;
       puckGlow = `${hex}66`;
       cardGlow = `${hex}33`;
     } else if (domain === "switch" && isOn) {
