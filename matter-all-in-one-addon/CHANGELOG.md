@@ -1,3 +1,12 @@
+## [1.5.18] - 2026-09-07
+
+### Corrección Crítica de Referencia `isDashboardMode` en DeviceCard y Typecheck Obligatorio en Build
+
+- **Resolución de ReferenceError `isDashboardMode` (`DeviceCard.tsx`):**
+  - Declaración explícita de `isDashboardMode` en `DeviceCardProps` con resolución automática vía parámetro de consulta URL (`?mode=dashboard`), eliminando la excepción de renderizado detectada por el ErrorBoundary.
+- **Validación Estricta de Tipos en el Pipeline de Compilación:**
+  - El script `build` ahora ejecuta `tsc -p src/frontend/tsconfig.json --noEmit` obligatoriamente antes de Vite para bloquear cualquier error de variables no declaradas o desajustes de tipos en tiempo de compilación.
+
 ## [1.5.17] - 2026-09-07
 
 ### Corrección Definitiva de Pantalla Negra en Home Assistant Ingress y Fallback Anti-Caché

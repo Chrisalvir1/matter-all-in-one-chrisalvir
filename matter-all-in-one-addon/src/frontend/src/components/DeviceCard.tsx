@@ -9,6 +9,7 @@ interface DeviceCardProps {
   searchQuery: string;
   onConfigure: () => void;
   onRefresh?: () => void;
+  isDashboardMode?: boolean;
 }
 
 export const DeviceCard: React.FC<DeviceCardProps> = ({
@@ -16,7 +17,12 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
   searchQuery,
   onConfigure,
   onRefresh,
+  isDashboardMode: propDashboardMode = false,
 }) => {
+  const isDashboardMode =
+    propDashboardMode ||
+    (typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).get("mode") === "dashboard");
   const [isToggling, setIsToggling] = useState(false);
   const exported = device.entities.filter((e) => e.exported).length;
   const isMqtt = device.entities.some((e) => e.origin === "mqtt" || e.entityId.startsWith("mqtt."));
