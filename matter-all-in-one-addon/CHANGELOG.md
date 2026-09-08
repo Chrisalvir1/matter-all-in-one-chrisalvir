@@ -1,3 +1,29 @@
+## [1.5.16] - 2026-09-07
+
+### Soporte de Pantalla Avanzada: Display P3, HDR / XDR, 120 FPS ProMotion, OLED True Black y Dimmer
+
+- **Soporte Display P3 (Wide Color Gamut):**
+  - Colores nativos de Apple Home (`--apple-green`, `--apple-amber`, `--apple-blue`, etc.) con coordenadas `color(display-p3 ...)` y fallback automático sRGB para paneles estándar.
+- **HDR y Liquid Retina XDR:**
+  - Soporte de brillo dinámico `@media (dynamic-range: high)` con reflejos especulares de hasta 1600 nits en bordes de cristal líquido y pucks activos.
+- **OLED True Black (0 nits):**
+  - Degradado periférico a `#000000` puro en modo oscuro que apaga físicamente los píxeles OLED en pantallas Super Retina XDR y OLED, ahorrando batería y dando contraste infinito.
+- **Rendimiento 120 FPS ProMotion:**
+  - Animaciones aceleradas por hardware en GPU (`translate3d` y `will-change: transform, opacity`), eliminando saltos de cuadro (*zero layout thrashing*).
+- **Dimmer Deslizante Interactivo (Liquid Glass Slider):**
+  - Control de brillo para luces (`light.*`) y porcentaje de velocidad para ventiladores (`fan.*`) con respuesta visual instantánea a 120 FPS y llamadas con debounce de 40ms a Home Assistant.
+- **Sincronización Automática de Día y Noche (`sun.sun`):**
+  - Adaptación automática del fondo y luz ambiental de las tarjetas según el estado de `sun.sun` (`above_horizon` vs `below_horizon`).
+
+## [1.5.15] - 2026-09-07
+
+### Tarjeta Lovelace Nativa TypeScript y Sincronización Bidireccional de Ventiladores
+
+- **Tarjeta Lovelace Dedicada (`matter-apple-card`):**
+  - Compilada directamente desde TypeScript con Vite 8 (`dist/frontend/matter-apple-card.js`) para ser usada en cualquier dashboard de Home Assistant.
+- **Sincronización Bidireccional de Estado de Ventiladores con Home Assistant:**
+  - Sincronización instantánea entre el estado físico de Home Assistant y HomeKit/Apple Home, evitando desfases cuando se enciende o apaga desde otra plataforma.
+
 ## [1.5.14] - 2026-09-07
 
 ### Tarjetas Liquid Glass estilo Apple Home, Modo Dashboard Operativo y Auditoría de No Exportados
