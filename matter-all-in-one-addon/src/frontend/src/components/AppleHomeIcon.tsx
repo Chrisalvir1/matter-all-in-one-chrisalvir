@@ -383,6 +383,65 @@ export const AppleHomeIcon: React.FC<AppleHomeIconProps> = ({
       );
     }
 
+    case "vacuum": {
+      return (
+        <svg
+          viewBox="0 0 36 36"
+          style={svgStyle}
+          className={`apple-home-icon icon-vacuum ${isOn ? "is-on" : "is-off"} ${className}`}
+          aria-label="Aspiradora"
+        >
+          <circle
+            cx="18"
+            cy="18"
+            r="14"
+            fill={isOn ? "rgba(225, 29, 72, 0.15)" : "rgba(255, 255, 255, 0.08)"}
+            stroke={isOn ? "#E11D48" : "rgba(255, 255, 255, 0.3)"}
+            strokeWidth="1.6"
+          />
+          {/* Front Bumper arc */}
+          <path
+            d="M 6 18 A 12 12 0 0 1 30 18"
+            fill="none"
+            stroke={isOn ? "#FB7185" : "rgba(255, 255, 255, 0.2)"}
+            strokeWidth="1.8"
+          />
+          {/* LiDAR Turret */}
+          <circle
+            cx="18"
+            cy="21"
+            r="4.5"
+            fill={isOn ? "#E11D48" : "#48484A"}
+            stroke="#1C1C1E"
+            strokeWidth="1.2"
+          />
+          {/* Status LED / Laser dot */}
+          <circle cx="18" cy="21" r="1.5" fill={isOn ? "#FFF" : "#8E8E93"} />
+        </svg>
+      );
+    }
+
+    case "humidifier": {
+      return (
+        <svg
+          viewBox="0 0 36 36"
+          style={svgStyle}
+          className={`apple-home-icon icon-humidifier ${isOn ? "is-on" : "is-off"} ${className}`}
+          aria-label="Humidificador"
+        >
+          <path
+            d="M 18 6 C 18 6 10 17 10 23 A 8 8 0 0 0 26 23 C 26 17 18 6 18 6 Z"
+            fill={isOn ? "rgba(56, 189, 248, 0.25)" : "rgba(255, 255, 255, 0.08)"}
+            stroke={isOn ? "#38BDF8" : "rgba(255, 255, 255, 0.3)"}
+            strokeWidth="1.8"
+          />
+          {isOn && (
+            <circle cx="18" cy="23" r="3.5" fill="#38BDF8" opacity={0.8} />
+          )}
+        </svg>
+      );
+    }
+
     default: {
       return (
         <svg

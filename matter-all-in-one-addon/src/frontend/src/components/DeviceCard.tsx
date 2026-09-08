@@ -4,6 +4,7 @@ import { AppleHomeIcon } from "./AppleHomeIcon";
 import { DeviceCardArt } from "./DeviceCardArt";
 import { LiquidSlider } from "./LiquidSlider";
 import { extractLightColor } from "../utils/colors";
+import { detectDevice } from "../utils/deviceDetector";
 import { api } from "../api/client";
 
 interface DeviceCardProps {
@@ -27,6 +28,8 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
       new URLSearchParams(window.location.search).get("mode") === "dashboard");
   const [togglingEntityIds, setTogglingEntityIds] = useState<Set<string>>(new Set());
 
+  const deviceInfo = detectDevice(device);
+
   const exported = device.entities.filter((e) => e.exported).length;
   const isMqtt = device.entities.some((e) => e.origin === "mqtt" || e.entityId.startsWith("mqtt."));
   const hasIssue = device.entities.some((e) => e.exported && e.hasIssue);
@@ -38,7 +41,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
   const coverEntity = device.entities.find((e) => e.domain === "cover");
 
   const controllableCount = device.entities.filter((e) =>
-    ["light", "fan", "switch", "cover", "climate", "lock", "humidifier"].includes(e.domain)
+    ["light", "fan", "switch", "cover", "climate", "lock", "humidifier", "vacuum"].includes(e.domain)
   ).length;
 
   const isComposite = (Boolean(fanEntity) && Boolean(lightEntity)) || controllableCount > 1;
@@ -58,19 +61,16 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
 
   const domains = [...new Set(device.entities.map((e) => e.domain))].slice(0, 3);
 
-  const brandInfo = device.manufacturer
-    ? `${device.manufacturer}${device.model ? ` (${device.model})` : ""}`
-    : "";
   const originText = isMqtt
     ? "MQTT Auto-Discovery"
-    : brandInfo
-      ? `${brandInfo}${device.area ? ` · 📍 ${device.area}` : ""}`
-      : device.area
-        ? `📍 ${device.area} · Home Assistant`
+    : device.area
+      ? `📍 ${device.area} · ${deviceInfo.brand}`
+      : deviceInfo.brand !== "Home Assistant"
+        ? `${deviceInfo.brand} · Home Assistant`
         : "Home Assistant";
 
   // Check if primary domain is controllable via toggle
-  const isControllable = ["light", "switch", "fan", "climate", "lock", "cover", "humidifier"].includes(
+  const isControllable = ["light", "switch", "fan", "climate", "lock", "cover", "humidifier", "vacuum"].includes(
     primaryDomain
   );
   const isOn =
@@ -176,6 +176,9 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
         lightRgb={[lr, lg, lb]}
         lightBrightness={lightBrightness}
         isLightOn={isLightActive}
+        subtype={deviceInfo.subtype}
+        brand={deviceInfo.brand}
+        model={deviceInfo.model}
       />
 
       {/* Card Header & Controls (z-index: 2 for absolute click priority) */}
@@ -225,6 +228,52 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
       </div>
 
       <div style={{ position: "relative", zIndex: 2 }}>
+        <div
+          className="device-brand-row"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+            marginBottom: "5px",
+            flexWrap: "wrap",
+          }}
+        >
+          <span
+            className="brand-pill"
+            style={{
+              fontSize: "0.68rem",
+              fontWeight: 750,
+              letterSpacing: "0.05em",
+              textTransform: "uppercase",
+              padding: "2px 7px",
+              borderRadius: "6px",
+              background: `rgba(${deviceInfo.brandColor}, 0.15)`,
+              border: `1px solid rgba(${deviceInfo.brandColor}, 0.35)`,
+              color: deviceInfo.accentColor,
+            }}
+          >
+            {deviceInfo.brand}
+          </span>
+          {deviceInfo.model && (
+            <span
+              className="model-pill"
+              style={{
+                fontSize: "0.68rem",
+                fontWeight: 600,
+                padding: "2px 6px",
+                borderRadius: "6px",
+                background: "rgba(0, 0, 0, 0.3)",
+                border: "1px solid rgba(255, 255, 255, 0.12)",
+                color: "#cbd5e1",
+              }}
+            >
+              {deviceInfo.model}
+            </span>
+          )}
+          <span style={{ fontSize: "0.72rem", color: "#94a3b8" }}>
+            {deviceInfo.category}
+          </span>
+        </div>
         <h3 title={device.name}>{device.name}</h3>
         {!isComposite && <p className="device-status-highlight">{statusSummary}</p>}
         <p className="device-meta">{originText}</p>
@@ -452,7 +501,17 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
 
       <div className="tags" style={{ position: "relative", zIndex: 2, marginTop: "10px" }}>
         {isMqtt && <span className="tag tag-mqtt">📡 MQTT</span>}
-        {device.manufacturer && <span className="tag tag-brand">{device.manufacturer}</span>}
+        <span
+          className="tag tag-brand"
+          style={{
+            color: deviceInfo.accentColor,
+            borderColor: `rgba(${deviceInfo.brandColor}, 0.35)`,
+            background: `rgba(${deviceInfo.brandColor}, 0.08)`,
+          }}
+        >
+          {deviceInfo.brand}
+        </span>
+        {deviceInfo.model && <span className="tag">{deviceInfo.model}</span>}
         {hasIssue && <span className="tag tag-warning">Revisar</span>}
         {domains.map((dom) => (
           <span className="tag" key={dom}>

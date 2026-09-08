@@ -1,3 +1,26 @@
+## [1.5.21] - 2026-09-07
+
+### Reconocimiento Universal de Marca, Modelo Fiel y Renderizado de Hardware Físico en Todos los Dispositivos
+
+- **Motor de Inteligencia de Marcas y Modelos (`deviceDetector.ts`):**
+  - Detección automática y profunda de marcas inteligentes líderes del mercado: **Govee, Tapo / TP-Link, Philips Hue, Roborock, SwitchBot, Aqara, Tuya / Smart Life, Sonoff, Shelly, Roomba / iRobot, Ecovacs, Dreame, Nanoleaf, WiZ, IKEA TRÅDFRI, Ecobee, Google Nest, Honeywell, Ring, Blink, Eufy, Reolink, Yale, August, Hunter, Dyson, Xiaomi**.
+  - Identificación precisa de modelos específicos (e.g. `H7133`, `H7130`, `H618A`, `H6199`, `L530E`, `P110`, `C200`, `S8 Pro Ultra`, `Plus 1PM`, `NSPanel`, etc.).
+  - Distintivos estilizados de marca (`brand-pill`) con colores de identidad de marca (Govee cyan, Tapo blue, Hue violet, Roborock crimson, etc.) y pastillas de modelo (`model-pill`) en cada tarjeta.
+- **Renderizado Físico Realista por Tipo de Hardware (`DeviceCardArt.tsx`):**
+  - **Ventilador de Torre (`tower_fan`, e.g. Govee H7133 / Dreo):** Columna vertical estilizada, panel superior LED con indicador de encendido, rejilla de salida de aire con paletas oscilantes animadas (`fan-tower-vane`) y estelas dinámicas de brisa (`breezeGrad`).
+  - **Ventilador de Techo con Luz (`ceiling_fan`, e.g. Hunter / Ventilador de Sala):** Cúpula de techo, vástago, aspas horizontales aerodinámicas rotando en vivo en 360° y domo de luz central de cristal esmerilado que se ilumina con la temperatura Kelvin real.
+  - **Ventilador de Pie / Pedestal (`pedestal_fan`):** Base circular, mástil telescópico, jaula de alambre y hélice tripala girando a velocidad proporcional.
+  - **Tiras LED RGBIC y Neón (`led_strip`, e.g. Govee RGBIC / Nanoleaf):** Cinta de neón sinuosa y flexible con nodos LED y resplandor vibrante según Kelvin o color RGB.
+  - **Bombillas Inteligentes (`bulb`, e.g. Tapo L530, Philips Hue):** Silueta de cristal A19 con filamento LED visible y cono de luz volumétrico.
+  - **Aspiradoras Robot (`vacuum`, e.g. Roborock S8 / Roomba):** Chasis circular con torreta LiDAR que proyecta un rayo láser rojo giratorio en 360° en tiempo real (`fan-spin`), parachoques frontal y compuerta de depósito.
+  - **Termostatos Inteligentes (`thermostat`, e.g. Nest / Ecobee):** Dial circular con bisel de cristal y arco de estado térmico activo (naranja calefacción, cian refrigeración, verde eco).
+  - **Enchufes Inteligentes (`plug`, e.g. Tapo P110 / Shelly):** Adaptador de enchufe con anillo circular de encendido retroiluminado y tomas protegidas.
+  - **Cerraduras Electrónicas (`lock`, e.g. Yale / SwitchBot Lock):** Placa de cerrojo maciza con cilindro y anillo LED (verde desbloqueado, rojo bloqueado).
+- **Iconografía Dinámica Apple Home Expandida (`AppleHomeIcon.tsx`):**
+  - Incorporados iconos nativos para aspiradoras robot (`vacuum`) y humidificadores (`humidifier`).
+- **Tarjeta Lovelace Home Assistant Sincronizada (`matter-apple-card.ts`):**
+  - Integrada representación cinética para aspiradoras robot y actualización de versión a `1.5.21`.
+
 ## [1.5.20] - 2026-09-07
 
 ### Animación Cinemática de Aspas Rotando en Vivo e Iluminación Volumétrica Kelvin / RGB de Tarjeta

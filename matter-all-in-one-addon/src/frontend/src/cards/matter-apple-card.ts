@@ -47,7 +47,7 @@ export interface DeviceProfile {
   matterExport: string;
 }
 
-const CARD_VERSION = "1.5.20";
+const CARD_VERSION = "1.5.21";
 
 // ── Color Utilities ───────────────────────────────────────────────────────────
 function kelvinToRgb(kelvin: number): [number, number, number] {
@@ -233,6 +233,16 @@ function detectDeviceProfile(
       brand: brand || "Home Assistant",
       model: model,
       matterExport: "Matter 1.6 · On/Off Plugin Unit",
+    };
+  }
+
+  // 10. Robot Vacuum
+  if (domain === "vacuum") {
+    return {
+      type: "vacuum",
+      brand: brand || "Roborock",
+      model: model || "Aspiradora Robot",
+      matterExport: "Matter 1.6 · Robotic Vacuum Cleaner",
     };
   }
 
@@ -773,7 +783,23 @@ function renderKineticSvg(profile: DeviceProfile, stateObj: HassState, isOn: boo
     `;
   }
 
-  // 9. Switch / Socket
+  // 9. Robot Vacuum
+  if (domain === "vacuum" || profile.type === "vacuum") {
+    return `
+      <svg viewBox="0 0 48 48" width="34" height="34" aria-hidden="true">
+        <circle cx="24" cy="24" r="18" fill="${isOn ? "#1E293B" : "#0F172A"}" stroke="${isOn ? "#E11D48" : "#64748B"}" stroke-width="2"/>
+        <path d="M 10 18 A 16 16 0 0 1 38 18" fill="none" stroke="${isOn ? "#FB7185" : "rgba(255,255,255,0.15)"}" stroke-width="2.5" stroke-linecap="round"/>
+        <circle cx="24" cy="24" r="6" fill="${isOn ? "#E11D48" : "#334155"}" stroke="#1E293B" stroke-width="1.5"/>
+        <g class="${isOn ? "fan-spinning" : ""}" style="transform-origin: 24px 24px;">
+          <line x1="24" y1="24" x2="36" y2="24" stroke="#EF4444" stroke-width="1.8" stroke-linecap="round"/>
+          <circle cx="35" cy="24" r="1.5" fill="#FFF"/>
+        </g>
+        <circle cx="24" cy="24" r="2" fill="#FFF"/>
+      </svg>
+    `;
+  }
+
+  // 10. Switch / Socket
   return `
     <svg viewBox="0 0 48 48" width="34" height="34" aria-hidden="true">
       <rect x="10" y="8" width="28" height="32" rx="8" fill="${isOn ? "#1E293B" : "#0F172A"}" stroke="${isOn ? "var(--apple-green)" : "#64748B"}" stroke-width="2"/>
