@@ -1,3 +1,24 @@
+## [1.5.28] - 2026-09-08
+
+### Soporte de Postura Dual (De pie / Acostado) y Animaciones Dinámicas de Flujo de Aire y Calor para Govee H7133
+
+- **Animación Dinámica de Ráfagas de Viento y Calor (`DeviceCardArt.tsx`, `style.css`):**
+  - **Modo Ambiente (Ventilador encendido, Calefactor apagado):** Efecto de ráfagas continuas de brisa fresca en tonos cian/azul (`breeze-gust-flow`) saliendo desde la rejilla del ventilador con curvas de aceleración y velocidad sincronizada al flujo real (`--fan-speed-duration`).
+  - **Modo Calentador (Calefactor / Auto-Stop activo):** Efecto de ráfagas térmicas combinadas en naranja fuego y cian (`heat-gust-flow`), acompañado de un núcleo de calefacción cerámico PTC incandescente pulsante (`heat-ceramic-glow`) detrás de las lamas y destellos de calor en las lamas.
+  - **Luz Nocturna Independiente:** La base circular del ventilador proyecta el resplandor y anillo iluminado con su color real RGB o Kelvin (`lightHex`), manteniéndose fiel a la selección de color del usuario sin mezclarse de forma estática con el flujo de aire.
+- **Soporte de Posición Dual (De pie / Acostado / Horizontal / Vertical):**
+  - Compatibilidad total con la característica física del Govee H7133 que permite usarlo tanto vertical (de pie) como horizontal (acostado sobre una superficie).
+  - Silueta gráfica adaptativa en SVG para ambas orientaciones:
+    - *De pie (Vertical):* Torre erguida con base ancha, lamas verticales, núcleo PTC central y ráfagas proyectadas hacia la derecha.
+    - *Acostado (Horizontal):* Torre apoyada horizontalmente con soportes de goma, lamas a lo largo del chasis, aro nocturno lateral derecho y ráfagas proyectadas hacia arriba.
+  - Detección inteligente automática a través de sensores de postura/giroscopio/inclinación de Home Assistant (`orientation`, `tilt`, `postura`, `acostado`, `horizontal`).
+  - Botón de alternancia rápida interactivo en la tarjeta (`[ ⬆️ De pie ]` / `[ ➡️ Acostado ]`) para cambiar de posición al instante con persistencia en memoria local (`deviceDetector.ts`).
+  - Selector de orientación explícito en el diálogo de configuración de hardware (`DeviceModal.tsx`) bajo la sección de Apariencia (`✨ Automático`, `⬆️ De pie`, `➡️ Acostado`).
+- **Reconocimiento Especial del Interruptor de Calefacción (`DeviceCard.tsx`):**
+  - Detección del interruptor `auto_stop` o entidades con `calefactor`/`heater` como control de calor, mostrándolo con icono `🔥`, etiqueta `"Calefactor / Auto-Stop"` y resalte ámbar cálido en lugar de un switch genérico.
+- **Tarjeta Lovelace Apple Home (`matter-apple-card.ts`):**
+  - Silueta cinética SVG actualizada para `govee_tower_fan` con soporte dinámico para modo calor (gradiente cálido y lamas incandescentes) y renderizado de la luz base con su color real RGB/Kelvin.
+
 ## [1.5.27] - 2026-09-08
 
 ### Soporte Completo RGB y Kelvin para Luz Nocturna Govee H7133 y Todas las Luces en Tarjetas

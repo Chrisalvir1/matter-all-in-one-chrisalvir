@@ -33,6 +33,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
   const [visualType, setVisualType] = useState<string>("auto");
   const [appleColor, setAppleColor] = useState<string>("space_gray");
   const [customRoom, setCustomRoom] = useState<string>("");
+  const [orientation, setOrientation] = useState<"auto" | "vertical" | "horizontal">("auto");
 
   useEffect(() => {
     if (!device) return;
@@ -47,6 +48,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     setVisualType(ov?.visualType || "auto");
     setAppleColor(ov?.appleColor || det.appleColor || "space_gray");
     setCustomRoom(ov?.roomLabel || "");
+    setOrientation(ov?.orientation || "auto");
   }, [device, targetEntity]);
 
   if (!device) return null;
@@ -63,16 +65,22 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
   const handleSaveVisualOverride = (
     newType: string,
     newColor: string,
-    newRoom: string
+    newRoom: string,
+    newOrientation?: "auto" | "vertical" | "horizontal"
   ) => {
+    const effOrientation = newOrientation !== undefined ? newOrientation : orientation;
     setDeviceVisualOverride(device.id, {
       visualType: newType,
       appleColor: newColor,
       roomLabel: newRoom.trim() || undefined,
+      orientation: effOrientation,
     });
     setVisualType(newType);
     setAppleColor(newColor);
     setCustomRoom(newRoom);
+    if (newOrientation !== undefined) {
+      setOrientation(newOrientation);
+    }
     showToast("✓ Apariencia de hardware guardada");
     onRefresh();
   };
@@ -977,6 +985,47 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                   </optgroup>
                 </select>
               </div>
+
+              {/* Tower Fan Dual Orientation Picker (De pie vs Acostado) */}
+              {effectiveSubtype === "tower_fan" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }}>
+                  <label style={{ fontSize: 11, color: "var(--text-secondary, #94A3B8)", fontWeight: 500 }}>
+                    Posición / Postura del Ventilador Torre
+                  </label>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                    {[
+                      { id: "auto", label: "✨ Automático (Sensor)" },
+                      { id: "vertical", label: "⬆️ De pie (Vertical)" },
+                      { id: "horizontal", label: "➡️ Acostado (Horizontal)" },
+                    ].map((opt) => {
+                      const isSelected = orientation === opt.id;
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => handleSaveVisualOverride(visualType, appleColor, customRoom, opt.id as any)}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                            padding: "6px 12px",
+                            borderRadius: 8,
+                            background: isSelected ? "rgba(56, 189, 248, 0.2)" : "rgba(255, 255, 255, 0.05)",
+                            border: isSelected ? "1.5px solid #38BDF8" : "1px solid rgba(255, 255, 255, 0.1)",
+                            color: isSelected ? "#38BDF8" : "var(--text-secondary, #94A3B8)",
+                            cursor: "pointer",
+                            fontSize: 12,
+                            fontWeight: isSelected ? 600 : 400,
+                            transition: "all 0.15s ease",
+                          }}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* HomePod Official Apple Color Picker */}
               {isHomePodSubtype && (

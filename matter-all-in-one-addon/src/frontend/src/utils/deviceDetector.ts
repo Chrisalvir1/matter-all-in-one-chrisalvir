@@ -28,6 +28,7 @@ export interface DeviceVisualConfig {
   visualType?: string;
   appleColor?: string;
   roomLabel?: string;
+  orientation?: "auto" | "vertical" | "horizontal";
 }
 
 const STORAGE_PREFIX = "matter_visual_override_";

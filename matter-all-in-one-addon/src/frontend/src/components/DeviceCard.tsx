@@ -73,6 +73,30 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
 
   const coverEntity = device.entities.find((e) => e.domain === "cover");
 
+  // Check heating mode (auto_stop switch or climate entity)
+  const heaterEntity =
+    device.entities.find((e) => e.domain === "climate") ||
+    device.entities.find(
+      (e) =>
+        e.domain === "switch" &&
+        (e.entityId.toLowerCase().includes("auto_stop") ||
+          e.entityId.toLowerCase().includes("heater") ||
+          e.entityId.toLowerCase().includes("calefactor") ||
+          (e.name || "").toLowerCase().includes("calefactor") ||
+          (e.name || "").toLowerCase().includes("auto_stop"))
+    );
+  const isHeating =
+    (heaterEntity?.domain === "climate" && (heaterEntity.state === "heat" || heaterEntity.state === "on")) ||
+    (heaterEntity?.domain === "switch" && heaterEntity.state === "on");
+
+  // Check orientation override hook
+  const visualOverride = getDeviceVisualOverride(device.id);
+  const [overrideOrientation, setOverrideOrientation] = useState<"vertical" | "horizontal" | undefined>(
+    visualOverride?.orientation === "horizontal" || visualOverride?.orientation === "vertical"
+      ? visualOverride.orientation
+      : undefined
+  );
+
   const isComposite = (Boolean(fanEntity) && Boolean(lightEntity)) || (deviceInfo.subtype === "multi_gang_switch" && switchEntities.length > 1);
 
   // Domain priority: Prioritize media_player (Apple TV, HomePod), climate, fan
@@ -87,6 +111,44 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
   const primaryDomain = isFanDevice && fanEntity ? "fan" : (primaryEntity?.domain || "switch");
   const primaryState = primaryEntity?.state || "off";
   const primaryAttributes = primaryEntity?.attributes || {};
+
+  // Check orientation (Vertical / De pie vs Horizontal / Acostado)
+  const orientationSensor = device.entities.find(
+    (e) =>
+      e.entityId.toLowerCase().includes("orientation") ||
+      e.entityId.toLowerCase().includes("tilt") ||
+      e.entityId.toLowerCase().includes("posture") ||
+      e.entityId.toLowerCase().includes("inclinacion") ||
+      (e.name || "").toLowerCase().includes("orientación") ||
+      (e.name || "").toLowerCase().includes("postura") ||
+      (e.name || "").toLowerCase().includes("acostado")
+  );
+  const isSensorHorizontal =
+    orientationSensor &&
+    (orientationSensor.state === "horizontal" ||
+      orientationSensor.state === "acostado" ||
+      orientationSensor.state === "lying" ||
+      orientationSensor.state === "flat" ||
+      orientationSensor.state === "on");
+  const isAttrHorizontal =
+    primaryAttributes?.orientation === "horizontal" ||
+    primaryAttributes?.placement === "horizontal" ||
+    primaryAttributes?.horizontal === true ||
+    primaryAttributes?.tilt === true;
+
+  const effectiveOrientation: "vertical" | "horizontal" =
+    overrideOrientation ||
+    (isSensorHorizontal || isAttrHorizontal ? "horizontal" : "vertical");
+
+  const handleToggleOrientation = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const nextOrientation = effectiveOrientation === "vertical" ? "horizontal" : "vertical";
+    setOverrideOrientation(nextOrientation);
+    setDeviceVisualOverride(device.id, {
+      ...visualOverride,
+      orientation: nextOrientation,
+    });
+  };
 
   const domains = [...new Set(device.entities.map((e) => e.domain))].slice(0, 3);
 
@@ -110,7 +172,8 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
     primaryState === "cool" ||
     primaryState === "open" ||
     primaryState === "unlocked" ||
-    primaryState === "cleaning";
+    primaryState === "cleaning" ||
+    isHeating;
 
   // Light color & brightness for card illumination
   const activeLight = lightEntity || (primaryDomain === "light" ? primaryEntity : undefined);
@@ -161,7 +224,9 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
   } else if (primaryDomain === "fan") {
     const pct = primaryAttributes.percentage;
     const osc = primaryAttributes.oscillating;
-    statusSummary = isOn
+    statusSummary = isHeating
+      ? `Calefacción activa${osc ? " · Oscilando" : ""}`
+      : isOn
       ? `${pct !== undefined ? `${pct}%` : "Encendido"}${osc ? " · Oscilando" : ""}`
       : "Apagado";
   } else if (primaryDomain === "light") {
@@ -201,13 +266,18 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
     }
   };
 
-  // Card dynamic illumination style based on Kelvin / RGB
+  // Card dynamic illumination style based on Kelvin / RGB or Active Heater
   const cardIlluminationStyle: React.CSSProperties = isLightActive
     ? {
         borderColor: `rgba(${lr}, ${lg}, ${lb}, ${Math.min(0.7, 0.35 * lightBrightness + 0.25)})`,
         boxShadow: `0 16px 40px rgba(0, 0, 0, 0.55), 0 0 ${Math.round(
           28 * lightBrightness
         )}px rgba(${lr}, ${lg}, ${lb}, ${0.35 * lightBrightness}), inset 0 1px 0 rgba(${lr}, ${lg}, ${lb}, ${0.5 * lightBrightness})`,
+      }
+    : isHeating
+    ? {
+        borderColor: "rgba(251, 146, 60, 0.5)",
+        boxShadow: "0 16px 40px rgba(0, 0, 0, 0.55), 0 0 24px rgba(234, 88, 12, 0.35), inset 0 1px 0 rgba(251, 146, 60, 0.45)",
       }
     : {};
 
@@ -234,11 +304,11 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
             ? fanEntity.attributes.percentage
             : primaryDomain === "fan" && typeof primaryAttributes?.percentage === "number"
             ? primaryAttributes.percentage
-            : (fanEntity ? fanEntity.state === "on" : primaryDomain === "fan" && isOn)
+            : (fanEntity ? fanEntity.state === "on" : primaryDomain === "fan" && isOn) || isHeating
             ? 100
             : 0
         }
-        isFanOn={fanEntity ? fanEntity.state === "on" : primaryDomain === "fan" && isOn}
+        isFanOn={(fanEntity ? fanEntity.state === "on" : primaryDomain === "fan" && isOn) || isHeating}
         lightRgb={[lr, lg, lb]}
         lightBrightness={lightBrightness}
         isLightOn={isLightActive}
@@ -246,6 +316,8 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
         brand={deviceInfo.brand}
         model={deviceInfo.model}
         appleColor={deviceInfo.appleColor}
+        isHeating={isHeating}
+        orientation={effectiveOrientation}
         hasProductImage={Boolean(deviceInfo.productImageUrl && imgLoaded)}
       />
 
@@ -380,6 +452,16 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
           <span style={{ fontSize: "0.72rem", color: "#94a3b8" }}>
             {deviceInfo.category}
           </span>
+          {deviceInfo.subtype === "tower_fan" && (
+            <button
+              type="button"
+              className="orientation-toggle-btn"
+              onClick={handleToggleOrientation}
+              title={`Orientación: actualmente ${effectiveOrientation === "horizontal" ? "Acostado" : "De pie"}. Haz clic para conmutar.`}
+            >
+              {effectiveOrientation === "horizontal" ? "➡️ Acostado" : "⬆️ De pie"}
+            </button>
+          )}
         </div>
         <h3 title={device.name}>{device.name}</h3>
         {!isComposite && <p className="device-status-highlight">{statusSummary}</p>}
@@ -740,35 +822,67 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
               </div>
             </div>
           ) : (
-            switchEntities.map((sw) => (
-              <div
-                key={sw.entityId}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "6px 10px",
-                  background: "rgba(0, 0, 0, 0.18)",
-                  border: "1px solid rgba(255, 255, 255, 0.06)",
-                  borderRadius: "10px",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                  <AppleHomeIcon domain="switch" state={sw.state} size={18} />
-                  <span style={{ fontSize: "0.76rem", color: "#e2e8f0" }}>{sw.name || "Interruptor"}</span>
-                </div>
-                <button
-                  type="button"
-                  className={`quick-toggle-pill ${sw.state === "on" ? "active" : "inactive"}`}
-                  onClick={(e) => handleToggleEntity(e, sw.entityId)}
-                  disabled={togglingEntityIds.has(sw.entityId)}
-                  style={{ transform: "scale(0.85)" }}
-                  title={`Conmutar ${sw.name || "interruptor"}`}
+            switchEntities.map((sw) => {
+              const isHeaterSwitch =
+                sw.entityId.toLowerCase().includes("auto_stop") ||
+                sw.entityId.toLowerCase().includes("heater") ||
+                sw.entityId.toLowerCase().includes("calefactor") ||
+                (sw.name || "").toLowerCase().includes("auto_stop") ||
+                (sw.name || "").toLowerCase().includes("calefactor") ||
+                (sw.name || "").toLowerCase().includes("heater");
+              const switchLabel = isHeaterSwitch
+                ? "Calefactor / Auto-Stop"
+                : sw.name || "Interruptor";
+              const isSwActive = sw.state === "on";
+
+              return (
+                <div
+                  key={sw.entityId}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "6px 10px",
+                    background: isHeaterSwitch && isSwActive ? "rgba(234, 88, 12, 0.22)" : "rgba(0, 0, 0, 0.18)",
+                    border: isHeaterSwitch && isSwActive ? "1px solid rgba(251, 146, 60, 0.35)" : "1px solid rgba(255, 255, 255, 0.06)",
+                    borderRadius: "10px",
+                    transition: "all 0.25s ease",
+                  }}
                 >
-                  <span className="toggle-thumb" />
-                </button>
-              </div>
-            ))
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    {isHeaterSwitch ? (
+                      <span style={{ fontSize: "16px", filter: isSwActive ? "drop-shadow(0 0 6px #FF6A00)" : "none" }}>
+                        🔥
+                      </span>
+                    ) : (
+                      <AppleHomeIcon domain="switch" state={sw.state} size={18} />
+                    )}
+                    <span
+                      style={{
+                        fontSize: "0.76rem",
+                        color: isHeaterSwitch && isSwActive ? "#FFD8A8" : "#e2e8f0",
+                        fontWeight: isHeaterSwitch ? 600 : 400,
+                      }}
+                    >
+                      {switchLabel}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className={`quick-toggle-pill ${isSwActive ? "active" : "inactive"}`}
+                    onClick={(e) => handleToggleEntity(e, sw.entityId)}
+                    disabled={togglingEntityIds.has(sw.entityId)}
+                    style={{
+                      transform: "scale(0.85)",
+                      background: isHeaterSwitch && isSwActive ? "#EA580C" : undefined,
+                    }}
+                    title={isHeaterSwitch ? "Conmutar calefactor" : `Conmutar ${sw.name || "interruptor"}`}
+                  >
+                    <span className="toggle-thumb" />
+                  </button>
+                </div>
+              );
+            })
           )}
         </div>
       )}

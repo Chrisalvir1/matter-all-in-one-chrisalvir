@@ -16,6 +16,8 @@ interface DeviceCardArtProps {
   brand?: string;
   model?: string;
   appleColor?: string;
+  isHeating?: boolean;
+  orientation?: "vertical" | "horizontal";
   /** When true, real product CDN image is displayed — skip SVG art to avoid double rendering */
   hasProductImage?: boolean;
 }
@@ -34,6 +36,8 @@ export const DeviceCardArt: React.FC<DeviceCardArtProps> = ({
   brand = "",
   model = "",
   appleColor = "space_gray",
+  isHeating = false,
+  orientation = "vertical",
   hasProductImage = false,
 }) => {
   const isFanActive = propFanOn ?? (domain === "fan" && (state === "on" || (fanPercentage ?? 0) > 0));
@@ -269,10 +273,40 @@ export const DeviceCardArt: React.FC<DeviceCardArtProps> = ({
                 <stop offset="100%" stopColor="#0D0E13" />
               </linearGradient>
 
-              {/* Dynamic Breeze Wave Gradient */}
+              {/* Dynamic Breeze Wave Gradient (Modo Ambiente: Cyan / Azul) */}
               <linearGradient id="breezeGrad" x1="100%" y1="0%" x2="0%" y2="0%">
-                <stop offset="0%" stopColor="#007AFF" stopOpacity="0.75" />
+                <stop offset="0%" stopColor="#007AFF" stopOpacity="0.8" />
+                <stop offset="50%" stopColor="#00F0FF" stopOpacity="0.65" />
                 <stop offset="100%" stopColor="#38BDF8" stopOpacity="0" />
+              </linearGradient>
+
+              {/* Dynamic Heat Wave Gradient (Modo Calentador: Naranja Fuego + Azul Térmico) */}
+              <linearGradient id="heatBreezeGrad" x1="100%" y1="0%" x2="0%" y2="0%">
+                <stop offset="0%" stopColor="#FF3B00" stopOpacity="0.9" />
+                <stop offset="35%" stopColor="#FF8C00" stopOpacity="0.8" />
+                <stop offset="70%" stopColor="#38BDF8" stopOpacity="0.5" />
+                <stop offset="100%" stopColor="#FF4500" stopOpacity="0" />
+              </linearGradient>
+
+              {/* Upward Airflow Gradients (Horizontal Laying-Down Mode) */}
+              <linearGradient id="breezeUpGrad" x1="0%" y1="100%" x2="0%" y2="0%">
+                <stop offset="0%" stopColor="#007AFF" stopOpacity="0.8" />
+                <stop offset="50%" stopColor="#00F0FF" stopOpacity="0.65" />
+                <stop offset="100%" stopColor="#38BDF8" stopOpacity="0" />
+              </linearGradient>
+
+              <linearGradient id="heatBreezeUpGrad" x1="0%" y1="100%" x2="0%" y2="0%">
+                <stop offset="0%" stopColor="#FF3B00" stopOpacity="0.9" />
+                <stop offset="35%" stopColor="#FF8C00" stopOpacity="0.8" />
+                <stop offset="70%" stopColor="#38BDF8" stopOpacity="0.5" />
+                <stop offset="100%" stopColor="#FF4500" stopOpacity="0" />
+              </linearGradient>
+
+              {/* Ceramic Heating Grille Vanes Gradient */}
+              <linearGradient id="heatVaneGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor="#FF4500" />
+                <stop offset="50%" stopColor="#FFA500" />
+                <stop offset="100%" stopColor="#FF3B00" />
               </linearGradient>
 
               {/* Siri Rainbow Fluid Gradient for HomePod Touch Disc */}
@@ -606,40 +640,348 @@ export const DeviceCardArt: React.FC<DeviceCardArtProps> = ({
 
           {/* ── 6. VENTILADOR DE TORRE EN NEGRO MATE (e.g. Govee H7133) ── */}
           {visualType === "tower_fan" && (
-            <g className="art-tower-fan">
-              <ellipse cx="118" cy="132" rx="26" ry="6" fill="#0E1015" stroke="rgba(255,255,255,0.12)" strokeWidth="1.2" />
-              <rect x="104" y="14" width="28" height="116" rx="6" fill="url(#towerChassisGrad)" stroke={isFanActive ? "rgba(0, 240, 255, 0.4)" : "rgba(255,255,255,0.15)"} strokeWidth="1.5" />
+            <g className={`art-tower-fan ${orientation === "horizontal" ? "art-tower-horizontal" : "art-tower-vertical"}`}>
+              {orientation === "horizontal" ? (
+                /* ── MODO ACOSTADO / HORIZONTAL ── */
+                <g className="tower-horizontal-body">
+                  {/* Rubber Feet Supports */}
+                  <rect x="52" y="108" width="16" height="5" rx="2" fill="#0A0B0E" stroke="rgba(255,255,255,0.12)" strokeWidth="1" />
+                  <rect x="114" y="108" width="16" height="5" rx="2" fill="#0A0B0E" stroke="rgba(255,255,255,0.12)" strokeWidth="1" />
 
-              {/* Top Touch Panel */}
-              <path d="M106 14 L130 14 L128 24 L108 24 Z" fill="#0A0B0E" />
-              <circle cx="118" cy="19" r="2.2" fill={isFanActive ? "#00F0FF" : "#64748B"} style={{ filter: isFanActive ? "drop-shadow(0 0 4px #00F0FF)" : undefined }} />
-
-              {/* Outlet Grille with Oscillating Vanes */}
-              <rect x="110" y="28" width="16" height="92" rx="3" fill="#07080C" stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
-              {Array.from({ length: 9 }).map((_, i) => {
-                const yPos = 35 + i * 9.5;
-                return (
-                  <line
-                    key={i}
-                    x1="112"
-                    y1={yPos}
-                    x2="124"
-                    y2={yPos}
-                    stroke={isFanActive ? "#38BDF8" : "rgba(255,255,255,0.2)"}
-                    strokeWidth="1.6"
-                    strokeLinecap="round"
-                    className={isFanActive ? "fan-tower-vane" : ""}
-                    style={{ animationDelay: `${i * 0.12}s` }}
+                  {/* Horizontal Chassis Body */}
+                  <rect
+                    x="28"
+                    y="76"
+                    width="128"
+                    height="32"
+                    rx="7"
+                    fill="url(#towerChassisGrad)"
+                    stroke={
+                      isHeating
+                        ? "rgba(255, 69, 0, 0.55)"
+                        : isFanActive
+                        ? "rgba(0, 240, 255, 0.4)"
+                        : "rgba(255, 255, 255, 0.15)"
+                    }
+                    strokeWidth="1.5"
                   />
-                );
-              })}
 
-              {/* Breeze Waves */}
-              {isFanActive && (
-                <g className="airflow-stream" style={{ opacity: Math.max(0.4, effectiveFanPct / 100) }}>
-                  <path d="M98 42 C76 40 58 46 36 42" fill="none" stroke="url(#breezeGrad)" strokeWidth="2.8" strokeLinecap="round" className="breeze-line-1" />
-                  <path d="M94 65 C68 62 48 70 24 66" fill="none" stroke="url(#breezeGrad)" strokeWidth="3.4" strokeLinecap="round" className="breeze-line-2" />
-                  <path d="M98 88 C74 86 54 92 34 88" fill="none" stroke="url(#breezeGrad)" strokeWidth="2.5" strokeLinecap="round" className="breeze-line-3" />
+                  {/* Left Touch Cap / Controls */}
+                  <path d="M28 80 L38 80 L38 104 L28 104 Z" fill="#07080C" />
+                  <circle
+                    cx="33"
+                    cy="92"
+                    r="2.2"
+                    fill={isHeating ? "#FF4500" : isFanActive ? "#00F0FF" : "#64748B"}
+                    style={{
+                      filter: isHeating
+                        ? "drop-shadow(0 0 5px #FF4500)"
+                        : isFanActive
+                        ? "drop-shadow(0 0 5px #00F0FF)"
+                        : undefined,
+                    }}
+                  />
+
+                  {/* Right Base Cap & Night Light Ring */}
+                  <rect x="146" y="74" width="12" height="36" rx="4" fill="#0E1015" stroke="rgba(255,255,255,0.1)" strokeWidth="1" />
+                  {isLightOn && (
+                    <>
+                      {/* Luminous Night Light Ring along right end cap */}
+                      <rect
+                        x="147"
+                        y="77"
+                        width="4"
+                        height="30"
+                        rx="2"
+                        fill={lightHex}
+                        opacity={Math.max(0.7, lightBrightness)}
+                        style={{ filter: `drop-shadow(0 0 10px ${lightHex})` }}
+                      />
+                      <ellipse
+                        cx="152"
+                        cy="92"
+                        rx="16"
+                        ry="22"
+                        fill={lightHex}
+                        opacity={0.25 * Math.max(0.4, lightBrightness)}
+                        style={{ filter: "blur(8px)" }}
+                      />
+                    </>
+                  )}
+
+                  {/* Horizontal Grille */}
+                  <rect x="42" y="81" width="100" height="22" rx="3" fill="#07080C" stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
+
+                  {/* Internal PTC Heating Glow when heating */}
+                  {isHeating && (
+                    <rect
+                      x="43"
+                      y="82"
+                      width="98"
+                      height="20"
+                      rx="2"
+                      fill="url(#heatVaneGrad)"
+                      opacity="0.3"
+                      className="heat-ceramic-glow"
+                    />
+                  )}
+
+                  {/* Grille Vanes (Vertical lines across horizontal slot) */}
+                  {Array.from({ length: 11 }).map((_, i) => {
+                    const xPos = 48 + i * 8.8;
+                    return (
+                      <line
+                        key={i}
+                        x1={xPos}
+                        y1="83"
+                        x2={xPos}
+                        y2="101"
+                        stroke={
+                          isHeating
+                            ? "url(#heatVaneGrad)"
+                            : isFanActive
+                            ? "#38BDF8"
+                            : "rgba(255, 255, 255, 0.2)"
+                        }
+                        strokeWidth="1.6"
+                        strokeLinecap="round"
+                        className={
+                          isHeating
+                            ? "heat-tower-vane"
+                            : isFanActive
+                            ? "fan-tower-vane"
+                            : ""
+                        }
+                        style={{ animationDelay: `${i * 0.1}s` }}
+                      />
+                    );
+                  })}
+
+                  {/* Dynamic Airflow Gusts blowing UPWARDS & OUT */}
+                  {isHeating ? (
+                    <g className="airflow-stream heat-stream" style={{ opacity: 0.95 }}>
+                      <path
+                        d="M58 76 C55 52 42 34 26 22"
+                        fill="none"
+                        stroke="url(#heatBreezeUpGrad)"
+                        strokeWidth="3.2"
+                        strokeLinecap="round"
+                        className="heat-line-1"
+                      />
+                      <path
+                        d="M92 75 C92 46 76 28 52 16"
+                        fill="none"
+                        stroke="url(#heatBreezeUpGrad)"
+                        strokeWidth="3.6"
+                        strokeLinecap="round"
+                        className="heat-line-2"
+                      />
+                      <path
+                        d="M126 76 C128 48 112 30 84 18"
+                        fill="none"
+                        stroke="url(#heatBreezeUpGrad)"
+                        strokeWidth="2.8"
+                        strokeLinecap="round"
+                        className="heat-line-3"
+                      />
+                    </g>
+                  ) : isFanActive ? (
+                    <g className="airflow-stream breeze-stream" style={{ opacity: Math.max(0.45, effectiveFanPct / 100) }}>
+                      <path
+                        d="M58 76 C55 52 42 34 26 22"
+                        fill="none"
+                        stroke="url(#breezeUpGrad)"
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                        className="breeze-line-1"
+                      />
+                      <path
+                        d="M92 75 C92 46 76 28 52 16"
+                        fill="none"
+                        stroke="url(#breezeUpGrad)"
+                        strokeWidth="3.4"
+                        strokeLinecap="round"
+                        className="breeze-line-2"
+                      />
+                      <path
+                        d="M126 76 C128 48 112 30 84 18"
+                        fill="none"
+                        stroke="url(#breezeUpGrad)"
+                        strokeWidth="2.6"
+                        strokeLinecap="round"
+                        className="breeze-line-3"
+                      />
+                    </g>
+                  ) : null}
+                </g>
+              ) : (
+                /* ── MODO DE PIE / VERTICAL ── */
+                <g className="tower-vertical-body">
+                  {/* Stand Base */}
+                  <ellipse cx="118" cy="132" rx="26" ry="6" fill="#0E1015" stroke="rgba(255,255,255,0.12)" strokeWidth="1.2" />
+
+                  {/* Night Light Base Ring */}
+                  {isLightOn && (
+                    <>
+                      <ellipse
+                        cx="118"
+                        cy="130"
+                        rx="24"
+                        ry="5.5"
+                        fill="none"
+                        stroke={lightHex}
+                        strokeWidth="3"
+                        opacity={Math.max(0.7, lightBrightness)}
+                        style={{ filter: `drop-shadow(0 0 8px ${lightHex})` }}
+                      />
+                      <ellipse
+                        cx="118"
+                        cy="133"
+                        rx="32"
+                        ry="7.5"
+                        fill={lightHex}
+                        opacity={0.25 * Math.max(0.4, lightBrightness)}
+                        style={{ filter: "blur(6px)" }}
+                      />
+                    </>
+                  )}
+
+                  {/* Upright Tower Chassis */}
+                  <rect
+                    x="104"
+                    y="14"
+                    width="28"
+                    height="116"
+                    rx="6"
+                    fill="url(#towerChassisGrad)"
+                    stroke={
+                      isHeating
+                        ? "rgba(255, 69, 0, 0.55)"
+                        : isFanActive
+                        ? "rgba(0, 240, 255, 0.4)"
+                        : "rgba(255, 255, 255, 0.15)"
+                    }
+                    strokeWidth="1.5"
+                  />
+
+                  {/* Top Touch Panel */}
+                  <path d="M106 14 L130 14 L128 24 L108 24 Z" fill="#0A0B0E" />
+                  <circle
+                    cx="118"
+                    cy="19"
+                    r="2.2"
+                    fill={isHeating ? "#FF4500" : isFanActive ? "#00F0FF" : "#64748B"}
+                    style={{
+                      filter: isHeating
+                        ? "drop-shadow(0 0 5px #FF4500)"
+                        : isFanActive
+                        ? "drop-shadow(0 0 5px #00F0FF)"
+                        : undefined,
+                    }}
+                  />
+
+                  {/* Outlet Grille with Ceramic Heating Layer & Vanes */}
+                  <rect x="110" y="28" width="16" height="92" rx="3" fill="#07080C" stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
+
+                  {isHeating && (
+                    <rect
+                      x="111"
+                      y="29"
+                      width="14"
+                      height="90"
+                      rx="2"
+                      fill="url(#heatVaneGrad)"
+                      opacity="0.32"
+                      className="heat-ceramic-glow"
+                    />
+                  )}
+
+                  {Array.from({ length: 9 }).map((_, i) => {
+                    const yPos = 35 + i * 9.5;
+                    return (
+                      <line
+                        key={i}
+                        x1="112"
+                        y1={yPos}
+                        x2="124"
+                        y2={yPos}
+                        stroke={
+                          isHeating
+                            ? "url(#heatVaneGrad)"
+                            : isFanActive
+                            ? "#38BDF8"
+                            : "rgba(255, 255, 255, 0.2)"
+                        }
+                        strokeWidth="1.6"
+                        strokeLinecap="round"
+                        className={
+                          isHeating
+                            ? "heat-tower-vane"
+                            : isFanActive
+                            ? "fan-tower-vane"
+                            : ""
+                        }
+                        style={{ animationDelay: `${i * 0.12}s` }}
+                      />
+                    );
+                  })}
+
+                  {/* Dynamic Airflow Gusts (Heat: Ráfagas Naranjas y Azules | Fan: Ráfagas Azules) */}
+                  {isHeating ? (
+                    <g className="airflow-stream heat-stream" style={{ opacity: 0.95 }}>
+                      <path
+                        d="M98 42 C72 38 52 46 24 40"
+                        fill="none"
+                        stroke="url(#heatBreezeGrad)"
+                        strokeWidth="3.2"
+                        strokeLinecap="round"
+                        className="heat-line-1"
+                      />
+                      <path
+                        d="M94 65 C64 58 42 68 18 64"
+                        fill="none"
+                        stroke="url(#heatBreezeGrad)"
+                        strokeWidth="3.8"
+                        strokeLinecap="round"
+                        className="heat-line-2"
+                      />
+                      <path
+                        d="M98 88 C70 84 48 94 22 88"
+                        fill="none"
+                        stroke="url(#heatBreezeGrad)"
+                        strokeWidth="3.0"
+                        strokeLinecap="round"
+                        className="heat-line-3"
+                      />
+                    </g>
+                  ) : isFanActive ? (
+                    <g className="airflow-stream breeze-stream" style={{ opacity: Math.max(0.4, effectiveFanPct / 100) }}>
+                      <path
+                        d="M98 42 C76 40 58 46 36 42"
+                        fill="none"
+                        stroke="url(#breezeGrad)"
+                        strokeWidth="2.8"
+                        strokeLinecap="round"
+                        className="breeze-line-1"
+                      />
+                      <path
+                        d="M94 65 C68 62 48 70 24 66"
+                        fill="none"
+                        stroke="url(#breezeGrad)"
+                        strokeWidth="3.4"
+                        strokeLinecap="round"
+                        className="breeze-line-2"
+                      />
+                      <path
+                        d="M98 88 C74 86 54 92 34 88"
+                        fill="none"
+                        stroke="url(#breezeGrad)"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        className="breeze-line-3"
+                      />
+                    </g>
+                  ) : null}
                 </g>
               )}
             </g>

@@ -47,7 +47,7 @@ export interface DeviceProfile {
   matterExport: string;
 }
 
-const CARD_VERSION = "1.5.27";
+const CARD_VERSION = "1.5.28";
 
 // ── Color Utilities ───────────────────────────────────────────────────────────
 function kelvinToRgb(kelvin: number): [number, number, number] {
@@ -789,24 +789,44 @@ function renderKineticSvg(profile: DeviceProfile, stateObj: HassState, isOn: boo
   if (profile.type === "govee_tower_fan") {
     const pct = typeof attrs.percentage === "number" ? attrs.percentage : (isOn ? 50 : 0);
     const isOscillating = attrs.oscillating === true;
+    const isHeating =
+      stateObj?.state === "heat" ||
+      attrs.hvac_action === "heating" ||
+      attrs.auto_stop === true ||
+      attrs.heating === true ||
+      Boolean(stateObj?.entity_id?.includes("auto_stop") && isOn);
     const speedDuration = pct > 0 ? (Math.max(0.35, 2.5 - (pct / 100) * 2.1)).toFixed(2) + "s" : "0s";
+    const lightInfo = extractLightColorInfo(attrs);
+    const baseLightColor = lightInfo.hex || (isOn ? (isHeating ? "#FF9500" : "var(--apple-cyan)") : "#334155");
 
     return `
       <svg viewBox="0 0 48 48" width="34" height="34" style="--fan-speed-duration: ${speedDuration};" aria-hidden="true">
-        <rect x="14" y="5" width="20" height="35" rx="5" fill="${isOn ? "#1E293B" : "#0F172A"}" stroke="${isOn ? "var(--apple-cyan)" : "rgba(255,255,255,0.2)"}" stroke-width="1.8"/>
-        <rect x="16" y="7" width="16" height="5" rx="2.5" fill="${isOn ? "var(--apple-cyan)" : "#334155"}"/>
+        <defs>
+          <linearGradient id="goveeTowerBodyGrad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="${isHeating ? "#3B1812" : isOn ? "#1E293B" : "#0F172A"}"/>
+            <stop offset="100%" stop-color="${isHeating ? "#1F0F0A" : "#090D16"}"/>
+          </linearGradient>
+          <linearGradient id="goveeHeatGrad" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#FF3B30"/>
+            <stop offset="50%" stop-color="#FF9500"/>
+            <stop offset="100%" stop-color="#00C7BE"/>
+          </linearGradient>
+        </defs>
+        ${isHeating ? `<rect x="12" y="3" width="24" height="39" rx="6" fill="#FF9500" opacity="0.22" filter="blur(3px)"/>` : ""}
+        <rect x="14" y="5" width="20" height="35" rx="5" fill="url(#goveeTowerBodyGrad)" stroke="${isHeating ? "#FF9500" : isOn ? "var(--apple-cyan)" : "rgba(255,255,255,0.2)"}" stroke-width="1.8"/>
+        <rect x="16" y="7" width="16" height="5" rx="2.5" fill="${isHeating ? "#FF9500" : isOn ? "var(--apple-cyan)" : "#334155"}"/>
         <circle cx="24" cy="9.5" r="1.5" fill="${isOn ? "#FFFFFF" : "#64748B"}"/>
         <g opacity="${isOn ? "0.95" : "0.35"}">
-          <line x1="17" y1="16" x2="31" y2="16" stroke="${isOn ? "#7DD3FC" : "#64748B"}" stroke-width="1.5" stroke-linecap="round" class="${isOn ? "fan-tower-vane" : ""}"/>
-          <line x1="17" y1="20" x2="31" y2="20" stroke="${isOn ? "var(--apple-cyan)" : "#64748B"}" stroke-width="1.5" stroke-linecap="round" class="${isOn ? "fan-tower-vane" : ""}" style="animation-delay: 0.15s;"/>
-          <line x1="17" y1="24" x2="31" y2="24" stroke="${isOn ? "var(--apple-blue)" : "#64748B"}" stroke-width="1.5" stroke-linecap="round" class="${isOn ? "fan-tower-vane" : ""}" style="animation-delay: 0.3s;"/>
-          <line x1="17" y1="28" x2="31" y2="28" stroke="${isOn ? "var(--apple-cyan)" : "#64748B"}" stroke-width="1.5" stroke-linecap="round" class="${isOn ? "fan-tower-vane" : ""}" style="animation-delay: 0.45s;"/>
-          <line x1="17" y1="32" x2="31" y2="32" stroke="${isOn ? "#7DD3FC" : "#64748B"}" stroke-width="1.5" stroke-linecap="round" class="${isOn ? "fan-tower-vane" : ""}" style="animation-delay: 0.6s;"/>
+          <line x1="17" y1="16" x2="31" y2="16" stroke="${isHeating ? "url(#goveeHeatGrad)" : isOn ? "#7DD3FC" : "#64748B"}" stroke-width="1.6" stroke-linecap="round" class="${isOn ? "fan-tower-vane" : ""}"/>
+          <line x1="17" y1="20" x2="31" y2="20" stroke="${isHeating ? "#FF9500" : isOn ? "var(--apple-cyan)" : "#64748B"}" stroke-width="1.6" stroke-linecap="round" class="${isOn ? "fan-tower-vane" : ""}" style="animation-delay: 0.15s;"/>
+          <line x1="17" y1="24" x2="31" y2="24" stroke="${isHeating ? "#FF3B30" : isOn ? "var(--apple-blue)" : "#64748B"}" stroke-width="1.6" stroke-linecap="round" class="${isOn ? "fan-tower-vane" : ""}" style="animation-delay: 0.3s;"/>
+          <line x1="17" y1="28" x2="31" y2="28" stroke="${isHeating ? "#FF9500" : isOn ? "var(--apple-cyan)" : "#64748B"}" stroke-width="1.6" stroke-linecap="round" class="${isOn ? "fan-tower-vane" : ""}" style="animation-delay: 0.45s;"/>
+          <line x1="17" y1="32" x2="31" y2="32" stroke="${isHeating ? "url(#goveeHeatGrad)" : isOn ? "#7DD3FC" : "#64748B"}" stroke-width="1.6" stroke-linecap="round" class="${isOn ? "fan-tower-vane" : ""}" style="animation-delay: 0.6s;"/>
         </g>
-        <ellipse cx="24" cy="42" rx="13" ry="2.5" fill="${isOn ? "var(--apple-cyan)" : "#334155"}" opacity="${isOn ? "0.8" : "0.4"}"/>
+        <ellipse cx="24" cy="42" rx="13" ry="2.5" fill="${baseLightColor}" opacity="${isOn ? "0.95" : "0.4"}"/>
         ${
           isOscillating && isOn
-            ? `<path d="M 8 24 A 18 18 0 0 1 11 17 M 40 24 A 18 18 0 0 0 37 17" fill="none" stroke="var(--apple-cyan)" stroke-width="1.8" stroke-linecap="round" stroke-dasharray="2 3"/>`
+            ? `<path d="M 8 24 A 18 18 0 0 1 11 17 M 40 24 A 18 18 0 0 0 37 17" fill="none" stroke="${isHeating ? "#FF9500" : "var(--apple-cyan)"}" stroke-width="1.8" stroke-linecap="round" stroke-dasharray="2 3"/>`
             : ""
         }
       </svg>
