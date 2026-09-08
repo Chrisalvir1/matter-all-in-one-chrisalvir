@@ -32,6 +32,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
     (typeof window !== "undefined" &&
       new URLSearchParams(window.location.search).get("mode") === "dashboard");
   const [togglingEntityIds, setTogglingEntityIds] = useState<Set<string>>(new Set());
+  const [imgLoaded, setImgLoaded] = useState(false);
 
   const deviceInfo = detectDevice(device);
 
@@ -40,17 +41,39 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
   const hasIssue = device.entities.some((e) => e.exported && e.hasIssue);
 
   // Sub-entities breakdown
-  const fanEntity = device.entities.find((e) => e.domain === "fan");
+  const isFanDevice =
+    deviceInfo.hasFan ||
+    deviceInfo.isTowerFan ||
+    deviceInfo.isCeilingFan ||
+    deviceInfo.subtype === "tower_fan" ||
+    deviceInfo.subtype === "ceiling_fan" ||
+    (device.name && device.name.toLowerCase().includes("ventilador"));
+
+  // Fan entity resolution: check domain "fan", or if fan device, find the switch controlling the fan
+  const fanEntity =
+    device.entities.find((e) => e.domain === "fan") ||
+    (isFanDevice
+      ? device.entities.find(
+          (e) =>
+            e.domain === "switch" &&
+            (e.entityId.toLowerCase().includes("ventilador") ||
+             e.entityId.toLowerCase().includes("fan") ||
+             (e.name && (e.name.toLowerCase().includes("ventilador") || e.name.toLowerCase().includes("fan"))))
+        ) || device.entities.find((e) => e.domain === "switch" && !e.entityId.includes("auto_stop"))
+      : undefined);
+
   const lightEntity = device.entities.find((e) => e.domain === "light");
-  // Only show exported switch channels on the card face — non-exported hidden until modal
-  const switchEntities = device.entities.filter((e) => e.domain === "switch" && e.exported);
+
+  // Only show exported switch channels on the card face — non-exported hidden until modal,
+  // EXCEPT if this is a standalone switch device with no fan/light, keep at least the first switch visible
+  const rawSwitchEntities = device.entities.filter((e) => e.domain === "switch" && e.entityId !== fanEntity?.entityId);
+  const switchEntities = rawSwitchEntities.filter((e) => e.exported).length > 0
+    ? rawSwitchEntities.filter((e) => e.exported)
+    : (!fanEntity && !lightEntity ? rawSwitchEntities.slice(0, 3) : []);
+
   const coverEntity = device.entities.find((e) => e.domain === "cover");
 
-  const controllableCount = device.entities.filter((e) =>
-    ["light", "fan", "switch", "cover", "climate", "lock", "humidifier", "vacuum", "media_player"].includes(e.domain)
-  ).length;
-
-  const isComposite = (Boolean(fanEntity) && Boolean(lightEntity)) || controllableCount > 1;
+  const isComposite = (Boolean(fanEntity) && Boolean(lightEntity)) || (deviceInfo.subtype === "multi_gang_switch" && switchEntities.length > 1);
 
   // Domain priority: Prioritize media_player (Apple TV, HomePod), climate, fan
   const domainPriority = ["media_player", "climate", "fan", "lock", "cover", "vacuum", "camera", "humidifier", "light", "switch", "sensor"];
@@ -60,8 +83,8 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
     return (idxA === -1 ? 99 : idxA) - (idxB === -1 ? 99 : idxB);
   });
 
-  const primaryEntity = sortedEntities[0] || device.entities[0];
-  const primaryDomain = primaryEntity?.domain || "switch";
+  const primaryEntity = isFanDevice && fanEntity ? fanEntity : (sortedEntities[0] || device.entities[0]);
+  const primaryDomain = isFanDevice && fanEntity ? "fan" : (primaryEntity?.domain || "switch");
   const primaryState = primaryEntity?.state || "off";
   const primaryAttributes = primaryEntity?.attributes || {};
 
@@ -220,7 +243,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
         brand={deviceInfo.brand}
         model={deviceInfo.model}
         appleColor={deviceInfo.appleColor}
-        hasProductImage={Boolean(deviceInfo.productImageUrl)}
+        hasProductImage={Boolean(deviceInfo.productImageUrl && imgLoaded)}
       />
 
       {/* Real product photo — CDN image shown in top-right zone */}
@@ -238,11 +261,17 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
             overflow: "hidden",
             maskImage: "linear-gradient(to left, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.5) 55%, transparent 100%)",
             WebkitMaskImage: "linear-gradient(to left, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.5) 55%, transparent 100%)",
+            display: imgLoaded ? "block" : "none",
           }}
         >
           <img
             src={deviceInfo.productImageUrl}
             alt={deviceInfo.productImageAlt || deviceInfo.brand}
+            onLoad={() => setImgLoaded(true)}
+            onError={(e) => {
+              setImgLoaded(false);
+              (e.target as HTMLImageElement).style.display = "none";
+            }}
             style={{
               width: "100%",
               height: "100%",
@@ -251,9 +280,6 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
               opacity: isOn ? 0.95 : 0.5,
               transition: "opacity 0.5s ease",
               filter: isOn ? "none" : "grayscale(0.4)",
-            }}
-            onError={(e) => {
-              (e.target as HTMLImageElement).style.display = "none";
             }}
           />
         </div>

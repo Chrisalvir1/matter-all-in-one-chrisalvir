@@ -208,25 +208,9 @@ export function getProductImage(
     }
   }
 
-  // ── Govee ─────────────────────────────────────────────────────────────────
+  // ── Govee (Uses dynamic animated vector artwork that reflects live RGB colors, Kelvin, and fan speed) ──
   if (brandLower === "govee") {
-    // Try specific model first
-    for (const [key, url] of Object.entries(GOVEE_IMAGES)) {
-      if (modelLower.includes(key)) {
-        return { url, alt: `Govee ${model}`, transparent: true };
-      }
-    }
-    // Fallback by subtype
-    if (subtypeLower === "tower_fan")
-      return { url: GOVEE_IMAGES.h7133, alt: "Govee Tower Fan", transparent: true };
-    if (subtypeLower === "led_strip" || subtypeLower === "govee_dreamview")
-      return { url: GOVEE_IMAGES.h6199, alt: "Govee LED", transparent: true };
-    if (subtypeLower === "govee_lyra")
-      return { url: GOVEE_IMAGES.h6072, alt: "Govee Lyra", transparent: true };
-    if (subtypeLower === "govee_glide")
-      return { url: GOVEE_IMAGES.h6061, alt: "Govee Glide", transparent: true };
-    if (subtypeLower === "led_strip")
-      return { url: GOVEE_IMAGES.led_strip, alt: "Govee LED Strip", transparent: true };
+    return null;
   }
 
   // ── Ring ──────────────────────────────────────────────────────────────────

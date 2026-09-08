@@ -681,6 +681,142 @@ export const DeviceCardArt: React.FC<DeviceCardArtProps> = ({
             </g>
           )}
 
+          {/* ── 8b. BARRAS DE LUZ GOVEE FLOW / TORRES SALA (`govee_light_bars`) ── */}
+          {visualType === "govee_light_bars" && (
+            <g className="art-govee-light-bars">
+              {/* Dual vertical RGBIC light towers with angled desk bases */}
+              {[85, 130].map((cx, i) => (
+                <g key={i}>
+                  {/* Angled base */}
+                  <ellipse cx={cx} cy="128" rx="14" ry="4.5" fill="#181D26" stroke="rgba(255,255,255,0.18)" strokeWidth="1" />
+                  <rect x={cx - 3} y="120" width="6" height="8" fill="#242B38" />
+                  {/* Tower shell */}
+                  <rect x={cx - 5} y="22" width="10" height="100" rx="4" fill="#11141B" stroke="rgba(255,255,255,0.15)" strokeWidth="1" />
+                  {/* Diffuser face with active light color */}
+                  <rect
+                    x={cx - 3}
+                    y="25"
+                    width="6"
+                    height="94"
+                    rx="2.5"
+                    fill={isLightOn ? lightHex : "#2A3342"}
+                    style={{
+                      filter: isLightOn ? `drop-shadow(0 0 12px ${lightHex})` : undefined,
+                      transition: "fill 0.4s ease",
+                    }}
+                  />
+                  {/* Glow dispersion on sides */}
+                  {isLightOn && (
+                    <ellipse
+                      cx={cx}
+                      cy="72"
+                      rx="20"
+                      ry="40"
+                      fill={lightHex}
+                      opacity={0.18 * lightBrightness}
+                      style={{ filter: "blur(8px)" }}
+                    />
+                  )}
+                </g>
+              ))}
+            </g>
+          )}
+
+          {/* ── 8c. LUCES EXTERIORES PERMANENTES GOVEE (`govee_permanent_outdoor`) ── */}
+          {visualType === "govee_permanent_outdoor" && (
+            <g className="art-govee-permanent-outdoor">
+              {/* Architectural roofline / fascia board */}
+              <rect x="20" y="24" width="140" height="7" rx="1.5" fill="#2D3748" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
+              {/* Downward puck lights under the soffit */}
+              {[45, 75, 105, 135].map((cx, i) => (
+                <g key={i}>
+                  {/* Puck mount */}
+                  <rect x={cx - 5} y="31" width="10" height="4" rx="1" fill="#1A202C" />
+                  <ellipse cx={cx} cy="35" rx="4" ry="1.5" fill={isLightOn ? lightHex : "#4A5568"} />
+                  {/* Architectural triangular wash on wall */}
+                  {isLightOn && (
+                    <polygon
+                      points={`${cx - 3},35 ${cx + 3},35 ${cx + 18},120 ${cx - 18},120`}
+                      fill={lightHex}
+                      opacity={0.22 * lightBrightness}
+                      style={{ mixBlendMode: "screen", filter: "blur(2px)" }}
+                    />
+                  )}
+                </g>
+              ))}
+            </g>
+          )}
+
+          {/* ── 8d. LUCES DE SUELO / SENDERO EXTERIOR GOVEE (`govee_ground_lights`) ── */}
+          {visualType === "govee_ground_lights" && (
+            <g className="art-govee-ground-lights">
+              {/* Ground line */}
+              <line x1="20" y1="126" x2="160" y2="126" stroke="rgba(255,255,255,0.15)" strokeWidth="1.2" strokeDasharray="3 3" />
+              {/* Landscape puck / stake lights */}
+              {[55, 95, 135].map((cx, i) => (
+                <g key={i}>
+                  {/* Stake rod */}
+                  <line x1={cx} y1="90" x2={cx} y2="126" stroke="#4A5568" strokeWidth="2" />
+                  {/* Light head housing */}
+                  <ellipse cx={cx} cy="86" rx="9" ry="3" fill="#1F2937" stroke="rgba(255,255,255,0.2)" strokeWidth="0.8" />
+                  {/* Glowing dome */}
+                  <ellipse
+                    cx={cx}
+                    cy="82"
+                    rx="7"
+                    ry="5"
+                    fill={isLightOn ? lightHex : "#374151"}
+                    style={{
+                      filter: isLightOn ? `drop-shadow(0 0 10px ${lightHex})` : undefined,
+                      transition: "fill 0.4s ease",
+                    }}
+                  />
+                  {/* Ground wash */}
+                  {isLightOn && (
+                    <ellipse
+                      cx={cx}
+                      cy="126"
+                      rx="16"
+                      ry="5"
+                      fill={lightHex}
+                      opacity={0.28 * lightBrightness}
+                      style={{ mixBlendMode: "screen" }}
+                    />
+                  )}
+                </g>
+              ))}
+            </g>
+          )}
+
+          {/* ── 8e. FOCO EMPOTRADO EN TECHO (`ceiling_spot`) ── */}
+          {visualType === "ceiling_spot" && (
+            <g className="art-ceiling-spot">
+              {/* Recessed bezel ring flush with ceiling */}
+              <ellipse cx="115" cy="24" rx="28" ry="7" fill="#1E293B" stroke="rgba(255,255,255,0.3)" strokeWidth="1.5" />
+              <ellipse cx="115" cy="24" rx="20" ry="5" fill="#0F172A" />
+              {/* Center lens */}
+              <ellipse
+                cx="115"
+                cy="24"
+                rx="14"
+                ry="3.5"
+                fill={isLightOn ? lightHex : "#334155"}
+                style={{
+                  filter: isLightOn ? `drop-shadow(0 0 14px ${lightHex})` : undefined,
+                  transition: "fill 0.4s ease",
+                }}
+              />
+              {/* Downward conical spotlight beam */}
+              {isLightOn && (
+                <polygon
+                  points="101,26 129,26 156,136 74,136"
+                  fill="url(#lampConeGrad)"
+                  style={{ mixBlendMode: "screen" }}
+                />
+              )}
+            </g>
+          )}
+
           {/* ── 9. TIMBRE CON VIDEO (DOORBELL e.g. Ring / Nest) ── */}
           {visualType === "doorbell" && (
             <g className="art-doorbell">

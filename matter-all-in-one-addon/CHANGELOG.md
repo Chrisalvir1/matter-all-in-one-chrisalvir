@@ -1,3 +1,40 @@
+## [1.5.25] - 2026-09-08
+
+### Detección Precisa de Modelos Govee, Asistente Plan A/B para H7133 y Arte Dinámico para Barras y Luces Exteriores
+
+- **Detección Exhaustiva de Modelos Govee (`deviceDetector.ts`):**
+  - Mapeo exacto por número de modelo para toda la gama Govee:
+    - `H7130 - H7135`, `H7101 - H7102` -> `tower_fan` ("Ventilador de Torre").
+    - `H6054`, `H6056`, `H6046`, `H6047`, `H6051` -> `govee_light_bars` ("Barras de Luz Flow Pro / Plus").
+    - `H6099`, `H6199`, `H61B8` -> `govee_dreamview` ("Govee DreamView TV").
+    - `H6072`, `H6076`, `H6078` -> `govee_lyra` ("Lámpara de Esquina Govee Lyra").
+    - `H706A`, `H805C`, `H705x` -> `govee_permanent_outdoor` ("Luces Exteriores Permanentes Pro / Elite").
+    - `H7062`, `H619E` -> `govee_ground_lights` ("Luces de Suelo / Sendero Exterior Govee").
+    - `H7021`, `H7020` -> `ceiling_spot` ("Foco Empotrado en Techo Govee").
+    - `H61A0`, `H61xx`, `H619C`, `H6167` -> `led_strip` ("Tira LED RGBIC / Neón").
+    - `H6088` -> `table_lamp` ("Lámpara de Ambiente Govee").
+    - `H6061`, `H6062` -> `govee_glide` ("Paneles de Pared Govee Glide").
+    - `H5054`, `H5075` -> `sensor` ("Sensor de Fuga / Termohigrómetro Govee").
+  - **Eliminada la falsa clasificación como "Apagador Táctil Triple":** los dispositivos inteligentes multi-switch nunca más se clasifican como apagadores de pared por el solo hecho de exponer 2 o más interruptores en Home Assistant.
+  - **Fijado el conflicto con Amazon Echo:** la comprobación de Alexa/Echo solo se activa si la marca detectada es genuinamente Amazon.
+
+- **Asistente de Publicación Matter para Govee H7133 (`DeviceModal.tsx`):**
+  - Panel interactivo exclusivo para el H7133 con 1-clic para:
+    - **🌪️ Plan A (Ventilador Matter):** activa ventilador principal con velocidades, oscilación, luz nocturna y sensor de temperatura ambiente.
+    - **🔥 Plan B (Calefactor / Clima):** activa termostato/calefactor Matter con dial de temperatura y sensor.
+    - **⚡ Publicar Todo:** exporta todas las entidades simultáneamente.
+  - Botón directo de publicación en la columna QR cuando aún no está exportado, eliminando la confusión del modal "Sin publicar".
+  - Nombres legibles en español en lugar de entity_ids crudos (`switch.ventilador_playroom_auto_stop` -> `⏱️ Parada Automática (Auto-Stop)`).
+
+- **Controles e Ilustración en Tarjeta Exterior (`DeviceCard.tsx`, `DeviceCardArt.tsx`):**
+  - Identificación del switch principal del ventilador como `fanEntity` para renderizar el ventilador animado y control de giro en la tarjeta exterior.
+  - Tarjeta compuesta que expone tanto los controles de ventilador como la luz ambiental del H7133.
+  - Nuevas ilustraciones vectoriales SVG dinámicas e interactivas:
+    - `govee_light_bars`: Torres dobles verticales con halos de luz ambiental reactivos al color RGB de Home Assistant.
+    - `govee_permanent_outdoor`: Aleros de techo arquitectónicos con lavados triangulares de luz descendentes.
+    - `govee_ground_lights`: Focos de suelo en jardín con haces de luz cálida o RGB.
+    - `ceiling_spot`: Focos empotrados tipo spot con cono de iluminación direccionable.
+
 ## [1.5.24] - 2026-09-08
 
 ### Imágenes Reales de Productos, Etiquetas Sin Duplicar, Arte Alineado al Techo y Marcas Nuevas

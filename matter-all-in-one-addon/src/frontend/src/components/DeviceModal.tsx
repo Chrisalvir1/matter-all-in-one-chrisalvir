@@ -106,6 +106,73 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
   const isExported = Boolean(activeEntity?.exported);
   const isCommissioned = Boolean(activeEntity?.commissioned);
 
+  const isH7133 =
+    (device.model || "").toUpperCase().includes("H7133") ||
+    (device.name || "").toLowerCase().includes("h7133") ||
+    (detected.brand === "Govee" && (detected.subtype === "tower_fan" || (device.name || "").toLowerCase().includes("ventilador")));
+
+  const handleExportPlan = async (plan: "plan_a" | "plan_b" | "both") => {
+    setIsBusy(true);
+    try {
+      if (plan === "plan_a") {
+        // Plan A: Fan + Night Light + Temperature Sensor
+        for (const ent of device.entities) {
+          const isFanOrLightOrTemp =
+            ent.domain === "fan" ||
+            ent.domain === "light" ||
+            ent.domain === "sensor" ||
+            ent.entityId.toLowerCase().includes("ventilador") ||
+            (ent.domain === "switch" && !ent.entityId.includes("auto_stop"));
+          if (isFanOrLightOrTemp && !ent.exported) {
+            await api.toggleExport(ent.entityId, true);
+            ent.exported = true;
+          }
+        }
+        showToast("✓ Plan A Activado: Ventilador + Luz Nocturna + Sensor de Temperatura expuestos en Matter");
+      } else if (plan === "plan_b") {
+        // Plan B: Heater / Thermostat + Temperature Sensor
+        for (const ent of device.entities) {
+          const isHeaterOrTemp =
+            ent.domain === "climate" ||
+            ent.domain === "sensor" ||
+            (ent.domain === "switch" && !ent.entityId.includes("auto_stop"));
+          if (isHeaterOrTemp && !ent.exported) {
+            await api.toggleExport(ent.entityId, true);
+            ent.exported = true;
+          }
+        }
+        showToast("✓ Plan B Activado: Calefactor / Termostato expuesto en Matter");
+      } else {
+        // Both / All
+        for (const ent of device.entities) {
+          if (!ent.exported) {
+            await api.toggleExport(ent.entityId, true);
+            ent.exported = true;
+          }
+        }
+        showToast("✓ Todas las entidades del accesorio publicadas en Matter");
+      }
+      onRefresh();
+    } catch (err: any) {
+      showToast(err.message || "Error al exportar entidades", true);
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const getFriendlyEntityName = (ent: EntityRecord | null): string => {
+    if (!ent) return "Selecciona una entidad";
+    const id = ent.entityId.toLowerCase();
+    const name = (ent.name || "").toLowerCase();
+    if (isH7133 || id.includes("h7133") || name.includes("ventilador")) {
+      if (ent.domain === "light") return "💡 Luz Nocturna / LED";
+      if (id.includes("auto_stop")) return "⏱️ Parada Automática (Auto-Stop)";
+      if (id.includes("temp") || ent.domain === "sensor") return "🌡️ Sensor de Temperatura Ambiente";
+      if (id.includes("ventilador") || ent.domain === "fan" || ent.domain === "switch") return "🌪️ Ventilador Principal (Encendido / Velocidad)";
+    }
+    return ent.name || ent.entityId;
+  };
+
   const handleToggleExport = async (entity: EntityRecord) => {
     try {
       const nextState = !entity.exported;
@@ -113,7 +180,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
       entity.exported = nextState;
       showToast(
         nextState
-          ? `✓ ${entity.name || entity.entityId} publicado en Matter`
+          ? `✓ ${getFriendlyEntityName(entity)} publicado en Matter`
           : `Retirado de Matter`
       );
       onRefresh();
@@ -300,7 +367,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                     </span>
                     <div>
                       <div className="entity-row-name">
-                        {ent.name || ent.entityId}
+                        {getFriendlyEntityName(ent)}
                       </div>
                       <div className="entity-row-id">{ent.entityId}</div>
                       <span
@@ -341,10 +408,103 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
               gap: 14,
             }}
           >
+            {/* Govee H7133 Plan A & Plan B Quick Assistant */}
+            {isH7133 && (
+              <div
+                className="h7133-assistant-card"
+                style={{
+                  background: "linear-gradient(135deg, rgba(2, 132, 199, 0.18) 0%, rgba(14, 165, 233, 0.08) 100%)",
+                  border: "1.5px solid rgba(56, 189, 248, 0.4)",
+                  borderRadius: 14,
+                  padding: "14px 16px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 10,
+                  boxShadow: "0 4px 16px rgba(0, 0, 0, 0.25)",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ fontSize: 22 }}>🌪️🔥</span>
+                  <div>
+                    <strong style={{ fontSize: 13, color: "#38BDF8", display: "block" }}>
+                      Govee H7133 · Modos de Publicación Matter
+                    </strong>
+                    <div style={{ fontSize: 11, color: "#94A3B8" }}>
+                      Ventilador de Torre, Calefactor, Luz Nocturna y Sensor
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    className="button"
+                    onClick={() => handleExportPlan("plan_a")}
+                    disabled={isBusy}
+                    title="Exporta como accesorio Ventilador Matter con velocidades, luz nocturna y lectura de temperatura"
+                    style={{
+                      flex: 1,
+                      minWidth: "140px",
+                      padding: "8px 10px",
+                      background: "rgba(2, 132, 199, 0.35)",
+                      border: "1px solid #38BDF8",
+                      color: "#FFF",
+                      borderRadius: 8,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    🌪️ Plan A: Ventilador Matter
+                  </button>
+                  <button
+                    type="button"
+                    className="button"
+                    onClick={() => handleExportPlan("plan_b")}
+                    disabled={isBusy}
+                    title="Exporta como accesorio Termostato/Calefactor con dial térmico y sensor de temperatura"
+                    style={{
+                      flex: 1,
+                      minWidth: "140px",
+                      padding: "8px 10px",
+                      background: "rgba(234, 88, 12, 0.3)",
+                      border: "1px solid #FB923C",
+                      color: "#FFF",
+                      borderRadius: 8,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    🔥 Plan B: Calefactor / Clima
+                  </button>
+                  <button
+                    type="button"
+                    className="button"
+                    onClick={() => handleExportPlan("both")}
+                    disabled={isBusy}
+                    title="Activa todos los canales para exponer el conjunto completo"
+                    style={{
+                      width: "100%",
+                      padding: "6px 10px",
+                      background: "rgba(255, 255, 255, 0.08)",
+                      border: "1px solid rgba(255, 255, 255, 0.2)",
+                      color: "#E2E8F0",
+                      borderRadius: 8,
+                      fontSize: 11,
+                      cursor: "pointer",
+                    }}
+                  >
+                    ⚡ Publicar Todo (Ventilador + Luz + Sensor)
+                  </button>
+                </div>
+              </div>
+            )}
+
             <p className="card-label">SELECCIÓN Y CONFIGURACIÓN</p>
             <h3 id="selection-title">
               <span className="selection-title-text">
-                {activeEntity?.name || activeEntity?.entityId || "Selecciona una entidad"}
+                {getFriendlyEntityName(activeEntity)}
               </span>
               {isCommissioned && (
                 <span className="home-badge commissioned">
@@ -429,8 +589,13 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                   <optgroup label="💡 Iluminación">
                     <option value="bulb">Bombilla Estándar / Techo</option>
                     <option value="chandelier">Candelabro Colgante de Techo (Cristal)</option>
-                    <option value="ceiling_spot">Foco Empotrado en Techo (Downlight)</option>
+                    <option value="hanging_bulbs">Bombillos de Filamento Colgantes con Dimmer</option>
+                    <option value="ceiling_spot">Foco Empotrado en Techo (Downlight / Spot Govee)</option>
                     <option value="led_strip">Tira LED / Neón RGBIC</option>
+                    <option value="govee_light_bars">Barras de Luz RGBIC / Torres (Govee Flow)</option>
+                    <option value="govee_dreamview">Govee DreamView TV Backlight</option>
+                    <option value="govee_permanent_outdoor">Luces Exteriores Permanentes (Govee)</option>
+                    <option value="govee_ground_lights">Luces de Suelo / Sendero Exterior (Govee)</option>
                     <option value="govee_lyra">Lámpara de Pie Esquina (Govee Lyra)</option>
                   </optgroup>
                   <optgroup label="🌀 Clima y Ventilación">
@@ -658,9 +823,42 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
             ) : (
               <div
                 className="qr-liquid-glass-card"
-                style={{ padding: 24, textAlign: "center", color: "var(--text-secondary)" }}
+                style={{
+                  padding: 24,
+                  textAlign: "center",
+                  background: "rgba(255, 255, 255, 0.03)",
+                  borderRadius: 16,
+                  border: "1px dashed rgba(255, 255, 255, 0.15)",
+                }}
               >
-                Activa la entidad para generar el código QR de Matter.
+                <p style={{ color: "var(--text-secondary, #94a3b8)", fontSize: 13, marginBottom: 14 }}>
+                  Activa la entidad para generar el código QR de vinculación Matter.
+                </p>
+                <button
+                  type="button"
+                  className="button button-primary"
+                  onClick={() =>
+                    isH7133
+                      ? handleExportPlan("plan_a")
+                      : activeEntity
+                      ? handleToggleExport(activeEntity)
+                      : handleToggleExport(sortedEntities[0])
+                  }
+                  disabled={isBusy}
+                  style={{
+                    width: "100%",
+                    padding: "10px 16px",
+                    fontSize: "0.85rem",
+                    fontWeight: 600,
+                    borderRadius: "10px",
+                    background: "linear-gradient(135deg, #0284c7 0%, #0369a1 100%)",
+                    border: "none",
+                    color: "#fff",
+                    cursor: "pointer",
+                  }}
+                >
+                  🚀 {isH7133 ? "Publicar como Ventilador (Plan A)" : "Activar y Generar Código QR"}
+                </button>
               </div>
             )}
 
