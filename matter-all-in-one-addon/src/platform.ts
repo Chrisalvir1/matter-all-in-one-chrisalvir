@@ -950,13 +950,35 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         return "extendedColorLight";
       }
     }
-    if (!entityId.startsWith("switch.omni_broadlink_")) return undefined;
-    const identity = `${entityId} ${state.attributes?.friendly_name ?? ""}`;
-    return /(?:^|[_\s-])(everybot|ircedge|robot|aspiradora|vacuum|cleaner)(?:$|[_\s-])/i.test(
-      identity,
-    )
-      ? "roboticVacuumCleaner"
-      : undefined;
+    if (entityId.startsWith("switch.")) {
+      const id = entityId.toLowerCase();
+      const fn = (state.attributes?.friendly_name || "").toLowerCase();
+      const identity = `${id} ${fn}`;
+
+      if (
+        /auto_stop|calefactor|heater|termostato|thermostat|heating/i.test(
+          identity,
+        )
+      ) {
+        return "thermostat";
+      }
+
+      if (
+        /ventilador|fan|abanico|blower/i.test(identity) &&
+        !/auto_stop|timer|temporizador|oscil|luz|light/i.test(identity)
+      ) {
+        return "fan";
+      }
+
+      if (entityId.startsWith("switch.omni_broadlink_")) {
+        return /(?:^|[_\s-])(everybot|ircedge|robot|aspiradora|vacuum|cleaner)(?:$|[_\s-])/i.test(
+          identity,
+        )
+          ? "roboticVacuumCleaner"
+          : undefined;
+      }
+    }
+    return undefined;
   }
 
   /** Refresh the panel catalogue from the latest HA state cache on demand. */
@@ -1411,7 +1433,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     );
     this.log.notice(`[Runtime] Matterbridge runtime: ${mbVersion}`);
     this.log.notice(`[Runtime] Node.js runtime: ${process.version}`);
-    this.log.notice(`[Runtime] Plugin version: 1.5.29`);
+    this.log.notice(`[Runtime] Plugin version: 1.5.30`);
     await this.loadEntityDiagnostics();
     await this.startUiServer();
     this.startMatterConnectionMonitor();
@@ -2144,7 +2166,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           : endpoint.deviceName
             ? this.getDeviceByName(endpoint.deviceName)
             : undefined;
-        if (existingEndpoint?.serverNode) {
+        const deviceTypeMismatch =
+          existingEndpoint?.deviceType !== undefined &&
+          existingEndpoint.deviceType !== endpoint.deviceType;
+
+        if (existingEndpoint?.serverNode && !deviceTypeMismatch) {
           entity.adoptEndpoint(existingEndpoint);
           this.matterbridgeDevices.set(entityId, existingEndpoint);
           await entity.syncInitialState();
@@ -2152,6 +2178,20 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             `Reused existing Matter endpoint ${idn}${entityId}${rs}; it remains paired and was not recreated.`,
           );
           return;
+        } else if (existingEndpoint && deviceTypeMismatch) {
+          this.log.warn(
+            `Existing Matter endpoint ${idn}${entityId}${rs} device type (${existingEndpoint.deviceType}) does not match new device type (${endpoint.deviceType}). Recreating endpoint...`,
+          );
+          try {
+            if ((existingEndpoint as any).serverNode?.lifecycle?.isOnline) {
+              await (existingEndpoint as any).serverNode.close();
+            }
+            await this.unregisterDevice(existingEndpoint);
+          } catch (e) {
+            this.log.debug(
+              `Failed to unregister mismatched existing endpoint: ${e}`,
+            );
+          }
         }
       }
       await this.registerDevice(endpoint);
@@ -3082,13 +3122,52 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     try {
       const wasExported = this.exportedDevices.has(entityId);
       const state = entity.state;
-      if (wasExported) await this.manualUnregister(entityId);
+
+      const endpoint = this.getMatterEndpointForEntity(entityId);
+      if (endpoint?.serverNode) {
+        try {
+          await endpoint.serverNode.erase();
+        } catch (e) {
+          this.log.debug(`Failed to erase server node for ${entityId}: ${e}`);
+        }
+        const storeId = String(endpoint.deviceName ?? "").replace(/[ .]/g, "");
+        const bridgeRuntime = this.matterbridge as any;
+        const managedStorage =
+          bridgeRuntime.serverNodeStorageManagers?.get?.(storeId);
+        const storageService = bridgeRuntime.matterStorageService;
+        const storageManager =
+          managedStorage ?? (await storageService?.open?.(storeId));
+        try {
+          await storageManager?.createContext?.("persist")?.clearAll?.();
+          await storageManager?.createContext?.("fabrics")?.clearAll?.();
+          await storageManager?.createContext?.("commissioning")?.clearAll?.();
+          await storageManager
+            ?.createContext?.("operationalCredentials")
+            ?.clearAll?.();
+        } catch (e) {
+          this.log.debug(`Failed to clear storage contexts for ${entityId}: ${e}`);
+        } finally {
+          if (!managedStorage) await storageManager?.close?.();
+        }
+        if (endpoint.serverNode.lifecycle?.isOnline) {
+          await endpoint.serverNode.close();
+        }
+        await this.unregisterDevice(endpoint);
+      }
+
+      if (wasExported) {
+        this.exportedDevices.delete(entityId);
+      }
       this.deviceOverrides[entityId] = profileId;
       await this.saveDeviceOverrides();
       this.entities.delete(entityId);
       this.matterbridgeDevices.delete(entityId);
       await this.registerHAEntity(state);
-      if (wasExported) await this.manualRegister(entityId);
+      if (wasExported) {
+        this.exportedDevices.add(entityId);
+        await this.activateEntity(entityId, true);
+        await this.saveExportedDevices();
+      }
       return { success: true };
     } catch (error) {
       this.log.error(
@@ -4194,10 +4273,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           );
           try {
             const body = await this.readRequestBody(req);
-            const data = JSON.parse(body) as { profileId?: string };
+            const data = JSON.parse(body) as {
+              profileId?: string;
+              profile?: string;
+            };
             const result = await this.setDeviceProfile(
               entityId,
-              data.profileId ?? "",
+              data.profileId || data.profile || "",
             );
             res.writeHead(result.success ? 200 : 400, {
               "Content-Type": "application/json; charset=utf-8",

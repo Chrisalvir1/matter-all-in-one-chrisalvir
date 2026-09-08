@@ -1,3 +1,21 @@
+## [1.5.30] - 2026-09-08
+
+### Corrección Crítica de Tipo de Dispositivo (Fan vs Thermostat vs Enchufe) y Regeneración Limpia de Nodos Matter
+
+- **Detección Automática de Perfiles para Switches Fan y Calefactor (`platform.ts`):**
+  - Se corrigió `getAutomaticProfile` para reconocer automáticamente switches de ventiladores (`switch.ventilador_*`, `switch.*fan*`) asignando el perfil nativo Matter `fan` (`0x002b`).
+  - Se añadió detección para switches de calefactor/auto-stop (`switch.*auto_stop*`, `switch.*calefactor*`, `switch.*heater*`) asignando el perfil nativo Matter `thermostat` (`0x0301`).
+  - Esto evita que los dispositivos caigan en el fallback genérico de enchufe (`0x010a` / `onOffPlugInUnit`).
+- **Limpieza de Storage y Recreación Forzada en Cambio de Perfil (`platform.ts`, `DeviceModal.tsx`):**
+  - Al cambiar de perfil o activar Plan A / Plan B, `setDeviceProfile` ahora borra completamente los contextos de almacenamiento de Matterbridge (`persist`, `fabrics`, `commissioning`, `operationalCredentials`), desregistra el nodo viejo y activa el nuevo nodo con `forceRecreate = true`.
+  - En `activateEntity`, se valida que cualquier nodo previo existente coincida con el `deviceType` del nuevo endpoint. Si difiere (por ejemplo, existía un nodo de enchufe previo), se descarta el nodo anterior y se genera un nodo completamente limpio de tipo Fan o Thermostat.
+  - El modal web ahora invoca `resetAccessory` cuando el accesorio ya estaba publicado, asegurando que Apple Home escanee un accesorio nativo nuevo en lugar de un accesorio residual.
+- **Compatibilidad del Cliente API (`client.ts` y `platform.ts`):**
+  - Se normalizó el payload de `/api/custom/device-profile/` para aceptar tanto `profileId` como `profile`, asegurando que las sobreescrituras de tipo de dispositivo se guarden y apliquen permanentemente.
+- **Sincronización de Estado y Velocidades en Apple Home (`fan.converter.ts`, `base.entity.ts`):**
+  - En `haStateToFanMode`, al detectar un ventilador encendido sin porcentaje discreto (switch fan), ahora reporta `FanControl.FanMode.High` (valor 3) en lugar del valor 4 (`On`), el cual es un enum no admitido en secuencias `OffLowMedHigh` de Apple HomeKit y causaba que Apple Home no detectara el encendido ni las velocidades.
+  - Los manejadores de comandos de FanControl ahora enrutan llamadas correctamente a `switch.turn_on` y `switch.turn_off` cuando la entidad pertenece al dominio `switch`, evitando errores de llamadas al servicio `fan`.
+
 ## [1.5.29] - 2026-09-08
 
 ### Sincronización Completa, Termostato Matter con Modo Fan Puro y Control de Modos para Govee H7133

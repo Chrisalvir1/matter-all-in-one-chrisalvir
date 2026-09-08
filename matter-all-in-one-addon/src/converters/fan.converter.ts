@@ -333,8 +333,11 @@ export function getFanControlFeatures(state: HassState): any[] {
  */
 export function haStateToFanMode(state: HassState): FanControl.FanMode {
   if (!isFanOn(state)) return FanControl.FanMode.Off;
+  if (String(state.attributes?.preset_mode).toLowerCase() === "auto") {
+    return FanControl.FanMode.Auto;
+  }
   const pct = fanPercentage(state);
-  if (pct <= 0) return FanControl.FanMode.On; // on, no discrete level known
+  if (pct <= 0) return FanControl.FanMode.High; // on, switch-based fan or full speed
   // Map to Low/Medium/High where possible
   const normalised = normaliseToPhysicalSpeed(pct);
   if (normalised <= 33.34) return FanControl.FanMode.Low;

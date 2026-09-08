@@ -291,6 +291,16 @@ describe("Fan converter — FanMode (test 12)", () => {
     // Critical: even though percentage is high, state=off → FanMode.Off
     expect(haStateToFanMode(s)).toBe(FanControl.FanMode.Off);
   });
+
+  it("12. state=on sin percentage (e.g. switch de ventilador) → FanMode.High", () => {
+    const s = makeState("on", {});
+    expect(haStateToFanMode(s)).toBe(FanControl.FanMode.High);
+  });
+
+  it("12. state=on con preset_mode=auto → FanMode.Auto", () => {
+    const s = makeState("on", { preset_mode: "auto" });
+    expect(haStateToFanMode(s)).toBe(FanControl.FanMode.Auto);
+  });
 });
 
 describe("Fan converter — Feature conformance & capability detection", () => {

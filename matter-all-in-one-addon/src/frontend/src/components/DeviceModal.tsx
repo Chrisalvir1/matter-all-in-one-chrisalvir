@@ -185,8 +185,13 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     setIsBusy(true);
     showToast("Activando Plan A (Ventilador Matter)...");
     try {
-      await api.setDeviceProfile(planAEntity.entityId, "fan").catch(() => {});
-      const reg = await api.toggleExport(planAEntity.entityId, true);
+      await api.setDeviceProfile(planAEntity.entityId, "fan");
+      let reg: any;
+      if (planAEntity.exported) {
+        reg = await api.resetAccessory(planAEntity.entityId);
+      } else {
+        reg = await api.toggleExport(planAEntity.entityId, true);
+      }
       planAEntity.exported = true;
       if (reg?.pairingCode) {
         planAEntity.pairingCode = reg.pairingCode;
@@ -228,8 +233,13 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     setIsBusy(true);
     showToast("Activando Plan B (Calefactor / Clima)...");
     try {
-      await api.setDeviceProfile(planBEntity.entityId, "thermostat").catch(() => {});
-      const reg = await api.toggleExport(planBEntity.entityId, true);
+      await api.setDeviceProfile(planBEntity.entityId, "thermostat");
+      let reg: any;
+      if (planBEntity.exported) {
+        reg = await api.resetAccessory(planBEntity.entityId);
+      } else {
+        reg = await api.toggleExport(planBEntity.entityId, true);
+      }
       planBEntity.exported = true;
       if (reg?.pairingCode) {
         planBEntity.pairingCode = reg.pairingCode;

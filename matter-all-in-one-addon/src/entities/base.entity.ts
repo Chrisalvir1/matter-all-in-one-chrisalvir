@@ -749,18 +749,19 @@ export class BaseEntity {
                 this.platform.log.debug(
                   `[${this.entityId}] FanControl.fanMode changed: ${newMode}`,
                 );
+                const svcDomain = domain === "fan" ? "fan" : "switch";
                 if (newMode === FanControl.FanMode.Off) {
                   this.setCommandLockout("fan_state", "off");
                   this.setCommandLockout("onOff", false);
                   await this.platform.ha.callService(
-                    "fan",
+                    svcDomain,
                     "turn_off",
                     this.entityId,
                   );
                 } else if (newMode === FanControl.FanMode.Auto) {
                   this.setCommandLockout("fan_state", "on");
                   this.setCommandLockout("onOff", true);
-                  if (hasFanAuto(this.state)) {
+                  if (domain === "fan" && hasFanAuto(this.state)) {
                     await this.platform.ha.callService(
                       "fan",
                       "set_preset_mode",
@@ -769,7 +770,7 @@ export class BaseEntity {
                     );
                   } else {
                     await this.platform.ha.callService(
-                      "fan",
+                      svcDomain,
                       "turn_on",
                       this.entityId,
                     );
@@ -777,35 +778,59 @@ export class BaseEntity {
                 } else if (newMode === FanControl.FanMode.Low) {
                   this.setCommandLockout("fan_state", "on");
                   this.setCommandLockout("onOff", true);
-                  await this.platform.ha.callService(
-                    "fan",
-                    "turn_on",
-                    this.entityId,
-                    { percentage: 33.33 },
-                  );
+                  if (domain === "fan") {
+                    await this.platform.ha.callService(
+                      "fan",
+                      "turn_on",
+                      this.entityId,
+                      { percentage: 33.33 },
+                    );
+                  } else {
+                    await this.platform.ha.callService(
+                      "switch",
+                      "turn_on",
+                      this.entityId,
+                    );
+                  }
                 } else if (newMode === FanControl.FanMode.Medium) {
                   this.setCommandLockout("fan_state", "on");
                   this.setCommandLockout("onOff", true);
-                  await this.platform.ha.callService(
-                    "fan",
-                    "turn_on",
-                    this.entityId,
-                    { percentage: 66.67 },
-                  );
+                  if (domain === "fan") {
+                    await this.platform.ha.callService(
+                      "fan",
+                      "turn_on",
+                      this.entityId,
+                      { percentage: 66.67 },
+                    );
+                  } else {
+                    await this.platform.ha.callService(
+                      "switch",
+                      "turn_on",
+                      this.entityId,
+                    );
+                  }
                 } else if (newMode === FanControl.FanMode.High) {
                   this.setCommandLockout("fan_state", "on");
                   this.setCommandLockout("onOff", true);
-                  await this.platform.ha.callService(
-                    "fan",
-                    "turn_on",
-                    this.entityId,
-                    { percentage: 100 },
-                  );
+                  if (domain === "fan") {
+                    await this.platform.ha.callService(
+                      "fan",
+                      "turn_on",
+                      this.entityId,
+                      { percentage: 100 },
+                    );
+                  } else {
+                    await this.platform.ha.callService(
+                      "switch",
+                      "turn_on",
+                      this.entityId,
+                    );
+                  }
                 } else if (newMode === FanControl.FanMode.On) {
                   this.setCommandLockout("fan_state", "on");
                   this.setCommandLockout("onOff", true);
                   await this.platform.ha.callService(
-                    "fan",
+                    svcDomain,
                     "turn_on",
                     this.entityId,
                   );
