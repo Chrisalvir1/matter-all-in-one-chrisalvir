@@ -42,7 +42,8 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
   // Sub-entities breakdown
   const fanEntity = device.entities.find((e) => e.domain === "fan");
   const lightEntity = device.entities.find((e) => e.domain === "light");
-  const switchEntities = device.entities.filter((e) => e.domain === "switch");
+  // Only show exported switch channels on the card face — non-exported hidden until modal
+  const switchEntities = device.entities.filter((e) => e.domain === "switch" && e.exported);
   const coverEntity = device.entities.find((e) => e.domain === "cover");
 
   const controllableCount = device.entities.filter((e) =>
@@ -219,7 +220,44 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
         brand={deviceInfo.brand}
         model={deviceInfo.model}
         appleColor={deviceInfo.appleColor}
+        hasProductImage={Boolean(deviceInfo.productImageUrl)}
       />
+
+      {/* Real product photo — CDN image shown in top-right zone */}
+      {deviceInfo.productImageUrl && (
+        <div
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            top: 0,
+            right: 0,
+            width: "130px",
+            height: "170px",
+            pointerEvents: "none",
+            zIndex: 1,
+            overflow: "hidden",
+            maskImage: "linear-gradient(to left, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.5) 55%, transparent 100%)",
+            WebkitMaskImage: "linear-gradient(to left, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.5) 55%, transparent 100%)",
+          }}
+        >
+          <img
+            src={deviceInfo.productImageUrl}
+            alt={deviceInfo.productImageAlt || deviceInfo.brand}
+            style={{
+              width: "100%",
+              height: "100%",
+              objectFit: "contain",
+              objectPosition: "right top",
+              opacity: isOn ? 0.95 : 0.5,
+              transition: "opacity 0.5s ease",
+              filter: isOn ? "none" : "grayscale(0.4)",
+            }}
+            onError={(e) => {
+              (e.target as HTMLImageElement).style.display = "none";
+            }}
+          />
+        </div>
+      )}
 
       {/* Card Header & Controls (z-index: 2 for absolute click priority) */}
       <div className="card-top" style={{ position: "relative", zIndex: 2 }}>
@@ -267,7 +305,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
         </div>
       </div>
 
-      <div style={{ position: "relative", zIndex: 2 }}>
+      <div style={{ position: "relative", zIndex: 2, paddingRight: deviceInfo.productImageUrl ? "120px" : undefined }}>
         <div
           className="device-brand-row"
           style={{
@@ -812,26 +850,6 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
         </div>
       )}
 
-      <div className="tags" style={{ position: "relative", zIndex: 2, marginTop: "10px" }}>
-        {isMqtt && <span className="tag tag-mqtt">📡 MQTT</span>}
-        <span
-          className="tag tag-brand"
-          style={{
-            color: deviceInfo.accentColor,
-            borderColor: `rgba(${deviceInfo.brandColor}, 0.35)`,
-            background: `rgba(${deviceInfo.brandColor}, 0.08)`,
-          }}
-        >
-          {deviceInfo.brand}
-        </span>
-        {deviceInfo.model && <span className="tag">{deviceInfo.model}</span>}
-        {hasIssue && <span className="tag tag-warning">Revisar</span>}
-        {domains.map((dom) => (
-          <span className="tag" key={dom}>
-            {dom}
-          </span>
-        ))}
-      </div>
 
       <div className="card-footer" style={{ position: "relative", zIndex: 2 }}>
         <span className="entity-summary">

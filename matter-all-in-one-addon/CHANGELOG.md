@@ -1,3 +1,31 @@
+## [1.5.24] - 2026-09-08
+
+### Imágenes Reales de Productos, Etiquetas Sin Duplicar, Arte Alineado al Techo y Marcas Nuevas
+
+- **Imágenes de productos reales (`productImages.ts` nuevo, `DeviceCard.tsx`, `DeviceCardArt.tsx`):**
+  - Se crea `src/frontend/src/data/productImages.ts`: tabla de mapeo `marca + subtype + modelo → URL CDN oficial` con fotos reales de Apple, Amazon Echo, Govee, Ring, Wyze, Tapo, Philips Hue, Ecobee, Nest, Roborock, Broadlink, Samsung.
+  - Cuando se detecta imagen real, se muestra `<img>` en zona derecha de la tarjeta con fade-in al encender/apagar; el SVG de arte se omite para ese dispositivo.
+  - HomePod Mini y HomePod muestran foto real del color seleccionado actualmente.
+- **Etiquetas duplicadas eliminadas (`DeviceCard.tsx` L815):**
+  - Eliminado el bloque `.tags` inferior que repetía Marca, Modelo y dominios ya visibles en la fila de marca superior.
+- **Arte SVG alineado al tope (`DeviceCardArt.tsx`):**
+  - `preserveAspectRatio` cambiado de `xMaxYMid` → `xMaxYMin` — el ventilador y las luces aparecen en la esquina superior derecha, no en el centro.
+  - Altura del canvas limitada a `190px` para no cubrir los controles inferiores.
+- **Sin superposición texto/imagen:**
+  - Contenedor de texto recibe `paddingRight: 120px` cuando hay imagen de producto real, garantizando que ambos coexistan sin cubrirse.
+- **Solo canales Matter exportados visibles en la tarjeta exterior:**
+  - `switchEntities` filtrado por `e.exported === true`; canales no exportados son invisibles en la tarjeta y solo aparecen en el modal de configuración. Elimina el problema de Wyze Cam con 10 canales.
+- **Nuevas marcas detectadas (`deviceDetector.ts`):**
+  - Samsung / SmartThings, Sony / Bravia, Hisense, Vimtag, Wyze, Ring (reforzado), EZVIZ (reforzado), Broadlink (RM4/Mini/Pro), Ecobee (con `ecobee3`, `smartsensor`), Nest / Google Nest, Xiaomi (Mi Home, MIIO), Tuya (slugs locales `_ty_`).
+- **Nuevos subtypes de dispositivos:**
+  - `hanging_bulbs` — Bombillos de filamento colgantes con dimmer (detecta `dimmer`, `filament`, `colgante`, `vintage`).
+  - `humidifier` — Humidificador inteligente con nivel de agua y partículas de vapor animadas.
+  - `ir_blaster` — Control remoto IR universal (Broadlink RM4 Pro).
+  - `ecobee_thermostat` — Termostato Ecobee Premium.
+  - `ecobee_sensor` — Sensor de Habitación Ecobee.
+  - `nest_thermostat` — Termostato Nest Learning.
+- **413+ pruebas pasando, build limpio.**
+
 ## [1.5.23] - 2026-09-07
 
 ### Compatibilidad Completa Amazon Alexa & Echo, Apagadores Triples Compactos, Candelabros en Techo y Renderizado de Hardware Real

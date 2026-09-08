@@ -1,4 +1,5 @@
 import { DeviceRecord } from "../types";
+import { getProductImage } from "../data/productImages";
 
 export interface AppleColorConfig {
   name: string;
@@ -65,7 +66,10 @@ export interface DetectedDeviceInfo {
   appleColor: string;
   brandColor: string;
   accentColor: string;
+  productImageUrl?: string;
+  productImageAlt?: string;
 }
+
 
 interface BrandConfig {
   name: string;
@@ -83,7 +87,7 @@ const BRAND_CONFIGS: BrandConfig[] = [
   { name: "Philips Hue", pattern: /\b(philips\s*hue|hue)\b/i, brandColor: "175, 82, 222", accentColor: "#AF52DE" },
   { name: "SwitchBot", pattern: /\bswitch\s*bot\b/i, brandColor: "239, 68, 68", accentColor: "#EF4444" },
   { name: "Aqara", pattern: /\baqara\b/i, brandColor: "14, 165, 233", accentColor: "#0EA5E9" },
-  { name: "Tuya", pattern: /\b(tuya|smart\s*life)\b/i, brandColor: "255, 107, 0", accentColor: "#FF6B00" },
+  { name: "Tuya", pattern: /\b(tuya|smart\s*life|_ty_|ty_[a-z]|tuya_local)\b/i, brandColor: "255, 107, 0", accentColor: "#FF6B00" },
   { name: "Sonoff", pattern: /\b(sonoff|ewelink)\b/i, brandColor: "2, 132, 199", accentColor: "#0284C7" },
   { name: "Roborock", pattern: /\broborock\b/i, brandColor: "225, 29, 72", accentColor: "#E11D48" },
   { name: "Roomba", pattern: /\b(roomba|irobot)\b/i, brandColor: "16, 185, 129", accentColor: "#10B981" },
@@ -93,23 +97,28 @@ const BRAND_CONFIGS: BrandConfig[] = [
   { name: "Nanoleaf", pattern: /\bnanoleaf\b/i, brandColor: "34, 197, 94", accentColor: "#22C55E" },
   { name: "WiZ", pattern: /\bwiz\b/i, brandColor: "99, 102, 241", accentColor: "#818CF8" },
   { name: "IKEA", pattern: /\b(ikea|tradfri|trådfri)\b/i, brandColor: "245, 158, 11", accentColor: "#F59E0B" },
-  { name: "Broadlink", pattern: /\bbroadlink\b/i, brandColor: "234, 88, 12", accentColor: "#EA580C" },
-  { name: "Ecobee", pattern: /\becobee\b/i, brandColor: "16, 185, 129", accentColor: "#10B981" },
-  { name: "Nest", pattern: /\b(nest|google\s*nest)\b/i, brandColor: "66, 133, 244", accentColor: "#4285F4" },
+  { name: "Broadlink", pattern: /\b(broadlink|rm4|rm\s*mini|rm\s*pro|rm\s*4)\b/i, brandColor: "234, 88, 12", accentColor: "#EA580C" },
+  { name: "Ecobee", pattern: /\b(ecobee|ecobee3|ecobee4|smartsensor)\b/i, brandColor: "16, 185, 129", accentColor: "#10B981" },
+  { name: "Nest", pattern: /\b(nest|google\s*nest|nest_thermostat)\b/i, brandColor: "66, 133, 244", accentColor: "#4285F4" },
   { name: "Honeywell", pattern: /\bhoneywell\b/i, brandColor: "220, 38, 38", accentColor: "#DC2626" },
-  { name: "Ring", pattern: /\bring\b/i, brandColor: "2, 132, 199", accentColor: "#0284C7" },
+  { name: "Ring", pattern: /\b(ring|ringvideo|ring_cam|ring_doorbell|floodlight_cam)\b/i, brandColor: "0, 162, 255", accentColor: "#00A2FF" },
   { name: "Blink", pattern: /\bblink\b/i, brandColor: "59, 130, 246", accentColor: "#3B82F6" },
   { name: "Eufy", pattern: /\beufy\b/i, brandColor: "6, 182, 212", accentColor: "#06B6D4" },
   { name: "Reolink", pattern: /\breolink\b/i, brandColor: "37, 99, 235", accentColor: "#2563EB" },
-  { name: "EZVIZ", pattern: /\bezviz\b/i, brandColor: "147, 51, 234", accentColor: "#9333EA" },
+  { name: "EZVIZ", pattern: /\b(ezviz|cs-[a-z])\b/i, brandColor: "147, 51, 234", accentColor: "#9333EA" },
   { name: "LIFX", pattern: /\blifx\b/i, brandColor: "168, 85, 247", accentColor: "#A855F7" },
   { name: "Yale", pattern: /\byale\b/i, brandColor: "234, 179, 8", accentColor: "#EAB308" },
   { name: "August", pattern: /\baugust\b/i, brandColor: "239, 68, 68", accentColor: "#EF4444" },
   { name: "Hunter", pattern: /\bhunter\b/i, brandColor: "13, 148, 136", accentColor: "#0D9488" },
   { name: "Dyson", pattern: /\bdyson\b/i, brandColor: "139, 92, 246", accentColor: "#8B5CF6" },
   { name: "Dreo", pattern: /\bdreo\b/i, brandColor: "14, 165, 233", accentColor: "#38BDF8" },
-  { name: "Xiaomi", pattern: /\b(xiaomi|mijia)\b/i, brandColor: "255, 105, 0", accentColor: "#FF6900" },
+  { name: "Xiaomi", pattern: /\b(xiaomi|mijia|mi\s*home|miio)\b/i, brandColor: "255, 105, 0", accentColor: "#FF6900" },
   { name: "Meross", pattern: /\bmeross\b/i, brandColor: "16, 185, 129", accentColor: "#10B981" },
+  { name: "Samsung", pattern: /\b(samsung|smartthings|galaxy)\b/i, brandColor: "0, 100, 220", accentColor: "#1428A0" },
+  { name: "Sony", pattern: /\b(sony|bravia|xperia)\b/i, brandColor: "0, 70, 175", accentColor: "#0046AF" },
+  { name: "Hisense", pattern: /\bhisense\b/i, brandColor: "2, 132, 199", accentColor: "#0EA5E9" },
+  { name: "Vimtag", pattern: /\bvimtag\b/i, brandColor: "34, 197, 94", accentColor: "#22C55E" },
+  { name: "Wyze", pattern: /\bwyze\b/i, brandColor: "0, 191, 164", accentColor: "#00BFA4" },
 ];
 
 export function detectDevice(device: DeviceRecord): DetectedDeviceInfo {
@@ -424,6 +433,16 @@ export function detectDevice(device: DeviceRecord): DetectedDeviceInfo {
     } else if (isCeilingSpot) {
       subtype = "ceiling_spot";
       category = "Foco Empotrado en Techo";
+    } else if (
+      poolLower.includes("dimmer") ||
+      poolLower.includes("filament") ||
+      poolLower.includes("filamento") ||
+      poolLower.includes("vintage") ||
+      poolLower.includes("colgante") ||
+      poolLower.includes("pendant")
+    ) {
+      subtype = "hanging_bulbs";
+      category = "Bombillos de Filamento Colgantes";
     } else {
       subtype = "bulb";
       category = "Bombilla Inteligente";
@@ -432,8 +451,25 @@ export function detectDevice(device: DeviceRecord): DetectedDeviceInfo {
     subtype = "vacuum";
     category = "Aspiradora Robot";
   } else if (hasClimate) {
-    subtype = "thermostat";
-    category = "Termostato / Clima";
+    // Specific thermostat brands
+    if (poolLower.includes("ecobee") || poolLower.includes("smartsensor")) {
+      if (poolLower.includes("sensor") || poolLower.includes("smartsensor")) {
+        subtype = "ecobee_sensor";
+        category = "Sensor de Habitación Ecobee";
+      } else {
+        subtype = "ecobee_thermostat";
+        category = "Termostato Ecobee Premium";
+      }
+    } else if (poolLower.includes("nest") || poolLower.includes("google_nest")) {
+      subtype = "nest_thermostat";
+      category = "Termostato Nest";
+    } else {
+      subtype = "thermostat";
+      category = "Termostato / Clima";
+    }
+  } else if (device.entities.some((e) => e.domain === "humidifier")) {
+    subtype = "humidifier";
+    category = "Humidificador Inteligente";
   } else if (hasCover) {
     subtype = "cover";
     category = "Persiana / Cortina Motorizada";
@@ -449,7 +485,7 @@ export function detectDevice(device: DeviceRecord): DetectedDeviceInfo {
     if (poolLower.includes("doorbell") || poolLower.includes("timbre") || poolLower.includes("ring") || poolLower.includes("hello")) {
       subtype = "doorbell";
       category = "Timbre con Video";
-    } else if (poolLower.includes("c200") || poolLower.includes("c210") || poolLower.includes("ptz") || poolLower.includes("360") || poolLower.includes("domo")) {
+    } else if (poolLower.includes("c200") || poolLower.includes("c210") || poolLower.includes("ptz") || poolLower.includes("360") || poolLower.includes("domo") || poolLower.includes("pan")) {
       subtype = "ptz_camera";
       category = "Cámara Domo PTZ 360°";
     } else {
@@ -459,9 +495,15 @@ export function detectDevice(device: DeviceRecord): DetectedDeviceInfo {
   } else if (hasSwitch && (poolLower.includes("plug") || poolLower.includes("enchufe") || poolLower.includes("toma") || poolLower.includes("socket"))) {
     subtype = "plug";
     category = "Enchufe Inteligente";
+  } else if (poolLower.includes("broadlink") || poolLower.includes("rm4") || poolLower.includes("rm mini") || poolLower.includes("rm pro") || poolLower.includes("ir blaster") || poolLower.includes("control remoto")) {
+    subtype = "ir_blaster";
+    category = "Control Remoto IR Universal";
   } else if (hasSwitch) {
     subtype = "switch";
     category = "Interruptor Inteligente";
+  } else if (poolLower.includes("ecobee") && hasSensor) {
+    subtype = "ecobee_sensor";
+    category = "Sensor de Habitación Ecobee";
   } else if (hasSensor) {
     subtype = "sensor";
     category = "Sensor Inteligente";
@@ -515,6 +557,9 @@ export function detectDevice(device: DeviceRecord): DetectedDeviceInfo {
     if (override.roomLabel) inferredArea = override.roomLabel;
   }
 
+  // 6. Resolve real product image (CDN photo)
+  const productImgResult = getProductImage(detectedBrand, subtype, detectedModel, appleColor);
+
   return {
     brand: detectedBrand,
     model: detectedModel,
@@ -532,5 +577,7 @@ export function detectDevice(device: DeviceRecord): DetectedDeviceInfo {
     appleColor,
     brandColor,
     accentColor,
+    productImageUrl: productImgResult?.url,
+    productImageAlt: productImgResult?.alt,
   };
 }

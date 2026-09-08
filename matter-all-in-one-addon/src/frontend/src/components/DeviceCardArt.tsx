@@ -16,6 +16,8 @@ interface DeviceCardArtProps {
   brand?: string;
   model?: string;
   appleColor?: string;
+  /** When true, real product CDN image is displayed — skip SVG art to avoid double rendering */
+  hasProductImage?: boolean;
 }
 
 export const DeviceCardArt: React.FC<DeviceCardArtProps> = ({
@@ -32,6 +34,7 @@ export const DeviceCardArt: React.FC<DeviceCardArtProps> = ({
   brand = "",
   model = "",
   appleColor = "space_gray",
+  hasProductImage = false,
 }) => {
   const isFanActive = propFanOn ?? (domain === "fan" && (state === "on" || (fanPercentage ?? 0) > 0));
   const effectiveFanPct = fanPercentage ?? (isFanActive ? 100 : 0);
@@ -209,15 +212,15 @@ export const DeviceCardArt: React.FC<DeviceCardArtProps> = ({
         </div>
       )}
 
-      {/* 4. Main Right-Aligned Vector Artwork Canvas */}
-      {visualType !== "chandelier" && (
+      {/* 4. Main Right-Aligned Vector Artwork Canvas — skipped when real product image present */}
+      {visualType !== "chandelier" && !hasProductImage && (
         <div
           style={{
             position: "absolute",
             top: 0,
             right: 0,
             width: "220px",
-            height: "100%",
+            height: "190px",
             opacity: isOn ? 0.96 : 0.45,
             transition: "opacity 0.6s ease",
             maskImage:
@@ -234,7 +237,7 @@ export const DeviceCardArt: React.FC<DeviceCardArtProps> = ({
             viewBox="0 0 160 140"
             width="100%"
             height="100%"
-            preserveAspectRatio="xMaxYMid meet"
+            preserveAspectRatio="xMaxYMin meet"
           >
             <defs>
               {/* Lamp light cone gradient matching exact Kelvin / RGB */}
@@ -792,6 +795,117 @@ export const DeviceCardArt: React.FC<DeviceCardArtProps> = ({
                   style={{ mixBlendMode: "screen" }}
                 />
               )}
+            </g>
+          )}
+
+          {/* ── 13b. BOMBILLOS DE FILAMENTO COLGANTES + DIMMER ── */}
+          {visualType === "hanging_bulbs" && (
+            <g className="art-hanging-bulbs">
+              {/* Dimmer switch on left wall */}
+              <rect x="10" y="30" width="24" height="38" rx="4" fill="#2D3748" stroke="rgba(255,255,255,0.2)" strokeWidth="1.2" />
+              <rect x="14" y="36" width="16" height="26" rx="2" fill="#1A202C" stroke="rgba(255,255,255,0.1)" strokeWidth="1" />
+              {/* Slider thumb */}
+              <rect
+                x="14"
+                y={isLightOn ? "48" : "52"}
+                width="16"
+                height="8"
+                rx="2"
+                fill={isLightOn ? lightHex : "#4A5568"}
+                style={{ transition: "y 0.4s ease, fill 0.4s ease" }}
+              />
+
+              {/* Three hanging cords from ceiling */}
+              {[72, 105, 138].map((cx, i) => (
+                <g key={i}>
+                  <line x1={cx} y1="0" x2={cx} y2={20 + i * 8} stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" />
+                  {/* Socket */}
+                  <rect x={cx - 5} y={20 + i * 8} width="10" height="7" rx="2" fill="#374151" />
+                  {/* Bulb glass globe */}
+                  <ellipse
+                    cx={cx}
+                    cy={36 + i * 8 + 18}
+                    rx="11"
+                    ry="15"
+                    fill={isLightOn ? lightHex : "#1E2430"}
+                    stroke={isLightOn ? "#FFFFFF" : "rgba(255,255,255,0.2)"}
+                    strokeWidth="1.5"
+                    style={{ filter: isLightOn ? `drop-shadow(0 0 12px ${lightHex})` : undefined, transition: "fill 0.4s ease" }}
+                  />
+                  {/* Visible filament */}
+                  {isLightOn && (
+                    <path
+                      d={`M${cx - 5} ${36 + i * 8 + 14} Q${cx} ${36 + i * 8 + 10} ${cx + 5} ${36 + i * 8 + 14}`}
+                      fill="none" stroke="#FFFFFF" strokeWidth="1.2" strokeLinecap="round"
+                    />
+                  )}
+                  {/* Bottom light cone */}
+                  {isLightOn && (
+                    <polygon
+                      points={`${cx - 10},${60 + i * 8} ${cx + 10},${60 + i * 8} ${cx + 22},${120} ${cx - 22},${120}`}
+                      fill={lightHex}
+                      opacity={0.12 * lightBrightness}
+                      style={{ mixBlendMode: "screen" }}
+                    />
+                  )}
+                </g>
+              ))}
+            </g>
+          )}
+
+          {/* ── 13c. HUMIDIFICADOR INTELIGENTE ── */}
+          {visualType === "humidifier" && (
+            <g className="art-humidifier">
+              {/* Tank body */}
+              <rect x="88" y="40" width="54" height="75" rx="16" fill="#1E2E3A" stroke={isOn ? "#38BDF8" : "rgba(255,255,255,0.2)"} strokeWidth="2" />
+              {/* Water level indicator */}
+              <rect
+                x="94"
+                y={isOn ? "80" : "100"}
+                width="42"
+                height={isOn ? "30" : "10"}
+                rx="8"
+                fill={isOn ? "rgba(56, 189, 248, 0.35)" : "rgba(255,255,255,0.05)"}
+                style={{ transition: "all 0.8s ease" }}
+              />
+              {/* Mist nozzle */}
+              <ellipse cx="115" cy="40" rx="12" ry="5" fill="#2D4A5A" stroke="rgba(255,255,255,0.15)" strokeWidth="1" />
+              {/* Mist particles */}
+              {isOn && [0, 1, 2].map((i) => (
+                <ellipse key={i}
+                  cx={107 + i * 8}
+                  cy={25 - i * 5}
+                  rx="4"
+                  ry="7"
+                  fill="rgba(186, 230, 253, 0.55)"
+                  style={{ filter: "blur(3px)", animation: `pulse ${1.2 + i * 0.3}s ease-in-out infinite` }}
+                />
+              ))}
+              {/* Control button */}
+              <circle cx="115" cy="100" r="8" fill={isOn ? "#0EA5E9" : "#374151"} stroke="rgba(255,255,255,0.15)" strokeWidth="1" />
+            </g>
+          )}
+
+          {/* ── 13d. CONTROL IR (BROADLINK) ── */}
+          {visualType === "ir_blaster" && (
+            <g className="art-ir-blaster">
+              {/* Compact disc-shaped IR blaster */}
+              <circle cx="115" cy="70" r="32" fill="#1A1A2E" stroke={isOn ? "#EA580C" : "rgba(255,255,255,0.15)"} strokeWidth="2" />
+              <circle cx="115" cy="70" r="22" fill="#16213E" stroke={isOn ? "#F97316" : "rgba(255,255,255,0.08)"} strokeWidth="1.2" />
+              {/* IR emission arcs */}
+              {isOn && [14, 20, 26].map((r, i) => (
+                <path key={i}
+                  d={`M ${115 - r} 44 A ${r} ${r} 0 0 1 ${115 + r} 44`}
+                  fill="none" stroke="#F97316"
+                  strokeWidth={1.5 - i * 0.3}
+                  strokeLinecap="round"
+                  opacity={0.7 - i * 0.2}
+                />
+              ))}
+              {/* Center LED */}
+              <circle cx="115" cy="70" r="6" fill={isOn ? "#F97316" : "#374151"} style={{ filter: isOn ? "drop-shadow(0 0 6px #F97316)" : undefined }} />
+              {/* Status LED */}
+              <circle cx="140" cy="48" r="3" fill={isOn ? "#22C55E" : "#374151"} />
             </g>
           )}
 
