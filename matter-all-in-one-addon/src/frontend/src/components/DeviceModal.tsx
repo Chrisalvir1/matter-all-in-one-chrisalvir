@@ -2,6 +2,13 @@ import React, { useState, useEffect } from "react";
 import { DeviceRecord, EntityRecord } from "../types";
 import { api } from "../api/client";
 import { QRCodeDisplay } from "./QRCodeDisplay";
+import { AppleHomeIcon } from "./AppleHomeIcon";
+import {
+  detectDevice,
+  getDeviceVisualOverride,
+  setDeviceVisualOverride,
+  APPLE_HOMEPOD_COLORS,
+} from "../utils/deviceDetector";
 
 interface DeviceModalProps {
   device: DeviceRecord | null;
@@ -10,8 +17,6 @@ interface DeviceModalProps {
   onRefresh: () => void;
   showToast: (msg: string, isError?: boolean) => void;
 }
-
-import { AppleHomeIcon } from "./AppleHomeIcon";
 
 export const DeviceModal: React.FC<DeviceModalProps> = ({
   device,
@@ -24,14 +29,52 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
   const [isBusy, setIsBusy] = useState(false);
   const [multiAdminOpen, setMultiAdminOpen] = useState(false);
 
+  const [visualType, setVisualType] = useState<string>("auto");
+  const [appleColor, setAppleColor] = useState<string>("space_gray");
+  const [customRoom, setCustomRoom] = useState<string>("");
+
   useEffect(() => {
     if (!device) return;
     const initial = targetEntity || device.entities[0] || null;
     setSelectedEntity(initial);
     setMultiAdminOpen(false);
+
+    const ov =
+      getDeviceVisualOverride(device.id) ||
+      (device.entities[0] ? getDeviceVisualOverride(device.entities[0].entityId) : null);
+    const det = detectDevice(device);
+    setVisualType(ov?.visualType || "auto");
+    setAppleColor(ov?.appleColor || det.appleColor || "space_gray");
+    setCustomRoom(ov?.roomLabel || "");
   }, [device, targetEntity]);
 
   if (!device) return null;
+
+  const detected = detectDevice(device);
+  const effectiveSubtype = visualType === "auto" ? detected.subtype : visualType;
+  const isHomePodSubtype =
+    effectiveSubtype === "homepod_mini" || effectiveSubtype === "homepod";
+  const activeHomePodModel =
+    effectiveSubtype === "homepod" ? "homepod" : "homepod_mini";
+  const availableAppleColors =
+    APPLE_HOMEPOD_COLORS[activeHomePodModel] || APPLE_HOMEPOD_COLORS.homepod_mini;
+
+  const handleSaveVisualOverride = (
+    newType: string,
+    newColor: string,
+    newRoom: string
+  ) => {
+    setDeviceVisualOverride(device.id, {
+      visualType: newType,
+      appleColor: newColor,
+      roomLabel: newRoom.trim() || undefined,
+    });
+    setVisualType(newType);
+    setAppleColor(newColor);
+    setCustomRoom(newRoom);
+    showToast("✓ Apariencia de hardware guardada");
+    onRefresh();
+  };
 
   const sortedEntities = [...device.entities].sort((a, b) => {
     if (targetEntity) {
@@ -335,6 +378,174 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                 <dd>{isCommissioned ? "Emparejado en red Matter" : isExported ? "Listo para vincular" : "Sin publicar"}</dd>
               </div>
             </dl>
+
+            {/* Custom Visual Silhouette / Hardware Appearance */}
+            <section
+              className="appearance-customization-section"
+              style={{
+                background: "rgba(255, 255, 255, 0.04)",
+                border: "1px solid rgba(255, 255, 255, 0.08)",
+                borderRadius: 14,
+                padding: "14px 16px",
+                display: "flex",
+                flexDirection: "column",
+                gap: 12,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 16 }}>🎨</span>
+                  <strong style={{ fontSize: 13, color: "var(--text-primary, #fff)" }}>
+                    Silueta y Hardware Visual
+                  </strong>
+                </div>
+                <span style={{ fontSize: 11, color: "var(--text-secondary, #94A3B8)" }}>
+                  {detected.brand} · {detected.category}
+                </span>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <label style={{ fontSize: 11, color: "var(--text-secondary, #94A3B8)", fontWeight: 500 }}>
+                  Tipo de Accesorio / Silueta
+                </label>
+                <select
+                  value={visualType}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    handleSaveVisualOverride(val, appleColor, customRoom);
+                  }}
+                  style={{
+                    background: "rgba(15, 23, 42, 0.8)",
+                    border: "1px solid rgba(255, 255, 255, 0.15)",
+                    color: "var(--text-primary, #fff)",
+                    padding: "8px 12px",
+                    borderRadius: 8,
+                    fontSize: 13,
+                    outline: "none",
+                    cursor: "pointer",
+                  }}
+                >
+                  <option value="auto">✨ Detección Inteligente Automática ({detected.category})</option>
+                  <optgroup label="💡 Iluminación">
+                    <option value="bulb">Bombilla Estándar / Techo</option>
+                    <option value="chandelier">Candelabro Colgante de Techo (Cristal)</option>
+                    <option value="ceiling_spot">Foco Empotrado en Techo (Downlight)</option>
+                    <option value="led_strip">Tira LED / Neón RGBIC</option>
+                    <option value="govee_lyra">Lámpara de Pie Esquina (Govee Lyra)</option>
+                  </optgroup>
+                  <optgroup label="🌀 Clima y Ventilación">
+                    <option value="ceiling_fan">Ventilador de Techo Negro Mate con Luz</option>
+                    <option value="tower_fan">Ventilador de Torre Oscilante</option>
+                  </optgroup>
+                  <optgroup label="🍎 Apple Audio y Video">
+                    <option value="apple_tv">Apple TV 4K (Pantalla 16:9 OLED con Carátula)</option>
+                    <option value="homepod_mini">Apple HomePod Mini (Esfera Acústica 3D)</option>
+                    <option value="homepod">Apple HomePod (Cilindro Acústico Grande)</option>
+                  </optgroup>
+                  <optgroup label="🔒 Seguridad y Cámaras">
+                    <option value="doorbell">Timbre con Video y Campanilla</option>
+                    <option value="ptz_camera">Cámara Domo PTZ 360°</option>
+                    <option value="bullet_camera">Cámara Exterior Bala</option>
+                    <option value="keypad_deadbolt">Cerradura con Teclado Numérico Táctil</option>
+                    <option value="smart_turn_lock">Cerrojo Giratorio Interior</option>
+                  </optgroup>
+                  <optgroup label="🔌 Energía y Otros">
+                    <option value="smart_plug">Enchufe Inteligente con Medidor</option>
+                  </optgroup>
+                </select>
+              </div>
+
+              {/* HomePod Official Apple Color Picker */}
+              {isHomePodSubtype && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }}>
+                  <label style={{ fontSize: 11, color: "var(--text-secondary, #94A3B8)", fontWeight: 500 }}>
+                    Color Oficial de Venta Apple ({activeHomePodModel === "homepod_mini" ? "HomePod Mini" : "HomePod"})
+                  </label>
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                    {Object.entries(availableAppleColors).map(([colorKey, colorCfg]) => {
+                      const isSelected = appleColor === colorKey;
+                      return (
+                        <button
+                          key={colorKey}
+                          type="button"
+                          onClick={() => handleSaveVisualOverride(visualType, colorKey, customRoom)}
+                          title={`Color Apple: ${colorCfg.name}`}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                            padding: "4px 10px",
+                            borderRadius: 16,
+                            background: isSelected ? "rgba(255, 255, 255, 0.16)" : "rgba(255, 255, 255, 0.05)",
+                            border: isSelected ? "1.5px solid #38BDF8" : "1px solid rgba(255, 255, 255, 0.1)",
+                            cursor: "pointer",
+                            transition: "all 0.15s ease",
+                          }}
+                        >
+                          <span
+                            style={{
+                              width: 14,
+                              height: 14,
+                              borderRadius: "50%",
+                              background: colorCfg.hex,
+                              boxShadow: "0 1px 4px rgba(0,0,0,0.5)",
+                              border: "1px solid rgba(255,255,255,0.2)",
+                              display: "inline-block",
+                            }}
+                          />
+                          <span style={{ fontSize: 11, color: isSelected ? "#fff" : "var(--text-secondary, #94A3B8)" }}>
+                            {colorCfg.name}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Room / Area Label Override */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <label style={{ fontSize: 11, color: "var(--text-secondary, #94A3B8)", fontWeight: 500 }}>
+                  Habitación / Área Visual (Deducida: {detected.inferredArea || "Sin área"})
+                </label>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input
+                    type="text"
+                    value={customRoom}
+                    placeholder="Ej. Sala, Cocina, Playroom, Balcón..."
+                    onChange={(e) => setCustomRoom(e.target.value)}
+                    onBlur={() => handleSaveVisualOverride(visualType, appleColor, customRoom)}
+                    style={{
+                      flex: 1,
+                      background: "rgba(15, 23, 42, 0.8)",
+                      border: "1px solid rgba(255, 255, 255, 0.15)",
+                      color: "var(--text-primary, #fff)",
+                      padding: "6px 12px",
+                      borderRadius: 8,
+                      fontSize: 12,
+                      outline: "none",
+                    }}
+                  />
+                  {customRoom && (
+                    <button
+                      type="button"
+                      onClick={() => handleSaveVisualOverride(visualType, appleColor, "")}
+                      style={{
+                        padding: "4px 10px",
+                        background: "rgba(255, 255, 255, 0.08)",
+                        border: "1px solid rgba(255, 255, 255, 0.15)",
+                        color: "var(--text-secondary, #94A3B8)",
+                        borderRadius: 8,
+                        fontSize: 11,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Limpiar
+                    </button>
+                  )}
+                </div>
+              </div>
+            </section>
 
             {/* Fabrics section */}
             <section className="fabrics-section" id="fabrics-section">

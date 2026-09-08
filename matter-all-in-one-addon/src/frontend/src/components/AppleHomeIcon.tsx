@@ -442,6 +442,69 @@ export const AppleHomeIcon: React.FC<AppleHomeIconProps> = ({
       );
     }
 
+    case "media_player": {
+      return (
+        <svg
+          viewBox="0 0 36 36"
+          style={svgStyle}
+          className={`apple-home-icon icon-media-player ${isOn ? "is-on" : "is-off"} ${className}`}
+          aria-label="Reproductor Multimedia"
+        >
+          <rect
+            x="6"
+            y="9"
+            width="24"
+            height="16"
+            rx="3"
+            fill={isOn ? "rgba(10, 132, 255, 0.2)" : "rgba(255, 255, 255, 0.08)"}
+            stroke={isOn ? "#0A84FF" : "rgba(255, 255, 255, 0.3)"}
+            strokeWidth="1.6"
+          />
+          {isOn ? (
+            <polygon points="15,13 23,17 15,21" fill="#0A84FF" />
+          ) : (
+            <line x1="12" y1="28" x2="24" y2="28" stroke="rgba(255, 255, 255, 0.3)" strokeWidth="1.6" strokeLinecap="round" />
+          )}
+        </svg>
+      );
+    }
+
+    case "chandelier": {
+      return (
+        <svg
+          viewBox="0 0 36 36"
+          style={svgStyle}
+          className={`apple-home-icon icon-chandelier ${isOn ? "is-on" : "is-off"} ${className}`}
+          aria-label="Candelabro"
+        >
+          <line x1="18" y1="4" x2="18" y2="10" stroke={isOn ? lightColor : "rgba(255,255,255,0.4)"} strokeWidth="1.5" />
+          <path d="M12 16 C12 22 24 22 24 16" fill="none" stroke={isOn ? lightColor : "rgba(255,255,255,0.4)"} strokeWidth="1.5" />
+          <path d="M8 14 C8 25 28 25 28 14" fill="none" stroke={isOn ? lightColor : "rgba(255,255,255,0.3)"} strokeWidth="1.5" />
+          <circle cx="8" cy="12" r="2" fill={isOn ? lightColor : "#8E8E93"} />
+          <circle cx="18" cy="10" r="2.5" fill={isOn ? lightColor : "#8E8E93"} />
+          <circle cx="28" cy="12" r="2" fill={isOn ? lightColor : "#8E8E93"} />
+          {/* Hanging crystal drops */}
+          <line x1="18" y1="22" x2="18" y2="28" stroke={isOn ? lightColor : "rgba(255,255,255,0.3)"} strokeWidth="1.2" />
+          <circle cx="18" cy="29" r="1.5" fill={isOn ? lightColor : "rgba(255,255,255,0.4)"} />
+        </svg>
+      );
+    }
+
+    case "doorbell": {
+      return (
+        <svg
+          viewBox="0 0 36 36"
+          style={svgStyle}
+          className={`apple-home-icon icon-doorbell ${isOn ? "is-on" : "is-off"} ${className}`}
+          aria-label="Timbre"
+        >
+          <rect x="11" y="6" width="14" height="24" rx="4" fill="rgba(255,255,255,0.1)" stroke={isOn ? "#0A84FF" : "rgba(255,255,255,0.3)"} strokeWidth="1.6" />
+          <circle cx="18" cy="12" r="3" fill="#0C0E14" stroke="rgba(255,255,255,0.4)" strokeWidth="1" />
+          <circle cx="18" cy="22" r="3.5" fill={isOn ? "#0A84FF" : "rgba(255,255,255,0.25)"} style={{ filter: isOn ? "drop-shadow(0 0 4px #0A84FF)" : undefined }} />
+        </svg>
+      );
+    }
+
     default: {
       return (
         <svg

@@ -1,3 +1,31 @@
+## [1.5.22] - 2026-09-07
+
+### Apple TV 16:9 con Carátula en Vivo, HomePod con Paleta Oficial Apple, Candelabros en Techo, Ventiladores Negro Mate y Selector Manual de Siluetas
+
+- **Apple TV 4K en Formato Cinematográfico 16:9 (`DeviceCardArt.tsx` & `DeviceCard.tsx`):**
+  - Pantalla 16:9 4K con bisel ultrafino, pie de soporte flotante y difuminado progresivo hacia negro OLED puro (`#000000`) en la mitad inferior.
+  - Reproducción activa en vivo: despliega la carátula oficial (`entity_picture`), título de pista, nombre de app (Netflix, Disney+, etc.) o logo Apple TV resplandeciente en reposo.
+  - Controles de transporte integrados en la tarjeta (`⏮`, `▶ / ⏸`, `⏭`) y deslizador táctil de volumen por HTTP proxy `/api/custom/media-action`.
+- **Apple HomePod y HomePod Mini con Colores Oficiales Apple (`deviceDetector.ts` & `DeviceCardArt.tsx`):**
+  - Diferenciación física precisa entre **HomePod Mini** (esfera acústica 3D con disco táctil superior retroiluminado Siri con ondas RGB) y **HomePod Estándar** (cilindro acústico de gran tamaño con malla tejida sin costuras).
+  - **Selector de Colores Oficiales Apple en Venta:**
+    - *HomePod Mini*: Gris Espacial (`#3C3D40`), Blanco (`#E8E8ED`), Medianoche (`#1C2026`), Azul (`#25537C`), Naranja (`#E05A3E`), Amarillo (`#E8B13D`).
+    - *HomePod Estándar*: Medianoche (`#181B20`), Blanco (`#EDEDF2`), Gris Espacial (`#353639`).
+  - Muestra la carátula del álbum que se está reproduciendo actualmente y estado musical en vivo.
+- **Selector y Anulación Manual de Silueta de Hardware (`DeviceModal.tsx`):**
+  - Nuevo panel «🎨 Silueta y Hardware Visual» en la ventana de detalle del dispositivo.
+  - Permite al usuario forzar la apariencia visual que desee para cualquier entidad o marca (Bombilla, Candelabro, Tira LED, Govee Lyra, Apple TV, HomePod Mini, HomePod, Ventilador Negro Mate, Timbre con Video, Cámara PTZ 360°, Cámara Bala, Cerrojo Táctil, etc.).
+  - Persistencia automática de la preferencia del usuario en el navegador (`matter_visual_override_*`).
+- **Candelabros Colgantes Anclados Físicamente al Techo (`DeviceCardArt.tsx`):**
+  - Los candelabros (`chandelier`) cuelgan verticalmente desde el techo de la tarjeta (`y = 0`) mediante una cadena metálica eslabonada, florón superior, brazos barrocos curvados con velas ornamentales y lágrimas de cristal facetado que irradian luz hacia abajo según los grados Kelvin y brillo del accesorio.
+- **Ventiladores en Acabado Negro Mate / Obsidiana:**
+  - Carcasa, aspas y soportes de ventiladores de techo, torre y pedestal rediseñados en acabado negro mate carbón (`#14171E` / `#1E2430`) para un contraste sofisticado con la iluminación Kelvin y las estelas cinéticas de brisa.
+- **Inferencia Semántica de Habitaciones sin Áreas en HA (`deviceDetector.ts`):**
+  - Detección inteligente de áreas ("Cocina", "Sala", "Playroom", "Comedor", "Recámara", "Baño", "Balcón", "Estudio", etc.) a partir del nombre sin inventar tipos de hardware inexistentes (e.g. "Luz de Playroom" se detecta como bombilla en habitación Playroom).
+  - Posibilidad de personalizar o limpiar la etiqueta de habitación directamente desde el modal.
+- **Variedad Visual para Govee, Cerraduras y Cámaras:**
+  - Siluetas exclusivas para lámparas de pie Govee Lyra (`H6072`), timbres con botón de llamada físico iluminado (`doorbell`), cámaras domo PTZ 360° motorizadas (`ptz_camera`) y cerraduras con teclado digital táctil retroiluminado (`keypad_deadbolt`).
+
 ## [1.5.21] - 2026-09-07
 
 ### Reconocimiento Universal de Marca, Modelo Fiel y Renderizado de Hardware Físico en Todos los Dispositivos

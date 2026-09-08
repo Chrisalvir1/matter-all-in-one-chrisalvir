@@ -1,5 +1,53 @@
 import { DeviceRecord } from "../types";
 
+export interface AppleColorConfig {
+  name: string;
+  hex: string;
+  mesh: string;
+  top: string;
+}
+
+export const APPLE_HOMEPOD_COLORS: Record<string, Record<string, AppleColorConfig>> = {
+  homepod_mini: {
+    space_gray: { name: "Gris Espacial", hex: "#3C3D40", mesh: "#2A2B2E", top: "#4A4B4F" },
+    white: { name: "Blanco", hex: "#E8E8ED", mesh: "#D5D5DC", top: "#FFFFFF" },
+    midnight: { name: "Medianoche", hex: "#1C2026", mesh: "#13161B", top: "#282E37" },
+    blue: { name: "Azul", hex: "#25537C", mesh: "#193A57", top: "#356B9C" },
+    orange: { name: "Naranja", hex: "#E05A3E", mesh: "#A83C25", top: "#F07357" },
+    yellow: { name: "Amarillo", hex: "#E8B13D", mesh: "#B58422", top: "#F5C358" },
+  },
+  homepod: {
+    midnight: { name: "Medianoche", hex: "#181B20", mesh: "#101216", top: "#242931" },
+    white: { name: "Blanco", hex: "#EDEDF2", mesh: "#D8D8DE", top: "#FFFFFF" },
+    space_gray: { name: "Gris Espacial", hex: "#353639", mesh: "#232426", top: "#45464A" },
+  },
+};
+
+export interface DeviceVisualConfig {
+  visualType?: string;
+  appleColor?: string;
+  roomLabel?: string;
+}
+
+const STORAGE_PREFIX = "matter_visual_override_";
+
+export function getDeviceVisualOverride(deviceIdOrEntityId: string): DeviceVisualConfig | null {
+  if (typeof window === "undefined" || !window.localStorage) return null;
+  try {
+    const raw = window.localStorage.getItem(`${STORAGE_PREFIX}${deviceIdOrEntityId}`);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setDeviceVisualOverride(deviceIdOrEntityId: string, config: DeviceVisualConfig): void {
+  if (typeof window === "undefined" || !window.localStorage) return;
+  try {
+    window.localStorage.setItem(`${STORAGE_PREFIX}${deviceIdOrEntityId}`, JSON.stringify(config));
+  } catch {}
+}
+
 export interface DetectedDeviceInfo {
   brand: string;
   model: string;
@@ -9,8 +57,12 @@ export interface DetectedDeviceInfo {
   isTowerFan: boolean;
   isCeilingFan: boolean;
   isLedStrip: boolean;
+  isChandelier: boolean;
   hasLight: boolean;
   hasFan: boolean;
+  hasMediaPlayer: boolean;
+  inferredArea: string;
+  appleColor: string;
   brandColor: string;
   accentColor: string;
 }
@@ -23,6 +75,7 @@ interface BrandConfig {
 }
 
 const BRAND_CONFIGS: BrandConfig[] = [
+  { name: "Apple", pattern: /\b(apple|homepod|apple\s*tv|airplay)\b/i, brandColor: "255, 255, 255", accentColor: "#F5F5F7" },
   { name: "Govee", pattern: /\bgovee\b/i, brandColor: "0, 240, 255", accentColor: "#00F0FF" },
   { name: "Tapo", pattern: /\btapo\b/i, brandColor: "0, 150, 255", accentColor: "#0096FF" },
   { name: "TP-Link", pattern: /\b(tp-link|tplink|kasa)\b/i, brandColor: "0, 168, 150", accentColor: "#00A896" },
@@ -76,7 +129,6 @@ export function detectDevice(device: DeviceRecord): DetectedDeviceInfo {
   let brandColor = "0, 122, 255"; // Default Apple blue
   let accentColor = "#007AFF";
 
-  // Check matching brand config
   let matchedConfig: BrandConfig | undefined;
   for (const cfg of BRAND_CONFIGS) {
     if (cfg.pattern.test(searchPool)) {
@@ -97,9 +149,39 @@ export function detectDevice(device: DeviceRecord): DetectedDeviceInfo {
 
   // 2. Detect Model
   let detectedModel = rawModel;
-
-  // Search rawModel first for specific model identifiers, then devName and entities
   const modelSearchPool = `${rawModel} ${devName} ${entityTexts}`;
+
+  // Apple TV models
+  if (poolLower.includes("apple tv") || poolLower.includes("appletv")) {
+    detectedBrand = "Apple";
+    brandColor = "255, 255, 255";
+    accentColor = "#FFFFFF";
+    if (poolLower.includes("4k")) {
+      if (poolLower.includes("3rd") || poolLower.includes("3ra") || poolLower.includes("gen 3") || poolLower.includes("a2843")) {
+        detectedModel = "Apple TV 4K (3.ª gen)";
+      } else if (poolLower.includes("2nd") || poolLower.includes("2da") || poolLower.includes("gen 2") || poolLower.includes("a2169")) {
+        detectedModel = "Apple TV 4K (2.ª gen)";
+      } else {
+        detectedModel = "Apple TV 4K";
+      }
+    } else if (poolLower.includes("hd") || poolLower.includes("4th gen") || poolLower.includes("a1625")) {
+      detectedModel = "Apple TV HD";
+    } else {
+      detectedModel = "Apple TV 4K";
+    }
+  }
+
+  // Apple HomePod models
+  if (poolLower.includes("homepod")) {
+    detectedBrand = "Apple";
+    brandColor = "255, 255, 255";
+    accentColor = "#FFFFFF";
+    if (poolLower.includes("mini") || poolLower.includes("a2374")) {
+      detectedModel = "HomePod Mini";
+    } else {
+      detectedModel = "HomePod (2.ª gen)";
+    }
+  }
 
   // Govee models (H7133, H7130, H618A, H6199, H6072, H5080, etc.)
   const goveeModelMatch = modelSearchPool.match(/\b(H[0-9]{4}[A-Z0-9]?)\b/i);
@@ -121,7 +203,7 @@ export function detectDevice(device: DeviceRecord): DetectedDeviceInfo {
     accentColor = "#0096FF";
   }
 
-  // Roborock models (S8 Pro Ultra, S8 MaxV, S7 MaxV, S7, Q8 Max, Q7 Max, Q Revo, Dyad, Curv)
+  // Roborock models
   const roborockMatch = modelSearchPool.match(/\b(S[5-8]|Q[5-8]|Dyad|Curv)\s*(MaxV|Max|Pro|Ultra|Plus)?\b/i);
   if (roborockMatch && (detectedBrand.toLowerCase().includes("roborock") || poolLower.includes("roborock"))) {
     detectedModel = roborockMatch[0];
@@ -130,7 +212,7 @@ export function detectDevice(device: DeviceRecord): DetectedDeviceInfo {
     accentColor = "#E11D48";
   }
 
-  // SwitchBot models (Curtain 3, Curtain, Bot, Lock Pro, Lock, Hub 2, Meter Plus)
+  // SwitchBot models
   const switchBotMatch = modelSearchPool.match(/\b(Curtain\s*3?|Blind\s*Tilt|Lock\s*Pro|Lock|Hub\s*2|Hub\s*Mini|Bot|Meter\s*Plus|Meter)\b/i);
   if (switchBotMatch && (detectedBrand.toLowerCase().includes("switchbot") || poolLower.includes("switchbot"))) {
     detectedModel = switchBotMatch[0];
@@ -139,7 +221,7 @@ export function detectDevice(device: DeviceRecord): DetectedDeviceInfo {
     accentColor = "#EF4444";
   }
 
-  // Shelly models (Plus 1PM, Plus 1, Plus 2PM, 2.5, 1PM, Pro 4PM, EM, 3EM)
+  // Shelly models
   const shellyMatch = modelSearchPool.match(/\b(Plus\s*(?:1PM|1|2PM|i4)|Pro\s*(?:1|2|4PM)|(?:1PM|1|2\.5|EM|3EM))\b/i);
   if (shellyMatch && (detectedBrand.toLowerCase().includes("shelly") || poolLower.includes("shelly"))) {
     detectedModel = shellyMatch[0];
@@ -148,7 +230,7 @@ export function detectDevice(device: DeviceRecord): DetectedDeviceInfo {
     accentColor = "#38BDF8";
   }
 
-  // Sonoff models (BasicR2, Basic, MiniR2, Mini, S26, DualR3, NSPanel)
+  // Sonoff models
   const sonoffMatch = modelSearchPool.match(/\b(Basic(?:R[23])?|Mini(?:R[23])?|S26(?:R2)?|Dual(?:R[23])?|NSPanel)\b/i);
   if (sonoffMatch && (detectedBrand.toLowerCase().includes("sonoff") || poolLower.includes("sonoff"))) {
     detectedModel = sonoffMatch[0];
@@ -157,7 +239,7 @@ export function detectDevice(device: DeviceRecord): DetectedDeviceInfo {
     accentColor = "#0284C7";
   }
 
-  // Philips Hue models (Play, Go, Signe, Iris, Lightstrip, Bloom)
+  // Philips Hue models
   const hueMatch = modelSearchPool.match(/\b(Play|Go|Signe|Iris|Lightstrip|Bloom|Ambiance)\b/i);
   if (hueMatch && (detectedBrand.toLowerCase().includes("hue") || poolLower.includes("hue"))) {
     detectedModel = `Hue ${hueMatch[0]}`;
@@ -167,6 +249,7 @@ export function detectDevice(device: DeviceRecord): DetectedDeviceInfo {
   }
 
   // 3. Functional Subtype Classification
+  const hasMediaPlayer = device.entities.some((e) => e.domain === "media_player");
   const hasFan = device.entities.some((e) => e.domain === "fan");
   const hasLight = device.entities.some((e) => e.domain === "light");
   const hasClimate = device.entities.some((e) => e.domain === "climate");
@@ -177,7 +260,7 @@ export function detectDevice(device: DeviceRecord): DetectedDeviceInfo {
   const hasSensor = device.entities.some((e) => e.domain === "sensor" || e.domain === "binary_sensor");
   const hasSwitch = device.entities.some((e) => e.domain === "switch");
 
-  // Detailed Fan Subtyping
+  // Fan Subtyping
   const isTowerFan =
     hasFan &&
     (poolLower.includes("h7133") ||
@@ -199,7 +282,15 @@ export function detectDevice(device: DeviceRecord): DetectedDeviceInfo {
       poolLower.includes("abanico") ||
       poolLower.includes("hunter"));
 
-  // Detailed Light Subtyping
+  // Light Subtyping
+  const isChandelier =
+    hasLight &&
+    (poolLower.includes("candelabro") ||
+      poolLower.includes("chandelier") ||
+      poolLower.includes("araña") ||
+      poolLower.includes("arana") ||
+      poolLower.includes("colgante cristal"));
+
   const isLedStrip =
     hasLight &&
     (poolLower.includes("strip") ||
@@ -210,48 +301,182 @@ export function detectDevice(device: DeviceRecord): DetectedDeviceInfo {
       poolLower.includes("cinta") ||
       poolLower.startsWith("h61"));
 
-  const isLamp =
+  const isGoveeLyra =
     hasLight &&
-    (poolLower.includes("lamp") ||
-      poolLower.includes("lámpara") ||
-      poolLower.includes("lampara") ||
+    (poolLower.includes("h6072") ||
+      poolLower.includes("h6076") ||
       poolLower.includes("lyra") ||
-      poolLower.includes("signe") ||
-      poolLower.includes("iris") ||
-      poolLower.includes("h607"));
+      poolLower.includes("aura") ||
+      poolLower.includes("esquina") ||
+      poolLower.includes("corner"));
+
+  const isGoveeDreamview =
+    hasLight &&
+    (poolLower.includes("h6199") ||
+      poolLower.includes("h6054") ||
+      poolLower.includes("dreamview") ||
+      poolLower.includes("immersion") ||
+      poolLower.includes("tv backlight"));
+
+  const isGoveeGlide =
+    hasLight &&
+    (poolLower.includes("h6061") ||
+      poolLower.includes("h6062") ||
+      poolLower.includes("glide") ||
+      poolLower.includes("hexa") ||
+      poolLower.includes("wall light"));
+
+  const isFloorLamp =
+    hasLight &&
+    (isGoveeLyra || poolLower.includes("lámpara de pie") || poolLower.includes("lampara de pie") || poolLower.includes("piso"));
+
+  const isTableLamp =
+    hasLight &&
+    (poolLower.includes("mesa") || poolLower.includes("noche") || poolLower.includes("velador") || poolLower.includes("desk"));
+
+  const isCeilingSpot =
+    hasLight &&
+    (poolLower.includes("spot") ||
+      poolLower.includes("empotrado") ||
+      poolLower.includes("plafón") ||
+      poolLower.includes("plafon") ||
+      poolLower.includes("downlight"));
 
   let subtype = "generic";
-  if (isTowerFan) subtype = "tower_fan";
-  else if (isCeilingFan) subtype = "ceiling_fan";
-  else if (hasFan) subtype = "pedestal_fan";
-  else if (isLedStrip) subtype = "led_strip";
-  else if (isLamp) subtype = "lamp";
-  else if (hasLight) subtype = "bulb";
-  else if (hasVacuum) subtype = "vacuum";
-  else if (hasClimate) subtype = "thermostat";
-  else if (hasCover) subtype = "cover";
-  else if (hasLock) subtype = "lock";
-  else if (hasCamera) subtype = "camera";
-  else if (hasSwitch && (poolLower.includes("plug") || poolLower.includes("enchufe") || poolLower.includes("toma") || poolLower.includes("socket"))) subtype = "plug";
-  else if (hasSwitch) subtype = "switch";
-  else if (hasSensor) subtype = "sensor";
-
-  // Human-Friendly Categorization (Spanish)
   let category = "Dispositivo Inteligente";
-  if (subtype === "tower_fan") category = "Ventilador de Torre";
-  else if (subtype === "ceiling_fan") category = hasLight ? "Ventilador de Techo con Luz" : "Ventilador de Techo";
-  else if (subtype === "pedestal_fan") category = "Ventilador de Pie / Pedestal";
-  else if (subtype === "led_strip") category = "Tira LED RGBIC / Neón";
-  else if (subtype === "lamp") category = "Lámpara Inteligente";
-  else if (subtype === "bulb") category = "Bombilla Inteligente";
-  else if (subtype === "vacuum") category = "Aspiradora Robot";
-  else if (subtype === "thermostat") category = "Termostato / Clima";
-  else if (subtype === "cover") category = "Persiana / Cortina Motorizada";
-  else if (subtype === "lock") category = "Cerradura Electrónica";
-  else if (subtype === "camera") category = "Cámara de Seguridad";
-  else if (subtype === "plug") category = "Enchufe Inteligente";
-  else if (subtype === "switch") category = "Interruptor Inteligente";
-  else if (subtype === "sensor") category = "Sensor Inteligente";
+
+  // Priority classification based on real technical domain first
+  if (hasMediaPlayer || poolLower.includes("apple tv") || poolLower.includes("homepod")) {
+    if (poolLower.includes("apple tv") || poolLower.includes("appletv") || poolLower.includes("tv")) {
+      subtype = "apple_tv";
+      category = "Apple TV 4K";
+    } else if (poolLower.includes("mini")) {
+      subtype = "homepod_mini";
+      category = "Apple HomePod Mini";
+    } else {
+      subtype = "homepod";
+      category = "Apple HomePod";
+    }
+  } else if (hasFan) {
+    if (isTowerFan) {
+      subtype = "tower_fan";
+      category = "Ventilador de Torre";
+    } else if (isCeilingFan) {
+      subtype = "ceiling_fan";
+      category = hasLight ? "Ventilador de Techo con Luz" : "Ventilador de Techo";
+    } else {
+      subtype = "pedestal_fan";
+      category = "Ventilador de Pie / Pedestal";
+    }
+  } else if (hasLight) {
+    if (isChandelier) {
+      subtype = "chandelier";
+      category = "Candelabro de Techo";
+    } else if (isGoveeLyra) {
+      subtype = "govee_lyra";
+      category = "Lámpara de Esquina Lyra";
+    } else if (isGoveeDreamview) {
+      subtype = "govee_dreamview";
+      category = "Govee DreamView TV";
+    } else if (isGoveeGlide) {
+      subtype = "govee_glide";
+      category = "Paneles de Pared Glide";
+    } else if (isLedStrip) {
+      subtype = "led_strip";
+      category = "Tira LED RGBIC / Neón";
+    } else if (isFloorLamp) {
+      subtype = "floor_lamp";
+      category = "Lámpara de Pie";
+    } else if (isTableLamp) {
+      subtype = "table_lamp";
+      category = "Lámpara de Mesa";
+    } else if (isCeilingSpot) {
+      subtype = "ceiling_spot";
+      category = "Foco Empotrado en Techo";
+    } else {
+      subtype = "bulb";
+      category = "Bombilla Inteligente";
+    }
+  } else if (hasVacuum) {
+    subtype = "vacuum";
+    category = "Aspiradora Robot";
+  } else if (hasClimate) {
+    subtype = "thermostat";
+    category = "Termostato / Clima";
+  } else if (hasCover) {
+    subtype = "cover";
+    category = "Persiana / Cortina Motorizada";
+  } else if (hasLock) {
+    if (poolLower.includes("yale") || poolLower.includes("schlage") || poolLower.includes("keypad") || poolLower.includes("teclado")) {
+      subtype = "keypad_deadbolt";
+      category = "Cerradura con Teclado Táctil";
+    } else {
+      subtype = "smart_turn_lock";
+      category = "Cerrojo Inteligente de Giro";
+    }
+  } else if (hasCamera) {
+    if (poolLower.includes("doorbell") || poolLower.includes("timbre") || poolLower.includes("ring") || poolLower.includes("hello")) {
+      subtype = "doorbell";
+      category = "Timbre con Video";
+    } else if (poolLower.includes("c200") || poolLower.includes("c210") || poolLower.includes("ptz") || poolLower.includes("360") || poolLower.includes("domo")) {
+      subtype = "ptz_camera";
+      category = "Cámara Domo PTZ 360°";
+    } else {
+      subtype = "bullet_camera";
+      category = "Cámara Exterior Bala";
+    }
+  } else if (hasSwitch && (poolLower.includes("plug") || poolLower.includes("enchufe") || poolLower.includes("toma") || poolLower.includes("socket"))) {
+    subtype = "plug";
+    category = "Enchufe Inteligente";
+  } else if (hasSwitch) {
+    subtype = "switch";
+    category = "Interruptor Inteligente";
+  } else if (hasSensor) {
+    subtype = "sensor";
+    category = "Sensor Inteligente";
+  }
+
+  // 4. Inferred Area (Room Fallback when device.area is empty)
+  let inferredArea = device.area || "";
+  if (!inferredArea) {
+    if (poolLower.includes("cocina") || poolLower.includes("kitchen")) inferredArea = "Cocina";
+    else if (poolLower.includes("playroom") || poolLower.includes("juegos") || poolLower.includes("game")) inferredArea = "Playroom";
+    else if (poolLower.includes("sala") || poolLower.includes("living") || poolLower.includes("salon")) inferredArea = "Sala";
+    else if (poolLower.includes("comedor") || poolLower.includes("dining")) inferredArea = "Comedor";
+    else if (poolLower.includes("recámara") || poolLower.includes("recamara") || poolLower.includes("dormitorio") || poolLower.includes("habitación") || poolLower.includes("habitacion") || poolLower.includes("cuarto") || poolLower.includes("bedroom")) inferredArea = "Recámara";
+    else if (poolLower.includes("baño") || poolLower.includes("bano") || poolLower.includes("toilet") || poolLower.includes("bathroom")) inferredArea = "Baño";
+    else if (poolLower.includes("patio") || poolLower.includes("jardín") || poolLower.includes("jardin") || poolLower.includes("terraza") || poolLower.includes("outdoor")) inferredArea = "Patio / Jardín";
+    else if (poolLower.includes("oficina") || poolLower.includes("estudio") || poolLower.includes("office")) inferredArea = "Estudio / Oficina";
+    else if (poolLower.includes("pasillo") || poolLower.includes("entrada") || poolLower.includes("foyer") || poolLower.includes("hall")) inferredArea = "Entrada / Pasillo";
+    else if (poolLower.includes("cochera") || poolLower.includes("garaje") || poolLower.includes("garage")) inferredArea = "Garaje";
+  }
+
+  // 5. Check User Manual Overrides (Persistent User Preference)
+  let appleColor = "space_gray";
+  const override = getDeviceVisualOverride(device.id) || (device.entities[0] ? getDeviceVisualOverride(device.entities[0].entityId) : null);
+  if (override) {
+    if (override.visualType && override.visualType !== "auto") {
+      subtype = override.visualType;
+      // Re-adjust category label
+      if (subtype === "chandelier") category = "Candelabro de Techo";
+      else if (subtype === "bulb") category = "Bombilla Inteligente";
+      else if (subtype === "led_strip") category = "Tira LED RGBIC / Neón";
+      else if (subtype === "floor_lamp" || subtype === "govee_lyra") category = "Lámpara de Pie";
+      else if (subtype === "ceiling_spot") category = "Foco Empotrado en Techo";
+      else if (subtype === "apple_tv") category = "Apple TV 4K";
+      else if (subtype === "homepod_mini") category = "Apple HomePod Mini";
+      else if (subtype === "homepod") category = "Apple HomePod";
+      else if (subtype === "ceiling_fan") category = "Ventilador de Techo con Luz";
+      else if (subtype === "tower_fan") category = "Ventilador de Torre";
+      else if (subtype === "doorbell") category = "Timbre con Video";
+      else if (subtype === "ptz_camera") category = "Cámara Domo PTZ 360°";
+      else if (subtype === "bullet_camera") category = "Cámara Exterior Bala";
+      else if (subtype === "keypad_deadbolt") category = "Cerradura con Teclado Táctil";
+      else if (subtype === "smart_turn_lock") category = "Cerrojo Inteligente de Giro";
+    }
+    if (override.appleColor) appleColor = override.appleColor;
+    if (override.roomLabel) inferredArea = override.roomLabel;
+  }
 
   return {
     brand: detectedBrand,
@@ -262,8 +487,12 @@ export function detectDevice(device: DeviceRecord): DetectedDeviceInfo {
     isTowerFan,
     isCeilingFan,
     isLedStrip,
+    isChandelier,
     hasLight,
     hasFan,
+    hasMediaPlayer,
+    inferredArea,
+    appleColor,
     brandColor,
     accentColor,
   };

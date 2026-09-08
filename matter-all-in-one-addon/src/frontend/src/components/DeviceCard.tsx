@@ -4,7 +4,12 @@ import { AppleHomeIcon } from "./AppleHomeIcon";
 import { DeviceCardArt } from "./DeviceCardArt";
 import { LiquidSlider } from "./LiquidSlider";
 import { extractLightColor } from "../utils/colors";
-import { detectDevice } from "../utils/deviceDetector";
+import {
+  detectDevice,
+  APPLE_HOMEPOD_COLORS,
+  getDeviceVisualOverride,
+  setDeviceVisualOverride,
+} from "../utils/deviceDetector";
 import { api } from "../api/client";
 
 interface DeviceCardProps {
@@ -41,13 +46,13 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
   const coverEntity = device.entities.find((e) => e.domain === "cover");
 
   const controllableCount = device.entities.filter((e) =>
-    ["light", "fan", "switch", "cover", "climate", "lock", "humidifier", "vacuum"].includes(e.domain)
+    ["light", "fan", "switch", "cover", "climate", "lock", "humidifier", "vacuum", "media_player"].includes(e.domain)
   ).length;
 
   const isComposite = (Boolean(fanEntity) && Boolean(lightEntity)) || controllableCount > 1;
 
-  // Domain priority: If fan exists (like Ventilador de Sala), prioritize fan representation!
-  const domainPriority = ["climate", "fan", "lock", "cover", "vacuum", "camera", "humidifier", "light", "switch", "sensor"];
+  // Domain priority: Prioritize media_player (Apple TV, HomePod), climate, fan
+  const domainPriority = ["media_player", "climate", "fan", "lock", "cover", "vacuum", "camera", "humidifier", "light", "switch", "sensor"];
   const sortedEntities = [...device.entities].sort((a, b) => {
     const idxA = domainPriority.indexOf(a.domain);
     const idxB = domainPriority.indexOf(b.domain);
@@ -61,24 +66,27 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
 
   const domains = [...new Set(device.entities.map((e) => e.domain))].slice(0, 3);
 
+  const room = deviceInfo.inferredArea || device.area;
   const originText = isMqtt
     ? "MQTT Auto-Discovery"
-    : device.area
-      ? `📍 ${device.area} · ${deviceInfo.brand}`
+    : room
+      ? `📍 ${room} · ${deviceInfo.brand}`
       : deviceInfo.brand !== "Home Assistant"
         ? `${deviceInfo.brand} · Home Assistant`
         : "Home Assistant";
 
   // Check if primary domain is controllable via toggle
-  const isControllable = ["light", "switch", "fan", "climate", "lock", "cover", "humidifier", "vacuum"].includes(
+  const isControllable = ["light", "switch", "fan", "climate", "lock", "cover", "humidifier", "vacuum", "media_player"].includes(
     primaryDomain
   );
   const isOn =
     primaryState === "on" ||
+    primaryState === "playing" ||
     primaryState === "heat" ||
     primaryState === "cool" ||
     primaryState === "open" ||
-    primaryState === "unlocked";
+    primaryState === "unlocked" ||
+    primaryState === "cleaning";
 
   // Light color & brightness for card illumination
   const activeLight = lightEntity || (primaryDomain === "light" ? primaryEntity : undefined);
@@ -94,7 +102,18 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
 
   // Status text description
   let statusSummary = isOn ? "Activo" : "Inactivo";
-  if (primaryDomain === "fan") {
+  if (primaryDomain === "media_player") {
+    const title = primaryAttributes.media_title;
+    const app = primaryAttributes.app_name;
+    const artist = primaryAttributes.media_artist;
+    const isPlaying = primaryState === "playing";
+    const isPaused = primaryState === "paused";
+    statusSummary = isPlaying
+      ? `${title || app || "Reproduciendo"}${artist ? ` · ${artist}` : ""}`
+      : isPaused
+      ? "En pausa"
+      : "Inactivo";
+  } else if (primaryDomain === "fan") {
     const pct = primaryAttributes.percentage;
     const osc = primaryAttributes.oscillating;
     statusSummary = isOn
@@ -179,6 +198,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
         subtype={deviceInfo.subtype}
         brand={deviceInfo.brand}
         model={deviceInfo.model}
+        appleColor={deviceInfo.appleColor}
       />
 
       {/* Card Header & Controls (z-index: 2 for absolute click priority) */}
@@ -277,6 +297,53 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
         <h3 title={device.name}>{device.name}</h3>
         {!isComposite && <p className="device-status-highlight">{statusSummary}</p>}
         <p className="device-meta">{originText}</p>
+
+        {/* Official Apple Color Picker for HomePod and HomePod Mini */}
+        {(deviceInfo.subtype === "homepod_mini" || deviceInfo.subtype === "homepod") && (
+          <div
+            className="homepod-color-picker"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              marginTop: "6px",
+              marginBottom: "4px",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <span style={{ fontSize: "0.68rem", color: "#94a3b8", fontWeight: 600 }}>Color Apple:</span>
+            {Object.entries(
+              deviceInfo.subtype === "homepod_mini"
+                ? APPLE_HOMEPOD_COLORS.homepod_mini
+                : APPLE_HOMEPOD_COLORS.homepod
+            ).map(([colKey, colData]) => (
+              <button
+                key={colKey}
+                type="button"
+                title={colData.name}
+                onClick={() => {
+                  setDeviceVisualOverride(device.id, {
+                    ...getDeviceVisualOverride(device.id),
+                    appleColor: colKey,
+                  });
+                  onRefresh?.();
+                }}
+                style={{
+                  width: "16px",
+                  height: "16px",
+                  borderRadius: "50%",
+                  background: colData.hex,
+                  border: deviceInfo.appleColor === colKey ? "2px solid #FFFFFF" : "1px solid rgba(255,255,255,0.25)",
+                  boxShadow: deviceInfo.appleColor === colKey ? `0 0 6px ${colData.hex}` : "none",
+                  cursor: "pointer",
+                  padding: 0,
+                  transform: deviceInfo.appleColor === colKey ? "scale(1.2)" : "scale(1)",
+                  transition: "all 0.15s ease",
+                }}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* COMPOSITE MULTI-ENTITY CONTROLS (e.g. Fan + Light + Switches) */}
@@ -495,6 +562,78 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
               label="Posición"
               onRefresh={onRefresh}
             />
+          )}
+          {primaryDomain === "media_player" && (
+            <div
+              className="media-player-controls"
+              style={{
+                background: "rgba(0, 0, 0, 0.35)",
+                backdropFilter: "blur(12px)",
+                WebkitBackdropFilter: "blur(12px)",
+                border: "1px solid rgba(255, 255, 255, 0.08)",
+                borderRadius: "14px",
+                padding: "8px 10px",
+                display: "flex",
+                flexDirection: "column",
+                gap: "8px",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Transport Buttons: Previous, Play/Pause, Next */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "14px" }}>
+                <button
+                  type="button"
+                  className="button button-ghost"
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    try {
+                      await api.mediaAction(primaryEntity.entityId, "media_previous_track");
+                      onRefresh?.();
+                    } catch {}
+                  }}
+                  title="Pista anterior"
+                  style={{ width: "32px", height: "32px", borderRadius: "50%", padding: 0, display: "grid", placeItems: "center", fontSize: "0.85rem", color: "#CBD5E1" }}
+                >
+                  ⏮
+                </button>
+                <button
+                  type="button"
+                  className={`quick-toggle-pill ${isOn ? "active" : "inactive"}`}
+                  onClick={(e) => handleToggleEntity(e, primaryEntity.entityId)}
+                  title={primaryState === "playing" ? "Pausar" : "Reproducir"}
+                  style={{ width: "38px", height: "38px", borderRadius: "50%", padding: 0, display: "grid", placeItems: "center", fontSize: "1rem" }}
+                >
+                  {primaryState === "playing" ? "⏸" : "▶"}
+                </button>
+                <button
+                  type="button"
+                  className="button button-ghost"
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    try {
+                      await api.mediaAction(primaryEntity.entityId, "media_next_track");
+                      onRefresh?.();
+                    } catch {}
+                  }}
+                  title="Siguiente pista"
+                  style={{ width: "32px", height: "32px", borderRadius: "50%", padding: 0, display: "grid", placeItems: "center", fontSize: "0.85rem", color: "#CBD5E1" }}
+                >
+                  ⏭
+                </button>
+              </div>
+
+              {/* Volume Slider */}
+              {typeof primaryAttributes.volume_level === "number" && (
+                <LiquidSlider
+                  entityId={primaryEntity.entityId}
+                  domain="media_player"
+                  initialValue={Math.round(primaryAttributes.volume_level * 100)}
+                  color="var(--apple-blue, #007aff)"
+                  label="Volumen"
+                  onRefresh={onRefresh}
+                />
+              )}
+            </div>
           )}
         </div>
       )}

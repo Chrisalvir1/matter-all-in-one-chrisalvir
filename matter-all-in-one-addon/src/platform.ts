@@ -1381,7 +1381,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     );
     this.log.notice(`[Runtime] Matterbridge runtime: ${mbVersion}`);
     this.log.notice(`[Runtime] Node.js runtime: ${process.version}`);
-    this.log.notice(`[Runtime] Plugin version: 1.5.21`);
+    this.log.notice(`[Runtime] Plugin version: 1.5.22`);
     await this.loadEntityDiagnostics();
     await this.startUiServer();
     this.startMatterConnectionMonitor();
@@ -3807,11 +3807,41 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           );
           const [domain] = entityId.split(".");
           try {
-            await this.ha.callService(domain, "toggle", entityId);
+            if (domain === "media_player") {
+              await this.ha.callService("media_player", "media_play_pause", entityId);
+            } else {
+              await this.ha.callService(domain, "toggle", entityId);
+            }
             res.writeHead(200, {
               "Content-Type": "application/json; charset=utf-8",
             });
             res.end(JSON.stringify({ success: true, entityId }));
+          } catch (err: any) {
+            res.writeHead(500, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ success: false, error: err?.message || String(err) }));
+          }
+          return;
+        }
+
+        // POST /api/custom/media-action/:entityId
+        if (
+          req.method === "POST" &&
+          pathname.startsWith("/api/custom/media-action/")
+        ) {
+          const entityId = decodeURIComponent(
+            pathname.substring("/api/custom/media-action/".length),
+          );
+          try {
+            const body = await this.readRequestBody(req);
+            const data = JSON.parse(body || "{}");
+            const action = data.action || "media_play_pause";
+            await this.ha.callService("media_player", action, entityId);
+            res.writeHead(200, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ success: true, entityId, action }));
           } catch (err: any) {
             res.writeHead(500, {
               "Content-Type": "application/json; charset=utf-8",
@@ -3858,6 +3888,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             } else if (domain === "climate") {
               await this.ha.callService("climate", "set_temperature", entityId, {
                 temperature: numVal,
+              });
+            } else if (domain === "media_player") {
+              await this.ha.callService("media_player", "volume_set", entityId, {
+                volume_level: numVal / 100,
               });
             }
 

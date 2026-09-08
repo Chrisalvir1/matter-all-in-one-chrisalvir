@@ -94,6 +94,15 @@ export const api = {
       body: JSON.stringify({ value }),
     }),
 
+  mediaAction: (
+    entityId: string,
+    action: "media_play_pause" | "media_previous_track" | "media_next_track"
+  ) =>
+    request(`/media-action/${encodeURIComponent(entityId)}`, {
+      method: "POST",
+      body: JSON.stringify({ action }),
+    }),
+
   setDeviceProfile: (entityId: string, profile: string) =>
     request(`/device-profile/${encodeURIComponent(entityId)}`, {
       method: "POST",
