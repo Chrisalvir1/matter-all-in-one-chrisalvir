@@ -1381,7 +1381,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     );
     this.log.notice(`[Runtime] Matterbridge runtime: ${mbVersion}`);
     this.log.notice(`[Runtime] Node.js runtime: ${process.version}`);
-    this.log.notice(`[Runtime] Plugin version: 1.5.16`);
+    this.log.notice(`[Runtime] Plugin version: 1.5.17`);
     await this.loadEntityDiagnostics();
     await this.startUiServer();
     this.startMatterConnectionMonitor();
@@ -3328,7 +3328,18 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         );
         if (req.method === "GET" && staticAssetMatch) {
           const relPath = staticAssetMatch[1];
-          const content = await this.readBinaryFile(relPath);
+          let content = await this.readBinaryFile(relPath);
+
+          // Stale cache fallback: if the requested file is an index-*.js or index-*.css that doesn't exist,
+          // serve the canonical assets/index.js or assets/index.css instead of 404!
+          if (!content) {
+            if (/^assets\/index.*\.js$/i.test(relPath)) {
+              content = await this.readBinaryFile("assets/index.js");
+            } else if (/^assets\/index.*\.css$/i.test(relPath)) {
+              content = await this.readBinaryFile("assets/index.css");
+            }
+          }
+
           if (content) {
             const ext = path.extname(relPath).toLowerCase();
             const mimeTypes: Record<string, string> = {
@@ -3346,13 +3357,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               ".ttf": "font/ttf",
               ".map": "application/json",
             };
-            const isHashedAsset = relPath.startsWith("assets/");
+            const isIndexAsset = relPath.startsWith("assets/index");
             res.writeHead(200, {
               "Content-Type": mimeTypes[ext] || "application/octet-stream",
               "Access-Control-Allow-Origin": "*",
-              "Cache-Control": isHashedAsset
-                ? "public, max-age=31536000, immutable"
-                : "no-cache, no-store, must-revalidate",
+              "Cache-Control": isIndexAsset
+                ? "no-cache, must-revalidate"
+                : "public, max-age=31536000, immutable",
             });
             res.end(content);
             return;

@@ -47,14 +47,14 @@ export const App: React.FC = () => {
       const q = searchQuery.toLowerCase().trim();
       list = list.filter(
         (d) =>
-          d.name.toLowerCase().includes(q) ||
+          (d.name || "").toLowerCase().includes(q) ||
           (d.manufacturer && d.manufacturer.toLowerCase().includes(q)) ||
           (d.model && d.model.toLowerCase().includes(q)) ||
           (d.area && d.area.toLowerCase().includes(q)) ||
           d.entities.some(
             (e) =>
-              e.name?.toLowerCase().includes(q) ||
-              e.entityId.toLowerCase().includes(q)
+              (e.name || "").toLowerCase().includes(q) ||
+              (e.entityId || "").toLowerCase().includes(q)
           )
       );
     }
@@ -106,7 +106,7 @@ export const App: React.FC = () => {
     let scryptedList = cameras;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
-      scryptedList = scryptedList.filter((c) => c.name.toLowerCase().includes(q));
+      scryptedList = scryptedList.filter((c) => (c.name || "").toLowerCase().includes(q));
     }
 
     if (activeFilter === "paired") {
@@ -130,7 +130,7 @@ export const App: React.FC = () => {
     let haList = realHaCameraDevices;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
-      haList = haList.filter((d) => d.name.toLowerCase().includes(q));
+      haList = haList.filter((d) => (d.name || "").toLowerCase().includes(q));
     }
 
     if (activeFilter === "paired") {
@@ -148,11 +148,11 @@ export const App: React.FC = () => {
     }
 
     const sortedBrands = [...map.keys()].sort((a, b) => {
-      const aUnknown = a.toLowerCase().includes("no identificada");
-      const bUnknown = b.toLowerCase().includes("no identificada");
+      const aUnknown = (a || "").toLowerCase().includes("no identificada");
+      const bUnknown = (b || "").toLowerCase().includes("no identificada");
       if (aUnknown && !bUnknown) return 1;
       if (!aUnknown && bUnknown) return -1;
-      return a.localeCompare(b, "es", { sensitivity: "base" });
+      return (a || "").localeCompare(b || "", "es", { sensitivity: "base" });
     });
 
     return sortedBrands.map((brand) => ({

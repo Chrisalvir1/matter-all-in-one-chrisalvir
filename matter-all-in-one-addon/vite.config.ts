@@ -24,7 +24,14 @@ export default defineConfig({
           if (chunkInfo.name === "matter-apple-card") {
             return "matter-apple-card.js";
           }
-          return "assets/[name]-[hash].js";
+          return "assets/index.js";
+        },
+        chunkFileNames: "assets/[name].js",
+        assetFileNames: (assetInfo) => {
+          if (assetInfo.name && assetInfo.name.endsWith(".css")) {
+            return "assets/index.css";
+          }
+          return "assets/[name].[ext]";
         },
       },
     },

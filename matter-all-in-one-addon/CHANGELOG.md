@@ -1,3 +1,16 @@
+## [1.5.17] - 2026-09-07
+
+### Corrección Definitiva de Pantalla Negra en Home Assistant Ingress y Fallback Anti-Caché
+
+- **Nombres de Archivos Deterministas sin Hashes Volátiles (`assets/index.js` y `assets/index.css`):**
+  - Se eliminan los hashes dinámicos de Vite en los puntos de entrada para evitar que la caché del proxy Ingress de Home Assistant solicite scripts 404 de versiones previas (`index-[hash].js`).
+- **Fallback Automático de Servidor para Hashes Obsoletos (`platform.ts`):**
+  - Si un navegador o proxy Ingress solicita un archivo con hash viejo (`assets/index-*.js` o `assets/index-*.css`), el servidor responde automáticamente con el bundle canónico más reciente en lugar de un error 404 / pantalla negra.
+- **Failsafe y Watchdog Inline en `index.html`:**
+  - Script inline independiente en `<head>` que captura errores de carga de recursos (`<script type="module">`) y temporizador de recuperación de 3.5 segundos con botones de recarga limpia en caso de problemas de red o caché.
+- **Protección Defensiva contra Valores Nulos en Filtros y Nombres:**
+  - Blindaje completo en `useAddonState.ts`, `App.tsx` y `CameraCard.tsx` para evitar excepciones en `localeCompare` o `toLowerCase` durante el renderizado inicial de dispositivos sin nombre o entidad.
+
 ## [1.5.16] - 2026-09-07
 
 ### Soporte de Pantalla Avanzada: Display P3, HDR / XDR, 120 FPS ProMotion, OLED True Black y Dimmer

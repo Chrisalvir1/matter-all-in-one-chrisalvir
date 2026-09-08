@@ -119,7 +119,7 @@ export function useAddonState() {
       if (!map.has(id)) {
         map.set(id, {
           id,
-          name: entity.device_name || entity.name || entity.area_name || entity.domain,
+          name: entity.device_name || entity.name || entity.area_name || entity.domain || entity.entityId || "Dispositivo",
           area: entity.area_name || "",
           manufacturer: entity.manufacturer || "",
           model: entity.model || "",
@@ -128,7 +128,7 @@ export function useAddonState() {
       }
       map.get(id)!.entities.push(entity);
     }
-    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
+    return [...map.values()].sort((a, b) => (a.name || "").localeCompare(b.name || "", "es", { sensitivity: "base" }));
   }, [entities]);
 
   // Scrypted names and IDs to avoid duplicating HA camera representations
