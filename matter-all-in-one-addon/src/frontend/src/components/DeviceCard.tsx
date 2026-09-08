@@ -62,16 +62,29 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
         ) || device.entities.find((e) => e.domain === "switch" && !e.entityId.includes("auto_stop"))
       : undefined);
 
+  // Detect Govee H7133 specifically or tower fans with heater switch
+  const isH7133 =
+    (device.model || "").toUpperCase().includes("H7133") ||
+    (device.name || "").toLowerCase().includes("h7133") ||
+    device.entities.some(
+      (e) =>
+        e.entityId.toLowerCase().includes("h7133") ||
+        (e.name || "").toLowerCase().includes("h7133")
+    ) ||
+    (device.entities.some((e) => e.entityId.toLowerCase().includes("ventilador_playroom")) &&
+      device.entities.some((e) => e.entityId.toLowerCase().includes("auto_stop")));
+
+  // Detect temperature sensor
+  const tempSensor = device.entities.find(
+    (e) =>
+      e.domain === "sensor" &&
+      (e.attributes?.device_class === "temperature" ||
+        e.entityId.toLowerCase().includes("temperature") ||
+        e.entityId.toLowerCase().includes("temperatura") ||
+        (e.name || "").toLowerCase().includes("temperatura"))
+  );
+
   const lightEntity = device.entities.find((e) => e.domain === "light");
-
-  // Only show exported switch channels on the card face — non-exported hidden until modal,
-  // EXCEPT if this is a standalone switch device with no fan/light, keep at least the first switch visible
-  const rawSwitchEntities = device.entities.filter((e) => e.domain === "switch" && e.entityId !== fanEntity?.entityId);
-  const switchEntities = rawSwitchEntities.filter((e) => e.exported).length > 0
-    ? rawSwitchEntities.filter((e) => e.exported)
-    : (!fanEntity && !lightEntity ? rawSwitchEntities.slice(0, 3) : []);
-
-  const coverEntity = device.entities.find((e) => e.domain === "cover");
 
   // Check heating mode (auto_stop switch or climate entity)
   const heaterEntity =
@@ -89,6 +102,20 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
     (heaterEntity?.domain === "climate" && (heaterEntity.state === "heat" || heaterEntity.state === "on")) ||
     (heaterEntity?.domain === "switch" && heaterEntity.state === "on");
 
+  // Only show exported switch channels on the card face — non-exported hidden until modal,
+  // EXCEPT if this is a standalone switch device with no fan/light, keep at least the first switch visible
+  const rawSwitchEntities = device.entities.filter(
+    (e) =>
+      e.domain === "switch" &&
+      e.entityId !== fanEntity?.entityId &&
+      (!isH7133 || e.entityId !== heaterEntity?.entityId)
+  );
+  const switchEntities = rawSwitchEntities.filter((e) => e.exported).length > 0
+    ? rawSwitchEntities.filter((e) => e.exported)
+    : (!fanEntity && !lightEntity ? rawSwitchEntities.slice(0, 3) : []);
+
+  const coverEntity = device.entities.find((e) => e.domain === "cover");
+
   // Check orientation override hook
   const visualOverride = getDeviceVisualOverride(device.id);
   const [overrideOrientation, setOverrideOrientation] = useState<"vertical" | "horizontal" | undefined>(
@@ -97,7 +124,10 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
       : undefined
   );
 
-  const isComposite = (Boolean(fanEntity) && Boolean(lightEntity)) || (deviceInfo.subtype === "multi_gang_switch" && switchEntities.length > 1);
+  const isComposite =
+    Boolean(isH7133) ||
+    (Boolean(fanEntity) && Boolean(lightEntity)) ||
+    (deviceInfo.subtype === "multi_gang_switch" && switchEntities.length > 1);
 
   // Domain priority: Prioritize media_player (Apple TV, HomePod), climate, fan
   const domainPriority = ["media_player", "climate", "fan", "lock", "cover", "vacuum", "camera", "humidifier", "light", "switch", "sensor"];
@@ -263,6 +293,37 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
         next.delete(entityId);
         return next;
       });
+    }
+  };
+
+  const handleSetH7133Mode = async (e: React.MouseEvent, mode: "fan" | "heat" | "off") => {
+    e.stopPropagation();
+    try {
+      if (mode === "fan") {
+        if (heaterEntity && heaterEntity.state === "on") {
+          await api.turnOffEntity(heaterEntity.entityId);
+        }
+        if (fanEntity && fanEntity.state !== "on") {
+          await api.turnOnEntity(fanEntity.entityId);
+        }
+      } else if (mode === "heat") {
+        if (fanEntity && fanEntity.state !== "on") {
+          await api.turnOnEntity(fanEntity.entityId);
+        }
+        if (heaterEntity && heaterEntity.state !== "on") {
+          await api.turnOnEntity(heaterEntity.entityId);
+        }
+      } else {
+        if (heaterEntity && heaterEntity.state === "on") {
+          await api.turnOffEntity(heaterEntity.entityId);
+        }
+        if (fanEntity && fanEntity.state === "on") {
+          await api.turnOffEntity(fanEntity.entityId);
+        }
+      }
+      onRefresh?.();
+    } catch (err) {
+      console.error("Error setting H7133 mode:", err);
     }
   };
 
@@ -462,6 +523,26 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
               {effectiveOrientation === "horizontal" ? "➡️ Acostado" : "⬆️ De pie"}
             </button>
           )}
+          {tempSensor && (
+            <span
+              className="temp-pill"
+              style={{
+                fontSize: "0.68rem",
+                fontWeight: 700,
+                padding: "2px 7px",
+                borderRadius: "6px",
+                background: "rgba(56, 189, 248, 0.15)",
+                border: "1px solid rgba(56, 189, 248, 0.35)",
+                color: "#38BDF8",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "3px",
+              }}
+              title={`Temperatura ambiente: ${tempSensor.state} ${tempSensor.attributes?.unit_of_measurement || "°F"}`}
+            >
+              🌡️ {tempSensor.state} {tempSensor.attributes?.unit_of_measurement || "°F"}
+            </span>
+          )}
         </div>
         <h3 title={device.name}>{device.name}</h3>
         {!isComposite && <p className="device-status-highlight">{statusSummary}</p>}
@@ -597,6 +678,142 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
             gap: "8px",
           }}
         >
+          {/* Govee H7133 Quick Mode Selector */}
+          {isH7133 && (
+            <div
+              className="h7133-mode-selector"
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "6px",
+                background: "rgba(0, 0, 0, 0.35)",
+                border: isHeating
+                  ? "1.5px solid rgba(251, 146, 60, 0.5)"
+                  : "1px solid rgba(56, 189, 248, 0.3)",
+                borderRadius: "14px",
+                padding: "8px 10px",
+                backdropFilter: "blur(12px)",
+                WebkitBackdropFilter: "blur(12px)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span
+                  style={{
+                    fontSize: "0.72rem",
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.05em",
+                    color: isHeating ? "#FB923C" : fanEntity?.state === "on" ? "#38BDF8" : "#94A3B8",
+                  }}
+                >
+                  {isHeating
+                    ? "🔥 Calefactor Activo"
+                    : fanEntity?.state === "on"
+                    ? "🌪️ Fan Manual Activo"
+                    : "💤 En Reposo"}
+                </span>
+                {tempSensor && (
+                  <span
+                    style={{
+                      fontSize: "0.72rem",
+                      fontWeight: 700,
+                      color: "#F8FAFC",
+                      background: "rgba(255, 255, 255, 0.08)",
+                      padding: "2px 7px",
+                      borderRadius: "6px",
+                      border: "1px solid rgba(255, 255, 255, 0.1)",
+                    }}
+                  >
+                    🌡️ {tempSensor.state} {tempSensor.attributes?.unit_of_measurement || "°F"}
+                  </span>
+                )}
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "6px" }}>
+                <button
+                  type="button"
+                  onClick={(e) => handleSetH7133Mode(e, "fan")}
+                  style={{
+                    padding: "6px 4px",
+                    borderRadius: "8px",
+                    fontSize: "0.72rem",
+                    fontWeight: 700,
+                    border:
+                      fanEntity?.state === "on" && !isHeating
+                        ? "1.5px solid #38BDF8"
+                        : "1px solid rgba(255, 255, 255, 0.1)",
+                    background:
+                      fanEntity?.state === "on" && !isHeating
+                        ? "rgba(2, 132, 199, 0.35)"
+                        : "rgba(255, 255, 255, 0.04)",
+                    color: "#FFF",
+                    cursor: "pointer",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: "2px",
+                    transition: "all 0.15s ease",
+                  }}
+                  title="Activar ventilador en modo manual sin calefactor"
+                >
+                  <span style={{ fontSize: "14px" }}>🌪️</span>
+                  <span>Fan Manual</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => handleSetH7133Mode(e, "heat")}
+                  style={{
+                    padding: "6px 4px",
+                    borderRadius: "8px",
+                    fontSize: "0.72rem",
+                    fontWeight: 700,
+                    border: isHeating ? "1.5px solid #FB923C" : "1px solid rgba(255, 255, 255, 0.1)",
+                    background: isHeating ? "rgba(234, 88, 12, 0.35)" : "rgba(255, 255, 255, 0.04)",
+                    color: "#FFF",
+                    cursor: "pointer",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: "2px",
+                    transition: "all 0.15s ease",
+                  }}
+                  title="Activar modo calefactor con ventilación"
+                >
+                  <span style={{ fontSize: "14px" }}>🔥</span>
+                  <span>Calefactor</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => handleSetH7133Mode(e, "off")}
+                  style={{
+                    padding: "6px 4px",
+                    borderRadius: "8px",
+                    fontSize: "0.72rem",
+                    fontWeight: 700,
+                    border:
+                      (!fanEntity || fanEntity.state !== "on") && !isHeating
+                        ? "1.5px solid #94A3B8"
+                        : "1px solid rgba(255, 255, 255, 0.1)",
+                    background:
+                      (!fanEntity || fanEntity.state !== "on") && !isHeating
+                        ? "rgba(148, 163, 184, 0.25)"
+                        : "rgba(255, 255, 255, 0.04)",
+                    color: (!fanEntity || fanEntity.state !== "on") && !isHeating ? "#FFF" : "#94A3B8",
+                    cursor: "pointer",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: "2px",
+                    transition: "all 0.15s ease",
+                  }}
+                  title="Apagar ventilador y calefactor"
+                >
+                  <span style={{ fontSize: "14px" }}>🛑</span>
+                  <span>Apagar</span>
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Fan sub-control with spinning icon & speed slider */}
           {fanEntity && (
             <div

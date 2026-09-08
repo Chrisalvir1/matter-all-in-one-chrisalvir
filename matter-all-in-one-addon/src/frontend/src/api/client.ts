@@ -93,6 +93,16 @@ export const api = {
       method: "POST",
     }),
 
+  turnOnEntity: (entityId: string) =>
+    request(`/entity-turn-on/${encodeURIComponent(entityId)}`, {
+      method: "POST",
+    }),
+
+  turnOffEntity: (entityId: string) =>
+    request(`/entity-turn-off/${encodeURIComponent(entityId)}`, {
+      method: "POST",
+    }),
+
   setEntityValue: (entityId: string, value: number) =>
     request(`/entity-set-value/${encodeURIComponent(entityId)}`, {
       method: "POST",

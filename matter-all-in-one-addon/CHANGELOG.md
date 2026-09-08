@@ -1,3 +1,26 @@
+## [1.5.29] - 2026-09-08
+
+### Sincronización Completa, Termostato Matter con Modo Fan Puro y Control de Modos para Govee H7133
+
+- **Sincronización Bidireccional de Entidades Compañeras (`platform.ts`):**
+  - Coordinación automática en tiempo real entre entidades del mismo `device_id` en Home Assistant (ventilador principal `switch.ventilador_playroom`, calefactor `switch.ventilador_playroom_auto_stop`, sensor de temperatura `sensor.ventilador_playroom_temperature` y luz nocturna).
+  - Al encender el calefactor (`auto_stop`), el ventilador principal se activa automáticamente garantizando flujo de aire y previniendo desincronizaciones térmicas.
+  - Al apagar el ventilador principal, el calefactor se apaga inmediatamente de forma segura para evitar sobrecalentamiento.
+  - Al recibir lecturas de temperatura ambiente (`sensor.*temp*`), la temperatura se sincroniza instantáneamente en los nodos Matter correspondientes en escala de centésimas de grado Celsius.
+- **Exportación Novedosa del Plan B como Termostato Nativo Matter (`base.entity.ts`):**
+  - El interruptor de calefactor/auto-stop exportado bajo el perfil `thermostat` ahora inicializa un clúster `ThermostatServer` nativo completo con soporte de `Heating`, `Cooling` y `AutoMode`.
+  - Vinculación automática del sensor de temperatura ambiente compañera (`72.0 °F` -> `22.2 °C` / `2222` centicelsius) visible tanto en Apple Home como en Google Home.
+  - **Modo Fan Puro (sin calefacción) en Termostato:** Al seleccionar `Cool` o ventilación en la rueda del termostato, se activa el ventilador principal (`switch.ventilador_playroom` ON) y se mantiene apagado el calefactor (`auto_stop` OFF), permitiendo usar la interfaz del termostato para refrescar la habitación sin encender las resistencias térmicas.
+  - **Modo Heat (Calefacción):** Enciende el calefactor y el ventilador en coordinación.
+  - **Modo Auto (Termostático):** Compara el setpoint deseado con la temperatura ambiente leída del sensor para gestionar el auto-stop inteligentemente.
+- **Plan A con Control de Velocidades de 3 Niveles (`base.entity.ts`):**
+  - Soporte de clúster `FanControl` para el interruptor del ventilador con snapping inteligente de 3 velocidades: Low (33%), Medium (66%) y High (100%), traduciendo comandos de Matter a llamadas seguras de conmutación.
+- **Selector Rápido de Modos e Indicador de Temperatura en la Tarjeta Web (`DeviceCard.tsx`):**
+  - Selector de modos intuitivo para dispositivos híbridos como el H7133: `[ 🌪️ Fan Manual ]`, `[ 🔥 Calefactor ]` y `[ 🛑 Apagar ]`.
+  - Badge dinámico en el encabezado con la temperatura ambiente en tiempo real (`🌡️ 72.0 °F`).
+  - Endpoints dedicados `/api/custom/entity-turn-on/:entityId` y `/api/custom/entity-turn-off/:entityId` en `src/platform.ts` y métodos en el cliente API web.
+  - Slider y conmutadores protegidos contra llamadas a servicios incompatibles en switches.
+
 ## [1.5.28] - 2026-09-08
 
 ### Soporte de Postura Dual (De pie / Acostado) y Animaciones Dinámicas de Flujo de Aire y Calor para Govee H7133

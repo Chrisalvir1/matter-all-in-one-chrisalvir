@@ -688,7 +688,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                       </span>
                     </div>
                     <p style={{ fontSize: 11, color: "#cbd5e1", margin: 0 }}>
-                      Accesorio Calefactor / Termostato Matter independiente con dial térmico.
+                      Termostato Matter: Calefacción, Ventilador puro (sin calor) y Auto con sensor.
                     </p>
                     <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
                       <button

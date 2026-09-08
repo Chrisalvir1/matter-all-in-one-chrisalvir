@@ -1411,7 +1411,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     );
     this.log.notice(`[Runtime] Matterbridge runtime: ${mbVersion}`);
     this.log.notice(`[Runtime] Node.js runtime: ${process.version}`);
-    this.log.notice(`[Runtime] Plugin version: 1.5.28`);
+    this.log.notice(`[Runtime] Plugin version: 1.5.29`);
     await this.loadEntityDiagnostics();
     await this.startUiServer();
     this.startMatterConnectionMonitor();
@@ -3156,14 +3156,14 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       }
     }
 
-    // Cross-coordination for hybrid devices (e.g. Govee H7133 Fan + Climate + Switch Oscillation)
+    // Cross-coordination for hybrid devices (e.g. Govee H7133 Fan + Climate/Heater + Switch Oscillation + Sensor Temp)
     const hybridDeviceId = this.ha?.hassEntities?.get(entityId)?.device_id;
     if (hybridDeviceId) {
       // 1. Oscillation switch state changes -> sync companion fan oscillation
       if (entityId.startsWith("switch.") && entityId.includes("oscillation")) {
         for (const [fId, fEntity] of this.entities.entries()) {
           if (
-            fId.startsWith("fan.") &&
+            (fId.startsWith("fan.") || this.deviceOverrides[fId] === "fan") &&
             this.ha?.hassEntities?.get(fId)?.device_id === hybridDeviceId
           ) {
             fEntity.state = {
@@ -3180,21 +3180,27 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         }
       }
 
-      // 2. Climate updates -> coordinate companion fan (airflow active when heating, sync room temperature)
-      if (entityId.startsWith("climate.")) {
+      // 2. Heater / Auto-Stop switch or Climate updates -> coordinate companion fan (airflow active when heating)
+      const isHeaterEntity =
+        entityId.startsWith("climate.") ||
+        (entityId.startsWith("switch.") &&
+          (entityId.includes("auto_stop") || entityId.includes("heater") || entityId.includes("calefactor")));
+
+      if (isHeaterEntity) {
+        const isHeatingOn = newState.state === "heat" || newState.state === "on";
         for (const [fId, fEntity] of this.entities.entries()) {
           if (
-            fId.startsWith("fan.") &&
+            fId !== entityId &&
+            (fId.startsWith("fan.") || this.deviceOverrides[fId] === "fan" || (fId.startsWith("switch.") && fId.includes("ventilador"))) &&
             this.ha?.hassEntities?.get(fId)?.device_id === hybridDeviceId
           ) {
             let changed = false;
             const newAttrs = { ...fEntity.state.attributes };
             if (typeof newState.attributes.current_temperature === "number") {
-              newAttrs.current_temperature =
-                newState.attributes.current_temperature;
+              newAttrs.current_temperature = newState.attributes.current_temperature;
               changed = true;
             }
-            if (newState.state === "heat" && fEntity.state.state === "off") {
+            if (isHeatingOn && fEntity.state.state === "off") {
               fEntity.state = {
                 ...fEntity.state,
                 state: "on",
@@ -3211,17 +3217,51 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         }
       }
 
-      // 3. Fan updates -> coordinate companion climate (if fan completely off, reflect climate idle/off)
-      if (entityId.startsWith("fan.")) {
+      // 3. Fan updates -> coordinate companion climate / heater (if fan completely off, reflect climate/heater off)
+      const isFanEntity =
+        entityId.startsWith("fan.") ||
+        (entityId.startsWith("switch.") && entityId.includes("ventilador") && !entityId.includes("auto_stop"));
+
+      if (isFanEntity) {
         for (const [cId, cEntity] of this.entities.entries()) {
           if (
-            cId.startsWith("climate.") &&
+            cId !== entityId &&
+            (cId.startsWith("climate.") || (cId.startsWith("switch.") && (cId.includes("auto_stop") || cId.includes("heater")))) &&
             this.ha?.hassEntities?.get(cId)?.device_id === hybridDeviceId
           ) {
             if (newState.state === "off" && cEntity.state.state !== "off") {
               cEntity.state = { ...cEntity.state, state: "off" };
               if (this.isEntityExported(cId)) {
                 this.queueStateUpdate(cId, cEntity.state);
+              }
+            }
+          }
+        }
+      }
+
+      // 4. Temperature sensor updates -> propagate current_temperature to companion thermostat and fan entities
+      if (
+        entityId.startsWith("sensor.") &&
+        (entityId.includes("temp") || (newState.attributes as any)?.device_class === "temperature")
+      ) {
+        const val = parseFloat(newState.state);
+        if (!isNaN(val)) {
+          const unit = newState.attributes?.unit_of_measurement;
+          const tempC = (unit === "°F" || unit === "F" || val > 45) ? (val - 32) * (5 / 9) : val;
+          for (const [compId, compEntity] of this.entities.entries()) {
+            if (
+              compId !== entityId &&
+              this.ha?.hassEntities?.get(compId)?.device_id === hybridDeviceId
+            ) {
+              compEntity.state = {
+                ...compEntity.state,
+                attributes: {
+                  ...compEntity.state.attributes,
+                  current_temperature: tempC,
+                },
+              };
+              if (this.isEntityExported(compId)) {
+                this.queueStateUpdate(compId, compEntity.state);
               }
             }
           }
@@ -3874,6 +3914,54 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           return;
         }
 
+        // POST /api/custom/entity-turn-on/:entityId
+        if (
+          req.method === "POST" &&
+          pathname.startsWith("/api/custom/entity-turn-on/")
+        ) {
+          const entityId = decodeURIComponent(
+            pathname.substring("/api/custom/entity-turn-on/".length),
+          );
+          const [domain] = entityId.split(".");
+          try {
+            await this.ha.callService(domain, "turn_on", entityId);
+            res.writeHead(200, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ success: true, entityId }));
+          } catch (err: any) {
+            res.writeHead(500, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ success: false, error: err?.message || String(err) }));
+          }
+          return;
+        }
+
+        // POST /api/custom/entity-turn-off/:entityId
+        if (
+          req.method === "POST" &&
+          pathname.startsWith("/api/custom/entity-turn-off/")
+        ) {
+          const entityId = decodeURIComponent(
+            pathname.substring("/api/custom/entity-turn-off/".length),
+          );
+          const [domain] = entityId.split(".");
+          try {
+            await this.ha.callService(domain, "turn_off", entityId);
+            res.writeHead(200, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ success: true, entityId }));
+          } catch (err: any) {
+            res.writeHead(500, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ success: false, error: err?.message || String(err) }));
+          }
+          return;
+        }
+
         // POST /api/custom/media-action/:entityId
         if (
           req.method === "POST" &&
@@ -3929,6 +4017,12 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                 await this.ha.callService("fan", "set_percentage", entityId, {
                   percentage: numVal,
                 });
+              }
+            } else if (domain === "switch") {
+              if (numVal === 0) {
+                await this.ha.callService("switch", "turn_off", entityId);
+              } else {
+                await this.ha.callService("switch", "turn_on", entityId);
               }
             } else if (domain === "cover") {
               await this.ha.callService("cover", "set_cover_position", entityId, {
