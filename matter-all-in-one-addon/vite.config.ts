@@ -15,7 +15,18 @@ export default defineConfig({
     emptyOutDir: true,
     target: "esnext",
     rollupOptions: {
-      input: path.resolve(__dirname, "src/frontend/index.html"),
+      input: {
+        index: path.resolve(__dirname, "src/frontend/index.html"),
+        "matter-apple-card": path.resolve(__dirname, "src/frontend/src/cards/matter-apple-card.ts"),
+      },
+      output: {
+        entryFileNames: (chunkInfo) => {
+          if (chunkInfo.name === "matter-apple-card") {
+            return "matter-apple-card.js";
+          }
+          return "assets/[name]-[hash].js";
+        },
+      },
     },
   },
   server: {
