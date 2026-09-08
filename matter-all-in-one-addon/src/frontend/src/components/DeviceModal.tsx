@@ -432,7 +432,8 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
           maxHeight: "96vh",
           display: "flex",
           flexDirection: "column",
-          padding: "24px 32px",
+          padding: "20px 28px",
+          overflowY: "auto",
         }}
       >
         <button
@@ -1279,12 +1280,35 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
             </div>
 
             {isTargetCommissioned && !multiAdminOpen && (
-              <div className="commissioned-hint" style={{ display: "block" }}>
+              <div className="commissioned-hint" style={{ display: "block", flexShrink: 0 }}>
                 <p className="hint-title">🔒 Vinculado a Matter</p>
                 <p className="hint-desc">
-                  Este accesorio ya tiene una casa registrada en Matter. Para
-                  emparejarlo en una segunda plataforma, pulsa «Modo Multi-Admin».
+                  Este accesorio ya tiene una vinculación activa previa en Matter. Si lo eliminaste de Apple Home o deseas vincularlo de nuevo como accesorio limpio, pulsa el botón de abajo:
                 </p>
+                <button
+                  type="button"
+                  onClick={() => handleResetAccessoryForEntity(targetQrEntity)}
+                  disabled={isBusy}
+                  style={{
+                    width: "100%",
+                    marginTop: 10,
+                    padding: "9px 12px",
+                    background: "rgba(239, 68, 68, 0.22)",
+                    border: "1px solid rgba(239, 68, 68, 0.5)",
+                    color: "#fca5a5",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    borderRadius: 8,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 6,
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  <span>🔄 Desconectar y Generar QR Limpio</span>
+                </button>
               </div>
             )}
 
@@ -1425,7 +1449,11 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
               </div>
             )}
 
-            <div className="accessory-controls" id="accessory-controls" style={{ marginTop: "auto", paddingTop: 12 }}>
+            <div
+              className="accessory-controls"
+              id="accessory-controls"
+              style={{ marginTop: 14, paddingTop: 10, flexShrink: 0 }}
+            >
               {isTargetExported && (
                 <div className="matter-actions" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   <button

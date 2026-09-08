@@ -1308,7 +1308,7 @@ mark {
   transform: translateY(-1px);
 }
 
-/* QR Panel (right column, always visible) */
+/* QR Panel (right column, always visible & scrollable) */
 .qr-panel {
   display: flex;
   flex-direction: column;
@@ -1317,8 +1317,29 @@ mark {
   border: 1px solid var(--border);
   border-radius: 16px;
   background: rgba(6, 12, 25, 0.65);
-  overflow-y: auto;
-  max-height: calc(92vh - 170px);
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(56, 189, 248, 0.5) rgba(0, 0, 0, 0.2);
+  box-sizing: border-box;
+}
+.qr-panel > * {
+  flex-shrink: 0 !important;
+}
+.qr-panel::-webkit-scrollbar {
+  width: 6px;
+}
+.qr-panel::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+.qr-panel::-webkit-scrollbar-thumb {
+  background: rgba(56, 189, 248, 0.4);
+  border-radius: 4px;
+}
+.qr-panel::-webkit-scrollbar-thumb:hover {
+  background: rgba(56, 189, 248, 0.7);
 }
 .qr-status-label {
   padding: 6px 11px;
@@ -1405,7 +1426,7 @@ mark {
   );
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 20px;
-  padding: 18px 16px;
+  padding: 16px 14px;
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   box-shadow:
@@ -1415,7 +1436,9 @@ mark {
   transition:
     transform 0.3s ease,
     box-shadow 0.3s ease;
-  overflow: hidden;
+  overflow: visible !important;
+  flex-shrink: 0 !important;
+  min-height: fit-content;
 }
 
 .qr-liquid-glass-card::before {
@@ -1431,6 +1454,7 @@ mark {
     transparent 45%
   );
   pointer-events: none;
+  border-radius: 20px;
 }
 
 .qr-visual-wrapper {
@@ -1439,6 +1463,7 @@ mark {
   justify-content: center;
   align-items: center;
   margin: 0 auto;
+  flex-shrink: 0 !important;
 }
 
 .qr-frame-glow {
@@ -1458,21 +1483,25 @@ mark {
 .qr-frame {
   position: relative;
   background: #ffffff;
-  padding: 12px;
+  padding: 10px;
   border-radius: 18px;
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
   display: flex;
   justify-content: center;
   align-items: center;
+  flex-shrink: 0 !important;
 }
 
 #device-qr-code,
 #cam-modal-qr-code {
-  width: 224px;
-  height: 224px;
+  width: 208px;
+  height: 208px;
+  min-width: 208px;
+  min-height: 208px;
   display: flex;
   justify-content: center;
   align-items: center;
+  flex-shrink: 0 !important;
 }
 
 #device-qr-code svg,

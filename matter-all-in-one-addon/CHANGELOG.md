@@ -1,3 +1,15 @@
+## [1.5.31] - 2026-09-08
+
+### Corrección de Scroll y Visibilidad Total de Códigos QR en el Modal de Dispositivo
+
+- **Solución al Recorte del Código QR y Falta de Scroll (`style.css`, `QRCodeDisplay.tsx`, `DeviceModal.tsx`):**
+  - Se corrigió el recorte inferior del código QR eliminando la compresión flex (`flex-shrink: 0 !important; overflow: visible !important; min-height: fit-content;`) en la tarjeta `.qr-liquid-glass-card` y en todos los elementos secundarios de `.qr-panel`.
+  - Se activó scroll vertical suave (`overflow-y: auto !important; overscroll-behavior: contain;`) con scrollbar estilizada y accesible en el panel lateral de códigos QR.
+  - Se ajustaron las dimensiones del canvas QR a 208px optimizados para garantizar nitidez y compatibilidad inmediata con pantallas de laptops y resoluciones estándar.
+  - Se eliminó `marginTop: "auto"` de los controles de accesorio para evitar empujes forzados y desbordes hacia el fondo del viewport.
+- **Acceso Directo para Desconexión y Generación de QR Limpio (`DeviceModal.tsx`):**
+  - Se integró un botón directo de acción rápida **`[ 🔄 Desconectar y Generar QR Limpio ]`** dentro del banner informativo de vinculación previa (`commissioned-hint`), permitiendo restablecer el accesorio y generar un QR nuevo sin tener que desplazarse hacia abajo.
+
 ## [1.5.30] - 2026-09-08
 
 ### Corrección Crítica de Tipo de Dispositivo (Fan vs Thermostat vs Enchufe) y Regeneración Limpia de Nodos Matter
