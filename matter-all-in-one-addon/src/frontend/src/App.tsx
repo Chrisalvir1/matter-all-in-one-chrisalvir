@@ -9,6 +9,7 @@ import { CameraConfigModal } from "./components/CameraConfigModal";
 import { DeviceModal } from "./components/DeviceModal";
 import { ScryptedModal } from "./components/ScryptedModal";
 import { SettingsModal } from "./components/SettingsModal";
+import { LovelaceModal } from "./components/LovelaceModal";
 import { extractCameraBrand } from "./components/CameraCard";
 import { CameraRecord, DeviceRecord } from "./types";
 import { api } from "./api/client";
@@ -35,29 +36,8 @@ export const App: React.FC = () => {
   const [selectedDevice, setSelectedDevice] = useState<DeviceRecord | null>(null);
   const [isScryptedModalOpen, setIsScryptedModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [isLovelaceModalOpen, setIsLovelaceModalOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-
-  const [isDashboardMode, setIsDashboardMode] = useState<boolean>(() => {
-    try {
-      const params = new URLSearchParams(window.location.search);
-      if (params.get("mode") === "dashboard" || params.get("dashboard") === "true") {
-        return true;
-      }
-      return localStorage.getItem("matter_view_mode") === "dashboard";
-    } catch {
-      return false;
-    }
-  });
-
-  const handleToggleDashboardMode = () => {
-    setIsDashboardMode((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem("matter_view_mode", next ? "dashboard" : "admin");
-      } catch {}
-      return next;
-    });
-  };
 
   // Filter devices based on search and active tab
   const filteredDevices = useMemo(() => {
@@ -217,8 +197,7 @@ export const App: React.FC = () => {
           status={status}
           onOpenSettings={() => setIsSettingsModalOpen(true)}
           onRestartService={handleRestartService}
-          isDashboardMode={isDashboardMode}
-          onToggleDashboardMode={handleToggleDashboardMode}
+          onOpenLovelaceGuide={() => setIsLovelaceModalOpen(true)}
         />
 
         {/* Main Content Area */}
@@ -227,13 +206,11 @@ export const App: React.FC = () => {
             <div>
               <p className="eyebrow">
                 <span className="eyebrow-pulse" aria-hidden="true" />
-                {isDashboardMode ? "PANEL DE CONTROL OPERATIVO" : "PUBLICACIÓN CONTROLADA"}
+                PUBLICACIÓN CONTROLADA
               </p>
-              <h2>{isDashboardMode ? "Tus Dispositivos en Vivo" : "Tu espacio Matter"}</h2>
+              <h2>Tu espacio Matter</h2>
               <p className="lead">
-                {isDashboardMode
-                  ? "Control inmediato y monitoreo cinético con diseño Liquid Glass estilo Apple Home."
-                  : "Activa la entidad principal para publicar el dispositivo físico. Sus capacidades compatibles se integran como endpoints bajo un único código Matter."}
+                Activa la entidad principal para publicar el dispositivo físico. Sus capacidades compatibles se integran como endpoints bajo un único código Matter.
               </p>
             </div>
             <label className="search" htmlFor="device-search">
@@ -252,19 +229,17 @@ export const App: React.FC = () => {
           {/* Control Center */}
           <ControlCenter stats={stats} loading={loading} />
 
-          {/* Info Banner (hidden in Dashboard Mode) */}
-          {!isDashboardMode && (
-            <section className="info-banner" aria-label="Información de emparejamiento">
-              <span className="info-icon" aria-hidden="true">✦</span>
-              <div>
-                <strong>Un dispositivo, un único acceso Matter</strong>
-                <p>
-                  Cada dispositivo físico tiene un único código QR y manual de
-                  emparejamiento. Los endpoints integrados comparten ese código.
-                </p>
-              </div>
-            </section>
-          )}
+          {/* Info Banner */}
+          <section className="info-banner" aria-label="Información de emparejamiento">
+            <span className="info-icon" aria-hidden="true">✦</span>
+            <div>
+              <strong>Un dispositivo, un único acceso Matter</strong>
+              <p>
+                Cada dispositivo físico tiene un único código QR y manual de
+                emparejamiento. Los endpoints integrados comparten ese código.
+              </p>
+            </div>
+          </section>
 
           {/* Toolbar */}
           <div className="toolbar">
@@ -328,7 +303,6 @@ export const App: React.FC = () => {
                     searchQuery={searchQuery}
                     onConfigure={() => setSelectedDevice(device)}
                     onRefresh={refreshAll}
-                    isDashboardMode={isDashboardMode}
                   />
                 ))}
 
@@ -389,6 +363,13 @@ export const App: React.FC = () => {
       <SettingsModal
         isOpen={isSettingsModalOpen}
         onClose={() => setIsSettingsModalOpen(false)}
+        showToast={showToast}
+      />
+
+      {/* Lovelace Card Dashboard Modal */}
+      <LovelaceModal
+        isOpen={isLovelaceModalOpen}
+        onClose={() => setIsLovelaceModalOpen(false)}
         showToast={showToast}
       />
 

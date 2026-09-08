@@ -9,7 +9,6 @@ interface DeviceCardProps {
   searchQuery: string;
   onConfigure: () => void;
   onRefresh?: () => void;
-  isDashboardMode?: boolean;
 }
 
 export const DeviceCard: React.FC<DeviceCardProps> = ({
@@ -17,7 +16,6 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
   searchQuery,
   onConfigure,
   onRefresh,
-  isDashboardMode = false,
 }) => {
   const [isToggling, setIsToggling] = useState(false);
   const exported = device.entities.filter((e) => e.exported).length;
@@ -174,22 +172,16 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
         <span className="entity-summary">
           {device.entities.length} entidad{device.entities.length === 1 ? "" : "es"}
         </span>
-        {!isDashboardMode ? (
-          <button
-            className="button button-secondary"
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onConfigure();
-            }}
-          >
-            Configurar
-          </button>
-        ) : (
-          <span className="dashboard-action-hint">
-            {isControllable ? "Toca para conmutar" : "Solo lectura"}
-          </span>
-        )}
+        <button
+          className="button button-secondary"
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onConfigure();
+          }}
+        >
+          Configurar
+        </button>
       </div>
     </article>
   );

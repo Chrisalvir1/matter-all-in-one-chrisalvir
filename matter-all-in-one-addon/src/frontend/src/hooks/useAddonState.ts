@@ -68,10 +68,24 @@ export function useAddonState() {
           if (!event.data || event.data.startsWith(":")) return;
           try {
             const data = JSON.parse(event.data);
-            if (
+            if (data.type === "state_changed" && data.payload?.entityId) {
+              const { entityId, state: newState, attributes: newAttrs } = data.payload;
+              setEntities((prev) =>
+                prev.map((e) =>
+                  e.entityId === entityId
+                    ? {
+                        ...e,
+                        state: newState ?? e.state,
+                        attributes: { ...e.attributes, ...newAttrs },
+                      }
+                    : e
+                )
+              );
+            } else if (
               data.type === "device_update" ||
               data.type === "camera_update" ||
               data.type === "state_change" ||
+              data.type === "state_changed" ||
               data.type === "scrypted_status"
             ) {
               refreshAll();

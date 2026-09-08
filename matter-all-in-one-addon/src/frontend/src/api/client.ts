@@ -119,4 +119,9 @@ export const api = {
   restartService: () => request("/restart", { method: "POST" }),
 
   factoryReset: () => request("/factoryreset", { method: "POST" }),
+
+  installLovelaceCard: () =>
+    request<{ success: boolean; message: string }>("/install-lovelace-card", {
+      method: "POST",
+    }),
 };

@@ -3349,6 +3349,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             const isHashedAsset = relPath.startsWith("assets/");
             res.writeHead(200, {
               "Content-Type": mimeTypes[ext] || "application/octet-stream",
+              "Access-Control-Allow-Origin": "*",
               "Cache-Control": isHashedAsset
                 ? "public, max-age=31536000, immutable"
                 : "no-cache, no-store, must-revalidate",
@@ -3356,6 +3357,36 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             res.end(content);
             return;
           }
+        }
+
+        if (
+          req.method === "GET" &&
+          (pathname === "/api/custom/matter-apple-card.js" ||
+            pathname === "/matter-apple-card.js")
+        ) {
+          const content = await this.readBinaryFile("matter-apple-card.js");
+          if (content) {
+            res.writeHead(200, {
+              "Content-Type": "application/javascript; charset=utf-8",
+              "Access-Control-Allow-Origin": "*",
+              "Cache-Control": "no-cache, must-revalidate",
+            });
+            res.end(content);
+            return;
+          }
+        }
+
+        if (
+          req.method === "POST" &&
+          pathname === "/api/custom/install-lovelace-card"
+        ) {
+          const result = await this.deployLovelaceCardToHomeAssistant();
+          res.writeHead(200, {
+            "Content-Type": "application/json; charset=utf-8",
+            "Access-Control-Allow-Origin": "*",
+          });
+          res.end(JSON.stringify(result));
+          return;
         }
 
         if (req.method === "GET" && pathname === "/api/custom/logs") {
@@ -5392,6 +5423,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         this.log.notice(
           `Custom Liquid Glass UI Server listening on port ${this.uiServerPort}`,
         );
+        void this.deployLovelaceCardToHomeAssistant();
         resolve();
       });
     });
@@ -5399,31 +5431,66 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
   private async readFrontendFile(filename: string): Promise<string | null> {
     const dir = import.meta.dirname;
-    const distPath = path.join(dir, "frontend", filename);
-    const srcPath = path.join(dir, "../src/frontend", filename);
-    try {
-      return await fs.readFile(distPath, "utf8");
-    } catch {
+    const candidates = [
+      path.join(dir, "frontend", filename),
+      path.join(dir, "../src/frontend", filename),
+      path.join(dir, "../src/frontend/public", filename),
+    ];
+    for (const p of candidates) {
       try {
-        return await fs.readFile(srcPath, "utf8");
-      } catch {
-        return null;
-      }
+        return await fs.readFile(p, "utf8");
+      } catch {}
     }
+    return null;
   }
 
   private async readBinaryFile(filename: string): Promise<Buffer | null> {
     const dir = import.meta.dirname;
-    const distPath = path.join(dir, "frontend", filename);
-    const srcPath = path.join(dir, "../src/frontend", filename);
-    try {
-      return await fs.readFile(distPath);
-    } catch {
+    const candidates = [
+      path.join(dir, "frontend", filename),
+      path.join(dir, "../src/frontend", filename),
+      path.join(dir, "../src/frontend/public", filename),
+    ];
+    for (const p of candidates) {
       try {
-        return await fs.readFile(srcPath);
-      } catch {
-        return null;
+        return await fs.readFile(p);
+      } catch {}
+    }
+    return null;
+  }
+
+  /**
+   * Automatically deploy matter-apple-card.js to /config/www/ if /config or /config/www is mounted
+   */
+  public async deployLovelaceCardToHomeAssistant(): Promise<{
+    success: boolean;
+    message: string;
+  }> {
+    try {
+      const cardContent = await this.readFrontendFile("matter-apple-card.js");
+      if (!cardContent) {
+        return {
+          success: false,
+          message: "No se encontró el archivo matter-apple-card.js en el paquete.",
+        };
       }
+
+      const targetDir = "/config/www";
+      try {
+        await fs.mkdir(targetDir, { recursive: true });
+      } catch {}
+
+      const targetPath = path.join(targetDir, "matter-apple-card.js");
+      await fs.writeFile(targetPath, cardContent, "utf8");
+      this.log.info(
+        `[Lovelace] Tarjeta Matter Apple instalada con éxito en ${targetPath}`,
+      );
+      return { success: true, message: `Tarjeta instalada en ${targetPath}` };
+    } catch (err: any) {
+      this.log.debug(
+        `[Lovelace] No se pudo escribir en /config/www: ${err?.message || err}`,
+      );
+      return { success: false, message: err?.message || String(err) };
     }
   }
 

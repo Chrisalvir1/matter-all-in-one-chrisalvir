@@ -5,16 +5,14 @@ interface TopBarProps {
   status: StatusResponse | null;
   onOpenSettings: () => void;
   onRestartService: () => void;
-  isDashboardMode?: boolean;
-  onToggleDashboardMode?: () => void;
+  onOpenLovelaceGuide?: () => void;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
   status,
   onOpenSettings,
   onRestartService,
-  isDashboardMode = false,
-  onToggleDashboardMode,
+  onOpenLovelaceGuide,
 }) => {
   const isOnline = status?.haStatus === "conectado";
 
@@ -50,22 +48,18 @@ export const TopBar: React.FC<TopBarProps> = ({
       </div>
 
       <div className="topbar-actions">
-        {onToggleDashboardMode && (
+        {onOpenLovelaceGuide && (
           <button
-            className={`button button-secondary button-topbar ${isDashboardMode ? "button-primary" : ""}`}
-            id="toggle-dashboard-button"
+            className="button button-secondary button-topbar"
+            id="lovelace-guide-button"
             type="button"
-            onClick={onToggleDashboardMode}
-            title={
-              isDashboardMode
-                ? "Cambiar a modo Administración (con códigos QR y configuración)"
-                : "Cambiar a modo Dashboard (control interactivo sin configuración)"
-            }
+            onClick={onOpenLovelaceGuide}
+            title="Ver e instalar tarjeta Liquid Glass para Dashboards de Home Assistant"
           >
             <span className="btn-icon" aria-hidden="true">
-              {isDashboardMode ? "🛠️" : "📱"}
+              📱
             </span>
-            {isDashboardMode ? "Modo Admin" : "Modo Dashboard"}
+            Tarjeta Lovelace
           </button>
         )}
         <button
