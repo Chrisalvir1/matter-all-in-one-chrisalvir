@@ -71,12 +71,24 @@ const profilesByDomain: Record<string, DeviceExportProfile[]> = {
         "Tipo Matter RVC oficial con controles nativos en Apple Home.",
       appleHome: "supported",
     },
+    {
+      id: "thermostat",
+      label: "Calefactor / Termostato",
+      description: "Interruptor mostrado como termostato/calefactor en Apple Home.",
+      appleHome: "supported",
+    },
   ],
   fan: [
     {
       id: "fan",
       label: "Ventilador",
       description: "Control de ventilador Matter.",
+      appleHome: "supported",
+    },
+    {
+      id: "thermostat",
+      label: "Calefactor / Termostato",
+      description: "Ventilador mostrado como termostato/calefactor en Apple Home.",
       appleHome: "supported",
     },
     {

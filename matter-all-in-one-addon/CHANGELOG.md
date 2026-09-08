@@ -1,3 +1,18 @@
+## [1.5.26] - 2026-09-08
+
+### Códigos QR Separados para Plan A (Ventilador) y Plan B (Calefactor) en Govee H7133
+
+- **Códigos QR Independientes por Modo en Govee H7133 (`DeviceModal.tsx`):**
+  - **Plan A (Ventilador Matter):** genera y activa su propio código QR y código numérico manual de emparejamiento exclusivo para vincular como Ventilador en Apple Home / Google Home.
+  - **Plan B (Calefactor / Clima):** genera y activa su propio código QR y código numérico manual de emparejamiento exclusivo e independiente para vincular como Termostato / Calefactor en Apple Home / Google Home.
+  - **Selector de Códigos QR por Pestañas:** Pestañas directas `[ 🌪️ QR Plan A: Ventilador ]` y `[ 🔥 QR Plan B: Calefactor ]` con insignias de estado en tiempo real (🏠 Vinculado, ✓ QR Listo, Inactivo).
+  - **Resolución Instantánea de Códigos QR:** si una entidad está publicada pero su código no se ha recibido en el estado inicial, el panel muestra un botón interactivo `[ ⚡ Mostrar Código QR de Emparejamiento ]` que abre la ventana de comisionado automáticamente.
+  - **Controles de Accesorio Específicos por Plan:** Sincronización, Multi-Admin y Desconexión limpios dirigidos al accesorio seleccionado.
+- **Soporte de Perfil Termostato para Conmutadores y Ventiladores (`device-profiles.ts`):**
+  - Añadido el perfil oficial `thermostat` a los dominios `switch` y `fan` para permitir la exportación de interruptores como termostatos/calefactores nativos en Matter.
+- **Retorno Directo de Códigos de Emparejamiento en el Backend (`platform.ts`):**
+  - `manualRegister` ahora devuelve inmediatamente `pairingCode` y `manualPairingCode` tras activar la entidad o el dispositivo compuesto.
+
 ## [1.5.25] - 2026-09-08
 
 ### Detección Precisa de Modelos Govee, Asistente Plan A/B para H7133 y Arte Dinámico para Barras y Luces Exteriores

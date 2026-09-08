@@ -583,7 +583,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       // behavior. The compatibility state is still used by older
       // Matterbridge runtimes, but a commissioned node may no longer mirror
       // its codes into serverNode.state.commissioning.
+      const behaviorGetterState =
+        typeof endpoint?.serverNode?.behaviors?.get === "function"
+          ? endpoint.serverNode.behaviors.get("commissioning")?.state ??
+            endpoint.serverNode.behaviors.get("commissioningServer")?.state
+          : undefined;
       const behaviorCommissioning =
+        behaviorGetterState ??
         endpoint?.serverNode?.behaviors?.commissioning?.state ??
         endpoint?.serverNode?.behaviors?.commissioning ??
         endpoint?.serverNode?.commissioning?.state ??
@@ -1381,7 +1387,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     );
     this.log.notice(`[Runtime] Matterbridge runtime: ${mbVersion}`);
     this.log.notice(`[Runtime] Node.js runtime: ${process.version}`);
-    this.log.notice(`[Runtime] Plugin version: 1.5.25`);
+    this.log.notice(`[Runtime] Plugin version: 1.5.26`);
     await this.loadEntityDiagnostics();
     await this.startUiServer();
     this.startMatterConnectionMonitor();
@@ -2193,7 +2199,12 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
    */
   public async manualRegister(
     entityId: string,
-  ): Promise<{ success: boolean; error?: string }> {
+  ): Promise<{
+    success: boolean;
+    error?: string;
+    pairingCode?: string | null;
+    manualPairingCode?: string | null;
+  }> {
     if (entityId.startsWith("mqtt.")) {
       try {
         this.exportedDevices.add(entityId);
@@ -2246,7 +2257,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         try {
           await this.activateComposite(entityId);
           await this.saveExportedDevices();
-          return { success: true };
+          const ep = this.getMatterEndpointForEntity(entityId, composite.deviceId);
+          const conn = ep ? this.getMatterConnectionInfo(ep) : undefined;
+          return {
+            success: true,
+            pairingCode: conn?.pairingCode ?? null,
+            manualPairingCode: conn?.manualPairingCode ?? null,
+          };
         } catch (error) {
           this.exportedDevices.delete(key);
           throw error;
@@ -2258,7 +2275,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       this.log.notice(
         `Manually exported bridged endpoint for ${entityId}${isMultiSwitch ? " (multi-switch: independent QR)" : ""}`,
       );
-      return { success: true };
+      const ep = this.getMatterEndpointForEntity(entityId);
+      const conn = ep ? this.getMatterConnectionInfo(ep) : undefined;
+      return {
+        success: true,
+        pairingCode: conn?.pairingCode ?? null,
+        manualPairingCode: conn?.manualPairingCode ?? null,
+      };
     } catch (err) {
       this.exportedDevices.delete(entityId);
       this.log.error(`Failed to manually register ${entityId}: ${err}`);

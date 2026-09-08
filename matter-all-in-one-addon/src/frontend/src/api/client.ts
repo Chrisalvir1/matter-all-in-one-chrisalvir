@@ -79,7 +79,12 @@ export const api = {
     request(`/cameras/${encodeURIComponent(cameraId)}`, { method: "DELETE" }),
 
   toggleExport: (entityId: string, exported: boolean) =>
-    request(`/${exported ? "register" : "unregister"}/${encodeURIComponent(entityId)}`, {
+    request<{
+      success: boolean;
+      error?: string;
+      pairingCode?: string | null;
+      manualPairingCode?: string | null;
+    }>(`/${exported ? "register" : "unregister"}/${encodeURIComponent(entityId)}`, {
       method: "POST",
     }),
 
