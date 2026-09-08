@@ -76,6 +76,7 @@ interface BrandConfig {
 
 const BRAND_CONFIGS: BrandConfig[] = [
   { name: "Apple", pattern: /\b(apple|homepod|apple\s*tv|airplay)\b/i, brandColor: "255, 255, 255", accentColor: "#F5F5F7" },
+  { name: "Amazon", pattern: /\b(amazon|alexa|echo|fire\s*tv|firestick)\b/i, brandColor: "0, 202, 255", accentColor: "#00CAFF" },
   { name: "Govee", pattern: /\bgovee\b/i, brandColor: "0, 240, 255", accentColor: "#00F0FF" },
   { name: "Tapo", pattern: /\btapo\b/i, brandColor: "0, 150, 255", accentColor: "#0096FF" },
   { name: "TP-Link", pattern: /\b(tp-link|tplink|kasa)\b/i, brandColor: "0, 168, 150", accentColor: "#00A896" },
@@ -346,8 +347,26 @@ export function detectDevice(device: DeviceRecord): DetectedDeviceInfo {
   let category = "Dispositivo Inteligente";
 
   // Priority classification based on real technical domain first
-  if (hasMediaPlayer || poolLower.includes("apple tv") || poolLower.includes("homepod")) {
-    if (poolLower.includes("apple tv") || poolLower.includes("appletv") || poolLower.includes("tv")) {
+  if (hasMediaPlayer || poolLower.includes("apple tv") || poolLower.includes("homepod") || poolLower.includes("alexa") || poolLower.includes("echo") || poolLower.includes("fire tv")) {
+    if (poolLower.includes("echo show") || (poolLower.includes("echo") && poolLower.includes("show"))) {
+      subtype = "echo_show";
+      category = "Pantalla Inteligente Echo Show";
+    } else if (poolLower.includes("echo studio")) {
+      subtype = "echo_studio";
+      category = "Altavoz Echo Studio";
+    } else if (poolLower.includes("echo pop")) {
+      subtype = "echo_pop";
+      category = "Altavoz Echo Pop";
+    } else if (poolLower.includes("echo dot") || poolLower.includes("dot")) {
+      subtype = "echo_dot";
+      category = "Altavoz Echo Dot";
+    } else if (poolLower.includes("fire tv") || poolLower.includes("firestick") || poolLower.includes("fire_tv")) {
+      subtype = "fire_tv";
+      category = "Amazon Fire TV";
+    } else if (poolLower.includes("echo") || poolLower.includes("alexa")) {
+      subtype = "echo_dot";
+      category = "Altavoz Amazon Echo";
+    } else if (poolLower.includes("apple tv") || poolLower.includes("appletv") || poolLower.includes("tv")) {
       subtype = "apple_tv";
       category = "Apple TV 4K";
     } else if (poolLower.includes("mini")) {
@@ -357,6 +376,18 @@ export function detectDevice(device: DeviceRecord): DetectedDeviceInfo {
       subtype = "homepod";
       category = "Apple HomePod";
     }
+  } else if (
+    poolLower.includes("apagador") ||
+    poolLower.includes("wall switch") ||
+    poolLower.includes("cb03") ||
+    poolLower.includes("3 gang") ||
+    poolLower.includes("2 gang") ||
+    poolLower.includes("triple") ||
+    (hasSwitch && device.entities.filter((e) => e.domain === "switch").length >= 2)
+  ) {
+    const swCount = device.entities.filter((e) => e.domain === "switch" || e.domain === "light").length;
+    subtype = "multi_gang_switch";
+    category = swCount >= 3 ? "Apagador Táctil Triple" : swCount === 2 ? "Apagador Táctil Doble" : "Apagador Inteligente de Pared";
   } else if (hasFan) {
     if (isTowerFan) {
       subtype = "tower_fan";
@@ -466,6 +497,12 @@ export function detectDevice(device: DeviceRecord): DetectedDeviceInfo {
       else if (subtype === "apple_tv") category = "Apple TV 4K";
       else if (subtype === "homepod_mini") category = "Apple HomePod Mini";
       else if (subtype === "homepod") category = "Apple HomePod";
+      else if (subtype === "echo_dot") category = "Amazon Echo Dot";
+      else if (subtype === "echo_show") category = "Pantalla Echo Show";
+      else if (subtype === "echo_studio") category = "Altavoz Echo Studio";
+      else if (subtype === "echo_pop") category = "Altavoz Echo Pop";
+      else if (subtype === "fire_tv") category = "Amazon Fire TV";
+      else if (subtype === "multi_gang_switch") category = "Apagador Táctil de Pared";
       else if (subtype === "ceiling_fan") category = "Ventilador de Techo con Luz";
       else if (subtype === "tower_fan") category = "Ventilador de Torre";
       else if (subtype === "doorbell") category = "Timbre con Video";

@@ -100,18 +100,38 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
       : 0
     : 0;
 
+  // Rich media info extraction
+  const mediaTitle = (primaryAttributes.media_title || primaryAttributes.track_name || "") as string;
+  const mediaSeries = (primaryAttributes.media_series_title || "") as string;
+  const mediaSeason = primaryAttributes.media_season;
+  const mediaEpisode = primaryAttributes.media_episode;
+  const mediaArtist = (primaryAttributes.media_artist || primaryAttributes.artist || "") as string;
+  const mediaApp = (primaryAttributes.app_name || primaryAttributes.source || "") as string;
+  const mediaChannel = (primaryAttributes.media_channel || "") as string;
+  const entityPicture = primaryAttributes.entity_picture as string | undefined;
+
+  let fullMediaText = "";
+  if (mediaSeries) {
+    fullMediaText = `${mediaSeries}${mediaTitle ? ` · ${mediaTitle}` : ""}${
+      mediaSeason && mediaEpisode ? ` (T${mediaSeason}:E${mediaEpisode})` : ""
+    }`;
+  } else if (mediaTitle) {
+    fullMediaText = `${mediaTitle}${mediaArtist ? ` · ${mediaArtist}` : ""}`;
+  } else if (mediaChannel) {
+    fullMediaText = mediaChannel;
+  } else if (mediaApp) {
+    fullMediaText = mediaApp;
+  }
+
   // Status text description
   let statusSummary = isOn ? "Activo" : "Inactivo";
   if (primaryDomain === "media_player") {
-    const title = primaryAttributes.media_title;
-    const app = primaryAttributes.app_name;
-    const artist = primaryAttributes.media_artist;
     const isPlaying = primaryState === "playing";
     const isPaused = primaryState === "paused";
     statusSummary = isPlaying
-      ? `${title || app || "Reproduciendo"}${artist ? ` · ${artist}` : ""}`
+      ? fullMediaText || "Reproduciendo"
       : isPaused
-      ? "En pausa"
+      ? `En pausa${fullMediaText ? ` · ${fullMediaText}` : ""}`
       : "Inactivo";
   } else if (primaryDomain === "fan") {
     const pct = primaryAttributes.percentage;
@@ -296,6 +316,75 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
         </div>
         <h3 title={device.name}>{device.name}</h3>
         {!isComposite && <p className="device-status-highlight">{statusSummary}</p>}
+        {/* Rich Now Playing banner for Apple TV / HomePod / Media Players */}
+        {primaryDomain === "media_player" && (primaryState === "playing" || primaryState === "paused") && (
+          <div
+            className="now-playing-pill"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              marginTop: "6px",
+              marginBottom: "4px",
+              padding: "5px 8px",
+              background: "rgba(0, 0, 0, 0.45)",
+              border: "1px solid rgba(255, 255, 255, 0.1)",
+              borderRadius: "10px",
+              backdropFilter: "blur(10px)",
+            }}
+          >
+            {entityPicture ? (
+              <img
+                src={entityPicture}
+                alt="Carátula"
+                style={{
+                  width: "30px",
+                  height: "30px",
+                  borderRadius: "6px",
+                  objectFit: "cover",
+                  flexShrink: 0,
+                  boxShadow: "0 2px 6px rgba(0,0,0,0.5)",
+                }}
+              />
+            ) : (
+              <span style={{ fontSize: "14px", flexShrink: 0 }}>
+                {mediaApp.toLowerCase().includes("netflix")
+                  ? "🍿"
+                  : mediaApp.toLowerCase().includes("youtube")
+                  ? "▶️"
+                  : "🎬"}
+              </span>
+            )}
+            <div style={{ minWidth: 0, flex: 1 }}>
+              {mediaApp && (
+                <div
+                  style={{
+                    fontSize: "0.62rem",
+                    fontWeight: 750,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.05em",
+                    color: "#38BDF8",
+                    lineHeight: 1.1,
+                  }}
+                >
+                  {mediaApp}
+                </div>
+              )}
+              <div
+                style={{
+                  fontSize: "0.74rem",
+                  fontWeight: 600,
+                  color: "#F8FAFC",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                {fullMediaText || "Reproduciendo contenido"}
+              </div>
+            </div>
+          </div>
+        )}
         <p className="device-meta">{originText}</p>
 
         {/* Official Apple Color Picker for HomePod and HomePod Mini */}
@@ -481,36 +570,121 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
             </div>
           )}
 
-          {/* Switch sub-controls (e.g. oscillation, etc.) */}
-          {switchEntities.map((sw) => (
+          {/* Multi-Gang Switch row: When there are 2 or more switches, render them horizontally in a sleek grid! */}
+          {switchEntities.length >= 2 ? (
             <div
-              key={sw.entityId}
+              className="multi-gang-switches-cluster"
               style={{
                 display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                padding: "6px 10px",
-                background: "rgba(0, 0, 0, 0.18)",
-                border: "1px solid rgba(255, 255, 255, 0.06)",
-                borderRadius: "10px",
+                flexDirection: "column",
+                gap: "6px",
+                background: "rgba(0, 0, 0, 0.28)",
+                border: "1px solid rgba(255, 255, 255, 0.08)",
+                borderRadius: "14px",
+                padding: "8px 10px",
+                backdropFilter: "blur(10px)",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <AppleHomeIcon domain="switch" state={sw.state} size={18} />
-                <span style={{ fontSize: "0.76rem", color: "#e2e8f0" }}>{sw.name || "Interruptor"}</span>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "#94A3B8" }}>
+                  Canales ({switchEntities.length})
+                </span>
+                <span style={{ fontSize: "0.72rem", color: switchEntities.some(s => s.state === "on") ? "#38BDF8" : "#64748B" }}>
+                  {switchEntities.filter(s => s.state === "on").length} encendido{switchEntities.filter(s => s.state === "on").length === 1 ? "" : "s"}
+                </span>
               </div>
-              <button
-                type="button"
-                className={`quick-toggle-pill ${sw.state === "on" ? "active" : "inactive"}`}
-                onClick={(e) => handleToggleEntity(e, sw.entityId)}
-                disabled={togglingEntityIds.has(sw.entityId)}
-                style={{ transform: "scale(0.85)" }}
-                title={`Conmutar ${sw.name || "interruptor"}`}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: `repeat(${Math.min(switchEntities.length, 4)}, 1fr)`,
+                  gap: "6px",
+                }}
               >
-                <span className="toggle-thumb" />
-              </button>
+                {switchEntities.map((sw, idx) => {
+                  const isSwOn = sw.state === "on";
+                  const cleanLabel = sw.name
+                    ? sw.name.replace(device.name, "").replace(/interruptor/i, "").trim() || `Canal ${idx + 1}`
+                    : `Canal ${idx + 1}`;
+                  return (
+                    <button
+                      key={sw.entityId}
+                      type="button"
+                      onClick={(e) => handleToggleEntity(e, sw.entityId)}
+                      disabled={togglingEntityIds.has(sw.entityId)}
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        padding: "8px 4px",
+                        borderRadius: "10px",
+                        background: isSwOn ? "rgba(56, 189, 248, 0.18)" : "rgba(255, 255, 255, 0.04)",
+                        border: isSwOn ? "1.5px solid #38BDF8" : "1px solid rgba(255, 255, 255, 0.08)",
+                        cursor: "pointer",
+                        transition: "all 0.15s ease",
+                        gap: "4px",
+                      }}
+                      title={`Conmutar ${sw.name || `Canal ${idx + 1}`}`}
+                    >
+                      <AppleHomeIcon domain="switch" state={sw.state} size={18} />
+                      <span
+                        style={{
+                          fontSize: "0.72rem",
+                          fontWeight: 600,
+                          color: isSwOn ? "#FFFFFF" : "#94A3B8",
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          maxWidth: "100%",
+                        }}
+                      >
+                        {cleanLabel}
+                      </span>
+                      <span
+                        style={{
+                          width: "6px",
+                          height: "6px",
+                          borderRadius: "50%",
+                          background: isSwOn ? "#38BDF8" : "rgba(255, 255, 255, 0.25)",
+                          boxShadow: isSwOn ? "0 0 8px #38BDF8" : "none",
+                        }}
+                      />
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          ))}
+          ) : (
+            switchEntities.map((sw) => (
+              <div
+                key={sw.entityId}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "6px 10px",
+                  background: "rgba(0, 0, 0, 0.18)",
+                  border: "1px solid rgba(255, 255, 255, 0.06)",
+                  borderRadius: "10px",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <AppleHomeIcon domain="switch" state={sw.state} size={18} />
+                  <span style={{ fontSize: "0.76rem", color: "#e2e8f0" }}>{sw.name || "Interruptor"}</span>
+                </div>
+                <button
+                  type="button"
+                  className={`quick-toggle-pill ${sw.state === "on" ? "active" : "inactive"}`}
+                  onClick={(e) => handleToggleEntity(e, sw.entityId)}
+                  disabled={togglingEntityIds.has(sw.entityId)}
+                  style={{ transform: "scale(0.85)" }}
+                  title={`Conmutar ${sw.name || "interruptor"}`}
+                >
+                  <span className="toggle-thumb" />
+                </button>
+              </div>
+            ))
+          )}
         </div>
       )}
 

@@ -198,4 +198,50 @@ describe("deviceDetector - Apple TV, HomePod official colors, chandelier & visua
     expect(hpDet.subtype).toBe("homepod_mini");
     expect(hpDet.appleColor).toBe("yellow");
   });
+
+  it("detects Amazon Echo devices accurately with signature cyan accent", () => {
+    const echoDevice: DeviceRecord = {
+      id: "dev_echo_dot",
+      name: "Echo Dot Sala",
+      manufacturer: "Amazon",
+      model: "Echo Dot (5th Gen)",
+      entities: [
+        {
+          entityId: "media_player.echo_dot_sala",
+          name: "Echo Dot Sala",
+          domain: "media_player",
+          state: "playing",
+          attributes: { media_title: "Rock Classics", media_artist: "Spotify" },
+          exported: true,
+          hasIssue: false,
+          origin: "homeassistant",
+        },
+      ],
+    };
+
+    const echoInfo = detectDevice(echoDevice);
+    expect(echoInfo.brand).toBe("Amazon");
+    expect(echoInfo.subtype).toBe("echo_dot");
+    expect(echoInfo.category).toBe("Altavoz Echo Dot");
+    expect(echoInfo.accentColor).toBe("#00CAFF");
+  });
+
+  it("detects Tuya multi-gang wall switches like CB03-SBL Apagador Triple accurately", () => {
+    const switchDevice: DeviceRecord = {
+      id: "dev_tuya_switch",
+      name: "Apagador Triple",
+      manufacturer: "Tuya",
+      model: "CB03-SBL",
+      entities: [
+        { entityId: "switch.apagador_triple_1", name: "Canal 1", domain: "switch", state: "on", exported: true, hasIssue: false, origin: "homeassistant" },
+        { entityId: "switch.apagador_triple_2", name: "Canal 2", domain: "switch", state: "off", exported: true, hasIssue: false, origin: "homeassistant" },
+        { entityId: "switch.apagador_triple_3", name: "Canal 3", domain: "switch", state: "on", exported: true, hasIssue: false, origin: "homeassistant" },
+      ],
+    };
+
+    const switchInfo = detectDevice(switchDevice);
+    expect(switchInfo.brand).toBe("Tuya");
+    expect(switchInfo.subtype).toBe("multi_gang_switch");
+    expect(switchInfo.category).toBe("Apagador Táctil Triple");
+  });
 });

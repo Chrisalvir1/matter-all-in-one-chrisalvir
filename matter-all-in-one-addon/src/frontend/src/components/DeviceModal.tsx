@@ -442,6 +442,13 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                     <option value="homepod_mini">Apple HomePod Mini (Esfera Acústica 3D)</option>
                     <option value="homepod">Apple HomePod (Cilindro Acústico Grande)</option>
                   </optgroup>
+                  <optgroup label="📦 Amazon Alexa & Echo">
+                    <option value="echo_dot">Amazon Echo Dot (Esfera Acústica con Anillo Cyan)</option>
+                    <option value="echo_show">Amazon Echo Show (Pantalla Inteligente 16:9)</option>
+                    <option value="echo_studio">Amazon Echo Studio (Altavoz de Alta Fidelidad)</option>
+                    <option value="echo_pop">Amazon Echo Pop (Altavoz Compacto Frontal)</option>
+                    <option value="fire_tv">Amazon Fire TV (Stick HDMI con Control)</option>
+                  </optgroup>
                   <optgroup label="🔒 Seguridad y Cámaras">
                     <option value="doorbell">Timbre con Video y Campanilla</option>
                     <option value="ptz_camera">Cámara Domo PTZ 360°</option>
@@ -449,7 +456,8 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                     <option value="keypad_deadbolt">Cerradura con Teclado Numérico Táctil</option>
                     <option value="smart_turn_lock">Cerrojo Giratorio Interior</option>
                   </optgroup>
-                  <optgroup label="🔌 Energía y Otros">
+                  <optgroup label="🔌 Interruptores y Energía">
+                    <option value="multi_gang_switch">Apagador Táctil de Pared (Multi-Canal)</option>
                     <option value="smart_plug">Enchufe Inteligente con Medidor</option>
                   </optgroup>
                 </select>

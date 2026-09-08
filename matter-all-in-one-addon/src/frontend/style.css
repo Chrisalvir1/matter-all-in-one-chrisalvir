@@ -558,14 +558,15 @@ h2 {
 
 .device-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(235px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+  align-items: start;
 }
 .device-card {
   position: relative;
   display: flex;
   flex-direction: column;
-  min-height: 224px;
+  min-height: 200px;
   padding: 18px;
   overflow: hidden;
   border-radius: 18px;

@@ -122,134 +122,229 @@ export const DeviceCardArt: React.FC<DeviceCardArtProps> = ({
         />
       )}
 
-      {/* 3. Vector Artwork Canvas */}
-      <div
-        style={{
-          position: "absolute",
-          top: 0,
-          right: 0,
-          width: visualType === "apple_tv" || visualType === "chandelier" ? "100%" : "230px",
-          height: "100%",
-          opacity: isOn ? 0.96 : 0.45,
-          transition: "opacity 0.6s ease",
-          maskImage:
-            visualType === "apple_tv"
-              ? "linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0.85) 60%, transparent 100%)"
-              : visualType === "chandelier"
-              ? "linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0.9) 70%, transparent 100%)"
-              : "linear-gradient(to left, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.55) 60%, transparent 98%)",
-          WebkitMaskImage:
-            visualType === "apple_tv"
-              ? "linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0.85) 60%, transparent 100%)"
-              : visualType === "chandelier"
-              ? "linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0.9) 70%, transparent 100%)"
-              : "linear-gradient(to left, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.55) 60%, transparent 98%)",
-        }}
-      >
-        <svg
-          viewBox={visualType === "apple_tv" || visualType === "chandelier" ? "0 0 280 140" : "0 0 160 140"}
-          width="100%"
-          height="100%"
-          preserveAspectRatio={visualType === "apple_tv" ? "xMidYMid slice" : "xMaxYMid meet"}
+      {/* 3. Chandelier (Suspended directly from card ceiling at top: 0, y = 0) */}
+      {visualType === "chandelier" && (
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            height: "125px",
+            overflow: "hidden",
+            pointerEvents: "none",
+            zIndex: 1,
+            opacity: isOn ? 0.98 : 0.45,
+            transition: "opacity 0.5s ease",
+            maskImage: "linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0.95) 75%, transparent 100%)",
+            WebkitMaskImage: "linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0.95) 75%, transparent 100%)",
+          }}
         >
-          <defs>
-            {/* Lamp light cone gradient matching exact Kelvin / RGB */}
-            <radialGradient id="lampConeGrad" cx="50%" cy="0%" r="90%">
-              <stop
-                offset="0%"
-                stopColor={`rgb(${lr}, ${lg}, ${lb})`}
-                stopOpacity={isLightOn ? 0.65 * lightBrightness : 0.05}
-              />
-              <stop
-                offset="60%"
-                stopColor={`rgb(${lr}, ${lg}, ${lb})`}
-                stopOpacity={isLightOn ? 0.22 * lightBrightness : 0}
-              />
-              <stop offset="100%" stopColor="#0B0D13" stopOpacity="0" />
-            </radialGradient>
+          <svg
+            viewBox="0 0 280 125"
+            width="100%"
+            height="125"
+            preserveAspectRatio="xMidYMin meet"
+          >
+            <defs>
+              <radialGradient id="chandelierLightCone" cx="50%" cy="0%" r="90%">
+                <stop offset="0%" stopColor={`rgb(${lr}, ${lg}, ${lb})`} stopOpacity={isLightOn ? 0.65 * lightBrightness : 0.05} />
+                <stop offset="60%" stopColor={`rgb(${lr}, ${lg}, ${lb})`} stopOpacity={isLightOn ? 0.22 * lightBrightness : 0} />
+                <stop offset="100%" stopColor="#0B0D13" stopOpacity="0" />
+              </radialGradient>
+            </defs>
+            <g className="art-chandelier">
+              {/* Ceiling Rose Canopy at y = 0 */}
+              <rect x="131" y="0" width="18" height="6" rx="2" fill="#D97706" stroke="rgba(255,255,255,0.3)" strokeWidth="1" />
+              {/* Interlinked Chain */}
+              <ellipse cx="140" cy="9" rx="2.5" ry="4" fill="none" stroke="#F59E0B" strokeWidth="1.8" />
+              <ellipse cx="140" cy="16" rx="2.5" ry="4" fill="none" stroke="#F59E0B" strokeWidth="1.8" />
+              <ellipse cx="140" cy="23" rx="2.5" ry="4" fill="none" stroke="#F59E0B" strokeWidth="1.8" />
+              {/* Central Baroque Spindle Body */}
+              <path d="M136 28 L144 28 L142 46 L138 46 Z" fill="#B45309" stroke="#F59E0B" strokeWidth="1" />
+              <circle cx="140" cy="46" r="6.5" fill="#D97706" stroke="#FEF3C7" strokeWidth="1.2" />
 
-            {/* Pedestal Stand Gradient (Matte Black / Obsidian) */}
-            <linearGradient id="pedestalGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#252A34" />
-              <stop offset="100%" stopColor="#111317" />
-            </linearGradient>
+              {/* Symmetrical Curved Ornate Arms */}
+              <path d="M140 46 C120 46 104 36 104 30" fill="none" stroke="#F59E0B" strokeWidth="2.5" strokeLinecap="round" />
+              <path d="M140 46 C160 46 176 36 176 30" fill="none" stroke="#F59E0B" strokeWidth="2.5" strokeLinecap="round" />
+              <path d="M140 46 C116 50 82 40 82 32" fill="none" stroke="#D97706" strokeWidth="2.2" strokeLinecap="round" />
+              <path d="M140 46 C164 50 198 40 198 32" fill="none" stroke="#D97706" strokeWidth="2.2" strokeLinecap="round" />
 
-            {/* Tower Body Gradient (Sleek Matte Black / Obsidian) */}
-            <linearGradient id="towerChassisGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#111318" />
-              <stop offset="35%" stopColor="#222733" />
-              <stop offset="70%" stopColor="#1A1F29" />
-              <stop offset="100%" stopColor="#0D0E13" />
-            </linearGradient>
-
-            {/* Dynamic Breeze Wave Gradient */}
-            <linearGradient id="breezeGrad" x1="100%" y1="0%" x2="0%" y2="0%">
-              <stop offset="0%" stopColor="#007AFF" stopOpacity="0.75" />
-              <stop offset="100%" stopColor="#38BDF8" stopOpacity="0" />
-            </linearGradient>
-
-            {/* Siri Rainbow Fluid Gradient for HomePod Touch Disc */}
-            <linearGradient id="siriWaveGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#00F0FF" />
-              <stop offset="35%" stopColor="#AF52DE" />
-              <stop offset="70%" stopColor="#FF2D55" />
-              <stop offset="100%" stopColor="#FF9500" />
-            </linearGradient>
-
-            {/* LED Neon Strip Gradient */}
-            <linearGradient id="neonStripGrad" x1="0%" y1="100%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor={isLightOn ? lightHex : "#334155"} />
-              <stop offset="50%" stopColor={isLightOn ? "#00F0FF" : "#475569"} />
-              <stop offset="100%" stopColor={isLightOn ? "#AF52DE" : "#1E293B"} />
-            </linearGradient>
-          </defs>
-
-          {/* ── 1. APPLE TV 4K CON PANTALLA 16:9 Y DEGRADADO A NEGRO ── */}
-          {visualType === "apple_tv" && (
-            <g className="art-apple-tv">
-              {/* 16:9 TV Screen Bezel */}
-              <rect x="50" y="8" width="180" height="98" rx="6" fill="#0A0D14" stroke="#2D3748" strokeWidth="2" />
-              {/* Screen Inner Display */}
-              <rect x="53" y="11" width="174" height="92" rx="4" fill="#04060A" />
-
-              {/* Contenido en Vivo: Si hay carátula de Home Assistant se muestra dentro de la TV */}
-              {entityPicture ? (
-                <image
-                  href={entityPicture}
-                  x="53"
-                  y="11"
-                  width="174"
-                  height="92"
-                  preserveAspectRatio="xMidYMid slice"
-                  opacity={isMediaActive ? 0.95 : 0.4}
-                />
-              ) : (
-                <g opacity={isMediaActive ? 0.9 : 0.3}>
-                  {/* Apple TV Cinematic Glow */}
-                  <rect x="53" y="11" width="174" height="92" fill="url(#siriWaveGrad)" opacity="0.18" />
-                  {/* Apple Logo Silhouette in Center of Screen */}
-                  <path
-                    d="M138 52 C138 48 141 45 143 43 C141 40 137 38 133 38 C128 38 126 40 123 40 C120 40 117 38 113 38 C107 38 102 43 102 51 C102 61 113 75 119 75 C122 75 124 73 127 73 C130 73 132 75 136 75 C142 75 147 67 149 63 C143 60 138 56 138 52 Z M130 36 C132 33 134 29 133 26 C130 26 126 28 124 31 C122 34 121 37 122 40 C126 40 129 38 130 36 Z"
-                    fill="#FFFFFF"
-                    transform="scale(0.55) translate(100, 15)"
-                    opacity="0.8"
+              {/* Candle Sleeves, Flames & Crystal Drops */}
+              {[82, 104, 140, 176, 198].map((x, i) => (
+                <g key={i}>
+                  <ellipse cx={x} cy={i === 2 ? 22 : 30} rx="6" ry="2.2" fill="#D97706" />
+                  <rect x={x - 2} y={i === 2 ? 12 : 20} width="4" height="10" rx="1" fill="#FEF3C7" />
+                  <ellipse
+                    cx={x}
+                    cy={i === 2 ? 8 : 16}
+                    rx="2.5"
+                    ry="4.5"
+                    fill={isLightOn ? lightHex : "#D97706"}
+                    style={{ filter: isLightOn ? `drop-shadow(0 0 6px ${lightHex})` : undefined }}
                   />
-                  <text x="140" y="78" textAnchor="middle" fill="#94A3B8" fontSize="8" fontWeight="600" letterSpacing="0.1em">
-                    {attributes?.app_name || (isMediaActive ? "REPRODUCIENDO" : "APPLE TV 4K")}
-                  </text>
+                  <line x1={x} y1={i === 2 ? 24 : 32} x2={x} y2={i === 2 ? 34 : 42} stroke="rgba(255,255,255,0.6)" strokeWidth="1" strokeDasharray="1.5 1.5" />
+                  <polygon
+                    points={`${x},${i === 2 ? 34 : 42} ${x - 3},${i === 2 ? 40 : 48} ${x},${i === 2 ? 46 : 54} ${x + 3},${i === 2 ? 40 : 48}`}
+                    fill="rgba(255,255,255,0.85)"
+                    stroke="#BAE6FD"
+                    strokeWidth="0.8"
+                  />
                 </g>
+              ))}
+
+              {/* Bottom Crystal Finial Drop */}
+              <circle cx="140" cy="56" r="4" fill="rgba(255,255,255,0.9)" stroke="#F59E0B" strokeWidth="1" />
+
+              {/* Downward radiance cone */}
+              {isLightOn && (
+                <polygon
+                  points="110,40 170,40 240,125 40,125"
+                  fill="url(#chandelierLightCone)"
+                  style={{ mixBlendMode: "screen" }}
+                />
               )}
-
-              {/* TV Metallic Stand Base */}
-              <rect x="126" y="106" width="28" height="6" rx="2" fill="#4B5563" />
-              <rect x="115" y="112" width="50" height="3" rx="1.5" fill="#374151" />
-
-              {/* Physical Apple TV Puck Unit (Black box on table) */}
-              <rect x="195" y="104" width="32" height="14" rx="4" fill="#0A0B0E" stroke="rgba(255,255,255,0.18)" strokeWidth="1.2" />
-              {/* Apple TV White Status Power LED */}
-              <circle cx="211" cy="114" r="1.4" fill={isMediaActive ? "#FFFFFF" : "#64748B"} style={{ filter: isMediaActive ? "drop-shadow(0 0 4px #FFF)" : undefined }} />
             </g>
-          )}
+          </svg>
+        </div>
+      )}
+
+      {/* 4. Main Right-Aligned Vector Artwork Canvas */}
+      {visualType !== "chandelier" && (
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            right: 0,
+            width: "220px",
+            height: "100%",
+            opacity: isOn ? 0.96 : 0.45,
+            transition: "opacity 0.6s ease",
+            maskImage:
+              visualType === "apple_tv"
+                ? "linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0.85) 65%, transparent 100%)"
+                : "linear-gradient(to left, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.55) 60%, transparent 98%)",
+            WebkitMaskImage:
+              visualType === "apple_tv"
+                ? "linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0.85) 65%, transparent 100%)"
+                : "linear-gradient(to left, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.55) 60%, transparent 98%)",
+          }}
+        >
+          <svg
+            viewBox="0 0 160 140"
+            width="100%"
+            height="100%"
+            preserveAspectRatio="xMaxYMid meet"
+          >
+            <defs>
+              {/* Lamp light cone gradient matching exact Kelvin / RGB */}
+              <radialGradient id="lampConeGrad" cx="50%" cy="0%" r="90%">
+                <stop
+                  offset="0%"
+                  stopColor={`rgb(${lr}, ${lg}, ${lb})`}
+                  stopOpacity={isLightOn ? 0.65 * lightBrightness : 0.05}
+                />
+                <stop
+                  offset="60%"
+                  stopColor={`rgb(${lr}, ${lg}, ${lb})`}
+                  stopOpacity={isLightOn ? 0.22 * lightBrightness : 0}
+                />
+                <stop offset="100%" stopColor="#0B0D13" stopOpacity="0" />
+              </radialGradient>
+
+              {/* Pedestal Stand Gradient (Matte Black / Obsidian) */}
+              <linearGradient id="pedestalGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#252A34" />
+                <stop offset="100%" stopColor="#111317" />
+              </linearGradient>
+
+              {/* Tower Body Gradient (Sleek Matte Black / Obsidian) */}
+              <linearGradient id="towerChassisGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#111318" />
+                <stop offset="35%" stopColor="#222733" />
+                <stop offset="70%" stopColor="#1A1F29" />
+                <stop offset="100%" stopColor="#0D0E13" />
+              </linearGradient>
+
+              {/* Dynamic Breeze Wave Gradient */}
+              <linearGradient id="breezeGrad" x1="100%" y1="0%" x2="0%" y2="0%">
+                <stop offset="0%" stopColor="#007AFF" stopOpacity="0.75" />
+                <stop offset="100%" stopColor="#38BDF8" stopOpacity="0" />
+              </linearGradient>
+
+              {/* Siri Rainbow Fluid Gradient for HomePod Touch Disc */}
+              <linearGradient id="siriWaveGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#00F0FF" />
+                <stop offset="35%" stopColor="#AF52DE" />
+                <stop offset="70%" stopColor="#FF2D55" />
+                <stop offset="100%" stopColor="#FF9500" />
+              </linearGradient>
+
+              {/* LED Neon Strip Gradient */}
+              <linearGradient id="neonStripGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor={isLightOn ? lightHex : "#334155"} />
+                <stop offset="50%" stopColor={isLightOn ? "#00F0FF" : "#475569"} />
+                <stop offset="100%" stopColor={isLightOn ? "#AF52DE" : "#1E293B"} />
+              </linearGradient>
+            </defs>
+
+            {/* ── 1. APPLE TV 4K REAL HARDWARE (PUCK + REMOTE + 16:9 SCREEN) ── */}
+            {visualType === "apple_tv" && (
+              <g className="art-apple-tv">
+                {/* 16:9 Screen in background */}
+                <rect x="25" y="10" width="125" height="70" rx="5" fill="#0A0D14" stroke="#2D3748" strokeWidth="1.5" />
+                <rect x="27" y="12" width="121" height="66" rx="3.5" fill="#04060A" />
+
+                {/* Screen Content: Poster / Video or Apple TV Aerial Gradient */}
+                {entityPicture ? (
+                  <image
+                    href={entityPicture}
+                    x="27"
+                    y="12"
+                    width="121"
+                    height="66"
+                    preserveAspectRatio="xMidYMid slice"
+                    opacity={isMediaActive ? 0.95 : 0.4}
+                  />
+                ) : (
+                  <g opacity={isMediaActive ? 0.9 : 0.35}>
+                    <rect x="27" y="12" width="121" height="66" fill="url(#siriWaveGrad)" opacity="0.15" />
+                    {/* Apple Logo in Screen Center */}
+                    <path
+                      d="M138 52 C138 48 141 45 143 43 C141 40 137 38 133 38 C128 38 126 40 123 40 C120 40 117 38 113 38 C107 38 102 43 102 51 C102 61 113 75 119 75 C122 75 124 73 127 73 C130 73 132 75 136 75 C142 75 147 67 149 63 C143 60 138 56 138 52 Z M130 36 C132 33 134 29 133 26 C130 26 126 28 124 31 C122 34 121 37 122 40 C126 40 129 38 130 36 Z"
+                      fill="#FFFFFF"
+                      transform="scale(0.35) translate(195, 75)"
+                      opacity="0.85"
+                    />
+                  </g>
+                )}
+
+                {/* Glass specular screen reflection */}
+                <polygon points="27,12 85,12 45,78 27,78" fill="rgba(255,255,255,0.06)" />
+
+                {/* Real Apple TV 4K Hardware Unit (Obsidian Puck) */}
+                <rect x="52" y="86" width="46" height="20" rx="6" fill="#10131A" stroke="#252A36" strokeWidth="1.4" />
+                <rect x="54" y="87.5" width="42" height="17" rx="4.5" fill="#181D26" />
+                {/* Apple TV logo on puck */}
+                <path
+                  d="M138 52 C138 48 141 45 143 43 C141 40 137 38 133 38 C128 38 126 40 123 40 C120 40 117 38 113 38 C107 38 102 43 102 51 C102 61 113 75 119 75 C122 75 124 73 127 73 C130 73 132 75 136 75 C142 75 147 67 149 63 C143 60 138 56 138 52 Z M130 36 C132 33 134 29 133 26 C130 26 126 28 124 31 C122 34 121 37 122 40 C126 40 129 38 130 36 Z"
+                  fill="#374151"
+                  transform="scale(0.18) translate(370, 480)"
+                />
+                <text x="82" y="99" fill="#4B5563" fontSize="5" fontWeight="700">tv</text>
+                {/* Pinpoint White Status Power LED */}
+                <circle cx="75" cy="103" r="1.3" fill={isMediaActive ? "#FFFFFF" : "#64748B"} style={{ filter: isMediaActive ? "drop-shadow(0 0 3px #FFF)" : undefined }} />
+
+                {/* Siri Remote in Silver Aluminum */}
+                <rect x="110" y="80" width="16" height="42" rx="4" fill="#CBD5E1" stroke="#94A3B8" strokeWidth="1" />
+                <circle cx="118" cy="90" r="5" fill="#1E293B" />
+                <circle cx="118" cy="90" r="2.2" fill="#0F172A" />
+                <rect x="114" y="98" width="3" height="3" rx="0.8" fill="#475569" />
+                <rect x="119" y="98" width="3" height="3" rx="0.8" fill="#475569" />
+                <rect x="114" y="103" width="3" height="3" rx="0.8" fill="#475569" />
+                <rect x="119" y="103" width="3" height="6" rx="0.8" fill="#475569" />
+              </g>
+            )}
 
           {/* ── 2. APPLE HOMEPOD MINI (COLOR OFICIAL APPLE) ── */}
           {visualType === "homepod_mini" && (
@@ -308,56 +403,144 @@ export const DeviceCardArt: React.FC<DeviceCardArtProps> = ({
             </g>
           )}
 
-          {/* ── 4. CANDELABRO ORNAMENTAL SUSPENDIDO DEL TECHO ── */}
-          {visualType === "chandelier" && (
-            <g className="art-chandelier">
-              {/* Ceiling Rose Canopy & Hanging Metallic Chain */}
-              <rect x="132" y="0" width="16" height="8" rx="2" fill="#B45309" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
-              <line x1="140" y1="8" x2="140" y2="32" stroke="#D97706" strokeWidth="2.5" strokeDasharray="3 2" />
+          {/* ── 4. AMAZON ECHO DOT (ESFERA CON ANILLO CYAN ILUMINADO) ── */}
+          {(visualType === "echo_dot" || visualType === "echo") && (
+            <g className="art-echo-dot">
+              {/* 3D Spherical Acoustic Fabric Body */}
+              <circle cx="95" cy="70" r="38" fill="#1E2430" stroke="rgba(255,255,255,0.12)" strokeWidth="1.5" />
+              <ellipse cx="95" cy="70" rx="36" ry="35" fill="#29303D" opacity="0.4" />
 
-              {/* Central Baroque Spindle Body */}
-              <path d="M136 32 L144 32 L142 54 L138 54 Z" fill="#92400E" />
-              <circle cx="140" cy="54" r="6" fill="#B45309" stroke="#D97706" strokeWidth="1.2" />
+              {/* Signature Alexa Cyan/Blue Illuminated LED Ring at the base */}
+              <ellipse
+                cx="95"
+                cy="104"
+                rx="32"
+                ry="6"
+                fill="none"
+                stroke={isMediaActive || isOn ? "#00CAFF" : "rgba(0, 202, 255, 0.3)"}
+                strokeWidth="2.5"
+                style={{
+                  filter: isMediaActive || isOn ? "drop-shadow(0 0 8px #00CAFF) drop-shadow(0 2px 12px #007AFF)" : "none",
+                }}
+              />
+              {/* Table reflection glow */}
+              {(isMediaActive || isOn) && (
+                <ellipse cx="95" cy="110" rx="38" ry="7" fill="#00CAFF" opacity="0.25" style={{ filter: "blur(4px)" }} />
+              )}
 
-              {/* Symmetrical Curved Ornate Arms */}
-              <path d="M140 54 C120 54 104 42 104 36" fill="none" stroke="#D97706" strokeWidth="2.5" strokeLinecap="round" />
-              <path d="M140 54 C160 54 176 42 176 36" fill="none" stroke="#D97706" strokeWidth="2.5" strokeLinecap="round" />
-              <path d="M140 54 C116 58 84 46 84 38" fill="none" stroke="#B45309" strokeWidth="2.2" strokeLinecap="round" />
-              <path d="M140 54 C164 58 196 46 196 38" fill="none" stroke="#B45309" strokeWidth="2.2" strokeLinecap="round" />
+              {/* Top 4 Hardware Buttons (+, -, mute, action) */}
+              <circle cx="85" cy="40" r="3" fill="#334155" />
+              <text x="85" y="42" textAnchor="middle" fill="#CBD5E1" fontSize="5" fontWeight="700">+</text>
+              <circle cx="105" cy="40" r="3" fill="#334155" />
+              <text x="105" y="41.5" textAnchor="middle" fill="#CBD5E1" fontSize="6" fontWeight="700">-</text>
+              <circle cx="95" cy="35" r="2.8" fill="#334155" />
+              <circle cx="95" cy="45" r="2.8" fill="#334155" />
+            </g>
+          )}
 
-              {/* Candle Cups & Candle Sleeves */}
-              {[84, 104, 140, 176, 196].map((x, i) => (
-                <g key={i}>
-                  {/* Bobeche dish */}
-                  <ellipse cx={x} cy={i === 2 ? 28 : 36} rx="6" ry="2.2" fill="#D97706" />
-                  {/* Candle sleeve */}
-                  <rect x={x - 2} y={i === 2 ? 18 : 26} width="4" height="10" fill="#FEF3C7" />
-                  {/* Glowing Flame */}
-                  <ellipse
-                    cx={x}
-                    cy={i === 2 ? 14 : 22}
-                    rx="2.5"
-                    ry="4.5"
-                    fill={isLightOn ? lightHex : "#78350F"}
-                    style={{ filter: isLightOn ? `drop-shadow(0 0 6px ${lightHex})` : undefined }}
+          {/* ── 5. AMAZON ECHO SHOW (PANTALLA INTELIGENTE 16:9) ── */}
+          {visualType === "echo_show" && (
+            <g className="art-echo-show">
+              {/* Fabric Wedge Body */}
+              <polygon points="35,108 135,108 128,32 42,32" fill="#1E2430" stroke="rgba(255,255,255,0.12)" strokeWidth="1.2" />
+              {/* Front 16:9 Display Frame */}
+              <rect x="42" y="36" width="88" height="64" rx="4" fill="#0A0D14" stroke="#334155" strokeWidth="1.2" />
+              <rect x="45" y="39" width="82" height="58" rx="2.5" fill="#04060A" />
+
+              {/* Screen Content: Poster or Alexa Ambient UI */}
+              {entityPicture ? (
+                <image href={entityPicture} x="45" y="39" width="82" height="58" preserveAspectRatio="xMidYMid slice" opacity={isMediaActive ? 0.95 : 0.4} />
+              ) : (
+                <g opacity={isMediaActive ? 0.9 : 0.4}>
+                  <rect x="45" y="39" width="82" height="58" fill="url(#siriWaveGrad)" opacity="0.12" />
+                  <text x="86" y="66" textAnchor="middle" fill="#00CAFF" fontSize="11" fontWeight="700" fontFamily="sans-serif">
+                    12:45
+                  </text>
+                  <text x="86" y="78" textAnchor="middle" fill="#94A3B8" fontSize="5.5" fontWeight="600">
+                    {attributes?.app_name || "Alexa"}
+                  </text>
+                </g>
+              )}
+
+              {/* Camera Shutter on top */}
+              <circle cx="86" cy="34" r="1.5" fill="#000" stroke="#64748B" strokeWidth="0.6" />
+            </g>
+          )}
+
+          {/* ── 6. AMAZON ECHO STUDIO (ALTAVOZ ALTA FIDELIDAD) ── */}
+          {visualType === "echo_studio" && (
+            <g className="art-echo-studio">
+              {/* Cylindrical Acoustic Mesh */}
+              <rect x="68" y="24" width="56" height="88" rx="14" fill="#181D26" stroke="rgba(255,255,255,0.15)" strokeWidth="1.4" />
+              {/* Horizontal Aperture Slot for Bass Reflex */}
+              <rect x="74" y="82" width="44" height="12" rx="6" fill="#0A0D14" />
+              <ellipse
+                cx="96"
+                cy="88"
+                rx="20"
+                ry="4"
+                fill="none"
+                stroke={isMediaActive ? "#00CAFF" : "#334155"}
+                strokeWidth="1.5"
+                style={{ filter: isMediaActive ? "drop-shadow(0 0 6px #00CAFF)" : "none" }}
+              />
+              {/* Top Light Ring */}
+              <ellipse
+                cx="96"
+                cy="28"
+                rx="22"
+                ry="5"
+                fill="none"
+                stroke={isMediaActive ? "#00CAFF" : "rgba(255,255,255,0.2)"}
+                strokeWidth="1.5"
+              />
+            </g>
+          )}
+
+          {/* ── 7. AMAZON FIRE TV ── */}
+          {visualType === "fire_tv" && (
+            <g className="art-fire-tv">
+              {/* Fire TV Streaming Stick */}
+              <rect x="50" y="42" width="40" height="65" rx="5" fill="#14171F" stroke="#2D3748" strokeWidth="1.2" />
+              <rect x="62" y="32" width="16" height="10" rx="1" fill="#94A3B8" />
+              <path d="M60 74 Q70 80 80 74" fill="none" stroke="#FF9900" strokeWidth="2" strokeLinecap="round" />
+              {/* Alexa Voice Remote */}
+              <rect x="100" y="34" width="18" height="76" rx="5" fill="#1E2430" stroke="#334155" strokeWidth="1.2" />
+              <circle cx="109" cy="46" r="5" fill="#00CAFF" style={{ filter: "drop-shadow(0 0 4px #00CAFF)" }} />
+              <circle cx="109" cy="62" r="5" fill="#0F172A" />
+            </g>
+          )}
+
+          {/* ── 8. APAGADOR INTELIGENTE DE PARED (MULTI-GANG GLASS SWITCH) ── */}
+          {visualType === "multi_gang_switch" && (
+            <g className="art-multi-gang-switch">
+              {/* Tempered Glass Wall Plate */}
+              <rect x="52" y="22" width="68" height="96" rx="6" fill="#0E121A" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5" />
+              {/* Glass Bevel Chamfer */}
+              <rect x="55" y="25" width="62" height="90" rx="4" fill="#161B26" />
+              {/* Specular Diagonal Glass Glare */}
+              <polygon points="55,25 90,25 65,115 55,115" fill="rgba(255,255,255,0.05)" />
+
+              {/* 3 Capacitive Touch Sensor Rings */}
+              {[42, 70, 98].map((y, idx) => (
+                <g key={idx}>
+                  <circle
+                    cx="86"
+                    cy={y}
+                    r="9"
+                    fill="#0F141E"
+                    stroke={isOn ? "#007AFF" : "rgba(255,255,255,0.25)"}
+                    strokeWidth="1.6"
+                    style={{ filter: isOn ? "drop-shadow(0 0 6px #007AFF)" : "none" }}
                   />
-                  {/* Hanging Crystal Teardrops */}
-                  <line x1={x} y1={i === 2 ? 30 : 38} x2={x} y2={i === 2 ? 40 : 48} stroke="rgba(255,255,255,0.4)" strokeWidth="1" />
-                  <circle cx={x} cy={i === 2 ? 41 : 49} r="2" fill="rgba(255,255,255,0.7)" />
+                  <circle
+                    cx="86"
+                    cy={y}
+                    r="3"
+                    fill={isOn ? "#38BDF8" : "#475569"}
+                  />
                 </g>
               ))}
-
-              {/* Bottom Crystal Finial Drop */}
-              <circle cx="140" cy="64" r="3.5" fill="rgba(255,255,255,0.8)" stroke="#D97706" strokeWidth="1" />
-
-              {/* Volumetric downward radiance cone */}
-              {isLightOn && (
-                <polygon
-                  points="110,45 170,45 230,140 50,140"
-                  fill="url(#lampConeGrad)"
-                  style={{ mixBlendMode: "screen" }}
-                />
-              )}
             </g>
           )}
 
@@ -714,6 +897,7 @@ export const DeviceCardArt: React.FC<DeviceCardArtProps> = ({
           )}
         </svg>
       </div>
-    </div>
-  );
+    )}
+  </div>
+);
 };

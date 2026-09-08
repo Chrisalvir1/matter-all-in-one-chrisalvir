@@ -1,3 +1,21 @@
+## [1.5.23] - 2026-09-07
+
+### Compatibilidad Completa Amazon Alexa & Echo, Apagadores Triples Compactos, Candelabros en Techo y Renderizado de Hardware Real
+
+- **Soporte Nativo y Detección de Marca Amazon / Alexa (`deviceDetector.ts`):**
+  - Reconocimiento de **Amazon Echo Dot**, **Echo Show**, **Echo Studio**, **Echo Pop**, **Echo Spot** y **Amazon Fire TV**.
+  - Distintivo oficial de marca Amazon en cian neón (`#00CAFF`) e identificación de modelos.
+  - Ilustración de hardware fotorrealista para **Echo Dot** con el icónico anillo circular LED cian/azul iluminado en la base con reflejo sobre la superficie, botones superiores de control (+, -, silenciar, acción), y pantalla táctil HD en **Echo Show**.
+- **Apagadores Triples y Multi-Canal Compactos (`DeviceCard.tsx`):**
+  - Fin a las tarjetas alargadas verticalmente: los interruptores de múltiples canales (e.g. Tuya `CB03-SBL`, apagadores triples o dobles) ahora se organizan en una fila/cuadrícula horizontal compacta `[ Canal 1 ] [ Canal 2 ] [ Canal 3 ]` con botones táctiles interactivos de un toque y LED de estado.
+  - Reducción de más de 160px de altura vertical por tarjeta, eliminando el estiramiento forzado de tarjetas vecinas mediante `align-items: start` en el grid principal.
+- **Anclaje Físico Estricto de Candelabros al Techo (`DeviceCardArt.tsx`):**
+  - El candelabro cuelga exclusivamente desde el borde superior de la tarjeta (`top: 0`, `y = 0`) con florón superior, cadena eslabonada de latón y lágrimas de cristal facetado que proyectan iluminación cálida descendente, impidiendo que flote en el centro de la tarjeta.
+- **Apple TV 4K Real y Tarjeta "Now Playing" Detallada (`DeviceCard.tsx` & `DeviceCardArt.tsx`):**
+  - Eliminado el texto vectorial distorsionado de fondo.
+  - Renderizado fotorrealista del hardware físico de Apple TV 4K (puck negro obsidiana con bisel satinado y LED blanco de estado) junto al mando Siri Remote en aluminio plateado con clickpad circular negro.
+  - Despliegue en vivo del contenido exacto en reproducción: nombre de app en pastilla oficial (Netflix, YouTube, Disney+, Apple TV+, etc.), título de serie, temporada y episodio (`T1:E3`), o título de canción y artista con carátula real.
+
 ## [1.5.22] - 2026-09-07
 
 ### Apple TV 16:9 con Carátula en Vivo, HomePod con Paleta Oficial Apple, Candelabros en Techo, Ventiladores Negro Mate y Selector Manual de Siluetas
