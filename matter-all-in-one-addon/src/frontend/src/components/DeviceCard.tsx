@@ -3,6 +3,7 @@ import { DeviceRecord } from "../types";
 import { AppleHomeIcon } from "./AppleHomeIcon";
 import { DeviceCardArt } from "./DeviceCardArt";
 import { LiquidSlider } from "./LiquidSlider";
+import { extractLightColor } from "../utils/colors";
 import { api } from "../api/client";
 
 interface DeviceCardProps {
@@ -42,7 +43,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
 
   const isComposite = (Boolean(fanEntity) && Boolean(lightEntity)) || controllableCount > 1;
 
-  // Domain priority: Fan, Climate, Lock, Cover takes precedence over light or switch
+  // Domain priority: If fan exists (like Ventilador de Sala), prioritize fan representation!
   const domainPriority = ["climate", "fan", "lock", "cover", "vacuum", "camera", "humidifier", "light", "switch", "sensor"];
   const sortedEntities = [...device.entities].sort((a, b) => {
     const idxA = domainPriority.indexOf(a.domain);
@@ -78,6 +79,18 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
     primaryState === "cool" ||
     primaryState === "open" ||
     primaryState === "unlocked";
+
+  // Light color & brightness for card illumination
+  const activeLight = lightEntity || (primaryDomain === "light" ? primaryEntity : undefined);
+  const isLightActive = activeLight ? activeLight.state === "on" : false;
+  const [lr, lg, lb] = extractLightColor(activeLight?.attributes);
+  const lightBrightness = activeLight
+    ? typeof activeLight.attributes?.brightness === "number"
+      ? activeLight.attributes.brightness / 255
+      : isLightActive
+      ? 1.0
+      : 0
+    : 0;
 
   // Status text description
   let statusSummary = isOn ? "Activo" : "Inactivo";
@@ -122,6 +135,16 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
     }
   };
 
+  // Card dynamic illumination style based on Kelvin / RGB
+  const cardIlluminationStyle: React.CSSProperties = isLightActive
+    ? {
+        borderColor: `rgba(${lr}, ${lg}, ${lb}, ${Math.min(0.7, 0.35 * lightBrightness + 0.25)})`,
+        boxShadow: `0 16px 40px rgba(0, 0, 0, 0.55), 0 0 ${Math.round(
+          28 * lightBrightness
+        )}px rgba(${lr}, ${lg}, ${lb}, ${0.35 * lightBrightness}), inset 0 1px 0 rgba(${lr}, ${lg}, ${lb}, ${0.5 * lightBrightness})`,
+      }
+    : {};
+
   return (
     <article
       className={`device-card apple-home-card liquid-glass-card ${
@@ -130,13 +153,29 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
         exported === 0 ? "is-unexported" : "is-exported"
       }`}
       onClick={isDashboardMode && isControllable && primaryEntity ? (e) => handleToggleEntity(e, primaryEntity.entityId) : onConfigure}
-      style={{ position: "relative" }}
+      style={{
+        position: "relative",
+        ...cardIlluminationStyle,
+      }}
     >
-      {/* Dynamic Apple Home Artwork Background with Deep Dark Gradient */}
+      {/* Dynamic Apple Home Artwork Background with Spinning Blades & Kelvin Illumination */}
       <DeviceCardArt
         domain={primaryDomain}
         state={primaryState}
         attributes={primaryAttributes}
+        fanPercentage={
+          typeof fanEntity?.attributes?.percentage === "number"
+            ? fanEntity.attributes.percentage
+            : primaryDomain === "fan" && typeof primaryAttributes?.percentage === "number"
+            ? primaryAttributes.percentage
+            : (fanEntity ? fanEntity.state === "on" : primaryDomain === "fan" && isOn)
+            ? 100
+            : 0
+        }
+        isFanOn={fanEntity ? fanEntity.state === "on" : primaryDomain === "fan" && isOn}
+        lightRgb={[lr, lg, lb]}
+        lightBrightness={lightBrightness}
+        isLightOn={isLightActive}
       />
 
       {/* Card Header & Controls (z-index: 2 for absolute click priority) */}
@@ -204,19 +243,21 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
             gap: "8px",
           }}
         >
-          {/* Fan sub-control */}
+          {/* Fan sub-control with spinning icon & speed slider */}
           {fanEntity && (
             <div
               style={{
-                background: "rgba(0, 0, 0, 0.26)",
-                border: "1px solid rgba(255, 255, 255, 0.08)",
+                background: "rgba(0, 0, 0, 0.28)",
+                backdropFilter: "blur(12px)",
+                WebkitBackdropFilter: "blur(12px)",
+                border: "1px solid rgba(255, 255, 255, 0.09)",
                 borderRadius: "14px",
                 padding: "8px 10px",
               }}
             >
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <AppleHomeIcon domain="fan" state={fanEntity.state} attributes={fanEntity.attributes} size={22} />
+                  <AppleHomeIcon domain="fan" state={fanEntity.state} attributes={fanEntity.attributes} size={24} />
                   <div>
                     <div style={{ fontSize: "0.82rem", fontWeight: 600, color: "#f8fafc" }}>
                       {fanEntity.name || "Ventilador"}
@@ -257,24 +298,34 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
             </div>
           )}
 
-          {/* Light sub-control */}
+          {/* Light sub-control with glowing icon, Kelvin hue & dimmer slider */}
           {lightEntity && (
             <div
               style={{
-                background: "rgba(0, 0, 0, 0.26)",
-                border: "1px solid rgba(255, 255, 255, 0.08)",
+                background: "rgba(0, 0, 0, 0.28)",
+                backdropFilter: "blur(12px)",
+                WebkitBackdropFilter: "blur(12px)",
+                border: isLightActive
+                  ? `1px solid rgba(${lr}, ${lg}, ${lb}, 0.35)`
+                  : "1px solid rgba(255, 255, 255, 0.09)",
                 borderRadius: "14px",
                 padding: "8px 10px",
+                transition: "border-color 0.4s ease",
               }}
             >
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <AppleHomeIcon domain="light" state={lightEntity.state} attributes={lightEntity.attributes} size={22} />
+                  <AppleHomeIcon domain="light" state={lightEntity.state} attributes={lightEntity.attributes} size={24} />
                   <div>
                     <div style={{ fontSize: "0.82rem", fontWeight: 600, color: "#f8fafc" }}>
                       {lightEntity.name || "Luz"}
                     </div>
-                    <div style={{ fontSize: "0.72rem", color: lightEntity.state === "on" ? "#fbbf24" : "#94a3b8" }}>
+                    <div
+                      style={{
+                        fontSize: "0.72rem",
+                        color: lightEntity.state === "on" ? `rgb(${lr}, ${lg}, ${lb})` : "#94a3b8",
+                      }}
+                    >
                       {lightEntity.state === "on"
                         ? `Encendida${
                             lightEntity.attributes?.brightness
@@ -307,14 +358,14 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                     ? 100
                     : 0
                 }
-                color="var(--apple-yellow, #ffd159)"
+                color={`rgb(${lr}, ${lg}, ${lb})`}
                 label="Brillo luz"
                 onRefresh={onRefresh}
               />
             </div>
           )}
 
-          {/* Switch sub-controls (e.g. oscillation, nightlight, etc.) */}
+          {/* Switch sub-controls (e.g. oscillation, etc.) */}
           {switchEntities.map((sw) => (
             <div
               key={sw.entityId}
@@ -361,7 +412,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                   ? 100
                   : 0
               }
-              color="var(--apple-yellow, #ffd159)"
+              color={`rgb(${lr}, ${lg}, ${lb})`}
               label="Brillo"
               onRefresh={onRefresh}
             />

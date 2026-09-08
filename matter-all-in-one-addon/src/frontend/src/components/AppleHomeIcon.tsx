@@ -1,4 +1,5 @@
 import React from "react";
+import { extractLightColor, rgbToHex } from "../utils/colors";
 
 interface AppleHomeIconProps {
   domain: string;
@@ -21,18 +22,11 @@ export const AppleHomeIcon: React.FC<AppleHomeIconProps> = ({
 
   // Fan speed calculation
   const percentage = typeof attributes.percentage === "number" ? attributes.percentage : isOn ? 100 : 0;
-  const fanDurationSec = percentage > 0 ? Math.max(0.35, Math.min(2.2, (100 / percentage) * 0.75)) : 0;
+  const fanDurationSec = percentage > 0 ? Math.max(0.18, Math.min(2.4, (100 / Math.max(10, percentage)) * 0.55)) : 0;
 
-  // Light color calculation
-  let lightColor = "#FFD159"; // Apple Home default warm yellow
-  if (attributes.rgb_color && Array.isArray(attributes.rgb_color)) {
-    lightColor = `rgb(${attributes.rgb_color.join(",")})`;
-  } else if (attributes.color_temp_kelvin) {
-    const k = attributes.color_temp_kelvin;
-    if (k < 3000) lightColor = "#FFB347";
-    else if (k < 4500) lightColor = "#FFE4B5";
-    else lightColor = "#D4EBFF";
-  }
+  // Exact Light color calculation from Kelvin or RGB
+  const lightRgb = extractLightColor(attributes);
+  const lightColor = rgbToHex(lightRgb);
 
   // Common SVG wrapper style
   const svgStyle: React.CSSProperties = {

@@ -1,3 +1,18 @@
+## [1.5.20] - 2026-09-07
+
+### Animación Cinemática de Aspas Rotando en Vivo e Iluminación Volumétrica Kelvin / RGB de Tarjeta
+
+- **Aspas de Ventilador Rotando Físicamente en la Ilustración (`DeviceCardArt.tsx`):**
+  - Incorporadas 3 aspas aerodinámicas en la silueta central del ventilador que **rotan visiblemente en 360° en tiempo real** cuando el ventilador está encendido.
+  - La velocidad de giro se calcula de forma dinámica y continua (`0.18s` a 100% hasta `2.4s` a 10%), reflejando fielmente la velocidad real del ventilador en Home Assistant a 120 FPS.
+- **Iluminación Volumétrica de la Tarjeta según Kelvin y Brillo Real:**
+  - El fondo de cristal líquido, bordes y cono de luz de la tarjeta se **iluminan físicamente** con la temperatura de color exacta (`color_temp_kelvin`, e.g. 2700K ámbar cálido, 4000K neutro, 6500K luz de día fría) o color RGB.
+  - La intensidad del resplandor responde proporcionalmente al brillo (`brightness`) de la luz.
+- **Sincronización Total en Dispositivos Mixtos (Ventilador + Luz):**
+  - Si el ventilador y la luz están encendidos al mismo tiempo, las aspas giran a la velocidad correspondiente mientras toda la escena y el ventilador se bañan en el halo de luz Kelvin.
+- **Motor Matemático Preciso Kelvin a RGB (`colors.ts`):**
+  - Algoritmo de Planckian Locus para calcular coordenadas RGB exactas a partir de cualquier valor de temperatura de color o mireds.
+
 ## [1.5.19] - 2026-09-07
 
 ### Control Total de Dispositivos Compuestos: Ventilador + Luz, Dimmer Deslizante y Regulador de Velocidad Directo
