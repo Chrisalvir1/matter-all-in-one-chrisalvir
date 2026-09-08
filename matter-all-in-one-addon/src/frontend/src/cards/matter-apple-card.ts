@@ -47,7 +47,7 @@ export interface DeviceProfile {
   matterExport: string;
 }
 
-const CARD_VERSION = "1.5.18";
+const CARD_VERSION = "1.5.19";
 
 // ── Color Utilities ───────────────────────────────────────────────────────────
 function kelvinToRgb(kelvin: number): [number, number, number] {

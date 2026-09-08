@@ -1381,7 +1381,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     );
     this.log.notice(`[Runtime] Matterbridge runtime: ${mbVersion}`);
     this.log.notice(`[Runtime] Node.js runtime: ${process.version}`);
-    this.log.notice(`[Runtime] Plugin version: 1.5.18`);
+    this.log.notice(`[Runtime] Plugin version: 1.5.19`);
     await this.loadEntityDiagnostics();
     await this.startUiServer();
     this.startMatterConnectionMonitor();
@@ -3812,6 +3812,59 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               "Content-Type": "application/json; charset=utf-8",
             });
             res.end(JSON.stringify({ success: true, entityId }));
+          } catch (err: any) {
+            res.writeHead(500, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ success: false, error: err?.message || String(err) }));
+          }
+          return;
+        }
+
+        // POST /api/custom/entity-set-value/:entityId
+        if (
+          req.method === "POST" &&
+          pathname.startsWith("/api/custom/entity-set-value/")
+        ) {
+          const entityId = decodeURIComponent(
+            pathname.substring("/api/custom/entity-set-value/".length),
+          );
+          const [domain] = entityId.split(".");
+          try {
+            const body = await this.readRequestBody(req);
+            const data = JSON.parse(body || "{}");
+            const numVal = Math.max(0, Math.min(100, Math.round(Number(data.value) || 0)));
+
+            if (domain === "light") {
+              if (numVal === 0) {
+                await this.ha.callService("light", "turn_off", entityId);
+              } else {
+                await this.ha.callService("light", "turn_on", entityId, {
+                  brightness_pct: numVal,
+                });
+              }
+            } else if (domain === "fan") {
+              if (numVal === 0) {
+                await this.ha.callService("fan", "turn_off", entityId);
+              } else {
+                await this.ha.callService("fan", "set_percentage", entityId, {
+                  percentage: numVal,
+                });
+              }
+            } else if (domain === "cover") {
+              await this.ha.callService("cover", "set_cover_position", entityId, {
+                position: numVal,
+              });
+            } else if (domain === "climate") {
+              await this.ha.callService("climate", "set_temperature", entityId, {
+                temperature: numVal,
+              });
+            }
+
+            res.writeHead(200, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ success: true, entityId, value: numVal }));
           } catch (err: any) {
             res.writeHead(500, {
               "Content-Type": "application/json; charset=utf-8",

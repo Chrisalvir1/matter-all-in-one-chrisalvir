@@ -88,6 +88,12 @@ export const api = {
       method: "POST",
     }),
 
+  setEntityValue: (entityId: string, value: number) =>
+    request(`/entity-set-value/${encodeURIComponent(entityId)}`, {
+      method: "POST",
+      body: JSON.stringify({ value }),
+    }),
+
   setDeviceProfile: (entityId: string, profile: string) =>
     request(`/device-profile/${encodeURIComponent(entityId)}`, {
       method: "POST",

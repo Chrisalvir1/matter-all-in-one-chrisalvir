@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { DeviceRecord } from "../types";
 import { AppleHomeIcon } from "./AppleHomeIcon";
 import { DeviceCardArt } from "./DeviceCardArt";
+import { LiquidSlider } from "./LiquidSlider";
 import { api } from "../api/client";
 
 interface DeviceCardProps {
@@ -23,12 +24,33 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
     propDashboardMode ||
     (typeof window !== "undefined" &&
       new URLSearchParams(window.location.search).get("mode") === "dashboard");
-  const [isToggling, setIsToggling] = useState(false);
+  const [togglingEntityIds, setTogglingEntityIds] = useState<Set<string>>(new Set());
+
   const exported = device.entities.filter((e) => e.exported).length;
   const isMqtt = device.entities.some((e) => e.origin === "mqtt" || e.entityId.startsWith("mqtt."));
   const hasIssue = device.entities.some((e) => e.exported && e.hasIssue);
 
-  const primaryEntity = device.entities[0];
+  // Sub-entities breakdown
+  const fanEntity = device.entities.find((e) => e.domain === "fan");
+  const lightEntity = device.entities.find((e) => e.domain === "light");
+  const switchEntities = device.entities.filter((e) => e.domain === "switch");
+  const coverEntity = device.entities.find((e) => e.domain === "cover");
+
+  const controllableCount = device.entities.filter((e) =>
+    ["light", "fan", "switch", "cover", "climate", "lock", "humidifier"].includes(e.domain)
+  ).length;
+
+  const isComposite = (Boolean(fanEntity) && Boolean(lightEntity)) || controllableCount > 1;
+
+  // Domain priority: Fan, Climate, Lock, Cover takes precedence over light or switch
+  const domainPriority = ["climate", "fan", "lock", "cover", "vacuum", "camera", "humidifier", "light", "switch", "sensor"];
+  const sortedEntities = [...device.entities].sort((a, b) => {
+    const idxA = domainPriority.indexOf(a.domain);
+    const idxB = domainPriority.indexOf(b.domain);
+    return (idxA === -1 ? 99 : idxA) - (idxB === -1 ? 99 : idxB);
+  });
+
+  const primaryEntity = sortedEntities[0] || device.entities[0];
   const primaryDomain = primaryEntity?.domain || "switch";
   const primaryState = primaryEntity?.state || "off";
   const primaryAttributes = primaryEntity?.attributes || {};
@@ -81,17 +103,22 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
     statusSummary = `${isOn ? "Abierta" : "Cerrada"}${pos !== undefined ? ` · ${pos}%` : ""}`;
   }
 
-  const handleToggle = async (e: React.MouseEvent) => {
+  const handleToggleEntity = async (e: React.MouseEvent, entityId: string) => {
     e.stopPropagation();
-    if (!primaryEntity || !isControllable || isToggling) return;
-    setIsToggling(true);
+    if (togglingEntityIds.has(entityId)) return;
+
+    setTogglingEntityIds((prev) => new Set(prev).add(entityId));
     try {
-      await api.toggleDeviceState(primaryEntity.entityId);
+      await api.toggleDeviceState(entityId);
       onRefresh?.();
     } catch (err) {
       console.error("Error toggling entity:", err);
     } finally {
-      setIsToggling(false);
+      setTogglingEntityIds((prev) => {
+        const next = new Set(prev);
+        next.delete(entityId);
+        return next;
+      });
     }
   };
 
@@ -102,7 +129,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
       } ${hasIssue ? "needs-attention" : ""} ${
         exported === 0 ? "is-unexported" : "is-exported"
       }`}
-      onClick={isDashboardMode && isControllable ? handleToggle : onConfigure}
+      onClick={isDashboardMode && isControllable && primaryEntity ? (e) => handleToggleEntity(e, primaryEntity.entityId) : onConfigure}
       style={{ position: "relative" }}
     >
       {/* Dynamic Apple Home Artwork Background with Deep Dark Gradient */}
@@ -117,9 +144,9 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
         <button
           type="button"
           className={`card-icon-button ${isControllable ? "is-clickable" : ""}`}
-          onClick={isControllable ? handleToggle : undefined}
+          onClick={isControllable && primaryEntity ? (e) => handleToggleEntity(e, primaryEntity.entityId) : undefined}
           title={isControllable ? `Conmutar ${device.name}` : undefined}
-          disabled={isToggling}
+          disabled={primaryEntity ? togglingEntityIds.has(primaryEntity.entityId) : false}
         >
           <AppleHomeIcon
             domain={primaryDomain}
@@ -142,12 +169,13 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
             )
           )}
 
-          {isControllable && (
+          {/* If single controllable device, show main quick toggle */}
+          {!isComposite && isControllable && primaryEntity && (
             <button
               type="button"
               className={`quick-toggle-pill ${isOn ? "active" : "inactive"}`}
-              onClick={handleToggle}
-              disabled={isToggling}
+              onClick={(e) => handleToggleEntity(e, primaryEntity.entityId)}
+              disabled={togglingEntityIds.has(primaryEntity.entityId)}
               aria-label={isOn ? "Apagar" : "Encender"}
               title={isOn ? "Apagar dispositivo" : "Encender dispositivo"}
             >
@@ -159,11 +187,219 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
 
       <div style={{ position: "relative", zIndex: 2 }}>
         <h3 title={device.name}>{device.name}</h3>
-        <p className="device-status-highlight">{statusSummary}</p>
+        {!isComposite && <p className="device-status-highlight">{statusSummary}</p>}
         <p className="device-meta">{originText}</p>
       </div>
 
-      <div className="tags" style={{ position: "relative", zIndex: 2 }}>
+      {/* COMPOSITE MULTI-ENTITY CONTROLS (e.g. Fan + Light + Switches) */}
+      {isComposite && (
+        <div
+          className="composite-controls-cluster"
+          style={{
+            position: "relative",
+            zIndex: 3,
+            marginTop: "10px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "8px",
+          }}
+        >
+          {/* Fan sub-control */}
+          {fanEntity && (
+            <div
+              style={{
+                background: "rgba(0, 0, 0, 0.26)",
+                border: "1px solid rgba(255, 255, 255, 0.08)",
+                borderRadius: "14px",
+                padding: "8px 10px",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <AppleHomeIcon domain="fan" state={fanEntity.state} attributes={fanEntity.attributes} size={22} />
+                  <div>
+                    <div style={{ fontSize: "0.82rem", fontWeight: 600, color: "#f8fafc" }}>
+                      {fanEntity.name || "Ventilador"}
+                    </div>
+                    <div style={{ fontSize: "0.72rem", color: fanEntity.state === "on" ? "#38bdf8" : "#94a3b8" }}>
+                      {fanEntity.state === "on"
+                        ? `Encendido · ${fanEntity.attributes?.percentage ?? 100}%`
+                        : "Apagado"}
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  className={`quick-toggle-pill ${fanEntity.state === "on" ? "active" : "inactive"}`}
+                  onClick={(e) => handleToggleEntity(e, fanEntity.entityId)}
+                  disabled={togglingEntityIds.has(fanEntity.entityId)}
+                  title="Conmutar ventilador"
+                >
+                  <span className="toggle-thumb" />
+                </button>
+              </div>
+
+              <LiquidSlider
+                entityId={fanEntity.entityId}
+                domain="fan"
+                initialValue={
+                  typeof fanEntity.attributes?.percentage === "number"
+                    ? fanEntity.attributes.percentage
+                    : fanEntity.state === "on"
+                    ? 100
+                    : 0
+                }
+                color="var(--apple-cyan, #007aff)"
+                label="Velocidad ventilador"
+                onRefresh={onRefresh}
+              />
+            </div>
+          )}
+
+          {/* Light sub-control */}
+          {lightEntity && (
+            <div
+              style={{
+                background: "rgba(0, 0, 0, 0.26)",
+                border: "1px solid rgba(255, 255, 255, 0.08)",
+                borderRadius: "14px",
+                padding: "8px 10px",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <AppleHomeIcon domain="light" state={lightEntity.state} attributes={lightEntity.attributes} size={22} />
+                  <div>
+                    <div style={{ fontSize: "0.82rem", fontWeight: 600, color: "#f8fafc" }}>
+                      {lightEntity.name || "Luz"}
+                    </div>
+                    <div style={{ fontSize: "0.72rem", color: lightEntity.state === "on" ? "#fbbf24" : "#94a3b8" }}>
+                      {lightEntity.state === "on"
+                        ? `Encendida${
+                            lightEntity.attributes?.brightness
+                              ? ` · ${Math.round((lightEntity.attributes.brightness / 255) * 100)}%`
+                              : ""
+                          }`
+                        : "Apagada"}
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  className={`quick-toggle-pill ${lightEntity.state === "on" ? "active" : "inactive"}`}
+                  onClick={(e) => handleToggleEntity(e, lightEntity.entityId)}
+                  disabled={togglingEntityIds.has(lightEntity.entityId)}
+                  title="Conmutar luz"
+                >
+                  <span className="toggle-thumb" />
+                </button>
+              </div>
+
+              <LiquidSlider
+                entityId={lightEntity.entityId}
+                domain="light"
+                initialValue={
+                  lightEntity.attributes?.brightness
+                    ? Math.round((lightEntity.attributes.brightness / 255) * 100)
+                    : lightEntity.state === "on"
+                    ? 100
+                    : 0
+                }
+                color="var(--apple-yellow, #ffd159)"
+                label="Brillo luz"
+                onRefresh={onRefresh}
+              />
+            </div>
+          )}
+
+          {/* Switch sub-controls (e.g. oscillation, nightlight, etc.) */}
+          {switchEntities.map((sw) => (
+            <div
+              key={sw.entityId}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "6px 10px",
+                background: "rgba(0, 0, 0, 0.18)",
+                border: "1px solid rgba(255, 255, 255, 0.06)",
+                borderRadius: "10px",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <AppleHomeIcon domain="switch" state={sw.state} size={18} />
+                <span style={{ fontSize: "0.76rem", color: "#e2e8f0" }}>{sw.name || "Interruptor"}</span>
+              </div>
+              <button
+                type="button"
+                className={`quick-toggle-pill ${sw.state === "on" ? "active" : "inactive"}`}
+                onClick={(e) => handleToggleEntity(e, sw.entityId)}
+                disabled={togglingEntityIds.has(sw.entityId)}
+                style={{ transform: "scale(0.85)" }}
+                title={`Conmutar ${sw.name || "interruptor"}`}
+              >
+                <span className="toggle-thumb" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* SINGLE CONTROLLABLE SLIDER (Standalone Light, Fan, Cover) */}
+      {!isComposite && isControllable && primaryEntity && (
+        <div style={{ position: "relative", zIndex: 3, marginTop: 8 }}>
+          {primaryDomain === "light" && (
+            <LiquidSlider
+              entityId={primaryEntity.entityId}
+              domain="light"
+              initialValue={
+                primaryAttributes.brightness
+                  ? Math.round((primaryAttributes.brightness / 255) * 100)
+                  : isOn
+                  ? 100
+                  : 0
+              }
+              color="var(--apple-yellow, #ffd159)"
+              label="Brillo"
+              onRefresh={onRefresh}
+            />
+          )}
+          {primaryDomain === "fan" && (
+            <LiquidSlider
+              entityId={primaryEntity.entityId}
+              domain="fan"
+              initialValue={
+                typeof primaryAttributes.percentage === "number"
+                  ? primaryAttributes.percentage
+                  : isOn
+                  ? 100
+                  : 0
+              }
+              color="var(--apple-cyan, #007aff)"
+              label="Velocidad"
+              onRefresh={onRefresh}
+            />
+          )}
+          {primaryDomain === "cover" && (
+            <LiquidSlider
+              entityId={primaryEntity.entityId}
+              domain="cover"
+              initialValue={
+                typeof primaryAttributes.current_position === "number"
+                  ? primaryAttributes.current_position
+                  : 0
+              }
+              color="var(--apple-blue, #38bdf8)"
+              label="Posición"
+              onRefresh={onRefresh}
+            />
+          )}
+        </div>
+      )}
+
+      <div className="tags" style={{ position: "relative", zIndex: 2, marginTop: "10px" }}>
         {isMqtt && <span className="tag tag-mqtt">📡 MQTT</span>}
         {device.manufacturer && <span className="tag tag-brand">{device.manufacturer}</span>}
         {hasIssue && <span className="tag tag-warning">Revisar</span>}
@@ -178,16 +414,22 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
         <span className="entity-summary">
           {device.entities.length} entidad{device.entities.length === 1 ? "" : "es"}
         </span>
-        <button
-          className="button button-secondary"
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onConfigure();
-          }}
-        >
-          Configurar
-        </button>
+        {!isDashboardMode ? (
+          <button
+            className="button button-secondary"
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onConfigure();
+            }}
+          >
+            Configurar
+          </button>
+        ) : (
+          <span className="dashboard-action-hint">
+            {isControllable ? "Toca para conmutar" : "Solo lectura"}
+          </span>
+        )}
       </div>
     </article>
   );

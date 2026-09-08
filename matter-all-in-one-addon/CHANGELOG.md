@@ -1,3 +1,19 @@
+## [1.5.19] - 2026-09-07
+
+### Control Total de Dispositivos Compuestos: Ventilador + Luz, Dimmer Deslizante y Regulador de Velocidad Directo
+
+- **Priorización Inteligente de Entidad Primaria en Tarjetas:**
+  - Los dispositivos que contienen ventiladores (`fan.*`, e.g. «Ventilador de Sala») adoptan automáticamente el icono cinemático de aspas rotativas y la silueta dinámica de ventilador con brisa, evitando que una bombilla secundaria oculte el propósito principal del equipo.
+- **Controles Múltiples Independientes en Dispositivos Compuestos (`DeviceCard.tsx`):**
+  - Desglose interactivo en la misma tarjeta:
+    - **Subpanel de Ventilador:** Icono animado de aspas, conmutador On/Off dedicado y regulador deslizante táctil de velocidad (0% a 100%).
+    - **Subpanel de Luz:** Icono de filamento con halo luminoso cálido, conmutador On/Off dedicado y dimmer deslizante táctil de brillo (0% a 100%).
+    - **Subpanel de Interruptores:** Conmutadores individuales para oscilación, brisa u otras funciones adicionales.
+- **Regulador Deslizante Líquido Táctil (`LiquidSlider.tsx`):**
+  - Deslizador de cristal líquido con respuesta inmediata a 120 FPS, visualización de porcentaje en tiempo real y comunicación con Home Assistant con debounce de 120ms.
+- **Nuevo Endpoint REST de Ajuste de Nivel (`platform.ts`):**
+  - `POST /api/custom/entity-set-value/:entityId` para regular de forma nativa brillo en luces (`brightness_pct`), velocidad en ventiladores (`percentage`) y posición en persianas (`position`).
+
 ## [1.5.18] - 2026-09-07
 
 ### Corrección Crítica de Referencia `isDashboardMode` en DeviceCard y Typecheck Obligatorio en Build
