@@ -83,6 +83,11 @@ export const api = {
       method: "POST",
     }),
 
+  toggleDeviceState: (entityId: string) =>
+    request(`/entity-toggle/${encodeURIComponent(entityId)}`, {
+      method: "POST",
+    }),
+
   setDeviceProfile: (entityId: string, profile: string) =>
     request(`/device-profile/${encodeURIComponent(entityId)}`, {
       method: "POST",

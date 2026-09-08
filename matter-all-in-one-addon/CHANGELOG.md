@@ -1,3 +1,26 @@
+## [1.5.14] - 2026-09-07
+
+### Tarjetas Liquid Glass estilo Apple Home, Modo Dashboard Operativo y Auditoría de No Exportados
+
+- **Diseño Liquid Glass estilo Apple Home (iOS / macOS / visionOS):**
+  - Tarjetas con acabado de cristal líquido translúcido esmerilado (`backdrop-filter: blur(28px) saturate(190%)`), bordes con reflejos especulares y sombreado profundo de alta fidelidad.
+  - Arte vectorial dinámico con degradado suave hacia negro profundo (`#0B0D13`), asegurando máxima legibilidad y respuesta táctil en primer plano.
+- **Iconos Cinemáticos Apple Home Dinámicos (Sin Emojis Inventados):**
+  - Sustitución completa de emojis genéricos por componentes vectoriales SVG cinéticos nativos (`AppleHomeIcon`).
+  - **Ventilador interactivo:** Aspas que rotan fluidamente a la velocidad porcentual real reportada (`attributes.percentage`), con desaceleración física suave al apagarse.
+  - **Luces:** Filamento activo con halo difuso de emisión en color RGB real o temperatura Kelvin real.
+  - **Termostatos:** Dial térmico con arcos de temperatura dinámicos (cian gélido / naranja calor).
+  - **Persianas y cerraduras:** Visualización porcentual de lamas y animación de pestillo motorizado.
+- **Modo Dashboard Operativo para Home Assistant:**
+  - Selector en la barra superior («Modo Dashboard» vs «Modo Admin») y soporte de URL embebida `?mode=dashboard` para paneles Lovelace de Home Assistant.
+  - En modo Dashboard se ocultan los botones de configuración interna y códigos QR, permitiendo usar las tarjetas Liquid Glass directamente como un panel de control interactivo para encender/apagar y monitorear accesorios al tocar la tarjeta.
+- **Conmutación Interactiva Directa:**
+  - Nuevo endpoint `POST /api/custom/entity-toggle/:entityId` y botón rápido (`quick-toggle-pill`) en la tarjeta para conmutar el estado del equipo en vivo.
+- **Auditoría y Filtro «NO EXPORTADOS (HA)»:**
+  - Nuevo chip de filtro que aísla de inmediato las entidades y dispositivos de Home Assistant que aún no están publicados en Matter, con etiqueta visual ámbar `NO EXPORTADO`.
+- **Compatibilidad Oficial de Repositorio Home Assistant Supervisor:**
+  - Incorporación de `repository.yaml` en la raíz del repositorio para cumplir estrictamente con el estándar de Home Assistant Supervisor y evitar fallos de indexación de versiones.
+
 ## [1.5.13] - 2026-09-07
 
 ### Soporte Integral Govee H7133 (Oscilación Rocking, Termostato Coordinado, Luz RGB) y Matterbridge 3.10.8

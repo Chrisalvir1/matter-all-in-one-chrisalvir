@@ -37,6 +37,28 @@ export const App: React.FC = () => {
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
+  const [isDashboardMode, setIsDashboardMode] = useState<boolean>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("mode") === "dashboard" || params.get("dashboard") === "true") {
+        return true;
+      }
+      return localStorage.getItem("matter_view_mode") === "dashboard";
+    } catch {
+      return false;
+    }
+  });
+
+  const handleToggleDashboardMode = () => {
+    setIsDashboardMode((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("matter_view_mode", next ? "dashboard" : "admin");
+      } catch {}
+      return next;
+    });
+  };
+
   // Filter devices based on search and active tab
   const filteredDevices = useMemo(() => {
     let list = allDevices;
@@ -76,6 +98,12 @@ export const App: React.FC = () => {
             !d.entities.every((e) => e.domain === "camera") &&
             d.entities.some((e) => e.exported && !e.commissioned)
         );
+      case "unexported":
+        return list.filter(
+          (d) =>
+            !d.entities.every((e) => e.domain === "camera") &&
+            !d.entities.some((e) => e.exported)
+        );
       case "mqtt":
         return list.filter((d) =>
           d.entities.some((e) => e.origin === "mqtt" || e.entityId.startsWith("mqtt."))
@@ -91,7 +119,7 @@ export const App: React.FC = () => {
 
   // Group cameras by brand when relevant to active tab
   const cameraBrandGroups = useMemo(() => {
-    if (activeFilter === "iot" || activeFilter === "mqtt") return [];
+    if (activeFilter === "iot" || activeFilter === "mqtt" || activeFilter === "unexported") return [];
 
     const map = new Map<string, { scrypted: CameraRecord[]; ha: DeviceRecord[] }>();
 
@@ -189,6 +217,8 @@ export const App: React.FC = () => {
           status={status}
           onOpenSettings={() => setIsSettingsModalOpen(true)}
           onRestartService={handleRestartService}
+          isDashboardMode={isDashboardMode}
+          onToggleDashboardMode={handleToggleDashboardMode}
         />
 
         {/* Main Content Area */}
@@ -197,13 +227,13 @@ export const App: React.FC = () => {
             <div>
               <p className="eyebrow">
                 <span className="eyebrow-pulse" aria-hidden="true" />
-                PUBLICACIÓN CONTROLADA
+                {isDashboardMode ? "PANEL DE CONTROL OPERATIVO" : "PUBLICACIÓN CONTROLADA"}
               </p>
-              <h2>Tu espacio Matter</h2>
+              <h2>{isDashboardMode ? "Tus Dispositivos en Vivo" : "Tu espacio Matter"}</h2>
               <p className="lead">
-                Activa la entidad principal para publicar el dispositivo físico.
-                Sus capacidades compatibles se integran como endpoints bajo un
-                único código Matter.
+                {isDashboardMode
+                  ? "Control inmediato y monitoreo cinético con diseño Liquid Glass estilo Apple Home."
+                  : "Activa la entidad principal para publicar el dispositivo físico. Sus capacidades compatibles se integran como endpoints bajo un único código Matter."}
               </p>
             </div>
             <label className="search" htmlFor="device-search">
@@ -222,17 +252,19 @@ export const App: React.FC = () => {
           {/* Control Center */}
           <ControlCenter stats={stats} loading={loading} />
 
-          {/* Info Banner */}
-          <section className="info-banner" aria-label="Información de emparejamiento">
-            <span className="info-icon" aria-hidden="true">✦</span>
-            <div>
-              <strong>Un dispositivo, un único acceso Matter</strong>
-              <p>
-                Cada dispositivo físico tiene un único código QR y manual de
-                emparejamiento. Los endpoints integrados comparten ese código.
-              </p>
-            </div>
-          </section>
+          {/* Info Banner (hidden in Dashboard Mode) */}
+          {!isDashboardMode && (
+            <section className="info-banner" aria-label="Información de emparejamiento">
+              <span className="info-icon" aria-hidden="true">✦</span>
+              <div>
+                <strong>Un dispositivo, un único acceso Matter</strong>
+                <p>
+                  Cada dispositivo físico tiene un único código QR y manual de
+                  emparejamiento. Los endpoints integrados comparten ese código.
+                </p>
+              </div>
+            </section>
+          )}
 
           {/* Toolbar */}
           <div className="toolbar">
@@ -245,6 +277,8 @@ export const App: React.FC = () => {
                 ? `${stats.pairedTotal} accesorios vinculados en Matter`
                 : activeFilter === "unpaired"
                 ? `${stats.unpairedTotal} accesorios pendientes de emparejar`
+                : activeFilter === "unexported"
+                ? `${filteredDevices.length} dispositivos en Home Assistant listos para publicar en Matter`
                 : activeFilter === "mqtt"
                 ? `${stats.mqttCount} dispositivos MQTT`
                 : activeFilter === "issues"
@@ -293,6 +327,8 @@ export const App: React.FC = () => {
                     device={device}
                     searchQuery={searchQuery}
                     onConfigure={() => setSelectedDevice(device)}
+                    onRefresh={refreshAll}
+                    isDashboardMode={isDashboardMode}
                   />
                 ))}
 
@@ -305,6 +341,8 @@ export const App: React.FC = () => {
                         ? "No se encontraron dispositivos MQTT configurados."
                         : activeFilter === "paired"
                         ? "No hay dispositivos ni cámaras emparejadas en Matter todavía."
+                        : activeFilter === "unexported"
+                        ? "Todos los dispositivos detectados en Home Assistant ya están exportados a Matter."
                         : activeFilter === "issues"
                         ? "No hay incidencias registradas en este momento."
                         : "No hay dispositivos que coincidan con los filtros seleccionados."}

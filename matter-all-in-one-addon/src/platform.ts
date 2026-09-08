@@ -3755,6 +3755,30 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           return;
         }
 
+        // POST /api/custom/entity-toggle/:entityId
+        if (
+          req.method === "POST" &&
+          pathname.startsWith("/api/custom/entity-toggle/")
+        ) {
+          const entityId = decodeURIComponent(
+            pathname.substring("/api/custom/entity-toggle/".length),
+          );
+          const [domain] = entityId.split(".");
+          try {
+            await this.ha.callService(domain, "toggle", entityId);
+            res.writeHead(200, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ success: true, entityId }));
+          } catch (err: any) {
+            res.writeHead(500, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ success: false, error: err?.message || String(err) }));
+          }
+          return;
+        }
+
         // POST /api/custom/reset-accessory/:entityId
         if (
           req.method === "POST" &&

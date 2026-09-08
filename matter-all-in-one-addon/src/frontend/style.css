@@ -2702,3 +2702,201 @@ mark {
   }
 }
 
+/* ==========================================================================
+   Apple Home Dynamic Cards, Icons & Artwork (iOS 17/18 Aesthetics)
+   ========================================================================== */
+.apple-home-card {
+  background: #0B0D13;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+  contain: paint layout;
+}
+
+/* Liquid Glass Cards (Frosted Glassmorphism + Specular Highlights) */
+.liquid-glass-card {
+  background: rgba(14, 18, 28, 0.68) !important;
+  backdrop-filter: blur(28px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(190%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  box-shadow:
+    0 12px 36px 0 rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.22),
+    inset 0 0 16px 0 rgba(255, 255, 255, 0.03) !important;
+  transition: all 0.25s cubic-bezier(0.25, 1, 0.5, 1) !important;
+}
+
+.liquid-glass-card::before {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.35) 40%,
+    rgba(255, 255, 255, 0.6) 50%,
+    rgba(255, 255, 255, 0.35) 60%,
+    transparent 100%
+  ) !important;
+  opacity: 0.8 !important;
+}
+
+.liquid-glass-card:hover {
+  background: rgba(22, 28, 44, 0.78) !important;
+  border-color: rgba(120, 175, 255, 0.45) !important;
+  box-shadow:
+    0 20px 48px 0 rgba(0, 0, 0, 0.6),
+    0 0 24px rgba(0, 122, 255, 0.2),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.38) !important;
+  transform: translateY(-4px) scale(1.01) !important;
+}
+
+.liquid-glass-card.dashboard-mode {
+  cursor: pointer;
+}
+
+.dashboard-action-hint {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.apple-home-card.is-unexported {
+  border-color: rgba(255, 255, 255, 0.05);
+  opacity: 0.9;
+}
+
+.apple-home-card:hover {
+  border-color: rgba(0, 122, 255, 0.45);
+  background: #0E1119;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(0, 122, 255, 0.2);
+}
+
+.card-icon-button {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  cursor: pointer;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s ease, border-color 0.2s ease;
+}
+
+.card-icon-button.is-clickable:hover {
+  transform: scale(1.06);
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.card-icon-button:active {
+  transform: scale(0.95);
+}
+
+/* Quick Toggle Switch Pill */
+.quick-toggle-pill {
+  width: 44px;
+  height: 24px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 2px;
+  cursor: pointer;
+  position: relative;
+  transition: background 0.25s ease, border-color 0.25s ease;
+}
+
+.quick-toggle-pill.active {
+  background: #30D158;
+  border-color: #30D158;
+}
+
+.quick-toggle-pill .toggle-thumb {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #FFF;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform: translateX(0);
+}
+
+.quick-toggle-pill.active .toggle-thumb {
+  transform: translateX(20px);
+}
+
+.export-badge.unexported {
+  background: rgba(255, 159, 10, 0.12);
+  border-color: rgba(255, 159, 10, 0.4);
+  color: #FF9F0A;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.filter-chip-unexported.active {
+  background: rgba(255, 159, 10, 0.2);
+  border-color: #FF9F0A;
+  color: #FFB340;
+}
+
+.device-status-highlight {
+  font-size: 12px;
+  font-weight: 600;
+  color: #0A84FF;
+  margin: 0 0 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Fan rotation with GPU acceleration */
+@keyframes fan-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.fan-blades {
+  will-change: transform;
+}
+
+.fan-blades.spinning {
+  animation: fan-spin 0.8s linear infinite;
+}
+
+/* Airflow animation in artwork */
+@keyframes breeze-flow {
+  0% {
+    stroke-dashoffset: 60;
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 0.8;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0.1;
+  }
+}
+
+.breeze-line-1, .breeze-line-2, .breeze-line-3 {
+  stroke-dasharray: 20 10;
+  animation: breeze-flow 1.6s ease-in-out infinite;
+}
+.breeze-line-2 {
+  animation-delay: 0.3s;
+}
+.breeze-line-3 {
+  animation-delay: 0.6s;
+}
+
+/* Day / Night Art transitions */
+.card-art-backdrop {
+  transition: background 0.8s ease;
+}
+
+

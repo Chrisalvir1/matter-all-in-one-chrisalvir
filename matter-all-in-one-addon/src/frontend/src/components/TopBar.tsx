@@ -5,12 +5,16 @@ interface TopBarProps {
   status: StatusResponse | null;
   onOpenSettings: () => void;
   onRestartService: () => void;
+  isDashboardMode?: boolean;
+  onToggleDashboardMode?: () => void;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
   status,
   onOpenSettings,
   onRestartService,
+  isDashboardMode = false,
+  onToggleDashboardMode,
 }) => {
   const isOnline = status?.haStatus === "conectado";
 
@@ -46,6 +50,24 @@ export const TopBar: React.FC<TopBarProps> = ({
       </div>
 
       <div className="topbar-actions">
+        {onToggleDashboardMode && (
+          <button
+            className={`button button-secondary button-topbar ${isDashboardMode ? "button-primary" : ""}`}
+            id="toggle-dashboard-button"
+            type="button"
+            onClick={onToggleDashboardMode}
+            title={
+              isDashboardMode
+                ? "Cambiar a modo Administración (con códigos QR y configuración)"
+                : "Cambiar a modo Dashboard (control interactivo sin configuración)"
+            }
+          >
+            <span className="btn-icon" aria-hidden="true">
+              {isDashboardMode ? "🛠️" : "📱"}
+            </span>
+            {isDashboardMode ? "Modo Admin" : "Modo Dashboard"}
+          </button>
+        )}
         <button
           className="button button-secondary button-topbar"
           id="settings-button"

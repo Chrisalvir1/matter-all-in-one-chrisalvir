@@ -11,34 +11,7 @@ interface DeviceModalProps {
   showToast: (msg: string, isError?: boolean) => void;
 }
 
-function getDomainIcon(domain?: string): string {
-  switch (domain) {
-    case "light":
-      return "💡";
-    case "switch":
-      return "🔌";
-    case "camera":
-      return "📹";
-    case "climate":
-      return "❄️";
-    case "fan":
-      return "🌀";
-    case "cover":
-      return "🪟";
-    case "lock":
-      return "🔒";
-    case "sensor":
-      return "🌡️";
-    case "binary_sensor":
-      return "🔔";
-    case "vacuum":
-      return "🤖";
-    case "humidifier":
-      return "💧";
-    default:
-      return "⚡";
-  }
-}
+import { AppleHomeIcon } from "./AppleHomeIcon";
 
 export const DeviceModal: React.FC<DeviceModalProps> = ({
   device,
@@ -216,7 +189,12 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
 
         <header className="modal-header" style={{ marginBottom: 8 }}>
           <span className="modal-icon" id="device-modal-icon">
-            {getDomainIcon(device.entities[0]?.domain)}
+            <AppleHomeIcon
+              domain={device.entities[0]?.domain || "switch"}
+              state={device.entities[0]?.state}
+              attributes={device.entities[0]?.attributes}
+              size={36}
+            />
           </span>
           <div>
             <p className="eyebrow">DISPOSITIVO IOT · MATTER ALL-IN-ONE</p>
@@ -270,7 +248,12 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                     onClick={() => setSelectedEntity(ent)}
                   >
                     <span className="entity-row-icon">
-                      {getDomainIcon(ent.domain)}
+                      <AppleHomeIcon
+                        domain={ent.domain}
+                        state={ent.state}
+                        attributes={ent.attributes}
+                        size={22}
+                      />
                     </span>
                     <div>
                       <div className="entity-row-name">

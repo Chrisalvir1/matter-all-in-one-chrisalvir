@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { api } from "../api/client";
 import { CameraRecord, DeviceRecord, EntityRecord, ScryptedConfigResponse, StatusResponse } from "../types";
 
-export type FilterType = "all" | "iot" | "cameras" | "paired" | "unpaired" | "mqtt" | "issues";
+export type FilterType = "all" | "iot" | "cameras" | "paired" | "unpaired" | "unexported" | "mqtt" | "issues";
 
 export function useAddonState() {
   const [status, setStatus] = useState<StatusResponse | null>(null);
@@ -166,12 +166,16 @@ export function useAddonState() {
 
     const totalCameras = scryptedTotal + haCamsTotal;
     const iotDevices = allDevices.filter((d) => !d.entities.every((e) => e.domain === "camera")).length;
+    const unexportedCount = allDevices.filter(
+      (d) => !d.entities.every((e) => e.domain === "camera") && !d.entities.some((e) => e.exported)
+    ).length;
     const pairedTotal = pairedNodes + scryptedPaired + haCamsPaired;
     const unpairedTotal = pendingNodes + (scryptedTotal - scryptedPaired) + (haCamsTotal - haCamsPaired);
 
     return {
       totalDevices: allDevices.length,
       iotDevices,
+      unexportedCount,
       exportedNodes,
       pairedNodes,
       pendingNodes,
