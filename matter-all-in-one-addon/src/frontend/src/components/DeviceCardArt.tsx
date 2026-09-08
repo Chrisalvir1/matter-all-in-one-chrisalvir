@@ -83,6 +83,13 @@ export const DeviceCardArt: React.FC<DeviceCardArtProps> = ({
   const standardColorConfig =
     APPLE_HOMEPOD_COLORS.homepod[appleColor] || APPLE_HOMEPOD_COLORS.homepod.midnight;
 
+  const isRusticWoodFan =
+    model.toLowerCase().includes("fanlamp") ||
+    brand.toLowerCase().includes("fanlamp") ||
+    model.toLowerCase().includes("pro_v3") ||
+    subtype === "wood_fan" ||
+    subtype === "rustic_fan";
+
   return (
     <div
       className="card-art-backdrop"
@@ -323,6 +330,54 @@ export const DeviceCardArt: React.FC<DeviceCardArtProps> = ({
                 <stop offset="50%" stopColor={isLightOn ? "#00F0FF" : "#475569"} />
                 <stop offset="100%" stopColor={isLightOn ? "#AF52DE" : "#1E293B"} />
               </linearGradient>
+
+              {/* Apple HomePod Mini 3D Diamond-Woven Acoustic Fabric Mesh */}
+              <pattern id="homepodAcousticMesh" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                <rect width="4" height="4" fill={miniColorConfig.mesh} />
+                <path d="M 0 2 L 2 0 L 4 2 L 2 4 Z" fill={miniColorConfig.hex} opacity="0.65" />
+                <line x1="0" y1="0" x2="4" y2="4" stroke="rgba(255,255,255,0.2)" strokeWidth="0.5" />
+                <line x1="4" y1="0" x2="0" y2="4" stroke="rgba(0,0,0,0.25)" strokeWidth="0.5" />
+              </pattern>
+
+              {/* Spherical PBR Volumetric Light Falloff for HomePod */}
+              <radialGradient id="homepodSpherePBR" cx="35%" cy="30%" r="70%">
+                <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.45" />
+                <stop offset="45%" stopColor={miniColorConfig.hex} stopOpacity="0.15" />
+                <stop offset="80%" stopColor="#000000" stopOpacity="0.55" />
+                <stop offset="100%" stopColor="#000000" stopOpacity="0.85" />
+              </radialGradient>
+
+              {/* HomePod Ground Contact Shadow */}
+              <radialGradient id="homepodGroundShadow" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stopColor="#000000" stopOpacity="0.75" />
+                <stop offset="60%" stopColor="#000000" stopOpacity="0.3" />
+                <stop offset="100%" stopColor="#000000" stopOpacity="0" />
+              </radialGradient>
+
+              {/* Dark Rustic Walnut Wood Grain Gradient for Recámara 5-Blade Fan */}
+              <linearGradient id="walnutWoodGrad" x1="0%" y1="0%" x2="100%" y2="20%">
+                <stop offset="0%" stopColor="#2A170C" />
+                <stop offset="15%" stopColor="#3E2313" />
+                <stop offset="35%" stopColor="#4F2E1A" />
+                <stop offset="55%" stopColor="#381E10" />
+                <stop offset="75%" stopColor="#4A2B18" />
+                <stop offset="90%" stopColor="#2E190E" />
+                <stop offset="100%" stopColor="#22120A" />
+              </linearGradient>
+
+              {/* Matte Carbon / Black Metal Gradient for Sala Modern Fan */}
+              <linearGradient id="matteObsidianGrad" x1="0%" y1="0%" x2="100%" y2="25%">
+                <stop offset="0%" stopColor="#1E232B" />
+                <stop offset="30%" stopColor="#14171E" />
+                <stop offset="70%" stopColor="#252A34" />
+                <stop offset="100%" stopColor="#0E1015" />
+              </linearGradient>
+
+              {/* Vertical Ribbed Engine Cooling Fins Pattern */}
+              <pattern id="finnedMotorPattern" width="4" height="14" patternUnits="userSpaceOnUse">
+                <rect width="2.2" height="14" fill="#252A34" />
+                <rect x="2.2" width="1.8" height="14" fill="#0E1117" />
+              </pattern>
             </defs>
 
             {/* ── 1. APPLE TV 4K REAL HARDWARE (PUCK + REMOTE + 16:9 SCREEN) ── */}
@@ -383,34 +438,46 @@ export const DeviceCardArt: React.FC<DeviceCardArtProps> = ({
               </g>
             )}
 
-          {/* ── 2. APPLE HOMEPOD MINI (COLOR OFICIAL APPLE) ── */}
+          {/* ── 2. APPLE HOMEPOD MINI (HIPERREALISTA MULTICAPA 2.5D DE ESTUDIO) ── */}
           {visualType === "homepod_mini" && (
             <g className="art-homepod-mini">
-              {/* Spherical 3D Acoustic Mesh Body */}
-              <circle cx="114" cy="74" r="40" fill={miniColorConfig.mesh} stroke="rgba(255,255,255,0.15)" strokeWidth="1.5" />
-              {/* Acoustic Mesh Subtle Texture Highlight */}
-              <ellipse cx="114" cy="74" rx="38" ry="37" fill={miniColorConfig.hex} opacity="0.35" />
+              {/* Capa 1: Sombra de contacto suave en base de estudio */}
+              <ellipse cx="114" cy="115" rx="36" ry="8" fill="url(#homepodGroundShadow)" />
 
-              {/* Top Touch Glass Disc */}
-              <ellipse cx="114" cy="38" rx="20" ry="7" fill={miniColorConfig.top} stroke="rgba(255,255,255,0.25)" strokeWidth="1.2" />
+              {/* Capa 2: Cuerpo Esférico con Malla Acústica Tejida Apple en 3D */}
+              <circle cx="114" cy="74" r="41" fill={miniColorConfig.mesh} />
+              <circle cx="114" cy="74" r="41" fill="url(#homepodAcousticMesh)" />
 
-              {/* Glowing Siri Dynamic Rainbow Waveform (Gira cuando reproduce) */}
+              {/* Capa 3: Sombreado Esférico PBR y Volumen Lumínico */}
+              <circle cx="114" cy="74" r="41" fill="url(#homepodSpherePBR)" style={{ mixBlendMode: "multiply" }} />
+              <circle cx="114" cy="74" r="41" fill="url(#homepodSpherePBR)" opacity="0.35" />
+
+              {/* Capa 4: Disco Táctil Superior de Cristal Apple con Bisel Pulido */}
+              <ellipse cx="114" cy="38" rx="22" ry="7.5" fill="#0A0B0E" stroke="rgba(255,255,255,0.3)" strokeWidth="1" />
+              <ellipse cx="114" cy="38" rx="20.5" ry="6.5" fill={miniColorConfig.top} />
+              {/* Reflejo especular en el cristal superior */}
+              <path d="M102 36 C106 34 122 34 126 36 C122 37 106 37 102 36 Z" fill="rgba(255,255,255,0.4)" />
+
+              {/* Capa 5: Siri Dynamic Rainbow Waveform (Brilla e irradia cuando reproduce) */}
               {isMediaActive && (
-                <ellipse
-                  cx="114"
-                  cy="38"
-                  rx="14"
-                  ry="5"
-                  fill="url(#siriWaveGrad)"
-                  style={{ filter: "drop-shadow(0 0 6px rgba(0, 240, 255, 0.8))" }}
-                />
+                <g>
+                  <ellipse
+                    cx="114"
+                    cy="38"
+                    rx="16"
+                    ry="5.5"
+                    fill="url(#siriWaveGrad)"
+                    style={{ filter: "drop-shadow(0 0 8px rgba(0, 240, 255, 0.9))" }}
+                  />
+                  <ellipse cx="114" cy="38" rx="9" ry="3" fill="#FFFFFF" opacity="0.6" style={{ filter: "blur(1px)" }} />
+                </g>
               )}
 
-              {/* Acoustic Sound Waves when playing */}
+              {/* Ondas acústicas pulsantes */}
               {isMediaActive && (
-                <g opacity="0.75">
-                  <path d="M64 74 C58 64 58 84 64 74" stroke={miniColorConfig.hex} strokeWidth="2" strokeLinecap="round" />
-                  <path d="M54 74 C46 58 46 90 54 74" stroke={miniColorConfig.hex} strokeWidth="2.5" strokeLinecap="round" />
+                <g opacity="0.8">
+                  <path d="M60 74 C54 62 54 86 60 74" stroke={miniColorConfig.hex} strokeWidth="2.5" strokeLinecap="round" />
+                  <path d="M50 74 C42 56 42 92 50 74" stroke={miniColorConfig.hex} strokeWidth="3" strokeLinecap="round" />
                 </g>
               )}
             </g>
@@ -581,58 +648,101 @@ export const DeviceCardArt: React.FC<DeviceCardArtProps> = ({
             </g>
           )}
 
-          {/* ── 5. VENTILADOR DE TECHO EN NEGRO MATE / OBSIDIAN ── */}
+          {/* ── 5. VENTILADOR DE TECHO MULTICAPA DE ESTUDIO (5 ASPAS: SALA Y RECÁMARA) ── */}
           {visualType === "ceiling_fan" && (
             <g className="art-ceiling-fan">
-              {/* Ceiling Mount Canopy & Downrod (Negro Mate Obsidian) */}
-              <path d="M106 0 L122 0 L118 12 L110 12 Z" fill="#14171E" stroke="rgba(255,255,255,0.15)" strokeWidth="1" />
-              <line x1="114" y1="12" x2="114" y2="34" stroke="#1E2430" strokeWidth="3.5" />
+              {/* Capa 1: Soporte Superior a Techo y Tija (Canopy & Downrod) */}
+              <path d="M104 0 L124 0 L120 10 L108 10 Z" fill="#14171E" stroke="rgba(255,255,255,0.15)" strokeWidth="1" />
+              <line x1="114" y1="10" x2="114" y2="30" stroke="#181D26" strokeWidth="4.5" strokeLinecap="square" />
 
-              {/* Horizontal Aerodynamic Rotating Ceiling Blades (Elegante Negro Mate) */}
+              {/* Embellecedor y Carcasa Motor Cilíndrico de Estudio */}
+              <rect x="98" y="28" width="32" height="18" rx="4" fill="#11141A" stroke="#252A34" strokeWidth="1.2" />
+              {!isRusticWoodFan && (
+                /* Aletas verticales acanaladas de refrigeración del motor de Sala (Foto 4) */
+                <rect x="100" y="30" width="28" height="14" fill="url(#finnedMotorPattern)" />
+              )}
+
+              {/* Capa 2: Rotor de 5 Aspas Aerodinámicas con Rotación GPU 3D */}
               <g
                 className={`art-fan-blades ${isFanActive ? "spinning" : ""}`}
                 style={{
-                  transformOrigin: "114px 38px",
+                  transformOrigin: "114px 44px",
                   animation: isFanActive ? `fan-spin ${fanDurationSec}s linear infinite` : "none",
+                  filter: isFanActive && effectiveFanPct > 50 ? "blur(0.35px)" : "none",
                 }}
               >
-                {/* 4 Blades in Matte Obsidian with subtle satin edges */}
-                <path d="M114 38 C110 32 60 22 54 28 C48 34 100 42 114 38 Z" fill="#181D26" stroke="#2B3242" strokeWidth="1" />
-                <path d="M114 38 C118 32 168 22 174 28 C180 34 128 42 114 38 Z" fill="#181D26" stroke="#2B3242" strokeWidth="1" />
-                <path d="M114 38 C120 42 136 84 128 88 C120 92 112 50 114 38 Z" fill="#14171F" stroke="#2B3242" strokeWidth="1" />
-                <path d="M114 38 C108 42 92 84 100 88 C108 92 116 50 114 38 Z" fill="#14171F" stroke="#2B3242" strokeWidth="1" />
+                {/* 5 Aspas distribuidas simétricamente a 72° (0°, 72°, 144°, 216°, 288°) */}
+                {[0, 72, 144, 216, 288].map((angle, idx) => (
+                  <g key={idx} transform={`rotate(${angle} 114 44)`}>
+                    {isRusticWoodFan ? (
+                      /* Aspa de Madera Nogal Oscuro con herraje negro (Foto 5 Recámara) */
+                      <g>
+                        {/* Herraje metálico negro curvado de fijación al motor (Blade Iron) */}
+                        <path d="M112 44 L116 44 L117 56 L111 56 Z" fill="#0A0D12" stroke="#2A303C" strokeWidth="0.8" />
+                        <circle cx="114" cy="54" r="1.2" fill="#4B5563" />
+                        {/* Aspa de Nogal Veteado con punta redondeada y borde satinado */}
+                        <path
+                          d="M109 56 C107 58 102 104 105 108 C108 111 120 111 123 108 C126 104 121 58 119 56 Z"
+                          fill="url(#walnutWoodGrad)"
+                          stroke="#1A0F07"
+                          strokeWidth="1"
+                        />
+                        {/* Veta sutil de madera nogal */}
+                        <path d="M112 62 C110 75 111 95 113 105" stroke="rgba(0,0,0,0.35)" strokeWidth="1" fill="none" />
+                        <path d="M116 64 C117 78 115 94 117 104" stroke="rgba(255,255,255,0.12)" strokeWidth="0.8" fill="none" />
+                      </g>
+                    ) : (
+                      /* Aspa Aerodinámica Negro Mate Obsidiana (Foto 4 Sala) */
+                      <g>
+                        {/* Soporte de unión al motor */}
+                        <rect x="112" y="44" width="4" height="10" fill="#0A0B0E" />
+                        {/* Aspa curva aerodinámica con bisel */}
+                        <path
+                          d="M109 54 C106 58 103 104 107 108 C110 111 118 111 121 108 C125 104 122 58 119 54 Z"
+                          fill="url(#matteObsidianGrad)"
+                          stroke="#2D3545"
+                          strokeWidth="1"
+                        />
+                        <path d="M111 56 L111 106" stroke="rgba(255,255,255,0.14)" strokeWidth="0.8" />
+                      </g>
+                    )}
+                  </g>
+                ))}
+
+                {/* Núcleo central del rotor (Tapa de motor que gira) */}
+                <circle cx="114" cy="44" r="10" fill="#181D26" stroke="#2D3545" strokeWidth="1.2" />
               </g>
 
-              {/* Center Frosted Glass Light Dome */}
+              {/* Capa 3: Domo Difusor de Cristal Esmerilado Central (Iluminación Kelvin en tiempo real) */}
               <ellipse
                 cx="114"
-                cy="44"
+                cy="46"
                 rx="16"
-                ry="10"
-                fill={isLightOn ? lightHex : "#1E2430"}
-                stroke={isLightOn ? "#FFF" : "rgba(255,255,255,0.2)"}
-                strokeWidth="1.5"
+                ry="11"
+                fill={isLightOn ? lightHex : "#222733"}
+                stroke={isLightOn ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.22)"}
+                strokeWidth="1.6"
                 style={{
-                  filter: isLightOn ? `drop-shadow(0 0 16px ${lightHex})` : undefined,
-                  transition: "fill 0.4s ease",
+                  filter: isLightOn ? `drop-shadow(0 0 20px ${lightHex}) drop-shadow(0 0 8px #FFF)` : undefined,
+                  transition: "fill 0.4s ease, filter 0.4s ease",
                 }}
               />
 
-              {/* Radiating Light Cone */}
+              {/* Resplandor volumétrico y cono de luz descendente hacia la habitación */}
               {isLightOn && (
                 <polygon
-                  points="100,46 128,46 160,140 68,140"
+                  points="98,48 130,48 175,140 53,140"
                   fill="url(#lampConeGrad)"
-                  style={{ mixBlendMode: "screen" }}
+                  style={{ mixBlendMode: "screen", opacity: Math.min(1, 0.5 + 0.5 * lightBrightness) }}
                 />
               )}
 
-              {/* Downward Breeze Lines */}
+              {/* Ráfagas de flujo de aire descendente cuando está encendido */}
               {isFanActive && (
                 <g className="airflow-stream" style={{ opacity: Math.max(0.4, effectiveFanPct / 100) }}>
-                  <path d="M84 62 C74 74 68 94 62 112" fill="none" stroke="url(#breezeGrad)" strokeWidth="2.2" strokeLinecap="round" className="breeze-line-1" />
-                  <path d="M114 62 C114 80 114 100 114 120" fill="none" stroke="url(#breezeGrad)" strokeWidth="2.8" strokeLinecap="round" className="breeze-line-2" />
-                  <path d="M144 62 C154 74 160 94 166 112" fill="none" stroke="url(#breezeGrad)" strokeWidth="2.2" strokeLinecap="round" className="breeze-line-3" />
+                  <path d="M82 66 C72 78 66 98 60 118" fill="none" stroke="url(#breezeGrad)" strokeWidth="2.2" strokeLinecap="round" className="breeze-line-1" />
+                  <path d="M114 66 C114 84 114 104 114 126" fill="none" stroke="url(#breezeGrad)" strokeWidth="2.8" strokeLinecap="round" className="breeze-line-2" />
+                  <path d="M146 66 C156 78 162 98 168 118" fill="none" stroke="url(#breezeGrad)" strokeWidth="2.2" strokeLinecap="round" className="breeze-line-3" />
                 </g>
               )}
             </g>

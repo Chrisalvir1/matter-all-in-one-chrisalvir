@@ -557,17 +557,9 @@ export class BaseEntity {
           this.setCommandLockout("onOff", true);
           this.setCommandLockout("fan_state", "on");
           await this.platform.ha.callService("switch", "turn_on", this.entityId);
-          const companionHeater = this.getCompanionEntity("switch.", "auto_stop");
-          if (companionHeater && companionHeater.state?.state === "on") {
-            await this.platform.ha.callService("switch", "turn_off", companionHeater.entityId);
-          }
         } else if (isThermostatProfile) {
           this.setCommandLockout("onOff", true);
           await this.platform.ha.callService(domain, "turn_on", this.entityId);
-          const mainFan = this.getCompanionEntity("switch.", "ventilador");
-          if (mainFan && mainFan.state?.state === "off") {
-            await this.platform.ha.callService("switch", "turn_on", mainFan.entityId);
-          }
         } else
           await this.platform.ha.callService(domain, "turn_on", this.entityId);
       });
@@ -591,10 +583,6 @@ export class BaseEntity {
           this.setCommandLockout("onOff", false);
           this.setCommandLockout("fan_state", "off");
           await this.platform.ha.callService("switch", "turn_off", this.entityId);
-          const companionHeater = this.getCompanionEntity("switch.", "auto_stop");
-          if (companionHeater && companionHeater.state?.state === "on") {
-            await this.platform.ha.callService("switch", "turn_off", companionHeater.entityId);
-          }
         } else if (isThermostatProfile) {
           this.setCommandLockout("onOff", false);
           await this.platform.ha.callService(domain, "turn_off", this.entityId);

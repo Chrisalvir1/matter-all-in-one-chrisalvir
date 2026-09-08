@@ -3259,11 +3259,12 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         }
       }
 
-      // 2. Heater / Auto-Stop switch or Climate updates -> coordinate companion fan (airflow active when heating)
+      // 2. Real Climate or explicit heater switch updates -> coordinate companion fan (airflow active when heating)
       const isHeaterEntity =
         entityId.startsWith("climate.") ||
         (entityId.startsWith("switch.") &&
-          (entityId.includes("auto_stop") || entityId.includes("heater") || entityId.includes("calefactor")));
+          (entityId.includes("heater") || entityId.includes("calefactor")) &&
+          !entityId.includes("auto_stop"));
 
       if (isHeaterEntity) {
         const isHeatingOn = newState.state === "heat" || newState.state === "on";
@@ -3305,7 +3306,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         for (const [cId, cEntity] of this.entities.entries()) {
           if (
             cId !== entityId &&
-            (cId.startsWith("climate.") || (cId.startsWith("switch.") && (cId.includes("auto_stop") || cId.includes("heater")))) &&
+            (cId.startsWith("climate.") || (cId.startsWith("switch.") && (cId.includes("heater") || cId.includes("calefactor")) && !cId.includes("auto_stop"))) &&
             this.ha?.hassEntities?.get(cId)?.device_id === hybridDeviceId
           ) {
             if (newState.state === "off" && cEntity.state.state !== "off") {
@@ -4121,6 +4122,50 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               "Content-Type": "application/json; charset=utf-8",
             });
             res.end(JSON.stringify({ success: true, entityId, value: numVal }));
+          } catch (err: any) {
+            res.writeHead(500, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ success: false, error: err?.message || String(err) }));
+          }
+          return;
+        }
+
+        // POST /api/custom/entity-set-light/:entityId
+        if (
+          req.method === "POST" &&
+          pathname.startsWith("/api/custom/entity-set-light/")
+        ) {
+          const entityId = decodeURIComponent(
+            pathname.substring("/api/custom/entity-set-light/".length),
+          );
+          try {
+            const body = await this.readRequestBody(req);
+            const data = JSON.parse(body || "{}");
+            const serviceData: Record<string, any> = {};
+
+            if (typeof data.brightness_pct === "number") {
+              serviceData.brightness_pct = Math.max(1, Math.min(100, Math.round(data.brightness_pct)));
+            } else if (typeof data.brightness === "number") {
+              serviceData.brightness = Math.max(1, Math.min(255, Math.round(data.brightness)));
+            }
+
+            if (typeof data.color_temp_kelvin === "number") {
+              serviceData.color_temp_kelvin = Math.max(2000, Math.min(7000, Math.round(data.color_temp_kelvin)));
+            } else if (typeof data.kelvin === "number") {
+              serviceData.color_temp_kelvin = Math.max(2000, Math.min(7000, Math.round(data.kelvin)));
+            }
+
+            if (Array.isArray(data.rgb_color) && data.rgb_color.length === 3) {
+              serviceData.rgb_color = data.rgb_color.map((c: any) => Math.max(0, Math.min(255, Math.round(Number(c) || 0))));
+            }
+
+            await this.ha.callService("light", "turn_on", entityId, serviceData);
+
+            res.writeHead(200, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ success: true, entityId, serviceData }));
           } catch (err: any) {
             res.writeHead(500, {
               "Content-Type": "application/json; charset=utf-8",

@@ -33,6 +33,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
       new URLSearchParams(window.location.search).get("mode") === "dashboard");
   const [togglingEntityIds, setTogglingEntityIds] = useState<Set<string>>(new Set());
   const [imgLoaded, setImgLoaded] = useState(false);
+  const [showKelvinPicker, setShowKelvinPicker] = useState(false);
 
   const deviceInfo = detectDevice(device);
 
@@ -86,17 +87,16 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
 
   const lightEntity = device.entities.find((e) => e.domain === "light");
 
-  // Check heating mode (auto_stop switch or climate entity)
+  // Check heating mode (explicit climate entity or heater switch, excluding auto_stop)
   const heaterEntity =
     device.entities.find((e) => e.domain === "climate") ||
     device.entities.find(
       (e) =>
         e.domain === "switch" &&
-        (e.entityId.toLowerCase().includes("auto_stop") ||
-          e.entityId.toLowerCase().includes("heater") ||
+        (e.entityId.toLowerCase().includes("heater") ||
           e.entityId.toLowerCase().includes("calefactor") ||
-          (e.name || "").toLowerCase().includes("calefactor") ||
-          (e.name || "").toLowerCase().includes("auto_stop"))
+          (e.name || "").toLowerCase().includes("calefactor")) &&
+        !e.entityId.toLowerCase().includes("auto_stop")
     );
   const isHeating =
     (heaterEntity?.domain === "climate" && (heaterEntity.state === "heat" || heaterEntity.state === "on")) ||
@@ -324,6 +324,22 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
       onRefresh?.();
     } catch (err) {
       console.error("Error setting H7133 mode:", err);
+    }
+  };
+
+  const currentKelvin =
+    lightEntity?.attributes?.color_temp_kelvin ||
+    (lightEntity?.attributes?.color_temp
+      ? Math.round(1000000 / lightEntity.attributes.color_temp)
+      : 2700);
+
+  const handleSetKelvin = async (kelvin: number) => {
+    if (!lightEntity) return;
+    try {
+      await api.setLightSettings(lightEntity.entityId, { kelvin });
+      onRefresh?.();
+    } catch (err) {
+      console.error("Error setting light Kelvin:", err);
     }
   };
 
@@ -869,7 +885,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
             </div>
           )}
 
-          {/* Light sub-control with glowing icon, Kelvin hue & dimmer slider */}
+          {/* Light sub-control with compact bulb, toggle, level & interactive Kelvin picker */}
           {lightEntity && (
             <div
               style={{
@@ -900,32 +916,62 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                         gap: "6px",
                       }}
                     >
-                      {lightEntity.state === "on" && (
-                        <span
-                          style={{
-                            width: "7px",
-                            height: "7px",
-                            borderRadius: "50%",
-                            background: lightColorInfo.hex,
-                            boxShadow: `0 0 6px ${lightColorInfo.hex}`,
-                            display: "inline-block",
-                            flexShrink: 0,
+                      {lightEntity.state === "on" ? (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowKelvinPicker((prev) => !prev);
                           }}
-                        />
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "5px",
+                            background: showKelvinPicker
+                              ? "rgba(255, 255, 255, 0.16)"
+                              : "rgba(255, 255, 255, 0.06)",
+                            border: showKelvinPicker
+                              ? `1px solid rgb(${lr}, ${lg}, ${lb})`
+                              : "1px solid rgba(255, 255, 255, 0.12)",
+                            borderRadius: "6px",
+                            padding: "2px 6px",
+                            color: "#f8fafc",
+                            fontSize: "0.70rem",
+                            fontWeight: 600,
+                            cursor: "pointer",
+                            transition: "all 0.2s ease",
+                          }}
+                          title="Clic para graduar Kelvin y temperatura de color"
+                        >
+                          <span
+                            style={{
+                              width: "7px",
+                              height: "7px",
+                              borderRadius: "50%",
+                              background: lightColorInfo.hex,
+                              boxShadow: `0 0 6px ${lightColorInfo.hex}`,
+                              display: "inline-block",
+                              flexShrink: 0,
+                            }}
+                          />
+                          <span>
+                            {lightEntity.attributes?.brightness
+                              ? `${Math.round((lightEntity.attributes.brightness / 255) * 100)}% · `
+                              : ""}
+                            {currentKelvin}K
+                          </span>
+                          <span style={{ fontSize: "0.6rem", opacity: 0.8 }}>
+                            {showKelvinPicker ? "▲" : "▼"}
+                          </span>
+                        </button>
+                      ) : (
+                        <span>Apagada</span>
                       )}
-                      <span>
-                        {lightEntity.state === "on"
-                          ? `Encendida${
-                              lightEntity.attributes?.brightness
-                                ? ` · ${Math.round((lightEntity.attributes.brightness / 255) * 100)}%`
-                                : ""
-                            } · ${lightColorInfo.label}`
-                          : "Apagada"}
-                      </span>
                     </div>
                   </div>
                 </div>
 
+                {/* Small toggle switch to activate/deactivate */}
                 <button
                   type="button"
                   className={`quick-toggle-pill ${lightEntity.state === "on" ? "active" : "inactive"}`}
@@ -937,6 +983,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                 </button>
               </div>
 
+              {/* Brightness Dimmer Slider */}
               <LiquidSlider
                 entityId={lightEntity.entityId}
                 domain="light"
@@ -951,6 +998,108 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                 label="Brillo luz"
                 onRefresh={onRefresh}
               />
+
+              {/* Interactive Kelvin Temperature Selector Panel */}
+              {showKelvinPicker && lightEntity.state === "on" && (
+                <div
+                  style={{
+                    marginTop: "8px",
+                    padding: "8px 10px",
+                    background: "rgba(0, 0, 0, 0.4)",
+                    border: "1px solid rgba(255, 255, 255, 0.1)",
+                    borderRadius: "10px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "8px",
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span style={{ fontSize: "0.70rem", fontWeight: 700, color: "#cbd5e1" }}>
+                      🌡️ Temperatura: <strong style={{ color: lightColorInfo.hex }}>{currentKelvin}K</strong>
+                    </span>
+                    <span style={{ fontSize: "0.68rem", color: "#94a3b8" }}>
+                      {lightColorInfo.label}
+                    </span>
+                  </div>
+
+                  {/* Gradient Kelvin Range Slider */}
+                  <input
+                    type="range"
+                    min="2000"
+                    max="6500"
+                    step="50"
+                    value={currentKelvin}
+                    onChange={(e) => handleSetKelvin(Number(e.target.value))}
+                    style={{
+                      width: "100%",
+                      height: "8px",
+                      borderRadius: "4px",
+                      appearance: "none",
+                      outline: "none",
+                      cursor: "pointer",
+                      background: "linear-gradient(to right, #ff9329 0%, #ffbe76 35%, #fff2e0 60%, #e0f2fe 80%, #bae6fd 100%)",
+                      boxShadow: "inset 0 1px 2px rgba(0,0,0,0.5)",
+                    }}
+                    title="Deslizar para ajustar grados Kelvin (2000K - 6500K)"
+                  />
+
+                  {/* Quick Preset Buttons */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "6px" }}>
+                    <button
+                      type="button"
+                      onClick={() => handleSetKelvin(2700)}
+                      style={{
+                        padding: "4px 2px",
+                        fontSize: "0.68rem",
+                        fontWeight: currentKelvin <= 3000 ? 700 : 500,
+                        borderRadius: "6px",
+                        border: currentKelvin <= 3000 ? "1px solid #ffbe76" : "1px solid rgba(255,255,255,0.08)",
+                        background: currentKelvin <= 3000 ? "rgba(255, 190, 118, 0.25)" : "rgba(255,255,255,0.04)",
+                        color: "#fff",
+                        cursor: "pointer",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      🟠 2700K Cálido
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSetKelvin(4000)}
+                      style={{
+                        padding: "4px 2px",
+                        fontSize: "0.68rem",
+                        fontWeight: currentKelvin > 3000 && currentKelvin < 5500 ? 700 : 500,
+                        borderRadius: "6px",
+                        border: currentKelvin > 3000 && currentKelvin < 5500 ? "1px solid #fff2e0" : "1px solid rgba(255,255,255,0.08)",
+                        background: currentKelvin > 3000 && currentKelvin < 5500 ? "rgba(255, 255, 255, 0.22)" : "rgba(255,255,255,0.04)",
+                        color: "#fff",
+                        cursor: "pointer",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      🟡 4000K Neutro
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSetKelvin(6500)}
+                      style={{
+                        padding: "4px 2px",
+                        fontSize: "0.68rem",
+                        fontWeight: currentKelvin >= 5500 ? 700 : 500,
+                        borderRadius: "6px",
+                        border: currentKelvin >= 5500 ? "1px solid #bae6fd" : "1px solid rgba(255,255,255,0.08)",
+                        background: currentKelvin >= 5500 ? "rgba(186, 230, 253, 0.25)" : "rgba(255,255,255,0.04)",
+                        color: "#fff",
+                        cursor: "pointer",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      ⚪ 6500K Frío
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

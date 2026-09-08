@@ -1,3 +1,21 @@
+## [1.5.32] - 2026-09-08
+
+### Corrección de Govee H7133 (Fan vs Calefactor/Auto), Selector Interactivo Kelvin y Visuales Multicapa 2.5D de Estudio
+
+- **Desacople de `auto_stop` y Corrección de Modos Govee H7133 (`platform.ts`, `base.entity.ts`, `DeviceCard.tsx`):**
+  - Se eliminó la asignación errónea de `switch.*auto_stop` como interruptor de calefacción (`heaterEntity`). `auto_stop` es una función de seguridad/apagado por tiempo, no la resistencia térmica.
+  - Se eliminaron las reglas de coordinación cruzada que forzaban el encendido/sincronización de calor cuando se activaba el ventilador principal en modo Fan.
+  - Al presionar **Fan Manual**, el ventilador se activa en flujo de aire limpio sin encender calefacción ni entrar en modo Auto.
+- **Control Interactivo de Kelvin y Luz (`DeviceCard.tsx`, `client.ts`, `platform.ts`):**
+  - Se rediseñó la sección de luz con icono de bombillo, switch pequeño de conmutación rápida e indicador de nivel continuo (`% · Kelvin`).
+  - Al pulsar sobre el nivel/Kelvin, se despliega un panel interactivo con barra deslizante continua (2000K a 6500K) con gradiente de temperatura cromática y botones de ajuste rápido de un toque (`2700K Cálido`, `4000K Neutro`, `6500K Frío`).
+  - Se añadió la ruta de backend `POST /api/custom/entity-set-light/:entityId` para el envío directo de parámetros `color_temp_kelvin` a Home Assistant.
+- **Arquitectura Visual Multicapa 2.5D de Estudio Hiperrealista (`DeviceCardArt.tsx`):**
+  - **Apple HomePod Mini:** Reemplazo de figuras vectoriales planas por renderizado fotorrealista con malla acústica tridimensional tejida en rombos, sombreado PBR esférico, sombra de contacto en la base y disco táctil de cristal con halo dinámico Siri y ondas luminiscentes en reproducción.
+  - **Ventiladores de Techo de 5 Aspas (Sala y Recámara):**
+    - **Sala (`zhimei_fan_v1`):** Modelo negro mate con 5 aspas aerodinámicas, carcasa de motor cilíndrica con aletas de refrigeración verticales acanaladas, tija y florón de techo, rotación por GPU a 60 FPS con desenfoque de movimiento suave y domo de cristal que irradia luz reactiva al Kelvin real.
+    - **Recámara / Visitas (`fanlamp_pro_v3`):** Modelo rústico de 5 aspas con textura de madera nogal veteada oscura, herrajes metálicos negros curvados de fijación al motor y domo difusor de cristal esmerilado con resplandor en tiempo real.
+
 ## [1.5.31] - 2026-09-08
 
 ### Corrección de Scroll y Visibilidad Total de Códigos QR en el Modal de Dispositivo

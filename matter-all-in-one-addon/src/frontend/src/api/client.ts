@@ -109,6 +109,21 @@ export const api = {
       body: JSON.stringify({ value }),
     }),
 
+  setLightSettings: (
+    entityId: string,
+    options: {
+      brightness_pct?: number;
+      brightness?: number;
+      color_temp_kelvin?: number;
+      kelvin?: number;
+      rgb_color?: [number, number, number];
+    }
+  ) =>
+    request(`/entity-set-light/${encodeURIComponent(entityId)}`, {
+      method: "POST",
+      body: JSON.stringify(options),
+    }),
+
   mediaAction: (
     entityId: string,
     action: "media_play_pause" | "media_previous_track" | "media_next_track"
