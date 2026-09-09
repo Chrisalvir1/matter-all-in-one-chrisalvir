@@ -3121,5 +3121,30 @@ mark {
   transform: translateY(-1px);
 }
 
+/* ── Prevent iOS WebKit touch callout & tooltip popup on mobile cards ── */
+.device-card,
+.card-top,
+.card-icon-button,
+.device-brand-row,
+.h7133-mode-selector,
+.kelvin-slider-container {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
 
-
+/* ── Mobile Layout Fine-Tuning ── */
+@media (max-width: 600px) {
+  .device-card {
+    padding: 14px 12px;
+    border-radius: 18px;
+  }
+  .h7133-mode-selector {
+    padding: 7px 8px !important;
+    gap: 5px !important;
+  }
+  .h7133-mode-selector button {
+    padding: 6px 3px !important;
+    font-size: 0.68rem !important;
+  }
+}

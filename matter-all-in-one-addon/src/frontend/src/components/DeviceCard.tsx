@@ -87,7 +87,12 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
 
   const lightEntity = device.entities.find((e) => e.domain === "light");
 
-  // Check heating mode (explicit climate entity or heater switch, excluding auto_stop)
+  // Detect Govee H7133 auto_stop entity (Heating / Auto mode switch)
+  const autoStopEntity = device.entities.find(
+    (e) => e.domain === "switch" && e.entityId.toLowerCase().includes("auto_stop")
+  );
+
+  // Check heating mode (explicit climate entity or heater switch, or H7133 auto_stop)
   const heaterEntity =
     device.entities.find((e) => e.domain === "climate") ||
     device.entities.find(
@@ -98,17 +103,21 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
           (e.name || "").toLowerCase().includes("calefactor")) &&
         !e.entityId.toLowerCase().includes("auto_stop")
     );
-  const isHeating =
-    (heaterEntity?.domain === "climate" && (heaterEntity.state === "heat" || heaterEntity.state === "on")) ||
-    (heaterEntity?.domain === "switch" && heaterEntity.state === "on");
+  const isHeating = isH7133
+    ? Boolean(fanEntity?.state === "on" && autoStopEntity?.state === "on")
+    : Boolean(
+        (heaterEntity?.domain === "climate" && (heaterEntity.state === "heat" || heaterEntity.state === "on")) ||
+        (heaterEntity?.domain === "switch" && heaterEntity.state === "on")
+      );
 
   // Only show exported switch channels on the card face — non-exported hidden until modal,
-  // EXCEPT if this is a standalone switch device with no fan/light, keep at least the first switch visible
+  // EXCEPT if this is a standalone switch device with no fan/light, keep at least the first switch visible.
+  // For Govee H7133, auto_stop and heater switches are controlled via the quick mode selector, hide them from the card face switch list.
   const rawSwitchEntities = device.entities.filter(
     (e) =>
       e.domain === "switch" &&
       e.entityId !== fanEntity?.entityId &&
-      (!isH7133 || e.entityId !== heaterEntity?.entityId)
+      (!isH7133 || (e.entityId !== heaterEntity?.entityId && e.entityId !== autoStopEntity?.entityId))
   );
   const switchEntities = rawSwitchEntities.filter((e) => e.exported).length > 0
     ? rawSwitchEntities.filter((e) => e.exported)
@@ -300,20 +309,37 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
     e.stopPropagation();
     try {
       if (mode === "fan") {
+        // Govee H7133 requires main power ON before any mode selection
+        if (fanEntity && fanEntity.state !== "on") {
+          await api.turnOnEntity(fanEntity.entityId);
+          // Wait for hardware controller to wake up
+          await new Promise((resolve) => setTimeout(resolve, 450));
+        }
+        // Deactivate auto_stop (PTC heater) to enter pure fan mode
+        if (autoStopEntity && autoStopEntity.state === "on") {
+          await api.turnOffEntity(autoStopEntity.entityId);
+        }
         if (heaterEntity && heaterEntity.state === "on") {
           await api.turnOffEntity(heaterEntity.entityId);
         }
-        if (fanEntity && fanEntity.state !== "on") {
-          await api.turnOnEntity(fanEntity.entityId);
-        }
       } else if (mode === "heat") {
+        // Govee H7133 requires main power ON before heating can start
         if (fanEntity && fanEntity.state !== "on") {
           await api.turnOnEntity(fanEntity.entityId);
+          await new Promise((resolve) => setTimeout(resolve, 450));
+        }
+        // Activate auto_stop (PTC heater)
+        if (autoStopEntity && autoStopEntity.state !== "on") {
+          await api.turnOnEntity(autoStopEntity.entityId);
         }
         if (heaterEntity && heaterEntity.state !== "on") {
           await api.turnOnEntity(heaterEntity.entityId);
         }
       } else {
+        // Turn off heater/auto_stop first, then power down the unit
+        if (autoStopEntity && autoStopEntity.state === "on") {
+          await api.turnOffEntity(autoStopEntity.entityId);
+        }
         if (heaterEntity && heaterEntity.state === "on") {
           await api.turnOffEntity(heaterEntity.entityId);
         }

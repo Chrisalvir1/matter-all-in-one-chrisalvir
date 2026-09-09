@@ -1,3 +1,23 @@
+## [1.5.33] - 2026-09-09
+
+### Secuencia de Encendido Govee H7133, Limpieza de Tarjeta Móvil y Corrección de Visual Horizontal
+
+- **Secuencia Estricta de Encendido de Hardware en Govee H7133 (`DeviceCard.tsx`):**
+  - Se implementó la activación previa obligatoria de encendido general (`fanEntity`) antes de despachar comandos de modo (`fan` o `heat`), con un tiempo de espera de inicialización de 450 ms para el microcontrolador del dispositivo.
+  - Al seleccionar **Fan Manual**, se enciende primero el ventilador y se desactiva de inmediato `auto_stop` (calefactor PTC), garantizando funcionamiento en frío sin calentamiento.
+  - Al seleccionar **Calefactor**, se enciende el ventilador y se activa `auto_stop` (PTC).
+  - Al presionar **Apagar**, se desactiva primero la resistencia térmica y luego se apaga el ventilador.
+  - Se filtró la fila redundante "Interruptor" (`switch.*auto_stop`) del listado de canales de la tarjeta, eliminando la duplicación en la interfaz.
+- **Rediseño del SVG en Modo Horizontal / Acostado (`DeviceCardArt.tsx`):**
+  - Se reubicó el cuerpo horizontal del ventilador de torre a la franja superior (`y=20` a `y=48`), eliminando la superposición con el título y texto "Ventilador Playroom".
+  - Se ajustó el ancho y la posición de la tapa derecha (`x=134` a `x=144`) para evitar cualquier recorte en bordes sobre pantallas estrechas.
+  - Se configuró `pointerEvents: "none"` en el lienzo vectorial para impedir bloqueos o interacciones accidentales sobre el arte.
+- **Optimización y Prevención de Tooltips Nativos en Móvil (`style.css`):**
+  - Se añadieron reglas `-webkit-touch-callout: none` y `-webkit-user-select: none` en tarjetas y controles para evitar la aparición del globo flotante nativo de iOS WebKit al interactuar en la app de Home Assistant.
+  - Ajustes de padding y espaciado compacto para selectores de modo en pantallas menores a 600px.
+- **Invalidez de Caché Automática en WebViews Ingress (`vite.config.ts`):**
+  - Los paquetes generados incluyen hashes únicos en nombres de archivo (`index-[hash].js`, `index-[hash].css`) para garantizar que la app móvil de Home Assistant siempre cargue la última versión sin requerir borrado manual de caché.
+
 ## [1.5.32] - 2026-09-08
 
 ### Corrección de Govee H7133 (Fan vs Calefactor/Auto), Selector Interactivo Kelvin y Visuales Multicapa 2.5D de Estudio

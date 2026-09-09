@@ -234,6 +234,7 @@ export const DeviceCardArt: React.FC<DeviceCardArtProps> = ({
             height: "190px",
             opacity: isOn ? 0.96 : 0.45,
             transition: "opacity 0.6s ease",
+            pointerEvents: "none",
             maskImage:
               visualType === "apple_tv"
                 ? "linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0.85) 65%, transparent 100%)"
@@ -755,16 +756,16 @@ export const DeviceCardArt: React.FC<DeviceCardArtProps> = ({
                 /* ── MODO ACOSTADO / HORIZONTAL ── */
                 <g className="tower-horizontal-body">
                   {/* Rubber Feet Supports */}
-                  <rect x="52" y="108" width="16" height="5" rx="2" fill="#0A0B0E" stroke="rgba(255,255,255,0.12)" strokeWidth="1" />
-                  <rect x="114" y="108" width="16" height="5" rx="2" fill="#0A0B0E" stroke="rgba(255,255,255,0.12)" strokeWidth="1" />
+                  <rect x="54" y="48" width="16" height="4" rx="1.5" fill="#0A0B0E" stroke="rgba(255,255,255,0.12)" strokeWidth="1" />
+                  <rect x="108" y="48" width="16" height="4" rx="1.5" fill="#0A0B0E" stroke="rgba(255,255,255,0.12)" strokeWidth="1" />
 
                   {/* Horizontal Chassis Body */}
                   <rect
-                    x="28"
-                    y="76"
-                    width="128"
-                    height="32"
-                    rx="7"
+                    x="36"
+                    y="20"
+                    width="108"
+                    height="28"
+                    rx="6"
                     fill="url(#towerChassisGrad)"
                     stroke={
                       isHeating
@@ -777,10 +778,10 @@ export const DeviceCardArt: React.FC<DeviceCardArtProps> = ({
                   />
 
                   {/* Left Touch Cap / Controls */}
-                  <path d="M28 80 L38 80 L38 104 L28 104 Z" fill="#07080C" />
+                  <path d="M36 24 L46 24 L46 44 L36 44 Z" fill="#07080C" />
                   <circle
-                    cx="33"
-                    cy="92"
+                    cx="41"
+                    cy="34"
                     r="2.2"
                     fill={isHeating ? "#FF4500" : isFanActive ? "#00F0FF" : "#64748B"}
                     style={{
@@ -793,42 +794,42 @@ export const DeviceCardArt: React.FC<DeviceCardArtProps> = ({
                   />
 
                   {/* Right Base Cap & Night Light Ring */}
-                  <rect x="146" y="74" width="12" height="36" rx="4" fill="#0E1015" stroke="rgba(255,255,255,0.1)" strokeWidth="1" />
+                  <rect x="134" y="18" width="10" height="32" rx="3" fill="#0E1015" stroke="rgba(255,255,255,0.1)" strokeWidth="1" />
                   {isLightOn && (
                     <>
                       {/* Luminous Night Light Ring along right end cap */}
                       <rect
-                        x="147"
-                        y="77"
-                        width="4"
-                        height="30"
-                        rx="2"
+                        x="135"
+                        y="20"
+                        width="3"
+                        height="28"
+                        rx="1.5"
                         fill={lightHex}
                         opacity={Math.max(0.7, lightBrightness)}
                         style={{ filter: `drop-shadow(0 0 10px ${lightHex})` }}
                       />
                       <ellipse
-                        cx="152"
-                        cy="92"
-                        rx="16"
-                        ry="22"
+                        cx="139"
+                        cy="34"
+                        rx="12"
+                        ry="16"
                         fill={lightHex}
                         opacity={0.25 * Math.max(0.4, lightBrightness)}
-                        style={{ filter: "blur(8px)" }}
+                        style={{ filter: "blur(6px)" }}
                       />
                     </>
                   )}
 
                   {/* Horizontal Grille */}
-                  <rect x="42" y="81" width="100" height="22" rx="3" fill="#07080C" stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
+                  <rect x="48" y="24" width="84" height="20" rx="3" fill="#07080C" stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
 
                   {/* Internal PTC Heating Glow when heating */}
                   {isHeating && (
                     <rect
-                      x="43"
-                      y="82"
-                      width="98"
-                      height="20"
+                      x="49"
+                      y="25"
+                      width="82"
+                      height="18"
                       rx="2"
                       fill="url(#heatVaneGrad)"
                       opacity="0.3"
@@ -837,15 +838,15 @@ export const DeviceCardArt: React.FC<DeviceCardArtProps> = ({
                   )}
 
                   {/* Grille Vanes (Vertical lines across horizontal slot) */}
-                  {Array.from({ length: 11 }).map((_, i) => {
-                    const xPos = 48 + i * 8.8;
+                  {Array.from({ length: 10 }).map((_, i) => {
+                    const xPos = 53 + i * 8.2;
                     return (
                       <line
                         key={i}
                         x1={xPos}
-                        y1="83"
+                        y1="25"
                         x2={xPos}
-                        y2="101"
+                        y2="43"
                         stroke={
                           isHeating
                             ? "url(#heatVaneGrad)"
@@ -871,26 +872,26 @@ export const DeviceCardArt: React.FC<DeviceCardArtProps> = ({
                   {isHeating ? (
                     <g className="airflow-stream heat-stream" style={{ opacity: 0.95 }}>
                       <path
-                        d="M58 76 C55 52 42 34 26 22"
+                        d="M60 20 C58 14 50 8 36 3"
                         fill="none"
                         stroke="url(#heatBreezeUpGrad)"
-                        strokeWidth="3.2"
+                        strokeWidth="2.8"
                         strokeLinecap="round"
                         className="heat-line-1"
                       />
                       <path
-                        d="M92 75 C92 46 76 28 52 16"
+                        d="M90 20 C90 13 80 7 62 2"
                         fill="none"
                         stroke="url(#heatBreezeUpGrad)"
-                        strokeWidth="3.6"
+                        strokeWidth="3.2"
                         strokeLinecap="round"
                         className="heat-line-2"
                       />
                       <path
-                        d="M126 76 C128 48 112 30 84 18"
+                        d="M120 20 C122 13 112 7 92 2"
                         fill="none"
                         stroke="url(#heatBreezeUpGrad)"
-                        strokeWidth="2.8"
+                        strokeWidth="2.6"
                         strokeLinecap="round"
                         className="heat-line-3"
                       />
@@ -898,26 +899,26 @@ export const DeviceCardArt: React.FC<DeviceCardArtProps> = ({
                   ) : isFanActive ? (
                     <g className="airflow-stream breeze-stream" style={{ opacity: Math.max(0.45, effectiveFanPct / 100) }}>
                       <path
-                        d="M58 76 C55 52 42 34 26 22"
+                        d="M60 20 C58 14 50 8 36 3"
                         fill="none"
                         stroke="url(#breezeUpGrad)"
-                        strokeWidth="3"
+                        strokeWidth="2.8"
                         strokeLinecap="round"
                         className="breeze-line-1"
                       />
                       <path
-                        d="M92 75 C92 46 76 28 52 16"
+                        d="M90 20 C90 13 80 7 62 2"
                         fill="none"
                         stroke="url(#breezeUpGrad)"
-                        strokeWidth="3.4"
+                        strokeWidth="3"
                         strokeLinecap="round"
                         className="breeze-line-2"
                       />
                       <path
-                        d="M126 76 C128 48 112 30 84 18"
+                        d="M120 20 C122 13 112 7 92 2"
                         fill="none"
                         stroke="url(#breezeUpGrad)"
-                        strokeWidth="2.6"
+                        strokeWidth="2.4"
                         strokeLinecap="round"
                         className="breeze-line-3"
                       />
