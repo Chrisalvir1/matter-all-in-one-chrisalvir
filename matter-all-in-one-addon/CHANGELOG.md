@@ -1,3 +1,21 @@
+## [1.5.64] - 2026-09-10
+
+### Control Maestro Unificado y Claridad de Endpoints para Accesorios Compuestos (Ventilador + Luz en 1 QR)
+
+- **Interruptor Maestro Único para Accesorios Compuestos (`DeviceModal.tsx`):**
+  - Para ventiladores de techo con luz integrada (`fan.*` + `light.*`), se reemplazaron los interruptores individuales de exportación de cada entidad por un **Interruptor Maestro General** («Publicar Accesorio en Matter: Ventilador y luz juntos bajo un solo código QR»).
+  - Al activar o desactivar el interruptor maestro, el accesorio completo se publica o retira de Matter de manera atómica, garantizando coherencia con el modelo de accesorio unificado de 1 solo código QR.
+- **Insignias de Rol de Endpoint y Exclusión de Entidades Auxiliares (`DeviceModal.tsx`):**
+  - Las filas individuales de sub-entidades ahora indican explícitamente su función sin interruptores individuales confusos:
+    - **Endpoint 1 · Ventilador:** Insignia azul indicando el canal primario.
+    - **Endpoint 2 · Luz (Dimmer + Kelvin):** Insignia verde indicando el canal secundario.
+    - **Auxiliar (Omitido):** Insignia gris con etiqueta «Excluido» para entidades secundarias no exportables (ej. switches de buzzer o beeper).
+- **Tarjetas de Dispositivo con Indicador Unificado (`DeviceCard.tsx`):**
+  - Para accesorios compuestos, el contador de publicación muestra `1/1 Matter` o `0/1 Matter` (en lugar de conteos fraccionarios engañosos como `2/3`), junto con la etiqueta distintiva `⚡ Unificado (1 QR)`.
+- **Sincronización Total de Código QR y Operaciones (`DeviceModal.tsx`):**
+  - Seleccionar cualquier fila secundaria o auxiliar mantiene visible el código QR y código manual unificado del accesorio principal, evitando que el código QR desaparezca o cambie de contexto.
+  - Las acciones de desvinculación, reconexión y apertura de Multi-Admin se dirigen siempre al nodo principal unificado.
+
 ## [1.5.63] - 2026-09-10
 
 ### Corrección Crítica de Eliminación de Fabrics y Purga de Almacenamiento Persistente en Disco

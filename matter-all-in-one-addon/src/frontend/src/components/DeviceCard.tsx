@@ -37,10 +37,20 @@ function getDomainIcon(domain: string): string {
 }
 
 export const DeviceCard: React.FC<DeviceCardProps> = ({ device, searchQuery, onConfigure }) => {
+  const isComposite =
+    device.entities.some((e) => e.composite || e.isComposite || e.compositeDeviceId) ||
+    (device.entities.some((e) => e.domain === "fan") &&
+     device.entities.some((e) => e.domain === "light"));
+
+  const compositeExported =
+    isComposite && device.entities.some((e) => e.exported && !e.auxiliary);
   const exported = device.entities.filter((e) => e.exported).length;
   const isMqtt = device.entities.some((e) => e.origin === "mqtt" || e.entityId.startsWith("mqtt."));
   const hasIssue = device.entities.some((e) => e.exported && e.hasIssue);
-  const primaryDomain = device.entities[0]?.domain || "switch";
+  const fanEntity = device.entities.find((e) => e.domain === "fan");
+  const primaryDomain = isComposite
+    ? (fanEntity ? "fan" : "light")
+    : (device.entities[0]?.domain || "switch");
 
   const domains = [...new Set(device.entities.map((e) => e.domain))].slice(0, 3);
 
@@ -62,13 +72,40 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({ device, searchQuery, onC
     >
       <div className="card-top">
         <span className="device-icon">{getDomainIcon(primaryDomain)}</span>
-        <span className={`export-badge ${exported ? "active" : ""}`}>
-          {exported}/{device.entities.length}
+        <span
+          className={`export-badge ${
+            isComposite
+              ? compositeExported
+                ? "active"
+                : ""
+              : exported
+              ? "active"
+              : ""
+          }`}
+        >
+          {isComposite
+            ? compositeExported
+              ? "1/1 Matter"
+              : "0/1 Matter"
+            : `${exported}/${device.entities.length}`}
         </span>
       </div>
       <h3 title={device.name}>{device.name}</h3>
       <p className="device-meta">{originText}</p>
       <div className="tags">
+        {isComposite && (
+          <span
+            className="tag"
+            style={{
+              background: "rgba(59, 130, 246, 0.15)",
+              color: "#60a5fa",
+              border: "1px solid rgba(59, 130, 246, 0.3)",
+              fontWeight: 600,
+            }}
+          >
+            ⚡ Unificado (1 QR)
+          </span>
+        )}
         {isMqtt && <span className="tag tag-mqtt">📡 MQTT</span>}
         {device.manufacturer && <span className="tag tag-brand">{device.manufacturer}</span>}
         {hasIssue && <span className="tag tag-warning">Revisar</span>}
@@ -80,7 +117,9 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({ device, searchQuery, onC
       </div>
       <div className="card-footer">
         <span className="entity-summary">
-          {device.entities.length} entidad{device.entities.length === 1 ? "" : "es"}
+          {isComposite
+            ? `1 accesorio · ${device.entities.length} entidad${device.entities.length === 1 ? "" : "es"}`
+            : `${device.entities.length} entidad${device.entities.length === 1 ? "" : "es"}`}
         </span>
         <button
           className="button button-secondary"

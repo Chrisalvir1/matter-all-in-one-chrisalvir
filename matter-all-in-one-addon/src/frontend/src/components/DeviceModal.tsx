@@ -114,35 +114,77 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
 
   const activeEntity = selectedEntity || sortedEntities[0] || null;
 
+  const isComposite = device.entities.some((e) => e.composite);
+  const compositePrimary =
+    device.entities.find((e) => e.entityId === e.compositePrimaryEntityId) ||
+    device.entities.find((e) => e.domain === "fan") ||
+    device.entities[0];
+  const isCompositeExported = device.entities.some(
+    (e) => e.composite && e.exported
+  );
+
   // Pairing code: fresh code from reset, primary entity's code, or selected entity's code
   const pairingCode =
     freshPairingCode ||
-    activeEntity?.pairingCode ||
+    (isComposite ? compositePrimary?.pairingCode : activeEntity?.pairingCode) ||
     device.entities.find((e) => e.exported && e.pairingCode)?.pairingCode ||
     "";
   const manualCode =
     freshManualCode ||
-    activeEntity?.manualPairingCode ||
+    (isComposite ? compositePrimary?.manualPairingCode : activeEntity?.manualPairingCode) ||
     device.entities.find((e) => e.exported && e.manualPairingCode)?.manualPairingCode ||
     "";
 
   const matterFabrics = resetFabrics
     ? []
-    : Array.isArray(activeEntity?.matterFabrics)
+    : Array.isArray(activeEntity?.matterFabrics) && activeEntity.matterFabrics.length > 0
     ? activeEntity.matterFabrics
+    : Array.isArray(compositePrimary?.matterFabrics) && compositePrimary.matterFabrics.length > 0
+    ? compositePrimary.matterFabrics
     : Array.isArray(device.entities.find((e) => e.matterFabrics?.length)?.matterFabrics)
     ? device.entities.find((e) => e.matterFabrics?.length)!.matterFabrics!
     : [];
 
-  const isExported = Boolean(activeEntity?.exported);
-  const isCommissioned = !resetFabrics && Boolean(activeEntity?.commissioned);
+  const isExported = isComposite
+    ? Boolean(isCompositeExported)
+    : Boolean(activeEntity?.exported);
+  const isCommissioned =
+    !resetFabrics &&
+    (isComposite
+      ? Boolean(compositePrimary?.commissioned) ||
+        device.entities.some((e) => e.composite && e.commissioned)
+      : Boolean(activeEntity?.commissioned));
+
+  const handleToggleCompositeExport = async () => {
+    if (!compositePrimary) return;
+    const nextState = !isCompositeExported;
+    try {
+      await api.toggleExport(compositePrimary.entityId, nextState);
+      device.entities.forEach((e) => {
+        if (e.composite) {
+          e.exported = nextState;
+        }
+      });
+      showToast(
+        nextState
+          ? `✓ Accesorio publicado en Matter (Ventilador + Luz juntos en 1 QR)`
+          : `Accesorio retirado de Matter`
+      );
+      onRefresh();
+    } catch (err: any) {
+      showToast(err.message || "Error al modificar publicación", true);
+    }
+  };
 
   const handleRemoveFabric = async (fabricIndex: number | string) => {
     if (!activeEntity) return;
     if (!confirm("¿Desconectar este accesorio de este controlador Matter?")) return;
     setIsBusy(true);
+    const targetEntityId = isComposite
+      ? (compositePrimary?.entityId || activeEntity.entityId)
+      : activeEntity.entityId;
     try {
-      const res: any = await api.removeFabric(activeEntity.entityId, fabricIndex);
+      const res: any = await api.removeFabric(targetEntityId, fabricIndex);
       if (res?.remainingFabrics === 0) {
         setResetFabrics(true);
         if (res?.pairingCode) setFreshPairingCode(res.pairingCode);
@@ -171,24 +213,24 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
           }
         });
       }
-      showToast("✓ Controlador desconectado");
+      showToast("✓ Fabric desconectado de este accesorio");
       onRefresh();
     } catch (err: any) {
-      showToast(err.message || "Error al desconectar", true);
+      showToast(err.message || "Error al desconectar fabric", true);
     } finally {
       setIsBusy(false);
     }
   };
 
   const handleToggleExport = async (entity: EntityRecord) => {
+    const nextState = !entity.exported;
     try {
-      const nextState = !entity.exported;
       await api.toggleExport(entity.entityId, nextState);
       entity.exported = nextState;
       showToast(
         nextState
           ? `✓ ${entity.name || entity.entityId} publicado en Matter`
-          : `Retirado de Matter`
+          : `${entity.name || entity.entityId} retirado de Matter`
       );
       onRefresh();
     } catch (err: any) {
@@ -200,9 +242,12 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     if (!activeEntity) return;
     setIsBusy(true);
     showToast("Reconectando accesorio Matter...");
+    const targetEntityId = isComposite
+      ? (compositePrimary?.entityId || activeEntity.entityId)
+      : activeEntity.entityId;
     try {
       await api.reconnectAccessory(
-        activeEntity.compositeDeviceId || activeEntity.entityId
+        activeEntity.compositeDeviceId || targetEntityId
       );
       showToast("✓ Accesorio reconectado");
       onRefresh();
@@ -216,8 +261,11 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
   const handleOpenCommissioning = async () => {
     if (!activeEntity) return;
     setIsBusy(true);
+    const targetEntityId = isComposite
+      ? (compositePrimary?.entityId || activeEntity.entityId)
+      : activeEntity.entityId;
     try {
-      await api.openCommissioning(activeEntity.entityId);
+      await api.openCommissioning(targetEntityId);
       setMultiAdminOpen(true);
       showToast(
         "✓ Modo Multi-Admin Abierto. Puedes emparejar en una segunda plataforma."
@@ -238,8 +286,11 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     )
       return;
     setIsBusy(true);
+    const targetEntityId = isComposite
+      ? (compositePrimary?.entityId || activeEntity.entityId)
+      : activeEntity.entityId;
     try {
-      const res: any = await api.resetAccessory(activeEntity.entityId);
+      const res: any = await api.resetAccessory(targetEntityId);
       if (res?.pairingCode || res?.manualPairingCode) {
         setFreshPairingCode(res.pairingCode || null);
         setFreshManualCode(res.manualPairingCode || null);
@@ -251,6 +302,8 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
         device.entities.forEach((e) => {
           e.commissioned = false;
           e.matterFabrics = [];
+          if (res?.pairingCode) e.pairingCode = res.pairingCode;
+          if (res?.manualPairingCode) e.manualPairingCode = res.manualPairingCode;
         });
       }
       showToast("✓ Accesorio desvinculado y nuevo QR generado");
@@ -346,14 +399,63 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
         >
           {/* Column 1: Entity List */}
           <div className="entity-list-col" style={{ display: "flex", flexDirection: "column", minHeight: 0, height: "100%" }}>
-            <div className="section-header">
-              <h3>Entidades disponibles</h3>
+            <div className="section-header" style={{ marginBottom: isComposite ? "8px" : "12px" }}>
+              <div>
+                <h3 style={{ margin: 0 }}>
+                  {isComposite ? "Endpoints del Accesorio" : "Entidades disponibles"}
+                </h3>
+                {isComposite && (
+                  <p style={{ fontSize: "11px", color: "var(--muted)", margin: "2px 0 0" }}>
+                    1 accesorio Matter unificado (1 solo código QR)
+                  </p>
+                )}
+              </div>
               <span id="modal-export-count">
-                {activeNodesCount
+                {isComposite
+                  ? isCompositeExported
+                    ? "✓ 1 accesorio activo en Matter"
+                    : "0 accesorios en Matter"
+                  : activeNodesCount
                   ? `${activeNodesCount} accesorio Matter · ${device.entities.filter((e) => e.exported).length}/${device.entities.length} endpoints`
                   : `0/${device.entities.length} publicadas`}
               </span>
             </div>
+
+            {isComposite && (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "10px 14px",
+                  background: isCompositeExported
+                    ? "rgba(16, 185, 129, 0.08)"
+                    : "rgba(255, 255, 255, 0.03)",
+                  border: `1px solid ${isCompositeExported ? "rgba(16, 185, 129, 0.25)" : "var(--border)"}`,
+                  borderRadius: "10px",
+                  marginBottom: "10px",
+                  flexShrink: 0,
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: "12.5px", fontWeight: 600, color: "var(--text)" }}>
+                    Publicar Accesorio en Matter
+                  </div>
+                  <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "2px" }}>
+                    Ventilador y luz juntos bajo un solo código QR
+                  </div>
+                </div>
+                <label className="toggle" style={{ margin: 0 }}>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(isCompositeExported)}
+                    onChange={handleToggleCompositeExport}
+                  />
+                  <span />
+                </label>
+              </div>
+            )}
+
             <div
               className="entity-list"
               id="entity-list"
@@ -366,6 +468,15 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
             >
               {sortedEntities.map((ent) => {
                 const isSelected = activeEntity?.entityId === ent.entityId;
+                const isPrimaryEndpoint =
+                  ent.entityId === ent.compositePrimaryEntityId ||
+                  (isComposite && ent.domain === "fan");
+                const isIntegratedEndpoint =
+                  isComposite &&
+                  (ent.domain === "fan" || ent.domain === "light") &&
+                  !ent.auxiliary;
+                const isExcludedAuxiliary = isComposite && ent.auxiliary;
+
                 return (
                   <div
                     key={ent.entityId}
@@ -375,29 +486,112 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                     <span className="entity-row-icon">
                       {getDomainIcon(ent.domain)}
                     </span>
-                    <div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
                       <div className="entity-row-name">
                         {ent.name || ent.entityId}
                       </div>
                       <div className="entity-row-id">{ent.entityId}</div>
-                      <span
-                        className={`entity-state${ent.state === "on" ? " on" : ""}`}
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: "6px",
+                          alignItems: "center",
+                          marginTop: "3px",
+                          flexWrap: "wrap",
+                        }}
                       >
-                        {ent.state || "desconocido"}
-                      </span>
+                        <span
+                          className={`entity-state${ent.state === "on" ? " on" : ""}`}
+                        >
+                          {ent.state || "desconocido"}
+                        </span>
+                        {isComposite && isPrimaryEndpoint && (
+                          <span
+                            className="tag"
+                            style={{
+                              fontSize: "10px",
+                              padding: "1px 6px",
+                              background: "rgba(59, 130, 246, 0.15)",
+                              color: "#60a5fa",
+                              border: "1px solid rgba(59, 130, 246, 0.3)",
+                            }}
+                          >
+                            Endpoint 1 · Ventilador
+                          </span>
+                        )}
+                        {isComposite && !isPrimaryEndpoint && isIntegratedEndpoint && (
+                          <span
+                            className="tag"
+                            style={{
+                              fontSize: "10px",
+                              padding: "1px 6px",
+                              background: "rgba(16, 185, 129, 0.15)",
+                              color: "#34d399",
+                              border: "1px solid rgba(16, 185, 129, 0.3)",
+                            }}
+                          >
+                            Endpoint 2 · Luz (Dimmer + Kelvin)
+                          </span>
+                        )}
+                        {isExcludedAuxiliary && (
+                          <span
+                            className="tag"
+                            style={{
+                              fontSize: "10px",
+                              padding: "1px 6px",
+                              background: "rgba(156, 163, 175, 0.15)",
+                              color: "#9ca3af",
+                              border: "1px solid rgba(156, 163, 175, 0.25)",
+                            }}
+                          >
+                            Auxiliar (Omitido)
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <div
                       className="export-control"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <label className="toggle">
-                        <input
-                          type="checkbox"
-                          checked={Boolean(ent.exported)}
-                          onChange={() => handleToggleExport(ent)}
-                        />
-                        <span />
-                      </label>
+                      {isComposite ? (
+                        isExcludedAuxiliary ? (
+                          <span
+                            style={{
+                              fontSize: "11px",
+                              color: "var(--muted)",
+                              fontStyle: "italic",
+                            }}
+                          >
+                            Excluido
+                          </span>
+                        ) : (
+                          <span
+                            className={`badge ${ent.exported ? "badge-success" : "badge-muted"}`}
+                            style={{
+                              fontSize: "10.5px",
+                              padding: "2px 8px",
+                              borderRadius: "6px",
+                              background: ent.exported
+                                ? "rgba(16, 185, 129, 0.15)"
+                                : "rgba(255, 255, 255, 0.05)",
+                              color: ent.exported ? "#34d399" : "var(--muted)",
+                              border: `1px solid ${ent.exported ? "rgba(16, 185, 129, 0.3)" : "rgba(255, 255, 255, 0.1)"}`,
+                              fontWeight: 500,
+                            }}
+                          >
+                            {ent.exported ? "✓ En Matter" : "Inactivo"}
+                          </span>
+                        )
+                      ) : (
+                        <label className="toggle">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(ent.exported)}
+                            onChange={() => handleToggleExport(ent)}
+                          />
+                          <span />
+                        </label>
+                      )}
                     </div>
                   </div>
                 );
@@ -430,7 +624,13 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
               )}
             </h3>
             <p id="selection-description">
-              {isExported
+              {isComposite
+                ? activeEntity?.auxiliary
+                  ? "Esta entidad es auxiliar (ej. buzzer/beeper) y se omite en Matter para mantener limpio el accesorio."
+                  : isExported
+                  ? "Este canal forma parte del accesorio unificado y está activo en Matter bajo el mismo código QR."
+                  : "Activa el interruptor general arriba para publicar el accesorio (ventilador y luz juntos en 1 QR)."
+                : isExported
                 ? "Esta entidad está activa y expuesta a través de Matter."
                 : "Activa el interruptor para publicar este canal en Matter."}
             </p>
@@ -707,7 +907,11 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
               <QRCodeDisplay
                 pairingCode={pairingCode}
                 manualCode={manualCode}
-                entityName={activeEntity?.name || device.name}
+                entityName={
+                  isComposite
+                    ? compositePrimary?.name || device.name
+                    : activeEntity?.name || device.name
+                }
                 elementId="device-qr-code"
               />
             ) : (
@@ -715,7 +919,9 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                 className="qr-liquid-glass-card"
                 style={{ padding: 20, textAlign: "center", color: "var(--text-secondary)", flexShrink: 0 }}
               >
-                Activa la entidad para generar el código QR de Matter.
+                {isComposite
+                  ? "Activa el interruptor general del accesorio para generar el código QR de Matter."
+                  : "Activa la entidad para generar el código QR de Matter."}
               </div>
             )}
 
