@@ -49,7 +49,6 @@ import {
   getExportProfile,
   getExportProfiles,
 } from "./device-profiles.js";
-import { ManualPairingCodeCodec, QrPairingCodeCodec } from "@matter/types/schema";
 import { MqttClientManager } from "./mqtt/mqtt-client.js";
 import { MqttEntity } from "./mqtt/mqtt.entity.js";
 import { ScryptedStorage } from "./camera/scrypted/scrypted-storage.js";
@@ -606,7 +605,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           ?.qrPairingCode ??
         endpoint?.qrPairingCode ??
         null;
-      let manualPairingCode =
+      const manualPairingCode =
         pairingCodes.manualPairingCode ??
         pairingCodes.manualCode ??
         behaviorCommissioning.manualPairingCode ??
@@ -615,22 +614,6 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           ?.manualPairingCode ??
         endpoint?.manualPairingCode ??
         null;
-
-      if (
-        !manualPairingCode &&
-        qrPairingCode &&
-        typeof qrPairingCode === "string" &&
-        qrPairingCode.startsWith("MT:")
-      ) {
-        try {
-          const decoded = QrPairingCodeCodec.decode(qrPairingCode);
-          if (Array.isArray(decoded) && decoded[0]) {
-            manualPairingCode = ManualPairingCodeCodec.encode(decoded[0] as any);
-          }
-        } catch {
-          // ignore parsing error
-        }
-      }
 
       // An accessory is commissioned if and only if it has at least one active fabric
       const isCommissioned = fabrics.length > 0;

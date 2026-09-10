@@ -1,3 +1,14 @@
+## [1.5.55] - 2026-09-10
+
+### Corrección Crítica de Arranque: Eliminación de Importación Externa @matter/types
+
+- **Resolución Inmediata de Arranque del Add-on:**
+  - Se eliminó la importación estática de `@matter/types/schema` en `platform.ts` que provocaba el fallo `ERR_MODULE_NOT_FOUND` al iniciar el contenedor de producción.
+  - El puente Matterbridge arranca ahora limpiamente y sin demoras.
+- **Se mantiene toda la UI reparada:**
+  - Lista de casas conectadas (`matterFabrics`) con botón `[Desconectar]`.
+  - Botón directo `[ 🔄 Desconectar y nuevo QR ]` para limpiar sesiones congeladas en Apple Home.
+
 ## [1.5.54] - 2026-09-10
 
 ### Auditoría Completa y Reparación de Vinculación Matter, Código Manual y Fabrics
