@@ -52,6 +52,9 @@ export const LiquidSlider: React.FC<LiquidSliderProps> = ({
   const handleChange = (newVal: number) => {
     setVal(newVal);
     onChange?.(newVal);
+    // For H7133, speed is handled exclusively by executeH7133FanMode via onChange
+    // to prevent sending raw switch turn_on which causes hardware to reset to heating!
+    if (domain === "h7133_fan") return;
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
     debounceTimer.current = setTimeout(async () => {
       try {

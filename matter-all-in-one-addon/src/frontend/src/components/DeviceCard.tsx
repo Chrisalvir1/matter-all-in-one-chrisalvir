@@ -139,31 +139,52 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
     return "off";
   });
 
-  // Oscillation entities detection
-  const oscSelectEntity = device.entities.find(
-    (e) =>
-      e.domain === "select" &&
-      (/oscil|sweep|angle|direction|range/i.test(e.entityId) || /oscil|sweep|dirección/i.test(e.name || ""))
-  );
-
+  // Oscillation entities detection (strictly excludes main fanEntity, heaterEntity, autoStopEntity)
   const oscVerticalSwitch = device.entities.find(
     (e) =>
       e.domain === "switch" &&
+      e.entityId !== fanEntity?.entityId &&
+      e.entityId !== autoStopEntity?.entityId &&
       (/vert|up_down|arriba|abajo/i.test(e.entityId) || /vert|arriba|abajo/i.test(e.name || ""))
   );
 
   const oscHorizontalSwitch = device.entities.find(
     (e) =>
       e.domain === "switch" &&
+      e.entityId !== fanEntity?.entityId &&
+      e.entityId !== autoStopEntity?.entityId &&
       (/horiz|left_right|izq|der/i.test(e.entityId) || /horiz|izq|der/i.test(e.name || ""))
   );
 
   const oscGeneralSwitch = device.entities.find(
     (e) =>
       e.domain === "switch" &&
-      (/oscil/i.test(e.entityId) || /oscil/i.test(e.name || "")) &&
+      e.entityId !== fanEntity?.entityId &&
+      e.entityId !== heaterEntity?.entityId &&
+      e.entityId !== autoStopEntity?.entityId &&
+      (/oscil|swing|sweep|shake|giro|girar|rotar|pan/i.test(e.entityId) ||
+       /oscil|swing|sweep|shake|giro|girar|rotar/i.test(e.name || "")) &&
       e.entityId !== oscVerticalSwitch?.entityId &&
       e.entityId !== oscHorizontalSwitch?.entityId
+  );
+
+  const oscSelectEntity = device.entities.find(
+    (e) =>
+      e.domain === "select" &&
+      (/oscil|swing|sweep|angle|direction|range/i.test(e.entityId) ||
+       /oscil|swing|sweep|dirección|ángulo/i.test(e.name || "") ||
+       (e.attributes?.options || []).some((opt: string) => /oscil|swing|sweep|horiz|vert|angle/i.test(opt)))
+  );
+
+  const oscClimateEntity = device.entities.find(
+    (e) =>
+      e.domain === "climate" &&
+      Array.isArray(e.attributes?.swing_modes) &&
+      e.attributes.swing_modes.length > 0
+  );
+
+  const oscFanEntity = device.entities.find(
+    (e) => e.domain === "fan"
   );
 
   // Detect heater / climate entity
@@ -432,7 +453,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
     }
 
     // Step 4: Explicitly set fan speed / percentage so it NEVER stays at 0!
-    if (fanEntity) {
+    if (fanEntity && fanEntity.domain === "fan") {
       tasks.push(api.setEntityValue(fanEntity.entityId, speedPct).catch(() => {}));
     }
 
@@ -484,7 +505,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
 
     // Reinforce after 250ms in case microcontroller took extra time to transition from boot
     setTimeout(() => {
-      if (fanEntity) {
+      if (fanEntity && fanEntity.domain === "fan") {
         api.setEntityValue(fanEntity.entityId, speedPct).catch(() => {});
       }
       for (const sel of selectEntities) {
@@ -534,23 +555,15 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
       window.localStorage.setItem(`govee_h7133_oscillation_${device.id}`, mode);
     } catch {}
 
+    const isOscActive = mode !== "off";
     const tasks: Promise<any>[] = [];
 
-    // 1. Select entity if present
-    if (oscSelectEntity) {
-      const options: string[] = oscSelectEntity.attributes?.options || [];
-      let targetOption: string | undefined;
-      if (mode === "off") {
-        targetOption = options.find((opt) => /^(off|fijo|none|stop|desactivado|no)$/i.test(opt));
-      } else if (mode === "horizontal") {
-        targetOption = options.find((opt) => /^(horizontal|horiz|left_right|izq_der)$/i.test(opt) || opt.toLowerCase().includes("horiz"));
-      } else if (mode === "vertical") {
-        targetOption = options.find((opt) => /^(vertical|vert|up_down|arriba_abajo)$/i.test(opt) || opt.toLowerCase().includes("vert"));
-      } else if (mode === "all") {
-        targetOption = options.find((opt) => /^(all|both|todo|ambos|3d)$/i.test(opt) || opt.toLowerCase().includes("all") || opt.toLowerCase().includes("both"));
-      }
-      if (targetOption) {
-        tasks.push(api.selectOption(oscSelectEntity.entityId, targetOption).catch(() => {}));
+    // 1. Dedicated oscillation switch (never the main power switch)
+    if (oscGeneralSwitch) {
+      if (isOscActive) {
+        tasks.push(api.turnOnEntity(oscGeneralSwitch.entityId).catch(() => {}));
+      } else {
+        tasks.push(api.turnOffEntity(oscGeneralSwitch.entityId).catch(() => {}));
       }
     }
 
@@ -562,7 +575,6 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
         tasks.push(api.turnOffEntity(oscHorizontalSwitch.entityId).catch(() => {}));
       }
     }
-
     if (oscVerticalSwitch) {
       if (mode === "vertical" || mode === "all") {
         tasks.push(api.turnOnEntity(oscVerticalSwitch.entityId).catch(() => {}));
@@ -571,18 +583,57 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
       }
     }
 
-    // 3. General oscillation switch
-    if (oscGeneralSwitch) {
-      if (mode !== "off") {
-        tasks.push(api.turnOnEntity(oscGeneralSwitch.entityId).catch(() => {}));
-      } else {
-        tasks.push(api.turnOffEntity(oscGeneralSwitch.entityId).catch(() => {}));
+    // 3. Select entity if present
+    if (oscSelectEntity) {
+      const options: string[] = oscSelectEntity.attributes?.options || [];
+      let targetOption: string | undefined;
+      if (!isOscActive) {
+        targetOption = options.find((opt) => /^(off|fijo|none|stop|desactivado|no)$/i.test(opt) || opt.toLowerCase().includes("off"));
+      } else if (mode === "horizontal") {
+        targetOption = options.find((opt) => /horiz|left_right|izq|60/i.test(opt)) || options.find((opt) => /^(on|activado|si|yes|oscil)/i.test(opt));
+      } else if (mode === "vertical") {
+        targetOption = options.find((opt) => /vert|up_down|arriba|40/i.test(opt)) || options.find((opt) => /^(on|activado|si|yes|oscil)/i.test(opt));
+      } else if (mode === "all") {
+        targetOption = options.find((opt) => /all|both|todo|3d/i.test(opt)) || options.find((opt) => /^(on|activado|si|yes|oscil)/i.test(opt));
+      }
+      if (!targetOption && isOscActive) {
+        targetOption = options.find((opt) => !/^(off|fijo|none|stop|desactivado|no)$/i.test(opt));
+      }
+      if (targetOption) {
+        tasks.push(api.selectOption(oscSelectEntity.entityId, targetOption).catch(() => {}));
       }
     }
 
-    // 4. Fan entity oscillate service
-    if (fanEntity) {
-      tasks.push(api.setFanOscillation(fanEntity.entityId, mode !== "off").catch(() => {}));
+    // 4. Climate swing mode if present
+    if (oscClimateEntity) {
+      const modes: string[] = oscClimateEntity.attributes?.swing_modes || [];
+      const targetSwing = isOscActive
+        ? modes.find((m) => /^(on|both|horizontal|swing|oscillat)/i.test(m)) || modes[1] || "on"
+        : modes.find((m) => /^(off|stop|none)/i.test(m)) || "off";
+      tasks.push(api.setClimateSwingMode(oscClimateEntity.entityId, targetSwing).catch(() => {}));
+    }
+
+    // 5. Genuine fan domain entity (ONLY if domain is genuinely "fan", NEVER on a switch!)
+    if (oscFanEntity && oscFanEntity.domain === "fan") {
+      tasks.push(api.setFanOscillation(oscFanEntity.entityId, isOscActive).catch(() => {}));
+    }
+
+    // CRITICAL FOR H7133: If currently in Fan mode, RE-ASSERT Fan mode so hardware NEVER slips into heating!
+    if (isH7133 && currentH7133Mode === "fan") {
+      if (autoStopEntity) {
+        tasks.push(api.turnOffEntity(autoStopEntity.entityId).catch(() => {}));
+      }
+      if (heaterEntity && heaterEntity.domain === "switch" && heaterEntity.entityId !== fanEntity?.entityId) {
+        tasks.push(api.turnOffEntity(heaterEntity.entityId).catch(() => {}));
+      }
+      const selectEntities = device.entities.filter((e) => e.domain === "select" && e.entityId !== oscSelectEntity?.entityId);
+      for (const sel of selectEntities) {
+        const options: string[] = sel.attributes?.options || [];
+        const fanOpt = options.find((opt: string) =>
+          /^(fan|fan_only|ventilador|normal|manual)$/i.test(opt) || opt.toLowerCase().includes("fan")
+        );
+        if (fanOpt) tasks.push(api.selectOption(sel.entityId, fanOpt).catch(() => {}));
+      }
     }
 
     await Promise.allSettled(tasks);
@@ -1602,7 +1653,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
 
               <LiquidSlider
                 entityId={fanEntity.entityId}
-                domain="fan"
+                domain={isH7133 ? "h7133_fan" : (fanEntity.domain || "fan")}
                 initialValue={
                   typeof fanEntity.attributes?.percentage === "number" && fanEntity.attributes.percentage > 0
                     ? fanEntity.attributes.percentage
@@ -1620,6 +1671,9 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                     try {
                       window.localStorage.setItem(`govee_h7133_fan_speed_pct_${device.id}`, String(val));
                     } catch {}
+                    if (currentH7133Mode === "fan") {
+                      executeH7133FanMode(val);
+                    }
                   }
                 }}
                 onRefresh={onRefresh}

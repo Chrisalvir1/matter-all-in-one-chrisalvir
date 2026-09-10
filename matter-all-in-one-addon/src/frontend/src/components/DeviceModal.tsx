@@ -289,7 +289,11 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     if (isH7133 || id.includes("h7133") || name.includes("ventilador")) {
       if (ent.domain === "light") return "💡 Luz Nocturna / LED";
       if (id.includes("auto_stop")) return "🔥 Calefactor / Auto-Stop (Plan B)";
-      if (id.includes("temp") || ent.domain === "sensor") return "🌡️ Sensor de Temperatura Ambiente";
+      if (id.includes("temp") && !id.includes("target") || (ent.domain === "sensor" && ent.attributes?.device_class === "temperature")) return "🌡️ Sensor de Temperatura Ambiente";
+      if (id.includes("oscil") || id.includes("swing") || id.includes("sweep") || name.includes("oscilación") || name.includes("barrido")) return "🔄 Oscilación / Barrido";
+      if (id.includes("gear") || id.includes("speed") || name.includes("velocidad") || name.includes("engranaje")) return "⚡ Velocidad / Engranaje";
+      if (id.includes("mode") || name.includes("modo")) return "🎛️ Selector de Modo de Trabajo";
+      if (id.includes("target_temp") || id.includes("target_temperature") || name.includes("objetivo")) return "🎯 Temperatura Objetivo";
       if (id.includes("ventilador") || ent.domain === "fan" || ent.domain === "switch") return "🌪️ Ventilador Principal (Plan A)";
     }
     return ent.name || ent.entityId;

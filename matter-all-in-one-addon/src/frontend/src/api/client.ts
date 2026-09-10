@@ -133,6 +133,12 @@ export const api = {
       body: JSON.stringify({ oscillating }),
     }),
 
+  setClimateSwingMode: (entityId: string, swing_mode: string) =>
+    request(`/entity-climate-swing/${encodeURIComponent(entityId)}`, {
+      method: "POST",
+      body: JSON.stringify({ swing_mode }),
+    }),
+
   setLightSettings: (
     entityId: string,
     options: {

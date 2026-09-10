@@ -1,3 +1,24 @@
+## [1.5.38] - 2026-09-09
+
+### Corrección Crítica: Aislamiento Total de Oscilación y Bloqueo Anticonmutación a Calefacción en Govee H7133
+
+- **Causa Raíz Diagnosticada y Solucionada:**
+  - Al pulsar los controles de oscilación o mover el deslizador, el servicio llamaba erróneamente `api.setFanOscillation` o `api.setEntityValue` sobre `switch.ventilador_playroom` (la entidad de alimentación principal).
+  - En Home Assistant, enviar `switch.turn_on` al interruptor general de hardware hacía que el microcontrolador Govee se reiniciara y arrancara en su modo por defecto de fábrica: **Calefacción (PTC Heat)**.
+- **Aislamiento Estricto de Entidades de Oscilación (`DeviceCard.tsx`):**
+  - La detección de entidades de oscilación ahora excluye explícitamente el switch principal (`fanEntity`), el calefactor (`heaterEntity`) y la parada automática (`autoStopEntity`).
+  - `handleSetOscillation` despacha comandos únicamente a:
+    - Interruptor dedicado de oscilación / swing / barrido (`oscGeneralSwitch`).
+    - Selectores de oscilación / ángulo / modo (`oscSelectEntity`).
+    - Modos de oscilación climática (`climate.set_swing_mode`).
+    - Servicio `fan.oscillate` (estrictamente si el dominio es `fan`, nunca si es un `switch`).
+- **Bloqueo Activo del Modo Fan Manual (`DeviceCard.tsx`):**
+  - Al activar o cambiar la oscilación mientras se está en `Fan Manual`, el sistema refuerza de forma atómica el estado `auto_stop` en OFF y el selector de modo en `Fan`, garantizando que el hardware jamás salte a calefacción.
+- **Protección del Deslizador de Velocidad (`LiquidSlider.tsx`):**
+  - Para el perfil `h7133_fan`, el deslizador delega el ajuste de velocidad a `executeH7133FanMode` (que selecciona el engranaje adecuado y preserva el modo de ventilación pura), impidiendo el envío de órdenes de encendido crudo al conmutador general.
+- **Identificación Precisa de Entidades en el Modal (`DeviceModal.tsx`):**
+  - Diferenciación visual de nombres en el panel de configuración: oscilación/barrido, selectores de modo de trabajo, engranajes de velocidad, paradas automáticas y sensores de temperatura.
+
 ## [1.5.37] - 2026-09-09
 
 ### Control de Velocidad (Low, Med, High), Rango de Oscilación 3D (Horizontal, Vertical, Todo) y Animación Cool para Govee H7133

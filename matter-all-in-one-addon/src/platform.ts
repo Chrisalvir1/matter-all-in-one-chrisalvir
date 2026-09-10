@@ -4311,13 +4311,58 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               await this.ha.callService("fan", "oscillate", entityId, {
                 oscillating,
               });
+            } else if (domain === "climate") {
+              await this.ha.callService("climate", "set_swing_mode", entityId, {
+                swing_mode: oscillating ? "on" : "off",
+              });
             } else if (domain === "switch") {
-              await this.ha.callService("switch", oscillating ? "turn_on" : "turn_off", entityId);
+              const lower = entityId.toLowerCase();
+              if (
+                lower.includes("oscil") ||
+                lower.includes("swing") ||
+                lower.includes("sweep") ||
+                lower.includes("shake") ||
+                lower.includes("pan") ||
+                lower.includes("rotar") ||
+                lower.includes("giro")
+              ) {
+                await this.ha.callService("switch", oscillating ? "turn_on" : "turn_off", entityId);
+              } else {
+                this.log.warn(`[entity-oscillate] Prevented oscillate command on non-oscillation switch ${entityId}`);
+              }
             }
             res.writeHead(200, {
               "Content-Type": "application/json; charset=utf-8",
             });
             res.end(JSON.stringify({ success: true, entityId, oscillating }));
+          } catch (err: any) {
+            res.writeHead(500, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ success: false, error: err?.message || String(err) }));
+          }
+          return;
+        }
+
+        // POST /api/custom/entity-climate-swing/:entityId
+        if (
+          req.method === "POST" &&
+          pathname.startsWith("/api/custom/entity-climate-swing/")
+        ) {
+          const entityId = decodeURIComponent(
+            pathname.substring("/api/custom/entity-climate-swing/".length),
+          );
+          try {
+            const body = await this.readRequestBody(req);
+            const data = JSON.parse(body || "{}");
+            const swingMode = String(data.swing_mode || (data.oscillating ? "on" : "off"));
+            await this.ha.callService("climate", "set_swing_mode", entityId, {
+              swing_mode: swingMode,
+            });
+            res.writeHead(200, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ success: true, entityId, swingMode }));
           } catch (err: any) {
             res.writeHead(500, {
               "Content-Type": "application/json; charset=utf-8",
