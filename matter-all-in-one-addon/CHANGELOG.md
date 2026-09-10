@@ -1,3 +1,15 @@
+## [1.5.35] - 2026-09-09
+
+### Corrección Crítica de Apagado (Govee H7133 y Entidades Home Assistant)
+
+- **Apagado Inmediato e Incondicional (`DeviceCard.tsx`):**
+  - Se eliminó la dependencia secuencial que bloqueaba el apagado del ventilador si `auto_stop` o el calefactor fallaban o tardaban en responder.
+  - Al presionar **Apagar**, se envían concurrentemente las órdenes de apagado a todas las entidades del dispositivo (`fanEntity`, `primaryEntity`, `heaterEntity`) mediante `Promise.allSettled`, asegurando que ninguna excepción o demora impida apagar el ventilador físico.
+  - Se corrigió el cálculo de `currentH7133Mode` para respetar de inmediato el estado `"off"` (`h7133Mode === "off" || !isFanPoweredOn`), evitando que el estado anterior de Home Assistant forzara la tarjeta a volver a `"fan"`.
+  - El botón de encendido/apagado en la fila del ventilador ahora sincroniza directamente con `handleSetH7133Mode(e, "off")` cuando está activo.
+- **Fallback Universal de Servicios en Backend (`platform.ts`):**
+  - Los endpoints de control `/api/custom/entity-turn-off`, `/api/custom/entity-turn-on` y `/api/custom/entity-toggle` ahora cuentan con un fallback automático al dominio global `homeassistant` (`homeassistant.turn_off`, `homeassistant.turn_on`, `homeassistant.toggle`) si el servicio específico del dominio (`switch`, `fan`, etc.) es rechazado o falla.
+
 ## [1.5.34] - 2026-09-09
 
 ### Desacople Total de Calefactor en Fan Manual, Estado Persistente y Eliminación de Switch Redundante

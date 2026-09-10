@@ -212,9 +212,10 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
   );
   // Govee H7133 active mode calculation
   const isFanPoweredOn = fanEntity ? fanEntity.state === "on" : (primaryDomain === "fan" && primaryState === "on");
-  const currentH7133Mode: "fan" | "heat" | "off" = !isFanPoweredOn
-    ? "off"
-    : (h7133Mode === "heat" ? "heat" : "fan");
+  const currentH7133Mode: "fan" | "heat" | "off" =
+    h7133Mode === "off" || !isFanPoweredOn
+      ? "off"
+      : (h7133Mode === "heat" ? "heat" : "fan");
 
   const isHeating = isH7133
     ? currentH7133Mode === "heat"
@@ -223,15 +224,18 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
         (heaterEntity?.domain === "switch" && heaterEntity.state === "on")
       );
 
-  const isOn =
-    primaryState === "on" ||
-    primaryState === "playing" ||
-    primaryState === "heat" ||
-    primaryState === "cool" ||
-    primaryState === "open" ||
-    primaryState === "unlocked" ||
-    primaryState === "cleaning" ||
-    isHeating;
+  const isOn = isH7133
+    ? currentH7133Mode !== "off"
+    : (
+        primaryState === "on" ||
+        primaryState === "playing" ||
+        primaryState === "heat" ||
+        primaryState === "cool" ||
+        primaryState === "open" ||
+        primaryState === "unlocked" ||
+        primaryState === "cleaning" ||
+        isHeating
+      );
 
   // Light color & brightness for card illumination
   const activeLight = lightEntity || (primaryDomain === "light" ? primaryEntity : undefined);
@@ -341,44 +345,56 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
 
     try {
       if (mode === "fan") {
-        // Govee H7133 requires main power ON before any mode selection
-        if (fanEntity && fanEntity.state !== "on") {
-          await api.turnOnEntity(fanEntity.entityId);
-          // Wait for hardware controller to wake up
-          await new Promise((resolve) => setTimeout(resolve, 450));
+        // Govee H7133: Ensure main power switch is ON
+        const targetFanId = fanEntity?.entityId || primaryEntity?.entityId;
+        if (targetFanId) {
+          await api.turnOnEntity(targetFanId).catch(() => {});
         }
-        // Deactivate auto_stop / heater to guarantee clean ambient fan mode
-        if (autoStopEntity && autoStopEntity.state === "on") {
-          await api.turnOffEntity(autoStopEntity.entityId);
+        // Turn off any heater switches concurrently
+        const fanOffCalls: Promise<any>[] = [];
+        if (heaterEntity && heaterEntity.entityId !== targetFanId) {
+          fanOffCalls.push(api.turnOffEntity(heaterEntity.entityId));
         }
-        if (heaterEntity && heaterEntity.state === "on") {
-          await api.turnOffEntity(heaterEntity.entityId);
+        if (autoStopEntity && autoStopEntity.entityId !== targetFanId) {
+          fanOffCalls.push(api.turnOffEntity(autoStopEntity.entityId));
         }
+        await Promise.allSettled(fanOffCalls);
       } else if (mode === "heat") {
-        // Govee H7133 requires main power ON before heating can start
-        if (fanEntity && fanEntity.state !== "on") {
-          await api.turnOnEntity(fanEntity.entityId);
-          await new Promise((resolve) => setTimeout(resolve, 450));
+        // Govee H7133: Turn on main power then activate heat
+        const targetFanId = fanEntity?.entityId || primaryEntity?.entityId;
+        if (targetFanId) {
+          await api.turnOnEntity(targetFanId).catch(() => {});
+          await new Promise((resolve) => setTimeout(resolve, 300));
         }
-        // Activate auto_stop / heater
-        if (autoStopEntity && autoStopEntity.state !== "on") {
-          await api.turnOnEntity(autoStopEntity.entityId);
+        const heatCalls: Promise<any>[] = [];
+        if (heaterEntity && heaterEntity.entityId !== targetFanId) {
+          heatCalls.push(api.turnOnEntity(heaterEntity.entityId));
         }
-        if (heaterEntity && heaterEntity.state !== "on") {
-          await api.turnOnEntity(heaterEntity.entityId);
+        if (autoStopEntity && autoStopEntity.entityId !== targetFanId) {
+          heatCalls.push(api.turnOnEntity(autoStopEntity.entityId));
         }
+        await Promise.allSettled(heatCalls);
       } else {
-        // Turn off heater/auto_stop first, then power down the unit
-        if (autoStopEntity && autoStopEntity.state === "on") {
-          await api.turnOffEntity(autoStopEntity.entityId);
+        // Mode: OFF
+        // Unconditionally turn off all power and sub-switches concurrently via Promise.allSettled
+        // This guarantees that even if one service call errors or times out, the fan power switch is still turned off!
+        const offCalls: Promise<any>[] = [];
+        if (fanEntity) {
+          offCalls.push(api.turnOffEntity(fanEntity.entityId));
         }
-        if (heaterEntity && heaterEntity.state === "on") {
-          await api.turnOffEntity(heaterEntity.entityId);
+        if (primaryEntity && primaryEntity.entityId !== fanEntity?.entityId) {
+          offCalls.push(api.turnOffEntity(primaryEntity.entityId));
         }
-        if (fanEntity && fanEntity.state === "on") {
-          await api.turnOffEntity(fanEntity.entityId);
+        if (heaterEntity && heaterEntity.entityId !== fanEntity?.entityId) {
+          offCalls.push(api.turnOffEntity(heaterEntity.entityId));
         }
+        if (autoStopEntity && autoStopEntity.entityId !== fanEntity?.entityId) {
+          offCalls.push(api.turnOffEntity(autoStopEntity.entityId));
+        }
+        await Promise.allSettled(offCalls);
       }
+      // Give Home Assistant state machine 350ms to settle before refreshing
+      await new Promise((resolve) => setTimeout(resolve, 350));
       onRefresh?.();
     } catch (err) {
       console.error("Error setting H7133 mode:", err);
@@ -439,11 +455,11 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
             ? fanEntity.attributes.percentage
             : primaryDomain === "fan" && typeof primaryAttributes?.percentage === "number"
             ? primaryAttributes.percentage
-            : (fanEntity ? fanEntity.state === "on" : primaryDomain === "fan" && isOn) || isHeating
+            : (isH7133 ? currentH7133Mode !== "off" : ((fanEntity ? fanEntity.state === "on" : primaryDomain === "fan" && isOn) || isHeating))
             ? 100
             : 0
         }
-        isFanOn={(fanEntity ? fanEntity.state === "on" : primaryDomain === "fan" && isOn) || isHeating}
+        isFanOn={isH7133 ? currentH7133Mode !== "off" : ((fanEntity ? fanEntity.state === "on" : primaryDomain === "fan" && isOn) || isHeating)}
         lightRgb={[lr, lg, lb]}
         lightBrightness={lightBrightness}
         isLightOn={isLightActive}
@@ -911,13 +927,23 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
             >
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <AppleHomeIcon domain="fan" state={fanEntity.state} attributes={fanEntity.attributes} size={24} />
+                  <AppleHomeIcon
+                    domain="fan"
+                    state={(isH7133 ? currentH7133Mode !== "off" : fanEntity.state === "on") ? "on" : "off"}
+                    attributes={fanEntity.attributes}
+                    size={24}
+                  />
                   <div>
                     <div style={{ fontSize: "0.82rem", fontWeight: 600, color: "#f8fafc" }}>
                       {fanEntity.name || "Ventilador"}
                     </div>
-                    <div style={{ fontSize: "0.72rem", color: fanEntity.state === "on" ? "#38bdf8" : "#94a3b8" }}>
-                      {fanEntity.state === "on"
+                    <div
+                      style={{
+                        fontSize: "0.72rem",
+                        color: (isH7133 ? currentH7133Mode !== "off" : fanEntity.state === "on") ? "#38bdf8" : "#94a3b8",
+                      }}
+                    >
+                      {(isH7133 ? currentH7133Mode !== "off" : fanEntity.state === "on")
                         ? `Encendido · ${fanEntity.attributes?.percentage ?? 100}%`
                         : "Apagado"}
                     </div>
@@ -926,8 +952,16 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
 
                 <button
                   type="button"
-                  className={`quick-toggle-pill ${fanEntity.state === "on" ? "active" : "inactive"}`}
-                  onClick={(e) => handleToggleEntity(e, fanEntity.entityId)}
+                  className={`quick-toggle-pill ${
+                    (isH7133 ? currentH7133Mode !== "off" : fanEntity.state === "on") ? "active" : "inactive"
+                  }`}
+                  onClick={(e) => {
+                    if (isH7133) {
+                      handleSetH7133Mode(e, currentH7133Mode === "off" ? "fan" : "off");
+                    } else {
+                      handleToggleEntity(e, fanEntity.entityId);
+                    }
+                  }}
                   disabled={togglingEntityIds.has(fanEntity.entityId)}
                   title="Conmutar ventilador"
                 >
@@ -941,7 +975,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                 initialValue={
                   typeof fanEntity.attributes?.percentage === "number"
                     ? fanEntity.attributes.percentage
-                    : fanEntity.state === "on"
+                    : (isH7133 ? currentH7133Mode !== "off" : fanEntity.state === "on")
                     ? 100
                     : 0
                 }

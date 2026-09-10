@@ -3986,10 +3986,18 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             });
             res.end(JSON.stringify({ success: true, entityId }));
           } catch (err: any) {
-            res.writeHead(500, {
-              "Content-Type": "application/json; charset=utf-8",
-            });
-            res.end(JSON.stringify({ success: false, error: err?.message || String(err) }));
+            try {
+              await this.ha.callService("homeassistant", "toggle", entityId);
+              res.writeHead(200, {
+                "Content-Type": "application/json; charset=utf-8",
+              });
+              res.end(JSON.stringify({ success: true, entityId, fallback: true }));
+            } catch (err2: any) {
+              res.writeHead(500, {
+                "Content-Type": "application/json; charset=utf-8",
+              });
+              res.end(JSON.stringify({ success: false, error: err2?.message || String(err2) }));
+            }
           }
           return;
         }
@@ -4010,10 +4018,18 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             });
             res.end(JSON.stringify({ success: true, entityId }));
           } catch (err: any) {
-            res.writeHead(500, {
-              "Content-Type": "application/json; charset=utf-8",
-            });
-            res.end(JSON.stringify({ success: false, error: err?.message || String(err) }));
+            try {
+              await this.ha.callService("homeassistant", "turn_on", entityId);
+              res.writeHead(200, {
+                "Content-Type": "application/json; charset=utf-8",
+              });
+              res.end(JSON.stringify({ success: true, entityId, fallback: true }));
+            } catch (err2: any) {
+              res.writeHead(500, {
+                "Content-Type": "application/json; charset=utf-8",
+              });
+              res.end(JSON.stringify({ success: false, error: err2?.message || String(err2) }));
+            }
           }
           return;
         }
@@ -4034,10 +4050,18 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             });
             res.end(JSON.stringify({ success: true, entityId }));
           } catch (err: any) {
-            res.writeHead(500, {
-              "Content-Type": "application/json; charset=utf-8",
-            });
-            res.end(JSON.stringify({ success: false, error: err?.message || String(err) }));
+            try {
+              await this.ha.callService("homeassistant", "turn_off", entityId);
+              res.writeHead(200, {
+                "Content-Type": "application/json; charset=utf-8",
+              });
+              res.end(JSON.stringify({ success: true, entityId, fallback: true }));
+            } catch (err2: any) {
+              res.writeHead(500, {
+                "Content-Type": "application/json; charset=utf-8",
+              });
+              res.end(JSON.stringify({ success: false, error: err2?.message || String(err2) }));
+            }
           }
           return;
         }
