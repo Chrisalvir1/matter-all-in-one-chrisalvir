@@ -1,3 +1,15 @@
+## [1.5.39] - 2026-09-09
+
+### Corrección Crítica: Solución de Error en la Aplicación (TDZ ReferenceError en Inicialización de Interfaz)
+
+- **Causa Raíz Diagnosticada y Solucionada:**
+  - En `DeviceCard.tsx`, la entidad `oscGeneralSwitch` intentaba comparar `e.entityId !== heaterEntity?.entityId`, pero `heaterEntity` estaba declarada líneas más abajo mediante `const`.
+  - En JavaScript / V8 / WebKit, el acceso a una variable `const` en la Zona Muerta Temporal (TDZ) arroja inmediatamente `ReferenceError: Cannot access 'R' before initialization` (donde 'R' correspondía al identificador ofuscado de `heaterEntity`), haciendo que la tarjeta de inicio colapsara antes de renderizar.
+- **Corrección de Orden Topológico (`DeviceCard.tsx`):**
+  - Se reordenaron las declaraciones asegurando que `heaterEntity` se inicialice antes de los filtros y conmutadores de oscilación (`oscVerticalSwitch`, `oscHorizontalSwitch`, `oscGeneralSwitch`).
+- **Mejora del ErrorBoundary (`main.tsx`):**
+  - Se añadió visualización desplegable de la traza de error técnica (`stack trace`) para diagnóstico inmediato ante cualquier fallo no capturado.
+
 ## [1.5.38] - 2026-09-09
 
 ### Corrección Crítica: Aislamiento Total de Oscilación y Bloqueo Anticonmutación a Calefacción en Govee H7133

@@ -139,6 +139,18 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
     return "off";
   });
 
+  // Detect heater / climate entity (must be declared before oscillation entity filters)
+  const heaterEntity =
+    device.entities.find((e) => e.domain === "climate") ||
+    device.entities.find(
+      (e) =>
+        e.domain === "switch" &&
+        (e.entityId.toLowerCase().includes("heater") ||
+          e.entityId.toLowerCase().includes("calefactor") ||
+          (e.name || "").toLowerCase().includes("calefactor")) &&
+        !e.entityId.toLowerCase().includes("auto_stop")
+    );
+
   // Oscillation entities detection (strictly excludes main fanEntity, heaterEntity, autoStopEntity)
   const oscVerticalSwitch = device.entities.find(
     (e) =>
@@ -186,18 +198,6 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
   const oscFanEntity = device.entities.find(
     (e) => e.domain === "fan"
   );
-
-  // Detect heater / climate entity
-  const heaterEntity =
-    device.entities.find((e) => e.domain === "climate") ||
-    device.entities.find(
-      (e) =>
-        e.domain === "switch" &&
-        (e.entityId.toLowerCase().includes("heater") ||
-          e.entityId.toLowerCase().includes("calefactor") ||
-          (e.name || "").toLowerCase().includes("calefactor")) &&
-        !e.entityId.toLowerCase().includes("auto_stop")
-    );
 
   // Only show exported switch channels on the card face — non-exported hidden until modal.
   // For Govee H7133, all power, modes, and oscillation are controlled via dedicated controls.

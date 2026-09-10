@@ -37,6 +37,12 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
         <div style={{ padding: 40, color: "#f8fafc", fontFamily: "sans-serif", textAlign: "center" }}>
           <h2 style={{ color: "#f87171" }}>Error en la aplicación</h2>
           <p style={{ color: "#94a3b8", fontSize: 14 }}>{String(this.state.error?.message || this.state.error)}</p>
+          {this.state.error?.stack && (
+            <details style={{ marginTop: 12, textAlign: "left", background: "rgba(0,0,0,0.3)", padding: 12, borderRadius: 8, fontSize: 12, color: "#cbd5e1", maxWidth: 600, margin: "12px auto" }}>
+              <summary style={{ cursor: "pointer", color: "#38bdf8" }}>Ver detalles técnicos</summary>
+              <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-all", marginTop: 8 }}>{this.state.error.stack}</pre>
+            </details>
+          )}
           <button
             onClick={() => window.location.reload()}
             style={{ marginTop: 16, padding: "8px 16px", background: "#0284c7", color: "white", border: "none", borderRadius: 8, cursor: "pointer" }}
