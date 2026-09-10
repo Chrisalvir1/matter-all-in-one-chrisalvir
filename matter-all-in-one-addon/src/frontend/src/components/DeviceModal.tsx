@@ -97,8 +97,13 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
 
   useEffect(() => {
     if (!device) return;
-    const initial = targetEntity || sortedEntities[0] || device.entities[0] || null;
-    setSelectedEntity(initial);
+    setSelectedEntity((prev) => {
+      if (prev) {
+        const found = device.entities.find((e) => e.entityId === prev.entityId);
+        if (found) return found;
+      }
+      return targetEntity || sortedEntities[0] || device.entities[0] || null;
+    });
     setMultiAdminOpen(false);
     setFreshPairingCode(null);
     setFreshManualCode(null);
@@ -113,12 +118,12 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
   const pairingCode =
     freshPairingCode ||
     activeEntity?.pairingCode ||
-    device.entities.find((e) => e.pairingCode)?.pairingCode ||
+    device.entities.find((e) => e.exported && e.pairingCode)?.pairingCode ||
     "";
   const manualCode =
     freshManualCode ||
     activeEntity?.manualPairingCode ||
-    device.entities.find((e) => e.manualPairingCode)?.manualPairingCode ||
+    device.entities.find((e) => e.exported && e.manualPairingCode)?.manualPairingCode ||
     "";
 
   const matterFabrics = resetFabrics

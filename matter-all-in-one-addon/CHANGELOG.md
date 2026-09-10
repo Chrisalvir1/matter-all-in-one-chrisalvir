@@ -1,3 +1,13 @@
+## [1.5.58] - 2026-09-10
+
+### Sincronización en Tiempo Real de Modales UI y Protección contra Códigos Obsoletos
+
+- **Sincronización Reactiva de Modales (`App.tsx`):**
+  - Se corrigió el error en el que `selectedDevice` y `selectedCamera` no se actualizaban al refrescar el estado general (`allDevices` / `cameras`), lo que provocaba que si el modal estaba abierto mostrara códigos QR o manuales obsoletos de versiones o reinicios anteriores.
+  - Ahora `selectedDevice` y `selectedCamera` se sincronizan reactivamente con cualquier actualización proveniente de peticiones HTTP, eventos SSE o pulsación del botón «Recargar / Sincronizar».
+- **Preservación de Entidad Activa y Filtrado Estricto de Códigos (`DeviceModal.tsx`):**
+  - Al recibir una actualización del dispositivo, el modal preserva la entidad actualmente seleccionada y garantiza que los códigos QR/manuales sólo provengan de la entidad exportada activa.
+
 ## [1.5.57] - 2026-09-10
 
 ### Corrección de Emparejamiento en Apple Home y Sincronización Inmediata de Códigos QR

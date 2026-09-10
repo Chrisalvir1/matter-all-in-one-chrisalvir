@@ -37,6 +37,24 @@ export const App: React.FC = () => {
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
+  // Keep selectedDevice in sync with updated allDevices from periodic polls / SSE / refreshAll
+  useEffect(() => {
+    if (!selectedDevice) return;
+    const updated = allDevices.find((d) => d.id === selectedDevice.id);
+    if (updated) {
+      setSelectedDevice(updated);
+    }
+  }, [allDevices]);
+
+  // Keep selectedCamera in sync with updated cameras
+  useEffect(() => {
+    if (!selectedCamera) return;
+    const updated = cameras.find((c) => c.id === selectedCamera.id);
+    if (updated) {
+      setSelectedCamera(updated);
+    }
+  }, [cameras]);
+
   // Filter devices based on search and active tab
   const filteredDevices = useMemo(() => {
     let list = allDevices;
