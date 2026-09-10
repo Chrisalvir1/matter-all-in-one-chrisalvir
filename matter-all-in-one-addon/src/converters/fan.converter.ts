@@ -308,11 +308,14 @@ export function rockSettingToHa(rockSetting: any): boolean {
  * Rocking is included when HA fan supports oscillation (bit 1 or oscillating attribute).
  */
 export function getFanControlFeatures(state: HassState): any[] {
-  const features: any[] = [
-    FanControl.Feature.MultiSpeed,
-    FanControl.Feature.Auto,
-    FanControl.Feature.Step,
-  ];
+  const features: any[] = [];
+  if (hasFanSpeed(state)) {
+    features.push(
+      FanControl.Feature.MultiSpeed,
+      FanControl.Feature.Auto,
+      FanControl.Feature.Step,
+    );
+  }
   if (hasFanDirection(state)) {
     features.push(FanControl.Feature.AirflowDirection);
   }

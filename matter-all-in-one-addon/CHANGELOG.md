@@ -1,3 +1,22 @@
+## [1.5.44] - 2026-09-10
+
+### Separación Perfecta Plan A y Plan B con Ventilador On/Off Puro y Soporte Modo Cool
+
+- **Plan A Unificado en 1 solo accesorio Matter:**
+  - Se configuró la agrupación de entidades compuestas (`CompositeDeviceEntity`) para que el ventilador y la luz RGB (`switch.ventilador_playroom` y `light.ventilador_playroom_night_light`) se publiquen juntos bajo un único accesorio y un único código QR.
+  - El ventilador se configura en Matter como ventilador puramente On/Off sin `MultiSpeed` ni `Step` (evitando sliders o porcentajes que fuercen al firmware de Govee a saltar al modo AUTO o encender calefacción).
+  - La luz nocturna RGB se incluye como endpoint secundario manteniendo el control de color, temperatura de color y brillo.
+  - La entidad de calefacción/termostato (`switch.ventilador_playroom_auto_stop`) y la de oscilación quedan excluidas del accesorio compuesto de Plan A.
+
+- **Plan B: Termostato para Calefacción y Automatización de Fan Cool:**
+  - El termostato (`switch.ventilador_playroom_auto_stop` con perfil `thermostat`) se publica de forma totalmente independiente con su propio código QR.
+  - Soporta modo `Heat` para calefacción y modo `Cool` para activar exclusivamente el flujo de ventilación fresca (0W de calor) sin resistencias, permitiendo crear automatizaciones en Apple Home / Google Home para encender el ventilador en frío.
+  - Al apagar el termostato (modo `Off`), se apaga tanto la calefacción como el ventilador principal.
+
+- **Ajustes en UI y Detección:**
+  - `isMultiSwitchDevice` ahora discrimina correctamente dispositivos híbridos y electrodomésticos complejos, evitando que se separen erróneamente en múltiples accesorios cuando deben agruparse en Plan A.
+  - Interfaz de `DeviceModal.tsx` actualizada con explicaciones claras para Plan A y Plan B.
+
 ## [1.5.43] - 2026-09-10
 
 ### Corrección Definitiva: Eliminación de Salto a AUTO / Calefacción en Modo Fan (Govee H7133)

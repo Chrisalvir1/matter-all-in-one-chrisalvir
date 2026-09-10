@@ -416,7 +416,7 @@ export class BaseEntity {
       this.deviceType.code === 0x0301;
 
     const hasDirectionSupport = hasFanDirection(this.state);
-    const hasSpeedSupport = hasFanSpeed(this.state) || isFanProfile;
+    const hasSpeedSupport = hasFanSpeed(this.state);
     const hasOscillationSupport = hasFanOscillation(this.state);
 
     if (isFanProfile && !isThermostatProfile) {
@@ -426,43 +426,42 @@ export class BaseEntity {
       const speed = fanSpeed(pct, speedMax);
       const fanMode = haStateToFanMode(this.state);
       const fanFeatures = getFanControlFeatures(this.state);
-      if (!fanFeatures.includes(FanControl.Feature.MultiSpeed)) {
-        fanFeatures.push(FanControl.Feature.MultiSpeed);
-      }
-      if (!fanFeatures.includes(FanControl.Feature.Auto)) {
-        fanFeatures.push(FanControl.Feature.Auto);
-      }
       const fanModeSequence = getFanModeSequence(this.state);
 
       this.platform.log.debug(
         `[${this.entityId}] Fan init: state=${this.state.state}, on=${on}, pct=${pct}, speed=${speed}/${speedMax}, sequence=${fanModeSequence}, speedSupport=${hasSpeedSupport}, oscillationSupport=${hasOscillationSupport}, dir=${this.state.attributes.direction ?? "N/A"}`,
       );
 
-      const fanClusterBehavior = MatterbridgeFanControlServer.with(
-        ...fanFeatures,
-      );
-      const fanStateConfig: any = {
-        fanMode,
-        fanModeSequence,
-        percentSetting: pct,
-        percentCurrent: pct,
-        speedMax,
-        speedSetting: speed,
-        speedCurrent: speed,
-      };
-
-      if (hasDirectionSupport) {
-        fanStateConfig.airflowDirection = haDirectionToMatter(
-          fanDirection(this.state),
+      if (fanFeatures.includes(FanControl.Feature.MultiSpeed)) {
+        const fanClusterBehavior = MatterbridgeFanControlServer.with(
+          ...fanFeatures,
         );
-      }
+        const fanStateConfig: any = {
+          fanMode,
+          fanModeSequence,
+          percentSetting: pct,
+          percentCurrent: pct,
+          speedMax,
+          speedSetting: speed,
+          speedCurrent: speed,
+        };
 
-      if (hasOscillationSupport) {
-        fanStateConfig.rockSupport = { rockLeftRight: true };
-        fanStateConfig.rockSetting = haStateToRockSetting(this.state);
-      }
+        if (hasDirectionSupport) {
+          fanStateConfig.airflowDirection = haDirectionToMatter(
+            fanDirection(this.state),
+          );
+        }
 
-      this.endpoint.behaviors.require(fanClusterBehavior, fanStateConfig);
+        if (hasOscillationSupport) {
+          fanStateConfig.rockSupport = { rockLeftRight: true };
+          fanStateConfig.rockSetting = haStateToRockSetting(this.state);
+        }
+
+        this.endpoint.behaviors.require(fanClusterBehavior, fanStateConfig);
+      } else {
+        // Pure On/Off fan (no MultiSpeed, no speed slider)
+        this.endpoint.createOnOffFanControlClusterServer(fanMode);
+      }
       this.endpoint.behaviors.require(MatterbridgeOnOffServer.with());
 
       // If ambient temperature is reported on this fan entity or companion sensor
@@ -1264,13 +1263,20 @@ export class BaseEntity {
                 // Switch-based thermostat (Plan B)
                 const mainFan = this.getCompanionEntity("switch.", "ventilador");
                 if (newMode === 0) {
-                  // Off
+                  // Off: turn off heating and main fan
                   await this.platform.ha.callService("switch", "turn_off", this.entityId);
+                  if (mainFan) {
+                    await this.platform.ha.callService("switch", "turn_off", mainFan.entityId);
+                  }
                 } else if (newMode === 3) {
                   // Cool / Ventilation (Fan without heating)
                   await this.platform.ha.callService("switch", "turn_off", this.entityId);
                   if (mainFan) {
-                    await this.platform.ha.callService("switch", "turn_on", mainFan.entityId);
+                    if (typeof (mainFan as any).executeSafeFanCommand === "function") {
+                      await (mainFan as any).executeSafeFanCommand(100);
+                    } else {
+                      await this.platform.ha.callService("switch", "turn_on", mainFan.entityId);
+                    }
                   }
                 } else if (newMode === 4) {
                   // Heat

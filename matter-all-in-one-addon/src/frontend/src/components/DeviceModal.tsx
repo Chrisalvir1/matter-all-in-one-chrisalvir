@@ -183,8 +183,12 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
   const handleActivatePlanA = async () => {
     if (!planAEntity) return;
     setIsBusy(true);
-    showToast("Activando Plan A (Ventilador Matter)...");
+    showToast("Activando Plan A (Ventilador On/Off + Luz RGB)...");
     try {
+      const lightEnt = device.entities.find((e) => e.domain === "light");
+      if (lightEnt) {
+        await api.setDeviceProfile(lightEnt.entityId, "extendedColorLight").catch(() => {});
+      }
       await api.setDeviceProfile(planAEntity.entityId, "fan");
       let reg: any;
       if (planAEntity.exported) {
@@ -193,6 +197,9 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
         reg = await api.toggleExport(planAEntity.entityId, true);
       }
       planAEntity.exported = true;
+      if (lightEnt) {
+        lightEnt.exported = true;
+      }
       if (reg?.pairingCode) {
         planAEntity.pairingCode = reg.pairingCode;
         if (reg.manualPairingCode) planAEntity.manualPairingCode = reg.manualPairingCode;
@@ -204,22 +211,9 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
         }
       }
 
-      // Also publish companion light & temperature if present
-      const lightEnt = device.entities.find((e) => e.domain === "light");
-      if (lightEnt && !lightEnt.exported) {
-        await api.setDeviceProfile(lightEnt.entityId, "extendedColorLight").catch(() => {});
-        await api.toggleExport(lightEnt.entityId, true).catch(() => {});
-        lightEnt.exported = true;
-      }
-      const tempEnt = device.entities.find((e) => e.domain === "sensor");
-      if (tempEnt && !tempEnt.exported) {
-        await api.toggleExport(tempEnt.entityId, true).catch(() => {});
-        tempEnt.exported = true;
-      }
-
       setH7133Tab("plan_a");
       setSelectedEntity(planAEntity);
-      showToast("✓ Plan A Activado: Código QR de Ventilador generado exitosamente");
+      showToast("✓ Plan A Activado: 1 solo accesorio Matter (Ventilador On/Off + Luz RGB)");
       setTimeout(() => onRefresh(), 500);
     } catch (err: any) {
       showToast(err.message || "Error al activar Plan A", true);
@@ -614,7 +608,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                     }}
                   >
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                      <strong style={{ fontSize: 12, color: "#38BDF8" }}>🌪️ Plan A: Ventilador</strong>
+                      <strong style={{ fontSize: 12, color: "#38BDF8" }}>🌪️💡 Plan A: Ventilador + Luz RGB</strong>
                       <span
                         style={{
                           fontSize: 10,
@@ -637,7 +631,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                       </span>
                     </div>
                     <p style={{ fontSize: 11, color: "#cbd5e1", margin: 0 }}>
-                      Ventilador de torre con velocidades, oscilación, luz nocturna y sensor.
+                      Ventilador On/Off simple (sin velocidades para evitar saltos a calefacción) + Luz Nocturna RGB (1 solo accesorio y 1 código QR).
                     </p>
                     <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
                       <button
@@ -680,7 +674,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                     }}
                   >
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                      <strong style={{ fontSize: 12, color: "#FB923C" }}>🔥 Plan B: Calefactor</strong>
+                      <strong style={{ fontSize: 12, color: "#FB923C" }}>🔥 Plan B: Termostato + Fan Cool</strong>
                       <span
                         style={{
                           fontSize: 10,
@@ -703,7 +697,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                       </span>
                     </div>
                     <p style={{ fontSize: 11, color: "#cbd5e1", margin: 0 }}>
-                      Termostato Matter: Calefacción, Ventilador puro (sin calor) y Auto con sensor.
+                      Termostato independiente con su propio código QR: Calefactor (Heat) y modo Frío (Cool) para encender ventilador fresco en automatizaciones.
                     </p>
                     <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
                       <button
@@ -1341,8 +1335,8 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                   noteText={
                     isH7133
                       ? (h7133Tab === "plan_a"
-                          ? "🌪️ Plan A: Escanea para vincular como Ventilador Matter en Apple Home o Google Home"
-                          : "🔥 Plan B: Escanea para vincular como Calefactor / Termostato en Apple Home o Google Home")
+                          ? "🌪️💡 Plan A: Escanea para vincular Ventilador On/Off + Luz RGB (1 solo accesorio Matter)"
+                          : "🔥 Plan B: Escanea para vincular Termostato Calefactor + Fan Cool en Apple Home o Google Home")
                       : "Escanea con Apple Home, Google Home, Alexa o SmartThings"
                   }
                 />
@@ -1406,17 +1400,17 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                   gap: 12,
                 }}
               >
-                <div style={{ fontSize: 32 }}>{isH7133 ? (h7133Tab === "plan_a" ? "🌪️" : "🔥") : "⚡"}</div>
+                <div style={{ fontSize: 32 }}>{isH7133 ? (h7133Tab === "plan_a" ? "🌪️💡" : "🔥") : "⚡"}</div>
                 <strong style={{ color: "#FFF", fontSize: 14 }}>
                   {isH7133
-                    ? (h7133Tab === "plan_a" ? "Código QR · Plan A: Ventilador" : "Código QR · Plan B: Calefactor")
+                    ? (h7133Tab === "plan_a" ? "Código QR · Plan A: Ventilador + Luz RGB (1 solo accesorio)" : "Código QR · Plan B: Termostato Calefactor + Fan Cool")
                     : "Accesorio Matter Inactivo"}
                 </strong>
                 <p style={{ color: "var(--text-secondary, #94a3b8)", fontSize: 12, margin: 0 }}>
                   {isH7133
                     ? (h7133Tab === "plan_a"
-                        ? "Activa el Plan A para generar su propio Código QR de vinculación como Ventilador Matter."
-                        : "Activa el Plan B para generar su propio Código QR de vinculación como Calefactor / Termostato.")
+                        ? "Activa el Plan A para generar 1 solo Código QR con el Ventilador On/Off y la Luz RGB juntos."
+                        : "Activa el Plan B para generar su propio Código QR de vinculación como Termostato Calefactor + Fan Cool.")
                     : "Activa la entidad para generar el código QR de vinculación Matter."}
                 </p>
                 <button
@@ -1448,7 +1442,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                     boxShadow: "0 2px 10px rgba(0, 0, 0, 0.3)",
                   }}
                 >
-                  🚀 {isH7133 ? (h7133Tab === "plan_a" ? "Activar y Generar QR de Ventilador (Plan A)" : "Activar y Generar QR de Calefactor (Plan B)") : "Activar y Generar Código QR"}
+                  🚀 {isH7133 ? (h7133Tab === "plan_a" ? "Activar Plan A (Ventilador + Luz RGB)" : "Activar Plan B (Termostato Calefactor)") : "Activar y Generar Código QR"}
                 </button>
               </div>
             )}

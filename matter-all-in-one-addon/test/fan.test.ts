@@ -482,6 +482,15 @@ describe("Fan converter — Oscillation (Rocking) support", () => {
     expect(features).toContain(FanControl.Feature.Rocking);
     expect(features).toContain(FanControl.Feature.MultiSpeed);
   });
+
+  it("omits MultiSpeed, Auto and Step for pure On/Off fans without speed capability", () => {
+    const s = makeState("on", {}); // switch-based fan or fan without SET_SPEED
+    const features = getFanControlFeatures(s);
+    expect(features).not.toContain(FanControl.Feature.MultiSpeed);
+    expect(features).not.toContain(FanControl.Feature.Auto);
+    expect(features).not.toContain(FanControl.Feature.Step);
+    expect(features).toEqual([]);
+  });
 });
 
 describe("Govee H7133 Matter FanControl Speed & Mode Mapping", () => {

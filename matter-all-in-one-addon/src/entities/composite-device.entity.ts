@@ -85,6 +85,7 @@ type CompositePlatform = {
       data?: Record<string, any>,
     ): Promise<unknown>;
   };
+  entities?: Map<string, any>;
 };
 
 export interface CompositeMember {
@@ -834,10 +835,10 @@ export class CompositeDeviceEntity {
     if (domain === "camera") return [OnOff.id];
     if (domain === "light")
       return lightClusterIds(member.state, this.typeFor(member));
-    if (domain === "switch") return [];
-    if (domain === "fan") {
-      return isFanProfile(this.typeFor(member)) ? [FanControl.id] : [];
+    if (domain === "fan" || isFanProfile(this.typeFor(member))) {
+      return [FanControl.id];
     }
+    if (domain === "switch") return [];
     if (domain === "lock") return [DoorLock.id];
     if (domain === "sensor") {
       const deviceClass = member.state.attributes.device_class;
@@ -916,12 +917,8 @@ export class CompositeDeviceEntity {
       return;
     }
 
-    if (domain === "fan") {
-      if (!isFanProfile(this.typeFor(member))) {
-        endpoint.behaviors.require(MatterbridgeOnOffServer.with());
-        endpoint.addRequiredClusterServers();
-        return;
-      }
+    const isFan = domain === "fan" || isFanProfile(this.typeFor(member));
+    if (isFan) {
       const on = isFanOn(member.state);
       const pct = fanPercentage(member.state);
       const speedMax = getFanSpeedCount(member.state);
@@ -937,7 +934,7 @@ export class CompositeDeviceEntity {
         `[Composite] Fan root init: ${member.entityId}, on=${on}, pct=${pct}, speed=${speed}/${speedMax}, sequence=${fanModeSequence}, speedSupport=${hasSpeed}, oscillationSupport=${hasOscillation}, dir=${member.state.attributes.direction ?? "N/A"}`,
       );
 
-      if (hasSpeed || hasOscillation) {
+      if (fanFeatures.includes(FanControl.Feature.MultiSpeed)) {
         const fanClusterBehavior = MatterbridgeFanControlServer.with(
           ...fanFeatures,
         );
@@ -964,10 +961,7 @@ export class CompositeDeviceEntity {
 
         endpoint.behaviors.require(fanClusterBehavior, fanStateConfig);
       } else {
-        endpoint.createDefaultFanControlClusterServer(
-          fanMode,
-          FAN_MODE_SEQUENCE,
-        );
+        endpoint.createOnOffFanControlClusterServer(fanMode);
       }
 
       endpoint.behaviors.require(MatterbridgeOnOffServer.with());
@@ -1106,7 +1100,8 @@ export class CompositeDeviceEntity {
       return;
     }
 
-    if (domain === "fan") {
+    const isFan = domain === "fan" || isFanProfile(this.typeFor(member));
+    if (isFan) {
       endpoint.addCommandHandler("on", async () => {
         this.setCommandLockout(entityId, "fan_state", "on");
         this.setCommandLockout(entityId, "onOff", true);
@@ -1114,7 +1109,14 @@ export class CompositeDeviceEntity {
         const curPct = fanPercentage(currentState);
         const defaultPct = curPct > 0 ? curPct : 50;
         this.platform.log.debug(`[Composite][${entityId}] → HA fan turn_on (pct: ${defaultPct})`);
-        if (hasFanSpeed(currentState)) {
+        if (domain === "switch") {
+          const mainEntity = this.platform.entities?.get(entityId);
+          if (mainEntity && typeof (mainEntity as any).executeSafeFanCommand === "function") {
+            await (mainEntity as any).executeSafeFanCommand(100);
+          } else {
+            await this.platform.ha.callService("switch", "turn_on", entityId);
+          }
+        } else if (hasFanSpeed(currentState)) {
           await this.platform.ha.callService("fan", "turn_on", entityId, { percentage: defaultPct });
         } else {
           await this.platform.ha.callService("fan", "turn_on", entityId);
@@ -1124,7 +1126,16 @@ export class CompositeDeviceEntity {
         this.setCommandLockout(entityId, "fan_state", "off");
         this.setCommandLockout(entityId, "onOff", false);
         this.platform.log.debug(`[Composite][${entityId}] → HA fan turn_off`);
-        await this.platform.ha.callService("fan", "turn_off", entityId);
+        if (domain === "switch") {
+          const mainEntity = this.platform.entities?.get(entityId);
+          if (mainEntity && typeof (mainEntity as any).executeSafeFanCommand === "function") {
+            await (mainEntity as any).executeSafeFanCommand(0, "Off");
+          } else {
+            await this.platform.ha.callService("switch", "turn_off", entityId);
+          }
+        } else {
+          await this.platform.ha.callService("fan", "turn_off", entityId);
+        }
       });
 
       const hasSpeed = hasFanSpeed(member.state);

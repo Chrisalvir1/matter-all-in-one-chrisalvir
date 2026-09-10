@@ -1018,6 +1018,25 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       (e) => e.entityId.startsWith("fan.") && isNonGeneric(e),
     );
 
+    const isSpecialApplianceEntity = (e: BaseEntity) => {
+      const id = e.entityId.toLowerCase();
+      const override = (this.deviceOverrides[e.entityId] ?? "").toLowerCase();
+      if (override === "fan" || override === "thermostat") return true;
+      if (
+        id.includes("ventilador") ||
+        id.includes("auto_stop") ||
+        id.includes("oscillation") ||
+        id.includes("oscilacion")
+      ) {
+        return true;
+      }
+      return false;
+    };
+
+    if (allMembers.some((e) => isSpecialApplianceEntity(e))) {
+      return false;
+    }
+
     // 1. Any device with 2 or more switch entities is a multi-gang switch/controller
     if (switches.length >= 2) return true;
 
@@ -1070,6 +1089,17 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     if (config?.group_by_device_id === false) {
       this.log.debug(
         `[Composite] ${entityId}: grouping explicitly disabled for device ${deviceId}`,
+      );
+      return undefined;
+    }
+    if (
+      entityId.includes("auto_stop") ||
+      this.deviceOverrides[entityId] === "thermostat" ||
+      entityId.includes("oscillation") ||
+      entityId.includes("oscilacion")
+    ) {
+      this.log.debug(
+        `[Composite] ${entityId}: standalone Plan B thermostat or auxiliary entity — composite grouping bypassed`,
       );
       return undefined;
     }
@@ -1140,17 +1170,38 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       members = members.filter((m) => !m.entityId.startsWith("switch."));
     }
 
-    // If the composite group is a fan, exclude auxiliary beeper/sound switches
+    const isFanMember = (m: BaseEntity) =>
+      m.entityId.startsWith("fan.") ||
+      this.deviceOverrides[m.entityId] === "fan" ||
+      m.deviceType.name.toLowerCase() === "fan" ||
+      (m.entityId.startsWith("switch.") && m.entityId.includes("ventilador"));
+
+    // If the composite group has a fan, exclude auxiliary switches (oscillation, auto_stop/calefactor, sounds)
     if (
-      members.some((m) => m.entityId.startsWith("fan.")) &&
+      members.some(isFanMember) &&
       !explicitlyIncluded?.length
     ) {
       members = members.filter((m) => {
-        if (!m.entityId.startsWith("switch.")) return true;
-        const name = (
-          this.ha.hassEntities.get(m.entityId)?.name || m.entityId
-        ).toLowerCase();
-        return !/beep|buzz|sound|audio|timb|indicat|display/i.test(name);
+        const id = m.entityId.toLowerCase();
+        if (
+          id.includes("auto_stop") ||
+          this.deviceOverrides[m.entityId] === "thermostat"
+        ) {
+          return false;
+        }
+        if (id.includes("oscillation") || id.includes("oscilacion")) {
+          return false;
+        }
+        if (m.entityId.startsWith("switch.")) {
+          if (!isFanMember(m)) {
+            return false;
+          }
+          const name = (
+            this.ha.hassEntities.get(m.entityId)?.name || m.entityId
+          ).toLowerCase();
+          return !/beep|buzz|sound|audio|timb|indicat|display/i.test(name);
+        }
+        return true;
       });
     }
 
@@ -1173,7 +1224,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
     const hasPrimaryControllable = members.some(
       (member) =>
-        member.entityId.startsWith("fan.") ||
+        isFanMember(member) ||
         member.entityId.startsWith("lock.") ||
         member.entityId.startsWith("humidifier."),
     );
@@ -1200,6 +1251,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     members.sort((a, b) => {
       if (a.entityId === config?.primary_entity) return -1;
       if (b.entityId === config?.primary_entity) return 1;
+      if (isFanMember(a) && !isFanMember(b)) return -1;
+      if (!isFanMember(a) && isFanMember(b)) return 1;
       const left = order.indexOf(a.entityId);
       const right = order.indexOf(b.entityId);
       if (left !== -1 || right !== -1)
@@ -3761,7 +3814,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                 member.entityId.startsWith("lock."),
               )?.entityId ??
               compositeCandidate?.members.find((member) =>
-                member.entityId.startsWith("fan."),
+                member.entityId.startsWith("fan.") ||
+                this.deviceOverrides[member.entityId] === "fan" ||
+                (member.entityId.startsWith("switch.") && member.entityId.includes("ventilador")),
               )?.entityId ??
               compositeCandidate?.members[0]?.entityId ??
               null;

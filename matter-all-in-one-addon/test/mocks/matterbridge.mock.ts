@@ -54,6 +54,10 @@ export class MockMatterbridgeEndpoint {
     return this;
   }
 
+  public createOnOffFanControlClusterServer() {
+    return this;
+  }
+
   public createDefaultDoorLockClusterServer() {
     return this;
   }
