@@ -922,7 +922,6 @@ export class CompositeDeviceEntity {
         );
       }
 
-      endpoint.behaviors.require(MatterbridgeOnOffServer.with());
       endpoint.addRequiredClusterServers();
       return;
     }

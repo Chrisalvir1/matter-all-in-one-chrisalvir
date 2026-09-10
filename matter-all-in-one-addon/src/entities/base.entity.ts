@@ -297,8 +297,6 @@ export class BaseEntity {
           FAN_MODE_SEQUENCE,
         );
       }
-
-      this.endpoint.behaviors.require(MatterbridgeOnOffServer.with());
     } else if (
       domain === "light" ||
       domain === "switch" ||

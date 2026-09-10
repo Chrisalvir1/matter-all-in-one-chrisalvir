@@ -75,29 +75,31 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
   const [isBusy, setIsBusy] = useState(false);
   const [multiAdminOpen, setMultiAdminOpen] = useState(false);
 
+  const sortedEntities = device
+    ? [...device.entities].sort((a, b) => {
+        if (targetEntity) {
+          if (a.entityId === targetEntity.entityId) return -1;
+          if (b.entityId === targetEntity.entityId) return 1;
+        }
+        const primaryDelta =
+          Number(b.entityId === b.compositePrimaryEntityId) -
+          Number(a.entityId === a.compositePrimaryEntityId);
+        return (
+          primaryDelta ||
+          Number(b.exported) - Number(a.exported) ||
+          (a.name || a.entityId).localeCompare(b.name || b.entityId)
+        );
+      })
+    : [];
+
   useEffect(() => {
     if (!device) return;
-    const initial = targetEntity || device.entities[0] || null;
+    const initial = targetEntity || sortedEntities[0] || device.entities[0] || null;
     setSelectedEntity(initial);
     setMultiAdminOpen(false);
   }, [device, targetEntity]);
 
   if (!device) return null;
-
-  const sortedEntities = [...device.entities].sort((a, b) => {
-    if (targetEntity) {
-      if (a.entityId === targetEntity.entityId) return -1;
-      if (b.entityId === targetEntity.entityId) return 1;
-    }
-    const primaryDelta =
-      Number(b.entityId === b.compositePrimaryEntityId) -
-      Number(a.entityId === a.compositePrimaryEntityId);
-    return (
-      primaryDelta ||
-      Number(b.exported) - Number(a.exported) ||
-      (a.name || a.entityId).localeCompare(b.name || b.entityId)
-    );
-  });
 
   const activeEntity = selectedEntity || sortedEntities[0] || null;
 
@@ -261,7 +263,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
 
         <header className="modal-header" style={{ marginBottom: 8 }}>
           <span className="modal-icon" id="device-modal-icon">
-            {getDomainIcon(device.entities[0]?.domain)}
+            {getDomainIcon(activeEntity?.domain || sortedEntities[0]?.domain || device.entities[0]?.domain)}
           </span>
           <div>
             <p className="eyebrow">DISPOSITIVO IOT · MATTER ALL-IN-ONE</p>
@@ -376,6 +378,94 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                 ? "Esta entidad está activa y expuesta a través de Matter."
                 : "Activa el interruptor para publicar este canal en Matter."}
             </p>
+
+            {/* Matter Profile Selector */}
+            {activeEntity && Array.isArray(activeEntity.profiles) && activeEntity.profiles.length > 0 && !activeEntity.auxiliary && (
+              <div
+                className="profile-field"
+                id="profile-field"
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 6,
+                  marginTop: 14,
+                  padding: 12,
+                  background: "rgba(255, 255, 255, 0.03)",
+                  border: "1px solid var(--border)",
+                  borderRadius: 10,
+                }}
+              >
+                <label
+                  htmlFor="profile-select"
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 750,
+                    letterSpacing: "0.05em",
+                    color: "var(--dim)",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Perfil Matter
+                </label>
+                <select
+                  id="profile-select"
+                  aria-label="Perfil Matter"
+                  value={activeEntity.profileId || activeEntity.matterType || ""}
+                  onChange={async (e) => {
+                    const newProfile = e.target.value;
+                    try {
+                      setIsBusy(true);
+                      await api.setDeviceProfile(activeEntity.entityId, newProfile);
+                      activeEntity.profileId = newProfile;
+                      activeEntity.matterType = newProfile;
+                      showToast(`✓ Perfil Matter actualizado a ${newProfile}`);
+                      onRefresh();
+                    } catch (err: any) {
+                      showToast(err.message || "Error al cambiar perfil Matter", true);
+                    } finally {
+                      setIsBusy(false);
+                    }
+                  }}
+                  disabled={isBusy}
+                  style={{
+                    width: "100%",
+                    padding: "8px 10px",
+                    background: "#0b1528",
+                    color: "var(--text)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 8,
+                    fontSize: 12,
+                    cursor: "pointer",
+                  }}
+                >
+                  {activeEntity.profiles.map((p: any) => (
+                    <option key={p.id} value={p.id}>
+                      {p.label}
+                      {p.appleHome === "supported"
+                        ? ""
+                        : p.appleHome === "experimental"
+                        ? " · experimental"
+                        : " · no compatible con Apple Home"}
+                    </option>
+                  ))}
+                </select>
+                {(() => {
+                  const cur =
+                    activeEntity.profiles.find(
+                      (p: any) =>
+                        p.id === (activeEntity.profileId || activeEntity.matterType)
+                    ) || activeEntity.profiles[0];
+                  return cur ? (
+                    <small
+                      id="profile-note"
+                      style={{ color: "var(--muted)", fontSize: 10, lineHeight: 1.4 }}
+                    >
+                      {cur.description}
+                    </small>
+                  ) : null;
+                })()}
+              </div>
+            )}
 
             <dl className="selection-meta" id="selection-meta">
               <div>

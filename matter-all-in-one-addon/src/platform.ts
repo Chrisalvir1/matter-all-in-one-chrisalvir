@@ -3825,11 +3825,12 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           );
           try {
             const body = await this.readRequestBody(req);
-            const data = JSON.parse(body) as { profileId?: string };
-            const result = await this.setDeviceProfile(
-              entityId,
-              data.profileId ?? "",
-            );
+            const data = JSON.parse(body) as {
+              profileId?: string;
+              profile?: string;
+            };
+            const targetProfile = data.profileId || data.profile || "";
+            const result = await this.setDeviceProfile(entityId, targetProfile);
             res.writeHead(result.success ? 200 : 400, {
               "Content-Type": "application/json; charset=utf-8",
             });

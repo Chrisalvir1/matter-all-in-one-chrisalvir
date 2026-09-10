@@ -1,3 +1,19 @@
+## [1.5.56] - 2026-09-10
+
+### Reconocimiento Nativo de Ventilador (Fan 0x002B) y Selector de Perfiles Matter
+
+- **Reconocimiento Puro de Ventiladores en Apple Home:**
+  - Se eliminó la inyección indebida del clúster `MatterbridgeOnOffServer` (`0x0006`) en los endpoints de ventilador en `base.entity.ts` y `composite-device.entity.ts`.
+  - Los ventiladores ahora operan exclusivamente bajo el estándar oficial Matter con `FanControl` (`0x0202`), lo que garantiza que Apple Home los reconozca nativamente como **Ventiladores 🌀** con control de velocidad por deslizador (0% a 100%, MultiSpeed y Step) en lugar de bombillas o enchufes.
+- **Restauración del Selector de Perfil Matter en la UI (`DeviceModal.tsx`):**
+  - Se reincorporó el selector de perfil Matter (`#profile-select` y `.profile-field`) dentro del panel de configuración de la entidad.
+  - Permite visualizar el perfil actual (ej. Ventilador, Luz On/Off, Enchufe) y cambiarlo dinámicamente llamando a `/api/custom/device-profile/:entityId`.
+- **Selección Inteligente e Iconos en el Modal:**
+  - Al abrir un dispositivo, la selección inicial prioriza la entidad publicada o la entidad primaria (ej. el Ventilador activo) en lugar de una entidad secundaria apagada (`device.entities[0]`).
+  - El icono superior del modal muestra dinámicamente el dominio real del accesorio activo (`🌀` para ventilador, `💡` para luz, etc.).
+- **Compatibilidad API en Actualización de Perfiles:**
+  - El cliente web y el backend ahora soportan indistintamente `profileId` y `profile` en el cuerpo de la petición HTTP.
+
 ## [1.5.55] - 2026-09-10
 
 ### Corrección Crítica de Arranque: Eliminación de Importación Externa @matter/types

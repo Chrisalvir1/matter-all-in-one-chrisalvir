@@ -86,7 +86,7 @@ export const api = {
   setDeviceProfile: (entityId: string, profile: string) =>
     request(`/device-profile/${encodeURIComponent(entityId)}`, {
       method: "POST",
-      body: JSON.stringify({ profile }),
+      body: JSON.stringify({ profileId: profile, profile }),
     }),
 
   reconnectAccessory: (nodeId: string) =>
