@@ -1,21 +1,636 @@
-## [1.5.50] - 2026-09-10
+## [1.5.51] - 2026-09-10
 
-### Botón Directo de Activación y Generación de QR en Modal
+### Restauración de UI Completa (Casas Conectadas) + Matterbridge 3.10.8 Real + Auto-Detección de Red LAN
 
-- **Botón Prominente «Activar y Generar Código QR»:**
-  - En la tarjeta del modal de dispositivo, cuando una entidad no está publicada («Sin publicar»), ahora se muestra un botón grande y directo **«🚀 Activar y Generar Código QR»**. Al pulsarlo, se publica automáticamente la entidad en Matter y se muestra el código QR al instante, sin necesidad de buscar el interruptor en la lista lateral.
-- **Diseño Responsivo en Modal de Dispositivo:**
-  - Se eliminó el estilo en línea rígido de columnas fijas (`grid-template-columns: 350px minmax(...) 420px`) que desbordaba y cortaba la lista de entidades en pantallas pequeñas o en la app de Home Assistant.
+- **Restauración de UI Completa con Sección de Casas Conectadas:**
+  - Se restauró la interfaz moderna con el modal de visualización de **«Casas / Controladores Conectados»** (Apple Home, Google Home, número de fabrics vinculados e indicadores de estado).
+  - Incluye todas las mejoras visuales de tarjetas, diagnósticos y controles directos de emparejamiento.
+- **Matterbridge 3.10.8 Real en Dockerfile:**
+  - `Dockerfile` configurado formalmente para instalar `matterbridge@3.10.8` de forma global, asegurando que el runtime y los reportes de versión muestren la versión 3.10.8 real.
+- **Auto-Detección de Interfaz de Red LAN para mDNS (`run.sh`):**
+  - En Home Assistant OS, los contenedores Docker en modo red host disponen de múltiples interfaces virtuales (`docker0`, `hassio`, `br-*`). Si `mdnsinterface` no está configurado, Matterbridge ahora auto-detecta la interfaz de red física predeterminada (ej. `eth0`, `enp3s0`) para que las emisiones mDNS (`_matterc._udp`) se transmitan directamente a la red LAN local donde se encuentran el iPhone y el Apple TV / HomePod, eliminando la causa de fondo del bloqueo en *"Connecting..."*.
 
-## [1.5.49] - 2026-09-10
+## [1.5.48] - 2026-09-10
 
-### Restauración a Versión Estable Base Matterbridge 3.10.8 (v1.5.13)
+### Corrección Crítica de Emparejamiento — Reactivación de Nodos Offline ("Connecting...")
 
-- **Retroceso de Estabilidad Solicitado:**
-  - Se restaura íntegramente la arquitectura de código y endpoints de la versión `v1.5.13` (la primera versión con Matterbridge 3.10.8 probado donde el escaneo QR y emparejamiento con Apple Home funcionaba de forma inmediata sin congelarse en "Connecting...").
-  - `Dockerfile` actualizado para instalar formalmente `matterbridge@3.10.8`.
-  - Se eliminan las modificaciones experimentales posteriores de esquemas y perfiles complejos que causaban bloqueos en el protocolo de enlace PASE/mDNS de Apple Home.
-  - Soporte completo de ventilador con oscilación, termostato coordinado, luz RGB y compatibilidad pura de emparejamiento.
+- **Garantía de ServerNode Online al Reutilizar Endpoints:**
+  - Se corrigió un problema donde los nodos Matter reutilizados durante el arranque (`activateComposite`, `activateEntity` y `activateMqttEntity`) no verificaban si su `serverNode` estaba online. Si el nodo se encontraba detenido o inactivo tras reiniciar el add-on, su socket UDP y anuncios mDNS no respondían, causando que al escanear el código QR Apple Home se quedara infinitamente en *"Conectando con el accesorio..."* (Connecting...).
+  - Ahora se invoca explícitamente `serverNode.start()` si el nodo reutilizado está offline.
+
+## [1.5.47] - 2026-09-10
+
+### Corrección Definitiva de Ventiladores BLE en "Sin Respuesta" — Detección Automática de Cambios de Schema
+
+- **Detección Automática de Cambio de Schema del Cluster FanControl (BLE Fans):**
+  - Se implementó un sistema de *fingerprint* del cluster `FanControl` persistido en `/data/fan-schema-fingerprints.json`. Cada vez que el add-on arranca, compara las features actuales del cluster (ej. `MultiSpeed,Auto,Step`) con las del último arranque exitoso.
+  - Si las features cambiaron (lo que ocurrió al actualizar de v1.5.44 a v1.5.46), el nodo Matter del ventilador se **recrea automáticamente** con el schema correcto, eliminando el estado "Sin Respuesta" sin que el usuario tenga que realizar un reset manual.
+  - Al recrear el nodo, se muestra el diagnóstico: *"⚠️ Schema del cluster Fan actualizado — retira el accesorio de Apple Home y escanea el nuevo código QR"* en el dashboard.
+
+- **Nuevo Endpoint de Reset Masivo de Ventiladores:**
+  - Se añadió `POST /api/custom/reset-all-fans` que restablece todos los accesorios de ventiladores exportados en paralelo, generando nuevos códigos QR.
+  - Útil como acción de recuperación cuando múltiples ventiladores BLE quedan en "Sin Respuesta" simultáneamente.
+
+- **Registro de Fingerprint al Reactivar o Reutilizar Nodo:**
+  - Al reutilizar un nodo fan existente (sin recreación), también se actualiza el fingerprint almacenado, evitando recreaciones innecesarias en futuros reinicios.
+
+## [1.5.46] - 2026-09-10
+
+### Restauración Completa de Ventiladores y Luces BLE / Compatibilidad Matter Apple Home
+
+- **Restauración de Clusters FanControl para Ventiladores BLE y de Techo:**
+  - Se restauró la especificación estándar del cluster `FanControl` (`MultiSpeed`, `Auto`, `Step`) con `MatterbridgeFanControlServer` para todos los ventiladores estándar y BLE en `fan.converter.ts`, `base.entity.ts` y `composite-device.entity.ts`.
+  - Esto resuelve de inmediato el estado *"Sin Respuesta"* (No Response) en Apple Home para los ventiladores BLE y sus luces asociadas, manteniendo la compatibilidad estricta de esquemas requerida por los controladores Apple Home y Google Home.
+
+- **Aislamiento Estricto de Reglas Especiales para Govee H7133:**
+  - El filtro `isSpecialApplianceEntity` en `isMultiSwitchDevice` y el bypass de oscilación en dispositivos compuestos ahora aplican **exclusivamente** a dispositivos que posean la entidad de protección térmica PTC `auto_stop` o modelo `H7133`.
+  - Se eliminó el filtrado genérico por la palabra *"ventilador"*, asegurando que ningún ventilador BLE, ventilador de techo ni interruptor de ventilador en la casa vea alterada su estructura de accesorios o código QR.
+
+- **Resolución de Bloqueo en "Conectando..." en Apple Home:**
+  - Al proveer las características requeridas por Matter en el endpoint raíz del ventilador, los controladores Apple Home completan de inmediato el intercambio de descriptores durante el emparejamiento PASE.
+
+## [1.5.45] - 2026-09-10
+
+### Unificación de Tarjetas en Dashboard para Dispositivos Físicos Multientidad
+
+- **Consolidación de Tarjetas por Dispositivo Físico:**
+  - Se corrigió la agrupación de entidades en el frontend (`useAddonState.ts`). Previamente, al separar Plan A y Plan B, las entidades con `compositeDeviceId` se agrupaban bajo una clave (`matter:...`) mientras que las entidades no asociadas a Plan A (como `switch.ventilador_playroom_auto_stop`) se agrupaban bajo la clave del `device_id` de Home Assistant, ocasionando que un mismo dispositivo físico (ej. Govee H7133) se mostrara duplicado en el dashboard en dos tarjetas separadas (una con 6 entidades y otra con 1 entidad).
+  - La clave de agrupación ahora prioriza `entity.device_id` de Home Assistant de forma que todas las entidades pertenecientes a un mismo aparato físico se consolidan en una única tarjeta en el dashboard (mostrando las 7 entidades completas).
+  - Se enriquece la información del dispositivo agregando fabricante, modelo y área si alguna entidad subsiguiente los posee.
+
+- **Compatibilidad y Persistencia en LocalStorage:**
+  - `getDeviceVisualOverride` y los selectores de modo/nivel de calefacción/oscilación de Govee H7133 ahora resuelven fluidamente claves tanto con prefijo `matter:` como sin él, preservando las preferencias guardadas del usuario.
+
+## [1.5.44] - 2026-09-10
+
+### Separación Perfecta Plan A y Plan B con Ventilador On/Off Puro y Soporte Modo Cool
+
+- **Plan A Unificado en 1 solo accesorio Matter:**
+  - Se configuró la agrupación de entidades compuestas (`CompositeDeviceEntity`) para que el ventilador y la luz RGB (`switch.ventilador_playroom` y `light.ventilador_playroom_night_light`) se publiquen juntos bajo un único accesorio y un único código QR.
+  - El ventilador se configura en Matter como ventilador puramente On/Off sin `MultiSpeed` ni `Step` (evitando sliders o porcentajes que fuercen al firmware de Govee a saltar al modo AUTO o encender calefacción).
+  - La luz nocturna RGB se incluye como endpoint secundario manteniendo el control de color, temperatura de color y brillo.
+  - La entidad de calefacción/termostato (`switch.ventilador_playroom_auto_stop`) y la de oscilación quedan excluidas del accesorio compuesto de Plan A.
+
+- **Plan B: Termostato para Calefacción y Automatización de Fan Cool:**
+  - El termostato (`switch.ventilador_playroom_auto_stop` con perfil `thermostat`) se publica de forma totalmente independiente con su propio código QR.
+  - Soporta modo `Heat` para calefacción y modo `Cool` para activar exclusivamente el flujo de ventilación fresca (0W de calor) sin resistencias, permitiendo crear automatizaciones en Apple Home / Google Home para encender el ventilador en frío.
+  - Al apagar el termostato (modo `Off`), se apaga tanto la calefacción como el ventilador principal.
+
+- **Ajustes en UI y Detección:**
+  - `isMultiSwitchDevice` ahora discrimina correctamente dispositivos híbridos y electrodomésticos complejos, evitando que se separen erróneamente en múltiples accesorios cuando deben agruparse en Plan A.
+  - Interfaz de `DeviceModal.tsx` actualizada con explicaciones claras para Plan A y Plan B.
+
+## [1.5.43] - 2026-09-10
+
+### Corrección Definitiva: Eliminación de Salto a AUTO / Calefacción en Modo Fan (Govee H7133)
+
+- **Causa Raíz Identificada:**
+  - En la integración de Govee H7133 para Home Assistant, **no existe una entidad separada para regular la velocidad de soplado en modo ventilador**; el modo `Fan` opera por diseño de hardware como recirculación continua de aire fresco a velocidad constante (0W de calor).
+  - En la versión 1.5.42, al pulsar los botones `Low` o `Medium` dentro de la tarjeta o al ajustar la velocidad, el despachador intentaba enviar la orden a través de entidades `select`, las cuales en el firmware de Govee corresponden a los niveles de resistencia calefactora (`Low` = Calor 1, `Medium` = Calor 2). Al recibir esa orden mientras se desactivaba la parada automática, el firmware del dispositivo entraba en conflicto y conmutaba forzosamente a modo `AUTO` / Calefacción.
+- **Blindaje Total en `BaseEntity.ts` (`executeSafeFanCommand`):**
+  - Si un dispositivo híbrido cuenta con selector de modo con opción `Fan` (como el Govee H7133), **se inhibe de forma estricta el envío de órdenes de marchas (`gearMatchedOption`)** durante operaciones de ventilador (`!modeMatchedOption`). El modo queda rígidamente fijado en `Fan` (`0W calor`), garantizando que jamás se active la calefacción ni salte a `AUTO`.
+- **Limpieza de Interfaz en Tarjeta Web (`DeviceCard.tsx`):**
+  - Se eliminaron los botones de velocidad variable `[ Low ]`, `[ Medium ]`, `[ High ]` dentro del panel Fan/Air Deflector del H7133, reemplazándolos por un indicador limpio de estado: **❄️ Flujo Continuo de Ventilación Fresca (0W Calor)**.
+  - Se mantiene el panel completo de **Rango de Oscilación 3D** (`↔️ Horiz`, `↕️ Vert`, `🔄 Todo 3D`, `⏸️ Fijo`), el cual opera de forma segura sin interferir con el modo de ventilación ni alterar la temperatura.
+
+## [1.5.42] - 2026-09-10
+
+### Soporte Completo Plan A Matter (Ventilador + Luz RGB) y Réplica de Interfaz GoveeLife
+
+- **Soporte Bidireccional de Velocidad Matter (Plan A - Ventilador):**
+  - Se implementó `executeSafeFanCommand` en `BaseEntity`: al regular la velocidad desde Apple Home o Google Home (0% a 100%, Low/Med/High o pasos), el puente Matter mapea el porcentaje a la marcha física del deflector (1/Low a 33%, 2/Med a 66%, 3/High a 100%) y la envía a la entidad complementaria `select.*_gear`.
+  - **Blindaje Térmico Absoluto:** Al encender o ajustar velocidad desde Matter, se fuerza `select.*_mode: Fan` y se apaga `switch.*_auto_stop`, eliminando re-encendidos redundantes del interruptor general y garantizando que las resistencias de calefacción jamás se activen por accidente.
+- **Sincronización en Tiempo Real HA/Govee → Matter:**
+  - `platform.ts` ahora intercepta cambios en `select.*_gear` provenientes de la app física de GoveeLife o Home Assistant, actualizando de inmediato el porcentaje (33%, 66%, 100%) y el modo en Matter para que Apple Home refleje la velocidad real al instante.
+  - Se amplió la detección de oscilación a deflectores de aire (`/deflector|swing|giro/i`).
+- **Diseño Idéntico a GoveeLife en la Tarjeta Web (Modo Fan):**
+  - Sección **Air Deflector** dedicada en la tarjeta:
+    - **Speed (Velocidad de Flujo):** 3 botones `[ Low ]`, `[ Medium ]`, `[ High ]` con estado activo iluminado en azul.
+    - **Range (Rango de Oscilación):** 4 botones de rango angular (`↔️ Horiz`, `↕️ Vert`, `🔄 3D Todo`, `⏸️ Fijo`).
+  - **Luz Nocturna RGB (Plan A):** Control completo de la lámpara LED integrada con interruptor, deslizador de brillo y selector Kelvin/RGB.
+
+## [1.5.41] - 2026-09-10
+
+### Corrección Visual y Operativa: Eliminación de Slider Inexistente y Persistencia Optimista en Govee H7133
+
+- **Eliminación del Slider Redundante en Govee H7133:**
+  - El hardware físico del Govee H7133 (Space Heater Pro) no dispone de velocidades variables en modo ventilador; opera como flujo de aire continuo para refrigerar las resistencias y recircular aire fresco.
+  - La tarjeta mostraba un bloque secundario `Ventilador` con un deslizador al 0% (correspondiente al switch on/off de energía `switch.ventilador_playroom`), confundiendo al usuario al no permitir regular la velocidad.
+  - Se ocultó este sub-control redundante exclusivamente para el modelo H7133 (`!isH7133`), manteniéndolo para ventiladores de techo con modulación real de porcentaje. Toda la gestión del H7133 queda concentrada de forma limpia y transparente en sus paneles dedicados de modo, oscilación y luz.
+- **Persistencia Inmediata del Modo Fan:**
+  - Se corrigió el cálculo de `currentH7133Mode` para que retenga de forma optimista el modo seleccionado (`Fan Manual` o `Calefactor`), impidiendo que los controles se colapsen a `En Reposo` durante la latencia de respuesta de Home Assistant.
+
+## [1.5.40] - 2026-09-10
+
+### Corrección Definitiva: Blindaje Absoluto Anti-Calefacción en Govee H7133 (Fan Manual y Oscilación Pura)
+
+- **Eliminación de Conmutación Indeseada a Calefactor (Auditoría Integral):**
+  - **Identificación del problema de engranajes:** En el firmware de fábrica del Govee H7133 (Space Heater Pro), los niveles de engranaje (`select.*_gear` 1, 2, 3) corresponden físicamente a las **resistencias térmicas PTC** (Low, Medium, High Heat). Al intentar cambiar la velocidad del ventilador usando `gear`, el dispositivo recibía una orden directa de encender el calefactor.
+  - **Eliminación de botones de velocidad engañosos:** En modo `Fan Manual`, el ventilador opera a flujo continuo ambiental sin resistencias térmicas. Se retiraron los botones 1/2/3 de velocidad y se reemplazaron por un banner claro de **Ventilación Pura Activa (0W / Sin Calor)**.
+  - **Bloqueo Total de Selectores de Calor:** En modo `Fan`, el código filtra y prohíbe terminantemente interactuar con `select.*_gear` o cualquier selector térmico, asegurando que solo se envíe `mode: Fan` a `select.*_mode`.
+- **Aislamiento Total de la Oscilación:**
+  - Se desactivó por completo el uso de `climate.set_swing_mode` en el perfil Govee H7133, ya que en Home Assistant enviar comandos de swing a un termostato de calefactor despertaba el equipo en modo `heat`.
+  - `oscSelectEntity` ahora excluye explícitamente entidades de modo (`mode`) y potencia/engranaje (`gear`), asegurando que jamás altere el modo de trabajo del dispositivo.
+  - Al pulsar cualquiera de los botones de oscilación (`↔️ Horiz`, `↕️ Vert`, `🔄 Todo`, `⏸️ Fijo`), el sistema re-afirma automáticamente `mode: Fan` y `auto_stop: off`.
+- **Protección del Switch de Alimentación Principal:**
+  - `executeH7133FanMode` solo envía `turn_on` si el interruptor principal está apagado. Si ya está encendido, no vuelve a enviar `turn_on` (lo que provocaba que el microcontrolador de Govee se reiniciara a calefactor).
+- **Apagado Completo Limpio (`executeH7133OffMode`):**
+  - Apaga ordenadamente el interruptor principal, el calefactor, el auto-stop y cualquier entidad de clima asociada.
+
+## [1.5.39] - 2026-09-09
+
+### Corrección Crítica: Solución de Error en la Aplicación (TDZ ReferenceError en Inicialización de Interfaz)
+
+- **Causa Raíz Diagnosticada y Solucionada:**
+  - En `DeviceCard.tsx`, la entidad `oscGeneralSwitch` intentaba comparar `e.entityId !== heaterEntity?.entityId`, pero `heaterEntity` estaba declarada líneas más abajo mediante `const`.
+  - En JavaScript / V8 / WebKit, el acceso a una variable `const` en la Zona Muerta Temporal (TDZ) arroja inmediatamente `ReferenceError: Cannot access 'R' before initialization` (donde 'R' correspondía al identificador ofuscado de `heaterEntity`), haciendo que la tarjeta de inicio colapsara antes de renderizar.
+- **Corrección de Orden Topológico (`DeviceCard.tsx`):**
+  - Se reordenaron las declaraciones asegurando que `heaterEntity` se inicialice antes de los filtros y conmutadores de oscilación (`oscVerticalSwitch`, `oscHorizontalSwitch`, `oscGeneralSwitch`).
+- **Mejora del ErrorBoundary (`main.tsx`):**
+  - Se añadió visualización desplegable de la traza de error técnica (`stack trace`) para diagnóstico inmediato ante cualquier fallo no capturado.
+
+## [1.5.38] - 2026-09-09
+
+### Corrección Crítica: Aislamiento Total de Oscilación y Bloqueo Anticonmutación a Calefacción en Govee H7133
+
+- **Causa Raíz Diagnosticada y Solucionada:**
+  - Al pulsar los controles de oscilación o mover el deslizador, el servicio llamaba erróneamente `api.setFanOscillation` o `api.setEntityValue` sobre `switch.ventilador_playroom` (la entidad de alimentación principal).
+  - En Home Assistant, enviar `switch.turn_on` al interruptor general de hardware hacía que el microcontrolador Govee se reiniciara y arrancara en su modo por defecto de fábrica: **Calefacción (PTC Heat)**.
+- **Aislamiento Estricto de Entidades de Oscilación (`DeviceCard.tsx`):**
+  - La detección de entidades de oscilación ahora excluye explícitamente el switch principal (`fanEntity`), el calefactor (`heaterEntity`) y la parada automática (`autoStopEntity`).
+  - `handleSetOscillation` despacha comandos únicamente a:
+    - Interruptor dedicado de oscilación / swing / barrido (`oscGeneralSwitch`).
+    - Selectores de oscilación / ángulo / modo (`oscSelectEntity`).
+    - Modos de oscilación climática (`climate.set_swing_mode`).
+    - Servicio `fan.oscillate` (estrictamente si el dominio es `fan`, nunca si es un `switch`).
+- **Bloqueo Activo del Modo Fan Manual (`DeviceCard.tsx`):**
+  - Al activar o cambiar la oscilación mientras se está en `Fan Manual`, el sistema refuerza de forma atómica el estado `auto_stop` en OFF y el selector de modo en `Fan`, garantizando que el hardware jamás salte a calefacción.
+- **Protección del Deslizador de Velocidad (`LiquidSlider.tsx`):**
+  - Para el perfil `h7133_fan`, el deslizador delega el ajuste de velocidad a `executeH7133FanMode` (que selecciona el engranaje adecuado y preserva el modo de ventilación pura), impidiendo el envío de órdenes de encendido crudo al conmutador general.
+- **Identificación Precisa de Entidades en el Modal (`DeviceModal.tsx`):**
+  - Diferenciación visual de nombres en el panel de configuración: oscilación/barrido, selectores de modo de trabajo, engranajes de velocidad, paradas automáticas y sensores de temperatura.
+
+## [1.5.37] - 2026-09-09
+
+### Control de Velocidad (Low, Med, High), Rango de Oscilación 3D (Horizontal, Vertical, Todo) y Animación Cool para Govee H7133
+
+- **Selector Rápido de Velocidad para Modo Fan Manual (`DeviceCard.tsx`):**
+  - Añadida botonera de 3 velocidades en modo Fan:
+    - **1 · Low:** 33% de velocidad / Gear 1.
+    - **2 · Med:** 66% de velocidad / Gear 2.
+    - **3 · High:** 100% de velocidad / Gear 3.
+  - Sincronización instantánea con el deslizador `LiquidSlider` interactivo (`onChange` y `initialValue` sincronizados) y persistencia en `localStorage`.
+  - Al pulsar `🌪️ Fan Manual`, el ventilador arranca inmediatamente con la velocidad seleccionada (por defecto 100%), garantizando que nunca quede dormido o en 0%.
+- **Control de Rango y Oscilación 3D Multidireccional (`DeviceCard.tsx`, `platform.ts`, `client.ts`):**
+  - Soporte completo para los 4 modos de oscilación del calentador/ventilador de torre Govee H7133:
+    - **↔️ Horiz:** Oscilación horizontal de izquierda a derecha.
+    - **↕️ Vert:** Oscilación vertical de arriba a abajo.
+    - **🔄 Todo:** Oscilación tridimensional completa (horizontal + vertical combinados).
+    - **⏸️ Fijo:** Apaga la oscilación (modo estático fijo).
+  - Enrutamiento inteligente a las entidades de Home Assistant: selectores de oscilación (`select.*oscillation*`), interruptores de barrido horizontal/vertical (`switch.*vertical*`, `switch.*horizontal*`), switch general de oscilación y servicio estándar `fan.oscillate`.
+  - Nuevo endpoint en backend: `POST /api/custom/entity-oscillate/:entityId`.
+- **Animación Vectorial Dinámica de Brisa Fresca y Oscilación 3D (`DeviceCardArt.tsx`, `style.css`):**
+  - En modo Fan Manual, las ondas de flujo de aire se renderizan en gradiente cian/azul frío (`url(#breezeGrad)`), con aletas frontales en tono `#38BDF8` y animación activa a una velocidad proporcional al porcentaje fijado (`--fan-speed-duration`).
+  - La torre responde visualmente con animaciones SVG en tiempo real según el modo de oscilación activo: balanceo horizontal (`art-tower-oscillating-horiz`), barrido vertical (`art-tower-oscillating-vert`) o movimiento combinado 3D (`art-tower-oscillating-all`).
+  - El subtítulo dinámico informa el porcentaje exacto y el estado de oscilación (ej. `Ventilación pura · 100% · 🔄 3D Todo`).
+
+## [1.5.36] - 2026-09-09
+
+### Selector de Niveles de Calefacción (1, 2, 3, Auto), Soporte de Dominios Select/Number y Modo Fan Puro en Govee H7133
+
+- **Soporte Completo de Dominios `select` y `number` en Backend (`platform.ts`):**
+  - Se añadieron `"select"` y `"number"` a la lista de `allowedDomains` en `registerHAEntity`, permitiendo que Home Assistant exporte los selectores de modo/engranaje (`select.*_mode`, `select.*_gear`) y de temperatura objetivo (`number.*target_temperature`) hacia la interfaz.
+  - Se crearon endpoints dedicados en la API REST del add-on:
+    - `POST /api/custom/entity-select-option/:entityId` (ejecuta `select.select_option`).
+    - `POST /api/custom/entity-set-preset-mode/:entityId` (ejecuta `fan.set_preset_mode`).
+    - `POST /api/custom/entity-set-hvac-mode/:entityId` (ejecuta `climate.set_hvac_mode`).
+    - Soporte para fijar valores de entidades `number` vía `number.set_value` en `/api/custom/entity-set-value/:entityId`.
+- **Modo Fan Manual Puro sin Calefacción (`DeviceCard.tsx`):**
+  - Implementada la secuencia de encendido y selección directa de ventilación:
+    1. Enciende la alimentación principal del ventilador.
+    2. Espera 200 ms para arranque del microcontrolador.
+    3. Desactiva inmediatamente el termostato `auto_stop` y cualquier interruptor secundario de calefacción.
+    4. Envía comando de modo `Fan` / `fan_only` tanto al selector de modo (`select.select_option`) como al preset del ventilador (`fan.set_preset_mode`) y climatizador (`climate.set_hvac_mode`).
+    5. Refuerza la selección a los 250 ms para evitar que el hardware Govee inicialice en su modo térmico por defecto.
+  - La interfaz muestra claramente `🌪️ Fan Manual Activo (Sin Calefacción)` con iluminación cian `#38BDF8`.
+- **Selector Interactivo de Niveles de Calefactor (1, 2, 3 y Auto) (`DeviceCard.tsx`):**
+  - Al seleccionar **🔥 Calefactor**, se despliega una barra interactiva con 4 niveles:
+    - **1 · Bajo:** Calefacción suave (33% velocidad / gear 1 / Low).
+    - **2 · Medio:** Calefacción moderada (66% velocidad / gear 2 / Medium).
+    - **3 · Alto:** Calefacción máxima (100% velocidad / gear 3 / High).
+    - **🌡️ Auto:** Termostato automático (activa `auto_stop` y modo Auto en select/fan/climate).
+  - El nivel seleccionado se persiste automáticamente en `localStorage` (`govee_h7133_heat_level_<deviceId>`).
+- **Sincronización Total de Estado y Colores (`DeviceCard.tsx`):**
+  - Los encabezados, descripciones (`statusSummary`), iconos y textos del control secundario del ventilador reflejan con precisión el modo y nivel activo (`🔥 Calefactor Activo (Nivel X)` o `🌪️ Fan Manual Activo (Sin Calefacción)`).
+
+## [1.5.35] - 2026-09-09
+
+### Corrección Crítica de Apagado (Govee H7133 y Entidades Home Assistant)
+
+- **Apagado Inmediato e Incondicional (`DeviceCard.tsx`):**
+  - Se eliminó la dependencia secuencial que bloqueaba el apagado del ventilador si `auto_stop` o el calefactor fallaban o tardaban en responder.
+  - Al presionar **Apagar**, se envían concurrentemente las órdenes de apagado a todas las entidades del dispositivo (`fanEntity`, `primaryEntity`, `heaterEntity`) mediante `Promise.allSettled`, asegurando que ninguna excepción o demora impida apagar el ventilador físico.
+  - Se corrigió el cálculo de `currentH7133Mode` para respetar de inmediato el estado `"off"` (`h7133Mode === "off" || !isFanPoweredOn`), evitando que el estado anterior de Home Assistant forzara la tarjeta a volver a `"fan"`.
+  - El botón de encendido/apagado en la fila del ventilador ahora sincroniza directamente con `handleSetH7133Mode(e, "off")` cuando está activo.
+- **Fallback Universal de Servicios en Backend (`platform.ts`):**
+  - Los endpoints de control `/api/custom/entity-turn-off`, `/api/custom/entity-turn-on` y `/api/custom/entity-toggle` ahora cuentan con un fallback automático al dominio global `homeassistant` (`homeassistant.turn_off`, `homeassistant.turn_on`, `homeassistant.toggle`) si el servicio específico del dominio (`switch`, `fan`, etc.) es rechazado o falla.
+
+## [1.5.34] - 2026-09-09
+
+### Desacople Total de Calefactor en Fan Manual, Estado Persistente y Eliminación de Switch Redundante
+
+- **Desacople Definitivo de `isHeating` frente a `auto_stop` (`DeviceCard.tsx`):**
+  - Se eliminó la suposición que vinculaba `switch.*auto_stop` como indicador de calefactor encendido. Dado que en Home Assistant este interruptor suele permanecer activo por defecto (función auto-stop de seguridad), anteriormente provocaba que cualquier encendido de ventilador reportara incorrectamente "🔥 CALEFACTOR ACTIVO".
+  - Se introdujo el estado reactivo `currentH7133Mode` y persistencia en `localStorage` (`govee_h7133_mode_<deviceId>`) con valor inicial `"fan"`.
+  - El modo calefactor solo se activa si el usuario pulsa explícitamente el botón **Calefactor**. Al encender el equipo o pulsar **Fan Manual**, la tarjeta muestra **`🌪️ Fan Manual Activo`** en azul cian (`#38BDF8`), activa el botón correspondiente y reproduce ráfagas de aire fresco (sin brillo naranja ni llamas PTC).
+- **Supresión de Interruptor Duplicado en la Cara de la Tarjeta (`DeviceCard.tsx`):**
+  - Para los dispositivos Govee H7133, los interruptores secundarios internos (`auto_stop` / calefactor) ya no se muestran como una fila genérica "Interruptor" en la tarjeta, manteniendo la interfaz despejada exclusivamente con el control de ventilador, luz y selector rápido de 3 modos.
+- **Sincronización Reactiva de Estilos y Botones en el Selector Rápido (`DeviceCard.tsx`):**
+  - El encabezado de estado, los bordes iluminados y el selector de botones reflejan directamente el estado activo de `currentH7133Mode` (`fan`, `heat`, `off`), garantizando feedback visual instantáneo antes y después del refresco con la API.
+
+## [1.5.33] - 2026-09-09
+
+### Secuencia de Encendido Govee H7133, Limpieza de Tarjeta Móvil y Corrección de Visual Horizontal
+
+- **Secuencia Estricta de Encendido de Hardware en Govee H7133 (`DeviceCard.tsx`):**
+  - Se implementó la activación previa obligatoria de encendido general (`fanEntity`) antes de despachar comandos de modo (`fan` o `heat`), con un tiempo de espera de inicialización de 450 ms para el microcontrolador del dispositivo.
+  - Al seleccionar **Fan Manual**, se enciende primero el ventilador y se desactiva de inmediato `auto_stop` (calefactor PTC), garantizando funcionamiento en frío sin calentamiento.
+  - Al seleccionar **Calefactor**, se enciende el ventilador y se activa `auto_stop` (PTC).
+  - Al presionar **Apagar**, se desactiva primero la resistencia térmica y luego se apaga el ventilador.
+  - Se filtró la fila redundante "Interruptor" (`switch.*auto_stop`) del listado de canales de la tarjeta, eliminando la duplicación en la interfaz.
+- **Rediseño del SVG en Modo Horizontal / Acostado (`DeviceCardArt.tsx`):**
+  - Se reubicó el cuerpo horizontal del ventilador de torre a la franja superior (`y=20` a `y=48`), eliminando la superposición con el título y texto "Ventilador Playroom".
+  - Se ajustó el ancho y la posición de la tapa derecha (`x=134` a `x=144`) para evitar cualquier recorte en bordes sobre pantallas estrechas.
+  - Se configuró `pointerEvents: "none"` en el lienzo vectorial para impedir bloqueos o interacciones accidentales sobre el arte.
+- **Optimización y Prevención de Tooltips Nativos en Móvil (`style.css`):**
+  - Se añadieron reglas `-webkit-touch-callout: none` y `-webkit-user-select: none` en tarjetas y controles para evitar la aparición del globo flotante nativo de iOS WebKit al interactuar en la app de Home Assistant.
+  - Ajustes de padding y espaciado compacto para selectores de modo en pantallas menores a 600px.
+- **Invalidez de Caché Automática en WebViews Ingress (`vite.config.ts`):**
+  - Los paquetes generados incluyen hashes únicos en nombres de archivo (`index-[hash].js`, `index-[hash].css`) para garantizar que la app móvil de Home Assistant siempre cargue la última versión sin requerir borrado manual de caché.
+
+## [1.5.32] - 2026-09-08
+
+### Corrección de Govee H7133 (Fan vs Calefactor/Auto), Selector Interactivo Kelvin y Visuales Multicapa 2.5D de Estudio
+
+- **Desacople de `auto_stop` y Corrección de Modos Govee H7133 (`platform.ts`, `base.entity.ts`, `DeviceCard.tsx`):**
+  - Se eliminó la asignación errónea de `switch.*auto_stop` como interruptor de calefacción (`heaterEntity`). `auto_stop` es una función de seguridad/apagado por tiempo, no la resistencia térmica.
+  - Se eliminaron las reglas de coordinación cruzada que forzaban el encendido/sincronización de calor cuando se activaba el ventilador principal en modo Fan.
+  - Al presionar **Fan Manual**, el ventilador se activa en flujo de aire limpio sin encender calefacción ni entrar en modo Auto.
+- **Control Interactivo de Kelvin y Luz (`DeviceCard.tsx`, `client.ts`, `platform.ts`):**
+  - Se rediseñó la sección de luz con icono de bombillo, switch pequeño de conmutación rápida e indicador de nivel continuo (`% · Kelvin`).
+  - Al pulsar sobre el nivel/Kelvin, se despliega un panel interactivo con barra deslizante continua (2000K a 6500K) con gradiente de temperatura cromática y botones de ajuste rápido de un toque (`2700K Cálido`, `4000K Neutro`, `6500K Frío`).
+  - Se añadió la ruta de backend `POST /api/custom/entity-set-light/:entityId` para el envío directo de parámetros `color_temp_kelvin` a Home Assistant.
+- **Arquitectura Visual Multicapa 2.5D de Estudio Hiperrealista (`DeviceCardArt.tsx`):**
+  - **Apple HomePod Mini:** Reemplazo de figuras vectoriales planas por renderizado fotorrealista con malla acústica tridimensional tejida en rombos, sombreado PBR esférico, sombra de contacto en la base y disco táctil de cristal con halo dinámico Siri y ondas luminiscentes en reproducción.
+  - **Ventiladores de Techo de 5 Aspas (Sala y Recámara):**
+    - **Sala (`zhimei_fan_v1`):** Modelo negro mate con 5 aspas aerodinámicas, carcasa de motor cilíndrica con aletas de refrigeración verticales acanaladas, tija y florón de techo, rotación por GPU a 60 FPS con desenfoque de movimiento suave y domo de cristal que irradia luz reactiva al Kelvin real.
+    - **Recámara / Visitas (`fanlamp_pro_v3`):** Modelo rústico de 5 aspas con textura de madera nogal veteada oscura, herrajes metálicos negros curvados de fijación al motor y domo difusor de cristal esmerilado con resplandor en tiempo real.
+
+## [1.5.31] - 2026-09-08
+
+### Corrección de Scroll y Visibilidad Total de Códigos QR en el Modal de Dispositivo
+
+- **Solución al Recorte del Código QR y Falta de Scroll (`style.css`, `QRCodeDisplay.tsx`, `DeviceModal.tsx`):**
+  - Se corrigió el recorte inferior del código QR eliminando la compresión flex (`flex-shrink: 0 !important; overflow: visible !important; min-height: fit-content;`) en la tarjeta `.qr-liquid-glass-card` y en todos los elementos secundarios de `.qr-panel`.
+  - Se activó scroll vertical suave (`overflow-y: auto !important; overscroll-behavior: contain;`) con scrollbar estilizada y accesible en el panel lateral de códigos QR.
+  - Se ajustaron las dimensiones del canvas QR a 208px optimizados para garantizar nitidez y compatibilidad inmediata con pantallas de laptops y resoluciones estándar.
+  - Se eliminó `marginTop: "auto"` de los controles de accesorio para evitar empujes forzados y desbordes hacia el fondo del viewport.
+- **Acceso Directo para Desconexión y Generación de QR Limpio (`DeviceModal.tsx`):**
+  - Se integró un botón directo de acción rápida **`[ 🔄 Desconectar y Generar QR Limpio ]`** dentro del banner informativo de vinculación previa (`commissioned-hint`), permitiendo restablecer el accesorio y generar un QR nuevo sin tener que desplazarse hacia abajo.
+
+## [1.5.30] - 2026-09-08
+
+### Corrección Crítica de Tipo de Dispositivo (Fan vs Thermostat vs Enchufe) y Regeneración Limpia de Nodos Matter
+
+- **Detección Automática de Perfiles para Switches Fan y Calefactor (`platform.ts`):**
+  - Se corrigió `getAutomaticProfile` para reconocer automáticamente switches de ventiladores (`switch.ventilador_*`, `switch.*fan*`) asignando el perfil nativo Matter `fan` (`0x002b`).
+  - Se añadió detección para switches de calefactor/auto-stop (`switch.*auto_stop*`, `switch.*calefactor*`, `switch.*heater*`) asignando el perfil nativo Matter `thermostat` (`0x0301`).
+  - Esto evita que los dispositivos caigan en el fallback genérico de enchufe (`0x010a` / `onOffPlugInUnit`).
+- **Limpieza de Storage y Recreación Forzada en Cambio de Perfil (`platform.ts`, `DeviceModal.tsx`):**
+  - Al cambiar de perfil o activar Plan A / Plan B, `setDeviceProfile` ahora borra completamente los contextos de almacenamiento de Matterbridge (`persist`, `fabrics`, `commissioning`, `operationalCredentials`), desregistra el nodo viejo y activa el nuevo nodo con `forceRecreate = true`.
+  - En `activateEntity`, se valida que cualquier nodo previo existente coincida con el `deviceType` del nuevo endpoint. Si difiere (por ejemplo, existía un nodo de enchufe previo), se descarta el nodo anterior y se genera un nodo completamente limpio de tipo Fan o Thermostat.
+  - El modal web ahora invoca `resetAccessory` cuando el accesorio ya estaba publicado, asegurando que Apple Home escanee un accesorio nativo nuevo en lugar de un accesorio residual.
+- **Compatibilidad del Cliente API (`client.ts` y `platform.ts`):**
+  - Se normalizó el payload de `/api/custom/device-profile/` para aceptar tanto `profileId` como `profile`, asegurando que las sobreescrituras de tipo de dispositivo se guarden y apliquen permanentemente.
+- **Sincronización de Estado y Velocidades en Apple Home (`fan.converter.ts`, `base.entity.ts`):**
+  - En `haStateToFanMode`, al detectar un ventilador encendido sin porcentaje discreto (switch fan), ahora reporta `FanControl.FanMode.High` (valor 3) en lugar del valor 4 (`On`), el cual es un enum no admitido en secuencias `OffLowMedHigh` de Apple HomeKit y causaba que Apple Home no detectara el encendido ni las velocidades.
+  - Los manejadores de comandos de FanControl ahora enrutan llamadas correctamente a `switch.turn_on` y `switch.turn_off` cuando la entidad pertenece al dominio `switch`, evitando errores de llamadas al servicio `fan`.
+
+## [1.5.29] - 2026-09-08
+
+### Sincronización Completa, Termostato Matter con Modo Fan Puro y Control de Modos para Govee H7133
+
+- **Sincronización Bidireccional de Entidades Compañeras (`platform.ts`):**
+  - Coordinación automática en tiempo real entre entidades del mismo `device_id` en Home Assistant (ventilador principal `switch.ventilador_playroom`, calefactor `switch.ventilador_playroom_auto_stop`, sensor de temperatura `sensor.ventilador_playroom_temperature` y luz nocturna).
+  - Al encender el calefactor (`auto_stop`), el ventilador principal se activa automáticamente garantizando flujo de aire y previniendo desincronizaciones térmicas.
+  - Al apagar el ventilador principal, el calefactor se apaga inmediatamente de forma segura para evitar sobrecalentamiento.
+  - Al recibir lecturas de temperatura ambiente (`sensor.*temp*`), la temperatura se sincroniza instantáneamente en los nodos Matter correspondientes en escala de centésimas de grado Celsius.
+- **Exportación Novedosa del Plan B como Termostato Nativo Matter (`base.entity.ts`):**
+  - El interruptor de calefactor/auto-stop exportado bajo el perfil `thermostat` ahora inicializa un clúster `ThermostatServer` nativo completo con soporte de `Heating`, `Cooling` y `AutoMode`.
+  - Vinculación automática del sensor de temperatura ambiente compañera (`72.0 °F` -> `22.2 °C` / `2222` centicelsius) visible tanto en Apple Home como en Google Home.
+  - **Modo Fan Puro (sin calefacción) en Termostato:** Al seleccionar `Cool` o ventilación en la rueda del termostato, se activa el ventilador principal (`switch.ventilador_playroom` ON) y se mantiene apagado el calefactor (`auto_stop` OFF), permitiendo usar la interfaz del termostato para refrescar la habitación sin encender las resistencias térmicas.
+  - **Modo Heat (Calefacción):** Enciende el calefactor y el ventilador en coordinación.
+  - **Modo Auto (Termostático):** Compara el setpoint deseado con la temperatura ambiente leída del sensor para gestionar el auto-stop inteligentemente.
+- **Plan A con Control de Velocidades de 3 Niveles (`base.entity.ts`):**
+  - Soporte de clúster `FanControl` para el interruptor del ventilador con snapping inteligente de 3 velocidades: Low (33%), Medium (66%) y High (100%), traduciendo comandos de Matter a llamadas seguras de conmutación.
+- **Selector Rápido de Modos e Indicador de Temperatura en la Tarjeta Web (`DeviceCard.tsx`):**
+  - Selector de modos intuitivo para dispositivos híbridos como el H7133: `[ 🌪️ Fan Manual ]`, `[ 🔥 Calefactor ]` y `[ 🛑 Apagar ]`.
+  - Badge dinámico en el encabezado con la temperatura ambiente en tiempo real (`🌡️ 72.0 °F`).
+  - Endpoints dedicados `/api/custom/entity-turn-on/:entityId` y `/api/custom/entity-turn-off/:entityId` en `src/platform.ts` y métodos en el cliente API web.
+  - Slider y conmutadores protegidos contra llamadas a servicios incompatibles en switches.
+
+## [1.5.28] - 2026-09-08
+
+### Soporte de Postura Dual (De pie / Acostado) y Animaciones Dinámicas de Flujo de Aire y Calor para Govee H7133
+
+- **Animación Dinámica de Ráfagas de Viento y Calor (`DeviceCardArt.tsx`, `style.css`):**
+  - **Modo Ambiente (Ventilador encendido, Calefactor apagado):** Efecto de ráfagas continuas de brisa fresca en tonos cian/azul (`breeze-gust-flow`) saliendo desde la rejilla del ventilador con curvas de aceleración y velocidad sincronizada al flujo real (`--fan-speed-duration`).
+  - **Modo Calentador (Calefactor / Auto-Stop activo):** Efecto de ráfagas térmicas combinadas en naranja fuego y cian (`heat-gust-flow`), acompañado de un núcleo de calefacción cerámico PTC incandescente pulsante (`heat-ceramic-glow`) detrás de las lamas y destellos de calor en las lamas.
+  - **Luz Nocturna Independiente:** La base circular del ventilador proyecta el resplandor y anillo iluminado con su color real RGB o Kelvin (`lightHex`), manteniéndose fiel a la selección de color del usuario sin mezclarse de forma estática con el flujo de aire.
+- **Soporte de Posición Dual (De pie / Acostado / Horizontal / Vertical):**
+  - Compatibilidad total con la característica física del Govee H7133 que permite usarlo tanto vertical (de pie) como horizontal (acostado sobre una superficie).
+  - Silueta gráfica adaptativa en SVG para ambas orientaciones:
+    - *De pie (Vertical):* Torre erguida con base ancha, lamas verticales, núcleo PTC central y ráfagas proyectadas hacia la derecha.
+    - *Acostado (Horizontal):* Torre apoyada horizontalmente con soportes de goma, lamas a lo largo del chasis, aro nocturno lateral derecho y ráfagas proyectadas hacia arriba.
+  - Detección inteligente automática a través de sensores de postura/giroscopio/inclinación de Home Assistant (`orientation`, `tilt`, `postura`, `acostado`, `horizontal`).
+  - Botón de alternancia rápida interactivo en la tarjeta (`[ ⬆️ De pie ]` / `[ ➡️ Acostado ]`) para cambiar de posición al instante con persistencia en memoria local (`deviceDetector.ts`).
+  - Selector de orientación explícito en el diálogo de configuración de hardware (`DeviceModal.tsx`) bajo la sección de Apariencia (`✨ Automático`, `⬆️ De pie`, `➡️ Acostado`).
+- **Reconocimiento Especial del Interruptor de Calefacción (`DeviceCard.tsx`):**
+  - Detección del interruptor `auto_stop` o entidades con `calefactor`/`heater` como control de calor, mostrándolo con icono `🔥`, etiqueta `"Calefactor / Auto-Stop"` y resalte ámbar cálido en lugar de un switch genérico.
+- **Tarjeta Lovelace Apple Home (`matter-apple-card.ts`):**
+  - Silueta cinética SVG actualizada para `govee_tower_fan` con soporte dinámico para modo calor (gradiente cálido y lamas incandescentes) y renderizado de la luz base con su color real RGB/Kelvin.
+
+## [1.5.27] - 2026-09-08
+
+### Soporte Completo RGB y Kelvin para Luz Nocturna Govee H7133 y Todas las Luces en Tarjetas
+
+- **Corrección Raíz de Atributos de Luz (`platform.ts`):**
+  - Se corrigió el endpoint `/api/custom/devices` que filtraba y truncaba los atributos del estado a solo `{ friendly_name }`. Ahora se entregan todos los atributos íntegros (`rgb_color`, `rgbw_color`, `rgbww_color`, `hs_color`, `xy_color`, `color_temp_kelvin`, `color_temp`, `brightness`, etc.) al frontend.
+- **Exportación de Luz Nocturna Govee H7133 como `extendedColorLight` (`device-profiles.ts`, `platform.ts`, `device-registry.ts`):**
+  - La luz nocturna del ventilador Govee H7133 (`light.ventilador_playroom_night_light`), tiras LED y luces con capacidades de color se detectan y configuran automáticamente como `extendedColorLight` (Matter ColorControl), habilitando la rueda de colores RGB completa en Apple Home y Google Home.
+  - Al activar el Plan A para H7133, la luz acompañante se configura directamente con perfil `extendedColorLight`.
+- **Motor de Conversión de Color Ampliado (`light-color.ts`):**
+  - Soporte completo en backend para extraer color HS desde `rgbw_color`, `rgbww_color`, `xy_color` y `rgb_color`.
+  - Conversión bidireccional entre HS y RGB (`hsToRgb`, `rgbToHs`).
+  - Envío dual de `color_temp` y `color_temp_kelvin` en cargas útiles dirigidas a Home Assistant.
+  - Conversión automática a `rgb_color` cuando las entidades solo admiten modo de color RGB.
+- **Renderizado Dinámico de RGB y Kelvin en Tarjetas (`colors.ts`, `DeviceCard.tsx`, `matter-apple-card.ts`):**
+  - Utilidad `extractLightColorInfo` que analiza los atributos de HA y extrae el color RGB exacto, código HEX, temperatura Kelvin y etiquetas descriptivas (`4000K · Blanco Neutro`, `Color (#00F0FF)`, `2700K · Blanco Cálido`).
+  - Las tarjetas (`DeviceCard.tsx` y Lovelace `matter-apple-card.ts`) iluminan el borde, brillo y sombras con el color real emitido por la bombilla o tira LED.
+  - Píldora indicadora de color en vivo con punto brillante en los subcontroles de luz y estado principal de la tarjeta.
+- **Panel de Configuración de Luz y Selector de Perfiles Matter (`DeviceModal.tsx`):**
+  - Nuevo panel interactivo al seleccionar cualquier entidad de luz con insignia de color en tiempo real, valores HEX/Kelvin y selector de perfiles Matter (`extendedColorLight`, `colorTemperatureLight`, `dimmableLight`, `onOffLight`).
+
+## [1.5.26] - 2026-09-08
+
+### Códigos QR Separados para Plan A (Ventilador) y Plan B (Calefactor) en Govee H7133
+
+- **Códigos QR Independientes por Modo en Govee H7133 (`DeviceModal.tsx`):**
+  - **Plan A (Ventilador Matter):** genera y activa su propio código QR y código numérico manual de emparejamiento exclusivo para vincular como Ventilador en Apple Home / Google Home.
+  - **Plan B (Calefactor / Clima):** genera y activa su propio código QR y código numérico manual de emparejamiento exclusivo e independiente para vincular como Termostato / Calefactor en Apple Home / Google Home.
+  - **Selector de Códigos QR por Pestañas:** Pestañas directas `[ 🌪️ QR Plan A: Ventilador ]` y `[ 🔥 QR Plan B: Calefactor ]` con insignias de estado en tiempo real (🏠 Vinculado, ✓ QR Listo, Inactivo).
+  - **Resolución Instantánea de Códigos QR:** si una entidad está publicada pero su código no se ha recibido en el estado inicial, el panel muestra un botón interactivo `[ ⚡ Mostrar Código QR de Emparejamiento ]` que abre la ventana de comisionado automáticamente.
+  - **Controles de Accesorio Específicos por Plan:** Sincronización, Multi-Admin y Desconexión limpios dirigidos al accesorio seleccionado.
+- **Soporte de Perfil Termostato para Conmutadores y Ventiladores (`device-profiles.ts`):**
+  - Añadido el perfil oficial `thermostat` a los dominios `switch` y `fan` para permitir la exportación de interruptores como termostatos/calefactores nativos en Matter.
+- **Retorno Directo de Códigos de Emparejamiento en el Backend (`platform.ts`):**
+  - `manualRegister` ahora devuelve inmediatamente `pairingCode` y `manualPairingCode` tras activar la entidad o el dispositivo compuesto.
+
+## [1.5.25] - 2026-09-08
+
+### Detección Precisa de Modelos Govee, Asistente Plan A/B para H7133 y Arte Dinámico para Barras y Luces Exteriores
+
+- **Detección Exhaustiva de Modelos Govee (`deviceDetector.ts`):**
+  - Mapeo exacto por número de modelo para toda la gama Govee:
+    - `H7130 - H7135`, `H7101 - H7102` -> `tower_fan` ("Ventilador de Torre").
+    - `H6054`, `H6056`, `H6046`, `H6047`, `H6051` -> `govee_light_bars` ("Barras de Luz Flow Pro / Plus").
+    - `H6099`, `H6199`, `H61B8` -> `govee_dreamview` ("Govee DreamView TV").
+    - `H6072`, `H6076`, `H6078` -> `govee_lyra` ("Lámpara de Esquina Govee Lyra").
+    - `H706A`, `H805C`, `H705x` -> `govee_permanent_outdoor` ("Luces Exteriores Permanentes Pro / Elite").
+    - `H7062`, `H619E` -> `govee_ground_lights` ("Luces de Suelo / Sendero Exterior Govee").
+    - `H7021`, `H7020` -> `ceiling_spot` ("Foco Empotrado en Techo Govee").
+    - `H61A0`, `H61xx`, `H619C`, `H6167` -> `led_strip` ("Tira LED RGBIC / Neón").
+    - `H6088` -> `table_lamp` ("Lámpara de Ambiente Govee").
+    - `H6061`, `H6062` -> `govee_glide` ("Paneles de Pared Govee Glide").
+    - `H5054`, `H5075` -> `sensor` ("Sensor de Fuga / Termohigrómetro Govee").
+  - **Eliminada la falsa clasificación como "Apagador Táctil Triple":** los dispositivos inteligentes multi-switch nunca más se clasifican como apagadores de pared por el solo hecho de exponer 2 o más interruptores en Home Assistant.
+  - **Fijado el conflicto con Amazon Echo:** la comprobación de Alexa/Echo solo se activa si la marca detectada es genuinamente Amazon.
+
+- **Asistente de Publicación Matter para Govee H7133 (`DeviceModal.tsx`):**
+  - Panel interactivo exclusivo para el H7133 con 1-clic para:
+    - **🌪️ Plan A (Ventilador Matter):** activa ventilador principal con velocidades, oscilación, luz nocturna y sensor de temperatura ambiente.
+    - **🔥 Plan B (Calefactor / Clima):** activa termostato/calefactor Matter con dial de temperatura y sensor.
+    - **⚡ Publicar Todo:** exporta todas las entidades simultáneamente.
+  - Botón directo de publicación en la columna QR cuando aún no está exportado, eliminando la confusión del modal "Sin publicar".
+  - Nombres legibles en español en lugar de entity_ids crudos (`switch.ventilador_playroom_auto_stop` -> `⏱️ Parada Automática (Auto-Stop)`).
+
+- **Controles e Ilustración en Tarjeta Exterior (`DeviceCard.tsx`, `DeviceCardArt.tsx`):**
+  - Identificación del switch principal del ventilador como `fanEntity` para renderizar el ventilador animado y control de giro en la tarjeta exterior.
+  - Tarjeta compuesta que expone tanto los controles de ventilador como la luz ambiental del H7133.
+  - Nuevas ilustraciones vectoriales SVG dinámicas e interactivas:
+    - `govee_light_bars`: Torres dobles verticales con halos de luz ambiental reactivos al color RGB de Home Assistant.
+    - `govee_permanent_outdoor`: Aleros de techo arquitectónicos con lavados triangulares de luz descendentes.
+    - `govee_ground_lights`: Focos de suelo en jardín con haces de luz cálida o RGB.
+    - `ceiling_spot`: Focos empotrados tipo spot con cono de iluminación direccionable.
+
+## [1.5.24] - 2026-09-08
+
+### Imágenes Reales de Productos, Etiquetas Sin Duplicar, Arte Alineado al Techo y Marcas Nuevas
+
+- **Imágenes de productos reales (`productImages.ts` nuevo, `DeviceCard.tsx`, `DeviceCardArt.tsx`):**
+  - Se crea `src/frontend/src/data/productImages.ts`: tabla de mapeo `marca + subtype + modelo → URL CDN oficial` con fotos reales de Apple, Amazon Echo, Govee, Ring, Wyze, Tapo, Philips Hue, Ecobee, Nest, Roborock, Broadlink, Samsung.
+  - Cuando se detecta imagen real, se muestra `<img>` en zona derecha de la tarjeta con fade-in al encender/apagar; el SVG de arte se omite para ese dispositivo.
+  - HomePod Mini y HomePod muestran foto real del color seleccionado actualmente.
+- **Etiquetas duplicadas eliminadas (`DeviceCard.tsx` L815):**
+  - Eliminado el bloque `.tags` inferior que repetía Marca, Modelo y dominios ya visibles en la fila de marca superior.
+- **Arte SVG alineado al tope (`DeviceCardArt.tsx`):**
+  - `preserveAspectRatio` cambiado de `xMaxYMid` → `xMaxYMin` — el ventilador y las luces aparecen en la esquina superior derecha, no en el centro.
+  - Altura del canvas limitada a `190px` para no cubrir los controles inferiores.
+- **Sin superposición texto/imagen:**
+  - Contenedor de texto recibe `paddingRight: 120px` cuando hay imagen de producto real, garantizando que ambos coexistan sin cubrirse.
+- **Solo canales Matter exportados visibles en la tarjeta exterior:**
+  - `switchEntities` filtrado por `e.exported === true`; canales no exportados son invisibles en la tarjeta y solo aparecen en el modal de configuración. Elimina el problema de Wyze Cam con 10 canales.
+- **Nuevas marcas detectadas (`deviceDetector.ts`):**
+  - Samsung / SmartThings, Sony / Bravia, Hisense, Vimtag, Wyze, Ring (reforzado), EZVIZ (reforzado), Broadlink (RM4/Mini/Pro), Ecobee (con `ecobee3`, `smartsensor`), Nest / Google Nest, Xiaomi (Mi Home, MIIO), Tuya (slugs locales `_ty_`).
+- **Nuevos subtypes de dispositivos:**
+  - `hanging_bulbs` — Bombillos de filamento colgantes con dimmer (detecta `dimmer`, `filament`, `colgante`, `vintage`).
+  - `humidifier` — Humidificador inteligente con nivel de agua y partículas de vapor animadas.
+  - `ir_blaster` — Control remoto IR universal (Broadlink RM4 Pro).
+  - `ecobee_thermostat` — Termostato Ecobee Premium.
+  - `ecobee_sensor` — Sensor de Habitación Ecobee.
+  - `nest_thermostat` — Termostato Nest Learning.
+- **413+ pruebas pasando, build limpio.**
+
+## [1.5.23] - 2026-09-07
+
+### Compatibilidad Completa Amazon Alexa & Echo, Apagadores Triples Compactos, Candelabros en Techo y Renderizado de Hardware Real
+
+- **Soporte Nativo y Detección de Marca Amazon / Alexa (`deviceDetector.ts`):**
+  - Reconocimiento de **Amazon Echo Dot**, **Echo Show**, **Echo Studio**, **Echo Pop**, **Echo Spot** y **Amazon Fire TV**.
+  - Distintivo oficial de marca Amazon en cian neón (`#00CAFF`) e identificación de modelos.
+  - Ilustración de hardware fotorrealista para **Echo Dot** con el icónico anillo circular LED cian/azul iluminado en la base con reflejo sobre la superficie, botones superiores de control (+, -, silenciar, acción), y pantalla táctil HD en **Echo Show**.
+- **Apagadores Triples y Multi-Canal Compactos (`DeviceCard.tsx`):**
+  - Fin a las tarjetas alargadas verticalmente: los interruptores de múltiples canales (e.g. Tuya `CB03-SBL`, apagadores triples o dobles) ahora se organizan en una fila/cuadrícula horizontal compacta `[ Canal 1 ] [ Canal 2 ] [ Canal 3 ]` con botones táctiles interactivos de un toque y LED de estado.
+  - Reducción de más de 160px de altura vertical por tarjeta, eliminando el estiramiento forzado de tarjetas vecinas mediante `align-items: start` en el grid principal.
+- **Anclaje Físico Estricto de Candelabros al Techo (`DeviceCardArt.tsx`):**
+  - El candelabro cuelga exclusivamente desde el borde superior de la tarjeta (`top: 0`, `y = 0`) con florón superior, cadena eslabonada de latón y lágrimas de cristal facetado que proyectan iluminación cálida descendente, impidiendo que flote en el centro de la tarjeta.
+- **Apple TV 4K Real y Tarjeta "Now Playing" Detallada (`DeviceCard.tsx` & `DeviceCardArt.tsx`):**
+  - Eliminado el texto vectorial distorsionado de fondo.
+  - Renderizado fotorrealista del hardware físico de Apple TV 4K (puck negro obsidiana con bisel satinado y LED blanco de estado) junto al mando Siri Remote en aluminio plateado con clickpad circular negro.
+  - Despliegue en vivo del contenido exacto en reproducción: nombre de app en pastilla oficial (Netflix, YouTube, Disney+, Apple TV+, etc.), título de serie, temporada y episodio (`T1:E3`), o título de canción y artista con carátula real.
+
+## [1.5.22] - 2026-09-07
+
+### Apple TV 16:9 con Carátula en Vivo, HomePod con Paleta Oficial Apple, Candelabros en Techo, Ventiladores Negro Mate y Selector Manual de Siluetas
+
+- **Apple TV 4K en Formato Cinematográfico 16:9 (`DeviceCardArt.tsx` & `DeviceCard.tsx`):**
+  - Pantalla 16:9 4K con bisel ultrafino, pie de soporte flotante y difuminado progresivo hacia negro OLED puro (`#000000`) en la mitad inferior.
+  - Reproducción activa en vivo: despliega la carátula oficial (`entity_picture`), título de pista, nombre de app (Netflix, Disney+, etc.) o logo Apple TV resplandeciente en reposo.
+  - Controles de transporte integrados en la tarjeta (`⏮`, `▶ / ⏸`, `⏭`) y deslizador táctil de volumen por HTTP proxy `/api/custom/media-action`.
+- **Apple HomePod y HomePod Mini con Colores Oficiales Apple (`deviceDetector.ts` & `DeviceCardArt.tsx`):**
+  - Diferenciación física precisa entre **HomePod Mini** (esfera acústica 3D con disco táctil superior retroiluminado Siri con ondas RGB) y **HomePod Estándar** (cilindro acústico de gran tamaño con malla tejida sin costuras).
+  - **Selector de Colores Oficiales Apple en Venta:**
+    - *HomePod Mini*: Gris Espacial (`#3C3D40`), Blanco (`#E8E8ED`), Medianoche (`#1C2026`), Azul (`#25537C`), Naranja (`#E05A3E`), Amarillo (`#E8B13D`).
+    - *HomePod Estándar*: Medianoche (`#181B20`), Blanco (`#EDEDF2`), Gris Espacial (`#353639`).
+  - Muestra la carátula del álbum que se está reproduciendo actualmente y estado musical en vivo.
+- **Selector y Anulación Manual de Silueta de Hardware (`DeviceModal.tsx`):**
+  - Nuevo panel «🎨 Silueta y Hardware Visual» en la ventana de detalle del dispositivo.
+  - Permite al usuario forzar la apariencia visual que desee para cualquier entidad o marca (Bombilla, Candelabro, Tira LED, Govee Lyra, Apple TV, HomePod Mini, HomePod, Ventilador Negro Mate, Timbre con Video, Cámara PTZ 360°, Cámara Bala, Cerrojo Táctil, etc.).
+  - Persistencia automática de la preferencia del usuario en el navegador (`matter_visual_override_*`).
+- **Candelabros Colgantes Anclados Físicamente al Techo (`DeviceCardArt.tsx`):**
+  - Los candelabros (`chandelier`) cuelgan verticalmente desde el techo de la tarjeta (`y = 0`) mediante una cadena metálica eslabonada, florón superior, brazos barrocos curvados con velas ornamentales y lágrimas de cristal facetado que irradian luz hacia abajo según los grados Kelvin y brillo del accesorio.
+- **Ventiladores en Acabado Negro Mate / Obsidiana:**
+  - Carcasa, aspas y soportes de ventiladores de techo, torre y pedestal rediseñados en acabado negro mate carbón (`#14171E` / `#1E2430`) para un contraste sofisticado con la iluminación Kelvin y las estelas cinéticas de brisa.
+- **Inferencia Semántica de Habitaciones sin Áreas en HA (`deviceDetector.ts`):**
+  - Detección inteligente de áreas ("Cocina", "Sala", "Playroom", "Comedor", "Recámara", "Baño", "Balcón", "Estudio", etc.) a partir del nombre sin inventar tipos de hardware inexistentes (e.g. "Luz de Playroom" se detecta como bombilla en habitación Playroom).
+  - Posibilidad de personalizar o limpiar la etiqueta de habitación directamente desde el modal.
+- **Variedad Visual para Govee, Cerraduras y Cámaras:**
+  - Siluetas exclusivas para lámparas de pie Govee Lyra (`H6072`), timbres con botón de llamada físico iluminado (`doorbell`), cámaras domo PTZ 360° motorizadas (`ptz_camera`) y cerraduras con teclado digital táctil retroiluminado (`keypad_deadbolt`).
+
+## [1.5.21] - 2026-09-07
+
+### Reconocimiento Universal de Marca, Modelo Fiel y Renderizado de Hardware Físico en Todos los Dispositivos
+
+- **Motor de Inteligencia de Marcas y Modelos (`deviceDetector.ts`):**
+  - Detección automática y profunda de marcas inteligentes líderes del mercado: **Govee, Tapo / TP-Link, Philips Hue, Roborock, SwitchBot, Aqara, Tuya / Smart Life, Sonoff, Shelly, Roomba / iRobot, Ecovacs, Dreame, Nanoleaf, WiZ, IKEA TRÅDFRI, Ecobee, Google Nest, Honeywell, Ring, Blink, Eufy, Reolink, Yale, August, Hunter, Dyson, Xiaomi**.
+  - Identificación precisa de modelos específicos (e.g. `H7133`, `H7130`, `H618A`, `H6199`, `L530E`, `P110`, `C200`, `S8 Pro Ultra`, `Plus 1PM`, `NSPanel`, etc.).
+  - Distintivos estilizados de marca (`brand-pill`) con colores de identidad de marca (Govee cyan, Tapo blue, Hue violet, Roborock crimson, etc.) y pastillas de modelo (`model-pill`) en cada tarjeta.
+- **Renderizado Físico Realista por Tipo de Hardware (`DeviceCardArt.tsx`):**
+  - **Ventilador de Torre (`tower_fan`, e.g. Govee H7133 / Dreo):** Columna vertical estilizada, panel superior LED con indicador de encendido, rejilla de salida de aire con paletas oscilantes animadas (`fan-tower-vane`) y estelas dinámicas de brisa (`breezeGrad`).
+  - **Ventilador de Techo con Luz (`ceiling_fan`, e.g. Hunter / Ventilador de Sala):** Cúpula de techo, vástago, aspas horizontales aerodinámicas rotando en vivo en 360° y domo de luz central de cristal esmerilado que se ilumina con la temperatura Kelvin real.
+  - **Ventilador de Pie / Pedestal (`pedestal_fan`):** Base circular, mástil telescópico, jaula de alambre y hélice tripala girando a velocidad proporcional.
+  - **Tiras LED RGBIC y Neón (`led_strip`, e.g. Govee RGBIC / Nanoleaf):** Cinta de neón sinuosa y flexible con nodos LED y resplandor vibrante según Kelvin o color RGB.
+  - **Bombillas Inteligentes (`bulb`, e.g. Tapo L530, Philips Hue):** Silueta de cristal A19 con filamento LED visible y cono de luz volumétrico.
+  - **Aspiradoras Robot (`vacuum`, e.g. Roborock S8 / Roomba):** Chasis circular con torreta LiDAR que proyecta un rayo láser rojo giratorio en 360° en tiempo real (`fan-spin`), parachoques frontal y compuerta de depósito.
+  - **Termostatos Inteligentes (`thermostat`, e.g. Nest / Ecobee):** Dial circular con bisel de cristal y arco de estado térmico activo (naranja calefacción, cian refrigeración, verde eco).
+  - **Enchufes Inteligentes (`plug`, e.g. Tapo P110 / Shelly):** Adaptador de enchufe con anillo circular de encendido retroiluminado y tomas protegidas.
+  - **Cerraduras Electrónicas (`lock`, e.g. Yale / SwitchBot Lock):** Placa de cerrojo maciza con cilindro y anillo LED (verde desbloqueado, rojo bloqueado).
+- **Iconografía Dinámica Apple Home Expandida (`AppleHomeIcon.tsx`):**
+  - Incorporados iconos nativos para aspiradoras robot (`vacuum`) y humidificadores (`humidifier`).
+- **Tarjeta Lovelace Home Assistant Sincronizada (`matter-apple-card.ts`):**
+  - Integrada representación cinética para aspiradoras robot y actualización de versión a `1.5.21`.
+
+## [1.5.20] - 2026-09-07
+
+### Animación Cinemática de Aspas Rotando en Vivo e Iluminación Volumétrica Kelvin / RGB de Tarjeta
+
+- **Aspas de Ventilador Rotando Físicamente en la Ilustración (`DeviceCardArt.tsx`):**
+  - Incorporadas 3 aspas aerodinámicas en la silueta central del ventilador que **rotan visiblemente en 360° en tiempo real** cuando el ventilador está encendido.
+  - La velocidad de giro se calcula de forma dinámica y continua (`0.18s` a 100% hasta `2.4s` a 10%), reflejando fielmente la velocidad real del ventilador en Home Assistant a 120 FPS.
+- **Iluminación Volumétrica de la Tarjeta según Kelvin y Brillo Real:**
+  - El fondo de cristal líquido, bordes y cono de luz de la tarjeta se **iluminan físicamente** con la temperatura de color exacta (`color_temp_kelvin`, e.g. 2700K ámbar cálido, 4000K neutro, 6500K luz de día fría) o color RGB.
+  - La intensidad del resplandor responde proporcionalmente al brillo (`brightness`) de la luz.
+- **Sincronización Total en Dispositivos Mixtos (Ventilador + Luz):**
+  - Si el ventilador y la luz están encendidos al mismo tiempo, las aspas giran a la velocidad correspondiente mientras toda la escena y el ventilador se bañan en el halo de luz Kelvin.
+- **Motor Matemático Preciso Kelvin a RGB (`colors.ts`):**
+  - Algoritmo de Planckian Locus para calcular coordenadas RGB exactas a partir de cualquier valor de temperatura de color o mireds.
+
+## [1.5.19] - 2026-09-07
+
+### Control Total de Dispositivos Compuestos: Ventilador + Luz, Dimmer Deslizante y Regulador de Velocidad Directo
+
+- **Priorización Inteligente de Entidad Primaria en Tarjetas:**
+  - Los dispositivos que contienen ventiladores (`fan.*`, e.g. «Ventilador de Sala») adoptan automáticamente el icono cinemático de aspas rotativas y la silueta dinámica de ventilador con brisa, evitando que una bombilla secundaria oculte el propósito principal del equipo.
+- **Controles Múltiples Independientes en Dispositivos Compuestos (`DeviceCard.tsx`):**
+  - Desglose interactivo en la misma tarjeta:
+    - **Subpanel de Ventilador:** Icono animado de aspas, conmutador On/Off dedicado y regulador deslizante táctil de velocidad (0% a 100%).
+    - **Subpanel de Luz:** Icono de filamento con halo luminoso cálido, conmutador On/Off dedicado y dimmer deslizante táctil de brillo (0% a 100%).
+    - **Subpanel de Interruptores:** Conmutadores individuales para oscilación, brisa u otras funciones adicionales.
+- **Regulador Deslizante Líquido Táctil (`LiquidSlider.tsx`):**
+  - Deslizador de cristal líquido con respuesta inmediata a 120 FPS, visualización de porcentaje en tiempo real y comunicación con Home Assistant con debounce de 120ms.
+- **Nuevo Endpoint REST de Ajuste de Nivel (`platform.ts`):**
+  - `POST /api/custom/entity-set-value/:entityId` para regular de forma nativa brillo en luces (`brightness_pct`), velocidad en ventiladores (`percentage`) y posición en persianas (`position`).
+
+## [1.5.18] - 2026-09-07
+
+### Corrección Crítica de Referencia `isDashboardMode` en DeviceCard y Typecheck Obligatorio en Build
+
+- **Resolución de ReferenceError `isDashboardMode` (`DeviceCard.tsx`):**
+  - Declaración explícita de `isDashboardMode` en `DeviceCardProps` con resolución automática vía parámetro de consulta URL (`?mode=dashboard`), eliminando la excepción de renderizado detectada por el ErrorBoundary.
+- **Validación Estricta de Tipos en el Pipeline de Compilación:**
+  - El script `build` ahora ejecuta `tsc -p src/frontend/tsconfig.json --noEmit` obligatoriamente antes de Vite para bloquear cualquier error de variables no declaradas o desajustes de tipos en tiempo de compilación.
+
+## [1.5.17] - 2026-09-07
+
+### Corrección Definitiva de Pantalla Negra en Home Assistant Ingress y Fallback Anti-Caché
+
+- **Nombres de Archivos Deterministas sin Hashes Volátiles (`assets/index.js` y `assets/index.css`):**
+  - Se eliminan los hashes dinámicos de Vite en los puntos de entrada para evitar que la caché del proxy Ingress de Home Assistant solicite scripts 404 de versiones previas (`index-[hash].js`).
+- **Fallback Automático de Servidor para Hashes Obsoletos (`platform.ts`):**
+  - Si un navegador o proxy Ingress solicita un archivo con hash viejo (`assets/index-*.js` o `assets/index-*.css`), el servidor responde automáticamente con el bundle canónico más reciente en lugar de un error 404 / pantalla negra.
+- **Failsafe y Watchdog Inline en `index.html`:**
+  - Script inline independiente en `<head>` que captura errores de carga de recursos (`<script type="module">`) y temporizador de recuperación de 3.5 segundos con botones de recarga limpia en caso de problemas de red o caché.
+- **Protección Defensiva contra Valores Nulos en Filtros y Nombres:**
+  - Blindaje completo en `useAddonState.ts`, `App.tsx` y `CameraCard.tsx` para evitar excepciones en `localeCompare` o `toLowerCase` durante el renderizado inicial de dispositivos sin nombre o entidad.
+
+## [1.5.16] - 2026-09-07
+
+### Soporte de Pantalla Avanzada: Display P3, HDR / XDR, 120 FPS ProMotion, OLED True Black y Dimmer
+
+- **Soporte Display P3 (Wide Color Gamut):**
+  - Colores nativos de Apple Home (`--apple-green`, `--apple-amber`, `--apple-blue`, etc.) con coordenadas `color(display-p3 ...)` y fallback automático sRGB para paneles estándar.
+- **HDR y Liquid Retina XDR:**
+  - Soporte de brillo dinámico `@media (dynamic-range: high)` con reflejos especulares de hasta 1600 nits en bordes de cristal líquido y pucks activos.
+- **OLED True Black (0 nits):**
+  - Degradado periférico a `#000000` puro en modo oscuro que apaga físicamente los píxeles OLED en pantallas Super Retina XDR y OLED, ahorrando batería y dando contraste infinito.
+- **Rendimiento 120 FPS ProMotion:**
+  - Animaciones aceleradas por hardware en GPU (`translate3d` y `will-change: transform, opacity`), eliminando saltos de cuadro (*zero layout thrashing*).
+- **Dimmer Deslizante Interactivo (Liquid Glass Slider):**
+  - Control de brillo para luces (`light.*`) y porcentaje de velocidad para ventiladores (`fan.*`) con respuesta visual instantánea a 120 FPS y llamadas con debounce de 40ms a Home Assistant.
+- **Sincronización Automática de Día y Noche (`sun.sun`):**
+  - Adaptación automática del fondo y luz ambiental de las tarjetas según el estado de `sun.sun` (`above_horizon` vs `below_horizon`).
+
+## [1.5.15] - 2026-09-07
+
+### Tarjeta Lovelace Nativa TypeScript y Sincronización Bidireccional de Ventiladores
+
+- **Tarjeta Lovelace Dedicada (`matter-apple-card`):**
+  - Compilada directamente desde TypeScript con Vite 8 (`dist/frontend/matter-apple-card.js`) para ser usada en cualquier dashboard de Home Assistant.
+- **Sincronización Bidireccional de Estado de Ventiladores con Home Assistant:**
+  - Sincronización instantánea entre el estado físico de Home Assistant y HomeKit/Apple Home, evitando desfases cuando se enciende o apaga desde otra plataforma.
+
+## [1.5.14] - 2026-09-07
+
+### Tarjetas Liquid Glass estilo Apple Home, Modo Dashboard Operativo y Auditoría de No Exportados
+
+- **Diseño Liquid Glass estilo Apple Home (iOS / macOS / visionOS):**
+  - Tarjetas con acabado de cristal líquido translúcido esmerilado (`backdrop-filter: blur(28px) saturate(190%)`), bordes con reflejos especulares y sombreado profundo de alta fidelidad.
+  - Arte vectorial dinámico con degradado suave hacia negro profundo (`#0B0D13`), asegurando máxima legibilidad y respuesta táctil en primer plano.
+- **Iconos Cinemáticos Apple Home Dinámicos (Sin Emojis Inventados):**
+  - Sustitución completa de emojis genéricos por componentes vectoriales SVG cinéticos nativos (`AppleHomeIcon`).
+  - **Ventilador interactivo:** Aspas que rotan fluidamente a la velocidad porcentual real reportada (`attributes.percentage`), con desaceleración física suave al apagarse.
+  - **Luces:** Filamento activo con halo difuso de emisión en color RGB real o temperatura Kelvin real.
+  - **Termostatos:** Dial térmico con arcos de temperatura dinámicos (cian gélido / naranja calor).
+  - **Persianas y cerraduras:** Visualización porcentual de lamas y animación de pestillo motorizado.
+- **Modo Dashboard Operativo para Home Assistant:**
+  - Selector en la barra superior («Modo Dashboard» vs «Modo Admin») y soporte de URL embebida `?mode=dashboard` para paneles Lovelace de Home Assistant.
+  - En modo Dashboard se ocultan los botones de configuración interna y códigos QR, permitiendo usar las tarjetas Liquid Glass directamente como un panel de control interactivo para encender/apagar y monitorear accesorios al tocar la tarjeta.
+- **Conmutación Interactiva Directa:**
+  - Nuevo endpoint `POST /api/custom/entity-toggle/:entityId` y botón rápido (`quick-toggle-pill`) en la tarjeta para conmutar el estado del equipo en vivo.
+- **Auditoría y Filtro «NO EXPORTADOS (HA)»:**
+  - Nuevo chip de filtro que aísla de inmediato las entidades y dispositivos de Home Assistant que aún no están publicados en Matter, con etiqueta visual ámbar `NO EXPORTADO`.
+- **Compatibilidad Oficial de Repositorio Home Assistant Supervisor:**
+  - Incorporación de `repository.yaml` en la raíz del repositorio para cumplir estrictamente con el estándar de Home Assistant Supervisor y evitar fallos de indexación de versiones.
 
 ## [1.5.13] - 2026-09-07
 
