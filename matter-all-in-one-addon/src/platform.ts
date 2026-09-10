@@ -59,6 +59,7 @@ import { ScryptedHomeKitBridge } from "./camera/scrypted/scrypted-homekit-bridge
 import { ScryptedMatterBridge } from "./camera/scrypted/scrypted-matter-bridge.js";
 import { ScryptedStreamValidator } from "./camera/scrypted/scrypted-stream-validator.js";
 import { sanitizeUrlCredentials } from "./camera/homekit/ffmpeg-helper.js";
+import { getFanControlFeatures } from "./converters/fan.converter.js";
 
 export interface HomeAssistantPlatformConfig extends PlatformConfig {
   host?: string; // Optional: auto-detected from network/supervisor if not set
@@ -170,6 +171,12 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
   /** Set of entity IDs that the user has explicitly requested to export as accessories */
   public exportedDevices: Set<string> = new Set();
+  /**
+   * Persisted fingerprints of each fan's cluster feature set (e.g. "MultiSpeed,Auto,Step").
+   * When the feature set changes across add-on updates, the fan node is automatically
+   * recreated so Apple Home receives the correct cluster schema instead of a stale one.
+   */
+  private fanSchemaFingerprints: Map<string, string> = new Map();
   /**
    * HA can emit several state_changed events for the same entity in a single
    * tick.  Coalescing those events keeps Matter attribute transactions from
@@ -1417,6 +1424,97 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     return primary !== undefined && primary !== entityId;
   }
 
+  /**
+   * Compute a deterministic fingerprint string for the FanControl cluster
+   * features active on a given entity's current HA state.
+   * Example: "Auto,MultiSpeed,Step"
+   */
+  private computeFanSchemaFingerprint(state: HassState): string {
+    const features = getFanControlFeatures(state);
+    return features
+      .map((f: unknown) => String(f))
+      .sort()
+      .join(",");
+  }
+
+  /** Load persisted fan schema fingerprints from disk. */
+  private async loadFanSchemaFingerprints(): Promise<void> {
+    try {
+      const raw = await fs.readFile(
+        "/data/fan-schema-fingerprints.json",
+        "utf8",
+      );
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") {
+        this.fanSchemaFingerprints = new Map(Object.entries(parsed));
+        this.log.debug(
+          `Loaded ${this.fanSchemaFingerprints.size} fan schema fingerprints.`,
+        );
+      }
+    } catch {
+      this.fanSchemaFingerprints = new Map();
+    }
+  }
+
+  /** Persist fan schema fingerprints to disk. */
+  private async saveFanSchemaFingerprints(): Promise<void> {
+    try {
+      const obj: Record<string, string> = {};
+      this.fanSchemaFingerprints.forEach((v, k) => {
+        obj[k] = v;
+      });
+      await fs.writeFile(
+        "/data/fan-schema-fingerprints.json",
+        JSON.stringify(obj, null, 2),
+        "utf8",
+      );
+    } catch (err) {
+      this.log.debug(`Failed to save fan-schema-fingerprints.json: ${err}`);
+    }
+  }
+
+  /**
+   * Check whether the fan cluster schema has changed for an entity since
+   * it was last exported. Returns true if a schema mismatch is detected
+   * and the node must be recreated.
+   * Also updates the stored fingerprint if it differs.
+   */
+  private checkFanSchemaMismatch(entityId: string, state: HassState): boolean {
+    const [domain] = entityId.split(".");
+    if (domain !== "fan") return false;
+    const current = this.computeFanSchemaFingerprint(state);
+    const stored = this.fanSchemaFingerprints.get(entityId);
+    if (stored === undefined) {
+      // First time — record it, no mismatch
+      this.fanSchemaFingerprints.set(entityId, current);
+      return false;
+    }
+    if (stored !== current) {
+      this.log.warn(
+        `[Fan Schema] ${entityId}: cluster features changed from [${stored}] to [${current}]. ` +
+          `Forcing Matter node recreation to apply correct schema. ` +
+          `Remove the accessory from Apple Home and re-scan the new QR code.`,
+      );
+      this.fanSchemaFingerprints.set(entityId, current);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Save the current fan schema fingerprint for an entity after successful activation.
+   */
+  private recordFanSchemaFingerprint(
+    entityId: string,
+    state: HassState,
+  ): void {
+    const [domain] = entityId.split(".");
+    if (domain !== "fan") return;
+    const fp = this.computeFanSchemaFingerprint(state);
+    this.fanSchemaFingerprints.set(entityId, fp);
+    void this.saveFanSchemaFingerprints();
+  }
+
   constructor(
     matterbridge: PlatformMatterbridge,
     log: AnsiLogger,
@@ -1782,6 +1880,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       }
 
       await this.loadHomeKitCameraRecords();
+      await this.loadFanSchemaFingerprints();
 
       // Optional device-level composite definitions. This file intentionally
       // lives beside entity overrides so advanced users can tune grouping
@@ -2193,7 +2292,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   }
 
   /** Create a bridged endpoint and let Matterbridge own its lifecycle. */
-  private async activateEntity(
+   private async activateEntity(
     entityId: string,
     forceRecreate = false,
   ): Promise<void> {
@@ -2218,6 +2317,39 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       return;
     }
 
+    // Fan schema mismatch check: if the FanControl cluster features changed
+    // since the node was last exported (e.g. add-on update changed MultiSpeed
+    // support), force a node recreation so Apple Home gets the correct schema.
+    if (!forceRecreate && entity.state) {
+      const schemaChanged = this.checkFanSchemaMismatch(entityId, entity.state);
+      if (schemaChanged) {
+        this.log.warn(
+          `[Fan Schema] ${entityId}: fan cluster schema changed — forcing node recreation.`,
+        );
+        forceRecreate = true;
+        // Close and unregister the stale node if it exists
+        const staleEndpoint = this.matterbridgeDevices.get(entityId);
+        if (staleEndpoint) {
+          try {
+            if ((staleEndpoint as any).serverNode?.lifecycle?.isOnline) {
+              await (staleEndpoint as any).serverNode.close();
+            }
+            await this.unregisterDevice(staleEndpoint);
+          } catch (e) {
+            this.log.debug(
+              `[Fan Schema] Failed to unregister stale fan endpoint ${entityId}: ${e}`,
+            );
+          }
+          this.matterbridgeDevices.delete(entityId);
+        }
+        this.recordEntityDiagnostic(
+          entityId,
+          `⚠️ Schema del cluster Fan actualizado — retira el accesorio de Apple Home y escanea el nuevo código QR.`,
+          "warning",
+        );
+      }
+    }
+
     try {
       const endpoint = await entity.createEndpoint();
       if (!forceRecreate) {
@@ -2237,6 +2369,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           this.log.notice(
             `Reused existing Matter endpoint ${idn}${entityId}${rs}; it remains paired and was not recreated.`,
           );
+          // Record fingerprint even on reuse so future startups know the current schema
+          if (entity.state) this.recordFanSchemaFingerprint(entityId, entity.state);
           return;
         } else if (existingEndpoint && deviceTypeMismatch) {
           this.log.warn(
@@ -2268,6 +2402,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       }
       this.matterbridgeDevices.set(entityId, endpoint);
       await entity.syncInitialState();
+      // Record the current fan schema fingerprint so future startups can detect changes
+      if (entity.state) this.recordFanSchemaFingerprint(entityId, entity.state);
       this.log.notice(`Exported bridged endpoint ${idn}${entityId}${rs}`);
     } catch (err) {
       this.log.error(`Failed to activate entity ${entityId}: ${err}`);
@@ -2278,6 +2414,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       throw err;
     }
   }
+
 
   /** Create an MQTT bridged endpoint and let Matterbridge own its lifecycle. */
   public async activateMqttEntity(entityId: string): Promise<void> {
@@ -4493,6 +4630,38 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             "Content-Type": "application/json; charset=utf-8",
           });
           res.end(JSON.stringify(result));
+          return;
+        }
+
+        // POST /api/custom/reset-all-fans
+        // Resets all exported fan accessories so Apple Home can be updated with new QR codes.
+        if (req.method === "POST" && pathname === "/api/custom/reset-all-fans") {
+          const fanEntityIds = Array.from(this.exportedDevices).filter((id) =>
+            id.startsWith("fan."),
+          );
+          if (fanEntityIds.length === 0) {
+            res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+            res.end(JSON.stringify({ success: true, reset: [], message: "No hay ventiladores exportados." }));
+            return;
+          }
+          const results = await Promise.all(
+            fanEntityIds.map(async (entityId) => {
+              try {
+                const result = await this.runMatterAccessoryOperation(
+                  entityId,
+                  () => this.resetMatterAccessory(entityId),
+                );
+                return { entityId, ...result };
+              } catch (err) {
+                return { entityId, success: false, error: String(err) };
+              }
+            }),
+          );
+          const allOk = results.every((r) => r.success);
+          res.writeHead(allOk ? 200 : 207, {
+            "Content-Type": "application/json; charset=utf-8",
+          });
+          res.end(JSON.stringify({ success: allOk, reset: results }));
           return;
         }
 

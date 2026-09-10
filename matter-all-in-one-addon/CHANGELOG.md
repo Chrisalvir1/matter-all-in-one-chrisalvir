@@ -1,3 +1,19 @@
+## [1.5.47] - 2026-09-10
+
+### Corrección Definitiva de Ventiladores BLE en "Sin Respuesta" — Detección Automática de Cambios de Schema
+
+- **Detección Automática de Cambio de Schema del Cluster FanControl (BLE Fans):**
+  - Se implementó un sistema de *fingerprint* del cluster `FanControl` persistido en `/data/fan-schema-fingerprints.json`. Cada vez que el add-on arranca, compara las features actuales del cluster (ej. `MultiSpeed,Auto,Step`) con las del último arranque exitoso.
+  - Si las features cambiaron (lo que ocurrió al actualizar de v1.5.44 a v1.5.46), el nodo Matter del ventilador se **recrea automáticamente** con el schema correcto, eliminando el estado "Sin Respuesta" sin que el usuario tenga que realizar un reset manual.
+  - Al recrear el nodo, se muestra el diagnóstico: *"⚠️ Schema del cluster Fan actualizado — retira el accesorio de Apple Home y escanea el nuevo código QR"* en el dashboard.
+
+- **Nuevo Endpoint de Reset Masivo de Ventiladores:**
+  - Se añadió `POST /api/custom/reset-all-fans` que restablece todos los accesorios de ventiladores exportados en paralelo, generando nuevos códigos QR.
+  - Útil como acción de recuperación cuando múltiples ventiladores BLE quedan en "Sin Respuesta" simultáneamente.
+
+- **Registro de Fingerprint al Reactivar o Reutilizar Nodo:**
+  - Al reutilizar un nodo fan existente (sin recreación), también se actualiza el fingerprint almacenado, evitando recreaciones innecesarias en futuros reinicios.
+
 ## [1.5.46] - 2026-09-10
 
 ### Restauración Completa de Ventiladores y Luces BLE / Compatibilidad Matter Apple Home
