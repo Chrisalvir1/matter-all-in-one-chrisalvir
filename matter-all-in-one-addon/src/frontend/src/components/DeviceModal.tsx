@@ -40,6 +40,30 @@ function getDomainIcon(domain?: string): string {
   }
 }
 
+function getControllerBadge(vendorId?: number | null, controllerName?: string): { icon: string; name: string } {
+  const name = controllerName || "Controlador Matter";
+  const vid = vendorId !== null && vendorId !== undefined ? Number(vendorId) : null;
+  if (vid === 0x1349 || /apple/i.test(name)) {
+    return { icon: "🍎", name: "Apple Home" };
+  }
+  if (vid === 0x6006 || /google/i.test(name)) {
+    return { icon: "🌐", name: "Google Home" };
+  }
+  if (vid === 0x1211 || /amazon|alexa/i.test(name)) {
+    return { icon: "🔊", name: "Amazon Alexa" };
+  }
+  if (
+    (vid !== null && [0x10e1, 0x110a, 0x127b, 0x1175, 0x1360].includes(vid)) ||
+    /smartthings|samsung/i.test(name)
+  ) {
+    return { icon: "💠", name: "Samsung SmartThings" };
+  }
+  if (vid === 0x130d || /home assistant/i.test(name)) {
+    return { icon: "🏠", name: "Home Assistant" };
+  }
+  return { icon: "📱", name };
+}
+
 export const DeviceModal: React.FC<DeviceModalProps> = ({
   device,
   targetEntity,
@@ -85,10 +109,31 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
   const manualCode =
     activeEntity?.manualPairingCode ||
     device.entities.find((e) => e.manualPairingCode)?.manualPairingCode ||
-    pairingCode;
+    "";
+
+  const matterFabrics = Array.isArray(activeEntity?.matterFabrics)
+    ? activeEntity.matterFabrics
+    : Array.isArray(device.entities.find((e) => e.matterFabrics?.length)?.matterFabrics)
+    ? device.entities.find((e) => e.matterFabrics?.length)!.matterFabrics!
+    : [];
 
   const isExported = Boolean(activeEntity?.exported);
   const isCommissioned = Boolean(activeEntity?.commissioned);
+
+  const handleRemoveFabric = async (fabricIndex: number | string) => {
+    if (!activeEntity) return;
+    if (!confirm("¿Desconectar este accesorio de este controlador Matter?")) return;
+    setIsBusy(true);
+    try {
+      await api.removeFabric(activeEntity.entityId, fabricIndex);
+      showToast("✓ Controlador desconectado");
+      onRefresh();
+    } catch (err: any) {
+      showToast(err.message || "Error al desconectar", true);
+    } finally {
+      setIsBusy(false);
+    }
+  };
 
   const handleToggleExport = async (entity: EntityRecord) => {
     try {
@@ -362,6 +407,58 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
               <p className="fabrics-subtitle">
                 Desconectar de ecosistemas Matter existentes si cambias de controlador o si ya eliminaste este accesorio en tu app de Apple Home, Google Home o Alexa.
               </p>
+
+              {matterFabrics.length > 0 ? (
+                <div className="fabrics-list">
+                  {matterFabrics.map((fabric: any, idx: number) => {
+                    const badge = getControllerBadge(fabric.vendorId, fabric.controller);
+                    const targetIndex = fabric.fabricIndex ?? fabric.fabricId ?? idx + 1;
+                    return (
+                      <div key={targetIndex} className="fabric-item">
+                        <div className="fabric-info">
+                          <div className="fabric-controller-line">
+                            <span style={{ fontSize: 15 }}>{badge.icon}</span>
+                            <span className="fabric-name">{badge.name}</span>
+                          </div>
+                          {fabric.label && (
+                            <span className="fabric-home-name">
+                              Casa: <strong>{fabric.label}</strong>
+                            </span>
+                          )}
+                          <span className="fabric-detail">
+                            Fabric {targetIndex}
+                            {fabric.vendorId ? ` · VID: 0x${Number(fabric.vendorId).toString(16).toUpperCase()}` : ""}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          className="button button-danger-outline button-xs"
+                          onClick={() => handleRemoveFabric(targetIndex)}
+                          disabled={isBusy}
+                          title="Desconectar únicamente esta casa"
+                          style={{
+                            padding: "4px 8px",
+                            fontSize: "11px",
+                            borderRadius: "6px",
+                            cursor: "pointer",
+                            background: "rgba(239, 68, 68, 0.15)",
+                            color: "#fca5a5",
+                            border: "1px solid rgba(239, 68, 68, 0.35)",
+                          }}
+                        >
+                          Desconectar
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div style={{ fontSize: 11, color: "var(--muted)", fontStyle: "italic", padding: "4px 0" }}>
+                  {isCommissioned
+                    ? "Sesión registrada en el puente (sin etiquetas de controlador reportadas)."
+                    : "No hay casas ni controladores vinculados a este accesorio."}
+                </div>
+              )}
             </section>
 
             {/* Diagnostics Panel */}
@@ -426,12 +523,54 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
             </div>
 
             {isCommissioned && !multiAdminOpen && (
-              <div className="commissioned-hint" style={{ display: "block" }}>
-                <p className="hint-title">🔒 Vinculado a Matter</p>
-                <p className="hint-desc">
-                  Este accesorio ya tiene una casa registrada en Matter. Para
-                  emparejarlo en una segunda plataforma, pulsa «Modo Multi-Admin».
+              <div
+                className="commissioned-hint"
+                style={{
+                  display: "block",
+                  background: "rgba(245, 158, 11, 0.12)",
+                  border: "1px solid rgba(245, 158, 11, 0.3)",
+                  borderRadius: 12,
+                  padding: 12,
+                  marginBottom: 12,
+                }}
+              >
+                <p className="hint-title" style={{ color: "#fbbf24", fontWeight: 700, margin: "0 0 4px 0" }}>
+                  🔒 Sesión Matter Registrada
                 </p>
+                <p className="hint-desc" style={{ fontSize: 11, color: "var(--text-secondary)", margin: "0 0 10px 0", lineHeight: 1.4 }}>
+                  El puente tiene guardada una vinculación previa. Si no lo tienes en Apple Home o no conecta, pulsa «Desconectar todo y nuevo QR» para generar credenciales limpias:
+                </p>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    className="button button-danger button-xs"
+                    onClick={handleResetAccessory}
+                    disabled={isBusy}
+                    style={{
+                      padding: "6px 10px",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      borderRadius: 8,
+                      cursor: "pointer",
+                    }}
+                  >
+                    🔄 Desconectar y nuevo QR
+                  </button>
+                  <button
+                    type="button"
+                    className="button button-secondary button-xs"
+                    onClick={handleOpenCommissioning}
+                    disabled={isBusy}
+                    style={{
+                      padding: "6px 10px",
+                      fontSize: 11,
+                      borderRadius: 8,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Abrir Multi-Admin
+                  </button>
+                </div>
               </div>
             )}
 
