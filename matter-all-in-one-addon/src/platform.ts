@@ -2242,6 +2242,12 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         candidate.members.forEach((member) =>
           this.compositeMembership.set(member.entityId, candidate.deviceId),
         );
+        if (
+          typeof (existingEndpoint.serverNode as any)?.start === "function" &&
+          !existingEndpoint.serverNode.lifecycle?.isOnline
+        ) {
+          await existingEndpoint.serverNode.start();
+        }
         await composite.syncInitialState();
         this.log.notice(
           `Reused existing Matter node ${idn}${nodeName}${rs}; it remains paired and was not recreated.`,
@@ -2365,6 +2371,12 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         if (existingEndpoint?.serverNode && !deviceTypeMismatch) {
           entity.adoptEndpoint(existingEndpoint);
           this.matterbridgeDevices.set(entityId, existingEndpoint);
+          if (
+            typeof (existingEndpoint.serverNode as any)?.start === "function" &&
+            !existingEndpoint.serverNode.lifecycle?.isOnline
+          ) {
+            await existingEndpoint.serverNode.start();
+          }
           await entity.syncInitialState();
           this.log.notice(
             `Reused existing Matter endpoint ${idn}${entityId}${rs}; it remains paired and was not recreated.`,
@@ -2432,6 +2444,12 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       if (existingEndpoint?.serverNode) {
         entity.adoptEndpoint(existingEndpoint);
         this.matterbridgeDevices.set(entityId, existingEndpoint);
+        if (
+          typeof (existingEndpoint.serverNode as any)?.start === "function" &&
+          !existingEndpoint.serverNode.lifecycle?.isOnline
+        ) {
+          await existingEndpoint.serverNode.start();
+        }
         await entity.syncInitialState();
         this.log.notice(
           `Reused existing Matter endpoint ${idn}${entityId}${rs}; it remains paired.`,

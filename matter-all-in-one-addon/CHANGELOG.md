@@ -1,3 +1,11 @@
+## [1.5.48] - 2026-09-10
+
+### Corrección Crítica de Emparejamiento — Reactivación de Nodos Offline ("Connecting...")
+
+- **Garantía de ServerNode Online al Reutilizar Endpoints:**
+  - Se corrigió un problema donde los nodos Matter reutilizados durante el arranque (`activateComposite`, `activateEntity` y `activateMqttEntity`) no verificaban si su `serverNode` estaba online. Si el nodo se encontraba detenido o inactivo tras reiniciar el add-on, su socket UDP y anuncios mDNS no respondían, causando que al escanear el código QR Apple Home se quedara infinitamente en *"Conectando con el accesorio..."* (Connecting...).
+  - Ahora se invoca explícitamente `serverNode.start()` si el nodo reutilizado está offline.
+
 ## [1.5.47] - 2026-09-10
 
 ### Corrección Definitiva de Ventiladores BLE en "Sin Respuesta" — Detección Automática de Cambios de Schema
