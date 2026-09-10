@@ -1,3 +1,14 @@
+## [1.5.41] - 2026-09-10
+
+### Corrección Visual y Operativa: Eliminación de Slider Inexistente y Persistencia Optimista en Govee H7133
+
+- **Eliminación del Slider Redundante en Govee H7133:**
+  - El hardware físico del Govee H7133 (Space Heater Pro) no dispone de velocidades variables en modo ventilador; opera como flujo de aire continuo para refrigerar las resistencias y recircular aire fresco.
+  - La tarjeta mostraba un bloque secundario `Ventilador` con un deslizador al 0% (correspondiente al switch on/off de energía `switch.ventilador_playroom`), confundiendo al usuario al no permitir regular la velocidad.
+  - Se ocultó este sub-control redundante exclusivamente para el modelo H7133 (`!isH7133`), manteniéndolo para ventiladores de techo con modulación real de porcentaje. Toda la gestión del H7133 queda concentrada de forma limpia y transparente en sus paneles dedicados de modo, oscilación y luz.
+- **Persistencia Inmediata del Modo Fan:**
+  - Se corrigió el cálculo de `currentH7133Mode` para que retenga de forma optimista el modo seleccionado (`Fan Manual` o `Calefactor`), impidiendo que los controles se colapsen a `En Reposo` durante la latencia de respuesta de Home Assistant.
+
 ## [1.5.40] - 2026-09-10
 
 ### Corrección Definitiva: Blindaje Absoluto Anti-Calefacción en Govee H7133 (Fan Manual y Oscilación Pura)

@@ -302,12 +302,14 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
   const isControllable = ["light", "switch", "fan", "climate", "lock", "cover", "humidifier", "vacuum", "media_player"].includes(
     primaryDomain
   );
-  // Govee H7133 active mode calculation
+  // Govee H7133 active mode calculation (optimistic mode retention so controls do not vanish during polling delay)
   const isFanPoweredOn = fanEntity ? fanEntity.state === "on" : (primaryDomain === "fan" && primaryState === "on");
   const currentH7133Mode: "fan" | "heat" | "off" =
-    h7133Mode === "off" || !isFanPoweredOn
+    h7133Mode === "off"
       ? "off"
-      : (h7133Mode === "heat" ? "heat" : "fan");
+      : isFanPoweredOn
+      ? (h7133Mode === "heat" ? "heat" : "fan")
+      : h7133Mode;
 
   const isHeating = isH7133
     ? currentH7133Mode === "heat"
@@ -1526,8 +1528,8 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
             </div>
           )}
 
-          {/* Fan sub-control with spinning icon & speed slider */}
-          {fanEntity && (
+          {/* Fan sub-control with spinning icon & speed slider (standard variable fans only; H7133 has dedicated modes above) */}
+          {fanEntity && !isH7133 && (
             <div
               style={{
                 background: "rgba(0, 0, 0, 0.28)",
