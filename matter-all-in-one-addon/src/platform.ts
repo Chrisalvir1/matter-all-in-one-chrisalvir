@@ -59,6 +59,7 @@ import { ScryptedHomeKitBridge } from "./camera/scrypted/scrypted-homekit-bridge
 import { ScryptedMatterBridge } from "./camera/scrypted/scrypted-matter-bridge.js";
 import { ScryptedStreamValidator } from "./camera/scrypted/scrypted-stream-validator.js";
 import { sanitizeUrlCredentials } from "./camera/homekit/ffmpeg-helper.js";
+import { getFanControlFeatures } from "./converters/fan.converter.js";
 
 export interface HomeAssistantPlatformConfig extends PlatformConfig {
   host?: string; // Optional: auto-detected from network/supervisor if not set
@@ -170,6 +171,12 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
   /** Set of entity IDs that the user has explicitly requested to export as accessories */
   public exportedDevices: Set<string> = new Set();
+  /**
+   * Persisted fingerprints of each fan's cluster feature set (e.g. "MultiSpeed,Auto,Step").
+   * When the feature set changes across add-on updates, the fan node is automatically
+   * recreated so Apple Home receives the correct cluster schema instead of a stale one.
+   */
+  private fanSchemaFingerprints: Map<string, string> = new Map();
   /**
    * HA can emit several state_changed events for the same entity in a single
    * tick.  Coalescing those events keeps Matter attribute transactions from
@@ -583,7 +590,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       // behavior. The compatibility state is still used by older
       // Matterbridge runtimes, but a commissioned node may no longer mirror
       // its codes into serverNode.state.commissioning.
+      const behaviorGetterState =
+        typeof endpoint?.serverNode?.behaviors?.get === "function"
+          ? endpoint.serverNode.behaviors.get("commissioning")?.state ??
+            endpoint.serverNode.behaviors.get("commissioningServer")?.state
+          : undefined;
       const behaviorCommissioning =
+        behaviorGetterState ??
         endpoint?.serverNode?.behaviors?.commissioning?.state ??
         endpoint?.serverNode?.behaviors?.commissioning ??
         endpoint?.serverNode?.commissioning?.state ??
@@ -920,13 +933,59 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     entityId: string,
     state: HassState,
   ): string | undefined {
-    if (!entityId.startsWith("switch.omni_broadlink_")) return undefined;
-    const identity = `${entityId} ${state.attributes?.friendly_name ?? ""}`;
-    return /(?:^|[_\s-])(everybot|ircedge|robot|aspiradora|vacuum|cleaner)(?:$|[_\s-])/i.test(
-      identity,
-    )
-      ? "roboticVacuumCleaner"
-      : undefined;
+    if (entityId.startsWith("light.")) {
+      const id = entityId.toLowerCase();
+      const fn = (state.attributes?.friendly_name || "").toLowerCase();
+      // Night lights (such as Govee H7133 night light), Govee LED, and lights with color capabilities
+      if (
+        id.includes("h713") ||
+        id.includes("night_light") ||
+        id.includes("rgb") ||
+        id.includes("govee") ||
+        id.includes("flow") ||
+        id.includes("lyra") ||
+        id.includes("strip") ||
+        fn.includes("nocturna") ||
+        fn.includes("night light") ||
+        fn.includes("rgb") ||
+        state.attributes?.rgb_color !== undefined ||
+        state.attributes?.hs_color !== undefined ||
+        state.attributes?.xy_color !== undefined ||
+        state.attributes?.color_temp !== undefined ||
+        state.attributes?.color_temp_kelvin !== undefined
+      ) {
+        return "extendedColorLight";
+      }
+    }
+    if (entityId.startsWith("switch.")) {
+      const id = entityId.toLowerCase();
+      const fn = (state.attributes?.friendly_name || "").toLowerCase();
+      const identity = `${id} ${fn}`;
+
+      if (
+        /auto_stop|calefactor|heater|termostato|thermostat|heating/i.test(
+          identity,
+        )
+      ) {
+        return "thermostat";
+      }
+
+      if (
+        /ventilador|fan|abanico|blower/i.test(identity) &&
+        !/auto_stop|timer|temporizador|oscil|luz|light/i.test(identity)
+      ) {
+        return "fan";
+      }
+
+      if (entityId.startsWith("switch.omni_broadlink_")) {
+        return /(?:^|[_\s-])(everybot|ircedge|robot|aspiradora|vacuum|cleaner)(?:$|[_\s-])/i.test(
+          identity,
+        )
+          ? "roboticVacuumCleaner"
+          : undefined;
+      }
+    }
+    return undefined;
   }
 
   /** Refresh the panel catalogue from the latest HA state cache on demand. */
@@ -965,6 +1024,18 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     const fans = allMembers.filter(
       (e) => e.entityId.startsWith("fan.") && isNonGeneric(e),
     );
+
+    const isSpecialApplianceEntity = (e: BaseEntity) => {
+      const id = e.entityId.toLowerCase();
+      if (id.includes("auto_stop")) return true;
+      const model = (e.state?.attributes?.model || "").toLowerCase();
+      if (model.includes("h7133")) return true;
+      return false;
+    };
+
+    if (allMembers.some((e) => isSpecialApplianceEntity(e))) {
+      return false;
+    }
 
     // 1. Any device with 2 or more switch entities is a multi-gang switch/controller
     if (switches.length >= 2) return true;
@@ -1018,6 +1089,26 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     if (config?.group_by_device_id === false) {
       this.log.debug(
         `[Composite] ${entityId}: grouping explicitly disabled for device ${deviceId}`,
+      );
+      return undefined;
+    }
+    const isGoveeAppliance = Array.from(this.entities.values()).some((e) => {
+      const entry = (this.ha as any).hassEntities?.get(e.entityId);
+      return (
+        entry?.device_id === deviceId &&
+        (e.entityId.includes("auto_stop") ||
+          (e.state?.attributes?.model || "").toLowerCase().includes("h7133"))
+      );
+    });
+
+    if (
+      entityId.includes("auto_stop") ||
+      this.deviceOverrides[entityId] === "thermostat" ||
+      (isGoveeAppliance &&
+        (entityId.includes("oscillation") || entityId.includes("oscilacion")))
+    ) {
+      this.log.debug(
+        `[Composite] ${entityId}: standalone Plan B thermostat or auxiliary entity — composite grouping bypassed`,
       );
       return undefined;
     }
@@ -1088,17 +1179,41 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       members = members.filter((m) => !m.entityId.startsWith("switch."));
     }
 
-    // If the composite group is a fan, exclude auxiliary beeper/sound switches
+    const isFanMember = (m: BaseEntity) =>
+      m.entityId.startsWith("fan.") ||
+      this.deviceOverrides[m.entityId] === "fan" ||
+      m.deviceType.name.toLowerCase() === "fan" ||
+      (m.entityId.startsWith("switch.") && m.entityId.includes("ventilador"));
+
+    // If the composite group has a fan, exclude auxiliary switches (oscillation, auto_stop/calefactor, sounds)
     if (
-      members.some((m) => m.entityId.startsWith("fan.")) &&
+      members.some(isFanMember) &&
       !explicitlyIncluded?.length
     ) {
       members = members.filter((m) => {
-        if (!m.entityId.startsWith("switch.")) return true;
-        const name = (
-          this.ha.hassEntities.get(m.entityId)?.name || m.entityId
-        ).toLowerCase();
-        return !/beep|buzz|sound|audio|timb|indicat|display/i.test(name);
+        const id = m.entityId.toLowerCase();
+        if (
+          id.includes("auto_stop") ||
+          this.deviceOverrides[m.entityId] === "thermostat"
+        ) {
+          return false;
+        }
+        if (
+          isGoveeAppliance &&
+          (id.includes("oscillation") || id.includes("oscilacion"))
+        ) {
+          return false;
+        }
+        if (m.entityId.startsWith("switch.")) {
+          if (!isFanMember(m)) {
+            return false;
+          }
+          const name = (
+            this.ha.hassEntities.get(m.entityId)?.name || m.entityId
+          ).toLowerCase();
+          return !/beep|buzz|sound|audio|timb|indicat|display/i.test(name);
+        }
+        return true;
       });
     }
 
@@ -1121,7 +1236,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
     const hasPrimaryControllable = members.some(
       (member) =>
-        member.entityId.startsWith("fan.") ||
+        isFanMember(member) ||
         member.entityId.startsWith("lock.") ||
         member.entityId.startsWith("humidifier."),
     );
@@ -1148,6 +1263,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     members.sort((a, b) => {
       if (a.entityId === config?.primary_entity) return -1;
       if (b.entityId === config?.primary_entity) return 1;
+      if (isFanMember(a) && !isFanMember(b)) return -1;
+      if (!isFanMember(a) && isFanMember(b)) return 1;
       const left = order.indexOf(a.entityId);
       const right = order.indexOf(b.entityId);
       if (left !== -1 || right !== -1)
@@ -1307,6 +1424,97 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     return primary !== undefined && primary !== entityId;
   }
 
+  /**
+   * Compute a deterministic fingerprint string for the FanControl cluster
+   * features active on a given entity's current HA state.
+   * Example: "Auto,MultiSpeed,Step"
+   */
+  private computeFanSchemaFingerprint(state: HassState): string {
+    const features = getFanControlFeatures(state);
+    return features
+      .map((f: unknown) => String(f))
+      .sort()
+      .join(",");
+  }
+
+  /** Load persisted fan schema fingerprints from disk. */
+  private async loadFanSchemaFingerprints(): Promise<void> {
+    try {
+      const raw = await fs.readFile(
+        "/data/fan-schema-fingerprints.json",
+        "utf8",
+      );
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") {
+        this.fanSchemaFingerprints = new Map(Object.entries(parsed));
+        this.log.debug(
+          `Loaded ${this.fanSchemaFingerprints.size} fan schema fingerprints.`,
+        );
+      }
+    } catch {
+      this.fanSchemaFingerprints = new Map();
+    }
+  }
+
+  /** Persist fan schema fingerprints to disk. */
+  private async saveFanSchemaFingerprints(): Promise<void> {
+    try {
+      const obj: Record<string, string> = {};
+      this.fanSchemaFingerprints.forEach((v, k) => {
+        obj[k] = v;
+      });
+      await fs.writeFile(
+        "/data/fan-schema-fingerprints.json",
+        JSON.stringify(obj, null, 2),
+        "utf8",
+      );
+    } catch (err) {
+      this.log.debug(`Failed to save fan-schema-fingerprints.json: ${err}`);
+    }
+  }
+
+  /**
+   * Check whether the fan cluster schema has changed for an entity since
+   * it was last exported. Returns true if a schema mismatch is detected
+   * and the node must be recreated.
+   * Also updates the stored fingerprint if it differs.
+   */
+  private checkFanSchemaMismatch(entityId: string, state: HassState): boolean {
+    const [domain] = entityId.split(".");
+    if (domain !== "fan") return false;
+    const current = this.computeFanSchemaFingerprint(state);
+    const stored = this.fanSchemaFingerprints.get(entityId);
+    if (stored === undefined) {
+      // First time — record it, no mismatch
+      this.fanSchemaFingerprints.set(entityId, current);
+      return false;
+    }
+    if (stored !== current) {
+      this.log.warn(
+        `[Fan Schema] ${entityId}: cluster features changed from [${stored}] to [${current}]. ` +
+          `Forcing Matter node recreation to apply correct schema. ` +
+          `Remove the accessory from Apple Home and re-scan the new QR code.`,
+      );
+      this.fanSchemaFingerprints.set(entityId, current);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Save the current fan schema fingerprint for an entity after successful activation.
+   */
+  private recordFanSchemaFingerprint(
+    entityId: string,
+    state: HassState,
+  ): void {
+    const [domain] = entityId.split(".");
+    if (domain !== "fan") return;
+    const fp = this.computeFanSchemaFingerprint(state);
+    this.fanSchemaFingerprints.set(entityId, fp);
+    void this.saveFanSchemaFingerprints();
+  }
+
   constructor(
     matterbridge: PlatformMatterbridge,
     log: AnsiLogger,
@@ -1381,7 +1589,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     );
     this.log.notice(`[Runtime] Matterbridge runtime: ${mbVersion}`);
     this.log.notice(`[Runtime] Node.js runtime: ${process.version}`);
-    this.log.notice(`[Runtime] Plugin version: 1.5.13`);
+    this.log.notice(`[Runtime] Plugin version: 1.5.31`);
     await this.loadEntityDiagnostics();
     await this.startUiServer();
     this.startMatterConnectionMonitor();
@@ -1672,6 +1880,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       }
 
       await this.loadHomeKitCameraRecords();
+      await this.loadFanSchemaFingerprints();
 
       // Optional device-level composite definitions. This file intentionally
       // lives beside entity overrides so advanced users can tune grouping
@@ -1763,6 +1972,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       "vacuum",
       "media_player",
       "humidifier",
+      "select",
+      "number",
     ];
     if (
       !allowedDomains.includes(domain) &&
@@ -2031,6 +2242,12 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         candidate.members.forEach((member) =>
           this.compositeMembership.set(member.entityId, candidate.deviceId),
         );
+        if (
+          typeof (existingEndpoint.serverNode as any)?.start === "function" &&
+          !existingEndpoint.serverNode.lifecycle?.isOnline
+        ) {
+          await existingEndpoint.serverNode.start();
+        }
         await composite.syncInitialState();
         this.log.notice(
           `Reused existing Matter node ${idn}${nodeName}${rs}; it remains paired and was not recreated.`,
@@ -2081,7 +2298,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   }
 
   /** Create a bridged endpoint and let Matterbridge own its lifecycle. */
-  private async activateEntity(
+   private async activateEntity(
     entityId: string,
     forceRecreate = false,
   ): Promise<void> {
@@ -2106,6 +2323,39 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       return;
     }
 
+    // Fan schema mismatch check: if the FanControl cluster features changed
+    // since the node was last exported (e.g. add-on update changed MultiSpeed
+    // support), force a node recreation so Apple Home gets the correct schema.
+    if (!forceRecreate && entity.state) {
+      const schemaChanged = this.checkFanSchemaMismatch(entityId, entity.state);
+      if (schemaChanged) {
+        this.log.warn(
+          `[Fan Schema] ${entityId}: fan cluster schema changed — forcing node recreation.`,
+        );
+        forceRecreate = true;
+        // Close and unregister the stale node if it exists
+        const staleEndpoint = this.matterbridgeDevices.get(entityId);
+        if (staleEndpoint) {
+          try {
+            if ((staleEndpoint as any).serverNode?.lifecycle?.isOnline) {
+              await (staleEndpoint as any).serverNode.close();
+            }
+            await this.unregisterDevice(staleEndpoint);
+          } catch (e) {
+            this.log.debug(
+              `[Fan Schema] Failed to unregister stale fan endpoint ${entityId}: ${e}`,
+            );
+          }
+          this.matterbridgeDevices.delete(entityId);
+        }
+        this.recordEntityDiagnostic(
+          entityId,
+          `⚠️ Schema del cluster Fan actualizado — retira el accesorio de Apple Home y escanea el nuevo código QR.`,
+          "warning",
+        );
+      }
+    }
+
     try {
       const endpoint = await entity.createEndpoint();
       if (!forceRecreate) {
@@ -2114,14 +2364,40 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           : endpoint.deviceName
             ? this.getDeviceByName(endpoint.deviceName)
             : undefined;
-        if (existingEndpoint?.serverNode) {
+        const deviceTypeMismatch =
+          existingEndpoint?.deviceType !== undefined &&
+          existingEndpoint.deviceType !== endpoint.deviceType;
+
+        if (existingEndpoint?.serverNode && !deviceTypeMismatch) {
           entity.adoptEndpoint(existingEndpoint);
           this.matterbridgeDevices.set(entityId, existingEndpoint);
+          if (
+            typeof (existingEndpoint.serverNode as any)?.start === "function" &&
+            !existingEndpoint.serverNode.lifecycle?.isOnline
+          ) {
+            await existingEndpoint.serverNode.start();
+          }
           await entity.syncInitialState();
           this.log.notice(
             `Reused existing Matter endpoint ${idn}${entityId}${rs}; it remains paired and was not recreated.`,
           );
+          // Record fingerprint even on reuse so future startups know the current schema
+          if (entity.state) this.recordFanSchemaFingerprint(entityId, entity.state);
           return;
+        } else if (existingEndpoint && deviceTypeMismatch) {
+          this.log.warn(
+            `Existing Matter endpoint ${idn}${entityId}${rs} device type (${existingEndpoint.deviceType}) does not match new device type (${endpoint.deviceType}). Recreating endpoint...`,
+          );
+          try {
+            if ((existingEndpoint as any).serverNode?.lifecycle?.isOnline) {
+              await (existingEndpoint as any).serverNode.close();
+            }
+            await this.unregisterDevice(existingEndpoint);
+          } catch (e) {
+            this.log.debug(
+              `Failed to unregister mismatched existing endpoint: ${e}`,
+            );
+          }
         }
       }
       await this.registerDevice(endpoint);
@@ -2138,6 +2414,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       }
       this.matterbridgeDevices.set(entityId, endpoint);
       await entity.syncInitialState();
+      // Record the current fan schema fingerprint so future startups can detect changes
+      if (entity.state) this.recordFanSchemaFingerprint(entityId, entity.state);
       this.log.notice(`Exported bridged endpoint ${idn}${entityId}${rs}`);
     } catch (err) {
       this.log.error(`Failed to activate entity ${entityId}: ${err}`);
@@ -2148,6 +2426,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       throw err;
     }
   }
+
 
   /** Create an MQTT bridged endpoint and let Matterbridge own its lifecycle. */
   public async activateMqttEntity(entityId: string): Promise<void> {
@@ -2165,6 +2444,12 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       if (existingEndpoint?.serverNode) {
         entity.adoptEndpoint(existingEndpoint);
         this.matterbridgeDevices.set(entityId, existingEndpoint);
+        if (
+          typeof (existingEndpoint.serverNode as any)?.start === "function" &&
+          !existingEndpoint.serverNode.lifecycle?.isOnline
+        ) {
+          await existingEndpoint.serverNode.start();
+        }
         await entity.syncInitialState();
         this.log.notice(
           `Reused existing Matter endpoint ${idn}${entityId}${rs}; it remains paired.`,
@@ -2193,7 +2478,12 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
    */
   public async manualRegister(
     entityId: string,
-  ): Promise<{ success: boolean; error?: string }> {
+  ): Promise<{
+    success: boolean;
+    error?: string;
+    pairingCode?: string | null;
+    manualPairingCode?: string | null;
+  }> {
     if (entityId.startsWith("mqtt.")) {
       try {
         this.exportedDevices.add(entityId);
@@ -2246,7 +2536,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         try {
           await this.activateComposite(entityId);
           await this.saveExportedDevices();
-          return { success: true };
+          const ep = this.getMatterEndpointForEntity(entityId, composite.deviceId);
+          const conn = ep ? this.getMatterConnectionInfo(ep) : undefined;
+          return {
+            success: true,
+            pairingCode: conn?.pairingCode ?? null,
+            manualPairingCode: conn?.manualPairingCode ?? null,
+          };
         } catch (error) {
           this.exportedDevices.delete(key);
           throw error;
@@ -2258,7 +2554,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       this.log.notice(
         `Manually exported bridged endpoint for ${entityId}${isMultiSwitch ? " (multi-switch: independent QR)" : ""}`,
       );
-      return { success: true };
+      const ep = this.getMatterEndpointForEntity(entityId);
+      const conn = ep ? this.getMatterConnectionInfo(ep) : undefined;
+      return {
+        success: true,
+        pairingCode: conn?.pairingCode ?? null,
+        manualPairingCode: conn?.manualPairingCode ?? null,
+      };
     } catch (err) {
       this.exportedDevices.delete(entityId);
       this.log.error(`Failed to manually register ${entityId}: ${err}`);
@@ -3035,13 +3337,52 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     try {
       const wasExported = this.exportedDevices.has(entityId);
       const state = entity.state;
-      if (wasExported) await this.manualUnregister(entityId);
+
+      const endpoint = this.getMatterEndpointForEntity(entityId);
+      if (endpoint?.serverNode) {
+        try {
+          await endpoint.serverNode.erase();
+        } catch (e) {
+          this.log.debug(`Failed to erase server node for ${entityId}: ${e}`);
+        }
+        const storeId = String(endpoint.deviceName ?? "").replace(/[ .]/g, "");
+        const bridgeRuntime = this.matterbridge as any;
+        const managedStorage =
+          bridgeRuntime.serverNodeStorageManagers?.get?.(storeId);
+        const storageService = bridgeRuntime.matterStorageService;
+        const storageManager =
+          managedStorage ?? (await storageService?.open?.(storeId));
+        try {
+          await storageManager?.createContext?.("persist")?.clearAll?.();
+          await storageManager?.createContext?.("fabrics")?.clearAll?.();
+          await storageManager?.createContext?.("commissioning")?.clearAll?.();
+          await storageManager
+            ?.createContext?.("operationalCredentials")
+            ?.clearAll?.();
+        } catch (e) {
+          this.log.debug(`Failed to clear storage contexts for ${entityId}: ${e}`);
+        } finally {
+          if (!managedStorage) await storageManager?.close?.();
+        }
+        if (endpoint.serverNode.lifecycle?.isOnline) {
+          await endpoint.serverNode.close();
+        }
+        await this.unregisterDevice(endpoint);
+      }
+
+      if (wasExported) {
+        this.exportedDevices.delete(entityId);
+      }
       this.deviceOverrides[entityId] = profileId;
       await this.saveDeviceOverrides();
       this.entities.delete(entityId);
       this.matterbridgeDevices.delete(entityId);
       await this.registerHAEntity(state);
-      if (wasExported) await this.manualRegister(entityId);
+      if (wasExported) {
+        this.exportedDevices.add(entityId);
+        await this.activateEntity(entityId, true);
+        await this.saveExportedDevices();
+      }
       return { success: true };
     } catch (error) {
       this.log.error(
@@ -3109,21 +3450,40 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       }
     }
 
-    // Cross-coordination for hybrid devices (e.g. Govee H7133 Fan + Climate + Switch Oscillation)
+    // Cross-coordination for hybrid devices (e.g. Govee H7133 Fan + Climate/Heater + Switch Oscillation + Sensor Temp)
     const hybridDeviceId = this.ha?.hassEntities?.get(entityId)?.device_id;
     if (hybridDeviceId) {
-      // 1. Oscillation switch state changes -> sync companion fan oscillation
-      if (entityId.startsWith("switch.") && entityId.includes("oscillation")) {
+      // 0. Speed / gear select state changes -> sync companion fan speed & percentage to Matter
+      if (
+        entityId.startsWith("select.") &&
+        /gear|engranaje|speed|velocidad|potencia/i.test(entityId)
+      ) {
+        const opt = String(newState.state || "").toLowerCase();
+        let pct = 100;
+        let fMode = 3; // High
+        if (/^(1|low|bajo|gear 1|gear_1)$/i.test(opt)) {
+          pct = 33;
+          fMode = 1; // Low
+        } else if (/^(2|medium|med|medio|gear 2|gear_2)$/i.test(opt)) {
+          pct = 66;
+          fMode = 2; // Medium
+        } else if (/^(3|high|alto|gear 3|gear_3)$/i.test(opt)) {
+          pct = 100;
+          fMode = 3; // High
+        }
+
         for (const [fId, fEntity] of this.entities.entries()) {
           if (
-            fId.startsWith("fan.") &&
+            (fId.startsWith("fan.") || this.deviceOverrides[fId] === "fan" || (fId.startsWith("switch.") && fId.includes("ventilador"))) &&
             this.ha?.hassEntities?.get(fId)?.device_id === hybridDeviceId
           ) {
             fEntity.state = {
               ...fEntity.state,
               attributes: {
                 ...fEntity.state.attributes,
-                oscillating: newState.state === "on",
+                percentage: pct,
+                speed: fMode,
+                preset_mode: opt,
               },
             };
             if (this.isEntityExported(fId)) {
@@ -3133,21 +3493,55 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         }
       }
 
-      // 2. Climate updates -> coordinate companion fan (airflow active when heating, sync room temperature)
-      if (entityId.startsWith("climate.")) {
+      // 1. Oscillation switch/select state changes -> sync companion fan oscillation
+      if (
+        (entityId.startsWith("switch.") && /oscil|swing|sweep|shake|giro|rotar|pan|deflector/i.test(entityId)) ||
+        (entityId.startsWith("select.") && /oscil|swing|sweep|angle|direction|range|deflector/i.test(entityId))
+      ) {
+        const isOscOn = entityId.startsWith("switch.")
+          ? newState.state === "on"
+          : !/off|fijo|none|stop/i.test(String(newState.state || ""));
         for (const [fId, fEntity] of this.entities.entries()) {
           if (
-            fId.startsWith("fan.") &&
+            (fId.startsWith("fan.") || this.deviceOverrides[fId] === "fan" || (fId.startsWith("switch.") && fId.includes("ventilador"))) &&
+            this.ha?.hassEntities?.get(fId)?.device_id === hybridDeviceId
+          ) {
+            fEntity.state = {
+              ...fEntity.state,
+              attributes: {
+                ...fEntity.state.attributes,
+                oscillating: isOscOn,
+              },
+            };
+            if (this.isEntityExported(fId)) {
+              this.queueStateUpdate(fId, fEntity.state);
+            }
+          }
+        }
+      }
+
+      // 2. Real Climate or explicit heater switch updates -> coordinate companion fan (airflow active when heating)
+      const isHeaterEntity =
+        entityId.startsWith("climate.") ||
+        (entityId.startsWith("switch.") &&
+          (entityId.includes("heater") || entityId.includes("calefactor")) &&
+          !entityId.includes("auto_stop"));
+
+      if (isHeaterEntity) {
+        const isHeatingOn = newState.state === "heat" || newState.state === "on";
+        for (const [fId, fEntity] of this.entities.entries()) {
+          if (
+            fId !== entityId &&
+            (fId.startsWith("fan.") || this.deviceOverrides[fId] === "fan" || (fId.startsWith("switch.") && fId.includes("ventilador"))) &&
             this.ha?.hassEntities?.get(fId)?.device_id === hybridDeviceId
           ) {
             let changed = false;
             const newAttrs = { ...fEntity.state.attributes };
             if (typeof newState.attributes.current_temperature === "number") {
-              newAttrs.current_temperature =
-                newState.attributes.current_temperature;
+              newAttrs.current_temperature = newState.attributes.current_temperature;
               changed = true;
             }
-            if (newState.state === "heat" && fEntity.state.state === "off") {
+            if (isHeatingOn && fEntity.state.state === "off") {
               fEntity.state = {
                 ...fEntity.state,
                 state: "on",
@@ -3164,17 +3558,51 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         }
       }
 
-      // 3. Fan updates -> coordinate companion climate (if fan completely off, reflect climate idle/off)
-      if (entityId.startsWith("fan.")) {
+      // 3. Fan updates -> coordinate companion climate / heater (if fan completely off, reflect climate/heater off)
+      const isFanEntity =
+        entityId.startsWith("fan.") ||
+        (entityId.startsWith("switch.") && entityId.includes("ventilador") && !entityId.includes("auto_stop"));
+
+      if (isFanEntity) {
         for (const [cId, cEntity] of this.entities.entries()) {
           if (
-            cId.startsWith("climate.") &&
+            cId !== entityId &&
+            (cId.startsWith("climate.") || (cId.startsWith("switch.") && (cId.includes("heater") || cId.includes("calefactor")) && !cId.includes("auto_stop"))) &&
             this.ha?.hassEntities?.get(cId)?.device_id === hybridDeviceId
           ) {
             if (newState.state === "off" && cEntity.state.state !== "off") {
               cEntity.state = { ...cEntity.state, state: "off" };
               if (this.isEntityExported(cId)) {
                 this.queueStateUpdate(cId, cEntity.state);
+              }
+            }
+          }
+        }
+      }
+
+      // 4. Temperature sensor updates -> propagate current_temperature to companion thermostat and fan entities
+      if (
+        entityId.startsWith("sensor.") &&
+        (entityId.includes("temp") || (newState.attributes as any)?.device_class === "temperature")
+      ) {
+        const val = parseFloat(newState.state);
+        if (!isNaN(val)) {
+          const unit = newState.attributes?.unit_of_measurement;
+          const tempC = (unit === "°F" || unit === "F" || val > 45) ? (val - 32) * (5 / 9) : val;
+          for (const [compId, compEntity] of this.entities.entries()) {
+            if (
+              compId !== entityId &&
+              this.ha?.hassEntities?.get(compId)?.device_id === hybridDeviceId
+            ) {
+              compEntity.state = {
+                ...compEntity.state,
+                attributes: {
+                  ...compEntity.state.attributes,
+                  current_temperature: tempC,
+                },
+              };
+              if (this.isEntityExported(compId)) {
+                this.queueStateUpdate(compId, compEntity.state);
               }
             }
           }
@@ -3328,7 +3756,18 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         );
         if (req.method === "GET" && staticAssetMatch) {
           const relPath = staticAssetMatch[1];
-          const content = await this.readBinaryFile(relPath);
+          let content = await this.readBinaryFile(relPath);
+
+          // Stale cache fallback: if the requested file is an index-*.js or index-*.css that doesn't exist,
+          // serve the canonical assets/index.js or assets/index.css instead of 404!
+          if (!content) {
+            if (/^assets\/index.*\.js$/i.test(relPath)) {
+              content = await this.readBinaryFile("assets/index.js");
+            } else if (/^assets\/index.*\.css$/i.test(relPath)) {
+              content = await this.readBinaryFile("assets/index.css");
+            }
+          }
+
           if (content) {
             const ext = path.extname(relPath).toLowerCase();
             const mimeTypes: Record<string, string> = {
@@ -3346,16 +3785,47 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               ".ttf": "font/ttf",
               ".map": "application/json",
             };
-            const isHashedAsset = relPath.startsWith("assets/");
+            const isIndexAsset = relPath.startsWith("assets/index");
             res.writeHead(200, {
               "Content-Type": mimeTypes[ext] || "application/octet-stream",
-              "Cache-Control": isHashedAsset
-                ? "public, max-age=31536000, immutable"
-                : "no-cache, no-store, must-revalidate",
+              "Access-Control-Allow-Origin": "*",
+              "Cache-Control": isIndexAsset
+                ? "no-cache, must-revalidate"
+                : "public, max-age=31536000, immutable",
             });
             res.end(content);
             return;
           }
+        }
+
+        if (
+          req.method === "GET" &&
+          (pathname === "/api/custom/matter-apple-card.js" ||
+            pathname === "/matter-apple-card.js")
+        ) {
+          const content = await this.readBinaryFile("matter-apple-card.js");
+          if (content) {
+            res.writeHead(200, {
+              "Content-Type": "application/javascript; charset=utf-8",
+              "Access-Control-Allow-Origin": "*",
+              "Cache-Control": "no-cache, must-revalidate",
+            });
+            res.end(content);
+            return;
+          }
+        }
+
+        if (
+          req.method === "POST" &&
+          pathname === "/api/custom/install-lovelace-card"
+        ) {
+          const result = await this.deployLovelaceCardToHomeAssistant();
+          res.writeHead(200, {
+            "Content-Type": "application/json; charset=utf-8",
+            "Access-Control-Allow-Origin": "*",
+          });
+          res.end(JSON.stringify(result));
+          return;
         }
 
         if (req.method === "GET" && pathname === "/api/custom/logs") {
@@ -3504,7 +3974,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                 member.entityId.startsWith("lock."),
               )?.entityId ??
               compositeCandidate?.members.find((member) =>
-                member.entityId.startsWith("fan."),
+                member.entityId.startsWith("fan.") ||
+                this.deviceOverrides[member.entityId] === "fan" ||
+                (member.entityId.startsWith("switch.") && member.entityId.includes("ventilador")),
               )?.entityId ??
               compositeCandidate?.members[0]?.entityId ??
               null;
@@ -3529,6 +4001,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               media_player: "Speaker",
               sensor: "Sensor",
               binary_sensor: "BinarySensor",
+              select: "Select",
+              number: "Number",
             };
             const typeLabel =
               (e.constructor as any).matterTypeLabel ||
@@ -3540,14 +4014,16 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               entityId: e.entityId,
               domain: domain,
               state: e.state.state,
-              attributes: { friendly_name: e.state.attributes?.friendly_name },
+              attributes: { ...e.state.attributes },
               deviceTypeLabel: typeLabel,
               matterType:
                 domain === "fan"
                   ? "fan"
                   : domain === "humidifier"
                     ? "humidifier"
-                    : e.deviceType.name,
+                    : (this.deviceOverrides[e.entityId] ??
+                      this.getAutomaticProfile(e.entityId, e.state) ??
+                      e.deviceType.name),
               // Registry info
               ...this.getHaRegistryInfo(e.entityId),
               // Accessory status
@@ -3755,6 +4231,408 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           return;
         }
 
+        // POST /api/custom/entity-toggle/:entityId
+        if (
+          req.method === "POST" &&
+          pathname.startsWith("/api/custom/entity-toggle/")
+        ) {
+          const entityId = decodeURIComponent(
+            pathname.substring("/api/custom/entity-toggle/".length),
+          );
+          const [domain] = entityId.split(".");
+          try {
+            if (domain === "media_player") {
+              await this.ha.callService("media_player", "media_play_pause", entityId);
+            } else {
+              await this.ha.callService(domain, "toggle", entityId);
+            }
+            res.writeHead(200, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ success: true, entityId }));
+          } catch (err: any) {
+            try {
+              await this.ha.callService("homeassistant", "toggle", entityId);
+              res.writeHead(200, {
+                "Content-Type": "application/json; charset=utf-8",
+              });
+              res.end(JSON.stringify({ success: true, entityId, fallback: true }));
+            } catch (err2: any) {
+              res.writeHead(500, {
+                "Content-Type": "application/json; charset=utf-8",
+              });
+              res.end(JSON.stringify({ success: false, error: err2?.message || String(err2) }));
+            }
+          }
+          return;
+        }
+
+        // POST /api/custom/entity-turn-on/:entityId
+        if (
+          req.method === "POST" &&
+          pathname.startsWith("/api/custom/entity-turn-on/")
+        ) {
+          const entityId = decodeURIComponent(
+            pathname.substring("/api/custom/entity-turn-on/".length),
+          );
+          const [domain] = entityId.split(".");
+          try {
+            await this.ha.callService(domain, "turn_on", entityId);
+            res.writeHead(200, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ success: true, entityId }));
+          } catch (err: any) {
+            try {
+              await this.ha.callService("homeassistant", "turn_on", entityId);
+              res.writeHead(200, {
+                "Content-Type": "application/json; charset=utf-8",
+              });
+              res.end(JSON.stringify({ success: true, entityId, fallback: true }));
+            } catch (err2: any) {
+              res.writeHead(500, {
+                "Content-Type": "application/json; charset=utf-8",
+              });
+              res.end(JSON.stringify({ success: false, error: err2?.message || String(err2) }));
+            }
+          }
+          return;
+        }
+
+        // POST /api/custom/entity-turn-off/:entityId
+        if (
+          req.method === "POST" &&
+          pathname.startsWith("/api/custom/entity-turn-off/")
+        ) {
+          const entityId = decodeURIComponent(
+            pathname.substring("/api/custom/entity-turn-off/".length),
+          );
+          const [domain] = entityId.split(".");
+          try {
+            await this.ha.callService(domain, "turn_off", entityId);
+            res.writeHead(200, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ success: true, entityId }));
+          } catch (err: any) {
+            try {
+              await this.ha.callService("homeassistant", "turn_off", entityId);
+              res.writeHead(200, {
+                "Content-Type": "application/json; charset=utf-8",
+              });
+              res.end(JSON.stringify({ success: true, entityId, fallback: true }));
+            } catch (err2: any) {
+              res.writeHead(500, {
+                "Content-Type": "application/json; charset=utf-8",
+              });
+              res.end(JSON.stringify({ success: false, error: err2?.message || String(err2) }));
+            }
+          }
+          return;
+        }
+
+        // POST /api/custom/media-action/:entityId
+        if (
+          req.method === "POST" &&
+          pathname.startsWith("/api/custom/media-action/")
+        ) {
+          const entityId = decodeURIComponent(
+            pathname.substring("/api/custom/media-action/".length),
+          );
+          try {
+            const body = await this.readRequestBody(req);
+            const data = JSON.parse(body || "{}");
+            const action = data.action || "media_play_pause";
+            await this.ha.callService("media_player", action, entityId);
+            res.writeHead(200, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ success: true, entityId, action }));
+          } catch (err: any) {
+            res.writeHead(500, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ success: false, error: err?.message || String(err) }));
+          }
+          return;
+        }
+
+        // POST /api/custom/entity-set-value/:entityId
+        if (
+          req.method === "POST" &&
+          pathname.startsWith("/api/custom/entity-set-value/")
+        ) {
+          const entityId = decodeURIComponent(
+            pathname.substring("/api/custom/entity-set-value/".length),
+          );
+          const [domain] = entityId.split(".");
+          try {
+            const body = await this.readRequestBody(req);
+            const data = JSON.parse(body || "{}");
+            const numVal = Math.max(0, Math.min(100, Math.round(Number(data.value) || 0)));
+
+            if (domain === "light") {
+              if (numVal === 0) {
+                await this.ha.callService("light", "turn_off", entityId);
+              } else {
+                await this.ha.callService("light", "turn_on", entityId, {
+                  brightness_pct: numVal,
+                });
+              }
+            } else if (domain === "fan") {
+              if (numVal === 0) {
+                await this.ha.callService("fan", "turn_off", entityId);
+              } else {
+                await this.ha.callService("fan", "set_percentage", entityId, {
+                  percentage: numVal,
+                });
+              }
+            } else if (domain === "switch") {
+              if (numVal === 0) {
+                await this.ha.callService("switch", "turn_off", entityId);
+              } else {
+                await this.ha.callService("switch", "turn_on", entityId);
+              }
+            } else if (domain === "cover") {
+              await this.ha.callService("cover", "set_cover_position", entityId, {
+                position: numVal,
+              });
+            } else if (domain === "climate") {
+              await this.ha.callService("climate", "set_temperature", entityId, {
+                temperature: numVal,
+              });
+            } else if (domain === "media_player") {
+              await this.ha.callService("media_player", "volume_set", entityId, {
+                volume_level: numVal / 100,
+              });
+            } else if (domain === "number") {
+              await this.ha.callService("number", "set_value", entityId, {
+                value: Number(data.value),
+              });
+            }
+
+            res.writeHead(200, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ success: true, entityId, value: numVal }));
+          } catch (err: any) {
+            res.writeHead(500, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ success: false, error: err?.message || String(err) }));
+          }
+          return;
+        }
+
+        // POST /api/custom/entity-set-light/:entityId
+        if (
+          req.method === "POST" &&
+          pathname.startsWith("/api/custom/entity-set-light/")
+        ) {
+          const entityId = decodeURIComponent(
+            pathname.substring("/api/custom/entity-set-light/".length),
+          );
+          try {
+            const body = await this.readRequestBody(req);
+            const data = JSON.parse(body || "{}");
+            const serviceData: Record<string, any> = {};
+
+            if (typeof data.brightness_pct === "number") {
+              serviceData.brightness_pct = Math.max(1, Math.min(100, Math.round(data.brightness_pct)));
+            } else if (typeof data.brightness === "number") {
+              serviceData.brightness = Math.max(1, Math.min(255, Math.round(data.brightness)));
+            }
+
+            if (typeof data.color_temp_kelvin === "number") {
+              serviceData.color_temp_kelvin = Math.max(2000, Math.min(7000, Math.round(data.color_temp_kelvin)));
+            } else if (typeof data.kelvin === "number") {
+              serviceData.color_temp_kelvin = Math.max(2000, Math.min(7000, Math.round(data.kelvin)));
+            }
+
+            if (Array.isArray(data.rgb_color) && data.rgb_color.length === 3) {
+              serviceData.rgb_color = data.rgb_color.map((c: any) => Math.max(0, Math.min(255, Math.round(Number(c) || 0))));
+            }
+
+            await this.ha.callService("light", "turn_on", entityId, serviceData);
+
+            res.writeHead(200, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ success: true, entityId, serviceData }));
+          } catch (err: any) {
+            res.writeHead(500, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ success: false, error: err?.message || String(err) }));
+          }
+          return;
+        }
+
+        // POST /api/custom/entity-select-option/:entityId
+        if (
+          req.method === "POST" &&
+          pathname.startsWith("/api/custom/entity-select-option/")
+        ) {
+          const entityId = decodeURIComponent(
+            pathname.substring("/api/custom/entity-select-option/".length),
+          );
+          const [domain] = entityId.split(".");
+          try {
+            const body = await this.readRequestBody(req);
+            const data = JSON.parse(body || "{}");
+            const option = String(data.option ?? "");
+            const serviceDomain = domain === "input_select" ? "input_select" : "select";
+            await this.ha.callService(serviceDomain, "select_option", entityId, {
+              option,
+            });
+            res.writeHead(200, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ success: true, entityId, option }));
+          } catch (err: any) {
+            res.writeHead(500, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ success: false, error: err?.message || String(err) }));
+          }
+          return;
+        }
+
+        // POST /api/custom/entity-set-preset-mode/:entityId
+        if (
+          req.method === "POST" &&
+          pathname.startsWith("/api/custom/entity-set-preset-mode/")
+        ) {
+          const entityId = decodeURIComponent(
+            pathname.substring("/api/custom/entity-set-preset-mode/".length),
+          );
+          const [domain] = entityId.split(".");
+          try {
+            const body = await this.readRequestBody(req);
+            const data = JSON.parse(body || "{}");
+            const preset_mode = String(data.preset_mode ?? data.mode ?? "");
+            await this.ha.callService(domain, "set_preset_mode", entityId, {
+              preset_mode,
+            });
+            res.writeHead(200, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ success: true, entityId, preset_mode }));
+          } catch (err: any) {
+            res.writeHead(500, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ success: false, error: err?.message || String(err) }));
+          }
+          return;
+        }
+
+        // POST /api/custom/entity-set-hvac-mode/:entityId
+        if (
+          req.method === "POST" &&
+          pathname.startsWith("/api/custom/entity-set-hvac-mode/")
+        ) {
+          const entityId = decodeURIComponent(
+            pathname.substring("/api/custom/entity-set-hvac-mode/".length),
+          );
+          try {
+            const body = await this.readRequestBody(req);
+            const data = JSON.parse(body || "{}");
+            const hvac_mode = String(data.hvac_mode ?? data.mode ?? "");
+            await this.ha.callService("climate", "set_hvac_mode", entityId, {
+              hvac_mode,
+            });
+            res.writeHead(200, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ success: true, entityId, hvac_mode }));
+          } catch (err: any) {
+            res.writeHead(500, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ success: false, error: err?.message || String(err) }));
+          }
+          return;
+        }
+
+        // POST /api/custom/entity-oscillate/:entityId
+        if (
+          req.method === "POST" &&
+          pathname.startsWith("/api/custom/entity-oscillate/")
+        ) {
+          const entityId = decodeURIComponent(
+            pathname.substring("/api/custom/entity-oscillate/".length),
+          );
+          const [domain] = entityId.split(".");
+          try {
+            const body = await this.readRequestBody(req);
+            const data = JSON.parse(body || "{}");
+            const oscillating = Boolean(data.oscillating);
+            if (domain === "fan") {
+              await this.ha.callService("fan", "oscillate", entityId, {
+                oscillating,
+              });
+            } else if (domain === "climate") {
+              await this.ha.callService("climate", "set_swing_mode", entityId, {
+                swing_mode: oscillating ? "on" : "off",
+              });
+            } else if (domain === "switch") {
+              const lower = entityId.toLowerCase();
+              if (
+                lower.includes("oscil") ||
+                lower.includes("swing") ||
+                lower.includes("sweep") ||
+                lower.includes("shake") ||
+                lower.includes("pan") ||
+                lower.includes("rotar") ||
+                lower.includes("giro")
+              ) {
+                await this.ha.callService("switch", oscillating ? "turn_on" : "turn_off", entityId);
+              } else {
+                this.log.warn(`[entity-oscillate] Prevented oscillate command on non-oscillation switch ${entityId}`);
+              }
+            }
+            res.writeHead(200, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ success: true, entityId, oscillating }));
+          } catch (err: any) {
+            res.writeHead(500, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ success: false, error: err?.message || String(err) }));
+          }
+          return;
+        }
+
+        // POST /api/custom/entity-climate-swing/:entityId
+        if (
+          req.method === "POST" &&
+          pathname.startsWith("/api/custom/entity-climate-swing/")
+        ) {
+          const entityId = decodeURIComponent(
+            pathname.substring("/api/custom/entity-climate-swing/".length),
+          );
+          try {
+            const body = await this.readRequestBody(req);
+            const data = JSON.parse(body || "{}");
+            const swingMode = String(data.swing_mode || (data.oscillating ? "on" : "off"));
+            await this.ha.callService("climate", "set_swing_mode", entityId, {
+              swing_mode: swingMode,
+            });
+            res.writeHead(200, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ success: true, entityId, swingMode }));
+          } catch (err: any) {
+            res.writeHead(500, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ success: false, error: err?.message || String(err) }));
+          }
+          return;
+        }
+
         // POST /api/custom/reset-accessory/:entityId
         if (
           req.method === "POST" &&
@@ -3770,6 +4648,38 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             "Content-Type": "application/json; charset=utf-8",
           });
           res.end(JSON.stringify(result));
+          return;
+        }
+
+        // POST /api/custom/reset-all-fans
+        // Resets all exported fan accessories so Apple Home can be updated with new QR codes.
+        if (req.method === "POST" && pathname === "/api/custom/reset-all-fans") {
+          const fanEntityIds = Array.from(this.exportedDevices).filter((id) =>
+            id.startsWith("fan."),
+          );
+          if (fanEntityIds.length === 0) {
+            res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+            res.end(JSON.stringify({ success: true, reset: [], message: "No hay ventiladores exportados." }));
+            return;
+          }
+          const results = await Promise.all(
+            fanEntityIds.map(async (entityId) => {
+              try {
+                const result = await this.runMatterAccessoryOperation(
+                  entityId,
+                  () => this.resetMatterAccessory(entityId),
+                );
+                return { entityId, ...result };
+              } catch (err) {
+                return { entityId, success: false, error: String(err) };
+              }
+            }),
+          );
+          const allOk = results.every((r) => r.success);
+          res.writeHead(allOk ? 200 : 207, {
+            "Content-Type": "application/json; charset=utf-8",
+          });
+          res.end(JSON.stringify({ success: allOk, reset: results }));
           return;
         }
 
@@ -3898,10 +4808,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           );
           try {
             const body = await this.readRequestBody(req);
-            const data = JSON.parse(body) as { profileId?: string };
+            const data = JSON.parse(body) as {
+              profileId?: string;
+              profile?: string;
+            };
             const result = await this.setDeviceProfile(
               entityId,
-              data.profileId ?? "",
+              data.profileId || data.profile || "",
             );
             res.writeHead(result.success ? 200 : 400, {
               "Content-Type": "application/json; charset=utf-8",
@@ -5368,6 +6281,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         this.log.notice(
           `Custom Liquid Glass UI Server listening on port ${this.uiServerPort}`,
         );
+        void this.deployLovelaceCardToHomeAssistant();
         resolve();
       });
     });
@@ -5375,31 +6289,66 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
   private async readFrontendFile(filename: string): Promise<string | null> {
     const dir = import.meta.dirname;
-    const distPath = path.join(dir, "frontend", filename);
-    const srcPath = path.join(dir, "../src/frontend", filename);
-    try {
-      return await fs.readFile(distPath, "utf8");
-    } catch {
+    const candidates = [
+      path.join(dir, "frontend", filename),
+      path.join(dir, "../src/frontend", filename),
+      path.join(dir, "../src/frontend/public", filename),
+    ];
+    for (const p of candidates) {
       try {
-        return await fs.readFile(srcPath, "utf8");
-      } catch {
-        return null;
-      }
+        return await fs.readFile(p, "utf8");
+      } catch {}
     }
+    return null;
   }
 
   private async readBinaryFile(filename: string): Promise<Buffer | null> {
     const dir = import.meta.dirname;
-    const distPath = path.join(dir, "frontend", filename);
-    const srcPath = path.join(dir, "../src/frontend", filename);
-    try {
-      return await fs.readFile(distPath);
-    } catch {
+    const candidates = [
+      path.join(dir, "frontend", filename),
+      path.join(dir, "../src/frontend", filename),
+      path.join(dir, "../src/frontend/public", filename),
+    ];
+    for (const p of candidates) {
       try {
-        return await fs.readFile(srcPath);
-      } catch {
-        return null;
+        return await fs.readFile(p);
+      } catch {}
+    }
+    return null;
+  }
+
+  /**
+   * Automatically deploy matter-apple-card.js to /config/www/ if /config or /config/www is mounted
+   */
+  public async deployLovelaceCardToHomeAssistant(): Promise<{
+    success: boolean;
+    message: string;
+  }> {
+    try {
+      const cardContent = await this.readFrontendFile("matter-apple-card.js");
+      if (!cardContent) {
+        return {
+          success: false,
+          message: "No se encontró el archivo matter-apple-card.js en el paquete.",
+        };
       }
+
+      const targetDir = "/config/www";
+      try {
+        await fs.mkdir(targetDir, { recursive: true });
+      } catch {}
+
+      const targetPath = path.join(targetDir, "matter-apple-card.js");
+      await fs.writeFile(targetPath, cardContent, "utf8");
+      this.log.info(
+        `[Lovelace] Tarjeta Matter Apple instalada con éxito en ${targetPath}`,
+      );
+      return { success: true, message: `Tarjeta instalada en ${targetPath}` };
+    } catch (err: any) {
+      this.log.debug(
+        `[Lovelace] No se pudo escribir en /config/www: ${err?.message || err}`,
+      );
+      return { success: false, message: err?.message || String(err) };
     }
   }
 

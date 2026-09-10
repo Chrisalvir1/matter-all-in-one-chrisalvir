@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import "./mocks/matterbridge.mock.js";
 import { CompositeDeviceEntity } from "../src/entities/composite-device.entity.js";
+import { MatterDeviceTypes } from "../src/device-registry.js";
 
 const platform = {
   log: {
@@ -268,6 +269,51 @@ describe("CompositeDeviceEntity", () => {
       "oscillate",
       "fan.govee",
       { oscillating: false },
+    );
+  });
+
+  it("Plan A: creates single composite accessory for switch-based fan with fan profile and RGB light", async () => {
+    const composite = new CompositeDeviceEntity(
+      platform,
+      "govee-playroom",
+      "Ventilador Playroom",
+      [
+        {
+          entityId: "switch.ventilador_playroom",
+          state: state("switch.ventilador_playroom", "off"),
+          deviceType: MatterDeviceTypes.fan,
+        },
+        {
+          entityId: "light.ventilador_playroom_night_light",
+          state: state("light.ventilador_playroom_night_light", "off", {
+            supported_color_modes: ["rgb", "color_temp"],
+            rgb_color: [255, 255, 255],
+          }),
+        },
+      ],
+      "switch.ventilador_playroom",
+    );
+
+    const root = await composite.createEndpoint();
+    expect(composite.primaryEntityId).toBe("switch.ventilador_playroom");
+    expect(composite.endpoints.get("switch.ventilador_playroom")).toBe(root);
+    expect(composite.endpoints.get("light.ventilador_playroom_night_light")).toBeDefined();
+    expect((root as any).children.has("light_ventilador_playroom_night_light")).toBe(true);
+
+    // Turning on fan triggers switch.turn_on
+    await (composite.endpoints.get("switch.ventilador_playroom") as any).invokeCommand("on");
+    expect(platform.ha.callService).toHaveBeenCalledWith(
+      "switch",
+      "turn_on",
+      "switch.ventilador_playroom",
+    );
+
+    // Turning off fan triggers switch.turn_off
+    await (composite.endpoints.get("switch.ventilador_playroom") as any).invokeCommand("off");
+    expect(platform.ha.callService).toHaveBeenCalledWith(
+      "switch",
+      "turn_off",
+      "switch.ventilador_playroom",
     );
   });
 });

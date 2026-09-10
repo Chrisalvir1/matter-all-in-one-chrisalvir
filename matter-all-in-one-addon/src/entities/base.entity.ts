@@ -220,6 +220,154 @@ export class BaseEntity {
     return clusters;
   }
 
+  public hasAttr(clusterId: any, attribute: string): boolean {
+    return Boolean((this.endpoint as any)?.hasAttributeServer?.(clusterId, attribute));
+  }
+
+  public getCompanionTemperature(): number | null {
+    if (typeof this.state?.attributes?.current_temperature === "number") {
+      return this.state.attributes.current_temperature;
+    }
+    const deviceId = (this.platform?.ha as any)?.hassEntities?.get?.(this.entityId)?.device_id;
+    const ents = (this.platform as any)?.entities;
+    if (deviceId && ents) {
+      const entries = typeof ents.entries === "function" ? ents.entries() : Object.entries(ents);
+      for (const [eId, ent] of entries) {
+        if (eId !== this.entityId && (this.platform.ha as any)?.hassEntities?.get?.(eId)?.device_id === deviceId) {
+          if (
+            eId.startsWith("sensor.") &&
+            (eId.includes("temp") || (ent as any)?.state?.attributes?.device_class === "temperature")
+          ) {
+            const val = parseFloat((ent as any)?.state?.state);
+            if (!isNaN(val)) {
+              const unit = (ent as any)?.state?.attributes?.unit_of_measurement;
+              if (unit === "°F" || unit === "F" || val > 45) {
+                return (val - 32) * (5 / 9);
+              }
+              return val;
+            }
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  public getCompanionEntity(domainPrefix: string, nameKeyword?: string): BaseEntity | null {
+    const deviceId = (this.platform?.ha as any)?.hassEntities?.get?.(this.entityId)?.device_id;
+    const ents = (this.platform as any)?.entities;
+    if (deviceId && ents) {
+      const entries = typeof ents.entries === "function" ? ents.entries() : Object.entries(ents);
+      for (const [eId, ent] of entries) {
+        if (eId !== this.entityId && (this.platform.ha as any)?.hassEntities?.get?.(eId)?.device_id === deviceId) {
+          if (eId.startsWith(domainPrefix)) {
+            if (!nameKeyword || eId.toLowerCase().includes(nameKeyword.toLowerCase())) {
+              return ent as BaseEntity;
+            }
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  public async executeSafeFanCommand(pct: number, mode?: "Low" | "Medium" | "High" | "Off" | "Auto") {
+    const deviceId = (this.platform?.ha as any)?.hassEntities?.get?.(this.entityId)?.device_id;
+    const [domain] = this.entityId.split(".");
+
+    if (pct <= 0 || mode === "Off") {
+      this.setCommandLockout("fan_state", "off");
+      this.setCommandLockout("onOff", false);
+      await this.platform.ha.callService(domain === "fan" ? "fan" : "switch", "turn_off", this.entityId);
+      return;
+    }
+
+    this.setCommandLockout("fan_state", "on");
+    this.setCommandLockout("onOff", true);
+    this.setCommandLockout("fan_percentage", pct);
+
+    // If native fan domain entity:
+    if (domain === "fan") {
+      await this.platform.ha.callService("fan", "turn_on", this.entityId, { percentage: pct });
+      return;
+    }
+
+    // For switch-based fan (e.g. Govee H7133 switch.ventilador_playroom):
+    const gearLevel = pct <= 33 ? "1" : pct <= 66 ? "2" : "3";
+    const gearRegex =
+      gearLevel === "1"
+        ? /^(1|low|bajo|gear 1|gear_1)$/i
+        : gearLevel === "2"
+        ? /^(2|medium|med|medio|gear 2|gear_2)$/i
+        : /^(3|high|alto|gear 3|gear_3)$/i;
+
+    let gearEntityId: string | undefined;
+    let gearMatchedOption: string | undefined;
+    let modeEntityId: string | undefined;
+    let modeMatchedOption: string | undefined;
+    let autoStopEntityId: string | undefined;
+
+    if (deviceId) {
+      const states = (this.platform?.ha as any)?.hassStates;
+      if (states && typeof states.entries === "function") {
+        for (const [eId, s] of states.entries()) {
+          if ((this.platform?.ha as any)?.hassEntities?.get?.(eId)?.device_id === deviceId) {
+            if (eId.startsWith("select.")) {
+              if (/gear|engranaje|speed|velocidad|potencia/i.test(eId)) {
+                gearEntityId = eId;
+                const options: string[] = s?.attributes?.options || [];
+                gearMatchedOption = options.find((opt: string) => gearRegex.test(opt));
+              } else if (/mode|modo/i.test(eId)) {
+                modeEntityId = eId;
+                const options: string[] = s?.attributes?.options || [];
+                modeMatchedOption = options.find((opt: string) => /fan|ventilador/i.test(opt));
+              }
+            } else if (eId.startsWith("switch.") && eId.includes("auto_stop")) {
+              autoStopEntityId = eId;
+            }
+          }
+        }
+      }
+    }
+
+    // Ensure main switch is on
+    if (this.state.state !== "on") {
+      await this.platform.ha.callService("switch", "turn_on", this.entityId);
+    }
+
+    // Ensure mode is Fan
+    if (modeEntityId && modeMatchedOption) {
+      await this.platform.ha.callService("select", "select_option", modeEntityId, {
+        option: modeMatchedOption,
+      }).catch(() => {});
+    }
+
+    // Ensure auto_stop is off
+    if (autoStopEntityId) {
+      await this.platform.ha.callService("switch", "turn_off", autoStopEntityId).catch(() => {});
+    }
+
+    // Select gear option ONLY if device does NOT have a dedicated Fan mode
+    // (on hybrid heaters like Govee H7133, gear/engranaje sets PTC heater wattage, which turns on heat/auto!)
+    if (gearEntityId && gearMatchedOption && !modeMatchedOption) {
+      await this.platform.ha.callService("select", "select_option", gearEntityId, {
+        option: gearMatchedOption,
+      }).catch(() => {});
+    }
+
+    // Reinforce Fan mode after 200ms to guarantee firmware never flips to heat
+    setTimeout(async () => {
+      if (modeEntityId && modeMatchedOption) {
+        await this.platform.ha.callService("select", "select_option", modeEntityId, {
+          option: modeMatchedOption,
+        }).catch(() => {});
+      }
+      if (autoStopEntityId) {
+        await this.platform.ha.callService("switch", "turn_off", autoStopEntityId).catch(() => {});
+      }
+    }, 200);
+  }
+
   public async createEndpoint(): Promise<MatterbridgeEndpoint> {
     const rawName = this.state.attributes.friendly_name ?? this.entityId;
     const uniqueName = rawName.substring(0, 32).trim();
@@ -258,16 +406,23 @@ export class BaseEntity {
     this.applyMatterbridgeFirmware();
 
     const isFanProfile =
+      domain === "fan" ||
       this.deviceType.code === 0x002b ||
       this.deviceType.name.toLowerCase() === "fan";
+
+    const isThermostatProfile =
+      domain === "climate" ||
+      this.deviceType.name.toLowerCase() === "thermostat" ||
+      this.deviceType.code === 0x0301;
+
     const hasDirectionSupport = hasFanDirection(this.state);
     const hasSpeedSupport = hasFanSpeed(this.state);
     const hasOscillationSupport = hasFanOscillation(this.state);
 
-    if (domain === "fan" && isFanProfile) {
+    if (isFanProfile && !isThermostatProfile) {
       const on = isFanOn(this.state);
-      const pct = fanPercentage(this.state);
-      const speedMax = getFanSpeedCount(this.state);
+      const pct = fanPercentage(this.state) || (on ? 100 : 0);
+      const speedMax = getFanSpeedCount(this.state) || 3;
       const speed = fanSpeed(pct, speedMax);
       const fanMode = haStateToFanMode(this.state);
       const fanFeatures = getFanControlFeatures(this.state);
@@ -277,76 +432,77 @@ export class BaseEntity {
         `[${this.entityId}] Fan init: state=${this.state.state}, on=${on}, pct=${pct}, speed=${speed}/${speedMax}, sequence=${fanModeSequence}, speedSupport=${hasSpeedSupport}, oscillationSupport=${hasOscillationSupport}, dir=${this.state.attributes.direction ?? "N/A"}`,
       );
 
-      if (hasSpeedSupport || hasOscillationSupport) {
-        const fanClusterBehavior = MatterbridgeFanControlServer.with(
-          ...fanFeatures,
-        );
-        const fanStateConfig: any = {
-          fanMode,
-          fanModeSequence,
-          percentSetting: pct,
-          percentCurrent: pct,
-          speedMax,
-          speedSetting: speed,
-          speedCurrent: speed,
-        };
+      const fanClusterBehavior = MatterbridgeFanControlServer.with(
+        ...fanFeatures,
+      );
+      const fanStateConfig: any = {
+        fanMode,
+        fanModeSequence,
+        percentSetting: pct,
+        percentCurrent: pct,
+        speedMax,
+        speedSetting: speed,
+        speedCurrent: speed,
+      };
 
-        if (hasDirectionSupport) {
-          fanStateConfig.airflowDirection = haDirectionToMatter(
-            fanDirection(this.state),
-          );
-        }
-
-        if (hasOscillationSupport) {
-          fanStateConfig.rockSupport = { rockLeftRight: true };
-          fanStateConfig.rockSetting = haStateToRockSetting(this.state);
-        }
-
-        this.endpoint.behaviors.require(fanClusterBehavior, fanStateConfig);
-      } else {
-        // Pure On/Off fan (e.g. smart switch configured as fan) — use default FanControl server without MultiSpeed
-        this.endpoint.createDefaultFanControlClusterServer(
-          fanMode,
-          FAN_MODE_SEQUENCE,
+      if (hasDirectionSupport) {
+        fanStateConfig.airflowDirection = haDirectionToMatter(
+          fanDirection(this.state),
         );
       }
 
+      if (hasOscillationSupport) {
+        fanStateConfig.rockSupport = { rockLeftRight: true };
+        fanStateConfig.rockSetting = haStateToRockSetting(this.state);
+      }
+
+      this.endpoint.behaviors.require(fanClusterBehavior, fanStateConfig);
       this.endpoint.behaviors.require(MatterbridgeOnOffServer.with());
 
-      // If ambient temperature is reported on this fan entity (e.g. Govee H7133 tower fan)
+      // If ambient temperature is reported on this fan entity or companion sensor
+      const compTemp = this.getCompanionTemperature();
       if (typeof this.state.attributes.current_temperature === "number") {
         this.endpoint.createDefaultTemperatureMeasurementClusterServer(
           Math.round(this.state.attributes.current_temperature * 100),
         );
+      } else if (compTemp !== null) {
+        this.endpoint.createDefaultTemperatureMeasurementClusterServer(
+          Math.round(compTemp * 100),
+        );
       }
-    } else if (domain === "climate") {
-      const thermostatFeatures: any[] = [Thermostat.Feature.Heating];
-      const hvacModes: string[] = this.state.attributes.hvac_modes ?? [];
-      if (hvacModes.includes("cool")) {
-        thermostatFeatures.push(Thermostat.Feature.Cooling);
-      }
-      if (hvacModes.includes("auto") || hvacModes.includes("heat_cool")) {
-        thermostatFeatures.push(Thermostat.Feature.AutoMode);
-      }
+    } else if (isThermostatProfile) {
+      const thermostatFeatures: any[] = [
+        Thermostat.Feature.Heating,
+        Thermostat.Feature.Cooling,
+        Thermostat.Feature.AutoMode,
+      ];
 
       const thermostatServer = MatterbridgeThermostatServer.with(
         ...thermostatFeatures,
       );
+      const compTemp = this.getCompanionTemperature();
       const currentTemp =
         typeof this.state.attributes.current_temperature === "number"
           ? Math.round(this.state.attributes.current_temperature * 100)
-          : 2100;
+          : compTemp !== null
+          ? Math.round(compTemp * 100)
+          : 2200;
       const targetTemp =
         typeof this.state.attributes.temperature === "number"
           ? Math.round(this.state.attributes.temperature * 100)
           : currentTemp;
       const minTemp = Math.round(
-        (this.state.attributes.min_temp ?? 7) * 100,
+        (this.state.attributes.min_temp ?? 10) * 100,
       );
       const maxTemp = Math.round(
-        (this.state.attributes.max_temp ?? 35) * 100,
+        (this.state.attributes.max_temp ?? 32) * 100,
       );
-      const systemMode = climateConverter.toMatterSystemMode(this.state.state);
+      const systemMode =
+        domain === "climate"
+          ? climateConverter.toMatterSystemMode(this.state.state)
+          : this.state.state === "on"
+          ? 4 // Heat
+          : 0; // Off
 
       this.endpoint.behaviors.require(thermostatServer, {
         localTemperature: currentTemp,
@@ -357,12 +513,12 @@ export class BaseEntity {
         absMaxHeatSetpointLimit: maxTemp,
         systemMode,
       });
+      this.endpoint.behaviors.require(MatterbridgeOnOffServer.with());
     } else if (
       domain === "light" ||
       domain === "switch" ||
       domain === "media_player" ||
-      domain === "vacuum" ||
-      domain === "fan"
+      domain === "vacuum"
     ) {
       const isLighting =
         domain === "light" ||
@@ -451,12 +607,23 @@ export class BaseEntity {
   protected registerCommandHandlers(_endpoint?: MatterbridgeEndpoint) {
     const [domain] = this.entityId.split(".");
 
+    const isFanProfile =
+      domain === "fan" ||
+      this.deviceType.code === 0x002b ||
+      this.deviceType.name.toLowerCase() === "fan";
+    const isThermostatProfile =
+      domain === "climate" ||
+      this.deviceType.name.toLowerCase() === "thermostat" ||
+      this.deviceType.code === 0x0301;
+
     if (
       domain === "light" ||
       domain === "switch" ||
       domain === "fan" ||
       domain === "media_player" ||
-      domain === "vacuum"
+      domain === "vacuum" ||
+      isFanProfile ||
+      isThermostatProfile
     ) {
       this.endpoint.addCommandHandler("on", async () => {
         if (domain === "vacuum")
@@ -465,6 +632,25 @@ export class BaseEntity {
           this.setCommandLockout("onOff", true);
           this.cancelDebouncedService("turn_off");
           this.callServiceDebounced(domain, "turn_on", undefined, 0);
+        } else if (domain === "fan") {
+          this.setCommandLockout("onOff", true);
+          this.setCommandLockout("fan_state", "on");
+          const curPct = fanPercentage(this.state);
+          const defaultPct = curPct > 0 ? curPct : 50;
+          if (hasFanSpeed(this.state)) {
+            await this.platform.ha.callService("fan", "turn_on", this.entityId, {
+              percentage: defaultPct,
+            });
+          } else {
+            await this.platform.ha.callService(domain, "turn_on", this.entityId);
+          }
+        } else if (isFanProfile) {
+          this.setCommandLockout("onOff", true);
+          this.setCommandLockout("fan_state", "on");
+          await this.executeSafeFanCommand(100);
+        } else if (isThermostatProfile) {
+          this.setCommandLockout("onOff", true);
+          await this.platform.ha.callService(domain, "turn_on", this.entityId);
         } else
           await this.platform.ha.callService(domain, "turn_on", this.entityId);
       });
@@ -480,25 +666,33 @@ export class BaseEntity {
           this.setCommandLockout("onOff", false);
           this.cancelDebouncedService("turn_on");
           this.callServiceDebounced(domain, "turn_off", undefined, 0);
+        } else if (domain === "fan") {
+          this.setCommandLockout("onOff", false);
+          this.setCommandLockout("fan_state", "off");
+          await this.platform.ha.callService(domain, "turn_off", this.entityId);
+        } else if (isFanProfile) {
+          this.setCommandLockout("onOff", false);
+          this.setCommandLockout("fan_state", "off");
+          await this.executeSafeFanCommand(0, "Off");
+        } else if (isThermostatProfile) {
+          this.setCommandLockout("onOff", false);
+          await this.platform.ha.callService(domain, "turn_off", this.entityId);
         } else
           await this.platform.ha.callService(domain, "turn_off", this.entityId);
       });
 
       if (
-        domain === "fan" &&
-        hasFanSpeed(this.state) &&
-        this.endpoint.hasAttributeServer(FanControl.id, "percentCurrent")
+        isFanProfile &&
+        this.hasAttr(FanControl.id, "percentCurrent")
       ) {
         // ── Fan speed (percentage) handler ───────────────────────────────────
         this.endpoint.addCommandHandler(
           "FanControl.step",
           async (data: any) => {
             if (this.isUpdatingFromHa) return;
-            if (!hasFanSpeed(this.state)) return;
             const direction = data?.request?.direction ?? data?.direction;
-            // Read current % from HA state, NOT from last_percentage
-            const current = fanPercentage(this.state);
-            const speedMax = getFanSpeedCount(this.state);
+            const current = fanPercentage(this.state) || (this.state.state === "on" ? 100 : 0);
+            const speedMax = getFanSpeedCount(this.state) || 3;
             const delta =
               direction === FanControl.StepDirection.Increase ? 10 : -10;
             const next = snapToPhysicalLevel(
@@ -508,21 +702,19 @@ export class BaseEntity {
             this.platform.log.debug(
               `[${this.entityId}] FanControl.step: dir=${direction}, current=${current}%, next=${next}%`,
             );
-            if (next === 0) {
-              this.setCommandLockout("fan_state", "off");
-              await this.platform.ha.callService(
-                "fan",
-                "turn_off",
-                this.entityId,
-              );
+            if (domain === "fan") {
+              if (next === 0) {
+                this.setCommandLockout("fan_state", "off");
+                this.setCommandLockout("onOff", false);
+                await this.platform.ha.callService("fan", "turn_off", this.entityId);
+              } else {
+                this.setCommandLockout("fan_percentage", next);
+                this.setCommandLockout("fan_state", "on");
+                this.setCommandLockout("onOff", true);
+                await this.platform.ha.callService("fan", "turn_on", this.entityId, { percentage: next });
+              }
             } else {
-              this.setCommandLockout("fan_percentage", next);
-              await this.platform.ha.callService(
-                "fan",
-                "set_percentage",
-                this.entityId,
-                { percentage: next },
-              );
+              await this.executeSafeFanCommand(next);
             }
           },
         );
@@ -532,69 +724,63 @@ export class BaseEntity {
           "percentSetting",
           async (newValue: any) => {
             if (this.isUpdatingFromHa) return;
-            if (!hasFanSpeed(this.state)) return;
             if (typeof newValue === "number") {
-              const speedMax = getFanSpeedCount(this.state);
+              const speedMax = getFanSpeedCount(this.state) || 3;
               const next = snapToPhysicalLevel(newValue, speedMax);
               this.platform.log.debug(
                 `[${this.entityId}] FanControl.percentSetting changed: ${newValue}% -> snapped ${next}%`,
               );
-              if (next === 0) {
-                this.setCommandLockout("fan_state", "off");
-                await this.platform.ha.callService(
-                  "fan",
-                  "turn_off",
-                  this.entityId,
-                );
+              if (domain === "fan") {
+                if (next === 0) {
+                  this.setCommandLockout("fan_state", "off");
+                  this.setCommandLockout("onOff", false);
+                  await this.platform.ha.callService("fan", "turn_off", this.entityId);
+                } else {
+                  this.setCommandLockout("fan_percentage", next);
+                  this.setCommandLockout("fan_state", "on");
+                  this.setCommandLockout("onOff", true);
+                  await this.platform.ha.callService("fan", "turn_on", this.entityId, { percentage: next });
+                }
               } else {
-                this.setCommandLockout("fan_percentage", next);
-                await this.platform.ha.callService(
-                  "fan",
-                  "set_percentage",
-                  this.entityId,
-                  { percentage: next },
-                );
+                await this.executeSafeFanCommand(next);
               }
             }
           },
         );
 
-        if (this.endpoint.hasAttributeServer(FanControl.id, "speedSetting")) {
+        if (this.hasAttr(FanControl.id, "speedSetting")) {
           this.endpoint.subscribeAttribute(
             FanControl.id,
             "speedSetting",
             async (newValue: any) => {
               if (this.isUpdatingFromHa) return;
-              if (!hasFanSpeed(this.state)) return;
               if (typeof newValue === "number") {
-                const speedMax = getFanSpeedCount(this.state);
+                const speedMax = getFanSpeedCount(this.state) || 3;
                 const pct = newValue === 0 ? 0 : (newValue / speedMax) * 100;
                 const next = snapToPhysicalLevel(pct, speedMax);
                 this.platform.log.debug(
                   `[${this.entityId}] FanControl.speedSetting changed: ${newValue} -> pct ${next}%`,
                 );
-                if (next === 0) {
-                  this.setCommandLockout("fan_state", "off");
-                  await this.platform.ha.callService(
-                    "fan",
-                    "turn_off",
-                    this.entityId,
-                  );
+                if (domain === "fan") {
+                  if (next === 0) {
+                    this.setCommandLockout("fan_state", "off");
+                    this.setCommandLockout("onOff", false);
+                    await this.platform.ha.callService("fan", "turn_off", this.entityId);
+                  } else {
+                    this.setCommandLockout("fan_percentage", next);
+                    this.setCommandLockout("fan_state", "on");
+                    this.setCommandLockout("onOff", true);
+                    await this.platform.ha.callService("fan", "turn_on", this.entityId, { percentage: next });
+                  }
                 } else {
-                  this.setCommandLockout("fan_percentage", next);
-                  await this.platform.ha.callService(
-                    "fan",
-                    "set_percentage",
-                    this.entityId,
-                    { percentage: next },
-                  );
+                  await this.executeSafeFanCommand(next);
                 }
               }
             },
           );
         }
 
-        if (this.endpoint.hasAttributeServer(FanControl.id, "fanMode")) {
+        if (this.hasAttr(FanControl.id, "fanMode")) {
           this.endpoint.subscribeAttribute(
             FanControl.id,
             "fanMode",
@@ -603,55 +789,45 @@ export class BaseEntity {
                 this.platform.log.debug(
                   `[${this.entityId}] FanControl.fanMode changed: ${newMode}`,
                 );
-                if (newMode === FanControl.FanMode.Off) {
-                  this.setCommandLockout("fan_state", "off");
-                  await this.platform.ha.callService(
-                    "fan",
-                    "turn_off",
-                    this.entityId,
-                  );
-                } else if (newMode === FanControl.FanMode.Auto) {
-                  if (hasFanAuto(this.state)) {
-                    await this.platform.ha.callService(
-                      "fan",
-                      "set_preset_mode",
-                      this.entityId,
-                      { preset_mode: "auto" },
-                    );
-                  } else {
-                    await this.platform.ha.callService(
-                      "fan",
-                      "turn_on",
-                      this.entityId,
-                    );
+                if (domain === "fan") {
+                  if (newMode === FanControl.FanMode.Off) {
+                    this.setCommandLockout("fan_state", "off");
+                    this.setCommandLockout("onOff", false);
+                    await this.platform.ha.callService("fan", "turn_off", this.entityId);
+                  } else if (newMode === FanControl.FanMode.Auto) {
+                    this.setCommandLockout("fan_state", "on");
+                    this.setCommandLockout("onOff", true);
+                    if (hasFanAuto(this.state)) {
+                      await this.platform.ha.callService("fan", "set_preset_mode", this.entityId, { preset_mode: "auto" });
+                    } else {
+                      await this.platform.ha.callService("fan", "turn_on", this.entityId);
+                    }
+                  } else if (newMode === FanControl.FanMode.Low) {
+                    this.setCommandLockout("fan_state", "on");
+                    this.setCommandLockout("onOff", true);
+                    await this.platform.ha.callService("fan", "turn_on", this.entityId, { percentage: 33.33 });
+                  } else if (newMode === FanControl.FanMode.Medium) {
+                    this.setCommandLockout("fan_state", "on");
+                    this.setCommandLockout("onOff", true);
+                    await this.platform.ha.callService("fan", "turn_on", this.entityId, { percentage: 66.67 });
+                  } else if (newMode === FanControl.FanMode.High || newMode === FanControl.FanMode.On) {
+                    this.setCommandLockout("fan_state", "on");
+                    this.setCommandLockout("onOff", true);
+                    await this.platform.ha.callService("fan", "turn_on", this.entityId, { percentage: 100 });
                   }
-                } else if (newMode === FanControl.FanMode.Low) {
-                  await this.platform.ha.callService(
-                    "fan",
-                    "set_percentage",
-                    this.entityId,
-                    { percentage: 33.33 },
-                  );
-                } else if (newMode === FanControl.FanMode.Medium) {
-                  await this.platform.ha.callService(
-                    "fan",
-                    "set_percentage",
-                    this.entityId,
-                    { percentage: 66.67 },
-                  );
-                } else if (newMode === FanControl.FanMode.High) {
-                  await this.platform.ha.callService(
-                    "fan",
-                    "set_percentage",
-                    this.entityId,
-                    { percentage: 100 },
-                  );
-                } else if (newMode === FanControl.FanMode.On) {
-                  await this.platform.ha.callService(
-                    "fan",
-                    "turn_on",
-                    this.entityId,
-                  );
+                } else {
+                  // Switch-based fan (Govee Plan A)
+                  if (newMode === FanControl.FanMode.Off) {
+                    await this.executeSafeFanCommand(0, "Off");
+                  } else if (newMode === FanControl.FanMode.Low) {
+                    await this.executeSafeFanCommand(33, "Low");
+                  } else if (newMode === FanControl.FanMode.Medium) {
+                    await this.executeSafeFanCommand(66, "Medium");
+                  } else if (newMode === FanControl.FanMode.High || newMode === FanControl.FanMode.On) {
+                    await this.executeSafeFanCommand(100, "High");
+                  } else if (newMode === FanControl.FanMode.Auto) {
+                    await this.executeSafeFanCommand(100, "Auto");
+                  }
                 }
               }
             },
@@ -662,7 +838,7 @@ export class BaseEntity {
       // ── Fan direction handler ────────────────────────────────────────────
       if (
         domain === "fan" &&
-        this.endpoint.hasAttributeServer(FanControl.id, "airflowDirection")
+        this.hasAttr(FanControl.id, "airflowDirection")
       ) {
         this.endpoint.addCommandHandler(
           "FanControl.changeDirection" as any,
@@ -688,8 +864,8 @@ export class BaseEntity {
 
       // ── Fan rocking / oscillation handler ────────────────────────────────
       if (
-        domain === "fan" &&
-        this.endpoint.hasAttributeServer(FanControl.id, "rockSetting")
+        (domain === "fan" || isFanProfile) &&
+        this.hasAttr(FanControl.id, "rockSetting")
       ) {
         this.endpoint.subscribeAttribute(
           FanControl.id,
@@ -701,33 +877,40 @@ export class BaseEntity {
             this.platform.log.debug(
               `[${this.entityId}] FanControl rockSetting → HA oscillating: ${isOscillating}`,
             );
-            try {
-              await this.platform.ha.callService(
-                "fan",
-                "oscillate",
-                this.entityId,
-                { oscillating: isOscillating },
-              );
-            } catch (err) {
-              this.platform.log.debug(
-                `[${this.entityId}] fan.oscillate failed, attempting companion switch fallback: ${err}`,
-              );
-              const devId =
-                this.platform.ha?.hassEntities?.get(this.entityId)?.device_id;
-              if (devId) {
-                for (const [sId] of this.platform.entities.entries()) {
-                  if (
-                    sId.startsWith("switch.") &&
-                    sId.includes("oscillation") &&
-                    this.platform.ha?.hassEntities?.get(sId)?.device_id === devId
-                  ) {
-                    await this.platform.ha.callService(
-                      "switch",
-                      isOscillating ? "turn_on" : "turn_off",
-                      sId,
-                    );
-                    break;
-                  }
+            if (domain === "fan") {
+              try {
+                await this.platform.ha.callService(
+                  "fan",
+                  "oscillate",
+                  this.entityId,
+                  { oscillating: isOscillating },
+                );
+                return;
+              } catch (err: any) {
+                this.platform.log.debug(
+                  `[${this.entityId}] fan.oscillate failed, attempting companion switch fallback: ${err}`,
+                );
+              }
+            }
+
+            // Companion oscillation switch fallback for hybrid / switch fans
+            const devId =
+              this.platform.ha?.hassEntities?.get(this.entityId)?.device_id;
+            const ents = (this.platform as any)?.entities;
+            if (devId && ents) {
+              const entries = typeof ents.entries === "function" ? ents.entries() : Object.entries(ents);
+              for (const [sId] of entries) {
+                if (
+                  sId !== this.entityId &&
+                  sId.startsWith("switch.") &&
+                  /oscil|swing|sweep|shake|giro|rotar|pan|deflector/i.test(sId) &&
+                  this.platform.ha?.hassEntities?.get(sId)?.device_id === devId
+                ) {
+                  await this.platform.ha.callService(
+                    "switch",
+                    isOscillating ? "turn_on" : "turn_off",
+                    sId,
+                  );
                 }
               }
             }
@@ -735,7 +918,7 @@ export class BaseEntity {
         );
       }
 
-      if (this.endpoint.hasAttributeServer(LevelControl.id, "currentLevel")) {
+      if (this.hasAttr(LevelControl.id, "currentLevel")) {
         this.endpoint.addCommandHandler("moveToLevel", async (data: any) => {
           const level = data?.request?.level ?? data?.level;
           if (typeof level === "number") {
@@ -1008,9 +1191,9 @@ export class BaseEntity {
     }
 
     // ── Climate / Thermostat handlers ───────────────────────────────────
-    if (domain === "climate") {
+    if (isThermostatProfile) {
       if (
-        this.endpoint.hasAttributeServer(
+        this.hasAttr(
           Thermostat.id,
           "occupiedHeatingSetpoint",
         )
@@ -1026,35 +1209,92 @@ export class BaseEntity {
                 `[${this.entityId}] Thermostat setpoint changed: ${newVal} -> ${targetC}°C`,
               );
               this.setCommandLockout("temperature", targetC);
-              await this.platform.ha.callService(
-                "climate",
-                "set_temperature",
-                this.entityId,
-                { temperature: targetC },
-              );
+              if (domain === "climate") {
+                await this.platform.ha.callService(
+                  "climate",
+                  "set_temperature",
+                  this.entityId,
+                  { temperature: targetC },
+                );
+              } else {
+                // Switch-based thermostat (Plan B)
+                const compTemp = this.getCompanionTemperature();
+                const currentC = compTemp ?? 22;
+                const mainFan = this.getCompanionEntity("switch.", "ventilador");
+                if (targetC > currentC) {
+                  await this.platform.ha.callService("switch", "turn_on", this.entityId);
+                  if (mainFan && mainFan.state?.state === "off") {
+                    await this.platform.ha.callService("switch", "turn_on", mainFan.entityId);
+                  }
+                } else {
+                  await this.platform.ha.callService("switch", "turn_off", this.entityId);
+                }
+              }
             }
           },
         );
       }
 
-      if (this.endpoint.hasAttributeServer(Thermostat.id, "systemMode")) {
+      if (this.hasAttr(Thermostat.id, "systemMode")) {
         this.endpoint.subscribeAttribute(
           Thermostat.id,
           "systemMode",
           async (newMode: any) => {
             if (this.isUpdatingFromHa) return;
             if (typeof newMode === "number") {
-              const hvacMode = climateConverter.toHaHvacMode(newMode);
-              this.platform.log.debug(
-                `[${this.entityId}] Thermostat systemMode changed: ${newMode} -> ${hvacMode}`,
-              );
-              this.setCommandLockout("climate_state", hvacMode);
-              await this.platform.ha.callService(
-                "climate",
-                "set_hvac_mode",
-                this.entityId,
-                { hvac_mode: hvacMode },
-              );
+              if (domain === "climate") {
+                const hvacMode = climateConverter.toHaHvacMode(newMode);
+                this.platform.log.debug(
+                  `[${this.entityId}] Thermostat systemMode changed: ${newMode} -> ${hvacMode}`,
+                );
+                this.setCommandLockout("climate_state", hvacMode);
+                await this.platform.ha.callService(
+                  "climate",
+                  "set_hvac_mode",
+                  this.entityId,
+                  { hvac_mode: hvacMode },
+                );
+              } else {
+                // Switch-based thermostat (Plan B)
+                const mainFan = this.getCompanionEntity("switch.", "ventilador");
+                if (newMode === 0) {
+                  // Off: turn off heating and main fan
+                  await this.platform.ha.callService("switch", "turn_off", this.entityId);
+                  if (mainFan) {
+                    await this.platform.ha.callService("switch", "turn_off", mainFan.entityId);
+                  }
+                } else if (newMode === 3) {
+                  // Cool / Ventilation (Fan without heating)
+                  await this.platform.ha.callService("switch", "turn_off", this.entityId);
+                  if (mainFan) {
+                    if (typeof (mainFan as any).executeSafeFanCommand === "function") {
+                      await (mainFan as any).executeSafeFanCommand(100);
+                    } else {
+                      await this.platform.ha.callService("switch", "turn_on", mainFan.entityId);
+                    }
+                  }
+                } else if (newMode === 4) {
+                  // Heat
+                  await this.platform.ha.callService("switch", "turn_on", this.entityId);
+                  if (mainFan && mainFan.state?.state === "off") {
+                    await this.platform.ha.callService("switch", "turn_on", mainFan.entityId);
+                  }
+                } else if (newMode === 1) {
+                  // Auto
+                  const setpoint = this.endpoint.getAttribute(Thermostat.id, "occupiedHeatingSetpoint") ?? 2200;
+                  const targetC = setpoint / 100;
+                  const compTemp = this.getCompanionTemperature();
+                  const currentC = compTemp ?? 22;
+                  if (targetC > currentC) {
+                    await this.platform.ha.callService("switch", "turn_on", this.entityId);
+                    if (mainFan && mainFan.state?.state === "off") {
+                      await this.platform.ha.callService("switch", "turn_on", mainFan.entityId);
+                    }
+                  } else {
+                    await this.platform.ha.callService("switch", "turn_off", this.entityId);
+                  }
+                }
+              }
             }
           },
         );
@@ -1303,7 +1543,7 @@ export class BaseEntity {
                   this.platform.log,
                 );
                 if (
-                  this.endpoint.hasAttributeServer(
+                  this.hasAttr(
                     ColorControl.id,
                     "enhancedColorMode",
                   )
@@ -1331,13 +1571,13 @@ export class BaseEntity {
         );
 
         if (domain === "light") {
-          const afterLevel = this.endpoint?.hasAttributeServer?.(
+          const afterLevel = this.hasAttr(
             LevelControl.id,
             "currentLevel",
           )
             ? this.endpoint.getAttribute(LevelControl.id, "currentLevel")
             : undefined;
-          const afterOnOff = this.endpoint?.hasAttributeServer?.(
+          const afterOnOff = this.hasAttr(
             OnOff.id,
             "onOff",
           )
@@ -1352,13 +1592,12 @@ export class BaseEntity {
         }
 
         if (
-          domain === "fan" &&
-          this.endpoint.hasAttributeServer(FanControl.id, "fanMode")
+          this.hasAttr(FanControl.id, "fanMode")
         ) {
-          const speedSupported = hasFanSpeed(newState);
-          const speedMax = getFanSpeedCount(newState);
-          const pct = isOn ? fanPercentage(newState) : 0;
-          const speed = isOn ? fanSpeed(pct, speedMax) : 0;
+          const speedSupported = hasFanSpeed(newState) || this.hasAttr(FanControl.id, "percentCurrent");
+          const speedMax = getFanSpeedCount(newState) || 3;
+          const pct = isOn ? (fanPercentage(newState) || 100) : 0;
+          const speed = isOn ? (fanSpeed(pct, speedMax) || 1) : 0;
           const newFanMode = haStateToFanMode(newState);
 
           this.platform.log.debug(
@@ -1367,7 +1606,7 @@ export class BaseEntity {
 
           if (
             speedSupported &&
-            this.endpoint.hasAttributeServer(FanControl.id, "percentCurrent")
+            this.hasAttr(FanControl.id, "percentCurrent")
           ) {
             // Percentage / speed update with hysteresis and lockout
             if (
@@ -1394,7 +1633,7 @@ export class BaseEntity {
               );
 
               if (
-                this.endpoint.hasAttributeServer(FanControl.id, "speedCurrent")
+                this.hasAttr(FanControl.id, "speedCurrent")
               ) {
                 await updateFn(
                   this.endpoint,
@@ -1425,7 +1664,7 @@ export class BaseEntity {
 
           // AirflowDirection update (only when HA exposes direction)
           if (
-            this.endpoint.hasAttributeServer(FanControl.id, "airflowDirection")
+            this.hasAttr(FanControl.id, "airflowDirection")
           ) {
             const dir = fanDirection(newState);
             if (dir !== undefined) {
@@ -1453,7 +1692,7 @@ export class BaseEntity {
           }
 
           // Rocking (Oscillation) update
-          if (this.endpoint.hasAttributeServer(FanControl.id, "rockSetting")) {
+          if (this.hasAttr(FanControl.id, "rockSetting")) {
             const isOscillating = isFanOscillating(newState);
             if (
               !isInitialSync &&
@@ -1480,7 +1719,7 @@ export class BaseEntity {
           // Ambient temperature on fan endpoint
           if (
             typeof newState.attributes.current_temperature === "number" &&
-            this.endpoint.hasAttributeServer(
+            this.hasAttr(
               TemperatureMeasurement.id,
               "measuredValue",
             )
@@ -1494,22 +1733,32 @@ export class BaseEntity {
             );
           }
         }
-      } else if (domain === "climate") {
-        if (
-          this.endpoint.hasAttributeServer(Thermostat.id, "localTemperature") &&
+      } else if (
+        domain === "climate" ||
+        this.hasAttr(Thermostat.id, "systemMode") ||
+        this.hasAttr(Thermostat.id, "localTemperature")
+      ) {
+        const compTemp = this.getCompanionTemperature();
+        const currentTemp =
           typeof newState.attributes.current_temperature === "number"
+            ? newState.attributes.current_temperature
+            : compTemp;
+
+        if (
+          this.hasAttr(Thermostat.id, "localTemperature") &&
+          typeof currentTemp === "number"
         ) {
           await updateFn(
             this.endpoint,
             Thermostat.id,
             "localTemperature",
-            Math.round(newState.attributes.current_temperature * 100),
+            Math.round(currentTemp * 100),
             this.platform.log,
           );
         }
 
         if (
-          this.endpoint.hasAttributeServer(
+          this.hasAttr(
             Thermostat.id,
             "occupiedHeatingSetpoint",
           ) &&
@@ -1536,7 +1785,7 @@ export class BaseEntity {
           }
         }
 
-        if (this.endpoint.hasAttributeServer(Thermostat.id, "systemMode")) {
+        if (this.hasAttr(Thermostat.id, "systemMode")) {
           if (
             !isInitialSync &&
             this.shouldIgnoreStateUpdate("climate_state", newState.state)
@@ -1545,7 +1794,12 @@ export class BaseEntity {
               `[${this.entityId}] Ignoring HA climate state update due to command lockout`,
             );
           } else {
-            const systemMode = climateConverter.toMatterSystemMode(newState.state);
+            const systemMode =
+              domain === "climate"
+                ? climateConverter.toMatterSystemMode(newState.state)
+                : newState.state === "on"
+                ? 4 // Heat
+                : 0; // Off
             await updateFn(
               this.endpoint,
               Thermostat.id,
@@ -1563,7 +1817,7 @@ export class BaseEntity {
         const updateMatter = async (isActive: boolean) => {
           if (!this.endpoint) return;
           if (
-            this.endpoint.hasAttributeServer(OccupancySensing.id, "occupancy")
+            this.hasAttr(OccupancySensing.id, "occupancy")
           ) {
             await updateFn(
               this.endpoint,
@@ -1573,7 +1827,7 @@ export class BaseEntity {
               this.platform.log,
             );
           } else if (
-            this.endpoint.hasAttributeServer(BooleanState.id, "stateValue")
+            this.hasAttr(BooleanState.id, "stateValue")
           ) {
             await updateFn(
               this.endpoint,
@@ -1607,7 +1861,7 @@ export class BaseEntity {
         const numeric = parseFloat(newState.state);
         if (!isNaN(numeric) && this.endpoint) {
           if (
-            this.endpoint.hasAttributeServer(
+            this.hasAttr(
               TemperatureMeasurement.id,
               "measuredValue",
             )
@@ -1620,7 +1874,7 @@ export class BaseEntity {
               this.platform.log,
             );
           } else if (
-            this.endpoint.hasAttributeServer(
+            this.hasAttr(
               RelativeHumidityMeasurement.id,
               "measuredValue",
             )
