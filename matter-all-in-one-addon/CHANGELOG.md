@@ -1,3 +1,18 @@
+## [1.5.46] - 2026-09-10
+
+### Restauración Completa de Ventiladores y Luces BLE / Compatibilidad Matter Apple Home
+
+- **Restauración de Clusters FanControl para Ventiladores BLE y de Techo:**
+  - Se restauró la especificación estándar del cluster `FanControl` (`MultiSpeed`, `Auto`, `Step`) con `MatterbridgeFanControlServer` para todos los ventiladores estándar y BLE en `fan.converter.ts`, `base.entity.ts` y `composite-device.entity.ts`.
+  - Esto resuelve de inmediato el estado *"Sin Respuesta"* (No Response) en Apple Home para los ventiladores BLE y sus luces asociadas, manteniendo la compatibilidad estricta de esquemas requerida por los controladores Apple Home y Google Home.
+
+- **Aislamiento Estricto de Reglas Especiales para Govee H7133:**
+  - El filtro `isSpecialApplianceEntity` en `isMultiSwitchDevice` y el bypass de oscilación en dispositivos compuestos ahora aplican **exclusivamente** a dispositivos que posean la entidad de protección térmica PTC `auto_stop` o modelo `H7133`.
+  - Se eliminó el filtrado genérico por la palabra *"ventilador"*, asegurando que ningún ventilador BLE, ventilador de techo ni interruptor de ventilador en la casa vea alterada su estructura de accesorios o código QR.
+
+- **Resolución de Bloqueo en "Conectando..." en Apple Home:**
+  - Al proveer las características requeridas por Matter en el endpoint raíz del ventilador, los controladores Apple Home completan de inmediato el intercambio de descriptores durante el emparejamiento PASE.
+
 ## [1.5.45] - 2026-09-10
 
 ### Unificación de Tarjetas en Dashboard para Dispositivos Físicos Multientidad

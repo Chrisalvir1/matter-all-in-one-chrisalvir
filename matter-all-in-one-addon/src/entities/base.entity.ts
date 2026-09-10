@@ -432,36 +432,31 @@ export class BaseEntity {
         `[${this.entityId}] Fan init: state=${this.state.state}, on=${on}, pct=${pct}, speed=${speed}/${speedMax}, sequence=${fanModeSequence}, speedSupport=${hasSpeedSupport}, oscillationSupport=${hasOscillationSupport}, dir=${this.state.attributes.direction ?? "N/A"}`,
       );
 
-      if (fanFeatures.includes(FanControl.Feature.MultiSpeed)) {
-        const fanClusterBehavior = MatterbridgeFanControlServer.with(
-          ...fanFeatures,
+      const fanClusterBehavior = MatterbridgeFanControlServer.with(
+        ...fanFeatures,
+      );
+      const fanStateConfig: any = {
+        fanMode,
+        fanModeSequence,
+        percentSetting: pct,
+        percentCurrent: pct,
+        speedMax,
+        speedSetting: speed,
+        speedCurrent: speed,
+      };
+
+      if (hasDirectionSupport) {
+        fanStateConfig.airflowDirection = haDirectionToMatter(
+          fanDirection(this.state),
         );
-        const fanStateConfig: any = {
-          fanMode,
-          fanModeSequence,
-          percentSetting: pct,
-          percentCurrent: pct,
-          speedMax,
-          speedSetting: speed,
-          speedCurrent: speed,
-        };
-
-        if (hasDirectionSupport) {
-          fanStateConfig.airflowDirection = haDirectionToMatter(
-            fanDirection(this.state),
-          );
-        }
-
-        if (hasOscillationSupport) {
-          fanStateConfig.rockSupport = { rockLeftRight: true };
-          fanStateConfig.rockSetting = haStateToRockSetting(this.state);
-        }
-
-        this.endpoint.behaviors.require(fanClusterBehavior, fanStateConfig);
-      } else {
-        // Pure On/Off fan (no MultiSpeed, no speed slider)
-        this.endpoint.createOnOffFanControlClusterServer(fanMode);
       }
+
+      if (hasOscillationSupport) {
+        fanStateConfig.rockSupport = { rockLeftRight: true };
+        fanStateConfig.rockSetting = haStateToRockSetting(this.state);
+      }
+
+      this.endpoint.behaviors.require(fanClusterBehavior, fanStateConfig);
       this.endpoint.behaviors.require(MatterbridgeOnOffServer.with());
 
       // If ambient temperature is reported on this fan entity or companion sensor

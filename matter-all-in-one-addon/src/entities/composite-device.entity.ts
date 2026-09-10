@@ -934,35 +934,31 @@ export class CompositeDeviceEntity {
         `[Composite] Fan root init: ${member.entityId}, on=${on}, pct=${pct}, speed=${speed}/${speedMax}, sequence=${fanModeSequence}, speedSupport=${hasSpeed}, oscillationSupport=${hasOscillation}, dir=${member.state.attributes.direction ?? "N/A"}`,
       );
 
-      if (fanFeatures.includes(FanControl.Feature.MultiSpeed)) {
-        const fanClusterBehavior = MatterbridgeFanControlServer.with(
-          ...fanFeatures,
+      const fanClusterBehavior = MatterbridgeFanControlServer.with(
+        ...fanFeatures,
+      );
+      const fanStateConfig: any = {
+        fanMode,
+        fanModeSequence,
+        percentSetting: pct,
+        percentCurrent: pct,
+        speedMax,
+        speedSetting: speed,
+        speedCurrent: speed,
+      };
+
+      if (hasDir) {
+        fanStateConfig.airflowDirection = haDirectionToMatter(
+          fanDirection(member.state),
         );
-        const fanStateConfig: any = {
-          fanMode,
-          fanModeSequence,
-          percentSetting: pct,
-          percentCurrent: pct,
-          speedMax,
-          speedSetting: speed,
-          speedCurrent: speed,
-        };
-
-        if (hasDir) {
-          fanStateConfig.airflowDirection = haDirectionToMatter(
-            fanDirection(member.state),
-          );
-        }
-
-        if (hasOscillation) {
-          fanStateConfig.rockSupport = { rockLeftRight: true };
-          fanStateConfig.rockSetting = haStateToRockSetting(member.state);
-        }
-
-        endpoint.behaviors.require(fanClusterBehavior, fanStateConfig);
-      } else {
-        endpoint.createOnOffFanControlClusterServer(fanMode);
       }
+
+      if (hasOscillation) {
+        fanStateConfig.rockSupport = { rockLeftRight: true };
+        fanStateConfig.rockSetting = haStateToRockSetting(member.state);
+      }
+
+      endpoint.behaviors.require(fanClusterBehavior, fanStateConfig);
 
       endpoint.behaviors.require(MatterbridgeOnOffServer.with());
 

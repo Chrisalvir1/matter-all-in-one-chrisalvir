@@ -1020,16 +1020,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
     const isSpecialApplianceEntity = (e: BaseEntity) => {
       const id = e.entityId.toLowerCase();
-      const override = (this.deviceOverrides[e.entityId] ?? "").toLowerCase();
-      if (override === "fan" || override === "thermostat") return true;
-      if (
-        id.includes("ventilador") ||
-        id.includes("auto_stop") ||
-        id.includes("oscillation") ||
-        id.includes("oscilacion")
-      ) {
-        return true;
-      }
+      if (id.includes("auto_stop")) return true;
+      const model = (e.state?.attributes?.model || "").toLowerCase();
+      if (model.includes("h7133")) return true;
       return false;
     };
 
@@ -1092,11 +1085,20 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       );
       return undefined;
     }
+    const isGoveeAppliance = Array.from(this.entities.values()).some((e) => {
+      const entry = (this.ha as any).hassEntities?.get(e.entityId);
+      return (
+        entry?.device_id === deviceId &&
+        (e.entityId.includes("auto_stop") ||
+          (e.state?.attributes?.model || "").toLowerCase().includes("h7133"))
+      );
+    });
+
     if (
       entityId.includes("auto_stop") ||
       this.deviceOverrides[entityId] === "thermostat" ||
-      entityId.includes("oscillation") ||
-      entityId.includes("oscilacion")
+      (isGoveeAppliance &&
+        (entityId.includes("oscillation") || entityId.includes("oscilacion")))
     ) {
       this.log.debug(
         `[Composite] ${entityId}: standalone Plan B thermostat or auxiliary entity — composite grouping bypassed`,
@@ -1189,7 +1191,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         ) {
           return false;
         }
-        if (id.includes("oscillation") || id.includes("oscilacion")) {
+        if (
+          isGoveeAppliance &&
+          (id.includes("oscillation") || id.includes("oscilacion"))
+        ) {
           return false;
         }
         if (m.entityId.startsWith("switch.")) {
