@@ -183,17 +183,20 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
   const oscSelectEntity = device.entities.find(
     (e) =>
       e.domain === "select" &&
-      (/oscil|swing|sweep|angle|direction|range/i.test(e.entityId) ||
-       /oscil|swing|sweep|dirección|ángulo/i.test(e.name || "") ||
-       (e.attributes?.options || []).some((opt: string) => /oscil|swing|sweep|horiz|vert|angle/i.test(opt)))
+      !/mode|modo|gear|engranaje|speed|potencia|nivel/i.test(e.entityId) &&
+      !/mode|modo|gear|engranaje|speed|potencia|nivel/i.test(e.name || "") &&
+      (/oscil|swing|sweep|angle|direction|range|deflector/i.test(e.entityId) ||
+       /oscil|swing|sweep|dirección|ángulo|deflector/i.test(e.name || ""))
   );
 
-  const oscClimateEntity = device.entities.find(
-    (e) =>
-      e.domain === "climate" &&
-      Array.isArray(e.attributes?.swing_modes) &&
-      e.attributes.swing_modes.length > 0
-  );
+  const oscClimateEntity = isH7133
+    ? undefined
+    : device.entities.find(
+        (e) =>
+          e.domain === "climate" &&
+          Array.isArray(e.attributes?.swing_modes) &&
+          e.attributes.swing_modes.length > 0
+      );
 
   const oscFanEntity = device.entities.find(
     (e) => e.domain === "fan"
@@ -431,18 +434,17 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
     }
   };
 
-  const executeH7133FanMode = async (speedPct = h7133FanSpeedPct) => {
+  const executeH7133FanMode = async () => {
     const targetFanId = fanEntity?.entityId || primaryEntity?.entityId;
-    // Step 1: Turn on main power
-    if (targetFanId) {
+    // Step 1: Turn on main power ONLY if not already on! Never re-send turn_on to an already running switch!
+    if (targetFanId && fanEntity?.state !== "on") {
       await api.turnOnEntity(targetFanId).catch(() => {});
-      // Allow microcontroller to boot
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      await new Promise((resolve) => setTimeout(resolve, 250));
     }
 
     const tasks: Promise<any>[] = [];
 
-    // Step 2: Turn off auto_stop switch (Auto heating thermostatic shutoff)
+    // Step 2: Turn off auto_stop switch (Thermostatic auto heating)
     if (autoStopEntity) {
       tasks.push(api.turnOffEntity(autoStopEntity.entityId).catch(() => {}));
     }
@@ -452,9 +454,9 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
       tasks.push(api.turnOffEntity(heaterEntity.entityId).catch(() => {}));
     }
 
-    // Step 4: Explicitly set fan speed / percentage so it NEVER stays at 0!
+    // Step 4: For real fan entities only
     if (fanEntity && fanEntity.domain === "fan") {
-      tasks.push(api.setEntityValue(fanEntity.entityId, speedPct).catch(() => {}));
+      tasks.push(api.setEntityValue(fanEntity.entityId, 100).catch(() => {}));
     }
 
     // Step 5: If fan entity has preset_modes, select Fan mode
@@ -468,8 +470,12 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
     }
 
     // Step 6: Check select entities for Fan option (e.g. select.ventilador_playroom_mode)
+    // CRITICAL: NEVER touch gear/speed entities in Fan mode because gear is PTC heat level in Govee H7133!
     const selectEntities = device.entities.filter((e) => e.domain === "select");
     for (const sel of selectEntities) {
+      if (/gear|engranaje|speed|velocidad|potencia|nivel/i.test(sel.entityId) || /gear|engranaje|speed|velocidad/i.test(sel.name || "")) {
+        continue;
+      }
       const options: string[] = sel.attributes?.options || [];
       const fanOpt = options.find((opt: string) =>
         /^(fan|fan_only|ventilador|normal|manual)$/i.test(opt) || opt.toLowerCase().includes("fan")
@@ -477,75 +483,36 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
       if (fanOpt) {
         tasks.push(api.selectOption(sel.entityId, fanOpt).catch(() => {}));
       }
-      // Also check if there's a gear/speed select entity
-      if (/gear|speed|velocidad/i.test(sel.entityId) || /gear|speed|velocidad/i.test(sel.name || "")) {
-        const speedLevel = speedPct <= 33 ? "1" : speedPct <= 66 ? "2" : "3";
-        const targetRegex =
-          speedLevel === "1"
-            ? /^(1|low|bajo|gear 1|gear_1)$/i
-            : speedLevel === "2"
-            ? /^(2|medium|med|medio|gear 2|gear_2)$/i
-            : /^(3|high|alto|gear 3|gear_3)$/i;
-        const gearMatch = options.find((opt) => targetRegex.test(opt));
-        if (gearMatch) {
-          tasks.push(api.selectOption(sel.entityId, gearMatch).catch(() => {}));
-        }
-      }
     }
 
-    // Step 7: If climate entity exists, switch HVAC mode to fan_only
+    // Step 7: If climate entity exists, switch HVAC mode to fan_only or off
     const climateEntities = device.entities.filter((e) => e.domain === "climate");
     for (const clim of climateEntities) {
       if (clim.attributes?.hvac_modes?.includes("fan_only")) {
         tasks.push(api.setHvacMode(clim.entityId, "fan_only").catch(() => {}));
+      } else if (clim.attributes?.hvac_modes?.includes("off")) {
+        tasks.push(api.setHvacMode(clim.entityId, "off").catch(() => {}));
       }
     }
 
     await Promise.allSettled(tasks);
 
-    // Reinforce after 250ms in case microcontroller took extra time to transition from boot
+    // Reinforce Fan mode after 300ms
     setTimeout(() => {
-      if (fanEntity && fanEntity.domain === "fan") {
-        api.setEntityValue(fanEntity.entityId, speedPct).catch(() => {});
+      if (autoStopEntity) {
+        api.turnOffEntity(autoStopEntity.entityId).catch(() => {});
       }
       for (const sel of selectEntities) {
+        if (/gear|engranaje|speed|velocidad|potencia|nivel/i.test(sel.entityId) || /gear|engranaje|speed|velocidad/i.test(sel.name || "")) {
+          continue;
+        }
         const options: string[] = sel.attributes?.options || [];
         const fanOpt = options.find((opt: string) =>
           /^(fan|fan_only|ventilador|normal|manual)$/i.test(opt) || opt.toLowerCase().includes("fan")
         );
         if (fanOpt) api.selectOption(sel.entityId, fanOpt).catch(() => {});
       }
-      if (fanEntity?.attributes?.preset_modes) {
-        const match = fanEntity.attributes.preset_modes.find((m: string) =>
-          /^(fan|fan_only|ventilador|normal|manual)$/i.test(m) || m.toLowerCase().includes("fan")
-        );
-        if (match) api.setPresetMode(fanEntity.entityId, match).catch(() => {});
-      }
-    }, 250);
-  };
-
-  const handleSetH7133FanSpeed = async (e: React.MouseEvent, level: "low" | "med" | "high") => {
-    e.stopPropagation();
-    const pct = level === "low" ? 33 : level === "med" ? 66 : 100;
-    setH7133FanSpeedPct(pct);
-    try {
-      window.localStorage.setItem(`govee_h7133_fan_speed_pct_${device.id}`, String(pct));
-    } catch {}
-
-    if (currentH7133Mode !== "fan") {
-      setH7133Mode("fan");
-      try {
-        window.localStorage.setItem(`govee_h7133_mode_${device.id}`, "fan");
-      } catch {}
-    }
-
-    try {
-      await executeH7133FanMode(pct);
-      await new Promise((resolve) => setTimeout(resolve, 350));
-      onRefresh?.();
-    } catch (err) {
-      console.error("Error setting H7133 fan speed:", err);
-    }
+    }, 300);
   };
 
   const handleSetOscillation = async (e: React.MouseEvent, mode: "off" | "horizontal" | "vertical" | "all") => {
@@ -583,7 +550,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
       }
     }
 
-    // 3. Select entity if present
+    // 3. Select entity if present (strictly oscillation select, never mode/gear!)
     if (oscSelectEntity) {
       const options: string[] = oscSelectEntity.attributes?.options || [];
       let targetOption: string | undefined;
@@ -596,16 +563,13 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
       } else if (mode === "all") {
         targetOption = options.find((opt) => /all|both|todo|3d/i.test(opt)) || options.find((opt) => /^(on|activado|si|yes|oscil)/i.test(opt));
       }
-      if (!targetOption && isOscActive) {
-        targetOption = options.find((opt) => !/^(off|fijo|none|stop|desactivado|no)$/i.test(opt));
-      }
       if (targetOption) {
         tasks.push(api.selectOption(oscSelectEntity.entityId, targetOption).catch(() => {}));
       }
     }
 
-    // 4. Climate swing mode if present
-    if (oscClimateEntity) {
+    // 4. Climate swing mode if present (ONLY for non-H7133 devices; H7133 climate is a space heater!)
+    if (oscClimateEntity && !isH7133) {
       const modes: string[] = oscClimateEntity.attributes?.swing_modes || [];
       const targetSwing = isOscActive
         ? modes.find((m) => /^(on|both|horizontal|swing|oscillat)/i.test(m)) || modes[1] || "on"
@@ -618,21 +582,21 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
       tasks.push(api.setFanOscillation(oscFanEntity.entityId, isOscActive).catch(() => {}));
     }
 
-    // CRITICAL FOR H7133: If currently in Fan mode, RE-ASSERT Fan mode so hardware NEVER slips into heating!
-    if (isH7133 && currentH7133Mode === "fan") {
+    // CRITICAL FOR H7133: If NOT in heat mode, RE-ASSERT Fan mode and auto_stop OFF
+    if (isH7133 && h7133Mode !== "heat") {
       if (autoStopEntity) {
         tasks.push(api.turnOffEntity(autoStopEntity.entityId).catch(() => {}));
       }
       if (heaterEntity && heaterEntity.domain === "switch" && heaterEntity.entityId !== fanEntity?.entityId) {
         tasks.push(api.turnOffEntity(heaterEntity.entityId).catch(() => {}));
       }
-      const selectEntities = device.entities.filter((e) => e.domain === "select" && e.entityId !== oscSelectEntity?.entityId);
-      for (const sel of selectEntities) {
-        const options: string[] = sel.attributes?.options || [];
+      const modeSelect = device.entities.find((e) => e.domain === "select" && /mode|modo/i.test(e.entityId));
+      if (modeSelect) {
+        const options: string[] = modeSelect.attributes?.options || [];
         const fanOpt = options.find((opt: string) =>
           /^(fan|fan_only|ventilador|normal|manual)$/i.test(opt) || opt.toLowerCase().includes("fan")
         );
-        if (fanOpt) tasks.push(api.selectOption(sel.entityId, fanOpt).catch(() => {}));
+        if (fanOpt) tasks.push(api.selectOption(modeSelect.entityId, fanOpt).catch(() => {}));
       }
     }
 
@@ -757,6 +721,12 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
     );
     for (const sw of otherSwitches) {
       offCalls.push(api.turnOffEntity(sw.entityId));
+    }
+    const climateEntities = device.entities.filter((e) => e.domain === "climate");
+    for (const clim of climateEntities) {
+      if (clim.attributes?.hvac_modes?.includes("off")) {
+        offCalls.push(api.setHvacMode(clim.entityId, "off"));
+      }
     }
     await Promise.allSettled(offCalls);
   };
@@ -1328,63 +1298,38 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                 </button>
               </div>
 
-              {/* Fan Speed & Oscillation Controls when in fan mode */}
+              {/* Fan Mode Controls (Pure Ventilation without Heat) */}
               {currentH7133Mode === "fan" && (
                 <div style={{ marginTop: "6px", display: "flex", flexDirection: "column", gap: "6px" }}>
-                  {/* Speed Bar: Low (1), Med (2), High (3) */}
-                  <div>
-                    <div
-                      style={{
-                        fontSize: "0.66rem",
-                        fontWeight: 600,
-                        color: "#38BDF8",
-                        marginBottom: "4px",
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                      }}
-                    >
-                      <span>Velocidad ventilador:</span>
-                      <span style={{ color: "#BAE6FD" }}>
-                        {h7133FanSpeedPct <= 33
-                          ? "1 · Bajo (Low · 33%)"
-                          : h7133FanSpeedPct <= 66
-                          ? "2 · Medio (Med · 66%)"
-                          : "3 · Alto (High · 100%)"}
+                  {/* Status Banner */}
+                  <div
+                    style={{
+                      background: "rgba(14, 165, 233, 0.12)",
+                      border: "1px solid rgba(56, 189, 248, 0.25)",
+                      borderRadius: "8px",
+                      padding: "6px 10px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <span style={{ fontSize: "14px" }}>🌪️</span>
+                      <span style={{ fontSize: "0.7rem", fontWeight: 600, color: "#38BDF8" }}>
+                        Ventilación Pura Activa
                       </span>
                     </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "4px" }}>
-                      {[
-                        { id: "low", label: "1 · Low", desc: "Velocidad baja (33%)", match: h7133FanSpeedPct <= 33 },
-                        { id: "med", label: "2 · Med", desc: "Velocidad media (66%)", match: h7133FanSpeedPct > 33 && h7133FanSpeedPct <= 66 },
-                        { id: "high", label: "3 · High", desc: "Velocidad máxima (100%)", match: h7133FanSpeedPct > 66 },
-                      ].map((s) => (
-                        <button
-                          key={s.id}
-                          type="button"
-                          onClick={(e) => handleSetH7133FanSpeed(e, s.id as "low" | "med" | "high")}
-                          style={{
-                            padding: "6px 2px",
-                            borderRadius: "6px",
-                            fontSize: "0.7rem",
-                            fontWeight: s.match ? 700 : 500,
-                            border: s.match
-                              ? "1.5px solid #38BDF8"
-                              : "1px solid rgba(255, 255, 255, 0.12)",
-                            background: s.match
-                              ? "rgba(14, 165, 233, 0.4)"
-                              : "rgba(255, 255, 255, 0.05)",
-                            color: s.match ? "#E0F2FE" : "#94A3B8",
-                            cursor: "pointer",
-                            textAlign: "center",
-                            transition: "all 0.15s ease",
-                          }}
-                          title={s.desc}
-                        >
-                          {s.label}
-                        </button>
-                      ))}
-                    </div>
+                    <span
+                      style={{
+                        fontSize: "0.65rem",
+                        color: "#94A3B8",
+                        background: "rgba(0, 0, 0, 0.25)",
+                        padding: "2px 6px",
+                        borderRadius: "4px",
+                      }}
+                    >
+                      Resistencia 0W · Sin calor
+                    </span>
                   </div>
 
                   {/* Oscillation Bar: Horizontal, Vertical, Todo (3D), Fijo */}
@@ -1664,18 +1609,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                     : 0
                 }
                 color={isH7133 && currentH7133Mode === "heat" ? "#FB923C" : "var(--apple-cyan, #007aff)"}
-                label="Velocidad ventilador"
-                onChange={(val) => {
-                  if (isH7133) {
-                    setH7133FanSpeedPct(val);
-                    try {
-                      window.localStorage.setItem(`govee_h7133_fan_speed_pct_${device.id}`, String(val));
-                    } catch {}
-                    if (currentH7133Mode === "fan") {
-                      executeH7133FanMode(val);
-                    }
-                  }
-                }}
+                label={isH7133 ? "Ventilador Govee" : "Velocidad ventilador"}
                 onRefresh={onRefresh}
               />
             </div>

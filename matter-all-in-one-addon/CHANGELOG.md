@@ -1,3 +1,20 @@
+## [1.5.40] - 2026-09-10
+
+### Corrección Definitiva: Blindaje Absoluto Anti-Calefacción en Govee H7133 (Fan Manual y Oscilación Pura)
+
+- **Eliminación de Conmutación Indeseada a Calefactor (Auditoría Integral):**
+  - **Identificación del problema de engranajes:** En el firmware de fábrica del Govee H7133 (Space Heater Pro), los niveles de engranaje (`select.*_gear` 1, 2, 3) corresponden físicamente a las **resistencias térmicas PTC** (Low, Medium, High Heat). Al intentar cambiar la velocidad del ventilador usando `gear`, el dispositivo recibía una orden directa de encender el calefactor.
+  - **Eliminación de botones de velocidad engañosos:** En modo `Fan Manual`, el ventilador opera a flujo continuo ambiental sin resistencias térmicas. Se retiraron los botones 1/2/3 de velocidad y se reemplazaron por un banner claro de **Ventilación Pura Activa (0W / Sin Calor)**.
+  - **Bloqueo Total de Selectores de Calor:** En modo `Fan`, el código filtra y prohíbe terminantemente interactuar con `select.*_gear` o cualquier selector térmico, asegurando que solo se envíe `mode: Fan` a `select.*_mode`.
+- **Aislamiento Total de la Oscilación:**
+  - Se desactivó por completo el uso de `climate.set_swing_mode` en el perfil Govee H7133, ya que en Home Assistant enviar comandos de swing a un termostato de calefactor despertaba el equipo en modo `heat`.
+  - `oscSelectEntity` ahora excluye explícitamente entidades de modo (`mode`) y potencia/engranaje (`gear`), asegurando que jamás altere el modo de trabajo del dispositivo.
+  - Al pulsar cualquiera de los botones de oscilación (`↔️ Horiz`, `↕️ Vert`, `🔄 Todo`, `⏸️ Fijo`), el sistema re-afirma automáticamente `mode: Fan` y `auto_stop: off`.
+- **Protección del Switch de Alimentación Principal:**
+  - `executeH7133FanMode` solo envía `turn_on` si el interruptor principal está apagado. Si ya está encendido, no vuelve a enviar `turn_on` (lo que provocaba que el microcontrolador de Govee se reiniciara a calefactor).
+- **Apagado Completo Limpio (`executeH7133OffMode`):**
+  - Apaga ordenadamente el interruptor principal, el calefactor, el auto-stop y cualquier entidad de clima asociada.
+
 ## [1.5.39] - 2026-09-09
 
 ### Corrección Crítica: Solución de Error en la Aplicación (TDZ ReferenceError en Inicialización de Interfaz)
