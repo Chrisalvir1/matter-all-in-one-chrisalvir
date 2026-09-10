@@ -1,3 +1,16 @@
+## [1.5.34] - 2026-09-09
+
+### Desacople Total de Calefactor en Fan Manual, Estado Persistente y Eliminación de Switch Redundante
+
+- **Desacople Definitivo de `isHeating` frente a `auto_stop` (`DeviceCard.tsx`):**
+  - Se eliminó la suposición que vinculaba `switch.*auto_stop` como indicador de calefactor encendido. Dado que en Home Assistant este interruptor suele permanecer activo por defecto (función auto-stop de seguridad), anteriormente provocaba que cualquier encendido de ventilador reportara incorrectamente "🔥 CALEFACTOR ACTIVO".
+  - Se introdujo el estado reactivo `currentH7133Mode` y persistencia en `localStorage` (`govee_h7133_mode_<deviceId>`) con valor inicial `"fan"`.
+  - El modo calefactor solo se activa si el usuario pulsa explícitamente el botón **Calefactor**. Al encender el equipo o pulsar **Fan Manual**, la tarjeta muestra **`🌪️ Fan Manual Activo`** en azul cian (`#38BDF8`), activa el botón correspondiente y reproduce ráfagas de aire fresco (sin brillo naranja ni llamas PTC).
+- **Supresión de Interruptor Duplicado en la Cara de la Tarjeta (`DeviceCard.tsx`):**
+  - Para los dispositivos Govee H7133, los interruptores secundarios internos (`auto_stop` / calefactor) ya no se muestran como una fila genérica "Interruptor" en la tarjeta, manteniendo la interfaz despejada exclusivamente con el control de ventilador, luz y selector rápido de 3 modos.
+- **Sincronización Reactiva de Estilos y Botones en el Selector Rápido (`DeviceCard.tsx`):**
+  - El encabezado de estado, los bordes iluminados y el selector de botones reflejan directamente el estado activo de `currentH7133Mode` (`fan`, `heat`, `off`), garantizando feedback visual instantáneo antes y después del refresco con la API.
+
 ## [1.5.33] - 2026-09-09
 
 ### Secuencia de Encendido Govee H7133, Limpieza de Tarjeta Móvil y Corrección de Visual Horizontal

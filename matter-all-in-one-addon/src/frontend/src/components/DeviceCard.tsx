@@ -92,7 +92,18 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
     (e) => e.domain === "switch" && e.entityId.toLowerCase().includes("auto_stop")
   );
 
-  // Check heating mode (explicit climate entity or heater switch, or H7133 auto_stop)
+  // Persistent user mode preference for Govee H7133 (fan vs heat vs off)
+  const [h7133Mode, setH7133Mode] = useState<"fan" | "heat" | "off">(() => {
+    if (typeof window !== "undefined" && window.localStorage) {
+      try {
+        const saved = window.localStorage.getItem(`govee_h7133_mode_${device.id}`);
+        if (saved === "heat" || saved === "fan" || saved === "off") return saved;
+      } catch {}
+    }
+    return "fan";
+  });
+
+  // Detect heater / climate entity
   const heaterEntity =
     device.entities.find((e) => e.domain === "climate") ||
     device.entities.find(
@@ -103,23 +114,18 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
           (e.name || "").toLowerCase().includes("calefactor")) &&
         !e.entityId.toLowerCase().includes("auto_stop")
     );
-  const isHeating = isH7133
-    ? Boolean(fanEntity?.state === "on" && autoStopEntity?.state === "on")
-    : Boolean(
-        (heaterEntity?.domain === "climate" && (heaterEntity.state === "heat" || heaterEntity.state === "on")) ||
-        (heaterEntity?.domain === "switch" && heaterEntity.state === "on")
-      );
 
-  // Only show exported switch channels on the card face — non-exported hidden until modal,
-  // EXCEPT if this is a standalone switch device with no fan/light, keep at least the first switch visible.
-  // For Govee H7133, auto_stop and heater switches are controlled via the quick mode selector, hide them from the card face switch list.
+  // Only show exported switch channels on the card face — non-exported hidden until modal.
+  // For Govee H7133, all power and modes are controlled via Fan sub-control and Quick Mode Selector, so hide raw switch rows.
   const rawSwitchEntities = device.entities.filter(
     (e) =>
       e.domain === "switch" &&
       e.entityId !== fanEntity?.entityId &&
       (!isH7133 || (e.entityId !== heaterEntity?.entityId && e.entityId !== autoStopEntity?.entityId))
   );
-  const switchEntities = rawSwitchEntities.filter((e) => e.exported).length > 0
+  const switchEntities = isH7133
+    ? []
+    : rawSwitchEntities.filter((e) => e.exported).length > 0
     ? rawSwitchEntities.filter((e) => e.exported)
     : (!fanEntity && !lightEntity ? rawSwitchEntities.slice(0, 3) : []);
 
@@ -204,6 +210,19 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
   const isControllable = ["light", "switch", "fan", "climate", "lock", "cover", "humidifier", "vacuum", "media_player"].includes(
     primaryDomain
   );
+  // Govee H7133 active mode calculation
+  const isFanPoweredOn = fanEntity ? fanEntity.state === "on" : (primaryDomain === "fan" && primaryState === "on");
+  const currentH7133Mode: "fan" | "heat" | "off" = !isFanPoweredOn
+    ? "off"
+    : (h7133Mode === "heat" ? "heat" : "fan");
+
+  const isHeating = isH7133
+    ? currentH7133Mode === "heat"
+    : Boolean(
+        (heaterEntity?.domain === "climate" && (heaterEntity.state === "heat" || heaterEntity.state === "on")) ||
+        (heaterEntity?.domain === "switch" && heaterEntity.state === "on")
+      );
+
   const isOn =
     primaryState === "on" ||
     primaryState === "playing" ||
@@ -290,6 +309,14 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
     e.stopPropagation();
     if (togglingEntityIds.has(entityId)) return;
 
+    if (isH7133 && entityId === fanEntity?.entityId) {
+      const nextMode = fanEntity?.state === "on" ? "off" : "fan";
+      setH7133Mode(nextMode);
+      try {
+        window.localStorage.setItem(`govee_h7133_mode_${device.id}`, nextMode);
+      } catch {}
+    }
+
     setTogglingEntityIds((prev) => new Set(prev).add(entityId));
     try {
       await api.toggleDeviceState(entityId);
@@ -307,6 +334,11 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
 
   const handleSetH7133Mode = async (e: React.MouseEvent, mode: "fan" | "heat" | "off") => {
     e.stopPropagation();
+    setH7133Mode(mode);
+    try {
+      window.localStorage.setItem(`govee_h7133_mode_${device.id}`, mode);
+    } catch {}
+
     try {
       if (mode === "fan") {
         // Govee H7133 requires main power ON before any mode selection
@@ -315,7 +347,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
           // Wait for hardware controller to wake up
           await new Promise((resolve) => setTimeout(resolve, 450));
         }
-        // Deactivate auto_stop (PTC heater) to enter pure fan mode
+        // Deactivate auto_stop / heater to guarantee clean ambient fan mode
         if (autoStopEntity && autoStopEntity.state === "on") {
           await api.turnOffEntity(autoStopEntity.entityId);
         }
@@ -328,7 +360,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
           await api.turnOnEntity(fanEntity.entityId);
           await new Promise((resolve) => setTimeout(resolve, 450));
         }
-        // Activate auto_stop (PTC heater)
+        // Activate auto_stop / heater
         if (autoStopEntity && autoStopEntity.state !== "on") {
           await api.turnOnEntity(autoStopEntity.entityId);
         }
@@ -729,9 +761,12 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                 flexDirection: "column",
                 gap: "6px",
                 background: "rgba(0, 0, 0, 0.35)",
-                border: isHeating
-                  ? "1.5px solid rgba(251, 146, 60, 0.5)"
-                  : "1px solid rgba(56, 189, 248, 0.3)",
+                border:
+                  currentH7133Mode === "heat"
+                    ? "1.5px solid rgba(251, 146, 60, 0.5)"
+                    : currentH7133Mode === "fan"
+                    ? "1.5px solid rgba(56, 189, 248, 0.4)"
+                    : "1px solid rgba(255, 255, 255, 0.1)",
                 borderRadius: "14px",
                 padding: "8px 10px",
                 backdropFilter: "blur(12px)",
@@ -745,12 +780,12 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                     fontWeight: 700,
                     textTransform: "uppercase",
                     letterSpacing: "0.05em",
-                    color: isHeating ? "#FB923C" : fanEntity?.state === "on" ? "#38BDF8" : "#94A3B8",
+                    color: currentH7133Mode === "heat" ? "#FB923C" : currentH7133Mode === "fan" ? "#38BDF8" : "#94A3B8",
                   }}
                 >
-                  {isHeating
+                  {currentH7133Mode === "heat"
                     ? "🔥 Calefactor Activo"
-                    : fanEntity?.state === "on"
+                    : currentH7133Mode === "fan"
                     ? "🌪️ Fan Manual Activo"
                     : "💤 En Reposo"}
                 </span>
@@ -780,14 +815,14 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                     fontSize: "0.72rem",
                     fontWeight: 700,
                     border:
-                      fanEntity?.state === "on" && !isHeating
+                      currentH7133Mode === "fan"
                         ? "1.5px solid #38BDF8"
                         : "1px solid rgba(255, 255, 255, 0.1)",
                     background:
-                      fanEntity?.state === "on" && !isHeating
+                      currentH7133Mode === "fan"
                         ? "rgba(2, 132, 199, 0.35)"
                         : "rgba(255, 255, 255, 0.04)",
-                    color: "#FFF",
+                    color: currentH7133Mode === "fan" ? "#38BDF8" : "#94A3B8",
                     cursor: "pointer",
                     display: "flex",
                     flexDirection: "column",
@@ -808,9 +843,15 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                     borderRadius: "8px",
                     fontSize: "0.72rem",
                     fontWeight: 700,
-                    border: isHeating ? "1.5px solid #FB923C" : "1px solid rgba(255, 255, 255, 0.1)",
-                    background: isHeating ? "rgba(234, 88, 12, 0.35)" : "rgba(255, 255, 255, 0.04)",
-                    color: "#FFF",
+                    border:
+                      currentH7133Mode === "heat"
+                        ? "1.5px solid #FB923C"
+                        : "1px solid rgba(255, 255, 255, 0.1)",
+                    background:
+                      currentH7133Mode === "heat"
+                        ? "rgba(234, 88, 12, 0.35)"
+                        : "rgba(255, 255, 255, 0.04)",
+                    color: currentH7133Mode === "heat" ? "#FB923C" : "#94A3B8",
                     cursor: "pointer",
                     display: "flex",
                     flexDirection: "column",
@@ -832,14 +873,14 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                     fontSize: "0.72rem",
                     fontWeight: 700,
                     border:
-                      (!fanEntity || fanEntity.state !== "on") && !isHeating
+                      currentH7133Mode === "off"
                         ? "1.5px solid #94A3B8"
                         : "1px solid rgba(255, 255, 255, 0.1)",
                     background:
-                      (!fanEntity || fanEntity.state !== "on") && !isHeating
+                      currentH7133Mode === "off"
                         ? "rgba(148, 163, 184, 0.25)"
                         : "rgba(255, 255, 255, 0.04)",
-                    color: (!fanEntity || fanEntity.state !== "on") && !isHeating ? "#FFF" : "#94A3B8",
+                    color: currentH7133Mode === "off" ? "#FFF" : "#94A3B8",
                     cursor: "pointer",
                     display: "flex",
                     flexDirection: "column",
@@ -849,7 +890,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                   }}
                   title="Apagar ventilador y calefactor"
                 >
-                  <span style={{ fontSize: "14px" }}>🛑</span>
+                  <span style={{ fontSize: "14px" }}>💤</span>
                   <span>Apagar</span>
                 </button>
               </div>
