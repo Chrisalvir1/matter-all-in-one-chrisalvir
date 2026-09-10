@@ -677,6 +677,82 @@ describe("HomeAssistantPlatform", () => {
     expect(swDev?.composite).toBe(false);
   });
 
+  it("groups ceiling fan with integrated light into a single composite accessory and filters auxiliary switches", async (ctx) => {
+    if (!networkAvailable) return;
+    await platform.onStart();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    // Register a ceiling fan device with fan + light + beep switch
+    platform.ha.hassDevices.set("device-ventilador-sala-tuya", {
+      id: "device-ventilador-sala-tuya",
+      name: "VENTILADOR DE SALA",
+    });
+    platform.ha.hassEntities.set("fan.ventilador_de_sala_main_fan", {
+      id: "entity-fan-sala",
+      entity_id: "fan.ventilador_de_sala_main_fan",
+      device_id: "device-ventilador-sala-tuya",
+      platform: "tuya",
+    });
+    platform.ha.hassEntities.set("light.ventilador_de_sala_light", {
+      id: "entity-light-sala",
+      entity_id: "light.ventilador_de_sala_light",
+      device_id: "device-ventilador-sala-tuya",
+      platform: "tuya",
+    });
+    platform.ha.hassEntities.set("switch.sala_tv_ventilador_de_sala_main_fan_beep", {
+      id: "entity-switch-sala-beep",
+      entity_id: "switch.sala_tv_ventilador_de_sala_main_fan_beep",
+      device_id: "device-ventilador-sala-tuya",
+      platform: "tuya",
+    });
+
+    await (platform as any).registerHAEntity({
+      entity_id: "fan.ventilador_de_sala_main_fan",
+      state: "off",
+      attributes: {
+        friendly_name: "VENTILADOR DE SALA Fan",
+        supported_features: 1, // percentage
+        percentage: 50,
+      },
+    });
+    await (platform as any).registerHAEntity({
+      entity_id: "light.ventilador_de_sala_light",
+      state: "on",
+      attributes: {
+        friendly_name: "VENTILADOR DE SALA Light",
+        supported_color_modes: ["color_temp"],
+        color_mode: "color_temp",
+        color_temp_kelvin: 3000,
+        min_color_temp_kelvin: 2700,
+        max_color_temp_kelvin: 6500,
+        brightness: 200,
+      },
+    });
+    await (platform as any).registerHAEntity({
+      entity_id: "switch.sala_tv_ventilador_de_sala_main_fan_beep",
+      state: "on",
+      attributes: {
+        friendly_name: "Buzzer",
+      },
+    });
+
+    // 1. isMultiSwitchDevice should return FALSE for fan with integrated light
+    expect(platform.isMultiSwitchDevice("device-ventilador-sala-tuya")).toBe(false);
+
+    // 2. getCompositeCandidate should produce a composite candidate with fan + light, excluding auxiliary switches
+    const candidate = (platform as any).getCompositeCandidate("fan.ventilador_de_sala_main_fan");
+    expect(candidate).toBeDefined();
+    expect(candidate.deviceId).toBe("device-ventilador-sala-tuya");
+    // Should contain fan and light, but NOT the beep switch
+    const memberIds = candidate.members.map((m: any) => m.entityId);
+    expect(memberIds).toContain("fan.ventilador_de_sala_main_fan");
+    expect(memberIds).toContain("light.ventilador_de_sala_light");
+    expect(memberIds).not.toContain("switch.sala_tv_ventilador_de_sala_main_fan_beep");
+    // Primary entity (Endpoint 1) should be the fan
+    expect(memberIds[0]).toBe("fan.ventilador_de_sala_main_fan");
+    expect(memberIds[1]).toBe("light.ventilador_de_sala_light");
+  });
+
   it("allows setting profile override on entities", async (ctx) => {
     if (!networkAvailable) return;
     await platform.onStart();

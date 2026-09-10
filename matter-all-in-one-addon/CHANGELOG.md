@@ -1,3 +1,17 @@
+## [1.5.62] - 2026-09-10
+
+### Unificación de Ventiladores de Techo con Luz en un Solo Código QR Matter (Composite Accessory)
+
+- **Agrupación Automática de Ventilador + Luz en Accesorio Compuesto (`platform.ts`):**
+  - Los dispositivos de Home Assistant que exponen simultáneamente entidad de ventilador (`fan.*`) y luz (`light.*`) (ej. ventiladores de techo Tuya/SmartLife como `VENTILADOR DE SALA`, `VENTILADOR DE RECAMARA` o cualquier ventilador futuro) ahora se generan bajo **un único accesorio Matter (1 solo código QR)**.
+  - Se modificó `isMultiSwitchDevice()` para excluir explícitamente dispositivos que combinan ventilador y luz, evitando que se desglosen en accesorios separados con múltiples códigos QR.
+- **Filtrado Inteligente de Interruptores Auxiliares de Ventiladores (`platform.ts`):**
+  - Al agrupar ventilador + luz, se descartan automáticamente los switches auxiliares de la integración (bocina/buzzer, modo reversa, duplicados de encendido), manteniendo el accesorio Matter limpio y enfocado en las funciones esenciales.
+- **Estructura Multi-Endpoint Nativa Matter:**
+  - **Endpoint 1 (Root):** Ventilador (`0x002B Fan`) con control de velocidad multinivel (`FanControl 0x0202`).
+  - **Endpoint 2:** Luz (`0x010C Color Temperature Light` o `0x010D Extended Color Light`) con regulador de brillo (`LevelControl 0x0008`) y temperatura de color en Kelvin (`ColorControl 0x0300`).
+  - Apple Home reconoce de inmediato ambas capacidades al escanear el único código QR y permite organizarlas en la misma habitación o como tarjetas separadas según la preferencia del usuario.
+
 ## [1.5.61] - 2026-09-10
 
 ### Corrección de Visibilidad Completa de Código QR en Modales de Dispositivos

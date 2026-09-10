@@ -966,6 +966,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       (e) => e.entityId.startsWith("fan.") && isNonGeneric(e),
     );
 
+    // Ceiling fans with integrated light: ALWAYS keep together as a composite Matter accessory (1 QR code)
+    if (fans.length >= 1 && lights.length >= 1) {
+      return false;
+    }
+
     // 1. Any device with 2 or more switch entities is a multi-gang switch/controller
     if (switches.length >= 2) return true;
 
@@ -1088,18 +1093,23 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       members = members.filter((m) => !m.entityId.startsWith("switch."));
     }
 
-    // If the composite group is a fan, exclude auxiliary beeper/sound switches
+    // If the composite group is a fan, exclude auxiliary beeper/sound switches or all switches if there is a light
     if (
       members.some((m) => m.entityId.startsWith("fan.")) &&
       !explicitlyIncluded?.length
     ) {
-      members = members.filter((m) => {
-        if (!m.entityId.startsWith("switch.")) return true;
-        const name = (
-          this.ha.hassEntities.get(m.entityId)?.name || m.entityId
-        ).toLowerCase();
-        return !/beep|buzz|sound|audio|timb|indicat|display/i.test(name);
-      });
+      if (members.some((m) => m.entityId.startsWith("light."))) {
+        // Ceiling fan with integrated light: keep fan, light, and sensors; exclude auxiliary switches
+        members = members.filter((m) => !m.entityId.startsWith("switch."));
+      } else {
+        members = members.filter((m) => {
+          if (!m.entityId.startsWith("switch.")) return true;
+          const name = (
+            this.ha.hassEntities.get(m.entityId)?.name || m.entityId
+          ).toLowerCase();
+          return !/beep|buzz|sound|audio|timb|indicat|display/i.test(name);
+        });
+      }
     }
 
     this.log.debug(
@@ -1148,6 +1158,16 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     members.sort((a, b) => {
       if (a.entityId === config?.primary_entity) return -1;
       if (b.entityId === config?.primary_entity) return 1;
+      const isAPrimary =
+        a.entityId.startsWith("fan.") ||
+        a.entityId.startsWith("lock.") ||
+        a.entityId.startsWith("humidifier.");
+      const isBPrimary =
+        b.entityId.startsWith("fan.") ||
+        b.entityId.startsWith("lock.") ||
+        b.entityId.startsWith("humidifier.");
+      if (isAPrimary && !isBPrimary) return -1;
+      if (!isAPrimary && isBPrimary) return 1;
       const left = order.indexOf(a.entityId);
       const right = order.indexOf(b.entityId);
       if (left !== -1 || right !== -1)
