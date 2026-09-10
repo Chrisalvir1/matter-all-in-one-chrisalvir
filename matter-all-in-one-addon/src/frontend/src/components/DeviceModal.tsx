@@ -91,10 +91,15 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
   const isCommissioned = Boolean(activeEntity?.commissioned);
 
   const handleToggleExport = async (entity: EntityRecord) => {
+    setIsBusy(true);
     try {
       const nextState = !entity.exported;
-      await api.toggleExport(entity.entityId, nextState);
+      const res = await api.toggleExport(entity.entityId, nextState);
       entity.exported = nextState;
+      if (res?.pairingCode) {
+        entity.pairingCode = res.pairingCode;
+        if (res.manualPairingCode) entity.manualPairingCode = res.manualPairingCode;
+      }
       showToast(
         nextState
           ? `✓ ${entity.name || entity.entityId} publicado en Matter`
@@ -103,6 +108,8 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
       onRefresh();
     } catch (err: any) {
       showToast(err.message || "Error al modificar publicación", true);
+    } finally {
+      setIsBusy(false);
     }
   };
 
@@ -229,18 +236,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
           </div>
         </header>
 
-        <div
-          className="modal-layout"
-          style={{
-            display: "grid",
-            gridTemplateColumns: "350px minmax(0, 1fr) 420px",
-            gap: 24,
-            flex: 1,
-            minHeight: 0,
-            overflow: "hidden",
-            alignItems: "stretch",
-          }}
-        >
+        <div className="modal-layout">
           {/* Column 1: Entity List */}
           <div className="entity-list-col" style={{ display: "flex", flexDirection: "column", minHeight: 0, height: "100%" }}>
             <div className="section-header">
@@ -456,9 +452,51 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
             ) : (
               <div
                 className="qr-liquid-glass-card"
-                style={{ padding: 24, textAlign: "center", color: "var(--text-secondary)" }}
+                style={{
+                  padding: 24,
+                  textAlign: "center",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 14,
+                  background: "rgba(255, 255, 255, 0.04)",
+                  borderRadius: 16,
+                  border: "1px dashed rgba(56, 189, 248, 0.4)",
+                }}
               >
-                Activa la entidad para generar el código QR de Matter.
+                <div style={{ fontSize: 36 }}>⚡</div>
+                <div style={{ color: "#FFF", fontSize: 14, fontWeight: 600 }}>
+                  Accesorio sin publicar en Matter
+                </div>
+                <p style={{ margin: 0, fontSize: 12, color: "var(--text-secondary, #94a3b8)", lineHeight: 1.4 }}>
+                  Pulsa el botón de abajo para activar esta entidad en Matter y generar de inmediato su código QR.
+                </p>
+                {activeEntity && (
+                  <button
+                    type="button"
+                    className="button button-primary"
+                    onClick={() => handleToggleExport(activeEntity)}
+                    disabled={isBusy}
+                    style={{
+                      width: "100%",
+                      padding: "12px 16px",
+                      fontSize: 13,
+                      fontWeight: 700,
+                      borderRadius: 10,
+                      background: "linear-gradient(135deg, #0284c7, #0369a1)",
+                      border: "none",
+                      color: "#fff",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 8,
+                      boxShadow: "0 4px 12px rgba(2, 132, 199, 0.35)",
+                    }}
+                  >
+                    🚀 Activar y Generar Código QR
+                  </button>
+                )}
               </div>
             )}
 
