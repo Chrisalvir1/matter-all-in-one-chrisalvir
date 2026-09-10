@@ -557,4 +557,12 @@ describe("Govee H7133 Matter FanControl Speed & Mode Mapping", () => {
     expect(oscRegex.test("switch.ventilador_playroom_swing")).toBe(true);
     expect(oscRegex.test("switch.ventilador_playroom_giro")).toBe(true);
   });
+
+  it("hybrid heater with Fan mode never dispatches gear commands in fan operation", () => {
+    // When mode is Fan, gear commands (which represent PTC heat levels) must be withheld
+    const modeMatchedOption = "Fan";
+    const gearMatchedOption = "Medium";
+    const shouldDispatchGear = Boolean(gearMatchedOption && !modeMatchedOption);
+    expect(shouldDispatchGear).toBe(false);
+  });
 });

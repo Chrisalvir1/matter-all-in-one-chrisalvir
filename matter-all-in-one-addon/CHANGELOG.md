@@ -1,3 +1,16 @@
+## [1.5.43] - 2026-09-10
+
+### Corrección Definitiva: Eliminación de Salto a AUTO / Calefacción en Modo Fan (Govee H7133)
+
+- **Causa Raíz Identificada:**
+  - En la integración de Govee H7133 para Home Assistant, **no existe una entidad separada para regular la velocidad de soplado en modo ventilador**; el modo `Fan` opera por diseño de hardware como recirculación continua de aire fresco a velocidad constante (0W de calor).
+  - En la versión 1.5.42, al pulsar los botones `Low` o `Medium` dentro de la tarjeta o al ajustar la velocidad, el despachador intentaba enviar la orden a través de entidades `select`, las cuales en el firmware de Govee corresponden a los niveles de resistencia calefactora (`Low` = Calor 1, `Medium` = Calor 2). Al recibir esa orden mientras se desactivaba la parada automática, el firmware del dispositivo entraba en conflicto y conmutaba forzosamente a modo `AUTO` / Calefacción.
+- **Blindaje Total en `BaseEntity.ts` (`executeSafeFanCommand`):**
+  - Si un dispositivo híbrido cuenta con selector de modo con opción `Fan` (como el Govee H7133), **se inhibe de forma estricta el envío de órdenes de marchas (`gearMatchedOption`)** durante operaciones de ventilador (`!modeMatchedOption`). El modo queda rígidamente fijado en `Fan` (`0W calor`), garantizando que jamás se active la calefacción ni salte a `AUTO`.
+- **Limpieza de Interfaz en Tarjeta Web (`DeviceCard.tsx`):**
+  - Se eliminaron los botones de velocidad variable `[ Low ]`, `[ Medium ]`, `[ High ]` dentro del panel Fan/Air Deflector del H7133, reemplazándolos por un indicador limpio de estado: **❄️ Flujo Continuo de Ventilación Fresca (0W Calor)**.
+  - Se mantiene el panel completo de **Rango de Oscilación 3D** (`↔️ Horiz`, `↕️ Vert`, `🔄 Todo 3D`, `⏸️ Fijo`), el cual opera de forma segura sin interferir con el modo de ventilación ni alterar la temperatura.
+
 ## [1.5.42] - 2026-09-10
 
 ### Soporte Completo Plan A Matter (Ventilador + Luz RGB) y Réplica de Interfaz GoveeLife

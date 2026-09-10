@@ -347,8 +347,9 @@ export class BaseEntity {
       await this.platform.ha.callService("switch", "turn_off", autoStopEntityId).catch(() => {});
     }
 
-    // Select gear option
-    if (gearEntityId && gearMatchedOption) {
+    // Select gear option ONLY if device does NOT have a dedicated Fan mode
+    // (on hybrid heaters like Govee H7133, gear/engranaje sets PTC heater wattage, which turns on heat/auto!)
+    if (gearEntityId && gearMatchedOption && !modeMatchedOption) {
       await this.platform.ha.callService("select", "select_option", gearEntityId, {
         option: gearMatchedOption,
       }).catch(() => {});
