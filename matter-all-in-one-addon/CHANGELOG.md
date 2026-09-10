@@ -1,3 +1,15 @@
+## [1.5.45] - 2026-09-10
+
+### Unificación de Tarjetas en Dashboard para Dispositivos Físicos Multientidad
+
+- **Consolidación de Tarjetas por Dispositivo Físico:**
+  - Se corrigió la agrupación de entidades en el frontend (`useAddonState.ts`). Previamente, al separar Plan A y Plan B, las entidades con `compositeDeviceId` se agrupaban bajo una clave (`matter:...`) mientras que las entidades no asociadas a Plan A (como `switch.ventilador_playroom_auto_stop`) se agrupaban bajo la clave del `device_id` de Home Assistant, ocasionando que un mismo dispositivo físico (ej. Govee H7133) se mostrara duplicado en el dashboard en dos tarjetas separadas (una con 6 entidades y otra con 1 entidad).
+  - La clave de agrupación ahora prioriza `entity.device_id` de Home Assistant de forma que todas las entidades pertenecientes a un mismo aparato físico se consolidan en una única tarjeta en el dashboard (mostrando las 7 entidades completas).
+  - Se enriquece la información del dispositivo agregando fabricante, modelo y área si alguna entidad subsiguiente los posee.
+
+- **Compatibilidad y Persistencia en LocalStorage:**
+  - `getDeviceVisualOverride` y los selectores de modo/nivel de calefacción/oscilación de Govee H7133 ahora resuelven fluidamente claves tanto con prefijo `matter:` como sin él, preservando las preferencias guardadas del usuario.
+
 ## [1.5.44] - 2026-09-10
 
 ### Separación Perfecta Plan A y Plan B con Ventilador On/Off Puro y Soporte Modo Cool

@@ -36,7 +36,11 @@ const STORAGE_PREFIX = "matter_visual_override_";
 export function getDeviceVisualOverride(deviceIdOrEntityId: string): DeviceVisualConfig | null {
   if (typeof window === "undefined" || !window.localStorage) return null;
   try {
-    const raw = window.localStorage.getItem(`${STORAGE_PREFIX}${deviceIdOrEntityId}`);
+    const cleanId = deviceIdOrEntityId.replace(/^matter:/, "");
+    const raw =
+      window.localStorage.getItem(`${STORAGE_PREFIX}${deviceIdOrEntityId}`) ||
+      window.localStorage.getItem(`${STORAGE_PREFIX}${cleanId}`) ||
+      window.localStorage.getItem(`${STORAGE_PREFIX}matter:${cleanId}`);
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;

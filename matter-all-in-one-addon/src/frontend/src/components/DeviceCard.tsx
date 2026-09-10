@@ -92,50 +92,49 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
     (e) => e.domain === "switch" && e.entityId.toLowerCase().includes("auto_stop")
   );
 
+  // Helper to read localStorage with fallback for keys that might have been saved with or without 'matter:' prefix
+  const getGoveeStorageItem = (prefix: string) => {
+    if (typeof window === "undefined" || !window.localStorage) return null;
+    try {
+      const cleanId = device.id.replace(/^matter:/, "");
+      return (
+        window.localStorage.getItem(`${prefix}_${device.id}`) ||
+        window.localStorage.getItem(`${prefix}_${cleanId}`) ||
+        window.localStorage.getItem(`${prefix}_matter:${cleanId}`)
+      );
+    } catch {
+      return null;
+    }
+  };
+
   // Persistent user mode preference for Govee H7133 (fan vs heat vs off)
   const [h7133Mode, setH7133Mode] = useState<"fan" | "heat" | "off">(() => {
-    if (typeof window !== "undefined" && window.localStorage) {
-      try {
-        const saved = window.localStorage.getItem(`govee_h7133_mode_${device.id}`);
-        if (saved === "heat" || saved === "fan" || saved === "off") return saved;
-      } catch {}
-    }
+    const saved = getGoveeStorageItem("govee_h7133_mode");
+    if (saved === "heat" || saved === "fan" || saved === "off") return saved;
     return "fan";
   });
 
   // Selected heat level for Govee H7133 (1: Bajo, 2: Medio, 3: Alto, auto: Termostato)
   const [h7133HeatLevel, setH7133HeatLevel] = useState<"1" | "2" | "3" | "auto">(() => {
-    if (typeof window !== "undefined" && window.localStorage) {
-      try {
-        const saved = window.localStorage.getItem(`govee_h7133_heat_level_${device.id}`);
-        if (saved === "1" || saved === "2" || saved === "3" || saved === "auto") return saved;
-      } catch {}
-    }
+    const saved = getGoveeStorageItem("govee_h7133_heat_level");
+    if (saved === "1" || saved === "2" || saved === "3" || saved === "auto") return saved;
     return "1";
   });
 
   // Selected fan speed percentage for Govee H7133 (33: Low, 66: Med, 100: High)
   const [h7133FanSpeedPct, setH7133FanSpeedPct] = useState<number>(() => {
-    if (typeof window !== "undefined" && window.localStorage) {
-      try {
-        const saved = window.localStorage.getItem(`govee_h7133_fan_speed_pct_${device.id}`);
-        if (saved) {
-          const num = Number(saved);
-          if (!isNaN(num) && num > 0 && num <= 100) return num;
-        }
-      } catch {}
+    const saved = getGoveeStorageItem("govee_h7133_fan_speed_pct");
+    if (saved) {
+      const num = Number(saved);
+      if (!isNaN(num) && num > 0 && num <= 100) return num;
     }
     return 100;
   });
 
   // Selected oscillation mode for Govee H7133 ("off" | "horizontal" | "vertical" | "all")
   const [h7133Oscillation, setH7133Oscillation] = useState<"off" | "horizontal" | "vertical" | "all">(() => {
-    if (typeof window !== "undefined" && window.localStorage) {
-      try {
-        const saved = window.localStorage.getItem(`govee_h7133_oscillation_${device.id}`);
-        if (saved === "off" || saved === "horizontal" || saved === "vertical" || saved === "all") return saved;
-      } catch {}
-    }
+    const saved = getGoveeStorageItem("govee_h7133_oscillation");
+    if (saved === "off" || saved === "horizontal" || saved === "vertical" || saved === "all") return saved;
     return "off";
   });
 

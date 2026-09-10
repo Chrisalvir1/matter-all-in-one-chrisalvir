@@ -112,9 +112,9 @@ export function useAddonState() {
   const allDevices: DeviceRecord[] = useMemo(() => {
     const map = new Map<string, DeviceRecord>();
     for (const entity of entities) {
-      const id = entity.compositeDeviceId
+      const id = entity.device_id || (entity.compositeDeviceId
         ? `matter:${entity.compositeDeviceId}`
-        : entity.device_id || `entity:${entity.entityId}`;
+        : `entity:${entity.entityId}`);
 
       if (!map.has(id)) {
         map.set(id, {
@@ -125,6 +125,12 @@ export function useAddonState() {
           model: entity.model || "",
           entities: [],
         });
+      } else {
+        const record = map.get(id)!;
+        if (!record.manufacturer && entity.manufacturer) record.manufacturer = entity.manufacturer;
+        if (!record.model && entity.model) record.model = entity.model;
+        if (!record.area && entity.area_name) record.area = entity.area_name;
+        if (entity.device_name && (record.name === "Dispositivo" || !record.name)) record.name = entity.device_name;
       }
       map.get(id)!.entities.push(entity);
     }
