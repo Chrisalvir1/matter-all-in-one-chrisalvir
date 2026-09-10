@@ -103,6 +103,17 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
     return "fan";
   });
 
+  // Selected heat level for Govee H7133 (1: Bajo, 2: Medio, 3: Alto, auto: Termostato)
+  const [h7133HeatLevel, setH7133HeatLevel] = useState<"1" | "2" | "3" | "auto">(() => {
+    if (typeof window !== "undefined" && window.localStorage) {
+      try {
+        const saved = window.localStorage.getItem(`govee_h7133_heat_level_${device.id}`);
+        if (saved === "1" || saved === "2" || saved === "3" || saved === "auto") return saved;
+      } catch {}
+    }
+    return "1";
+  });
+
   // Detect heater / climate entity
   const heaterEntity =
     device.entities.find((e) => e.domain === "climate") ||
@@ -286,7 +297,13 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
   } else if (primaryDomain === "fan") {
     const pct = primaryAttributes.percentage;
     const osc = primaryAttributes.oscillating;
-    statusSummary = isHeating
+    statusSummary = isH7133
+      ? currentH7133Mode === "heat"
+        ? `Calefacción (${h7133HeatLevel === "auto" ? "Auto" : `Nivel ${h7133HeatLevel}`})${osc ? " · Oscilando" : ""}`
+        : currentH7133Mode === "fan"
+        ? `Ventilación manual · ${pct !== undefined ? `${pct}%` : "100%"}${osc ? " · Oscilando" : ""}`
+        : "Apagado"
+      : isHeating
       ? `Calefacción activa${osc ? " · Oscilando" : ""}`
       : isOn
       ? `${pct !== undefined ? `${pct}%` : "Encendido"}${osc ? " · Oscilando" : ""}`
@@ -336,6 +353,197 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
     }
   };
 
+  const executeH7133FanMode = async () => {
+    const targetFanId = fanEntity?.entityId || primaryEntity?.entityId;
+    // Step 1: Turn on main power
+    if (targetFanId) {
+      await api.turnOnEntity(targetFanId).catch(() => {});
+      // Allow microcontroller to boot
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+
+    const tasks: Promise<any>[] = [];
+
+    // Step 2: Turn off auto_stop switch (Auto heating thermostatic shutoff)
+    if (autoStopEntity) {
+      tasks.push(api.turnOffEntity(autoStopEntity.entityId).catch(() => {}));
+    }
+
+    // Step 3: Turn off heater entity if it is a separate switch
+    if (heaterEntity && heaterEntity.domain === "switch" && heaterEntity.entityId !== targetFanId) {
+      tasks.push(api.turnOffEntity(heaterEntity.entityId).catch(() => {}));
+    }
+
+    // Step 4: If fan entity has preset_modes, select Fan mode
+    if (fanEntity?.attributes?.preset_modes && Array.isArray(fanEntity.attributes.preset_modes)) {
+      const match = fanEntity.attributes.preset_modes.find((m: string) =>
+        /^(fan|fan_only|ventilador|normal|manual)$/i.test(m) || m.toLowerCase().includes("fan")
+      );
+      if (match) {
+        tasks.push(api.setPresetMode(fanEntity.entityId, match).catch(() => {}));
+      }
+    }
+
+    // Step 5: Check select entities for Fan option (e.g. select.ventilador_playroom_mode)
+    const selectEntities = device.entities.filter((e) => e.domain === "select");
+    for (const sel of selectEntities) {
+      const options: string[] = sel.attributes?.options || [];
+      const fanOpt = options.find((opt: string) =>
+        /^(fan|fan_only|ventilador|normal|manual)$/i.test(opt) || opt.toLowerCase().includes("fan")
+      );
+      if (fanOpt) {
+        tasks.push(api.selectOption(sel.entityId, fanOpt).catch(() => {}));
+      }
+    }
+
+    // Step 6: If climate entity exists, switch HVAC mode to fan_only
+    const climateEntities = device.entities.filter((e) => e.domain === "climate");
+    for (const clim of climateEntities) {
+      if (clim.attributes?.hvac_modes?.includes("fan_only")) {
+        tasks.push(api.setHvacMode(clim.entityId, "fan_only").catch(() => {}));
+      }
+    }
+
+    await Promise.allSettled(tasks);
+
+    // Reinforce after 250ms in case microcontroller took extra time to transition from boot
+    setTimeout(() => {
+      for (const sel of selectEntities) {
+        const options: string[] = sel.attributes?.options || [];
+        const fanOpt = options.find((opt: string) =>
+          /^(fan|fan_only|ventilador|normal|manual)$/i.test(opt) || opt.toLowerCase().includes("fan")
+        );
+        if (fanOpt) api.selectOption(sel.entityId, fanOpt).catch(() => {});
+      }
+      if (fanEntity?.attributes?.preset_modes) {
+        const match = fanEntity.attributes.preset_modes.find((m: string) =>
+          /^(fan|fan_only|ventilador|normal|manual)$/i.test(m) || m.toLowerCase().includes("fan")
+        );
+        if (match) api.setPresetMode(fanEntity.entityId, match).catch(() => {});
+      }
+    }, 250);
+  };
+
+  const executeH7133HeatMode = async (level: "1" | "2" | "3" | "auto") => {
+    const targetFanId = fanEntity?.entityId || primaryEntity?.entityId;
+    if (targetFanId) {
+      await api.turnOnEntity(targetFanId).catch(() => {});
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+
+    const tasks: Promise<any>[] = [];
+
+    if (level === "auto") {
+      // Auto: Activate auto_stop thermostatic mode
+      if (autoStopEntity) {
+        tasks.push(api.turnOnEntity(autoStopEntity.entityId).catch(() => {}));
+      }
+      if (fanEntity?.attributes?.preset_modes) {
+        const autoPreset = fanEntity.attributes.preset_modes.find((m: string) =>
+          /^(auto|termostato)$/i.test(m) || m.toLowerCase().includes("auto")
+        );
+        if (autoPreset) tasks.push(api.setPresetMode(fanEntity.entityId, autoPreset).catch(() => {}));
+      }
+      const selectEntities = device.entities.filter((e) => e.domain === "select");
+      for (const sel of selectEntities) {
+        const autoOpt = (sel.attributes?.options || []).find((opt: string) =>
+          /^(auto|termostato)$/i.test(opt) || opt.toLowerCase().includes("auto")
+        );
+        if (autoOpt) tasks.push(api.selectOption(sel.entityId, autoOpt).catch(() => {}));
+      }
+      const climateEntities = device.entities.filter((e) => e.domain === "climate");
+      for (const clim of climateEntities) {
+        if (clim.attributes?.hvac_modes?.includes("auto")) {
+          tasks.push(api.setHvacMode(clim.entityId, "auto").catch(() => {}));
+        }
+      }
+    } else {
+      // Levels 1, 2, 3: Disable auto_stop so it stays on explicit heat level
+      if (autoStopEntity) {
+        tasks.push(api.turnOffEntity(autoStopEntity.entityId).catch(() => {}));
+      }
+
+      // Map level to percentage and speed
+      const pct = level === "1" ? 33 : level === "2" ? 66 : 100;
+      if (fanEntity) {
+        tasks.push(api.setEntityValue(fanEntity.entityId, pct).catch(() => {}));
+      }
+
+      // Fan preset modes
+      if (fanEntity?.attributes?.preset_modes) {
+        const presets: string[] = fanEntity.attributes.preset_modes;
+        const targetRegex =
+          level === "1"
+            ? /^(1|low|bajo|gear 1|gear_1|heat 1)$/i
+            : level === "2"
+            ? /^(2|medium|med|medio|gear 2|gear_2|heat 2)$/i
+            : /^(3|high|alto|gear 3|gear_3|heat 3)$/i;
+        const match = presets.find((p) => targetRegex.test(p));
+        if (match) tasks.push(api.setPresetMode(fanEntity.entityId, match).catch(() => {}));
+      }
+
+      // Select entities (gear and mode)
+      const selectEntities = device.entities.filter((e) => e.domain === "select");
+      for (const sel of selectEntities) {
+        const options: string[] = sel.attributes?.options || [];
+        const targetRegex =
+          level === "1"
+            ? /^(1|low|bajo|gear 1|gear_1|heat 1)$/i
+            : level === "2"
+            ? /^(2|medium|med|medio|gear 2|gear_2|heat 2)$/i
+            : /^(3|high|alto|gear 3|gear_3|heat 3)$/i;
+        const match = options.find((opt) => targetRegex.test(opt));
+        if (match) {
+          tasks.push(api.selectOption(sel.entityId, match).catch(() => {}));
+        } else {
+          const gearMode = options.find((opt) => /^(gear|custom|heat)$/i.test(opt));
+          if (gearMode) tasks.push(api.selectOption(sel.entityId, gearMode).catch(() => {}));
+        }
+      }
+
+      // Turn on separate heater switch if any
+      if (heaterEntity && heaterEntity.domain === "switch" && heaterEntity.entityId !== targetFanId) {
+        tasks.push(api.turnOnEntity(heaterEntity.entityId).catch(() => {}));
+      }
+
+      // Set climate entity to heat
+      const climateEntities = device.entities.filter((e) => e.domain === "climate");
+      for (const clim of climateEntities) {
+        if (clim.attributes?.hvac_modes?.includes("heat")) {
+          tasks.push(api.setHvacMode(clim.entityId, "heat").catch(() => {}));
+        }
+      }
+    }
+
+    await Promise.allSettled(tasks);
+  };
+
+  const executeH7133OffMode = async () => {
+    const offCalls: Promise<any>[] = [];
+    if (fanEntity) offCalls.push(api.turnOffEntity(fanEntity.entityId));
+    if (primaryEntity && primaryEntity.entityId !== fanEntity?.entityId) {
+      offCalls.push(api.turnOffEntity(primaryEntity.entityId));
+    }
+    if (heaterEntity && heaterEntity.entityId !== fanEntity?.entityId) {
+      offCalls.push(api.turnOffEntity(heaterEntity.entityId));
+    }
+    if (autoStopEntity && autoStopEntity.entityId !== fanEntity?.entityId) {
+      offCalls.push(api.turnOffEntity(autoStopEntity.entityId));
+    }
+    const otherSwitches = device.entities.filter(
+      (e) =>
+        e.domain === "switch" &&
+        e.entityId !== fanEntity?.entityId &&
+        e.entityId !== primaryEntity?.entityId &&
+        e.entityId !== heaterEntity?.entityId &&
+        e.entityId !== autoStopEntity?.entityId
+    );
+    for (const sw of otherSwitches) {
+      offCalls.push(api.turnOffEntity(sw.entityId));
+    }
+    await Promise.allSettled(offCalls);
+  };
+
   const handleSetH7133Mode = async (e: React.MouseEvent, mode: "fan" | "heat" | "off") => {
     e.stopPropagation();
     setH7133Mode(mode);
@@ -345,59 +553,39 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
 
     try {
       if (mode === "fan") {
-        // Govee H7133: Ensure main power switch is ON
-        const targetFanId = fanEntity?.entityId || primaryEntity?.entityId;
-        if (targetFanId) {
-          await api.turnOnEntity(targetFanId).catch(() => {});
-        }
-        // Turn off any heater switches concurrently
-        const fanOffCalls: Promise<any>[] = [];
-        if (heaterEntity && heaterEntity.entityId !== targetFanId) {
-          fanOffCalls.push(api.turnOffEntity(heaterEntity.entityId));
-        }
-        if (autoStopEntity && autoStopEntity.entityId !== targetFanId) {
-          fanOffCalls.push(api.turnOffEntity(autoStopEntity.entityId));
-        }
-        await Promise.allSettled(fanOffCalls);
+        await executeH7133FanMode();
       } else if (mode === "heat") {
-        // Govee H7133: Turn on main power then activate heat
-        const targetFanId = fanEntity?.entityId || primaryEntity?.entityId;
-        if (targetFanId) {
-          await api.turnOnEntity(targetFanId).catch(() => {});
-          await new Promise((resolve) => setTimeout(resolve, 300));
-        }
-        const heatCalls: Promise<any>[] = [];
-        if (heaterEntity && heaterEntity.entityId !== targetFanId) {
-          heatCalls.push(api.turnOnEntity(heaterEntity.entityId));
-        }
-        if (autoStopEntity && autoStopEntity.entityId !== targetFanId) {
-          heatCalls.push(api.turnOnEntity(autoStopEntity.entityId));
-        }
-        await Promise.allSettled(heatCalls);
+        await executeH7133HeatMode(h7133HeatLevel);
       } else {
-        // Mode: OFF
-        // Unconditionally turn off all power and sub-switches concurrently via Promise.allSettled
-        // This guarantees that even if one service call errors or times out, the fan power switch is still turned off!
-        const offCalls: Promise<any>[] = [];
-        if (fanEntity) {
-          offCalls.push(api.turnOffEntity(fanEntity.entityId));
-        }
-        if (primaryEntity && primaryEntity.entityId !== fanEntity?.entityId) {
-          offCalls.push(api.turnOffEntity(primaryEntity.entityId));
-        }
-        if (heaterEntity && heaterEntity.entityId !== fanEntity?.entityId) {
-          offCalls.push(api.turnOffEntity(heaterEntity.entityId));
-        }
-        if (autoStopEntity && autoStopEntity.entityId !== fanEntity?.entityId) {
-          offCalls.push(api.turnOffEntity(autoStopEntity.entityId));
-        }
-        await Promise.allSettled(offCalls);
+        await executeH7133OffMode();
       }
-      // Give Home Assistant state machine 350ms to settle before refreshing
       await new Promise((resolve) => setTimeout(resolve, 350));
       onRefresh?.();
     } catch (err) {
       console.error("Error setting H7133 mode:", err);
+    }
+  };
+
+  const handleSetH7133HeatLevel = async (e: React.MouseEvent, level: "1" | "2" | "3" | "auto") => {
+    e.stopPropagation();
+    setH7133HeatLevel(level);
+    try {
+      window.localStorage.setItem(`govee_h7133_heat_level_${device.id}`, level);
+    } catch {}
+
+    if (currentH7133Mode !== "heat") {
+      setH7133Mode("heat");
+      try {
+        window.localStorage.setItem(`govee_h7133_mode_${device.id}`, "heat");
+      } catch {}
+    }
+
+    try {
+      await executeH7133HeatMode(level);
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      onRefresh?.();
+    } catch (err) {
+      console.error("Error setting H7133 heat level:", err);
     }
   };
 
@@ -800,9 +988,9 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                   }}
                 >
                   {currentH7133Mode === "heat"
-                    ? "🔥 Calefactor Activo"
+                    ? `🔥 Calefactor Activo (${h7133HeatLevel === "auto" ? "Auto" : `Nivel ${h7133HeatLevel}`})`
                     : currentH7133Mode === "fan"
-                    ? "🌪️ Fan Manual Activo"
+                    ? "🌪️ Fan Manual Activo (Sin Calefacción)"
                     : "💤 En Reposo"}
                 </span>
                 {tempSensor && (
@@ -910,6 +1098,70 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                   <span>Apagar</span>
                 </button>
               </div>
+
+              {/* Heat Level Selector when in heat mode */}
+              {currentH7133Mode === "heat" && (
+                <div style={{ marginTop: "4px" }}>
+                  <div
+                    style={{
+                      fontSize: "0.66rem",
+                      fontWeight: 600,
+                      color: "#FB923C",
+                      marginBottom: "4px",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    <span>Potencia calefactor:</span>
+                    <span style={{ color: "#FED7AA" }}>
+                      {h7133HeatLevel === "1"
+                        ? "Nivel 1 (Bajo · 33%)"
+                        : h7133HeatLevel === "2"
+                        ? "Nivel 2 (Medio · 66%)"
+                        : h7133HeatLevel === "3"
+                        ? "Nivel 3 (Alto · 100%)"
+                        : "Modo Auto (Termostato)"}
+                    </span>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "4px" }}>
+                    {[
+                      { id: "1", label: "1 · Bajo", desc: "Calefacción suave (Nivel 1)" },
+                      { id: "2", label: "2 · Medio", desc: "Calefacción moderada (Nivel 2)" },
+                      { id: "3", label: "3 · Alto", desc: "Calefacción máxima (Nivel 3)" },
+                      { id: "auto", label: "🌡️ Auto", desc: "Termostato automático" },
+                    ].map((lvl) => {
+                      const isSelected = h7133HeatLevel === lvl.id;
+                      return (
+                        <button
+                          key={lvl.id}
+                          type="button"
+                          onClick={(e) => handleSetH7133HeatLevel(e, lvl.id as "1" | "2" | "3" | "auto")}
+                          style={{
+                            padding: "6px 2px",
+                            borderRadius: "6px",
+                            fontSize: "0.7rem",
+                            fontWeight: isSelected ? 700 : 500,
+                            border: isSelected
+                              ? "1.5px solid #FB923C"
+                              : "1px solid rgba(255, 255, 255, 0.12)",
+                            background: isSelected
+                              ? "rgba(234, 88, 12, 0.45)"
+                              : "rgba(255, 255, 255, 0.05)",
+                            color: isSelected ? "#FED7AA" : "#94A3B8",
+                            cursor: "pointer",
+                            textAlign: "center",
+                            transition: "all 0.15s ease",
+                          }}
+                          title={lvl.desc}
+                        >
+                          {lvl.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -940,10 +1192,24 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                     <div
                       style={{
                         fontSize: "0.72rem",
-                        color: (isH7133 ? currentH7133Mode !== "off" : fanEntity.state === "on") ? "#38bdf8" : "#94a3b8",
+                        color: isH7133
+                          ? currentH7133Mode === "heat"
+                            ? "#FB923C"
+                            : currentH7133Mode === "fan"
+                            ? "#38BDF8"
+                            : "#94A3B8"
+                          : fanEntity.state === "on"
+                          ? "#38BDF8"
+                          : "#94A3B8",
                       }}
                     >
-                      {(isH7133 ? currentH7133Mode !== "off" : fanEntity.state === "on")
+                      {isH7133
+                        ? currentH7133Mode === "heat"
+                          ? `Calefacción activa (${h7133HeatLevel === "auto" ? "Auto" : `Nivel ${h7133HeatLevel}`})`
+                          : currentH7133Mode === "fan"
+                          ? `Ventilación pura · ${fanEntity.attributes?.percentage ?? 100}%`
+                          : "Apagado"
+                        : fanEntity.state === "on"
                         ? `Encendido · ${fanEntity.attributes?.percentage ?? 100}%`
                         : "Apagado"}
                     </div>

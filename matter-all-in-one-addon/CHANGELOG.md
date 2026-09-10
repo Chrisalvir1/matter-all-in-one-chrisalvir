@@ -1,3 +1,32 @@
+## [1.5.36] - 2026-09-09
+
+### Selector de Niveles de Calefacción (1, 2, 3, Auto), Soporte de Dominios Select/Number y Modo Fan Puro en Govee H7133
+
+- **Soporte Completo de Dominios `select` y `number` en Backend (`platform.ts`):**
+  - Se añadieron `"select"` y `"number"` a la lista de `allowedDomains` en `registerHAEntity`, permitiendo que Home Assistant exporte los selectores de modo/engranaje (`select.*_mode`, `select.*_gear`) y de temperatura objetivo (`number.*target_temperature`) hacia la interfaz.
+  - Se crearon endpoints dedicados en la API REST del add-on:
+    - `POST /api/custom/entity-select-option/:entityId` (ejecuta `select.select_option`).
+    - `POST /api/custom/entity-set-preset-mode/:entityId` (ejecuta `fan.set_preset_mode`).
+    - `POST /api/custom/entity-set-hvac-mode/:entityId` (ejecuta `climate.set_hvac_mode`).
+    - Soporte para fijar valores de entidades `number` vía `number.set_value` en `/api/custom/entity-set-value/:entityId`.
+- **Modo Fan Manual Puro sin Calefacción (`DeviceCard.tsx`):**
+  - Implementada la secuencia de encendido y selección directa de ventilación:
+    1. Enciende la alimentación principal del ventilador.
+    2. Espera 200 ms para arranque del microcontrolador.
+    3. Desactiva inmediatamente el termostato `auto_stop` y cualquier interruptor secundario de calefacción.
+    4. Envía comando de modo `Fan` / `fan_only` tanto al selector de modo (`select.select_option`) como al preset del ventilador (`fan.set_preset_mode`) y climatizador (`climate.set_hvac_mode`).
+    5. Refuerza la selección a los 250 ms para evitar que el hardware Govee inicialice en su modo térmico por defecto.
+  - La interfaz muestra claramente `🌪️ Fan Manual Activo (Sin Calefacción)` con iluminación cian `#38BDF8`.
+- **Selector Interactivo de Niveles de Calefactor (1, 2, 3 y Auto) (`DeviceCard.tsx`):**
+  - Al seleccionar **🔥 Calefactor**, se despliega una barra interactiva con 4 niveles:
+    - **1 · Bajo:** Calefacción suave (33% velocidad / gear 1 / Low).
+    - **2 · Medio:** Calefacción moderada (66% velocidad / gear 2 / Medium).
+    - **3 · Alto:** Calefacción máxima (100% velocidad / gear 3 / High).
+    - **🌡️ Auto:** Termostato automático (activa `auto_stop` y modo Auto en select/fan/climate).
+  - El nivel seleccionado se persiste automáticamente en `localStorage` (`govee_h7133_heat_level_<deviceId>`).
+- **Sincronización Total de Estado y Colores (`DeviceCard.tsx`):**
+  - Los encabezados, descripciones (`statusSummary`), iconos y textos del control secundario del ventilador reflejan con precisión el modo y nivel activo (`🔥 Calefactor Activo (Nivel X)` o `🌪️ Fan Manual Activo (Sin Calefacción)`).
+
 ## [1.5.35] - 2026-09-09
 
 ### Corrección Crítica de Apagado (Govee H7133 y Entidades Home Assistant)

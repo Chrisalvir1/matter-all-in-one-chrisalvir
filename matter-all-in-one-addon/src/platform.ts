@@ -1815,6 +1815,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       "vacuum",
       "media_player",
       "humidifier",
+      "select",
+      "number",
     ];
     if (
       !allowedDomains.includes(domain) &&
@@ -3738,6 +3740,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               media_player: "Speaker",
               sensor: "Sensor",
               binary_sensor: "BinarySensor",
+              select: "Select",
+              number: "Number",
             };
             const typeLabel =
               (e.constructor as any).matterTypeLabel ||
@@ -4140,6 +4144,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               await this.ha.callService("media_player", "volume_set", entityId, {
                 volume_level: numVal / 100,
               });
+            } else if (domain === "number") {
+              await this.ha.callService("number", "set_value", entityId, {
+                value: Number(data.value),
+              });
             }
 
             res.writeHead(200, {
@@ -4190,6 +4198,93 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               "Content-Type": "application/json; charset=utf-8",
             });
             res.end(JSON.stringify({ success: true, entityId, serviceData }));
+          } catch (err: any) {
+            res.writeHead(500, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ success: false, error: err?.message || String(err) }));
+          }
+          return;
+        }
+
+        // POST /api/custom/entity-select-option/:entityId
+        if (
+          req.method === "POST" &&
+          pathname.startsWith("/api/custom/entity-select-option/")
+        ) {
+          const entityId = decodeURIComponent(
+            pathname.substring("/api/custom/entity-select-option/".length),
+          );
+          const [domain] = entityId.split(".");
+          try {
+            const body = await this.readRequestBody(req);
+            const data = JSON.parse(body || "{}");
+            const option = String(data.option ?? "");
+            const serviceDomain = domain === "input_select" ? "input_select" : "select";
+            await this.ha.callService(serviceDomain, "select_option", entityId, {
+              option,
+            });
+            res.writeHead(200, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ success: true, entityId, option }));
+          } catch (err: any) {
+            res.writeHead(500, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ success: false, error: err?.message || String(err) }));
+          }
+          return;
+        }
+
+        // POST /api/custom/entity-set-preset-mode/:entityId
+        if (
+          req.method === "POST" &&
+          pathname.startsWith("/api/custom/entity-set-preset-mode/")
+        ) {
+          const entityId = decodeURIComponent(
+            pathname.substring("/api/custom/entity-set-preset-mode/".length),
+          );
+          const [domain] = entityId.split(".");
+          try {
+            const body = await this.readRequestBody(req);
+            const data = JSON.parse(body || "{}");
+            const preset_mode = String(data.preset_mode ?? data.mode ?? "");
+            await this.ha.callService(domain, "set_preset_mode", entityId, {
+              preset_mode,
+            });
+            res.writeHead(200, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ success: true, entityId, preset_mode }));
+          } catch (err: any) {
+            res.writeHead(500, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ success: false, error: err?.message || String(err) }));
+          }
+          return;
+        }
+
+        // POST /api/custom/entity-set-hvac-mode/:entityId
+        if (
+          req.method === "POST" &&
+          pathname.startsWith("/api/custom/entity-set-hvac-mode/")
+        ) {
+          const entityId = decodeURIComponent(
+            pathname.substring("/api/custom/entity-set-hvac-mode/".length),
+          );
+          try {
+            const body = await this.readRequestBody(req);
+            const data = JSON.parse(body || "{}");
+            const hvac_mode = String(data.hvac_mode ?? data.mode ?? "");
+            await this.ha.callService("climate", "set_hvac_mode", entityId, {
+              hvac_mode,
+            });
+            res.writeHead(200, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ success: true, entityId, hvac_mode }));
           } catch (err: any) {
             res.writeHead(500, {
               "Content-Type": "application/json; charset=utf-8",

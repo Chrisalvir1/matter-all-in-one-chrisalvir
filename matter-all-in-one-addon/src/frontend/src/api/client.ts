@@ -109,6 +109,24 @@ export const api = {
       body: JSON.stringify({ value }),
     }),
 
+  selectOption: (entityId: string, option: string) =>
+    request(`/entity-select-option/${encodeURIComponent(entityId)}`, {
+      method: "POST",
+      body: JSON.stringify({ option }),
+    }),
+
+  setPresetMode: (entityId: string, presetMode: string) =>
+    request(`/entity-set-preset-mode/${encodeURIComponent(entityId)}`, {
+      method: "POST",
+      body: JSON.stringify({ preset_mode: presetMode }),
+    }),
+
+  setHvacMode: (entityId: string, hvacMode: string) =>
+    request(`/entity-set-hvac-mode/${encodeURIComponent(entityId)}`, {
+      method: "POST",
+      body: JSON.stringify({ hvac_mode: hvacMode }),
+    }),
+
   setLightSettings: (
     entityId: string,
     options: {
