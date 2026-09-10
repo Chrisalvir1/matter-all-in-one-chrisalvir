@@ -1,3 +1,12 @@
+## [1.5.50] - 2026-09-10
+
+### Botón Directo de Activación y Generación de QR en Modal
+
+- **Botón Prominente «Activar y Generar Código QR»:**
+  - En la tarjeta del modal de dispositivo, cuando una entidad no está publicada («Sin publicar»), ahora se muestra un botón grande y directo **«🚀 Activar y Generar Código QR»**. Al pulsarlo, se publica automáticamente la entidad en Matter y se muestra el código QR al instante, sin necesidad de buscar el interruptor en la lista lateral.
+- **Diseño Responsivo en Modal de Dispositivo:**
+  - Se eliminó el estilo en línea rígido de columnas fijas (`grid-template-columns: 350px minmax(...) 420px`) que desbordaba y cortaba la lista de entidades en pantallas pequeñas o en la app de Home Assistant.
+
 ## [1.5.49] - 2026-09-10
 
 ### Restauración a Versión Estable Base Matterbridge 3.10.8 (v1.5.13)
