@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useAddonState, FilterType } from "./hooks/useAddonState";
 import { TopBar } from "./components/TopBar";
 import { ControlCenter } from "./components/ControlCenter";

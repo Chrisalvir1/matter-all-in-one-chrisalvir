@@ -1,6 +1,6 @@
 {
   "name": "matter-all-in-one-chrisalvir",
-  "version": "1.5.59",
+  "version": "1.5.60",
   "description": "Matter all-in-one Home Assistant Add-on with complete Scrypted, BLE, Smart Dimmers, Vacuum, AC, Climate, Lock and Multi-Platform ecosystem compatibility",
   "author": "chrisalvir",
   "license": "Apache-2.0",
@@ -50,11 +50,11 @@
   },
   "scripts": {
     "clean": "node scripts/clean-dist.mjs",
-    "build": "npm run clean && tsc -p tsconfig.build.json && vite build",
+    "build": "npm run clean && tsc -p tsconfig.build.json && tsc -p src/frontend/tsconfig.json && vite build",
     "build:backend": "tsc -p tsconfig.build.json",
-    "build:frontend": "vite build",
+    "build:frontend": "tsc -p src/frontend/tsconfig.json && vite build",
     "dev": "tsc --watch",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p src/frontend/tsconfig.json",
     "lint": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\"",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "test": "vitest run",

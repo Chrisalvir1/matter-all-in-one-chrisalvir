@@ -1,3 +1,12 @@
+## [1.5.60] - 2026-09-10
+
+### Corrección de Importación `useEffect` y Verificación Estricta Frontend TypeScript
+
+- **Corrección de Importación en `App.tsx`:**
+  - Se añadió la importación de `useEffect` desde `react` en `src/frontend/src/App.tsx`, solucionando el error en tiempo de ejecución `ReferenceError: Can't find variable: useEffect` capturado por el ErrorBoundary.
+- **Integración de Typecheck Estricto de Frontend en Scripts de Compilación (`package.json`):**
+  - Se configuró la ejecución de `tsc -p src/frontend/tsconfig.json` tanto en `npm run build` como en `npm run typecheck`, asegurando que el tipado de componentes React se valide exhaustivamente en cada compilación antes de generar el paquete final con Vite.
+
 ## [1.5.59] - 2026-09-10
 
 ### Protección contra Pantalla en Negro en Ingress y Manejador Global de Errores UI
