@@ -1,3 +1,15 @@
+## [1.5.59] - 2026-09-10
+
+### Protección contra Pantalla en Negro en Ingress y Manejador Global de Errores UI
+
+- **Inyección Dinámica de `<base href>` para Home Assistant Ingress (`platform.ts`):**
+  - Se implementó la inyección automática del encabezado `X-Ingress-Path` como etiqueta `<base href="/api/hassio_ingress/.../">` dentro de `index.html`. Esto previene fallos de resolución en navegadores cuando el iframe de Ingress se abre sin barra inclinada final, asegurando que todos los bundles JavaScript, hojas de estilo CSS y llamadas a `/api/custom/*` se resuelvan de forma inequívoca contra el proxy de Ingress.
+- **Componente ErrorBoundary y Protección contra Fallos de Renderizado (`ErrorBoundary.tsx`, `main.tsx`):**
+  - Se encapsuló la aplicación completa en un componente de captura de excepciones (`<ErrorBoundary>`), evitando que cualquier error inesperado en tiempo de ejecución desmonte el árbol de componentes React y deje la pantalla completamente en negro.
+  - La interfaz ahora presenta una tarjeta de diagnóstico con diseño Liquid Glass, mostrando el error y opciones directas para «Recargar interfaz» y «Limpiar caché local y reiniciar».
+- **Corrección de Identificador de Cámara en Sincronización de Estado (`App.tsx`):**
+  - Se corrigió la comparación en el efecto reactivo de cámaras (`c.cameraId === selectedCamera.cameraId` en lugar de `c.id`), eliminando el riesgo de asignaciones incorrectas o excepciones al refrescar el listado.
+
 ## [1.5.58] - 2026-09-10
 
 ### Sincronización en Tiempo Real de Modales UI y Protección contra Códigos Obsoletos

@@ -3238,8 +3238,28 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
       try {
         if (req.method === "GET" && (pathname === "/" || pathname === "/index.html")) {
-          const content = await this.readFrontendFile("index.html");
+          let content = await this.readFrontendFile("index.html");
           if (content) {
+            // Ensure proper base URL when loaded through Home Assistant Ingress
+            const ingressHeader = req.headers["x-ingress-path"];
+            let baseHref = "";
+            if (typeof ingressHeader === "string" && ingressHeader) {
+              baseHref = ingressHeader.endsWith("/") ? ingressHeader : `${ingressHeader}/`;
+            } else {
+              const ingressRegex = /^\/api\/hassio_ingress\/[^/]+/;
+              const match = urlObj.pathname.match(ingressRegex);
+              if (match) {
+                baseHref = `${match[0]}/`;
+              }
+            }
+            if (baseHref) {
+              if (content.includes("<base ")) {
+                content = content.replace(/<base[^>]*>/i, `<base href="${baseHref}">`);
+              } else {
+                content = content.replace("<head>", `<head>\n    <base href="${baseHref}">`);
+              }
+            }
+
             res.writeHead(200, {
               "Content-Type": "text/html; charset=utf-8",
               "Cache-Control": "no-cache, no-store, must-revalidate",

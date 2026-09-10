@@ -49,7 +49,7 @@ export const App: React.FC = () => {
   // Keep selectedCamera in sync with updated cameras
   useEffect(() => {
     if (!selectedCamera) return;
-    const updated = cameras.find((c) => c.id === selectedCamera.id);
+    const updated = cameras.find((c) => c.cameraId === selectedCamera.cameraId);
     if (updated) {
       setSelectedCamera(updated);
     }
