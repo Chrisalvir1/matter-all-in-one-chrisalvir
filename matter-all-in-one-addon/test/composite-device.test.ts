@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import "./mocks/matterbridge.mock.js";
 import { CompositeDeviceEntity } from "../src/entities/composite-device.entity.js";
-import { MatterDeviceTypes } from "../src/device-registry.js";
 
 const platform = {
   log: {
@@ -224,96 +223,5 @@ describe("CompositeDeviceEntity", () => {
       (retainedEndpoint as any).children.get("light_sala"),
     );
     await expect(restored.syncInitialState()).resolves.toBeUndefined();
-  });
-
-  it("handles fan oscillation and ambient temperature measurement in composite fan", async () => {
-    const composite = new CompositeDeviceEntity(
-      platform,
-      "govee-fan-heater",
-      "Govee H7133",
-      [
-        {
-          entityId: "fan.govee",
-          state: state("fan.govee", "on", {
-            percentage: 66.67,
-            oscillating: true,
-            current_temperature: 22.5,
-            supported_features: 3, // speed + oscillation
-          }),
-        },
-        {
-          entityId: "light.govee_light",
-          state: state("light.govee_light", "on", {
-            brightness: 200,
-            rgb_color: [255, 100, 50],
-            supported_color_modes: ["rgb"],
-          }),
-        },
-      ],
-    );
-
-    const root = await composite.createEndpoint();
-    expect(root).toBeDefined();
-    // Verify temperature cluster was registered
-    expect(root.clusterServers.has(0x0402)).toBe(true);
-    expect(root.getAttribute(0x0402, "measuredValue")).toBe(2250);
-
-    // Verify rockSetting attribute subscription and command execution
-    await (root as any).invokeAttributeChange(
-      { id: 0x0202 },
-      "rockSetting",
-      { rockLeftRight: false },
-    );
-    expect(platform.ha.callService).toHaveBeenCalledWith(
-      "fan",
-      "oscillate",
-      "fan.govee",
-      { oscillating: false },
-    );
-  });
-
-  it("Plan A: creates single composite accessory for switch-based fan with fan profile and RGB light", async () => {
-    const composite = new CompositeDeviceEntity(
-      platform,
-      "govee-playroom",
-      "Ventilador Playroom",
-      [
-        {
-          entityId: "switch.ventilador_playroom",
-          state: state("switch.ventilador_playroom", "off"),
-          deviceType: MatterDeviceTypes.fan,
-        },
-        {
-          entityId: "light.ventilador_playroom_night_light",
-          state: state("light.ventilador_playroom_night_light", "off", {
-            supported_color_modes: ["rgb", "color_temp"],
-            rgb_color: [255, 255, 255],
-          }),
-        },
-      ],
-      "switch.ventilador_playroom",
-    );
-
-    const root = await composite.createEndpoint();
-    expect(composite.primaryEntityId).toBe("switch.ventilador_playroom");
-    expect(composite.endpoints.get("switch.ventilador_playroom")).toBe(root);
-    expect(composite.endpoints.get("light.ventilador_playroom_night_light")).toBeDefined();
-    expect((root as any).children.has("light_ventilador_playroom_night_light")).toBe(true);
-
-    // Turning on fan triggers switch.turn_on
-    await (composite.endpoints.get("switch.ventilador_playroom") as any).invokeCommand("on");
-    expect(platform.ha.callService).toHaveBeenCalledWith(
-      "switch",
-      "turn_on",
-      "switch.ventilador_playroom",
-    );
-
-    // Turning off fan triggers switch.turn_off
-    await (composite.endpoints.get("switch.ventilador_playroom") as any).invokeCommand("off");
-    expect(platform.ha.callService).toHaveBeenCalledWith(
-      "switch",
-      "turn_off",
-      "switch.ventilador_playroom",
-    );
   });
 });

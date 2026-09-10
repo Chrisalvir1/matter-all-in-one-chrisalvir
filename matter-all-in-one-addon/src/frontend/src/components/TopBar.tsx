@@ -5,14 +5,12 @@ interface TopBarProps {
   status: StatusResponse | null;
   onOpenSettings: () => void;
   onRestartService: () => void;
-  onOpenLovelaceGuide?: () => void;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
   status,
   onOpenSettings,
   onRestartService,
-  onOpenLovelaceGuide,
 }) => {
   const isOnline = status?.haStatus === "conectado";
 
@@ -48,20 +46,6 @@ export const TopBar: React.FC<TopBarProps> = ({
       </div>
 
       <div className="topbar-actions">
-        {onOpenLovelaceGuide && (
-          <button
-            className="button button-secondary button-topbar"
-            id="lovelace-guide-button"
-            type="button"
-            onClick={onOpenLovelaceGuide}
-            title="Ver e instalar tarjeta Liquid Glass para Dashboards de Home Assistant"
-          >
-            <span className="btn-icon" aria-hidden="true">
-              📱
-            </span>
-            Tarjeta Lovelace
-          </button>
-        )}
         <button
           className="button button-secondary button-topbar"
           id="settings-button"

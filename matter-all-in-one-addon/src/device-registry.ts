@@ -313,8 +313,6 @@ export function getLightDeviceType(
     modes.some((mode) => ["hs", "xy", "rgb", "rgbw", "rgbww"].includes(mode)) ||
     (supportedFeatures & 16) !== 0 ||
     attributes.rgb_color !== undefined ||
-    attributes.rgbw_color !== undefined ||
-    attributes.rgbww_color !== undefined ||
     attributes.hs_color !== undefined ||
     attributes.xy_color !== undefined
   ) {

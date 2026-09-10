@@ -58,10 +58,6 @@ import {
   hasFanDirection,
   hasFanSpeed,
   hasFanAuto,
-  hasFanOscillation,
-  isFanOscillating,
-  haStateToRockSetting,
-  rockSettingToHa,
   getFanSpeedCount,
   getFanModeSequence,
   getFanControlFeatures,
@@ -85,7 +81,6 @@ type CompositePlatform = {
       data?: Record<string, any>,
     ): Promise<unknown>;
   };
-  entities?: Map<string, any>;
 };
 
 export interface CompositeMember {
@@ -460,44 +455,6 @@ export class CompositeDeviceEntity {
             }
           }
         }
-
-        if (endpoint.hasAttributeServer(FanControl.id, "rockSetting")) {
-          const isOscillating = isFanOscillating(state);
-          if (
-            !initial &&
-            this.shouldIgnoreStateUpdate(
-              entityId,
-              "fan_oscillating",
-              isOscillating,
-            )
-          ) {
-            this.platform.log.debug(
-              `[Composite][${entityId}] Ignoring fan_oscillating update (lockout)`,
-            );
-          } else {
-            const rockSetting = haStateToRockSetting(state);
-            await update(
-              endpoint,
-              FanControl.id,
-              "rockSetting",
-              rockSetting,
-              this.platform.log,
-            );
-          }
-        }
-
-        if (
-          typeof state.attributes.current_temperature === "number" &&
-          endpoint.hasAttributeServer(TemperatureMeasurement.id, "measuredValue")
-        ) {
-          await update(
-            endpoint,
-            TemperatureMeasurement.id,
-            "measuredValue",
-            Math.round(state.attributes.current_temperature * 100),
-            this.platform.log,
-          );
-        }
         return;
       }
 
@@ -835,10 +792,10 @@ export class CompositeDeviceEntity {
     if (domain === "camera") return [OnOff.id];
     if (domain === "light")
       return lightClusterIds(member.state, this.typeFor(member));
-    if (domain === "fan" || isFanProfile(this.typeFor(member))) {
-      return [FanControl.id];
-    }
     if (domain === "switch") return [];
+    if (domain === "fan") {
+      return isFanProfile(this.typeFor(member)) ? [FanControl.id] : [];
+    }
     if (domain === "lock") return [DoorLock.id];
     if (domain === "sensor") {
       const deviceClass = member.state.attributes.device_class;
@@ -917,8 +874,12 @@ export class CompositeDeviceEntity {
       return;
     }
 
-    const isFan = domain === "fan" || isFanProfile(this.typeFor(member));
-    if (isFan) {
+    if (domain === "fan") {
+      if (!isFanProfile(this.typeFor(member))) {
+        endpoint.behaviors.require(MatterbridgeOnOffServer.with());
+        endpoint.addRequiredClusterServers();
+        return;
+      }
       const on = isFanOn(member.state);
       const pct = fanPercentage(member.state);
       const speedMax = getFanSpeedCount(member.state);
@@ -926,49 +887,42 @@ export class CompositeDeviceEntity {
       const fanMode = haStateToFanMode(member.state);
       const hasDir = hasFanDirection(member.state);
       const hasSpeed = hasFanSpeed(member.state);
-      const hasOscillation = hasFanOscillation(member.state);
       const fanFeatures = getFanControlFeatures(member.state);
       const fanModeSequence = getFanModeSequence(member.state);
 
       this.platform.log.debug(
-        `[Composite] Fan root init: ${member.entityId}, on=${on}, pct=${pct}, speed=${speed}/${speedMax}, sequence=${fanModeSequence}, speedSupport=${hasSpeed}, oscillationSupport=${hasOscillation}, dir=${member.state.attributes.direction ?? "N/A"}`,
+        `[Composite] Fan root init: ${member.entityId}, on=${on}, pct=${pct}, speed=${speed}/${speedMax}, sequence=${fanModeSequence}, speedSupport=${hasSpeed}, dir=${member.state.attributes.direction ?? "N/A"}`,
       );
 
-      const fanClusterBehavior = MatterbridgeFanControlServer.with(
-        ...fanFeatures,
-      );
-      const fanStateConfig: any = {
-        fanMode,
-        fanModeSequence,
-        percentSetting: pct,
-        percentCurrent: pct,
-        speedMax,
-        speedSetting: speed,
-        speedCurrent: speed,
-      };
+      if (hasSpeed) {
+        const fanClusterBehavior = MatterbridgeFanControlServer.with(
+          ...fanFeatures,
+        );
+        const fanStateConfig: any = {
+          fanMode,
+          fanModeSequence,
+          percentSetting: pct,
+          percentCurrent: pct,
+          speedMax,
+          speedSetting: speed,
+          speedCurrent: speed,
+        };
 
-      if (hasDir) {
-        fanStateConfig.airflowDirection = haDirectionToMatter(
-          fanDirection(member.state),
+        if (hasDir) {
+          fanStateConfig.airflowDirection = haDirectionToMatter(
+            fanDirection(member.state),
+          );
+        }
+
+        endpoint.behaviors.require(fanClusterBehavior, fanStateConfig);
+      } else {
+        endpoint.createDefaultFanControlClusterServer(
+          fanMode,
+          FAN_MODE_SEQUENCE,
         );
       }
-
-      if (hasOscillation) {
-        fanStateConfig.rockSupport = { rockLeftRight: true };
-        fanStateConfig.rockSetting = haStateToRockSetting(member.state);
-      }
-
-      endpoint.behaviors.require(fanClusterBehavior, fanStateConfig);
 
       endpoint.behaviors.require(MatterbridgeOnOffServer.with());
-
-      // If ambient temperature is reported on this fan entity (e.g. Govee H7133)
-      if (typeof member.state.attributes.current_temperature === "number") {
-        endpoint.createDefaultTemperatureMeasurementClusterServer(
-          Math.round(member.state.attributes.current_temperature * 100),
-        );
-      }
-
       endpoint.addRequiredClusterServers();
       return;
     }
@@ -1096,42 +1050,16 @@ export class CompositeDeviceEntity {
       return;
     }
 
-    const isFan = domain === "fan" || isFanProfile(this.typeFor(member));
-    if (isFan) {
+    if (domain === "fan") {
       endpoint.addCommandHandler("on", async () => {
         this.setCommandLockout(entityId, "fan_state", "on");
-        this.setCommandLockout(entityId, "onOff", true);
-        const currentState = this.states.get(entityId) ?? member.state;
-        const curPct = fanPercentage(currentState);
-        const defaultPct = curPct > 0 ? curPct : 50;
-        this.platform.log.debug(`[Composite][${entityId}] → HA fan turn_on (pct: ${defaultPct})`);
-        if (domain === "switch") {
-          const mainEntity = this.platform.entities?.get(entityId);
-          if (mainEntity && typeof (mainEntity as any).executeSafeFanCommand === "function") {
-            await (mainEntity as any).executeSafeFanCommand(100);
-          } else {
-            await this.platform.ha.callService("switch", "turn_on", entityId);
-          }
-        } else if (hasFanSpeed(currentState)) {
-          await this.platform.ha.callService("fan", "turn_on", entityId, { percentage: defaultPct });
-        } else {
-          await this.platform.ha.callService("fan", "turn_on", entityId);
-        }
+        this.platform.log.debug(`[Composite][${entityId}] → HA fan turn_on`);
+        await this.platform.ha.callService("fan", "turn_on", entityId);
       });
       endpoint.addCommandHandler("off", async () => {
         this.setCommandLockout(entityId, "fan_state", "off");
-        this.setCommandLockout(entityId, "onOff", false);
         this.platform.log.debug(`[Composite][${entityId}] → HA fan turn_off`);
-        if (domain === "switch") {
-          const mainEntity = this.platform.entities?.get(entityId);
-          if (mainEntity && typeof (mainEntity as any).executeSafeFanCommand === "function") {
-            await (mainEntity as any).executeSafeFanCommand(0, "Off");
-          } else {
-            await this.platform.ha.callService("switch", "turn_off", entityId);
-          }
-        } else {
-          await this.platform.ha.callService("fan", "turn_off", entityId);
-        }
+        await this.platform.ha.callService("fan", "turn_off", entityId);
       });
 
       const hasSpeed = hasFanSpeed(member.state);
@@ -1157,15 +1085,12 @@ export class CompositeDeviceEntity {
           );
           if (next === 0) {
             this.setCommandLockout(entityId, "fan_state", "off");
-            this.setCommandLockout(entityId, "onOff", false);
             await this.platform.ha.callService("fan", "turn_off", entityId);
           } else {
             this.setCommandLockout(entityId, "fan_percentage", next);
-            this.setCommandLockout(entityId, "fan_state", "on");
-            this.setCommandLockout(entityId, "onOff", true);
             await this.platform.ha.callService(
               "fan",
-              "turn_on",
+              "set_percentage",
               entityId,
               { percentage: next },
             );
@@ -1190,15 +1115,12 @@ export class CompositeDeviceEntity {
               );
               if (next === 0) {
                 this.setCommandLockout(entityId, "fan_state", "off");
-                this.setCommandLockout(entityId, "onOff", false);
                 await this.platform.ha.callService("fan", "turn_off", entityId);
               } else {
                 this.setCommandLockout(entityId, "fan_percentage", next);
-                this.setCommandLockout(entityId, "fan_state", "on");
-                this.setCommandLockout(entityId, "onOff", true);
                 await this.platform.ha.callService(
                   "fan",
-                  "turn_on",
+                  "set_percentage",
                   entityId,
                   { percentage: next },
                 );
@@ -1227,7 +1149,6 @@ export class CompositeDeviceEntity {
                 );
                 if (next === 0) {
                   this.setCommandLockout(entityId, "fan_state", "off");
-                  this.setCommandLockout(entityId, "onOff", false);
                   await this.platform.ha.callService(
                     "fan",
                     "turn_off",
@@ -1235,11 +1156,9 @@ export class CompositeDeviceEntity {
                   );
                 } else {
                   this.setCommandLockout(entityId, "fan_percentage", next);
-                  this.setCommandLockout(entityId, "fan_state", "on");
-                  this.setCommandLockout(entityId, "onOff", true);
                   await this.platform.ha.callService(
                     "fan",
-                    "turn_on",
+                    "set_percentage",
                     entityId,
                     { percentage: next },
                   );
@@ -1260,15 +1179,12 @@ export class CompositeDeviceEntity {
                 );
                 if (newMode === FanControl.FanMode.Off) {
                   this.setCommandLockout(entityId, "fan_state", "off");
-                  this.setCommandLockout(entityId, "onOff", false);
                   await this.platform.ha.callService(
                     "fan",
                     "turn_off",
                     entityId,
                   );
                 } else if (newMode === FanControl.FanMode.Auto) {
-                  this.setCommandLockout(entityId, "fan_state", "on");
-                  this.setCommandLockout(entityId, "onOff", true);
                   const currentState = this.states.get(entityId);
                   if (currentState && hasFanAuto(currentState)) {
                     await this.platform.ha.callService(
@@ -1285,35 +1201,27 @@ export class CompositeDeviceEntity {
                     );
                   }
                 } else if (newMode === FanControl.FanMode.Low) {
-                  this.setCommandLockout(entityId, "fan_state", "on");
-                  this.setCommandLockout(entityId, "onOff", true);
                   await this.platform.ha.callService(
                     "fan",
-                    "turn_on",
+                    "set_percentage",
                     entityId,
                     { percentage: 33.33 },
                   );
                 } else if (newMode === FanControl.FanMode.Medium) {
-                  this.setCommandLockout(entityId, "fan_state", "on");
-                  this.setCommandLockout(entityId, "onOff", true);
                   await this.platform.ha.callService(
                     "fan",
-                    "turn_on",
+                    "set_percentage",
                     entityId,
                     { percentage: 66.67 },
                   );
                 } else if (newMode === FanControl.FanMode.High) {
-                  this.setCommandLockout(entityId, "fan_state", "on");
-                  this.setCommandLockout(entityId, "onOff", true);
                   await this.platform.ha.callService(
                     "fan",
-                    "turn_on",
+                    "set_percentage",
                     entityId,
                     { percentage: 100 },
                   );
                 } else if (newMode === FanControl.FanMode.On) {
-                  this.setCommandLockout(entityId, "fan_state", "on");
-                  this.setCommandLockout(entityId, "onOff", true);
                   await this.platform.ha.callService(
                     "fan",
                     "turn_on",
@@ -1345,46 +1253,6 @@ export class CompositeDeviceEntity {
               entityId,
               { direction: haDir },
             );
-          },
-        );
-      }
-
-      if (endpoint.hasAttributeServer(FanControl.id, "rockSetting")) {
-        endpoint.subscribeAttribute(
-          FanControl.id,
-          "rockSetting",
-          async (newSetting: any) => {
-            if (this.isUpdatingFromHa(entityId)) return;
-            const isOscillating = rockSettingToHa(newSetting);
-            this.setCommandLockout(entityId, "fan_oscillating", isOscillating);
-            this.platform.log.debug(
-              `[Composite][${entityId}] FanControl rockSetting → HA oscillating: ${isOscillating}`,
-            );
-            try {
-              await this.platform.ha.callService(
-                "fan",
-                "oscillate",
-                entityId,
-                { oscillating: isOscillating },
-              );
-            } catch (err) {
-              this.platform.log.debug(
-                `[Composite][${entityId}] fan.oscillate failed, checking switch fallback: ${err}`,
-              );
-              for (const member of this.members) {
-                if (
-                  member.entityId.startsWith("switch.") &&
-                  member.entityId.includes("oscillation")
-                ) {
-                  await this.platform.ha.callService(
-                    "switch",
-                    isOscillating ? "turn_on" : "turn_off",
-                    member.entityId,
-                  );
-                  break;
-                }
-              }
-            }
           },
         );
       }
