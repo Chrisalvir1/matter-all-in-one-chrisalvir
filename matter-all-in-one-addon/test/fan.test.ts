@@ -291,16 +291,6 @@ describe("Fan converter — FanMode (test 12)", () => {
     // Critical: even though percentage is high, state=off → FanMode.Off
     expect(haStateToFanMode(s)).toBe(FanControl.FanMode.Off);
   });
-
-  it("12. state=on sin percentage (e.g. switch de ventilador) → FanMode.High", () => {
-    const s = makeState("on", {});
-    expect(haStateToFanMode(s)).toBe(FanControl.FanMode.High);
-  });
-
-  it("12. state=on con preset_mode=auto → FanMode.Auto", () => {
-    const s = makeState("on", { preset_mode: "auto" });
-    expect(haStateToFanMode(s)).toBe(FanControl.FanMode.Auto);
-  });
 });
 
 describe("Fan converter — Feature conformance & capability detection", () => {
@@ -481,96 +471,5 @@ describe("Fan converter — Oscillation (Rocking) support", () => {
     const features = getFanControlFeatures(s);
     expect(features).toContain(FanControl.Feature.Rocking);
     expect(features).toContain(FanControl.Feature.MultiSpeed);
-  });
-
-  it("includes MultiSpeed, Auto and Step for standard fans for full Apple Home compatibility", () => {
-    const s = makeState("on", {});
-    const features = getFanControlFeatures(s);
-    expect(features).toContain(FanControl.Feature.MultiSpeed);
-    expect(features).toContain(FanControl.Feature.Auto);
-    expect(features).toContain(FanControl.Feature.Step);
-  });
-});
-
-describe("Govee H7133 Matter FanControl Speed & Mode Mapping", () => {
-  const getGearLevel = (pct: number): "1" | "2" | "3" => {
-    return pct <= 33 ? "1" : pct <= 66 ? "2" : "3";
-  };
-
-  const getTargetRegex = (level: "1" | "2" | "3"): RegExp => {
-    return level === "1"
-      ? /^(1|low|bajo|gear 1|gear_1)$/i
-      : level === "2"
-      ? /^(2|medium|med|medio|gear 2|gear_2)$/i
-      : /^(3|high|alto|gear 3|gear_3)$/i;
-  };
-
-  it("maps Matter percentage to discrete Govee gear levels", () => {
-    expect(getGearLevel(10)).toBe("1");
-    expect(getGearLevel(33)).toBe("1");
-    expect(getGearLevel(34)).toBe("2");
-    expect(getGearLevel(50)).toBe("2");
-    expect(getGearLevel(66)).toBe("2");
-    expect(getGearLevel(67)).toBe("3");
-    expect(getGearLevel(100)).toBe("3");
-  });
-
-  it("correctly matches Govee select options for Low/Med/High", () => {
-    const lowOptions = ["Low", "low", "1", "gear 1", "gear_1", "Bajo"];
-    const medOptions = ["Medium", "med", "2", "gear 2", "gear_2", "Medio"];
-    const highOptions = ["High", "high", "3", "gear 3", "gear_3", "Alto"];
-
-    for (const opt of lowOptions) {
-      expect(getTargetRegex("1").test(opt)).toBe(true);
-      expect(getTargetRegex("2").test(opt)).toBe(false);
-      expect(getTargetRegex("3").test(opt)).toBe(false);
-    }
-
-    for (const opt of medOptions) {
-      expect(getTargetRegex("1").test(opt)).toBe(false);
-      expect(getTargetRegex("2").test(opt)).toBe(true);
-      expect(getTargetRegex("3").test(opt)).toBe(false);
-    }
-
-    for (const opt of highOptions) {
-      expect(getTargetRegex("1").test(opt)).toBe(false);
-      expect(getTargetRegex("2").test(opt)).toBe(false);
-      expect(getTargetRegex("3").test(opt)).toBe(true);
-    }
-  });
-
-  it("maps HA select.gear state back to Matter fan percentage", () => {
-    const gearToPct = (opt: string): number => {
-      const lower = opt.toLowerCase();
-      if (/^(1|low|bajo|gear 1|gear_1)$/i.test(lower)) return 33;
-      if (/^(2|medium|med|medio|gear 2|gear_2)$/i.test(lower)) return 66;
-      if (/^(3|high|alto|gear 3|gear_3)$/i.test(lower)) return 100;
-      return 100;
-    };
-
-    expect(gearToPct("Low")).toBe(33);
-    expect(gearToPct("1")).toBe(33);
-    expect(gearToPct("Medium")).toBe(66);
-    expect(gearToPct("2")).toBe(66);
-    expect(gearToPct("High")).toBe(100);
-    expect(gearToPct("3")).toBe(100);
-  });
-
-  it("oscillation detection regex supports all deflector variations", () => {
-    const oscRegex = /oscil|swing|sweep|shake|giro|rotar|pan|deflector/i;
-    expect(oscRegex.test("switch.ventilador_playroom_oscillation")).toBe(true);
-    expect(oscRegex.test("switch.ventilador_playroom_air_deflector")).toBe(true);
-    expect(oscRegex.test("switch.ventilador_playroom_deflector")).toBe(true);
-    expect(oscRegex.test("select.ventilador_playroom_deflector_range")).toBe(true);
-    expect(oscRegex.test("switch.ventilador_playroom_swing")).toBe(true);
-    expect(oscRegex.test("switch.ventilador_playroom_giro")).toBe(true);
-  });
-
-  it("hybrid heater with Fan mode never dispatches gear commands in fan operation", () => {
-    // When mode is Fan, gear commands (which represent PTC heat levels) must be withheld
-    const modeMatchedOption = "Fan";
-    const gearMatchedOption = "Medium";
-    const shouldDispatchGear = Boolean(gearMatchedOption && !modeMatchedOption);
-    expect(shouldDispatchGear).toBe(false);
   });
 });

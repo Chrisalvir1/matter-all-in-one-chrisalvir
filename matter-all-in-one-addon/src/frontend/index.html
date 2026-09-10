@@ -5,30 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Matter All-in-One (Chrisalvir)</title>
     <link rel="icon" type="image/png" href="logo.png" />
-    <script>
-      (function() {
-        function renderFallback(title, msg, isError) {
-          var root = document.getElementById('root');
-          if (!root || root.children.length > 0) return;
-          var accent = isError ? '#f87171' : '#38bdf8';
-          var icon = isError ? '⚠️' : '⚡';
-          root.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:24px;color:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;text-align:center;background:#09101f;"><div style="font-size:44px;margin-bottom:16px;">' + icon + '</div><h2 style="color:' + accent + ';font-size:22px;margin:0 0 10px 0;font-weight:700;">' + title + '</h2><p style="color:#94a3b8;font-size:14px;max-width:520px;line-height:1.5;margin:0 0 20px 0;">' + msg + '</p><div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;"><button onclick="window.location.reload(true)" style="padding:10px 22px;background:#2563eb;color:white;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(37,99,235,0.35);">Recargar Interfaz</button><button onclick="window.parent && window.parent.location.reload()" style="padding:10px 22px;background:#334155;color:white;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;">Recargar Home Assistant</button></div></div>';
-        }
-
-        window.addEventListener('error', function(e) {
-          console.error('[Matter AIO Global Error]', e);
-          var reason = e.message || (e.target && e.target.src ? 'Error cargando recurso: ' + e.target.src : 'Error cargando módulos de la aplicación.');
-          renderFallback('Error al iniciar la interfaz', reason, true);
-        }, true);
-
-        setTimeout(function() {
-          var root = document.getElementById('root');
-          if (root && root.children.length === 0) {
-            renderFallback('Iniciando Matter All-in-One...', 'Si la pantalla no cambia, es posible que la caché de Home Assistant Ingress esté desactualizada. Haz clic en el botón para recargar limpiamente.', false);
-          }
-        }, 3500);
-      })();
-    </script>
   </head>
   <body>
     <div id="root"></div>

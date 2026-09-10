@@ -37,7 +37,7 @@ export const QRCodeDisplay: React.FC<QRCodeDisplayProps> = ({
     setQrError(null);
 
     QRCode.toCanvas(canvasRef.current, pairingCode, {
-      width: 208,
+      width: 224,
       margin: 1,
       color: { dark: "#09101f", light: "#ffffff" },
       errorCorrectionLevel: "H", // High error correction permits center logo overlay
@@ -129,21 +129,12 @@ export const QRCodeDisplay: React.FC<QRCodeDisplayProps> = ({
   }
 
   return (
-    <div
-      className="qr-liquid-glass-card"
-      style={{ display: "block", flexShrink: 0, minHeight: "fit-content" }}
-    >
-      <div className="qr-visual-wrapper" style={{ flexShrink: 0 }}>
+    <div className="qr-liquid-glass-card" style={{ display: "block" }}>
+      <div className="qr-visual-wrapper">
         <div className="qr-frame-glow" aria-hidden="true" />
-        <div className="qr-frame" style={{ flexShrink: 0 }}>
-          <div
-            id={elementId}
-            style={{ width: 208, height: 208, minWidth: 208, minHeight: 208, flexShrink: 0 }}
-          >
-            <canvas
-              ref={canvasRef}
-              style={{ width: "100%", height: "100%", display: "block" }}
-            />
+        <div className="qr-frame">
+          <div id={elementId}>
+            <canvas ref={canvasRef} style={{ width: "100%", height: "100%", display: "block" }} />
           </div>
           <div className="qr-center-logo" aria-hidden="true">
             <img src="logo.png" alt="Matter Logo" className="qr-logo-img" />

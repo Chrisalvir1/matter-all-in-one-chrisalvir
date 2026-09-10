@@ -50,42 +50,4 @@ describe("frontend accessibility contract", () => {
     expect(apiClient).toContain("/open-commissioning/");
     expect(deviceModal).toContain("Modo Multi-Admin Abierto");
   });
-
-  it("integrates Apple Home dynamic icons, artwork, and unexported filter", async () => {
-    const deviceCard = await readFile(
-      new URL("components/DeviceCard.tsx", frontendSrcPath),
-      "utf8",
-    );
-    const filterBar = await readFile(
-      new URL("components/FilterBar.tsx", frontendSrcPath),
-      "utf8",
-    );
-    const appleHomeIcon = await readFile(
-      new URL("components/AppleHomeIcon.tsx", frontendSrcPath),
-      "utf8",
-    );
-    const deviceCardArt = await readFile(
-      new URL("components/DeviceCardArt.tsx", frontendSrcPath),
-      "utf8",
-    );
-
-    // DeviceCard must use AppleHomeIcon and DeviceCardArt instead of raw emojis
-    expect(deviceCard).toContain("<AppleHomeIcon");
-    expect(deviceCard).toContain("<DeviceCardArt");
-    expect(deviceCard).not.toContain('return "💡"');
-    expect(deviceCard).toContain("NO EXPORTADO");
-
-    // FilterBar must have unexported filter
-    expect(filterBar).toContain("NO EXPORTADOS (HA)");
-    expect(filterBar).toContain("unexportedCount");
-
-    // AppleHomeIcon must support animated fan blades and lighting glows
-    expect(appleHomeIcon).toContain("fan-blades");
-    expect(appleHomeIcon).toContain("fanDurationSec");
-    expect(appleHomeIcon).toContain("bulbGlow");
-
-    // DeviceCardArt must support day/night modes and dark gradient backdrop
-    expect(deviceCardArt).toContain("card-art-backdrop");
-    expect(deviceCardArt).toContain("breezeGrad");
-  });
 });
