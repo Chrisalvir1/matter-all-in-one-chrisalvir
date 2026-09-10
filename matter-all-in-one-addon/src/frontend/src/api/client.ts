@@ -92,7 +92,7 @@ export const api = {
   reconnectAccessory: (nodeId: string) =>
     request(`/refresh-accessory/${encodeURIComponent(nodeId)}`, { method: "POST" }),
 
-  removeFabric: (entityId: string, fabricIndex: number) =>
+  removeFabric: (entityId: string, fabricIndex: number | string) =>
     request(`/remove-fabric/${encodeURIComponent(entityId)}/${fabricIndex}`, {
       method: "DELETE",
     }),

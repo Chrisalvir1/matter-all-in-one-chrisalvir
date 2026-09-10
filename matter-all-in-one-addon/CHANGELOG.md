@@ -1,3 +1,17 @@
+## [1.5.54] - 2026-09-10
+
+### Auditoría Completa y Reparación de Vinculación Matter, Código Manual y Fabrics
+
+- **Visualización Real de Casas / Controladores Conectados (`matterFabrics`):**
+  - Se implementó la renderización completa de la lista de controladores Matter conectados (`🍎 Apple Home`, `🌐 Google Home`, `🔊 Alexa`, `💠 SmartThings`, `🏠 Home Assistant`) con nombre de casa, índice de fabric y Vendor ID.
+  - Cada casa conectada cuenta ahora con su propio botón individual **`[Desconectar]`**.
+  - Soporte de métodos `POST` y `DELETE` en el endpoint `/api/custom/remove-fabric/:entityId/:fabricIndex`.
+- **Generación Garantizada de Código Numérico Manual:**
+  - Se integró `ManualPairingCodeCodec` y `QrPairingCodeCodec` en el backend para derivar y garantizar el código numérico manual (11 o 21 dígitos formateado) para cualquier accesorio exportado.
+  - El código manual ahora se muestra de forma visible, legible y copiable directamente en el panel QR.
+- **Manejo de Accesorios Pre-vinculados ("Connecting..." en Apple Home):**
+  - Se agregó una alerta destacada en el modal cuando un accesorio tiene una sesión previa guardada en el puente (`isCommissioned`), con botón directo de un solo clic **`[🔄 Desconectar y nuevo QR]`** para restablecer el accesorio a estado limpio listo para emparejar en Apple Home.
+
 ## [1.5.53] - 2026-09-10
 
 ### Corrección CI & Restauración Completa a v1.5.12 con Matterbridge 3.10.8

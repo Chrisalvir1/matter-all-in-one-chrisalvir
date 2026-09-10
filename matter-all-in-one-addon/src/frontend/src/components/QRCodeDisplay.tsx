@@ -37,7 +37,7 @@ export const QRCodeDisplay: React.FC<QRCodeDisplayProps> = ({
     setQrError(null);
 
     QRCode.toCanvas(canvasRef.current, pairingCode, {
-      width: 224,
+      width: 200,
       margin: 1,
       color: { dark: "#09101f", light: "#ffffff" },
       errorCorrectionLevel: "H", // High error correction permits center logo overlay
