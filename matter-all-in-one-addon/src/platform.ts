@@ -17,7 +17,6 @@ import path from "path";
 import { HomeAssistant } from "./homeAssistant.js";
 import { HassState, isUnavailable } from "./utils/ha-state.js";
 import { discoverHassUrl, toWsUrl } from "./utils/ha-discovery.js";
-import { FabricManager } from "@matter/protocol";
 import {
   getDeviceTypeForEntity,
   MatterDeviceTypes,
@@ -528,27 +527,17 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         endpoint?.serverNode?.behaviors?.operationalCredentials?.state?.fabrics;
 
       let rawFabrics: any[] = [];
-      if (endpoint?.serverNode?.env) {
-        try {
-          const fm = endpoint.serverNode.env.get(FabricManager);
-          if (fm?.fabrics) {
-            rawFabrics = Array.from(fm.fabrics);
-          }
-        } catch {}
-      }
-      if (rawFabrics.length === 0) {
-        if (liveFabricSource !== undefined && liveFabricSource !== null) {
-          rawFabrics = Array.isArray(liveFabricSource)
-            ? liveFabricSource
-            : Object.values(liveFabricSource);
-        } else if (
-          commissioning.fabrics !== undefined &&
-          commissioning.fabrics !== null
-        ) {
-          rawFabrics = Array.isArray(commissioning.fabrics)
-            ? commissioning.fabrics
-            : Object.values(commissioning.fabrics);
-        }
+      if (liveFabricSource !== undefined && liveFabricSource !== null) {
+        rawFabrics = Array.isArray(liveFabricSource)
+          ? liveFabricSource
+          : Object.values(liveFabricSource);
+      } else if (
+        commissioning.fabrics !== undefined &&
+        commissioning.fabrics !== null
+      ) {
+        rawFabrics = Array.isArray(commissioning.fabrics)
+          ? commissioning.fabrics
+          : Object.values(commissioning.fabrics);
       }
 
       const homeLocation = (this.ha as any)?.hassConfig?.location_name || null;
@@ -2438,12 +2427,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       // 1. In-memory cleanup before stopping the node
       if (serverNode) {
         try {
-          const fabricManager = (serverNode as any).env?.get?.(FabricManager);
-          if (fabricManager) {
-            await fabricManager.clear();
+          if (typeof (serverNode as any).resetStorage === "function") {
+            await (serverNode as any).resetStorage();
           }
         } catch (e) {
-          this.log.debug(`[Reset] FabricManager clear: ${e}`);
+          this.log.debug(`[Reset] ServerNode resetStorage: ${e}`);
         }
       }
 
@@ -2936,8 +2924,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             ? targetNum
             : 1;
 
-      // 1. Try deleting fabric directly via FabricManager in serverNode.env
+      // 1. Try deleting fabric directly via dynamic import of FabricManager if available
       try {
+        const { FabricManager } = await import("@matter/protocol");
         const fabricManager = (serverNode as any).env?.get?.(FabricManager);
         if (fabricManager) {
           let fabric = fabricManager.maybeFor(fabricIndex);
@@ -2962,8 +2951,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           }
         }
       } catch (err) {
-        this.log.warn(
-          `[removeFabric] Direct FabricManager.delete failed for ${entityId}: ${err}`,
+        this.log.debug(
+          `[removeFabric] Direct FabricManager dynamic import: ${err}`,
         );
       }
 

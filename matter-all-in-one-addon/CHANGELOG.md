@@ -1,3 +1,14 @@
+## [1.5.65] - 2026-09-10
+
+### Corrección Crítica: Eliminación de Dependencia Inválida en Inicio (@matter/protocol) y Pantalla de Carga Ingress
+
+- **Eliminación de Importación Estática Bloqueante (`platform.ts`):**
+  - Se eliminó la importación estática de nivel superior `import { FabricManager } from "@matter/protocol"`. Al ejecutarse en el contenedor de producción de Home Assistant, Node.js lanzaba `ERR_MODULE_NOT_FOUND` al iniciar el plugin debido a que `@matter/protocol` no es una dependencia directa de producción de `/app`, impidiendo que el plugin cargara e iniciando un bucle infinito en la pantalla «Iniciando Matter Bridge».
+  - La lectura de fabrics se realiza de forma directa sobre las instancias vivas (`nodeState.operationalCredentials?.fabrics`) sin requerir imports estáticos.
+  - La eliminación puntual de fabrics ahora utiliza importación dinámica protegida por bloque `try/catch` con fallback automático a reset y purge.
+- **Robustez de Auto-Recarga en Pantalla de Espera Ingress (`proxy.ts`):**
+  - Se mejoró la función `checkReady()` para verificar tanto la ruta canónica con barra final como sin barra final bajo Ingress (`window.location.pathname`), garantizando que la interfaz recargue automáticamente en cuanto el servicio esté listo sin requerir refresco manual del navegador.
+
 ## [1.5.64] - 2026-09-10
 
 ### Control Maestro Unificado y Claridad de Endpoints para Accesorios Compuestos (Ventilador + Luz en 1 QR)

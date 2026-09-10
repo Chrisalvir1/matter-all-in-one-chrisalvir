@@ -192,8 +192,15 @@ function getLoadingHtml() {
     // Silent background poll to avoid screen flickering
     async function checkReady() {
       try {
-        const res = await fetch('./api/custom/status', { cache: 'no-store' });
-        if (res.ok && res.status === 200) {
+        const basePath = window.location.pathname.endsWith('/')
+          ? window.location.pathname
+          : window.location.pathname + '/';
+        const targetUrl = basePath + 'api/custom/status';
+        let res = await fetch(targetUrl, { cache: 'no-store' }).catch(() => null);
+        if (!res || !res.ok) {
+          res = await fetch('./api/custom/status', { cache: 'no-store' }).catch(() => null);
+        }
+        if (res && res.ok && res.status === 200) {
           window.location.reload();
           return;
         }
