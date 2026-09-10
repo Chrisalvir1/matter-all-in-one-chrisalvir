@@ -1,3 +1,16 @@
+## [1.5.61] - 2026-09-10
+
+### Corrección de Visibilidad Completa de Código QR en Modales de Dispositivos
+
+- **Prevención de Truncamiento y Compresión Flexbox (`DeviceModal.tsx`, `style.css`):**
+  - Se corrigió la compresión vertical involuntaria de flexbox (`flex-shrink: 1`) que provocaba que la tarjeta del código QR (`.qr-liquid-glass-card`) se recortara en la parte inferior en pantallas con altura limitada.
+  - Se estableció `flex-shrink: 0` en la tarjeta y contenedores clave, y se agregaron barras de desplazamiento estilizadas y fluidas en `.qr-panel`.
+- **Ajuste de Dimensiones y Proporciones de Códigos QR (`QRCodeDisplay.tsx`, `style.css`):**
+  - Se optimizó el renderizado del lienzo QR a 180x180 px con padding compacto de 10 px y logo central escalado a 40x40 px, garantizando lectura nítida e inmediata por parte de cámaras de iPhone/Android sin desbordar el modal.
+- **Simplificación del Bloque de Sesión y Eliminación de Botones Duplicados (`DeviceModal.tsx`):**
+  - Se compactó la caja de advertencia «Sesión Matter Registrada», eliminando la duplicación innecesaria de botones que saturaban verticalmente la columna derecha.
+  - Ahora el código QR, el código manual de emparejamiento numérico y los botones de acción se visualizan al 100% sin recortes ni solapamientos.
+
 ## [1.5.60] - 2026-09-10
 
 ### Corrección de Importación `useEffect` y Verificación Estricta Frontend TypeScript

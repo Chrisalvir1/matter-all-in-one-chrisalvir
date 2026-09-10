@@ -1311,13 +1311,25 @@ mark {
 .qr-panel {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 16px;
+  gap: 10px;
+  padding: 14px;
   border: 1px solid var(--border);
   border-radius: 16px;
   background: rgba(6, 12, 25, 0.65);
   overflow-y: auto;
-  max-height: calc(92vh - 170px);
+  overflow-x: hidden;
+  max-height: calc(94vh - 140px);
+  min-height: 0;
+}
+.qr-panel::-webkit-scrollbar {
+  width: 5px;
+}
+.qr-panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+.qr-panel::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 4px;
 }
 .qr-status-label {
   padding: 6px 11px;
@@ -1327,6 +1339,7 @@ mark {
   color: var(--dim);
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid transparent;
+  flex-shrink: 0;
 }
 .qr-status-label.active {
   color: #abebd0;
@@ -1339,18 +1352,19 @@ mark {
   background: rgba(124, 168, 255, 0.08);
 }
 .commissioned-hint {
-  padding: 12px;
+  padding: 10px 12px;
   border-radius: 12px;
   background: rgba(124, 168, 255, 0.07);
   border: 1px solid rgba(124, 168, 255, 0.2);
   font-size: 11px;
-  line-height: 1.45;
+  line-height: 1.4;
+  flex-shrink: 0;
 }
 .commissioned-hint .hint-title {
-  margin: 0 0 5px;
+  margin: 0 0 4px;
   font-weight: 700;
   color: #9ec6ff;
-  font-size: 12px;
+  font-size: 11px;
 }
 .commissioned-hint .hint-desc {
   margin: 0;
@@ -1388,12 +1402,6 @@ mark {
   color: var(--muted);
   font-size: 12px;
 }
-/* QR section */
-.bridge-qr-button {
-  display: block;
-  width: 100%;
-  text-align: center;
-}
 /* Premium Liquid Glass QR Card */
 .qr-liquid-glass-card {
   position: relative;
@@ -1403,8 +1411,8 @@ mark {
     rgba(20, 31, 53, 0.6) 100%
   );
   border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 20px;
-  padding: 18px 16px;
+  border-radius: 18px;
+  padding: 14px 12px 10px;
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   box-shadow:
@@ -1415,6 +1423,7 @@ mark {
     transform 0.3s ease,
     box-shadow 0.3s ease;
   overflow: hidden;
+  flex-shrink: 0;
 }
 
 .qr-liquid-glass-card::before {
@@ -1443,7 +1452,7 @@ mark {
 .qr-frame-glow {
   position: absolute;
   inset: -6px;
-  border-radius: 22px;
+  border-radius: 20px;
   background: linear-gradient(
     135deg,
     rgba(124, 168, 255, 0.4),
@@ -1457,8 +1466,8 @@ mark {
 .qr-frame {
   position: relative;
   background: #ffffff;
-  padding: 12px;
-  border-radius: 18px;
+  padding: 10px;
+  border-radius: 16px;
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
   display: flex;
   justify-content: center;
@@ -1467,8 +1476,8 @@ mark {
 
 #device-qr-code,
 #cam-modal-qr-code {
-  width: 224px;
-  height: 224px;
+  width: 180px;
+  height: 180px;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -1490,16 +1499,16 @@ mark {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 48px;
-  height: 48px;
+  width: 40px;
+  height: 40px;
   background: #ffffff;
   border: 2px solid rgba(255, 255, 255, 0.95);
-  border-radius: 12px;
+  border-radius: 10px;
   display: flex;
   justify-content: center;
   align-items: center;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-  padding: 3px;
+  padding: 2px;
   pointer-events: none;
 }
 
@@ -1507,16 +1516,16 @@ mark {
   width: 100%;
   height: 100%;
   object-fit: contain;
-  border-radius: 8px;
+  border-radius: 6px;
 }
 
 /* Manual Code Box (Glass Pill) */
 .qr-manual-box {
-  margin: 14px 0 10px;
+  margin: 10px 0 8px;
   background: rgba(10, 16, 30, 0.55);
   border: 1px solid rgba(177, 199, 235, 0.14);
-  border-radius: 14px;
-  padding: 8px 12px;
+  border-radius: 12px;
+  padding: 6px 10px;
 }
 
 .manual-code-label {

@@ -304,8 +304,8 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
           className="modal-layout"
           style={{
             display: "grid",
-            gridTemplateColumns: "350px minmax(0, 1fr) 420px",
-            gap: 24,
+            gridTemplateColumns: "310px minmax(0, 1fr) 370px",
+            gap: 16,
             flex: 1,
             minHeight: 0,
             overflow: "hidden",
@@ -618,16 +618,19 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
             style={{
               display: "flex",
               flexDirection: "column",
+              gap: 8,
               minHeight: 0,
               height: "100%",
               overflowY: "auto",
-              paddingRight: 4,
+              overflowX: "hidden",
+              paddingRight: 6,
             }}
           >
-            <p className="card-label">CÓDIGO MATTER</p>
+            <p className="card-label" style={{ margin: "0 0 2px 0", flexShrink: 0 }}>CÓDIGO MATTER</p>
             <div
               className={`qr-status-label${isCommissioned ? " commissioned" : isExported ? " active" : ""}`}
               id="qr-status-label"
+              style={{ flexShrink: 0 }}
             >
               {isCommissioned
                 ? "Vinculado a Matter"
@@ -643,53 +646,22 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                   display: "block",
                   background: "rgba(245, 158, 11, 0.12)",
                   border: "1px solid rgba(245, 158, 11, 0.3)",
-                  borderRadius: 12,
-                  padding: 12,
-                  marginBottom: 12,
+                  borderRadius: 10,
+                  padding: "8px 10px",
+                  flexShrink: 0,
                 }}
               >
-                <p className="hint-title" style={{ color: "#fbbf24", fontWeight: 700, margin: "0 0 4px 0" }}>
+                <p className="hint-title" style={{ color: "#fbbf24", fontWeight: 700, margin: "0 0 2px 0", fontSize: 11 }}>
                   🔒 Sesión Matter Registrada
                 </p>
-                <p className="hint-desc" style={{ fontSize: 11, color: "var(--text-secondary)", margin: "0 0 10px 0", lineHeight: 1.4 }}>
-                  El puente tiene guardada una vinculación previa. Si no lo tienes en Apple Home o no conecta, pulsa «Desconectar todo y nuevo QR» para generar credenciales limpias:
+                <p className="hint-desc" style={{ fontSize: 10.5, color: "var(--text-secondary)", margin: 0, lineHeight: 1.35 }}>
+                  El puente ya está vinculado en Apple Home. Si necesitas un código limpio o no conecta, usa los botones de abajo.
                 </p>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <button
-                    type="button"
-                    className="button button-danger button-xs"
-                    onClick={handleResetAccessory}
-                    disabled={isBusy}
-                    style={{
-                      padding: "6px 10px",
-                      fontSize: 11,
-                      fontWeight: 600,
-                      borderRadius: 8,
-                      cursor: "pointer",
-                    }}
-                  >
-                    🔄 Desconectar y nuevo QR
-                  </button>
-                  <button
-                    type="button"
-                    className="button button-secondary button-xs"
-                    onClick={handleOpenCommissioning}
-                    disabled={isBusy}
-                    style={{
-                      padding: "6px 10px",
-                      fontSize: 11,
-                      borderRadius: 8,
-                      cursor: "pointer",
-                    }}
-                  >
-                    Abrir Multi-Admin
-                  </button>
-                </div>
               </div>
             )}
 
             {multiAdminOpen && (
-              <div id="multi-admin-hint" className="multi-admin-hint" style={{ display: "block" }}>
+              <div id="multi-admin-hint" className="multi-admin-hint" style={{ display: "block", flexShrink: 0 }}>
                 <p className="hint-title">🌐 Modo Multi-Admin Abierto (15 min)</p>
                 <p className="hint-desc">
                   Ventana de emparejamiento abierta. Escanea este código QR en
@@ -709,15 +681,15 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
             ) : (
               <div
                 className="qr-liquid-glass-card"
-                style={{ padding: 24, textAlign: "center", color: "var(--text-secondary)" }}
+                style={{ padding: 20, textAlign: "center", color: "var(--text-secondary)", flexShrink: 0 }}
               >
                 Activa la entidad para generar el código QR de Matter.
               </div>
             )}
 
-            <div className="accessory-controls" id="accessory-controls" style={{ marginTop: "auto", paddingTop: 12 }}>
+            <div className="accessory-controls" id="accessory-controls" style={{ flexShrink: 0, paddingTop: 6 }}>
               {isExported && (
-                <div className="matter-actions" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <div className="matter-actions" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   <button
                     className="button button-secondary action-btn"
                     id="reconnect-accessory-button"
@@ -725,6 +697,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                     onClick={handleReconnect}
                     disabled={isBusy}
                     title="Refresca la conexión con Home Assistant y Matter"
+                    style={{ padding: "7px 10px", fontSize: 11.5 }}
                   >
                     ↻ Recargar / Sincronizar
                   </button>
@@ -735,6 +708,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                     type="button"
                     onClick={handleOpenCommissioning}
                     disabled={isBusy}
+                    style={{ padding: "7px 10px", fontSize: 11.5 }}
                   >
                     Abrir Modo Multi-Admin
                   </button>
@@ -746,6 +720,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                     onClick={handleResetAccessory}
                     disabled={isBusy}
                     title="Desconectar de todas las casas y generar un nuevo código QR"
+                    style={{ padding: "7px 10px", fontSize: 11.5 }}
                   >
                     Desconectar todo y nuevo QR
                   </button>
