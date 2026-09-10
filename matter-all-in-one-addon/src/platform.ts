@@ -2401,12 +2401,20 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     }
 
     try {
-      await serverNode.erase();
-      // Matter.js erases fabrics and endpoint state, but Matterbridge keeps a
-      // separate `persist` context with Basic Information values. Clear that
-      // per-accessory context too, otherwise a regenerated QR reuses a stale
-      // serial number from a previous virtual node.
       const storeId = String(endpoint.deviceName ?? "").replace(/[ .]/g, "");
+
+      if (compositeDeviceId) {
+        await this.disposeCompositeNode(compositeDeviceId);
+      } else {
+        if (serverNode.lifecycle?.isOnline) await serverNode.close();
+        await this.unregisterDevice(endpoint);
+        this.matterbridgeDevices.delete(entityId);
+      }
+
+      // Matterbridge keeps a separate `persist` context with Basic Information values,
+      // as well as fabrics and commissioning contexts. Clear them while the node is stopped
+      // so the newly created ServerNode starts with completely clean credentials and a single
+      // authoritative discriminator and pairing code.
       const bridgeRuntime = this.matterbridge as any;
       const managedStorage =
         bridgeRuntime.serverNodeStorageManagers?.get?.(storeId);
@@ -2423,13 +2431,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       } finally {
         if (!managedStorage) await storageManager?.close?.();
       }
+
       if (compositeDeviceId) {
-        await this.disposeCompositeNode(compositeDeviceId);
         await this.activateComposite(entityId, true);
       } else {
-        if (serverNode.lifecycle?.isOnline) await serverNode.close();
-        await this.unregisterDevice(endpoint);
-        this.matterbridgeDevices.delete(entityId);
         await this.activateEntity(entityId, true);
       }
       this.clearMatterAccessoryProblems(entityId, compositeDeviceId);

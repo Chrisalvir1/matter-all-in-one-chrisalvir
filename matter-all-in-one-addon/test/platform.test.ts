@@ -796,4 +796,62 @@ describe("HomeAssistantPlatform", () => {
     expect(json.success).toBe(true);
     expect(json.pairingCode).toBe("MT:Y.K9042C00KA0648G00");
   });
+
+  it("handles POST /api/custom/reset-accessory/:entityId HTTP endpoint cleanly without calling serverNode.erase()", async (ctx) => {
+    if (!networkAvailable) {
+      ctx.skip();
+      return;
+    }
+    await platform.onStart();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    const eraseFn = vi.fn().mockResolvedValue(undefined);
+    const closeFn = vi.fn().mockResolvedValue(undefined);
+    const startFn = vi.fn().mockResolvedValue(undefined);
+
+    const mockEndpoint = {
+      deviceName: "test_fan",
+      serverNode: {
+        erase: eraseFn,
+        close: closeFn,
+        lifecycle: { isOnline: true },
+      },
+    };
+    (platform as any).matterbridgeDevices.set("fan.test_fan", mockEndpoint);
+
+    // Mock unregisterDevice and activateEntity
+    vi.spyOn(platform as any, "unregisterDevice").mockResolvedValue(undefined);
+    vi.spyOn(platform as any, "activateEntity").mockImplementation(async () => {
+      const regeneratedEndpoint = {
+        deviceName: "test_fan",
+        serverNode: {
+          lifecycle: { isOnline: true },
+          state: {
+            commissioning: {
+              pairingCodes: {
+                qrPairingCode: "MT:Y.K90TEST001",
+                manualPairingCode: "12345678901",
+              },
+              fabrics: [],
+            },
+          },
+        },
+      };
+      (platform as any).matterbridgeDevices.set("fan.test_fan", regeneratedEndpoint);
+    });
+
+    const res = await fetch(
+      `http://127.0.0.1:${platform.uiServerPort}/api/custom/reset-accessory/fan.test_fan`,
+      { method: "POST" },
+    );
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as any;
+    expect(json.success).toBe(true);
+    expect(json.pairingCode).toBe("MT:Y.K90TEST001");
+    expect(json.manualPairingCode).toBe("12345678901");
+    // Verify serverNode.erase() was NOT called (to avoid double node creation race)
+    expect(eraseFn).not.toHaveBeenCalled();
+    expect(closeFn).toHaveBeenCalled();
+  });
 });
+

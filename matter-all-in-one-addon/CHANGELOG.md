@@ -1,3 +1,14 @@
+## [1.5.57] - 2026-09-10
+
+### Corrección de Emparejamiento en Apple Home y Sincronización Inmediata de Códigos QR
+
+- **Eliminación de Carrera en Creación de Nodos Matter (`resetMatterAccessory`):**
+  - Se eliminó la llamada concurrente `serverNode.erase()` que generaba internamente un nodo efímero con un discriminador y código de emparejamiento obsoleto antes de levantar el nodo definitivo.
+  - El proceso de reseteo ahora apaga limpiamente el nodo previo, limpia los almacenes persistentes (`fabrics`, `commissioning`, `operationalCredentials`, `persist`) y levanta un único nodo autoritativo con un único discriminador y código QR sin discrepancias de red.
+- **Sincronización Inmediata en el Modal de la UI (`DeviceModal.tsx`):**
+  - Al pulsar «Desconectar todo y nuevo QR», la interfaz actualiza de forma síncrona el código QR y el código manual (`freshPairingCode`, `freshManualCode`) y limpia las telas de sesión registradas, garantizando que el usuario escanee exactamente las credenciales con las que el nodo está escuchando.
+  - Se añadió advertencia en el cuadro de confirmación recordando eliminar primero el accesorio viejo en la app Casa si ya existía vinculado.
+
 ## [1.5.56] - 2026-09-10
 
 ### Reconocimiento Nativo de Ventilador (Fan 0x002B) y Selector de Perfiles Matter

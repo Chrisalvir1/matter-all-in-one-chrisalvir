@@ -74,6 +74,9 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
   const [selectedEntity, setSelectedEntity] = useState<EntityRecord | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const [multiAdminOpen, setMultiAdminOpen] = useState(false);
+  const [freshPairingCode, setFreshPairingCode] = useState<string | null>(null);
+  const [freshManualCode, setFreshManualCode] = useState<string | null>(null);
+  const [resetFabrics, setResetFabrics] = useState<boolean>(false);
 
   const sortedEntities = device
     ? [...device.entities].sort((a, b) => {
@@ -97,30 +100,37 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     const initial = targetEntity || sortedEntities[0] || device.entities[0] || null;
     setSelectedEntity(initial);
     setMultiAdminOpen(false);
+    setFreshPairingCode(null);
+    setFreshManualCode(null);
+    setResetFabrics(false);
   }, [device, targetEntity]);
 
   if (!device) return null;
 
   const activeEntity = selectedEntity || sortedEntities[0] || null;
 
-  // Pairing code: primary entity's code or selected entity's code
+  // Pairing code: fresh code from reset, primary entity's code, or selected entity's code
   const pairingCode =
+    freshPairingCode ||
     activeEntity?.pairingCode ||
     device.entities.find((e) => e.pairingCode)?.pairingCode ||
     "";
   const manualCode =
+    freshManualCode ||
     activeEntity?.manualPairingCode ||
     device.entities.find((e) => e.manualPairingCode)?.manualPairingCode ||
     "";
 
-  const matterFabrics = Array.isArray(activeEntity?.matterFabrics)
+  const matterFabrics = resetFabrics
+    ? []
+    : Array.isArray(activeEntity?.matterFabrics)
     ? activeEntity.matterFabrics
     : Array.isArray(device.entities.find((e) => e.matterFabrics?.length)?.matterFabrics)
     ? device.entities.find((e) => e.matterFabrics?.length)!.matterFabrics!
     : [];
 
   const isExported = Boolean(activeEntity?.exported);
-  const isCommissioned = Boolean(activeEntity?.commissioned);
+  const isCommissioned = !resetFabrics && Boolean(activeEntity?.commissioned);
 
   const handleRemoveFabric = async (fabricIndex: number | string) => {
     if (!activeEntity) return;
@@ -190,13 +200,22 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     if (!activeEntity) return;
     if (
       !confirm(
-        "¿Desconectar este accesorio de todas las casas y generar un nuevo código QR limpio?"
+        "¿Desconectar este accesorio de todas las casas y generar un nuevo código QR limpio?\n\nIMPORTANTE: Si ya agregaste este accesorio en Apple Home, primero elimínalo de la app Casa (Ajustes -> Eliminar accesorio) para evitar que Apple Home intente reconectar una sesión obsoleta."
       )
     )
       return;
     setIsBusy(true);
     try {
-      await api.resetAccessory(activeEntity.entityId);
+      const res: any = await api.resetAccessory(activeEntity.entityId);
+      if (res?.pairingCode || res?.manualPairingCode) {
+        setFreshPairingCode(res.pairingCode || null);
+        setFreshManualCode(res.manualPairingCode || null);
+        setResetFabrics(true);
+        activeEntity.pairingCode = res.pairingCode || activeEntity.pairingCode;
+        activeEntity.manualPairingCode = res.manualPairingCode || activeEntity.manualPairingCode;
+        activeEntity.commissioned = false;
+        activeEntity.matterFabrics = [];
+      }
       showToast("✓ Accesorio desvinculado y nuevo QR generado");
       onRefresh();
     } catch (err: any) {
