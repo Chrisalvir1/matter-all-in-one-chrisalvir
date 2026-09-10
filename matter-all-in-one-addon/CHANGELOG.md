@@ -1,3 +1,13 @@
+## [1.5.53] - 2026-09-10
+
+### Corrección CI & Restauración Completa a v1.5.12 con Matterbridge 3.10.8
+
+- **Sincronización de Dependencias (package-lock.json):**
+  - Se sincronizó `package-lock.json` para satisfacer estrictamente `@matterbridge/*` y `matterbridge@3.10.8` en el pipeline de CI (`npm ci`).
+- **Restauración Completa de UI y Arquitectura v1.5.12:**
+  - Código base y UI devueltos exactamente a la versión estable `v1.5.12`.
+  - Sin componentes experimentales ni modificaciones en el generador QR original.
+
 ## [1.5.52] - 2026-09-10
 
 ### Restauración Completa a la Versión v1.5.12 (UI Original y Arquitectura Estable) con Matterbridge 3.10.8
