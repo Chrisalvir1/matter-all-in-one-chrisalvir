@@ -79,14 +79,94 @@ export const api = {
     request(`/cameras/${encodeURIComponent(cameraId)}`, { method: "DELETE" }),
 
   toggleExport: (entityId: string, exported: boolean) =>
-    request(`/${exported ? "register" : "unregister"}/${encodeURIComponent(entityId)}`, {
+    request<{
+      success: boolean;
+      error?: string;
+      pairingCode?: string | null;
+      manualPairingCode?: string | null;
+    }>(`/${exported ? "register" : "unregister"}/${encodeURIComponent(entityId)}`, {
       method: "POST",
+    }),
+
+  toggleDeviceState: (entityId: string) =>
+    request(`/entity-toggle/${encodeURIComponent(entityId)}`, {
+      method: "POST",
+    }),
+
+  turnOnEntity: (entityId: string) =>
+    request(`/entity-turn-on/${encodeURIComponent(entityId)}`, {
+      method: "POST",
+    }),
+
+  turnOffEntity: (entityId: string) =>
+    request(`/entity-turn-off/${encodeURIComponent(entityId)}`, {
+      method: "POST",
+    }),
+
+  setEntityValue: (entityId: string, value: number) =>
+    request(`/entity-set-value/${encodeURIComponent(entityId)}`, {
+      method: "POST",
+      body: JSON.stringify({ value }),
+    }),
+
+  selectOption: (entityId: string, option: string) =>
+    request(`/entity-select-option/${encodeURIComponent(entityId)}`, {
+      method: "POST",
+      body: JSON.stringify({ option }),
+    }),
+
+  setPresetMode: (entityId: string, presetMode: string) =>
+    request(`/entity-set-preset-mode/${encodeURIComponent(entityId)}`, {
+      method: "POST",
+      body: JSON.stringify({ preset_mode: presetMode }),
+    }),
+
+  setHvacMode: (entityId: string, hvacMode: string) =>
+    request(`/entity-set-hvac-mode/${encodeURIComponent(entityId)}`, {
+      method: "POST",
+      body: JSON.stringify({ hvac_mode: hvacMode }),
+    }),
+
+  setFanOscillation: (entityId: string, oscillating: boolean) =>
+    request(`/entity-oscillate/${encodeURIComponent(entityId)}`, {
+      method: "POST",
+      body: JSON.stringify({ oscillating }),
+    }),
+
+  setClimateSwingMode: (entityId: string, swing_mode: string) =>
+    request(`/entity-climate-swing/${encodeURIComponent(entityId)}`, {
+      method: "POST",
+      body: JSON.stringify({ swing_mode }),
+    }),
+
+  setLightSettings: (
+    entityId: string,
+    options: {
+      brightness_pct?: number;
+      brightness?: number;
+      color_temp_kelvin?: number;
+      kelvin?: number;
+      rgb_color?: [number, number, number];
+    }
+  ) =>
+    request(`/entity-set-light/${encodeURIComponent(entityId)}`, {
+      method: "POST",
+      body: JSON.stringify(options),
+    }),
+
+  mediaAction: (
+    entityId: string,
+    action: "media_play_pause" | "media_previous_track" | "media_next_track"
+  ) =>
+    request(`/media-action/${encodeURIComponent(entityId)}`, {
+      method: "POST",
+      body: JSON.stringify({ action }),
     }),
 
   setDeviceProfile: (entityId: string, profile: string) =>
     request(`/device-profile/${encodeURIComponent(entityId)}`, {
       method: "POST",
-      body: JSON.stringify({ profile }),
+      body: JSON.stringify({ profile, profileId: profile }),
     }),
 
   reconnectAccessory: (nodeId: string) =>
@@ -114,4 +194,9 @@ export const api = {
   restartService: () => request("/restart", { method: "POST" }),
 
   factoryReset: () => request("/factoryreset", { method: "POST" }),
+
+  installLovelaceCard: () =>
+    request<{ success: boolean; message: string }>("/install-lovelace-card", {
+      method: "POST",
+    }),
 };

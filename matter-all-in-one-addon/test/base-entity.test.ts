@@ -200,11 +200,92 @@ describe("BaseEntity fan devices (On/Off vs MultiSpeed)", () => {
     await endpoint.invokeAttributeChange(0x0202, "percentSetting", 83.33);
     expect(platform.ha.callService).toHaveBeenCalledWith(
       "fan",
-      "set_percentage",
+      "turn_on",
       "fan.ceiling_speed_fan",
       {
         percentage: 83.33,
       },
+    );
+  });
+
+  it("handles fan oscillation (rockSetting) and ambient temperature measurement on BaseEntity", async () => {
+    const oscillatingFanState = {
+      entity_id: "fan.tower_fan",
+      state: "on",
+      attributes: {
+        friendly_name: "Tower Fan",
+        supported_features: 3, // speed + oscillate
+        percentage: 66.67,
+        oscillating: true,
+        current_temperature: 23.4,
+      },
+      last_changed: "",
+      last_updated: "",
+    } as any;
+
+    const entity = new BaseEntity(
+      platform as any,
+      oscillatingFanState,
+      MatterDeviceTypes.fan,
+    );
+    const endpoint = (await entity.createEndpoint()) as any;
+
+    // Verify temperature cluster was added
+    expect(endpoint.clusterServers.has(0x0402)).toBe(true);
+    expect(endpoint.getAttribute(0x0402, "measuredValue")).toBe(2340);
+
+    // Simulate rockSetting change
+    await endpoint.invokeAttributeChange(0x0202, "rockSetting", {
+      rockLeftRight: false,
+    });
+    expect(platform.ha.callService).toHaveBeenCalledWith(
+      "fan",
+      "oscillate",
+      "fan.tower_fan",
+      { oscillating: false },
+    );
+  });
+
+  it("handles climate entity as a Matter Thermostat with temperature setpoint and systemMode", async () => {
+    const climateState = {
+      entity_id: "climate.space_heater",
+      state: "heat",
+      attributes: {
+        friendly_name: "Space Heater",
+        temperature: 24,
+        current_temperature: 21.5,
+        min_temp: 10,
+        max_temp: 35,
+        hvac_modes: ["off", "heat"],
+      },
+      last_changed: "",
+      last_updated: "",
+    } as any;
+
+    const entity = new BaseEntity(
+      platform as any,
+      climateState,
+      MatterDeviceTypes.thermostat,
+    );
+    const endpoint = (await entity.createEndpoint()) as any;
+    expect(endpoint).toBeDefined();
+
+    // Verify setpoint change
+    await endpoint.invokeAttributeChange(0x0201, "occupiedHeatingSetpoint", 2500);
+    expect(platform.ha.callService).toHaveBeenCalledWith(
+      "climate",
+      "set_temperature",
+      "climate.space_heater",
+      { temperature: 25 },
+    );
+
+    // Verify systemMode change
+    await endpoint.invokeAttributeChange(0x0201, "systemMode", 0); // Off
+    expect(platform.ha.callService).toHaveBeenCalledWith(
+      "climate",
+      "set_hvac_mode",
+      "climate.space_heater",
+      { hvac_mode: "off" },
     );
   });
 });

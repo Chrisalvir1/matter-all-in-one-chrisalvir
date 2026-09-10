@@ -150,20 +150,20 @@ export const lightColor = {
     return clamped;
   },
 
-  /** Extract HA HS color from RGB or HS state */
+  /** Extract HA HS color from RGB, RGBW, RGBWW, XY, or HS state */
   getHsColor(state: HassState): [number, number] | undefined {
-    const attrs = state.attributes as any;
+    const attrs = (state?.attributes || {}) as any;
     if (Array.isArray(attrs.hs_color) && attrs.hs_color.length >= 2) {
       return [attrs.hs_color[0], attrs.hs_color[1]];
     }
-    if (!Array.isArray(attrs.rgb_color) || attrs.rgb_color.length < 3)
-      return undefined;
-
-    return this.rgbToHs(
-      attrs.rgb_color[0],
-      attrs.rgb_color[1],
-      attrs.rgb_color[2],
-    );
+    const rgb = attrs.rgb_color ?? attrs.rgbw_color ?? attrs.rgbww_color;
+    if (Array.isArray(rgb) && rgb.length >= 3) {
+      return this.rgbToHs(rgb[0], rgb[1], rgb[2]);
+    }
+    if (Array.isArray(attrs.xy_color) && attrs.xy_color.length >= 2) {
+      return this.xyToHs(attrs.xy_color[0], attrs.xy_color[1]);
+    }
+    return undefined;
   },
 
   /** Convert RGB to HS */
@@ -183,6 +183,49 @@ export const lightColor = {
     else hue = 60 * ((red - green) / delta + 4);
 
     return [this.normalizeHue(hue), Math.round((delta / max) * 100)];
+  },
+
+  /** Convert HS to RGB */
+  hsToRgb(h: number, s: number): [number, number, number] {
+    const hue = this.normalizeHue(h);
+    const sat = Math.max(0, Math.min(100, s)) / 100;
+    const v = 1;
+    const c = v * sat;
+    const x = c * (1 - Math.abs(((hue / 60) % 2) - 1));
+    const m = v - c;
+    let r1 = 0,
+      g1 = 0,
+      b1 = 0;
+    if (hue < 60) {
+      r1 = c;
+      g1 = x;
+      b1 = 0;
+    } else if (hue < 120) {
+      r1 = x;
+      g1 = c;
+      b1 = 0;
+    } else if (hue < 180) {
+      r1 = 0;
+      g1 = c;
+      b1 = x;
+    } else if (hue < 240) {
+      r1 = 0;
+      g1 = x;
+      b1 = c;
+    } else if (hue < 300) {
+      r1 = x;
+      g1 = 0;
+      b1 = c;
+    } else {
+      r1 = c;
+      g1 = 0;
+      b1 = x;
+    }
+    return [
+      Math.round((r1 + m) * 255),
+      Math.round((g1 + m) * 255),
+      Math.round((b1 + m) * 255),
+    ];
   },
 
   /** Convert XY to HS using sRGB / D65 approximation */
@@ -228,8 +271,9 @@ export const lightColor = {
 
     if (colorReq.mireds !== undefined) {
       // If a temperature was requested, it takes precedence if supported
-      if (modes.includes("color_temp")) {
+      if (modes.includes("color_temp") || modes.includes("color_temp_kelvin")) {
         payload.color_temp = colorReq.mireds;
+        payload.color_temp_kelvin = this.miredsToKelvin(colorReq.mireds);
         return payload;
       }
     }
@@ -246,19 +290,26 @@ export const lightColor = {
         modes.includes("rgbww")
       ) {
         const hs = this.xyToHs(colorReq.xy[0], colorReq.xy[1]);
-        payload.hs_color = hs;
+        if (modes.includes("rgb") && !modes.includes("hs")) {
+          payload.rgb_color = this.hsToRgb(hs[0], hs[1]);
+        } else {
+          payload.hs_color = hs;
+        }
         return payload;
       }
     }
 
     if (colorReq.hs) {
+      if (modes.includes("hs")) {
+        payload.hs_color = colorReq.hs;
+        return payload;
+      }
       if (
-        modes.includes("hs") ||
         modes.includes("rgb") ||
         modes.includes("rgbw") ||
         modes.includes("rgbww")
       ) {
-        payload.hs_color = colorReq.hs;
+        payload.rgb_color = this.hsToRgb(colorReq.hs[0], colorReq.hs[1]);
         return payload;
       }
       // If only XY is supported

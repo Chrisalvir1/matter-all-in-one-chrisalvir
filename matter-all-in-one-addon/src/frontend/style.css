@@ -60,8 +60,8 @@ button {
 .app-shell {
   position: relative;
   z-index: 1;
-  display: grid;
-  grid-template-columns: 272px minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   min-height: 100vh;
 }
 
@@ -221,11 +221,115 @@ button {
 }
 
 .content {
-  max-width: 1500px;
+  max-width: 1600px;
   width: 100%;
-  padding: 42px clamp(22px, 4vw, 64px) 60px;
+  padding: 28px clamp(20px, 3.5vw, 48px) 60px;
   margin: 0 auto;
 }
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 14px clamp(20px, 3.5vw, 48px);
+  background: rgba(6, 12, 25, 0.82);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(24px);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.topbar-logo {
+  display: block;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  object-fit: contain;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.topbar-brand-info h1 {
+  margin: 1px 0 0;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  white-space: nowrap;
+}
+.topbar-brand-info .eyebrow {
+  margin: 0;
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  color: var(--dim);
+}
+.topbar-status-badge {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  backdrop-filter: blur(12px);
+}
+.topbar-status-badge .status-orb {
+  margin-top: 0;
+  flex-shrink: 0;
+}
+.topbar-status-desc strong {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.version-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--dim);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  white-space: nowrap;
+}
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.button-topbar {
+  height: 38px;
+  padding: 0 16px;
+  font-size: 13px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border-radius: 12px;
+  margin-bottom: 0 !important;
+  white-space: nowrap;
+}
+.button-topbar .btn-icon {
+  font-size: 14px;
+}
+
 .content-header {
   display: flex;
   justify-content: space-between;
@@ -454,14 +558,15 @@ h2 {
 
 .device-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(235px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+  align-items: start;
 }
 .device-card {
   position: relative;
   display: flex;
   flex-direction: column;
-  min-height: 224px;
+  min-height: 200px;
   padding: 18px;
   overflow: hidden;
   border-radius: 18px;
@@ -1203,7 +1308,7 @@ mark {
   transform: translateY(-1px);
 }
 
-/* QR Panel (right column, always visible) */
+/* QR Panel (right column, always visible & scrollable) */
 .qr-panel {
   display: flex;
   flex-direction: column;
@@ -1212,8 +1317,29 @@ mark {
   border: 1px solid var(--border);
   border-radius: 16px;
   background: rgba(6, 12, 25, 0.65);
-  overflow-y: auto;
-  max-height: calc(92vh - 170px);
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(56, 189, 248, 0.5) rgba(0, 0, 0, 0.2);
+  box-sizing: border-box;
+}
+.qr-panel > * {
+  flex-shrink: 0 !important;
+}
+.qr-panel::-webkit-scrollbar {
+  width: 6px;
+}
+.qr-panel::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+.qr-panel::-webkit-scrollbar-thumb {
+  background: rgba(56, 189, 248, 0.4);
+  border-radius: 4px;
+}
+.qr-panel::-webkit-scrollbar-thumb:hover {
+  background: rgba(56, 189, 248, 0.7);
 }
 .qr-status-label {
   padding: 6px 11px;
@@ -1300,7 +1426,7 @@ mark {
   );
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 20px;
-  padding: 18px 16px;
+  padding: 16px 14px;
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   box-shadow:
@@ -1310,7 +1436,9 @@ mark {
   transition:
     transform 0.3s ease,
     box-shadow 0.3s ease;
-  overflow: hidden;
+  overflow: visible !important;
+  flex-shrink: 0 !important;
+  min-height: fit-content;
 }
 
 .qr-liquid-glass-card::before {
@@ -1326,6 +1454,7 @@ mark {
     transparent 45%
   );
   pointer-events: none;
+  border-radius: 20px;
 }
 
 .qr-visual-wrapper {
@@ -1334,6 +1463,7 @@ mark {
   justify-content: center;
   align-items: center;
   margin: 0 auto;
+  flex-shrink: 0 !important;
 }
 
 .qr-frame-glow {
@@ -1353,21 +1483,25 @@ mark {
 .qr-frame {
   position: relative;
   background: #ffffff;
-  padding: 12px;
+  padding: 10px;
   border-radius: 18px;
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
   display: flex;
   justify-content: center;
   align-items: center;
+  flex-shrink: 0 !important;
 }
 
 #device-qr-code,
 #cam-modal-qr-code {
-  width: 224px;
-  height: 224px;
+  width: 208px;
+  height: 208px;
+  min-width: 208px;
+  min-height: 208px;
   display: flex;
   justify-content: center;
   align-items: center;
+  flex-shrink: 0 !important;
 }
 
 #device-qr-code svg,
@@ -1828,6 +1962,27 @@ mark {
   }
   .content {
     padding: 28px 18px 44px;
+  }
+  .topbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 12px 16px;
+    position: static;
+  }
+  .topbar-left {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .topbar-actions {
+    width: 100%;
+    display: flex;
+    gap: 8px;
+  }
+  .button-topbar {
+    flex: 1;
+    justify-content: center;
   }
   .content-header {
     align-items: stretch;
@@ -2577,3 +2732,448 @@ mark {
   }
 }
 
+/* ==========================================================================
+   Apple Home Dynamic Cards, Icons & Artwork (iOS 17/18 Aesthetics)
+   ========================================================================== */
+.apple-home-card {
+  background: #0B0D13;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+  contain: paint layout;
+}
+
+/* Liquid Glass Cards (Frosted Glassmorphism + Specular Highlights) */
+.liquid-glass-card {
+  background: rgba(14, 18, 28, 0.68) !important;
+  backdrop-filter: blur(28px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(190%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  box-shadow:
+    0 12px 36px 0 rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.22),
+    inset 0 0 16px 0 rgba(255, 255, 255, 0.03) !important;
+  transition: all 0.25s cubic-bezier(0.25, 1, 0.5, 1) !important;
+}
+
+.liquid-glass-card::before {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.35) 40%,
+    rgba(255, 255, 255, 0.6) 50%,
+    rgba(255, 255, 255, 0.35) 60%,
+    transparent 100%
+  ) !important;
+  opacity: 0.8 !important;
+}
+
+.liquid-glass-card:hover {
+  background: rgba(22, 28, 44, 0.78) !important;
+  border-color: rgba(120, 175, 255, 0.45) !important;
+  box-shadow:
+    0 20px 48px 0 rgba(0, 0, 0, 0.6),
+    0 0 24px rgba(0, 122, 255, 0.2),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.38) !important;
+  transform: translateY(-4px) scale(1.01) !important;
+}
+
+.liquid-glass-card.dashboard-mode {
+  cursor: pointer;
+}
+
+.dashboard-action-hint {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.apple-home-card.is-unexported {
+  border-color: rgba(255, 255, 255, 0.05);
+  opacity: 0.9;
+}
+
+.apple-home-card:hover {
+  border-color: rgba(0, 122, 255, 0.45);
+  background: #0E1119;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(0, 122, 255, 0.2);
+}
+
+.card-icon-button {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  cursor: pointer;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s ease, border-color 0.2s ease;
+}
+
+.card-icon-button.is-clickable:hover {
+  transform: scale(1.06);
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.card-icon-button:active {
+  transform: scale(0.95);
+}
+
+/* Quick Toggle Switch Pill */
+.quick-toggle-pill {
+  width: 44px;
+  height: 24px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 2px;
+  cursor: pointer;
+  position: relative;
+  transition: background 0.25s ease, border-color 0.25s ease;
+}
+
+.quick-toggle-pill.active {
+  background: #30D158;
+  border-color: #30D158;
+}
+
+.quick-toggle-pill .toggle-thumb {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #FFF;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform: translateX(0);
+}
+
+.quick-toggle-pill.active .toggle-thumb {
+  transform: translateX(20px);
+}
+
+.export-badge.unexported {
+  background: rgba(255, 159, 10, 0.12);
+  border-color: rgba(255, 159, 10, 0.4);
+  color: #FF9F0A;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.filter-chip-unexported.active {
+  background: rgba(255, 159, 10, 0.2);
+  border-color: #FF9F0A;
+  color: #FFB340;
+}
+
+.device-status-highlight {
+  font-size: 12px;
+  font-weight: 600;
+  color: #0A84FF;
+  margin: 0 0 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Fan rotation with GPU acceleration */
+@keyframes fan-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.fan-blades {
+  will-change: transform;
+}
+
+.fan-blades.spinning {
+  animation: fan-spin 0.8s linear infinite;
+}
+
+/* Airflow animation in artwork */
+@keyframes breeze-flow {
+  0% {
+    stroke-dashoffset: 60;
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 0.8;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0.1;
+  }
+}
+
+.breeze-line-1, .breeze-line-2, .breeze-line-3 {
+  stroke-dasharray: 20 10;
+  animation: breeze-flow 1.6s ease-in-out infinite;
+}
+.breeze-line-2 {
+  animation-delay: 0.3s;
+}
+.breeze-line-3 {
+  animation-delay: 0.6s;
+}
+
+/* Day / Night Art transitions */
+.card-art-backdrop {
+  transition: background 0.8s ease;
+}
+
+/* ==========================================================================
+   Liquid Dimmer Sliders & Composite Multi-Entity Controls
+   ========================================================================== */
+.liquid-slider-wrapper {
+  transition: all 0.2s ease;
+}
+.liquid-slider-wrapper:hover {
+  background: rgba(0, 0, 0, 0.4) !important;
+  border-color: rgba(255, 255, 255, 0.22) !important;
+}
+.composite-controls-cluster {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.composite-controls-cluster > div {
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+.composite-controls-cluster > div:hover {
+  background: rgba(0, 0, 0, 0.35) !important;
+  border-color: rgba(255, 255, 255, 0.16) !important;
+}
+
+/* Tower Fan Vane Oscillation */
+@keyframes tower-vane-sweep {
+  0% {
+    transform: scaleX(0.7);
+    opacity: 0.4;
+  }
+  50% {
+    transform: scaleX(1.15);
+    opacity: 1;
+  }
+  100% {
+    transform: scaleX(0.7);
+    opacity: 0.4;
+  }
+}
+
+.fan-tower-vane {
+  transform-origin: center;
+  animation: tower-vane-sweep 1.4s ease-in-out infinite;
+}
+
+/* Brand & Model Pills */
+.brand-pill {
+  display: inline-flex;
+  align-items: center;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  letter-spacing: 0.05em;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
+}
+
+.model-pill {
+  display: inline-flex;
+  align-items: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+/* ── Breeze Gusts (Modo Ambiente: Ráfagas Azules) ── */
+@keyframes breeze-gust-flow {
+  0% {
+    stroke-dashoffset: 140;
+    opacity: 0.15;
+  }
+  30% {
+    opacity: 0.95;
+  }
+  70% {
+    opacity: 0.95;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0.15;
+  }
+}
+
+.breeze-line-1 {
+  stroke-dasharray: 45 30;
+  animation: breeze-gust-flow var(--fan-speed-duration, 1.2s) cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.breeze-line-2 {
+  stroke-dasharray: 55 30;
+  animation: breeze-gust-flow var(--fan-speed-duration, 1s) cubic-bezier(0.4, 0, 0.2, 1) infinite 0.25s;
+}
+
+.breeze-line-3 {
+  stroke-dasharray: 40 30;
+  animation: breeze-gust-flow var(--fan-speed-duration, 1.4s) cubic-bezier(0.4, 0, 0.2, 1) infinite 0.5s;
+}
+
+/* ── Heat Gusts (Modo Calentador: Ráfagas Azules y Naranjas) ── */
+@keyframes heat-gust-flow {
+  0% {
+    stroke-dashoffset: 140;
+    opacity: 0.2;
+    filter: drop-shadow(0 0 3px #FF4500);
+  }
+  30% {
+    opacity: 1;
+    filter: drop-shadow(0 0 10px #FF6A00);
+  }
+  70% {
+    opacity: 1;
+    filter: drop-shadow(0 0 10px #FF4500);
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0.2;
+    filter: drop-shadow(0 0 3px #FF4500);
+  }
+}
+
+.heat-line-1 {
+  stroke-dasharray: 45 30;
+  animation: heat-gust-flow var(--fan-speed-duration, 1.1s) cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.heat-line-2 {
+  stroke-dasharray: 55 30;
+  animation: heat-gust-flow var(--fan-speed-duration, 0.9s) cubic-bezier(0.4, 0, 0.2, 1) infinite 0.2s;
+}
+
+.heat-line-3 {
+  stroke-dasharray: 40 30;
+  animation: heat-gust-flow var(--fan-speed-duration, 1.3s) cubic-bezier(0.4, 0, 0.2, 1) infinite 0.45s;
+}
+
+@keyframes ceramic-heat-pulse {
+  0% {
+    opacity: 0.35;
+    filter: drop-shadow(0 0 3px #FF4500);
+  }
+  50% {
+    opacity: 0.85;
+    filter: drop-shadow(0 0 12px #FF5500);
+  }
+  100% {
+    opacity: 0.35;
+    filter: drop-shadow(0 0 3px #FF4500);
+  }
+}
+
+.heat-ceramic-glow {
+  animation: ceramic-heat-pulse 2.2s ease-in-out infinite alternate;
+}
+
+@keyframes heat-vane-shimmer {
+  0% {
+    opacity: 0.7;
+    transform: scaleX(0.92);
+  }
+  50% {
+    opacity: 1;
+    transform: scaleX(1.08);
+  }
+  100% {
+    opacity: 0.7;
+    transform: scaleX(0.92);
+  }
+}
+
+.heat-tower-vane {
+  transform-origin: center;
+  animation: heat-vane-shimmer 1.2s ease-in-out infinite alternate;
+}
+
+/* ── Tower Fan Orientation Toggle Button ── */
+.orientation-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  color: #E2E8F0;
+  font-size: 0.68rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(8px);
+}
+
+.orientation-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(56, 189, 248, 0.5);
+  color: #FFF;
+  transform: translateY(-1px);
+}
+
+/* ── Prevent iOS WebKit touch callout & tooltip popup on mobile cards ── */
+.device-card,
+.card-top,
+.card-icon-button,
+.device-brand-row,
+.h7133-mode-selector,
+.kelvin-slider-container {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* ── Mobile Layout Fine-Tuning ── */
+@media (max-width: 600px) {
+  .device-card {
+    padding: 14px 12px;
+    border-radius: 18px;
+  }
+  .h7133-mode-selector {
+    padding: 7px 8px !important;
+    gap: 5px !important;
+  }
+  .h7133-mode-selector button {
+    padding: 6px 3px !important;
+    font-size: 0.68rem !important;
+  }
+}
+
+/* ── Tower Fan 3D Oscillation Animation Effects ── */
+@keyframes tower-oscillate-horiz {
+  0% { transform: rotate(0deg); }
+  25% { transform: rotate(-7deg); }
+  75% { transform: rotate(7deg); }
+  100% { transform: rotate(0deg); }
+}
+
+@keyframes tower-oscillate-vert {
+  0% { transform: translateY(0); }
+  25% { transform: translateY(-5px); }
+  75% { transform: translateY(5px); }
+  100% { transform: translateY(0); }
+}
+
+.art-tower-oscillating-horiz {
+  transform-origin: 118px 132px;
+  animation: tower-oscillate-horiz 3.6s ease-in-out infinite;
+}
+
+.art-tower-oscillating-vert {
+  animation: tower-oscillate-vert 2.8s ease-in-out infinite;
+}
+
+.art-tower-oscillating-all {
+  transform-origin: 118px 132px;
+  animation: tower-oscillate-horiz 3.6s ease-in-out infinite, tower-oscillate-vert 2.8s ease-in-out infinite;
+}

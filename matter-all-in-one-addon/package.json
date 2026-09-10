@@ -1,6 +1,6 @@
 {
   "name": "matter-all-in-one-chrisalvir",
-  "version": "1.5.09",
+  "version": "1.5.47",
   "description": "Matter all-in-one Home Assistant Add-on with complete Scrypted, BLE, Smart Dimmers, Vacuum, AC, Climate, Lock and Multi-Platform ecosystem compatibility",
   "author": "chrisalvir",
   "license": "Apache-2.0",
@@ -31,7 +31,7 @@
     "ws": "^8.21.3"
   },
   "peerDependencies": {
-    "matterbridge": ">= 3.10.7"
+    "matterbridge": ">= 3.10.8"
   },
   "devDependencies": {
     "@types/node": "^24.10.0",
@@ -41,7 +41,7 @@
     "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^6.1.1",
     "@vitest/coverage-v8": "^5.0.0-rc.4",
-    "matterbridge": "^3.10.7",
+    "matterbridge": "^3.10.8",
     "prettier": "^3.9.6",
     "qrcode": "^1.5.4",
     "typescript": "^7.0.2",
@@ -50,7 +50,7 @@
   },
   "scripts": {
     "clean": "node scripts/clean-dist.mjs",
-    "build": "npm run clean && tsc -p tsconfig.build.json && vite build",
+    "build": "npm run clean && tsc -p tsconfig.build.json && tsc -p src/frontend/tsconfig.json --noEmit && vite build",
     "build:backend": "tsc -p tsconfig.build.json",
     "build:frontend": "vite build",
     "dev": "tsc --watch",
@@ -73,7 +73,7 @@
   ],
   "matterbridge": {
     "name": "matter-all-in-one-chrisalvir",
-    "version": "1.4.84",
+    "version": "1.5.15",
     "author": "chrisalvir",
     "description": "Standards-based Matter 1.6 bridge for Home Assistant"
   }

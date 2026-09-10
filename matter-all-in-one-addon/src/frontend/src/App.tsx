@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { useAddonState, FilterType } from "./hooks/useAddonState";
-import { Header } from "./components/Header";
+import { TopBar } from "./components/TopBar";
 import { ControlCenter } from "./components/ControlCenter";
 import { FilterBar } from "./components/FilterBar";
 import { CameraBrandGroup } from "./components/CameraBrandGroup";
@@ -9,6 +9,7 @@ import { CameraConfigModal } from "./components/CameraConfigModal";
 import { DeviceModal } from "./components/DeviceModal";
 import { ScryptedModal } from "./components/ScryptedModal";
 import { SettingsModal } from "./components/SettingsModal";
+import { LovelaceModal } from "./components/LovelaceModal";
 import { extractCameraBrand } from "./components/CameraCard";
 import { CameraRecord, DeviceRecord } from "./types";
 import { api } from "./api/client";
@@ -35,6 +36,7 @@ export const App: React.FC = () => {
   const [selectedDevice, setSelectedDevice] = useState<DeviceRecord | null>(null);
   const [isScryptedModalOpen, setIsScryptedModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [isLovelaceModalOpen, setIsLovelaceModalOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
   // Filter devices based on search and active tab
@@ -45,14 +47,14 @@ export const App: React.FC = () => {
       const q = searchQuery.toLowerCase().trim();
       list = list.filter(
         (d) =>
-          d.name.toLowerCase().includes(q) ||
+          (d.name || "").toLowerCase().includes(q) ||
           (d.manufacturer && d.manufacturer.toLowerCase().includes(q)) ||
           (d.model && d.model.toLowerCase().includes(q)) ||
           (d.area && d.area.toLowerCase().includes(q)) ||
           d.entities.some(
             (e) =>
-              e.name?.toLowerCase().includes(q) ||
-              e.entityId.toLowerCase().includes(q)
+              (e.name || "").toLowerCase().includes(q) ||
+              (e.entityId || "").toLowerCase().includes(q)
           )
       );
     }
@@ -76,6 +78,12 @@ export const App: React.FC = () => {
             !d.entities.every((e) => e.domain === "camera") &&
             d.entities.some((e) => e.exported && !e.commissioned)
         );
+      case "unexported":
+        return list.filter(
+          (d) =>
+            !d.entities.every((e) => e.domain === "camera") &&
+            !d.entities.some((e) => e.exported)
+        );
       case "mqtt":
         return list.filter((d) =>
           d.entities.some((e) => e.origin === "mqtt" || e.entityId.startsWith("mqtt."))
@@ -91,14 +99,14 @@ export const App: React.FC = () => {
 
   // Group cameras by brand when relevant to active tab
   const cameraBrandGroups = useMemo(() => {
-    if (activeFilter === "iot" || activeFilter === "mqtt") return [];
+    if (activeFilter === "iot" || activeFilter === "mqtt" || activeFilter === "unexported") return [];
 
     const map = new Map<string, { scrypted: CameraRecord[]; ha: DeviceRecord[] }>();
 
     let scryptedList = cameras;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
-      scryptedList = scryptedList.filter((c) => c.name.toLowerCase().includes(q));
+      scryptedList = scryptedList.filter((c) => (c.name || "").toLowerCase().includes(q));
     }
 
     if (activeFilter === "paired") {
@@ -122,7 +130,7 @@ export const App: React.FC = () => {
     let haList = realHaCameraDevices;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
-      haList = haList.filter((d) => d.name.toLowerCase().includes(q));
+      haList = haList.filter((d) => (d.name || "").toLowerCase().includes(q));
     }
 
     if (activeFilter === "paired") {
@@ -140,11 +148,11 @@ export const App: React.FC = () => {
     }
 
     const sortedBrands = [...map.keys()].sort((a, b) => {
-      const aUnknown = a.toLowerCase().includes("no identificada");
-      const bUnknown = b.toLowerCase().includes("no identificada");
+      const aUnknown = (a || "").toLowerCase().includes("no identificada");
+      const bUnknown = (b || "").toLowerCase().includes("no identificada");
       if (aUnknown && !bUnknown) return 1;
       if (!aUnknown && bUnknown) return -1;
-      return a.localeCompare(b, "es", { sensitivity: "base" });
+      return (a || "").localeCompare(b || "", "es", { sensitivity: "base" });
     });
 
     return sortedBrands.map((brand) => ({
@@ -184,11 +192,12 @@ export const App: React.FC = () => {
       <div className="ambient ambient-two" />
 
       <div className="app-shell">
-        {/* Sidebar Header */}
-        <Header
+        {/* Top Bar with Brand, Status, and Actions */}
+        <TopBar
           status={status}
           onOpenSettings={() => setIsSettingsModalOpen(true)}
           onRestartService={handleRestartService}
+          onOpenLovelaceGuide={() => setIsLovelaceModalOpen(true)}
         />
 
         {/* Main Content Area */}
@@ -201,9 +210,7 @@ export const App: React.FC = () => {
               </p>
               <h2>Tu espacio Matter</h2>
               <p className="lead">
-                Activa la entidad principal para publicar el dispositivo físico.
-                Sus capacidades compatibles se integran como endpoints bajo un
-                único código Matter.
+                Activa la entidad principal para publicar el dispositivo físico. Sus capacidades compatibles se integran como endpoints bajo un único código Matter.
               </p>
             </div>
             <label className="search" htmlFor="device-search">
@@ -245,6 +252,8 @@ export const App: React.FC = () => {
                 ? `${stats.pairedTotal} accesorios vinculados en Matter`
                 : activeFilter === "unpaired"
                 ? `${stats.unpairedTotal} accesorios pendientes de emparejar`
+                : activeFilter === "unexported"
+                ? `${filteredDevices.length} dispositivos en Home Assistant listos para publicar en Matter`
                 : activeFilter === "mqtt"
                 ? `${stats.mqttCount} dispositivos MQTT`
                 : activeFilter === "issues"
@@ -293,6 +302,7 @@ export const App: React.FC = () => {
                     device={device}
                     searchQuery={searchQuery}
                     onConfigure={() => setSelectedDevice(device)}
+                    onRefresh={refreshAll}
                   />
                 ))}
 
@@ -305,6 +315,8 @@ export const App: React.FC = () => {
                         ? "No se encontraron dispositivos MQTT configurados."
                         : activeFilter === "paired"
                         ? "No hay dispositivos ni cámaras emparejadas en Matter todavía."
+                        : activeFilter === "unexported"
+                        ? "Todos los dispositivos detectados en Home Assistant ya están exportados a Matter."
                         : activeFilter === "issues"
                         ? "No hay incidencias registradas en este momento."
                         : "No hay dispositivos que coincidan con los filtros seleccionados."}
@@ -351,6 +363,13 @@ export const App: React.FC = () => {
       <SettingsModal
         isOpen={isSettingsModalOpen}
         onClose={() => setIsSettingsModalOpen(false)}
+        showToast={showToast}
+      />
+
+      {/* Lovelace Card Dashboard Modal */}
+      <LovelaceModal
+        isOpen={isLovelaceModalOpen}
+        onClose={() => setIsLovelaceModalOpen(false)}
         showToast={showToast}
       />
 

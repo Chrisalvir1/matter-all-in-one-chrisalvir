@@ -3,15 +3,9 @@ import { StatusResponse } from "../types";
 
 interface HeaderProps {
   status: StatusResponse | null;
-  onOpenSettings: () => void;
-  onRestartService: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({
-  status,
-  onOpenSettings,
-  onRestartService,
-}) => {
+export const Header: React.FC<HeaderProps> = ({ status }) => {
   const isOnline = status?.haStatus === "conectado";
 
   return (
@@ -51,35 +45,6 @@ export const Header: React.FC<HeaderProps> = ({
           código de emparejamiento único.
         </p>
       </section>
-
-      <div className="sidebar-spacer" />
-
-      <button
-        className="button button-secondary button-restart-quick"
-        id="quick-restart-button"
-        type="button"
-        onClick={onRestartService}
-      >
-        ↻ Reiniciar Servicio
-      </button>
-      <button
-        className="button button-secondary"
-        id="settings-button"
-        type="button"
-        onClick={onOpenSettings}
-      >
-        Ajustes del servicio
-      </button>
-
-      <div className="connection-state">
-        <span className={`connection-dot ${isOnline ? "online" : "offline"}`} id="ha-dot" />
-        <span id="ha-status">
-          {isOnline ? "Home Assistant conectado" : "Conectando con Home Assistant…"}
-        </span>
-      </div>
-      <p className="version" id="version">
-        {status?.version ? `v${status.version}` : "—"}
-      </p>
     </aside>
   );
 };

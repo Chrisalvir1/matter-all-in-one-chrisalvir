@@ -1,7 +1,15 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { DeviceRecord, EntityRecord } from "../types";
 import { api } from "../api/client";
 import { QRCodeDisplay } from "./QRCodeDisplay";
+import { AppleHomeIcon } from "./AppleHomeIcon";
+import { extractLightColorInfo } from "../utils/colors";
+import {
+  detectDevice,
+  getDeviceVisualOverride,
+  setDeviceVisualOverride,
+  APPLE_HOMEPOD_COLORS,
+} from "../utils/deviceDetector";
 
 interface DeviceModalProps {
   device: DeviceRecord | null;
@@ -9,35 +17,6 @@ interface DeviceModalProps {
   onClose: () => void;
   onRefresh: () => void;
   showToast: (msg: string, isError?: boolean) => void;
-}
-
-function getDomainIcon(domain?: string): string {
-  switch (domain) {
-    case "light":
-      return "💡";
-    case "switch":
-      return "🔌";
-    case "camera":
-      return "📹";
-    case "climate":
-      return "❄️";
-    case "fan":
-      return "🌀";
-    case "cover":
-      return "🪟";
-    case "lock":
-      return "🔒";
-    case "sensor":
-      return "🌡️";
-    case "binary_sensor":
-      return "🔔";
-    case "vacuum":
-      return "🤖";
-    case "humidifier":
-      return "💧";
-    default:
-      return "⚡";
-  }
 }
 
 export const DeviceModal: React.FC<DeviceModalProps> = ({
@@ -51,14 +30,60 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
   const [isBusy, setIsBusy] = useState(false);
   const [multiAdminOpen, setMultiAdminOpen] = useState(false);
 
+  const [visualType, setVisualType] = useState<string>("auto");
+  const [appleColor, setAppleColor] = useState<string>("space_gray");
+  const [customRoom, setCustomRoom] = useState<string>("");
+  const [orientation, setOrientation] = useState<"auto" | "vertical" | "horizontal">("auto");
+
   useEffect(() => {
     if (!device) return;
     const initial = targetEntity || device.entities[0] || null;
     setSelectedEntity(initial);
     setMultiAdminOpen(false);
+
+    const ov =
+      getDeviceVisualOverride(device.id) ||
+      (device.entities[0] ? getDeviceVisualOverride(device.entities[0].entityId) : null);
+    const det = detectDevice(device);
+    setVisualType(ov?.visualType || "auto");
+    setAppleColor(ov?.appleColor || det.appleColor || "space_gray");
+    setCustomRoom(ov?.roomLabel || "");
+    setOrientation(ov?.orientation || "auto");
   }, [device, targetEntity]);
 
   if (!device) return null;
+
+  const detected = detectDevice(device);
+  const effectiveSubtype = visualType === "auto" ? detected.subtype : visualType;
+  const isHomePodSubtype =
+    effectiveSubtype === "homepod_mini" || effectiveSubtype === "homepod";
+  const activeHomePodModel =
+    effectiveSubtype === "homepod" ? "homepod" : "homepod_mini";
+  const availableAppleColors =
+    APPLE_HOMEPOD_COLORS[activeHomePodModel] || APPLE_HOMEPOD_COLORS.homepod_mini;
+
+  const handleSaveVisualOverride = (
+    newType: string,
+    newColor: string,
+    newRoom: string,
+    newOrientation?: "auto" | "vertical" | "horizontal"
+  ) => {
+    const effOrientation = newOrientation !== undefined ? newOrientation : orientation;
+    setDeviceVisualOverride(device.id, {
+      visualType: newType,
+      appleColor: newColor,
+      roomLabel: newRoom.trim() || undefined,
+      orientation: effOrientation,
+    });
+    setVisualType(newType);
+    setAppleColor(newColor);
+    setCustomRoom(newRoom);
+    if (newOrientation !== undefined) {
+      setOrientation(newOrientation);
+    }
+    showToast("✓ Apariencia de hardware guardada");
+    onRefresh();
+  };
 
   const sortedEntities = [...device.entities].sort((a, b) => {
     if (targetEntity) {
@@ -75,29 +100,211 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     );
   });
 
-  const activeEntity = selectedEntity || sortedEntities[0] || null;
+  const isH7133 =
+    (device.model || "").toUpperCase().includes("H7133") ||
+    (device.name || "").toLowerCase().includes("h7133") ||
+    (detected.brand === "Govee" &&
+      (detected.subtype === "tower_fan" ||
+        (device.name || "").toLowerCase().includes("ventilador")));
 
-  // Pairing code: primary entity's code or selected entity's code
+  const planAEntity = useMemo(() => {
+    return (
+      device.entities.find(
+        (e) =>
+          e.domain === "fan" ||
+          (e.domain === "switch" &&
+            !e.entityId.includes("auto_stop") &&
+            (e.entityId.toLowerCase().includes("ventilador") ||
+              (e.name || "").toLowerCase().includes("ventilador")))
+      ) ||
+      device.entities.find(
+        (e) => e.domain === "switch" && !e.entityId.includes("auto_stop")
+      ) ||
+      device.entities[0] ||
+      null
+    );
+  }, [device.entities]);
+
+  const planBEntity = useMemo(() => {
+    return (
+      device.entities.find(
+        (e) =>
+          e.domain === "climate" ||
+          e.entityId.includes("auto_stop") ||
+          (e.name || "").toLowerCase().includes("auto_stop") ||
+          (e.name || "").toLowerCase().includes("calefactor")
+      ) ||
+      device.entities.find(
+        (e) => e.entityId !== planAEntity?.entityId && e.domain === "switch"
+      ) ||
+      device.entities[1] ||
+      null
+    );
+  }, [device.entities, planAEntity]);
+
+  const [h7133Tab, setH7133Tab] = useState<"plan_a" | "plan_b">("plan_a");
+
+  const effectiveEntity = isH7133
+    ? h7133Tab === "plan_a"
+      ? selectedEntity && (selectedEntity.entityId === planAEntity?.entityId || selectedEntity.domain === "light" || selectedEntity.domain === "sensor")
+        ? selectedEntity
+        : planAEntity
+      : selectedEntity && (selectedEntity.entityId === planBEntity?.entityId || selectedEntity.domain === "climate")
+      ? selectedEntity
+      : planBEntity
+    : selectedEntity || sortedEntities[0] || null;
+
+  const activeEntity = effectiveEntity;
+
+  // The entity targeted by the QR code panel:
+  const targetQrEntity = isH7133
+    ? (h7133Tab === "plan_a" ? planAEntity : planBEntity) || activeEntity
+    : activeEntity;
+
+  const isTargetExported = Boolean(targetQrEntity?.exported);
+  const isTargetCommissioned = Boolean(targetQrEntity?.commissioned);
+
+  // Pairing code: target QR entity's code, or fall back to device code
   const pairingCode =
-    activeEntity?.pairingCode ||
-    device.entities.find((e) => e.pairingCode)?.pairingCode ||
-    "";
+    targetQrEntity?.pairingCode ||
+    (isH7133
+      ? (h7133Tab === "plan_a" ? planAEntity?.pairingCode : planBEntity?.pairingCode) || ""
+      : device.entities.find((e) => e.pairingCode)?.pairingCode || "");
+
   const manualCode =
-    activeEntity?.manualPairingCode ||
-    device.entities.find((e) => e.manualPairingCode)?.manualPairingCode ||
-    pairingCode;
+    targetQrEntity?.manualPairingCode ||
+    (isH7133
+      ? (h7133Tab === "plan_a" ? planAEntity?.manualPairingCode : planBEntity?.manualPairingCode) || pairingCode
+      : device.entities.find((e) => e.manualPairingCode)?.manualPairingCode || pairingCode);
 
   const isExported = Boolean(activeEntity?.exported);
   const isCommissioned = Boolean(activeEntity?.commissioned);
 
+  const handleActivatePlanA = async () => {
+    if (!planAEntity) return;
+    setIsBusy(true);
+    showToast("Activando Plan A (Ventilador On/Off + Luz RGB)...");
+    try {
+      const lightEnt = device.entities.find((e) => e.domain === "light");
+      if (lightEnt) {
+        await api.setDeviceProfile(lightEnt.entityId, "extendedColorLight").catch(() => {});
+      }
+      await api.setDeviceProfile(planAEntity.entityId, "fan");
+      let reg: any;
+      if (planAEntity.exported) {
+        reg = await api.resetAccessory(planAEntity.entityId);
+      } else {
+        reg = await api.toggleExport(planAEntity.entityId, true);
+      }
+      planAEntity.exported = true;
+      if (lightEnt) {
+        lightEnt.exported = true;
+      }
+      if (reg?.pairingCode) {
+        planAEntity.pairingCode = reg.pairingCode;
+        if (reg.manualPairingCode) planAEntity.manualPairingCode = reg.manualPairingCode;
+      } else {
+        const comm = await api.openCommissioning(planAEntity.entityId).catch(() => null);
+        if (comm?.pairingCode) {
+          planAEntity.pairingCode = comm.pairingCode;
+          if (comm.manualPairingCode) planAEntity.manualPairingCode = comm.manualPairingCode;
+        }
+      }
+
+      setH7133Tab("plan_a");
+      setSelectedEntity(planAEntity);
+      showToast("✓ Plan A Activado: 1 solo accesorio Matter (Ventilador On/Off + Luz RGB)");
+      setTimeout(() => onRefresh(), 500);
+    } catch (err: any) {
+      showToast(err.message || "Error al activar Plan A", true);
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const handleActivatePlanB = async () => {
+    if (!planBEntity) return;
+    setIsBusy(true);
+    showToast("Activando Plan B (Calefactor / Clima)...");
+    try {
+      await api.setDeviceProfile(planBEntity.entityId, "thermostat");
+      let reg: any;
+      if (planBEntity.exported) {
+        reg = await api.resetAccessory(planBEntity.entityId);
+      } else {
+        reg = await api.toggleExport(planBEntity.entityId, true);
+      }
+      planBEntity.exported = true;
+      if (reg?.pairingCode) {
+        planBEntity.pairingCode = reg.pairingCode;
+        if (reg.manualPairingCode) planBEntity.manualPairingCode = reg.manualPairingCode;
+      } else {
+        const comm = await api.openCommissioning(planBEntity.entityId).catch(() => null);
+        if (comm?.pairingCode) {
+          planBEntity.pairingCode = comm.pairingCode;
+          if (comm.manualPairingCode) planBEntity.manualPairingCode = comm.manualPairingCode;
+        }
+      }
+
+      // Also ensure temperature sensor is exported for thermostat readings
+      const tempEnt = device.entities.find((e) => e.domain === "sensor");
+      if (tempEnt && !tempEnt.exported) {
+        await api.toggleExport(tempEnt.entityId, true).catch(() => {});
+        tempEnt.exported = true;
+      }
+
+      setH7133Tab("plan_b");
+      setSelectedEntity(planBEntity);
+      showToast("✓ Plan B Activado: Código QR de Calefactor generado por separado");
+      setTimeout(() => onRefresh(), 500);
+    } catch (err: any) {
+      showToast(err.message || "Error al activar Plan B", true);
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const handleExportPlan = async (plan: "plan_a" | "plan_b" | "both") => {
+    if (plan === "plan_a") {
+      await handleActivatePlanA();
+    } else if (plan === "plan_b") {
+      await handleActivatePlanB();
+    } else {
+      await handleActivatePlanA();
+      await handleActivatePlanB();
+      showToast("✓ Ambos planes activados: Cada uno tiene su propio Código QR");
+    }
+  };
+
+  const getFriendlyEntityName = (ent: EntityRecord | null): string => {
+    if (!ent) return "Selecciona una entidad";
+    const id = ent.entityId.toLowerCase();
+    const name = (ent.name || "").toLowerCase();
+    if (isH7133 || id.includes("h7133") || name.includes("ventilador")) {
+      if (ent.domain === "light") return "💡 Luz Nocturna / LED";
+      if (id.includes("auto_stop")) return "🔥 Calefactor / Auto-Stop (Plan B)";
+      if (id.includes("temp") && !id.includes("target") || (ent.domain === "sensor" && ent.attributes?.device_class === "temperature")) return "🌡️ Sensor de Temperatura Ambiente";
+      if (id.includes("oscil") || id.includes("swing") || id.includes("sweep") || name.includes("oscilación") || name.includes("barrido")) return "🔄 Oscilación / Barrido";
+      if (id.includes("gear") || id.includes("speed") || name.includes("velocidad") || name.includes("engranaje")) return "⚡ Velocidad / Engranaje";
+      if (id.includes("mode") || name.includes("modo")) return "🎛️ Selector de Modo de Trabajo";
+      if (id.includes("target_temp") || id.includes("target_temperature") || name.includes("objetivo")) return "🎯 Temperatura Objetivo";
+      if (id.includes("ventilador") || ent.domain === "fan" || ent.domain === "switch") return "🌪️ Ventilador Principal (Plan A)";
+    }
+    return ent.name || ent.entityId;
+  };
+
   const handleToggleExport = async (entity: EntityRecord) => {
     try {
       const nextState = !entity.exported;
-      await api.toggleExport(entity.entityId, nextState);
+      const res = await api.toggleExport(entity.entityId, nextState);
       entity.exported = nextState;
+      if (nextState && res?.pairingCode) {
+        entity.pairingCode = res.pairingCode;
+        if (res.manualPairingCode) entity.manualPairingCode = res.manualPairingCode;
+      }
       showToast(
         nextState
-          ? `✓ ${entity.name || entity.entityId} publicado en Matter`
+          ? `✓ ${getFriendlyEntityName(entity)} publicado en Matter`
           : `Retirado de Matter`
       );
       onRefresh();
@@ -107,12 +314,16 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
   };
 
   const handleReconnect = async () => {
-    if (!activeEntity) return;
+    await handleReconnectForEntity(targetQrEntity || activeEntity);
+  };
+
+  const handleReconnectForEntity = async (ent: EntityRecord | null) => {
+    if (!ent) return;
     setIsBusy(true);
     showToast("Reconectando accesorio Matter...");
     try {
       await api.reconnectAccessory(
-        activeEntity.compositeDeviceId || activeEntity.entityId
+        ent.compositeDeviceId || ent.entityId
       );
       showToast("✓ Accesorio reconectado");
       onRefresh();
@@ -124,14 +335,23 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
   };
 
   const handleOpenCommissioning = async () => {
-    if (!activeEntity) return;
+    await handleOpenCommissioningForEntity(targetQrEntity || activeEntity);
+  };
+
+  const handleOpenCommissioningForEntity = async (ent: EntityRecord | null) => {
+    if (!ent) return;
     setIsBusy(true);
     try {
-      await api.openCommissioning(activeEntity.entityId);
+      const res = await api.openCommissioning(ent.entityId);
+      if (res?.pairingCode) {
+        ent.pairingCode = res.pairingCode;
+        if (res.manualPairingCode) ent.manualPairingCode = res.manualPairingCode;
+      }
       setMultiAdminOpen(true);
       showToast(
-        "✓ Modo Multi-Admin Abierto. Puedes emparejar en una segunda plataforma."
+        "✓ Código QR generado y modo emparejamiento abierto (15 min)"
       );
+      onRefresh();
     } catch (err: any) {
       showToast(err.message || "Error al abrir Multi-Admin", true);
     } finally {
@@ -140,7 +360,11 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
   };
 
   const handleResetAccessory = async () => {
-    if (!activeEntity) return;
+    await handleResetAccessoryForEntity(targetQrEntity || activeEntity);
+  };
+
+  const handleResetAccessoryForEntity = async (ent: EntityRecord | null) => {
+    if (!ent) return;
     if (
       !confirm(
         "¿Desconectar este accesorio de todas las casas y generar un nuevo código QR limpio?"
@@ -149,7 +373,11 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
       return;
     setIsBusy(true);
     try {
-      await api.resetAccessory(activeEntity.entityId);
+      const res = await api.resetAccessory(ent.entityId);
+      if (res?.pairingCode) {
+        ent.pairingCode = res.pairingCode;
+        if (res.manualPairingCode) ent.manualPairingCode = res.manualPairingCode;
+      }
       showToast("✓ Accesorio desvinculado y nuevo QR generado");
       onRefresh();
     } catch (err: any) {
@@ -160,15 +388,16 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
   };
 
   const handleCopyDiagnostics = () => {
-    if (!activeEntity) return;
+    const target = targetQrEntity || activeEntity;
+    if (!target) return;
     const diagText = JSON.stringify(
       {
-        entityId: activeEntity.entityId,
-        name: activeEntity.name,
-        domain: activeEntity.domain,
-        exported: activeEntity.exported,
-        commissioned: activeEntity.commissioned,
-        logs: selectedEntity?.logs || activeEntity.logs || [],
+        entityId: target.entityId,
+        name: target.name,
+        domain: target.domain,
+        exported: target.exported,
+        commissioned: target.commissioned,
+        logs: selectedEntity?.logs || target.logs || [],
       },
       null,
       2
@@ -201,7 +430,8 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
           maxHeight: "96vh",
           display: "flex",
           flexDirection: "column",
-          padding: "24px 32px",
+          padding: "20px 28px",
+          overflowY: "auto",
         }}
       >
         <button
@@ -216,7 +446,12 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
 
         <header className="modal-header" style={{ marginBottom: 8 }}>
           <span className="modal-icon" id="device-modal-icon">
-            {getDomainIcon(device.entities[0]?.domain)}
+            <AppleHomeIcon
+              domain={device.entities[0]?.domain || "switch"}
+              state={device.entities[0]?.state}
+              attributes={device.entities[0]?.attributes}
+              size={36}
+            />
           </span>
           <div>
             <p className="eyebrow">DISPOSITIVO IOT · MATTER ALL-IN-ONE</p>
@@ -267,14 +502,28 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                   <div
                     key={ent.entityId}
                     className={`entity-row${ent.exported ? "" : " dimmed"}${isSelected ? " selected" : ""}`}
-                    onClick={() => setSelectedEntity(ent)}
+                    onClick={() => {
+                      setSelectedEntity(ent);
+                      if (isH7133) {
+                        if (ent.entityId === planAEntity?.entityId) {
+                          setH7133Tab("plan_a");
+                        } else if (ent.entityId === planBEntity?.entityId) {
+                          setH7133Tab("plan_b");
+                        }
+                      }
+                    }}
                   >
                     <span className="entity-row-icon">
-                      {getDomainIcon(ent.domain)}
+                      <AppleHomeIcon
+                        domain={ent.domain}
+                        state={ent.state}
+                        attributes={ent.attributes}
+                        size={22}
+                      />
                     </span>
                     <div>
                       <div className="entity-row-name">
-                        {ent.name || ent.entityId}
+                        {getFriendlyEntityName(ent)}
                       </div>
                       <div className="entity-row-id">{ent.entityId}</div>
                       <span
@@ -315,10 +564,197 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
               gap: 14,
             }}
           >
+            {/* Govee H7133 Plan A & Plan B Quick Assistant */}
+            {/* Govee H7133 Dual Plan Selector Assistant Card */}
+            {isH7133 && (
+              <div
+                className="h7133-assistant-card"
+                style={{
+                  background: "linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.85))",
+                  border: "1px solid rgba(56, 189, 248, 0.35)",
+                  borderRadius: 14,
+                  padding: "16px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 12,
+                  boxShadow: "0 6px 20px rgba(0, 0, 0, 0.35)",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ fontSize: 24 }}>🌪️🔥</span>
+                    <div>
+                      <strong style={{ fontSize: 13, color: "#38BDF8", display: "block" }}>
+                        Govee H7133 · Publicación Matter Independiente
+                      </strong>
+                      <div style={{ fontSize: 11, color: "#94A3B8" }}>
+                        Cada plan genera su propio Código QR para Apple Home / Google Home
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  {/* Plan A Card */}
+                  <div
+                    style={{
+                      background: h7133Tab === "plan_a" ? "rgba(2, 132, 199, 0.22)" : "rgba(255, 255, 255, 0.04)",
+                      border: h7133Tab === "plan_a" ? "1.5px solid #38BDF8" : "1px solid rgba(255, 255, 255, 0.1)",
+                      borderRadius: 10,
+                      padding: "10px 12px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 6,
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <strong style={{ fontSize: 12, color: "#38BDF8" }}>🌪️💡 Plan A: Ventilador + Luz RGB</strong>
+                      <span
+                        style={{
+                          fontSize: 10,
+                          padding: "2px 6px",
+                          borderRadius: 6,
+                          background: planAEntity?.commissioned
+                            ? "rgba(34, 197, 94, 0.2)"
+                            : planAEntity?.exported
+                            ? "rgba(56, 189, 248, 0.2)"
+                            : "rgba(255, 255, 255, 0.1)",
+                          color: planAEntity?.commissioned
+                            ? "#4ade80"
+                            : planAEntity?.exported
+                            ? "#38bdf8"
+                            : "#94a3b8",
+                          fontWeight: 600,
+                        }}
+                      >
+                        {planAEntity?.commissioned ? "🏠 Vinculado" : planAEntity?.exported ? "✓ QR Listo" : "Sin publicar"}
+                      </span>
+                    </div>
+                    <p style={{ fontSize: 11, color: "#cbd5e1", margin: 0 }}>
+                      Ventilador On/Off simple (sin velocidades para evitar saltos a calefacción) + Luz Nocturna RGB (1 solo accesorio y 1 código QR).
+                    </p>
+                    <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setH7133Tab("plan_a");
+                          if (planAEntity) setSelectedEntity(planAEntity);
+                          if (!planAEntity?.exported) handleActivatePlanA();
+                        }}
+                        disabled={isBusy}
+                        style={{
+                          flex: 1,
+                          padding: "6px 8px",
+                          borderRadius: 6,
+                          fontSize: 11,
+                          fontWeight: 600,
+                          background: planAEntity?.exported
+                            ? (h7133Tab === "plan_a" ? "#0284c7" : "rgba(56, 189, 248, 0.25)")
+                            : "linear-gradient(135deg, #0284c7, #0369a1)",
+                          border: "1px solid #38bdf8",
+                          color: "#FFF",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {planAEntity?.exported ? "📱 Ver QR Plan A" : "🚀 Activar Plan A"}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Plan B Card */}
+                  <div
+                    style={{
+                      background: h7133Tab === "plan_b" ? "rgba(234, 88, 12, 0.22)" : "rgba(255, 255, 255, 0.04)",
+                      border: h7133Tab === "plan_b" ? "1.5px solid #FB923C" : "1px solid rgba(255, 255, 255, 0.1)",
+                      borderRadius: 10,
+                      padding: "10px 12px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 6,
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <strong style={{ fontSize: 12, color: "#FB923C" }}>🔥 Plan B: Termostato + Fan Cool</strong>
+                      <span
+                        style={{
+                          fontSize: 10,
+                          padding: "2px 6px",
+                          borderRadius: 6,
+                          background: planBEntity?.commissioned
+                            ? "rgba(34, 197, 94, 0.2)"
+                            : planBEntity?.exported
+                            ? "rgba(251, 146, 60, 0.2)"
+                            : "rgba(255, 255, 255, 0.1)",
+                          color: planBEntity?.commissioned
+                            ? "#4ade80"
+                            : planBEntity?.exported
+                            ? "#fb923c"
+                            : "#94a3b8",
+                          fontWeight: 600,
+                        }}
+                      >
+                        {planBEntity?.commissioned ? "🏠 Vinculado" : planBEntity?.exported ? "✓ QR Listo" : "Sin publicar"}
+                      </span>
+                    </div>
+                    <p style={{ fontSize: 11, color: "#cbd5e1", margin: 0 }}>
+                      Termostato independiente con su propio código QR: Calefactor (Heat) y modo Frío (Cool) para encender ventilador fresco en automatizaciones.
+                    </p>
+                    <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setH7133Tab("plan_b");
+                          if (planBEntity) setSelectedEntity(planBEntity);
+                          if (!planBEntity?.exported) handleActivatePlanB();
+                        }}
+                        disabled={isBusy}
+                        style={{
+                          flex: 1,
+                          padding: "6px 8px",
+                          borderRadius: 6,
+                          fontSize: 11,
+                          fontWeight: 600,
+                          background: planBEntity?.exported
+                            ? (h7133Tab === "plan_b" ? "#ea580c" : "rgba(251, 146, 60, 0.25)")
+                            : "linear-gradient(135deg, #ea580c, #c2410c)",
+                          border: "1px solid #fb923c",
+                          color: "#FFF",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {planBEntity?.exported ? "📱 Ver QR Plan B" : "🚀 Activar Plan B"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleExportPlan("both")}
+                  disabled={isBusy}
+                  style={{
+                    padding: "7px 12px",
+                    background: "rgba(255, 255, 255, 0.06)",
+                    border: "1px solid rgba(255, 255, 255, 0.15)",
+                    borderRadius: 8,
+                    color: "#E2E8F0",
+                    fontSize: 11,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 6,
+                  }}
+                >
+                  <span>⚡ Activar Ambos Planes (QR Ventilador + QR Calefactor)</span>
+                </button>
+              </div>
+            )}
+
             <p className="card-label">SELECCIÓN Y CONFIGURACIÓN</p>
             <h3 id="selection-title">
               <span className="selection-title-text">
-                {activeEntity?.name || activeEntity?.entityId || "Selecciona una entidad"}
+                {getFriendlyEntityName(activeEntity)}
               </span>
               {isCommissioned && (
                 <span className="home-badge commissioned">
@@ -352,6 +788,345 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                 <dd>{isCommissioned ? "Emparejado en red Matter" : isExported ? "Listo para vincular" : "Sin publicar"}</dd>
               </div>
             </dl>
+
+            {/* Dedicated Light & Color Control Panel */}
+            {activeEntity?.domain === "light" && (() => {
+              const colInfo = extractLightColorInfo(activeEntity.attributes);
+              return (
+                <section
+                  className="light-color-config-section"
+                  style={{
+                    background: "rgba(255, 255, 255, 0.04)",
+                    border: "1px solid rgba(255, 255, 255, 0.08)",
+                    borderRadius: 14,
+                    padding: "14px 16px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 12,
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: 16 }}>💡</span>
+                      <strong style={{ fontSize: 13, color: "var(--text-primary, #fff)" }}>
+                        Color & Perfil Matter de Luz
+                      </strong>
+                    </div>
+                    <span
+                      style={{
+                        fontSize: 11,
+                        padding: "2px 8px",
+                        borderRadius: 12,
+                        background: "rgba(255, 255, 255, 0.08)",
+                        color: "#38BDF8",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {activeEntity.matterType || "extendedColorLight"}
+                    </span>
+                  </div>
+
+                  {/* Live color badge */}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 12,
+                      padding: "10px 12px",
+                      background: "rgba(0, 0, 0, 0.3)",
+                      borderRadius: 10,
+                      border: `1px solid ${colInfo.hex}44`,
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: 24,
+                        height: 24,
+                        borderRadius: "50%",
+                        background: colInfo.hex,
+                        boxShadow: `0 0 12px ${colInfo.hex}`,
+                        border: "2px solid rgba(255, 255, 255, 0.4)",
+                        flexShrink: 0,
+                      }}
+                    />
+                    <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: "#fff" }}>
+                        {colInfo.label}
+                      </span>
+                      <span style={{ fontSize: 11, color: "var(--text-secondary, #94A3B8)" }}>
+                        HEX: {colInfo.hex} {colInfo.kelvin ? `· ${colInfo.kelvin}K` : ""}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Matter profile selector */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    <label style={{ fontSize: 11, color: "var(--text-secondary, #94A3B8)", fontWeight: 500 }}>
+                      Perfil Matter de Exportación
+                    </label>
+                    <select
+                      value={activeEntity.matterType || "extendedColorLight"}
+                      onChange={async (e) => {
+                        const val = e.target.value;
+                        try {
+                          await api.setDeviceProfile(activeEntity.entityId, val);
+                          activeEntity.matterType = val;
+                          showToast(`✓ Perfil cambiado a ${val}`);
+                          onRefresh();
+                        } catch (err: any) {
+                          showToast(err.message || "Error al cambiar perfil", true);
+                        }
+                      }}
+                      style={{
+                        background: "rgba(15, 23, 42, 0.8)",
+                        border: "1px solid rgba(255, 255, 255, 0.15)",
+                        color: "var(--text-primary, #fff)",
+                        padding: "8px 12px",
+                        borderRadius: 8,
+                        fontSize: 13,
+                        outline: "none",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <option value="extendedColorLight">
+                        🎨 extendedColorLight (Color RGB + Kelvin + Brillo) [Recomendado]
+                      </option>
+                      <option value="colorTemperatureLight">
+                        🌡️ colorTemperatureLight (Temperatura Kelvin + Brillo)
+                      </option>
+                      <option value="dimmableLight">
+                        🔅 dimmableLight (Regulable / Brillo)
+                      </option>
+                      <option value="onOffLight">
+                        💡 onOffLight (Encendido / Apagado)
+                      </option>
+                    </select>
+                  </div>
+                </section>
+              );
+            })()}
+
+            {/* Custom Visual Silhouette / Hardware Appearance */}
+            <section
+              className="appearance-customization-section"
+              style={{
+                background: "rgba(255, 255, 255, 0.04)",
+                border: "1px solid rgba(255, 255, 255, 0.08)",
+                borderRadius: 14,
+                padding: "14px 16px",
+                display: "flex",
+                flexDirection: "column",
+                gap: 12,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 16 }}>🎨</span>
+                  <strong style={{ fontSize: 13, color: "var(--text-primary, #fff)" }}>
+                    Silueta y Hardware Visual
+                  </strong>
+                </div>
+                <span style={{ fontSize: 11, color: "var(--text-secondary, #94A3B8)" }}>
+                  {detected.brand} · {detected.category}
+                </span>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <label style={{ fontSize: 11, color: "var(--text-secondary, #94A3B8)", fontWeight: 500 }}>
+                  Tipo de Accesorio / Silueta
+                </label>
+                <select
+                  value={visualType}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    handleSaveVisualOverride(val, appleColor, customRoom);
+                  }}
+                  style={{
+                    background: "rgba(15, 23, 42, 0.8)",
+                    border: "1px solid rgba(255, 255, 255, 0.15)",
+                    color: "var(--text-primary, #fff)",
+                    padding: "8px 12px",
+                    borderRadius: 8,
+                    fontSize: 13,
+                    outline: "none",
+                    cursor: "pointer",
+                  }}
+                >
+                  <option value="auto">✨ Detección Inteligente Automática ({detected.category})</option>
+                  <optgroup label="💡 Iluminación">
+                    <option value="bulb">Bombilla Estándar / Techo</option>
+                    <option value="chandelier">Candelabro Colgante de Techo (Cristal)</option>
+                    <option value="hanging_bulbs">Bombillos de Filamento Colgantes con Dimmer</option>
+                    <option value="ceiling_spot">Foco Empotrado en Techo (Downlight / Spot Govee)</option>
+                    <option value="led_strip">Tira LED / Neón RGBIC</option>
+                    <option value="govee_light_bars">Barras de Luz RGBIC / Torres (Govee Flow)</option>
+                    <option value="govee_dreamview">Govee DreamView TV Backlight</option>
+                    <option value="govee_permanent_outdoor">Luces Exteriores Permanentes (Govee)</option>
+                    <option value="govee_ground_lights">Luces de Suelo / Sendero Exterior (Govee)</option>
+                    <option value="govee_lyra">Lámpara de Pie Esquina (Govee Lyra)</option>
+                  </optgroup>
+                  <optgroup label="🌀 Clima y Ventilación">
+                    <option value="ceiling_fan">Ventilador de Techo Negro Mate con Luz</option>
+                    <option value="tower_fan">Ventilador de Torre Oscilante</option>
+                  </optgroup>
+                  <optgroup label="🍎 Apple Audio y Video">
+                    <option value="apple_tv">Apple TV 4K (Pantalla 16:9 OLED con Carátula)</option>
+                    <option value="homepod_mini">Apple HomePod Mini (Esfera Acústica 3D)</option>
+                    <option value="homepod">Apple HomePod (Cilindro Acústico Grande)</option>
+                  </optgroup>
+                  <optgroup label="📦 Amazon Alexa & Echo">
+                    <option value="echo_dot">Amazon Echo Dot (Esfera Acústica con Anillo Cyan)</option>
+                    <option value="echo_show">Amazon Echo Show (Pantalla Inteligente 16:9)</option>
+                    <option value="echo_studio">Amazon Echo Studio (Altavoz de Alta Fidelidad)</option>
+                    <option value="echo_pop">Amazon Echo Pop (Altavoz Compacto Frontal)</option>
+                    <option value="fire_tv">Amazon Fire TV (Stick HDMI con Control)</option>
+                  </optgroup>
+                  <optgroup label="🔒 Seguridad y Cámaras">
+                    <option value="doorbell">Timbre con Video y Campanilla</option>
+                    <option value="ptz_camera">Cámara Domo PTZ 360°</option>
+                    <option value="bullet_camera">Cámara Exterior Bala</option>
+                    <option value="keypad_deadbolt">Cerradura con Teclado Numérico Táctil</option>
+                    <option value="smart_turn_lock">Cerrojo Giratorio Interior</option>
+                  </optgroup>
+                  <optgroup label="🔌 Interruptores y Energía">
+                    <option value="multi_gang_switch">Apagador Táctil de Pared (Multi-Canal)</option>
+                    <option value="smart_plug">Enchufe Inteligente con Medidor</option>
+                  </optgroup>
+                </select>
+              </div>
+
+              {/* Tower Fan Dual Orientation Picker (De pie vs Acostado) */}
+              {effectiveSubtype === "tower_fan" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }}>
+                  <label style={{ fontSize: 11, color: "var(--text-secondary, #94A3B8)", fontWeight: 500 }}>
+                    Posición / Postura del Ventilador Torre
+                  </label>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                    {[
+                      { id: "auto", label: "✨ Automático (Sensor)" },
+                      { id: "vertical", label: "⬆️ De pie (Vertical)" },
+                      { id: "horizontal", label: "➡️ Acostado (Horizontal)" },
+                    ].map((opt) => {
+                      const isSelected = orientation === opt.id;
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => handleSaveVisualOverride(visualType, appleColor, customRoom, opt.id as any)}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                            padding: "6px 12px",
+                            borderRadius: 8,
+                            background: isSelected ? "rgba(56, 189, 248, 0.2)" : "rgba(255, 255, 255, 0.05)",
+                            border: isSelected ? "1.5px solid #38BDF8" : "1px solid rgba(255, 255, 255, 0.1)",
+                            color: isSelected ? "#38BDF8" : "var(--text-secondary, #94A3B8)",
+                            cursor: "pointer",
+                            fontSize: 12,
+                            fontWeight: isSelected ? 600 : 400,
+                            transition: "all 0.15s ease",
+                          }}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* HomePod Official Apple Color Picker */}
+              {isHomePodSubtype && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }}>
+                  <label style={{ fontSize: 11, color: "var(--text-secondary, #94A3B8)", fontWeight: 500 }}>
+                    Color Oficial de Venta Apple ({activeHomePodModel === "homepod_mini" ? "HomePod Mini" : "HomePod"})
+                  </label>
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                    {Object.entries(availableAppleColors).map(([colorKey, colorCfg]) => {
+                      const isSelected = appleColor === colorKey;
+                      return (
+                        <button
+                          key={colorKey}
+                          type="button"
+                          onClick={() => handleSaveVisualOverride(visualType, colorKey, customRoom)}
+                          title={`Color Apple: ${colorCfg.name}`}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                            padding: "4px 10px",
+                            borderRadius: 16,
+                            background: isSelected ? "rgba(255, 255, 255, 0.16)" : "rgba(255, 255, 255, 0.05)",
+                            border: isSelected ? "1.5px solid #38BDF8" : "1px solid rgba(255, 255, 255, 0.1)",
+                            cursor: "pointer",
+                            transition: "all 0.15s ease",
+                          }}
+                        >
+                          <span
+                            style={{
+                              width: 14,
+                              height: 14,
+                              borderRadius: "50%",
+                              background: colorCfg.hex,
+                              boxShadow: "0 1px 4px rgba(0,0,0,0.5)",
+                              border: "1px solid rgba(255,255,255,0.2)",
+                              display: "inline-block",
+                            }}
+                          />
+                          <span style={{ fontSize: 11, color: isSelected ? "#fff" : "var(--text-secondary, #94A3B8)" }}>
+                            {colorCfg.name}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Room / Area Label Override */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <label style={{ fontSize: 11, color: "var(--text-secondary, #94A3B8)", fontWeight: 500 }}>
+                  Habitación / Área Visual (Deducida: {detected.inferredArea || "Sin área"})
+                </label>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input
+                    type="text"
+                    value={customRoom}
+                    placeholder="Ej. Sala, Cocina, Playroom, Balcón..."
+                    onChange={(e) => setCustomRoom(e.target.value)}
+                    onBlur={() => handleSaveVisualOverride(visualType, appleColor, customRoom)}
+                    style={{
+                      flex: 1,
+                      background: "rgba(15, 23, 42, 0.8)",
+                      border: "1px solid rgba(255, 255, 255, 0.15)",
+                      color: "var(--text-primary, #fff)",
+                      padding: "6px 12px",
+                      borderRadius: 8,
+                      fontSize: 12,
+                      outline: "none",
+                    }}
+                  />
+                  {customRoom && (
+                    <button
+                      type="button"
+                      onClick={() => handleSaveVisualOverride(visualType, appleColor, "")}
+                      style={{
+                        padding: "4px 10px",
+                        background: "rgba(255, 255, 255, 0.08)",
+                        border: "1px solid rgba(255, 255, 255, 0.15)",
+                        color: "var(--text-secondary, #94A3B8)",
+                        borderRadius: 8,
+                        fontSize: 11,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Limpiar
+                    </button>
+                  )}
+                </div>
+              </div>
+            </section>
 
             {/* Fabrics section */}
             <section className="fabrics-section" id="fabrics-section">
@@ -392,7 +1167,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
               </p>
               {logs.length > 0 && (
                 <ul id="diagnostics-list">
-                  {logs.slice(-6).map((l, i) => (
+                  {(logs as any[]).slice(-6).map((l: any, i: number) => (
                     <li key={i}>{typeof l === "string" ? l : (l as any)?.message || JSON.stringify(l)}</li>
                   ))}
                 </ul>
@@ -413,25 +1188,125 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
               paddingRight: 4,
             }}
           >
-            <p className="card-label">CÓDIGO MATTER</p>
+            {/* Govee H7133 Dedicated QR Plan Switcher */}
+            {isH7133 && (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 8,
+                  background: "rgba(0, 0, 0, 0.35)",
+                  padding: 5,
+                  borderRadius: 12,
+                  marginBottom: 14,
+                  border: "1px solid rgba(255, 255, 255, 0.08)",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setH7133Tab("plan_a");
+                    if (planAEntity) setSelectedEntity(planAEntity);
+                  }}
+                  style={{
+                    padding: "8px 10px",
+                    borderRadius: 8,
+                    border: h7133Tab === "plan_a" ? "1.5px solid #38BDF8" : "1px solid transparent",
+                    background: h7133Tab === "plan_a" ? "rgba(2, 132, 199, 0.45)" : "transparent",
+                    color: h7133Tab === "plan_a" ? "#FFF" : "#94A3B8",
+                    fontWeight: 600,
+                    fontSize: 12,
+                    cursor: "pointer",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: 2,
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  <span>🌪️ QR Plan A</span>
+                  <small style={{ fontSize: 10, color: planAEntity?.exported ? "#38bdf8" : "#94a3b8" }}>
+                    Ventilador {planAEntity?.commissioned ? "🏠 Vinculado" : planAEntity?.exported ? "✓ QR Listo" : "(Inactivo)"}
+                  </small>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setH7133Tab("plan_b");
+                    if (planBEntity) setSelectedEntity(planBEntity);
+                  }}
+                  style={{
+                    padding: "8px 10px",
+                    borderRadius: 8,
+                    border: h7133Tab === "plan_b" ? "1.5px solid #FB923C" : "1px solid transparent",
+                    background: h7133Tab === "plan_b" ? "rgba(234, 88, 12, 0.4)" : "transparent",
+                    color: h7133Tab === "plan_b" ? "#FFF" : "#94A3B8",
+                    fontWeight: 600,
+                    fontSize: 12,
+                    cursor: "pointer",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: 2,
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  <span>🔥 QR Plan B</span>
+                  <small style={{ fontSize: 10, color: planBEntity?.exported ? "#fb923c" : "#94a3b8" }}>
+                    Calefactor {planBEntity?.commissioned ? "🏠 Vinculado" : planBEntity?.exported ? "✓ QR Listo" : "(Inactivo)"}
+                  </small>
+                </button>
+              </div>
+            )}
+
+            <p className="card-label">
+              {isH7133
+                ? h7133Tab === "plan_a"
+                  ? "CÓDIGO QR · PLAN A (VENTILADOR MATTER)"
+                  : "CÓDIGO QR · PLAN B (CALEFACTOR / TERMOSTATO)"
+                : "CÓDIGO MATTER"}
+            </p>
             <div
-              className={`qr-status-label${isCommissioned ? " commissioned" : isExported ? " active" : ""}`}
+              className={`qr-status-label${isTargetCommissioned ? " commissioned" : isTargetExported ? " active" : ""}`}
               id="qr-status-label"
             >
-              {isCommissioned
+              {isTargetCommissioned
                 ? "Vinculado a Matter"
-                : isExported
+                : isTargetExported
                   ? "Listo para emparejar"
                   : "Sin publicar"}
             </div>
 
-            {isCommissioned && !multiAdminOpen && (
-              <div className="commissioned-hint" style={{ display: "block" }}>
+            {isTargetCommissioned && !multiAdminOpen && (
+              <div className="commissioned-hint" style={{ display: "block", flexShrink: 0 }}>
                 <p className="hint-title">🔒 Vinculado a Matter</p>
                 <p className="hint-desc">
-                  Este accesorio ya tiene una casa registrada en Matter. Para
-                  emparejarlo en una segunda plataforma, pulsa «Modo Multi-Admin».
+                  Este accesorio ya tiene una vinculación activa previa en Matter. Si lo eliminaste de Apple Home o deseas vincularlo de nuevo como accesorio limpio, pulsa el botón de abajo:
                 </p>
+                <button
+                  type="button"
+                  onClick={() => handleResetAccessoryForEntity(targetQrEntity)}
+                  disabled={isBusy}
+                  style={{
+                    width: "100%",
+                    marginTop: 10,
+                    padding: "9px 12px",
+                    background: "rgba(239, 68, 68, 0.22)",
+                    border: "1px solid rgba(239, 68, 68, 0.5)",
+                    color: "#fca5a5",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    borderRadius: 8,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 6,
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  <span>🔄 Desconectar y Generar QR Limpio</span>
+                </button>
               </div>
             )}
 
@@ -446,30 +1321,144 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
               </div>
             )}
 
-            {isExported ? (
-              <QRCodeDisplay
-                pairingCode={pairingCode}
-                manualCode={manualCode}
-                entityName={activeEntity?.name || device.name}
-                elementId="device-qr-code"
-              />
+            {isTargetExported ? (
+              pairingCode ? (
+                <QRCodeDisplay
+                  pairingCode={pairingCode}
+                  manualCode={manualCode}
+                  entityName={
+                    isH7133
+                      ? (h7133Tab === "plan_a" ? "Govee H7133 Ventilador" : "Govee H7133 Calefactor")
+                      : targetQrEntity?.name || device.name
+                  }
+                  elementId="device-qr-code"
+                  noteText={
+                    isH7133
+                      ? (h7133Tab === "plan_a"
+                          ? "🌪️💡 Plan A: Escanea para vincular Ventilador On/Off + Luz RGB (1 solo accesorio Matter)"
+                          : "🔥 Plan B: Escanea para vincular Termostato Calefactor + Fan Cool en Apple Home o Google Home")
+                      : "Escanea con Apple Home, Google Home, Alexa o SmartThings"
+                  }
+                />
+              ) : (
+                <div
+                  className="qr-liquid-glass-card"
+                  style={{
+                    padding: 24,
+                    textAlign: "center",
+                    background: "rgba(255, 255, 255, 0.04)",
+                    borderRadius: 16,
+                    border: "1px dashed rgba(56, 189, 248, 0.4)",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: 12,
+                  }}
+                >
+                  <div style={{ fontSize: 32 }}>🔄</div>
+                  <strong style={{ color: "#FFF", fontSize: 13 }}>
+                    {isH7133
+                      ? (h7133Tab === "plan_a" ? "Plan A (Ventilador) Publicado en Matter" : "Plan B (Calefactor) Publicado en Matter")
+                      : "Accesorio Publicado en Matter"}
+                  </strong>
+                  <p style={{ color: "#94A3B8", fontSize: 12, margin: 0 }}>
+                    Pulsa a continuación para abrir la ventana de emparejamiento y visualizar el Código QR.
+                  </p>
+                  <button
+                    type="button"
+                    className="button button-primary"
+                    onClick={() => handleOpenCommissioningForEntity(targetQrEntity)}
+                    disabled={isBusy}
+                    style={{
+                      padding: "10px 18px",
+                      fontSize: 13,
+                      fontWeight: 600,
+                      borderRadius: 10,
+                      background: "linear-gradient(135deg, #0284c7 0%, #0369a1 100%)",
+                      border: "none",
+                      color: "#FFF",
+                      cursor: "pointer",
+                      boxShadow: "0 2px 10px rgba(2, 132, 199, 0.4)",
+                    }}
+                  >
+                    ⚡ Mostrar Código QR de Emparejamiento
+                  </button>
+                </div>
+              )
             ) : (
               <div
                 className="qr-liquid-glass-card"
-                style={{ padding: 24, textAlign: "center", color: "var(--text-secondary)" }}
+                style={{
+                  padding: 24,
+                  textAlign: "center",
+                  background: "rgba(255, 255, 255, 0.03)",
+                  borderRadius: 16,
+                  border: "1px dashed rgba(255, 255, 255, 0.15)",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 12,
+                }}
               >
-                Activa la entidad para generar el código QR de Matter.
+                <div style={{ fontSize: 32 }}>{isH7133 ? (h7133Tab === "plan_a" ? "🌪️💡" : "🔥") : "⚡"}</div>
+                <strong style={{ color: "#FFF", fontSize: 14 }}>
+                  {isH7133
+                    ? (h7133Tab === "plan_a" ? "Código QR · Plan A: Ventilador + Luz RGB (1 solo accesorio)" : "Código QR · Plan B: Termostato Calefactor + Fan Cool")
+                    : "Accesorio Matter Inactivo"}
+                </strong>
+                <p style={{ color: "var(--text-secondary, #94a3b8)", fontSize: 12, margin: 0 }}>
+                  {isH7133
+                    ? (h7133Tab === "plan_a"
+                        ? "Activa el Plan A para generar 1 solo Código QR con el Ventilador On/Off y la Luz RGB juntos."
+                        : "Activa el Plan B para generar su propio Código QR de vinculación como Termostato Calefactor + Fan Cool.")
+                    : "Activa la entidad para generar el código QR de vinculación Matter."}
+                </p>
+                <button
+                  type="button"
+                  className="button button-primary"
+                  onClick={() => {
+                    if (isH7133) {
+                      if (h7133Tab === "plan_a") handleActivatePlanA();
+                      else handleActivatePlanB();
+                    } else if (targetQrEntity) {
+                      handleToggleExport(targetQrEntity);
+                    } else if (sortedEntities[0]) {
+                      handleToggleExport(sortedEntities[0]);
+                    }
+                  }}
+                  disabled={isBusy}
+                  style={{
+                    width: "100%",
+                    padding: "10px 16px",
+                    fontSize: "0.85rem",
+                    fontWeight: 600,
+                    borderRadius: "10px",
+                    background: isH7133 && h7133Tab === "plan_b"
+                      ? "linear-gradient(135deg, #ea580c 0%, #c2410c 100%)"
+                      : "linear-gradient(135deg, #0284c7 0%, #0369a1 100%)",
+                    border: "none",
+                    color: "#fff",
+                    cursor: "pointer",
+                    boxShadow: "0 2px 10px rgba(0, 0, 0, 0.3)",
+                  }}
+                >
+                  🚀 {isH7133 ? (h7133Tab === "plan_a" ? "Activar Plan A (Ventilador + Luz RGB)" : "Activar Plan B (Termostato Calefactor)") : "Activar y Generar Código QR"}
+                </button>
               </div>
             )}
 
-            <div className="accessory-controls" id="accessory-controls" style={{ marginTop: "auto", paddingTop: 12 }}>
-              {isExported && (
+            <div
+              className="accessory-controls"
+              id="accessory-controls"
+              style={{ marginTop: 14, paddingTop: 10, flexShrink: 0 }}
+            >
+              {isTargetExported && (
                 <div className="matter-actions" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   <button
                     className="button button-secondary action-btn"
                     id="reconnect-accessory-button"
                     type="button"
-                    onClick={handleReconnect}
+                    onClick={() => handleReconnectForEntity(targetQrEntity)}
                     disabled={isBusy}
                     title="Refresca la conexión con Home Assistant y Matter"
                   >
@@ -480,7 +1469,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                     className="button button-secondary action-btn"
                     id="regenerate-code-button"
                     type="button"
-                    onClick={handleOpenCommissioning}
+                    onClick={() => handleOpenCommissioningForEntity(targetQrEntity)}
                     disabled={isBusy}
                   >
                     Abrir Modo Multi-Admin
@@ -490,7 +1479,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                     className="button button-danger action-btn"
                     id="reset-accessory-button"
                     type="button"
-                    onClick={handleResetAccessory}
+                    onClick={() => handleResetAccessoryForEntity(targetQrEntity)}
                     disabled={isBusy}
                     title="Desconectar de todas las casas y generar un nuevo código QR"
                   >
