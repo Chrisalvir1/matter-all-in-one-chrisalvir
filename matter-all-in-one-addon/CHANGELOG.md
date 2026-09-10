@@ -1,3 +1,19 @@
+## [1.5.42] - 2026-09-10
+
+### Soporte Completo Plan A Matter (Ventilador + Luz RGB) y Réplica de Interfaz GoveeLife
+
+- **Soporte Bidireccional de Velocidad Matter (Plan A - Ventilador):**
+  - Se implementó `executeSafeFanCommand` en `BaseEntity`: al regular la velocidad desde Apple Home o Google Home (0% a 100%, Low/Med/High o pasos), el puente Matter mapea el porcentaje a la marcha física del deflector (1/Low a 33%, 2/Med a 66%, 3/High a 100%) y la envía a la entidad complementaria `select.*_gear`.
+  - **Blindaje Térmico Absoluto:** Al encender o ajustar velocidad desde Matter, se fuerza `select.*_mode: Fan` y se apaga `switch.*_auto_stop`, eliminando re-encendidos redundantes del interruptor general y garantizando que las resistencias de calefacción jamás se activen por accidente.
+- **Sincronización en Tiempo Real HA/Govee → Matter:**
+  - `platform.ts` ahora intercepta cambios en `select.*_gear` provenientes de la app física de GoveeLife o Home Assistant, actualizando de inmediato el porcentaje (33%, 66%, 100%) y el modo en Matter para que Apple Home refleje la velocidad real al instante.
+  - Se amplió la detección de oscilación a deflectores de aire (`/deflector|swing|giro/i`).
+- **Diseño Idéntico a GoveeLife en la Tarjeta Web (Modo Fan):**
+  - Sección **Air Deflector** dedicada en la tarjeta:
+    - **Speed (Velocidad de Flujo):** 3 botones `[ Low ]`, `[ Medium ]`, `[ High ]` con estado activo iluminado en azul.
+    - **Range (Rango de Oscilación):** 4 botones de rango angular (`↔️ Horiz`, `↕️ Vert`, `🔄 3D Todo`, `⏸️ Fijo`).
+  - **Luz Nocturna RGB (Plan A):** Control completo de la lámpara LED integrada con interruptor, deslizador de brillo y selector Kelvin/RGB.
+
 ## [1.5.41] - 2026-09-10
 
 ### Corrección Visual y Operativa: Eliminación de Slider Inexistente y Persistencia Optimista en Govee H7133

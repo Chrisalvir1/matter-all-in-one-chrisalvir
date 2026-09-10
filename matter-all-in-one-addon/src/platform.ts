@@ -3240,18 +3240,64 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     // Cross-coordination for hybrid devices (e.g. Govee H7133 Fan + Climate/Heater + Switch Oscillation + Sensor Temp)
     const hybridDeviceId = this.ha?.hassEntities?.get(entityId)?.device_id;
     if (hybridDeviceId) {
-      // 1. Oscillation switch state changes -> sync companion fan oscillation
-      if (entityId.startsWith("switch.") && entityId.includes("oscillation")) {
+      // 0. Speed / gear select state changes -> sync companion fan speed & percentage to Matter
+      if (
+        entityId.startsWith("select.") &&
+        /gear|engranaje|speed|velocidad|potencia/i.test(entityId)
+      ) {
+        const opt = String(newState.state || "").toLowerCase();
+        let pct = 100;
+        let fMode = 3; // High
+        if (/^(1|low|bajo|gear 1|gear_1)$/i.test(opt)) {
+          pct = 33;
+          fMode = 1; // Low
+        } else if (/^(2|medium|med|medio|gear 2|gear_2)$/i.test(opt)) {
+          pct = 66;
+          fMode = 2; // Medium
+        } else if (/^(3|high|alto|gear 3|gear_3)$/i.test(opt)) {
+          pct = 100;
+          fMode = 3; // High
+        }
+
         for (const [fId, fEntity] of this.entities.entries()) {
           if (
-            (fId.startsWith("fan.") || this.deviceOverrides[fId] === "fan") &&
+            (fId.startsWith("fan.") || this.deviceOverrides[fId] === "fan" || (fId.startsWith("switch.") && fId.includes("ventilador"))) &&
             this.ha?.hassEntities?.get(fId)?.device_id === hybridDeviceId
           ) {
             fEntity.state = {
               ...fEntity.state,
               attributes: {
                 ...fEntity.state.attributes,
-                oscillating: newState.state === "on",
+                percentage: pct,
+                speed: fMode,
+                preset_mode: opt,
+              },
+            };
+            if (this.isEntityExported(fId)) {
+              this.queueStateUpdate(fId, fEntity.state);
+            }
+          }
+        }
+      }
+
+      // 1. Oscillation switch/select state changes -> sync companion fan oscillation
+      if (
+        (entityId.startsWith("switch.") && /oscil|swing|sweep|shake|giro|rotar|pan|deflector/i.test(entityId)) ||
+        (entityId.startsWith("select.") && /oscil|swing|sweep|angle|direction|range|deflector/i.test(entityId))
+      ) {
+        const isOscOn = entityId.startsWith("switch.")
+          ? newState.state === "on"
+          : !/off|fijo|none|stop/i.test(String(newState.state || ""));
+        for (const [fId, fEntity] of this.entities.entries()) {
+          if (
+            (fId.startsWith("fan.") || this.deviceOverrides[fId] === "fan" || (fId.startsWith("switch.") && fId.includes("ventilador"))) &&
+            this.ha?.hassEntities?.get(fId)?.device_id === hybridDeviceId
+          ) {
+            fEntity.state = {
+              ...fEntity.state,
+              attributes: {
+                ...fEntity.state.attributes,
+                oscillating: isOscOn,
               },
             };
             if (this.isEntityExported(fId)) {

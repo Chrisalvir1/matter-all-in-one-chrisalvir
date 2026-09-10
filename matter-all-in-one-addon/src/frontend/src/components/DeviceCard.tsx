@@ -607,6 +607,71 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
     onRefresh?.();
   };
 
+  const handleSetH7133FanSpeed = async (e: React.MouseEvent, level: "1" | "2" | "3") => {
+    e.stopPropagation();
+    const pct = level === "1" ? 33 : level === "2" ? 66 : 100;
+    setH7133FanSpeedPct(pct);
+    try {
+      window.localStorage.setItem(`govee_h7133_fan_speed_pct_${device.id}`, String(pct));
+    } catch {}
+
+    const tasks: Promise<any>[] = [];
+
+    // 1. Ensure primary fan switch is turned on ONLY if currently off
+    if (fanEntity && fanEntity.state === "off") {
+      tasks.push(api.turnOnEntity(fanEntity.entityId).catch(() => {}));
+    }
+
+    // 2. Ensure auto_stop (heater) is OFF
+    if (autoStopEntity) {
+      tasks.push(api.turnOffEntity(autoStopEntity.entityId).catch(() => {}));
+    }
+    if (heaterEntity && heaterEntity.domain === "switch" && heaterEntity.entityId !== fanEntity?.entityId) {
+      tasks.push(api.turnOffEntity(heaterEntity.entityId).catch(() => {}));
+    }
+
+    // 3. Set speed/gear option
+    const targetRegex =
+      level === "1"
+        ? /^(1|low|bajo|gear 1|gear_1)$/i
+        : level === "2"
+        ? /^(2|medium|med|medio|gear 2|gear_2)$/i
+        : /^(3|high|alto|gear 3|gear_3)$/i;
+
+    const selectEntities = device.entities.filter((e) => e.domain === "select");
+    for (const sel of selectEntities) {
+      if (/gear|engranaje|speed|velocidad|potencia/i.test(sel.entityId) || /gear|engranaje|speed|velocidad/i.test(sel.name || "")) {
+        const options: string[] = sel.attributes?.options || [];
+        const match = options.find((opt) => targetRegex.test(opt));
+        if (match) tasks.push(api.selectOption(sel.entityId, match).catch(() => {}));
+      } else if (!/oscil|swing|angle|deflector/i.test(sel.entityId)) {
+        // Mode entity -> ensure Fan
+        const options: string[] = sel.attributes?.options || [];
+        const fanOpt = options.find((opt) => /^(fan|fan_only|ventilador|normal|manual)$/i.test(opt) || opt.toLowerCase().includes("fan"));
+        if (fanOpt) tasks.push(api.selectOption(sel.entityId, fanOpt).catch(() => {}));
+      }
+    }
+
+    // If native fan domain entity exists, set percentage
+    if (fanEntity && fanEntity.domain === "fan") {
+      tasks.push(api.setEntityValue(fanEntity.entityId, pct).catch(() => {}));
+    }
+
+    await Promise.allSettled(tasks);
+
+    // Reinforce Fan mode after 200ms
+    setTimeout(() => {
+      if (autoStopEntity) api.turnOffEntity(autoStopEntity.entityId).catch(() => {});
+      for (const sel of selectEntities) {
+        if (!/gear|speed|oscil|swing|angle|deflector/i.test(sel.entityId)) {
+          const options: string[] = sel.attributes?.options || [];
+          const fanOpt = options.find((opt) => /^(fan|fan_only|ventilador|normal|manual)$/i.test(opt) || opt.toLowerCase().includes("fan"));
+          if (fanOpt) api.selectOption(sel.entityId, fanOpt).catch(() => {});
+        }
+      }
+    }, 200);
+  };
+
   const executeH7133HeatMode = async (level: "1" | "2" | "3" | "auto") => {
     const targetFanId = fanEntity?.entityId || primaryEntity?.entityId;
     if (targetFanId) {
@@ -1300,54 +1365,115 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                 </button>
               </div>
 
-              {/* Fan Mode Controls (Pure Ventilation without Heat) */}
+              {/* Fan Mode Controls (Air Deflector: Speed + Range) */}
               {currentH7133Mode === "fan" && (
-                <div style={{ marginTop: "6px", display: "flex", flexDirection: "column", gap: "6px" }}>
-                  {/* Status Banner */}
-                  <div
-                    style={{
-                      background: "rgba(14, 165, 233, 0.12)",
-                      border: "1px solid rgba(56, 189, 248, 0.25)",
-                      borderRadius: "8px",
-                      padding: "6px 10px",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                    }}
-                  >
+                <div
+                  style={{
+                    marginTop: "6px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "8px",
+                    background: "rgba(15, 23, 42, 0.5)",
+                    border: "1px solid rgba(56, 189, 248, 0.25)",
+                    borderRadius: "12px",
+                    padding: "8px 10px",
+                  }}
+                >
+                  {/* Air Deflector Header */}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                       <span style={{ fontSize: "14px" }}>🌪️</span>
-                      <span style={{ fontSize: "0.7rem", fontWeight: 600, color: "#38BDF8" }}>
-                        Ventilación Pura Activa
+                      <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#38BDF8", letterSpacing: "0.02em" }}>
+                        Air Deflector
                       </span>
                     </div>
                     <span
                       style={{
-                        fontSize: "0.65rem",
-                        color: "#94A3B8",
-                        background: "rgba(0, 0, 0, 0.25)",
+                        fontSize: "0.62rem",
+                        fontWeight: 700,
+                        color: "#38BDF8",
+                        background: "rgba(14, 165, 233, 0.18)",
+                        border: "1px solid rgba(56, 189, 248, 0.35)",
                         padding: "2px 6px",
-                        borderRadius: "4px",
+                        borderRadius: "8px",
                       }}
                     >
-                      Resistencia 0W · Sin calor
+                      VENTILADOR · 0W CALOR
                     </span>
                   </div>
 
-                  {/* Oscillation Bar: Horizontal, Vertical, Todo (3D), Fijo */}
+                  {/* Speed Row: Low, Medium, High */}
                   <div>
                     <div
                       style={{
-                        fontSize: "0.66rem",
+                        fontSize: "0.65rem",
                         fontWeight: 600,
-                        color: "#38BDF8",
+                        color: "#94A3B8",
                         marginBottom: "4px",
                         display: "flex",
                         justifyContent: "space-between",
                         alignItems: "center",
                       }}
                     >
-                      <span>Rango / Oscilación:</span>
+                      <span>Speed (Velocidad de Flujo):</span>
+                      <span style={{ color: "#BAE6FD", fontWeight: 700 }}>
+                        {h7133FanSpeedPct <= 33 ? "Low (Baja)" : h7133FanSpeedPct <= 66 ? "Medium (Media)" : "High (Alta)"}
+                      </span>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "6px" }}>
+                      {[
+                        { id: "1", pct: 33, label: "Low", desc: "Velocidad baja (33%)" },
+                        { id: "2", pct: 66, label: "Medium", desc: "Velocidad media (66%)" },
+                        { id: "3", pct: 100, label: "High", desc: "Velocidad alta (100%)" },
+                      ].map((spd) => {
+                        const isSelected =
+                          (spd.id === "1" && h7133FanSpeedPct <= 33) ||
+                          (spd.id === "2" && h7133FanSpeedPct > 33 && h7133FanSpeedPct <= 66) ||
+                          (spd.id === "3" && h7133FanSpeedPct > 66);
+                        return (
+                          <button
+                            key={spd.id}
+                            type="button"
+                            onClick={(e) => handleSetH7133FanSpeed(e, spd.id as any)}
+                            style={{
+                              padding: "6px 4px",
+                              borderRadius: "8px",
+                              fontSize: "0.72rem",
+                              fontWeight: isSelected ? 700 : 500,
+                              border: isSelected
+                                ? "1.5px solid #38BDF8"
+                                : "1px solid rgba(255, 255, 255, 0.1)",
+                              background: isSelected
+                                ? "rgba(2, 132, 199, 0.4)"
+                                : "rgba(255, 255, 255, 0.04)",
+                              color: isSelected ? "#38BDF8" : "#94A3B8",
+                              cursor: "pointer",
+                              textAlign: "center",
+                              transition: "all 0.15s ease",
+                            }}
+                            title={spd.desc}
+                          >
+                            {spd.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Range / Oscillation Row: Horiz, Vert, Todo 3D, Fijo */}
+                  <div>
+                    <div
+                      style={{
+                        fontSize: "0.65rem",
+                        fontWeight: 600,
+                        color: "#94A3B8",
+                        marginBottom: "4px",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <span>Range (Rango / Oscilación):</span>
                       <span style={{ color: "#BAE6FD" }}>
                         {h7133Oscillation === "horizontal"
                           ? "Horizontal (↔️)"
