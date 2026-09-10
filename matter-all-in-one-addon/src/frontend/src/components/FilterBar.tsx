@@ -10,7 +10,6 @@ interface FilterBarProps {
     totalCameras: number;
     pairedTotal: number;
     unpairedTotal: number;
-    unexportedCount: number;
     mqttCount: number;
     issues: number;
   };
@@ -68,7 +67,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           type="button"
           onClick={() => onFilterChange("paired")}
         >
-          EN MATTER EMPAREJADOS 🍏 <span className="chip-badge">{stats.pairedTotal}</span>
+          EN MATTER EMPAREJADOS INCLUYENDO CÁMARAS 🍏 <span className="chip-badge">{stats.pairedTotal}</span>
         </button>
 
         <button
@@ -76,15 +75,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           type="button"
           onClick={() => onFilterChange("unpaired")}
         >
-          PENDIENTES QR <span className="chip-badge">{stats.unpairedTotal}</span>
-        </button>
-
-        <button
-          className={`filter-chip filter-chip-unexported ${activeFilter === "unexported" ? "active" : ""}`}
-          type="button"
-          onClick={() => onFilterChange("unexported")}
-        >
-          NO EXPORTADOS (HA) <span className="chip-badge">{stats.unexportedCount}</span>
+          NO EMPAREJADOS <span className="chip-badge">{stats.unpairedTotal}</span>
         </button>
 
         <button

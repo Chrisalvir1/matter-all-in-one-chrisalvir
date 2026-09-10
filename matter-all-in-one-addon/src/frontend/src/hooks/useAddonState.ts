@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { api } from "../api/client";
 import { CameraRecord, DeviceRecord, EntityRecord, ScryptedConfigResponse, StatusResponse } from "../types";
 
-export type FilterType = "all" | "iot" | "cameras" | "paired" | "unpaired" | "unexported" | "mqtt" | "issues";
+export type FilterType = "all" | "iot" | "cameras" | "paired" | "unpaired" | "mqtt" | "issues";
 
 export function useAddonState() {
   const [status, setStatus] = useState<StatusResponse | null>(null);
@@ -68,24 +68,10 @@ export function useAddonState() {
           if (!event.data || event.data.startsWith(":")) return;
           try {
             const data = JSON.parse(event.data);
-            if (data.type === "state_changed" && data.payload?.entityId) {
-              const { entityId, state: newState, attributes: newAttrs } = data.payload;
-              setEntities((prev) =>
-                prev.map((e) =>
-                  e.entityId === entityId
-                    ? {
-                        ...e,
-                        state: newState ?? e.state,
-                        attributes: { ...e.attributes, ...newAttrs },
-                      }
-                    : e
-                )
-              );
-            } else if (
+            if (
               data.type === "device_update" ||
               data.type === "camera_update" ||
               data.type === "state_change" ||
-              data.type === "state_changed" ||
               data.type === "scrypted_status"
             ) {
               refreshAll();
@@ -112,29 +98,23 @@ export function useAddonState() {
   const allDevices: DeviceRecord[] = useMemo(() => {
     const map = new Map<string, DeviceRecord>();
     for (const entity of entities) {
-      const id = entity.device_id || (entity.compositeDeviceId
+      const id = entity.compositeDeviceId
         ? `matter:${entity.compositeDeviceId}`
-        : `entity:${entity.entityId}`);
+        : entity.device_id || `entity:${entity.entityId}`;
 
       if (!map.has(id)) {
         map.set(id, {
           id,
-          name: entity.device_name || entity.name || entity.area_name || entity.domain || entity.entityId || "Dispositivo",
+          name: entity.device_name || entity.name || entity.area_name || entity.domain,
           area: entity.area_name || "",
           manufacturer: entity.manufacturer || "",
           model: entity.model || "",
           entities: [],
         });
-      } else {
-        const record = map.get(id)!;
-        if (!record.manufacturer && entity.manufacturer) record.manufacturer = entity.manufacturer;
-        if (!record.model && entity.model) record.model = entity.model;
-        if (!record.area && entity.area_name) record.area = entity.area_name;
-        if (entity.device_name && (record.name === "Dispositivo" || !record.name)) record.name = entity.device_name;
       }
       map.get(id)!.entities.push(entity);
     }
-    return [...map.values()].sort((a, b) => (a.name || "").localeCompare(b.name || "", "es", { sensitivity: "base" }));
+    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
   }, [entities]);
 
   // Scrypted names and IDs to avoid duplicating HA camera representations
@@ -186,16 +166,12 @@ export function useAddonState() {
 
     const totalCameras = scryptedTotal + haCamsTotal;
     const iotDevices = allDevices.filter((d) => !d.entities.every((e) => e.domain === "camera")).length;
-    const unexportedCount = allDevices.filter(
-      (d) => !d.entities.every((e) => e.domain === "camera") && !d.entities.some((e) => e.exported)
-    ).length;
     const pairedTotal = pairedNodes + scryptedPaired + haCamsPaired;
     const unpairedTotal = pendingNodes + (scryptedTotal - scryptedPaired) + (haCamsTotal - haCamsPaired);
 
     return {
       totalDevices: allDevices.length,
       iotDevices,
-      unexportedCount,
       exportedNodes,
       pairedNodes,
       pendingNodes,
