@@ -1,3 +1,14 @@
+## [1.5.66] - 2026-09-10
+
+### Corrección: Código QR No Aparecía Al Activar el Interruptor Maestro de Accesorio Compuesto
+
+- **Corrección de Bug de Estado React en `DeviceModal.tsx`:**
+  - El interruptor maestro del ventilador compuesto mostraba el toast «✓ Accesorio publicado» pero el panel derecho permanecía con «Sin publicar» y sin código QR. La causa era que `isCompositeExported` se derivaba directamente de `device.entities` (un prop de React) y su mutación en línea (`e.exported = nextState`) es invisible para el sistema de re-renderizado de React — el componente nunca se actualizaba visualmente.
+  - **Solución:** Se añadió `localCompositeExported` como estado local de React (`useState`), sincronizado en `useEffect` cuando el padre envía nueva data, y actualizado inmediatamente en `handleToggleCompositeExport` con `setLocalCompositeExported(nextState)`.
+- **Backend devuelve `pairingCode` en la respuesta de `/api/custom/register/:entityId` (`platform.ts`):**
+  - `manualRegister()` ahora incluye `pairingCode` y `manualPairingCode` en la respuesta cuando activa un accesorio compuesto, consultando `getMatterConnectionInfo()` sobre el endpoint recién creado.
+  - El frontend captura estos códigos inmediatamente con `setFreshPairingCode` / `setFreshManualCode`, haciendo que el QR aparezca al instante sin necesidad de esperar el ciclo completo de `onRefresh()`.
+
 ## [1.5.65] - 2026-09-10
 
 ### Corrección Crítica: Eliminación de Dependencia Inválida en Inicio (@matter/protocol) y Pantalla de Carga Ingress

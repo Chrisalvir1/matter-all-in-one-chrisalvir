@@ -2214,7 +2214,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
    */
   public async manualRegister(
     entityId: string,
-  ): Promise<{ success: boolean; error?: string }> {
+  ): Promise<{ success: boolean; error?: string; pairingCode?: string | null; manualPairingCode?: string | null }> {
     if (entityId.startsWith("mqtt.")) {
       try {
         this.exportedDevices.add(entityId);
@@ -2267,7 +2267,17 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         try {
           await this.activateComposite(entityId);
           await this.saveExportedDevices();
-          return { success: true };
+          // Return the pairing code immediately so the frontend can show the QR
+          // without waiting for the next /api/custom/devices poll.
+          const compositeEndpoint = this.matterbridgeDevices.get(key);
+          const connection = compositeEndpoint
+            ? this.getMatterConnectionInfo(compositeEndpoint)
+            : null;
+          return {
+            success: true,
+            pairingCode: connection?.pairingCode ?? null,
+            manualPairingCode: connection?.manualPairingCode ?? null,
+          };
         } catch (error) {
           this.exportedDevices.delete(key);
           throw error;

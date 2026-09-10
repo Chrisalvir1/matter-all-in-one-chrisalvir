@@ -77,6 +77,12 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
   const [freshPairingCode, setFreshPairingCode] = useState<string | null>(null);
   const [freshManualCode, setFreshManualCode] = useState<string | null>(null);
   const [resetFabrics, setResetFabrics] = useState<boolean>(false);
+  // localCompositeExported tracks the toggle state as proper React state so that
+  // flipping the master switch immediately re-renders the QR panel without waiting
+  // for onRefresh() to complete (mutating device.entities props directly is invisible to React).
+  const [localCompositeExported, setLocalCompositeExported] = useState<boolean>(
+    () => Boolean(device?.entities.some((e) => e.composite && e.exported))
+  );
 
   const sortedEntities = device
     ? [...device.entities].sort((a, b) => {
@@ -97,6 +103,8 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
 
   useEffect(() => {
     if (!device) return;
+    // Sync composite exported state whenever the parent pushes fresh device data
+    setLocalCompositeExported(device.entities.some((e) => e.composite && e.exported));
     setSelectedEntity((prev) => {
       if (prev) {
         const found = device.entities.find((e) => e.entityId === prev.entityId);
@@ -119,9 +127,8 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     device.entities.find((e) => e.entityId === e.compositePrimaryEntityId) ||
     device.entities.find((e) => e.domain === "fan") ||
     device.entities[0];
-  const isCompositeExported = device.entities.some(
-    (e) => e.composite && e.exported
-  );
+  // Use localCompositeExported (React state) instead of derived prop value so re-renders work
+  const isCompositeExported = localCompositeExported;
 
   // Pairing code: fresh code from reset, primary entity's code, or selected entity's code
   const pairingCode =
@@ -159,7 +166,16 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     if (!compositePrimary) return;
     const nextState = !isCompositeExported;
     try {
-      await api.toggleExport(compositePrimary.entityId, nextState);
+      const res: any = await api.toggleExport(compositePrimary.entityId, nextState);
+      // Update local React state immediately so QR panel re-renders without waiting for onRefresh
+      setLocalCompositeExported(nextState);
+      // Capture pairingCode returned by the backend so the QR appears right away
+      if (nextState && (res as any)?.pairingCode) {
+        setFreshPairingCode((res as any).pairingCode);
+      }
+      if (nextState && (res as any)?.manualPairingCode) {
+        setFreshManualCode((res as any).manualPairingCode);
+      }
       device.entities.forEach((e) => {
         if (e.composite) {
           e.exported = nextState;
