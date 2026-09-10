@@ -11,6 +11,7 @@ interface LiquidSliderProps {
   color?: string;
   label?: string;
   unit?: string;
+  onChange?: (value: number) => void;
   onRefresh?: () => void;
 }
 
@@ -24,6 +25,7 @@ export const LiquidSlider: React.FC<LiquidSliderProps> = ({
   color,
   label,
   unit = "%",
+  onChange,
   onRefresh,
 }) => {
   const [val, setVal] = useState<number>(initialValue);
@@ -49,6 +51,7 @@ export const LiquidSlider: React.FC<LiquidSliderProps> = ({
 
   const handleChange = (newVal: number) => {
     setVal(newVal);
+    onChange?.(newVal);
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
     debounceTimer.current = setTimeout(async () => {
       try {

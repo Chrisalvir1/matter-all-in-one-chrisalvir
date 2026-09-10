@@ -18,6 +18,8 @@ interface DeviceCardArtProps {
   appleColor?: string;
   isHeating?: boolean;
   orientation?: "vertical" | "horizontal";
+  isOscillating?: boolean;
+  oscillationMode?: "off" | "horizontal" | "vertical" | "all";
   /** When true, real product CDN image is displayed — skip SVG art to avoid double rendering */
   hasProductImage?: boolean;
 }
@@ -38,10 +40,17 @@ export const DeviceCardArt: React.FC<DeviceCardArtProps> = ({
   appleColor = "space_gray",
   isHeating = false,
   orientation = "vertical",
+  isOscillating = false,
+  oscillationMode = "off",
   hasProductImage = false,
 }) => {
   const isFanActive = propFanOn ?? (domain === "fan" && (state === "on" || (fanPercentage ?? 0) > 0));
-  const effectiveFanPct = fanPercentage ?? (isFanActive ? 100 : 0);
+  const effectiveFanPct =
+    typeof fanPercentage === "number" && fanPercentage > 0
+      ? fanPercentage
+      : isFanActive
+      ? 100
+      : 0;
   const fanDurationSec = isFanActive
     ? Math.max(0.18, Math.min(2.4, (100 / Math.max(10, effectiveFanPct)) * 0.55))
     : 0;
@@ -250,6 +259,7 @@ export const DeviceCardArt: React.FC<DeviceCardArtProps> = ({
             width="100%"
             height="100%"
             preserveAspectRatio="xMaxYMin meet"
+            style={{ ['--fan-speed-duration' as any]: `${fanDurationSec}s` }}
           >
             <defs>
               {/* Lamp light cone gradient matching exact Kelvin / RGB */}
@@ -751,7 +761,19 @@ export const DeviceCardArt: React.FC<DeviceCardArtProps> = ({
 
           {/* ── 6. VENTILADOR DE TORRE EN NEGRO MATE (e.g. Govee H7133) ── */}
           {visualType === "tower_fan" && (
-            <g className={`art-tower-fan ${orientation === "horizontal" ? "art-tower-horizontal" : "art-tower-vertical"}`}>
+            <g
+              className={`art-tower-fan ${
+                orientation === "horizontal" ? "art-tower-horizontal" : "art-tower-vertical"
+              } ${
+                isOscillating
+                  ? oscillationMode === "vertical"
+                    ? "art-tower-oscillating-vert"
+                    : oscillationMode === "all"
+                    ? "art-tower-oscillating-all"
+                    : "art-tower-oscillating-horiz"
+                  : ""
+              }`}
+            >
               {orientation === "horizontal" ? (
                 /* ── MODO ACOSTADO / HORIZONTAL ── */
                 <g className="tower-horizontal-body">

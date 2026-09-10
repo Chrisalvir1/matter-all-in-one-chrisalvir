@@ -114,6 +114,58 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
     return "1";
   });
 
+  // Selected fan speed percentage for Govee H7133 (33: Low, 66: Med, 100: High)
+  const [h7133FanSpeedPct, setH7133FanSpeedPct] = useState<number>(() => {
+    if (typeof window !== "undefined" && window.localStorage) {
+      try {
+        const saved = window.localStorage.getItem(`govee_h7133_fan_speed_pct_${device.id}`);
+        if (saved) {
+          const num = Number(saved);
+          if (!isNaN(num) && num > 0 && num <= 100) return num;
+        }
+      } catch {}
+    }
+    return 100;
+  });
+
+  // Selected oscillation mode for Govee H7133 ("off" | "horizontal" | "vertical" | "all")
+  const [h7133Oscillation, setH7133Oscillation] = useState<"off" | "horizontal" | "vertical" | "all">(() => {
+    if (typeof window !== "undefined" && window.localStorage) {
+      try {
+        const saved = window.localStorage.getItem(`govee_h7133_oscillation_${device.id}`);
+        if (saved === "off" || saved === "horizontal" || saved === "vertical" || saved === "all") return saved;
+      } catch {}
+    }
+    return "off";
+  });
+
+  // Oscillation entities detection
+  const oscSelectEntity = device.entities.find(
+    (e) =>
+      e.domain === "select" &&
+      (/oscil|sweep|angle|direction|range/i.test(e.entityId) || /oscil|sweep|dirección/i.test(e.name || ""))
+  );
+
+  const oscVerticalSwitch = device.entities.find(
+    (e) =>
+      e.domain === "switch" &&
+      (/vert|up_down|arriba|abajo/i.test(e.entityId) || /vert|arriba|abajo/i.test(e.name || ""))
+  );
+
+  const oscHorizontalSwitch = device.entities.find(
+    (e) =>
+      e.domain === "switch" &&
+      (/horiz|left_right|izq|der/i.test(e.entityId) || /horiz|izq|der/i.test(e.name || ""))
+  );
+
+  const oscGeneralSwitch = device.entities.find(
+    (e) =>
+      e.domain === "switch" &&
+      (/oscil/i.test(e.entityId) || /oscil/i.test(e.name || "")) &&
+      e.entityId !== oscVerticalSwitch?.entityId &&
+      e.entityId !== oscHorizontalSwitch?.entityId
+  );
+
   // Detect heater / climate entity
   const heaterEntity =
     device.entities.find((e) => e.domain === "climate") ||
@@ -127,12 +179,17 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
     );
 
   // Only show exported switch channels on the card face — non-exported hidden until modal.
-  // For Govee H7133, all power and modes are controlled via Fan sub-control and Quick Mode Selector, so hide raw switch rows.
+  // For Govee H7133, all power, modes, and oscillation are controlled via dedicated controls.
   const rawSwitchEntities = device.entities.filter(
     (e) =>
       e.domain === "switch" &&
       e.entityId !== fanEntity?.entityId &&
-      (!isH7133 || (e.entityId !== heaterEntity?.entityId && e.entityId !== autoStopEntity?.entityId))
+      (!isH7133 ||
+        (e.entityId !== heaterEntity?.entityId &&
+         e.entityId !== autoStopEntity?.entityId &&
+         e.entityId !== oscVerticalSwitch?.entityId &&
+         e.entityId !== oscHorizontalSwitch?.entityId &&
+         e.entityId !== oscGeneralSwitch?.entityId))
   );
   const switchEntities = isH7133
     ? []
@@ -353,7 +410,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
     }
   };
 
-  const executeH7133FanMode = async () => {
+  const executeH7133FanMode = async (speedPct = h7133FanSpeedPct) => {
     const targetFanId = fanEntity?.entityId || primaryEntity?.entityId;
     // Step 1: Turn on main power
     if (targetFanId) {
@@ -374,7 +431,12 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
       tasks.push(api.turnOffEntity(heaterEntity.entityId).catch(() => {}));
     }
 
-    // Step 4: If fan entity has preset_modes, select Fan mode
+    // Step 4: Explicitly set fan speed / percentage so it NEVER stays at 0!
+    if (fanEntity) {
+      tasks.push(api.setEntityValue(fanEntity.entityId, speedPct).catch(() => {}));
+    }
+
+    // Step 5: If fan entity has preset_modes, select Fan mode
     if (fanEntity?.attributes?.preset_modes && Array.isArray(fanEntity.attributes.preset_modes)) {
       const match = fanEntity.attributes.preset_modes.find((m: string) =>
         /^(fan|fan_only|ventilador|normal|manual)$/i.test(m) || m.toLowerCase().includes("fan")
@@ -384,7 +446,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
       }
     }
 
-    // Step 5: Check select entities for Fan option (e.g. select.ventilador_playroom_mode)
+    // Step 6: Check select entities for Fan option (e.g. select.ventilador_playroom_mode)
     const selectEntities = device.entities.filter((e) => e.domain === "select");
     for (const sel of selectEntities) {
       const options: string[] = sel.attributes?.options || [];
@@ -394,9 +456,23 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
       if (fanOpt) {
         tasks.push(api.selectOption(sel.entityId, fanOpt).catch(() => {}));
       }
+      // Also check if there's a gear/speed select entity
+      if (/gear|speed|velocidad/i.test(sel.entityId) || /gear|speed|velocidad/i.test(sel.name || "")) {
+        const speedLevel = speedPct <= 33 ? "1" : speedPct <= 66 ? "2" : "3";
+        const targetRegex =
+          speedLevel === "1"
+            ? /^(1|low|bajo|gear 1|gear_1)$/i
+            : speedLevel === "2"
+            ? /^(2|medium|med|medio|gear 2|gear_2)$/i
+            : /^(3|high|alto|gear 3|gear_3)$/i;
+        const gearMatch = options.find((opt) => targetRegex.test(opt));
+        if (gearMatch) {
+          tasks.push(api.selectOption(sel.entityId, gearMatch).catch(() => {}));
+        }
+      }
     }
 
-    // Step 6: If climate entity exists, switch HVAC mode to fan_only
+    // Step 7: If climate entity exists, switch HVAC mode to fan_only
     const climateEntities = device.entities.filter((e) => e.domain === "climate");
     for (const clim of climateEntities) {
       if (clim.attributes?.hvac_modes?.includes("fan_only")) {
@@ -408,6 +484,9 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
 
     // Reinforce after 250ms in case microcontroller took extra time to transition from boot
     setTimeout(() => {
+      if (fanEntity) {
+        api.setEntityValue(fanEntity.entityId, speedPct).catch(() => {});
+      }
       for (const sel of selectEntities) {
         const options: string[] = sel.attributes?.options || [];
         const fanOpt = options.find((opt: string) =>
@@ -422,6 +501,93 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
         if (match) api.setPresetMode(fanEntity.entityId, match).catch(() => {});
       }
     }, 250);
+  };
+
+  const handleSetH7133FanSpeed = async (e: React.MouseEvent, level: "low" | "med" | "high") => {
+    e.stopPropagation();
+    const pct = level === "low" ? 33 : level === "med" ? 66 : 100;
+    setH7133FanSpeedPct(pct);
+    try {
+      window.localStorage.setItem(`govee_h7133_fan_speed_pct_${device.id}`, String(pct));
+    } catch {}
+
+    if (currentH7133Mode !== "fan") {
+      setH7133Mode("fan");
+      try {
+        window.localStorage.setItem(`govee_h7133_mode_${device.id}`, "fan");
+      } catch {}
+    }
+
+    try {
+      await executeH7133FanMode(pct);
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      onRefresh?.();
+    } catch (err) {
+      console.error("Error setting H7133 fan speed:", err);
+    }
+  };
+
+  const handleSetOscillation = async (e: React.MouseEvent, mode: "off" | "horizontal" | "vertical" | "all") => {
+    e.stopPropagation();
+    setH7133Oscillation(mode);
+    try {
+      window.localStorage.setItem(`govee_h7133_oscillation_${device.id}`, mode);
+    } catch {}
+
+    const tasks: Promise<any>[] = [];
+
+    // 1. Select entity if present
+    if (oscSelectEntity) {
+      const options: string[] = oscSelectEntity.attributes?.options || [];
+      let targetOption: string | undefined;
+      if (mode === "off") {
+        targetOption = options.find((opt) => /^(off|fijo|none|stop|desactivado|no)$/i.test(opt));
+      } else if (mode === "horizontal") {
+        targetOption = options.find((opt) => /^(horizontal|horiz|left_right|izq_der)$/i.test(opt) || opt.toLowerCase().includes("horiz"));
+      } else if (mode === "vertical") {
+        targetOption = options.find((opt) => /^(vertical|vert|up_down|arriba_abajo)$/i.test(opt) || opt.toLowerCase().includes("vert"));
+      } else if (mode === "all") {
+        targetOption = options.find((opt) => /^(all|both|todo|ambos|3d)$/i.test(opt) || opt.toLowerCase().includes("all") || opt.toLowerCase().includes("both"));
+      }
+      if (targetOption) {
+        tasks.push(api.selectOption(oscSelectEntity.entityId, targetOption).catch(() => {}));
+      }
+    }
+
+    // 2. Separate horizontal / vertical switches if present
+    if (oscHorizontalSwitch) {
+      if (mode === "horizontal" || mode === "all") {
+        tasks.push(api.turnOnEntity(oscHorizontalSwitch.entityId).catch(() => {}));
+      } else {
+        tasks.push(api.turnOffEntity(oscHorizontalSwitch.entityId).catch(() => {}));
+      }
+    }
+
+    if (oscVerticalSwitch) {
+      if (mode === "vertical" || mode === "all") {
+        tasks.push(api.turnOnEntity(oscVerticalSwitch.entityId).catch(() => {}));
+      } else {
+        tasks.push(api.turnOffEntity(oscVerticalSwitch.entityId).catch(() => {}));
+      }
+    }
+
+    // 3. General oscillation switch
+    if (oscGeneralSwitch) {
+      if (mode !== "off") {
+        tasks.push(api.turnOnEntity(oscGeneralSwitch.entityId).catch(() => {}));
+      } else {
+        tasks.push(api.turnOffEntity(oscGeneralSwitch.entityId).catch(() => {}));
+      }
+    }
+
+    // 4. Fan entity oscillate service
+    if (fanEntity) {
+      tasks.push(api.setFanOscillation(fanEntity.entityId, mode !== "off").catch(() => {}));
+    }
+
+    await Promise.allSettled(tasks);
+    await new Promise((r) => setTimeout(r, 250));
+    onRefresh?.();
   };
 
   const executeH7133HeatMode = async (level: "1" | "2" | "3" | "auto") => {
@@ -639,15 +805,27 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
         state={primaryState}
         attributes={primaryAttributes}
         fanPercentage={
-          typeof fanEntity?.attributes?.percentage === "number"
+          isH7133
+            ? (currentH7133Mode !== "off"
+                ? (typeof fanEntity?.attributes?.percentage === "number" && fanEntity.attributes.percentage > 0
+                    ? fanEntity.attributes.percentage
+                    : h7133FanSpeedPct)
+                : 0)
+            : typeof fanEntity?.attributes?.percentage === "number"
             ? fanEntity.attributes.percentage
             : primaryDomain === "fan" && typeof primaryAttributes?.percentage === "number"
             ? primaryAttributes.percentage
-            : (isH7133 ? currentH7133Mode !== "off" : ((fanEntity ? fanEntity.state === "on" : primaryDomain === "fan" && isOn) || isHeating))
+            : (fanEntity ? fanEntity.state === "on" : primaryDomain === "fan" && isOn) || isHeating
             ? 100
             : 0
         }
-        isFanOn={isH7133 ? currentH7133Mode !== "off" : ((fanEntity ? fanEntity.state === "on" : primaryDomain === "fan" && isOn) || isHeating)}
+        isFanOn={
+          isH7133
+            ? currentH7133Mode !== "off"
+            : ((fanEntity ? fanEntity.state === "on" : primaryDomain === "fan" && isOn) || isHeating)
+        }
+        isOscillating={isH7133 ? h7133Oscillation !== "off" : Boolean(fanEntity?.attributes?.oscillating || primaryAttributes?.oscillating)}
+        oscillationMode={isH7133 ? h7133Oscillation : undefined}
         lightRgb={[lr, lg, lb]}
         lightBrightness={lightBrightness}
         isLightOn={isLightActive}
@@ -1099,66 +1277,253 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                 </button>
               </div>
 
-              {/* Heat Level Selector when in heat mode */}
-              {currentH7133Mode === "heat" && (
-                <div style={{ marginTop: "4px" }}>
-                  <div
-                    style={{
-                      fontSize: "0.66rem",
-                      fontWeight: 600,
-                      color: "#FB923C",
-                      marginBottom: "4px",
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                    }}
-                  >
-                    <span>Potencia calefactor:</span>
-                    <span style={{ color: "#FED7AA" }}>
-                      {h7133HeatLevel === "1"
-                        ? "Nivel 1 (Bajo · 33%)"
-                        : h7133HeatLevel === "2"
-                        ? "Nivel 2 (Medio · 66%)"
-                        : h7133HeatLevel === "3"
-                        ? "Nivel 3 (Alto · 100%)"
-                        : "Modo Auto (Termostato)"}
-                    </span>
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "4px" }}>
-                    {[
-                      { id: "1", label: "1 · Bajo", desc: "Calefacción suave (Nivel 1)" },
-                      { id: "2", label: "2 · Medio", desc: "Calefacción moderada (Nivel 2)" },
-                      { id: "3", label: "3 · Alto", desc: "Calefacción máxima (Nivel 3)" },
-                      { id: "auto", label: "🌡️ Auto", desc: "Termostato automático" },
-                    ].map((lvl) => {
-                      const isSelected = h7133HeatLevel === lvl.id;
-                      return (
+              {/* Fan Speed & Oscillation Controls when in fan mode */}
+              {currentH7133Mode === "fan" && (
+                <div style={{ marginTop: "6px", display: "flex", flexDirection: "column", gap: "6px" }}>
+                  {/* Speed Bar: Low (1), Med (2), High (3) */}
+                  <div>
+                    <div
+                      style={{
+                        fontSize: "0.66rem",
+                        fontWeight: 600,
+                        color: "#38BDF8",
+                        marginBottom: "4px",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <span>Velocidad ventilador:</span>
+                      <span style={{ color: "#BAE6FD" }}>
+                        {h7133FanSpeedPct <= 33
+                          ? "1 · Bajo (Low · 33%)"
+                          : h7133FanSpeedPct <= 66
+                          ? "2 · Medio (Med · 66%)"
+                          : "3 · Alto (High · 100%)"}
+                      </span>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "4px" }}>
+                      {[
+                        { id: "low", label: "1 · Low", desc: "Velocidad baja (33%)", match: h7133FanSpeedPct <= 33 },
+                        { id: "med", label: "2 · Med", desc: "Velocidad media (66%)", match: h7133FanSpeedPct > 33 && h7133FanSpeedPct <= 66 },
+                        { id: "high", label: "3 · High", desc: "Velocidad máxima (100%)", match: h7133FanSpeedPct > 66 },
+                      ].map((s) => (
                         <button
-                          key={lvl.id}
+                          key={s.id}
                           type="button"
-                          onClick={(e) => handleSetH7133HeatLevel(e, lvl.id as "1" | "2" | "3" | "auto")}
+                          onClick={(e) => handleSetH7133FanSpeed(e, s.id as "low" | "med" | "high")}
                           style={{
                             padding: "6px 2px",
                             borderRadius: "6px",
                             fontSize: "0.7rem",
-                            fontWeight: isSelected ? 700 : 500,
-                            border: isSelected
-                              ? "1.5px solid #FB923C"
+                            fontWeight: s.match ? 700 : 500,
+                            border: s.match
+                              ? "1.5px solid #38BDF8"
                               : "1px solid rgba(255, 255, 255, 0.12)",
-                            background: isSelected
-                              ? "rgba(234, 88, 12, 0.45)"
+                            background: s.match
+                              ? "rgba(14, 165, 233, 0.4)"
                               : "rgba(255, 255, 255, 0.05)",
-                            color: isSelected ? "#FED7AA" : "#94A3B8",
+                            color: s.match ? "#E0F2FE" : "#94A3B8",
                             cursor: "pointer",
                             textAlign: "center",
                             transition: "all 0.15s ease",
                           }}
-                          title={lvl.desc}
+                          title={s.desc}
                         >
-                          {lvl.label}
+                          {s.label}
                         </button>
-                      );
-                    })}
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Oscillation Bar: Horizontal, Vertical, Todo (3D), Fijo */}
+                  <div>
+                    <div
+                      style={{
+                        fontSize: "0.66rem",
+                        fontWeight: 600,
+                        color: "#38BDF8",
+                        marginBottom: "4px",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <span>Rango / Oscilación:</span>
+                      <span style={{ color: "#BAE6FD" }}>
+                        {h7133Oscillation === "horizontal"
+                          ? "Horizontal (↔️)"
+                          : h7133Oscillation === "vertical"
+                          ? "Vertical (↕️)"
+                          : h7133Oscillation === "all"
+                          ? "3D Todo (🔄)"
+                          : "Fijo (Off)"}
+                      </span>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "4px" }}>
+                      {[
+                        { id: "horizontal", label: "↔️ Horiz", desc: "Oscilación horizontal izquierda-derecha" },
+                        { id: "vertical", label: "↕️ Vert", desc: "Oscilación vertical arriba-abajo" },
+                        { id: "all", label: "🔄 Todo", desc: "Oscilación completa 3D (Arriba, Abajo y Lados)" },
+                        { id: "off", label: "⏸️ Fijo", desc: "Sin oscilación (Fijo)" },
+                      ].map((osc) => {
+                        const isSelected = h7133Oscillation === osc.id;
+                        return (
+                          <button
+                            key={osc.id}
+                            type="button"
+                            onClick={(e) => handleSetOscillation(e, osc.id as any)}
+                            style={{
+                              padding: "6px 2px",
+                              borderRadius: "6px",
+                              fontSize: "0.7rem",
+                              fontWeight: isSelected ? 700 : 500,
+                              border: isSelected
+                                ? "1.5px solid #38BDF8"
+                                : "1px solid rgba(255, 255, 255, 0.12)",
+                              background: isSelected
+                                ? "rgba(14, 165, 233, 0.35)"
+                                : "rgba(255, 255, 255, 0.05)",
+                              color: isSelected ? "#E0F2FE" : "#94A3B8",
+                              cursor: "pointer",
+                              textAlign: "center",
+                              transition: "all 0.15s ease",
+                            }}
+                            title={osc.desc}
+                          >
+                            {osc.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Heat Level & Oscillation Selector when in heat mode */}
+              {currentH7133Mode === "heat" && (
+                <div style={{ marginTop: "6px", display: "flex", flexDirection: "column", gap: "6px" }}>
+                  <div>
+                    <div
+                      style={{
+                        fontSize: "0.66rem",
+                        fontWeight: 600,
+                        color: "#FB923C",
+                        marginBottom: "4px",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <span>Potencia calefactor:</span>
+                      <span style={{ color: "#FED7AA" }}>
+                        {h7133HeatLevel === "1"
+                          ? "Nivel 1 (Bajo · 33%)"
+                          : h7133HeatLevel === "2"
+                          ? "Nivel 2 (Medio · 66%)"
+                          : h7133HeatLevel === "3"
+                          ? "Nivel 3 (Alto · 100%)"
+                          : "Modo Auto (Termostato)"}
+                      </span>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "4px" }}>
+                      {[
+                        { id: "1", label: "1 · Bajo", desc: "Calefacción suave (Nivel 1)" },
+                        { id: "2", label: "2 · Medio", desc: "Calefacción moderada (Nivel 2)" },
+                        { id: "3", label: "3 · Alto", desc: "Calefacción máxima (Nivel 3)" },
+                        { id: "auto", label: "🌡️ Auto", desc: "Termostato automático" },
+                      ].map((lvl) => {
+                        const isSelected = h7133HeatLevel === lvl.id;
+                        return (
+                          <button
+                            key={lvl.id}
+                            type="button"
+                            onClick={(e) => handleSetH7133HeatLevel(e, lvl.id as "1" | "2" | "3" | "auto")}
+                            style={{
+                              padding: "6px 2px",
+                              borderRadius: "6px",
+                              fontSize: "0.7rem",
+                              fontWeight: isSelected ? 700 : 500,
+                              border: isSelected
+                                ? "1.5px solid #FB923C"
+                                : "1px solid rgba(255, 255, 255, 0.12)",
+                              background: isSelected
+                                ? "rgba(234, 88, 12, 0.45)"
+                                : "rgba(255, 255, 255, 0.05)",
+                              color: isSelected ? "#FED7AA" : "#94A3B8",
+                              cursor: "pointer",
+                              textAlign: "center",
+                              transition: "all 0.15s ease",
+                            }}
+                            title={lvl.desc}
+                          >
+                            {lvl.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Oscillation Bar in Heat Mode */}
+                  <div>
+                    <div
+                      style={{
+                        fontSize: "0.66rem",
+                        fontWeight: 600,
+                        color: "#FB923C",
+                        marginBottom: "4px",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <span>Rango / Oscilación:</span>
+                      <span style={{ color: "#FED7AA" }}>
+                        {h7133Oscillation === "horizontal"
+                          ? "Horizontal (↔️)"
+                          : h7133Oscillation === "vertical"
+                          ? "Vertical (↕️)"
+                          : h7133Oscillation === "all"
+                          ? "3D Todo (🔄)"
+                          : "Fijo (Off)"}
+                      </span>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "4px" }}>
+                      {[
+                        { id: "horizontal", label: "↔️ Horiz", desc: "Oscilación horizontal izquierda-derecha" },
+                        { id: "vertical", label: "↕️ Vert", desc: "Oscilación vertical arriba-abajo" },
+                        { id: "all", label: "🔄 Todo", desc: "Oscilación completa 3D" },
+                        { id: "off", label: "⏸️ Fijo", desc: "Sin oscilación (Fijo)" },
+                      ].map((osc) => {
+                        const isSelected = h7133Oscillation === osc.id;
+                        return (
+                          <button
+                            key={osc.id}
+                            type="button"
+                            onClick={(e) => handleSetOscillation(e, osc.id as any)}
+                            style={{
+                              padding: "6px 2px",
+                              borderRadius: "6px",
+                              fontSize: "0.7rem",
+                              fontWeight: isSelected ? 700 : 500,
+                              border: isSelected
+                                ? "1.5px solid #FB923C"
+                                : "1px solid rgba(255, 255, 255, 0.12)",
+                              background: isSelected
+                                ? "rgba(234, 88, 12, 0.35)"
+                                : "rgba(255, 255, 255, 0.05)",
+                              color: isSelected ? "#FED7AA" : "#94A3B8",
+                              cursor: "pointer",
+                              textAlign: "center",
+                              transition: "all 0.15s ease",
+                            }}
+                            title={osc.desc}
+                          >
+                            {osc.label}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               )}
@@ -1205,9 +1570,9 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                     >
                       {isH7133
                         ? currentH7133Mode === "heat"
-                          ? `Calefacción activa (${h7133HeatLevel === "auto" ? "Auto" : `Nivel ${h7133HeatLevel}`})`
+                          ? `Calefacción activa (${h7133HeatLevel === "auto" ? "Auto" : `Nivel ${h7133HeatLevel}`})${h7133Oscillation !== "off" ? ` · 🔄 ${h7133Oscillation === "all" ? "3D Todo" : h7133Oscillation === "vertical" ? "Vertical" : "Horizontal"}` : ""}`
                           : currentH7133Mode === "fan"
-                          ? `Ventilación pura · ${fanEntity.attributes?.percentage ?? 100}%`
+                          ? `Ventilación pura · ${typeof fanEntity.attributes?.percentage === "number" && fanEntity.attributes.percentage > 0 ? fanEntity.attributes.percentage : h7133FanSpeedPct}%${h7133Oscillation !== "off" ? ` · 🔄 ${h7133Oscillation === "all" ? "3D Todo" : h7133Oscillation === "vertical" ? "Vertical" : "Horizontal"}` : ""}`
                           : "Apagado"
                         : fanEntity.state === "on"
                         ? `Encendido · ${fanEntity.attributes?.percentage ?? 100}%`
@@ -1239,14 +1604,24 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                 entityId={fanEntity.entityId}
                 domain="fan"
                 initialValue={
-                  typeof fanEntity.attributes?.percentage === "number"
+                  typeof fanEntity.attributes?.percentage === "number" && fanEntity.attributes.percentage > 0
                     ? fanEntity.attributes.percentage
+                    : isH7133 && currentH7133Mode === "fan"
+                    ? h7133FanSpeedPct
                     : (isH7133 ? currentH7133Mode !== "off" : fanEntity.state === "on")
                     ? 100
                     : 0
                 }
-                color="var(--apple-cyan, #007aff)"
+                color={isH7133 && currentH7133Mode === "heat" ? "#FB923C" : "var(--apple-cyan, #007aff)"}
                 label="Velocidad ventilador"
+                onChange={(val) => {
+                  if (isH7133) {
+                    setH7133FanSpeedPct(val);
+                    try {
+                      window.localStorage.setItem(`govee_h7133_fan_speed_pct_${device.id}`, String(val));
+                    } catch {}
+                  }
+                }}
                 onRefresh={onRefresh}
               />
             </div>

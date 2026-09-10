@@ -1,3 +1,27 @@
+## [1.5.37] - 2026-09-09
+
+### Control de Velocidad (Low, Med, High), Rango de Oscilación 3D (Horizontal, Vertical, Todo) y Animación Cool para Govee H7133
+
+- **Selector Rápido de Velocidad para Modo Fan Manual (`DeviceCard.tsx`):**
+  - Añadida botonera de 3 velocidades en modo Fan:
+    - **1 · Low:** 33% de velocidad / Gear 1.
+    - **2 · Med:** 66% de velocidad / Gear 2.
+    - **3 · High:** 100% de velocidad / Gear 3.
+  - Sincronización instantánea con el deslizador `LiquidSlider` interactivo (`onChange` y `initialValue` sincronizados) y persistencia en `localStorage`.
+  - Al pulsar `🌪️ Fan Manual`, el ventilador arranca inmediatamente con la velocidad seleccionada (por defecto 100%), garantizando que nunca quede dormido o en 0%.
+- **Control de Rango y Oscilación 3D Multidireccional (`DeviceCard.tsx`, `platform.ts`, `client.ts`):**
+  - Soporte completo para los 4 modos de oscilación del calentador/ventilador de torre Govee H7133:
+    - **↔️ Horiz:** Oscilación horizontal de izquierda a derecha.
+    - **↕️ Vert:** Oscilación vertical de arriba a abajo.
+    - **🔄 Todo:** Oscilación tridimensional completa (horizontal + vertical combinados).
+    - **⏸️ Fijo:** Apaga la oscilación (modo estático fijo).
+  - Enrutamiento inteligente a las entidades de Home Assistant: selectores de oscilación (`select.*oscillation*`), interruptores de barrido horizontal/vertical (`switch.*vertical*`, `switch.*horizontal*`), switch general de oscilación y servicio estándar `fan.oscillate`.
+  - Nuevo endpoint en backend: `POST /api/custom/entity-oscillate/:entityId`.
+- **Animación Vectorial Dinámica de Brisa Fresca y Oscilación 3D (`DeviceCardArt.tsx`, `style.css`):**
+  - En modo Fan Manual, las ondas de flujo de aire se renderizan en gradiente cian/azul frío (`url(#breezeGrad)`), con aletas frontales en tono `#38BDF8` y animación activa a una velocidad proporcional al porcentaje fijado (`--fan-speed-duration`).
+  - La torre responde visualmente con animaciones SVG en tiempo real según el modo de oscilación activo: balanceo horizontal (`art-tower-oscillating-horiz`), barrido vertical (`art-tower-oscillating-vert`) o movimiento combinado 3D (`art-tower-oscillating-all`).
+  - El subtítulo dinámico informa el porcentaje exacto y el estado de oscilación (ej. `Ventilación pura · 100% · 🔄 3D Todo`).
+
 ## [1.5.36] - 2026-09-09
 
 ### Selector de Niveles de Calefacción (1, 2, 3, Auto), Soporte de Dominios Select/Number y Modo Fan Puro en Govee H7133

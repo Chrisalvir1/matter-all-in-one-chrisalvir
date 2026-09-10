@@ -3148,3 +3148,32 @@ mark {
     font-size: 0.68rem !important;
   }
 }
+
+/* ── Tower Fan 3D Oscillation Animation Effects ── */
+@keyframes tower-oscillate-horiz {
+  0% { transform: rotate(0deg); }
+  25% { transform: rotate(-7deg); }
+  75% { transform: rotate(7deg); }
+  100% { transform: rotate(0deg); }
+}
+
+@keyframes tower-oscillate-vert {
+  0% { transform: translateY(0); }
+  25% { transform: translateY(-5px); }
+  75% { transform: translateY(5px); }
+  100% { transform: translateY(0); }
+}
+
+.art-tower-oscillating-horiz {
+  transform-origin: 118px 132px;
+  animation: tower-oscillate-horiz 3.6s ease-in-out infinite;
+}
+
+.art-tower-oscillating-vert {
+  animation: tower-oscillate-vert 2.8s ease-in-out infinite;
+}
+
+.art-tower-oscillating-all {
+  transform-origin: 118px 132px;
+  animation: tower-oscillate-horiz 3.6s ease-in-out infinite, tower-oscillate-vert 2.8s ease-in-out infinite;
+}

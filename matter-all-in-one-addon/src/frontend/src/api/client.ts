@@ -127,6 +127,12 @@ export const api = {
       body: JSON.stringify({ hvac_mode: hvacMode }),
     }),
 
+  setFanOscillation: (entityId: string, oscillating: boolean) =>
+    request(`/entity-oscillate/${encodeURIComponent(entityId)}`, {
+      method: "POST",
+      body: JSON.stringify({ oscillating }),
+    }),
+
   setLightSettings: (
     entityId: string,
     options: {

@@ -4294,6 +4294,39 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           return;
         }
 
+        // POST /api/custom/entity-oscillate/:entityId
+        if (
+          req.method === "POST" &&
+          pathname.startsWith("/api/custom/entity-oscillate/")
+        ) {
+          const entityId = decodeURIComponent(
+            pathname.substring("/api/custom/entity-oscillate/".length),
+          );
+          const [domain] = entityId.split(".");
+          try {
+            const body = await this.readRequestBody(req);
+            const data = JSON.parse(body || "{}");
+            const oscillating = Boolean(data.oscillating);
+            if (domain === "fan") {
+              await this.ha.callService("fan", "oscillate", entityId, {
+                oscillating,
+              });
+            } else if (domain === "switch") {
+              await this.ha.callService("switch", oscillating ? "turn_on" : "turn_off", entityId);
+            }
+            res.writeHead(200, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ success: true, entityId, oscillating }));
+          } catch (err: any) {
+            res.writeHead(500, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ success: false, error: err?.message || String(err) }));
+          }
+          return;
+        }
+
         // POST /api/custom/reset-accessory/:entityId
         if (
           req.method === "POST" &&
