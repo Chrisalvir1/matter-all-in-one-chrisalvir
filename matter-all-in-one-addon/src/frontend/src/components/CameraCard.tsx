@@ -7,8 +7,7 @@ interface CameraCardProps {
   onConfigure: () => void;
 }
 
-export function extractCameraBrand(item: CameraRecord | DeviceRecord | undefined | null): string {
-  if (!item) return "Marca no identificada";
+export function extractCameraBrand(item: CameraRecord | DeviceRecord): string {
   const name = ("name" in item ? item.name : "") || "";
   const model = ("displayModel" in item ? item.displayModel : "model" in item ? item.model : "") || "";
   const mfr = ("displayManufacturer" in item ? item.displayManufacturer : "manufacturer" in item ? item.manufacturer : "") || "";

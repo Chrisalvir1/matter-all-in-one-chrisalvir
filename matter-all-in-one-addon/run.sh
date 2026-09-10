@@ -92,22 +92,14 @@ node /app/dist/proxy.js &
 
 # Build arguments without shell word-splitting or option injection.
 set -- matterbridge -bridge -frontend 8284 -bind 127.0.0.1
-if [ -z "$MDNSINTERFACE" ]; then
-    DETECTED_IFACE=$(ip route show default 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="dev") print $(i+1)}' | head -n1)
-    if [ -n "$DETECTED_IFACE" ]; then
-        echo "[Info] Auto-detected primary LAN network interface for mDNS: $DETECTED_IFACE"
-        MDNSINTERFACE="$DETECTED_IFACE"
-    fi
-fi
-
 if [ -n "$MDNSINTERFACE" ]; then
     case "$MDNSINTERFACE" in
       *[!A-Za-z0-9_.:-]*) echo "[Error] Invalid mDNS interface name."; exit 1 ;;
     esac
-    echo "[Info] Using network interface for mDNS: $MDNSINTERFACE"
+    echo "[Info] Using manually configured network interface for mDNS: $MDNSINTERFACE"
     set -- "$@" -mdnsinterface "$MDNSINTERFACE"
 else
-    echo "[Info] mDNS will use all available interfaces."
+    echo "[Info] mDNS will use all available interfaces so route changes do not strand Matter devices."
 fi
 
 # Matter uses IPv6 link-local addresses on the LAN. This is independent from
