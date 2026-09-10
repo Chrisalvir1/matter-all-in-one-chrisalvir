@@ -17,6 +17,7 @@ import path from "path";
 import { HomeAssistant } from "./homeAssistant.js";
 import { HassState, isUnavailable } from "./utils/ha-state.js";
 import { discoverHassUrl, toWsUrl } from "./utils/ha-discovery.js";
+import { FabricManager } from "@matter/protocol";
 import {
   getDeviceTypeForEntity,
   MatterDeviceTypes,
@@ -527,25 +528,36 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         endpoint?.serverNode?.behaviors?.operationalCredentials?.state?.fabrics;
 
       let rawFabrics: any[] = [];
-      if (liveFabricSource !== undefined && liveFabricSource !== null) {
-        rawFabrics = Array.isArray(liveFabricSource)
-          ? liveFabricSource
-          : Object.values(liveFabricSource);
-      } else if (
-        commissioning.fabrics !== undefined &&
-        commissioning.fabrics !== null
-      ) {
-        rawFabrics = Array.isArray(commissioning.fabrics)
-          ? commissioning.fabrics
-          : Object.values(commissioning.fabrics);
+      if (endpoint?.serverNode?.env) {
+        try {
+          const fm = endpoint.serverNode.env.get(FabricManager);
+          if (fm?.fabrics) {
+            rawFabrics = Array.from(fm.fabrics);
+          }
+        } catch {}
+      }
+      if (rawFabrics.length === 0) {
+        if (liveFabricSource !== undefined && liveFabricSource !== null) {
+          rawFabrics = Array.isArray(liveFabricSource)
+            ? liveFabricSource
+            : Object.values(liveFabricSource);
+        } else if (
+          commissioning.fabrics !== undefined &&
+          commissioning.fabrics !== null
+        ) {
+          rawFabrics = Array.isArray(commissioning.fabrics)
+            ? commissioning.fabrics
+            : Object.values(commissioning.fabrics);
+        }
       }
 
       const homeLocation = (this.ha as any)?.hassConfig?.location_name || null;
       const fabrics: MatterFabricInfo[] = rawFabrics.map((fabric: any) => {
+        const rawVendorId = fabric?.rootVendorId ?? fabric?.vendorId;
         const parsedVendorId =
-          typeof fabric?.vendorId === "number"
-            ? fabric.vendorId
-            : Number(fabric?.vendorId);
+          typeof rawVendorId === "number"
+            ? rawVendorId
+            : Number(rawVendorId);
         const vendorId = Number.isFinite(parsedVendorId)
           ? parsedVendorId
           : null;
@@ -2423,6 +2435,19 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     try {
       const storeId = String(endpoint.deviceName ?? "").replace(/[ .]/g, "");
 
+      // 1. In-memory cleanup before stopping the node
+      if (serverNode) {
+        try {
+          const fabricManager = (serverNode as any).env?.get?.(FabricManager);
+          if (fabricManager) {
+            await fabricManager.clear();
+          }
+        } catch (e) {
+          this.log.debug(`[Reset] FabricManager clear: ${e}`);
+        }
+      }
+
+      // 2. Shut down and unregister the old endpoint
       if (compositeDeviceId) {
         await this.disposeCompositeNode(compositeDeviceId);
       } else {
@@ -2431,10 +2456,53 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         this.matterbridgeDevices.delete(entityId);
       }
 
-      // Matterbridge keeps a separate `persist` context with Basic Information values,
-      // as well as fabrics and commissioning contexts. Clear them while the node is stopped
-      // so the newly created ServerNode starts with completely clean credentials and a single
-      // authoritative discriminator and pairing code.
+      // 3. Purge all persisted storage folders for this node from disk
+      const candidates = [
+        (this.matterbridge as any).matterbridgeDirectory,
+        path.join(process.env.HOME || "/root", ".matterbridge"),
+        "/data/.matterbridge",
+        "/data",
+        "/root/.matterbridge",
+      ].filter(Boolean) as string[];
+
+      const possibleIds = new Set<string>(
+        [
+          storeId,
+          String(endpoint.deviceName ?? "").replace(/[ .]/g, ""),
+          String((endpoint as any).name ?? "").replace(/[ .]/g, ""),
+          String(endpoint.id ?? "").replace(/[ .]/g, ""),
+          (serverNode as any).id,
+        ].filter(Boolean),
+      );
+
+      if (compositeDeviceId) {
+        possibleIds.add(compositeDeviceId.replace(/[ .]/g, ""));
+        possibleIds.add(`device_${compositeDeviceId}`);
+      }
+
+      for (const baseDir of candidates) {
+        const storageDir = path.join(baseDir, "matterstorage");
+        if (!fsSync.existsSync(storageDir)) continue;
+        try {
+          const dirs = await fs.readdir(storageDir);
+          for (const d of dirs) {
+            const match = Array.from(possibleIds).some(
+              (id) =>
+                d.toLowerCase() === id.toLowerCase() ||
+                (id.length > 5 && d.toLowerCase().includes(id.toLowerCase())),
+            );
+            if (match) {
+              const fullPath = path.join(storageDir, d);
+              await fs.rm(fullPath, { recursive: true, force: true });
+              this.log.notice(`[Reset] Purged storage folder: ${fullPath}`);
+            }
+          }
+        } catch (err) {
+          this.log.debug(`[Reset] Storage scan error for ${storageDir}: ${err}`);
+        }
+      }
+
+      // 4. Legacy storage service context clear
       const bridgeRuntime = this.matterbridge as any;
       const managedStorage =
         bridgeRuntime.serverNodeStorageManagers?.get?.(storeId);
@@ -2868,8 +2936,39 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             ? targetNum
             : 1;
 
-      // 1. Try Matter.js ServerNode behavior removal via agent transaction
-      if (typeof (serverNode as any).act === "function") {
+      // 1. Try deleting fabric directly via FabricManager in serverNode.env
+      try {
+        const fabricManager = (serverNode as any).env?.get?.(FabricManager);
+        if (fabricManager) {
+          let fabric = fabricManager.maybeFor(fabricIndex);
+          if (!fabric) {
+            for (const f of fabricManager.fabrics ?? []) {
+              if (
+                Number(f.fabricIndex) === targetNum ||
+                String(f.fabricId) === targetStr ||
+                String(f.fabricIndex) === targetStr
+              ) {
+                fabric = f;
+                break;
+              }
+            }
+          }
+          if (fabric) {
+            this.log.notice(
+              `[removeFabric] Deleting fabric ${fabric.fabricIndex} (id: ${fabric.fabricId}) from ${entityId}`,
+            );
+            await fabric.delete();
+            removed = true;
+          }
+        }
+      } catch (err) {
+        this.log.warn(
+          `[removeFabric] Direct FabricManager.delete failed for ${entityId}: ${err}`,
+        );
+      }
+
+      // 2. Fallback to ServerNode behavior removal via agent transaction
+      if (!removed && typeof (serverNode as any).act === "function") {
         try {
           await (serverNode as any).act(async (agent: any) => {
             const opCreds =

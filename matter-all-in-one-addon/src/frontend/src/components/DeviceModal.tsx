@@ -142,7 +142,35 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     if (!confirm("¿Desconectar este accesorio de este controlador Matter?")) return;
     setIsBusy(true);
     try {
-      await api.removeFabric(activeEntity.entityId, fabricIndex);
+      const res: any = await api.removeFabric(activeEntity.entityId, fabricIndex);
+      if (res?.remainingFabrics === 0) {
+        setResetFabrics(true);
+        if (res?.pairingCode) setFreshPairingCode(res.pairingCode);
+        if (res?.manualPairingCode) setFreshManualCode(res.manualPairingCode);
+        activeEntity.commissioned = false;
+        activeEntity.matterFabrics = [];
+        device.entities.forEach((e) => {
+          e.commissioned = false;
+          e.matterFabrics = [];
+        });
+      } else {
+        if (activeEntity.matterFabrics) {
+          activeEntity.matterFabrics = activeEntity.matterFabrics.filter(
+            (f: any) =>
+              String(f.fabricIndex) !== String(fabricIndex) &&
+              String(f.fabricId) !== String(fabricIndex)
+          );
+        }
+        device.entities.forEach((e) => {
+          if (e.matterFabrics) {
+            e.matterFabrics = e.matterFabrics.filter(
+              (f: any) =>
+                String(f.fabricIndex) !== String(fabricIndex) &&
+                String(f.fabricId) !== String(fabricIndex)
+            );
+          }
+        });
+      }
       showToast("✓ Controlador desconectado");
       onRefresh();
     } catch (err: any) {
@@ -220,6 +248,10 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
         activeEntity.manualPairingCode = res.manualPairingCode || activeEntity.manualPairingCode;
         activeEntity.commissioned = false;
         activeEntity.matterFabrics = [];
+        device.entities.forEach((e) => {
+          e.commissioned = false;
+          e.matterFabrics = [];
+        });
       }
       showToast("✓ Accesorio desvinculado y nuevo QR generado");
       onRefresh();

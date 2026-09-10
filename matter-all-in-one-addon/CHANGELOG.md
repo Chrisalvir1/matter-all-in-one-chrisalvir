@@ -1,3 +1,15 @@
+## [1.5.63] - 2026-09-10
+
+### Corrección Crítica de Eliminación de Fabrics y Purga de Almacenamiento Persistente en Disco
+
+- **Eliminación Directa de Fabrics mediante `FabricManager` (`platform.ts`):**
+  - Se corrigió el error por el cual al pulsar «Desconectar» en un controlador (ej. Apple Home Fabric 1 o Fabric 2), la acción fallaba internamente debido a la restricción `assertRemoteActor` de Matter.js en invocaciones locales vía agente.
+  - Ahora se interactúa directamente con el `FabricManager` del entorno del nodo (`serverNode.env.get(FabricManager)`), llamando a `fabric.delete()`. Esto cierra las sesiones activas, actualiza los eventos de eliminación y persiste el nuevo estado en disco sin fallos.
+- **Purga Exhaustiva de Almacenamiento en Disco al Restablecer (`platform.ts`):**
+  - Al realizar un restablecimiento o desvinculación completa («Desconectar todo y nuevo QR»), se eliminan físicamente los directorios de almacenamiento en `/root/.matterbridge/matterstorage/<storeId>` y equivalentes locales. Esto garantiza que las credenciales de emparejamiento anteriores de Apple Home no vuelvan a cargarse en memoria al reiniciar el ServerNode.
+- **Actualización Reactiva Inmediata en la Interfaz Web (`DeviceModal.tsx`):**
+  - Al presionar «Desconectar» o «Desconectar todo y nuevo QR», la lista de controladores y el estado de emparejamiento se actualizan instantáneamente en la interfaz sin depender exclusivamente de llamadas asíncronas lentas o recargas de página, evitando que los controladores continúen mostrándose visualmente como activos.
+
 ## [1.5.62] - 2026-09-10
 
 ### Unificación de Ventiladores de Techo con Luz en un Solo Código QR Matter (Composite Accessory)
