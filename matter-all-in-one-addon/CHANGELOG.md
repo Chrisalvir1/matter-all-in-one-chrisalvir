@@ -1,3 +1,11 @@
+## [1.5.69] - 2026-09-11
+
+### Sincronización completa con Node.js 24.21.0 LTS (última versión estable)
+
+- **`Dockerfile`:** imagen base actualizada de `node:24.20.0-alpine3.24` → **`node:24.21.0-alpine3.24`**. La instalación global de matterbridge en el runtime también actualizada de `3.10.8` → `3.10.9`.
+- **`build.yaml`:** ⚠️ **CORRECCIÓN CRÍTICA** — estaba usando incorrectamente `node:26.8.1-alpine3.24` (Node 26, incompatible con el proyecto). Corregido a `node:24.21.0-alpine3.24` para amd64 y aarch64. Esto asegura que el add-on de Home Assistant se construya y ejecute en el mismo runtime Node 24 LTS en todas las arquitecturas.
+- **`package.json` `engines`:** mínimo actualizado de `>=24.20.0 <25` → **`>=24.21.0 <25`**, en sincronía con el runtime del Dockerfile.
+
 ## [1.5.68] - 2026-09-11
 
 ### Actualización de Dependencias — Versiones Estables
