@@ -1,3 +1,13 @@
+## [1.5.67] - 2026-09-10
+
+### Corrección: Recámara y Otros Ventiladores No Mostraban Interruptor Maestro + QR Desaparecía Después de Reset
+
+- **Detección de composite más robusta en `DeviceModal.tsx`:**
+  - Si un dispositivo tiene entidades `fan.*` + `light.*` (sin ser auxiliares), el modal fuerza el modo compuesto aunque el campo `composite` del backend sea `false` por algún edge case en `getCompositeCandidate`. Esto garantiza que el ventilador de recámara y cualquier futuro ventilador con luz siempre muestren el Interruptor Maestro unificado.
+- **QR ya no desaparece después de Desconectar/Generar Nuevo QR (`DeviceModal.tsx`):**
+  - El `useEffect` que sincroniza el estado del modal ya no borra `freshPairingCode` / `freshManualCode` incondicionalmente cada vez que el padre re-renderiza. En su lugar: solo los borra cuando el `device` recién refrescado ya trae su propio `pairingCode` desde el backend; así el QR permanece visible aunque `onRefresh()` complete antes de que el servidor haya propagado el código nuevo.
+  - `resetFabrics` solo se desactiva cuando el backend confirma que el dispositivo ya no está comisionado, evitando parpadeos prematuros.
+
 ## [1.5.66] - 2026-09-10
 
 ### Corrección: Código QR No Aparecía Al Activar el Interruptor Maestro de Accesorio Compuesto

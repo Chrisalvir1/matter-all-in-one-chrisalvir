@@ -113,16 +113,33 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
       return targetEntity || sortedEntities[0] || device.entities[0] || null;
     });
     setMultiAdminOpen(false);
-    setFreshPairingCode(null);
-    setFreshManualCode(null);
-    setResetFabrics(false);
+    // Only clear freshPairingCode if the refreshed device data already carries a
+    // pairingCode from the backend — avoids a race where onRefresh() completes
+    // before the ServerNode has written its code, wiping the code we just received
+    // from the reset/register response.
+    const newDevicePairingCode =
+      device.entities.find((e) => e.exported && e.pairingCode)?.pairingCode ?? null;
+    if (newDevicePairingCode) {
+      setFreshPairingCode(null);
+      setFreshManualCode(null);
+    }
+    // Only clear resetFabrics flag once the backend confirms the device is no longer commissioned
+    const stillCommissioned = device.entities.some((e) => e.commissioned);
+    if (!stillCommissioned) {
+      setResetFabrics(false);
+    }
   }, [device, targetEntity]);
 
   if (!device) return null;
 
   const activeEntity = selectedEntity || sortedEntities[0] || null;
 
-  const isComposite = device.entities.some((e) => e.composite);
+  // A device is composite if the backend says so, OR if it has fan+light entities
+  // (belt-and-suspenders: handles edge cases where getCompositeCandidate fails on backend)
+  const hasFan = device.entities.some((e) => e.domain === "fan" && !e.auxiliary);
+  const hasLight = device.entities.some((e) => e.domain === "light" && !e.auxiliary);
+  const isComposite =
+    device.entities.some((e) => e.composite) || (hasFan && hasLight);
   const compositePrimary =
     device.entities.find((e) => e.entityId === e.compositePrimaryEntityId) ||
     device.entities.find((e) => e.domain === "fan") ||
