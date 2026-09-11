@@ -1,3 +1,13 @@
+## [1.5.70] - 2026-09-11
+
+### Release consolidado — todas las actualizaciones y correcciones de v1.5.66–v1.5.69
+
+Versión de lanzamiento limpia que consolida:
+- Corrección QR no aparecía al activar interruptor maestro compuesto (v1.5.66)
+- Corrección recámara sin interruptor maestro + QR desaparecía tras reset (v1.5.67)
+- Actualización de todas las dependencias a versiones estables: react 19.3.0, vitest 5.0.0, vite 8.3.0, matterbridge 3.10.9 (v1.5.68)
+- Sincronización completa con Node.js 24.21.0 LTS + corrección build.yaml (Node 26 → 24) (v1.5.69)
+
 ## [1.5.69] - 2026-09-11
 
 ### Sincronización completa con Node.js 24.21.0 LTS (última versión estable)
