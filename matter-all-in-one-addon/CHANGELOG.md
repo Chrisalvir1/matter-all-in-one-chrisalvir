@@ -1,3 +1,25 @@
+## [1.5.68] - 2026-09-11
+
+### Actualización de Dependencias — Versiones Estables
+
+Todas las dependencias actualizadas a su versión estable más reciente. Se eliminaron versiones beta/RC.
+
+| Paquete | Antes | Después |
+|---------|-------|---------|
+| `react` + `react-dom` | `19.2.8` | `19.3.0` |
+| `@types/react` + `@types/react-dom` | `19.2.18 / 19.2.7` | `19.3.0` |
+| `vitest` | `5.0.0-rc.4` ⚠️ beta | `5.0.0` ✅ |
+| `@vitest/coverage-v8` | `5.0.0-rc.4` ⚠️ beta | `5.0.0` ✅ |
+| `vite` | `8.2.2` | `8.3.0` |
+| `lucide-react` | `1.40.0` | `1.45.0` |
+| `matterbridge` | `3.10.7` | `3.10.9` |
+| `@types/node` | `24.13.3` | `24.13.4` |
+
+- 388/388 tests pasando con vitest v5.0.0 estable.
+- Build limpio con vite v8.3.0.
+- Typecheck limpio con typescript v7.0.2.
+- 0 vulnerabilidades detectadas.
+
 ## [1.5.67] - 2026-09-10
 
 ### Corrección: Recámara y Otros Ventiladores No Mostraban Interruptor Maestro + QR Desaparecía Después de Reset
