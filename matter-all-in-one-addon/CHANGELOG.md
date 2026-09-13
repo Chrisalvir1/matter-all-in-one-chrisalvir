@@ -1,3 +1,11 @@
+## [1.5.73] - 2026-09-13
+
+### Corrección Crítica de Arranque: Resolución de Dependencia en Contenedor Docker
+
+- **Corrección de Módulo `@matter/node` en Runtime:**
+  - Se sustituyeron las importaciones estáticas directas de `@matter/node` en `base.entity.ts` y `composite-device.entity.ts` por las exportaciones nativas empaquetadas de `matterbridge/matter/behaviors` (`BasicInformationServer` y `BridgedDeviceBasicInformationServer`).
+  - Esto erradica el error `ERR_MODULE_NOT_FOUND: Cannot find package '@matter/node'` al iniciar el plugin en entornos de producción Docker / Home Assistant OS, solucionando el bloqueo en la pantalla de bienvenida ("Iniciando Matter Bridge...").
+
 ## [1.5.72] - 2026-09-13
 
 ### Concordancia Estricta de Métricas, Diagnósticos Transparentes y Propagación de Desconexión a Apple Home

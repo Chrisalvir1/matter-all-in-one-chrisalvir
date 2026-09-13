@@ -27,7 +27,10 @@ import {
   MatterbridgeOnOffServer,
   MatterbridgeFanControlServer,
 } from "matterbridge/behaviors";
-import { BasicInformationServer } from "@matter/node/behaviors/basic-information";
+import {
+  BasicInformationServer,
+  BridgedDeviceBasicInformationServer,
+} from "matterbridge/matter/behaviors";
 import {
   safeSetAttribute,
   safeUpdateAttribute,

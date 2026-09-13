@@ -17,8 +17,10 @@ import {
   MatterbridgeOnOffServer,
   MatterbridgeFanControlServer,
 } from "matterbridge/behaviors";
-import { BasicInformationServer } from "@matter/node/behaviors/basic-information";
-import { BridgedDeviceBasicInformationServer } from "@matter/node/behaviors/bridged-device-basic-information";
+import {
+  BasicInformationServer,
+  BridgedDeviceBasicInformationServer,
+} from "matterbridge/matter/behaviors";
 import { HomeAssistantPlatform } from "../platform.js";
 import { HassState } from "../utils/ha-state.js";
 import {
