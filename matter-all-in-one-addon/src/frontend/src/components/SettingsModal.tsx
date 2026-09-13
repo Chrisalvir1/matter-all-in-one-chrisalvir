@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { api } from "../api/client";
+import { copyToClipboard } from "../utils/clipboard";
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -17,6 +18,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [mqttUser, setMqttUser] = useState("");
   const [mqttPass, setMqttPass] = useState("");
   const [isSavingMqtt, setIsSavingMqtt] = useState(false);
+  const [systemLogs, setSystemLogs] = useState<string[]>([]);
+  const [isLoadingLogs, setIsLoadingLogs] = useState(false);
+  const [showLogs, setShowLogs] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -74,6 +78,39 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       onClose();
     } catch (err: any) {
       showToast(err.message || "Error al restablecer", true);
+    }
+  };
+
+  const handleLoadLogs = async () => {
+    setIsLoadingLogs(true);
+    try {
+      const res = await api.getLogs();
+      setSystemLogs(res.logs || []);
+      setShowLogs(true);
+    } catch (err: any) {
+      showToast(err.message || "Error al cargar logs", true);
+    } finally {
+      setIsLoadingLogs(false);
+    }
+  };
+
+  const handleCopyAllLogs = async () => {
+    try {
+      let logsToCopy = systemLogs;
+      if (logsToCopy.length === 0) {
+        const res = await api.getLogs();
+        logsToCopy = res.logs || [];
+        setSystemLogs(logsToCopy);
+      }
+      const text = logsToCopy.join("\n");
+      const ok = await copyToClipboard(text);
+      if (ok) {
+        showToast("✓ Todos los logs copiados al portapapeles");
+      } else {
+        showToast("⚠️ No se pudo acceder al portapapeles", true);
+      }
+    } catch (err: any) {
+      showToast(err.message || "Error al copiar logs", true);
     }
   };
 
@@ -170,6 +207,86 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               Reiniciar
             </button>
           </div>
+          <div className="settings-row">
+            <div>
+              <strong>Registros del sistema (Logs del Add-on)</strong>
+              <p>Inspecciona o copia el historial de eventos y errores del servicio.</p>
+            </div>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button
+                className="button button-secondary"
+                type="button"
+                onClick={handleLoadLogs}
+                disabled={isLoadingLogs}
+              >
+                {isLoadingLogs ? "Cargando..." : showLogs ? "🔄 Actualizar" : "👁️ Ver logs"}
+              </button>
+              <button
+                className="button button-primary"
+                type="button"
+                onClick={handleCopyAllLogs}
+                title="Copiar todos los logs al portapapeles"
+              >
+                📋 Copiar todo
+              </button>
+            </div>
+          </div>
+
+          {showLogs && (
+            <div
+              style={{
+                marginTop: 6,
+                marginBottom: 10,
+                padding: 10,
+                background: "rgba(0,0,0,0.5)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                borderRadius: 8,
+                userSelect: "text",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  marginBottom: 6,
+                  fontSize: "0.75rem",
+                  color: "var(--dim)",
+                }}
+              >
+                <span>Últimos {systemLogs.length} eventos registrados</span>
+                <button
+                  type="button"
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: "var(--text-secondary)",
+                    cursor: "pointer",
+                    fontSize: "0.75rem",
+                  }}
+                  onClick={() => setShowLogs(false)}
+                >
+                  Ocultar
+                </button>
+              </div>
+              <pre
+                style={{
+                  maxHeight: 180,
+                  overflowY: "auto",
+                  fontSize: "0.72rem",
+                  margin: 0,
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-all",
+                  userSelect: "text",
+                  color: "#e2e8f0",
+                }}
+              >
+                {systemLogs.length > 0
+                  ? systemLogs.slice(-100).join("\n")
+                  : "No hay registros disponibles."}
+              </pre>
+            </div>
+          )}
+
           <div className="settings-row danger-row">
             <div>
               <strong>Restablecimiento de fábrica</strong>

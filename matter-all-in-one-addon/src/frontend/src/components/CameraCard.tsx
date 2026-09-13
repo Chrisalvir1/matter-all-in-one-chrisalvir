@@ -49,6 +49,8 @@ export function extractCameraBrand(item: CameraRecord | DeviceRecord): string {
 export const CameraCard: React.FC<CameraCardProps> = ({ camera, haDevice, onConfigure }) => {
   if (camera) {
     const isOnline = camera.status?.connection === "online" || camera.status?.isOnline !== false;
+    const isHapPaired = camera.identity?.homeKitPairingState === "paired";
+    const isMatterPaired = camera.bindingState?.matterCommissioned === true;
     const brand = extractCameraBrand(camera);
     const modelDisplay = camera.displayModel || camera.model || "";
     const sn = camera.displaySerialNumber || camera.serialNumber || (camera.cameraId ? `CAM-${camera.cameraId}` : "");
@@ -71,8 +73,36 @@ export const CameraCard: React.FC<CameraCardProps> = ({ camera, haDevice, onConf
       >
         <div className="card-top">
           <span className="device-icon" style={{ fontSize: "1.2rem" }}>📹</span>
-          <div className="card-pills-group" style={{ display: "flex", gap: 5 }}>
+          <div className="card-pills-group" style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
             <span className="badge-scrypted-tag">SCRYPTED</span>
+            {isHapPaired && (
+              <span
+                className="tag"
+                style={{
+                  fontSize: "0.68rem",
+                  background: "rgba(16, 185, 129, 0.15)",
+                  color: "#6ee7b7",
+                  border: "1px solid rgba(52, 211, 153, 0.4)",
+                  fontWeight: 600,
+                }}
+              >
+                🍏 HAP Apple Home
+              </span>
+            )}
+            {isMatterPaired && (
+              <span
+                className="tag"
+                style={{
+                  fontSize: "0.68rem",
+                  background: "rgba(59, 130, 246, 0.15)",
+                  color: "#60a5fa",
+                  border: "1px solid rgba(59, 130, 246, 0.4)",
+                  fontWeight: 600,
+                }}
+              >
+                ⚡ Matter
+              </span>
+            )}
             <span
               className="tag"
               style={{
@@ -131,14 +161,29 @@ export const CameraCard: React.FC<CameraCardProps> = ({ camera, haDevice, onConf
     );
     const entitiesCount = camEntities.length + realSensors.length;
     const isExported = haDevice.entities.some((e) => e.exported);
+    const isCommissioned = haDevice.entities.some((e) => e.exported && e.commissioned);
 
     return (
       <article className="device-card ha-camera-card" onClick={onConfigure}>
         <div className="card-top">
           <span className="device-icon" style={{ fontSize: "1.2rem" }}>📹</span>
-          <div className="card-pills-group" style={{ display: "flex", gap: 5 }}>
+          <div className="card-pills-group" style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
             <span className="tag tag-brand">HOME ASSISTANT</span>
-            {isExported && <span className="tag tag-mqtt">EN MATTER</span>}
+            {isCommissioned && (
+              <span
+                className="tag"
+                style={{
+                  fontSize: "0.68rem",
+                  background: "rgba(16, 185, 129, 0.15)",
+                  color: "#6ee7b7",
+                  border: "1px solid rgba(52, 211, 153, 0.4)",
+                  fontWeight: 600,
+                }}
+              >
+                🍏 Matter Vinculado
+              </span>
+            )}
+            {!isCommissioned && isExported && <span className="tag tag-mqtt">EN MATTER</span>}
           </div>
         </div>
         <h3 title={haDevice.name}>{haDevice.name}</h3>

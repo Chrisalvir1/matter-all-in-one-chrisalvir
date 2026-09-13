@@ -3,6 +3,7 @@ import { CameraRecord } from "../types";
 import { api } from "../api/client";
 import { extractCameraBrand } from "./CameraCard";
 import { QRCodeDisplay } from "./QRCodeDisplay";
+import { copyToClipboard } from "../utils/clipboard";
 
 interface CameraConfigModalProps {
   camera: CameraRecord | null;
@@ -263,6 +264,37 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
     }
   };
 
+  const handleCopyCameraDiagnostics = async () => {
+    if (!camera) return;
+    const diagText = [
+      `=== DIAGNÓSTICO DE CÁMARA ===`,
+      `ID: ${camera.cameraId}`,
+      `Nombre: ${camera.name}`,
+      `Marca: ${brand}`,
+      `Modelo: ${modelDisplay}`,
+      `Estado: ${isOnline ? "En línea" : "Desconectada"}`,
+      `Último error: ${camera.status?.lastError || "Ninguno"}`,
+      `RTSP URL: ${rtspUrl || "No configurada"}`,
+      `Transporte RTSP: ${transport.toUpperCase()}`,
+      `HomeKit HAP: ${isPaired ? "Emparejado en Apple Home" : "Listo para vincular"}`,
+      `HomeKit Setup PIN: ${pinCode}`,
+      `HomeKit Setup URI: ${getSetupUri()}`,
+      `Matter activado: ${camera.exportConfig?.matterEnabled ? "SÍ" : "NO"}`,
+      `Matter vinculación: ${camera.bindingState?.matterCommissioned ? "Comisionado" : "Pendiente / Inactivo"}`,
+      camera.status?.logs?.length
+        ? `\n=== LOGS DE CÁMARA (${camera.status.logs.length}) ===\n` +
+          camera.status.logs.map((l) => `[${l.level || "INFO"}] ${l.message}`).join("\n")
+        : "\n(Sin logs de error registrados)",
+    ].join("\n");
+
+    const ok = await copyToClipboard(diagText);
+    if (ok) {
+      showToast("✓ Diagnóstico de cámara copiado al portapapeles");
+    } else {
+      showToast("⚠️ No se pudo acceder al portapapeles", true);
+    }
+  };
+
   return (
     <div className="modal-backdrop open" role="dialog" aria-modal="true">
       <section className="modal modal-wide" style={{ maxWidth: 940 }}>
@@ -496,6 +528,32 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                   </div>
                 ))}
               </div>
+            </div>
+
+            {/* Camera Diagnostics Panel */}
+            <div
+              className="diagnostics-panel"
+              style={{ marginTop: 14, userSelect: "text" }}
+            >
+              <div className="diagnostics-heading">
+                <span aria-hidden="true">✓</span>
+                <strong>Diagnóstico y estado de la cámara</strong>
+                <button
+                  className="copy-diagnostics-button"
+                  type="button"
+                  onClick={handleCopyCameraDiagnostics}
+                  title="Copiar diagnóstico de cámara"
+                >
+                  📋 Copiar diagnóstico
+                </button>
+              </div>
+              <p style={{ margin: "6px 0 4px", fontSize: "0.78rem", color: "var(--dim)" }}>
+                {camera.status?.lastError
+                  ? `Último error: ${camera.status.lastError}`
+                  : isOnline
+                  ? "Cámara en línea y operativa."
+                  : "Cámara no responde o desconectada."}
+              </p>
             </div>
 
             {/* Modal Actions */}

@@ -45,14 +45,27 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({ device, searchQuery, onC
   const compositeExported =
     isComposite && device.entities.some((e) => e.exported && !e.auxiliary);
   const exported = device.entities.filter((e) => e.exported).length;
+  const commissioned = device.entities.filter((e) => e.exported && e.commissioned).length;
+  const isDeviceCommissioned = commissioned > 0;
   const isMqtt = device.entities.some((e) => e.origin === "mqtt" || e.entityId.startsWith("mqtt."));
-  const hasIssue = device.entities.some((e) => e.exported && e.hasIssue);
+  const hasUnavailable = device.entities.some(
+    (e) => e.state === "unavailable" || e.state === "unknown" || e.state === "offline"
+  );
+  const hasIssue = device.entities.some(
+    (e) =>
+      e.hasIssue ||
+      e.state === "unavailable" ||
+      e.state === "unknown" ||
+      e.state === "offline" ||
+      (Array.isArray(e.logs) && e.logs.length > 0 && e.exported)
+  );
   const fanEntity = device.entities.find((e) => e.domain === "fan");
   const primaryDomain = isComposite
     ? (fanEntity ? "fan" : "light")
     : (device.entities[0]?.domain || "switch");
 
   const domains = [...new Set(device.entities.map((e) => e.domain))].slice(0, 3);
+  const isMultiGang = device.entities.length > 1;
 
   const brandInfo = device.manufacturer
     ? `${device.manufacturer}${device.model ? ` (${device.model})` : ""}`
@@ -87,12 +100,27 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({ device, searchQuery, onC
             ? compositeExported
               ? "1/1 Matter"
               : "0/1 Matter"
+            : isMultiGang
+            ? `${exported}/${device.entities.length} activos`
             : `${exported}/${device.entities.length}`}
         </span>
       </div>
       <h3 title={device.name}>{device.name}</h3>
       <p className="device-meta">{originText}</p>
       <div className="tags">
+        {isDeviceCommissioned && (
+          <span
+            className="tag"
+            style={{
+              background: "rgba(16, 185, 129, 0.15)",
+              color: "#6ee7b7",
+              border: "1px solid rgba(52, 211, 153, 0.3)",
+              fontWeight: 600,
+            }}
+          >
+            🍏 Matter Vinculado {isMultiGang ? `(${commissioned}/${device.entities.length} botones)` : ""}
+          </span>
+        )}
         {isComposite && (
           <span
             className="tag"
@@ -108,7 +136,21 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({ device, searchQuery, onC
         )}
         {isMqtt && <span className="tag tag-mqtt">📡 MQTT</span>}
         {device.manufacturer && <span className="tag tag-brand">{device.manufacturer}</span>}
-        {hasIssue && <span className="tag tag-warning">Revisar</span>}
+        {hasUnavailable ? (
+          <span
+            className="tag"
+            style={{
+              background: "rgba(239, 68, 68, 0.15)",
+              color: "#fca5a5",
+              border: "1px solid rgba(239, 68, 68, 0.4)",
+              fontWeight: 600,
+            }}
+          >
+            ⚠️ Desconectado
+          </span>
+        ) : hasIssue ? (
+          <span className="tag tag-warning">Revisar</span>
+        ) : null}
         {domains.map((dom) => (
           <span className="tag" key={dom}>
             {dom}
@@ -119,6 +161,8 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({ device, searchQuery, onC
         <span className="entity-summary">
           {isComposite
             ? `1 accesorio · ${device.entities.length} entidad${device.entities.length === 1 ? "" : "es"}`
+            : isMultiGang
+            ? `${device.entities.length} botones (${exported} en Matter)`
             : `${device.entities.length} entidad${device.entities.length === 1 ? "" : "es"}`}
         </span>
         <button

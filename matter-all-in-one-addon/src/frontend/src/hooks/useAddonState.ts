@@ -2,7 +2,15 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { api } from "../api/client";
 import { CameraRecord, DeviceRecord, EntityRecord, ScryptedConfigResponse, StatusResponse } from "../types";
 
-export type FilterType = "all" | "iot" | "cameras" | "paired" | "unpaired" | "mqtt" | "issues";
+export type FilterType =
+  | "all"
+  | "iot"
+  | "cameras"
+  | "paired"
+  | "unpaired"
+  | "unactivated"
+  | "mqtt"
+  | "issues";
 
 export function useAddonState() {
   const [status, setStatus] = useState<StatusResponse | null>(null);
@@ -149,7 +157,9 @@ export function useAddonState() {
     const exportedNodes = new Set(entities.filter((e) => e.exported).map(matterNodeKey)).size;
     const pairedNodes = new Set(entities.filter((e) => e.exported && e.commissioned).map(matterNodeKey)).size;
     const pendingNodes = new Set(entities.filter((e) => e.exported && !e.commissioned).map(matterNodeKey)).size;
-    const issues = allDevices.filter((d) => d.entities.some((e) => e.exported && e.hasIssue)).length;
+    const exportedEntities = entities.filter((e) => e.exported).length;
+    const pairedEntities = entities.filter((e) => e.exported && e.commissioned).length;
+
     const mqttCount = allDevices.filter((d) =>
       d.entities.some((e) => e.origin === "mqtt" || e.entityId.startsWith("mqtt."))
     ).length;
@@ -157,6 +167,11 @@ export function useAddonState() {
     const scryptedTotal = cameras.length;
     const scryptedPaired = cameras.filter(
       (c) => c.identity?.homeKitPairingState === "paired" || c.bindingState?.matterCommissioned === true
+    ).length;
+    const scryptedPending = cameras.filter(
+      (c) =>
+        (c.exportConfig?.matterEnabled || c.exportConfig?.homeKitEnabled) &&
+        !(c.identity?.homeKitPairingState === "paired" || c.bindingState?.matterCommissioned === true)
     ).length;
 
     const haCamsTotal = realHaCameraDevices.length;
@@ -166,17 +181,58 @@ export function useAddonState() {
 
     const totalCameras = scryptedTotal + haCamsTotal;
     const iotDevices = allDevices.filter((d) => !d.entities.every((e) => e.domain === "camera")).length;
-    const pairedTotal = pairedNodes + scryptedPaired + haCamsPaired;
-    const unpairedTotal = pendingNodes + (scryptedTotal - scryptedPaired) + (haCamsTotal - haCamsPaired);
+
+    // Paired total includes all active paired accessories (Matter nodes + Scrypted HAP/Matter cameras)
+    const pairedTotal = pairedNodes + scryptedPaired;
+
+    // Unpaired total represents accessories actively exported for Matter/HomeKit but waiting to be commissioned
+    const unpairedTotal = pendingNodes + scryptedPending;
+
+    // Unactivated devices: discovered devices that are neither exported nor commissioned
+    const unactivatedDevices = allDevices.filter(
+      (d) => !d.entities.some((e) => e.exported || e.commissioned)
+    ).length;
+    const unactivatedScrypted = cameras.filter(
+      (c) =>
+        !(c.exportConfig?.matterEnabled || c.exportConfig?.homeKitEnabled) &&
+        !(c.identity?.homeKitPairingState === "paired" || c.bindingState?.matterCommissioned === true)
+    ).length;
+    const unactivatedTotal = unactivatedDevices + unactivatedScrypted;
+
+    // Issues detection across all HA, MQTT devices and Cameras
+    const issuesDevices = allDevices.filter((d) =>
+      d.entities.some(
+        (e) =>
+          e.hasIssue ||
+          e.state === "unavailable" ||
+          e.state === "unknown" ||
+          e.state === "offline" ||
+          (Array.isArray(e.logs) && e.logs.length > 0 && e.exported)
+      )
+    ).length;
+
+    const issuesCameras = cameras.filter(
+      (c) =>
+        c.status?.connection === "offline" ||
+        c.status?.isOnline === false ||
+        Boolean(c.status?.lastError) ||
+        (c as any).hasIssue === true
+    ).length;
+
+    const issues = issuesDevices + issuesCameras;
 
     return {
-      totalDevices: allDevices.length,
+      totalDevices: allDevices.length + scryptedTotal,
+      rawDevicesCount: allDevices.length,
       iotDevices,
       exportedNodes,
       pairedNodes,
       pendingNodes,
+      exportedEntities,
+      pairedEntities,
       pairedTotal,
       unpairedTotal,
+      unactivatedTotal,
       issues,
       mqttCount,
       scryptedTotal,

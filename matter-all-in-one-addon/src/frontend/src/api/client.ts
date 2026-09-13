@@ -114,4 +114,8 @@ export const api = {
   restartService: () => request("/restart", { method: "POST" }),
 
   factoryReset: () => request("/factoryreset", { method: "POST" }),
+
+  getLogs: () => request<{ logs: string[] }>("/logs"),
+
+  clearLogs: () => request<{ success: boolean }>("/logs/clear", { method: "POST" }),
 };

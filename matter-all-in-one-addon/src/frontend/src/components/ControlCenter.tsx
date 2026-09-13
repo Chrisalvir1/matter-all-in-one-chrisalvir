@@ -3,6 +3,7 @@ import React from "react";
 interface ControlCenterProps {
   stats: {
     totalDevices: number;
+    rawDevicesCount?: number;
     exportedNodes: number;
     pairedNodes: number;
     scryptedTotal: number;
@@ -31,7 +32,7 @@ export const ControlCenter: React.FC<ControlCenterProps> = ({ stats, loading }) 
       </div>
       <div className="overview-stat">
         <span>Dispositivos</span>
-        <strong id="stat-devices">{loading ? "—" : stats.totalDevices}</strong>
+        <strong id="stat-devices">{loading ? "—" : (stats.rawDevicesCount ?? stats.totalDevices)}</strong>
       </div>
       <div className="overview-stat">
         <span>En Matter</span>

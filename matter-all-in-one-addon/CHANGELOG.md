@@ -1,3 +1,26 @@
+## [1.5.71] - 2026-09-13
+
+### Reestructuración de Filtros, Concordancia de Métricas y Copia de Logs
+
+- **Botón `EMPAREJADOS (MATTER & HAP) 🍏`:**
+  - Simplificación y coherencia de nombre reemplazando el texto largo anterior.
+  - Distinción técnica explícita en tarjetas y badges: las cámaras hacia Apple Home muestran `🍏 HAP Apple Home` (HomeKit Accessory Protocol) y los dispositivos IoT/MQTT muestran `🍏 Matter Vinculado`.
+- **Corrección de "NO EMPAREJADOS ⏳":**
+  - Se eliminó el conteo indebido de cámaras no activadas. Ahora refleja estrictamente accesorios exportados/activos con código Matter listos pero aún no comisionados (`exported && !commissioned`). Si todos los accesorios activos están emparejados, marca `0`.
+- **Nuevo filtro `NO ACTIVADOS ⚪`:**
+  - Pestaña dedicada para filtrar todos los accesorios descubiertos (HA, MQTT y Cámaras) que están inactivos (`!exported && !commissioned`).
+- **Claridad en Apagadores Multi-botón / Dobles:**
+  - La barra y centro de control cuentan 1 accesorio físico Matter, y la tarjeta desglosa transparentemente los botones/canales activos (ej: `2/2 activos` y `2 botones en Matter`).
+- **Detección real en `NECESITA ATENCIÓN ⚠️`:**
+  - Se eliminó la restricción `!connection.commissioned` en el backend para detectar caídas de conexión (`unavailable`/`unknown`) en accesorios emparejados.
+  - Los dispositivos MQTT ahora calculan `hasIssue` dinámicamente según disponibilidad y logs.
+  - Corregida la detección de cámaras desconectadas (`offline`) o con fallos de stream.
+- **Copia Universal de Logs y Diagnósticos (Soporte HA Ingress / Iframes):**
+  - Implementada utilidad `clipboard.ts` con fallback automático por `textarea` para entornos Ingress / HTTP / iframes.
+  - Habilitada la selección directa de texto (`user-select: text`) en todos los paneles de logs.
+  - Incorporado botón "📋 Copiar diagnóstico" en el modal de cámaras.
+  - Añadida sección de "Registros del sistema" en Ajustes del servicio para ver y copiar todo el historial (`/api/custom/logs`).
+
 ## [1.5.70] - 2026-09-11
 
 ### Release consolidado — todas las actualizaciones y correcciones de v1.5.66–v1.5.69

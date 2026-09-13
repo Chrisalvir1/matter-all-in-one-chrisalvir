@@ -10,6 +10,7 @@ interface FilterBarProps {
     totalCameras: number;
     pairedTotal: number;
     unpairedTotal: number;
+    unactivatedTotal: number;
     mqttCount: number;
     issues: number;
   };
@@ -42,14 +43,16 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           className={`filter-chip ${activeFilter === "all" ? "active" : ""}`}
           type="button"
           onClick={() => onFilterChange("all")}
+          title="Todos los dispositivos y cámaras disponibles"
         >
-          TODOS <span className="chip-badge">{stats.totalDevices + stats.totalCameras}</span>
+          TODOS <span className="chip-badge">{stats.totalDevices}</span>
         </button>
 
         <button
           className={`filter-chip ${activeFilter === "iot" ? "active" : ""}`}
           type="button"
           onClick={() => onFilterChange("iot")}
+          title="Accesorios IoT estándar (luces, interruptores, clima, sensores, etc.)"
         >
           IOT <span className="chip-badge">{stats.iotDevices}</span>
         </button>
@@ -58,6 +61,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           className={`filter-chip ${activeFilter === "cameras" ? "active" : ""}`}
           type="button"
           onClick={() => onFilterChange("cameras")}
+          title="Cámaras de seguridad (Scrypted y Home Assistant)"
         >
           CÁMARAS 📹 <span className="chip-badge">{stats.totalCameras}</span>
         </button>
@@ -66,32 +70,45 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           className={`filter-chip ${activeFilter === "paired" ? "active" : ""}`}
           type="button"
           onClick={() => onFilterChange("paired")}
+          title="Accesorios vinculados activamente (Matter en IoT/MQTT y HAP en Cámaras)"
         >
-          EN MATTER EMPAREJADOS INCLUYENDO CÁMARAS 🍏 <span className="chip-badge">{stats.pairedTotal}</span>
+          EMPAREJADOS (MATTER & HAP) 🍏 <span className="chip-badge">{stats.pairedTotal}</span>
         </button>
 
         <button
           className={`filter-chip ${activeFilter === "unpaired" ? "active" : ""}`}
           type="button"
           onClick={() => onFilterChange("unpaired")}
+          title="Accesorios activados con código Matter listos pero aún no enlazados a ninguna casa"
         >
-          NO EMPAREJADOS <span className="chip-badge">{stats.unpairedTotal}</span>
+          NO EMPAREJADOS ⏳ <span className="chip-badge">{stats.unpairedTotal}</span>
+        </button>
+
+        <button
+          className={`filter-chip ${activeFilter === "unactivated" ? "active" : ""}`}
+          type="button"
+          onClick={() => onFilterChange("unactivated")}
+          title="Dispositivos descubiertos que aún no están activados en Matter ni enlazados"
+        >
+          NO ACTIVADOS ⚪ <span className="chip-badge">{stats.unactivatedTotal}</span>
         </button>
 
         <button
           className={`filter-chip ${activeFilter === "mqtt" ? "active" : ""}`}
           type="button"
           onClick={() => onFilterChange("mqtt")}
+          title="Dispositivos integrados vía MQTT Auto-Discovery"
         >
-          MQTT <span className="chip-badge">{stats.mqttCount}</span>
+          MQTT 📡 <span className="chip-badge">{stats.mqttCount}</span>
         </button>
 
         <button
           className={`filter-chip filter-chip-warning ${activeFilter === "issues" ? "active" : ""}`}
           type="button"
           onClick={() => onFilterChange("issues")}
+          title="Dispositivos con problemas de conexión o errores en el registro"
         >
-          NECESITA ATENCIÓN <span className="chip-badge">{stats.issues}</span>
+          NECESITA ATENCIÓN ⚠️ <span className="chip-badge">{stats.issues}</span>
         </button>
       </div>
 

@@ -94,13 +94,26 @@ export const App: React.FC = () => {
             !d.entities.every((e) => e.domain === "camera") &&
             d.entities.some((e) => e.exported && !e.commissioned)
         );
+      case "unactivated":
+        return list.filter(
+          (d) =>
+            !d.entities.every((e) => e.domain === "camera") &&
+            !d.entities.some((e) => e.exported || e.commissioned)
+        );
       case "mqtt":
         return list.filter((d) =>
           d.entities.some((e) => e.origin === "mqtt" || e.entityId.startsWith("mqtt."))
         );
       case "issues":
         return list.filter((d) =>
-          d.entities.some((e) => e.exported && e.hasIssue)
+          d.entities.some(
+            (e) =>
+              e.hasIssue ||
+              e.state === "unavailable" ||
+              e.state === "unknown" ||
+              e.state === "offline" ||
+              (Array.isArray(e.logs) && e.logs.length > 0 && e.exported)
+          )
         );
       default:
         return list;
@@ -124,11 +137,27 @@ export const App: React.FC = () => {
         (c) => c.identity?.homeKitPairingState === "paired" || c.bindingState?.matterCommissioned === true
       );
     } else if (activeFilter === "unpaired") {
+      // Only cameras exported/published for Matter or HomeKit but not yet paired
       scryptedList = scryptedList.filter(
-        (c) => !(c.identity?.homeKitPairingState === "paired" || c.bindingState?.matterCommissioned === true)
+        (c) =>
+          (c.exportConfig?.matterEnabled || c.exportConfig?.homeKitEnabled) &&
+          !(c.identity?.homeKitPairingState === "paired" || c.bindingState?.matterCommissioned === true)
+      );
+    } else if (activeFilter === "unactivated") {
+      // Cameras not exported and not paired
+      scryptedList = scryptedList.filter(
+        (c) =>
+          !(c.exportConfig?.matterEnabled || c.exportConfig?.homeKitEnabled) &&
+          !(c.identity?.homeKitPairingState === "paired" || c.bindingState?.matterCommissioned === true)
       );
     } else if (activeFilter === "issues") {
-      scryptedList = scryptedList.filter((c) => (c as any).status === "offline" || (c as any).hasIssue);
+      scryptedList = scryptedList.filter(
+        (c) =>
+          c.status?.connection === "offline" ||
+          c.status?.isOnline === false ||
+          Boolean(c.status?.lastError) ||
+          (c as any).hasIssue === true
+      );
     }
 
     for (const cam of scryptedList) {
@@ -147,8 +176,19 @@ export const App: React.FC = () => {
       haList = haList.filter((d) => d.entities.some((e) => e.exported && e.commissioned));
     } else if (activeFilter === "unpaired") {
       haList = haList.filter((d) => d.entities.some((e) => e.exported && !e.commissioned));
+    } else if (activeFilter === "unactivated") {
+      haList = haList.filter((d) => !d.entities.some((e) => e.exported || e.commissioned));
     } else if (activeFilter === "issues") {
-      haList = haList.filter((d) => d.entities.some((e) => e.exported && e.hasIssue));
+      haList = haList.filter((d) =>
+        d.entities.some(
+          (e) =>
+            e.hasIssue ||
+            e.state === "unavailable" ||
+            e.state === "unknown" ||
+            e.state === "offline" ||
+            (Array.isArray(e.logs) && e.logs.length > 0 && e.exported)
+        )
+      );
     }
 
     for (const dev of haList) {
@@ -260,14 +300,16 @@ export const App: React.FC = () => {
                 : activeFilter === "iot"
                 ? `${filteredDevices.length} dispositivos IoT · ${stats.exportedNodes} activos en Matter`
                 : activeFilter === "paired"
-                ? `${stats.pairedTotal} accesorios vinculados en Matter`
+                ? `${stats.pairedTotal} accesorios vinculados (${stats.pairedNodes} por Matter, ${stats.scryptedPaired} por HAP HomeKit)`
                 : activeFilter === "unpaired"
-                ? `${stats.unpairedTotal} accesorios pendientes de emparejar`
+                ? `${stats.unpairedTotal} accesorios activos pendientes de emparejar`
+                : activeFilter === "unactivated"
+                ? `${stats.unactivatedTotal} accesorios no activados ni enlazados (inactivos)`
                 : activeFilter === "mqtt"
                 ? `${stats.mqttCount} dispositivos MQTT`
                 : activeFilter === "issues"
-                ? `${stats.issues} dispositivos requieren atención`
-                : `${filteredDevices.length + stats.totalCameras} elementos en total · ${stats.exportedNodes} activos en Matter`}
+                ? `${stats.issues} dispositivos requieren atención por conexión o incidencias`
+                : `${stats.totalDevices} elementos en total · ${stats.exportedNodes} activos en Matter`}
             </span>
             <button className="text-button" id="refresh-button" type="button" onClick={refreshAll}>
               Actualizar
@@ -322,7 +364,11 @@ export const App: React.FC = () => {
                         : activeFilter === "mqtt"
                         ? "No se encontraron dispositivos MQTT configurados."
                         : activeFilter === "paired"
-                        ? "No hay dispositivos ni cámaras emparejadas en Matter todavía."
+                        ? "No hay accesorios vinculados en Matter ni en HAP todavía."
+                        : activeFilter === "unpaired"
+                        ? "No hay accesorios pendientes de emparejar (todos los accesorios activos ya están vinculados)."
+                        : activeFilter === "unactivated"
+                        ? "No hay dispositivos inactivos disponibles."
                         : activeFilter === "issues"
                         ? "No hay incidencias registradas en este momento."
                         : "No hay dispositivos que coincidan con los filtros seleccionados."}

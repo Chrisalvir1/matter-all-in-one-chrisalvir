@@ -3641,15 +3641,18 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               controllerNames: connection.controllerNames,
               fabricCount: connection.fabricCount,
               matterFabrics: connection.fabrics,
-              // The attention queue is for live Matter accessories only. An
+              // Detect issues on exported or commissioned accessories (connection drops, unavailable state, errors)
               hasIssue:
-                this.isEntityExported(e.entityId) &&
-                !connection.commissioned &&
-                (this.entityProblems.has(e.entityId) || isUnavailable(e.state)),
+                (this.isEntityExported(e.entityId) || connection.commissioned) &&
+                (this.entityProblems.has(e.entityId) ||
+                  isUnavailable(e.state) ||
+                  (allErrorLogs.length > 0 &&
+                    this.getEntityErrorLogs(e.entityId, endpoint, allErrorLogs).length > 0)),
               diagnostics: this.entityDiagnostics.get(e.entityId) ?? [],
-              logs: this.isEntityExported(e.entityId)
-                ? this.getEntityErrorLogs(e.entityId, endpoint, allErrorLogs)
-                : [],
+              logs:
+                this.isEntityExported(e.entityId) || connection.commissioned
+                  ? this.getEntityErrorLogs(e.entityId, endpoint, allErrorLogs)
+                  : [],
               homekitCamera:
                 domain === "camera"
                   ? (() => {
@@ -3779,9 +3782,14 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                 controllerNames: connection.controllerNames,
                 fabricCount: connection.fabricCount,
                 matterFabrics: connection.fabrics,
-                hasIssue: false,
-                diagnostics: [],
-                logs: [],
+                hasIssue: (() => {
+                  const stateStr = (m.getStateString() || "").toLowerCase();
+                  const isMqttDown = stateStr === "offline" || stateStr === "unavailable" || stateStr === "unknown";
+                  const logs = this.getEntityErrorLogs(m.entityId, endpoint, allErrorLogs);
+                  return (this.isEntityExported(m.entityId) || connection.commissioned) && (isMqttDown || logs.length > 0);
+                })(),
+                diagnostics: this.entityDiagnostics.get(m.entityId) ?? [],
+                logs: this.getEntityErrorLogs(m.entityId, endpoint, allErrorLogs),
               };
             },
           );

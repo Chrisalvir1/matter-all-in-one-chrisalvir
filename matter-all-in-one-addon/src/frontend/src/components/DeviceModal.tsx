@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { DeviceRecord, EntityRecord } from "../types";
 import { api } from "../api/client";
 import { QRCodeDisplay } from "./QRCodeDisplay";
+import { copyToClipboard } from "../utils/clipboard";
 
 interface DeviceModalProps {
   device: DeviceRecord | null;
@@ -348,23 +349,33 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     }
   };
 
-  const handleCopyDiagnostics = () => {
+  const handleCopyDiagnostics = async () => {
     if (!activeEntity) return;
-    const diagText = JSON.stringify(
-      {
-        entityId: activeEntity.entityId,
-        name: activeEntity.name,
-        domain: activeEntity.domain,
-        exported: activeEntity.exported,
-        commissioned: activeEntity.commissioned,
-        logs: selectedEntity?.logs || activeEntity.logs || [],
-      },
-      null,
-      2
-    );
-    navigator.clipboard.writeText(diagText).then(() => {
-      showToast("✓ Diagnóstico copiado al portapapeles");
-    });
+    const rawLogs = selectedEntity?.logs || activeEntity.logs || [];
+    const formattedLogs = rawLogs
+      .map((l) => (typeof l === "string" ? l : `[${(l as any)?.level || "LOG"}] ${(l as any)?.message || JSON.stringify(l)}`))
+      .join("\n");
+
+    const diagText = [
+      `=== DIAGNÓSTICO DE ACCESORIO MATTER ===`,
+      `Entidad: ${activeEntity.entityId}`,
+      `Nombre: ${activeEntity.name || activeEntity.friendly_name || "Desconocido"}`,
+      `Dominio: ${activeEntity.domain}`,
+      `Estado: ${activeEntity.state || "N/A"}`,
+      `Publicado en Matter: ${activeEntity.exported ? "SÍ" : "NO"}`,
+      `Emparejado: ${activeEntity.commissioned ? "SÍ (Vinculado)" : "NO"}`,
+      `Código de emparejamiento manual: ${activeEntity.manualPairingCode || "N/A"}`,
+      `Incidencias: ${activeEntity.hasIssue ? "SÍ" : "NO"}`,
+      `\n=== EVENTOS Y LOGS (${rawLogs.length}) ===`,
+      formattedLogs || "(Sin errores ni eventos registrados)",
+    ].join("\n");
+
+    const ok = await copyToClipboard(diagText);
+    if (ok) {
+      showToast("✓ Diagnóstico y logs copiados al portapapeles");
+    } else {
+      showToast("⚠️ No se pudo acceder al portapapeles, intenta seleccionar el texto manualmente", true);
+    }
   };
 
   const activeNodesCount = new Set(
@@ -845,6 +856,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
               className="diagnostics-panel"
               id="diagnostics-panel"
               aria-live="polite"
+              style={{ userSelect: "text" }}
             >
               <div className="diagnostics-heading">
                 <span id="diagnostics-icon" aria-hidden="true">✓</span>
@@ -854,22 +866,27 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                   className="copy-diagnostics-button"
                   type="button"
                   onClick={handleCopyDiagnostics}
-                  title="Copiar diagnóstico y logs"
+                  title="Copiar diagnóstico y logs al portapapeles"
                 >
-                  Copiar
+                  📋 Copiar logs
                 </button>
               </div>
               <p id="diagnostics-summary">
                 {logs.length === 0 ? (
                   "Sin errores registrados para este accesorio."
                 ) : (
-                  `${logs.length} eventos registrados`
+                  `${logs.length} evento${logs.length === 1 ? "" : "s"} registrado${logs.length === 1 ? "" : "s"}`
                 )}
               </p>
               {logs.length > 0 && (
-                <ul id="diagnostics-list">
-                  {logs.slice(-6).map((l, i) => (
-                    <li key={i}>{typeof l === "string" ? l : (l as any)?.message || JSON.stringify(l)}</li>
+                <ul
+                  id="diagnostics-list"
+                  style={{ userSelect: "text", maxHeight: "200px", overflowY: "auto" }}
+                >
+                  {logs.slice(-25).map((l, i) => (
+                    <li key={i} style={{ userSelect: "text", wordBreak: "break-word" }}>
+                      {typeof l === "string" ? l : (l as any)?.message || JSON.stringify(l)}
+                    </li>
                   ))}
                 </ul>
               )}
