@@ -164,65 +164,72 @@ export function useAddonState() {
       d.entities.some((e) => e.origin === "mqtt" || e.entityId.startsWith("mqtt."))
     ).length;
 
+    const haCameraIds = new Set(realHaCameraDevices.map((d) => d.id));
     const scryptedTotal = cameras.length;
+    const haCamsTotal = realHaCameraDevices.length;
+    const totalCameras = scryptedTotal + haCamsTotal;
+    const iotDevices = allDevices.filter((d) => !haCameraIds.has(d.id)).length;
+
+    // Paired total includes all active paired accessories (Matter nodes + Scrypted HAP/Matter cameras)
     const scryptedPaired = cameras.filter(
       (c) => c.identity?.homeKitPairingState === "paired" || c.bindingState?.matterCommissioned === true
     ).length;
-    const scryptedPending = cameras.filter(
-      (c) =>
-        (c.exportConfig?.matterEnabled || c.exportConfig?.homeKitEnabled) &&
-        !(c.identity?.homeKitPairingState === "paired" || c.bindingState?.matterCommissioned === true)
-    ).length;
-
-    const haCamsTotal = realHaCameraDevices.length;
     const haCamsPaired = realHaCameraDevices.filter((d) =>
       d.entities.some((e) => e.exported && e.commissioned)
     ).length;
-
-    const totalCameras = scryptedTotal + haCamsTotal;
-    const iotDevices = allDevices.filter((d) => !d.entities.every((e) => e.domain === "camera")).length;
-
-    // Paired total includes all active paired accessories (Matter nodes + Scrypted HAP/Matter cameras)
     const pairedTotal = pairedNodes + scryptedPaired;
 
     // Unpaired total represents accessories actively exported for Matter/HomeKit but waiting to be commissioned
+    const scryptedPending = cameras.filter(
+      (c) =>
+        Boolean(c.identity?.matterPairingCode) &&
+        !(c.identity?.homeKitPairingState === "paired" || c.bindingState?.matterCommissioned === true)
+    ).length;
     const unpairedTotal = pendingNodes + scryptedPending;
 
-    // Unactivated devices: discovered devices that are neither exported nor commissioned
+    // Unactivated devices: discovered devices and cameras that are neither exported nor commissioned
     const unactivatedDevices = allDevices.filter(
       (d) => !d.entities.some((e) => e.exported || e.commissioned)
     ).length;
     const unactivatedScrypted = cameras.filter(
       (c) =>
-        !(c.exportConfig?.matterEnabled || c.exportConfig?.homeKitEnabled) &&
-        !(c.identity?.homeKitPairingState === "paired" || c.bindingState?.matterCommissioned === true)
+        !(c.identity?.homeKitPairingState === "paired" || c.bindingState?.matterCommissioned === true) &&
+        !Boolean(c.identity?.matterPairingCode)
     ).length;
     const unactivatedTotal = unactivatedDevices + unactivatedScrypted;
 
-    // Issues detection across all HA, MQTT devices and Cameras
-    const issuesDevices = allDevices.filter((d) =>
-      d.entities.some(
+    // Issues detection across all ACTIVE (exported or commissioned) HA, MQTT devices and Cameras
+    const issuesDevices = allDevices.filter((d) => {
+      const isDeviceActive = d.entities.some((e) => e.exported || e.commissioned);
+      if (!isDeviceActive) return false;
+      return d.entities.some(
         (e) =>
           e.hasIssue ||
           e.state === "unavailable" ||
           e.state === "unknown" ||
           e.state === "offline" ||
           (Array.isArray(e.logs) && e.logs.length > 0 && e.exported)
-      )
-    ).length;
+      );
+    }).length;
 
-    const issuesCameras = cameras.filter(
-      (c) =>
+    const issuesCameras = cameras.filter((c) => {
+      const isCameraActive =
+        c.identity?.homeKitPairingState === "paired" ||
+        c.bindingState?.matterCommissioned === true ||
+        Boolean(c.identity?.matterPairingCode);
+      if (!isCameraActive) return false;
+      return (
         c.status?.connection === "offline" ||
         c.status?.isOnline === false ||
         Boolean(c.status?.lastError) ||
         (c as any).hasIssue === true
-    ).length;
+      );
+    }).length;
 
     const issues = issuesDevices + issuesCameras;
 
     return {
-      totalDevices: allDevices.length + scryptedTotal,
+      totalDevices: iotDevices + totalCameras,
       rawDevicesCount: allDevices.length,
       iotDevices,
       exportedNodes,

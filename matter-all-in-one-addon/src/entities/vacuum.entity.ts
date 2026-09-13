@@ -531,5 +531,21 @@ export class VacuumEntity extends BaseEntity {
     }
   }
 
+  public override async setReachability(reachable: boolean): Promise<void> {
+    await super.setReachability(reachable);
+    if (!reachable && this.endpoint) {
+      try {
+        // Matter RvcOperationalState: 3 = Error
+        safeSetAttribute(
+          this.endpoint as any,
+          "rvcOperationalState" as any,
+          "operationalState",
+          3,
+          this.platform.log,
+        );
+      } catch {}
+    }
+  }
+
   static matterTypeLabel = "RoboticVacuumCleaner" as const;
 }

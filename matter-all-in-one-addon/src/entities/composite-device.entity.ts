@@ -27,6 +27,7 @@ import {
   MatterbridgeOnOffServer,
   MatterbridgeFanControlServer,
 } from "matterbridge/behaviors";
+import { BasicInformationServer } from "@matter/node/behaviors/basic-information";
 import {
   safeSetAttribute,
   safeUpdateAttribute,
@@ -222,6 +223,38 @@ export class CompositeDeviceEntity {
       this.members.find((m) => m.entityId.startsWith("vacuum."))?.entityId ??
       this.members[0].entityId
     );
+  }
+
+  async setReachability(reachable: boolean): Promise<void> {
+    const ep = this.endpoint as any;
+    if (!ep) return;
+    try {
+      const serverNode = ep.serverNode;
+      if (serverNode && typeof serverNode.setStateOf === "function") {
+        await serverNode.setStateOf(BasicInformationServer, { reachable });
+        serverNode.act?.((agent: any) => {
+          serverNode.eventsOf?.(BasicInformationServer)?.reachableChanged?.emit?.(
+            { reachableNewValue: reachable },
+            agent.context,
+          );
+        });
+      }
+      if (typeof ep.setAttribute === "function") {
+        if (ep.hasAttributeServer?.(0x0028, "reachable")) {
+          await ep.setAttribute(0x0028, "reachable", reachable, this.platform.log);
+        }
+        if (ep.hasAttributeServer?.(0x0039, "reachable")) {
+          await ep.setAttribute(0x0039, "reachable", reachable, this.platform.log);
+        }
+      }
+      this.platform.log?.debug?.(
+        `[Composite:${this.deviceId}] Updated Matter reachability to ${reachable}`,
+      );
+    } catch (err) {
+      this.platform.log?.debug?.(
+        `[Composite:${this.deviceId}] Could not update reachability to ${reachable}: ${err}`,
+      );
+    }
   }
 
   async createEndpoint(): Promise<MatterbridgeEndpoint> {

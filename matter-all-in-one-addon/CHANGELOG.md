@@ -1,3 +1,20 @@
+## [1.5.72] - 2026-09-13
+
+### Concordancia Estricta de Métricas, Diagnósticos Transparentes y Propagación de Desconexión a Apple Home
+
+- **Concordancia Exacta de Métricas y Filtros:**
+  - Separación matemática estricta y disjunta: `TODOS = IOT + CÁMARAS`. Las cámaras de Home Assistant y sus sensores/entidades auxiliares ya no duplican ni inflan el conteo en la pestaña de IoT.
+  - Conteo fiel en `NO EMPAREJADOS`: Muestra estrictamente los accesorios exportados/activos pendientes de vincular a una casa (`exported && !commissioned`). Muestra `0` cuando todos los dispositivos activos ya tienen sesión establecida.
+  - Depuración de `NECESITA ATENCIÓN`: Limita las alertas exclusivamente a accesorios activos o exportados que presenten fallos de comunicación o errores reales, eliminando falsas alarmas de dispositivos inactivos de Home Assistant.
+- **Diagnóstico Explícito y Claridad de Causa en `UNAVAILABLE`:**
+  - Corrección de la contradicción visual en el modal de accesorio: Ya no muestra "✓ Sin errores" cuando el badge indica `UNAVAILABLE`.
+  - Despliegue de banner explicativo en color ámbar: *Home Assistant perdió comunicación con el dispositivo físico. El puente Matter sigue activo, pero el aparato no responde en su origen (posiblemente apagado, sin batería o sin Wi-Fi).*
+  - Exportación completa en el botón "📋 Copiar logs" incluyendo el motivo explícito y la cronología del evento.
+- **Propagación Real de Desconexión a Apple Home / Matter (`reachable: false`):**
+  - Cuando un dispositivo se apaga o desconecta en Home Assistant, el puente Matter propaga dinámicamente `reachable: false` vía `BasicInformationServer` (y código de error `rvcOperationalState = 3` en aspiradoras Robot).
+  - Apple Home ahora refleja de inmediato "Sin respuesta" / Error en vez de mostrarlo falsamente como conectado o acoplado cuando no tiene corriente o Wi-Fi.
+  - En cuanto el aparato recupera conectividad en Home Assistant, el puente restaura de inmediato `reachable: true` de manera 100% transparente.
+
 ## [1.5.71] - 2026-09-13
 
 ### Reestructuración de Filtros, Concordancia de Métricas y Copia de Logs

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { DeviceRecord, EntityRecord } from "../types";
 import { api } from "../api/client";
 import { QRCodeDisplay } from "./QRCodeDisplay";
@@ -349,11 +349,46 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     }
   };
 
+  const currentEntity = selectedEntity || activeEntity;
+  const entityState = (currentEntity?.state || "").toLowerCase();
+  const isEntityUnavailable = entityState === "unavailable" || entityState === "unknown" || entityState === "offline";
+  const entityDiagnostics = currentEntity?.diagnostics || [];
+  const rawLogs = selectedEntity?.logs || currentEntity?.logs || [];
+
+  const combinedEvents = useMemo(() => {
+    const list: Array<{ text: string; level: string; timestamp?: string }> = [];
+
+    if (isEntityUnavailable) {
+      list.push({
+        text: `Home Assistant informa estado "${entityState.toUpperCase()}". El dispositivo físico no responde (posiblemente apagado, sin batería, fuera de rango o con la integración origen caída).`,
+        level: "warning",
+      });
+    }
+
+    for (const d of entityDiagnostics) {
+      list.push({
+        text: d.message,
+        level: d.level || "warning",
+        timestamp: d.timestamp,
+      });
+    }
+
+    for (const l of rawLogs) {
+      const msg = typeof l === "string" ? l : (l as any)?.message || JSON.stringify(l);
+      const lvl = typeof l === "object" && (l as any)?.level ? (l as any).level : "error";
+      list.push({ text: msg, level: lvl });
+    }
+
+    return list;
+  }, [isEntityUnavailable, entityState, entityDiagnostics, rawLogs]);
+
   const handleCopyDiagnostics = async () => {
     if (!activeEntity) return;
-    const rawLogs = selectedEntity?.logs || activeEntity.logs || [];
-    const formattedLogs = rawLogs
-      .map((l) => (typeof l === "string" ? l : `[${(l as any)?.level || "LOG"}] ${(l as any)?.message || JSON.stringify(l)}`))
+    const formattedEvents = combinedEvents
+      .map((e: { text: string; level: string; timestamp?: string }) => {
+        const timeStr = e.timestamp ? `[${new Date(e.timestamp).toLocaleTimeString()}] ` : "";
+        return `${timeStr}[${e.level.toUpperCase()}] ${e.text}`;
+      })
       .join("\n");
 
     const diagText = [
@@ -361,13 +396,16 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
       `Entidad: ${activeEntity.entityId}`,
       `Nombre: ${activeEntity.name || activeEntity.friendly_name || "Desconocido"}`,
       `Dominio: ${activeEntity.domain}`,
-      `Estado: ${activeEntity.state || "N/A"}`,
+      `Estado en Home Assistant: ${activeEntity.state ? activeEntity.state.toUpperCase() : "N/A"}`,
+      ...(isEntityUnavailable
+        ? [`Causa detectada: Dispositivo físico no responde en Home Assistant (apagado, sin batería o sin enlace con la integración)`]
+        : []),
       `Publicado en Matter: ${activeEntity.exported ? "SÍ" : "NO"}`,
       `Emparejado: ${activeEntity.commissioned ? "SÍ (Vinculado)" : "NO"}`,
       `Código de emparejamiento manual: ${activeEntity.manualPairingCode || "N/A"}`,
-      `Incidencias: ${activeEntity.hasIssue ? "SÍ" : "NO"}`,
-      `\n=== EVENTOS Y LOGS (${rawLogs.length}) ===`,
-      formattedLogs || "(Sin errores ni eventos registrados)",
+      `Incidencias activas: ${activeEntity.hasIssue || isEntityUnavailable ? "SÍ" : "NO"}`,
+      `\n=== HISTORIAL DE EVENTOS Y DIAGNÓSTICO (${combinedEvents.length}) ===`,
+      formattedEvents || "(Sin incidencias ni eventos registrados)",
     ].join("\n");
 
     const ok = await copyToClipboard(diagText);
@@ -381,8 +419,6 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
   const activeNodesCount = new Set(
     device.entities.filter((e) => e.exported).map((e) => e.compositeDeviceId || e.entityId)
   ).size;
-
-  const logs = selectedEntity?.logs || activeEntity?.logs || [];
 
   return (
     <div
@@ -853,14 +889,30 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
 
             {/* Diagnostics Panel */}
             <section
-              className="diagnostics-panel"
+              className={`diagnostics-panel ${isEntityUnavailable || activeEntity?.hasIssue ? "has-issues" : ""}`}
               id="diagnostics-panel"
               aria-live="polite"
-              style={{ userSelect: "text" }}
+              style={{
+                userSelect: "text",
+                background: isEntityUnavailable
+                  ? "rgba(245, 158, 11, 0.08)"
+                  : "rgba(255, 255, 255, 0.03)",
+                border: isEntityUnavailable
+                  ? "1px solid rgba(245, 158, 11, 0.3)"
+                  : "1px solid var(--border)",
+                borderRadius: "10px",
+                padding: "14px",
+              }}
             >
-              <div className="diagnostics-heading">
-                <span id="diagnostics-icon" aria-hidden="true">✓</span>
-                <strong id="diagnostics-heading-text">Diagnóstico y logs</strong>
+              <div className="diagnostics-heading" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <span id="diagnostics-icon" aria-hidden="true" style={{ fontSize: "16px" }}>
+                    {isEntityUnavailable || activeEntity?.hasIssue ? "⚠️" : combinedEvents.length > 0 ? "ℹ️" : "✓"}
+                  </span>
+                  <strong id="diagnostics-heading-text" style={{ fontSize: "13px" }}>
+                    {isEntityUnavailable ? "Estado de Conexión y Diagnóstico" : "Diagnóstico y logs"}
+                  </strong>
+                </div>
                 <button
                   id="copy-diagnostics-button"
                   className="copy-diagnostics-button"
@@ -871,21 +923,44 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                   📋 Copiar logs
                 </button>
               </div>
-              <p id="diagnostics-summary">
-                {logs.length === 0 ? (
+
+              {isEntityUnavailable && (
+                <div
+                  style={{
+                    background: "rgba(245, 158, 11, 0.15)",
+                    borderLeft: "3px solid #f59e0b",
+                    padding: "8px 10px",
+                    borderRadius: "4px",
+                    fontSize: "11px",
+                    color: "#fbbf24",
+                    marginBottom: "8px",
+                    lineHeight: "1.4",
+                  }}
+                >
+                  <strong>⚠️ Dispositivo no disponible en Home Assistant (Estado: {entityState.toUpperCase()})</strong>
+                  <div style={{ marginTop: "3px", color: "var(--text)" }}>
+                    Home Assistant perdió comunicación con el dispositivo físico. El puente Matter sigue activo, pero el aparato no responde en su origen (posiblemente apagado, sin batería o sin Wi-Fi).
+                  </div>
+                </div>
+              )}
+
+              <p id="diagnostics-summary" style={{ margin: "4px 0", fontSize: "11.5px", color: isEntityUnavailable ? "#fbbf24" : "var(--muted)" }}>
+                {combinedEvents.length === 0 ? (
                   "Sin errores registrados para este accesorio."
                 ) : (
-                  `${logs.length} evento${logs.length === 1 ? "" : "s"} registrado${logs.length === 1 ? "" : "s"}`
+                  `${combinedEvents.length} evento${combinedEvents.length === 1 ? "" : "s"} registrado${combinedEvents.length === 1 ? "" : "s"}`
                 )}
               </p>
-              {logs.length > 0 && (
+              {combinedEvents.length > 0 && (
                 <ul
                   id="diagnostics-list"
-                  style={{ userSelect: "text", maxHeight: "200px", overflowY: "auto" }}
+                  style={{ userSelect: "text", maxHeight: "180px", overflowY: "auto", margin: "6px 0 0", paddingLeft: "16px", fontSize: "11px", display: "flex", flexDirection: "column", gap: "4px" }}
                 >
-                  {logs.slice(-25).map((l, i) => (
-                    <li key={i} style={{ userSelect: "text", wordBreak: "break-word" }}>
-                      {typeof l === "string" ? l : (l as any)?.message || JSON.stringify(l)}
+                  {combinedEvents.slice(-25).map((e: { text: string; level: string; timestamp?: string }, i: number) => (
+                    <li key={i} style={{ userSelect: "text", wordBreak: "break-word", color: e.level === "warning" ? "#fbbf24" : e.level === "error" ? "#f87171" : "var(--text)" }}>
+                      {e.timestamp ? <span style={{ opacity: 0.6, marginRight: "5px" }}>[{new Date(e.timestamp).toLocaleTimeString()}]</span> : null}
+                      <span style={{ fontWeight: 600, marginRight: "4px" }}>[{e.level.toUpperCase()}]</span>
+                      {e.text}
                     </li>
                   ))}
                 </ul>

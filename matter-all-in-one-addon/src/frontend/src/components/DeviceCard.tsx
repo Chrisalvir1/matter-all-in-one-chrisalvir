@@ -48,17 +48,25 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({ device, searchQuery, onC
   const commissioned = device.entities.filter((e) => e.exported && e.commissioned).length;
   const isDeviceCommissioned = commissioned > 0;
   const isMqtt = device.entities.some((e) => e.origin === "mqtt" || e.entityId.startsWith("mqtt."));
-  const hasUnavailable = device.entities.some(
-    (e) => e.state === "unavailable" || e.state === "unknown" || e.state === "offline"
-  );
-  const hasIssue = device.entities.some(
-    (e) =>
-      e.hasIssue ||
-      e.state === "unavailable" ||
-      e.state === "unknown" ||
-      e.state === "offline" ||
-      (Array.isArray(e.logs) && e.logs.length > 0 && e.exported)
-  );
+  const isDeviceActive = exported > 0 || isDeviceCommissioned;
+  const hasUnavailable =
+    isDeviceActive &&
+    device.entities.some(
+      (e) =>
+        (e.exported || e.commissioned) &&
+        (e.state === "unavailable" || e.state === "unknown" || e.state === "offline")
+    );
+  const hasIssue =
+    isDeviceActive &&
+    device.entities.some(
+      (e) =>
+        (e.exported || e.commissioned) &&
+        (e.hasIssue ||
+          e.state === "unavailable" ||
+          e.state === "unknown" ||
+          e.state === "offline" ||
+          (Array.isArray(e.logs) && e.logs.length > 0))
+    );
   const fanEntity = device.entities.find((e) => e.domain === "fan");
   const primaryDomain = isComposite
     ? (fanEntity ? "fan" : "light")

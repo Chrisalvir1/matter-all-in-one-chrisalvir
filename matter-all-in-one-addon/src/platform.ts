@@ -477,6 +477,27 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     const isActivelyExported = this.isEntityExported(entityId) && hasEndpoint;
 
     if (isUnavailable(state)) {
+      if (isActivelyExported) {
+        if (entity && typeof (entity as any).setReachability === "function") {
+          void (entity as any).setReachability(false);
+        }
+        const compositeDeviceId =
+          this.compositeMembership.get(entityId) ??
+          this.getCompositeCandidate(entityId)?.deviceId;
+        const compDevice = compositeDeviceId
+          ? this.compositeDevices.get(compositeDeviceId)
+          : undefined;
+        if (compDevice && typeof (compDevice as any).setReachability === "function") {
+          const allUnavailable = compDevice.members?.every((m: any) => {
+            const st = this.entities.get(m.entityId)?.state;
+            return !st || isUnavailable(st);
+          });
+          if (allUnavailable || compDevice.primaryEntityId === entityId) {
+            void (compDevice as any).setReachability(false);
+          }
+        }
+      }
+
       if (previous === state.state) return true;
       const message = `Home Assistant informa el estado "${state.state}".`;
       if (isActivelyExported) {
@@ -500,6 +521,18 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           `Conexión restaurada con Home Assistant (estado: ${state.state})`,
           "info",
         );
+        if (entity && typeof (entity as any).setReachability === "function") {
+          void (entity as any).setReachability(true);
+        }
+        const compositeDeviceId =
+          this.compositeMembership.get(entityId) ??
+          this.getCompositeCandidate(entityId)?.deviceId;
+        const compDevice = compositeDeviceId
+          ? this.compositeDevices.get(compositeDeviceId)
+          : undefined;
+        if (compDevice && typeof (compDevice as any).setReachability === "function") {
+          void (compDevice as any).setReachability(true);
+        }
       } else {
         this.log.debug(
           `[Home Assistant] ${entityId}: la entidad se recuperó y volvió a "${state.state}". (no exportado o no soportado)`,
@@ -2096,6 +2129,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       this.compositeMembership.set(member.entityId, candidate.deviceId),
     );
     await composite.syncInitialState();
+    const primaryState = this.entities.get(composite.primaryEntityId)?.state;
+    if (primaryState && isUnavailable(primaryState)) {
+      void (composite as any).setReachability?.(false);
+    }
     this.log.notice(
       `Exported composite Matter device ${idn}${nodeName}${rs} with endpoints: ${candidate.members.map((member) => member.entityId).join(", ")}`,
     );
@@ -2139,6 +2176,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           entity.adoptEndpoint(existingEndpoint);
           this.matterbridgeDevices.set(entityId, existingEndpoint);
           await entity.syncInitialState();
+          if (isUnavailable(entity.state)) {
+            void (entity as any).setReachability?.(false);
+          }
           this.log.notice(
             `Reused existing Matter endpoint ${idn}${entityId}${rs}; it remains paired and was not recreated.`,
           );
@@ -2159,6 +2199,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       }
       this.matterbridgeDevices.set(entityId, endpoint);
       await entity.syncInitialState();
+      if (isUnavailable(entity.state)) {
+        void (entity as any).setReachability?.(false);
+      }
       this.log.notice(`Exported bridged endpoint ${idn}${entityId}${rs}`);
     } catch (err) {
       this.log.error(`Failed to activate entity ${entityId}: ${err}`);

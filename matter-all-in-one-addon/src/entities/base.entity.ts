@@ -17,6 +17,8 @@ import {
   MatterbridgeOnOffServer,
   MatterbridgeFanControlServer,
 } from "matterbridge/behaviors";
+import { BasicInformationServer } from "@matter/node/behaviors/basic-information";
+import { BridgedDeviceBasicInformationServer } from "@matter/node/behaviors/bridged-device-basic-information";
 import { HomeAssistantPlatform } from "../platform.js";
 import { HassState } from "../utils/ha-state.js";
 import {
@@ -916,6 +918,54 @@ export class BaseEntity {
       return Math.min(hi, Math.max(lo, rawLevel));
     } catch {
       return Math.min(254, Math.max(1, rawLevel));
+    }
+  }
+
+  public async setReachability(reachable: boolean): Promise<void> {
+    const ep = this.endpoint as any;
+    if (!ep) return;
+    try {
+      // 1. ServerNode reachability (individual accessory in mode: 'server')
+      const serverNode = ep.serverNode;
+      if (serverNode && typeof serverNode.setStateOf === "function") {
+        await serverNode.setStateOf(BasicInformationServer, { reachable });
+        serverNode.act?.((agent: any) => {
+          serverNode.eventsOf?.(BasicInformationServer)?.reachableChanged?.emit?.(
+            { reachableNewValue: reachable },
+            agent.context,
+          );
+        });
+      }
+
+      // 2. Bridged / child endpoint reachability
+      if (typeof ep.setStateOf === "function") {
+        try {
+          await ep.setStateOf(BridgedDeviceBasicInformationServer, { reachable });
+          ep.act?.((agent: any) => {
+            ep.eventsOf?.(BridgedDeviceBasicInformationServer)?.reachableChanged?.emit?.(
+              { reachableNewValue: reachable },
+              agent.context,
+            );
+          });
+        } catch {}
+      }
+
+      // 3. Update reachable attribute on cluster servers if present
+      if (typeof ep.setAttribute === "function") {
+        if (ep.hasAttributeServer?.(0x0028, "reachable")) {
+          await ep.setAttribute(0x0028, "reachable", reachable, this.platform.log);
+        }
+        if (ep.hasAttributeServer?.(0x0039, "reachable")) {
+          await ep.setAttribute(0x0039, "reachable", reachable, this.platform.log);
+        }
+      }
+      this.platform.log?.debug?.(
+        `[${this.entityId}] Updated Matter reachability to ${reachable}`,
+      );
+    } catch (err) {
+      this.platform.log?.debug?.(
+        `[${this.entityId}] Could not update reachability to ${reachable}: ${err}`,
+      );
     }
   }
 

@@ -75,50 +75,49 @@ export const App: React.FC = () => {
       );
     }
 
+    const haCameraIds = new Set(realHaCameraDevices.map((d) => d.id));
+    const iotOnlyList = list.filter((d) => !haCameraIds.has(d.id));
+
     switch (activeFilter) {
       case "all":
-        return list.filter((d) => !d.entities.every((e) => e.domain === "camera"));
+        return iotOnlyList;
       case "iot":
-        return list.filter((d) => !d.entities.every((e) => e.domain === "camera"));
+        return iotOnlyList;
       case "cameras":
         return [];
       case "paired":
-        return list.filter(
-          (d) =>
-            !d.entities.every((e) => e.domain === "camera") &&
-            d.entities.some((e) => e.exported && e.commissioned)
+        return iotOnlyList.filter((d) =>
+          d.entities.some((e) => e.exported && e.commissioned)
         );
       case "unpaired":
-        return list.filter(
-          (d) =>
-            !d.entities.every((e) => e.domain === "camera") &&
-            d.entities.some((e) => e.exported && !e.commissioned)
+        return iotOnlyList.filter((d) =>
+          d.entities.some((e) => e.exported && !e.commissioned)
         );
       case "unactivated":
-        return list.filter(
-          (d) =>
-            !d.entities.every((e) => e.domain === "camera") &&
-            !d.entities.some((e) => e.exported || e.commissioned)
+        return iotOnlyList.filter(
+          (d) => !d.entities.some((e) => e.exported || e.commissioned)
         );
       case "mqtt":
-        return list.filter((d) =>
+        return iotOnlyList.filter((d) =>
           d.entities.some((e) => e.origin === "mqtt" || e.entityId.startsWith("mqtt."))
         );
       case "issues":
-        return list.filter((d) =>
-          d.entities.some(
+        return iotOnlyList.filter((d) => {
+          const isDeviceActive = d.entities.some((e) => e.exported || e.commissioned);
+          if (!isDeviceActive) return false;
+          return d.entities.some(
             (e) =>
               e.hasIssue ||
               e.state === "unavailable" ||
               e.state === "unknown" ||
               e.state === "offline" ||
               (Array.isArray(e.logs) && e.logs.length > 0 && e.exported)
-          )
-        );
+          );
+        });
       default:
-        return list;
+        return iotOnlyList;
     }
-  }, [allDevices, searchQuery, activeFilter]);
+  }, [allDevices, realHaCameraDevices, searchQuery, activeFilter]);
 
   // Group cameras by brand when relevant to active tab
   const cameraBrandGroups = useMemo(() => {
@@ -137,27 +136,33 @@ export const App: React.FC = () => {
         (c) => c.identity?.homeKitPairingState === "paired" || c.bindingState?.matterCommissioned === true
       );
     } else if (activeFilter === "unpaired") {
-      // Only cameras exported/published for Matter or HomeKit but not yet paired
+      // Only cameras with active bridge waiting to be paired
       scryptedList = scryptedList.filter(
         (c) =>
-          (c.exportConfig?.matterEnabled || c.exportConfig?.homeKitEnabled) &&
+          Boolean(c.identity?.matterPairingCode) &&
           !(c.identity?.homeKitPairingState === "paired" || c.bindingState?.matterCommissioned === true)
       );
     } else if (activeFilter === "unactivated") {
-      // Cameras not exported and not paired
+      // Cameras not paired and without active bridge
       scryptedList = scryptedList.filter(
         (c) =>
-          !(c.exportConfig?.matterEnabled || c.exportConfig?.homeKitEnabled) &&
-          !(c.identity?.homeKitPairingState === "paired" || c.bindingState?.matterCommissioned === true)
+          !(c.identity?.homeKitPairingState === "paired" || c.bindingState?.matterCommissioned === true) &&
+          !Boolean(c.identity?.matterPairingCode)
       );
     } else if (activeFilter === "issues") {
-      scryptedList = scryptedList.filter(
-        (c) =>
+      scryptedList = scryptedList.filter((c) => {
+        const isCameraActive =
+          c.identity?.homeKitPairingState === "paired" ||
+          c.bindingState?.matterCommissioned === true ||
+          Boolean(c.identity?.matterPairingCode);
+        if (!isCameraActive) return false;
+        return (
           c.status?.connection === "offline" ||
           c.status?.isOnline === false ||
           Boolean(c.status?.lastError) ||
           (c as any).hasIssue === true
-      );
+        );
+      });
     }
 
     for (const cam of scryptedList) {
@@ -179,16 +184,18 @@ export const App: React.FC = () => {
     } else if (activeFilter === "unactivated") {
       haList = haList.filter((d) => !d.entities.some((e) => e.exported || e.commissioned));
     } else if (activeFilter === "issues") {
-      haList = haList.filter((d) =>
-        d.entities.some(
+      haList = haList.filter((d) => {
+        const isCameraActive = d.entities.some((e) => e.exported || e.commissioned);
+        if (!isCameraActive) return false;
+        return d.entities.some(
           (e) =>
             e.hasIssue ||
             e.state === "unavailable" ||
             e.state === "unknown" ||
             e.state === "offline" ||
             (Array.isArray(e.logs) && e.logs.length > 0 && e.exported)
-        )
-      );
+        );
+      });
     }
 
     for (const dev of haList) {
