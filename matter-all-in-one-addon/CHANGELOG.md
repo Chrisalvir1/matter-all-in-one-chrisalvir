@@ -1,3 +1,20 @@
+## [1.5.76] - 2026-09-13
+
+### Unificación del Centro de Control en Liquid Glass: Rediseño Interactivo y Coherencia Total de Métricas
+
+- **Nuevo Centro de Control Interactivo "Liquid Glass":**
+  - Rediseño integral con estética glassmorphic ultralimpia: efectos frosted glass con `backdrop-filter: blur(24px) saturate(180%)`, degradados de luz ambiental, bordes translúcidos con micro-relieve y sombras suaves.
+  - Se unificó el antiguo bloque superior pasivo con la barra inferior redundante de chips: ahora cada tarjeta del Centro de Control actúa como un **tab interactivo** que filtra directamente la lista inferior.
+  - Indicadores visuales de estado activo (borde glowing, fondo iluminado y micro-punto indicador), más estados semánticos para advertencias (ámbar pulsante) y éxito (verde esmeralda).
+- **Renombramiento Solicitado por el Usuario:**
+  - El filtro de dispositivos no enlazados ahora se denomina formalmente **"MATTER ACTIVO SIN EMPAREJAR"** (con subtítulo descriptivo *"Código QR listo para enlazar"*), garantizando claridad absoluta sobre el estado de la entidad.
+- **Sincronización Exacta de Métricas (100% Coherencia de Datos):**
+  - Se erradicó la discrepancia numérica (`Dispositivos: 101` vs `TODOS 117`): `stats.totalDevices` ahora representa con exactitud la totalidad de los accesorios gestionados (117 = 94 IoT + 23 Cámaras), desglosados explícitamente en el subtítulo de la tarjeta.
+  - El contador en vivo del encabezado y la insignia de filtro activo reflejan dinámicamente la cantidad exacta de accesorios mostrados en pantalla.
+- **Eliminación de Redundancia y Limpieza Visual del Layout:**
+  - Eliminados la barra de chips duplicados y el banner de información obsoleto, ahorrando más de 250px de espacio vertical y permitiendo acceso inmediato al grid de accesorios.
+  - Los controles contextuales del servidor Scrypted (sincronizar cámaras y ajustes) se preservan y despliegan elegantemente sólo cuando se filtran cámaras o dispositivos enlazados.
+
 ## [1.5.75] - 2026-09-13
 
 ### Gestión Nativa de Alcanzabilidad en Apple Home: Erradicación del Falso "Alert" y Diferenciación Estricta de "Sin respuesta"

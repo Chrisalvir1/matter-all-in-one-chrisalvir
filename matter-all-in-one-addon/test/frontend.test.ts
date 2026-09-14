@@ -50,4 +50,38 @@ describe("frontend accessibility contract", () => {
     expect(apiClient).toContain("/open-commissioning/");
     expect(deviceModal).toContain("Modo Multi-Admin Abierto");
   });
+
+  it("unifies command center into interactive liquid glass tabs with exact labeling", async () => {
+    const controlCenter = await readFile(
+      new URL("components/ControlCenter.tsx", frontendSrcPath),
+      "utf8",
+    );
+    const filterBar = await readFile(
+      new URL("components/FilterBar.tsx", frontendSrcPath),
+      "utf8",
+    );
+    const stylesheet = await readFile(
+      new URL("style.css", frontendPath),
+      "utf8",
+    );
+
+    // Verified exact requested naming: 'MATTER ACTIVO SIN EMPAREJAR'
+    expect(controlCenter).toContain("MATTER ACTIVO SIN EMPAREJAR");
+    expect(controlCenter).toContain("liquid-control-center");
+    expect(controlCenter).toContain('role="tablist"');
+    expect(controlCenter).toContain('id={`tab-${card.id}`}');
+    expect(controlCenter).toContain('id: "all"');
+    expect(controlCenter).toContain('id: "unpaired"');
+    expect(controlCenter).toContain('id: "issues"');
+
+    // Verified Liquid Glass styling
+    expect(stylesheet).toContain(".liquid-control-center");
+    expect(stylesheet).toContain(".glass-card-tab");
+    expect(stylesheet).toContain("backdrop-filter: blur(24px)");
+
+    // Verified FilterBar no longer has redundant filter chips
+    expect(filterBar).not.toContain("filter-chip");
+    expect(filterBar).toContain("scrypted-header-bar");
+  });
 });
+

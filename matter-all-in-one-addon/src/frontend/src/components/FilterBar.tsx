@@ -3,16 +3,8 @@ import { FilterType } from "../hooks/useAddonState";
 
 interface FilterBarProps {
   activeFilter: FilterType;
-  onFilterChange: (filter: FilterType) => void;
   stats: {
-    totalDevices: number;
-    iotDevices: number;
     totalCameras: number;
-    pairedTotal: number;
-    unpairedTotal: number;
-    unactivatedTotal: number;
-    mqttCount: number;
-    issues: number;
   };
   scryptedConfig: {
     connectionStatus?: string;
@@ -26,7 +18,6 @@ interface FilterBarProps {
 
 export const FilterBar: React.FC<FilterBarProps> = ({
   activeFilter,
-  onFilterChange,
   stats,
   scryptedConfig,
   onOpenScryptedModal,
@@ -36,120 +27,46 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   const isScryptedConnected =
     scryptedConfig?.connectionStatus === "connected" || (scryptedConfig?.cameraCount ?? 0) > 0;
 
+  // Only display the contextual management bar when viewing cameras or paired accessories
+  if (activeFilter !== "cameras" && activeFilter !== "paired") {
+    return null;
+  }
+
   return (
-    <>
-      <div className="filter-bar" role="group" aria-label="Filtrar dispositivos">
+    <div className="scrypted-header-bar" style={{ display: "flex", alignItems: "center", gap: 10, margin: "6px 0 16px" }}>
+      {isScryptedConnected ? (
+        <>
+          <span className="badge-connected" style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+            <span className="connection-dot online" /> Conectado
+          </span>
+          <span className="scrypted-url-display" style={{ fontSize: "0.85rem", opacity: 0.8 }}>
+            {scryptedConfig?.serverUrl || "Servidor Scrypted"} · {stats.totalCameras} cámaras
+          </span>
+          <button
+            className="button button-sm button-primary"
+            type="button"
+            onClick={onSyncCameras}
+            disabled={isSyncing}
+          >
+            {isSyncing ? "Sincronizando..." : "🔄 Sincronizar nuevas cámaras"}
+          </button>
+          <button
+            className="button button-sm button-secondary"
+            type="button"
+            onClick={onOpenScryptedModal}
+          >
+            ⚙️ Servidor
+          </button>
+        </>
+      ) : (
         <button
-          className={`filter-chip ${activeFilter === "all" ? "active" : ""}`}
+          className="button button-primary"
           type="button"
-          onClick={() => onFilterChange("all")}
-          title="Todos los dispositivos y cámaras disponibles"
+          onClick={onOpenScryptedModal}
         >
-          TODOS <span className="chip-badge">{stats.totalDevices}</span>
+          📹 Conectar con Scrypted
         </button>
-
-        <button
-          className={`filter-chip ${activeFilter === "iot" ? "active" : ""}`}
-          type="button"
-          onClick={() => onFilterChange("iot")}
-          title="Accesorios IoT estándar (luces, interruptores, clima, sensores, etc.)"
-        >
-          IOT <span className="chip-badge">{stats.iotDevices}</span>
-        </button>
-
-        <button
-          className={`filter-chip ${activeFilter === "cameras" ? "active" : ""}`}
-          type="button"
-          onClick={() => onFilterChange("cameras")}
-          title="Cámaras de seguridad (Scrypted y Home Assistant)"
-        >
-          CÁMARAS 📹 <span className="chip-badge">{stats.totalCameras}</span>
-        </button>
-
-        <button
-          className={`filter-chip ${activeFilter === "paired" ? "active" : ""}`}
-          type="button"
-          onClick={() => onFilterChange("paired")}
-          title="Accesorios vinculados activamente (Matter en IoT/MQTT y HAP en Cámaras)"
-        >
-          EMPAREJADOS (MATTER & HAP) 🍏 <span className="chip-badge">{stats.pairedTotal}</span>
-        </button>
-
-        <button
-          className={`filter-chip ${activeFilter === "unpaired" ? "active" : ""}`}
-          type="button"
-          onClick={() => onFilterChange("unpaired")}
-          title="Accesorios activados con código Matter listos pero aún no enlazados a ninguna casa"
-        >
-          NO EMPAREJADOS ⏳ <span className="chip-badge">{stats.unpairedTotal}</span>
-        </button>
-
-        <button
-          className={`filter-chip ${activeFilter === "unactivated" ? "active" : ""}`}
-          type="button"
-          onClick={() => onFilterChange("unactivated")}
-          title="Dispositivos descubiertos que aún no están activados en Matter ni enlazados"
-        >
-          NO ACTIVADOS ⚪ <span className="chip-badge">{stats.unactivatedTotal}</span>
-        </button>
-
-        <button
-          className={`filter-chip ${activeFilter === "mqtt" ? "active" : ""}`}
-          type="button"
-          onClick={() => onFilterChange("mqtt")}
-          title="Dispositivos integrados vía MQTT Auto-Discovery"
-        >
-          MQTT 📡 <span className="chip-badge">{stats.mqttCount}</span>
-        </button>
-
-        <button
-          className={`filter-chip filter-chip-warning ${activeFilter === "issues" ? "active" : ""}`}
-          type="button"
-          onClick={() => onFilterChange("issues")}
-          title="Dispositivos con problemas de conexión o errores en el registro"
-        >
-          NECESITA ATENCIÓN ⚠️ <span className="chip-badge">{stats.issues}</span>
-        </button>
-      </div>
-
-      {/* Scrypted management bar — visible on 'cameras' or 'all' if cameras exist */}
-      {(activeFilter === "cameras" || activeFilter === "paired") && (
-        <div className="scrypted-header-bar" style={{ display: "flex", alignItems: "center", gap: 10, margin: "10px 0 16px" }}>
-          {isScryptedConnected ? (
-            <>
-              <span className="badge-connected" style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-                <span className="connection-dot online" /> Conectado
-              </span>
-              <span className="scrypted-url-display" style={{ fontSize: "0.85rem", opacity: 0.8 }}>
-                {scryptedConfig?.serverUrl || "Servidor Scrypted"} · {stats.totalCameras} cámaras
-              </span>
-              <button
-                className="button button-sm button-primary"
-                type="button"
-                onClick={onSyncCameras}
-                disabled={isSyncing}
-              >
-                {isSyncing ? "Sincronizando..." : "🔄 Sincronizar nuevas cámaras"}
-              </button>
-              <button
-                className="button button-sm button-secondary"
-                type="button"
-                onClick={onOpenScryptedModal}
-              >
-                ⚙️ Servidor
-              </button>
-            </>
-          ) : (
-            <button
-              className="button button-primary"
-              type="button"
-              onClick={onOpenScryptedModal}
-            >
-              📹 Conectar con Scrypted
-            </button>
-          )}
-        </div>
       )}
-    </>
+    </div>
   );
 };

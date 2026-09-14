@@ -218,6 +218,14 @@ export const App: React.FC = () => {
     }));
   }, [activeFilter, cameras, realHaCameraDevices, searchQuery]);
 
+  const totalVisibleCount = useMemo(() => {
+    const cams = cameraBrandGroups.reduce(
+      (acc, g) => acc + g.scrypted.length + g.ha.length,
+      0
+    );
+    return filteredDevices.length + cams;
+  }, [cameraBrandGroups, filteredDevices]);
+
   const handleSyncCameras = async () => {
     setIsSyncing(true);
     showToast("Sincronizando cámaras de Scrypted...");
@@ -283,49 +291,19 @@ export const App: React.FC = () => {
             </label>
           </header>
 
-          {/* Control Center */}
-          <ControlCenter stats={stats} loading={loading} />
-
-          {/* Info Banner */}
-          <section className="info-banner" aria-label="Información de emparejamiento">
-            <span className="info-icon" aria-hidden="true">✦</span>
-            <div>
-              <strong>Un dispositivo, un único acceso Matter</strong>
-              <p>
-                Cada dispositivo físico tiene un único código QR y manual de
-                emparejamiento. Los endpoints integrados comparten ese código.
-              </p>
-            </div>
-          </section>
-
-          {/* Toolbar */}
-          <div className="toolbar">
-            <span id="device-count">
-              {activeFilter === "cameras"
-                ? `${stats.totalCameras} cámaras · Clasificadas por marca`
-                : activeFilter === "iot"
-                ? `${filteredDevices.length} dispositivos IoT · ${stats.exportedNodes} activos en Matter`
-                : activeFilter === "paired"
-                ? `${stats.pairedTotal} accesorios vinculados (${stats.pairedNodes} por Matter, ${stats.scryptedPaired} por HAP HomeKit)`
-                : activeFilter === "unpaired"
-                ? `${stats.unpairedTotal} accesorios activos pendientes de emparejar`
-                : activeFilter === "unactivated"
-                ? `${stats.unactivatedTotal} accesorios no activados ni enlazados (inactivos)`
-                : activeFilter === "mqtt"
-                ? `${stats.mqttCount} dispositivos MQTT`
-                : activeFilter === "issues"
-                ? `${stats.issues} dispositivos requieren atención por conexión o incidencias`
-                : `${stats.totalDevices} elementos en total · ${stats.exportedNodes} activos en Matter`}
-            </span>
-            <button className="text-button" id="refresh-button" type="button" onClick={refreshAll}>
-              Actualizar
-            </button>
-          </div>
-
-          {/* Filter Bar */}
-          <FilterBar
+          {/* Liquid Glass Interactive Control Center */}
+          <ControlCenter
+            stats={stats}
             activeFilter={activeFilter}
             onFilterChange={setActiveFilter}
+            loading={loading}
+            onRefresh={refreshAll}
+            filteredCount={totalVisibleCount}
+          />
+
+          {/* Contextual Scrypted Camera Bar */}
+          <FilterBar
+            activeFilter={activeFilter}
             stats={stats}
             scryptedConfig={scryptedConfig}
             onOpenScryptedModal={() => setIsScryptedModalOpen(true)}
