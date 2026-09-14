@@ -1,3 +1,14 @@
+## [1.5.82] - 2026-09-14
+
+### Corrección Crítica de FFprobe: Eliminación de Opción Incompatible '-stimeout' y Calibración a 3.0s / 2MB
+
+- **Solución al fallo «Unrecognized option 'stimeout'. Error splitting the argument list: Option not found»:**
+  - La opción de socket `-stimeout` es incompatible con el binario ejecutable `ffprobe` y provocaba que el análisis del stream abortara de inmediato antes de contactar con la cámara.
+  - Se eliminó completamente `-stimeout` de las llamadas a `probeWithFfprobe` y `probeWithFfmpeg` en [`ffmpeg-helper.ts`](file:///Users/chrisalvir/.gemini/antigravity/worktrees/matter-all-in-one-chrisalvir-main/audit_matter_buttons/matter-all-in-one-addon/src/camera/homekit/ffmpeg-helper.ts).
+  - El control de tiempo límite se delega enteramente al temporizador de socket nativo de Node.js (`setTimeout` + `child.kill('SIGKILL')`), eliminando cuelgues o conflictos con versiones de FFmpeg.
+- **Ventana de Análisis Optimizada para Cámaras Wyze / Tapo:**
+  - Incremento de `-analyzeduration` a `3000000` (3.0 segundos) y `-probesize` a `2097152` (2 MB) para garantizar la recepción íntegra de I-frames y cabeceras SPS/PPS en streams RTSP con intervalos GOP largos (1.5-2s) sin errores de decodificación.
+
 ## [1.5.81] - 2026-09-14
 
 ### Diagnóstico de Stream RTSP Confiable, Detección Inteligente de PTZ para Wyze Cam Pan v2 y Selector de Transporte TCP/UDP

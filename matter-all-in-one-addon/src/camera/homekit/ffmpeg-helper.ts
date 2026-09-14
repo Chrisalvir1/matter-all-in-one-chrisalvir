@@ -323,12 +323,10 @@ function probeWithFfprobe(
       args.push(
         "-rtsp_transport",
         rtspTransport,
-        "-stimeout",
-        String(Math.min(timeoutMs, 6000) * 1000),
         "-probesize",
-        "1048576",
+        "2097152",
         "-analyzeduration",
-        "2500000",
+        "3000000",
         "-fflags",
         "+nobuffer",
         "-flags",
@@ -467,9 +465,9 @@ function probeWithFfmpeg(
     const args = [
       "-hide_banner",
       "-probesize",
-      "1048576",
+      "2097152",
       "-analyzeduration",
-      "2500000",
+      "3000000",
     ];
 
     if (
@@ -484,8 +482,6 @@ function probeWithFfmpeg(
       args.push(
         "-rtsp_transport",
         rtspTransport,
-        "-stimeout",
-        String(Math.min(timeoutMs, 6000) * 1000),
         "-fflags",
         "+nobuffer",
         "-flags",
