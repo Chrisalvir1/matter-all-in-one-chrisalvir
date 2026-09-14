@@ -1,3 +1,16 @@
+## [1.5.74] - 2026-09-13
+
+### Depuración de Falsas Alarmas en "Necesita Atención", Diagnóstico Específico por Botón y Armonización Node 24
+
+- **Aislamiento Estricto de Entidades Inactivas / No Exportadas:**
+  - Se corrigió el cálculo de `hasIssue` y `hasUnavailable`: ahora evalúan **exclusivamente entidades exportadas activas a Matter**. Las entidades secundarias o botones no exportados en dispositivos multi-entidad (como los 16 sensores auxiliares de Govee o botones secundarios de Tuya) ya no provocan falsas alarmas de "Necesita Atención".
+  - Se eliminó la persistencia de falsos positivos causada por registros informativos o advertencias de apagado previas en el buffer de logs (`allErrorLogs`). `hasIssue` ahora responde estrictamente a caídas reales de disponibilidad en Home Assistant o problemas de sincronización en vivo.
+- **Diagnóstico Transparente y Específico por Botón:**
+  - En tarjetas de dispositivos multi-botón o con incidencias, se despliega una línea explícita identificando con precisión la causa (ej. `⚠️ "Botón 1" desconectado en Home Assistant` o `⚠️ Robotina: Desconectada en HA`), eliminando la incertidumbre sobre qué componente tiene problemas.
+  - Sincronización inmediata de disponibilidad y alcanzabilidad (`setReachability`) al pulsar "↻ Recargar / Sincronizar".
+- **Armonización de Versión de Node:**
+  - Ajustado `engines.node` en `package.json` a `>=24.0.0 <25` para eliminar la advertencia de `EBADENGINE` entre el entorno de desarrollo local (24.20) y el contenedor Docker (24.21).
+
 ## [1.5.73] - 2026-09-13
 
 ### Corrección Crítica de Arranque: Resolución de Dependencia en Contenedor Docker

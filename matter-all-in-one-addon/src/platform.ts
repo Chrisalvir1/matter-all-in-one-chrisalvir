@@ -2637,7 +2637,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         ? composite.members.map((member) => this.entities.get(member.entityId))
         : [this.entities.get(entityId)];
       await Promise.all(
-        entitiesToSync.map((entity) => entity?.syncInitialState?.()),
+        entitiesToSync.map(async (entity) => {
+          await entity?.syncInitialState?.();
+          if (entity && typeof (entity as any).setReachability === "function") {
+            const isAvail = !isUnavailable(entity.state);
+            void (entity as any).setReachability(isAvail);
+          }
+        }),
       );
       // `close()` permanently disposes a Matter.js ServerNode and cannot be
       // followed by start(). A soft reset refreshes its live operational state
@@ -3679,21 +3685,18 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               profiles: getExportProfiles(domain),
               pairingCode: connection.pairingCode,
               manualPairingCode: connection.manualPairingCode,
-              commissioned: connection.commissioned,
+              commissioned: this.isEntityExported(e.entityId) && connection.commissioned,
               homeName: connection.homeName,
               controllerNames: connection.controllerNames,
               fabricCount: connection.fabricCount,
               matterFabrics: connection.fabrics,
-              // Detect issues on exported or commissioned accessories (connection drops, unavailable state, errors)
+              // Detect issues strictly on exported accessories (connection drops, unavailable state, active problems)
               hasIssue:
-                (this.isEntityExported(e.entityId) || connection.commissioned) &&
-                (this.entityProblems.has(e.entityId) ||
-                  isUnavailable(e.state) ||
-                  (allErrorLogs.length > 0 &&
-                    this.getEntityErrorLogs(e.entityId, endpoint, allErrorLogs).length > 0)),
+                this.isEntityExported(e.entityId) &&
+                (this.entityProblems.has(e.entityId) || isUnavailable(e.state)),
               diagnostics: this.entityDiagnostics.get(e.entityId) ?? [],
               logs:
-                this.isEntityExported(e.entityId) || connection.commissioned
+                this.isEntityExported(e.entityId)
                   ? this.getEntityErrorLogs(e.entityId, endpoint, allErrorLogs)
                   : [],
               homekitCamera:
@@ -3820,7 +3823,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                 profiles: [],
                 pairingCode: connection.pairingCode,
                 manualPairingCode: connection.manualPairingCode,
-                commissioned: connection.commissioned,
+                commissioned: this.isEntityExported(m.entityId) && connection.commissioned,
                 homeName: connection.homeName,
                 controllerNames: connection.controllerNames,
                 fabricCount: connection.fabricCount,
@@ -3828,8 +3831,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                 hasIssue: (() => {
                   const stateStr = (m.getStateString() || "").toLowerCase();
                   const isMqttDown = stateStr === "offline" || stateStr === "unavailable" || stateStr === "unknown";
-                  const logs = this.getEntityErrorLogs(m.entityId, endpoint, allErrorLogs);
-                  return (this.isEntityExported(m.entityId) || connection.commissioned) && (isMqttDown || logs.length > 0);
+                  return this.isEntityExported(m.entityId) && isMqttDown;
                 })(),
                 diagnostics: this.entityDiagnostics.get(m.entityId) ?? [],
                 logs: this.getEntityErrorLogs(m.entityId, endpoint, allErrorLogs),

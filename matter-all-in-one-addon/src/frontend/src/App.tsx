@@ -103,16 +103,15 @@ export const App: React.FC = () => {
         );
       case "issues":
         return iotOnlyList.filter((d) => {
-          const isDeviceActive = d.entities.some((e) => e.exported || e.commissioned);
-          if (!isDeviceActive) return false;
-          return d.entities.some(
-            (e) =>
+          return d.entities.some((e) => {
+            if (!e.exported) return false;
+            return (
               e.hasIssue ||
               e.state === "unavailable" ||
               e.state === "unknown" ||
-              e.state === "offline" ||
-              (Array.isArray(e.logs) && e.logs.length > 0 && e.exported)
-          );
+              e.state === "offline"
+            );
+          });
         });
       default:
         return iotOnlyList;

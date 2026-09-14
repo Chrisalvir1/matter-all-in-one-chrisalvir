@@ -49,24 +49,18 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({ device, searchQuery, onC
   const isDeviceCommissioned = commissioned > 0;
   const isMqtt = device.entities.some((e) => e.origin === "mqtt" || e.entityId.startsWith("mqtt."));
   const isDeviceActive = exported > 0 || isDeviceCommissioned;
-  const hasUnavailable =
-    isDeviceActive &&
-    device.entities.some(
-      (e) =>
-        (e.exported || e.commissioned) &&
-        (e.state === "unavailable" || e.state === "unknown" || e.state === "offline")
-    );
-  const hasIssue =
-    isDeviceActive &&
-    device.entities.some(
-      (e) =>
-        (e.exported || e.commissioned) &&
-        (e.hasIssue ||
-          e.state === "unavailable" ||
-          e.state === "unknown" ||
-          e.state === "offline" ||
-          (Array.isArray(e.logs) && e.logs.length > 0))
-    );
+  const problematicEntities = device.entities.filter(
+    (e) =>
+      e.exported &&
+      (e.hasIssue ||
+        e.state === "unavailable" ||
+        e.state === "unknown" ||
+        e.state === "offline")
+  );
+  const hasUnavailable = problematicEntities.some(
+    (e) => e.state === "unavailable" || e.state === "unknown" || e.state === "offline"
+  );
+  const hasIssue = problematicEntities.length > 0;
   const fanEntity = device.entities.find((e) => e.domain === "fan");
   const primaryDomain = isComposite
     ? (fanEntity ? "fan" : "light")
@@ -115,6 +109,26 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({ device, searchQuery, onC
       </div>
       <h3 title={device.name}>{device.name}</h3>
       <p className="device-meta">{originText}</p>
+      {hasUnavailable && (
+        <p
+          style={{
+            margin: "3px 0 0",
+            fontSize: "11px",
+            color: "#f87171",
+            display: "flex",
+            alignItems: "center",
+            gap: "4px",
+            fontWeight: 500,
+          }}
+        >
+          <span>⚠️</span>
+          <span>
+            {problematicEntities.length === 1 && isMultiGang
+              ? `"${problematicEntities[0].name || problematicEntities[0].entityId}" desconectado en HA`
+              : "Desconectado en Home Assistant"}
+          </span>
+        </p>
+      )}
       <div className="tags">
         {isDeviceCommissioned && (
           <span
@@ -153,11 +167,17 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({ device, searchQuery, onC
               border: "1px solid rgba(239, 68, 68, 0.4)",
               fontWeight: 600,
             }}
+            title={`Entidad desconectada en HA: ${problematicEntities.map((e) => e.name || e.entityId).join(", ")}`}
           >
-            ⚠️ Desconectado
+            ⚠️ {problematicEntities.length === 1 && isMultiGang ? `${problematicEntities[0].name || "Botón"}: Desconectado` : "⚠️ Desconectado"}
           </span>
         ) : hasIssue ? (
-          <span className="tag tag-warning">Revisar</span>
+          <span
+            className="tag tag-warning"
+            title={`Incidencia en: ${problematicEntities.map((e) => e.name || e.entityId).join(", ")}`}
+          >
+            ⚠️ {problematicEntities.length === 1 && isMultiGang ? `${problematicEntities[0].name || "Botón"}: Revisar` : "Revisar"}
+          </span>
         ) : null}
         {domains.map((dom) => (
           <span className="tag" key={dom}>

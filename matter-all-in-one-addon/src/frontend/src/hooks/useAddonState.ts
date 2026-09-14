@@ -198,18 +198,17 @@ export function useAddonState() {
     ).length;
     const unactivatedTotal = unactivatedDevices + unactivatedScrypted;
 
-    // Issues detection across all ACTIVE (exported or commissioned) HA, MQTT devices and Cameras
+    // Issues detection across all ACTIVE (exported) HA, MQTT devices and Cameras
     const issuesDevices = allDevices.filter((d) => {
-      const isDeviceActive = d.entities.some((e) => e.exported || e.commissioned);
-      if (!isDeviceActive) return false;
-      return d.entities.some(
-        (e) =>
+      return d.entities.some((e) => {
+        if (!e.exported) return false;
+        return (
           e.hasIssue ||
           e.state === "unavailable" ||
           e.state === "unknown" ||
-          e.state === "offline" ||
-          (Array.isArray(e.logs) && e.logs.length > 0 && e.exported)
-      );
+          e.state === "offline"
+        );
+      });
     }).length;
 
     const issuesCameras = cameras.filter((c) => {
