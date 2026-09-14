@@ -395,11 +395,13 @@ export const App: React.FC = () => {
         />
       )}
 
-      {/* General Settings Modal (MQTT, Restart, Reset) */}
+      {/* General Settings Modal (MQTT, Restart, Reset, Live Console) */}
       <SettingsModal
         isOpen={isSettingsModalOpen}
         onClose={() => setIsSettingsModalOpen(false)}
         showToast={showToast}
+        status={status}
+        stats={stats}
       />
 
       {/* Toast Notification */}

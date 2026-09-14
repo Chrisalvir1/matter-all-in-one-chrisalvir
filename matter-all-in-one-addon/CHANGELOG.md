@@ -1,3 +1,21 @@
+## [1.5.77] - 2026-09-13
+
+### Rediseño Horizontal Espacioso de Ajustes del Servicio y Consola de Registros en Vivo "Liquid Glass"
+
+- **Centro de Mantenimiento Horizontal Expansivo:**
+  - Se sustituyó el diálogo estrecho y comprimido (`modal-small` de 570px) por un modal horizontal panorámico (`min(96vw, 1360px)` y `min(90vh, 840px)`) con diseño de doble columna en auténtico **Liquid Glass** (`backdrop-filter: blur(28px) saturate(190%)`).
+  - **Panel Izquierdo:**
+    - Tarjeta de telemetría del sistema en vivo (nombre del bridge, versión, estado de conexión WebSocket con Home Assistant, nodos activos, emparejados e incidencias).
+    - Formulario de configuración MQTT Auto-Discovery ordenado en cuadrícula de 2 columnas con guardado asíncrono.
+    - Operaciones del servicio (Reinicio seguro de Matterbridge).
+    - Zona de Mantenimiento Crítico delimitada en cristal carmesí para restablecimiento de fábrica.
+- **Consola de Registros del Sistema (Live Console Logs):**
+  - Carga automática inmediata de logs al abrir la ventana, con más de 600px de visibilidad real.
+  - **Buscador interactivo en tiempo real** para filtrar instantáneamente eventos por palabra clave.
+  - **Pestañas de severidad** con conteos en vivo: `Todos`, `❌ Errores`, `⚠️ Advertencias`, `ℹ️ Info / Eventos`.
+  - **Colorimetría semántica:** Resaltado de líneas en rojo neón para fallos, amarillo ámbar para avisos y azul cian para eventos de red.
+  - **Acciones avanzadas:** Conmutador de Auto-scroll, botón de recarga instantánea, copia completa al portapapeles y botón para vaciar/limpiar el buffer de logs (`api.clearLogs()`).
+
 ## [1.5.76] - 2026-09-13
 
 ### Unificación del Centro de Control en Liquid Glass: Rediseño Interactivo y Coherencia Total de Métricas

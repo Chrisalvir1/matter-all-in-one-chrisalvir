@@ -83,5 +83,39 @@ describe("frontend accessibility contract", () => {
     expect(filterBar).not.toContain("filter-chip");
     expect(filterBar).toContain("scrypted-header-bar");
   });
+
+  it("provides an expansive horizontal Liquid Glass service settings modal with full live log console", async () => {
+    const settingsModal = await readFile(
+      new URL("components/SettingsModal.tsx", frontendSrcPath),
+      "utf8",
+    );
+    const stylesheet = await readFile(
+      new URL("style.css", frontendPath),
+      "utf8",
+    );
+
+    // Wide horizontal layout with dual columns
+    expect(settingsModal).toContain("modal-settings-wide");
+    expect(settingsModal).toContain("settings-grid-layout");
+    expect(settingsModal).toContain("settings-left-col");
+    expect(settingsModal).toContain("settings-right-col");
+
+    // Live terminal & severity filters
+    expect(settingsModal).toContain("glass-terminal-wrapper");
+    expect(settingsModal).toContain("terminal-search-box");
+    expect(settingsModal).toContain("pill-error");
+    expect(settingsModal).toContain("pill-warn");
+    expect(settingsModal).toContain("pill-info");
+    expect(settingsModal).toContain("handleClearLogs");
+    expect(settingsModal).toContain("autoScroll");
+
+    // Liquid glass styles for modal-settings-wide and terminal
+    expect(stylesheet).toContain(".modal-settings-wide");
+    expect(stylesheet).toContain(".glass-terminal-wrapper");
+    expect(stylesheet).toContain(".terminal-line.line-error");
+    expect(stylesheet).toContain(".terminal-line.line-warn");
+    expect(stylesheet).toContain(".terminal-line.line-info");
+  });
 });
+
 
