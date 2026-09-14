@@ -270,7 +270,7 @@ export async function probeCameraSource(
   const ffmpegPath = options.customFfmpegPath || resolveFfmpegPath();
   if (ffmpegPath) {
     try {
-      return await probeWithFfmpeg(
+      const result = await probeWithFfmpeg(
         ffmpegPath,
         sourceUrl,
         timeoutMs,
@@ -278,6 +278,36 @@ export async function probeCameraSource(
         options.transport,
         lastError,
       );
+      if (result.valid) {
+        return result;
+      }
+      lastError = result.error;
+
+      // If RTSP failed with TCP and user didn't explicitly force TCP, try UDP fallback with ffmpeg
+      if (
+        sourceUrl.startsWith("rtsp://") &&
+        (!options.transport || options.transport === "tcp")
+      ) {
+        const udpResult = await probeWithFfmpeg(
+          ffmpegPath,
+          sourceUrl,
+          Math.min(timeoutMs, 4000),
+          options.httpBearerToken,
+          "udp",
+          lastError,
+        );
+        if (udpResult.valid) {
+          return udpResult;
+        }
+        if (udpResult.error) {
+          lastError = udpResult.error;
+        }
+      }
+
+      return {
+        ...result,
+        error: lastError || result.error,
+      };
     } catch (err) {
       return {
         valid: false,
@@ -327,10 +357,6 @@ function probeWithFfprobe(
         "2097152",
         "-analyzeduration",
         "3000000",
-        "-fflags",
-        "+nobuffer",
-        "-flags",
-        "low_delay",
       );
     } else if (
       sourceUrl.startsWith("http://") ||
@@ -429,6 +455,8 @@ function probeWithFfprobe(
         friendly = "Ruta no encontrada (404 Not Found). La ruta RTSP no existe en este dispositivo.";
       } else if (raw.includes("timed out") || raw.includes("Operation not permitted") || raw.includes("ETIMEDOUT")) {
         friendly = "Tiempo de espera agotado al conectar al stream RTSP (timeout). Verifica la conexión WiFi.";
+      } else if (raw.includes("Invalid data found") || raw.includes("Error opening input")) {
+        friendly = "Respuesta RTSP no válida (Invalid data found). La cámara rechazó la conexión. Verifica si requiere usuario y contraseña (rtsp://usuario:clave@ip:554/...), si la ruta es /live en vez de /stream0, o cambia a UDP.";
       } else if (raw.includes("Could not find codec parameters")) {
         friendly = "No se pudieron decodificar parámetros H.264 (no se detectaron fotogramas clave a tiempo).";
       } else if (!friendly) {
@@ -482,10 +510,6 @@ function probeWithFfmpeg(
       args.push(
         "-rtsp_transport",
         rtspTransport,
-        "-fflags",
-        "+nobuffer",
-        "-flags",
-        "low_delay",
       );
     } else if (
       sourceUrl.startsWith("http://") ||
@@ -570,6 +594,8 @@ function probeWithFfmpeg(
           friendly = "Ruta de stream no encontrada (404 Not Found).";
         } else if (raw.includes("timed out") || raw.includes("ETIMEDOUT")) {
           friendly = "Tiempo de espera agotado al conectar al stream RTSP.";
+        } else if (raw.includes("Invalid data found") || raw.includes("Error opening input")) {
+          friendly = "Respuesta RTSP no válida (Invalid data found). Verifica si la cámara requiere usuario y contraseña, si la ruta es /live en vez de /stream0, o cambia a UDP.";
         } else if (!friendly) {
           friendly = lastError || "No se detectaron paquetes de video H.264 válidos en el stream.";
         }

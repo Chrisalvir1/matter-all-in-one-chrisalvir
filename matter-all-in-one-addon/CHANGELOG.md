@@ -1,3 +1,15 @@
+## [1.5.83] - 2026-09-14
+
+### Corrección «Invalid data found» en Wyze RTSP: Eliminación de Flags de Latencia en Sonda y Fallback UDP para ffmpeg
+
+- **Solución al error «Invalid data found when processing input» en streams RTSP de Wyze:**
+  - Las flags `-fflags +nobuffer` y `-flags low_delay` en las funciones de sonda `probeWithFfprobe` y `probeWithFfmpeg` estaban forzando a FFmpeg a procesar los paquetes RTSP antes de que el buffer de red estuviera listo, causando que la cámara Wyze rechazara la conexión con datos malformados.
+  - Se eliminaron dichas flags únicamente de la sonda de diagnóstico (la sonda es una lectura puntual, no un stream en vivo), dejando los argumentos mínimos seguros: `-rtsp_transport tcp/udp`, `-probesize`, `-analyzeduration`.
+- **Fallback UDP también en ffmpeg (además de ffprobe):**
+  - Si `ffmpeg` también falla con TCP en la sonda, ahora reintenta con UDP de forma automática antes de reportar fallo.
+- **Mensaje de diagnóstico claro y accionable en UI:**
+  - El error crudo `"Invalid data found when processing input"` ahora se traduce en español a: `"Respuesta RTSP no válida. Verifica si la cámara requiere usuario y contraseña, si la ruta es /live en vez de /stream0, o cambia a UDP"`.
+
 ## [1.5.82] - 2026-09-14
 
 ### Corrección Crítica de FFprobe: Eliminación de Opción Incompatible '-stimeout' y Calibración a 3.0s / 2MB
