@@ -1,3 +1,19 @@
+## [1.5.75] - 2026-09-13
+
+### Gestión Nativa de Alcanzabilidad en Apple Home: Erradicación del Falso "Alert" y Diferenciación Estricta de "Sin respuesta"
+
+- **Erradicación del Falso "Alert" en Robotina / Aspiradoras RVC:**
+  - Se eliminó la asignación forzada de `operationalState = 3 (Error)` en `VacuumEntity.setReachability(false)` cuando el dispositivo está `unavailable` o sin energía.
+  - En la especificación Matter RVC (§9.10.5.1), `operationalState = 3` está reservado exclusivamente para fallas mecánicas activas en servicio (cepillo atascado, depósito ausente, sensor de desnivel bloqueado), lo que hacía que Apple Home mostrase una insignia naranja de "Alert" con el botón de limpieza encendido.
+  - Ahora, cuando la aspiradora se apaga, agota su batería o pierde conexión Wi-Fi, pasa a `operationalState = 0 (Stopped)`, `runMode = Idle` y `BasicInformationServer.reachable = false`, permitiendo a Apple Home reflejar el estado de desconexión sin levantar falsas alarmas operativas.
+- **Reserva Exclusiva de "Alert" para Averías Operacionales Reales:**
+  - El reporte de `Error (0x03)` en Matter se preserva de forma pura y estricta para cuando Home Assistant reporte un estado legítimo de `state === "error"`.
+  - Los manejadores de comandos Matter (`changeToMode`, `resume`, `pause`, `goHome`) ahora comprueban la disponibilidad en Home Assistant (`isUnavailable(this.state)`), ignorando llamadas cuando el robot está físicamente apagado o sin enlace.
+- **Restauración Instantánea de Estado al Reconectar:**
+  - Al recuperar la conexión (`reachable: true`), se re-sincroniza de forma inmediata el estado real desde Home Assistant (`docked`, `cleaning`, `paused`, `idle`).
+- **Limpieza Inmediata de Diagnósticos en Entidades Sanas:**
+  - Al confirmar estados disponibles (`!isUnavailable(state)`), se limpian automáticamente advertencias transitorias residuales en `entityProblems` de `platform.ts`, asegurando que el panel web no mantenga falsas insignias de "Necesita Atención" en dispositivos ya recuperados.
+
 ## [1.5.74] - 2026-09-13
 
 ### Depuración de Falsas Alarmas en "Necesita Atención", Diagnóstico Específico por Botón y Armonización Node 24

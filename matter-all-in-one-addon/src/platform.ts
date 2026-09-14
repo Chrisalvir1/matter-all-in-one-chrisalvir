@@ -510,12 +510,14 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       }
       return true;
     }
+    if (this.entityProblems.has(entityId)) {
+      this.clearEntityProblem(entityId);
+    }
     if (previous && ["unavailable", "unknown"].includes(previous)) {
       if (isActivelyExported) {
         this.log.info(
           `\u001b[32m[Home Assistant] ${entityId}: la entidad se recuperó y volvió a "${state.state}".\u001b[0m`,
         );
-        this.clearEntityProblem(entityId);
         this.recordEntityDiagnostic(
           entityId,
           `Conexión restaurada con Home Assistant (estado: ${state.state})`,

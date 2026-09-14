@@ -12,7 +12,7 @@
 import { MatterbridgeEndpoint, DeviceTypeDefinition } from "matterbridge";
 import { RoboticVacuumCleaner } from "matterbridge/devices";
 import { BaseEntity } from "./base.entity.js";
-import type { HassState } from "../utils/ha-state.js";
+import { type HassState, isUnavailable } from "../utils/ha-state.js";
 import {
   buildVacuumUpdate,
   buildVacuumMatterMeta,
@@ -309,6 +309,12 @@ export class VacuumEntity extends BaseEntity {
     if (!endpoint) endpoint = this.endpoint as unknown as MatterbridgeEndpoint;
 
     endpoint.addCommandHandler("RvcRunMode.changeToMode", async (data: any) => {
+      if (isUnavailable(this.state)) {
+        this.platform.log?.warn?.(
+          `[VacuumEntity] Ignored RvcRunMode.changeToMode: ${this.entityId} is unavailable in Home Assistant.`,
+        );
+        return;
+      }
       this.lastCommandTime = Date.now();
       this.platform.log?.info?.(
         `[VacuumEntity] changeToMode commanded: ${JSON.stringify(data)}`,
@@ -352,6 +358,12 @@ export class VacuumEntity extends BaseEntity {
     endpoint.addCommandHandler(
       "RvcCleanMode.changeToMode",
       async (data: any) => {
+        if (isUnavailable(this.state)) {
+          this.platform.log?.warn?.(
+            `[VacuumEntity] Ignored RvcCleanMode.changeToMode: ${this.entityId} is unavailable in Home Assistant.`,
+          );
+          return;
+        }
         this.platform.log?.info?.(
           `[VacuumEntity] RvcCleanMode.changeToMode commanded: ${JSON.stringify(data)}`,
         );
@@ -375,6 +387,12 @@ export class VacuumEntity extends BaseEntity {
     );
 
     endpoint.addCommandHandler("RvcOperationalState.resume", async () => {
+      if (isUnavailable(this.state)) {
+        this.platform.log?.warn?.(
+          `[VacuumEntity] Ignored RvcOperationalState.resume: ${this.entityId} is unavailable in Home Assistant.`,
+        );
+        return;
+      }
       this.lastCommandTime = Date.now();
       safeSetAttribute(
         endpoint as any,
@@ -394,6 +412,12 @@ export class VacuumEntity extends BaseEntity {
     });
 
     endpoint.addCommandHandler("RvcOperationalState.pause", async () => {
+      if (isUnavailable(this.state)) {
+        this.platform.log?.warn?.(
+          `[VacuumEntity] Ignored RvcOperationalState.pause: ${this.entityId} is unavailable in Home Assistant.`,
+        );
+        return;
+      }
       this.lastCommandTime = Date.now();
       safeSetAttribute(
         endpoint as any,
@@ -415,6 +439,12 @@ export class VacuumEntity extends BaseEntity {
     });
 
     endpoint.addCommandHandler("RvcOperationalState.goHome", async () => {
+      if (isUnavailable(this.state)) {
+        this.platform.log?.warn?.(
+          `[VacuumEntity] Ignored RvcOperationalState.goHome: ${this.entityId} is unavailable in Home Assistant.`,
+        );
+        return;
+      }
       this.lastCommandTime = Date.now();
       safeSetAttribute(
         endpoint as any,
@@ -434,6 +464,12 @@ export class VacuumEntity extends BaseEntity {
     });
 
     endpoint.addCommandHandler("goHome", async () => {
+      if (isUnavailable(this.state)) {
+        this.platform.log?.warn?.(
+          `[VacuumEntity] Ignored goHome: ${this.entityId} is unavailable in Home Assistant.`,
+        );
+        return;
+      }
       this.lastCommandTime = Date.now();
       safeSetAttribute(
         endpoint as any,
@@ -535,14 +571,29 @@ export class VacuumEntity extends BaseEntity {
     await super.setReachability(reachable);
     if (!reachable && this.endpoint) {
       try {
-        // Matter RvcOperationalState: 3 = Error
+        // Matter RvcOperationalState: 0 = Stopped
+        // Never set operationalState to 3 (Error) when unreachable/offline;
+        // Error (3) causes Apple Home to render an active "Alert" badge with
+        // an active action button, misleading the user into thinking the robot
+        // has a physical jam rather than being powered off or disconnected.
         safeSetAttribute(
           this.endpoint as any,
           "rvcOperationalState" as any,
           "operationalState",
-          3,
+          0,
           this.platform.log,
         );
+        safeSetAttribute(
+          this.endpoint as any,
+          "rvcRunMode" as any,
+          "currentMode",
+          RUN_MODE_ID_IDLE,
+          this.platform.log,
+        );
+      } catch {}
+    } else if (reachable && this.endpoint && this.state) {
+      try {
+        await this.syncState(this.endpoint, this.state);
       } catch {}
     }
   }

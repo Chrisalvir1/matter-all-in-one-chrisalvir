@@ -931,24 +931,12 @@ export class BaseEntity {
       const serverNode = ep.serverNode;
       if (serverNode && typeof serverNode.setStateOf === "function") {
         await serverNode.setStateOf(BasicInformationServer, { reachable });
-        serverNode.act?.((agent: any) => {
-          serverNode.eventsOf?.(BasicInformationServer)?.reachableChanged?.emit?.(
-            { reachableNewValue: reachable },
-            agent.context,
-          );
-        });
       }
 
       // 2. Bridged / child endpoint reachability
       if (typeof ep.setStateOf === "function") {
         try {
           await ep.setStateOf(BridgedDeviceBasicInformationServer, { reachable });
-          ep.act?.((agent: any) => {
-            ep.eventsOf?.(BridgedDeviceBasicInformationServer)?.reachableChanged?.emit?.(
-              { reachableNewValue: reachable },
-              agent.context,
-            );
-          });
         } catch {}
       }
 

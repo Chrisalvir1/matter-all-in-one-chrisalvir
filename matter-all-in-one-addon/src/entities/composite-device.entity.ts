@@ -235,12 +235,6 @@ export class CompositeDeviceEntity {
       const serverNode = ep.serverNode;
       if (serverNode && typeof serverNode.setStateOf === "function") {
         await serverNode.setStateOf(BasicInformationServer, { reachable });
-        serverNode.act?.((agent: any) => {
-          serverNode.eventsOf?.(BasicInformationServer)?.reachableChanged?.emit?.(
-            { reachableNewValue: reachable },
-            agent.context,
-          );
-        });
       }
       if (typeof ep.setAttribute === "function") {
         if (ep.hasAttributeServer?.(0x0028, "reachable")) {

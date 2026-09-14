@@ -119,4 +119,99 @@ describe("VacuumEntity Apple Home topology and identity", () => {
     await vacuum.updateState({ ...state, state: "cleaning" } as any, true);
     expect(endpoint.attributes.get("rvcCleanMode:currentMode")).toBe(4);
   });
+
+  it("sets operationalState to 0 (Stopped) when unreachable without raising Error 3", async () => {
+    const entityId = "vacuum.sala_tv_robotina_rvc";
+    const platform = {
+      matterbridge: { matterbridgeVersion: "3.10.2" },
+      log: {
+        debug: vi.fn(),
+        error: vi.fn(),
+        info: vi.fn(),
+        notice: vi.fn(),
+        warn: vi.fn(),
+      },
+      ha: {
+        callService: vi.fn().mockResolvedValue(undefined),
+        hassEntities: new Map(),
+        hassDevices: new Map(),
+        hassStates: new Map(),
+      },
+    };
+    const state = {
+      entity_id: entityId,
+      state: "cleaning",
+      attributes: { friendly_name: "ROBOTINA", battery_level: 80 },
+      last_changed: "",
+      last_updated: "",
+    };
+
+    const vacuum = new VacuumEntity(
+      platform as any,
+      state as any,
+      MatterDeviceTypes.roboticVacuumCleaner,
+    );
+    const endpoint = (await vacuum.createEndpoint()) as any;
+    await vacuum.updateState(state as any, true);
+
+    expect(endpoint.attributes.get("rvcOperationalState:operationalState")).toBe(1); // Running
+
+    // When entity goes offline / unavailable, reachability is false
+    await vacuum.setReachability(false);
+
+    // CRITICAL: operationalState must be 0 (Stopped), NEVER 3 (Error)!
+    expect(endpoint.attributes.get("rvcOperationalState:operationalState")).toBe(0);
+    expect(endpoint.attributes.get("rvcRunMode:currentMode")).toBe(1); // Idle
+
+    // Commands must be ignored when state is unavailable
+    vacuum.state = { ...state, state: "unavailable" } as any;
+    await endpoint.invokeCommand("RvcRunMode.changeToMode", {
+      request: { newMode: 2 },
+    });
+    // HA service should NOT be called
+    expect(platform.ha.callService).not.toHaveBeenCalled();
+
+    // When connection is restored to docked
+    vacuum.state = { ...state, state: "docked" } as any;
+    await vacuum.setReachability(true);
+    expect(endpoint.attributes.get("rvcOperationalState:operationalState")).toBe(0x42); // Docked
+  });
+
+  it("only reports operationalState 3 (Error) when Home Assistant explicitly reports state 'error'", async () => {
+    const entityId = "vacuum.sala_tv_robotina_rvc";
+    const platform = {
+      matterbridge: { matterbridgeVersion: "3.10.2" },
+      log: {
+        debug: vi.fn(),
+        error: vi.fn(),
+        info: vi.fn(),
+        notice: vi.fn(),
+        warn: vi.fn(),
+      },
+      ha: {
+        callService: vi.fn().mockResolvedValue(undefined),
+        hassEntities: new Map(),
+        hassDevices: new Map(),
+        hassStates: new Map(),
+      },
+    };
+    const state = {
+      entity_id: entityId,
+      state: "error",
+      attributes: { friendly_name: "ROBOTINA", error: "Roller brush stuck" },
+      last_changed: "",
+      last_updated: "",
+    };
+
+    const vacuum = new VacuumEntity(
+      platform as any,
+      state as any,
+      MatterDeviceTypes.roboticVacuumCleaner,
+    );
+    const endpoint = (await vacuum.createEndpoint()) as any;
+    await vacuum.updateState(state as any, true);
+
+    // Legitimate operational error reports Error (3)
+    expect(endpoint.attributes.get("rvcOperationalState:operationalState")).toBe(3);
+  });
 });
