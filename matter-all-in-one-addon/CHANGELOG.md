@@ -1,3 +1,26 @@
+## [1.5.78] - 2026-09-13
+
+### Especialización y Diferenciación de Códigos QR por Protocolo: HAP HomeKit, Matter Inicial y Multi-Admin Liquid Glass
+
+- **Cámaras HAP Apple HomeKit (`hap-homekit`):**
+  - Diseño estilo tarjeta de emparejamiento físico de Apple HomeKit con fondo blanco nítido y acento superior amarillo ámbar.
+  - **Ícono de casita en amarillo ámbar (`#f59e0b`):** Renderizado vectorial SVG exclusivo en amarillo con insignia suave, preservando el código QR y texto en contraste negro puro (`#0f172a`).
+  - **Código PIN HomeKit de 8 dígitos:** Formateado automáticamente en bloques estándar `XXX-XX-XXX` (p. ej. `031-45-154`) con botón de copiado rápido e insignia identificadora `HAP`.
+  - Código QR limpio en blanco y negro sin logo central para escaneo instantáneo sin oclusiones desde la app Casa de iOS/macOS.
+
+- **Dispositivos IoT - Emparejamiento Inicial Matter (`matter-badge`):**
+  - Mismo formato físico estructurado que HomeKit, adaptado a la identidad sobria de Matter en monocromo / blanco y negro (`#0f172a`).
+  - Ícono vectorial en gris/negro carbón, código QR limpio en blanco y negro, e insignia identificadora `Matter`.
+  - Muestra el **código manual largo de Matter** formateado en bloques legibles (`XXXX-XXX-XXXX` o de 21 dígitos).
+
+- **Modo Multi-Admin Abierto (`multi-admin-glass`):**
+  - Preserva el diseño futurista original en **Liquid Glass** translúcido con marco glowing animado y degradado de luz.
+  - Incrusta el **logotipo oficial de Matter en el centro** del código QR (`logo.png`) para identificar la apertura de la ventana de comisionamiento de 15 minutos.
+  - Código manual temporal en azul cian neón (`#38bdf8`) para vinculación directa en Google Home, Alexa y SmartThings.
+
+- **Garantía Absoluta de Integridad:**
+  - Cero modificaciones en el backend de emparejamiento, certificados TLS/HAP o credenciales Matter existentes.
+
 ## [1.5.77] - 2026-09-13
 
 ### Rediseño Horizontal Espacioso de Ajustes del Servicio y Consola de Registros en Vivo "Liquid Glass"

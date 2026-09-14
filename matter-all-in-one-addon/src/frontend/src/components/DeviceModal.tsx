@@ -1038,6 +1038,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                     : activeEntity?.name || device.name
                 }
                 elementId="device-qr-code"
+                variant={multiAdminOpen ? "multi-admin-glass" : "matter-badge"}
               />
             ) : (
               <div

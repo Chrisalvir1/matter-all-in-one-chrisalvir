@@ -116,6 +116,56 @@ describe("frontend accessibility contract", () => {
     expect(stylesheet).toContain(".terminal-line.line-warn");
     expect(stylesheet).toContain(".terminal-line.line-info");
   });
+
+  it("differentiates QR styling: HAP with yellow house icon and black code, Matter monochrome, and Multi-Admin glowing glass", async () => {
+    const qrDisplay = await readFile(
+      new URL("components/QRCodeDisplay.tsx", frontendSrcPath),
+      "utf8",
+    );
+    const cameraModal = await readFile(
+      new URL("components/CameraConfigModal.tsx", frontendSrcPath),
+      "utf8",
+    );
+    const deviceModal = await readFile(
+      new URL("components/DeviceModal.tsx", frontendSrcPath),
+      "utf8",
+    );
+    const stylesheet = await readFile(
+      new URL("style.css", frontendPath),
+      "utf8",
+    );
+
+    // QRCodeDisplay component contract
+    expect(qrDisplay).toContain('export type QRVariant = "hap-homekit" | "matter-badge" | "multi-admin-glass"');
+    expect(qrDisplay).toContain("homekit-house-icon-yellow");
+    expect(qrDisplay).toContain("matter-house-icon-mono");
+    expect(qrDisplay).toContain("multi-admin-sparkle-icon");
+    expect(qrDisplay).toContain("code-black");
+    expect(qrDisplay).toContain("code-cyan");
+    expect(qrDisplay).toContain("box-homekit");
+    expect(qrDisplay).toContain("box-matter");
+    expect(qrDisplay).toContain("box-multi-admin");
+
+    // CameraConfigModal passes hap-homekit variant and pinCode
+    expect(cameraModal).toContain('variant={activeTab === "homekit" ? "hap-homekit" : "matter-badge"}');
+    expect(cameraModal).toContain("pinCode={activeTab === \"homekit\" ? pinCode : undefined}");
+
+    // DeviceModal toggles between matter-badge and multi-admin-glass
+    expect(deviceModal).toContain('variant={multiAdminOpen ? "multi-admin-glass" : "matter-badge"}');
+
+    // CSS contract for HAP (yellow house icon, black code), Matter (monochrome), and Multi-Admin (cyan glass)
+    expect(stylesheet).toContain(".qr-badge-card");
+    expect(stylesheet).toContain(".qr-card-homekit-badge");
+    expect(stylesheet).toContain(".qr-card-matter-badge");
+    expect(stylesheet).toContain(".homekit-house-icon-yellow");
+    expect(stylesheet).toContain("color: #f59e0b;");
+    expect(stylesheet).toContain(".matter-house-icon-mono");
+    expect(stylesheet).toContain(".multi-admin-sparkle-icon");
+    expect(stylesheet).toContain(".manual-code-display.code-black");
+    expect(stylesheet).toContain(".manual-code-display.code-cyan");
+    expect(stylesheet).toContain(".qr-frame.qr-frame-clean");
+  });
 });
+
 
 

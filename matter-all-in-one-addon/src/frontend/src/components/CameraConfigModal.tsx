@@ -354,6 +354,8 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
               <QRCodeDisplay
                 pairingCode={pairingPayload}
                 manualCode={activeTab === "homekit" ? pinCode : pairingPayload}
+                pinCode={activeTab === "homekit" ? pinCode : undefined}
+                variant={activeTab === "homekit" ? "hap-homekit" : "matter-badge"}
                 entityName={camera.name}
                 elementId="cam-modal-qr-code"
                 noteText={
