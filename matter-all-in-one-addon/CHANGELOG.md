@@ -1,3 +1,11 @@
+## [1.5.85] - 2026-09-14
+
+### Rotación de Identidad HAP al Restablecer Emparejamiento (Solución 'Unable to Add Accessory')
+
+- **Generación de nueva MAC (Username) y SetupID en resetPairing:**
+  - Cuando HomeKit en iOS fallaba al emparejar una cámara ("Unable to Add Accessory"), Apple Home dejaba en caché el par de claves asociado a la dirección MAC del accesorio.
+  - Al presionar «Restablecer emparejamiento», ahora se genera una nueva dirección MAC HAP virtual (`0E:XX:XX:...`), un nuevo SetupID de 4 caracteres y un nuevo puerto libre. Esto hace que iOS detecte la cámara como un accesorio completamente nuevo y prístino, eliminando cualquier bloqueo por caché local.
+
 ## [1.5.84] - 2026-09-14
 
 ### Resolución Automática de 'localhost' en Streams RTSP de Scrypted y Resiliencia en Contenedores

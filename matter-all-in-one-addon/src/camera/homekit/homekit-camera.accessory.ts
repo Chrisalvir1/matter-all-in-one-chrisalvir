@@ -25,6 +25,7 @@ import type {
 } from "../camera-types.js";
 import { HomeKitCameraStreamingDelegate } from "./homekit-camera-stream.delegate.js";
 import { HomeKitCameraRecordingDelegate } from "./homekit-camera-recording.delegate.js";
+import crypto from "node:crypto";
 import { ScryptedStorage } from "../scrypted/scrypted-storage.js";
 import type { CameraRecord } from "../scrypted/scrypted-types.js";
 
@@ -408,10 +409,33 @@ export class HomeKitCameraAccessory {
         `[HomeKitCamera][${this.entityId}] Unable to remove old pairing: ${String(error)}`,
       );
     }
+
+    // Generate fresh MAC address (username) and setupId so iOS sees a brand-new device
+    const randomHex = crypto.randomBytes(5).toString("hex").toUpperCase();
+    this.record.username = `0E:${randomHex.match(/.{2}/g)!.join(":")}`;
+    this.record.setupId = crypto.randomBytes(2).toString("hex").toUpperCase().slice(0, 4);
+
+    // Pick next free port
+    if (this.platform?.homekitCameraRecords) {
+      const usedPorts = new Set(
+        Array.from(
+          this.platform.homekitCameraRecords.values() as Iterable<HomeKitCameraStorageRecord>,
+        )
+          .map((r: HomeKitCameraStorageRecord) => r.port)
+          .filter((p: number) => p !== this.record.port),
+      );
+      let nextPort = 51830;
+      while (usedPorts.has(nextPort)) nextPort++;
+      this.record.port = nextPort;
+    }
+
     this.record.published = false;
     this.record.isPaired = false;
     this.record.hksvEnabled = false;
     this.record.hksvCapable = false;
+    this.record.uuid = uuid.generate(
+      `homekit:camera:${this.entityId}:${Date.now()}`,
+    );
     this.accessory = new Accessory(
       this.record.name || this.entityId,
       this.record.uuid,
