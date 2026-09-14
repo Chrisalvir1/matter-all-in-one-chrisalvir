@@ -303,6 +303,21 @@ function probeWithFfprobe(
         "-flags",
         "low_delay",
       );
+    } else if (
+      sourceUrl.startsWith("http://") ||
+      sourceUrl.startsWith("https://")
+    ) {
+      args.push(
+        "-probesize",
+        "131072",
+        "-analyzeduration",
+        "500000",
+        "-rw_timeout",
+        String(timeoutMs * 1000),
+      );
+      if (sourceUrl.startsWith("https://")) {
+        args.push("-tls_verify", "0");
+      }
     }
 
     args.push(sourceUrl);
@@ -423,6 +438,23 @@ function probeWithFfmpeg(
         "-flags",
         "low_delay",
       );
+    } else if (
+      sourceUrl.startsWith("http://") ||
+      sourceUrl.startsWith("https://")
+    ) {
+      args.push(
+        "-reconnect",
+        "1",
+        "-reconnect_at_eof",
+        "1",
+        "-reconnect_streamed",
+        "1",
+        "-rw_timeout",
+        String(timeoutMs * 1000),
+      );
+      if (sourceUrl.startsWith("https://")) {
+        args.push("-tls_verify", "0");
+      }
     }
 
     args.push("-i", sourceUrl, "-t", "1", "-f", "null", "-");
@@ -528,6 +560,14 @@ export async function measureStreamGop(
 
     if (sourceUrl.startsWith("rtsp://")) {
       args.push("-rtsp_transport", "tcp");
+    } else if (
+      sourceUrl.startsWith("http://") ||
+      sourceUrl.startsWith("https://")
+    ) {
+      args.push("-rw_timeout", String(timeoutMs * 1000));
+      if (sourceUrl.startsWith("https://")) {
+        args.push("-tls_verify", "0");
+      }
     }
     args.push(sourceUrl);
 

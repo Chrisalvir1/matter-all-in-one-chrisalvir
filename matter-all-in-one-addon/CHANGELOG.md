@@ -1,3 +1,27 @@
+## [1.5.80] - 2026-09-14
+
+### Soporte Matter 1.6 Multi-Admin para Cámaras, Verificación Automática de Stream y Passthrough Puro H.264
+
+- **Matter 1.6 Multi-Admin en Cámaras (`CameraConfigModal.tsx`):**
+  - Corrección de la pestaña Matter 1.6 para cámaras que mostraba erróneamente "Sin código QR disponible".
+  - Incorporación de botón para comisionar en otros ecosistemas (Google Home, Alexa, SmartThings, Apple Home):
+    - Apertura de ventana de comisionamiento de 15 minutos (`openMatterCommissioningWindow`).
+    - Despliegue de código manual y QR Liquid Glass con logo Matter al abrir Multi-Admin.
+    - Botón interactivo "⚡ Generar Código de Emparejamiento" cuando la cámara aún no ha iniciado comisionamiento inicial.
+- **Diagnóstico y Verificación Automática de Stream:**
+  - Comprobación automática del stream en vivo al abrir la modal de configuración de la cámara (`api.verifyCameraStream`).
+  - Indicadores visuales en tiempo real: estado `"🔄 Verificando stream en vivo..."` con insignia verde/roja y mensaje detallado.
+  - Diagnóstico activo (`⚡ Diagnosticar Stream`) que mide métricas reales sin fallos 422: latencia de DESCRIBE, latencia del primer fotograma, FPS observados, GOP y protocolo de transporte.
+  - Aumento de timeouts de sondeo en `ScryptedStreamValidator` a 7-8 segundos para garantizar respuesta estable en redes locales y enlaces remotos.
+- **Passthrough Puro H.264 (`-c:v copy`) y Máxima Calidad en Apple Home (HAP):**
+  - Las cámaras con códec H.264 se configuran por defecto en passthrough directo (`-c:v copy -bsf:v dump_extra=freq=keyframe`) eliminando por completo la latencia de transcodificación y el consumo de CPU.
+  - Soporte nativo a máxima resolución y tasa de refresco (4K, 2K, 1080p, 720p a sus máximos FPS).
+  - Umbrales mínimos de bitrate de alta fidelidad (hasta 8000 kbps para 4K/2K) cuando se requiere transcodificación de respaldo.
+  - Calidad de audio/micrófono elevada a 32 kbps (`-b:a 32k`) para mayor claridad de voz y fidelidad de sonido.
+  - Corrección de cabeceras en streams externos: se eliminó la inyección indiscriminada de `Authorization: Bearer <ha-token>` en URLs de Scrypted o RTSP directas, permitiendo streaming fluido sin errores 401/403.
+  - Flags robustos de reconexión HTTP/HTTPS (`-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2 -rw_timeout 10000000 -tls_verify 0`).
+  - Priorización de endpoints LAN locales (`convertMediaObjectToLocalUrl`) en el cliente Scrypted para evitar enrutar streams locales por la nube.
+
 ## [1.5.79] - 2026-09-14
 
 ### Sticker de Configuración Apple Home en iOS 27 Liquid Glass y Ocultamiento de QR al Estar Vinculado

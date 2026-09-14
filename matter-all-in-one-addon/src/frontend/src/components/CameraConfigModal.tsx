@@ -26,7 +26,11 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
   const [isResetting, setIsResetting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [streamResult, setStreamResult] = useState<{ text: string; isError?: boolean } | null>(null);
-  const [showLogs, setShowLogs] = useState(false);
+  const [streamVerified, setStreamVerified] = useState(false);
+  const [multiAdminOpen, setMultiAdminOpen] = useState(false);
+  const [freshMatterCode, setFreshMatterCode] = useState<string | null>(null);
+  const [freshMatterManualCode, setFreshMatterManualCode] = useState<string | null>(null);
+  const [isOpeningCommissioning, setIsOpeningCommissioning] = useState(false);
 
   // Initialize data when camera changes
   useEffect(() => {
@@ -37,11 +41,14 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
       "";
     setRtspUrl(initialUrl);
     setTransport(camera.exportConfig?.rtspTransportPreference || "tcp");
-    setStreamResult(null);
-    setShowLogs(false);
+    setFreshMatterCode(null);
+    setFreshMatterManualCode(null);
+    setMultiAdminOpen(false);
 
-    // Auto-probe stream in background to fetch real specs
+    // Auto-probe stream in background to fetch real specs & verify live connectivity
     if (initialUrl) {
+      setIsVerifying(true);
+      setStreamResult({ text: "🔄 Verificando stream en vivo..." });
       api
         .verifyCameraStream(camera.cameraId, initialUrl)
         .then((res) => {
@@ -55,9 +62,39 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
               camera.capabilities.observed.hasAudio = res.validation.hasAudio;
             }
             if (res.validation.fps) camera.capabilities.observed.fps = res.validation.fps;
+            setStreamVerified(true);
+            const w = res.validation.resolution?.width || 1920;
+            const h = res.validation.resolution?.height || 1080;
+            const codec = (res.validation.videoCodec || "H.264").toUpperCase();
+            const fpsVal = res.validation.fps || 30;
+            const audioStr = res.validation.hasAudio ? "Con Audio" : "Sin Audio";
+            setStreamResult({
+              text: `✓ Stream verificado y activo (${codec} ${w}x${h} @ ${fpsVal}fps, ${audioStr}). Live View listo para Apple Home.`,
+            });
+          } else {
+            setStreamVerified(false);
+            setStreamResult({
+              text: `⚠️ Stream no verificado: ${res.validation?.error || "No se pudo conectar al stream RTSP/HTTP. Revisa la URL o transporte."}`,
+              isError: true,
+            });
           }
         })
-        .catch(() => {});
+        .catch((err: any) => {
+          setStreamVerified(false);
+          setStreamResult({
+            text: `⚠️ Error al verificar stream: ${err.message || "Error desconocido"}`,
+            isError: true,
+          });
+        })
+        .finally(() => {
+          setIsVerifying(false);
+        });
+    } else {
+      setStreamVerified(false);
+      setStreamResult({
+        text: "ℹ️ Sin URL de stream configurada. Ingresa una URL RTSP directa para activar Live View.",
+        isError: true,
+      });
     }
   }, [camera]);
 
@@ -84,8 +121,15 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
   if (!camera) return null;
 
   const isPaired = camera.identity?.homeKitPairingState === "paired";
+  const isMatterCommissioned = Boolean(
+    camera.bindingState?.matterCommissioned ||
+    (camera.bindingState?.fabrics && camera.bindingState.fabrics.length > 0)
+  );
   const pinCode = camera.identity?.homeKitPincode || "031-45-154";
-  const pairingPayload = activeTab === "homekit" ? getSetupUri() : camera.identity?.matterPairingCode || "";
+  const pairingPayload =
+    activeTab === "homekit"
+      ? getSetupUri()
+      : freshMatterCode || camera.identity?.matterPairingCode || "";
 
   const brand = extractCameraBrand(camera);
   const isOnline = camera.status?.connection === "online" || camera.status?.isOnline !== false;
@@ -192,21 +236,64 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
     }
   };
 
+  const handleOpenCommissioning = async () => {
+    if (!camera) return;
+    setIsOpeningCommissioning(true);
+    try {
+      const res: any = await api.openCommissioning(`scrypted.${camera.cameraId}`);
+      if (res?.pairingCode || res?.manualPairingCode) {
+        setFreshMatterCode(res.pairingCode || null);
+        setFreshMatterManualCode(res.manualPairingCode || null);
+      }
+      setMultiAdminOpen(true);
+      showToast(
+        "✓ Ventana de emparejamiento (Multi-Admin) abierta por 15 min. Escanea en Google Home, Alexa o SmartThings."
+      );
+    } catch (err: any) {
+      showToast(err.message || "Error al abrir Multi-Admin", true);
+    } finally {
+      setIsOpeningCommissioning(false);
+    }
+  };
+
   const handleVerifyStream = async () => {
     if (!rtspUrl.trim()) {
       showToast("Ingresa una URL RTSP para verificar", true);
       return;
     }
     setIsVerifying(true);
-    setStreamResult({ text: "Verificando stream RTSP (ffprobe)..." });
+    setStreamResult({ text: "Verificando stream RTSP/HTTP (ffprobe)..." });
     try {
       const res = await api.verifyCameraStream(camera.cameraId, rtspUrl.trim());
       if (res.ok && res.status === "verified") {
-        setStreamResult({ text: "✓ Stream verificado con éxito. Live View listo para Apple Home." });
+        setStreamVerified(true);
+        if (res.validation) {
+          if (!camera.capabilities) camera.capabilities = {};
+          if (!camera.capabilities.observed) camera.capabilities.observed = {};
+          if (res.validation.resolution) camera.capabilities.observed.resolution = res.validation.resolution;
+          if (res.validation.videoCodec) camera.capabilities.observed.videoCodec = res.validation.videoCodec;
+          if (res.validation.audioCodec) {
+            camera.capabilities.observed.audioCodec = res.validation.audioCodec;
+            camera.capabilities.observed.hasAudio = res.validation.hasAudio;
+          }
+          if (res.validation.fps) camera.capabilities.observed.fps = res.validation.fps;
+        }
+        const w = res.validation?.resolution?.width || 1920;
+        const h = res.validation?.resolution?.height || 1080;
+        const codec = (res.validation?.videoCodec || "H.264").toUpperCase();
+        const fpsVal = res.validation?.fps || 30;
+        setStreamResult({
+          text: `✓ Stream verificado con éxito (${codec} ${w}x${h} @ ${fpsVal}fps). Live View listo para Apple Home.`,
+        });
       } else {
-        setStreamResult({ text: `❌ ${res.validation?.error || "Stream inválido o no compatible"}`, isError: true });
+        setStreamVerified(false);
+        setStreamResult({
+          text: `❌ ${res.validation?.error || "Stream inválido o no compatible"}`,
+          isError: true,
+        });
       }
     } catch (err: any) {
+      setStreamVerified(false);
       setStreamResult({ text: `❌ Error: ${err.message}`, isError: true });
     } finally {
       setIsVerifying(false);
@@ -219,13 +306,23 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
       return;
     }
     setIsDiagnosing(true);
-    setStreamResult({ text: "Diagnosticando stream (latencia, transporte, GOP)..." });
+    setStreamResult({ text: "Diagnosticando stream en tiempo real (DESCRIBE, 1er frame, GOP, FPS)..." });
     try {
       const res = await api.diagnoseCameraStream(camera.cameraId, rtspUrl.trim());
-      if (res.success) {
-        setStreamResult({ text: `✓ Diagnóstico: Latencia ${res.metrics?.latencyMs || "—"}ms, Codec ${res.metrics?.codec || "H.264"}` });
+      if (res.success && res.metrics) {
+        const describeMs = res.metrics.timeToDescribeMs?.value ?? "—";
+        const frameMs = res.metrics.timeToFirstFrameMs?.value ?? "—";
+        const fpsVal = res.metrics.observedFps?.value ?? "—";
+        const gop = res.metrics.observedGopSeconds?.value ? `${res.metrics.observedGopSeconds.value}s` : "—";
+        const trans = (res.metrics.selectedTransport?.value || transport).toUpperCase();
+        setStreamResult({
+          text: `✓ Diagnóstico completado: ⚡ Inicio: ${describeMs}ms · 1er Frame: ${frameMs}ms · FPS: ${fpsVal} · GOP: ${gop} · Transporte: ${trans}`,
+        });
       } else {
-        setStreamResult({ text: `❌ Diagnóstico fallido: ${res.metrics?.error || "Desconocido"}`, isError: true });
+        setStreamResult({
+          text: `❌ Diagnóstico fallido: ${res.metrics?.error || "Error al conectar con el stream"}`,
+          isError: true,
+        });
       }
     } catch (err: any) {
       setStreamResult({ text: `❌ Error de diagnóstico: ${err.message}`, isError: true });
@@ -332,7 +429,76 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
               </button>
             </div>
 
-            {activeTab === "homekit" && isPaired ? (
+            {activeTab === "matter" ? (
+              isMatterCommissioned && !multiAdminOpen ? (
+                <div className="paired-success-glass-card" id="paired-camera-matter-card">
+                  <div className="paired-apple-home-badge">
+                    <AppleHomeModernIcon variant="mono" size={56} />
+                  </div>
+                  <h4 className="paired-card-title">¡Cámara activa en red Matter!</h4>
+                  <p className="paired-card-desc">
+                    Esta cámara está sincronizada en el puente Matter. El código inicial se oculta para proteger la sesión activa.
+                  </p>
+                  <div className="paired-multiadmin-box">
+                    <p className="paired-multiadmin-subtext">
+                      ¿Deseas agregarla a Google Home, Alexa o SmartThings?
+                    </p>
+                    <button
+                      className="button button-primary button-open-multiadmin"
+                      type="button"
+                      onClick={handleOpenCommissioning}
+                      disabled={isOpeningCommissioning}
+                      id="cam-open-multiadmin-btn"
+                    >
+                      <span>{isOpeningCommissioning ? "Abriendo..." : "🌐 Abrir Modo Multi-Admin (15 min)"}</span>
+                    </button>
+                  </div>
+                </div>
+              ) : multiAdminOpen || freshMatterCode ? (
+                <>
+                  <div id="cam-multi-admin-hint" className="multi-admin-hint" style={{ display: "block", marginBottom: 10 }}>
+                    <p className="hint-title">🌐 Modo Multi-Admin Abierto (15 min)</p>
+                    <p className="hint-desc">
+                      Ventana de emparejamiento abierta. Escanea este código QR en <strong>Google Home</strong>, <strong>Alexa</strong> o <strong>SmartThings</strong>.
+                    </p>
+                  </div>
+                  <QRCodeDisplay
+                    pairingCode={freshMatterCode || camera.identity?.matterPairingCode || ""}
+                    manualCode={freshMatterManualCode || freshMatterCode || camera.identity?.matterPairingCode}
+                    entityName={camera.name}
+                    elementId="cam-matter-qr-code"
+                    variant="multi-admin-glass"
+                    noteText="Escanea con Google Home, Alexa o SmartThings (Matter 1.6)"
+                  />
+                </>
+              ) : camera.identity?.matterPairingCode ? (
+                <QRCodeDisplay
+                  pairingCode={camera.identity.matterPairingCode}
+                  manualCode={camera.identity.matterPairingCode}
+                  entityName={camera.name}
+                  elementId="cam-matter-qr-code"
+                  variant="matter-badge"
+                  noteText="Escanea para agregar por Matter 1.6 a Apple Home o Google Home"
+                />
+              ) : (
+                <div className="paired-success-glass-card" style={{ textAlign: "center", padding: "20px 16px" }}>
+                  <div style={{ fontSize: "2.2rem", marginBottom: 8 }}>⚡</div>
+                  <h4 className="paired-card-title" style={{ fontSize: "1rem" }}>Vincular Cámara con Matter 1.6</h4>
+                  <p className="paired-card-desc" style={{ fontSize: "0.82rem", marginBottom: 14 }}>
+                    Genera el código de emparejamiento dinámico para agregar esta cámara a Google Home, Alexa, Apple Home o SmartThings.
+                  </p>
+                  <button
+                    className="button button-primary"
+                    type="button"
+                    onClick={handleOpenCommissioning}
+                    disabled={isOpeningCommissioning}
+                    style={{ width: "100%", justifyContent: "center" }}
+                  >
+                    <span>{isOpeningCommissioning ? "Generando código..." : "⚡ Generar Código de Emparejamiento"}</span>
+                  </button>
+                </div>
+              )
+            ) : isPaired ? (
               <div className="paired-success-glass-card" id="paired-camera-card">
                 <div className="paired-apple-home-badge">
                   <AppleHomeModernIcon variant="color" size={56} />
@@ -345,16 +511,12 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
             ) : (
               <QRCodeDisplay
                 pairingCode={pairingPayload}
-                manualCode={activeTab === "homekit" ? pinCode : pairingPayload}
+                manualCode={pinCode}
                 pinCode={activeTab === "homekit" ? pinCode : undefined}
                 variant={activeTab === "homekit" ? "hap-homekit" : "matter-badge"}
                 entityName={camera.name}
                 elementId="cam-modal-qr-code"
-                noteText={
-                  activeTab === "homekit"
-                    ? "Escanea con la app Casa de Apple para Live View HAP"
-                    : "Escanea con Apple Home, Google Home, Alexa o SmartThings"
-                }
+                noteText="Escanea con la app Casa de Apple para Live View HAP"
               />
             )}
 
@@ -367,6 +529,16 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                   disabled={isResetting}
                 >
                   {isResetting ? "Restableciendo..." : "🔄 Restablecer emparejamiento"}
+                </button>
+              )}
+              {activeTab === "matter" && isMatterCommissioned && (
+                <button
+                  className="button button-secondary button-sm"
+                  type="button"
+                  onClick={handleOpenCommissioning}
+                  disabled={isOpeningCommissioning}
+                >
+                  {isOpeningCommissioning ? "Abriendo..." : "🌐 Reabrir Multi-Admin (15 min)"}
                 </button>
               )}
             </div>
@@ -385,19 +557,37 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                     fontSize: "0.72rem",
                     padding: "2px 8px",
                     borderRadius: 4,
-                    background: "rgba(16, 185, 129, 0.15)",
-                    color: "#6ee7b7",
-                    border: "1px solid rgba(52, 211, 153, 0.3)",
+                    background: isVerifying
+                      ? "rgba(59, 130, 246, 0.15)"
+                      : streamVerified
+                        ? "rgba(16, 185, 129, 0.15)"
+                        : "rgba(239, 68, 68, 0.15)",
+                    color: isVerifying
+                      ? "#93c5fd"
+                      : streamVerified
+                        ? "#6ee7b7"
+                        : "#fca5a5",
+                    border: `1px solid ${
+                      isVerifying
+                        ? "rgba(59, 130, 246, 0.3)"
+                        : streamVerified
+                          ? "rgba(52, 211, 153, 0.3)"
+                          : "rgba(239, 68, 68, 0.3)"
+                    }`,
                   }}
                 >
-                  🟢 Stream verificado
+                  {isVerifying
+                    ? "🔄 Verificando stream..."
+                    : streamVerified
+                      ? "🟢 Stream verificado"
+                      : "🔴 Stream sin verificar"}
                 </span>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, fontSize: "0.8rem" }}>
                 <div><strong>📹 Video:</strong> {videoCodec} · {res} @ {fps}fps {profile}</div>
                 <div><strong>🔊 Audio:</strong> {audioCodec} (Bidireccional)</div>
                 <div><strong>⚡ Latencia:</strong> &lt;200ms (LAN Ultra Baja)</div>
-                <div><strong>🍏 HAP:</strong> Passthrough Directo</div>
+                <div><strong>🍏 HAP:</strong> Passthrough Puro H.264 (Sin transcode)</div>
               </div>
             </div>
 

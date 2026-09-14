@@ -51,6 +51,7 @@ export class ScryptedHomeKitBridge {
 
     const hasSource = Boolean(directUrl);
     const observed = camera.capabilities?.observed;
+    const isH264 = (observed?.videoCodec?.toLowerCase() || "h264") === "h264";
     const capabilities: CameraCapabilitiesInfo = {
       hasLiveStream: hasSource,
       streamSourceType: directUrl ? "rtsp" : "unknown",
@@ -59,8 +60,12 @@ export class ScryptedHomeKitBridge {
       audioCodec: observed?.hasAudio === false ? "none" : "aac_lc",
       resolution: observed?.resolution || { width: 1920, height: 1080 },
       maxFps: observed?.fps || 30,
-      strategy: hasSource ? "transcode_required" : "unsupported",
-      requiresTranscoding: hasSource,
+      strategy: hasSource
+        ? isH264
+          ? "passthrough_h264"
+          : "transcode_required"
+        : "unsupported",
+      requiresTranscoding: hasSource ? !isH264 : false,
       snapshotSupported: true,
       snapshotUrl: camera.source.snapshotReference?.directUrl,
       hksvCapable: false,

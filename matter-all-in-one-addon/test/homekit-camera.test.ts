@@ -3,7 +3,10 @@ import {
   Characteristic,
   SRTPCryptoSuites,
   StreamRequestTypes,
+  AudioStreamingCodecType,
 } from "hap-nodejs";
+import { EventEmitter } from "node:events";
+import * as ffmpegHelper from "../src/camera/homekit/ffmpeg-helper.js";
 import { HomeKitCameraAccessory } from "../src/camera/homekit/homekit-camera.accessory.js";
 import { HomeKitCameraStreamingDelegate } from "../src/camera/homekit/homekit-camera-stream.delegate.js";
 
@@ -239,5 +242,72 @@ describe("HomeKitCameraStreamingDelegate", () => {
       callback,
     );
     expect(callback).toHaveBeenCalledOnce();
+  });
+
+  it("builds stream args with H.264 passthrough copy, 32k audio, and without HA token for external streams", () => {
+    const delegate = new HomeKitCameraStreamingDelegate(
+      createPlatform(),
+      "scrypted.51",
+      { ...capabilities, strategy: "passthrough_h264" },
+      { ...rtspSource, url: "https://home.scrypted.app/endpoint/13/public/abc" },
+    );
+
+    const session = {
+      sessionId: "session-pass",
+      targetAddress: "192.168.1.50",
+      videoPort: 5000,
+      localVideoPort: 5001,
+      videoCryptoSuite: SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
+      videoKeySalt: Buffer.alloc(30, 1),
+      videoSsrc: 1111,
+      audioPort: 5002,
+      localAudioPort: 5003,
+      audioCryptoSuite: SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
+      audioKeySalt: Buffer.alloc(30, 2),
+      audioSsrc: 2222,
+    };
+
+    const request = {
+      sessionID: "session-pass",
+      type: StreamRequestTypes.START,
+      video: {
+        fps: 30,
+        width: 1920,
+        height: 1080,
+        max_bit_rate: 4000,
+        rtp: { port: 5000 } as any,
+        srtp_key: Buffer.alloc(16),
+        srtp_salt: Buffer.alloc(14),
+      } as any,
+      audio: {
+        codec: AudioStreamingCodecType.AAC_ELD,
+        channel: 1,
+        bit_rate: 0,
+        sample_rate: 16,
+        packet_time: 20,
+        pt: 110,
+        max_bit_rate: 32,
+        rtp: { port: 5002 } as any,
+      } as any,
+    };
+
+    const capturedArgs = delegate.buildStreamArgs(session, request);
+
+    // Verify H.264 passthrough remuxing without transcoding CPU overhead
+    expect(capturedArgs).toContain("-c:v");
+    expect(capturedArgs).toContain("copy");
+    expect(capturedArgs).toContain("dump_extra=freq=keyframe");
+
+    // Verify audio upgraded to 32k
+    expect(capturedArgs).toContain("32k");
+
+    // Verify HTTP/HTTPS robust flags
+    expect(capturedArgs).toContain("-reconnect");
+    expect(capturedArgs).toContain("1");
+    expect(capturedArgs).toContain("-tls_verify");
+    expect(capturedArgs).toContain("0");
+
+    // Verify NO Home Assistant token was leaked to external URL
+    expect(capturedArgs.join(" ")).not.toContain("Authorization: Bearer");
   });
 });

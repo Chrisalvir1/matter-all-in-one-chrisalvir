@@ -1164,9 +1164,9 @@ export class ScryptedClient {
   ): Promise<string | undefined> {
     if (!mediaManager || !mo) return undefined;
     const methods = [
-      "convertMediaObjectToUrl",
       "convertMediaObjectToLocalUrl",
       "convertMediaObjectToInsecureLocalUrl",
+      "convertMediaObjectToUrl",
     ];
     for (const method of methods) {
       if (typeof mediaManager[method] === "function") {

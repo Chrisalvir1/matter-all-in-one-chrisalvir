@@ -479,13 +479,82 @@ export class HomeKitCameraStreamingDelegate
       `?rtcpport=${session.videoPort}&localrtcpport=${session.localVideoPort}&pkt_size=${mtu}`;
 
     this.emit("session-start", session.sessionId);
+    const args = this.buildStreamArgs(session, request);
+
+    this.platform?.log?.notice?.(
+      `[HomeKitCamera][${this.entityId}] HAP START ${video.width}x${video.height}@${fps} profile=${h264Profile(video.profile)} level=${h264Level(video.level)} mtu=${mtu} source=${sanitizeUrlCredentials(sourceUrl)} ffmpeg=${ffmpegPath} ${getFfmpegVersion(ffmpegPath) || "unknown"}`,
+    );
+
+    let callbackSettled = false;
+    const settle = (error?: Error): void => {
+      if (callbackSettled) return;
+      callbackSettled = true;
+      callback(error);
+    };
+    try {
+      const process = spawn(ffmpegPath, args, {
+        stdio: ["ignore", "ignore", "pipe"],
+      });
+      session.process = process;
+      let stderr = "";
+      process.stderr.on("data", (chunk: Buffer) => {
+        stderr = `${stderr}${chunk.toString()}`.slice(-6000);
+      });
+      const guard = setTimeout(() => {
+        if (process.exitCode === null && !process.killed) {
+          this.platform?.log?.notice?.(
+            `[HomeKitCamera][${this.entityId}] HAP START callback success; FFmpeg active session=${session.sessionId}`,
+          );
+          settle();
+        } else {
+          settle(new Error("FFmpeg exited during HAP startup"));
+        }
+      }, 1200);
+      process.once("error", (error) => {
+        clearTimeout(guard);
+        settle(error);
+      });
+      process.once("close", (code) => {
+        clearTimeout(guard);
+        session.process = undefined;
+        this.platform?.log?.warn?.(
+          `[HomeKitCamera][${this.entityId}] FFmpeg closed code=${code} ${stderr.trim()}`,
+        );
+        if (!callbackSettled) {
+          settle(new Error(`FFmpeg exited during HAP startup (code ${code})`));
+        }
+        if (this.activeSessions.size === 0) {
+          this.emit("session-end");
+        }
+      });
+    } catch (error) {
+      settle(error as Error);
+    }
+  }
+
+  public buildStreamArgs(
+    session: HomeKitStreamSession,
+    request: StartStreamRequest,
+  ): string[] {
+    const sourceUrl = this.streamSource.url;
+    if (!sourceUrl) {
+      return [];
+    }
+    const video = request.video;
+    const fps = Math.max(1, Math.min(video.fps || 30, 60));
+    const mtu = video.mtu || 1378;
+    const host = formatHost(session.targetAddress);
+    const videoUrl =
+      `srtp://${host}:${session.videoPort}` +
+      `?rtcpport=${session.videoPort}&localrtcpport=${session.localVideoPort}&pkt_size=${mtu}`;
+
     const args: string[] = ["-hide_banner", "-loglevel", "warning"];
     if (sourceUrl.startsWith("rtsp://")) {
       args.push(
         "-probesize",
-        "32768",
+        "65536",
         "-analyzeduration",
-        "0",
+        "100000",
         "-rtsp_transport",
         "tcp",
         "-fflags",
@@ -497,22 +566,38 @@ export class HomeKitCameraStreamingDelegate
       );
     } else if (sourceUrl.startsWith("http://") || sourceUrl.startsWith("https://")) {
       args.push(
+        "-reconnect",
+        "1",
+        "-reconnect_at_eof",
+        "1",
+        "-reconnect_streamed",
+        "1",
+        "-reconnect_delay_max",
+        "2",
+        "-rw_timeout",
+        "10000000",
         "-probesize",
-        "32768",
+        "131072",
         "-analyzeduration",
-        "0",
+        "500000",
         "-fflags",
         "+nobuffer+flush_packets",
         "-flags",
         "low_delay",
         "-max_delay",
-        "0",
+        "500000",
       );
-      const token =
-        this.platform?.ha?.getAccessToken?.() ||
-        this.platform?.ha?.wsAccessToken;
-      if (token) {
-        args.push("-headers", `Authorization: Bearer ${token}\r\n`);
+      if (sourceUrl.startsWith("https://")) {
+        args.push("-tls_verify", "0");
+      }
+      const isHaProxy = this.streamSource.sourceType === "ha_proxy";
+      if (isHaProxy) {
+        const token =
+          this.platform?.ha?.getAccessToken?.() ||
+          this.platform?.ha?.wsAccessToken;
+        if (token) {
+          args.push("-headers", `Authorization: Bearer ${token}\r\n`);
+        }
       }
     }
     args.push("-i", sourceUrl);
@@ -538,50 +623,87 @@ export class HomeKitCameraStreamingDelegate
       );
     }
 
-    const videoBitrate = Math.max(
-      3500,
-      Math.min(video.max_bit_rate || 5000, 8000),
-    );
-    args.push(
-      "-map",
-      "0:v:0",
-      "-an",
-      "-c:v",
-      "libx264",
-      "-pix_fmt",
-      "yuv420p",
-      "-profile:v",
-      h264Profile(video.profile),
-      "-preset",
-      "ultrafast",
-      "-tune",
-      "zerolatency",
-      "-vf",
-      `scale=w='min(${video.width},iw)':h='min(${video.height},ih)':force_original_aspect_ratio=decrease:force_divisible_by=2`,
-      "-r",
-      String(fps),
-      "-g",
-      String(fps),
-      "-keyint_min",
-      String(fps),
-      "-b:v",
-      `${videoBitrate}k`,
-      "-maxrate",
-      `${videoBitrate}k`,
-      "-bufsize",
-      `${videoBitrate * 2}k`,
-      "-f",
-      "rtp",
-      "-payload_type",
-      String(video.pt || 99),
-      "-ssrc",
-      String(session.videoSsrc),
-      "-srtp_out_suite",
-      suiteName(session.videoCryptoSuite),
-      "-srtp_out_params",
-      session.videoKeySalt.toString("base64"),
-      videoUrl,
-    );
+    const isH264 = (this.capabilities.videoCodec || "h264").toLowerCase() === "h264";
+    const canPassthrough =
+      isH264 &&
+      (this.capabilities.strategy === "passthrough_h264" ||
+        this.streamSource.supportsPassthrough ||
+        !this.capabilities.requiresTranscoding);
+
+    if (canPassthrough) {
+      // Pure passthrough remuxing without transcoding CPU overhead (native 4K, 2K, 1080p, 720p @ max fps)
+      args.push(
+        "-map",
+        "0:v:0",
+        "-an",
+        "-c:v",
+        "copy",
+        "-bsf:v",
+        "dump_extra=freq=keyframe",
+        "-f",
+        "rtp",
+        "-payload_type",
+        String(video.pt || 99),
+        "-ssrc",
+        String(session.videoSsrc),
+        "-srtp_out_suite",
+        suiteName(session.videoCryptoSuite),
+        "-srtp_out_params",
+        session.videoKeySalt.toString("base64"),
+        videoUrl,
+      );
+    } else {
+      // High-fidelity transcoding fallback for HEVC / MJPEG / incompatible formats
+      const videoBitrate =
+        video.width >= 3840
+          ? 8000
+          : video.width >= 2560
+            ? 5000
+            : video.width >= 1920
+              ? 3500
+              : 2000;
+
+      args.push(
+        "-map",
+        "0:v:0",
+        "-an",
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        "-profile:v",
+        h264Profile(video.profile),
+        "-preset",
+        "ultrafast",
+        "-tune",
+        "zerolatency",
+        "-vf",
+        `scale=w='min(${video.width},iw)':h='min(${video.height},ih)':force_original_aspect_ratio=decrease:force_divisible_by=2`,
+        "-r",
+        String(fps),
+        "-g",
+        String(fps),
+        "-keyint_min",
+        String(fps),
+        "-b:v",
+        `${videoBitrate}k`,
+        "-maxrate",
+        `${videoBitrate}k`,
+        "-bufsize",
+        `${videoBitrate * 2}k`,
+        "-f",
+        "rtp",
+        "-payload_type",
+        String(video.pt || 99),
+        "-ssrc",
+        String(session.videoSsrc),
+        "-srtp_out_suite",
+        suiteName(session.videoCryptoSuite),
+        "-srtp_out_params",
+        session.videoKeySalt.toString("base64"),
+        videoUrl,
+      );
+    }
 
     if (
       hasAudioRequested &&
@@ -594,7 +716,7 @@ export class HomeKitCameraStreamingDelegate
         `?rtcpport=${session.audioPort}&localrtcpport=${session.localAudioPort}&pkt_size=188`;
       const isOpus = request.audio.codec === AudioStreamingCodecType.OPUS;
       const hasFdk = supportsFdkAac();
-      const audioBitrate = Math.min(request.audio.max_bit_rate || 24, 24);
+      const audioBitrate = Math.max(32, request.audio.max_bit_rate || 32);
 
       if (needsSilentAudio) {
         args.push(
@@ -652,55 +774,7 @@ export class HomeKitCameraStreamingDelegate
       );
     }
 
-    this.platform?.log?.notice?.(
-      `[HomeKitCamera][${this.entityId}] HAP START ${video.width}x${video.height}@${fps} profile=${h264Profile(video.profile)} level=${h264Level(video.level)} mtu=${mtu} source=${sanitizeUrlCredentials(sourceUrl)} ffmpeg=${ffmpegPath} ${getFfmpegVersion(ffmpegPath) || "unknown"}`,
-    );
-
-    let callbackSettled = false;
-    const settle = (error?: Error): void => {
-      if (callbackSettled) return;
-      callbackSettled = true;
-      callback(error);
-    };
-    try {
-      const process = spawn(ffmpegPath, args, {
-        stdio: ["ignore", "ignore", "pipe"],
-      });
-      session.process = process;
-      let stderr = "";
-      process.stderr.on("data", (chunk: Buffer) => {
-        stderr = `${stderr}${chunk.toString()}`.slice(-6000);
-      });
-      const guard = setTimeout(() => {
-        if (process.exitCode === null && !process.killed) {
-          this.platform?.log?.notice?.(
-            `[HomeKitCamera][${this.entityId}] HAP START callback success; FFmpeg active session=${session.sessionId}`,
-          );
-          settle();
-        } else {
-          settle(new Error("FFmpeg exited during HAP startup"));
-        }
-      }, 1200);
-      process.once("error", (error) => {
-        clearTimeout(guard);
-        settle(error);
-      });
-      process.once("close", (code) => {
-        clearTimeout(guard);
-        session.process = undefined;
-        this.platform?.log?.warn?.(
-          `[HomeKitCamera][${this.entityId}] FFmpeg closed code=${code} ${stderr.trim()}`,
-        );
-        if (!callbackSettled) {
-          settle(new Error(`FFmpeg exited during HAP startup (code ${code})`));
-        }
-        if (this.activeSessions.size === 0) {
-          this.emit("session-end");
-        }
-      });
-    } catch (error) {
-      settle(error as Error);
-    }
+    return args;
   }
 
   private stopStream(sessionId: string): void {

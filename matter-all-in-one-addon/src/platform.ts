@@ -2828,11 +2828,15 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     const compositeDeviceId =
       this.compositeMembership.get(entityId) ??
       this.getCompositeCandidate(entityId)?.deviceId;
-    const endpoint = this.getMatterEndpointForEntity(
+    let endpoint = this.getMatterEndpointForEntity(
       entityId,
       compositeDeviceId,
     );
-    const serverNode = endpoint?.serverNode;
+    let serverNode = endpoint?.serverNode;
+    if (!serverNode && (this.matterbridge as any)?.serverNode) {
+      serverNode = (this.matterbridge as any).serverNode;
+      endpoint = this.matterbridge;
+    }
     if (!endpoint || !serverNode) {
       return {
         success: false,
@@ -5135,7 +5139,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           const metrics = await ScryptedStreamValidator.diagnoseStreamUrl(
             targetUrl,
             cameraId,
-            parsed.timeoutMs ? Number(parsed.timeoutMs) : 4000,
+            parsed.timeoutMs ? Number(parsed.timeoutMs) : 8000,
           );
 
           camera.capabilities.latencyMetrics = metrics;

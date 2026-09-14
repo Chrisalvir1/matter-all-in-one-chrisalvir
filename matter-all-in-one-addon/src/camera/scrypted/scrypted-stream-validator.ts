@@ -53,7 +53,7 @@ export class ScryptedStreamValidator {
   public static async validateStreamUrl(
     url: string,
     cameraId?: string,
-    timeoutMs: number = 3000,
+    timeoutMs: number = 7000,
     signal?: AbortSignal,
   ): Promise<StreamValidationResult> {
     const now = new Date().toISOString();
@@ -312,7 +312,7 @@ export class ScryptedStreamValidator {
   public static async diagnoseStreamUrl(
     rawUrl: string,
     cameraId: string,
-    timeoutMs: number = 4000,
+    timeoutMs: number = 8000,
   ): Promise<StreamLatencyMetrics> {
     const trimmed = (rawUrl || "").trim();
     const now = new Date().toISOString();
