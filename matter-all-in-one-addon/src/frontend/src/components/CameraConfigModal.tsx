@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { CameraRecord } from "../types";
 import { api } from "../api/client";
 import { extractCameraBrand } from "./CameraCard";
-import { QRCodeDisplay } from "./QRCodeDisplay";
+import { QRCodeDisplay, AppleHomeModernIcon } from "./QRCodeDisplay";
 import { copyToClipboard } from "../utils/clipboard";
 
 interface CameraConfigModalProps {
@@ -333,21 +333,13 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
             </div>
 
             {activeTab === "homekit" && isPaired ? (
-              <div
-                className="paired-box"
-                style={{
-                  background: "rgba(16, 185, 129, 0.1)",
-                  border: "1px solid rgba(52, 211, 153, 0.3)",
-                  borderRadius: 12,
-                  padding: 16,
-                  textAlign: "center",
-                  marginBottom: 16,
-                }}
-              >
-                <div style={{ fontSize: "2rem", marginBottom: 6 }}>🟢</div>
-                <h4 style={{ margin: "0 0 6px", color: "#6ee7b7" }}>¡Cámara ya vinculada en Apple Home!</h4>
-                <p style={{ fontSize: "0.82rem", color: "var(--text-secondary)", margin: 0 }}>
-                  Esta cámara ya está configurada en Apple Home. El código QR se oculta para proteger la sesión activa.
+              <div className="paired-success-glass-card" id="paired-camera-card">
+                <div className="paired-apple-home-badge">
+                  <AppleHomeModernIcon variant="color" size={56} />
+                </div>
+                <h4 className="paired-card-title">¡Cámara vinculada en Apple Home!</h4>
+                <p className="paired-card-desc">
+                  Esta cámara ya está configurada en Apple Home para Live View HAP. El código QR se oculta para proteger la sesión activa.
                 </p>
               </div>
             ) : (

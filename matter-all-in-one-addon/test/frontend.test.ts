@@ -117,7 +117,7 @@ describe("frontend accessibility contract", () => {
     expect(stylesheet).toContain(".terminal-line.line-info");
   });
 
-  it("differentiates QR styling: HAP with yellow house icon and black code, Matter monochrome, and Multi-Admin glowing glass", async () => {
+  it("differentiates QR styling: iOS 27 Liquid Glass sticker with AppleHomeModernIcon (yellow for HAP, monochrome for Matter) and Multi-Admin glowing glass", async () => {
     const qrDisplay = await readFile(
       new URL("components/QRCodeDisplay.tsx", frontendSrcPath),
       "utf8",
@@ -137,33 +137,37 @@ describe("frontend accessibility contract", () => {
 
     // QRCodeDisplay component contract
     expect(qrDisplay).toContain('export type QRVariant = "hap-homekit" | "matter-badge" | "multi-admin-glass"');
-    expect(qrDisplay).toContain("homekit-house-icon-yellow");
-    expect(qrDisplay).toContain("matter-house-icon-mono");
+    expect(qrDisplay).toContain("export const AppleHomeModernIcon");
+    expect(qrDisplay).toContain("ios27-glass-sticker");
+    expect(qrDisplay).toContain("sticker-header");
+    expect(qrDisplay).toContain("sticker-house-col");
+    expect(qrDisplay).toContain("sticker-code-col");
+    expect(qrDisplay).toContain("sticker-code-line");
     expect(qrDisplay).toContain("multi-admin-sparkle-icon");
-    expect(qrDisplay).toContain("code-black");
     expect(qrDisplay).toContain("code-cyan");
-    expect(qrDisplay).toContain("box-homekit");
-    expect(qrDisplay).toContain("box-matter");
-    expect(qrDisplay).toContain("box-multi-admin");
 
-    // CameraConfigModal passes hap-homekit variant and pinCode
+    // CameraConfigModal passes hap-homekit variant and pinCode, and uses AppleHomeModernIcon for paired state
     expect(cameraModal).toContain('variant={activeTab === "homekit" ? "hap-homekit" : "matter-badge"}');
     expect(cameraModal).toContain("pinCode={activeTab === \"homekit\" ? pinCode : undefined}");
+    expect(cameraModal).toContain("paired-success-glass-card");
+    expect(cameraModal).toContain("<AppleHomeModernIcon variant=\"color\" size={56} />");
 
-    // DeviceModal toggles between matter-badge and multi-admin-glass
+    // DeviceModal hides initial QR when commissioned, shows paired-success-glass-card, and toggles multi-admin
+    expect(deviceModal).toContain("isCommissioned && !multiAdminOpen ?");
+    expect(deviceModal).toContain("paired-success-glass-card");
+    expect(deviceModal).toContain("<AppleHomeModernIcon variant=\"color\" size={56} />");
+    expect(deviceModal).toContain("button-open-multiadmin");
     expect(deviceModal).toContain('variant={multiAdminOpen ? "multi-admin-glass" : "matter-badge"}');
 
-    // CSS contract for HAP (yellow house icon, black code), Matter (monochrome), and Multi-Admin (cyan glass)
-    expect(stylesheet).toContain(".qr-badge-card");
-    expect(stylesheet).toContain(".qr-card-homekit-badge");
-    expect(stylesheet).toContain(".qr-card-matter-badge");
-    expect(stylesheet).toContain(".homekit-house-icon-yellow");
-    expect(stylesheet).toContain("color: #f59e0b;");
-    expect(stylesheet).toContain(".matter-house-icon-mono");
-    expect(stylesheet).toContain(".multi-admin-sparkle-icon");
-    expect(stylesheet).toContain(".manual-code-display.code-black");
-    expect(stylesheet).toContain(".manual-code-display.code-cyan");
-    expect(stylesheet).toContain(".qr-frame.qr-frame-clean");
+    // CSS contract for iOS 27 Liquid Glass sticker and paired success card
+    expect(stylesheet).toContain(".ios27-glass-sticker");
+    expect(stylesheet).toContain(".ios27-glass-sticker.sticker-hap");
+    expect(stylesheet).toContain(".ios27-glass-sticker.sticker-matter");
+    expect(stylesheet).toContain(".sticker-code-line");
+    expect(stylesheet).toContain(".paired-success-glass-card");
+    expect(stylesheet).toContain(".paired-apple-home-badge");
+    expect(stylesheet).toContain(".button-open-multiadmin");
+    expect(stylesheet).toContain(".qr-liquid-glass-card.multi-admin-mode");
   });
 });
 

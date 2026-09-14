@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { DeviceRecord, EntityRecord } from "../types";
 import { api } from "../api/client";
-import { QRCodeDisplay } from "./QRCodeDisplay";
+import { QRCodeDisplay, AppleHomeModernIcon } from "./QRCodeDisplay";
 import { copyToClipboard } from "../utils/clipboard";
 
 interface DeviceModalProps {
@@ -996,50 +996,57 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                   : "Sin publicar"}
             </div>
 
-            {isCommissioned && !multiAdminOpen && (
-              <div
-                className="commissioned-hint"
-                style={{
-                  display: "block",
-                  background: "rgba(245, 158, 11, 0.12)",
-                  border: "1px solid rgba(245, 158, 11, 0.3)",
-                  borderRadius: 10,
-                  padding: "8px 10px",
-                  flexShrink: 0,
-                }}
-              >
-                <p className="hint-title" style={{ color: "#fbbf24", fontWeight: 700, margin: "0 0 2px 0", fontSize: 11 }}>
-                  🔒 Sesión Matter Registrada
-                </p>
-                <p className="hint-desc" style={{ fontSize: 10.5, color: "var(--text-secondary)", margin: 0, lineHeight: 1.35 }}>
-                  El puente ya está vinculado en Apple Home. Si necesitas un código limpio o no conecta, usa los botones de abajo.
-                </p>
-              </div>
-            )}
-
-            {multiAdminOpen && (
-              <div id="multi-admin-hint" className="multi-admin-hint" style={{ display: "block", flexShrink: 0 }}>
-                <p className="hint-title">🌐 Modo Multi-Admin Abierto (15 min)</p>
-                <p className="hint-desc">
-                  Ventana de emparejamiento abierta. Escanea este código QR en
-                  <strong> Google Home</strong>, <strong>Alexa</strong> o{" "}
-                  <strong>SmartThings</strong>.
-                </p>
-              </div>
-            )}
-
             {isExported ? (
-              <QRCodeDisplay
-                pairingCode={pairingCode}
-                manualCode={manualCode}
-                entityName={
-                  isComposite
-                    ? compositePrimary?.name || device.name
-                    : activeEntity?.name || device.name
-                }
-                elementId="device-qr-code"
-                variant={multiAdminOpen ? "multi-admin-glass" : "matter-badge"}
-              />
+              isCommissioned && !multiAdminOpen ? (
+                <div className="paired-success-glass-card" id="paired-device-card">
+                  <div className="paired-apple-home-badge">
+                    <AppleHomeModernIcon variant="color" size={56} />
+                  </div>
+                  <h4 className="paired-card-title">¡Accesorio vinculado en Apple Home!</h4>
+                  <p className="paired-card-desc">
+                    Este dispositivo ya está emparejado y activo en tu red Matter.
+                    El código QR inicial se oculta para proteger la sesión activa.
+                  </p>
+                  <div className="paired-multiadmin-box">
+                    <p className="paired-multiadmin-subtext">
+                      ¿Deseas compartirlo con Google Home, Alexa o SmartThings?
+                    </p>
+                    <button
+                      className="button button-primary button-open-multiadmin"
+                      type="button"
+                      onClick={handleOpenCommissioning}
+                      disabled={isBusy}
+                      id="paired-open-multiadmin-btn"
+                    >
+                      <span>🌐 Abrir Modo Multi-Admin (15 min)</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {multiAdminOpen && (
+                    <div id="multi-admin-hint" className="multi-admin-hint" style={{ display: "block", flexShrink: 0 }}>
+                      <p className="hint-title">🌐 Modo Multi-Admin Abierto (15 min)</p>
+                      <p className="hint-desc">
+                        Ventana de emparejamiento abierta. Escanea este código QR en
+                        <strong> Google Home</strong>, <strong>Alexa</strong> o{" "}
+                        <strong>SmartThings</strong>.
+                      </p>
+                    </div>
+                  )}
+                  <QRCodeDisplay
+                    pairingCode={pairingCode}
+                    manualCode={manualCode}
+                    entityName={
+                      isComposite
+                        ? compositePrimary?.name || device.name
+                        : activeEntity?.name || device.name
+                    }
+                    elementId="device-qr-code"
+                    variant={multiAdminOpen ? "multi-admin-glass" : "matter-badge"}
+                  />
+                </>
+              )
             ) : (
               <div
                 className="qr-liquid-glass-card"

@@ -1,3 +1,24 @@
+## [1.5.79] - 2026-09-14
+
+### Sticker de Configuración Apple Home en iOS 27 Liquid Glass y Ocultamiento de QR al Estar Vinculado
+
+- **Ícono Moderno de Apple Home (3 Capas Concétricas):**
+  - Componente vectorial SVG de alta fidelidad `AppleHomeModernIcon` replicando el ícono oficial de la app Casa:
+    - **Cámaras HAP (`variant="color"`):** Degradado en capas con chimenea superior derecha, naranja cálido (`#ff9f0a`), ámbar dorado (`#ffc83b`) y núcleo marfil luminoso (`#fffde7`) con sombras de profundidad multinivel.
+    - **Matter IoT (`variant="mono"`):** La misma arquitectura concéntrica de 3 capas pero en sobrio monocromo (grafito carbón `#1e293b`, plata medio `#64748b` y blanco platino `#ffffff`).
+- **Diseño del Sticker Físico Apple HomeKit en iOS 27 Liquid Glass (`.ios27-glass-sticker`):**
+  - **Distribución de cabecera:** Casita moderna a la izquierda y código manual a la derecha organizado en 2 filas:
+    - **HAP HomeKit:** Código de 8 dígitos en 2 líneas de 4 dígitos (`6 6 4 0` / `7 4 4 3`) en tipografía de alto contraste negro puro.
+    - **Matter IoT:** Código manual de 11 dígitos (`3 4 9 7` / `0 1 1 - 2 9 8 3`) en 2 líneas en tipografía negra.
+  - **Lienzo QR nítido B&W:** Cuadrícula blanca limpia con marco squircle sin logotipos invasivos para escaneo instantáneo.
+  - **Acabado iOS 27 Liquid Glass:** Bisel translúcido con `backdrop-filter: blur(28px)`, reflejo especular (`inset 0 1px 2px`), squircle de 26px y halo luminoso ambiental.
+- **Ocultamiento Permanente del QR al Vincular en Apple Home:**
+  - Si un dispositivo o cámara ya está emparejado (`isCommissioned` en `DeviceModal.tsx` o `isPaired` en `CameraConfigModal.tsx`):
+    - **El código QR inicial se oculta permanentemente:** Evita reescaneos inválidos o confusiones una vez completado el comisionamiento.
+    - **Tarjeta de Estado Exitoso Liquid Glass (`.paired-success-glass-card`):** Despliega el ícono de Apple Home, confirmación de vínculo activo y botón directo **"🌐 Abrir Modo Multi-Admin (15 min)"**.
+    - **Ventana Multi-Admin:** Solo al pulsar dicho botón se despliega el código QR especial con el logo Matter en el centro (`variant="multi-admin-glass"`).
+    - **Revinculación:** Si el usuario pulsa "Desconectar todo y nuevo QR" o restablece el accesorio, el sticker inicial reaparece de inmediato.
+
 ## [1.5.78] - 2026-09-13
 
 ### Especialización y Diferenciación de Códigos QR por Protocolo: HAP HomeKit, Matter Inicial y Multi-Admin Liquid Glass
