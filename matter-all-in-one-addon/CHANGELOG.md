@@ -1,3 +1,11 @@
+## [1.5.84] - 2026-09-14
+
+### Resolución Automática de 'localhost' en Streams RTSP de Scrypted y Resiliencia en Contenedores
+
+- **Resolución inteligente de `localhost` / `127.0.0.1` en URLs RTSP:**
+  - Cuando un usuario o Scrypted proporciona URLs de rebroadcast con `localhost` (ej. `rtsp://localhost:59716/...` o `rtsp://127.0.0.1:8554/...`), el backend detecta el entorno de contenedor y reescribe automáticamente el host a la IP real del servidor Scrypted configurado en el add-on.
+  - Esto previene fallos de conexión hacia el propio contenedor del add-on donde Scrypted no reside.
+
 ## [1.5.83] - 2026-09-14
 
 ### Corrección «Invalid data found» en Wyze RTSP: Eliminación de Flags de Latencia en Sonda y Fallback UDP para ffmpeg

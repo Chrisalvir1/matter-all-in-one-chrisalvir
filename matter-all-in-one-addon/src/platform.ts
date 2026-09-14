@@ -5009,10 +5009,31 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             return;
           }
 
-          const targetUrl =
+          let targetUrl =
             String(parsed.streamUrl || "").trim() ||
             camera.source.streamReference?.directUrl ||
             "";
+
+          try {
+            if (
+              (targetUrl.startsWith("rtsp://localhost") ||
+                targetUrl.startsWith("rtsp://127.0.0.1") ||
+                targetUrl.startsWith("rtsps://localhost") ||
+                targetUrl.startsWith("rtsps://127.0.0.1")) &&
+              store.scrypted?.serverUrl
+            ) {
+              const parsedServer = new URL(store.scrypted.serverUrl);
+              if (
+                parsedServer.hostname &&
+                parsedServer.hostname !== "localhost" &&
+                parsedServer.hostname !== "127.0.0.1"
+              ) {
+                targetUrl = targetUrl
+                  .replace("://localhost", `://${parsedServer.hostname}`)
+                  .replace("://127.0.0.1", `://${parsedServer.hostname}`);
+              }
+            }
+          } catch {}
 
           const transport = parsed.transport === "udp" ? "udp" : "tcp";
           ScryptedStreamValidator.clearCache();
@@ -5110,10 +5131,31 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             return;
           }
 
-          const targetUrl =
+          let targetUrl =
             String(parsed.streamUrl || "").trim() ||
             camera.source.streamReference?.directUrl ||
             "";
+
+          try {
+            if (
+              (targetUrl.startsWith("rtsp://localhost") ||
+                targetUrl.startsWith("rtsp://127.0.0.1") ||
+                targetUrl.startsWith("rtsps://localhost") ||
+                targetUrl.startsWith("rtsps://127.0.0.1")) &&
+              store.scrypted?.serverUrl
+            ) {
+              const parsedServer = new URL(store.scrypted.serverUrl);
+              if (
+                parsedServer.hostname &&
+                parsedServer.hostname !== "localhost" &&
+                parsedServer.hostname !== "127.0.0.1"
+              ) {
+                targetUrl = targetUrl
+                  .replace("://localhost", `://${parsedServer.hostname}`)
+                  .replace("://127.0.0.1", `://${parsedServer.hostname}`);
+              }
+            }
+          } catch {}
 
           if (!targetUrl) {
             this.log.warn(

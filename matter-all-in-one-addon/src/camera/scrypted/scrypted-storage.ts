@@ -599,11 +599,33 @@ export class ScryptedStorage {
       return false;
     }
 
+    let effectiveUrl = trimmed;
+    try {
+      if (
+        (effectiveUrl.startsWith("rtsp://localhost") ||
+          effectiveUrl.startsWith("rtsp://127.0.0.1") ||
+          effectiveUrl.startsWith("rtsps://localhost") ||
+          effectiveUrl.startsWith("rtsps://127.0.0.1")) &&
+        store.scrypted?.serverUrl
+      ) {
+        const parsedServer = new URL(store.scrypted.serverUrl);
+        if (
+          parsedServer.hostname &&
+          parsedServer.hostname !== "localhost" &&
+          parsedServer.hostname !== "127.0.0.1"
+        ) {
+          effectiveUrl = effectiveUrl
+            .replace("://localhost", `://${parsedServer.hostname}`)
+            .replace("://127.0.0.1", `://${parsedServer.hostname}`);
+        }
+      }
+    } catch {}
+
     let host: string | undefined;
     let port: number | undefined;
     let path: string | undefined;
     try {
-      const u = new URL(trimmed);
+      const u = new URL(effectiveUrl);
       host = u.hostname || undefined;
       port = u.port
         ? parseInt(u.port, 10)
@@ -617,7 +639,7 @@ export class ScryptedStorage {
 
     cam.source.streamReference = {
       protocol: "rtsp",
-      directUrl: trimmed,
+      directUrl: effectiveUrl,
       host,
       port,
       path,
