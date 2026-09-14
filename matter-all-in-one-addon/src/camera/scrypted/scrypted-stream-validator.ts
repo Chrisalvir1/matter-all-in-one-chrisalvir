@@ -53,8 +53,9 @@ export class ScryptedStreamValidator {
   public static async validateStreamUrl(
     url: string,
     cameraId?: string,
-    timeoutMs: number = 7000,
+    timeoutMs: number = 8000,
     signal?: AbortSignal,
+    transport?: "tcp" | "udp",
   ): Promise<StreamValidationResult> {
     const now = new Date().toISOString();
     const sanitized = sanitizeUrlCredentials(url);
@@ -130,6 +131,7 @@ export class ScryptedStreamValidator {
           try {
             const probe: ProbeResult = await probeCameraSource(trimmedUrl, {
               timeoutMs,
+              transport,
             });
 
             const elapsedMs = Date.now() - startTime;
@@ -153,7 +155,7 @@ export class ScryptedStreamValidator {
                   measuredAt: now,
                 },
                 selectedTransport: {
-                  value: "tcp",
+                  value: probe.selectedTransport || transport || "tcp",
                   source: "rtsp_probe",
                   confidence: "high",
                   measuredAt: now,
@@ -313,6 +315,7 @@ export class ScryptedStreamValidator {
     rawUrl: string,
     cameraId: string,
     timeoutMs: number = 8000,
+    transport?: "tcp" | "udp",
   ): Promise<StreamLatencyMetrics> {
     const trimmed = (rawUrl || "").trim();
     const now = new Date().toISOString();
@@ -323,7 +326,7 @@ export class ScryptedStreamValidator {
         validatedAt: now,
         sourceType: "local_rtsp",
         selectedTransport: {
-          value: "tcp",
+          value: transport || "tcp",
           source: "unavailable",
           confidence: "low",
           measuredAt: now,
@@ -339,7 +342,7 @@ export class ScryptedStreamValidator {
         validatedAt: now,
         sourceType: "local_rtsp",
         selectedTransport: {
-          value: "tcp",
+          value: transport || "tcp",
           source: "unavailable",
           confidence: "low",
           measuredAt: now,
@@ -356,7 +359,7 @@ export class ScryptedStreamValidator {
         ? "scrypted_rebroadcast"
         : "local_rtsp",
       selectedTransport: {
-        value: "tcp",
+        value: transport || "tcp",
         source: "rtsp_probe",
         confidence: "high",
         measuredAt: now,
@@ -365,7 +368,10 @@ export class ScryptedStreamValidator {
     };
 
     try {
-      const probe = await probeCameraSource(trimmed, { timeoutMs });
+      const probe = await probeCameraSource(trimmed, { timeoutMs, transport });
+      if (probe.selectedTransport) {
+        metrics.selectedTransport.value = probe.selectedTransport;
+      }
       const elapsedMs = Date.now() - startTime;
 
       if (probe.valid) {

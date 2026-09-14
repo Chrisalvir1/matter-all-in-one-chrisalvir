@@ -14,6 +14,7 @@ export interface ProbeResult {
   gopSeconds?: number;
   error?: string;
   probeMethod?: "ffprobe" | "ffmpeg";
+  selectedTransport?: "tcp" | "udp";
 }
 
 /**
@@ -219,12 +220,14 @@ export async function probeCameraSource(
   options: {
     timeoutMs?: number;
     httpBearerToken?: string;
+    transport?: "tcp" | "udp";
     customFfprobePath?: string;
     customFfmpegPath?: string;
   } = {},
 ): Promise<ProbeResult> {
-  const timeoutMs = options.timeoutMs ?? 7000;
+  const timeoutMs = options.timeoutMs ?? 8000;
   const ffprobePath = options.customFfprobePath || resolveFfprobePath();
+  let lastError: string | undefined;
 
   if (ffprobePath) {
     try {
@@ -233,12 +236,34 @@ export async function probeCameraSource(
         sourceUrl,
         timeoutMs,
         options.httpBearerToken,
+        options.transport,
       );
       if (result.valid) {
         return result;
       }
-    } catch {
-      // Fallback to ffmpeg below
+      lastError = result.error;
+
+      // If RTSP failed with TCP and user didn't explicitly force TCP, try UDP fallback
+      if (
+        sourceUrl.startsWith("rtsp://") &&
+        (!options.transport || options.transport === "tcp")
+      ) {
+        const udpResult = await probeWithFfprobe(
+          ffprobePath,
+          sourceUrl,
+          Math.min(timeoutMs, 4000),
+          options.httpBearerToken,
+          "udp",
+        );
+        if (udpResult.valid) {
+          return udpResult;
+        }
+        if (udpResult.error) {
+          lastError = `${lastError} (UDP: ${udpResult.error})`;
+        }
+      }
+    } catch (err) {
+      lastError = String(err);
     }
   }
 
@@ -250,6 +275,8 @@ export async function probeCameraSource(
         sourceUrl,
         timeoutMs,
         options.httpBearerToken,
+        options.transport,
+        lastError,
       );
     } catch (err) {
       return {
@@ -263,7 +290,7 @@ export async function probeCameraSource(
   return {
     valid: false,
     hasAudio: false,
-    error: "No FFprobe or FFmpeg binary available for probing",
+    error: lastError || "No FFprobe or FFmpeg binary available for probing",
   };
 }
 
@@ -272,11 +299,12 @@ function probeWithFfprobe(
   sourceUrl: string,
   timeoutMs: number,
   httpBearerToken?: string,
+  transport?: "tcp" | "udp",
 ): Promise<ProbeResult> {
   return new Promise((resolve) => {
     const args = [
       "-v",
-      "warning",
+      "error",
       "-show_entries",
       "stream=codec_type,codec_name,width,height,r_frame_rate",
       "-of",
@@ -291,13 +319,16 @@ function probeWithFfprobe(
     }
 
     if (sourceUrl.startsWith("rtsp://")) {
+      const rtspTransport = transport || "tcp";
       args.push(
         "-rtsp_transport",
-        "tcp",
+        rtspTransport,
+        "-stimeout",
+        String(Math.min(timeoutMs, 6000) * 1000),
         "-probesize",
-        "65536",
+        "1048576",
         "-analyzeduration",
-        "100000",
+        "2500000",
         "-fflags",
         "+nobuffer",
         "-flags",
@@ -309,9 +340,9 @@ function probeWithFfprobe(
     ) {
       args.push(
         "-probesize",
-        "131072",
+        "1048576",
         "-analyzeduration",
-        "500000",
+        "2500000",
         "-rw_timeout",
         String(timeoutMs * 1000),
       );
@@ -335,7 +366,7 @@ function probeWithFfprobe(
       resolve({
         valid: false,
         hasAudio: false,
-        error: `ffprobe timeout after ${timeoutMs}ms`,
+        error: `Tiempo de espera agotado (${timeoutMs}ms) al conectar al stream RTSP`,
       });
     }, timeoutMs);
 
@@ -360,7 +391,7 @@ function probeWithFfprobe(
             (s: any) => s.codec_type === "audio",
           );
 
-          if (videoStream) {
+          if (videoStream && videoStream.codec_name) {
             let fps: number | undefined;
             if (videoStream.r_frame_rate) {
               const parts = videoStream.r_frame_rate.split("/");
@@ -381,6 +412,7 @@ function probeWithFfprobe(
               fps,
               hasAudio: Boolean(audioStream),
               probeMethod: "ffprobe",
+              selectedTransport: transport || "tcp",
             });
             return;
           }
@@ -389,10 +421,26 @@ function probeWithFfprobe(
         }
       }
 
+      const raw = stderrData.trim();
+      let friendly = raw;
+      if (raw.includes("Connection refused") || raw.includes("ECONNREFUSED")) {
+        friendly = "Conexión rechazada (Connection refused en puerto 554). Verifica la IP y que el servicio RTSP esté activo.";
+      } else if (raw.includes("401") || raw.includes("Unauthorized")) {
+        friendly = "Autenticación requerida (401 Unauthorized). El stream RTSP requiere usuario y contraseña (rtsp://usuario:clave@ip:554/...).";
+      } else if (raw.includes("404") || raw.includes("Not Found")) {
+        friendly = "Ruta no encontrada (404 Not Found). La ruta RTSP no existe en este dispositivo.";
+      } else if (raw.includes("timed out") || raw.includes("Operation not permitted") || raw.includes("ETIMEDOUT")) {
+        friendly = "Tiempo de espera agotado al conectar al stream RTSP (timeout). Verifica la conexión WiFi.";
+      } else if (raw.includes("Could not find codec parameters")) {
+        friendly = "No se pudieron decodificar parámetros H.264 (no se detectaron fotogramas clave a tiempo).";
+      } else if (!friendly) {
+        friendly = `ffprobe finalizó sin datos de video válidos (código ${code})`;
+      }
+
       resolve({
         valid: false,
         hasAudio: false,
-        error: stderrData || `ffprobe exited with code ${code}`,
+        error: friendly,
       });
     });
 
@@ -412,14 +460,16 @@ function probeWithFfmpeg(
   sourceUrl: string,
   timeoutMs: number,
   httpBearerToken?: string,
+  transport?: "tcp" | "udp",
+  lastError?: string,
 ): Promise<ProbeResult> {
   return new Promise((resolve) => {
     const args = [
       "-hide_banner",
       "-probesize",
-      "65536",
+      "1048576",
       "-analyzeduration",
-      "100000",
+      "2500000",
     ];
 
     if (
@@ -430,9 +480,12 @@ function probeWithFfmpeg(
     }
 
     if (sourceUrl.startsWith("rtsp://")) {
+      const rtspTransport = transport || "tcp";
       args.push(
         "-rtsp_transport",
-        "tcp",
+        rtspTransport,
+        "-stimeout",
+        String(Math.min(timeoutMs, 6000) * 1000),
         "-fflags",
         "+nobuffer",
         "-flags",
@@ -471,7 +524,7 @@ function probeWithFfmpeg(
       resolve({
         valid: false,
         hasAudio: false,
-        error: `ffmpeg probe timeout after ${timeoutMs}ms`,
+        error: `Tiempo de espera agotado (${timeoutMs}ms) en FFmpeg`,
       });
     }, timeoutMs);
 
@@ -510,6 +563,22 @@ function probeWithFfmpeg(
       }
 
       const valid = Boolean(videoCodec);
+      const raw = stderrData.trim();
+      let friendly = raw;
+      if (!valid) {
+        if (raw.includes("Connection refused") || raw.includes("ECONNREFUSED")) {
+          friendly = "Conexión rechazada (Connection refused en puerto 554).";
+        } else if (raw.includes("401") || raw.includes("Unauthorized")) {
+          friendly = "Autenticación requerida (401 Unauthorized). El stream RTSP requiere credenciales.";
+        } else if (raw.includes("404") || raw.includes("Not Found")) {
+          friendly = "Ruta de stream no encontrada (404 Not Found).";
+        } else if (raw.includes("timed out") || raw.includes("ETIMEDOUT")) {
+          friendly = "Tiempo de espera agotado al conectar al stream RTSP.";
+        } else if (!friendly) {
+          friendly = lastError || "No se detectaron paquetes de video H.264 válidos en el stream.";
+        }
+      }
+
       resolve({
         valid,
         videoCodec,
@@ -519,6 +588,8 @@ function probeWithFfmpeg(
         fps,
         hasAudio: Boolean(audioCodec),
         probeMethod: "ffmpeg",
+        selectedTransport: transport || "tcp",
+        error: valid ? undefined : friendly,
       });
     });
 

@@ -39,21 +39,30 @@ export const api = {
   testScryptedConnection: (data: any) => request("/scrypted/connection-test", { method: "POST", body: JSON.stringify(data) }),
   syncCameras: () => request<CameraRecord[]>("/scrypted/load-cameras", { method: "POST" }),
 
-  verifyCameraStream: (cameraId: string, streamUrl: string) =>
+  verifyCameraStream: (cameraId: string, streamUrl: string, transport?: string) =>
     request<{ ok: boolean; status: string; validation?: any }>(
       `/cameras/${encodeURIComponent(cameraId)}/verify-stream`,
       {
         method: "POST",
-        body: JSON.stringify({ streamUrl }),
+        body: JSON.stringify({ streamUrl, transport }),
       }
     ),
 
-  diagnoseCameraStream: (cameraId: string, streamUrl: string) =>
+  diagnoseCameraStream: (cameraId: string, streamUrl: string, transport?: string) =>
     request<{ success: boolean; metrics?: any; camera?: any }>(
       `/cameras/${encodeURIComponent(cameraId)}/diagnose-stream`,
       {
         method: "POST",
-        body: JSON.stringify({ streamUrl, timeoutMs: 7000 }),
+        body: JSON.stringify({ streamUrl, transport, timeoutMs: 8000 }),
+      }
+    ),
+
+  updateCameraIdentity: (cameraId: string, data: { manufacturer?: string; model?: string; clear?: boolean }) =>
+    request<{ success: boolean; message?: string }>(
+      `/cameras/${encodeURIComponent(cameraId)}/identity-override`,
+      {
+        method: "PUT",
+        body: JSON.stringify(data),
       }
     ),
 

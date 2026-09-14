@@ -36,7 +36,7 @@ export interface CameraSensorRecord {
   sensorId: string;
   name: string;
   type: "motion" | "doorbell" | "person" | "package" | "vehicle" | "animal" | "light" | "siren" | "ptz" | "other";
-  scryptedInterface: string;
+  scryptedInterface?: string;
   enabled: boolean;
   state?: boolean | string | number;
 }
@@ -70,6 +70,7 @@ export interface CameraRecord {
   displaySerialNumber?: string;
   sourceManufacturer?: string;
   sourceModel?: string;
+  identityOverride?: { manufacturer?: string; model?: string; serialNumber?: string };
   fps?: number;
   resolution?: { width: number; height: number };
   status?: {

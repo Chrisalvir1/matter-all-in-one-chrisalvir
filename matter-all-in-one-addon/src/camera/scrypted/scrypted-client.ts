@@ -259,10 +259,25 @@ function mapDeviceToCameraRecord(
     });
   }
 
-  if (
+  let resolvedModel = model ?? undefined;
+  if (!resolvedModel && typeof name === "string") {
+    const n = name.toLowerCase();
+    if (n.includes("pan v3") || n.includes("pan_v3")) resolvedModel = "Wyze Cam Pan v3";
+    else if (n.includes("pan v2") || n.includes("pan_v2")) resolvedModel = "Wyze Cam Pan v2";
+    else if (n.includes("cam pan") || (n.includes("pan") && n.includes("wyze"))) resolvedModel = "Wyze Cam Pan";
+    else if (n.includes("c200")) resolvedModel = "Tapo C200";
+    else if (n.includes("c210")) resolvedModel = "Tapo C210";
+    else if (n.includes("c220")) resolvedModel = "Tapo C220";
+    else if (n.includes("c225")) resolvedModel = "Tapo C225";
+  }
+
+  const isPtz =
     allInterfaces.includes("PanTilt") ||
-    allInterfaces.includes("PanTiltZoom")
-  ) {
+    allInterfaces.includes("PanTiltZoom") ||
+    /pan|ptz|pantilt|c200|c210|c220|c225|e1 zoom|orbit/i.test(resolvedModel || "") ||
+    /pan|ptz|pantilt/i.test(name || "");
+
+  if (isPtz) {
     sensors.push({
       sensorId: `${id}_ptz`,
       type: "ptz",
@@ -273,7 +288,6 @@ function mapDeviceToCameraRecord(
   }
 
   const resolvedManufacturer = manufacturer ?? undefined;
-  const resolvedModel = model ?? undefined;
 
   let scryptedHost = "127.0.0.1";
   try {

@@ -1,3 +1,20 @@
+## [1.5.81] - 2026-09-14
+
+### Diagnóstico de Stream RTSP Confiable, Detección Inteligente de PTZ para Wyze Cam Pan v2 y Selector de Transporte TCP/UDP
+
+- **Resolución de Fallos en Diagnóstico y Verificación de Stream RTSP (`ffmpeg-helper.ts` & `scrypted-stream-validator.ts`):**
+  - **Causa raíz identificada y solucionada:** Se incrementaron los parámetros de análisis de `ffprobe`/`ffmpeg` de los restrictivos 100 milisegundos (`-analyzeduration 100000`) y 64 KB (`-probesize 65536`) a **2.5 segundos** (`2500000` µs) y **1 MB** (`1048576` bytes). Los streams RTSP de Wyze (con GOP de 1.5–2s) ahora capturan de forma garantizada los headers SPS/PPS y el I-frame inicial para determinar dimensiones y códecs sin errores falsos de "unspecified size".
+  - **Manejo de socket timeout nativo:** Incorporación de `-stimeout 7000000` (7 segundos) para abortar sockets bloqueados limpiamente en nivel de red RTSP en lugar de esperar timeouts asíncronos.
+  - **Fallback automático a UDP si TCP falla:** Si un servidor RTSP rechaza TCP intercalado, la sonda reintenta automáticamente por UDP antes de reportar fallo.
+  - **Mensajes de diagnóstico legibles y accionables en español:** Clasificación exacta de errores de red (Conexión rechazada, Error de autenticación 401, Stream no encontrado 404, Tiempo de espera agotado, etc.) reemplazando el genérico y opaco "No se pudo obtener información del stream".
+- **Detección de Hardware PTZ (Pan/Tilt/Zoom) y Selección de Modelo Real (`scrypted-client.ts`, `scrypted-storage.ts`, `CameraConfigModal.tsx`):**
+  - **Causa raíz de cámaras Wyze Pan v2:** El protocolo RTSP puro (RFC 2326) no incluye comandos PTZ y el plugin RTSP de Scrypted no expone la interfaz `PanTiltZoom`.
+  - **Auto-detección heurística:** Se analiza el nombre de la cámara y el modelo (mediante coincidencia de patrones para Wyze Pan v2/v3, Tapo C200/C210/C220/C225, Reolink E1 Zoom, etc.) asignando de forma automática el sensor motorizado `ptz` y su capacidad de giro.
+  - **Selector y Sobrescritura de Modelo con Presets:** En la modal de configuración de la cámara, el usuario cuenta con un campo interactivo para asignar el modelo real de hardware con botones de 1 clic para presets populares (`Wyze Cam Pan v2 (PTZ)`, `Wyze Cam Pan v3 (PTZ)`, `Wyze Cam v3`).
+  - **Interruptor de Capacidad PTZ en Vivo:** Botón de acción directo en la tarjeta de capacidad de giro de la cámara que permite habilitar o alternar el control PTZ de forma instantánea.
+- **Sincronización Completa de Transporte RTSP:**
+  - El selector de transporte (`TCP` / `UDP`) de la interfaz ahora se transmite a todos los endpoints de backend (`/cameras/:id/verify-stream` y `/cameras/:id/diagnose-stream`).
+
 ## [1.5.80] - 2026-09-14
 
 ### Soporte Matter 1.6 Multi-Admin para Cámaras, Verificación Automática de Stream y Passthrough Puro H.264

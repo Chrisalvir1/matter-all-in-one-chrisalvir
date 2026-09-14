@@ -31,6 +31,8 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
   const [freshMatterCode, setFreshMatterCode] = useState<string | null>(null);
   const [freshMatterManualCode, setFreshMatterManualCode] = useState<string | null>(null);
   const [isOpeningCommissioning, setIsOpeningCommissioning] = useState(false);
+  const [modelInput, setModelInput] = useState(camera?.displayModel || camera?.model || "");
+  const [isSavingModel, setIsSavingModel] = useState(false);
 
   // Initialize data when camera changes
   useEffect(() => {
@@ -39,8 +41,10 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
       camera.source?.streamReference?.directUrl ||
       camera.source?.profiles?.find((p) => p.directUrl)?.directUrl ||
       "";
+    const prefTransport = camera.exportConfig?.rtspTransportPreference || "tcp";
     setRtspUrl(initialUrl);
-    setTransport(camera.exportConfig?.rtspTransportPreference || "tcp");
+    setTransport(prefTransport);
+    setModelInput(camera.displayModel || camera.model || "");
     setFreshMatterCode(null);
     setFreshMatterManualCode(null);
     setMultiAdminOpen(false);
@@ -50,7 +54,7 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
       setIsVerifying(true);
       setStreamResult({ text: "🔄 Verificando stream en vivo..." });
       api
-        .verifyCameraStream(camera.cameraId, initialUrl)
+        .verifyCameraStream(camera.cameraId, initialUrl, prefTransport)
         .then((res) => {
           if (res.ok && res.status === "verified" && res.validation) {
             if (!camera.capabilities) camera.capabilities = {};
@@ -135,6 +139,67 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
   const isOnline = camera.status?.connection === "online" || camera.status?.isOnline !== false;
   const modelDisplay = camera.displayModel || camera.model || "Modelo no identificado";
 
+  const handleSaveModel = async (newModel?: string) => {
+    if (!camera) return;
+    const modelToSave = (newModel ?? modelInput).trim();
+    if (!modelToSave) return;
+    setIsSavingModel(true);
+    try {
+      await api.updateCameraIdentity(camera.cameraId, {
+        manufacturer: brand,
+        model: modelToSave,
+      });
+      camera.displayModel = modelToSave;
+      camera.model = modelToSave;
+      if (!camera.identityOverride) camera.identityOverride = {};
+      camera.identityOverride.model = modelToSave;
+
+      const isPtz = /pan|ptz|pantilt|c200|c210|c220|c225|e1 zoom|orbit/i.test(modelToSave);
+      if (isPtz && !camera.sensors?.some((s) => s.type === "ptz")) {
+        if (!camera.sensors) camera.sensors = [];
+        camera.sensors.push({
+          sensorId: `${camera.cameraId}_ptz`,
+          type: "ptz",
+          name: `${camera.name} – Control PTZ (Giro)`,
+          enabled: true,
+          state: true,
+        });
+      }
+      setModelInput(modelToSave);
+      showToast(`✓ Modelo actualizado a «${modelToSave}»`);
+      onRefresh();
+    } catch (err: any) {
+      showToast(err.message || "Error al actualizar modelo", true);
+    } finally {
+      setIsSavingModel(false);
+    }
+  };
+
+  const handleTogglePtz = async () => {
+    if (!camera) return;
+    const currentlyHasPtz = (camera.sensors || []).some((s) => s.type === "ptz");
+    if (currentlyHasPtz) {
+      camera.sensors = (camera.sensors || []).filter((s) => s.type !== "ptz");
+      showToast("Giro PTZ desactivado");
+    } else {
+      if (!camera.sensors) camera.sensors = [];
+      camera.sensors.push({
+        sensorId: `${camera.cameraId}_ptz`,
+        type: "ptz",
+        name: `${camera.name} – Control PTZ (Giro)`,
+        enabled: true,
+        state: true,
+      });
+      if (!camera.displayModel || camera.displayModel === "Modelo no identificado") {
+        const panName = brand.toLowerCase().includes("wyze") ? "Wyze Cam Pan v2" : `${brand} Pan/Tilt`;
+        await handleSaveModel(panName);
+        return;
+      }
+      showToast("✓ Giro PTZ motorizado activado en hardware");
+    }
+    onRefresh();
+  };
+
   // Real Hardware Capabilities
   const hasDoorbell = (camera.sensors || []).some((s) => s.type === "doorbell");
   const hasLight = (camera.sensors || []).some((s) => s.type === "light");
@@ -171,10 +236,26 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
       icon: "🔄",
       title: "Giro Motorizado PTZ (Pan / Tilt)",
       desc: hasPtz
-        ? "Soporte de movimiento horizontal y vertical motorizado en el hardware de la cámara."
-        : "Cámara de lente fija (sin motor mecánico de rotación).",
+        ? "Hardware motorizado verificado (Pan/Tilt activo en el accesorio)."
+        : "Scrypted no detecta PTZ en streams RTSP estándar. Pulsa para activarlo si es una cámara Pan.",
       state: hasPtz ? "🟢 Soportado por hardware" : "⚪ Lente Fija (Sin PTZ)",
       available: hasPtz,
+      actionButton: (
+        <button
+          className="button button-sm"
+          type="button"
+          onClick={handleTogglePtz}
+          style={{
+            fontSize: "0.68rem",
+            padding: "2px 7px",
+            background: hasPtz ? "rgba(239, 68, 68, 0.15)" : "rgba(16, 185, 129, 0.2)",
+            color: hasPtz ? "#fca5a5" : "#6ee7b7",
+            border: `1px solid ${hasPtz ? "rgba(239, 68, 68, 0.3)" : "rgba(52, 211, 153, 0.3)"}`,
+          }}
+        >
+          {hasPtz ? "Desactivar PTZ" : "⚡ Activar Giro PTZ"}
+        </button>
+      ),
     },
     ...(hasDoorbell
       ? [
@@ -256,6 +337,7 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
     }
   };
 
+
   const handleVerifyStream = async () => {
     if (!rtspUrl.trim()) {
       showToast("Ingresa una URL RTSP para verificar", true);
@@ -264,7 +346,7 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
     setIsVerifying(true);
     setStreamResult({ text: "Verificando stream RTSP/HTTP (ffprobe)..." });
     try {
-      const res = await api.verifyCameraStream(camera.cameraId, rtspUrl.trim());
+      const res = await api.verifyCameraStream(camera.cameraId, rtspUrl.trim(), transport);
       if (res.ok && res.status === "verified") {
         setStreamVerified(true);
         if (res.validation) {
@@ -308,7 +390,7 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
     setIsDiagnosing(true);
     setStreamResult({ text: "Diagnosticando stream en tiempo real (DESCRIBE, 1er frame, GOP, FPS)..." });
     try {
-      const res = await api.diagnoseCameraStream(camera.cameraId, rtspUrl.trim());
+      const res = await api.diagnoseCameraStream(camera.cameraId, rtspUrl.trim(), transport);
       if (res.success && res.metrics) {
         const describeMs = res.metrics.timeToDescribeMs?.value ?? "—";
         const frameMs = res.metrics.timeToFirstFrameMs?.value ?? "—";
@@ -546,6 +628,79 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
 
           {/* Right Column: Specs, Stream config & Sensors */}
           <div className="selection-panel">
+            {/* Model & Hardware Identification Box */}
+            <div
+              style={{
+                marginBottom: 12,
+                padding: "8px 12px",
+                background: "rgba(255, 255, 255, 0.03)",
+                border: "1px solid rgba(255, 255, 255, 0.08)",
+                borderRadius: 8,
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 8,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 260 }}>
+                <span style={{ fontSize: "0.74rem", fontWeight: 700, color: "var(--dim)", textTransform: "uppercase" }}>
+                  MODELO DE CÁMARA:
+                </span>
+                <input
+                  type="text"
+                  value={modelInput}
+                  onChange={(e) => setModelInput(e.target.value)}
+                  placeholder="ej. Wyze Cam Pan v2, Tapo C200"
+                  style={{
+                    background: "rgba(0, 0, 0, 0.3)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 6,
+                    padding: "3px 8px",
+                    color: "var(--text)",
+                    fontSize: "0.82rem",
+                    flex: 1,
+                  }}
+                />
+                <button
+                  className="button button-sm button-secondary"
+                  type="button"
+                  onClick={() => handleSaveModel()}
+                  disabled={isSavingModel}
+                  style={{ whiteSpace: "nowrap" }}
+                >
+                  {isSavingModel ? "..." : "Guardar"}
+                </button>
+              </div>
+              <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                <span style={{ fontSize: "0.68rem", color: "var(--dim)" }}>Presets:</span>
+                <button
+                  className="button button-sm"
+                  type="button"
+                  style={{ fontSize: "0.68rem", padding: "2px 6px" }}
+                  onClick={() => handleSaveModel("Wyze Cam Pan v2")}
+                >
+                  Wyze Pan v2 (PTZ)
+                </button>
+                <button
+                  className="button button-sm"
+                  type="button"
+                  style={{ fontSize: "0.68rem", padding: "2px 6px" }}
+                  onClick={() => handleSaveModel("Wyze Cam Pan v3")}
+                >
+                  Pan v3
+                </button>
+                <button
+                  className="button button-sm"
+                  type="button"
+                  style={{ fontSize: "0.68rem", padding: "2px 6px" }}
+                  onClick={() => handleSaveModel("Wyze Cam v3")}
+                >
+                  Cam v3
+                </button>
+              </div>
+            </div>
+
             {/* Technical Specs */}
             <div className="camera-modal-specs-box">
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
@@ -698,17 +853,20 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                         <div style={{ fontSize: "0.72rem", color: "var(--text-secondary)" }}>{cap.desc}</div>
                       </div>
                     </div>
-                    <span
-                      className="tag"
-                      style={{
-                        fontSize: "0.68rem",
-                        whiteSpace: "nowrap",
-                        background: cap.available ? "rgba(16, 185, 129, 0.15)" : "rgba(255,255,255,0.05)",
-                        color: cap.available ? "#6ee7b7" : "var(--dim)",
-                      }}
-                    >
-                      {cap.state}
-                    </span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      {(cap as any).actionButton}
+                      <span
+                        className="tag"
+                        style={{
+                          fontSize: "0.68rem",
+                          whiteSpace: "nowrap",
+                          background: cap.available ? "rgba(16, 185, 129, 0.15)" : "rgba(255,255,255,0.05)",
+                          color: cap.available ? "#6ee7b7" : "var(--dim)",
+                        }}
+                      >
+                        {cap.state}
+                      </span>
+                    </div>
                   </div>
                 ))}
               </div>

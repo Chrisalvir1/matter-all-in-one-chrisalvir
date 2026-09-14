@@ -5014,11 +5014,14 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             camera.source.streamReference?.directUrl ||
             "";
 
+          const transport = parsed.transport === "udp" ? "udp" : "tcp";
           ScryptedStreamValidator.clearCache();
           const validation = await ScryptedStreamValidator.validateStreamUrl(
             targetUrl,
             cameraId,
             parsed.timeoutMs ? Number(parsed.timeoutMs) : 8000,
+            undefined,
+            transport,
           );
 
           await ScryptedStorage.updateCameraStreamValidation(
@@ -5135,11 +5138,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             `[Scrypted][${cameraId}] Iniciando diagnóstico de stream RTSP: ${sanitizedUrl}`,
           );
 
+          const transport = parsed.transport === "udp" ? "udp" : "tcp";
           ScryptedStreamValidator.clearCache();
           const metrics = await ScryptedStreamValidator.diagnoseStreamUrl(
             targetUrl,
             cameraId,
             parsed.timeoutMs ? Number(parsed.timeoutMs) : 8000,
+            transport,
           );
 
           camera.capabilities.latencyMetrics = metrics;

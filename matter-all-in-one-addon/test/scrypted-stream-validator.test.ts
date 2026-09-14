@@ -231,5 +231,24 @@ describe("ScryptedStreamValidator", () => {
       );
       expect(metrics.failureCause).toBe("source_offline");
     });
+
+    it("passes transport option to probeCameraSource", async () => {
+      const probeSpy = vi.spyOn(ffmpegHelper, "probeCameraSource").mockResolvedValueOnce({
+        valid: true,
+        videoCodec: "h264",
+        probeMethod: "ffprobe",
+      });
+
+      await ScryptedStreamValidator.diagnoseStreamUrl(
+        "rtsp://192.168.1.50:8554/feed",
+        "51",
+        8000,
+        "udp",
+      );
+      expect(probeSpy).toHaveBeenCalledWith(
+        "rtsp://192.168.1.50:8554/feed",
+        { timeoutMs: 8000, transport: "udp" },
+      );
+    });
   });
 });
