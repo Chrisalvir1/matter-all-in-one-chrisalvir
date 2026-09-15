@@ -126,6 +126,7 @@ export class BaseEntity {
   }
 
   private haUpdateDepth = 0;
+  private lastSyncedFan = { on: false, pct: 0 };
 
   /** True while HA-originated changes are being written into this endpoint. */
   protected get isUpdatingFromHa(): boolean {
@@ -409,6 +410,10 @@ export class BaseEntity {
           this.setCommandLockout("onOff", true);
           this.cancelDebouncedService("turn_off");
           this.callServiceDebounced(domain, "turn_on", undefined, 0);
+        } else if (domain === "fan") {
+          if (isFanOn(this.state)) return;
+          this.setCommandLockout("fan_state", "on");
+          await this.platform.ha.callService(domain, "turn_on", this.entityId);
         } else
           await this.platform.ha.callService(domain, "turn_on", this.entityId);
       });
@@ -424,6 +429,10 @@ export class BaseEntity {
           this.setCommandLockout("onOff", false);
           this.cancelDebouncedService("turn_on");
           this.callServiceDebounced(domain, "turn_off", undefined, 0);
+        } else if (domain === "fan") {
+          if (!isFanOn(this.state)) return;
+          this.setCommandLockout("fan_state", "off");
+          await this.platform.ha.callService(domain, "turn_off", this.entityId);
         } else
           await this.platform.ha.callService(domain, "turn_off", this.entityId);
       });
@@ -440,8 +449,7 @@ export class BaseEntity {
             if (this.isUpdatingFromHa) return;
             if (!hasFanSpeed(this.state)) return;
             const direction = data?.request?.direction ?? data?.direction;
-            // Read current % from HA state, NOT from last_percentage
-            const current = fanPercentage(this.state);
+            const current = isFanOn(this.state) ? fanPercentage(this.state) : 0;
             const speedMax = getFanSpeedCount(this.state);
             const delta =
               direction === FanControl.StepDirection.Increase ? 10 : -10;
@@ -453,6 +461,7 @@ export class BaseEntity {
               `[${this.entityId}] FanControl.step: dir=${direction}, current=${current}%, next=${next}%`,
             );
             if (next === 0) {
+              if (!isFanOn(this.state)) return;
               this.setCommandLockout("fan_state", "off");
               await this.platform.ha.callService(
                 "fan",
@@ -460,7 +469,9 @@ export class BaseEntity {
                 this.entityId,
               );
             } else {
+              if (isFanOn(this.state) && withinHysteresis(next, current)) return;
               this.setCommandLockout("fan_percentage", next);
+              this.setCommandLockout("fan_state", "on");
               await this.platform.ha.callService(
                 "fan",
                 "set_percentage",
@@ -478,12 +489,20 @@ export class BaseEntity {
             if (this.isUpdatingFromHa) return;
             if (!hasFanSpeed(this.state)) return;
             if (typeof newValue === "number") {
+              const currentOn = isFanOn(this.state);
+              const currentPct = currentOn ? fanPercentage(this.state) : 0;
               const speedMax = getFanSpeedCount(this.state);
               const next = snapToPhysicalLevel(newValue, speedMax);
+
+              // Anti-echo filter: if this matches what was just synced from HA, ignore
+              if (next === 0 && !this.lastSyncedFan.on) return;
+              if (this.lastSyncedFan.on && withinHysteresis(next, this.lastSyncedFan.pct)) return;
+
               this.platform.log.debug(
-                `[${this.entityId}] FanControl.percentSetting changed: ${newValue}% -> snapped ${next}%`,
+                `[${this.entityId}] FanControl.percentSetting changed: ${newValue}% -> snapped ${next}% (currentOn=${currentOn}, currentPct=${currentPct}%)`,
               );
               if (next === 0) {
+                if (!currentOn) return;
                 this.setCommandLockout("fan_state", "off");
                 await this.platform.ha.callService(
                   "fan",
@@ -491,7 +510,9 @@ export class BaseEntity {
                   this.entityId,
                 );
               } else {
+                if (currentOn && withinHysteresis(next, currentPct)) return;
                 this.setCommandLockout("fan_percentage", next);
+                this.setCommandLockout("fan_state", "on");
                 await this.platform.ha.callService(
                   "fan",
                   "set_percentage",
@@ -503,98 +524,22 @@ export class BaseEntity {
           },
         );
 
-        if (this.endpoint.hasAttributeServer(FanControl.id, "speedSetting")) {
-          this.endpoint.subscribeAttribute(
-            FanControl.id,
-            "speedSetting",
-            async (newValue: any) => {
-              if (this.isUpdatingFromHa) return;
-              if (!hasFanSpeed(this.state)) return;
-              if (typeof newValue === "number") {
-                const speedMax = getFanSpeedCount(this.state);
-                const pct = newValue === 0 ? 0 : (newValue / speedMax) * 100;
-                const next = snapToPhysicalLevel(pct, speedMax);
-                this.platform.log.debug(
-                  `[${this.entityId}] FanControl.speedSetting changed: ${newValue} -> pct ${next}%`,
-                );
-                if (next === 0) {
-                  this.setCommandLockout("fan_state", "off");
-                  await this.platform.ha.callService(
-                    "fan",
-                    "turn_off",
-                    this.entityId,
-                  );
-                } else {
-                  this.setCommandLockout("fan_percentage", next);
-                  await this.platform.ha.callService(
-                    "fan",
-                    "set_percentage",
-                    this.entityId,
-                    { percentage: next },
-                  );
-                }
-              }
-            },
-          );
-        }
-
         if (this.endpoint.hasAttributeServer(FanControl.id, "fanMode")) {
           this.endpoint.subscribeAttribute(
             FanControl.id,
             "fanMode",
             async (newMode: any) => {
+              if (this.isUpdatingFromHa) return;
               if (typeof newMode === "number") {
                 this.platform.log.debug(
                   `[${this.entityId}] FanControl.fanMode changed: ${newMode}`,
                 );
-                if (newMode === FanControl.FanMode.Off) {
-                  this.setCommandLockout("fan_state", "off");
+                if (newMode === FanControl.FanMode.Auto && hasFanAuto(this.state)) {
                   await this.platform.ha.callService(
                     "fan",
-                    "turn_off",
+                    "set_preset_mode",
                     this.entityId,
-                  );
-                } else if (newMode === FanControl.FanMode.Auto) {
-                  if (hasFanAuto(this.state)) {
-                    await this.platform.ha.callService(
-                      "fan",
-                      "set_preset_mode",
-                      this.entityId,
-                      { preset_mode: "auto" },
-                    );
-                  } else {
-                    await this.platform.ha.callService(
-                      "fan",
-                      "turn_on",
-                      this.entityId,
-                    );
-                  }
-                } else if (newMode === FanControl.FanMode.Low) {
-                  await this.platform.ha.callService(
-                    "fan",
-                    "set_percentage",
-                    this.entityId,
-                    { percentage: 33.33 },
-                  );
-                } else if (newMode === FanControl.FanMode.Medium) {
-                  await this.platform.ha.callService(
-                    "fan",
-                    "set_percentage",
-                    this.entityId,
-                    { percentage: 66.67 },
-                  );
-                } else if (newMode === FanControl.FanMode.High) {
-                  await this.platform.ha.callService(
-                    "fan",
-                    "set_percentage",
-                    this.entityId,
-                    { percentage: 100 },
-                  );
-                } else if (newMode === FanControl.FanMode.On) {
-                  await this.platform.ha.callService(
-                    "fan",
-                    "turn_on",
-                    this.entityId,
+                    { preset_mode: "auto" },
                   );
                 }
               }
@@ -1237,6 +1182,7 @@ export class BaseEntity {
           const pct = isOn ? fanPercentage(newState) : 0;
           const speed = isOn ? fanSpeed(pct, speedMax) : 0;
           const newFanMode = haStateToFanMode(newState);
+          this.lastSyncedFan = { on: isOn, pct };
 
           this.platform.log.debug(
             `[${this.entityId}] Fan state update: state=${newState.state}, on=${isOn}, pct=${pct}, speed=${speed}, fanMode=${newFanMode}, speedSupported=${speedSupported}, direction=${newState.attributes.direction ?? "N/A"}, oscillating=${newState.attributes.oscillating ?? "N/A"}, preset=${newState.attributes.preset_mode ?? "N/A"}`,
