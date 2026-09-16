@@ -53,7 +53,7 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
     const observed = camera.capabilities?.observed;
     const isVerified =
       camera.source?.streamValidationStatus === "verified" ||
-      camera.source?.streamReference?.validationStatus === "verified";
+      (camera.source?.streamReference as any)?.validationStatus === "verified";
     if (isVerified && observed) {
       setStreamVerified(true);
       const w = observed.resolution?.width || 1920;
@@ -76,7 +76,7 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
         isError: true,
       });
     }
-  }, [camera.cameraId]);
+  }, [camera?.cameraId]);
 
   // Compute HomeKit Setup URI
   const getSetupUri = () => {
