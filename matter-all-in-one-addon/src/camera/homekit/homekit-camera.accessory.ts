@@ -191,10 +191,7 @@ export class HomeKitCameraAccessory {
               profiles: [H264Profile.BASELINE, H264Profile.MAIN, H264Profile.HIGH],
               levels: [H264Level.LEVEL3_1, H264Level.LEVEL3_2, H264Level.LEVEL4_0],
             },
-            resolutions: [
-              [1920, 1080, 30],
-              [1280, 720, 30],
-            ],
+            resolutions: this.buildRecordingResolutions(),
           },
           audio: {
             codecs: {
@@ -212,6 +209,21 @@ export class HomeKitCameraAccessory {
     }
 
     return options;
+  }
+
+  private buildRecordingResolutions(): [number, number, number][] {
+    const source = this.capabilities.resolution || { width: 1920, height: 1080 };
+    const candidateResolutions: [number, number, number][] = [
+      [3840, 2160, 30],
+      [2560, 1440, 30],
+      [1920, 1080, 30],
+      [1280, 720, 30],
+    ];
+    // In iOS 27, Apple Home supports 4K and 2K HKSV recordings.
+    // If the camera source is 4K or 2K, advertise it so iCloud can record in UHD/QHD.
+    return candidateResolutions.filter(
+      ([w, h]) => (w <= source.width && h <= source.height) || w <= 1920,
+    );
   }
 
   private buildDeclaredResolutions(): [number, number, number][] {

@@ -35,7 +35,7 @@ export const homekitSupported = {
   temperatureSensor: true,
   humiditySensor: true,
   illuminanceSensor: true,
-  energyTariff: false,
+  energyTariff: true,
   roboticVacuumCleaner: true,
   fan: true,
   humidifier: true,

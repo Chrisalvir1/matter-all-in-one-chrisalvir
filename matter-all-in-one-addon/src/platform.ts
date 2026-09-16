@@ -1826,13 +1826,19 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     )
       return;
 
-    // Strict device_class whitelist for sensors to avoid exporting system/energy sensors
+    // Device_class whitelist for sensors (including iOS 27 Matter 1.3 energy/power sensors)
     const deviceClass = state.attributes.device_class;
     if (
       domain === "sensor" &&
-      !["temperature", "humidity", "illuminance", "moisture"].includes(
-        deviceClass ?? "",
-      )
+      ![
+        "temperature",
+        "humidity",
+        "illuminance",
+        "moisture",
+        "monetary",
+        "power",
+        "energy",
+      ].includes(deviceClass ?? "")
     )
       return;
     if (

@@ -276,6 +276,14 @@ export const DEVICE_CLASS_REGISTRY: Record<
       matterType: MatterDeviceTypes.energyTariff,
       homekitSupported: homekitSupported.energyTariff,
     },
+    power: {
+      matterType: MatterDeviceTypes.energyTariff,
+      homekitSupported: homekitSupported.energyTariff,
+    },
+    energy: {
+      matterType: MatterDeviceTypes.energyTariff,
+      homekitSupported: homekitSupported.energyTariff,
+    },
   },
 };
 

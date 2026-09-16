@@ -1,3 +1,15 @@
+## [1.5.88] - 2026-09-16
+
+### Compatibilidad con iOS 27 / iOS 27.2: Grabación 4K UHD HKSV y Gestión de Energía Matter 1.3
+
+- **Soporte de Grabaciones HKSV en 4K UHD (3840x2160) y 2K QHD (2560x1440):**
+  - Actualización de `HomeKitCameraAccessory` con `buildRecordingResolutions()` dinámico.
+  - Para cámaras con sensores 4K o 2K procedentes de Scrypted o RTSP, se publican las resoluciones `3840x2160` y `2560x1440` en las capacidades de grabación HKSV (`recording.video.resolutions`), permitiendo a iOS 27 / 27.2 grabar eventos en iCloud con máxima resolución UHD nativa.
+- **Integración de Gestión de Energía Matter 1.3 para la nueva categoría 'Electricidad' de Apple Home:**
+  - Habilitación de `energyTariff: true` en `homekit.compat.ts` y mapeo en el registro de tipos de dispositivo de HomeKit.
+  - Soporte para sensores de Home Assistant con `device_class: power` (potencia activa instantánea en mW mapeada al cluster `0x0090` `ElectricalPowerMeasurement`) y `device_class: energy` (energía acumulada en mWh mapeada al cluster `0x0091` `ElectricalEnergyMeasurement`).
+  - Actualización del whitelist de sensores en `platform.ts` para permitir entidades con `device_class: monetary`, `power` y `energy`.
+
 ## [1.5.87] - 2026-09-16
 
 ### Corrección de Disponibilidad Offline en Apple HomeKit y Rechazo Activo de Comandos Matter
