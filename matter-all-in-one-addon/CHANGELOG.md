@@ -1,3 +1,20 @@
+## [1.5.87] - 2026-09-16
+
+### Corrección de Disponibilidad Offline en Apple HomeKit y Rechazo Activo de Comandos Matter
+
+- **Rechazo inmediato de comandos en entidades fuera de línea:**
+  - Se introdujo `assertOnline()` en `BaseEntity` y `assertMemberOnline()` en `CompositeDeviceEntity`.
+  - Cuando un dispositivo pasa a estado `unavailable` o `unknown` en Home Assistant, cualquier comando recibido desde Apple Home o Matter (`on`, `off`, `moveToLevel`, `sendColor`, `FanControl`, `lockDoor`, etc.) es rechazado inmediatamente arrojando una excepción de protocolo en lugar de confirmar la orden con éxito a ciegas.
+  - Esto fuerza a la app Casa a actualizar la baldosa al estado real de fallo y mostrar de inmediato el cartel de *"Sin respuesta"*.
+- **Descarte de envíos asíncronos en cola:**
+  - `callServiceDebounced` verifica el estado de la entidad antes de programar y antes de despachar llamadas diferidas a Home Assistant.
+- **Emisión activa de suscripción Matter para Reachability:**
+  - `setReachability` ahora emite notificaciones push (`updateAttribute`) a los concentradores suscritos (Apple TV / HomePod) para el atributo `reachable` en los clusters `0x0039` (`BridgedDeviceBasicInformation`) y `0x0028`.
+- **Sincronización HAP en Cámaras Standalone:**
+  - En `CameraEntity`, `setReachability` propaga `accessory.updateReachability(reachable)` al accesorio nativo HomeKit HAP (Track A).
+- **Protección en cerraduras, persianas y reproductores:**
+  - Integración de `assertOnline()` en `LockEntity`, `ClosureEntity` y `MediaPlayerEntity`.
+
 ## [1.5.85] - 2026-09-14
 
 ### Rotación de Identidad HAP al Restablecer Emparejamiento (Solución 'Unable to Add Accessory')

@@ -22,7 +22,7 @@ import {
   BridgedDeviceBasicInformationServer,
 } from "matterbridge/matter/behaviors";
 import { HomeAssistantPlatform } from "../platform.js";
-import { HassState } from "../utils/ha-state.js";
+import { HassState, isUnavailable } from "../utils/ha-state.js";
 import {
   safeSetAttribute,
   safeUpdateAttribute,
@@ -357,12 +357,27 @@ export class BaseEntity {
     }
   }
 
+  protected assertOnline(): void {
+    if (isUnavailable(this.state)) {
+      this.platform.log?.warn?.(
+        `[${this.entityId}] Rejecting Matter command: device is unavailable/offline in Home Assistant.`,
+      );
+      throw new Error(`[${this.entityId}] Device is unavailable/offline`);
+    }
+  }
+
   protected callServiceDebounced(
     domain: string,
     service: string,
     data?: Record<string, any>,
     delayMs = 60,
   ) {
+    if (isUnavailable(this.state)) {
+      this.platform.log?.warn?.(
+        `[${this.entityId}] Ignored debounced ${domain}.${service}: device is unavailable/offline in Home Assistant.`,
+      );
+      return;
+    }
     if (service === "turn_on") {
       this.cancelDebouncedService("turn_off");
     } else if (service === "turn_off") {
@@ -384,6 +399,12 @@ export class BaseEntity {
 
     const timer = setTimeout(() => {
       this.serviceDebounceTimers.delete(key);
+      if (isUnavailable(this.state)) {
+        this.platform.log?.warn?.(
+          `[${this.entityId}] Ignored delayed ${domain}.${service}: device transitioned to unavailable.`,
+        );
+        return;
+      }
       if (data !== undefined) {
         void this.platform.ha.callService(domain, service, this.entityId, data);
       } else {
@@ -404,6 +425,7 @@ export class BaseEntity {
       domain === "vacuum"
     ) {
       this.endpoint.addCommandHandler("on", async () => {
+        this.assertOnline();
         if (domain === "vacuum")
           await this.platform.ha.callService(domain, "start", this.entityId);
         else if (domain === "light") {
@@ -419,6 +441,7 @@ export class BaseEntity {
       });
 
       this.endpoint.addCommandHandler("off", async () => {
+        this.assertOnline();
         if (domain === "vacuum")
           await this.platform.ha.callService(
             domain,
@@ -446,6 +469,7 @@ export class BaseEntity {
         this.endpoint.addCommandHandler(
           "FanControl.step",
           async (data: any) => {
+            this.assertOnline();
             if (this.isUpdatingFromHa) return;
             if (!hasFanSpeed(this.state)) return;
             const direction = data?.request?.direction ?? data?.direction;
@@ -556,6 +580,7 @@ export class BaseEntity {
         this.endpoint.addCommandHandler(
           "FanControl.changeDirection" as any,
           async (data: any) => {
+            this.assertOnline();
             const mattDir: FanControl.AirflowDirection =
               data?.request?.airflowDirection ??
               data?.airflowDirection ??
@@ -577,6 +602,7 @@ export class BaseEntity {
 
       if (this.endpoint.hasAttributeServer(LevelControl.id, "currentLevel")) {
         this.endpoint.addCommandHandler("moveToLevel", async (data: any) => {
+          this.assertOnline();
           const level = data?.request?.level ?? data?.level;
           if (typeof level === "number") {
             const haBrightness = lightConverter.toHaBrightness(level);
@@ -593,6 +619,7 @@ export class BaseEntity {
         this.endpoint.addCommandHandler(
           "moveToLevelWithOnOff",
           async (data: any) => {
+            this.assertOnline();
             const level = data?.request?.level ?? data?.level;
             if (typeof level === "number") {
               if (level === 0) {
@@ -625,6 +652,7 @@ export class BaseEntity {
 
       if (domain === "light" && this.hasColorControl(this.endpoint)) {
         const sendColor = async (payload: any) => {
+          this.assertOnline();
           if (payload.hs_color)
             this.setCommandLockout("hs_color", payload.hs_color);
           if (payload.xy_color)
@@ -892,6 +920,16 @@ export class BaseEntity {
         }
         if (ep.hasAttributeServer?.(0x0039, "reachable")) {
           await ep.setAttribute(0x0039, "reachable", reachable, this.platform.log);
+        }
+      }
+
+      // 4. Actively emit Matter subscription updates to controllers (Apple Home)
+      if (typeof ep.updateAttribute === "function") {
+        if (ep.hasAttributeServer?.(0x0039, "reachable")) {
+          await ep.updateAttribute(0x0039, "reachable", reachable, this.platform.log);
+        }
+        if (ep.hasAttributeServer?.(0x0028, "reachable")) {
+          await ep.updateAttribute(0x0028, "reachable", reachable, this.platform.log);
         }
       }
       this.platform.log?.debug?.(

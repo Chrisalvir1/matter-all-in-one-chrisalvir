@@ -147,16 +147,27 @@ export class CameraEntity extends BaseEntity {
     if (!targetEndpoint) return;
 
     targetEndpoint.addCommandHandler("on", async () => {
+      this.assertOnline();
       this.setCommandLockout("camera_state", "on");
       this.platform.log.debug(`[${this.entityId}] Matter → HA camera.turn_on`);
       await this.platform.ha.callService("camera", "turn_on", this.entityId);
     });
 
     targetEndpoint.addCommandHandler("off", async () => {
+      this.assertOnline();
       this.setCommandLockout("camera_state", "off");
       this.platform.log.debug(`[${this.entityId}] Matter → HA camera.turn_off`);
       await this.platform.ha.callService("camera", "turn_off", this.entityId);
     });
+  }
+
+  public override async setReachability(reachable: boolean): Promise<void> {
+    await super.setReachability(reachable);
+    if (this.homekitAccessory?.accessory) {
+      try {
+        this.homekitAccessory.accessory.updateReachability(reachable);
+      } catch {}
+    }
   }
 
   public override async updateState(

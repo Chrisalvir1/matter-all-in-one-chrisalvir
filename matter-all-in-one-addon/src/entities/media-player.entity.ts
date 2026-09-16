@@ -92,6 +92,7 @@ export class MediaPlayerEntity extends BaseEntity {
   }
 
   private async callService(service: string): Promise<void> {
+    this.assertOnline();
     await this.platform.ha.callService("media_player", service, this.entityId);
   }
 

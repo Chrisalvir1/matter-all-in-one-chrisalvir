@@ -35,7 +35,7 @@ import {
   safeSetAttribute,
   safeUpdateAttribute,
 } from "../utils/matter-attributes.js";
-import type { HassState } from "../utils/ha-state.js";
+import { HassState, isUnavailable } from "../utils/ha-state.js";
 import {
   getDeviceTypeForEntity,
   getLightDeviceType,
@@ -243,6 +243,14 @@ export class CompositeDeviceEntity {
         }
         if (ep.hasAttributeServer?.(0x0039, "reachable")) {
           await ep.setAttribute(0x0039, "reachable", reachable, this.platform.log);
+        }
+      }
+      if (typeof ep.updateAttribute === "function") {
+        if (ep.hasAttributeServer?.(0x0039, "reachable")) {
+          await ep.updateAttribute(0x0039, "reachable", reachable, this.platform.log);
+        }
+        if (ep.hasAttributeServer?.(0x0028, "reachable")) {
+          await ep.updateAttribute(0x0028, "reachable", reachable, this.platform.log);
         }
       }
       this.platform.log?.debug?.(
@@ -1021,6 +1029,18 @@ export class CompositeDeviceEntity {
     }
   }
 
+  private assertMemberOnline(entityId: string, member: CompositeMember): void {
+    const currentState = this.states.get(entityId) ?? member.state;
+    if (isUnavailable(currentState)) {
+      this.platform.log.warn(
+        `[Composite:${this.deviceId}][${entityId}] Rejecting Matter command: member is unavailable/offline in Home Assistant.`,
+      );
+      throw new Error(
+        `[Composite:${this.deviceId}][${entityId}] Member is unavailable/offline`,
+      );
+    }
+  }
+
   private callServiceDebounced(
     entityId: string,
     domain: string,
@@ -1028,6 +1048,13 @@ export class CompositeDeviceEntity {
     data?: Record<string, any>,
     delayMs = 60,
   ) {
+    const currentSt = this.states.get(entityId);
+    if (isUnavailable(currentSt)) {
+      this.platform.log.warn(
+        `[Composite:${this.deviceId}][${entityId}] Ignored debounced ${domain}.${service}: member is unavailable in Home Assistant.`,
+      );
+      return;
+    }
     if (service === "turn_on") {
       this.cancelDebouncedService(entityId, domain, "turn_off");
     } else if (service === "turn_off") {
@@ -1049,6 +1076,13 @@ export class CompositeDeviceEntity {
 
     const timer = setTimeout(() => {
       this.serviceDebounceTimers.delete(key);
+      const st = this.states.get(entityId);
+      if (isUnavailable(st)) {
+        this.platform.log.warn(
+          `[Composite:${this.deviceId}][${entityId}] Ignored delayed ${domain}.${service}: member transitioned to unavailable.`,
+        );
+        return;
+      }
       if (data !== undefined) {
         void this.platform.ha.callService(domain, service, entityId, data);
       } else {
@@ -1067,11 +1101,13 @@ export class CompositeDeviceEntity {
 
     if (domain === "camera") {
       endpoint.addCommandHandler("on", async () => {
+        this.assertMemberOnline(entityId, member);
         this.setCommandLockout(entityId, "camera_state", "on");
         this.platform.log.debug(`[Composite][${entityId}] → HA camera turn_on`);
         await this.platform.ha.callService("camera", "turn_on", entityId);
       });
       endpoint.addCommandHandler("off", async () => {
+        this.assertMemberOnline(entityId, member);
         this.setCommandLockout(entityId, "camera_state", "off");
         this.platform.log.debug(
           `[Composite][${entityId}] → HA camera turn_off`,
@@ -1083,6 +1119,7 @@ export class CompositeDeviceEntity {
 
     if (domain === "fan") {
       endpoint.addCommandHandler("on", async () => {
+        this.assertMemberOnline(entityId, member);
         const currentState = this.states.get(entityId) ?? member.state;
         if (isFanOn(currentState)) return;
         this.setCommandLockout(entityId, "fan_state", "on");
@@ -1090,6 +1127,7 @@ export class CompositeDeviceEntity {
         await this.platform.ha.callService("fan", "turn_on", entityId);
       });
       endpoint.addCommandHandler("off", async () => {
+        this.assertMemberOnline(entityId, member);
         const currentState = this.states.get(entityId) ?? member.state;
         if (!isFanOn(currentState)) return;
         this.setCommandLockout(entityId, "fan_state", "off");
@@ -1210,6 +1248,7 @@ export class CompositeDeviceEntity {
         endpoint.addCommandHandler(
           "FanControl.changeDirection" as any,
           async (data: any) => {
+            this.assertMemberOnline(entityId, member);
             const mattDir: FanControl.AirflowDirection =
               data?.request?.airflowDirection ??
               data?.airflowDirection ??
@@ -1233,9 +1272,11 @@ export class CompositeDeviceEntity {
 
     if (domain === "lock") {
       endpoint.addCommandHandler("lockDoor", async () => {
+        this.assertMemberOnline(entityId, member);
         await this.platform.ha.callService("lock", "lock", entityId);
       });
       endpoint.addCommandHandler("unlockDoor", async () => {
+        this.assertMemberOnline(entityId, member);
         await this.platform.ha.callService("lock", "unlock", entityId);
       });
       return;
@@ -1243,6 +1284,7 @@ export class CompositeDeviceEntity {
 
     if (domain === "light") {
       const sendColor = async (payload: any) => {
+        this.assertMemberOnline(entityId, member);
         if (payload.hs_color)
           this.setCommandLockout(entityId, "hs_color", payload.hs_color);
         if (payload.xy_color)
@@ -1261,11 +1303,13 @@ export class CompositeDeviceEntity {
         lightColor.getHsColor(this.states.get(entityId)!) ?? [0, 100];
 
       endpoint.addCommandHandler("on", async () => {
+        this.assertMemberOnline(entityId, member);
         this.setCommandLockout(entityId, "onOff", true);
         this.cancelDebouncedService(entityId, "light", "turn_off");
         this.callServiceDebounced(entityId, "light", "turn_on", undefined, 0);
       });
       endpoint.addCommandHandler("off", async () => {
+        this.assertMemberOnline(entityId, member);
         this.setCommandLockout(entityId, "onOff", false);
         this.cancelDebouncedService(entityId, "light", "turn_on");
         this.callServiceDebounced(entityId, "light", "turn_off", undefined, 0);
@@ -1273,6 +1317,7 @@ export class CompositeDeviceEntity {
 
       if (endpoint.hasAttributeServer(LevelControl.id, "currentLevel")) {
         endpoint.addCommandHandler("moveToLevel", async (data: any) => {
+          this.assertMemberOnline(entityId, member);
           const level = data?.level ?? data?.request?.level;
           if (typeof level === "number") {
             const haBrightness = lightConverter.toHaBrightness(level);
@@ -1289,6 +1334,7 @@ export class CompositeDeviceEntity {
         endpoint.addCommandHandler(
           "moveToLevelWithOnOff",
           async (data: any) => {
+            this.assertMemberOnline(entityId, member);
             const level = data?.level ?? data?.request?.level;
             if (typeof level === "number") {
               if (level === 0) {

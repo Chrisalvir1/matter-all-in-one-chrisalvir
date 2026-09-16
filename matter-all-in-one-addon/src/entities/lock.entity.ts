@@ -43,12 +43,14 @@ export class LockEntity extends BaseEntity {
 
     // Lock command handler
     this.endpoint.addCommandHandler("lockDoor", async () => {
+      this.assertOnline();
       this.platform.log.debug(`Matter LockDoor commanded for ${this.entityId}`);
       await this.platform.ha.callService(domain, "lock", this.entityId);
     });
 
     // Unlock command handler
     this.endpoint.addCommandHandler("unlockDoor", async () => {
+      this.assertOnline();
       this.platform.log.debug(
         `Matter UnlockDoor commanded for ${this.entityId}`,
       );

@@ -59,6 +59,7 @@ export class ClosureEntity extends BaseEntity {
     targetEndpoint.addCommandHandler(
       "goToLiftPercentage",
       async (payload: any) => {
+        this.assertOnline();
         // Safely support both liftPercentageValue (Matter 1.3/1.4) and liftPercent100thsValue (Matter 1.5/1.5.1)
         let percent: number | undefined;
         if (payload.liftPercent100thsValue !== undefined) {
