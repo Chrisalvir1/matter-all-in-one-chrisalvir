@@ -8,7 +8,7 @@
 - **Integración de Gestión de Energía Matter 1.3 para la nueva categoría 'Electricidad' de Apple Home:**
   - Habilitación de `energyTariff: true` en `homekit.compat.ts` y mapeo en el registro de tipos de dispositivo de HomeKit.
   - Soporte para sensores de Home Assistant con `device_class: power` (potencia activa instantánea en mW mapeada al cluster `0x0090` `ElectricalPowerMeasurement`) y `device_class: energy` (energía acumulada en mWh mapeada al cluster `0x0091` `ElectricalEnergyMeasurement`).
-  - Actualización del whitelist de sensores en `platform.ts` para permitir entidades con `device_class: monetary`, `power` y `energy`.
+  - Actualización del whitelist de sensores en `platform.ts` para admitir sensores de potencia (`power`) y energía acumulada (`energy`), manteniendo el principio fail-closed para precios monetarios incompletos.
 
 ## [1.5.87] - 2026-09-16
 
