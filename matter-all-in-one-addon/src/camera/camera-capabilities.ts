@@ -85,13 +85,18 @@ export function detectCameraCapabilities(
       } else if (
         pAudio.includes("pcm") ||
         pAudio.includes("alaw") ||
-        pAudio.includes("ulaw")
+        pAudio.includes("ulaw") ||
+        pAudio.includes("g711") ||
+        pAudio.includes("g722") ||
+        pAudio.includes("adpcm")
       ) {
         audioCodec = "pcm";
       } else {
-        audioCodec = "incompatible";
-        hasAudio = false;
+        // FFmpeg resamples and transcodes any camera audio codec to AAC-ELD
+        audioCodec = "aac_lc";
       }
+    } else if (hasAudio) {
+      audioCodec = "aac_lc";
     }
   } else {
     const rawAudioCodec = (attrs.audio_codec || "").toLowerCase();

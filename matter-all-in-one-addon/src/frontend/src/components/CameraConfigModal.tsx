@@ -282,6 +282,8 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
           if (res.validation.videoCodec) camera.capabilities.observed.videoCodec = res.validation.videoCodec;
           if (res.validation.audioCodec) {
             camera.capabilities.observed.audioCodec = res.validation.audioCodec;
+          }
+          if (res.validation.hasAudio !== undefined) {
             camera.capabilities.observed.hasAudio = res.validation.hasAudio;
           }
           if (res.validation.fps) camera.capabilities.observed.fps = res.validation.fps;

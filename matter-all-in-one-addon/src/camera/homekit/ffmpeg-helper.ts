@@ -530,7 +530,7 @@ function probeWithFfmpeg(
       }
     }
 
-    args.push("-i", sourceUrl, "-t", "1", "-f", "null", "-");
+    args.push("-i", sourceUrl, "-t", "2", "-f", "null", "-");
 
     const child = spawn(ffmpegPath, args, {
       stdio: ["ignore", "ignore", "pipe"],

@@ -5061,7 +5061,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                   audioCodec: validation.audioCodec as any,
                   resolution: validation.resolution,
                   fps: validation.fps,
-                  hasAudio: validation.hasAudio ?? false,
+                  hasAudio: validation.hasAudio ?? true,
                   needsDumpExtra: validation.needsDumpExtra,
                   gopSeconds: validation.gopSeconds,
                 }
@@ -5200,7 +5200,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               camera.capabilities.observed = {
                 videoCodec: "h264",
                 resolution: { width: 1920, height: 1080 },
-                hasAudio: false,
+                hasAudio: true,
               };
             }
             camera.capabilities.observed.gopSeconds =

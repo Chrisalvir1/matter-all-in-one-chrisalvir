@@ -61,8 +61,8 @@ export class ScryptedHomeKitBridge {
       hasLiveStream: hasSource,
       streamSourceType: directUrl ? "rtsp" : "unknown",
       videoCodec: observed?.videoCodec || "h264",
-      hasAudio: hasSource && (observed?.hasAudio !== false),
-      audioCodec: observed?.hasAudio === false ? "none" : "aac_lc",
+      hasAudio: hasSource,
+      audioCodec: "aac_lc",
       resolution: observed?.resolution || { width: 1920, height: 1080 },
       maxFps: observed?.fps || 30,
       strategy: hasSource

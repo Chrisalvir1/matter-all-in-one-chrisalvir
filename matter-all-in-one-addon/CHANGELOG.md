@@ -1,3 +1,17 @@
+## [1.5.90] - 2026-09-16
+
+### Restauración de Audio en Directo para Apple HomeKit y Sincronización Acústica PTS
+
+- **Corrección de Bitrate de Audio a Especificación HAP de Apple (24 kbps):**
+  - Se corrigió la tasa de bits de audio para que respete estrictamente los límites negociados por Apple HomeKit (`Math.min(request.audio.max_bit_rate || 24, 24)`). La elevación previa a 32+ kbps saturaba el buffer de fluctuación (jitter buffer) del decodificador AAC-ELD en iOS, provocando que el reproductor de audio de Apple Home silenciara o descartara los paquetes RTP.
+- **Filtro de Audio Mejorado con Sincronización PTS y Ganancia de Volumen:**
+  - Se implementó `-af aresample=async=1:first_pts=0,volume=2.5`, garantizando que la marca de tiempo (PTS) del audio comience exactamente en 0 coordinada con el video y compensando el bajo nivel de ganancia de los micrófonos RTSP (Tapo, Wyze, Hikvision, Dahua) para una audición nítida y potente en iPhone, iPad, Mac y Apple TV.
+- **Flags Globales de Encapsulación RTP para AAC:**
+  - Se añadió `-flags +global_header` de forma unificada tanto para `libfdk_aac` como para el encoder de respaldo `aac`, asegurando que los paquetes RTP contengan la información de encabezado de audio requerida por iOS.
+- **Eliminación de Falsos Positivos de Audio Silencioso (`needsSilentAudio`):**
+  - La inyección de fuente silenciosa (`anullsrc`) ahora sólo se activa si la cámara es genuinamente un proxy JPEG multipart de Home Assistant sin pista de audio (`/api/camera_proxy_stream/`). Los streams RTSP y HTTP de cámaras reales ya no se marcan erróneamente como mudos.
+  - En `scrypted-homekit-bridge.ts`, `scrypted-storage.ts`, `platform.ts` y `camera-capabilities.ts`, se restableció el soporte predeterminado de audio activo (`hasAudio: true`) y soporte para códecs G.711, G.722 y ADPCM, transcodificados transparentemente a AAC-ELD.
+
 ## [1.5.89] - 2026-09-16
 
 ### Estabilidad de Stream de Cámaras, Calidad 2K Nativa sin Pérdidas y Eliminación de Botones Ficticios de PTZ

@@ -627,7 +627,13 @@ export class HomeKitCameraStreamingDelegate
       session.audioSsrc &&
       session.audioKeySalt
     );
-    const isHaProxy = this.streamSource.sourceType === "ha_proxy";
+    const isHaProxy =
+      (this.streamSource.sourceType === "ha_proxy" ||
+        this.streamSource.sourceType === "mjpeg") &&
+      Boolean(
+        this.streamSource.url &&
+          this.streamSource.url.includes("/api/camera_proxy_stream/"),
+      );
     const needsSilentAudio =
       hasAudioRequested &&
       (isHaProxy || this.capabilities.hasAudio === false);
@@ -734,7 +740,7 @@ export class HomeKitCameraStreamingDelegate
         `?rtcpport=${session.audioPort}&localrtcpport=${session.localAudioPort}&pkt_size=188`;
       const isOpus = request.audio.codec === AudioStreamingCodecType.OPUS;
       const hasFdk = supportsFdkAac();
-      const audioBitrate = Math.max(32, request.audio.max_bit_rate || 32);
+      const audioBitrate = Math.min(request.audio.max_bit_rate || 24, 24);
 
       if (needsSilentAudio) {
         args.push(
@@ -748,7 +754,7 @@ export class HomeKitCameraStreamingDelegate
           "0:a:0",
           "-vn",
           "-af",
-          "aresample=16000",
+          "aresample=async=1:first_pts=0,volume=2.5",
         );
       }
 
@@ -765,10 +771,9 @@ export class HomeKitCameraStreamingDelegate
           hasFdk ? "libfdk_aac" : "aac",
           "-profile:a",
           hasFdk ? "aac_eld" : "aac_low",
+          "-flags",
+          "+global_header",
         );
-        if (hasFdk) {
-          args.push("-flags", "+global_header");
-        }
       }
 
       args.push(

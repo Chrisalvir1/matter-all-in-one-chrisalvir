@@ -773,7 +773,7 @@ export class ScryptedStorage {
         ...(cam.capabilities.observed || {
           videoCodec: "h264",
           resolution: { width: 1920, height: 1080 },
-          hasAudio: false,
+          hasAudio: true,
         }),
         ...capabilities,
       };

@@ -40,7 +40,13 @@ export class CameraSourceResolver {
       );
 
       return {
-        sourceType: streamSourceAttr.startsWith("rtsp") ? "rtsp" : "ha_proxy",
+        sourceType: streamSourceAttr.startsWith("rtsp")
+          ? "rtsp"
+          : streamSourceAttr.includes("/api/camera_proxy_stream/")
+            ? "ha_proxy"
+            : streamSourceAttr.includes(".m3u8")
+              ? "hls"
+              : "rtsp",
         url: streamSourceAttr,
         snapshotUrl,
         supportsPassthrough: true,

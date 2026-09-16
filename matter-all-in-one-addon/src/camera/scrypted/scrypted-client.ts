@@ -690,7 +690,10 @@ export class ScryptedClient {
               bitrateKbps: opt.video?.bitrate
                 ? Math.round(opt.video.bitrate / 1000)
                 : undefined,
-              hasAudio: Boolean(opt.audio),
+              hasAudio:
+                opt.audio !== undefined && opt.audio !== null
+                  ? Boolean(opt.audio)
+                  : true,
               directUrl,
               discoveredAt: now,
               validationStatus: directUrl ? "not_checked" : "unsupported",
@@ -1290,7 +1293,10 @@ export class ScryptedClient {
               bitrateKbps: opt.video?.bitrate
                 ? Math.round(opt.video.bitrate / 1000)
                 : undefined,
-              hasAudio: Boolean(opt.audio),
+              hasAudio:
+                opt.audio !== undefined && opt.audio !== null
+                  ? Boolean(opt.audio)
+                  : true,
               directUrl,
               discoveredAt: now,
               validationStatus: directUrl ? "not_checked" : "unsupported",

@@ -244,7 +244,7 @@ describe("HomeKitCameraStreamingDelegate", () => {
     expect(callback).toHaveBeenCalledOnce();
   });
 
-  it("builds stream args with H.264 passthrough copy, 32k audio, and without HA token for external streams", () => {
+  it("builds stream args with H.264 passthrough copy, 24k audio, and without HA token for external streams", () => {
     const delegate = new HomeKitCameraStreamingDelegate(
       createPlatform(),
       "scrypted.51",
@@ -286,7 +286,7 @@ describe("HomeKitCameraStreamingDelegate", () => {
         sample_rate: 16,
         packet_time: 20,
         pt: 110,
-        max_bit_rate: 32,
+        max_bit_rate: 24,
         rtp: { port: 5002 } as any,
       } as any,
     };
@@ -298,8 +298,9 @@ describe("HomeKitCameraStreamingDelegate", () => {
     expect(capturedArgs).toContain("copy");
     expect(capturedArgs).toContain("dump_extra=freq=keyframe");
 
-    // Verify audio upgraded to 32k
-    expect(capturedArgs).toContain("32k");
+    // Verify audio at HAP-compliant 24k and audio filter with PTS sync & volume boost
+    expect(capturedArgs).toContain("24k");
+    expect(capturedArgs).toContain("aresample=async=1:first_pts=0,volume=2.5");
 
     // Verify HTTP/HTTPS robust flags
     expect(capturedArgs).toContain("-reconnect");
