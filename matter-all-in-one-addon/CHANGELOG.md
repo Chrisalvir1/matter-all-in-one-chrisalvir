@@ -1,3 +1,18 @@
+## [1.5.89] - 2026-09-16
+
+### Estabilidad de Stream de Cámaras, Calidad 2K Nativa sin Pérdidas y Eliminación de Botones Ficticios de PTZ
+
+- **Eliminación del bucle de verificación de stream en UI y prevención de corte a los 3 segundos:**
+  - En `CameraConfigModal.tsx`, se corrigió la dependencia del `useEffect` a `camera.cameraId` en lugar de `camera`, evitando que las actualizaciones de estado en segundo plano (polling y SSE) ejecutaran `verifyCameraStream` continuamente en segundo plano.
+  - La verificación sólo se realiza bajo demanda cuando el usuario pulsa deliberadamente "🔍 Verificar Stream".
+  - En `ScryptedHomeKitBridge.mountCamera` y `platform.ts`, se protegen las sesiones de transmisión activa (`isStreaming`), impidiendo que el servidor desmonte el accesorio HAP o mate el proceso FFmpeg mientras el usuario visualiza el stream en Apple Home.
+- **Calidad 2K QHD Nativa y Tasa de Bits Mejorada para HomeKit Live View:**
+  - En `HomeKitCameraAccessory.buildDeclaredResolutions()`, la resolución nativa de la cámara se declara como la opción preferente y prioritaria, restringiendo las resoluciones anunciadas a las capacidades reales del sensor para evitar que iOS intente solicitar 4K en cámaras de 2K o 1080p forzando reescalado en CPU.
+  - En `HomeKitCameraStreamingDelegate`, se elevaron los pisos de tasa de bits a 3500-6000 kbps para 2K y hasta 12000 kbps para 4K, garantizando que el passthrough directo (`-c:v copy`) entregue la máxima nitidez cristalina sin compresión ni pérdidas.
+- **Limpieza de Sensores y Botones Ficticios de PTZ:**
+  - Eliminado el botón artificial *"⚡ Activar Giro PTZ"* y la inyección sintética de sensores `_ptz` basados en nombres o modelos de texto.
+  - Las capacidades motorizadas PTZ ahora sólo se reportan cuando la cámara física expone genuinamente las interfaces `PanTilt` o `PanTiltZoom` en hardware.
+
 ## [1.5.88] - 2026-09-16
 
 ### Compatibilidad con iOS 27 / iOS 27.2: Grabación 4K UHD HKSV y Gestión de Energía Matter 1.3

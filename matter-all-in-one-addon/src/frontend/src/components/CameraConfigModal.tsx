@@ -49,50 +49,26 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
     setFreshMatterManualCode(null);
     setMultiAdminOpen(false);
 
-    // Auto-probe stream in background to fetch real specs & verify live connectivity
-    if (initialUrl) {
-      setIsVerifying(true);
-      setStreamResult({ text: "🔄 Verificando stream en vivo..." });
-      api
-        .verifyCameraStream(camera.cameraId, initialUrl, prefTransport)
-        .then((res) => {
-          if (res.ok && res.status === "verified" && res.validation) {
-            if (!camera.capabilities) camera.capabilities = {};
-            if (!camera.capabilities.observed) camera.capabilities.observed = {};
-            if (res.validation.resolution) camera.capabilities.observed.resolution = res.validation.resolution;
-            if (res.validation.videoCodec) camera.capabilities.observed.videoCodec = res.validation.videoCodec;
-            if (res.validation.audioCodec) {
-              camera.capabilities.observed.audioCodec = res.validation.audioCodec;
-              camera.capabilities.observed.hasAudio = res.validation.hasAudio;
-            }
-            if (res.validation.fps) camera.capabilities.observed.fps = res.validation.fps;
-            setStreamVerified(true);
-            const w = res.validation.resolution?.width || 1920;
-            const h = res.validation.resolution?.height || 1080;
-            const codec = (res.validation.videoCodec || "H.264").toUpperCase();
-            const fpsVal = res.validation.fps || 30;
-            const audioStr = res.validation.hasAudio ? "Con Audio" : "Sin Audio";
-            setStreamResult({
-              text: `✓ Stream verificado y activo (${codec} ${w}x${h} @ ${fpsVal}fps, ${audioStr}). Live View listo para Apple Home.`,
-            });
-          } else {
-            setStreamVerified(false);
-            setStreamResult({
-              text: `⚠️ Stream no verificado: ${res.validation?.error || "No se pudo conectar al stream RTSP/HTTP. Revisa la URL o transporte."}`,
-              isError: true,
-            });
-          }
-        })
-        .catch((err: any) => {
-          setStreamVerified(false);
-          setStreamResult({
-            text: `⚠️ Error al verificar stream: ${err.message || "Error desconocido"}`,
-            isError: true,
-          });
-        })
-        .finally(() => {
-          setIsVerifying(false);
-        });
+    // Show current verified state without launching background ffprobe loop
+    const observed = camera.capabilities?.observed;
+    const isVerified =
+      camera.source?.streamValidationStatus === "verified" ||
+      camera.source?.streamReference?.validationStatus === "verified";
+    if (isVerified && observed) {
+      setStreamVerified(true);
+      const w = observed.resolution?.width || 1920;
+      const h = observed.resolution?.height || 1080;
+      const codec = (observed.videoCodec || "H.264").toUpperCase();
+      const fpsVal = observed.fps || 30;
+      const audioStr = observed.hasAudio !== false ? "Con Audio" : "Sin Audio";
+      setStreamResult({
+        text: `✓ Stream verificado y activo (${codec} ${w}x${h} @ ${fpsVal}fps, ${audioStr}). Live View listo para Apple Home.`,
+      });
+    } else if (initialUrl) {
+      setStreamVerified(false);
+      setStreamResult({
+        text: "ℹ️ Pulsa 'Verificar Stream' para probar la conectividad y resolución nativa en vivo.",
+      });
     } else {
       setStreamVerified(false);
       setStreamResult({
@@ -100,7 +76,7 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
         isError: true,
       });
     }
-  }, [camera]);
+  }, [camera.cameraId]);
 
   // Compute HomeKit Setup URI
   const getSetupUri = () => {
@@ -154,17 +130,6 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
       if (!camera.identityOverride) camera.identityOverride = {};
       camera.identityOverride.model = modelToSave;
 
-      const isPtz = /pan|ptz|pantilt|c200|c210|c220|c225|e1 zoom|orbit/i.test(modelToSave);
-      if (isPtz && !camera.sensors?.some((s) => s.type === "ptz")) {
-        if (!camera.sensors) camera.sensors = [];
-        camera.sensors.push({
-          sensorId: `${camera.cameraId}_ptz`,
-          type: "ptz",
-          name: `${camera.name} – Control PTZ (Giro)`,
-          enabled: true,
-          state: true,
-        });
-      }
       setModelInput(modelToSave);
       showToast(`✓ Modelo actualizado a «${modelToSave}»`);
       onRefresh();
@@ -173,31 +138,6 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
     } finally {
       setIsSavingModel(false);
     }
-  };
-
-  const handleTogglePtz = async () => {
-    if (!camera) return;
-    const currentlyHasPtz = (camera.sensors || []).some((s) => s.type === "ptz");
-    if (currentlyHasPtz) {
-      camera.sensors = (camera.sensors || []).filter((s) => s.type !== "ptz");
-      showToast("Giro PTZ desactivado");
-    } else {
-      if (!camera.sensors) camera.sensors = [];
-      camera.sensors.push({
-        sensorId: `${camera.cameraId}_ptz`,
-        type: "ptz",
-        name: `${camera.name} – Control PTZ (Giro)`,
-        enabled: true,
-        state: true,
-      });
-      if (!camera.displayModel || camera.displayModel === "Modelo no identificado") {
-        const panName = brand.toLowerCase().includes("wyze") ? "Wyze Cam Pan v2" : `${brand} Pan/Tilt`;
-        await handleSaveModel(panName);
-        return;
-      }
-      showToast("✓ Giro PTZ motorizado activado en hardware");
-    }
-    onRefresh();
   };
 
   // Real Hardware Capabilities
@@ -232,31 +172,17 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
       state: hasSiren ? "🟢 Detectada en hardware" : "⚪ No disponible en hardware",
       available: hasSiren,
     },
-    {
-      icon: "🔄",
-      title: "Giro Motorizado PTZ (Pan / Tilt)",
-      desc: hasPtz
-        ? "Hardware motorizado verificado (Pan/Tilt activo en el accesorio)."
-        : "Scrypted no detecta PTZ en streams RTSP estándar. Pulsa para activarlo si es una cámara Pan.",
-      state: hasPtz ? "🟢 Soportado por hardware" : "⚪ Lente Fija (Sin PTZ)",
-      available: hasPtz,
-      actionButton: (
-        <button
-          className="button button-sm"
-          type="button"
-          onClick={handleTogglePtz}
-          style={{
-            fontSize: "0.68rem",
-            padding: "2px 7px",
-            background: hasPtz ? "rgba(239, 68, 68, 0.15)" : "rgba(16, 185, 129, 0.2)",
-            color: hasPtz ? "#fca5a5" : "#6ee7b7",
-            border: `1px solid ${hasPtz ? "rgba(239, 68, 68, 0.3)" : "rgba(52, 211, 153, 0.3)"}`,
-          }}
-        >
-          {hasPtz ? "Desactivar PTZ" : "⚡ Activar Giro PTZ"}
-        </button>
-      ),
-    },
+    ...(hasPtz
+      ? [
+          {
+            icon: "🔄",
+            title: "Giro Motorizado PTZ (Pan / Tilt)",
+            desc: "Hardware motorizado con interfaz nativa activa en el accesorio.",
+            state: "🟢 Soportado por hardware",
+            available: true,
+          },
+        ]
+      : []),
     ...(hasDoorbell
       ? [
           {
@@ -680,7 +606,7 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                   style={{ fontSize: "0.68rem", padding: "2px 6px" }}
                   onClick={() => handleSaveModel("Wyze Cam Pan v2")}
                 >
-                  Wyze Pan v2 (PTZ)
+                  Wyze Pan v2
                 </button>
                 <button
                   className="button button-sm"

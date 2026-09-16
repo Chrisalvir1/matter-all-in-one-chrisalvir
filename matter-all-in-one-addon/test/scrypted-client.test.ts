@@ -221,7 +221,7 @@ describe("ScryptedClient — listCameras (mocked session)", () => {
     expect(cameras[0].sensors.some((s) => s.type === "doorbell")).toBe(true);
   });
 
-  it("auto-detects PTZ sensor from device name or model when interfaces lack PanTilt (e.g. Wyze Cam Pan v2)", async () => {
+  it("detects PTZ sensor when PanTilt interface is present in device interfaces", async () => {
     const fakeSession = {
       sdk: {
         systemManager: {
@@ -230,7 +230,7 @@ describe("ScryptedClient — listCameras (mocked session)", () => {
               id: "50",
               name: "WYZE-PATIO TRASERO",
               type: "Camera",
-              interfaces: ["Camera", "VideoCamera"],
+              interfaces: ["Camera", "VideoCamera", "PanTilt"],
               info: {
                 manufacturer: "Wyze",
                 model: "Wyze Cam Pan v2",

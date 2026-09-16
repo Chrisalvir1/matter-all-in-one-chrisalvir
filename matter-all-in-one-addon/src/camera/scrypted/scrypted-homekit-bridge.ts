@@ -44,6 +44,11 @@ export class ScryptedHomeKitBridge {
     ) {
       return existing;
     }
+    // If there is an active live stream in progress, do not tear down the accessory during verification probes
+    if (existing?.isPublished && existing.isStreaming) {
+      this.sourceFingerprints.set(camera.cameraId, fingerprint);
+      return existing;
+    }
     if (existing) {
       await existing.unpublish();
       this.activeAccessories.delete(camera.cameraId);

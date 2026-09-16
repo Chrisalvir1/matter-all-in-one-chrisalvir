@@ -229,15 +229,16 @@ export class HomeKitCameraAccessory {
   private buildDeclaredResolutions(): [number, number, number][] {
     const source = this.capabilities.resolution || { width: 1920, height: 1080 };
     const sourceFps = Math.max(15, Math.min(this.capabilities.maxFps || 30, 60));
-    const maxDeclaredWidth = Math.max(source.width, 3840);
-    const maxDeclaredHeight = Math.max(source.height, 2160);
+    const maxDeclaredWidth = source.width;
+    const maxDeclaredHeight = source.height;
     const ladder: [number, number, number][] = [
-      // Native source resolution first so HomeKit can negotiate max quality
+      // Native source resolution first so HomeKit negotiates maximum native quality
       [source.width, source.height, sourceFps],
       // 4K UHD (3840x2160)
       [3840, 2160, sourceFps],
-      // 2K QHD (2560x1440 for Tapo, etc.)
+      // 2K QHD (2560x1440 / 2304x1296 for Tapo, Wyze, etc.)
       [2560, 1440, sourceFps],
+      [2304, 1296, sourceFps],
       [1920, 1080, sourceFps],
       [1280, 960, sourceFps],
       [1280, 720, sourceFps],
@@ -250,12 +251,15 @@ export class HomeKitCameraAccessory {
       [320, 240, 15],
       [320, 180, 30],
     ];
-    // Deduplicate and keep only resolutions at or below max bounds, highest first
+    // Deduplicate and keep only native resolution and resolutions at or below sensor capabilities
     const seen = new Set<string>();
     const supported: [number, number, number][] = [];
     for (const [w, h, fps] of ladder) {
       const key = `${w}x${h}`;
-      if (!seen.has(key) && w <= maxDeclaredWidth && h <= maxDeclaredHeight) {
+      if (
+        !seen.has(key) &&
+        ((w <= maxDeclaredWidth && h <= maxDeclaredHeight) || w <= 1920)
+      ) {
         seen.add(key);
         supported.push([w, h, fps]);
       }
@@ -399,6 +403,10 @@ export class HomeKitCameraAccessory {
 
   public isPaired(): boolean {
     return this.getPairingState() === "paired";
+  }
+
+  public get isStreaming(): boolean {
+    return this.delegate?.isStreaming ?? false;
   }
 
   public async unpublish(): Promise<void> {

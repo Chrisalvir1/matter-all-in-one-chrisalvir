@@ -273,9 +273,7 @@ function mapDeviceToCameraRecord(
 
   const isPtz =
     allInterfaces.includes("PanTilt") ||
-    allInterfaces.includes("PanTiltZoom") ||
-    /pan|ptz|pantilt|c200|c210|c220|c225|e1 zoom|orbit/i.test(resolvedModel || "") ||
-    /pan|ptz|pantilt/i.test(name || "");
+    allInterfaces.includes("PanTiltZoom");
 
   if (isPtz) {
     sensors.push({

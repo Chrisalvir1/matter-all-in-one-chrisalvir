@@ -5074,10 +5074,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             camera.status.cache = "fresh";
             await ScryptedStorage.save(store);
 
-            // Remount with verified stream
+            // Mount or update HAP with verified stream without tearing down active streams
             try {
               if (camera.exportConfig?.homeKitEnabled) {
-                await ScryptedHomeKitBridge.unmountCamera(cameraId);
                 await ScryptedHomeKitBridge.mountCamera(this, camera);
               }
             } catch (remountErr) {

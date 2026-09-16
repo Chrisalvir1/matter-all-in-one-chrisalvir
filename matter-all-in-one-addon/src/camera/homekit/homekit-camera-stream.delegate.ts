@@ -94,6 +94,10 @@ export class HomeKitCameraStreamingDelegate
   private readonly activeSessions = new Map<string, HomeKitStreamSession>();
   private lastSnapshotBuffer: Buffer = FALLBACK_JPEG_BUFFER;
 
+  public get isStreaming(): boolean {
+    return this.activeSessions.size > 0;
+  }
+
   private isTakingSnapshot = false;
   private lastSnapshotTime = 0;
 
@@ -465,12 +469,26 @@ export class HomeKitCameraStreamingDelegate
     const video = request.video;
     const fps = Math.max(1, Math.min(video.fps || 30, 60));
     // HomeKit on iOS can request default low bitrates (e.g. 299k).
-    // Ensure a high-fidelity floor: at least 2500k for 1080p, 4000k for 1440p (Tapo) / 4K.
+    // Ensure a high-fidelity floor: at least 3500k-5000k for 2K (Tapo/Wyze), 6000k-8000k for 4K.
     const qualityFloor =
-      video.width >= 2560 ? 2000 : video.width >= 1920 ? 1500 : 1000;
+      video.width >= 3840
+        ? 6000
+        : video.width >= 2304
+          ? 3500
+          : video.width >= 1920
+            ? 2500
+            : 1500;
+    const maxBitrateCap =
+      video.width >= 3840
+        ? 12000
+        : video.width >= 2304
+          ? 6000
+          : video.width >= 1920
+            ? 4000
+            : 2500;
     const bitrate = Math.max(
       qualityFloor,
-      Math.min(video.max_bit_rate || 2000, 4000),
+      Math.min(video.max_bit_rate || 2500, maxBitrateCap),
     );
     const mtu = video.mtu || 1378;
     const host = formatHost(session.targetAddress);
