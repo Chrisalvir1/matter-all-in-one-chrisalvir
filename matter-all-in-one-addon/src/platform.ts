@@ -5795,13 +5795,16 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           const store = await CameraUiStorage.load();
           const enriched = store.cameras.map((cam) => {
             const acc = CameraUiHomeKitBridge.getAccessory(cam.id);
+            const livePaired = acc ? acc.isPaired() : (cam.isPaired ?? false);
             return {
               ...cam,
               setupUri: acc?.setupUri || cam.setupUri,
-              isPaired: acc?.isPaired() ?? cam.isPaired ?? false,
+              isPaired: livePaired,
               port: acc?.record?.port || cam.port,
               pincode: acc?.record?.pincode || cam.pincode || "031-45-154",
               setupId: acc?.record?.setupId || cam.setupId,
+              videoCodec: acc?.capabilities?.videoCodec || cam.videoCodec,
+              strategy: (acc?.capabilities?.strategy as any) || cam.strategy,
             };
           });
           res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });

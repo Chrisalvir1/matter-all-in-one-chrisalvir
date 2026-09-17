@@ -369,9 +369,21 @@ export class CameraUiClient {
       let isMuted = false;
 
       if (sources.length > 0) {
-        // High resolution or primary stream
+        // High resolution or primary stream (Stream 1) - strictly prioritize Stream 1
         const highRes =
-          sources.find((s) => s.role === "high-resolution" || s.role === "high" || s.role === "main") ||
+          sources.find(
+            (s) =>
+              s.role === "high-resolution" ||
+              s.role === "high" ||
+              s.role === "main" ||
+              s.role === "stream1" ||
+              (typeof s.name === "string" && /main|stream1|hq|primary/i.test(s.name)),
+          ) ||
+          sources.find((s) => {
+            const u = Array.isArray(s.urls) ? s.urls[0] : s.url || s.stream || "";
+            return /stream1|main|ch0|h264preview.*main/i.test(u);
+          }) ||
+          sources.find((s) => s.role !== "sub" && s.role !== "low" && s.role !== "snapshot") ||
           sources[0];
         if (highRes) {
           if (Array.isArray(highRes.urls) && highRes.urls.length > 0) {
@@ -422,6 +434,21 @@ export class CameraUiClient {
       let snapshotUrl =
         snapshotSourceUrl ||
         this.cleanStreamUrl(videoConfig.stillImageSource);
+
+      // Ensure rtspUrl strictly prioritizes Stream 1 (Full 100% Quality / Main Stream)
+      if (rtspUrl) {
+        if (
+          (rtspUrl.includes("/stream2") || rtspUrl.includes("_sub") || rtspUrl.includes("/sub/")) &&
+          subRtspUrl &&
+          (subRtspUrl.includes("/stream1") || subRtspUrl.includes("_main") || subRtspUrl.includes("/main/"))
+        ) {
+          const temp = rtspUrl;
+          rtspUrl = subRtspUrl;
+          subRtspUrl = temp;
+        } else if (rtspUrl.includes("/stream2")) {
+          rtspUrl = rtspUrl.replace("/stream2", "/stream1");
+        }
+      }
 
       // If no direct RTSP source was found, fallback to Camera.UI local RTSP restream
       if (!rtspUrl) {
@@ -476,6 +503,28 @@ export class CameraUiClient {
         item.doorbellTopic ||
         (item.doorbell ? `camera.ui/${safeSlug}/doorbell` : undefined);
 
+      // Detect video codec: check videoConfig, sources, or known Tapo 2K/HEVC camera models
+      const rawCodec = String(
+        videoConfig.vcodec ||
+        videoConfig.codec ||
+        item.vcodec ||
+        item.codec ||
+        (sources[0] && (sources[0].codec || sources[0].vcodec)) ||
+        "",
+      ).toLowerCase();
+
+      const modelName = String(item.info?.model || item.model || "").toLowerCase();
+      const cameraTitle = name.toLowerCase();
+      const isHevcDetected =
+        rawCodec.includes("hevc") ||
+        rawCodec.includes("265") ||
+        /c402|c420|c425|c520|c320|c325|tc72/i.test(modelName) ||
+        /c402|c420|c425|c520|c320|c325|tc72/i.test(cameraTitle) ||
+        (width >= 2304 && (/tapo/i.test(cameraTitle) || /tapo/i.test(modelName)));
+
+      const videoCodec = isHevcDetected ? "hevc" : rawCodec.includes("h264") ? "h264" : undefined;
+      const strategy = isHevcDetected ? "transcode" : "passthrough_h264";
+
       results.push({
         id: `cameraui_${safeId}`,
         name,
@@ -489,6 +538,8 @@ export class CameraUiClient {
         width,
         height,
         fps,
+        videoCodec,
+        strategy,
         motionTopic,
         doorbellTopic,
         motionActive: false,
@@ -509,6 +560,19 @@ export class CameraUiClient {
     }
     // Remove surrounding quotes if present
     trimmed = trimmed.replace(/^["']|["']$/g, "").trim();
+
+    // Support tapo:// custom scheme from Camera.UI / homebridge-tapo-camera
+    // e.g. tapo://user:password@192.168.1.100 -> rtsp://user:password@192.168.1.100:554/stream1
+    if (trimmed.startsWith("tapo://")) {
+      const afterProto = trimmed.substring(7);
+      if (!afterProto.includes(":554") && !afterProto.includes("/")) {
+        return `rtsp://${afterProto}:554/stream1`;
+      } else if (!afterProto.includes("/")) {
+        return `rtsp://${afterProto}/stream1`;
+      }
+      return `rtsp://${afterProto}`;
+    }
+
     if (
       trimmed.startsWith("rtsp://") ||
       trimmed.startsWith("rtsps://") ||

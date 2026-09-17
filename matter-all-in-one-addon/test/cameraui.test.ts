@@ -396,5 +396,68 @@ describe("Camera.UI Client and Storage Integration", () => {
     expect(res.ok).toBe(true);
     expect(res.message).toContain("1 cámara detectada");
   });
+
+  it("converts tapo:// URLs to standard RTSP stream1 endpoints", async () => {
+    global.fetch = vi.fn().mockImplementation(async (url: string) => {
+      if (url.includes("/api/cameras")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => [
+            {
+              _id: "tapo-c402-cam",
+              name: "APO C402 Prueba Cam",
+              videoConfig: {
+                source: "tapo://admin:mypassword@192.168.110.150",
+                maxWidth: 2560,
+                maxHeight: 1440,
+                maxFPS: 25,
+              },
+            },
+          ],
+        };
+      }
+      return { ok: false, status: 404 };
+    });
+
+    const client = new CameraUiClient({
+      enabled: true,
+      serverUrl: "https://192.168.110.46:3543",
+    });
+
+    const cameras = await client.fetchCameras();
+    expect(cameras.length).toBe(1);
+    expect(cameras[0].rtspUrl).toBe("rtsp://admin:mypassword@192.168.110.150:554/stream1");
+    expect(cameras[0].videoCodec).toBe("hevc");
+    expect(cameras[0].strategy).toBe("transcode");
+  });
+
+  it("CameraUiStorage.updateCamera modifies the specified camera and persists updates", async () => {
+    const store = await CameraUiStorage.load();
+    store.cameras = [
+      {
+        id: "cameraui_cam_test",
+        name: "Test Camera",
+        hasAudio: true,
+        homeKitEnabled: true,
+        status: "online",
+        isPaired: false,
+      },
+    ];
+    await CameraUiStorage.save(store);
+
+    await CameraUiStorage.updateCamera("cam_test", (cam) => {
+      cam.isPaired = true;
+      cam.videoCodec = "hevc";
+      return cam;
+    });
+
+    const updated = await CameraUiStorage.load();
+    const found = updated.cameras.find((c) => c.id === "cameraui_cam_test");
+    expect(found).toBeDefined();
+    expect(found?.isPaired).toBe(true);
+    expect(found?.videoCodec).toBe("hevc");
+  });
 });
+
 

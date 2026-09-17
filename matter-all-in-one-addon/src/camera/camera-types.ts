@@ -8,7 +8,7 @@
 export type StreamSourceType =
   "webrtc" | "rtsp" | "hls" | "mjpeg" | "ha_proxy" | "unknown";
 
-export type VideoCodecType = "h264" | "h265" | "mjpeg" | "unknown";
+export type VideoCodecType = "h264" | "h265" | "hevc" | "mjpeg" | "unknown";
 
 export type AudioCodecType =
   "aac_eld" | "opus" | "aac_lc" | "pcm" | "incompatible" | "none";
@@ -17,6 +17,7 @@ export type StreamStrategy =
   | "passthrough_h264"
   | "passthrough_video_only"
   | "transcode_required"
+  | "transcode"
   | "unsupported";
 
 export interface CameraCapabilitiesInfo {

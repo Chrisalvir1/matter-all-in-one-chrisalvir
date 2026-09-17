@@ -104,7 +104,9 @@ export function useAddonState() {
               data.type === "device_update" ||
               data.type === "camera_update" ||
               data.type === "state_change" ||
-              data.type === "scrypted_status"
+              data.type === "scrypted_status" ||
+              data.type === "camera_pairing_updated" ||
+              data.type === "cameraui_updated"
             ) {
               refreshAll();
             }

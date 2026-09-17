@@ -46,6 +46,7 @@ export interface HomeKitStreamSession {
   audioSsrc?: number;
   audioCryptoSuite?: SRTPCryptoSuites;
   audioKeySalt?: Buffer;
+  retried?: boolean;
 }
 
 const FALLBACK_JPEG_BUFFER = Buffer.from(
@@ -497,18 +498,33 @@ export class HomeKitCameraStreamingDelegate
       `?rtcpport=${session.videoPort}&localrtcpport=${session.localVideoPort}&pkt_size=${mtu}`;
 
     this.emit("session-start", session.sessionId);
-    const args = this.buildStreamArgs(session, request);
-
-    this.platform?.log?.notice?.(
-      `[HomeKitCamera][${this.entityId}] HAP START ${video.width}x${video.height}@${fps} profile=${h264Profile(video.profile)} level=${h264Level(video.level)} mtu=${mtu} source=${sanitizeUrlCredentials(sourceUrl)} ffmpeg=${ffmpegPath} ${getFfmpegVersion(ffmpegPath) || "unknown"}`,
-    );
-
     let callbackSettled = false;
     const settle = (error?: Error): void => {
       if (callbackSettled) return;
       callbackSettled = true;
       callback(error);
     };
+    this.spawnFfmpegProcess(session, request, settle, false);
+  }
+
+  private spawnFfmpegProcess(
+    session: HomeKitStreamSession,
+    request: StartStreamRequest,
+    settle: (error?: Error) => void,
+    forceTranscode = false,
+  ): void {
+    const ffmpegPath = resolveFfmpegPath() || "ffmpeg";
+    const sourceUrl = this.streamSource.url;
+    const video = request.video;
+    const fps = Math.max(1, Math.min(video.fps || 30, 60));
+    const mtu = video.mtu || 1378;
+
+    const args = this.buildStreamArgs(session, request, forceTranscode);
+
+    this.platform?.log?.notice?.(
+      `[HomeKitCamera][${this.entityId}] HAP START ${video.width}x${video.height}@${fps} transcode=${forceTranscode} profile=${h264Profile(video.profile)} level=${h264Level(video.level)} mtu=${mtu} source=${sanitizeUrlCredentials(sourceUrl || "")} ffmpeg=${ffmpegPath} ${getFfmpegVersion(ffmpegPath) || "unknown"}`,
+    );
+
     try {
       const process = spawn(ffmpegPath, args, {
         stdio: ["ignore", "ignore", "pipe"],
@@ -527,7 +543,7 @@ export class HomeKitCameraStreamingDelegate
         } else {
           settle(new Error("FFmpeg exited during HAP startup"));
         }
-      }, 1200);
+      }, 500);
       process.once("error", (error) => {
         clearTimeout(guard);
         settle(error);
@@ -538,9 +554,32 @@ export class HomeKitCameraStreamingDelegate
         this.platform?.log?.warn?.(
           `[HomeKitCamera][${this.entityId}] FFmpeg closed code=${code} ${stderr.trim()}`,
         );
-        if (!callbackSettled) {
-          settle(new Error(`FFmpeg exited during HAP startup (code ${code})`));
+
+        // Automatic fallback recovery: if initial attempt failed (e.g. passthrough on HEVC or missing audio track),
+        // retry immediately with safe transcoding and/or silent audio fallback
+        if (code !== 0 && !session.retried && this.activeSessions.has(session.sessionId)) {
+          session.retried = true;
+          let retryTranscode = forceTranscode;
+          if (
+            stderr.includes("dump_extra") ||
+            stderr.includes("extradata") ||
+            stderr.includes("codec") ||
+            stderr.includes("Error") ||
+            !forceTranscode
+          ) {
+            retryTranscode = true;
+          }
+          if (stderr.includes("matches no streams") || stderr.includes("0:a:0")) {
+            this.capabilities.hasAudio = false;
+          }
+          this.platform?.log?.notice?.(
+            `[HomeKitCamera][${this.entityId}] Retrying stream with safe fallback: forceTranscode=${retryTranscode} hasAudio=${this.capabilities.hasAudio}`,
+          );
+          this.spawnFfmpegProcess(session, request, settle, retryTranscode);
+          return;
         }
+
+        settle(new Error(`FFmpeg exited during HAP startup (code ${code})`));
         if (this.activeSessions.size === 0) {
           this.emit("session-end");
         }
@@ -553,6 +592,7 @@ export class HomeKitCameraStreamingDelegate
   public buildStreamArgs(
     session: HomeKitStreamSession,
     request: StartStreamRequest,
+    forceTranscode = false,
   ): string[] {
     const sourceUrl = this.streamSource.url;
     if (!sourceUrl) {
@@ -569,12 +609,18 @@ export class HomeKitCameraStreamingDelegate
     const args: string[] = ["-hide_banner", "-loglevel", "warning"];
     if (sourceUrl.startsWith("rtsp://")) {
       args.push(
-        "-probesize",
-        "65536",
-        "-analyzeduration",
-        "100000",
         "-rtsp_transport",
         "tcp",
+        "-rtsp_flags",
+        "prefer_tcp",
+        "-probesize",
+        "1048576",
+        "-analyzeduration",
+        "1000000",
+        "-avioflags",
+        "direct",
+        "-fpsprobesize",
+        "0",
         "-fflags",
         "+nobuffer+flush_packets",
         "-flags",
@@ -595,9 +641,9 @@ export class HomeKitCameraStreamingDelegate
         "-rw_timeout",
         "10000000",
         "-probesize",
-        "131072",
+        "1048576",
         "-analyzeduration",
-        "500000",
+        "1000000",
         "-fflags",
         "+nobuffer+flush_packets",
         "-flags",
@@ -649,6 +695,7 @@ export class HomeKitCameraStreamingDelegate
 
     const isH264 = (this.capabilities.videoCodec || "h264").toLowerCase() === "h264";
     const canPassthrough =
+      !forceTranscode &&
       isH264 &&
       (this.capabilities.strategy === "passthrough_h264" ||
         this.streamSource.supportsPassthrough ||
@@ -662,8 +709,6 @@ export class HomeKitCameraStreamingDelegate
         "-an",
         "-c:v",
         "copy",
-        "-bsf:v",
-        "dump_extra=freq=keyframe",
         "-f",
         "rtp",
         "-payload_type",
@@ -701,6 +746,12 @@ export class HomeKitCameraStreamingDelegate
         "ultrafast",
         "-tune",
         "zerolatency",
+        "-bf",
+        "0",
+        "-crf",
+        "18",
+        "-threads",
+        "0",
         "-vf",
         `scale=w='min(${video.width},iw)':h='min(${video.height},ih)':force_original_aspect_ratio=decrease:force_divisible_by=2`,
         "-r",

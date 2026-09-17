@@ -35,10 +35,33 @@ export class CameraUiHomeKitBridge {
     }
 
     const hasSource = Boolean(camera.rtspUrl);
+    const rawCodec = (
+      camera.videoCodec ||
+      (camera as any).vcodec ||
+      (camera as any).codec ||
+      ""
+    ).toLowerCase();
+
+    const isHevc =
+      rawCodec.includes("hevc") ||
+      rawCodec.includes("265") ||
+      /c402|c420|c425|c520|c320|c325|tc72/i.test(camera.model || "") ||
+      /c402|c420|c425|c520|c320|c325|tc72/i.test(camera.name || "") ||
+      Boolean(
+        camera.width &&
+          camera.width >= 2304 &&
+          /tapo/i.test(
+            camera.name + " " + (camera.model || "") + " " + (camera.manufacturer || ""),
+          ),
+      );
+
+    const chosenCodec = isHevc ? "hevc" : "h264";
+    const chosenStrategy = isHevc ? "transcode" : "passthrough_h264";
+
     const capabilities: CameraCapabilitiesInfo = {
       hasLiveStream: hasSource,
       streamSourceType: "rtsp",
-      videoCodec: "h264",
+      videoCodec: chosenCodec,
       hasAudio: camera.hasAudio,
       audioCodec: "aac_lc",
       resolution: {
@@ -46,8 +69,8 @@ export class CameraUiHomeKitBridge {
         height: camera.height || 1080,
       },
       maxFps: camera.fps || 30,
-      strategy: "passthrough_h264",
-      requiresTranscoding: false,
+      strategy: chosenStrategy,
+      requiresTranscoding: isHevc,
       snapshotSupported: Boolean(camera.snapshotUrl),
       snapshotUrl: camera.snapshotUrl,
       hksvCapable: false,
@@ -57,7 +80,7 @@ export class CameraUiHomeKitBridge {
       sourceType: "rtsp",
       url: camera.rtspUrl,
       snapshotUrl: camera.snapshotUrl,
-      supportsPassthrough: true,
+      supportsPassthrough: !isHevc,
       requiresBridge: true,
       metadata: {
         isCameraUi: true,
@@ -98,7 +121,7 @@ export class CameraUiHomeKitBridge {
       manufacturer: camera.manufacturer || "Camera.UI",
       model: camera.model || "Network Camera",
       serialNumber: camera.serialNumber || `CUI-${camera.id.toUpperCase()}`,
-      strategy: "passthrough_h264",
+      strategy: chosenStrategy,
       state: "idle",
       hksvEnabled: false,
       hksvCapable: false,
@@ -114,13 +137,54 @@ export class CameraUiHomeKitBridge {
       source,
     );
 
+    // Register pairing synchronization listeners
+    accessory.accessory.on("paired", () => {
+      camera.isPaired = true;
+      void CameraUiStorage.updateCamera(camera.id, (c) => {
+        c.isPaired = true;
+        return c;
+      });
+      platform.broadcastSseMessage?.("cameraui_updated", {
+        cameraId: camera.id,
+        isPaired: true,
+      });
+      platform.broadcastSseMessage?.("camera_pairing_updated", {
+        entityId: record.entityId,
+        isPaired: true,
+      });
+      platform.broadcastSseMessage?.("state_change", {
+        entityId: record.entityId,
+        isPaired: true,
+      });
+    });
+
+    accessory.accessory.on("unpaired", () => {
+      camera.isPaired = false;
+      void CameraUiStorage.updateCamera(camera.id, (c) => {
+        c.isPaired = false;
+        return c;
+      });
+      platform.broadcastSseMessage?.("cameraui_updated", {
+        cameraId: camera.id,
+        isPaired: false,
+      });
+      platform.broadcastSseMessage?.("camera_pairing_updated", {
+        entityId: record.entityId,
+        isPaired: false,
+      });
+      platform.broadcastSseMessage?.("state_change", {
+        entityId: record.entityId,
+        isPaired: false,
+      });
+    });
+
     await accessory.publish();
     camera.setupUri = accessory.setupUri;
     camera.isPaired = accessory.isPaired();
     this.activeAccessories.set(camera.id, accessory);
 
     platform.log?.notice?.(
-      `[Camera.UI][${camera.name}] Published to HomeKit HAP on port ${camera.port} (code: ${camera.pincode})`,
+      `[Camera.UI][${camera.name}] Published to HomeKit HAP on port ${camera.port} (code: ${camera.pincode}, codec: ${chosenCodec}, strategy: ${chosenStrategy})`,
     );
 
     // Persist changes

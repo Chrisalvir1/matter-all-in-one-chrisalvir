@@ -28,6 +28,8 @@ import { HomeKitCameraRecordingDelegate } from "./homekit-camera-recording.deleg
 import crypto from "node:crypto";
 import { ScryptedStorage } from "../scrypted/scrypted-storage.js";
 import type { CameraRecord } from "../scrypted/scrypted-types.js";
+import { CameraUiStorage } from "../cameraui/cameraui-storage.js";
+import { probeCameraSource } from "./ffmpeg-helper.js";
 
 export class HomeKitCameraAccessory {
   public accessory: Accessory;
@@ -163,11 +165,11 @@ export class HomeKitCameraAccessory {
         audio: {
           codecs: [
             {
-              type: AudioStreamingCodecType.AAC_ELD,
+              type: AudioStreamingCodecType.OPUS,
               samplerate: AudioStreamingSamplerate.KHZ_16,
             },
             {
-              type: AudioStreamingCodecType.OPUS,
+              type: AudioStreamingCodecType.AAC_ELD,
               samplerate: AudioStreamingSamplerate.KHZ_16,
             },
           ],
@@ -345,12 +347,57 @@ export class HomeKitCameraAccessory {
     this.platform?.log?.notice?.(
       `[HomeKitCamera][${this.entityId}] Published production HAP camera port=${this.record.port} HKSV=${this.record.hksvEnabled ? "enabled" : "disabled"}`,
     );
+
+    // Asynchronously probe stream capabilities (HEVC vs H264, audio tracks) to adapt strategy dynamically
+    void this.probeAndAdaptCapabilities();
+
     setTimeout(() => {
       void this.delegate.handleSnapshotRequest(
         { width: 1280, height: 720 },
         () => {},
       );
     }, 1500);
+  }
+
+  public async probeAndAdaptCapabilities(): Promise<void> {
+    if (!this.streamSource.url) return;
+    try {
+      const probe = await probeCameraSource(this.streamSource.url, { timeoutMs: 4000 });
+      if (probe.valid && probe.videoCodec) {
+        const codec = probe.videoCodec.toLowerCase();
+        const isHevc = codec.includes("hevc") || codec.includes("265");
+        this.capabilities.videoCodec = isHevc ? "hevc" : "h264";
+        this.capabilities.requiresTranscoding = isHevc;
+        this.capabilities.strategy = isHevc ? "transcode" : "passthrough_h264";
+        if (probe.hasAudio !== undefined) {
+          this.capabilities.hasAudio = probe.hasAudio;
+        }
+        if (probe.width && probe.height) {
+          this.capabilities.resolution = { width: probe.width, height: probe.height };
+        }
+        if (probe.fps) {
+          this.capabilities.maxFps = probe.fps;
+        }
+        this.platform?.log?.notice?.(
+          `[HomeKitCamera][${this.entityId}] Probed capabilities: codec=${probe.videoCodec} ${probe.width}x${probe.height}@${probe.fps}fps hasAudio=${probe.hasAudio} -> strategy=${this.capabilities.strategy}`,
+        );
+
+        if (this.entityId.includes("cameraui")) {
+          const cuiId = this.entityId.replace(/^camera\.cameraui_/, "").replace(/^camera\./, "");
+          void CameraUiStorage.updateCamera(cuiId, (cam) => {
+            cam.videoCodec = this.capabilities.videoCodec;
+            cam.strategy = this.capabilities.strategy as any;
+            if (probe.hasAudio !== undefined) cam.hasAudio = probe.hasAudio;
+            if (probe.width && probe.height) {
+              cam.width = probe.width;
+              cam.height = probe.height;
+            }
+            if (probe.fps) cam.fps = probe.fps;
+            return cam;
+          });
+        }
+      }
+    } catch {}
   }
 
   private notifyPairingStateChanged(paired: boolean): void {
@@ -367,10 +414,26 @@ export class HomeKitCameraAccessory {
           return cam;
         });
       }
+
+      // Update Camera.UI storage if applicable
+      const cuiId = this.entityId.replace(/^camera\.cameraui_/, "").replace(/^camera\./, "");
+      void CameraUiStorage.updateCamera(cuiId, (cam) => {
+        cam.isPaired = paired;
+        return cam;
+      });
+
       this.platform?.broadcastSseMessage?.("camera_pairing_updated", {
         entityId: this.entityId,
         isPaired: paired,
         homeName,
+      });
+      this.platform?.broadcastSseMessage?.("cameraui_updated", {
+        entityId: this.entityId,
+        isPaired: paired,
+      });
+      this.platform?.broadcastSseMessage?.("state_change", {
+        entityId: this.entityId,
+        isPaired: paired,
       });
       this.platform?.pushEntityUpdate?.(this.entityId);
     } catch {}
@@ -383,6 +446,17 @@ export class HomeKitCameraAccessory {
 
   public getPairingState(): "paired" | "not_paired" | "unverifiable" {
     try {
+      const serverInfo = (this.accessory as any)?._server?.accessoryInfo;
+      if (serverInfo && typeof serverInfo.paired === "function") {
+        const isHapPaired = serverInfo.paired();
+        if (this.record.isPaired !== isHapPaired) {
+          this.record.isPaired = isHapPaired;
+          void this.platform?.saveHomeKitCameraRecords?.();
+          this.notifyPairingStateChanged(isHapPaired);
+        }
+        return isHapPaired ? "paired" : "not_paired";
+      }
+
       if (!this.record.username) return "unverifiable";
       const info = AccessoryInfo.load(this.record.username as any);
       if (info && typeof info.paired === "function") {

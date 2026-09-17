@@ -1,3 +1,25 @@
+## [1.5.95] - 2026-09-16
+
+### Prioridad Absoluta a Stream 1 (100% Calidad), Passthrough Cero Lag Super Fluido, Sincronización Reactiva de Vinculación y Corrección de Pantalla Negra
+
+- **Priorización Estricta de Stream 1 (Alta Calidad / Calidad 100% Nativa):**
+  - Al escanear cámaras desde Camera.UI, el bridge ahora prioriza estrictamente los flujos `high-resolution`, `main` y `stream1`.
+  - Corrección automática: si la URL principal recibida contenía `stream2` o flujos secundarios (`sub`), se promociona o intercambia automáticamente por `stream1` para asegurar la máxima calidad de resolución nativa del sensor (4K UHD, 2K QHD, 1080p).
+  - Conversión inteligente de URLs con esquema `tapo://`: `tapo://user:pass@ip` se transforma limpiamente a `rtsp://user:pass@ip:554/stream1`.
+- **Passthrough Cero Lag y Máxima Fluidez:**
+  - Optimización de sockets FFmpeg con flags de latencia ultra baja en tiempo real: `-rtsp_flags prefer_tcp`, `-avioflags direct`, `-fpsprobesize 0`, `-fflags +nobuffer+flush_packets`, `-flags low_delay`, `-max_delay 0`.
+  - Aumento de probesize a 1MB (`-probesize 1048576`) y analyzeduration a 1.0s para capturar de inmediato I-frames de cámaras 2K/4K sin pérdida de paquetes ni retardos de arranque.
+  - Eliminación definitiva del filtro `-bsf:v dump_extra=freq=keyframe` en streaming RTP en vivo, previniendo cierres inesperados de FFmpeg en cámaras RTSP sin extradata in-band.
+- **Detección Automática de Códec y Recuperación Transcoding/Audio (Sin Pantalla Negra):**
+  - Si la cámara entrega H.264 nativo, el sistema utiliza **100% passthrough puro (`-c:v copy`) a 0% de uso de CPU**.
+  - Si la cámara es 2K QHD Tapo (C402, C420, C520WS, etc.) o emite en H.265/HEVC (incompatible de forma nativa con el decodificador HAP RTP de Apple Home), se adapta automáticamente a transcodificación ultra rápida de latencia cero (`-c:v libx264 -preset ultrafast -tune zerolatency -bf 0 -crf 18 -threads 0`) para evitar la pantalla negra y mantener una fluidez impecable.
+  - Si una cámara no dispone de pista de audio o está silenciada, el sistema inyecta una pista silenciosa `anullsrc` en lugar de fallar el mapeo de streams, garantizando que Apple Home no congele el stream esperando paquetes de audio RTP.
+  - En caso de error en el inicio del proceso FFmpeg, el sistema activa una recuperación inmediata automática reintentando con pipeline seguro.
+- **Sincronización Reactiva Inmediata del Estado de Vinculación HAP:**
+  - Corrección del evento de emparejamiento HAP en `HomeKitCameraAccessory` y `cameraui-homekit-bridge`: al emparejar una cámara de Camera.UI desde la app Casa en iOS, el estado `isPaired: true` se persiste inmediatamente en `CameraUiStorage` vía `CameraUiStorage.updateCamera`.
+  - Inspección del servidor HAP en vivo (`_server.accessoryInfo.paired()`) para reflejar instantáneamente el estado emparejado sin depender de archivos de disco desfasados.
+  - Difusión de eventos SSE `camera_pairing_updated` y `cameraui_updated`, e integración en el hook `useAddonState` para que la UI web actualice en tiempo real la insignia a **🍏 HAP Vinculado en Apple Home** sin necesidad de refrescar la página.
+
 ## [1.5.94] - 2026-09-16
 
 ### Detección Universal de Cámaras Camera.UI v5 (`result` Array, Diccionario Clave-Valor), Reemplazo IP Localhost y Eliminación de Error de Localhost

@@ -98,4 +98,33 @@ export class CameraUiStorage {
     await this.save(store);
     return store;
   }
+
+  public static async updateCamera(
+    cameraId: string,
+    updater: (cam: CameraUiCameraRecord) => CameraUiCameraRecord,
+  ): Promise<CameraUiStore> {
+    const store = await this.load();
+    const cleanId = cameraId
+      .replace(/^camera\.cameraui_/, "")
+      .replace(/^camera\./, "")
+      .replace(/^cameraui_/, "");
+    const idx = store.cameras.findIndex((c) => {
+      const cClean = c.id
+        .replace(/^camera\.cameraui_/, "")
+        .replace(/^camera\./, "")
+        .replace(/^cameraui_/, "");
+      return (
+        cClean === cleanId ||
+        c.id === cameraId ||
+        `camera.${c.id}` === cameraId ||
+        `camera.cameraui_${cClean}` === cameraId ||
+        `cameraui_${cleanId}` === c.id
+      );
+    });
+    if (idx !== -1) {
+      store.cameras[idx] = updater({ ...store.cameras[idx] });
+      await this.save(store);
+    }
+    return store;
+  }
 }

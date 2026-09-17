@@ -26,3 +26,5 @@ certificates/serverToken
 /persist/
 /data/
 matter-all-in-one-addon/data/
+cameraui-config.json
+matter-all-in-one-addon/cameraui-config.json
