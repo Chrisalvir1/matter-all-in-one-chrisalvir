@@ -1,5 +1,44 @@
+import net from "node:net";
 import type { CameraUiCameraRecord, CameraUiConfig } from "./cameraui-types.js";
 import { sanitizeUrlCredentials } from "../homekit/ffmpeg-helper.js";
+
+/**
+ * Fast TCP socket check to verify if a camera's RTSP or HTTP stream port is reachable.
+ */
+export async function isCameraStreamReachable(
+  streamUrl?: string,
+  timeoutMs = 2000,
+): Promise<boolean> {
+  if (!streamUrl || typeof streamUrl !== "string") return false;
+  try {
+    const parsed = new URL(streamUrl);
+    const host = parsed.hostname;
+    let port = parsed.port ? Number(parsed.port) : undefined;
+    if (!port) {
+      if (parsed.protocol === "rtsp:") port = 554;
+      else if (parsed.protocol === "rtsps:") port = 322;
+      else if (parsed.protocol === "http:") port = 80;
+      else if (parsed.protocol === "https:") port = 443;
+      else port = 554;
+    }
+    return await new Promise<boolean>((resolve) => {
+      const socket = net.createConnection({ host, port, timeout: timeoutMs }, () => {
+        socket.destroy();
+        resolve(true);
+      });
+      socket.on("error", () => {
+        socket.destroy();
+        resolve(false);
+      });
+      socket.on("timeout", () => {
+        socket.destroy();
+        resolve(false);
+      });
+    });
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Universal extractor to parse camera lists from any Camera.UI version response format:
@@ -70,6 +109,8 @@ export function extractRawCameras(json: any): any[] {
 
 export class CameraUiClient {
   private accessToken?: string;
+  private resolvedBaseUrl?: string;
+  private loginError?: string;
 
   constructor(private readonly config: CameraUiConfig) {
     if (this.config.allowSelfSignedCertificate !== false) {
@@ -84,6 +125,34 @@ export class CameraUiClient {
       url = `http://${url}`;
     }
     return url.replace(/\/+$/, "");
+  }
+
+  public getCandidateUrls(): string[] {
+    const configured = this.getBaseUrl();
+    const candidates: string[] = [];
+    if (this.resolvedBaseUrl) {
+      candidates.push(this.resolvedBaseUrl);
+    }
+    if (configured) {
+      candidates.push(configured);
+      try {
+        const u = new URL(configured);
+        // Prioritize IPv4 127.0.0.1 if localhost was configured, avoiding IPv6 ::1 ECONNREFUSED in containers
+        if (u.hostname === "localhost") {
+          candidates.push(`${u.protocol}//127.0.0.1:${u.port || "8181"}`);
+        } else if (u.hostname === "127.0.0.1") {
+          candidates.push(`${u.protocol}//localhost:${u.port || "8181"}`);
+        }
+      } catch {}
+    }
+
+    // Common Home Assistant add-on locations
+    candidates.push("http://127.0.0.1:8181");
+    candidates.push("http://localhost:8181");
+    candidates.push("http://a0d7b954-camera-ui:8181");
+    candidates.push("http://homeassistant:8181");
+
+    return Array.from(new Set(candidates.filter(Boolean)));
   }
 
   private getHeaders(): Record<string, string> {
@@ -103,14 +172,15 @@ export class CameraUiClient {
 
   /**
    * Attempts authentication with Camera.UI.
-   * Modern Camera.UI uses POST /api/auth/login returning a Bearer JWT access_token.
+   * Modern Camera.UI may use POST /api/auth/login or session auth.
+   * Universal HTTP Basic Auth is also handled transparently via getHeaders().
    */
-  public async login(): Promise<{ ok: boolean; message?: string; skipped?: boolean }> {
+  public async login(targetBaseUrl?: string): Promise<{ ok: boolean; message?: string; skipped?: boolean }> {
     if (!this.config.username || !this.config.password) {
       return { ok: true, skipped: true };
     }
 
-    const baseUrl = this.getBaseUrl();
+    const baseUrl = targetBaseUrl || this.getBaseUrl();
     if (!baseUrl) {
       return { ok: false, message: "URL del servidor Camera.UI no configurada" };
     }
@@ -119,171 +189,145 @@ export class CameraUiClient {
       process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
     }
 
-    // Try modern Camera.UI auth endpoint
-    try {
-      const res = await fetch(`${baseUrl}/api/auth/login`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        body: JSON.stringify({
-          username: this.config.username,
-          password: this.config.password,
-          kind: "web",
-          persistent: true,
-          device: { id: "matter-all-in-one", name: "Matter All-in-One Bridge" },
-        }),
-        signal: AbortSignal.timeout(6000),
-      });
+    const authEndpoints = ["/api/auth/login", "/api/login", "/auth/login"];
 
-      if (res.ok) {
-        const data = await res.json();
-        const token =
-          data?.access_token ||
-          data?.tokens?.access ||
-          data?.tokens?.access_token ||
-          data?.token ||
-          data?.accessToken;
-        if (token) {
-          this.accessToken = String(token);
-          return { ok: true };
-        }
-      }
-
-      if (res.status === 401 || res.status === 403) {
-        return {
-          ok: false,
-          message: `Credenciales incorrectas: usuario o contraseña rechazados por Camera.UI en ${baseUrl} (HTTP ${res.status}).`,
-        };
-      }
-
-      // If 404, try alternate login routes
-      if (res.status === 404) {
-        const fallbackRoutes = ["/api/login", "/auth/login"];
-        for (const route of fallbackRoutes) {
-          try {
-            const fallbackRes = await fetch(`${baseUrl}${route}`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Accept: "application/json",
-              },
-              body: JSON.stringify({
-                username: this.config.username,
-                password: this.config.password,
-              }),
-              signal: AbortSignal.timeout(5000),
-            });
-            if (fallbackRes.ok) {
-              const fallbackData = await fallbackRes.json();
-              const token =
-                fallbackData?.access_token ||
-                fallbackData?.tokens?.access ||
-                fallbackData?.token ||
-                fallbackData?.accessToken;
-              if (token) {
-                this.accessToken = String(token);
-                return { ok: true };
-              }
-            }
-          } catch {}
-        }
-        return { ok: true, skipped: true };
-      }
-    } catch (err: any) {
-      return {
-        ok: false,
-        message: `Error al conectar con el servicio de autenticación en ${baseUrl}: ${err.message || err}`,
-      };
-    }
-
-    return { ok: true };
-  }
-
-  /**
-   * Tests connection to the Camera.UI instance.
-   */
-  public async testConnection(): Promise<{ ok: boolean; message: string; version?: string }> {
-    const baseUrl = this.getBaseUrl();
-    if (!baseUrl) {
-      return { ok: false, message: "URL del servidor Camera.UI no configurada" };
-    }
-
-    if (this.config.allowSelfSignedCertificate !== false) {
-      process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
-    }
-
-    // Attempt login first if credentials provided
-    if (this.config.username && this.config.password) {
-      const loginRes = await this.login();
-      if (!loginRes.ok) {
-        return {
-          ok: false,
-          message: loginRes.message || "Fallo de autenticación con Camera.UI.",
-        };
-      }
-    }
-
-    const testEndpoints = [
-      "/api/cameras?page=1&pageSize=-1",
-      "/api/cameras",
-      "/cameras?page=1&pageSize=-1",
-      "/cameras",
-      "/api/config",
-      "/config",
-      "/api/system/version",
-      "/",
-    ];
-
-    let lastError = "";
-
-    for (const endpoint of testEndpoints) {
+    for (const ep of authEndpoints) {
       try {
-        const res = await fetch(`${baseUrl}${endpoint}`, {
-          method: "GET",
-          headers: this.getHeaders(),
+        const res = await fetch(`${baseUrl}${ep}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            ...this.getHeaders(),
+          },
+          body: JSON.stringify({
+            username: this.config.username,
+            password: this.config.password,
+            kind: "web",
+            persistent: true,
+            device: { id: "matter-all-in-one", name: "Matter All-in-One Bridge" },
+          }),
           signal: AbortSignal.timeout(5000),
         });
 
         if (res.ok) {
-          let version = "active";
-          let count = 0;
-          try {
-            const data = await res.json();
-            if (data?.version) version = String(data.version);
-            else if (data?.system?.version) version = String(data.system.version);
-
-            const discovered = extractRawCameras(data);
-            if (discovered.length > 0) {
-              count = discovered.length;
-            }
-          } catch {}
-
-          const countMsg = count > 0 ? ` (${count} cámara${count === 1 ? "" : "s"} detectada${count === 1 ? "" : "s"})` : "";
-          return {
-            ok: true,
-            message: `Conexión exitosa con Camera.UI en ${baseUrl}${countMsg}`,
-            version,
-          };
+          const data = await res.json();
+          const token =
+            data?.access_token ||
+            data?.tokens?.access ||
+            data?.tokens?.access_token ||
+            data?.token ||
+            data?.accessToken;
+          if (token) {
+            this.accessToken = String(token);
+            this.loginError = undefined;
+            return { ok: true };
+          }
         }
 
         if (res.status === 401 || res.status === 403) {
-          return {
-            ok: false,
-            message: `Camera.UI en ${baseUrl} denegó el acceso (HTTP ${res.status}). Verifica el usuario y contraseña.`,
-          };
+          this.loginError = `Credenciales incorrectas: usuario o contraseña rechazados por Camera.UI en ${baseUrl} (HTTP ${res.status}).`;
         }
+      } catch {}
+    }
 
-        lastError = `HTTP ${res.status} ${res.statusText}`;
-      } catch (err: any) {
-        lastError = err.message || String(err);
+    return { ok: true, skipped: true };
+  }
+
+  /**
+   * Tests connection to the Camera.UI instance across candidate endpoints and hosts.
+   */
+  public async testConnection(): Promise<{ ok: boolean; message: string; version?: string; activeUrl?: string }> {
+    const candidates = this.getCandidateUrls();
+    if (candidates.length === 0) {
+      return { ok: false, message: "URL del servidor Camera.UI no configurada" };
+    }
+
+    if (this.config.allowSelfSignedCertificate !== false) {
+      process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+    }
+
+    let lastError = "";
+    let authFailureMessage: string | undefined;
+
+    for (const baseUrl of candidates) {
+      this.loginError = undefined;
+      if (this.config.username && this.config.password) {
+        await this.login(baseUrl);
+      }
+
+      const testEndpoints = [
+        "/api/cameras?page=1&pageSize=-1",
+        "/api/cameras",
+        "/cameras?page=1&pageSize=-1",
+        "/cameras",
+        "/api/config",
+        "/config",
+        "/api/system/version",
+        "/api/system",
+        "/api/ping",
+        "/",
+      ];
+
+      for (const endpoint of testEndpoints) {
+        try {
+          const res = await fetch(`${baseUrl}${endpoint}`, {
+            method: "GET",
+            headers: this.getHeaders(),
+            signal: AbortSignal.timeout(4000),
+          });
+
+          if (res.ok) {
+            let version = "active";
+            let count = 0;
+            try {
+              const data = await res.json();
+              if (data?.version) version = String(data.version);
+              else if (data?.system?.version) version = String(data.system.version);
+
+              const discovered = extractRawCameras(data);
+              if (discovered.length > 0) {
+                count = discovered.length;
+              }
+            } catch {}
+
+            this.resolvedBaseUrl = baseUrl;
+            const countMsg = count > 0 ? ` (${count} cámara${count === 1 ? "" : "s"} detectada${count === 1 ? "" : "s"})` : "";
+            return {
+              ok: true,
+              message: `Conexión exitosa con Camera.UI en ${baseUrl}${countMsg}`,
+              version,
+              activeUrl: baseUrl,
+            };
+          }
+
+          if (res.status === 401 || res.status === 403) {
+            authFailureMessage = `Credenciales incorrectas: Camera.UI en ${baseUrl} denegó el acceso (HTTP ${res.status}). Verifica el usuario y contraseña.`;
+            break;
+          }
+
+          lastError = `HTTP ${res.status} ${res.statusText}`;
+        } catch (err: any) {
+          lastError = err.message || String(err);
+        }
+      }
+
+      if (this.loginError && !authFailureMessage) {
+        authFailureMessage = this.loginError;
       }
     }
 
+    if (authFailureMessage) {
+      return {
+        ok: false,
+        message: authFailureMessage,
+      };
+    }
+
+    const primaryUrl = this.getBaseUrl() || candidates[0];
     return {
       ok: false,
-      message: `No se pudo conectar a Camera.UI en ${baseUrl}: ${lastError}. Verifica que el servicio esté activo y el certificado SSL sea aceptado.`,
+      message: `No se pudo conectar a Camera.UI en ${primaryUrl}: ${lastError || "Servicio no disponible"}. Verifica que el servicio esté activo y el certificado SSL sea aceptado.`,
     };
   }
 
@@ -291,19 +335,15 @@ export class CameraUiClient {
    * Fetches and normalizes camera definitions from Camera.UI.
    */
   public async fetchCameras(): Promise<CameraUiCameraRecord[]> {
-    const baseUrl = this.getBaseUrl();
-    if (!baseUrl) return [];
+    const candidates = this.getCandidateUrls();
+    if (candidates.length === 0) return [];
 
     if (this.config.allowSelfSignedCertificate !== false) {
       process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
     }
 
-    // Ensure authenticated if credentials present
-    if (this.config.username && this.config.password && !this.accessToken) {
-      await this.login();
-    }
-
     let rawList: any[] = [];
+    let successfulBaseUrl = "";
 
     const endpointsToTry = [
       "/api/cameras?page=1&pageSize=-1",
@@ -314,39 +354,52 @@ export class CameraUiClient {
       "/config",
     ];
 
-    for (const ep of endpointsToTry) {
-      try {
-        let res = await fetch(`${baseUrl}${ep}`, {
-          headers: this.getHeaders(),
-          signal: AbortSignal.timeout(6000),
-        });
+    for (const baseUrl of candidates) {
+      if (this.config.username && this.config.password && !this.accessToken) {
+        await this.login(baseUrl);
+      }
 
-        // If 401, token might have expired, re-login once and retry
-        if (res.status === 401 && this.config.username && this.config.password) {
-          const loginRes = await this.login();
-          if (loginRes.ok) {
-            res = await fetch(`${baseUrl}${ep}`, {
-              headers: this.getHeaders(),
-              signal: AbortSignal.timeout(6000),
-            });
-          }
-        }
+      for (const ep of endpointsToTry) {
+        try {
+          let res = await fetch(`${baseUrl}${ep}`, {
+            headers: this.getHeaders(),
+            signal: AbortSignal.timeout(6000),
+          });
 
-        if (res.ok) {
-          const json = await res.json();
-          const items = extractRawCameras(json);
-          if (items.length > 0) {
-            rawList = items;
-            break;
+          // If 401, token might have expired, re-login once and retry
+          if (res.status === 401 && this.config.username && this.config.password) {
+            const loginRes = await this.login(baseUrl);
+            if (loginRes.ok) {
+              res = await fetch(`${baseUrl}${ep}`, {
+                headers: this.getHeaders(),
+                signal: AbortSignal.timeout(6000),
+              });
+            }
           }
-        }
-      } catch {}
+
+          if (res.ok) {
+            const json = await res.json();
+            const items = extractRawCameras(json);
+            if (items.length > 0) {
+              rawList = items;
+              successfulBaseUrl = baseUrl;
+              this.resolvedBaseUrl = baseUrl;
+              break;
+            }
+          }
+        } catch {}
+      }
+
+      if (rawList.length > 0) break;
     }
 
+    if (rawList.length === 0) return [];
+
+    const effectiveBaseUrl = successfulBaseUrl || this.getBaseUrl() || candidates[0];
     const results: CameraUiCameraRecord[] = [];
     let parsedHostname = "localhost";
     try {
-      parsedHostname = new URL(baseUrl).hostname;
+      parsedHostname = new URL(effectiveBaseUrl).hostname;
     } catch {}
 
     for (let i = 0; i < rawList.length; i++) {
@@ -483,7 +536,7 @@ export class CameraUiClient {
 
       // Default snapshot from Camera.UI feed if stillImageSource not present
       if (!snapshotUrl) {
-        snapshotUrl = `${baseUrl}/api/cameras/${encodeURIComponent(name)}/snapshot`;
+        snapshotUrl = `${effectiveBaseUrl}/api/cameras/${encodeURIComponent(name)}/snapshot`;
       }
 
       const width = Number(videoConfig.maxWidth || item.width || 1920);

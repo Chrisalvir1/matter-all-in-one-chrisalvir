@@ -1,3 +1,33 @@
+## [1.6.1] - 2026-09-17
+
+### Corrección Integral de Estado de Conexión en Cámaras Camera.UI ("🔴 Desconectada" -> "🟢 En línea")
+
+- **Resolución Multi-Host Inteligente y Resiliente en `CameraUiClient` (`getCandidateUrls`):**
+  - Se implementó sondeo multi-candidato para resolver URLs en entornos Docker/Home Assistant (`127.0.0.1:8181`, `localhost:8181`, `a0d7b954-camera-ui:8181` y `homeassistant:8181`).
+  - Prioridad a IPv4 (`127.0.0.1`) cuando se configura `localhost` para evitar fallos de conexión `ECONNREFUSED` causados por la resolución predeterminada a IPv6 `::1` en Node 24.
+  - Almacenamiento dinámico de la URL activa verificada (`resolvedBaseUrl`).
+
+- **Autenticación HTTP Basic Real sin Aborto Falso:**
+  - En `login()`, se eliminó el bloqueo fatal originado cuando Camera.UI respondía `401 Unauthorized` al intentar endpoints JSON POST incompatibles.
+  - La autenticación ahora fluye fluidamente con encabezados estándar `Authorization: Basic base64(user:pass)` en todos los endpoints de prueba (`/api/cameras`, `/api/config`, `/api/system/version`, `/api/ping`, `/`).
+  - `testConnection()` valida los endpoints directamente y solo reporta fallo de credenciales si los endpoints deniegan explícitamente el acceso HTTP Basic.
+
+- **Auto-habilitación de Integración y Prevención de Sobrescritura de Estado:**
+  - En `CameraUiStorage.load()`, si existen cámaras configuradas o guardadas, `store.config.enabled` se establece en `true` automáticamente, evitando que la integración quede desactivada silenciosamente.
+  - `CameraUiStorage.updateConnectionStatus()` ya no destruye el estado de las cámaras locales cuando el servidor sufre una reconexión temporal de 1 segundo.
+  - En `initCameraUi()` y `startCameraUiHealthMonitor()`, la inicialización se activa de inmediato si existen cámaras en base de datos.
+
+- **Detección Multi-Vector de Estado En Línea en `GET /api/cameraui/cameras`:**
+  - Una cámara de Camera.UI se reporta certeramente como `🟢 En línea` si:
+    1. El servidor Camera.UI está conectado y responde, O
+    2. Su accesorio HomeKit HAP está activo y publicado en la LAN (`acc?.isPublished === true`), O
+    3. Su stream o registro está activo (`cam.status === "online"`).
+  - Comprobador por socket TCP de baja latencia (`isCameraStreamReachable`) para verificar la accesibilidad real del puerto RTSP (554 / 8554).
+
+- **Actualización Inmediata en la UI:**
+  - Al probar conexión exitosamente (`POST /api/cameraui/test-connection`), el backend guarda el estado `connected` de inmediato y emite el evento SSE `cameraui_updated`, eliminando la espera del cron periódico.
+  - En `CameraUiModal.tsx`, se predetermina la URL a `http://127.0.0.1:8181` en lugar de borrar el campo.
+
 ## [1.6.0] - 2026-09-17
 
 ### Modal Unificado, Controles Interactivos de Luz y Sirena, QR Matter Separados y Fix de Emparejamiento HAP CIAO

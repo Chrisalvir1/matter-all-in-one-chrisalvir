@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { CameraUiClient } from "../src/camera/cameraui/cameraui-client.js";
+import { CameraUiClient, isCameraStreamReachable } from "../src/camera/cameraui/cameraui-client.js";
 import { CameraUiStorage } from "../src/camera/cameraui/cameraui-storage.js";
 import { CameraUiHomeKitBridge } from "../src/camera/cameraui/cameraui-homekit-bridge.js";
 import type { CameraUiCameraRecord } from "../src/camera/cameraui/cameraui-types.js";
@@ -458,6 +458,86 @@ describe("Camera.UI Client and Storage Integration", () => {
     expect(found?.isPaired).toBe(true);
     expect(found?.videoCodec).toBe("hevc");
   });
+
+  it("getCandidateUrls includes IPv4 127.0.0.1, localhost, and Home Assistant add-on hosts", () => {
+    const client = new CameraUiClient({
+      enabled: true,
+      serverUrl: "http://localhost:8181",
+    });
+
+    const candidates = client.getCandidateUrls();
+    expect(candidates).toContain("http://localhost:8181");
+    expect(candidates).toContain("http://127.0.0.1:8181");
+    expect(candidates).toContain("http://a0d7b954-camera-ui:8181");
+    expect(candidates).toContain("http://homeassistant:8181");
+  });
+
+  it("testConnection succeeds via HTTP Basic Auth even when /api/auth/login returns 404", async () => {
+    global.fetch = vi.fn().mockImplementation(async (url: string, opts?: any) => {
+      if (url.includes("/api/auth/login")) {
+        return { ok: false, status: 404 };
+      }
+      if (url.includes("/api/cameras")) {
+        const auth = opts?.headers?.Authorization || "";
+        const expectedAuth = `Basic ${Buffer.from("myuser:mypassword").toString("base64")}`;
+        if (auth === expectedAuth) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ version: "5.0.28", result: [{ id: "c1", name: "Patio" }] }),
+          };
+        }
+        return { ok: false, status: 401 };
+      }
+      return { ok: false, status: 404 };
+    });
+
+    const client = new CameraUiClient({
+      enabled: true,
+      serverUrl: "http://127.0.0.1:8181",
+      username: "myuser",
+      password: "mypassword",
+    });
+
+    const res = await client.testConnection();
+    expect(res.ok).toBe(true);
+    expect(res.message).toContain("Conexión exitosa con Camera.UI");
+    expect(res.message).toContain("1 cámara detectada");
+  });
+
+  it("updateConnectionStatus('disconnected') preserves camera online status", async () => {
+    const store = await CameraUiStorage.load();
+    store.cameras = [
+      {
+        id: "cameraui_living",
+        name: "Living Room",
+        status: "online",
+        hasAudio: true,
+        homeKitEnabled: true,
+      },
+    ];
+    await CameraUiStorage.save(store);
+
+    await CameraUiStorage.updateConnectionStatus("disconnected", "Server restarting");
+    const reloaded = await CameraUiStorage.load();
+    expect(reloaded.config.connectionStatus).toBe("disconnected");
+    expect(reloaded.config.lastError).toBe("Server restarting");
+    // Camera status must not be forcefully wiped to offline
+    expect(reloaded.cameras[0].status).toBe("online");
+  });
+
+  it("isCameraStreamReachable returns false gracefully on invalid or unroutable URLs", async () => {
+    const res1 = await isCameraStreamReachable("");
+    expect(res1).toBe(false);
+
+    const res2 = await isCameraStreamReachable("invalid-url-schema");
+    expect(res2).toBe(false);
+
+    // Reserved test IP that drops packets immediately
+    const res3 = await isCameraStreamReachable("rtsp://192.0.2.1:554/stream", 50);
+    expect(res3).toBe(false);
+  });
 });
+
 
 

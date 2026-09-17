@@ -15,8 +15,8 @@ export class CameraUiStorage {
   public static getDefaultStore(): CameraUiStore {
     return {
       config: {
-        enabled: false,
-        serverUrl: "http://localhost:8181",
+        enabled: true,
+        serverUrl: "http://127.0.0.1:8181",
         mqttEnabled: true,
         mqttTopicPrefix: "camera.ui",
         allowSelfSignedCertificate: true,
@@ -56,8 +56,13 @@ export class CameraUiStorage {
             return cam;
           })
         : [];
+      const storeConfig = { ...this.getDefaultStore().config, ...(parsed.config || {}) };
+      // Auto-enable integration if cameras exist in storage
+      if (cameras.length > 0) {
+        storeConfig.enabled = true;
+      }
       this.cachedStore = {
-        config: { ...this.getDefaultStore().config, ...(parsed.config || {}) },
+        config: storeConfig,
         cameras,
       };
       return this.cachedStore;
@@ -111,6 +116,8 @@ export class CameraUiStorage {
     }
 
     store.cameras = merged;
+    store.config.enabled = true;
+    store.config.connectionStatus = "connected";
     store.config.lastSyncedAt = new Date().toISOString();
     store.config.lastError = undefined;
     await this.save(store);
@@ -157,10 +164,14 @@ export class CameraUiStorage {
     } else if (status === "connected") {
       store.config.lastError = undefined;
     }
-    const isOnline = status === "connected";
-    store.cameras.forEach((cam) => {
-      cam.status = isOnline ? "online" : "offline";
-    });
+    // Only mark cameras online when server is confirmed connected.
+    // Do not force cameras offline when server connection is momentarily interrupted,
+    // as direct RTSP streams or HomeKit accessories may still be streaming.
+    if (status === "connected") {
+      store.cameras.forEach((cam) => {
+        cam.status = "online";
+      });
+    }
     await this.save(store);
     return store;
   }

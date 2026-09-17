@@ -359,9 +359,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
     try {
       const store = await CameraUiStorage.load();
-      if (!store.config.enabled) {
+      if (!store.config.enabled && store.cameras.length === 0) {
         this.log.debug("[Camera.UI] Integration is disabled in storage.");
         return;
+      }
+      if (!store.config.enabled && store.cameras.length > 0) {
+        store.config.enabled = true;
+        await CameraUiStorage.save(store);
       }
       this.log.info(
         `[Camera.UI] Fast Boot: ${store.cameras.length} cached cameras found. Initializing endpoints...`,
@@ -988,12 +992,16 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     const checkLiveness = async () => {
       try {
         const store = await CameraUiStorage.load();
-        if (!store.config.enabled || !store.config.serverUrl) return;
+        if (!store.config.serverUrl && store.cameras.length === 0) return;
+        if (!store.config.enabled && store.cameras.length > 0) {
+          store.config.enabled = true;
+          await CameraUiStorage.save(store);
+        }
         const client = new CameraUiClient(store.config);
         const test = await client.testConnection();
         const prevStatus = store.config.connectionStatus;
         const nextStatus = test.ok ? "connected" : "disconnected";
-        if (prevStatus !== nextStatus) {
+        if (prevStatus !== nextStatus || (test.ok && store.config.connectionStatus !== "connected")) {
           await CameraUiStorage.updateConnectionStatus(
             nextStatus,
             test.ok ? undefined : test.message,
@@ -5896,6 +5904,18 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               allowSelfSignedCertificate: allowSelfSigned,
             });
             const result = await client.testConnection();
+            if (result.ok) {
+              store.config.connectionStatus = "connected";
+              store.config.enabled = true;
+              if (result.activeUrl) {
+                store.config.serverUrl = result.activeUrl;
+              }
+              store.cameras.forEach((cam) => {
+                cam.status = "online";
+              });
+              await CameraUiStorage.save(store);
+              this.broadcastSseMessage("cameraui_updated", { connectionStatus: "connected" });
+            }
             res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
             res.end(JSON.stringify(result));
           } catch (err: any) {
@@ -5918,6 +5938,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             } catch {}
 
             const store = await CameraUiStorage.load();
+            store.config.enabled = true;
             if (data.serverUrl) store.config.serverUrl = String(data.serverUrl).trim();
             if (data.username !== undefined) store.config.username = String(data.username).trim();
             if (data.password !== undefined && String(data.password).length > 0) {
@@ -5981,14 +6002,18 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             pathname === "/api/custom/cameraui/cameras")
         ) {
           const store = await CameraUiStorage.load();
-          const isCameraUiServerConnected =
-            store.config.enabled && store.config.connectionStatus === "connected";
+          const isCameraUiServerConnected = store.config.connectionStatus === "connected";
           const enriched = store.cameras.map((cam) => {
             const acc = CameraUiHomeKitBridge.getAccessory(cam.id);
             const livePaired = acc ? acc.isPaired() : (cam.isPaired ?? false);
-            const effectiveStatus = isCameraUiServerConnected
-              ? (cam.status || "online")
-              : "offline";
+            const isLiveAccessory = Boolean(acc && acc.isPublished);
+
+            // Multi-vector liveness: camera is online if Camera.UI server is connected,
+            // or if its HomeKit accessory is actively published on LAN, or if recorded status is online
+            const effectiveStatus =
+              isCameraUiServerConnected || isLiveAccessory || cam.status === "online"
+                ? "online"
+                : "offline";
 
             const realEntities = this.findLinkedCameraEntities(cam.name, cam.id);
             const hasLight = realEntities.some((e) => e.type === "light");

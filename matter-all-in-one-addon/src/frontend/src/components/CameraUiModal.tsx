@@ -33,9 +33,9 @@ export const CameraUiModal: React.FC<CameraUiModalProps> = ({
   useEffect(() => {
     if (config && !hasInitializedRef.current) {
       hasInitializedRef.current = true;
-      setEnabled(config.enabled ?? false);
+      setEnabled(config.enabled ?? true);
       const configuredUrl = (config.serverUrl || "").trim();
-      setServerUrl(configuredUrl === "http://localhost:8181" ? "" : configuredUrl);
+      setServerUrl(configuredUrl || "http://127.0.0.1:8181");
       setUsername(config.username || "");
       setAllowSelfSigned(config.allowSelfSignedCertificate ?? true);
       setMqttEnabled(config.mqttEnabled ?? true);
@@ -52,7 +52,7 @@ export const CameraUiModal: React.FC<CameraUiModalProps> = ({
   };
 
   const handleTest = async () => {
-    const effectiveUrl = serverUrl.trim() || config?.serverUrl || "";
+    const effectiveUrl = serverUrl.trim() || config?.serverUrl || "http://127.0.0.1:8181";
     if (!effectiveUrl) {
       showToast("Ingresa la URL del servidor Camera.UI (ej. https://192.168.110.46:3543)", true);
       return;
@@ -79,7 +79,7 @@ export const CameraUiModal: React.FC<CameraUiModalProps> = ({
   };
 
   const handleSync = async () => {
-    const effectiveUrl = serverUrl.trim() || config?.serverUrl || "";
+    const effectiveUrl = serverUrl.trim() || config?.serverUrl || "http://127.0.0.1:8181";
     if (!effectiveUrl) {
       showToast("Ingresa la URL del servidor Camera.UI (ej. https://192.168.110.46:3543)", true);
       return;
