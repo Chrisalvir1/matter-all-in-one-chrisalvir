@@ -1,3 +1,21 @@
+## [1.5.91] - 2026-09-16
+
+### Integración Completa de Camera.UI, Eventos MQTT (Movimiento/Timbre) y Puente HomeKit HAP
+
+- **Soporte Nativo para Camera.UI (`cameraui` / `homebridge-camera-ui`):**
+  - Implementado cliente de descubrimiento REST (`CameraUiClient`) que consulta `/api/cameras` y `/api/config`, extrayendo las definiciones de cámaras, streams de alta resolución, snapshots y restreaming RTSP nativo (`rtsp://<host>:8554/<name>`).
+  - Almacenamiento persistente en `/data/cameraui-config.json` (`CameraUiStorage`) que preserva credenciales de emparejamiento HomeKit HAP (PIN `031-45-154`, setupId, username MAC virtual, puertos 51860+ y estado de vinculación) entre reinicios y actualizaciones.
+- **Suscripción y Despacho en Tiempo Real de Eventos MQTT:**
+  - `MqttClientManager` se suscribe automáticamente a `camera.ui/#` y `cameraui/#`.
+  - Despacho reactivo de eventos de movimiento (`camera.ui/motion` y `camera.ui/<cam>/motion`) notificando instantáneamente al sensor de movimiento de Apple Home.
+  - Soporte de eventos de timbre (`camera.ui/<cam>/doorbell`), activando el evento `ProgrammableSwitchEvent` (Single Press) en los accesorios HomeKit Timbre con notificaciones enriquecidas y sonido de timbre en Apple Home y Apple TV.
+- **Prevención de Entidades Fantasma en Matter:**
+  - Se filtró el componente `camera` en el auto-descubrimiento MQTT de Home Assistant (`onDeviceDiscovered`), evitando la creación de interruptores ficticios (`onOffPlugInUnit`). Las cámaras se canalizan exclusivamente a través de la pista de producción HomeKit HAP para compatibilidad total con iOS y iPadOS.
+- **Interfaz de Usuario y Modal de Administración:**
+  - Se incorporó `CameraUiModal.tsx` con pestañas de "Configuración y Conexión" y "Cámaras Descubiertas".
+  - Permite probar la conexión REST, sincronizar cámaras en tiempo real, alternar la publicación en HomeKit y restablecer emparejamientos individualmente.
+  - Botón de acceso directo contextual "🎥 Conectar Camera.UI / MQTT" integrado en `FilterBar` y `App.tsx`.
+
 ## [1.5.90] - 2026-09-16
 
 ### Restauración de Audio en Directo para Apple HomeKit y Sincronización Acústica PTS

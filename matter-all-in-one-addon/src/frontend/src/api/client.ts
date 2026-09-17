@@ -1,4 +1,11 @@
-import { CameraRecord, EntityRecord, ScryptedConfigResponse, StatusResponse } from "../types";
+import {
+  CameraRecord,
+  CameraUiCameraItem,
+  CameraUiConfigResponse,
+  EntityRecord,
+  ScryptedConfigResponse,
+  StatusResponse,
+} from "../types";
 
 const API_BASE = "./api/custom";
 
@@ -9,9 +16,8 @@ export async function request<T = any>(endpoint: string, options: RequestInit = 
   const res = await fetch(url, {
     ...options,
     headers: {
-      Accept: "application/json",
-      ...(options.body ? { "Content-Type": "application/json" } : {}),
-      ...options.headers,
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
     },
   });
 
@@ -38,6 +44,23 @@ export const api = {
   deleteScryptedConfig: () => request("/scrypted/config", { method: "DELETE" }),
   testScryptedConnection: (data: any) => request("/scrypted/connection-test", { method: "POST", body: JSON.stringify(data) }),
   syncCameras: () => request<CameraRecord[]>("/scrypted/load-cameras", { method: "POST" }),
+
+  // Camera.UI endpoints
+  getCameraUiConfig: () => request<CameraUiConfigResponse>("/cameraui/config"),
+  saveCameraUiConfig: (data: any) => request("/cameraui/config", { method: "POST", body: JSON.stringify(data) }),
+  testCameraUiConnection: (data: any) => request("/cameraui/test-connection", { method: "POST", body: JSON.stringify(data) }),
+  syncCameraUiCameras: () =>
+    request<{ success: boolean; totalCameras: number; newCameras: number; cameras: CameraUiCameraItem[] }>(
+      "/cameraui/sync",
+      { method: "POST" },
+    ),
+  getCameraUiCameras: () => request<CameraUiCameraItem[]>("/cameraui/cameras"),
+  toggleCameraUiHomeKit: (cameraId: string) =>
+    request(`/cameraui/cameras/${encodeURIComponent(cameraId)}/toggle-homekit`, { method: "POST" }),
+  resetCameraUiPairing: (cameraId: string) =>
+    request<{ success: boolean }>(`/cameraui/cameras/${encodeURIComponent(cameraId)}/reset-pairing`, {
+      method: "POST",
+    }),
 
   verifyCameraStream: (cameraId: string, streamUrl: string, transport?: string) =>
     request<{ ok: boolean; status: string; validation?: any }>(

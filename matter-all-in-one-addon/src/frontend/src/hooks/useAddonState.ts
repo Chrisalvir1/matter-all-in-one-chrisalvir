@@ -1,6 +1,13 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { api } from "../api/client";
-import { CameraRecord, DeviceRecord, EntityRecord, ScryptedConfigResponse, StatusResponse } from "../types";
+import {
+  CameraRecord,
+  CameraUiConfigResponse,
+  DeviceRecord,
+  EntityRecord,
+  ScryptedConfigResponse,
+  StatusResponse,
+} from "../types";
 
 export type FilterType =
   | "all"
@@ -17,6 +24,7 @@ export function useAddonState() {
   const [entities, setEntities] = useState<EntityRecord[]>([]);
   const [cameras, setCameras] = useState<CameraRecord[]>([]);
   const [scryptedConfig, setScryptedConfig] = useState<ScryptedConfigResponse | null>(null);
+  const [cameraUiConfig, setCameraUiConfig] = useState<CameraUiConfigResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<FilterType>("all");
@@ -31,11 +39,12 @@ export function useAddonState() {
 
   const refreshAll = useCallback(async () => {
     try {
-      const [statusRes, devicesRes, camerasRes, scryptedRes] = await Promise.allSettled([
+      const [statusRes, devicesRes, camerasRes, scryptedRes, cameraUiRes] = await Promise.allSettled([
         api.getStatus(),
         api.getDevices(),
         api.getCameras(),
         api.getScryptedConfig(),
+        api.getCameraUiConfig(),
       ]);
 
       if (statusRes.status === "fulfilled") setStatus(statusRes.value);
@@ -50,6 +59,7 @@ export function useAddonState() {
         setCameras(list);
       }
       if (scryptedRes.status === "fulfilled") setScryptedConfig(scryptedRes.value);
+      if (cameraUiRes.status === "fulfilled") setCameraUiConfig(cameraUiRes.value);
     } catch (err: any) {
       console.error("Error refreshing addon state:", err);
     } finally {
@@ -256,6 +266,7 @@ export function useAddonState() {
     allDevices,
     realHaCameraDevices,
     scryptedConfig,
+    cameraUiConfig,
     loading,
     searchQuery,
     setSearchQuery,

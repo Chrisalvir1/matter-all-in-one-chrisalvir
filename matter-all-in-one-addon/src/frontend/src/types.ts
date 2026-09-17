@@ -157,3 +157,33 @@ export interface ScryptedConfigResponse {
   lastError?: string;
   cameraCount?: number;
 }
+
+export interface CameraUiConfigResponse {
+  enabled: boolean;
+  serverUrl?: string;
+  username?: string;
+  hasPassword?: boolean;
+  mqttEnabled?: boolean;
+  mqttTopicPrefix?: string;
+  pollIntervalSeconds?: number;
+  lastSyncedAt?: string | null;
+  lastError?: string | null;
+}
+
+export interface CameraUiCameraItem {
+  id: string;
+  name: string;
+  rtspUrl: string;
+  snapshotUrl?: string;
+  manufacturer?: string;
+  model?: string;
+  hasAudio?: boolean;
+  homeKitEnabled?: boolean;
+  setupUri?: string;
+  isPaired?: boolean;
+  port?: number;
+  pincode?: string;
+  setupId?: string;
+  motionActive?: boolean;
+  doorbellActive?: boolean;
+}

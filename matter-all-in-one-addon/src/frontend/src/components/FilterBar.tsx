@@ -11,7 +11,12 @@ interface FilterBarProps {
     serverUrl?: string;
     cameraCount?: number;
   } | null;
+  cameraUiConfig?: {
+    enabled?: boolean;
+    serverUrl?: string;
+  } | null;
   onOpenScryptedModal: () => void;
+  onOpenCameraUiModal: () => void;
   onSyncCameras: () => void;
   isSyncing: boolean;
 }
@@ -20,12 +25,15 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   activeFilter,
   stats,
   scryptedConfig,
+  cameraUiConfig,
   onOpenScryptedModal,
+  onOpenCameraUiModal,
   onSyncCameras,
   isSyncing,
 }) => {
   const isScryptedConnected =
     scryptedConfig?.connectionStatus === "connected" || (scryptedConfig?.cameraCount ?? 0) > 0;
+  const isCameraUiActive = Boolean(cameraUiConfig?.enabled);
 
   // Only display the contextual management bar when viewing cameras or paired accessories
   if (activeFilter !== "cameras" && activeFilter !== "paired") {
@@ -33,7 +41,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   }
 
   return (
-    <div className="scrypted-header-bar" style={{ display: "flex", alignItems: "center", gap: 10, margin: "6px 0 16px" }}>
+    <div className="scrypted-header-bar" style={{ display: "flex", alignItems: "center", gap: 10, margin: "6px 0 16px", flexWrap: "wrap" }}>
       {isScryptedConnected ? (
         <>
           <span className="badge-connected" style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
@@ -48,14 +56,14 @@ export const FilterBar: React.FC<FilterBarProps> = ({
             onClick={onSyncCameras}
             disabled={isSyncing}
           >
-            {isSyncing ? "Sincronizando..." : "🔄 Sincronizar nuevas cámaras"}
+            {isSyncing ? "Sincronizando..." : "🔄 Sincronizar Scrypted"}
           </button>
           <button
             className="button button-sm button-secondary"
             type="button"
             onClick={onOpenScryptedModal}
           >
-            ⚙️ Servidor
+            ⚙️ Scrypted
           </button>
         </>
       ) : (
@@ -67,6 +75,16 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           📹 Conectar con Scrypted
         </button>
       )}
+
+      {/* Camera.UI Integration Button */}
+      <button
+        className={`button button-sm ${isCameraUiActive ? "button-primary" : "button-secondary"}`}
+        type="button"
+        onClick={onOpenCameraUiModal}
+        style={{ marginLeft: "auto" }}
+      >
+        {isCameraUiActive ? "🎥 Camera.UI (Activo)" : "🎥 Conectar Camera.UI / MQTT"}
+      </button>
     </div>
   );
 };

@@ -28,6 +28,7 @@ export class MqttClientManager {
   private onDeviceDiscoveredCallback?: (entry: MqttDiscoveryEntry) => void;
   private onDeviceRemovedCallback?: (topic: string) => void;
   private onStateChangedCallback?: (topic: string, payload: string) => void;
+  private onCameraUiMessageCallback?: (topic: string, payload: string) => void;
 
   constructor(
     log: AnsiLogger,
@@ -44,8 +45,16 @@ export class MqttClientManager {
     this.onDeviceRemovedCallback = callback;
   }
 
-  public onStateChanged(callback: (topic: string, state: string) => void) {
+  public onStateChanged(
+    callback: (topic: string, payload: string) => void,
+  ) {
     this.onStateChangedCallback = callback;
+  }
+
+  public onCameraUiMessage(
+    callback: (topic: string, payload: string) => void,
+  ) {
+    this.onCameraUiMessageCallback = callback;
   }
 
   public connect() {
@@ -68,6 +77,15 @@ export class MqttClientManager {
         else
           this.log.info(
             "[MQTT] Subscribed to homeassistant/# for Auto-Discovery",
+          );
+      });
+
+      // Subscribe to Camera.UI native event topics
+      this.client?.subscribe(["camera.ui/#", "cameraui/#"], (err) => {
+        if (err) this.log.error(`[MQTT] Camera.UI subscription error: ${err}`);
+        else
+          this.log.info(
+            "[MQTT] Subscribed to camera.ui/# and cameraui/# for Camera.UI events",
           );
       });
     });
@@ -123,6 +141,15 @@ export class MqttClientManager {
       } else {
         // State or availability topic update
         this.deviceStates.set(topic, payload);
+        if (
+          topic.startsWith("camera.ui/") ||
+          topic.startsWith("cameraui/") ||
+          topic === "camera.ui"
+        ) {
+          if (this.onCameraUiMessageCallback) {
+            this.onCameraUiMessageCallback(topic, payload);
+          }
+        }
         if (this.onStateChangedCallback) {
           this.onStateChangedCallback(topic, payload);
         }

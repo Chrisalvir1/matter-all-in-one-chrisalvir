@@ -8,6 +8,7 @@ import { DeviceCard } from "./components/DeviceCard";
 import { CameraConfigModal } from "./components/CameraConfigModal";
 import { DeviceModal } from "./components/DeviceModal";
 import { ScryptedModal } from "./components/ScryptedModal";
+import { CameraUiModal } from "./components/CameraUiModal";
 import { SettingsModal } from "./components/SettingsModal";
 import { extractCameraBrand } from "./components/CameraCard";
 import { CameraRecord, DeviceRecord } from "./types";
@@ -20,6 +21,7 @@ export const App: React.FC = () => {
     cameras,
     realHaCameraDevices,
     scryptedConfig,
+    cameraUiConfig,
     loading,
     searchQuery,
     setSearchQuery,
@@ -34,6 +36,7 @@ export const App: React.FC = () => {
   const [selectedCamera, setSelectedCamera] = useState<CameraRecord | null>(null);
   const [selectedDevice, setSelectedDevice] = useState<DeviceRecord | null>(null);
   const [isScryptedModalOpen, setIsScryptedModalOpen] = useState(false);
+  const [isCameraUiModalOpen, setIsCameraUiModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
@@ -301,12 +304,14 @@ export const App: React.FC = () => {
             filteredCount={totalVisibleCount}
           />
 
-          {/* Contextual Scrypted Camera Bar */}
+          {/* Contextual Scrypted & Camera.UI Bar */}
           <FilterBar
             activeFilter={activeFilter}
             stats={stats}
             scryptedConfig={scryptedConfig}
+            cameraUiConfig={cameraUiConfig}
             onOpenScryptedModal={() => setIsScryptedModalOpen(true)}
+            onOpenCameraUiModal={() => setIsCameraUiModalOpen(true)}
             onSyncCameras={handleSyncCameras}
             isSyncing={isSyncing}
           />
@@ -390,6 +395,16 @@ export const App: React.FC = () => {
         <ScryptedModal
           config={scryptedConfig}
           onClose={() => setIsScryptedModalOpen(false)}
+          onRefresh={refreshAll}
+          showToast={showToast}
+        />
+      )}
+
+      {/* Camera.UI Connection Modal */}
+      {isCameraUiModalOpen && (
+        <CameraUiModal
+          config={cameraUiConfig}
+          onClose={() => setIsCameraUiModalOpen(false)}
           onRefresh={refreshAll}
           showToast={showToast}
         />

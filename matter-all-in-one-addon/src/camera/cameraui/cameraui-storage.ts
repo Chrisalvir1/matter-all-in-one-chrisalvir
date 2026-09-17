@@ -1,0 +1,100 @@
+import fs from "node:fs/promises";
+import path from "node:path";
+import type { CameraUiCameraRecord, CameraUiConfig, CameraUiStore } from "./cameraui-types.js";
+
+const CONFIG_PATH = "/data/cameraui-config.json";
+const FALLBACK_CONFIG_PATH = "./cameraui-config.json";
+
+export class CameraUiStorage {
+  private static cachedStore: CameraUiStore | null = null;
+
+  public static getDefaultStore(): CameraUiStore {
+    return {
+      config: {
+        enabled: false,
+        serverUrl: "http://localhost:8181",
+        mqttEnabled: true,
+        mqttTopicPrefix: "camera.ui",
+        pollIntervalSeconds: 300,
+      },
+      cameras: [],
+    };
+  }
+
+  private static async getFilePath(): Promise<string> {
+    try {
+      await fs.access("/data");
+      return CONFIG_PATH;
+    } catch {
+      return FALLBACK_CONFIG_PATH;
+    }
+  }
+
+  public static async load(): Promise<CameraUiStore> {
+    if (this.cachedStore) return this.cachedStore;
+
+    const target = await this.getFilePath();
+    try {
+      const raw = await fs.readFile(target, "utf8");
+      const parsed = JSON.parse(raw);
+      this.cachedStore = {
+        config: { ...this.getDefaultStore().config, ...(parsed.config || {}) },
+        cameras: Array.isArray(parsed.cameras) ? parsed.cameras : [],
+      };
+      return this.cachedStore;
+    } catch {
+      this.cachedStore = this.getDefaultStore();
+      return this.cachedStore;
+    }
+  }
+
+  public static async save(store: CameraUiStore): Promise<void> {
+    this.cachedStore = store;
+    const target = await this.getFilePath();
+    try {
+      await fs.mkdir(path.dirname(target), { recursive: true });
+      await fs.writeFile(target, JSON.stringify(store, null, 2), "utf8");
+    } catch (err) {
+      // Fallback
+    }
+  }
+
+  public static async mergeDiscoveredCameras(
+    discovered: CameraUiCameraRecord[],
+  ): Promise<CameraUiStore> {
+    const store = await this.load();
+    const existingMap = new Map<string, CameraUiCameraRecord>(
+      store.cameras.map((c) => [c.id, c]),
+    );
+
+    const merged: CameraUiCameraRecord[] = [];
+    for (const item of discovered) {
+      const existing = existingMap.get(item.id);
+      if (existing) {
+        merged.push({
+          ...item,
+          // Preserve persistent HAP pairing and network settings
+          port: existing.port || item.port,
+          username: existing.username || item.username,
+          pincode: existing.pincode || item.pincode,
+          setupId: existing.setupId || item.setupId,
+          uuid: existing.uuid || item.uuid,
+          isPaired: existing.isPaired ?? false,
+          homeKitEnabled: existing.homeKitEnabled ?? true,
+          motionActive: existing.motionActive ?? false,
+          lastMotionAt: existing.lastMotionAt,
+          doorbellActive: existing.doorbellActive ?? false,
+          lastDoorbellAt: existing.lastDoorbellAt,
+        });
+      } else {
+        merged.push(item);
+      }
+    }
+
+    store.cameras = merged;
+    store.config.lastSyncedAt = new Date().toISOString();
+    store.config.lastError = undefined;
+    await this.save(store);
+    return store;
+  }
+}

@@ -58,6 +58,9 @@ import { ScryptedReconnectManager } from "./camera/scrypted/scrypted-reconnect-m
 import { ScryptedHomeKitBridge } from "./camera/scrypted/scrypted-homekit-bridge.js";
 import { ScryptedMatterBridge } from "./camera/scrypted/scrypted-matter-bridge.js";
 import { ScryptedStreamValidator } from "./camera/scrypted/scrypted-stream-validator.js";
+import { CameraUiStorage } from "./camera/cameraui/cameraui-storage.js";
+import { CameraUiClient } from "./camera/cameraui/cameraui-client.js";
+import { CameraUiHomeKitBridge } from "./camera/cameraui/cameraui-homekit-bridge.js";
 import { sanitizeUrlCredentials } from "./camera/homekit/ffmpeg-helper.js";
 
 export interface HomeAssistantPlatformConfig extends PlatformConfig {
@@ -344,6 +347,38 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       await manager.initialize();
     } catch (err) {
       this.log.warn(`[Scrypted] Failed to initialize Scrypted engine: ${err}`);
+    }
+  }
+
+  private cameraUiInitialized = false;
+
+  public async initCameraUi(): Promise<void> {
+    if (this.cameraUiInitialized) return;
+    this.cameraUiInitialized = true;
+
+    try {
+      const store = await CameraUiStorage.load();
+      if (!store.config.enabled) {
+        this.log.debug("[Camera.UI] Integration is disabled in storage.");
+        return;
+      }
+      this.log.info(
+        `[Camera.UI] Fast Boot: ${store.cameras.length} cached cameras found. Initializing endpoints...`,
+      );
+
+      for (const camera of store.cameras) {
+        if (camera.homeKitEnabled) {
+          try {
+            await CameraUiHomeKitBridge.mountCamera(this, camera);
+          } catch (err) {
+            this.log.warn(
+              `[Camera.UI] Failed to mount HomeKit for ${camera.id}: ${err}`,
+            );
+          }
+        }
+      }
+    } catch (err) {
+      this.log.warn(`[Camera.UI] Failed to initialize Camera.UI engine: ${err}`);
     }
   }
 
@@ -1456,6 +1491,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     // Load persisted camera configurations BEFORE Scrypted fast boot so existing PINs, MACs, and ports are preserved
     await this.loadHomeKitCameraRecords();
     void this.initScrypted();
+    void this.initCameraUi();
 
     // Load MQTT Config if exists
     try {
@@ -1478,6 +1514,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       });
 
       this.mqttManager.onDeviceDiscovered(async (entry) => {
+        if (entry.component === "camera") {
+          this.log.info(
+            `[MQTT] Discovered camera component "${entry.config?.name || entry.objectId}". Apple Home requires cameras via HomeKit HAP; skipped Matter bridge.`,
+          );
+          return;
+        }
+
         const entity = new MqttEntity(this, this.mqttManager!, entry);
         this.mqttEntities.set(entity.entityId, entity);
         this.log.info(
@@ -1513,6 +1556,65 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           if (entity.stateTopic === topic) {
             entity.handleStateUpdate(payload);
           }
+        }
+      });
+
+      this.mqttManager.onCameraUiMessage(async (topic, payload) => {
+        try {
+          const store = await CameraUiStorage.load();
+          let targetCameraId: string | undefined;
+          let isMotion = false;
+          let isDoorbell = false;
+          let active = false;
+
+          const parts = topic.split("/");
+          if (parts.length === 2 && (parts[1] === "motion" || parts[1] === "doorbell")) {
+            try {
+              const data = JSON.parse(payload);
+              const camIdentifier = (data.camera || data.name || data.id || "").toString().toLowerCase();
+              const found = store.cameras.find(
+                (c) => c.id.toLowerCase() === camIdentifier || c.name.toLowerCase() === camIdentifier,
+              );
+              if (found) targetCameraId = found.id;
+              active = data.state === true || data.state === "ON" || data.state === "active" || data.motion === true;
+              if (parts[1] === "motion") isMotion = true;
+              if (parts[1] === "doorbell") isDoorbell = true;
+            } catch {}
+          } else if (parts.length >= 3) {
+            const camIdentifier = parts[1].toLowerCase();
+            const action = parts[2].toLowerCase();
+            const found = store.cameras.find(
+              (c) =>
+                c.id.toLowerCase() === camIdentifier ||
+                c.name.toLowerCase().replace(/\s+/g, "_") === camIdentifier ||
+                c.name.toLowerCase() === camIdentifier,
+            );
+            targetCameraId = found ? found.id : camIdentifier;
+            if (action === "motion") {
+              isMotion = true;
+              active = payload === "true" || payload === "ON" || payload === "1" || payload === "active";
+              try {
+                const parsed = JSON.parse(payload);
+                if (typeof parsed === "boolean") active = parsed;
+                else if (parsed.state !== undefined) active = parsed.state === "ON" || parsed.state === true;
+              } catch {}
+            } else if (action === "doorbell") {
+              isDoorbell = true;
+            }
+          }
+
+          if (targetCameraId) {
+            if (isMotion) {
+              CameraUiHomeKitBridge.updateMotion(targetCameraId, active);
+              this.broadcastSseMessage("cameraui_motion", { cameraId: targetCameraId, motionOn: active });
+            }
+            if (isDoorbell) {
+              CameraUiHomeKitBridge.triggerDoorbell(targetCameraId);
+              this.broadcastSseMessage("cameraui_doorbell", { cameraId: targetCameraId });
+            }
+          }
+        } catch (e) {
+          this.log.debug(`[Camera.UI] Error processing MQTT event on ${topic}: ${e}`);
         }
       });
 
@@ -2730,6 +2832,50 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
         this.log.notice(
           `[ScryptedHomeKit] Reset HomeKit pairing for ${entityId}: New port ${newRecord.port}, setupId ${newRecord.setupId}, URI ${acc.setupUri}`,
+        );
+
+        return {
+          success: true,
+          record: newRecord,
+          setupUri: acc.setupUri,
+        };
+      }
+
+      if (entityId.startsWith("cameraui.") || entityId.startsWith("camera.cameraui_")) {
+        const cameraId = entityId.startsWith("cameraui.")
+          ? entityId.substring("cameraui.".length)
+          : entityId.substring("camera.".length);
+        let acc = CameraUiHomeKitBridge.getAccessory(cameraId);
+        if (!acc) {
+          const store = await CameraUiStorage.load();
+          const cam = store.cameras.find((c) => c.id === cameraId);
+          if (cam) {
+            await CameraUiHomeKitBridge.mountCamera(this, cam);
+            acc = CameraUiHomeKitBridge.getAccessory(cameraId);
+          }
+        }
+        if (!acc) {
+          return {
+            success: false,
+            error: `Cámara Camera.UI "${cameraId}" no encontrada.`,
+          };
+        }
+
+        const newRecord = await acc.resetPairing();
+        newRecord.pincode = "031-45-154";
+        const store = await CameraUiStorage.load();
+        const cam = store.cameras.find((c) => c.id === cameraId);
+        if (cam) {
+          cam.setupUri = acc.setupUri;
+          cam.pincode = newRecord.pincode;
+          cam.setupId = newRecord.setupId;
+          cam.port = newRecord.port;
+          cam.isPaired = false;
+          await CameraUiStorage.save(store);
+        }
+
+        this.log.notice(
+          `[CameraUiHomeKit] Reset HomeKit pairing for ${entityId}: New port ${newRecord.port}, setupId ${newRecord.setupId}, URI ${acc.setupUri}`,
         );
 
         return {
@@ -5456,6 +5602,193 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             "Content-Type": "application/json; charset=utf-8",
           });
           res.end(JSON.stringify({ success: removed }));
+          return;
+        }
+
+        // ── Camera.UI REST Endpoints ──────────────────────────────────────────
+        if (
+          req.method === "GET" &&
+          (pathname === "/api/cameraui/config" ||
+            pathname === "/api/custom/cameraui/config")
+        ) {
+          const store = await CameraUiStorage.load();
+          res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+          res.end(
+            JSON.stringify({
+              enabled: store.config.enabled,
+              serverUrl: store.config.serverUrl,
+              username: store.config.username || "",
+              hasPassword: Boolean(store.config.password),
+              mqttEnabled: store.config.mqttEnabled ?? true,
+              mqttTopicPrefix: store.config.mqttTopicPrefix || "camera.ui",
+              pollIntervalSeconds: store.config.pollIntervalSeconds || 300,
+              lastSyncedAt: store.config.lastSyncedAt || null,
+              lastError: store.config.lastError || null,
+            }),
+          );
+          return;
+        }
+
+        if (
+          (req.method === "POST" || req.method === "PUT") &&
+          (pathname === "/api/cameraui/config" ||
+            pathname === "/api/custom/cameraui/config")
+        ) {
+          try {
+            const body = await this.readRequestBody(req);
+            const data = JSON.parse(body);
+            const store = await CameraUiStorage.load();
+
+            if (typeof data.enabled === "boolean") store.config.enabled = data.enabled;
+            if (data.serverUrl !== undefined) store.config.serverUrl = String(data.serverUrl).trim();
+            if (data.username !== undefined) store.config.username = String(data.username).trim();
+            if (data.password !== undefined && String(data.password).length > 0) {
+              store.config.password = String(data.password);
+            }
+            if (data.clearPassword === true) store.config.password = undefined;
+            if (typeof data.mqttEnabled === "boolean") store.config.mqttEnabled = data.mqttEnabled;
+            if (data.mqttTopicPrefix !== undefined) store.config.mqttTopicPrefix = String(data.mqttTopicPrefix).trim();
+
+            await CameraUiStorage.save(store);
+
+            res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+            res.end(JSON.stringify({ success: true, config: store.config }));
+          } catch (err: any) {
+            res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
+            res.end(JSON.stringify({ success: false, error: err.message || "Error al guardar configuración de Camera.UI" }));
+          }
+          return;
+        }
+
+        if (
+          req.method === "POST" &&
+          (pathname === "/api/cameraui/test-connection" ||
+            pathname === "/api/custom/cameraui/test-connection")
+        ) {
+          try {
+            const body = await this.readRequestBody(req);
+            const data = JSON.parse(body);
+            const client = new CameraUiClient({
+              enabled: true,
+              serverUrl: data.serverUrl || "http://localhost:8181",
+              username: data.username,
+              password: data.password,
+            });
+            const result = await client.testConnection();
+            res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+            res.end(JSON.stringify(result));
+          } catch (err: any) {
+            res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
+            res.end(JSON.stringify({ ok: false, message: err.message || "Error al probar conexión" }));
+          }
+          return;
+        }
+
+        if (
+          req.method === "POST" &&
+          (pathname === "/api/cameraui/sync" ||
+            pathname === "/api/custom/cameraui/sync")
+        ) {
+          try {
+            const store = await CameraUiStorage.load();
+            const client = new CameraUiClient(store.config);
+            const discovered = await client.fetchCameras();
+            const previousIds = new Set(store.cameras.map((c) => c.id));
+
+            const updatedStore = await CameraUiStorage.mergeDiscoveredCameras(discovered);
+
+            for (const camera of updatedStore.cameras) {
+              if (camera.homeKitEnabled) {
+                try {
+                  await CameraUiHomeKitBridge.mountCamera(this, camera);
+                } catch (mountErr) {
+                  this.log.warn(`[Camera.UI] Error mounting ${camera.name}: ${mountErr}`);
+                }
+              }
+            }
+
+            const currentCameras = updatedStore.cameras.map((cam) => {
+              const acc = CameraUiHomeKitBridge.getAccessory(cam.id);
+              return {
+                ...cam,
+                setupUri: acc?.setupUri || cam.setupUri,
+                isPaired: acc?.isPaired() ?? cam.isPaired ?? false,
+              };
+            });
+
+            const newCameras = currentCameras.filter((c) => !previousIds.has(c.id)).length;
+            this.broadcastSseMessage("cameraui_updated", { cameras: currentCameras });
+
+            res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+            res.end(
+              JSON.stringify({
+                success: true,
+                totalCameras: currentCameras.length,
+                newCameras,
+                cameras: currentCameras,
+              }),
+            );
+          } catch (err: any) {
+            res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
+            res.end(JSON.stringify({ success: false, error: err.message || "Error al sincronizar cámaras de Camera.UI" }));
+          }
+          return;
+        }
+
+        if (
+          req.method === "GET" &&
+          (pathname === "/api/cameraui/cameras" ||
+            pathname === "/api/custom/cameraui/cameras")
+        ) {
+          const store = await CameraUiStorage.load();
+          const enriched = store.cameras.map((cam) => {
+            const acc = CameraUiHomeKitBridge.getAccessory(cam.id);
+            return {
+              ...cam,
+              setupUri: acc?.setupUri || cam.setupUri,
+              isPaired: acc?.isPaired() ?? cam.isPaired ?? false,
+              port: acc?.record?.port || cam.port,
+              pincode: acc?.record?.pincode || cam.pincode || "031-45-154",
+              setupId: acc?.record?.setupId || cam.setupId,
+            };
+          });
+          res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+          res.end(JSON.stringify(enriched));
+          return;
+        }
+
+        const cuiToggleMatch = pathname.match(
+          /\/api\/(?:custom\/)?cameraui\/cameras\/([^/]+)\/toggle-homekit$/,
+        );
+        if (req.method === "POST" && cuiToggleMatch) {
+          const cameraId = decodeURIComponent(cuiToggleMatch[1]);
+          const store = await CameraUiStorage.load();
+          const cam = store.cameras.find((c) => c.id === cameraId);
+          if (!cam) {
+            res.writeHead(404, { "Content-Type": "application/json; charset=utf-8" });
+            res.end(JSON.stringify({ success: false, error: "Cámara no encontrada" }));
+            return;
+          }
+          cam.homeKitEnabled = !cam.homeKitEnabled;
+          if (cam.homeKitEnabled) {
+            await CameraUiHomeKitBridge.mountCamera(this, cam);
+          } else {
+            await CameraUiHomeKitBridge.unmountCamera(cameraId);
+          }
+          await CameraUiStorage.save(store);
+          res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+          res.end(JSON.stringify({ success: true, homeKitEnabled: cam.homeKitEnabled, camera: cam }));
+          return;
+        }
+
+        const cuiResetMatch = pathname.match(
+          /\/api\/(?:custom\/)?cameraui\/cameras\/([^/]+)\/reset-pairing$/,
+        );
+        if (req.method === "POST" && cuiResetMatch) {
+          const cameraId = decodeURIComponent(cuiResetMatch[1]);
+          const success = await CameraUiHomeKitBridge.resetPairing(this, cameraId);
+          res.writeHead(success ? 200 : 400, { "Content-Type": "application/json; charset=utf-8" });
+          res.end(JSON.stringify({ success }));
           return;
         }
 
