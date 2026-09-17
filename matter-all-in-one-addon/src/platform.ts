@@ -14,6 +14,12 @@ import http from "http";
 import fs from "fs/promises";
 import fsSync from "fs";
 import path from "path";
+import { spawn } from "child_process";
+
+const FALLBACK_JPEG_BUFFER = Buffer.from(
+  "/9j/4AAQSkZJRgABAgAAAQABAAD//gAPTGF2YzYwLjMuMTAwAP/bAEMACAYGBwYHCAgICAgICQkJCgoKCQkJCQoKCgoKCgwMDAoKCgoKCgoMDAwMDQ4NDQ0MDQ4ODw8PEhIRERUVFRkZH//EAEwAAQEAAAAAAAAAAAAAAAAAAAAHAQEBAAAAAAAAAAAAAAAAAAAAARABAAAAAAAAAAAAAAAAAAAAABEBAAAAAAAAAAAAAAAAAAAAAP/AABEIAPABQAMBIgACEQADEQD/2gAIAwEAAhEDEQA/AI2AoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//9k=",
+  "base64",
+);
 import { HomeAssistant } from "./homeAssistant.js";
 import { HassState, isUnavailable } from "./utils/ha-state.js";
 import { discoverHassUrl, toWsUrl } from "./utils/ha-discovery.js";
@@ -5256,10 +5262,30 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             return;
           }
 
-          const updated = await ScryptedStorage.updateCameraStreamUrl(
+          let updated = await ScryptedStorage.updateCameraStreamUrl(
             cameraId,
             streamUrl,
           );
+          if (!updated) {
+            const cuiStore = await CameraUiStorage.load();
+            const cleanId = cameraId
+              .replace(/^camera\.cameraui_/, "")
+              .replace(/^camera\./, "")
+              .replace(/^cameraui_/, "");
+            const cuiCam = cuiStore.cameras.find(
+              (c) =>
+                c.id === cameraId ||
+                c.id === cleanId ||
+                `cameraui_${cleanId}` === c.id,
+            );
+            if (cuiCam) {
+              await CameraUiStorage.updateCamera(cuiCam.id, (cam) => {
+                cam.rtspUrl = streamUrl;
+                return cam;
+              });
+              updated = true;
+            }
+          }
           if (!updated) {
             res.writeHead(404, {
               "Content-Type": "application/json; charset=utf-8",
@@ -5347,21 +5373,46 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           } catch {}
 
           const store = await ScryptedStorage.load();
-          const camera = store.cameras.cameras.find(
-            (c) => c.cameraId === cameraId,
+          const cleanId = cameraId
+            .replace(/^camera\.cameraui_/, "")
+            .replace(/^camera\./, "")
+            .replace(/^cameraui_/, "");
+          const scryptedCam = store.cameras.cameras.find(
+            (c) => c.cameraId === cameraId || c.cameraId === cleanId,
           );
-          if (!camera) {
-            res.writeHead(404, {
-              "Content-Type": "application/json; charset=utf-8",
-            });
-            res.end(JSON.stringify({ error: "Cámara no encontrada" }));
-            return;
-          }
+
+          const cuiStore = await CameraUiStorage.load();
+          const cuiCam = cuiStore.cameras.find(
+            (c) =>
+              c.id === cameraId ||
+              c.id === cleanId ||
+              `cameraui_${cleanId}` === c.id ||
+              c.name.toLowerCase() === cameraId.toLowerCase(),
+          );
+
+          const haState =
+            this.ha?.hassStates?.get(cameraId) ||
+            this.ha?.hassStates?.get(`camera.${cleanId}`);
 
           let targetUrl =
             String(parsed.streamUrl || "").trim() ||
-            camera.source.streamReference?.directUrl ||
+            scryptedCam?.source.streamReference?.directUrl ||
+            cuiCam?.rtspUrl ||
+            (haState?.attributes as any)?.stream_source ||
             "";
+
+          if (!targetUrl) {
+            res.writeHead(400, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(
+              JSON.stringify({
+                error:
+                  "No se proporcionó una URL de stream RTSP/HTTP para verificar.",
+              }),
+            );
+            return;
+          }
 
           try {
             if (
@@ -5394,50 +5445,58 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             transport,
           );
 
-          await ScryptedStorage.updateCameraStreamValidation(
-            cameraId,
-            validation.status,
-            validation.error,
-            validation.status === "verified"
-              ? {
-                  videoCodec: validation.videoCodec as any,
-                  audioCodec: validation.audioCodec as any,
-                  resolution: validation.resolution,
-                  fps: validation.fps,
-                  hasAudio: validation.hasAudio ?? true,
-                  needsDumpExtra: validation.needsDumpExtra,
-                  gopSeconds: validation.gopSeconds,
+          if (scryptedCam) {
+            await ScryptedStorage.updateCameraStreamValidation(
+              scryptedCam.cameraId,
+              validation.status,
+              validation.error,
+              validation.status === "verified"
+                ? {
+                    videoCodec: validation.videoCodec as any,
+                    audioCodec: validation.audioCodec as any,
+                    resolution: validation.resolution,
+                    fps: validation.fps,
+                    hasAudio: validation.hasAudio ?? true,
+                    needsDumpExtra: validation.needsDumpExtra,
+                    gopSeconds: validation.gopSeconds,
+                  }
+                : undefined,
+              validation.metrics,
+            );
+
+            if (validation.status === "verified") {
+              scryptedCam.status.connection = "online";
+              scryptedCam.status.cache = "fresh";
+              await ScryptedStorage.save(store);
+
+              try {
+                if (scryptedCam.exportConfig?.homeKitEnabled) {
+                  await ScryptedHomeKitBridge.mountCamera(this, scryptedCam);
                 }
-              : undefined,
-            validation.metrics,
-          );
-
-          if (validation.status === "verified") {
-            camera.status.connection = "online";
-            camera.status.cache = "fresh";
-            await ScryptedStorage.save(store);
-
-            // Mount or update HAP with verified stream without tearing down active streams
-            try {
-              if (camera.exportConfig?.homeKitEnabled) {
-                await ScryptedHomeKitBridge.mountCamera(this, camera);
+              } catch (remountErr) {
+                this.log.warn(
+                  `[Scrypted] Remount HAP after verification note: ${remountErr}`,
+                );
               }
-            } catch (remountErr) {
-              this.log.warn(
-                `[Scrypted] Remount HAP after verification note: ${remountErr}`,
-              );
             }
+          }
 
-            try {
-              if (camera.exportConfig?.matterEnabled) {
-                await ScryptedMatterBridge.unmountCamera(this, cameraId);
-                await ScryptedMatterBridge.mountCamera(this, camera);
+          if (cuiCam) {
+            await CameraUiStorage.updateCamera(cuiCam.id, (cam) => {
+              cam.rtspUrl = targetUrl;
+              if (validation.status === "verified") {
+                cam.status = "online";
+                if (validation.resolution) {
+                  cam.width = validation.resolution.width;
+                  cam.height = validation.resolution.height;
+                }
+                if (validation.fps) cam.fps = validation.fps;
+                if (validation.videoCodec) cam.videoCodec = validation.videoCodec;
+                if (validation.hasAudio !== undefined)
+                  cam.hasAudio = validation.hasAudio;
               }
-            } catch (remountErr) {
-              this.log.warn(
-                `[Scrypted] Remount Matter after verification note: ${remountErr}`,
-              );
-            }
+              return cam;
+            });
           }
 
           res.writeHead(200, {
@@ -5448,7 +5507,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               ok: validation.status === "verified",
               status: validation.status,
               validation,
-              camera,
+              camera: scryptedCam || cuiCam || { id: cameraId, name: cameraId },
             }),
           );
           return;
@@ -5468,10 +5527,28 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           } catch {}
 
           const store = await ScryptedStorage.load();
-          const camera = store.cameras.cameras.find(
-            (c) => c.cameraId === cameraId,
+          const cleanId = cameraId
+            .replace(/^camera\.cameraui_/, "")
+            .replace(/^camera\./, "")
+            .replace(/^cameraui_/, "");
+          const scryptedCam = store.cameras.cameras.find(
+            (c) => c.cameraId === cameraId || c.cameraId === cleanId,
           );
-          if (!camera) {
+
+          const cuiStore = await CameraUiStorage.load();
+          const cuiCam = cuiStore.cameras.find(
+            (c) =>
+              c.id === cameraId ||
+              c.id === cleanId ||
+              `cameraui_${cleanId}` === c.id ||
+              c.name.toLowerCase() === cameraId.toLowerCase(),
+          );
+
+          const haState =
+            this.ha?.hassStates?.get(cameraId) ||
+            this.ha?.hassStates?.get(`camera.${cleanId}`);
+
+          if (!scryptedCam && !cuiCam && !haState) {
             res.writeHead(404, {
               "Content-Type": "application/json; charset=utf-8",
             });
@@ -5481,7 +5558,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
           let targetUrl =
             String(parsed.streamUrl || "").trim() ||
-            camera.source.streamReference?.directUrl ||
+            scryptedCam?.source.streamReference?.directUrl ||
+            cuiCam?.rtspUrl ||
+            (haState?.attributes as any)?.stream_source ||
             "";
 
           try {
@@ -5506,9 +5585,6 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           } catch {}
 
           if (!targetUrl) {
-            this.log.warn(
-              `[Scrypted][${cameraId}] Diagnóstico rechazado: no hay stream URL configurada ni descubierta.`,
-            );
             res.writeHead(400, {
               "Content-Type": "application/json; charset=utf-8",
             });
@@ -5525,7 +5601,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
           const sanitizedUrl = sanitizeUrlCredentials(targetUrl);
           this.log.notice(
-            `[Scrypted][${cameraId}] Iniciando diagnóstico de stream RTSP: ${sanitizedUrl}`,
+            `[DiagnoseStream][${cameraId}] Iniciando diagnóstico de stream RTSP/HTTP: ${sanitizedUrl}`,
           );
 
           const transport = parsed.transport === "udp" ? "udp" : "tcp";
@@ -5537,26 +5613,28 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             transport,
           );
 
-          camera.capabilities.latencyMetrics = metrics;
-          if (metrics.observedGopSeconds?.value) {
-            if (!camera.capabilities.observed) {
-              camera.capabilities.observed = {
-                videoCodec: "h264",
-                resolution: { width: 1920, height: 1080 },
-                hasAudio: true,
-              };
+          if (scryptedCam) {
+            scryptedCam.capabilities.latencyMetrics = metrics;
+            if (metrics.observedGopSeconds?.value) {
+              if (!scryptedCam.capabilities.observed) {
+                scryptedCam.capabilities.observed = {
+                  videoCodec: "h264",
+                  resolution: { width: 1920, height: 1080 },
+                  hasAudio: true,
+                };
+              }
+              scryptedCam.capabilities.observed.gopSeconds =
+                metrics.observedGopSeconds.value;
             }
-            camera.capabilities.observed.gopSeconds =
-              metrics.observedGopSeconds.value;
+            await ScryptedStorage.save(store);
           }
-          await ScryptedStorage.save(store);
 
           if (metrics.failureCause || metrics.timeToDescribeMs?.value == null) {
             const cause = metrics.failureCause || "invalid_stream";
             const errorMsg =
               metrics.error || "No se pudo obtener información del stream RTSP.";
             this.log.warn(
-              `[Scrypted][${cameraId}] Diagnóstico fallido: causa=${cause} error="${errorMsg}" target=${sanitizedUrl}`,
+              `[DiagnoseStream][${cameraId}] Diagnóstico fallido: causa=${cause} error="${errorMsg}" target=${sanitizedUrl}`,
             );
             res.writeHead(422, {
               "Content-Type": "application/json; charset=utf-8",
@@ -5567,19 +5645,50 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                 error: errorMsg,
                 cause,
                 metrics,
-                camera,
+                camera: scryptedCam || cuiCam || { id: cameraId, name: cameraId },
               }),
             );
             return;
           }
 
           this.log.notice(
-            `[Scrypted][${cameraId}] Diagnóstico completado con éxito: describe=${metrics.timeToDescribeMs.value}ms 1erFrame=${metrics.timeToFirstFrameMs?.value ?? "N/A"}ms target=${sanitizedUrl}`,
+            `[DiagnoseStream][${cameraId}] Diagnóstico completado con éxito: describe=${metrics.timeToDescribeMs.value}ms 1erFrame=${metrics.timeToFirstFrameMs?.value ?? "N/A"}ms target=${sanitizedUrl}`,
           );
           res.writeHead(200, {
             "Content-Type": "application/json; charset=utf-8",
           });
-          res.end(JSON.stringify({ success: true, metrics, camera }));
+          res.end(
+            JSON.stringify({
+              success: true,
+              metrics,
+              camera: scryptedCam || cuiCam || { id: cameraId, name: cameraId },
+            }),
+          );
+          return;
+        }
+
+        // GET /api/custom/cameras/:id/snapshot or /api/cameras/:id/snapshot
+        const snapshotMatch = pathname.match(
+          /\/cameras\/([^/]+)\/snapshot$/,
+        );
+        if (req.method === "GET" && snapshotMatch) {
+          const cameraId = decodeURIComponent(snapshotMatch[1]);
+          const snapBuffer = await this.getCameraSnapshotBuffer(cameraId);
+          if (snapBuffer && snapBuffer.length > 0) {
+            res.writeHead(200, {
+              "Content-Type": "image/jpeg",
+              "Cache-Control": "no-cache, no-store, must-revalidate",
+              "Content-Length": snapBuffer.length,
+            });
+            res.end(snapBuffer);
+            return;
+          }
+          res.writeHead(200, {
+            "Content-Type": "image/jpeg",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "X-Snapshot-Status": "fallback",
+          });
+          res.end(FALLBACK_JPEG_BUFFER);
           return;
         }
 
@@ -6338,5 +6447,179 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       }
     }
     return "unknown";
+  }
+
+  public async getCameraSnapshotBuffer(cameraId: string): Promise<Buffer | null> {
+    const cleanId = cameraId
+      .replace(/^camera\.cameraui_/, "")
+      .replace(/^camera\./, "")
+      .replace(/^cameraui_/, "")
+      .replaceAll(".", "_");
+    const snapPath = `/data/snapshots/${cleanId}.jpg`;
+    try {
+      if (fsSync.existsSync(snapPath)) {
+        const stat = fsSync.statSync(snapPath);
+        if (Date.now() - stat.mtimeMs < 10000 && stat.size > 1024) {
+          return fsSync.readFileSync(snapPath);
+        }
+      }
+    } catch {}
+
+    // 1. Try Home Assistant fetchSnapshot if HA entity exists
+    if (this.ha?.fetchSnapshot) {
+      try {
+        let haEntity = cameraId.startsWith("camera.") ? cameraId : undefined;
+        if (!haEntity && this.ha.hassStates) {
+          for (const id of this.ha.hassStates.keys()) {
+            if (
+              id.startsWith("camera.") &&
+              (id.includes(cleanId) || cleanId.includes(id.replace(/^camera\./, "")))
+            ) {
+              haEntity = id;
+              break;
+            }
+          }
+        }
+        if (haEntity) {
+          const buf = await this.ha.fetchSnapshot(haEntity);
+          if (buf && buf.length > 1024) {
+            try {
+              fsSync.mkdirSync("/data/snapshots", { recursive: true });
+              fsSync.writeFileSync(snapPath, buf);
+            } catch {}
+            return buf;
+          }
+        }
+      } catch {}
+    }
+
+    // 2. Resolve source stream URL from Scrypted or CameraUI
+    let sourceUrl: string | undefined;
+    let snapshotHttpUrl: string | undefined;
+
+    try {
+      const scStore = await ScryptedStorage.load();
+      const scCam = scStore.cameras.cameras.find(
+        (c) => c.cameraId === cameraId || c.cameraId === cleanId,
+      );
+      if (scCam) {
+        snapshotHttpUrl = scCam.source.snapshotReference?.directUrl;
+        sourceUrl = scCam.source.streamReference?.directUrl;
+      }
+    } catch {}
+
+    if (!sourceUrl && !snapshotHttpUrl) {
+      try {
+        const cuiStore = await CameraUiStorage.load();
+        const cuiCam = cuiStore.cameras.find(
+          (c) =>
+            c.id === cameraId ||
+            c.id === cleanId ||
+            `cameraui_${cleanId}` === c.id,
+        );
+        if (cuiCam) {
+          snapshotHttpUrl = cuiCam.snapshotUrl;
+          sourceUrl = cuiCam.rtspUrl;
+        }
+      } catch {}
+    }
+
+    // 3. If HTTP snapshot URL available, try fetching it
+    if (snapshotHttpUrl?.startsWith("http")) {
+      try {
+        const headers: Record<string, string> = {};
+        const token = this.ha?.getAccessToken?.() || this.ha?.wsAccessToken;
+        if (token && snapshotHttpUrl.includes("/api/camera_proxy")) {
+          headers["Authorization"] = `Bearer ${token}`;
+        }
+        const resp = await fetch(snapshotHttpUrl, {
+          headers,
+          signal: AbortSignal.timeout(3000),
+        });
+        if (resp.ok) {
+          const buf = Buffer.from(await resp.arrayBuffer());
+          if (buf.length > 1024) {
+            try {
+              fsSync.mkdirSync("/data/snapshots", { recursive: true });
+              fsSync.writeFileSync(snapPath, buf);
+            } catch {}
+            return buf;
+          }
+        }
+      } catch {}
+    }
+
+    // 4. Capture 1 frame via FFmpeg from sourceUrl
+    if (sourceUrl) {
+      const ffmpegPath = resolveFfmpegPath();
+      if (ffmpegPath) {
+        try {
+          const buf = await new Promise<Buffer | null>((resolve) => {
+            const args = [
+              "-hide_banner",
+              "-loglevel",
+              "error",
+              "-probesize",
+              "32768",
+              "-analyzeduration",
+              "0",
+              ...(sourceUrl.startsWith("rtsp://")
+                ? ["-rtsp_transport", "tcp"]
+                : []),
+              "-fflags",
+              "+nobuffer+flush_packets",
+              "-flags",
+              "low_delay",
+              "-i",
+              sourceUrl,
+              "-frames:v",
+              "1",
+              "-f",
+              "image2",
+              "-q:v",
+              "3",
+              "pipe:1",
+            ];
+            const proc = spawn(ffmpegPath, args, {
+              stdio: ["ignore", "pipe", "ignore"],
+            });
+            const chunks: Buffer[] = [];
+            const timer = setTimeout(() => {
+              try {
+                proc.kill("SIGKILL");
+              } catch {}
+              resolve(null);
+            }, 3500);
+            proc.stdout.on("data", (chunk: Buffer) => chunks.push(chunk));
+            proc.once("error", () => {
+              clearTimeout(timer);
+              resolve(null);
+            });
+            proc.once("close", () => {
+              clearTimeout(timer);
+              const result = Buffer.concat(chunks);
+              resolve(result.length > 1024 ? result : null);
+            });
+          });
+
+          if (buf) {
+            try {
+              fsSync.mkdirSync("/data/snapshots", { recursive: true });
+              fsSync.writeFileSync(snapPath, buf);
+            } catch {}
+            return buf;
+          }
+        } catch {}
+      }
+    }
+
+    // 5. Fallback: check if existing snapshot on disk exists regardless of age
+    try {
+      if (fsSync.existsSync(snapPath)) {
+        return fsSync.readFileSync(snapPath);
+      }
+    } catch {}
+
+    return null;
   }
 }

@@ -60,7 +60,7 @@ describe("detectCameraCapabilities", () => {
     expect(cap.requiresTranscoding).toBe(false);
   });
 
-  it("detects H.265 / HEVC stream and marks transcode_required with audio", () => {
+  it("detects H.265 / HEVC stream and marks passthrough_hevc with zero transcoding", () => {
     const state = makeState("streaming", {
       stream_source: "rtsp://camera.local/hevc",
       video_codec: "hevc",
@@ -72,10 +72,8 @@ describe("detectCameraCapabilities", () => {
     const cap = detectCameraCapabilities(state);
     expect(cap.hasLiveStream).toBe(true);
     expect(cap.videoCodec).toBe("h265");
-    expect(cap.strategy).toBe("transcode_required");
-    expect(cap.requiresTranscoding).toBe(true);
-    expect(cap.transcodingReason).toContain("h265");
-    // Audio should still be detected even when video requires transcoding
+    expect(cap.strategy).toBe("passthrough_hevc");
+    expect(cap.requiresTranscoding).toBe(false);
     expect(cap.hasAudio).toBe(true);
     expect(cap.audioCodec).toBe("aac_lc");
   });

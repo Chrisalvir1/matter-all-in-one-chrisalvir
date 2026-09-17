@@ -177,14 +177,14 @@ export function detectCameraCapabilities(
     // Home Assistant.  Camera attributes may say H.264, but copying that proxy
     // response as H.264 produces an invalid RTP stream for Apple Home.
   } else if (
-    videoCodec === "h264" &&
+    (videoCodec === "h264" || videoCodec === "h265") &&
     resolvedSource?.sourceType !== "ha_proxy" &&
     !resolvedSource?.url?.includes("/api/camera_proxy")
   ) {
-    // Always use passthrough_h264 for H.264 streams regardless of whether audio was
-    // detected. The delegate uses -map 0:a:0? which skips gracefully if no audio track
-    // exists. This eliminates the silent-audio forced mode for RTSP cameras.
-    strategy = "passthrough_h264";
+    // Both H.264 and H.265/HEVC (4K, 2K, 1080p) use pure passthrough remuxing (-c:v copy)
+    // with zero transcoding CPU overhead.
+    strategy = videoCodec === "h265" ? "passthrough_hevc" : "passthrough_h264";
+    requiresTranscoding = false;
   } else {
     strategy = "transcode_required";
     requiresTranscoding = true;

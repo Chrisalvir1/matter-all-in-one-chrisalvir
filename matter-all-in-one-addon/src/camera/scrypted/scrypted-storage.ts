@@ -110,8 +110,8 @@ export function isInventedRtspUrl(url: string, cameraId: string): boolean {
   if (!url || !cameraId) return false;
   try {
     const u = new URL(url);
-    // Prohibited: path is exactly /<cameraId> OR any path that is just /<digits>
-    return u.pathname === `/${cameraId}` || /^\/\d+$/.test(u.pathname);
+    // Prohibited: Scrypted Rebroadcast placeholder where path is exactly /<cameraId> or port 8554 with just /<digits>
+    return u.pathname === `/${cameraId}` || (u.port === "8554" && /^\/\d+$/.test(u.pathname));
   } catch {
     return false;
   }

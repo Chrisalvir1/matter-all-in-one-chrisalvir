@@ -1,3 +1,24 @@
+## [1.6.4] - 2026-09-17
+
+### Passthrough Puro HEVC / H.265 (Cero Transcodificación), Verificación y Diagnóstico Universal de Cámaras y Cuadro de Vista Previa en Vivo
+
+- **Passthrough Puro H.265 / HEVC (Cero Transcodificación):**
+  - Passthrough remux nativo (`-c:v copy`) para todas las cámaras HEVC / H.265 (4K, 2K, 1080p).
+  - Eliminada toda transcodificación forzada para HEVC en `camera-capabilities.ts` y `scrypted-homekit-bridge.ts`.
+  - Soporte de resoluciones nativas completas 4K UHD (3840x2160) y 2K QHD (2560x1440) sin consumo de CPU.
+
+- **Verificación y Diagnóstico Universal de Streams (`/verify-stream` y `/diagnose-stream`):**
+  - Soporte completo para verificar y diagnosticar cualquier cámara (Camera.UI, Home Assistant, Scrypted o cámaras nuevas).
+  - Eliminado el error 404 ("Cámara no encontrada") al verificar streams en la interfaz.
+  - Corrección de `isInventedRtspUrl`: ya no rechaza streams legítimos de cámaras IP con canales numéricos (ej. `/1` o `/0` en puerto 554).
+  - Actualización automática de resolución, fps y códecs comprobados en `CameraUiStorage` y `ScryptedStorage`.
+
+- **Cuadro de Vista Previa del Stream (Snapshot / Live Preview) en la UI:**
+  - Nuevo panel de vista previa visual directamente en el modal de configuración de la cámara.
+  - Nuevo endpoint backend `GET /api/cameras/:id/snapshot` que captura frames en tiempo real mediante FFmpeg desde la fuente RTSP/HTTP o Home Assistant Proxy.
+  - Botón "🔄 Actualizar Frame" y auto-recarga al verificar el stream con éxito.
+  - Indicador técnico en vivo: Códec detectado, resolución real y confirmación de passthrough puro (H.264 / HEVC).
+
 ## [1.6.3] - 2026-09-17
 
 ### Audio Universal AAC-ELD, Passthrough H.264 para todas las cámaras RTSP y Guía go2rtc para Google Nest

@@ -56,21 +56,19 @@ export class ScryptedHomeKitBridge {
 
     const hasSource = Boolean(directUrl);
     const observed = camera.capabilities?.observed;
-    const isH264 = (observed?.videoCodec?.toLowerCase() || "h264") === "h264";
+    const rawCodec = (observed?.videoCodec || "h264").toLowerCase();
+    const isHevc = rawCodec.includes("hevc") || rawCodec.includes("265");
+    const chosenStrategy = isHevc ? "passthrough_hevc" : "passthrough_h264";
     const capabilities: CameraCapabilitiesInfo = {
       hasLiveStream: hasSource,
-      streamSourceType: directUrl ? "rtsp" : "unknown",
-      videoCodec: observed?.videoCodec || "h264",
+      streamSourceType: directUrl?.startsWith("http") ? "hls" : "rtsp",
+      videoCodec: isHevc ? "h265" : "h264",
       hasAudio: hasSource,
       audioCodec: "aac_lc",
       resolution: observed?.resolution || { width: 1920, height: 1080 },
       maxFps: observed?.fps || 30,
-      strategy: hasSource
-        ? isH264
-          ? "passthrough_h264"
-          : "transcode_required"
-        : "unsupported",
-      requiresTranscoding: hasSource ? !isH264 : false,
+      strategy: hasSource ? chosenStrategy : "unsupported",
+      requiresTranscoding: false,
       snapshotSupported: true,
       snapshotUrl: camera.source.snapshotReference?.directUrl,
       hksvCapable: false,
@@ -141,7 +139,7 @@ export class ScryptedHomeKitBridge {
         username: this.generateMacAddress(camera.cameraId),
         setupId: this.generateSetupId(camera.cameraId),
         published: false,
-        strategy: "transcode_required",
+        strategy: chosenStrategy,
         state: "idle",
       };
     }
@@ -161,7 +159,7 @@ export class ScryptedHomeKitBridge {
       resolveDisplayModel(camera) ||
       model;
     record.serialNumber = serial;
-    record.strategy = "transcode_required";
+    record.strategy = chosenStrategy;
     record.hksvCapable = false;
     record.hksvEnabled = false;
     record.pincode = record.pincode || "031-45-154";

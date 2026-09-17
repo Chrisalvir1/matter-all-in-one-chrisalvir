@@ -70,6 +70,9 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
   });
   const [activeAiDetection, setActiveAiDetection] = useState<any>(null);
   const [isSavingAi, setIsSavingAi] = useState(false);
+  const [snapshotUrl, setSnapshotUrl] = useState<string | null>(null);
+  const [isLoadingSnapshot, setIsLoadingSnapshot] = useState(false);
+  const [snapshotLoaded, setSnapshotLoaded] = useState(false);
 
   const isCameraUi = Boolean(camera && ("id" in camera && !("cameraId" in camera)));
   const cameraId = camera ? ("cameraId" in camera ? camera.cameraId : camera.id) : "";
@@ -160,6 +163,8 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
     }
 
     if (cameraId) {
+      setSnapshotUrl(api.getCameraSnapshotUrl(cameraId));
+      setSnapshotLoaded(false);
       api.getCameraAiConfig(cameraId)
         .then((res) => {
           if (res?.config) setAiConfig(res.config);
@@ -168,6 +173,13 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
         .catch(() => {});
     }
   }, [cameraId, isCameraUi]);
+
+  const handleRefreshSnapshot = () => {
+    if (!cameraId) return;
+    setIsLoadingSnapshot(true);
+    setSnapshotUrl(api.getCameraSnapshotUrl(cameraId));
+    setTimeout(() => setIsLoadingSnapshot(false), 800);
+  };
 
   const handleSaveAiConfig = async () => {
     if (!cameraId) return;
@@ -488,6 +500,7 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
         setStreamResult({
           text: `✓ Stream verificado con éxito (${codec} ${w}x${h} @ ${fpsVal}fps). Live View listo para Apple Home.`,
         });
+        handleRefreshSnapshot();
       } else {
         setStreamVerified(false);
         setStreamResult({
@@ -1241,6 +1254,114 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                   {streamResult.text}
                 </div>
               )}
+
+              {/* Stream Live Preview Box */}
+              <div
+                style={{
+                  marginTop: 12,
+                  padding: "10px 12px",
+                  background: "rgba(0, 0, 0, 0.45)",
+                  borderRadius: 8,
+                  border: "1px solid rgba(255, 255, 255, 0.1)",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: 8,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: "0.78rem",
+                      fontWeight: 700,
+                      color: "#38bdf8",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                    }}
+                  >
+                    📺 Vista Previa del Stream (Snapshot / Live)
+                  </span>
+                  <button
+                    className="button button-sm button-secondary"
+                    type="button"
+                    onClick={handleRefreshSnapshot}
+                    disabled={isLoadingSnapshot}
+                    style={{ fontSize: "0.72rem", padding: "2px 8px" }}
+                  >
+                    {isLoadingSnapshot ? "Cargando..." : "🔄 Actualizar Frame"}
+                  </button>
+                </div>
+
+                <div
+                  style={{
+                    position: "relative",
+                    width: "100%",
+                    aspectRatio: "16/9",
+                    background: "#080808",
+                    borderRadius: 6,
+                    overflow: "hidden",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    border: "1px solid rgba(255, 255, 255, 0.05)",
+                  }}
+                >
+                  {snapshotUrl ? (
+                    <img
+                      src={snapshotUrl}
+                      alt="Vista previa de la cámara"
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "contain",
+                        display: snapshotLoaded ? "block" : "none",
+                      }}
+                      onLoad={() => setSnapshotLoaded(true)}
+                      onError={() => setSnapshotLoaded(false)}
+                    />
+                  ) : null}
+
+                  {!snapshotLoaded && (
+                    <div
+                      style={{
+                        color: "var(--text-muted)",
+                        fontSize: "0.8rem",
+                        textAlign: "center",
+                        padding: 16,
+                      }}
+                    >
+                      {isLoadingSnapshot
+                        ? "🔄 Capturando frame de la cámara en vivo..."
+                        : "ℹ️ Pulsa 'Verificar Stream' o 'Actualizar Frame' para cargar la vista previa."}
+                    </div>
+                  )}
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginTop: 8,
+                    fontSize: "0.72rem",
+                    color: "var(--text-muted)",
+                  }}
+                >
+                  <span>
+                    ⚡ Códec: <strong style={{ color: "#f8fafc" }}>{videoCodec}</strong> · Res:{" "}
+                    <strong style={{ color: "#f8fafc" }}>{resDisplay}</strong>
+                  </span>
+                  <span style={{ color: "#34d399", fontWeight: 600 }}>
+                    {videoCodec.includes("HEVC") || videoCodec.includes("265")
+                      ? "🚀 Passthrough Puro HEVC (Zero Transcode)"
+                      : "🚀 Passthrough Puro H.264"}
+                  </span>
+                </div>
+              </div>
             </div>
 
             {/* Hardware & Real Entities Section */}

@@ -80,6 +80,9 @@ export const api = {
       }
     ),
 
+  getCameraSnapshotUrl: (cameraId: string) =>
+    `${API_BASE}/cameras/${encodeURIComponent(cameraId)}/snapshot?t=${Date.now()}`,
+
   updateCameraIdentity: (cameraId: string, data: { manufacturer?: string; model?: string; clear?: boolean }) =>
     request<{ success: boolean; message?: string }>(
       `/cameras/${encodeURIComponent(cameraId)}/identity-override`,
