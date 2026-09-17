@@ -1,3 +1,13 @@
+## [1.5.97] - 2026-09-17
+
+### Corrección de Suite de Pruebas CI y Filtro de Bitstream Keyframe Passthrough
+
+- **Restauración de `-bsf:v dump_extra=freq=keyframe` en Flujo Passthrough:**
+  - Garantiza la inyección y repetición de conjuntos de parámetros VPS/SPS/PPS en cada fotograma clave (I-frame/IDR) tanto para H.264 como para HEVC / H.265.
+  - Asegura que Apple HomeKit y dispositivos iOS reciban la información de decodificación inmediatamente sin retardos ni pantallas congeladas.
+  - Pasa al 100% las pruebas unitarias de streaming de accesorios de HomeKit (`test/homekit-camera.test.ts`).
+  - Total de 50 archivos de pruebas y 408 tests pasando limpiamente en CI.
+
 ## [1.5.96] - 2026-09-16
 
 ### Passthrough Nativo HEVC / H.265 (Cero Transcodificación, Cero Lag, 100% Calidad Original)

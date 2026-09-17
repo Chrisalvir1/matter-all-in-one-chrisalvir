@@ -714,6 +714,8 @@ export class HomeKitCameraStreamingDelegate
         "-an",
         "-c:v",
         "copy",
+        "-bsf:v",
+        "dump_extra=freq=keyframe",
         "-f",
         "rtp",
         "-payload_type",
