@@ -1,3 +1,22 @@
+## [1.6.2] - 2026-09-17
+
+### Cámaras Google Nest, Fix de Live View & Audio en HomeKit (OPUS / 16k & 24k) y Detección de IA Local
+
+- **Corrección de Live View y Audio Mudo en Apple Home (HomeKit):**
+  - Si `libfdk_aac` no está presente en FFmpeg, se anuncia exclusivamente `OPUS` a HomeKit a 16 kHz y 24 kHz, garantizando compatibilidad nativa sin audio mudo en iOS.
+  - Mapeo de audio resiliente `-map 0:a:0?` y fallback automático con generador de silencio `anullsrc` para evitar que FFmpeg muera si una cámara no tiene pista de audio.
+  - Saneamiento de loopback reemplazando `localhost` por `127.0.0.1` para evitar caídas por IPv6.
+
+- **Ingesta y Exportación de Cámaras Google Nest desde Home Assistant:**
+  - Nuevo adaptador `NestCameraAdapter` que detecta cámaras Google Nest y correlaciona sensores acompañantes (persona, timbre, movimiento, sonido).
+  - Enrutamiento inteligente a Go2rtc RTSP local (passthrough H.264) o proxy continuo de Home Assistant con autenticación Bearer y transcodificación ultrarrápida.
+  - Compatibilidad dual-track para Apple Home (HomeKit HAP) y Matter 1.6.
+
+- **Motor de Visión Artificial e IA Local (Sin Compilación C++):**
+  - Detección local para persona (`person`) y fauna/mascotas (`dog`, `cat`, `bird`, `raccoon`, `snake`, `spider`).
+  - Activación instantánea del sensor de movimiento HomeKit y publicación MQTT en tiempo real (`matter-all-in-one/ai/{cameraId}/detection`).
+  - Pestaña de configuración "🧠 IA & Fauna" en el modal de configuración de cámara.
+
 ## [1.6.1] - 2026-09-17
 
 ### Corrección Integral de Estado de Conexión en Cámaras Camera.UI ("🔴 Desconectada" -> "🟢 En línea")
