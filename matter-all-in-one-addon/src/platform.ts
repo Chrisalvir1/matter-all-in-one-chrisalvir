@@ -5293,6 +5293,38 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                 return cam;
               });
               updated = true;
+            } else {
+              // Check if it's a native Home Assistant camera entity (e.g. Google Nest / go2rtc)
+              const haState =
+                this.ha?.hassStates?.get(cameraId) ||
+                this.ha?.hassStates?.get(`camera.${cleanId}`);
+              if (haState) {
+                const friendlyName =
+                  (haState.attributes as any)?.friendly_name ||
+                  cleanId.replace(/_/g, " ").toUpperCase();
+                const newCam: any = {
+                  id: cameraId,
+                  name: friendlyName,
+                  manufacturer: (haState.attributes as any)?.brand || "Home Assistant",
+                  model: (haState.attributes as any)?.model_name || "Camera IP",
+                  rtspUrl: streamUrl,
+                  hasAudio: true,
+                  homeKitEnabled: true,
+                  status: "online",
+                  pincode: "031-45-154",
+                  setupId: "HA01",
+                };
+                cuiStore.cameras.push(newCam);
+                await CameraUiStorage.save(cuiStore);
+                updated = true;
+                try {
+                  await CameraUiHomeKitBridge.mountCamera(this, newCam);
+                } catch (mountErr) {
+                  this.log.error(
+                    `Error mounting HA camera ${cameraId} to HomeKit: ${mountErr}`,
+                  );
+                }
+              }
             }
           }
           if (!updated) {
@@ -5303,7 +5335,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             return;
           }
 
-          // Remount camera in HomeKit with the new stream URL
+          // Remount camera in HomeKit if it was in Scrypted store
           const store = await ScryptedStorage.load();
           const cam = store.cameras.cameras.find(
             (c) => c.cameraId === cameraId,
