@@ -61,6 +61,7 @@ import { ScryptedStreamValidator } from "./camera/scrypted/scrypted-stream-valid
 import { CameraUiStorage } from "./camera/cameraui/cameraui-storage.js";
 import { CameraUiClient } from "./camera/cameraui/cameraui-client.js";
 import { CameraUiHomeKitBridge } from "./camera/cameraui/cameraui-homekit-bridge.js";
+import type { CameraRealEntity } from "./camera/cameraui/cameraui-types.js";
 import { sanitizeUrlCredentials } from "./camera/homekit/ffmpeg-helper.js";
 
 export interface HomeAssistantPlatformConfig extends PlatformConfig {
@@ -380,6 +381,143 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     } catch (err) {
       this.log.warn(`[Camera.UI] Failed to initialize Camera.UI engine: ${err}`);
     }
+  }
+
+  public findLinkedCameraEntities(
+    cameraName: string,
+    cameraId: string,
+  ): CameraRealEntity[] {
+    const entities: CameraRealEntity[] = [];
+    const states = this.ha?.hassStates;
+    const registry = this.ha?.hassEntities;
+    if (!states) return entities;
+
+    const baseRaw = (cameraName || cameraId)
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "_")
+      .replace(/_+/g, "_")
+      .replace(/^_|_$/g, "");
+
+    const words = baseRaw.split("_").filter((w) => w.length >= 3);
+
+    for (const [entityId, state] of states.entries()) {
+      const fn = (state?.attributes?.friendly_name || "").toLowerCase();
+      const idLower = entityId.toLowerCase();
+      const entry = registry?.get(entityId);
+
+      const matches =
+        idLower.includes(baseRaw) ||
+        fn.includes(baseRaw) ||
+        (words.length > 0 &&
+          words.every((w) => idLower.includes(w) || fn.includes(w)));
+
+      if (!matches) continue;
+
+      const domain = entityId.split(".")[0];
+      const deviceClass = state?.attributes?.device_class;
+      const isStateOn = state?.state === "on";
+
+      const registeredEntity = this.entities?.get(entityId);
+      const isExported = this.exportedDevices?.has(entityId) ?? false;
+      const matterCode = (registeredEntity as any)?.pairingCode || undefined;
+      const manualCode =
+        (registeredEntity as any)?.manualPairingCode || undefined;
+      const isMqtt =
+        entityId.startsWith("mqtt.") ||
+        (registeredEntity as any)?.origin === "mqtt" ||
+        (state?.attributes as any)?.origin === "mqtt";
+      const topic =
+        (registeredEntity as any)?.topic ||
+        (state?.attributes as any)?.command_topic ||
+        (state?.attributes as any)?.state_topic ||
+        (isMqtt ? `homeassistant/${domain}/${entityId.split(".")[1]}` : undefined);
+
+      if (
+        domain === "binary_sensor" &&
+        (["motion", "occupancy", "presence"].includes(deviceClass || "") ||
+          idLower.includes("motion") ||
+          idLower.includes("movimiento"))
+      ) {
+        if (!entities.some((e) => e.type === "motion")) {
+          entities.push({
+            id: entityId,
+            domain: "binary_sensor",
+            type: "motion",
+            name: state?.attributes?.friendly_name || "Sensor de Movimiento",
+            state: isStateOn,
+            matterExported: isExported,
+            matterPairingCode: matterCode,
+            matterManualCode: manualCode,
+            topic,
+          });
+        }
+      } else if (
+        domain === "light" &&
+        (idLower.includes("light") ||
+          idLower.includes("spotlight") ||
+          idLower.includes("floodlight") ||
+          idLower.includes("luz") ||
+          idLower.includes("foco") ||
+          fn.includes("luz") ||
+          fn.includes("foco"))
+      ) {
+        if (!entities.some((e) => e.type === "light")) {
+          entities.push({
+            id: entityId,
+            domain: "light",
+            type: "light",
+            name: state?.attributes?.friendly_name || "Foco / Luz",
+            state: isStateOn,
+            matterExported: isExported,
+            matterPairingCode: matterCode,
+            matterManualCode: manualCode,
+            topic,
+          });
+        }
+      } else if (
+        domain === "siren" ||
+        (domain === "switch" &&
+          (idLower.includes("siren") ||
+            idLower.includes("alarm") ||
+            idLower.includes("alarma") ||
+            fn.includes("sirena") ||
+            fn.includes("alarma")))
+      ) {
+        if (!entities.some((e) => e.type === "siren")) {
+          entities.push({
+            id: entityId,
+            domain: domain as any,
+            type: "siren",
+            name: state?.attributes?.friendly_name || "Sirena de Alarma",
+            state: isStateOn,
+            matterExported: isExported,
+            matterPairingCode: matterCode,
+            matterManualCode: manualCode,
+            topic,
+          });
+        }
+      } else if (
+        (domain === "binary_sensor" || domain === "event") &&
+        (deviceClass === "doorbell" ||
+          idLower.includes("doorbell") ||
+          idLower.includes("timbre"))
+      ) {
+        if (!entities.some((e) => e.type === "doorbell")) {
+          entities.push({
+            id: entityId,
+            domain: domain as any,
+            type: "doorbell",
+            name: state?.attributes?.friendly_name || "Timbre",
+            state: isStateOn,
+            matterExported: isExported,
+            matterPairingCode: matterCode,
+            matterManualCode: manualCode,
+            topic,
+          });
+        }
+      }
+    }
+    return entities;
   }
 
   public getOrCreateHomeKitCameraRecord(
@@ -4977,9 +5115,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               homeName: activeHomeName,
             };
 
+            const realEntities = this.findLinkedCameraEntities(cam.name, cam.cameraId);
             return {
               ...cam,
               status: liveStatus,
+              realEntities,
               displaySerialNumber:
                 cam.displaySerialNumber ||
                 cam.serialNumber ||
@@ -5849,6 +5989,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             const effectiveStatus = isCameraUiServerConnected
               ? (cam.status || "online")
               : "offline";
+
+            const realEntities = this.findLinkedCameraEntities(cam.name, cam.id);
+            const hasLight = realEntities.some((e) => e.type === "light");
+            const hasSiren = realEntities.some((e) => e.type === "siren");
+            const lightEntity = realEntities.find((e) => e.type === "light");
+            const sirenEntity = realEntities.find((e) => e.type === "siren");
+
             return {
               ...cam,
               status: effectiveStatus,
@@ -5859,6 +6006,14 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               setupId: acc?.record?.setupId || cam.setupId,
               videoCodec: acc?.capabilities?.videoCodec || cam.videoCodec,
               strategy: (acc?.capabilities?.strategy as any) || cam.strategy,
+              width: acc?.capabilities?.resolution?.width || cam.width,
+              height: acc?.capabilities?.resolution?.height || cam.height,
+              fps: acc?.capabilities?.maxFps || cam.fps,
+              hasLight,
+              lightActive: lightEntity ? lightEntity.state : false,
+              hasSiren,
+              sirenActive: sirenEntity ? sirenEntity.state : false,
+              realEntities,
             };
           });
           res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
@@ -5898,6 +6053,42 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           const success = await CameraUiHomeKitBridge.resetPairing(this, cameraId);
           res.writeHead(success ? 200 : 400, { "Content-Type": "application/json; charset=utf-8" });
           res.end(JSON.stringify({ success }));
+          return;
+        }
+
+        if (
+          req.method === "POST" &&
+          (pathname === "/api/cameras/control-entity" ||
+            pathname === "/api/custom/cameras/control-entity")
+        ) {
+          try {
+            const rawBody = await this.readRequestBody(req);
+            const body = rawBody ? JSON.parse(rawBody) : {};
+            const { entityId, action } = body;
+            if (!entityId) {
+              res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
+              res.end(JSON.stringify({ success: false, error: "entityId requerido" }));
+              return;
+            }
+            const domain = entityId.split(".")[0];
+            const service =
+              action === "turn_on"
+                ? "turn_on"
+                : action === "turn_off"
+                  ? "turn_off"
+                  : "toggle";
+            await this.ha?.callService(domain, service, entityId);
+            const newState = this.ha?.hassStates?.get(entityId)?.state === "on";
+            this.broadcastSseMessage("entity_state_changed", {
+              entityId,
+              state: newState,
+            });
+            res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+            res.end(JSON.stringify({ success: true, entityId, state: newState }));
+          } catch (err: any) {
+            res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
+            res.end(JSON.stringify({ success: false, error: err.message }));
+          }
           return;
         }
 

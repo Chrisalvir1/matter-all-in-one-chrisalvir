@@ -158,17 +158,26 @@ export const CameraCard: React.FC<CameraCardProps> = ({
     const isOnline = cameraUiCamera.status === "online" && cameraUiCamera.homeKitEnabled !== false;
     const isHapPaired = cameraUiCamera.isPaired === true;
     const brand = extractCameraBrand(cameraUiCamera);
-    const modelDisplay = cameraUiCamera.model || "Cámara RTSP";
-    const sn = cameraUiCamera.id.toUpperCase();
+    const modelDisplay = cameraUiCamera.model && cameraUiCamera.model !== "Cámara RTSP" ? cameraUiCamera.model : "";
+    const sn = cameraUiCamera.serialNumber || (cameraUiCamera.id.startsWith("cameraui_") ? "" : cameraUiCamera.id);
 
-    const sensors: string[] = [];
-    if (cameraUiCamera.motionTopic || cameraUiCamera.motionActive) sensors.push("🏃 Movimiento");
-    if (cameraUiCamera.doorbellTopic || cameraUiCamera.doorbellActive) sensors.push("🔔 Timbre");
+    // Only real sensors and entities verified from hardware or Home Assistant
+    const realSensors: string[] = [];
+    if (cameraUiCamera.realEntities && cameraUiCamera.realEntities.length > 0) {
+      for (const ent of cameraUiCamera.realEntities) {
+        if (ent.type === "motion" && !realSensors.includes("🏃 Movimiento")) realSensors.push("🏃 Movimiento");
+        if (ent.type === "light" && !realSensors.includes("💡 Luz")) realSensors.push("💡 Luz");
+        if (ent.type === "siren" && !realSensors.includes("🚨 Sirena")) realSensors.push("🚨 Sirena");
+        if (ent.type === "doorbell" && !realSensors.includes("🔔 Timbre")) realSensors.push("🔔 Timbre");
+      }
+    } else {
+      if (cameraUiCamera.motionTopic || cameraUiCamera.motionActive) realSensors.push("🏃 Movimiento");
+      if (cameraUiCamera.hasLight) realSensors.push("💡 Luz");
+      if (cameraUiCamera.hasSiren) realSensors.push("🚨 Sirena");
+      if (cameraUiCamera.doorbellTopic || cameraUiCamera.doorbellActive) realSensors.push("🔔 Timbre");
+    }
 
-    const resolutionLabel =
-      cameraUiCamera.width && cameraUiCamera.height
-        ? `${cameraUiCamera.width >= 2304 ? "2K" : cameraUiCamera.width >= 3840 ? "4K" : "1080p"} · Passthrough`
-        : "HD · Passthrough";
+    const entitiesCount = 1 + realSensors.length;
 
     return (
       <article
@@ -180,7 +189,7 @@ export const CameraCard: React.FC<CameraCardProps> = ({
           <span className="device-icon" style={{ fontSize: "1.2rem" }}>🎥</span>
           <div className="card-pills-group" style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
             <span className="badge-cameraui-tag">CAMERA.UI</span>
-            {isHapPaired ? (
+            {isHapPaired && (
               <span
                 className="tag"
                 style={{
@@ -191,20 +200,7 @@ export const CameraCard: React.FC<CameraCardProps> = ({
                   fontWeight: 600,
                 }}
               >
-                🍏 HAP Vinculado en Apple Home
-              </span>
-            ) : (
-              <span
-                className="tag"
-                style={{
-                  fontSize: "0.68rem",
-                  background: "rgba(245, 158, 11, 0.15)",
-                  color: "#fde68a",
-                  border: "1px solid rgba(245, 158, 11, 0.4)",
-                  fontWeight: 600,
-                }}
-              >
-                ⏳ Pendiente HAP
+                🍏 HAP Apple Home
               </span>
             )}
             <span
@@ -239,35 +235,13 @@ export const CameraCard: React.FC<CameraCardProps> = ({
 
         <h3 title={cameraUiCamera.name}>{cameraUiCamera.name}</h3>
         <p className="device-meta">
-          {brand} · {modelDisplay} · <code>{sn}</code>
+          {brand}
+          {modelDisplay ? ` (${modelDisplay})` : ""}
+          {sn ? ` · SN: ${sn}` : ""}
         </p>
 
         <div className="tags">
-          <span
-            className="tag"
-            style={{
-              fontSize: "0.7rem",
-              background: "rgba(16, 185, 129, 0.12)",
-              color: "#6ee7b7",
-              border: "1px solid rgba(52, 211, 153, 0.3)",
-            }}
-          >
-            ⚡ {resolutionLabel}
-          </span>
-          {cameraUiCamera.hasAudio !== false && (
-            <span
-              className="tag"
-              style={{
-                fontSize: "0.7rem",
-                background: "rgba(59, 130, 246, 0.12)",
-                color: "#93c5fd",
-                border: "1px solid rgba(59, 130, 246, 0.3)",
-              }}
-            >
-              🔊 Audio 24kbps AAC-ELD
-            </span>
-          )}
-          {sensors.map((s, idx) => (
+          {realSensors.map((s, idx) => (
             <span className="tag" key={idx}>
               {s}
             </span>
@@ -275,8 +249,8 @@ export const CameraCard: React.FC<CameraCardProps> = ({
         </div>
 
         <div className="card-footer">
-          <span className="entity-summary" style={{ fontSize: "0.78rem" }}>
-            PIN: <strong>{cameraUiCamera.pincode || "031-45-154"}</strong>
+          <span className="entity-summary">
+            {entitiesCount} entidad{entitiesCount === 1 ? "" : "es"}
           </span>
           <button
             className="button button-secondary"
@@ -286,7 +260,7 @@ export const CameraCard: React.FC<CameraCardProps> = ({
               onConfigure();
             }}
           >
-            Ver QR / Vincular
+            Configurar
           </button>
         </div>
       </article>

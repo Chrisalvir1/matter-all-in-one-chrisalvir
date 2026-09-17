@@ -81,6 +81,7 @@ export interface CameraRecord {
     logs?: Array<{ timestamp: string; level: string; message: string; details?: any }>;
   };
   sensors?: CameraSensorRecord[];
+  realEntities?: CameraRealEntity[];
   capabilities?: {
     observed?: {
       videoCodec?: string;
@@ -172,21 +173,42 @@ export interface CameraUiConfigResponse {
   connectionStatus?: "connected" | "disconnected" | "error";
 }
 
+export interface CameraRealEntity {
+  id: string;
+  domain: "binary_sensor" | "light" | "siren" | "switch" | "event";
+  type: "motion" | "light" | "siren" | "doorbell" | "switch";
+  name: string;
+  state: boolean;
+  matterExported?: boolean;
+  matterPairingCode?: string;
+  matterManualCode?: string;
+  topic?: string;
+}
+
 export interface CameraUiCameraItem {
   id: string;
   name: string;
   rtspUrl: string;
+  subRtspUrl?: string;
   snapshotUrl?: string;
   manufacturer?: string;
   model?: string;
+  serialNumber?: string;
   hasAudio?: boolean;
   width?: number;
   height?: number;
   fps?: number;
+  videoCodec?: string;
+  strategy?: string;
   motionTopic?: string;
   doorbellTopic?: string;
   motionActive?: boolean;
   doorbellActive?: boolean;
+  hasLight?: boolean;
+  lightActive?: boolean;
+  hasSiren?: boolean;
+  sirenActive?: boolean;
+  realEntities?: CameraRealEntity[];
   status?: "online" | "offline" | "unknown";
   homeKitEnabled?: boolean;
   setupUri?: string;

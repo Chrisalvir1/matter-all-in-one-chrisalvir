@@ -9,7 +9,6 @@ import { CameraConfigModal } from "./components/CameraConfigModal";
 import { DeviceModal } from "./components/DeviceModal";
 import { ScryptedModal } from "./components/ScryptedModal";
 import { CameraUiModal } from "./components/CameraUiModal";
-import { CameraUiPairingModal } from "./components/CameraUiPairingModal";
 import { SettingsModal } from "./components/SettingsModal";
 import { extractCameraBrand } from "./components/CameraCard";
 import { CameraRecord, CameraUiCameraItem, DeviceRecord } from "./types";
@@ -407,26 +406,15 @@ export const App: React.FC = () => {
         </main>
       </div>
 
-      {/* Camera Configuration Modal (Scrypted) */}
-      {selectedCamera && (
+      {/* Unified Camera Configuration Modal (Scrypted & Camera.UI) */}
+      {(selectedCamera || selectedCameraUiCamera) && (
         <CameraConfigModal
-          camera={selectedCamera}
-          onClose={() => setSelectedCamera(null)}
-          onRefresh={refreshAll}
-          showToast={showToast}
-        />
-      )}
-
-      {/* Camera.UI Camera Pairing Modal */}
-      {selectedCameraUiCamera && (
-        <CameraUiPairingModal
-          camera={selectedCameraUiCamera}
-          onClose={() => setSelectedCameraUiCamera(null)}
-          onRefresh={refreshAll}
-          onOpenGlobalSettings={() => {
+          camera={selectedCamera || selectedCameraUiCamera}
+          onClose={() => {
+            setSelectedCamera(null);
             setSelectedCameraUiCamera(null);
-            setIsCameraUiModalOpen(true);
           }}
+          onRefresh={refreshAll}
           showToast={showToast}
         />
       )}

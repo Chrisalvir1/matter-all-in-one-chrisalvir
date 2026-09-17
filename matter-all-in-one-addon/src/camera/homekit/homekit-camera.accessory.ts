@@ -17,6 +17,7 @@ import {
   SRTPCryptoSuites,
   uuid,
   VideoCodecType,
+  MDNSAdvertiser,
 } from "hap-nodejs";
 import type {
   CameraCapabilitiesInfo,
@@ -26,6 +27,7 @@ import type {
 import { HomeKitCameraStreamingDelegate } from "./homekit-camera-stream.delegate.js";
 import { HomeKitCameraRecordingDelegate } from "./homekit-camera-recording.delegate.js";
 import crypto from "node:crypto";
+import os from "node:os";
 import { ScryptedStorage } from "../scrypted/scrypted-storage.js";
 import type { CameraRecord } from "../scrypted/scrypted-types.js";
 import { CameraUiStorage } from "../cameraui/cameraui-storage.js";
@@ -38,6 +40,9 @@ export class HomeKitCameraAccessory {
   public recordingDelegate?: HomeKitCameraRecordingDelegate;
   public motionService?: Service;
   public linkedMotionEntityId?: string;
+  public linkedLightEntityId?: string;
+  public linkedSirenEntityId?: string;
+  public linkedDoorbellEntityId?: string;
   public isPublished = false;
 
   constructor(
@@ -50,7 +55,11 @@ export class HomeKitCameraAccessory {
     const accessoryUuid = record.uuid || uuid.generate(`homekit:camera:${entityId}`);
     this.record.uuid = accessoryUuid;
     this.accessory = new Accessory(record.name || entityId, accessoryUuid);
-    this.linkedMotionEntityId = this.findLinkedMotionEntity();
+    const linked = this.findLinkedEntities();
+    this.linkedMotionEntityId = linked.motion || this.findLinkedMotionEntity();
+    this.linkedLightEntityId = linked.light;
+    this.linkedSirenEntityId = linked.siren;
+    this.linkedDoorbellEntityId = linked.doorbell;
     this.rebuildServiceGraph();
   }
 
@@ -92,7 +101,7 @@ export class HomeKitCameraAccessory {
       this.motionService.setCharacteristic(Characteristic.MotionDetected, motionOn);
       this.motionService.setCharacteristic(Characteristic.StatusActive, true);
     }
-    if (Boolean(this.streamSource.metadata?.hasDoorbell)) {
+    if (this.linkedDoorbellEntityId || Boolean(this.streamSource.metadata?.hasDoorbell)) {
       try {
         const doorbell = this.accessory.addService(
           Service.Doorbell,
@@ -101,22 +110,55 @@ export class HomeKitCameraAccessory {
         doorbell.setCharacteristic(Characteristic.ProgrammableSwitchEvent, 0);
       } catch {}
     }
-    if (Boolean(this.streamSource.metadata?.hasLight)) {
+    if (this.linkedLightEntityId || Boolean(this.streamSource.metadata?.hasLight)) {
       try {
         const light = this.accessory.addService(
           Service.Lightbulb,
           `${this.record.name || this.entityId} Luz`,
         );
-        light.getCharacteristic(Characteristic.On).onGet(() => false).onSet(() => {});
+        light
+          .getCharacteristic(Characteristic.On)
+          .onGet(() => {
+            if (this.linkedLightEntityId) {
+              const state = this.platform?.ha?.hassStates?.get(this.linkedLightEntityId)?.state;
+              return state === "on";
+            }
+            return false;
+          })
+          .onSet(async (value) => {
+            if (this.linkedLightEntityId) {
+              const service = value ? "turn_on" : "turn_off";
+              try {
+                await this.platform?.ha?.callService("light", service, this.linkedLightEntityId);
+              } catch {}
+            }
+          });
       } catch {}
     }
-    if (Boolean(this.streamSource.metadata?.hasSiren)) {
+    if (this.linkedSirenEntityId || Boolean(this.streamSource.metadata?.hasSiren)) {
       try {
         const siren = this.accessory.addService(
           Service.Switch,
           `${this.record.name || this.entityId} Sirena`,
         );
-        siren.getCharacteristic(Characteristic.On).onGet(() => false).onSet(() => {});
+        siren
+          .getCharacteristic(Characteristic.On)
+          .onGet(() => {
+            if (this.linkedSirenEntityId) {
+              const state = this.platform?.ha?.hassStates?.get(this.linkedSirenEntityId)?.state;
+              return state === "on";
+            }
+            return false;
+          })
+          .onSet(async (value) => {
+            if (this.linkedSirenEntityId) {
+              const domain = this.linkedSirenEntityId.split(".")[0] || "siren";
+              const service = value ? "turn_on" : "turn_off";
+              try {
+                await this.platform?.ha?.callService(domain, service, this.linkedSirenEntityId);
+              } catch {}
+            }
+          });
       } catch {}
     }
     const isStreamingUsable = Boolean(this.streamSource.url);
@@ -269,6 +311,88 @@ export class HomeKitCameraAccessory {
     return supported.length ? supported : [[320, 180, 15]];
   }
 
+  public findLinkedEntities(): {
+    motion?: string;
+    light?: string;
+    siren?: string;
+    doorbell?: string;
+  } {
+    const result: { motion?: string; light?: string; siren?: string; doorbell?: string } = {};
+    const registry = this.platform?.ha?.hassEntities;
+    const states = this.platform?.ha?.hassStates;
+    if (!states) return result;
+
+    const cameraBase = (this.record.name || this.entityId)
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "_")
+      .replace(/_+/g, "_")
+      .replace(/^_|_$/g, "");
+
+    const words = cameraBase.split("_").filter((w: string) => w.length >= 3);
+
+    const matchesName = (entityId: string, friendlyName?: string) => {
+      const idLower = entityId.toLowerCase();
+      const fnLower = (friendlyName || "").toLowerCase();
+      if (idLower.includes(cameraBase) || fnLower.includes(cameraBase)) return true;
+      return words.length > 0 && words.every((w: string) => idLower.includes(w) || fnLower.includes(w));
+    };
+
+    const deviceId = registry?.get(this.entityId)?.device_id;
+
+    for (const [entityId, state] of states.entries()) {
+      const entry = registry?.get(entityId);
+      const isSameDevice = deviceId && entry?.device_id === deviceId;
+      const fn = state?.attributes?.friendly_name;
+      const match = isSameDevice || matchesName(entityId, fn);
+      if (!match) continue;
+
+      const domain = entityId.split(".")[0];
+      const deviceClass = state?.attributes?.device_class;
+
+      if (
+        !result.motion &&
+        domain === "binary_sensor" &&
+        (["motion", "occupancy", "presence"].includes(deviceClass) ||
+          entityId.includes("motion") ||
+          entityId.includes("movimiento"))
+      ) {
+        result.motion = entityId;
+      }
+      if (
+        !result.light &&
+        domain === "light" &&
+        (entityId.includes("light") ||
+          entityId.includes("spotlight") ||
+          entityId.includes("floodlight") ||
+          entityId.includes("luz") ||
+          entityId.includes("foco") ||
+          isSameDevice)
+      ) {
+        result.light = entityId;
+      }
+      if (
+        !result.siren &&
+        (domain === "siren" ||
+          (domain === "switch" &&
+            (entityId.includes("siren") ||
+              entityId.includes("alarm") ||
+              entityId.includes("alarma"))))
+      ) {
+        result.siren = entityId;
+      }
+      if (
+        !result.doorbell &&
+        (domain === "binary_sensor" || domain === "event") &&
+        (deviceClass === "doorbell" ||
+          entityId.includes("doorbell") ||
+          entityId.includes("timbre"))
+      ) {
+        result.doorbell = entityId;
+      }
+    }
+    return result;
+  }
+
   public findLinkedMotionEntity(): string | undefined {
     if (
       this.record.motionEntityId &&
@@ -309,6 +433,25 @@ export class HomeKitCameraAccessory {
     return undefined;
   }
 
+  public static detectPrimaryNetworkInterface(): { name: string; ip: string } | undefined {
+    try {
+      const ifaces = os.networkInterfaces();
+      const ignoredPatterns = /^(lo|docker|hassio|veth|br-|dummy|tun|tap|tailscale|wg|utun|llw|awdl)/i;
+
+      for (const [name, addrs] of Object.entries(ifaces)) {
+        if (ignoredPatterns.test(name)) continue;
+        for (const addr of addrs || []) {
+          if (addr.internal) continue;
+          if (addr.family === "IPv4" || (addr.family as any) === 4) {
+            if (addr.address.startsWith("172.17.") || addr.address.startsWith("172.30.")) continue;
+            return { name, ip: addr.address };
+          }
+        }
+      }
+    } catch {}
+    return undefined;
+  }
+
   public updateMotionState(motionDetected: boolean): void {
     if (!this.motionService) return;
     this.motionService.updateCharacteristic(
@@ -336,16 +479,20 @@ export class HomeKitCameraAccessory {
       void this.platform?.saveHomeKitCameraRecords?.();
       this.notifyPairingStateChanged(false);
     });
+
+    const primaryIface = HomeKitCameraAccessory.detectPrimaryNetworkInterface();
     await this.accessory.publish({
       username: this.record.username,
       pincode: this.record.pincode,
       port: this.record.port,
       category: Categories.IP_CAMERA,
       setupID: this.record.setupId,
+      advertiser: MDNSAdvertiser.CIAO,
+      bind: primaryIface?.name ? [primaryIface.name] : undefined,
     });
     this.isPublished = true;
     this.platform?.log?.notice?.(
-      `[HomeKitCamera][${this.entityId}] Published production HAP camera port=${this.record.port} HKSV=${this.record.hksvEnabled ? "enabled" : "disabled"}`,
+      `[HomeKitCamera][${this.entityId}] Published production HAP camera port=${this.record.port} (advertiser=ciao, iface=${primaryIface?.name || "all"}) HKSV=${this.record.hksvEnabled ? "enabled" : "disabled"}`,
     );
 
     // Asynchronously probe stream capabilities (HEVC vs H264, audio tracks) to adapt strategy dynamically
@@ -509,19 +656,24 @@ export class HomeKitCameraAccessory {
     this.record.username = `0E:${randomHex.match(/.{2}/g)!.join(":")}`;
     this.record.setupId = crypto.randomBytes(2).toString("hex").toUpperCase().slice(0, 4);
 
-    // Pick next free port
+    // Pick next free port across both HomeKit records and Camera.UI store
+    const usedPorts = new Set<number>();
     if (this.platform?.homekitCameraRecords) {
-      const usedPorts = new Set(
-        Array.from(
-          this.platform.homekitCameraRecords.values() as Iterable<HomeKitCameraStorageRecord>,
-        )
-          .map((r: HomeKitCameraStorageRecord) => r.port)
-          .filter((p: number) => p !== this.record.port),
-      );
-      let nextPort = 51830;
-      while (usedPorts.has(nextPort)) nextPort++;
-      this.record.port = nextPort;
+      for (const r of (this.platform.homekitCameraRecords.values() as Iterable<HomeKitCameraStorageRecord>)) {
+        if (r.port && r.port !== this.record.port) usedPorts.add(r.port);
+      }
     }
+    try {
+      const cuiStore = CameraUiStorage.getCachedStore();
+      if (cuiStore) {
+        for (const c of cuiStore.cameras) {
+          if (c.port && c.port !== this.record.port) usedPorts.add(c.port);
+        }
+      }
+    } catch {}
+    let nextPort = 51830;
+    while (usedPorts.has(nextPort)) nextPort++;
+    this.record.port = nextPort;
 
     this.record.published = false;
     this.record.isPaired = false;

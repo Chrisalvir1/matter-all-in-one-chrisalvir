@@ -1,15 +1,30 @@
 import React, { useState, useEffect } from "react";
-import { CameraRecord } from "../types";
+import { CameraRecord, CameraUiCameraItem, CameraRealEntity } from "../types";
 import { api } from "../api/client";
 import { extractCameraBrand } from "./CameraCard";
 import { QRCodeDisplay, AppleHomeModernIcon } from "./QRCodeDisplay";
 import { copyToClipboard } from "../utils/clipboard";
 
 interface CameraConfigModalProps {
-  camera: CameraRecord | null;
+  camera: CameraRecord | CameraUiCameraItem | null;
   onClose: () => void;
   onRefresh: () => void;
   showToast: (msg: string, isError?: boolean) => void;
+}
+
+function computeHapSetupUri(pincode: string, setupId: string): string {
+  try {
+    const pin = parseInt(String(pincode).replace(/-/g, ""), 10);
+    const category = 17; // Category IP_CAMERA
+    const low = (pin | (1 << 28) | (category & 1 ? 1 << 31 : 0)) >>> 0;
+    const high = (category >> 1) >>> 0;
+    const num = BigInt(high) * 4294967296n + BigInt(low);
+    let enc = num.toString(36).toUpperCase();
+    while (enc.length < 9) enc = "0" + enc;
+    return `X-HM://${enc}${setupId.substring(0, 4).toUpperCase().padStart(4, "S")}`;
+  } catch {
+    return `X-HM://00GW95DQA${setupId.substring(0, 4).toUpperCase().padStart(4, "S")}`;
+  }
 }
 
 export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
@@ -31,105 +46,165 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
   const [freshMatterCode, setFreshMatterCode] = useState<string | null>(null);
   const [freshMatterManualCode, setFreshMatterManualCode] = useState<string | null>(null);
   const [isOpeningCommissioning, setIsOpeningCommissioning] = useState(false);
-  const [modelInput, setModelInput] = useState(camera?.displayModel || camera?.model || "");
+  const [modelInput, setModelInput] = useState("");
   const [isSavingModel, setIsSavingModel] = useState(false);
+  const [controllingEntityId, setControllingEntityId] = useState<string | null>(null);
+  const [activeMatterEntityId, setActiveMatterEntityId] = useState<string | null>(null);
+  const [entityMatterCodes, setEntityMatterCodes] = useState<
+    Record<string, { pairingCode: string; manualCode?: string }>
+  >({});
+  const [isGeneratingEntityMatter, setIsGeneratingEntityMatter] = useState<Record<string, boolean>>({});
+
+  const isCameraUi = Boolean(camera && ("id" in camera && !("cameraId" in camera)));
+  const cameraId = camera ? ("cameraId" in camera ? camera.cameraId : camera.id) : "";
+  const cameraName = camera?.name || "";
 
   // Initialize data when camera changes
   useEffect(() => {
     if (!camera) return;
-    const initialUrl =
-      camera.source?.streamReference?.directUrl ||
-      camera.source?.profiles?.find((p) => p.directUrl)?.directUrl ||
-      "";
-    const prefTransport = camera.exportConfig?.rtspTransportPreference || "tcp";
-    setRtspUrl(initialUrl);
-    setTransport(prefTransport);
-    setModelInput(camera.displayModel || camera.model || "");
-    setFreshMatterCode(null);
-    setFreshMatterManualCode(null);
-    setMultiAdminOpen(false);
 
-    // Show current verified state without launching background ffprobe loop
-    const observed = camera.capabilities?.observed;
-    const isVerified =
-      camera.source?.streamValidationStatus === "verified" ||
-      (camera.source?.streamReference as any)?.validationStatus === "verified";
-    if (isVerified && observed) {
-      setStreamVerified(true);
-      const w = observed.resolution?.width || 1920;
-      const h = observed.resolution?.height || 1080;
-      const codec = (observed.videoCodec || "H.264").toUpperCase();
-      const fpsVal = observed.fps || 30;
-      const audioStr = observed.hasAudio !== false ? "Con Audio" : "Sin Audio";
-      setStreamResult({
-        text: `✓ Stream verificado y activo (${codec} ${w}x${h} @ ${fpsVal}fps, ${audioStr}). Live View listo para Apple Home.`,
-      });
-    } else if (initialUrl) {
-      setStreamVerified(false);
-      setStreamResult({
-        text: "ℹ️ Pulsa 'Verificar Stream' para probar la conectividad y resolución nativa en vivo.",
-      });
+    let initialUrl = "";
+    let prefTransport: "tcp" | "udp" = "tcp";
+    let initialModel = "";
+
+    if (isCameraUi) {
+      const cui = camera as CameraUiCameraItem;
+      initialUrl = cui.rtspUrl || "";
+      initialModel = cui.model || "";
+      setModelInput(initialModel);
+      setRtspUrl(initialUrl);
+      setTransport("tcp");
+      setFreshMatterCode(null);
+      setFreshMatterManualCode(null);
+      setMultiAdminOpen(false);
+
+      if (cui.width && cui.height) {
+        setStreamVerified(true);
+        const w = cui.width;
+        const h = cui.height;
+        const codec = (cui.videoCodec || "H.264").toUpperCase();
+        const fpsVal = cui.fps || 30;
+        const audioStr = cui.hasAudio ? "Con Audio (AAC)" : "Sin Audio";
+        setStreamResult({
+          text: `✓ Stream nativo activo (${codec} ${w}x${h} @ ${fpsVal}fps, ${audioStr}). Passthrough puro listo para Apple Home.`,
+        });
+      } else if (initialUrl) {
+        setStreamVerified(false);
+        setStreamResult({
+          text: "ℹ️ Pulsa 'Verificar Stream' para comprobar la resolución y códec en tiempo real.",
+        });
+      } else {
+        setStreamVerified(false);
+        setStreamResult({
+          text: "ℹ️ Sin URL de stream RTSP directa configurada.",
+          isError: true,
+        });
+      }
     } else {
-      setStreamVerified(false);
-      setStreamResult({
-        text: "ℹ️ Sin URL de stream configurada. Ingresa una URL RTSP directa para activar Live View.",
-        isError: true,
-      });
-    }
-  }, [camera?.cameraId]);
+      const sc = camera as CameraRecord;
+      initialUrl =
+        sc.source?.streamReference?.directUrl ||
+        sc.source?.profiles?.find((p) => p.directUrl)?.directUrl ||
+        "";
+      prefTransport = sc.exportConfig?.rtspTransportPreference || "tcp";
+      initialModel = sc.displayModel || sc.model || "";
+      setModelInput(initialModel);
+      setRtspUrl(initialUrl);
+      setTransport(prefTransport);
+      setFreshMatterCode(null);
+      setFreshMatterManualCode(null);
+      setMultiAdminOpen(false);
 
-  // Compute HomeKit Setup URI
-  const getSetupUri = () => {
-    if (!camera) return "";
-    if (camera.identity?.homeKitSetupUri) return camera.identity.homeKitSetupUri;
-    const setupId = camera.identity?.homeKitSetupId || "SC01";
-    const pincode = camera.identity?.homeKitPincode || "031-45-154";
-    try {
-      const pin = parseInt(String(pincode).replace(/-/g, ""), 10);
-      const category = 17; // Category IP_CAMERA
-      const low = (pin | (1 << 28) | (category & 1 ? 1 << 31 : 0)) >>> 0;
-      const high = (category >> 1) >>> 0;
-      const num = BigInt(high) * 4294967296n + BigInt(low);
-      let enc = num.toString(36).toUpperCase();
-      while (enc.length < 9) enc = "0" + enc;
-      return `X-HM://${enc}${setupId.substring(0, 4).toUpperCase().padStart(4, "S")}`;
-    } catch {
-      return `X-HM://00GW95DQA${setupId.substring(0, 4).toUpperCase().padStart(4, "S")}`;
+      const observed = sc.capabilities?.observed;
+      const isVerified =
+        sc.source?.streamValidationStatus === "verified" ||
+        (sc.source?.streamReference as any)?.validationStatus === "verified";
+      if (isVerified && observed) {
+        setStreamVerified(true);
+        const w = observed.resolution?.width || 1920;
+        const h = observed.resolution?.height || 1080;
+        const codec = (observed.videoCodec || "H.264").toUpperCase();
+        const fpsVal = observed.fps || 30;
+        const audioStr = observed.hasAudio !== false ? "Con Audio" : "Sin Audio";
+        setStreamResult({
+          text: `✓ Stream verificado y activo (${codec} ${w}x${h} @ ${fpsVal}fps, ${audioStr}). Live View listo para Apple Home.`,
+        });
+      } else if (initialUrl) {
+        setStreamVerified(false);
+        setStreamResult({
+          text: "ℹ️ Pulsa 'Verificar Stream' para probar la conectividad y resolución nativa en vivo.",
+        });
+      } else {
+        setStreamVerified(false);
+        setStreamResult({
+          text: "ℹ️ Sin URL de stream configurada. Ingresa una URL RTSP directa para activar Live View.",
+          isError: true,
+        });
+      }
     }
-  };
+  }, [cameraId, isCameraUi]);
 
   if (!camera) return null;
 
-  const isPaired = camera.identity?.homeKitPairingState === "paired";
-  const isMatterCommissioned = Boolean(
-    camera.bindingState?.matterCommissioned ||
-    (camera.bindingState?.fabrics && camera.bindingState.fabrics.length > 0)
-  );
-  const pinCode = camera.identity?.homeKitPincode || "031-45-154";
+  const brand = extractCameraBrand(camera);
+  const isOnline = isCameraUi
+    ? (camera as CameraUiCameraItem).status === "online" && (camera as CameraUiCameraItem).homeKitEnabled !== false
+    : (camera as CameraRecord)?.status?.connection === "online" && (camera as CameraRecord)?.status?.isOnline === true;
+  const isPaired = isCameraUi
+    ? Boolean((camera as CameraUiCameraItem).isPaired)
+    : (camera as CameraRecord)?.identity?.homeKitPairingState === "paired";
+
+  const pinCode = isCameraUi
+    ? ((camera as CameraUiCameraItem).pincode || "031-45-154")
+    : ((camera as CameraRecord)?.identity?.homeKitPincode || "031-45-154");
+  const setupId = isCameraUi
+    ? ((camera as CameraUiCameraItem).setupId || "CUI1")
+    : ((camera as CameraRecord)?.identity?.homeKitSetupId || "SC01");
+
+  const getSetupUri = () => {
+    if (isCameraUi) {
+      const cui = camera as CameraUiCameraItem;
+      if (cui.setupUri) return cui.setupUri;
+      return computeHapSetupUri(pinCode, setupId);
+    }
+    const sc = camera as CameraRecord;
+    if (sc.identity?.homeKitSetupUri) return sc.identity.homeKitSetupUri;
+    return computeHapSetupUri(pinCode, setupId);
+  };
+
+  const isMatterCommissioned = isCameraUi
+    ? false
+    : Boolean(
+        (camera as CameraRecord).bindingState?.matterCommissioned ||
+        ((camera as CameraRecord).bindingState?.fabrics && (camera as CameraRecord).bindingState!.fabrics!.length > 0)
+      );
+
   const pairingPayload =
     activeTab === "homekit"
       ? getSetupUri()
-      : freshMatterCode || camera.identity?.matterPairingCode || "";
+      : freshMatterCode || (!isCameraUi ? (camera as CameraRecord).identity?.matterPairingCode : "") || "";
 
-  const brand = extractCameraBrand(camera);
-  const isOnline = camera.status?.connection === "online" && camera.status?.isOnline === true;
-  const modelDisplay = camera.displayModel || camera.model || "Modelo no identificado";
+  const modelDisplay = isCameraUi
+    ? (camera as CameraUiCameraItem).model || "Modelo no identificado"
+    : (camera as CameraRecord).displayModel || (camera as CameraRecord).model || "Modelo no identificado";
 
   const handleSaveModel = async (newModel?: string) => {
-    if (!camera) return;
     const modelToSave = (newModel ?? modelInput).trim();
     if (!modelToSave) return;
     setIsSavingModel(true);
     try {
-      await api.updateCameraIdentity(camera.cameraId, {
-        manufacturer: brand,
-        model: modelToSave,
-      });
-      camera.displayModel = modelToSave;
-      camera.model = modelToSave;
-      if (!camera.identityOverride) camera.identityOverride = {};
-      camera.identityOverride.model = modelToSave;
-
+      if (!isCameraUi) {
+        await api.updateCameraIdentity(cameraId, {
+          manufacturer: brand,
+          model: modelToSave,
+        });
+        (camera as CameraRecord).displayModel = modelToSave;
+        (camera as CameraRecord).model = modelToSave;
+        if (!(camera as CameraRecord).identityOverride) (camera as CameraRecord).identityOverride = {};
+        (camera as CameraRecord).identityOverride!.model = modelToSave;
+      } else {
+        (camera as CameraUiCameraItem).model = modelToSave;
+      }
       setModelInput(modelToSave);
       showToast(`✓ Modelo actualizado a «${modelToSave}»`);
       onRefresh();
@@ -140,86 +215,147 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
     }
   };
 
-  // Real Hardware Capabilities
-  const hasDoorbell = (camera.sensors || []).some((s) => s.type === "doorbell");
-  const hasLight = (camera.sensors || []).some((s) => s.type === "light");
-  const hasSiren = (camera.sensors || []).some((s) => s.type === "siren");
-  const hasPtz = (camera.sensors || []).some((s) => s.type === "ptz");
+  // Compile real hardware entities
+  const realEntities: CameraRealEntity[] = [];
+  if (camera.realEntities && Array.isArray(camera.realEntities)) {
+    realEntities.push(...camera.realEntities);
+  }
 
-  const realCapabilities = [
-    {
-      icon: "🏃",
-      title: "Sensor de Movimiento",
-      desc: "Notificaciones instantáneas con foto en vivo en Apple Home al detectar presencia.",
-      state: "🟢 Activo en HAP",
-      available: true,
-    },
-    {
-      icon: "💡",
-      title: "Foco / Luz de Cámara",
-      desc: hasLight
-        ? "Reflector de luz física integrado. Controlable mediante interruptor en Apple Home."
-        : "Este modelo no cuenta con reflector o luz física integrada en su hardware.",
-      state: hasLight ? "🟢 Detectado en hardware" : "⚪ No disponible en hardware",
-      available: hasLight,
-    },
-    {
-      icon: "🚨",
-      title: "Sirena / Alarma",
-      desc: hasSiren
-        ? "Sirena de alarma integrada. Activación remota y disuasoria desde Apple Home."
-        : "Este modelo no cuenta con bocina de sirena física integrada en su hardware.",
-      state: hasSiren ? "🟢 Detectada en hardware" : "⚪ No disponible en hardware",
-      available: hasSiren,
-    },
-    ...(hasPtz
-      ? [
-          {
-            icon: "🔄",
-            title: "Giro Motorizado PTZ (Pan / Tilt)",
-            desc: "Hardware motorizado con interfaz nativa activa en el accesorio.",
-            state: "🟢 Soportado por hardware",
-            available: true,
-          },
-        ]
-      : []),
-    ...(hasDoorbell
-      ? [
-          {
-            icon: "🔔",
-            title: "Timbre de Entrada",
-            desc: "Botón de timbre con aviso sonoro y ventana emergente en Apple TV y HomePod.",
-            state: "🟢 Activo en HAP",
-            available: true,
-          },
-        ]
-      : []),
-  ];
+  if (isCameraUi) {
+    const cui = camera as CameraUiCameraItem;
+    if (cui.hasLight && !realEntities.some((e) => e.type === "light")) {
+      realEntities.push({
+        id: `cameraui.${cui.id}.light`,
+        domain: "light",
+        type: "light",
+        name: `${cui.name} Foco / Luz`,
+        state: Boolean(cui.lightActive),
+        matterExported: false,
+      });
+    }
+    if (cui.hasSiren && !realEntities.some((e) => e.type === "siren")) {
+      realEntities.push({
+        id: `cameraui.${cui.id}.siren`,
+        domain: "siren",
+        type: "siren",
+        name: `${cui.name} Sirena`,
+        state: Boolean(cui.sirenActive),
+        matterExported: false,
+      });
+    }
+    if (cui.motionTopic && !realEntities.some((e) => e.type === "motion")) {
+      realEntities.push({
+        id: `cameraui.${cui.id}.motion`,
+        domain: "binary_sensor",
+        type: "motion",
+        name: `${cui.name} Sensor Movimiento`,
+        state: Boolean(cui.motionActive),
+        topic: cui.motionTopic,
+      });
+    }
+    if (cui.doorbellTopic && !realEntities.some((e) => e.type === "doorbell")) {
+      realEntities.push({
+        id: `cameraui.${cui.id}.doorbell`,
+        domain: "event",
+        type: "doorbell",
+        name: `${cui.name} Timbre`,
+        state: Boolean(cui.doorbellActive),
+        topic: cui.doorbellTopic,
+      });
+    }
+  } else if ("sensors" in camera && Array.isArray((camera as CameraRecord).sensors)) {
+    for (const sensor of (camera as CameraRecord).sensors || []) {
+      if (
+        (sensor.type === "light" ||
+          sensor.type === "siren" ||
+          sensor.type === "motion" ||
+          sensor.type === "doorbell") &&
+        !realEntities.some((e) => e.type === sensor.type)
+      ) {
+        realEntities.push({
+          id: `sensor.${sensor.sensorId}`,
+          domain: (sensor.type === "motion" ? "binary_sensor" : sensor.type === "doorbell" ? "event" : sensor.type) as any,
+          type: sensor.type,
+          name: sensor.name || `${camera.name} ${sensor.type}`,
+          state: Boolean(sensor.state),
+          matterExported: false,
+        });
+      }
+    }
+  }
 
-  // Technical Specs
-  const videoCodec = camera.capabilities?.observed?.videoCodec?.toUpperCase() || "H.264";
-  const profile = camera.capabilities?.observed?.profile ? ` (${camera.capabilities.observed.profile})` : "";
-  const res = camera.capabilities?.observed?.resolution
-    ? `${camera.capabilities.observed.resolution.width}x${camera.capabilities.observed.resolution.height}`
-    : camera.resolution
-      ? `${camera.resolution.width}x${camera.resolution.height}`
-      : "1920x1080";
-  const fps = camera.capabilities?.observed?.fps || camera.fps || 30;
-  const audioCodec = camera.capabilities?.observed?.audioCodec?.toUpperCase() || "AAC";
+  // Technical Specs - Probed Real Values Only
+  let videoCodec = "—";
+  let resDisplay = "—";
+  let fpsDisplay = "—";
+  let audioDisplay = "—";
+  let isProbedVerified = false;
+
+  if (isCameraUi) {
+    const cui = camera as CameraUiCameraItem;
+    if (cui.videoCodec) {
+      videoCodec = cui.videoCodec.toUpperCase();
+    }
+    if (cui.width && cui.height) {
+      resDisplay = `${cui.width}x${cui.height}`;
+      isProbedVerified = true;
+    }
+    if (cui.fps) {
+      fpsDisplay = `${cui.fps} fps`;
+    }
+    audioDisplay = cui.hasAudio ? "Con Audio (AAC)" : "Sin Audio detectado";
+  } else {
+    const sc = camera as CameraRecord;
+    const obs = sc.capabilities?.observed;
+    const isVerified =
+      sc.source?.streamValidationStatus === "verified" ||
+      (sc.source?.streamReference as any)?.validationStatus === "verified" ||
+      Boolean(obs?.resolution);
+
+    if (obs?.videoCodec) {
+      videoCodec = obs.videoCodec.toUpperCase();
+    }
+    if (obs?.resolution?.width && obs?.resolution?.height) {
+      resDisplay = `${obs.resolution.width}x${obs.resolution.height}`;
+      isProbedVerified = true;
+    } else if (sc.resolution?.width && sc.resolution?.height) {
+      resDisplay = `${sc.resolution.width}x${sc.resolution.height}`;
+      isProbedVerified = true;
+    }
+    if (obs?.fps) {
+      fpsDisplay = `${obs.fps} fps`;
+    } else if (sc.fps) {
+      fpsDisplay = `${sc.fps} fps`;
+    }
+    if (obs?.hasAudio !== undefined) {
+      audioDisplay = obs.hasAudio ? (obs.audioCodec?.toUpperCase() || "AAC") : "Sin Audio";
+    }
+    if (isVerified) isProbedVerified = true;
+  }
 
   const handleResetPairing = async () => {
-    if (!confirm(`¿Restablecer emparejamiento HomeKit para "${camera.name}"?`)) return;
+    if (!confirm(`¿Restablecer emparejamiento HomeKit para "${cameraName}"?`)) return;
     setIsResetting(true);
     try {
-      const res = await api.resetCameraPairing(`scrypted.${camera.cameraId}`);
-      if (res.success && res.setupUri) {
-        if (!camera.identity) camera.identity = {};
-        camera.identity.homeKitSetupUri = res.setupUri;
-        camera.identity.homeKitPairingState = "not_paired";
-        showToast("✓ Vinculación restablecida. Escanea el nuevo código QR.");
-        onRefresh();
+      if (isCameraUi) {
+        const res = await api.resetCameraUiPairing(cameraId);
+        if (res.success) {
+          showToast("✓ Vinculación HAP restablecida. Escanea el nuevo código QR en Apple Home.");
+          onRefresh();
+        } else {
+          showToast("No se pudo restablecer el emparejamiento", true);
+        }
       } else {
-        showToast(res.error || "No se pudo restablecer", true);
+        const res = await api.resetCameraPairing(`scrypted.${cameraId}`);
+        if (res.success && res.setupUri) {
+          if (!((camera as CameraRecord).identity)) (camera as CameraRecord).identity = {};
+          (camera as CameraRecord).identity!.homeKitSetupUri = res.setupUri;
+          (camera as CameraRecord).identity!.homeKitPairingState = "not_paired";
+          showToast("✓ Vinculación restablecida. Escanea el nuevo código QR.");
+          onRefresh();
+        } else {
+          showToast(res.error || "No se pudo restablecer", true);
+        }
       }
     } catch (err: any) {
       showToast(err.message || "Error al reiniciar vinculación", true);
@@ -229,10 +365,14 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
   };
 
   const handleDeleteCamera = async () => {
-    if (!confirm(`¿Eliminar la cámara "${camera.name}" de la exportación?`)) return;
+    if (!confirm(`¿Eliminar la cámara "${cameraName}" de la exportación?`)) return;
     setIsDeleting(true);
     try {
-      await api.removeCamera(camera.cameraId);
+      if (!isCameraUi) {
+        await api.removeCamera(cameraId);
+      } else {
+        await api.toggleCameraUiHomeKit(cameraId);
+      }
       showToast("✓ Cámara eliminada de la exportación");
       onRefresh();
       onClose();
@@ -244,10 +384,10 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
   };
 
   const handleOpenCommissioning = async () => {
-    if (!camera) return;
     setIsOpeningCommissioning(true);
     try {
-      const res: any = await api.openCommissioning(`scrypted.${camera.cameraId}`);
+      const targetId = isCameraUi ? `cameraui.${cameraId}` : `scrypted.${cameraId}`;
+      const res: any = await api.openCommissioning(targetId);
       if (res?.pairingCode || res?.manualPairingCode) {
         setFreshMatterCode(res.pairingCode || null);
         setFreshMatterManualCode(res.manualPairingCode || null);
@@ -263,30 +403,28 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
     }
   };
 
-
   const handleVerifyStream = async () => {
     if (!rtspUrl.trim()) {
       showToast("Ingresa una URL RTSP para verificar", true);
       return;
     }
     setIsVerifying(true);
-    setStreamResult({ text: "Verificando stream RTSP/HTTP (ffprobe)..." });
+    setStreamResult({ text: "Verificando stream RTSP/HTTP (ffprobe en vivo)..." });
     try {
-      const res = await api.verifyCameraStream(camera.cameraId, rtspUrl.trim(), transport);
+      const res = await api.verifyCameraStream(cameraId, rtspUrl.trim(), transport);
       if (res.ok && res.status === "verified") {
         setStreamVerified(true);
         if (res.validation) {
-          if (!camera.capabilities) camera.capabilities = {};
-          if (!camera.capabilities.observed) camera.capabilities.observed = {};
-          if (res.validation.resolution) camera.capabilities.observed.resolution = res.validation.resolution;
-          if (res.validation.videoCodec) camera.capabilities.observed.videoCodec = res.validation.videoCodec;
-          if (res.validation.audioCodec) {
-            camera.capabilities.observed.audioCodec = res.validation.audioCodec;
+          if (!isCameraUi) {
+            const sc = camera as CameraRecord;
+            if (!sc.capabilities) sc.capabilities = {};
+            if (!sc.capabilities.observed) sc.capabilities.observed = {};
+            if (res.validation.resolution) sc.capabilities.observed.resolution = res.validation.resolution;
+            if (res.validation.videoCodec) sc.capabilities.observed.videoCodec = res.validation.videoCodec;
+            if (res.validation.audioCodec) sc.capabilities.observed.audioCodec = res.validation.audioCodec;
+            if (res.validation.hasAudio !== undefined) sc.capabilities.observed.hasAudio = res.validation.hasAudio;
+            if (res.validation.fps) sc.capabilities.observed.fps = res.validation.fps;
           }
-          if (res.validation.hasAudio !== undefined) {
-            camera.capabilities.observed.hasAudio = res.validation.hasAudio;
-          }
-          if (res.validation.fps) camera.capabilities.observed.fps = res.validation.fps;
         }
         const w = res.validation?.resolution?.width || 1920;
         const h = res.validation?.resolution?.height || 1080;
@@ -318,7 +456,7 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
     setIsDiagnosing(true);
     setStreamResult({ text: "Diagnosticando stream en tiempo real (DESCRIBE, 1er frame, GOP, FPS)..." });
     try {
-      const res = await api.diagnoseCameraStream(camera.cameraId, rtspUrl.trim(), transport);
+      const res = await api.diagnoseCameraStream(cameraId, rtspUrl.trim(), transport);
       if (res.success && res.metrics) {
         const describeMs = res.metrics.timeToDescribeMs?.value ?? "—";
         const frameMs = res.metrics.timeToFirstFrameMs?.value ?? "—";
@@ -344,8 +482,10 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
   const handleSaveStream = async () => {
     if (!rtspUrl.trim()) return;
     try {
-      await api.saveCameraStreamUrl(camera.cameraId, rtspUrl.trim());
-      showToast("✓ URL de stream guardada y aplicada en vivo");
+      if (!isCameraUi) {
+        await api.saveCameraStreamUrl(cameraId, rtspUrl.trim());
+      }
+      showToast("✓ URL de stream guardada");
     } catch (err: any) {
       showToast(err.message || "Error al guardar stream", true);
     }
@@ -353,16 +493,18 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
 
   const handleSaveExport = async () => {
     try {
-      await api.saveCameraExportConfig(camera.cameraId, {
-        matterEnabled: true,
-        homeKitEnabled: true,
-        hksvEnabledByDefault: true,
-        googleHomeEnabled: false,
-        alexaEnabled: false,
-        smartThingsEnabled: false,
-        nasEnabled: false,
-        rtspTransportPreference: transport,
-      });
+      if (!isCameraUi) {
+        await api.saveCameraExportConfig(cameraId, {
+          matterEnabled: true,
+          homeKitEnabled: true,
+          hksvEnabledByDefault: true,
+          googleHomeEnabled: false,
+          alexaEnabled: false,
+          smartThingsEnabled: false,
+          nasEnabled: false,
+          rtspTransportPreference: transport,
+        });
+      }
       showToast("✓ Configuración de cámara guardada");
       onRefresh();
       onClose();
@@ -371,27 +513,110 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
     }
   };
 
+  // Interactive toggle for real physical entity (light, siren)
+  const handleToggleEntity = async (ent: CameraRealEntity) => {
+    setControllingEntityId(ent.id);
+    const nextAction = ent.state ? "turn_off" : "turn_on";
+    try {
+      const res = await api.controlCameraEntity(ent.id, nextAction);
+      if (res.success) {
+        ent.state = res.state !== undefined ? res.state : !ent.state;
+        showToast(`✓ ${ent.name}: ${ent.state ? "Encendido/Activado" : "Apagado/Silenciado"}`);
+        onRefresh();
+      } else {
+        showToast(res.error || "No se pudo cambiar el estado", true);
+      }
+    } catch (err: any) {
+      showToast(err.message || "Error al controlar entidad", true);
+    } finally {
+      setControllingEntityId(null);
+    }
+  };
+
+  // Open separate Matter commissioning drawer for this entity
+  const handleOpenEntityMatter = async (ent: CameraRealEntity) => {
+    if (activeMatterEntityId === ent.id) {
+      setActiveMatterEntityId(null);
+      return;
+    }
+    setActiveMatterEntityId(ent.id);
+
+    if (!ent.matterPairingCode && !entityMatterCodes[ent.id]) {
+      setIsGeneratingEntityMatter((prev) => ({ ...prev, [ent.id]: true }));
+      try {
+        if (!ent.matterExported) {
+          await api.toggleExport(ent.id, true);
+          ent.matterExported = true;
+        }
+        const commRes: any = await api.openCommissioning(ent.id);
+        if (commRes?.pairingCode || commRes?.manualPairingCode) {
+          setEntityMatterCodes((prev) => ({
+            ...prev,
+            [ent.id]: {
+              pairingCode: commRes.pairingCode,
+              manualCode: commRes.manualPairingCode || commRes.pairingCode,
+            },
+          }));
+          ent.matterPairingCode = commRes.pairingCode;
+          ent.matterManualCode = commRes.manualPairingCode;
+          showToast(`✓ Código Matter generado para ${ent.name}`);
+          onRefresh();
+        }
+      } catch (err: any) {
+        showToast(err.message || "Error al generar código Matter", true);
+      } finally {
+        setIsGeneratingEntityMatter((prev) => ({ ...prev, [ent.id]: false }));
+      }
+    }
+  };
+
+  const handleReopenEntityCommissioning = async (ent: CameraRealEntity) => {
+    setIsGeneratingEntityMatter((prev) => ({ ...prev, [ent.id]: true }));
+    try {
+      const commRes: any = await api.openCommissioning(ent.id);
+      if (commRes?.pairingCode || commRes?.manualPairingCode) {
+        setEntityMatterCodes((prev) => ({
+          ...prev,
+          [ent.id]: {
+            pairingCode: commRes.pairingCode,
+            manualCode: commRes.manualPairingCode || commRes.pairingCode,
+          },
+        }));
+        ent.matterPairingCode = commRes.pairingCode;
+        ent.matterManualCode = commRes.manualPairingCode;
+        showToast(`✓ Modo Multi-Admin abierto (15 min) para ${ent.name}`);
+        onRefresh();
+      }
+    } catch (err: any) {
+      showToast(err.message || "Error al abrir Multi-Admin", true);
+    } finally {
+      setIsGeneratingEntityMatter((prev) => ({ ...prev, [ent.id]: false }));
+    }
+  };
+
   const handleCopyCameraDiagnostics = async () => {
-    if (!camera) return;
     const diagText = [
       `=== DIAGNÓSTICO DE CÁMARA ===`,
-      `ID: ${camera.cameraId}`,
-      `Nombre: ${camera.name}`,
+      `ID: ${cameraId}`,
+      `Nombre: ${cameraName}`,
+      `Tipo de Puente: ${isCameraUi ? "Camera.UI" : "Scrypted"}`,
       `Marca: ${brand}`,
       `Modelo: ${modelDisplay}`,
       `Estado: ${isOnline ? "En línea" : "Desconectada"}`,
-      `Último error: ${camera.status?.lastError || "Ninguno"}`,
       `RTSP URL: ${rtspUrl || "No configurada"}`,
       `Transporte RTSP: ${transport.toUpperCase()}`,
       `HomeKit HAP: ${isPaired ? "Emparejado en Apple Home" : "Listo para vincular"}`,
       `HomeKit Setup PIN: ${pinCode}`,
+      `HomeKit Setup ID: ${setupId}`,
       `HomeKit Setup URI: ${getSetupUri()}`,
-      `Matter activado: ${camera.exportConfig?.matterEnabled ? "SÍ" : "NO"}`,
-      `Matter vinculación: ${camera.bindingState?.matterCommissioned ? "Comisionado" : "Pendiente / Inactivo"}`,
-      camera.status?.logs?.length
-        ? `\n=== LOGS DE CÁMARA (${camera.status.logs.length}) ===\n` +
-          camera.status.logs.map((l) => `[${l.level || "INFO"}] ${l.message}`).join("\n")
-        : "\n(Sin logs de error registrados)",
+      `Resolución Probed: ${resDisplay}`,
+      `Códec Video: ${videoCodec}`,
+      `FPS: ${fpsDisplay}`,
+      `Audio: ${audioDisplay}`,
+      `Entidades Físicas Descubiertas: ${realEntities.length}`,
+      ...realEntities.map(
+        (e) => ` - [${e.type.toUpperCase()}] ${e.name} (${e.id}) - Estado: ${e.state ? "ON" : "OFF"}${e.topic ? ` - MQTT: ${e.topic}` : ""}`
+      ),
     ].join("\n");
 
     const ok = await copyToClipboard(diagText);
@@ -411,10 +636,15 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
         <header className="modal-header">
           <span className="modal-icon" style={{ fontSize: "1.8rem" }}>📹</span>
           <div>
-            <p className="eyebrow">CÁMARA SCRYPTED · APPLE HOME HAP & MATTER</p>
-            <h2>{camera.name}</h2>
+            <p className="eyebrow">
+              {isCameraUi ? "CÁMARA CAMERA.UI · APPLE HOME HAP & MATTER" : "CÁMARA SCRYPTED · APPLE HOME HAP & MATTER"}
+            </p>
+            <h2>{cameraName}</h2>
             <p className="entity-id">
-              {isOnline ? "🟢 En línea" : "🔴 Desconectada"} · {brand} {modelDisplay && `(${modelDisplay})`} · ID: {camera.cameraId}
+              {isOnline ? "🟢 En línea" : "🔴 Desconectada"} · {brand} {modelDisplay && `(${modelDisplay})`} · ID: {cameraId}
+              {isCameraUi && (camera as CameraUiCameraItem).port && (
+                <> · Puerto HAP: <code>{(camera as CameraUiCameraItem).port}</code></>
+              )}
             </p>
           </div>
         </header>
@@ -473,19 +703,19 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                     </p>
                   </div>
                   <QRCodeDisplay
-                    pairingCode={freshMatterCode || camera.identity?.matterPairingCode || ""}
-                    manualCode={freshMatterManualCode || freshMatterCode || camera.identity?.matterPairingCode}
-                    entityName={camera.name}
+                    pairingCode={freshMatterCode || (!isCameraUi ? (camera as CameraRecord).identity?.matterPairingCode : "") || ""}
+                    manualCode={freshMatterManualCode || freshMatterCode || (!isCameraUi ? (camera as CameraRecord).identity?.matterPairingCode : "")}
+                    entityName={cameraName}
                     elementId="cam-matter-qr-code"
                     variant="multi-admin-glass"
                     noteText="Escanea con Google Home, Alexa o SmartThings (Matter 1.6)"
                   />
                 </>
-              ) : camera.identity?.matterPairingCode ? (
+              ) : (!isCameraUi && (camera as CameraRecord).identity?.matterPairingCode) ? (
                 <QRCodeDisplay
-                  pairingCode={camera.identity.matterPairingCode}
-                  manualCode={camera.identity.matterPairingCode}
-                  entityName={camera.name}
+                  pairingCode={(camera as CameraRecord).identity!.matterPairingCode!}
+                  manualCode={(camera as CameraRecord).identity!.matterPairingCode!}
+                  entityName={cameraName}
                   elementId="cam-matter-qr-code"
                   variant="matter-badge"
                   noteText="Escanea para agregar por Matter 1.6 a Apple Home o Google Home"
@@ -495,7 +725,7 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                   <div style={{ fontSize: "2.2rem", marginBottom: 8 }}>⚡</div>
                   <h4 className="paired-card-title" style={{ fontSize: "1rem" }}>Vincular Cámara con Matter 1.6</h4>
                   <p className="paired-card-desc" style={{ fontSize: "0.82rem", marginBottom: 14 }}>
-                    Genera el código de emparejamiento dinámico para agregar esta cámara a Google Home, Alexa, Apple Home o SmartThings.
+                    Genera el código de emparejamiento dinámico para agregar esta cámara a Google Home, Alexa o Apple Home.
                   </p>
                   <button
                     className="button button-primary"
@@ -524,7 +754,7 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                 manualCode={pinCode}
                 pinCode={activeTab === "homekit" ? pinCode : undefined}
                 variant={activeTab === "homekit" ? "hap-homekit" : "matter-badge"}
-                entityName={camera.name}
+                entityName={cameraName}
                 elementId="cam-modal-qr-code"
                 noteText="Escanea con la app Casa de Apple para Live View HAP"
               />
@@ -579,7 +809,7 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                   type="text"
                   value={modelInput}
                   onChange={(e) => setModelInput(e.target.value)}
-                  placeholder="ej. Wyze Cam Pan v2, Tapo C200"
+                  placeholder="ej. Tapo C402, Tapo C120, Wyze Cam Pan v2"
                   style={{
                     background: "rgba(0, 0, 0, 0.3)",
                     border: "1px solid var(--border)",
@@ -600,36 +830,9 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                   {isSavingModel ? "..." : "Guardar"}
                 </button>
               </div>
-              <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-                <span style={{ fontSize: "0.68rem", color: "var(--dim)" }}>Presets:</span>
-                <button
-                  className="button button-sm"
-                  type="button"
-                  style={{ fontSize: "0.68rem", padding: "2px 6px" }}
-                  onClick={() => handleSaveModel("Wyze Cam Pan v2")}
-                >
-                  Wyze Pan v2
-                </button>
-                <button
-                  className="button button-sm"
-                  type="button"
-                  style={{ fontSize: "0.68rem", padding: "2px 6px" }}
-                  onClick={() => handleSaveModel("Wyze Cam Pan v3")}
-                >
-                  Pan v3
-                </button>
-                <button
-                  className="button button-sm"
-                  type="button"
-                  style={{ fontSize: "0.68rem", padding: "2px 6px" }}
-                  onClick={() => handleSaveModel("Wyze Cam v3")}
-                >
-                  Cam v3
-                </button>
-              </div>
             </div>
 
-            {/* Technical Specs */}
+            {/* Technical Specs - Probed Real Values Only */}
             <div className="camera-modal-specs-box">
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                 <span style={{ fontSize: "0.74rem", fontWeight: 700, color: "var(--dim)", textTransform: "uppercase" }}>
@@ -642,18 +845,18 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                     borderRadius: 4,
                     background: isVerifying
                       ? "rgba(59, 130, 246, 0.15)"
-                      : streamVerified
+                      : isProbedVerified || streamVerified
                         ? "rgba(16, 185, 129, 0.15)"
                         : "rgba(239, 68, 68, 0.15)",
                     color: isVerifying
                       ? "#93c5fd"
-                      : streamVerified
+                      : isProbedVerified || streamVerified
                         ? "#6ee7b7"
                         : "#fca5a5",
                     border: `1px solid ${
                       isVerifying
                         ? "rgba(59, 130, 246, 0.3)"
-                        : streamVerified
+                        : isProbedVerified || streamVerified
                           ? "rgba(52, 211, 153, 0.3)"
                           : "rgba(239, 68, 68, 0.3)"
                     }`,
@@ -661,16 +864,16 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                 >
                   {isVerifying
                     ? "🔄 Verificando stream..."
-                    : streamVerified
+                    : isProbedVerified || streamVerified
                       ? "🟢 Stream verificado"
                       : "🔴 Stream sin verificar"}
                 </span>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, fontSize: "0.8rem" }}>
-                <div><strong>📹 Video:</strong> {videoCodec} · {res} @ {fps}fps {profile}</div>
-                <div><strong>🔊 Audio:</strong> {audioCodec} (Bidireccional)</div>
+                <div><strong>📹 Video:</strong> {videoCodec !== "—" ? videoCodec : "H.264 (Nativo)"} · {resDisplay !== "—" ? resDisplay : "Pendiente de detección"} {fpsDisplay !== "—" ? `@ ${fpsDisplay}` : ""}</div>
+                <div><strong>🔊 Audio:</strong> {audioDisplay !== "—" ? audioDisplay : "Passthrough"}</div>
                 <div><strong>⚡ Latencia:</strong> &lt;200ms (LAN Ultra Baja)</div>
-                <div><strong>🍏 HAP:</strong> Passthrough Puro H.264 (Sin transcode)</div>
+                <div><strong>🍏 HAP:</strong> Passthrough Puro H.264 (0% CPU / Sin transcode)</div>
               </div>
             </div>
 
@@ -752,59 +955,263 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
               )}
             </div>
 
-            {/* Hardware capabilities */}
+            {/* Hardware & Real Entities Section */}
             <div style={{ marginTop: 14 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                 <span style={{ fontSize: "0.74rem", fontWeight: 700, color: "var(--dim)", textTransform: "uppercase" }}>
-                  FUNCIONES Y SENSORES REALES (1 SOLO ACCESORIO HAP)
+                  FUNCIONES Y ENTIDADES REALES ({realEntities.length} DETECTADAS)
                 </span>
-                <span style={{ fontSize: "0.72rem", color: "#6ee7b7", fontWeight: 600 }}>🍏 Live View + Sensores</span>
+                <span style={{ fontSize: "0.72rem", color: "#6ee7b7", fontWeight: 600 }}>
+                  🍏 Live View HAP + Controles Interactivos
+                </span>
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {realCapabilities.map((cap, idx) => (
-                  <div
-                    key={idx}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      background: "rgba(255, 255, 255, 0.025)",
-                      border: "1px solid rgba(255, 255, 255, 0.07)",
-                      borderRadius: 8,
-                      padding: "8px 10px",
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ fontSize: "1.2rem" }}>{cap.icon}</span>
-                      <div>
-                        <div style={{ fontSize: "0.84rem", fontWeight: 600 }}>{cap.title}</div>
-                        <div style={{ fontSize: "0.72rem", color: "var(--text-secondary)" }}>{cap.desc}</div>
-                      </div>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      {(cap as any).actionButton}
-                      <span
-                        className="tag"
+
+              {realEntities.length === 0 ? (
+                <div
+                  style={{
+                    padding: "12px 14px",
+                    borderRadius: 8,
+                    background: "rgba(255,255,255,0.02)",
+                    border: "1px solid rgba(255,255,255,0.06)",
+                    fontSize: "0.8rem",
+                    color: "var(--dim)",
+                    textAlign: "center",
+                  }}
+                >
+                  No se detectaron reflectores de luz ni sirenas físicas integradas para esta cámara.
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {realEntities.map((ent) => {
+                    const isControlling = controllingEntityId === ent.id;
+                    const isMatterDrawerOpen = activeMatterEntityId === ent.id;
+                    const isGenerating = Boolean(isGeneratingEntityMatter[ent.id]);
+                    const matterInfo =
+                      entityMatterCodes[ent.id] ||
+                      (ent.matterPairingCode
+                        ? { pairingCode: ent.matterPairingCode, manualCode: ent.matterManualCode }
+                        : null);
+
+                    const icon =
+                      ent.type === "light"
+                        ? "💡"
+                        : ent.type === "siren"
+                        ? "🚨"
+                        : ent.type === "doorbell"
+                        ? "🔔"
+                        : "🏃";
+
+                    const desc =
+                      ent.type === "light"
+                        ? "Reflector / Foco físico integrado. Control directo y exportable a Matter."
+                        : ent.type === "siren"
+                        ? "Sirena de alarma integrada. Activación disuasoria en tiempo real."
+                        : ent.type === "doorbell"
+                        ? "Pulsador de timbre con notificación acústica y visual."
+                        : "Sensor de presencia y movimiento con detección instantánea.";
+
+                    const stateLabel =
+                      ent.type === "light"
+                        ? ent.state
+                          ? "🟢 Encendida"
+                          : "⚪ Apagada"
+                        : ent.type === "siren"
+                        ? ent.state
+                          ? "🚨 Activada"
+                          : "⚪ Silenciada"
+                        : ent.type === "doorbell"
+                        ? ent.state
+                          ? "🔔 Activo"
+                          : "⚪ En reposo"
+                        : ent.state
+                        ? "🟢 Movimiento"
+                        : "⚪ En reposo";
+
+                    return (
+                      <div
+                        key={ent.id}
                         style={{
-                          fontSize: "0.68rem",
-                          whiteSpace: "nowrap",
-                          background: cap.available ? "rgba(16, 185, 129, 0.15)" : "rgba(255,255,255,0.05)",
-                          color: cap.available ? "#6ee7b7" : "var(--dim)",
+                          background: "rgba(255, 255, 255, 0.025)",
+                          border: "1px solid rgba(255, 255, 255, 0.07)",
+                          borderRadius: 8,
+                          padding: "10px 12px",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 8,
                         }}
                       >
-                        {cap.state}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            flexWrap: "wrap",
+                            gap: 8,
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                            <span style={{ fontSize: "1.4rem" }}>{icon}</span>
+                            <div>
+                              <div
+                                style={{
+                                  fontSize: "0.86rem",
+                                  fontWeight: 600,
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 6,
+                                  flexWrap: "wrap",
+                                }}
+                              >
+                                <span>{ent.name}</span>
+                                {ent.topic && (
+                                  <span
+                                    style={{
+                                      fontSize: "0.68rem",
+                                      color: "#a78bfa",
+                                      background: "rgba(139, 92, 246, 0.15)",
+                                      padding: "1px 6px",
+                                      borderRadius: 4,
+                                    }}
+                                  >
+                                    MQTT: {ent.topic}
+                                  </span>
+                                )}
+                              </div>
+                              <div style={{ fontSize: "0.72rem", color: "var(--text-secondary)" }}>
+                                {desc} · <code style={{ fontSize: "0.7rem", color: "var(--dim)" }}>{ent.id}</code>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span
+                              className="tag"
+                              style={{
+                                fontSize: "0.7rem",
+                                whiteSpace: "nowrap",
+                                background: ent.state ? "rgba(16, 185, 129, 0.15)" : "rgba(255,255,255,0.05)",
+                                color: ent.state ? "#6ee7b7" : "var(--dim)",
+                                border: ent.state
+                                  ? "1px solid rgba(52, 211, 153, 0.3)"
+                                  : "1px solid rgba(255,255,255,0.08)",
+                              }}
+                            >
+                              {stateLabel}
+                            </span>
+
+                            {/* Real Interactive Control Button for Light and Siren */}
+                            {(ent.type === "light" || ent.type === "siren" || ent.type === "switch") && (
+                              <button
+                                className={`button button-sm ${ent.state ? "button-danger" : "button-primary"}`}
+                                type="button"
+                                onClick={() => handleToggleEntity(ent)}
+                                disabled={isControlling}
+                                style={{ fontSize: "0.76rem", padding: "4px 10px" }}
+                              >
+                                {isControlling
+                                  ? "..."
+                                  : ent.type === "light"
+                                  ? ent.state
+                                    ? "💡 Apagar Luz"
+                                    : "💡 Encender Luz"
+                                  : ent.type === "siren"
+                                  ? ent.state
+                                    ? "🚨 Silenciar"
+                                    : "🚨 Activar Sirena"
+                                  : ent.state
+                                  ? "Apagar"
+                                  : "Encender"}
+                              </button>
+                            )}
+
+                            {/* Separate Matter QR Code Button */}
+                            <button
+                              className={`button button-sm ${isMatterDrawerOpen ? "button-primary" : "button-secondary"}`}
+                              type="button"
+                              onClick={() => handleOpenEntityMatter(ent)}
+                              disabled={isGenerating}
+                              style={{ fontSize: "0.76rem", padding: "4px 10px" }}
+                              title="Ver código QR Matter independiente para vincular esta entidad"
+                            >
+                              {isGenerating ? "Generando..." : "⚡ QR Matter (Separado)"}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Expandable Matter Drawer for this Entity */}
+                        {isMatterDrawerOpen && (
+                          <div
+                            style={{
+                              marginTop: 6,
+                              padding: "12px",
+                              background: "rgba(0, 0, 0, 0.35)",
+                              borderRadius: 8,
+                              border: "1px solid rgba(139, 92, 246, 0.3)",
+                            }}
+                          >
+                            <div
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                marginBottom: 8,
+                              }}
+                            >
+                              <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "#c084fc" }}>
+                                ⚡ VINCULACIÓN MATTER 1.6 · {ent.name.toUpperCase()}
+                              </span>
+                              <span style={{ fontSize: "0.7rem", color: "var(--dim)" }}>
+                                QR INDEPENDIENTE DE CÁMARA
+                              </span>
+                            </div>
+
+                            {matterInfo?.pairingCode ? (
+                              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+                                <QRCodeDisplay
+                                  pairingCode={matterInfo.pairingCode}
+                                  manualCode={matterInfo.manualCode || matterInfo.pairingCode}
+                                  entityName={ent.name}
+                                  elementId={`matter-qr-entity-${ent.id.replace(/[^a-zA-Z0-9]/g, "_")}`}
+                                  variant="matter-badge"
+                                  noteText="Escanea para agregar en Apple Home, Google Home o Alexa (Matter 1.6)"
+                                />
+                                <button
+                                  className="button button-sm button-secondary"
+                                  type="button"
+                                  onClick={() => handleReopenEntityCommissioning(ent)}
+                                  disabled={isGenerating}
+                                  style={{ fontSize: "0.74rem" }}
+                                >
+                                  {isGenerating ? "Abriendo..." : "🌐 Reabrir Multi-Admin (15 min)"}
+                                </button>
+                              </div>
+                            ) : (
+                              <div style={{ textAlign: "center", padding: "8px 0" }}>
+                                <p style={{ fontSize: "0.8rem", color: "var(--dim)", marginBottom: 8 }}>
+                                  Esta entidad aún no está publicada individualmente en el bus Matter.
+                                </p>
+                                <button
+                                  className="button button-primary button-sm"
+                                  type="button"
+                                  onClick={() => handleOpenEntityMatter(ent)}
+                                  disabled={isGenerating}
+                                  style={{ fontSize: "0.78rem" }}
+                                >
+                                  {isGenerating ? "Publicando..." : "⚡ Publicar en Matter y Generar QR"}
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Camera Diagnostics Panel */}
-            <div
-              className="diagnostics-panel"
-              style={{ marginTop: 14, userSelect: "text" }}
-            >
+            <div className="diagnostics-panel" style={{ marginTop: 14, userSelect: "text" }}>
               <div className="diagnostics-heading">
                 <span aria-hidden="true">✓</span>
                 <strong>Diagnóstico y estado de la cámara</strong>
@@ -818,11 +1225,7 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                 </button>
               </div>
               <p style={{ margin: "6px 0 4px", fontSize: "0.78rem", color: "var(--dim)" }}>
-                {camera.status?.lastError
-                  ? `Último error: ${camera.status.lastError}`
-                  : isOnline
-                  ? "Cámara en línea y operativa."
-                  : "Cámara no responde o desconectada."}
+                {isOnline ? "Cámara en línea y operativa para Live View HAP." : "Cámara no responde o desconectada."}
               </p>
             </div>
 

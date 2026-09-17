@@ -1,3 +1,33 @@
+## [1.6.0] - 2026-09-17
+
+### Modal Unificado, Controles Interactivos de Luz y Sirena, QR Matter Separados y Fix de Emparejamiento HAP CIAO
+
+- **Solución Definitiva a Bloqueo de Emparejamiento en Apple Home ("Conectando cámara..." -> "No se encontró el accesorio"):**
+  - Se implementó `detectPrimaryNetworkInterface()` en `homekit-camera.accessory.ts` para detectar la IP y NIC física real de la LAN (`en0`/`eth0`, ej. `192.168.110.147`) y excluir interfaces virtuales de Docker (`172.30.x`, `172.17.x`, `veth*`, `hassio*`).
+  - Se migró el anunciador mDNS a `MDNSAdvertiser.CIAO` con directiva `bind` apuntando a la interfaz física. Esto evita que el iPhone reciba IPs virtuales internas de Docker donde la conexión TCP quedaba colgada.
+  - Verificación preventiva de puertos HAP en `resetPairing()` consultando tanto registros de Scrypted como de Camera.UI para impedir colisiones de puertos.
+
+- **Modal de Configuración y Escaneo Totalmente Unificado (`CameraConfigModal`):**
+  - El modal de escaneo y ajustes para cámaras de Camera.UI ahora es idéntico al de Scrypted, compartiendo el mismo diseño Liquid Glass, pestañas Apple Home (HAP) y Matter 1.6, diagnóstico y acciones.
+  - Al pulsar "Configurar" en cualquier tarjeta se abre el mismo modal unificado con soporte nativo tanto para cámaras Scrypted como Camera.UI.
+
+- **Diseño Minimalista en Tarjetas de Cámara:**
+  - En `CameraCard.tsx`, las tarjetas de Camera.UI se alinearon estéticamente al diseño minimalista de Scrypted: se removieron datos técnicos redundantes en el exterior (`1080P PASSTHROUGH`, `AUDIO 24KBPS`, `PIN`).
+  - La tarjeta muestra solo: badge de origen (`CAMERA.UI`), estado real en vivo (`🟢 En línea`), modelo/marca real, tags de entidades físicas presentes y botón "Configurar".
+
+- **Especificaciones Técnicas y Resolución 100% Reales (Sin Valores Ficticios):**
+  - Se eliminaron valores predeterminados simulados. La resolución (`width` x `height`), fps y códecs se obtienen exclusivamente del sondeo y probeo real del stream RTSP (ej. 2304x1296 / 2K o 1920x1080).
+
+- **Controles Interactivos en Tiempo Real para Foco/Luz y Sirena:**
+  - Descubrimiento automático de entidades reales vinculadas en Home Assistant y MQTT (`light.*`, `siren.*`, `switch.*`).
+  - Botones interactivos en vivo dentro del modal (`[💡 Encender Luz]` / `[💡 Apagar Luz]`, `[🚨 Activar Sirena]` / `[🚨 Silenciar]`).
+  - Endpoint `POST /api/cameras/control-entity` en el backend para ejecutar los comandos directamente en Home Assistant y transmitir cambios de estado por SSE (`entity_state_changed`).
+
+- **Códigos QR de Matter Independientes por Entidad (Luz, Sirena, Sensores):**
+  - Cada entidad física cuenta con un botón `⚡ QR Matter (Separado)` con cajón interactivo.
+  - Permite generar y mostrar códigos QR y manuales de Matter independientes para comisionar la luz o la sirena en Apple Home, Google Home o Alexa de manera desacoplada de la cámara.
+  - Muestra el tópico MQTT real asociado a cada entidad (`MQTT: homeassistant/...`).
+
 ## [1.5.99] - 2026-09-17
 
 ### Detección Real de Estado En Línea / Desconectada para Scrypted y Camera.UI

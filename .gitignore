@@ -23,7 +23,10 @@ temp_node/
 TODO.md
 ts_homeassistant.json
 certificates/serverToken
-/persist/
+persist/
+matter-all-in-one-addon/persist/
+node_modules
+matter-all-in-one-addon/node_modules
 /data/
 matter-all-in-one-addon/data/
 cameraui-config.json

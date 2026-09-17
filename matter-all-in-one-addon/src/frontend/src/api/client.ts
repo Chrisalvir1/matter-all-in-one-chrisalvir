@@ -107,6 +107,18 @@ export const api = {
       { method: "POST" }
     ),
 
+  controlCameraEntity: (
+    entityId: string,
+    action: "turn_on" | "turn_off" | "toggle"
+  ) =>
+    request<{ success: boolean; entityId?: string; state?: boolean; error?: string }>(
+      `/cameras/control-entity`,
+      {
+        method: "POST",
+        body: JSON.stringify({ entityId, action }),
+      }
+    ),
+
   removeCamera: (cameraId: string) =>
     request(`/cameras/${encodeURIComponent(cameraId)}`, { method: "DELETE" }),
 

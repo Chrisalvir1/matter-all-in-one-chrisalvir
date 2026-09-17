@@ -8,6 +8,10 @@ const FALLBACK_CONFIG_PATH = "./cameraui-config.json";
 export class CameraUiStorage {
   private static cachedStore: CameraUiStore | null = null;
 
+  public static getCachedStore(): CameraUiStore | null {
+    return this.cachedStore;
+  }
+
   public static getDefaultStore(): CameraUiStore {
     return {
       config: {

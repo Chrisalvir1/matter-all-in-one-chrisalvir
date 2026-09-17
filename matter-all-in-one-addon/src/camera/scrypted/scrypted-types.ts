@@ -369,6 +369,9 @@ export interface CameraRecord {
 
   sensors: CameraSensorRecord[];
 
+  /** Discovered real hardware entities (spotlight, siren, doorbell, motion) */
+  realEntities?: import("../cameraui/cameraui-types.js").CameraRealEntity[];
+
   sensorClusters?: {
     motion?: { endpointId: number; clusterId: 0x040d; enabled: boolean };
     doorbell?: { endpointId: number; clusterId: 0x0552; enabled: boolean };

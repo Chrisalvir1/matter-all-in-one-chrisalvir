@@ -16,6 +16,18 @@ export interface CameraUiConfig {
   connectionStatus?: "connected" | "disconnected" | "error";
 }
 
+export interface CameraRealEntity {
+  id: string;
+  domain: "binary_sensor" | "light" | "siren" | "switch" | "event";
+  type: "motion" | "light" | "siren" | "doorbell" | "switch";
+  name: string;
+  state: boolean;
+  matterExported?: boolean;
+  matterPairingCode?: string;
+  matterManualCode?: string;
+  topic?: string;
+}
+
 export interface CameraUiCameraRecord {
   id: string;
   name: string;
@@ -35,6 +47,13 @@ export interface CameraUiCameraRecord {
   lastMotionAt?: string;
   doorbellActive?: boolean;
   lastDoorbellAt?: string;
+  hasLight?: boolean;
+  lightActive?: boolean;
+  lightTopic?: string;
+  hasSiren?: boolean;
+  sirenActive?: boolean;
+  sirenTopic?: string;
+  realEntities?: CameraRealEntity[];
   status: "online" | "offline" | "unknown";
   homeKitEnabled: boolean;
   port?: number;
