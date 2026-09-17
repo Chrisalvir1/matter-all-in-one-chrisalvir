@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useAddonState, FilterType } from "./hooks/useAddonState";
 import { TopBar } from "./components/TopBar";
 import { ControlCenter } from "./components/ControlCenter";
@@ -11,7 +11,13 @@ import { ScryptedModal } from "./components/ScryptedModal";
 import { CameraUiModal } from "./components/CameraUiModal";
 import { SettingsModal } from "./components/SettingsModal";
 import { extractCameraBrand } from "./components/CameraCard";
-import { CameraRecord, CameraUiCameraItem, DeviceRecord } from "./types";
+import {
+  CameraRecord,
+  CameraUiCameraItem,
+  DeviceRecord,
+  CameraSensorRecord,
+  CameraRealEntity,
+} from "./types";
 import { api } from "./api/client";
 
 export const App: React.FC = () => {
