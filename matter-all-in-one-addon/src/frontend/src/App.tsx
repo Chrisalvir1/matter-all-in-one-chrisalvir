@@ -263,6 +263,60 @@ export const App: React.FC = () => {
     return filteredDevices.length + cams;
   }, [cameraBrandGroups, filteredDevices]);
 
+  const adaptHaDeviceToCameraRecord = useCallback((dev: DeviceRecord): CameraRecord => {
+    const camEnt = dev.entities.find((e) => e.domain === "camera");
+    const isNest =
+      (dev.manufacturer || "").toLowerCase().includes("google") ||
+      (dev.manufacturer || "").toLowerCase().includes("nest") ||
+      (dev.name || "").toLowerCase().includes("nest") ||
+      Boolean(camEnt?.entityId.toLowerCase().includes("nest"));
+
+    const realSensors = dev.entities
+      .filter((e) => e.domain === "binary_sensor")
+      .map((e) => ({
+        name: e.name || e.entityId,
+        entityId: e.entityId,
+        sensorId: e.entityId,
+        type: (e.entityId.includes("doorbell") || e.name?.toLowerCase().includes("timbre")
+          ? "doorbell"
+          : "motion") as "motion" | "doorbell",
+        state: e.state === "on",
+      }));
+
+    const isCommissioned = dev.entities.some((e) => e.exported && e.commissioned);
+
+    return {
+      cameraId: camEnt?.entityId || dev.id,
+      name: dev.name,
+      manufacturer: dev.manufacturer || (isNest ? "Google" : "Home Assistant"),
+      model: dev.model || (isNest ? "Nest Cam" : "Cámara IP"),
+      serialNumber: dev.id,
+      status: {
+        connection: "online",
+        isOnline: true,
+      },
+      sensors: realSensors,
+      realEntities: dev.entities.map((e) => ({
+        id: e.entityId,
+        name: e.name || e.entityId,
+        type: e.domain === "camera" ? "video" : e.domain === "binary_sensor" ? "motion" : "switch",
+        state: e.state,
+        exported: e.exported,
+        commissioned: e.commissioned,
+      })),
+      identity: {
+        homeKitPairingState: isCommissioned ? "paired" : "not_paired",
+        homeKitSetupId: "HA01",
+        homeKitPincode: "031-45-154",
+      },
+      source: {
+        streamReference: {
+          directUrl: (camEnt as any)?.stream_source || "",
+        },
+      },
+    };
+  }, []);
+
   const handleSyncCameras = async () => {
     setIsSyncing(true);
     showToast("Sincronizando cámaras de Scrypted...");
@@ -367,7 +421,7 @@ export const App: React.FC = () => {
                     haCameras={group.ha}
                     cameraUiCameras={group.cui}
                     onConfigureCamera={(cam) => setSelectedCamera(cam)}
-                    onConfigureHaDevice={(dev) => setSelectedDevice(dev)}
+                    onConfigureHaDevice={(dev) => setSelectedCamera(adaptHaDeviceToCameraRecord(dev))}
                     onConfigureCameraUiCamera={(cam) => setSelectedCameraUiCamera(cam)}
                   />
                 ))}

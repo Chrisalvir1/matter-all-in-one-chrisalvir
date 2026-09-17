@@ -81,6 +81,23 @@ export const ScryptedModal: React.FC<ScryptedModalProps> = ({
     }
   };
 
+  const [isUnlinking, setIsUnlinking] = useState(false);
+
+  const handleUnlink = async () => {
+    if (!confirm("¿Desvincular Scrypted y limpiar todas las cámaras en caché de Scrypted?")) return;
+    setIsUnlinking(true);
+    try {
+      await api.deleteScryptedConfig();
+      showToast("✓ Scrypted desvinculado y caché de cámaras limpiada");
+      onRefresh();
+      onClose();
+    } catch (err: any) {
+      showToast(err.message || "Error al desvincular", true);
+    } finally {
+      setIsUnlinking(false);
+    }
+  };
+
   return (
     <div className="modal-backdrop open" role="dialog" aria-modal="true">
       <section className="modal" style={{ maxWidth: 520 }}>
@@ -161,15 +178,34 @@ export const ScryptedModal: React.FC<ScryptedModalProps> = ({
             </div>
           )}
 
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginTop: 12 }}>
-            <button
-              className="button button-secondary"
-              type="button"
-              onClick={handleTest}
-              disabled={isTesting}
-            >
-              {isTesting ? "Comprobando..." : "Probar Conexión"}
-            </button>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                className="button button-secondary"
+                type="button"
+                onClick={handleTest}
+                disabled={isTesting}
+              >
+                {isTesting ? "Comprobando..." : "Probar Conexión"}
+              </button>
+              {Boolean(config?.serverUrl) && (
+                <button
+                  className="button button-danger-outline"
+                  type="button"
+                  onClick={handleUnlink}
+                  disabled={isUnlinking}
+                  title="Elimina las credenciales y limpia las cámaras de Scrypted en caché"
+                  style={{
+                    background: "rgba(239, 68, 68, 0.12)",
+                    color: "#fca5a5",
+                    borderColor: "rgba(239, 68, 68, 0.35)",
+                    fontSize: "0.8rem",
+                  }}
+                >
+                  {isUnlinking ? "Limpiando..." : "Desvincular y Limpiar"}
+                </button>
+              )}
+            </div>
             <div style={{ display: "flex", gap: 8 }}>
               <button className="button button-secondary" type="button" onClick={onClose}>
                 Cancelar

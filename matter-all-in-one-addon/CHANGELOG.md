@@ -1,3 +1,26 @@
+## [1.6.5] - 2026-09-17
+
+### Desvinculación Limpia de Scrypted, Detección Nativa de Cámaras de Home Assistant (Google Nest) y Fin del Timeout de 8000ms
+
+- **Detección sin bloqueo de Cámaras de Home Assistant (`CAMARA DE PLAYROOM`):**
+  - La deduplicación entre Scrypted y Home Assistant ahora solo se activa si Scrypted está **realmente conectado y en línea**.
+  - Si Scrypted se apaga o desvincula, las cámaras nativas de Home Assistant (`camera.camara_de_playroom`) ya no se ocultan y aparecen inmediatamente en la interfaz bajo la insignia `[HOME ASSISTANT]`.
+
+- **Solución al Timeout de 8000ms en FFmpeg:**
+  - Corregida la reescritura de `127.0.0.1` en `/verify-stream`: ya no reemplaza las direcciones locales con el host de un servidor Scrypted caído.
+  - Al probar streams locales (como go2rtc en `rtsp://127.0.0.1:8554/...`), FFmpeg conecta directamente a la máquina local sin quedar colgado esperando una IP de Scrypted inalcanzable.
+
+- **Desvinculación y Limpieza Completa de Scrypted:**
+  - Nuevo botón **"Desvincular y Limpiar"** en el modal de Scrypted (`ScryptedModal`).
+  - Al desvincular, el backend borra tanto las credenciales como la lista de cámaras en caché de `ScryptedStorage` y despublica los accesorios huérfanos, evitando cámaras fantasma en estado de desconexión permanente.
+
+- **Apertura de `CameraConfigModal` para Cámaras de Home Assistant:**
+  - Al pulsar "Configurar" en cualquier cámara de Home Assistant (como Google Nest), ahora se abre el modal completo de cámara con:
+    - Cuadro de vista previa de imagen en directo.
+    - Verificador de stream RTSP para puentes como go2rtc.
+    - Pestaña `📡 Google Nest` con las instrucciones exactas paso a paso para exponer el stream a HomeKit.
+    - Generación y visualización del código QR de HomeKit HAP.
+
 ## [1.6.4] - 2026-09-17
 
 ### Passthrough Puro HEVC / H.265 (Cero Transcodificación), Verificación y Diagnóstico Universal de Cámaras y Cuadro de Vista Previa en Vivo

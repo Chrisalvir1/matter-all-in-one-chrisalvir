@@ -152,14 +152,25 @@ export function useAddonState() {
     return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
   }, [entities]);
 
+  // Only suppress duplicate HA cameras if Scrypted is actively connected and reachable
+  const isScryptedConnected =
+    scryptedConfig?.connectionStatus === "connected" ||
+    (status as any)?.scrypted?.connected === true;
+
   // Scrypted names and IDs to avoid duplicating HA camera representations
   const scryptedNames = useMemo(
-    () => new Set(cameras.map((c) => (c.name || "").toLowerCase().trim())),
-    [cameras]
+    () =>
+      isScryptedConnected
+        ? new Set(cameras.map((c) => (c.name || "").toLowerCase().trim()))
+        : new Set<string>(),
+    [cameras, isScryptedConnected]
   );
   const scryptedIds = useMemo(
-    () => new Set(cameras.map((c) => String(c.cameraId).toLowerCase().trim())),
-    [cameras]
+    () =>
+      isScryptedConnected
+        ? new Set(cameras.map((c) => String(c.cameraId).toLowerCase().trim()))
+        : new Set<string>(),
+    [cameras, isScryptedConnected]
   );
 
   // Real HA Camera devices

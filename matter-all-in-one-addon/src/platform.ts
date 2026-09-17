@@ -4632,6 +4632,14 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             const reconnectMgr = ScryptedReconnectManager.getInstance();
             reconnectMgr.destroy();
             const store = await ScryptedStorage.load();
+            for (const cam of store.cameras?.cameras || []) {
+              try {
+                const acc = ScryptedHomeKitBridge.getAccessory(cam.cameraId);
+                if (acc) {
+                  await acc.unpublish();
+                }
+              } catch {}
+            }
             store.scrypted.credentials = {
               authenticationMode: "username_password",
             };
@@ -4640,6 +4648,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             store.scrypted.allowSelfSignedCertificate = false;
             store.scrypted.connectionStatus = "not_configured";
             store.scrypted.lastConnected = undefined;
+            store.cameras = { cameras: [], lastSync: undefined };
             await ScryptedStorage.save(store);
             res.writeHead(200, {
               "Content-Type": "application/json; charset=utf-8",
@@ -4648,7 +4657,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               JSON.stringify({
                 success: true,
                 message:
-                  "Configuración de Scrypted eliminada. Las cámaras en caché se conservan.",
+                  "Configuración de Scrypted y cámaras asociadas eliminadas correctamente.",
               }),
             );
           } catch (err: any) {
@@ -5420,7 +5429,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                 targetUrl.startsWith("rtsp://127.0.0.1") ||
                 targetUrl.startsWith("rtsps://localhost") ||
                 targetUrl.startsWith("rtsps://127.0.0.1")) &&
-              store.scrypted?.serverUrl
+              store.scrypted?.serverUrl &&
+              store.scrypted.connectionStatus === "connected" &&
+              scryptedCam
             ) {
               const parsedServer = new URL(store.scrypted.serverUrl);
               if (
