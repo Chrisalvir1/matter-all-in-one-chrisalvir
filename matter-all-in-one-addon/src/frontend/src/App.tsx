@@ -9,9 +9,10 @@ import { CameraConfigModal } from "./components/CameraConfigModal";
 import { DeviceModal } from "./components/DeviceModal";
 import { ScryptedModal } from "./components/ScryptedModal";
 import { CameraUiModal } from "./components/CameraUiModal";
+import { CameraUiPairingModal } from "./components/CameraUiPairingModal";
 import { SettingsModal } from "./components/SettingsModal";
 import { extractCameraBrand } from "./components/CameraCard";
-import { CameraRecord, DeviceRecord } from "./types";
+import { CameraRecord, CameraUiCameraItem, DeviceRecord } from "./types";
 import { api } from "./api/client";
 
 export const App: React.FC = () => {
@@ -19,6 +20,7 @@ export const App: React.FC = () => {
     status,
     allDevices,
     cameras,
+    cameraUiCameras,
     realHaCameraDevices,
     scryptedConfig,
     cameraUiConfig,
@@ -34,6 +36,7 @@ export const App: React.FC = () => {
   } = useAddonState();
 
   const [selectedCamera, setSelectedCamera] = useState<CameraRecord | null>(null);
+  const [selectedCameraUiCamera, setSelectedCameraUiCamera] = useState<CameraUiCameraItem | null>(null);
   const [selectedDevice, setSelectedDevice] = useState<DeviceRecord | null>(null);
   const [isScryptedModalOpen, setIsScryptedModalOpen] = useState(false);
   const [isCameraUiModalOpen, setIsCameraUiModalOpen] = useState(false);
@@ -57,6 +60,15 @@ export const App: React.FC = () => {
       setSelectedCamera(updated);
     }
   }, [cameras]);
+
+  // Keep selectedCameraUiCamera in sync with updated cameraUiCameras
+  useEffect(() => {
+    if (!selectedCameraUiCamera) return;
+    const updated = cameraUiCameras.find((c) => c.id === selectedCameraUiCamera.id);
+    if (updated) {
+      setSelectedCameraUiCamera(updated);
+    }
+  }, [cameraUiCameras]);
 
   // Filter devices based on search and active tab
   const filteredDevices = useMemo(() => {
@@ -125,7 +137,7 @@ export const App: React.FC = () => {
   const cameraBrandGroups = useMemo(() => {
     if (activeFilter === "iot" || activeFilter === "mqtt") return [];
 
-    const map = new Map<string, { scrypted: CameraRecord[]; ha: DeviceRecord[] }>();
+    const map = new Map<string, { scrypted: CameraRecord[]; ha: DeviceRecord[]; cui: CameraUiCameraItem[] }>();
 
     let scryptedList = cameras;
     if (searchQuery.trim()) {
@@ -169,8 +181,30 @@ export const App: React.FC = () => {
 
     for (const cam of scryptedList) {
       const brand = extractCameraBrand(cam);
-      if (!map.has(brand)) map.set(brand, { scrypted: [], ha: [] });
+      if (!map.has(brand)) map.set(brand, { scrypted: [], ha: [], cui: [] });
       map.get(brand)!.scrypted.push(cam);
+    }
+
+    let cuiList = cameraUiCameras;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      cuiList = cuiList.filter((c) => c.name.toLowerCase().includes(q));
+    }
+
+    if (activeFilter === "paired") {
+      cuiList = cuiList.filter((c) => c.isPaired === true);
+    } else if (activeFilter === "unpaired") {
+      cuiList = cuiList.filter((c) => c.homeKitEnabled && !c.isPaired);
+    } else if (activeFilter === "unactivated") {
+      cuiList = cuiList.filter((c) => !c.homeKitEnabled);
+    } else if (activeFilter === "issues") {
+      cuiList = cuiList.filter((c) => c.status === "offline");
+    }
+
+    for (const cam of cuiList) {
+      const brand = extractCameraBrand(cam);
+      if (!map.has(brand)) map.set(brand, { scrypted: [], ha: [], cui: [] });
+      map.get(brand)!.cui.push(cam);
     }
 
     let haList = realHaCameraDevices;
@@ -202,7 +236,7 @@ export const App: React.FC = () => {
 
     for (const dev of haList) {
       const brand = extractCameraBrand(dev);
-      if (!map.has(brand)) map.set(brand, { scrypted: [], ha: [] });
+      if (!map.has(brand)) map.set(brand, { scrypted: [], ha: [], cui: [] });
       map.get(brand)!.ha.push(dev);
     }
 
@@ -218,12 +252,13 @@ export const App: React.FC = () => {
       brand,
       scrypted: map.get(brand)!.scrypted,
       ha: map.get(brand)!.ha,
+      cui: map.get(brand)!.cui,
     }));
-  }, [activeFilter, cameras, realHaCameraDevices, searchQuery]);
+  }, [activeFilter, cameras, cameraUiCameras, realHaCameraDevices, searchQuery]);
 
   const totalVisibleCount = useMemo(() => {
     const cams = cameraBrandGroups.reduce(
-      (acc, g) => acc + g.scrypted.length + g.ha.length,
+      (acc, g) => acc + g.scrypted.length + g.ha.length + g.cui.length,
       0
     );
     return filteredDevices.length + cams;
@@ -331,8 +366,10 @@ export const App: React.FC = () => {
                     brand={group.brand}
                     scryptedCameras={group.scrypted}
                     haCameras={group.ha}
+                    cameraUiCameras={group.cui}
                     onConfigureCamera={(cam) => setSelectedCamera(cam)}
                     onConfigureHaDevice={(dev) => setSelectedDevice(dev)}
+                    onConfigureCameraUiCamera={(cam) => setSelectedCameraUiCamera(cam)}
                   />
                 ))}
 
@@ -370,12 +407,26 @@ export const App: React.FC = () => {
         </main>
       </div>
 
-      {/* Camera Configuration Modal */}
+      {/* Camera Configuration Modal (Scrypted) */}
       {selectedCamera && (
         <CameraConfigModal
           camera={selectedCamera}
           onClose={() => setSelectedCamera(null)}
           onRefresh={refreshAll}
+          showToast={showToast}
+        />
+      )}
+
+      {/* Camera.UI Camera Pairing Modal */}
+      {selectedCameraUiCamera && (
+        <CameraUiPairingModal
+          camera={selectedCameraUiCamera}
+          onClose={() => setSelectedCameraUiCamera(null)}
+          onRefresh={refreshAll}
+          onOpenGlobalSettings={() => {
+            setSelectedCameraUiCamera(null);
+            setIsCameraUiModalOpen(true);
+          }}
           showToast={showToast}
         />
       )}

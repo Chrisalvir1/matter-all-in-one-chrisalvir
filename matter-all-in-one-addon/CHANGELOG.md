@@ -1,3 +1,22 @@
+## [1.5.93] - 2026-09-16
+
+### Visualización Distintiva de Origen de Cámaras (Scrypted vs Camera.UI vs HA), Modal de Emparejamiento HAP y Arquitectura Passthrough Cero CPU
+
+- **Distinción Visual y Badges de Origen en Tarjetas de Cámaras:**
+  - Cada tarjeta de cámara en el panel principal indica claramente de dónde proviene mediante etiquetas de gradiente de alto contraste:
+    - 🟢 `SCRYPTED`: Gradiente verde esmeralda / turquesa (`.badge-scrypted-tag`).
+    - 🟣 `CAMERA.UI`: Gradiente púrpura / magenta (`.badge-cameraui-tag`).
+    - 🔵 `HOME ASSISTANT`: Gradiente azul cian / cielo (`.badge-ha-tag`).
+- **Integración de Cámaras Camera.UI en el Dashboard Principal y Agrupación por Marca:**
+  - Las cámaras de Camera.UI ahora se agrupan automáticamente por marca (Tapo, Reolink, EZVIZ, Hikvision, etc.) junto con las de Scrypted y Home Assistant.
+  - Sincronización reactiva con todos los filtros de estado: Todas las cámaras, Vinculadas (HAP), Pendientes de Vincular, Desactivadas e Incidencias.
+- **Nuevo Modal de Emparejamiento y Especificaciones HAP (`CameraUiPairingModal`):**
+  - Permite hacer clic en cualquier cámara de Camera.UI para abrir su código QR interactivo de Apple Home HAP, PIN (`031-45-154`), enlace de emparejamiento directo, botón de restablecimiento de emparejamiento y detalle de tópicos MQTT de movimiento y timbre.
+- **Arquitectura de Transmisión Passthrough Directo (0% Carga CPU en Raspberry Pi / HA):**
+  - Todo el flujo de vídeo para cámaras de Camera.UI y Scrypted se remuxa en modo passthrough puro (`-c:v copy`), transfiriendo los paquetes RTP directamente a Apple Home sin decodificar ni transcodificar en la Raspberry Pi.
+  - La carga de procesamiento y análisis permanece en el equipo donde está instalado Camera.UI / Scrypted o en el chip de la propia cámara.
+  - Canal de audio optimizado a especificación HAP con **AAC-ELD a 24 kbps**, resampler mono a 16 kHz y sincronización temporal PTS (`aresample=async=1:first_pts=0,volume=2.5`).
+
 ## [1.5.92] - 2026-09-16
 
 ### Autenticación JWT Bearer, Soporte HTTPS con Certificados Autofirmados y Persistencia de Formularios para Camera.UI

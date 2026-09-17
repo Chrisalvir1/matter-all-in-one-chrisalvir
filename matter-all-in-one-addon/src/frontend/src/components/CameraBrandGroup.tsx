@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from "react";
-import { CameraRecord, DeviceRecord } from "../types";
+import { CameraRecord, CameraUiCameraItem, DeviceRecord } from "../types";
 import { CameraCard } from "./CameraCard";
 
 interface CameraBrandGroupProps {
   brand: string;
   scryptedCameras: CameraRecord[];
   haCameras: DeviceRecord[];
+  cameraUiCameras?: CameraUiCameraItem[];
   onConfigureCamera: (cam: CameraRecord) => void;
   onConfigureHaDevice: (dev: DeviceRecord) => void;
+  onConfigureCameraUiCamera?: (cam: CameraUiCameraItem) => void;
 }
 
 function getInitialCollapsed(brand: string): boolean {
@@ -38,11 +40,13 @@ export const CameraBrandGroup: React.FC<CameraBrandGroupProps> = ({
   brand,
   scryptedCameras,
   haCameras,
+  cameraUiCameras = [],
   onConfigureCamera,
   onConfigureHaDevice,
+  onConfigureCameraUiCamera,
 }) => {
   const [isOpen, setIsOpen] = useState(() => !getInitialCollapsed(brand));
-  const totalCount = scryptedCameras.length + haCameras.length;
+  const totalCount = scryptedCameras.length + haCameras.length + cameraUiCameras.length;
 
   const handleToggle = (e: React.SyntheticEvent<HTMLDetailsElement>) => {
     const openState = (e.target as HTMLDetailsElement).open;
@@ -64,6 +68,13 @@ export const CameraBrandGroup: React.FC<CameraBrandGroupProps> = ({
             key={`scrypted-${cam.cameraId}`}
             camera={cam}
             onConfigure={() => onConfigureCamera(cam)}
+          />
+        ))}
+        {cameraUiCameras.map((cam) => (
+          <CameraCard
+            key={`cameraui-${cam.id}`}
+            cameraUiCamera={cam}
+            onConfigure={() => onConfigureCameraUiCamera?.(cam)}
           />
         ))}
         {haCameras.map((dev) => (

@@ -179,12 +179,18 @@ export interface CameraUiCameraItem {
   manufacturer?: string;
   model?: string;
   hasAudio?: boolean;
+  width?: number;
+  height?: number;
+  fps?: number;
+  motionTopic?: string;
+  doorbellTopic?: string;
+  motionActive?: boolean;
+  doorbellActive?: boolean;
+  status?: "online" | "offline" | "unknown";
   homeKitEnabled?: boolean;
   setupUri?: string;
   isPaired?: boolean;
   port?: number;
   pincode?: string;
   setupId?: string;
-  motionActive?: boolean;
-  doorbellActive?: boolean;
 }

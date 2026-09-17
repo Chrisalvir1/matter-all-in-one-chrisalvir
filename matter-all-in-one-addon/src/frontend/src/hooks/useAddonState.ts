@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { api } from "../api/client";
 import {
   CameraRecord,
+  CameraUiCameraItem,
   CameraUiConfigResponse,
   DeviceRecord,
   EntityRecord,
@@ -23,6 +24,7 @@ export function useAddonState() {
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [entities, setEntities] = useState<EntityRecord[]>([]);
   const [cameras, setCameras] = useState<CameraRecord[]>([]);
+  const [cameraUiCameras, setCameraUiCameras] = useState<CameraUiCameraItem[]>([]);
   const [scryptedConfig, setScryptedConfig] = useState<ScryptedConfigResponse | null>(null);
   const [cameraUiConfig, setCameraUiConfig] = useState<CameraUiConfigResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -39,12 +41,20 @@ export function useAddonState() {
 
   const refreshAll = useCallback(async () => {
     try {
-      const [statusRes, devicesRes, camerasRes, scryptedRes, cameraUiRes] = await Promise.allSettled([
+      const [
+        statusRes,
+        devicesRes,
+        camerasRes,
+        scryptedRes,
+        cameraUiRes,
+        cameraUiCamsRes,
+      ] = await Promise.allSettled([
         api.getStatus(),
         api.getDevices(),
         api.getCameras(),
         api.getScryptedConfig(),
         api.getCameraUiConfig(),
+        api.getCameraUiCameras(),
       ]);
 
       if (statusRes.status === "fulfilled") setStatus(statusRes.value);
@@ -57,6 +67,10 @@ export function useAddonState() {
         const raw = camerasRes.value;
         const list = Array.isArray(raw) ? raw : (raw as any)?.cameras || [];
         setCameras(list);
+      }
+      if (cameraUiCamsRes.status === "fulfilled") {
+        const raw = cameraUiCamsRes.value;
+        setCameraUiCameras(Array.isArray(raw) ? raw : []);
       }
       if (scryptedRes.status === "fulfilled") setScryptedConfig(scryptedRes.value);
       if (cameraUiRes.status === "fulfilled") setCameraUiConfig(cameraUiRes.value);
@@ -177,17 +191,19 @@ export function useAddonState() {
     const haCameraIds = new Set(realHaCameraDevices.map((d) => d.id));
     const scryptedTotal = cameras.length;
     const haCamsTotal = realHaCameraDevices.length;
-    const totalCameras = scryptedTotal + haCamsTotal;
+    const camerauiTotal = cameraUiCameras.length;
+    const totalCameras = scryptedTotal + haCamsTotal + camerauiTotal;
     const iotDevices = allDevices.filter((d) => !haCameraIds.has(d.id)).length;
 
-    // Paired total includes all active paired accessories (Matter nodes + Scrypted HAP/Matter cameras)
+    // Paired total includes all active paired accessories (Matter nodes + Scrypted HAP/Matter cameras + Camera.UI HAP)
     const scryptedPaired = cameras.filter(
       (c) => c.identity?.homeKitPairingState === "paired" || c.bindingState?.matterCommissioned === true
     ).length;
     const haCamsPaired = realHaCameraDevices.filter((d) =>
       d.entities.some((e) => e.exported && e.commissioned)
     ).length;
-    const pairedTotal = pairedNodes + scryptedPaired;
+    const camerauiPaired = cameraUiCameras.filter((c) => c.isPaired).length;
+    const pairedTotal = pairedNodes + scryptedPaired + camerauiPaired;
 
     // Unpaired total represents accessories actively exported for Matter/HomeKit but waiting to be commissioned
     const scryptedPending = cameras.filter(
@@ -195,7 +211,8 @@ export function useAddonState() {
         Boolean(c.identity?.matterPairingCode) &&
         !(c.identity?.homeKitPairingState === "paired" || c.bindingState?.matterCommissioned === true)
     ).length;
-    const unpairedTotal = pendingNodes + scryptedPending;
+    const camerauiPending = cameraUiCameras.filter((c) => c.homeKitEnabled && !c.isPaired).length;
+    const unpairedTotal = pendingNodes + scryptedPending + camerauiPending;
 
     // Unactivated devices: discovered devices and cameras that are neither exported nor commissioned
     const unactivatedDevices = allDevices.filter(
@@ -206,7 +223,8 @@ export function useAddonState() {
         !(c.identity?.homeKitPairingState === "paired" || c.bindingState?.matterCommissioned === true) &&
         !Boolean(c.identity?.matterPairingCode)
     ).length;
-    const unactivatedTotal = unactivatedDevices + unactivatedScrypted;
+    const unactivatedCameraUi = cameraUiCameras.filter((c) => !c.homeKitEnabled).length;
+    const unactivatedTotal = unactivatedDevices + unactivatedScrypted + unactivatedCameraUi;
 
     // Issues detection across all ACTIVE (exported) HA, MQTT devices and Cameras
     const issuesDevices = allDevices.filter((d) => {
@@ -253,16 +271,19 @@ export function useAddonState() {
       mqttCount,
       scryptedTotal,
       scryptedPaired,
+      camerauiTotal,
+      camerauiPaired,
       haCamsTotal,
       haCamsPaired,
       totalCameras,
     };
-  }, [entities, allDevices, cameras, realHaCameraDevices]);
+  }, [entities, allDevices, cameras, realHaCameraDevices, cameraUiCameras]);
 
   return {
     status,
     entities,
     cameras,
+    cameraUiCameras,
     allDevices,
     realHaCameraDevices,
     scryptedConfig,

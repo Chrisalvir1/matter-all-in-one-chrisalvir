@@ -3161,6 +3161,28 @@ mark {
   text-transform: uppercase;
 }
 
+.badge-cameraui-tag {
+  font-size: 0.68rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, #a855f7, #ec4899);
+  color: #ffffff;
+  padding: 2px 7px;
+  border-radius: 6px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.badge-ha-tag {
+  font-size: 0.68rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, #0284c7, #38bdf8);
+  color: #082f49;
+  padding: 2px 7px;
+  border-radius: 6px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
 .codec-pill {
   font-size: 0.72rem;
   font-weight: 600;
