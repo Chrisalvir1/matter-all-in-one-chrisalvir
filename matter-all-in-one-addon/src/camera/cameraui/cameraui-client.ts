@@ -523,7 +523,7 @@ export class CameraUiClient {
         (width >= 2304 && (/tapo/i.test(cameraTitle) || /tapo/i.test(modelName)));
 
       const videoCodec = isHevcDetected ? "hevc" : rawCodec.includes("h264") ? "h264" : undefined;
-      const strategy = isHevcDetected ? "transcode" : "passthrough_h264";
+      const strategy = isHevcDetected ? "passthrough_hevc" : "passthrough_h264";
 
       results.push({
         id: `cameraui_${safeId}`,

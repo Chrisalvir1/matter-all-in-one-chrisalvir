@@ -44,7 +44,7 @@ export interface CameraUiCameraRecord {
   isPaired?: boolean;
   setupUri?: string;
   videoCodec?: string;
-  strategy?: "passthrough_h264" | "transcode";
+  strategy?: "passthrough_h264" | "passthrough_hevc" | "transcode";
 }
 
 export interface CameraUiStore {

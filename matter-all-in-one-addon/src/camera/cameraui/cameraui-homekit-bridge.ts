@@ -56,7 +56,7 @@ export class CameraUiHomeKitBridge {
       );
 
     const chosenCodec = isHevc ? "hevc" : "h264";
-    const chosenStrategy = isHevc ? "transcode" : "passthrough_h264";
+    const chosenStrategy = isHevc ? "passthrough_hevc" : "passthrough_h264";
 
     const capabilities: CameraCapabilitiesInfo = {
       hasLiveStream: hasSource,
@@ -70,7 +70,7 @@ export class CameraUiHomeKitBridge {
       },
       maxFps: camera.fps || 30,
       strategy: chosenStrategy,
-      requiresTranscoding: isHevc,
+      requiresTranscoding: false,
       snapshotSupported: Boolean(camera.snapshotUrl),
       snapshotUrl: camera.snapshotUrl,
       hksvCapable: false,
@@ -80,7 +80,7 @@ export class CameraUiHomeKitBridge {
       sourceType: "rtsp",
       url: camera.rtspUrl,
       snapshotUrl: camera.snapshotUrl,
-      supportsPassthrough: !isHevc,
+      supportsPassthrough: true,
       requiresBridge: true,
       metadata: {
         isCameraUi: true,

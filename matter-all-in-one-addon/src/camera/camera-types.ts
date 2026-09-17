@@ -15,6 +15,7 @@ export type AudioCodecType =
 
 export type StreamStrategy =
   | "passthrough_h264"
+  | "passthrough_hevc"
   | "passthrough_video_only"
   | "transcode_required"
   | "transcode"

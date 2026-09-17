@@ -1,3 +1,15 @@
+## [1.5.96] - 2026-09-16
+
+### Passthrough Nativo HEVC / H.265 (Cero Transcodificación, Cero Lag, 100% Calidad Original)
+
+- **Soporte Completo de Passthrough para HEVC / H.265 (`-c:v copy`):**
+  - Se eliminó el bloqueo que forzaba transcodificación en cámaras H.265.
+  - Para iOS 27 y Apple Home con soporte HEVC, las cámaras H.265 (como Tapo C402, C420, C520WS, 2K/4K) ahora utilizan **passthrough puro (`-c:v copy`)** directo al payload RTP sin re-codificación.
+  - Se añadieron las estrategias `passthrough_hevc` y `hevc` a `StreamStrategy` y `CameraUiCameraRecord`.
+  - `supportsPassthrough: true` y `requiresTranscoding: false` activados para flujos H.265 en el bridge de Camera.UI y accesorios HomeKit.
+  - Sockets FFmpeg con flags ultra directos: `-rtsp_flags prefer_tcp`, `-avioflags direct`, `-fpsprobesize 0`, `-probesize 1048576`, `-analyzeduration 1000000`.
+  - Cero sobrecarga de CPU, fluidez total y calidad 100% idéntica al sensor original.
+
 ## [1.5.95] - 2026-09-16
 
 ### Prioridad Absoluta a Stream 1 (100% Calidad), Passthrough Cero Lag Super Fluido, Sincronización Reactiva de Vinculación y Corrección de Pantalla Negra

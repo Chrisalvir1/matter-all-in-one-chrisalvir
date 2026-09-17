@@ -367,8 +367,8 @@ export class HomeKitCameraAccessory {
         const codec = probe.videoCodec.toLowerCase();
         const isHevc = codec.includes("hevc") || codec.includes("265");
         this.capabilities.videoCodec = isHevc ? "hevc" : "h264";
-        this.capabilities.requiresTranscoding = isHevc;
-        this.capabilities.strategy = isHevc ? "transcode" : "passthrough_h264";
+        this.capabilities.requiresTranscoding = false;
+        this.capabilities.strategy = isHevc ? "passthrough_hevc" : "passthrough_h264";
         if (probe.hasAudio !== undefined) {
           this.capabilities.hasAudio = probe.hasAudio;
         }

@@ -693,11 +693,16 @@ export class HomeKitCameraStreamingDelegate
       );
     }
 
-    const isH264 = (this.capabilities.videoCodec || "h264").toLowerCase() === "h264";
+    const isSupportedPassthroughCodec =
+      (this.capabilities.videoCodec || "h264").toLowerCase() === "h264" ||
+      (this.capabilities.videoCodec || "").toLowerCase() === "hevc" ||
+      (this.capabilities.videoCodec || "").toLowerCase() === "h265";
+
     const canPassthrough =
       !forceTranscode &&
-      isH264 &&
+      isSupportedPassthroughCodec &&
       (this.capabilities.strategy === "passthrough_h264" ||
+        this.capabilities.strategy === "passthrough_hevc" ||
         this.streamSource.supportsPassthrough ||
         !this.capabilities.requiresTranscoding);
 
