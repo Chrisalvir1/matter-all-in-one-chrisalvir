@@ -4648,7 +4648,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             store.scrypted.allowSelfSignedCertificate = false;
             store.scrypted.connectionStatus = "not_configured";
             store.scrypted.lastConnected = undefined;
-            store.cameras = { cameras: [], lastSync: undefined };
+            store.cameras = { cameras: [] };
             await ScryptedStorage.save(store);
             res.writeHead(200, {
               "Content-Type": "application/json; charset=utf-8",

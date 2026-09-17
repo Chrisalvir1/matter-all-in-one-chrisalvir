@@ -271,16 +271,42 @@ export const App: React.FC = () => {
       (dev.name || "").toLowerCase().includes("nest") ||
       Boolean(camEnt?.entityId.toLowerCase().includes("nest"));
 
-    const realSensors = dev.entities
+    const realSensors: CameraSensorRecord[] = dev.entities
       .filter((e) => e.domain === "binary_sensor")
       .map((e) => ({
         name: e.name || e.entityId,
-        entityId: e.entityId,
         sensorId: e.entityId,
         type: (e.entityId.includes("doorbell") || e.name?.toLowerCase().includes("timbre")
           ? "doorbell"
           : "motion") as "motion" | "doorbell",
+        enabled: true,
         state: e.state === "on",
+      }));
+
+    const realEntities: CameraRealEntity[] = dev.entities
+      .filter(
+        (e) =>
+          e.domain === "binary_sensor" ||
+          e.domain === "light" ||
+          e.domain === "siren" ||
+          e.domain === "switch" ||
+          e.domain === "event"
+      )
+      .map((e) => ({
+        id: e.entityId,
+        domain: e.domain as "binary_sensor" | "light" | "siren" | "switch" | "event",
+        name: e.name || e.entityId,
+        type: (e.entityId.includes("doorbell") || e.name?.toLowerCase().includes("timbre")
+          ? "doorbell"
+          : e.domain === "light"
+          ? "light"
+          : e.domain === "siren"
+          ? "siren"
+          : e.domain === "switch"
+          ? "switch"
+          : "motion") as "motion" | "light" | "siren" | "doorbell" | "switch",
+        state: e.state === "on",
+        matterExported: Boolean(e.exported),
       }));
 
     const isCommissioned = dev.entities.some((e) => e.exported && e.commissioned);
@@ -296,14 +322,7 @@ export const App: React.FC = () => {
         isOnline: true,
       },
       sensors: realSensors,
-      realEntities: dev.entities.map((e) => ({
-        id: e.entityId,
-        name: e.name || e.entityId,
-        type: e.domain === "camera" ? "video" : e.domain === "binary_sensor" ? "motion" : "switch",
-        state: e.state,
-        exported: e.exported,
-        commissioned: e.commissioned,
-      })),
+      realEntities,
       identity: {
         homeKitPairingState: isCommissioned ? "paired" : "not_paired",
         homeKitSetupId: "HA01",
