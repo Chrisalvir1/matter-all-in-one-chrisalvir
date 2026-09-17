@@ -16,7 +16,7 @@ export const CameraUiModal: React.FC<CameraUiModalProps> = ({
   showToast,
 }) => {
   const [enabled, setEnabled] = useState(false);
-  const [serverUrl, setServerUrl] = useState("http://localhost:8181");
+  const [serverUrl, setServerUrl] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [allowSelfSigned, setAllowSelfSigned] = useState(true);
@@ -34,7 +34,8 @@ export const CameraUiModal: React.FC<CameraUiModalProps> = ({
     if (config && !hasInitializedRef.current) {
       hasInitializedRef.current = true;
       setEnabled(config.enabled ?? false);
-      setServerUrl(config.serverUrl || "http://localhost:8181");
+      const configuredUrl = (config.serverUrl || "").trim();
+      setServerUrl(configuredUrl === "http://localhost:8181" ? "" : configuredUrl);
       setUsername(config.username || "");
       setAllowSelfSigned(config.allowSelfSignedCertificate ?? true);
       setMqttEnabled(config.mqttEnabled ?? true);
@@ -51,17 +52,18 @@ export const CameraUiModal: React.FC<CameraUiModalProps> = ({
   };
 
   const handleTest = async () => {
-    if (!serverUrl.trim()) {
-      showToast("Ingresa la URL del servidor Camera.UI", true);
+    const effectiveUrl = serverUrl.trim() || config?.serverUrl || "";
+    if (!effectiveUrl) {
+      showToast("Ingresa la URL del servidor Camera.UI (ej. https://192.168.110.46:3543)", true);
       return;
     }
     setIsTesting(true);
     setTestResult({ text: "Comprobando conexión con Camera.UI..." });
     try {
       const res = await api.testCameraUiConnection({
-        serverUrl: serverUrl.trim(),
+        serverUrl: effectiveUrl,
         username: username.trim() || undefined,
-        password: password || undefined,
+        password: password.trim() ? password : undefined,
         allowSelfSignedCertificate: allowSelfSigned,
       });
       if (res.ok) {
@@ -77,12 +79,17 @@ export const CameraUiModal: React.FC<CameraUiModalProps> = ({
   };
 
   const handleSync = async () => {
+    const effectiveUrl = serverUrl.trim() || config?.serverUrl || "";
+    if (!effectiveUrl) {
+      showToast("Ingresa la URL del servidor Camera.UI (ej. https://192.168.110.46:3543)", true);
+      return;
+    }
     setIsSyncing(true);
     try {
       const res = await api.syncCameraUiCameras({
-        serverUrl: serverUrl.trim(),
+        serverUrl: effectiveUrl,
         username: username.trim() || undefined,
-        password: password || undefined,
+        password: password.trim() ? password : undefined,
         allowSelfSignedCertificate: allowSelfSigned,
       });
       if (res.success) {
@@ -208,7 +215,7 @@ export const CameraUiModal: React.FC<CameraUiModalProps> = ({
                 type="url"
                 value={serverUrl}
                 onChange={(e) => setServerUrl(e.target.value)}
-                placeholder="http://192.168.1.100:8181"
+                placeholder="https://192.168.110.46:3543 o http://192.168.1.100:8181"
                 required
                 style={{ width: "100%", padding: "8px 12px", borderRadius: 8, background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff" }}
               />

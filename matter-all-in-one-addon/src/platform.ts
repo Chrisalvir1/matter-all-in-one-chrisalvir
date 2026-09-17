@@ -5671,13 +5671,44 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         ) {
           try {
             const body = await this.readRequestBody(req);
-            const data = JSON.parse(body);
+            let data: any = {};
+            try {
+              if (body) data = JSON.parse(body);
+            } catch {}
+
+            const store = await CameraUiStorage.load();
+            const serverUrl = String(data.serverUrl || store.config.serverUrl || "").trim();
+            if (!serverUrl) {
+              res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
+              res.end(
+                JSON.stringify({
+                  ok: false,
+                  message:
+                    "URL del servidor Camera.UI no configurada. Por favor ingresa la URL completa (ej. https://192.168.110.46:3543).",
+                }),
+              );
+              return;
+            }
+
+            const username =
+              data.username !== undefined && String(data.username).trim().length > 0
+                ? String(data.username).trim()
+                : store.config.username;
+            const password =
+              data.password !== undefined && String(data.password).length > 0
+                ? String(data.password)
+                : store.config.password;
+            const allowSelfSigned =
+              typeof data.allowSelfSignedCertificate === "boolean"
+                ? data.allowSelfSignedCertificate
+                : (store.config.allowSelfSignedCertificate ?? true);
+
             const client = new CameraUiClient({
               enabled: true,
-              serverUrl: data.serverUrl || "http://localhost:8181",
-              username: data.username,
-              password: data.password,
-              allowSelfSignedCertificate: data.allowSelfSignedCertificate ?? true,
+              serverUrl,
+              username,
+              password,
+              allowSelfSignedCertificate: allowSelfSigned,
             });
             const result = await client.testConnection();
             res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });

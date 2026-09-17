@@ -87,7 +87,7 @@ export class CameraUiHomeKitBridge {
 
     const record: HomeKitCameraStorageRecord = {
       entityId: `camera.${camera.id}`,
-      uuid: camera.uuid,
+      uuid: camera.uuid || uuid.generate(`cameraui:camera:${camera.id}`),
       username: camera.username,
       pincode: camera.pincode,
       setupId: camera.setupId,

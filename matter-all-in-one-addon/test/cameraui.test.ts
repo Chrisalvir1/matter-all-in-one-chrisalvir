@@ -253,4 +253,148 @@ describe("Camera.UI Client and Storage Integration", () => {
     expect(merged.rtspUrl).toBe("rtsp://192.168.1.121:554/stream1_hq");
     expect(saveSpy).toHaveBeenCalled();
   });
+
+  it("fetchCameras parses Camera.UI v5 { result: [...] } and replaces localhost in stream URLs", async () => {
+    const cameraUiV5Response = {
+      result: [
+        {
+          _id: "660c1d2e3f4a5b6c7d8e9f01",
+          name: "Camara Patio 2K",
+          room: "Exterior",
+          sources: [
+            {
+              name: "high",
+              role: "high-resolution",
+              urls: ["rtsp://localhost:8554/camara_patio_2k"],
+              muted: false,
+            },
+            {
+              name: "sub",
+              role: "mid-resolution",
+              urls: ["rtsp://127.0.0.1:8554/camara_patio_2k_sub"],
+            },
+          ],
+          info: {
+            manufacturer: "Reolink",
+            model: "RLC-810A",
+            serialNumber: "95270001",
+          },
+        },
+      ],
+      total: 1,
+      page: 1,
+      pageSize: -1,
+    };
+
+    global.fetch = vi.fn().mockImplementation(async (url: string) => {
+      if (url.includes("/api/cameras")) {
+        return {
+          ok: true,
+          json: async () => cameraUiV5Response,
+        };
+      }
+      return { ok: false, status: 404 };
+    });
+
+    const client = new CameraUiClient({
+      enabled: true,
+      serverUrl: "https://192.168.110.46:3543",
+      allowSelfSignedCertificate: true,
+    });
+
+    const cameras = await client.fetchCameras();
+    expect(cameras.length).toBe(1);
+    const cam = cameras[0];
+    expect(cam.name).toBe("Camara Patio 2K");
+    expect(cam.id).toBe("cameraui_660c1d2e3f4a5b6c7d8e9f01");
+    expect(cam.manufacturer).toBe("Reolink");
+    expect(cam.model).toBe("RLC-810A");
+    expect(cam.serialNumber).toBe("95270001");
+    // Localhost must be substituted by the server host (192.168.110.46)
+    expect(cam.rtspUrl).toBe("rtsp://192.168.110.46:8554/camara_patio_2k");
+    expect(cam.subRtspUrl).toBe("rtsp://192.168.110.46:8554/camara_patio_2k_sub");
+  });
+
+  it("fetchCameras parses dictionary schema from /api/config", async () => {
+    const configResponse = {
+      cameras: {
+        entrada: {
+          name: "Entrada",
+          sources: [
+            {
+              role: "high-resolution",
+              urls: ["rtsp://192.168.110.46:8554/entrada"],
+            },
+          ],
+          info: {
+            manufacturer: "Hikvision",
+            model: "DS-2CD2043G2",
+          },
+        },
+      },
+    };
+
+    global.fetch = vi.fn().mockImplementation(async (url: string) => {
+      if (url.includes("/api/cameras")) {
+        return { ok: false, status: 404 };
+      }
+      if (url.includes("/api/config")) {
+        return {
+          ok: true,
+          json: async () => configResponse,
+        };
+      }
+      return { ok: false, status: 404 };
+    });
+
+    const client = new CameraUiClient({
+      enabled: true,
+      serverUrl: "https://192.168.110.46:3543",
+      allowSelfSignedCertificate: true,
+    });
+
+    const cameras = await client.fetchCameras();
+    expect(cameras.length).toBe(1);
+    expect(cameras[0].name).toBe("Entrada");
+    expect(cameras[0].manufacturer).toBe("Hikvision");
+    expect(cameras[0].rtspUrl).toBe("rtsp://192.168.110.46:8554/entrada");
+  });
+
+  it("authenticates via tokens.access object shape", async () => {
+    global.fetch = vi.fn().mockImplementation(async (url: string) => {
+      if (url.endsWith("/api/auth/login")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            tokens: {
+              access: "mock-jwt-nested-token",
+            },
+          }),
+        };
+      }
+      if (url.includes("/api/cameras")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            result: [{ _id: "cam-test-1", name: "Camera One" }],
+          }),
+        };
+      }
+      return { ok: false, status: 404 };
+    });
+
+    const client = new CameraUiClient({
+      enabled: true,
+      serverUrl: "https://192.168.110.46:3543",
+      username: "admin",
+      password: "somepassword",
+    });
+
+    const res = await client.testConnection();
+    expect(res.ok).toBe(true);
+    expect(res.message).toContain("1 cámara detectada");
+  });
 });
+

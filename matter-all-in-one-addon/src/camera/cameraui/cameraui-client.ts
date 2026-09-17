@@ -1,6 +1,73 @@
 import type { CameraUiCameraRecord, CameraUiConfig } from "./cameraui-types.js";
 import { sanitizeUrlCredentials } from "../homekit/ffmpeg-helper.js";
 
+/**
+ * Universal extractor to parse camera lists from any Camera.UI version response format:
+ * - Direct array [...]
+ * - Camera.UI v5 standard paginated { result: [...] }
+ * - Legacy { cameras: [...] }
+ * - Object dictionary { cameras: { "cam1": { ... } } }
+ * - Object dictionary { result: { "cam1": { ... } } }
+ * - Generic envelope { data: [...] } or { items: [...] }
+ * - Top-level dictionary of camera objects { "patio": { name: "patio", ... } }
+ */
+export function extractRawCameras(json: any): any[] {
+  if (!json) return [];
+  if (Array.isArray(json)) return json;
+
+  if (typeof json !== "object") return [];
+
+  // Check array properties
+  if (Array.isArray(json.result)) return json.result;
+  if (Array.isArray(json.cameras)) return json.cameras;
+  if (Array.isArray(json.data)) return json.data;
+  if (Array.isArray(json.items)) return json.items;
+
+  // Check dictionary inside json.cameras
+  if (json.cameras && typeof json.cameras === "object" && !Array.isArray(json.cameras)) {
+    const dictValues = Object.entries(json.cameras)
+      .map(([key, val]: [string, any]) => {
+        if (val && typeof val === "object") {
+          return { name: val.name || key, ...val };
+        }
+        return null;
+      })
+      .filter(Boolean);
+    if (dictValues.length > 0) return dictValues;
+  }
+
+  // Check dictionary inside json.result
+  if (json.result && typeof json.result === "object" && !Array.isArray(json.result)) {
+    const dictValues = Object.entries(json.result)
+      .map(([key, val]: [string, any]) => {
+        if (val && typeof val === "object") {
+          return { name: val.name || key, ...val };
+        }
+        return null;
+      })
+      .filter(Boolean);
+    if (dictValues.length > 0) return dictValues;
+  }
+
+  // Check if json itself is a dictionary of camera definitions
+  const candidateValues = Object.entries(json)
+    .map(([key, val]: [string, any]) => {
+      if (
+        val &&
+        typeof val === "object" &&
+        (val.sources || val.videoConfig || val.name || val.id || val._id || val.uuid)
+      ) {
+        return { name: val.name || key, ...val };
+      }
+      return null;
+    })
+    .filter(Boolean);
+
+  if (candidateValues.length > 0) return candidateValues;
+
+  return [];
+}
+
 export class CameraUiClient {
   private accessToken?: string;
 
@@ -12,6 +79,7 @@ export class CameraUiClient {
 
   private getBaseUrl(): string {
     let url = (this.config.serverUrl || "").trim();
+    if (!url) return "";
     if (!url.startsWith("http://") && !url.startsWith("https://")) {
       url = `http://${url}`;
     }
@@ -71,8 +139,14 @@ export class CameraUiClient {
 
       if (res.ok) {
         const data = await res.json();
-        if (data?.access_token) {
-          this.accessToken = String(data.access_token);
+        const token =
+          data?.access_token ||
+          data?.tokens?.access ||
+          data?.tokens?.access_token ||
+          data?.token ||
+          data?.accessToken;
+        if (token) {
+          this.accessToken = String(token);
           return { ok: true };
         }
       }
@@ -80,34 +154,40 @@ export class CameraUiClient {
       if (res.status === 401 || res.status === 403) {
         return {
           ok: false,
-          message: `Credenciales incorrectas: usuario o contraseña rechazados por Camera.UI (HTTP ${res.status}).`,
+          message: `Credenciales incorrectas: usuario o contraseña rechazados por Camera.UI en ${baseUrl} (HTTP ${res.status}).`,
         };
       }
 
-      // If 404, might be legacy Camera.UI
+      // If 404, try alternate login routes
       if (res.status === 404) {
-        try {
-          const legacyRes = await fetch(`${baseUrl}/api/login`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Accept: "application/json",
-            },
-            body: JSON.stringify({
-              username: this.config.username,
-              password: this.config.password,
-            }),
-            signal: AbortSignal.timeout(5000),
-          });
-          if (legacyRes.ok) {
-            const legacyData = await legacyRes.json();
-            if (legacyData?.access_token || legacyData?.token) {
-              this.accessToken = String(legacyData.access_token || legacyData.token);
-              return { ok: true };
+        const fallbackRoutes = ["/api/login", "/auth/login"];
+        for (const route of fallbackRoutes) {
+          try {
+            const fallbackRes = await fetch(`${baseUrl}${route}`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Accept: "application/json",
+              },
+              body: JSON.stringify({
+                username: this.config.username,
+                password: this.config.password,
+              }),
+              signal: AbortSignal.timeout(5000),
+            });
+            if (fallbackRes.ok) {
+              const fallbackData = await fallbackRes.json();
+              const token =
+                fallbackData?.access_token ||
+                fallbackData?.tokens?.access ||
+                fallbackData?.token ||
+                fallbackData?.accessToken;
+              if (token) {
+                this.accessToken = String(token);
+                return { ok: true };
+              }
             }
-          }
-        } catch {
-          // Fallback to basic auth
+          } catch {}
         }
         return { ok: true, skipped: true };
       }
@@ -146,8 +226,12 @@ export class CameraUiClient {
     }
 
     const testEndpoints = [
+      "/api/cameras?page=1&pageSize=-1",
       "/api/cameras",
+      "/cameras?page=1&pageSize=-1",
+      "/cameras",
       "/api/config",
+      "/config",
       "/api/system/version",
       "/",
     ];
@@ -168,10 +252,11 @@ export class CameraUiClient {
           try {
             const data = await res.json();
             if (data?.version) version = String(data.version);
-            if (Array.isArray(data)) {
-              count = data.length;
-            } else if (Array.isArray(data?.cameras)) {
-              count = data.cameras.length;
+            else if (data?.system?.version) version = String(data.system.version);
+
+            const discovered = extractRawCameras(data);
+            if (discovered.length > 0) {
+              count = discovered.length;
             }
           } catch {}
 
@@ -220,45 +305,39 @@ export class CameraUiClient {
 
     let rawList: any[] = [];
 
-    // Try /api/cameras first
-    try {
-      let res = await fetch(`${baseUrl}/api/cameras`, {
-        headers: this.getHeaders(),
-        signal: AbortSignal.timeout(6000),
-      });
+    const endpointsToTry = [
+      "/api/cameras?page=1&pageSize=-1",
+      "/api/cameras",
+      "/cameras?page=1&pageSize=-1",
+      "/cameras",
+      "/api/config",
+      "/config",
+    ];
 
-      // If 401, token might have expired, re-login and retry
-      if (res.status === 401 && this.config.username && this.config.password) {
-        const loginRes = await this.login();
-        if (loginRes.ok) {
-          res = await fetch(`${baseUrl}/api/cameras`, {
-            headers: this.getHeaders(),
-            signal: AbortSignal.timeout(6000),
-          });
-        }
-      }
-
-      if (res.ok) {
-        const json = await res.json();
-        if (Array.isArray(json)) {
-          rawList = json;
-        } else if (json && Array.isArray(json.cameras)) {
-          rawList = json.cameras;
-        }
-      }
-    } catch {}
-
-    // Fallback to /api/config if /api/cameras was empty
-    if (rawList.length === 0) {
+    for (const ep of endpointsToTry) {
       try {
-        const res = await fetch(`${baseUrl}/api/config`, {
+        let res = await fetch(`${baseUrl}${ep}`, {
           headers: this.getHeaders(),
           signal: AbortSignal.timeout(6000),
         });
+
+        // If 401, token might have expired, re-login once and retry
+        if (res.status === 401 && this.config.username && this.config.password) {
+          const loginRes = await this.login();
+          if (loginRes.ok) {
+            res = await fetch(`${baseUrl}${ep}`, {
+              headers: this.getHeaders(),
+              signal: AbortSignal.timeout(6000),
+            });
+          }
+        }
+
         if (res.ok) {
           const json = await res.json();
-          if (json && Array.isArray(json.cameras)) {
-            rawList = json.cameras;
+          const items = extractRawCameras(json);
+          if (items.length > 0) {
+            rawList = items;
+            break;
           }
         }
       } catch {}
@@ -275,7 +354,7 @@ export class CameraUiClient {
       if (!item) continue;
 
       const name = String(item.name || item.camera || item.title || `Camera-${i + 1}`).trim();
-      const rawId = item.id || item.uuid || item.name || `cam_${i + 1}`;
+      const rawId = item._id || item.id || item.uuid || item.name || `cam_${i + 1}`;
       const safeId = String(rawId)
         .toLowerCase()
         .replace(/[^a-z0-9_-]/g, "_");
@@ -292,13 +371,15 @@ export class CameraUiClient {
       if (sources.length > 0) {
         // High resolution or primary stream
         const highRes =
-          sources.find((s) => s.role === "high-resolution" || s.role === "main") ||
+          sources.find((s) => s.role === "high-resolution" || s.role === "high" || s.role === "main") ||
           sources[0];
         if (highRes) {
           if (Array.isArray(highRes.urls) && highRes.urls.length > 0) {
             mainSourceUrl = this.cleanStreamUrl(highRes.urls[0]);
           } else if (typeof highRes.url === "string") {
             mainSourceUrl = this.cleanStreamUrl(highRes.url);
+          } else if (typeof highRes.stream === "string") {
+            mainSourceUrl = this.cleanStreamUrl(highRes.stream);
           }
           if (highRes.muted === true) {
             isMuted = true;
@@ -307,13 +388,20 @@ export class CameraUiClient {
 
         // Sub stream / mid-low resolution
         const subRes = sources.find(
-          (s) => s.role === "mid-resolution" || s.role === "low-resolution" || s.role === "sub",
+          (s) =>
+            s.role === "mid-resolution" ||
+            s.role === "mid" ||
+            s.role === "low-resolution" ||
+            s.role === "low" ||
+            s.role === "sub",
         );
         if (subRes) {
           if (Array.isArray(subRes.urls) && subRes.urls.length > 0) {
             subSourceUrl = this.cleanStreamUrl(subRes.urls[0]);
           } else if (typeof subRes.url === "string") {
             subSourceUrl = this.cleanStreamUrl(subRes.url);
+          } else if (typeof subRes.stream === "string") {
+            subSourceUrl = this.cleanStreamUrl(subRes.stream);
           }
         }
 
@@ -341,9 +429,34 @@ export class CameraUiClient {
         rtspUrl = `rtsp://${parsedHostname}:8554/${safeName}`;
       }
 
+      // Substitute localhost/127.0.0.1 in rtspUrl / subRtspUrl / snapshotUrl with actual server host
+      if (parsedHostname !== "localhost" && parsedHostname !== "127.0.0.1") {
+        if (rtspUrl) {
+          rtspUrl = rtspUrl
+            .replace("://localhost:", `://${parsedHostname}:`)
+            .replace("://127.0.0.1:", `://${parsedHostname}:`)
+            .replace("://localhost/", `://${parsedHostname}/`)
+            .replace("://127.0.0.1/", `://${parsedHostname}/`);
+        }
+        if (subRtspUrl) {
+          subRtspUrl = subRtspUrl
+            .replace("://localhost:", `://${parsedHostname}:`)
+            .replace("://127.0.0.1:", `://${parsedHostname}:`)
+            .replace("://localhost/", `://${parsedHostname}/`)
+            .replace("://127.0.0.1/", `://${parsedHostname}/`);
+        }
+        if (snapshotUrl) {
+          snapshotUrl = snapshotUrl
+            .replace("://localhost:", `://${parsedHostname}:`)
+            .replace("://127.0.0.1:", `://${parsedHostname}:`)
+            .replace("://localhost/", `://${parsedHostname}/`)
+            .replace("://127.0.0.1/", `://${parsedHostname}/`);
+        }
+      }
+
       // Default snapshot from Camera.UI feed if stillImageSource not present
       if (!snapshotUrl) {
-        snapshotUrl = `${baseUrl}/cameras/${encodeURIComponent(name)}/feed`;
+        snapshotUrl = `${baseUrl}/api/cameras/${encodeURIComponent(name)}/snapshot`;
       }
 
       const width = Number(videoConfig.maxWidth || item.width || 1920);
@@ -366,9 +479,9 @@ export class CameraUiClient {
       results.push({
         id: `cameraui_${safeId}`,
         name,
-        manufacturer: item.manufacturer || "Camera.UI",
-        model: item.model || "Network Camera",
-        serialNumber: item.serialNumber || `CUI-${safeId.toUpperCase()}`,
+        manufacturer: item.info?.manufacturer || item.manufacturer || "Camera.UI",
+        model: item.info?.model || item.model || "Network Camera",
+        serialNumber: item.info?.serialNumber || item.serialNumber || `CUI-${safeId.toUpperCase()}`,
         rtspUrl,
         subRtspUrl,
         snapshotUrl,
@@ -407,3 +520,4 @@ export class CameraUiClient {
     return undefined;
   }
 }
+

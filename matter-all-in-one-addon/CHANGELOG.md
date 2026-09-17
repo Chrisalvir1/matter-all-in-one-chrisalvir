@@ -1,3 +1,20 @@
+## [1.5.94] - 2026-09-16
+
+### Detección Universal de Cámaras Camera.UI v5 (`result` Array, Diccionario Clave-Valor), Reemplazo IP Localhost y Eliminación de Error de Localhost
+
+- **Extractor Universal de Cámaras (`extractRawCameras`):**
+  - Soluciona de forma definitiva el problema de *"0 cámaras detectadas"* en Camera.UI v5.
+  - La API de Camera.UI v5 entrega las cámaras bajo el esquema paginado `{ result: [ ... ], total: N, page: 1, pageSize: -1 }` y en `/api/config` bajo diccionarios clave-valor `{ cameras: { "patio": { ... } } }`. El nuevo extractor detecta y normaliza cámaras automáticamente sin importar si vienen en `result`, `cameras`, `data`, `items` o como diccionario de objetos.
+  - Consulta multi-endpoint en cascada (`/api/cameras?page=1&pageSize=-1`, `/api/cameras`, `/cameras`, `/api/config`, `/config`).
+- **Eliminación Total del Error de Localhost al Probar Conexión:**
+  - Se corrigió el endpoint `/api/cameraui/test-connection` para heredar la URL del servidor, usuario y contraseña guardados previamente en `store.config` si el usuario no los reescribe en el modal.
+  - Se eliminó el valor por defecto arbitrario `http://localhost:8181` cuando la URL está sin configurar, mostrando un mensaje de validación amigable en su lugar.
+- **Sustitución Automática de `localhost` en Streams RTSP:**
+  - Cuando Camera.UI v5 utiliza restreaming local vía go2rtc / MediaMTX (`rtsp://localhost:8554/...`), las URLs ahora reemplazan automáticamente `localhost` y `127.0.0.1` por la dirección IP o hostname real del servidor Camera.UI (`192.168.110.46`), asegurando que la Raspberry Pi / HA pueda conectarse al stream sin fallos.
+- **Identificadores y Metadatos de Camera.UI v5:**
+  - Mapeo directo de `_id`, fabricante y modelo desde `info.manufacturer` e `info.model`.
+  - Detección precisa de streams principales (`high-resolution`, `main`, `high`), secundarios (`mid-resolution`, `sub`, `low-resolution`) y snapshots (`snapshot`, `/api/cameras/:name/snapshot`).
+
 ## [1.5.93] - 2026-09-16
 
 ### Visualización Distintiva de Origen de Cámaras (Scrypted vs Camera.UI vs HA), Modal de Emparejamiento HAP y Arquitectura Passthrough Cero CPU
