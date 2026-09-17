@@ -255,7 +255,7 @@ export class HomeKitCameraStreamingDelegate
       }
 
       const ffmpegPath = resolveFfmpegPath();
-      const sourceUrl = this.streamSource.url;
+      const sourceUrl = this.getCleanSourceUrl();
       if (!ffmpegPath || !sourceUrl) {
         finish("fallback-no-source", this.lastSnapshotBuffer);
         return;
@@ -455,13 +455,23 @@ export class HomeKitCameraStreamingDelegate
     callback();
   }
 
+  private getCleanSourceUrl(): string | undefined {
+    let url = this.streamSource.url;
+    if (!url) return undefined;
+    const hashIdx = url.indexOf("#");
+    if (hashIdx !== -1) {
+      url = url.substring(0, hashIdx);
+    }
+    return url;
+  }
+
   private async startStream(
     session: HomeKitStreamSession,
     request: StartStreamRequest,
     callback: StreamRequestCallback,
   ): Promise<void> {
     const ffmpegPath = resolveFfmpegPath();
-    const sourceUrl = this.streamSource.url;
+    const sourceUrl = this.getCleanSourceUrl();
     if (!ffmpegPath || !sourceUrl) {
       callback(new Error("FFmpeg or RTSP source is unavailable"));
       return;
@@ -514,7 +524,7 @@ export class HomeKitCameraStreamingDelegate
     forceTranscode = false,
   ): void {
     const ffmpegPath = resolveFfmpegPath() || "ffmpeg";
-    const sourceUrl = this.streamSource.url;
+    const sourceUrl = this.getCleanSourceUrl();
     const video = request.video;
     const fps = Math.max(1, Math.min(video.fps || 30, 60));
     const mtu = video.mtu || 1378;
@@ -543,7 +553,7 @@ export class HomeKitCameraStreamingDelegate
         } else {
           settle(new Error("FFmpeg exited during HAP startup"));
         }
-      }, 500);
+      }, 600);
       process.once("error", (error) => {
         clearTimeout(guard);
         settle(error);
@@ -594,7 +604,7 @@ export class HomeKitCameraStreamingDelegate
     request: StartStreamRequest,
     forceTranscode = false,
   ): string[] {
-    const sourceUrl = this.streamSource.url;
+    const sourceUrl = this.getCleanSourceUrl();
     if (!sourceUrl) {
       return [];
     }
@@ -607,26 +617,20 @@ export class HomeKitCameraStreamingDelegate
       `?rtcpport=${session.videoPort}&localrtcpport=${session.localVideoPort}&pkt_size=${mtu}`;
 
     const args: string[] = ["-hide_banner", "-loglevel", "warning"];
-    if (sourceUrl.startsWith("rtsp://")) {
+    if (sourceUrl.startsWith("rtsp://") || sourceUrl.startsWith("rtsps://")) {
       args.push(
         "-rtsp_transport",
         "tcp",
-        "-rtsp_flags",
-        "prefer_tcp",
+        "-stimeout",
+        "5000000",
         "-probesize",
         "1048576",
         "-analyzeduration",
         "1000000",
-        "-avioflags",
-        "direct",
-        "-fpsprobesize",
-        "0",
         "-fflags",
         "+nobuffer+flush_packets",
         "-flags",
         "low_delay",
-        "-max_delay",
-        "0",
       );
     } else if (sourceUrl.startsWith("http://") || sourceUrl.startsWith("https://")) {
       args.push(
@@ -707,27 +711,31 @@ export class HomeKitCameraStreamingDelegate
         !this.capabilities.requiresTranscoding);
 
     if (canPassthrough) {
+      const isHevcCodec =
+        (this.capabilities.videoCodec || "").toLowerCase() === "hevc" ||
+        (this.capabilities.videoCodec || "").toLowerCase() === "h265" ||
+        this.capabilities.strategy === "passthrough_hevc";
+
       // Pure passthrough remuxing without transcoding CPU overhead (native 4K, 2K, 1080p, 720p @ max fps)
-      args.push(
-        "-map",
-        "0:v:0",
+      // For H.264: inject SPS/PPS on every keyframe via dump_extra so HomeKit decodes immediately
+      // For HEVC: use plain -c:v copy — HEVC RTP (RFC 7798) doesn't use dump_extra
+      const videoPassArgs: string[] = [
+        "-map", "0:v:0",
         "-an",
-        "-c:v",
-        "copy",
-        "-bsf:v",
-        "dump_extra=freq=keyframe",
-        "-f",
-        "rtp",
-        "-payload_type",
-        String(video.pt || 99),
-        "-ssrc",
-        String(session.videoSsrc),
-        "-srtp_out_suite",
-        suiteName(session.videoCryptoSuite),
-        "-srtp_out_params",
-        session.videoKeySalt.toString("base64"),
+        "-c:v", "copy",
+      ];
+      if (!isHevcCodec) {
+        videoPassArgs.push("-bsf:v", "dump_extra=freq=keyframe");
+      }
+      videoPassArgs.push(
+        "-f", "rtp",
+        "-payload_type", String(video.pt || 99),
+        "-ssrc", String(session.videoSsrc),
+        "-srtp_out_suite", suiteName(session.videoCryptoSuite),
+        "-srtp_out_params", session.videoKeySalt.toString("base64"),
         videoUrl,
       );
+      args.push(...videoPassArgs);
     } else {
       // High-fidelity transcoding fallback for HEVC / MJPEG / incompatible formats
       const videoBitrate =

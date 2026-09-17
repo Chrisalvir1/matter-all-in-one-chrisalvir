@@ -24,6 +24,17 @@ export class CameraUiHomeKitBridge {
       return undefined;
     }
 
+    // Strip URL fragments (#gop=1, etc.)
+    if (camera.rtspUrl && camera.rtspUrl.includes("#")) {
+      camera.rtspUrl = camera.rtspUrl.substring(0, camera.rtspUrl.indexOf("#"));
+    }
+    if (camera.subRtspUrl && camera.subRtspUrl.includes("#")) {
+      camera.subRtspUrl = camera.subRtspUrl.substring(0, camera.subRtspUrl.indexOf("#"));
+    }
+    if (camera.snapshotUrl && camera.snapshotUrl.includes("#")) {
+      camera.snapshotUrl = camera.snapshotUrl.substring(0, camera.snapshotUrl.indexOf("#"));
+    }
+
     const existing = this.activeAccessories.get(camera.id);
     if (existing && existing.isStreaming) {
       // Don't unmount or interrupt active Live View sessions

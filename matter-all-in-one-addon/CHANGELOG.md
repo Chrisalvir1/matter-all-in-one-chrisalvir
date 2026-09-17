@@ -1,3 +1,19 @@
+## [1.5.98] - 2026-09-17
+
+### Corrección de Fragmentos RTSP (#gop=1), Tarjeta de Vinculación Apple Home y Optimización HAP Streaming
+
+- **Eliminación y Saneamiento de Fragmentos de URL (`#gop=1`, `#...`):**
+  - Camera.UI (go2rtc) genera internamente directivas de fragmento como `#gop=1` en sus URLs RTSP de restreaming.
+  - Al enviarse a FFmpeg, los fragmentos `#` causaban error `404 Stream Not Found` / `Invalid data` porque el servidor RTSP no reconocía la ruta `/tapo-c402#gop=1`.
+  - Se implementó el saneamiento automático de fragmentos `#` en `cameraui-client`, `cameraui-storage`, `cameraui-homekit-bridge` y `homekit-camera-stream.delegate`.
+- **Corrección Visual de Estado Vinculado en la UI:**
+  - En `CameraUiPairingModal`, al estar vinculada la cámara (`isPaired: true`), ahora se oculta el código QR y se muestra la tarjeta de confirmación `¡Cámara vinculada en Apple Home!` con el ícono colorido oficial de Apple Home, alineado con el resto del proyecto.
+  - El botón de acción cambia automáticamente a "Desvincular / Resetear HAP" con estilo de advertencia.
+  - En `CameraCard`, el badge muestra claramente `🍏 HAP Vinculado en Apple Home`.
+- **Optimización de Sockets RTSP:**
+  - Limpieza de flags incompatibles en streaming TCP (`-stimeout 5000000`, remoción de `-avioflags direct` y `-max_delay 0` que causaban cierres de conexión).
+  - Passthrough nativo de HEVC sin filtros bitstream incompatibles (`dump_extra` solo para H.264).
+
 ## [1.5.97] - 2026-09-17
 
 ### Corrección de Suite de Pruebas CI y Filtro de Bitstream Keyframe Passthrough

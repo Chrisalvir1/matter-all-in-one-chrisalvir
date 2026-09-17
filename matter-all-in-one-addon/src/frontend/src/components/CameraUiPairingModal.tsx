@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { CameraUiCameraItem } from "../types";
 import { api } from "../api/client";
-import { QRCodeDisplay } from "./QRCodeDisplay";
+import { QRCodeDisplay, AppleHomeModernIcon } from "./QRCodeDisplay";
 import { extractCameraBrand } from "./CameraCard";
 
 interface CameraUiPairingModalProps {
@@ -82,17 +82,68 @@ export const CameraUiPairingModal: React.FC<CameraUiPairingModalProps> = ({
         </header>
 
         <div style={{ marginTop: 16 }}>
-          {/* QR Code and Pairing Section */}
-          <div style={{ background: "rgba(0,0,0,0.25)", borderRadius: 12, padding: "16px", border: "1px solid rgba(255,255,255,0.08)" }}>
-            <QRCodeDisplay
-              pairingCode={setupUri}
-              pinCode={pin}
-              entityName={camera.name}
-              elementId={`cameraui-qr-${camera.id}`}
-              variant="hap-homekit"
-              noteText="Escanea con la app Casa en tu iPhone o iPad (HAP nativo Apple Home)"
-            />
-          </div>
+          {/* QR Code or Paired State Section */}
+          {camera.isPaired ? (
+            <div
+              className="paired-success-glass-card"
+              id="paired-camera-card"
+              style={{
+                textAlign: "center",
+                padding: "24px 16px",
+                background: "rgba(16, 185, 129, 0.08)",
+                border: "1px solid rgba(52, 211, 153, 0.3)",
+                borderRadius: 12,
+              }}
+            >
+              <div
+                className="paired-apple-home-badge"
+                style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}
+              >
+                <AppleHomeModernIcon variant="color" size={60} />
+              </div>
+              <h3
+                className="paired-card-title"
+                style={{
+                  fontSize: "1.15rem",
+                  fontWeight: 700,
+                  color: "#6ee7b7",
+                  margin: "0 0 8px 0",
+                }}
+              >
+                ¡Cámara vinculada en Apple Home!
+              </h3>
+              <p
+                className="paired-card-desc"
+                style={{
+                  color: "var(--dim)",
+                  fontSize: "0.85rem",
+                  maxWidth: 360,
+                  margin: "0 auto",
+                  lineHeight: 1.4,
+                }}
+              >
+                Esta cámara ya está configurada y emparejada en Apple Home para Live View HAP. El código QR se oculta para proteger la sesión activa.
+              </p>
+            </div>
+          ) : (
+            <div
+              style={{
+                background: "rgba(0,0,0,0.25)",
+                borderRadius: 12,
+                padding: "16px",
+                border: "1px solid rgba(255,255,255,0.08)",
+              }}
+            >
+              <QRCodeDisplay
+                pairingCode={setupUri}
+                pinCode={pin}
+                entityName={camera.name}
+                elementId={`cameraui-qr-${camera.id}`}
+                variant="hap-homekit"
+                noteText="Escanea con la app Casa en tu iPhone o iPad (HAP nativo Apple Home)"
+              />
+            </div>
+          )}
 
           {/* Architecture and Streaming Pipeline Specs */}
           <div
@@ -133,7 +184,7 @@ export const CameraUiPairingModal: React.FC<CameraUiPairingModalProps> = ({
 
             <div style={{ background: "rgba(0,0,0,0.2)", padding: "8px 10px", borderRadius: 6, marginTop: 2, wordBreak: "break-all" }}>
               <span style={{ color: "var(--dim)", display: "block", fontSize: "0.72rem" }}>ORIGEN RTSP DIRECTO</span>
-              <code>{camera.rtspUrl}</code>
+              <code>{(camera.rtspUrl || "").split("#")[0]}</code>
             </div>
 
             {(camera.motionTopic || camera.doorbellTopic) && (
@@ -155,16 +206,29 @@ export const CameraUiPairingModal: React.FC<CameraUiPairingModalProps> = ({
 
           {/* Footer Actions */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginTop: 16 }}>
-            <button
-              type="button"
-              className="button button-secondary"
-              onClick={handleResetPairing}
-              disabled={isResetting}
-              style={{ fontSize: "0.82rem" }}
-              title="Genera un nuevo identificador si Apple Home no detecta la cámara"
-            >
-              {isResetting ? "Restableciendo..." : "🔄 Restablecer PIN / Emparejamiento"}
-            </button>
+            {camera.isPaired ? (
+              <button
+                type="button"
+                className="button button-danger-outline button-sm"
+                onClick={handleResetPairing}
+                disabled={isResetting}
+                style={{ fontSize: "0.82rem" }}
+                title="Desvincula la cámara de Apple Home para poder emparejarla de nuevo"
+              >
+                {isResetting ? "Desvinculando..." : "Desvincular / Resetear HAP"}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="button button-secondary"
+                onClick={handleResetPairing}
+                disabled={isResetting}
+                style={{ fontSize: "0.82rem" }}
+                title="Genera un nuevo identificador si Apple Home no detecta la cámara"
+              >
+                {isResetting ? "Restableciendo..." : "🔄 Restablecer PIN / Emparejamiento"}
+              </button>
+            )}
 
             <div style={{ display: "flex", gap: 8 }}>
               <button

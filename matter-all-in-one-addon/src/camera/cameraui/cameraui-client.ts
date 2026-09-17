@@ -579,7 +579,13 @@ export class CameraUiClient {
       trimmed.startsWith("http://") ||
       trimmed.startsWith("https://")
     ) {
-      return trimmed;
+      // Strip URL fragments (#gop=1, #timeout=..., etc.) — RTSP does NOT support URL fragments
+      // and FFmpeg will fail with "Invalid data found when processing input" if they are present.
+      const hashIndex = trimmed.indexOf("#");
+      if (hashIndex !== -1) {
+        trimmed = trimmed.substring(0, hashIndex);
+      }
+      return trimmed || undefined;
     }
     return undefined;
   }

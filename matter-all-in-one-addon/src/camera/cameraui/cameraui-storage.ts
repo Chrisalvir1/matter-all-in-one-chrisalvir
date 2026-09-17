@@ -38,9 +38,23 @@ export class CameraUiStorage {
     try {
       const raw = await fs.readFile(target, "utf8");
       const parsed = JSON.parse(raw);
+      const cameras = Array.isArray(parsed.cameras)
+        ? parsed.cameras.map((cam: CameraUiCameraRecord) => {
+            if (cam.rtspUrl && cam.rtspUrl.includes("#")) {
+              cam.rtspUrl = cam.rtspUrl.substring(0, cam.rtspUrl.indexOf("#"));
+            }
+            if (cam.subRtspUrl && cam.subRtspUrl.includes("#")) {
+              cam.subRtspUrl = cam.subRtspUrl.substring(0, cam.subRtspUrl.indexOf("#"));
+            }
+            if (cam.snapshotUrl && cam.snapshotUrl.includes("#")) {
+              cam.snapshotUrl = cam.snapshotUrl.substring(0, cam.snapshotUrl.indexOf("#"));
+            }
+            return cam;
+          })
+        : [];
       this.cachedStore = {
         config: { ...this.getDefaultStore().config, ...(parsed.config || {}) },
-        cameras: Array.isArray(parsed.cameras) ? parsed.cameras : [],
+        cameras,
       };
       return this.cachedStore;
     } catch {

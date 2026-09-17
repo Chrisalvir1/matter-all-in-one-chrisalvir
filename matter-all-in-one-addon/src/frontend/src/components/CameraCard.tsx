@@ -191,7 +191,7 @@ export const CameraCard: React.FC<CameraCardProps> = ({
                   fontWeight: 600,
                 }}
               >
-                🍏 HAP Apple Home
+                🍏 HAP Vinculado en Apple Home
               </span>
             ) : (
               <span
