@@ -676,6 +676,14 @@ export class HomeKitCameraStreamingDelegate
         if (token) {
           args.push("-headers", `Authorization: Bearer ${token}\r\n`);
         }
+      } else if (this.streamSource.metadata?.scryptedToken) {
+        const sToken = String(this.streamSource.metadata.scryptedToken).trim();
+        if (sToken) {
+          args.push(
+            "-headers",
+            `Authorization: ${sToken.startsWith("Bearer ") ? sToken : `Bearer ${sToken}`}\r\n`,
+          );
+        }
       }
     }
     args.push("-i", sourceUrl);

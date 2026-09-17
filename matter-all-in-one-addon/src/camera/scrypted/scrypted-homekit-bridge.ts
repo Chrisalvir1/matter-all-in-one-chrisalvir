@@ -9,7 +9,9 @@ import type { CameraRecord, CameraSensorRecord } from "./scrypted-types.js";
 import {
   resolveDisplayModel,
   resolveDisplaySerialNumber,
+  ScryptedStorage,
 } from "./scrypted-storage.js";
+import { ScryptedCrypto } from "./scrypted-crypto.js";
 
 export class ScryptedHomeKitBridge {
   private static readonly activeAccessories = new Map<
@@ -98,8 +100,19 @@ export class ScryptedHomeKitBridge {
       (sensor: CameraSensorRecord) => sensor.type === "doorbell",
     );
 
+    let scryptedToken: string | undefined;
+    try {
+      const store = await ScryptedStorage.load();
+      if (store.scrypted?.credentials?.apiTokenEncrypted) {
+        scryptedToken = await ScryptedCrypto.decrypt(
+          store.scrypted.credentials.apiTokenEncrypted,
+          "scrypted_api_token",
+        );
+      }
+    } catch {}
+
     const source: ResolvedStreamSource = {
-      sourceType: directUrl ? "rtsp" : "unknown",
+      sourceType: directUrl?.startsWith("http") ? "hls" : "rtsp",
       url: directUrl,
       snapshotUrl: camera.source.snapshotReference?.directUrl,
       supportsPassthrough: Boolean(directUrl),
@@ -107,6 +120,7 @@ export class ScryptedHomeKitBridge {
       metadata: {
         isScrypted: true,
         scryptedCameraId: camera.cameraId,
+        scryptedToken,
         streamVerified: validationStatus === "verified",
         validationStatus,
         profiles: camera.source.profiles,

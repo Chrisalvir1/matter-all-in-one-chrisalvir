@@ -307,9 +307,12 @@ function mapDeviceToCameraRecord(
       ? discoveredDirectUrl
       : undefined;
 
+  const isHttpUrl =
+    validDirectUrl?.startsWith("http://") ||
+    validDirectUrl?.startsWith("https://");
   const streamReference: StreamReference | undefined = validDirectUrl
     ? {
-        protocol: "rtsp",
+        protocol: (isHttpUrl ? "https" : "rtsp") as any,
         directUrl: validDirectUrl,
         validationStatus: "not_checked",
       }
