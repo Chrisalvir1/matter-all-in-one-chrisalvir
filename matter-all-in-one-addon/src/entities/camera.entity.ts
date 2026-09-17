@@ -21,6 +21,7 @@ import type {
   ResolvedStreamSource,
   HomeKitCameraStorageRecord,
 } from "../camera/camera-types.js";
+import { NestCameraAdapter } from "../camera/nest/nest-camera-adapter.js";
 
 export const CameraAvStreamManagementId = 0x0551 as any as ClusterId;
 export const WebRtcTransportProviderId = 0x0553 as any as ClusterId;
@@ -113,6 +114,16 @@ export class CameraEntity extends BaseEntity {
     if (this.homekitAccessory) return this.homekitAccessory;
 
     const { capabilities, streamSource } = await this.refreshCapabilities();
+
+    if (NestCameraAdapter.isNestCamera(this.entityId, this.state)) {
+      const nestMeta = NestCameraAdapter.getNestMetadata(this.entityId, this.state);
+      if (!record.manufacturer || record.manufacturer === "Home Assistant" || record.manufacturer === "Matter all in one Chrisalvir") {
+        record.manufacturer = nestMeta.manufacturer;
+      }
+      if (!record.model || record.model === "Modelo no identificado" || record.model === "Camera") {
+        record.model = nestMeta.model;
+      }
+    }
 
     this.homekitAccessory = new HomeKitCameraAccessory(
       this.platform,

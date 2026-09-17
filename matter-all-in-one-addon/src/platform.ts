@@ -63,6 +63,7 @@ import { CameraUiClient } from "./camera/cameraui/cameraui-client.js";
 import { CameraUiHomeKitBridge } from "./camera/cameraui/cameraui-homekit-bridge.js";
 import type { CameraRealEntity } from "./camera/cameraui/cameraui-types.js";
 import { sanitizeUrlCredentials } from "./camera/homekit/ffmpeg-helper.js";
+import { CameraAiDetector } from "./camera/ai/camera-ai-detector.js";
 
 export interface HomeAssistantPlatformConfig extends PlatformConfig {
   host?: string; // Optional: auto-detected from network/supervisor if not set
@@ -244,6 +245,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       this.log.debug("No homekit-cameras.json found, starting fresh.");
     }
   }
+
+  public cameraAiDetector!: CameraAiDetector;
 
   private scryptedInitialized = false;
 
@@ -1628,6 +1631,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     this.ha.on("event", (_deviceId, entityId, _oldState, newState) => {
       if (newState) {
         this.handleEntityStateChange(entityId, newState);
+        this.cameraAiDetector?.handleHaStateChange(this, entityId, newState);
       }
     });
 
@@ -1667,6 +1671,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     await this.loadHomeKitCameraRecords();
     void this.initScrypted();
     void this.initCameraUi();
+    this.cameraAiDetector = CameraAiDetector.getInstance(
+      fsSync.existsSync("/data") ? "/data" : "./persist",
+    );
 
     // Load MQTT Config if exists
     try {
@@ -6110,6 +6117,48 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             });
             res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
             res.end(JSON.stringify({ success: true, entityId, state: newState }));
+          } catch (err: any) {
+            res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
+            res.end(JSON.stringify({ success: false, error: err.message }));
+          }
+          return;
+        }
+
+        if (
+          req.method === "GET" &&
+          (pathname === "/api/cameras/ai-config" ||
+            pathname === "/api/custom/cameras/ai-config")
+        ) {
+          const cameraId = urlObj.searchParams.get("cameraId");
+          if (!cameraId) {
+            res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
+            res.end(JSON.stringify({ success: false, error: "cameraId requerido" }));
+            return;
+          }
+          const config = this.cameraAiDetector.getConfig(cameraId);
+          const active = this.cameraAiDetector.getActiveDetection(cameraId);
+          res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+          res.end(JSON.stringify({ success: true, config, active }));
+          return;
+        }
+
+        if (
+          req.method === "POST" &&
+          (pathname === "/api/cameras/ai-config" ||
+            pathname === "/api/custom/cameras/ai-config")
+        ) {
+          try {
+            const rawBody = await this.readRequestBody(req);
+            const body = rawBody ? JSON.parse(rawBody) : {};
+            const { cameraId, config } = body;
+            if (!cameraId) {
+              res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
+              res.end(JSON.stringify({ success: false, error: "cameraId requerido" }));
+              return;
+            }
+            const updated = this.cameraAiDetector.setConfig(cameraId, config || {});
+            res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+            res.end(JSON.stringify({ success: true, config: updated }));
           } catch (err: any) {
             res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
             res.end(JSON.stringify({ success: false, error: err.message }));

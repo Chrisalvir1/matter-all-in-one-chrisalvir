@@ -148,7 +148,8 @@ export function detectCameraCapabilities(
     // response as H.264 produces an invalid RTP stream for Apple Home.
   } else if (
     videoCodec === "h264" &&
-    resolvedSource?.sourceType !== "ha_proxy"
+    resolvedSource?.sourceType !== "ha_proxy" &&
+    !resolvedSource?.url?.includes("/api/camera_proxy")
   ) {
     if (hasAudio && audioCodec !== "incompatible" && audioCodec !== "none") {
       strategy = "passthrough_h264";

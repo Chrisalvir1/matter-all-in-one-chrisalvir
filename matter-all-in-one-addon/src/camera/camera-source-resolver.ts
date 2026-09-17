@@ -4,6 +4,7 @@ import {
   sanitizeUrlCredentials,
   probeCameraSource,
 } from "./homekit/ffmpeg-helper.js";
+import { isCameraStreamReachable } from "./cameraui/cameraui-client.js";
 
 export class CameraSourceResolver {
   /**
@@ -95,8 +96,36 @@ export class CameraSourceResolver {
 
     if (attrs.frontend_stream_type === "webrtc") {
       platform?.log?.debug?.(
-        `[CameraSourceResolver][${entityId}] Camera frontend_stream_type is webrtc`,
+        `[CameraSourceResolver][${entityId}] Camera frontend_stream_type is webrtc (Google Nest / WebRTC)`,
       );
+
+      // Check if go2rtc is running in Home Assistant exposing an RTSP bridge
+      const rawName = entityId.replace(/^camera\./, "");
+      const go2rtcCandidates = [
+        `rtsp://127.0.0.1:8554/${entityId}`,
+        `rtsp://127.0.0.1:8554/${rawName}`,
+      ];
+
+      for (const candidate of go2rtcCandidates) {
+        try {
+          const reachable = await isCameraStreamReachable(candidate, 800);
+          if (reachable) {
+            platform?.log?.notice?.(
+              `[CameraSourceResolver][${entityId}] Connected to Go2rtc local RTSP bridge: ${candidate}`,
+            );
+            return {
+              sourceType: "rtsp",
+              url: candidate,
+              snapshotUrl,
+              supportsPassthrough: true,
+              requiresBridge: false,
+              metadata: { isGo2rtc: true, isNest: entityId.includes("nest") },
+            };
+          }
+        } catch {}
+      }
+
+      // HA Camera continuous proxy stream fallback
       const fallbackProxyUrl = platform?.ha?.getCameraProxyStreamUrl?.(entityId);
       return {
         sourceType: "webrtc",
@@ -104,6 +133,7 @@ export class CameraSourceResolver {
         snapshotUrl,
         supportsPassthrough: true,
         requiresBridge: false,
+        metadata: { isNest: entityId.includes("nest"), frontendStreamType: "webrtc" },
       };
     }
 

@@ -33,7 +33,7 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
   onRefresh,
   showToast,
 }) => {
-  const [activeTab, setActiveTab] = useState<"homekit" | "matter">("homekit");
+  const [activeTab, setActiveTab] = useState<"homekit" | "matter" | "ai">("homekit");
   const [rtspUrl, setRtspUrl] = useState("");
   const [transport, setTransport] = useState<"tcp" | "udp">("tcp");
   const [isVerifying, setIsVerifying] = useState(false);
@@ -54,6 +54,22 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
     Record<string, { pairingCode: string; manualCode?: string }>
   >({});
   const [isGeneratingEntityMatter, setIsGeneratingEntityMatter] = useState<Record<string, boolean>>({});
+  const [aiConfig, setAiConfig] = useState<{
+    enabled: boolean;
+    targets: string[];
+    sensitivity: number;
+    motionTimeoutSeconds: number;
+    publishMqtt: boolean;
+    mqttTopic?: string;
+  }>({
+    enabled: true,
+    targets: ["person", "dog", "cat", "bird", "raccoon", "snake", "spider"],
+    sensitivity: 85,
+    motionTimeoutSeconds: 15,
+    publishMqtt: true,
+  });
+  const [activeAiDetection, setActiveAiDetection] = useState<any>(null);
+  const [isSavingAi, setIsSavingAi] = useState(false);
 
   const isCameraUi = Boolean(camera && ("id" in camera && !("cameraId" in camera)));
   const cameraId = camera ? ("cameraId" in camera ? camera.cameraId : camera.id) : "";
@@ -142,7 +158,33 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
         });
       }
     }
+
+    if (cameraId) {
+      api.getCameraAiConfig(cameraId)
+        .then((res) => {
+          if (res?.config) setAiConfig(res.config);
+          if (res?.active) setActiveAiDetection(res.active);
+        })
+        .catch(() => {});
+    }
   }, [cameraId, isCameraUi]);
+
+  const handleSaveAiConfig = async () => {
+    if (!cameraId) return;
+    setIsSavingAi(true);
+    try {
+      const res = await api.saveCameraAiConfig(cameraId, aiConfig);
+      if (res?.success) {
+        showToast("✓ Configuración de IA guardada correctamente");
+      } else {
+        showToast("Error al guardar configuración de IA", true);
+      }
+    } catch {
+      showToast("Error al conectar con el servidor", true);
+    } finally {
+      setIsSavingAi(false);
+    }
+  };
 
   if (!camera) return null;
 
@@ -667,9 +709,135 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
               >
                 Matter 1.6
               </button>
+              <button
+                className={`button button-sm ${activeTab === "ai" ? "button-primary" : "button-secondary"}`}
+                type="button"
+                onClick={() => setActiveTab("ai")}
+              >
+                🧠 IA & Fauna
+              </button>
             </div>
 
-            {activeTab === "matter" ? (
+            {activeTab === "ai" ? (
+              <div className="card" style={{ padding: 16 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                  <h4 style={{ margin: 0, fontSize: "0.95rem", color: "#38bdf8" }}>
+                    🧠 Detección IA Local
+                  </h4>
+                  <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: "0.85rem" }}>
+                    <input
+                      type="checkbox"
+                      checked={aiConfig.enabled}
+                      onChange={(e) => setAiConfig({ ...aiConfig, enabled: e.target.checked })}
+                    />
+                    <span>{aiConfig.enabled ? "Activa" : "Inactiva"}</span>
+                  </label>
+                </div>
+
+                <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: 14 }}>
+                  Clasificación y detección local de personas y fauna sin compilar módulos C++ pesados.
+                </p>
+
+                {activeAiDetection && (
+                  <div style={{ background: "rgba(56, 189, 248, 0.15)", border: "1px solid rgba(56, 189, 248, 0.3)", borderRadius: 8, padding: 10, marginBottom: 14 }}>
+                    <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "#38bdf8" }}>
+                      🚨 Detección Activa
+                    </div>
+                    <div style={{ fontSize: "0.8rem", marginTop: 4 }}>
+                      {activeAiDetection.labels?.join(", ")} ({(activeAiDetection.confidence * 100).toFixed(0)}%)
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ marginBottom: 14 }}>
+                  <label style={{ fontSize: "0.8rem", fontWeight: 600, display: "block", marginBottom: 6 }}>
+                    Objetivos de Detección:
+                  </label>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                    {[
+                      { id: "person", label: "👤 Persona" },
+                      { id: "dog", label: "🐶 Perro" },
+                      { id: "cat", label: "🐱 Gato" },
+                      { id: "bird", label: "🦜 Ave" },
+                      { id: "raccoon", label: "🦝 Mapache" },
+                      { id: "snake", label: "🐍 Serpiente" },
+                      { id: "spider", label: "🕷️ Araña" },
+                    ].map((t) => {
+                      const isChecked = aiConfig.targets.includes(t.id);
+                      return (
+                        <label
+                          key={t.id}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                            padding: "6px 10px",
+                            borderRadius: 6,
+                            background: isChecked ? "rgba(56, 189, 248, 0.1)" : "rgba(255,255,255,0.03)",
+                            border: `1px solid ${isChecked ? "rgba(56, 189, 248, 0.3)" : "rgba(255,255,255,0.08)"}`,
+                            cursor: "pointer",
+                            fontSize: "0.85rem",
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              const newTargets = e.target.checked
+                                ? [...aiConfig.targets, t.id]
+                                : aiConfig.targets.filter((x) => x !== t.id);
+                              setAiConfig({ ...aiConfig, targets: newTargets });
+                            }}
+                          />
+                          <span>{t.label}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", marginBottom: 4 }}>
+                    <span>Sensibilidad:</span>
+                    <span style={{ fontWeight: 600, color: "#38bdf8" }}>{aiConfig.sensitivity}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={50}
+                    max={95}
+                    value={aiConfig.sensitivity}
+                    onChange={(e) => setAiConfig({ ...aiConfig, sensitivity: Number(e.target.value) })}
+                    style={{ width: "100%" }}
+                  />
+                </div>
+
+                <div style={{ marginBottom: 14 }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: "0.85rem" }}>
+                    <input
+                      type="checkbox"
+                      checked={aiConfig.publishMqtt}
+                      onChange={(e) => setAiConfig({ ...aiConfig, publishMqtt: e.target.checked })}
+                    />
+                    <span>📡 Publicar eventos en broker MQTT</span>
+                  </label>
+                  {aiConfig.publishMqtt && (
+                    <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: 4, paddingLeft: 24 }}>
+                      Tópico: <code>{aiConfig.mqttTopic || `matter-all-in-one/ai/${cameraId.replace(/[^a-zA-Z0-9_]/g, "_")}/detection`}</code>
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  className="button button-primary"
+                  type="button"
+                  style={{ width: "100%", marginTop: 8 }}
+                  onClick={handleSaveAiConfig}
+                  disabled={isSavingAi}
+                >
+                  {isSavingAi ? "Guardando..." : "💾 Guardar Configuración de IA"}
+                </button>
+              </div>
+            ) : activeTab === "matter" ? (
               isMatterCommissioned && !multiAdminOpen ? (
                 <div className="paired-success-glass-card" id="paired-camera-matter-card">
                   <div className="paired-apple-home-badge">

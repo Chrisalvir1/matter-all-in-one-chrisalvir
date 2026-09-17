@@ -31,7 +31,8 @@ import os from "node:os";
 import { ScryptedStorage } from "../scrypted/scrypted-storage.js";
 import type { CameraRecord } from "../scrypted/scrypted-types.js";
 import { CameraUiStorage } from "../cameraui/cameraui-storage.js";
-import { probeCameraSource } from "./ffmpeg-helper.js";
+import { probeCameraSource, supportsFdkAac } from "./ffmpeg-helper.js";
+import { NestCameraAdapter } from "../nest/nest-camera-adapter.js";
 
 export class HomeKitCameraAccessory {
   public accessory: Accessory;
@@ -192,6 +193,30 @@ export class HomeKitCameraAccessory {
 
   private buildControllerOptions(): CameraControllerOptions {
     const isStreamingUsable = Boolean(this.streamSource.url);
+    const hasFdk = supportsFdkAac();
+    const audioCodecs = [
+      {
+        type: AudioStreamingCodecType.OPUS,
+        samplerate: AudioStreamingSamplerate.KHZ_16,
+      },
+      {
+        type: AudioStreamingCodecType.OPUS,
+        samplerate: AudioStreamingSamplerate.KHZ_24,
+      },
+      ...(hasFdk
+        ? [
+            {
+              type: AudioStreamingCodecType.AAC_ELD,
+              samplerate: AudioStreamingSamplerate.KHZ_16,
+            },
+            {
+              type: AudioStreamingCodecType.AAC_ELD,
+              samplerate: AudioStreamingSamplerate.KHZ_24,
+            },
+          ]
+        : []),
+    ];
+
     const options: CameraControllerOptions = {
       cameraStreamCount: 2,
       delegate: this.delegate,
@@ -205,16 +230,7 @@ export class HomeKitCameraAccessory {
           resolutions: this.buildDeclaredResolutions(),
         },
         audio: {
-          codecs: [
-            {
-              type: AudioStreamingCodecType.OPUS,
-              samplerate: AudioStreamingSamplerate.KHZ_16,
-            },
-            {
-              type: AudioStreamingCodecType.AAC_ELD,
-              samplerate: AudioStreamingSamplerate.KHZ_16,
-            },
-          ],
+          codecs: audioCodecs,
         },
       },
       sensors: this.motionService ? { motion: this.motionService } : undefined,
@@ -390,6 +406,15 @@ export class HomeKitCameraAccessory {
         result.doorbell = entityId;
       }
     }
+
+    // Correlate Google Nest companion sensors (Person, Doorbell, Sound)
+    if (NestCameraAdapter.isNestCamera(this.entityId, states.get(this.entityId))) {
+      const nestEntities = NestCameraAdapter.findLinkedNestEntities(this.platform, this.entityId);
+      if (nestEntities.motion && !result.motion) result.motion = nestEntities.motion;
+      if (nestEntities.person && !result.motion) result.motion = nestEntities.person;
+      if (nestEntities.doorbell && !result.doorbell) result.doorbell = nestEntities.doorbell;
+    }
+
     return result;
   }
 

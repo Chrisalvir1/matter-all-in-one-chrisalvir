@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import fsSync from "node:fs";
 import {
   AudioStreamingCodecType,
+  AudioStreamingSamplerate,
   CameraController,
   CameraStreamingDelegate,
   H264Level,
@@ -462,6 +463,8 @@ export class HomeKitCameraStreamingDelegate
     if (hashIdx !== -1) {
       url = url.substring(0, hashIdx);
     }
+    // Replace localhost with 127.0.0.1 to avoid IPv6 connection issues in FFmpeg
+    url = url.replace(/^(rtsps?|https?):\/\/localhost(?=[:/])/i, "$1://127.0.0.1");
     return url;
   }
 
@@ -553,7 +556,7 @@ export class HomeKitCameraStreamingDelegate
         } else {
           settle(new Error("FFmpeg exited during HAP startup"));
         }
-      }, 600);
+      }, 1000);
       process.once("error", (error) => {
         clearTimeout(guard);
         settle(error);
@@ -658,7 +661,14 @@ export class HomeKitCameraStreamingDelegate
       if (sourceUrl.startsWith("https://")) {
         args.push("-tls_verify", "0");
       }
-      const isHaProxy = this.streamSource.sourceType === "ha_proxy";
+      const isHaProxy =
+        this.streamSource.sourceType === "ha_proxy" ||
+        this.streamSource.sourceType === "mjpeg" ||
+        Boolean(
+          this.streamSource.url &&
+            (this.streamSource.url.includes("/api/camera_proxy") ||
+              this.streamSource.url.includes("/api/camera_proxy_stream")),
+        );
       if (isHaProxy) {
         const token =
           this.platform?.ha?.getAccessToken?.() ||
@@ -677,23 +687,29 @@ export class HomeKitCameraStreamingDelegate
       session.audioSsrc &&
       session.audioKeySalt
     );
-    const isHaProxy =
-      (this.streamSource.sourceType === "ha_proxy" ||
-        this.streamSource.sourceType === "mjpeg") &&
+    const isHaProxyStream =
+      this.streamSource.sourceType === "ha_proxy" ||
+      this.streamSource.sourceType === "mjpeg" ||
       Boolean(
         this.streamSource.url &&
-          this.streamSource.url.includes("/api/camera_proxy_stream/"),
+          (this.streamSource.url.includes("/api/camera_proxy_stream/") ||
+            this.streamSource.url.includes("/api/camera_proxy/")),
       );
     const needsSilentAudio =
       hasAudioRequested &&
-      (isHaProxy || this.capabilities.hasAudio === false);
+      (isHaProxyStream || this.capabilities.hasAudio === false);
+
+    const sampleRate =
+      request.audio?.sample_rate === AudioStreamingSamplerate.KHZ_24
+        ? 24000
+        : 16000;
 
     if (needsSilentAudio) {
       args.push(
         "-f",
         "lavfi",
         "-i",
-        "anullsrc=channel_layout=mono:sample_rate=16000",
+        `anullsrc=channel_layout=mono:sample_rate=${sampleRate}`,
       );
     }
 
@@ -817,7 +833,7 @@ export class HomeKitCameraStreamingDelegate
       } else {
         args.push(
           "-map",
-          "0:a:0",
+          "0:a:0?",
           "-vn",
           "-af",
           "aresample=async=1:first_pts=0,volume=2.5",
@@ -830,21 +846,36 @@ export class HomeKitCameraStreamingDelegate
           "libopus",
           "-application",
           "lowdelay",
+          "-frame_duration",
+          "20",
+          "-packet_loss",
+          "5",
+        );
+      } else if (hasFdk) {
+        args.push(
+          "-c:a",
+          "libfdk_aac",
+          "-profile:a",
+          "aac_eld",
+          "-flags",
+          "+global_header",
         );
       } else {
         args.push(
           "-c:a",
-          hasFdk ? "libfdk_aac" : "aac",
-          "-profile:a",
-          hasFdk ? "aac_eld" : "aac_low",
-          "-flags",
-          "+global_header",
+          "libopus",
+          "-application",
+          "lowdelay",
+          "-frame_duration",
+          "20",
+          "-packet_loss",
+          "5",
         );
       }
 
       args.push(
         "-ar",
-        "16000",
+        String(sampleRate),
         "-ac",
         "1",
         "-b:a",

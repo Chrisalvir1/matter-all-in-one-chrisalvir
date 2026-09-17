@@ -127,3 +127,30 @@ export interface CameraActivationResult {
   warnings: string[];
   error?: string;
 }
+
+export type CameraAiTarget =
+  | "person"
+  | "dog"
+  | "cat"
+  | "bird"
+  | "raccoon"
+  | "snake"
+  | "spider";
+
+export interface CameraAiDetectionEvent {
+  cameraId: string;
+  timestamp: number;
+  targets: CameraAiTarget[];
+  labels: string[];
+  confidence: number;
+  rawDetails?: string;
+}
+
+export interface CameraAiConfig {
+  enabled: boolean;
+  targets: CameraAiTarget[];
+  sensitivity: number;
+  motionTimeoutSeconds: number;
+  publishMqtt: boolean;
+  mqttTopic?: string;
+}

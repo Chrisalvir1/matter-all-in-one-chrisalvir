@@ -22,6 +22,7 @@ export function extractCameraBrand(item: CameraRecord | DeviceRecord | CameraUiC
     "Hikvision",
     "Dahua",
     "Aqara",
+    "Google",
     "Nest",
     "Ring",
     "UniFi",

@@ -119,6 +119,20 @@ export const api = {
       }
     ),
 
+  getCameraAiConfig: (cameraId: string) =>
+    request<{ success: boolean; config: any; active?: any; error?: string }>(
+      `/cameras/ai-config?cameraId=${encodeURIComponent(cameraId)}`
+    ),
+
+  saveCameraAiConfig: (cameraId: string, config: any) =>
+    request<{ success: boolean; config: any; error?: string }>(
+      `/cameras/ai-config`,
+      {
+        method: "POST",
+        body: JSON.stringify({ cameraId, config }),
+      }
+    ),
+
   removeCamera: (cameraId: string) =>
     request(`/cameras/${encodeURIComponent(cameraId)}`, { method: "DELETE" }),
 
