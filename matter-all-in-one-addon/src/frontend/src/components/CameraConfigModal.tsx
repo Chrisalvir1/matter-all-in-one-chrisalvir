@@ -112,7 +112,7 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
       : freshMatterCode || camera.identity?.matterPairingCode || "";
 
   const brand = extractCameraBrand(camera);
-  const isOnline = camera.status?.connection === "online" || camera.status?.isOnline !== false;
+  const isOnline = camera.status?.connection === "online" && camera.status?.isOnline === true;
   const modelDisplay = camera.displayModel || camera.model || "Modelo no identificado";
 
   const handleSaveModel = async (newModel?: string) => {

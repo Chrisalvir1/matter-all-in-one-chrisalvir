@@ -381,6 +381,7 @@ export interface CameraRecord {
 
   status: {
     connection: "online" | "offline" | "unknown";
+    isOnline?: boolean;
     cache: "fresh" | "stale" | "unverified" | "source_missing";
     lastFetched?: string;
     lastVerified?: string;

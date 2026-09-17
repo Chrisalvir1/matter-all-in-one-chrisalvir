@@ -255,7 +255,11 @@ export function useAddonState() {
       );
     }).length;
 
-    const issues = issuesDevices + issuesCameras;
+    const issuesCameraUi = cameraUiCameras.filter((c) => {
+      return c.homeKitEnabled !== false && c.status === "offline";
+    }).length;
+
+    const issues = issuesDevices + issuesCameras + issuesCameraUi;
 
     return {
       totalDevices: iotDevices + totalCameras,

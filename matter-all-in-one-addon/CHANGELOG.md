@@ -1,3 +1,20 @@
+## [1.5.99] - 2026-09-17
+
+### Detección Real de Estado En Línea / Desconectada para Scrypted y Camera.UI
+
+- **Monitor de Liveness y Heartbeat Activo para Scrypted:**
+  - Se implementó un heartbeat periódico en `ScryptedReconnectManager` (cada 25 segundos) que sondea el servidor Scrypted.
+  - Si el servidor Scrypted es detenido o apagado, la conexión pasa inmediatamente a `disconnected_using_cache` y todas las cámaras asociadas cambian de `🟢 En línea` a `🔴 Desconectada` tanto en la UI web como en la API REST.
+  - Al encender o reiniciar Scrypted, el reconector restablece la sesión automáticamente y devuelve las cámaras a `🟢 En línea`.
+- **Monitor de Liveness y Conexión en Tiempo Real para Camera.UI:**
+  - Se creó un monitor de salud en segundo plano en `platform.ts` (`cameraUiHealthMonitor`) que sondea la disponibilidad de Camera.UI cada 30 segundos.
+  - Almacena y actualiza el campo `connectionStatus` (`connected` o `disconnected`) en `CameraUiStorage`.
+  - Si el servicio de Camera.UI se detiene o se apaga, sus cámaras se marcan inmediatamente como `🔴 Desconectada` (o `⚪ Desactivada` si el usuario deshabilitó HomeKit para esa cámara).
+- **Corrección de Lógica de Estado en la Interfaz de Usuario:**
+  - En `CameraCard.tsx` y `CameraConfigModal.tsx`, se corrigió la evaluación de `isOnline`: ahora requiere que el servidor esté conectado y que el dispositivo esté efectivamente en línea (`connection === "online" && isOnline === true`), eliminando la condición permisiva previa que mostraba cámaras apagadas como "En línea".
+  - En `CameraUiPairingModal.tsx`, se añadió la insignia de estado de conexión (`🟢 En línea`, `🔴 Desconectada` o `⚪ Desactivada`) en la cabecera.
+  - Contador de problemas (`issues`) en `useAddonState.ts` actualizado para incluir cámaras de Camera.UI desconectadas.
+
 ## [1.5.98] - 2026-09-17
 
 ### Corrección de Fragmentos RTSP (#gop=1), Tarjeta de Vinculación Apple Home y Optimización HAP Streaming

@@ -13,6 +13,7 @@ export interface CameraUiConfig {
   pollIntervalSeconds?: number;
   lastSyncedAt?: string;
   lastError?: string;
+  connectionStatus?: "connected" | "disconnected" | "error";
 }
 
 export interface CameraUiCameraRecord {

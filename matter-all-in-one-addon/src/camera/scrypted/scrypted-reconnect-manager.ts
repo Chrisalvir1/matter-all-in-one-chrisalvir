@@ -15,6 +15,7 @@ export class ScryptedReconnectManager extends EventEmitter {
   private activeSession: ScryptedSession | null = null;
   private authFailedPermanent = false;
   private eventListenerRegister: any = null;
+  private heartbeatTimer: NodeJS.Timeout | null = null;
 
   private constructor() {
     super();
@@ -170,6 +171,7 @@ export class ScryptedReconnectManager extends EventEmitter {
         // Refresh camera states in background
         await this.refreshCameras(session);
         this.setupLiveEventListeners(session);
+        this.startHeartbeat();
         this.schedulePeriodicPolling(store.scrypted.pollIntervalMinutes);
         this.inFlightCheck = false;
         return true;
@@ -277,6 +279,7 @@ export class ScryptedReconnectManager extends EventEmitter {
 
     await ScryptedStorage.updateConnectionStatus("connected");
     const count = await this.refreshCameras(session);
+    this.startHeartbeat();
     this.emitStatus(
       "connected",
       `Sincronización completada (${count} cámaras).`,
@@ -379,7 +382,47 @@ export class ScryptedReconnectManager extends EventEmitter {
     }
   }
 
+  private startHeartbeat(): void {
+    if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
+    this.heartbeatTimer = setInterval(async () => {
+      if (!this.activeSession || this.inFlightCheck) return;
+      try {
+        const store = await ScryptedStorage.load();
+        const serverUrl = store.scrypted.serverUrl;
+        if (!serverUrl) return;
+        const res = await fetch(
+          `${serverUrl.replace(/\/+$/, "")}/endpoint/@scrypted/core/public/`,
+          {
+            method: "GET",
+            signal: AbortSignal.timeout(3500),
+          },
+        );
+        if (!res.ok && res.status >= 500) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+      } catch {
+        // Scrypted server is down, stopped, or unreachable!
+        if (this.heartbeatTimer) {
+          clearInterval(this.heartbeatTimer);
+          this.heartbeatTimer = null;
+        }
+        if (this.activeSession) {
+          void ScryptedClient.disconnect(this.activeSession);
+          this.activeSession = null;
+        }
+        await ScryptedStorage.updateConnectionStatus("disconnected_using_cache");
+        this.emitStatus(
+          "disconnected_using_cache",
+          "Scrypted no responde (servidor detenido o apagado).",
+        );
+        this.scheduleNextRetry();
+      }
+    }, 25000);
+  }
+
   public destroy(): void {
+    if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
+    this.heartbeatTimer = null;
     if (this.retryTimer) clearTimeout(this.retryTimer);
     if (this.pollTimer) clearInterval(this.pollTimer);
     this.retryTimer = null;

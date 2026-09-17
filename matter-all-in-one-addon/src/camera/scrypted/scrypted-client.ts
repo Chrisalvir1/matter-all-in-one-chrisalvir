@@ -353,7 +353,16 @@ function mapDeviceToCameraRecord(
       nasEnabled: false,
     },
     status: {
-      connection: "online",
+      connection:
+        typeof unwrapScryptedValue(device.online) === "boolean"
+          ? unwrapScryptedValue(device.online)
+            ? "online"
+            : "offline"
+          : "online",
+      isOnline:
+        typeof unwrapScryptedValue(device.online) === "boolean"
+          ? Boolean(unwrapScryptedValue(device.online))
+          : true,
       cache: "unverified",
       lastFetched: new Date().toISOString(),
     },

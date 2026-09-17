@@ -73,6 +73,28 @@ export const CameraUiPairingModal: React.FC<CameraUiPairingModalProps> = ({
               >
                 {camera.isPaired ? "🍏 HAP Vinculado en Apple Home" : "⏳ Listo para Vincular"}
               </span>
+              <span
+                className="tag"
+                style={{
+                  fontSize: "0.7rem",
+                  background: (camera.status === "online" && camera.homeKitEnabled !== false)
+                    ? "rgba(16, 185, 129, 0.2)"
+                    : "rgba(239, 68, 68, 0.2)",
+                  color: (camera.status === "online" && camera.homeKitEnabled !== false)
+                    ? "#6ee7b7"
+                    : "#fca5a5",
+                  border: (camera.status === "online" && camera.homeKitEnabled !== false)
+                    ? "1px solid rgba(52, 211, 153, 0.4)"
+                    : "1px solid rgba(239, 68, 68, 0.4)",
+                  fontWeight: 600,
+                }}
+              >
+                {(camera.status === "online" && camera.homeKitEnabled !== false)
+                  ? "🟢 En línea"
+                  : camera.homeKitEnabled === false
+                    ? "⚪ Desactivada"
+                    : "🔴 Desconectada"}
+              </span>
             </div>
             <h2>{camera.name}</h2>
             <p className="entity-id">

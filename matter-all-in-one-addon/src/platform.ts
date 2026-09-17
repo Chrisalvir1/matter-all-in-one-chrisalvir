@@ -843,6 +843,34 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     );
   }
 
+  private cameraUiHealthMonitor: NodeJS.Timeout | null = null;
+
+  private startCameraUiHealthMonitor(): void {
+    if (this.cameraUiHealthMonitor) return;
+    const checkLiveness = async () => {
+      try {
+        const store = await CameraUiStorage.load();
+        if (!store.config.enabled || !store.config.serverUrl) return;
+        const client = new CameraUiClient(store.config);
+        const test = await client.testConnection();
+        const prevStatus = store.config.connectionStatus;
+        const nextStatus = test.ok ? "connected" : "disconnected";
+        if (prevStatus !== nextStatus) {
+          await CameraUiStorage.updateConnectionStatus(
+            nextStatus,
+            test.ok ? undefined : test.message,
+          );
+          this.broadcastSseMessage("cameraui_updated", {
+            connectionStatus: nextStatus,
+          });
+        }
+      } catch {}
+    };
+
+    setTimeout(() => void checkLiveness(), 4000);
+    this.cameraUiHealthMonitor = setInterval(() => void checkLiveness(), 30_000);
+  }
+
   /**
    * Resolve the live Matter node for an entity. During the migration from
    * per-entity exports to one physical-device export, an existing legacy node
@@ -1476,6 +1504,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     await this.loadEntityDiagnostics();
     await this.startUiServer();
     this.startMatterConnectionMonitor();
+    this.startCameraUiHealthMonitor();
 
     // Ensure HAP persistent storage path is /data/hap-persist before mounting any cameras
     try {
@@ -4885,6 +4914,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             (this.ha as any)?.hassConfig?.location_name ||
             undefined;
 
+          const isScryptedServerConnected =
+            store.scrypted.connectionStatus === "connected";
+
           const enriched = (store.cameras.cameras || []).map((cam) => {
             const acc = ScryptedHomeKitBridge.getAccessory(cam.cameraId);
             let setupUri: string | undefined;
@@ -4900,6 +4932,15 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             } catch {}
 
             const isPaired = pairingState === "paired";
+            const isCamOnline = isScryptedServerConnected && cam.status?.isOnline === true;
+            const liveStatus = {
+              ...cam.status,
+              connection: isCamOnline ? ("online" as const) : ("offline" as const),
+              isOnline: isCamOnline,
+              lastError: isScryptedServerConnected
+                ? cam.status?.lastError
+                : "Servidor Scrypted apagado o sin conexión",
+            };
 
             const bindingState = {
               matterCommissioned: matterInfo.commissioned,
@@ -4938,6 +4979,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
             return {
               ...cam,
+              status: liveStatus,
               displaySerialNumber:
                 cam.displaySerialNumber ||
                 cam.serialNumber ||
@@ -5625,6 +5667,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               pollIntervalSeconds: store.config.pollIntervalSeconds || 300,
               lastSyncedAt: store.config.lastSyncedAt || null,
               lastError: store.config.lastError || null,
+              connectionStatus:
+                store.config.connectionStatus ||
+                (store.config.enabled ? "disconnected" : "disabled"),
             }),
           );
           return;
@@ -5747,7 +5792,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             const discovered = await client.fetchCameras();
             const previousIds = new Set(store.cameras.map((c) => c.id));
 
-            const updatedStore = await CameraUiStorage.mergeDiscoveredCameras(discovered);
+            await CameraUiStorage.mergeDiscoveredCameras(discovered);
+            const updatedStore = await CameraUiStorage.updateConnectionStatus("connected");
 
             for (const camera of updatedStore.cameras) {
               if (camera.homeKitEnabled) {
@@ -5769,7 +5815,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             });
 
             const newCameras = currentCameras.filter((c) => !previousIds.has(c.id)).length;
-            this.broadcastSseMessage("cameraui_updated", { cameras: currentCameras });
+            this.broadcastSseMessage("cameraui_updated", { cameras: currentCameras, connectionStatus: "connected" });
 
             res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
             res.end(
@@ -5781,6 +5827,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               }),
             );
           } catch (err: any) {
+            await CameraUiStorage.updateConnectionStatus("disconnected", err.message);
+            this.broadcastSseMessage("cameraui_updated", { connectionStatus: "disconnected" });
             res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
             res.end(JSON.stringify({ success: false, error: err.message || "Error al sincronizar cámaras de Camera.UI" }));
           }
@@ -5793,11 +5841,17 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             pathname === "/api/custom/cameraui/cameras")
         ) {
           const store = await CameraUiStorage.load();
+          const isCameraUiServerConnected =
+            store.config.enabled && store.config.connectionStatus === "connected";
           const enriched = store.cameras.map((cam) => {
             const acc = CameraUiHomeKitBridge.getAccessory(cam.id);
             const livePaired = acc ? acc.isPaired() : (cam.isPaired ?? false);
+            const effectiveStatus = isCameraUiServerConnected
+              ? (cam.status || "online")
+              : "offline";
             return {
               ...cam,
+              status: effectiveStatus,
               setupUri: acc?.setupUri || cam.setupUri,
               isPaired: livePaired,
               port: acc?.record?.port || cam.port,

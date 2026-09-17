@@ -141,4 +141,23 @@ export class CameraUiStorage {
     }
     return store;
   }
+
+  public static async updateConnectionStatus(
+    status: "connected" | "disconnected" | "error",
+    error?: string,
+  ): Promise<CameraUiStore> {
+    const store = await this.load();
+    store.config.connectionStatus = status;
+    if (error !== undefined) {
+      store.config.lastError = error;
+    } else if (status === "connected") {
+      store.config.lastError = undefined;
+    }
+    const isOnline = status === "connected";
+    store.cameras.forEach((cam) => {
+      cam.status = isOnline ? "online" : "offline";
+    });
+    await this.save(store);
+    return store;
+  }
 }

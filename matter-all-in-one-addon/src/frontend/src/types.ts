@@ -169,6 +169,7 @@ export interface CameraUiConfigResponse {
   pollIntervalSeconds?: number;
   lastSyncedAt?: string | null;
   lastError?: string | null;
+  connectionStatus?: "connected" | "disconnected" | "error";
 }
 
 export interface CameraUiCameraItem {

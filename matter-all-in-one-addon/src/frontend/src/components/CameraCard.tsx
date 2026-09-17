@@ -54,7 +54,7 @@ export const CameraCard: React.FC<CameraCardProps> = ({
   onConfigure,
 }) => {
   if (camera) {
-    const isOnline = camera.status?.connection === "online" || camera.status?.isOnline !== false;
+    const isOnline = camera.status?.connection === "online" && camera.status?.isOnline === true;
     const isHapPaired = camera.identity?.homeKitPairingState === "paired";
     const isMatterPaired = camera.bindingState?.matterCommissioned === true;
     const brand = extractCameraBrand(camera);
@@ -155,7 +155,7 @@ export const CameraCard: React.FC<CameraCardProps> = ({
   }
 
   if (cameraUiCamera) {
-    const isOnline = cameraUiCamera.homeKitEnabled !== false;
+    const isOnline = cameraUiCamera.status === "online" && cameraUiCamera.homeKitEnabled !== false;
     const isHapPaired = cameraUiCamera.isPaired === true;
     const brand = extractCameraBrand(cameraUiCamera);
     const modelDisplay = cameraUiCamera.model || "Cámara RTSP";
@@ -211,12 +211,28 @@ export const CameraCard: React.FC<CameraCardProps> = ({
               className="tag"
               style={{
                 fontSize: "0.68rem",
-                background: isOnline ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.15)",
-                color: isOnline ? "#6ee7b7" : "#fca5a5",
-                borderColor: isOnline ? "rgba(52, 211, 153, 0.4)" : "rgba(239, 68, 68, 0.4)",
+                background: isOnline
+                  ? "rgba(16, 185, 129, 0.15)"
+                  : cameraUiCamera.homeKitEnabled === false
+                    ? "rgba(156, 163, 175, 0.15)"
+                    : "rgba(239, 68, 68, 0.15)",
+                color: isOnline
+                  ? "#6ee7b7"
+                  : cameraUiCamera.homeKitEnabled === false
+                    ? "#9ca3af"
+                    : "#fca5a5",
+                borderColor: isOnline
+                  ? "rgba(52, 211, 153, 0.4)"
+                  : cameraUiCamera.homeKitEnabled === false
+                    ? "rgba(156, 163, 175, 0.4)"
+                    : "rgba(239, 68, 68, 0.4)",
               }}
             >
-              {isOnline ? "🟢 En línea" : "🔴 Desactivada"}
+              {isOnline
+                ? "🟢 En línea"
+                : cameraUiCamera.homeKitEnabled === false
+                  ? "⚪ Desactivada"
+                  : "🔴 Desconectada"}
             </span>
           </div>
         </div>
