@@ -841,6 +841,7 @@ export class HomeKitCameraStreamingDelegate
       }
 
       if (isOpus) {
+        // HomeKit explicitly negotiated OPUS — use it
         args.push(
           "-c:a",
           "libopus",
@@ -852,6 +853,7 @@ export class HomeKitCameraStreamingDelegate
           "5",
         );
       } else if (hasFdk) {
+        // libfdk_aac: best quality AAC-ELD encoder (premium, low-delay)
         args.push(
           "-c:a",
           "libfdk_aac",
@@ -861,15 +863,16 @@ export class HomeKitCameraStreamingDelegate
           "+global_header",
         );
       } else {
+        // Native FFmpeg AAC encoder with ELD profile — no license required,
+        // fully compatible with HomeKit/iOS for all source codecs
+        // (HEVC+AAC, RTSP+PCM/ALAW/G.711, RTSP+OPUS all arrive as AAC-ELD)
         args.push(
           "-c:a",
-          "libopus",
-          "-application",
-          "lowdelay",
-          "-frame_duration",
-          "20",
-          "-packet_loss",
-          "5",
+          "aac",
+          "-profile:a",
+          "aac_eld",
+          "-aac_coder",
+          "twoloop",
         );
       }
 

@@ -283,6 +283,16 @@ export const CameraCard: React.FC<CameraCardProps> = ({
     const isExported = haDevice.entities.some((e) => e.exported);
     const isCommissioned = haDevice.entities.some((e) => e.exported && e.commissioned);
 
+    // Detect Google Nest cameras that need go2rtc configuration
+    const isNestCamera =
+      brand === "GOOGLE" ||
+      brand === "NEST" ||
+      haDevice.entities.some(
+        (e) => e.domain === "camera" && (e.entityId.includes("nest") || e.entityId.includes("google"))
+      );
+    const streamStrategy = (haDevice as any).streamStrategy as string | undefined;
+    const needsGo2rtc = isNestCamera && streamStrategy === "unsupported";
+
     return (
       <article className="device-card ha-camera-card" onClick={onConfigure}>
         <div className="card-top">
@@ -304,6 +314,22 @@ export const CameraCard: React.FC<CameraCardProps> = ({
               </span>
             )}
             {!isCommissioned && isExported && <span className="tag tag-mqtt">EN MATTER</span>}
+            {needsGo2rtc && (
+              <span
+                className="tag"
+                title="Esta cámara Nest necesita go2rtc configurado para tener live stream en HomeKit. Haz clic en Configurar para ver los pasos."
+                style={{
+                  fontSize: "0.68rem",
+                  background: "rgba(251, 146, 60, 0.15)",
+                  color: "#fb923c",
+                  border: "1px solid rgba(251, 146, 60, 0.4)",
+                  fontWeight: 600,
+                  cursor: "help",
+                }}
+              >
+                ⚠️ Nest: Configurar go2rtc
+              </span>
+            )}
           </div>
         </div>
         <h3 title={haDevice.name}>{haDevice.name}</h3>

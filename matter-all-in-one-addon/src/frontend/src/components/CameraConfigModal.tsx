@@ -33,7 +33,7 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
   onRefresh,
   showToast,
 }) => {
-  const [activeTab, setActiveTab] = useState<"homekit" | "matter" | "ai">("homekit");
+  const [activeTab, setActiveTab] = useState<"homekit" | "matter" | "ai" | "nest">("homekit");
   const [rtspUrl, setRtspUrl] = useState("");
   const [transport, setTransport] = useState<"tcp" | "udp">("tcp");
   const [isVerifying, setIsVerifying] = useState(false);
@@ -195,6 +195,19 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
   const isPaired = isCameraUi
     ? Boolean((camera as CameraUiCameraItem).isPaired)
     : (camera as CameraRecord)?.identity?.homeKitPairingState === "paired";
+
+  // Detect Google Nest cameras — show go2rtc setup guide tab
+  const isNestCamera =
+    !isCameraUi &&
+    (brand === "GOOGLE" ||
+      brand === "NEST" ||
+      cameraId.includes("nest") ||
+      cameraId.includes("google") ||
+      ((camera as CameraRecord)?.capabilities?.observed?.streamSourceType === "webrtc" &&
+        (camera as CameraRecord)?.capabilities?.observed?.strategy === "unsupported"));
+  const nestNeedsGo2rtc =
+    isNestCamera &&
+    (camera as CameraRecord)?.capabilities?.observed?.strategy === "unsupported";
 
   const pinCode = isCameraUi
     ? ((camera as CameraUiCameraItem).pincode || "031-45-154")
@@ -694,7 +707,7 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
         <div className="camera-modal-layout">
           {/* Left Column: QR Code & Pairing */}
           <div className="qr-panel">
-            <div className="tab-group" style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+            <div className="tab-group" style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
               <button
                 className={`button button-sm ${activeTab === "homekit" ? "button-primary" : "button-secondary"}`}
                 type="button"
@@ -716,9 +729,116 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
               >
                 🧠 IA & Fauna
               </button>
+              {isNestCamera && (
+                <button
+                  className={`button button-sm ${activeTab === "nest" ? "button-primary" : "button-secondary"}`}
+                  type="button"
+                  onClick={() => setActiveTab("nest")}
+                  style={nestNeedsGo2rtc ? { borderColor: "#fb923c", color: activeTab === "nest" ? undefined : "#fb923c" } : undefined}
+                >
+                  📡 Google Nest
+                </button>
+              )}
             </div>
 
-            {activeTab === "ai" ? (
+            {activeTab === "nest" ? (
+              <div className="card" style={{ padding: 16 }}>
+                <h4 style={{ margin: "0 0 8px", fontSize: "0.95rem", color: "#fb923c" }}>
+                  📡 Google Nest — Live Stream en HomeKit
+                </h4>
+
+                {nestNeedsGo2rtc ? (
+                  <>
+                    <div style={{
+                      background: "rgba(251,146,60,0.1)",
+                      border: "1px solid rgba(251,146,60,0.4)",
+                      borderRadius: 8,
+                      padding: "10px 14px",
+                      marginBottom: 14,
+                      fontSize: "0.82rem",
+                      color: "#fb923c",
+                    }}>
+                      <strong>⚠️ Sin stream disponible:</strong> La integración <code>google_nest</code> de HA solo hace WebRTC efímero a Google Cloud.
+                      Para tener live stream estable en HomeKit necesitas <strong>go2rtc</strong> como puente RTSP local.
+                    </div>
+
+                    <p style={{ fontSize: "0.82rem", color: "var(--text-muted)", marginBottom: 12 }}>
+                      go2rtc se conecta directamente al Google SDM API con tus credenciales OAuth2 y expone un endpoint RTSP local
+                      (<code>rtsp://127.0.0.1:8554/{cameraName.toLowerCase().replace(/\s+/g, "_")}</code>) que nuestro addon detecta
+                      automáticamente y exporta a HomeKit con <strong>passthrough H.264</strong> y <strong>audio AAC-ELD</strong>.
+                    </p>
+
+                    <div style={{ fontSize: "0.82rem", color: "var(--text-secondary)" }}>
+                      <p style={{ fontWeight: 600, color: "#f1f5f9", marginBottom: 6 }}>Pasos de configuración:</p>
+                      <ol style={{ paddingLeft: 18, margin: 0, lineHeight: 1.9 }}>
+                        <li>
+                          <a href="https://console.cloud.google.com/apis/library/smartdevicemanagement.googleapis.com" target="_blank" rel="noreferrer" style={{ color: "#60a5fa" }}>
+                            Google Cloud Console
+                          </a>{" "}→ Habilitar <strong>Smart Device Management API</strong>
+                        </li>
+                        <li>
+                          APIs & Services → Credentials → Create OAuth 2.0 Client ID → Guardar <code>client_id</code> y <code>client_secret</code>
+                        </li>
+                        <li>
+                          <a href="https://console.nest.google.com/device-access/project-list" target="_blank" rel="noreferrer" style={{ color: "#60a5fa" }}>
+                            Google Device Access Console
+                          </a>{" "}→ Create project (<strong>pago único \$5</strong>) → Guardar <code>project_id</code>
+                        </li>
+                        <li>
+                          Completar OAuth flow para obtener <code>refresh_token</code>{" "}
+                          <a href="https://developers.google.com/nest/device-access/authorize" target="_blank" rel="noreferrer" style={{ color: "#60a5fa" }}>
+                            (guía oficial)
+                          </a>
+                        </li>
+                        <li>
+                          Obtener <code>device_id</code>: <code>GET /v1/enterprises/&#123;project_id&#125;/devices</code>{" "}
+                          con tu access token
+                        </li>
+                        <li>
+                          En HA → Settings → go2rtc → agregar stream:
+                          <pre style={{
+                            background: "#0f172a",
+                            borderRadius: 6,
+                            padding: "8px 10px",
+                            fontSize: "0.75rem",
+                            color: "#a5f3fc",
+                            marginTop: 6,
+                            overflowX: "auto",
+                            whiteSpace: "pre-wrap",
+                            wordBreak: "break-all",
+                          }}>
+{`streams:
+  ${cameraName.toLowerCase().replace(/\s+/g, "_")}:
+    - nest:?client_id=TU_ID&client_secret=TU_SECRET
+        &project_id=TU_PROJECT&refresh_token=TU_TOKEN
+        &device_id=TU_DEVICE_ID`}
+                          </pre>
+                        </li>
+                        <li>Reiniciar HA → Nuestro addon detecta el stream automáticamente al iniciar</li>
+                      </ol>
+                    </div>
+
+                    <div style={{ marginTop: 14, fontSize: "0.78rem", color: "var(--text-muted)" }}>
+                      💡 <strong>Tip:</strong> go2rtc gestiona la re-autenticación automáticamente. No es necesario renovar el token manualmente.
+                      El stream aparecerá como <code>rtsp://127.0.0.1:8554/{cameraName.toLowerCase().replace(/\s+/g, "_")}</code>{" "}
+                      y será detectado en el próximo inicio del addon.
+                    </div>
+                  </>
+                ) : (
+                  <div style={{
+                    background: "rgba(16,185,129,0.1)",
+                    border: "1px solid rgba(16,185,129,0.4)",
+                    borderRadius: 8,
+                    padding: "10px 14px",
+                    fontSize: "0.82rem",
+                    color: "#6ee7b7",
+                  }}>
+                    ✅ <strong>go2rtc detectado:</strong> El addon está recibiendo el stream RTSP local de esta cámara Nest.
+                    Live view y audio AAC-ELD están disponibles en HomeKit.
+                  </div>
+                )}
+              </div>
+            ) : activeTab === "ai" ? (
               <div className="card" style={{ padding: 16 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                   <h4 style={{ margin: 0, fontSize: "0.95rem", color: "#38bdf8" }}>

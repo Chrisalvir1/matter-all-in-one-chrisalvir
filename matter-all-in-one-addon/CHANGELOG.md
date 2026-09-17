@@ -1,3 +1,27 @@
+## [1.6.3] - 2026-09-17
+
+### Audio Universal AAC-ELD, Passthrough H.264 para todas las cámaras RTSP y Guía go2rtc para Google Nest
+
+- **Audio Universal AAC-ELD en HomeKit (todos los codecs de origen):**
+  - HEVC + AAC, RTSP + PCM/ALAW/G.711, RTSP + OPUS: todos llegan a HomeKit como AAC-ELD 16kHz/24kHz mono.
+  - Prioridad: `libfdk_aac -profile:a aac_eld` (si disponible) → encoder nativo `aac -profile:a aac_eld` (sin licencia).
+  - OPUS solo se usa cuando HomeKit explícitamente negocia OPUS en la sesión HAP.
+
+- **Passthrough H.264 correcto para cámaras RTSP sin `audio_codec` declarado:**
+  - Cámaras RTSP que no publican `audio_codec` en HA ahora se tratan como `passthrough_h264` con audio asumido.
+  - FFmpeg maneja silenciosamente el caso de streams sin pista de audio con `-map 0:a:0?`.
+  - Eliminada la estrategia `passthrough_video_only` para RTSP H.264 — siempre se intenta audio.
+
+- **Google Nest FAILED_PRECONDITION (400): diagnóstico correcto en UI:**
+  - Cámaras WebRTC (Nest) sin URL de stream (go2rtc no configurado o Google API error 400) → `strategy: "unsupported"` en lugar de `transcode_required`.
+  - Nueva pestaña "📡 Google Nest" en el modal de configuración con guía completa de setup go2rtc.
+  - Badge naranja "⚠️ Nest: Configurar go2rtc" en la CameraCard cuando la cámara Nest no tiene stream disponible.
+
+- **Guía go2rtc integrada en la UI del addon:**
+  - Pasos detallados: Google Cloud Console → SDM API → OAuth2 → Device Access Console → config YAML go2rtc.
+  - Snippet de configuración generado automáticamente con el nombre de la cámara.
+  - Links directos a las consolas de Google y documentación oficial.
+
 ## [1.6.2] - 2026-09-17
 
 ### Cámaras Google Nest, Fix de Live View & Audio en HomeKit (OPUS / 16k & 24k) y Detección de IA Local

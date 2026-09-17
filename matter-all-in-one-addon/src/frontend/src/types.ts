@@ -91,6 +91,8 @@ export interface CameraRecord {
       fps?: number;
       gopSeconds?: number;
       hasAudio?: boolean;
+      streamSourceType?: string;
+      strategy?: string;
     };
     latencyMetrics?: StreamLatencyMetrics;
   };
