@@ -9,6 +9,7 @@ export interface CameraUiConfig {
   password?: string;
   mqttEnabled?: boolean;
   mqttTopicPrefix?: string;
+  allowSelfSignedCertificate?: boolean;
   pollIntervalSeconds?: number;
   lastSyncedAt?: string;
   lastError?: string;

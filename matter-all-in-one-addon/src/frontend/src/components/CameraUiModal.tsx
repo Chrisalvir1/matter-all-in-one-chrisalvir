@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { CameraUiCameraItem, CameraUiConfigResponse } from "../types";
 import { api } from "../api/client";
 
@@ -19,6 +19,7 @@ export const CameraUiModal: React.FC<CameraUiModalProps> = ({
   const [serverUrl, setServerUrl] = useState("http://localhost:8181");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [allowSelfSigned, setAllowSelfSigned] = useState(true);
   const [mqttEnabled, setMqttEnabled] = useState(true);
   const [mqttTopicPrefix, setMqttTopicPrefix] = useState("camera.ui");
   const [isTesting, setIsTesting] = useState(false);
@@ -27,12 +28,15 @@ export const CameraUiModal: React.FC<CameraUiModalProps> = ({
   const [testResult, setTestResult] = useState<{ text: string; isError?: boolean } | null>(null);
   const [cameras, setCameras] = useState<CameraUiCameraItem[]>([]);
   const [activeTab, setActiveTab] = useState<"settings" | "cameras">("settings");
+  const hasInitializedRef = useRef(false);
 
   useEffect(() => {
-    if (config) {
+    if (config && !hasInitializedRef.current) {
+      hasInitializedRef.current = true;
       setEnabled(config.enabled ?? false);
       setServerUrl(config.serverUrl || "http://localhost:8181");
       setUsername(config.username || "");
+      setAllowSelfSigned(config.allowSelfSignedCertificate ?? true);
       setMqttEnabled(config.mqttEnabled ?? true);
       setMqttTopicPrefix(config.mqttTopicPrefix || "camera.ui");
     }
@@ -58,6 +62,7 @@ export const CameraUiModal: React.FC<CameraUiModalProps> = ({
         serverUrl: serverUrl.trim(),
         username: username.trim() || undefined,
         password: password || undefined,
+        allowSelfSignedCertificate: allowSelfSigned,
       });
       if (res.ok) {
         setTestResult({ text: `✓ ${res.message}` });
@@ -74,7 +79,12 @@ export const CameraUiModal: React.FC<CameraUiModalProps> = ({
   const handleSync = async () => {
     setIsSyncing(true);
     try {
-      const res = await api.syncCameraUiCameras();
+      const res = await api.syncCameraUiCameras({
+        serverUrl: serverUrl.trim(),
+        username: username.trim() || undefined,
+        password: password || undefined,
+        allowSelfSignedCertificate: allowSelfSigned,
+      });
       if (res.success) {
         showToast(`✓ Sincronización completa: ${res.totalCameras} cámaras detectadas (${res.newCameras} nuevas).`);
         setCameras(res.cameras || []);
@@ -128,6 +138,7 @@ export const CameraUiModal: React.FC<CameraUiModalProps> = ({
         serverUrl: serverUrl.trim(),
         username: username.trim() || undefined,
         password: password || undefined,
+        allowSelfSignedCertificate: allowSelfSigned,
         mqttEnabled,
         mqttTopicPrefix: mqttTopicPrefix.trim() || "camera.ui",
       });
@@ -202,8 +213,18 @@ export const CameraUiModal: React.FC<CameraUiModalProps> = ({
                 style={{ width: "100%", padding: "8px 12px", borderRadius: 8, background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff" }}
               />
               <span style={{ fontSize: "0.75rem", color: "var(--dim)" }}>
-                Puerto REST por defecto de Camera.UI: 8181. Restreaming RTSP nativo en puerto 8554.
+                Puerto REST por defecto de Camera.UI: 8181 (o HTTPS en 3543). Restreaming RTSP nativo en puerto 8554.
               </span>
+              <div style={{ marginTop: 8 }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: "0.8rem", color: "var(--dim)" }}>
+                  <input
+                    type="checkbox"
+                    checked={allowSelfSigned}
+                    onChange={(e) => setAllowSelfSigned(e.target.checked)}
+                  />
+                  <span>Permitir certificados SSL autofirmados (HTTPS local)</span>
+                </label>
+              </div>
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>

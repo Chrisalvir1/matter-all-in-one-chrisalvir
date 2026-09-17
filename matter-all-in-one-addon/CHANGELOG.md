@@ -1,3 +1,19 @@
+## [1.5.92] - 2026-09-16
+
+### Autenticación JWT Bearer, Soporte HTTPS con Certificados Autofirmados y Persistencia de Formularios para Camera.UI
+
+- **Soporte Completo para HTTPS y Certificados SSL Autofirmados:**
+  - Habilitada la opción `allowSelfSignedCertificate: true` (por defecto) tanto en backend como frontend, permitiendo conectar sin restricciones a servidores Camera.UI locales vía HTTPS (`https://192.168.x.x:3543`) sin errores de `SELF_SIGNED_CERT_IN_CHAIN`.
+  - Agregado checkbox interactivo en `CameraUiModal`: *"Permitir certificados SSL autofirmados (HTTPS local)"*.
+- **Autenticación Nativa Moderna de Camera.UI (`POST /api/auth/login`):**
+  - Implementado flujo de inicio de sesión completo que obtiene y renueva el token JWT Bearer (`access_token`), enviándolo en encabezados `Authorization: Bearer <access_token>` para `/api/cameras` y `/api/config`.
+  - Diagnóstico preciso de errores de credenciales (HTTP 401 / 403) con mensajes claros en la interfaz en lugar de fallos genéricos.
+- **Soporte para el Esquema Moderno de Cámaras (`sources`):**
+  - Parser robusto que extrae streams de alta resolución (`role: "high-resolution"`), streams secundarios (`role: "mid-resolution"` / `"low-resolution"`), snapshots y canales de audio a partir de la estructura moderna de Camera.UI (`camera.sources`), manteniendo compatibilidad hacia atrás con esquemas heredados (`videoConfig`).
+- **Corrección de Restablecimiento en Formulario del Modal:**
+  - Se corrigió el efecto reactivo en `CameraUiModal` que sobreescribía la URL introducida por el usuario con `localhost` durante el sondeo en segundo plano cada 10 segundos.
+  - La acción "Sincronizar Cámaras" ahora envía inmediatamente los datos actuales del formulario antes de iniciar el descubrimiento.
+
 ## [1.5.91] - 2026-09-16
 
 ### Integración Completa de Camera.UI, Eventos MQTT (Movimiento/Timbre) y Puente HomeKit HAP

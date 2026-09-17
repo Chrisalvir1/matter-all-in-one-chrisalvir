@@ -49,10 +49,10 @@ export const api = {
   getCameraUiConfig: () => request<CameraUiConfigResponse>("/cameraui/config"),
   saveCameraUiConfig: (data: any) => request("/cameraui/config", { method: "POST", body: JSON.stringify(data) }),
   testCameraUiConnection: (data: any) => request("/cameraui/test-connection", { method: "POST", body: JSON.stringify(data) }),
-  syncCameraUiCameras: () =>
+  syncCameraUiCameras: (data?: any) =>
     request<{ success: boolean; totalCameras: number; newCameras: number; cameras: CameraUiCameraItem[] }>(
       "/cameraui/sync",
-      { method: "POST" },
+      data ? { method: "POST", body: JSON.stringify(data) } : { method: "POST" },
     ),
   getCameraUiCameras: () => request<CameraUiCameraItem[]>("/cameraui/cameras"),
   toggleCameraUiHomeKit: (cameraId: string) =>

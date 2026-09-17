@@ -165,6 +165,7 @@ export interface CameraUiConfigResponse {
   hasPassword?: boolean;
   mqttEnabled?: boolean;
   mqttTopicPrefix?: string;
+  allowSelfSignedCertificate?: boolean;
   pollIntervalSeconds?: number;
   lastSyncedAt?: string | null;
   lastError?: string | null;

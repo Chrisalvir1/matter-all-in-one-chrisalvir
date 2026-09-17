@@ -5621,6 +5621,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               hasPassword: Boolean(store.config.password),
               mqttEnabled: store.config.mqttEnabled ?? true,
               mqttTopicPrefix: store.config.mqttTopicPrefix || "camera.ui",
+              allowSelfSignedCertificate: store.config.allowSelfSignedCertificate ?? true,
               pollIntervalSeconds: store.config.pollIntervalSeconds || 300,
               lastSyncedAt: store.config.lastSyncedAt || null,
               lastError: store.config.lastError || null,
@@ -5648,6 +5649,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             if (data.clearPassword === true) store.config.password = undefined;
             if (typeof data.mqttEnabled === "boolean") store.config.mqttEnabled = data.mqttEnabled;
             if (data.mqttTopicPrefix !== undefined) store.config.mqttTopicPrefix = String(data.mqttTopicPrefix).trim();
+            if (typeof data.allowSelfSignedCertificate === "boolean") {
+              store.config.allowSelfSignedCertificate = data.allowSelfSignedCertificate;
+            }
 
             await CameraUiStorage.save(store);
 
@@ -5673,6 +5677,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               serverUrl: data.serverUrl || "http://localhost:8181",
               username: data.username,
               password: data.password,
+              allowSelfSignedCertificate: data.allowSelfSignedCertificate ?? true,
             });
             const result = await client.testConnection();
             res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
@@ -5690,7 +5695,23 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             pathname === "/api/custom/cameraui/sync")
         ) {
           try {
+            const body = await this.readRequestBody(req);
+            let data: any = {};
+            try {
+              if (body) data = JSON.parse(body);
+            } catch {}
+
             const store = await CameraUiStorage.load();
+            if (data.serverUrl) store.config.serverUrl = String(data.serverUrl).trim();
+            if (data.username !== undefined) store.config.username = String(data.username).trim();
+            if (data.password !== undefined && String(data.password).length > 0) {
+              store.config.password = String(data.password);
+            }
+            if (typeof data.allowSelfSignedCertificate === "boolean") {
+              store.config.allowSelfSignedCertificate = data.allowSelfSignedCertificate;
+            }
+            await CameraUiStorage.save(store);
+
             const client = new CameraUiClient(store.config);
             const discovered = await client.fetchCameras();
             const previousIds = new Set(store.cameras.map((c) => c.id));

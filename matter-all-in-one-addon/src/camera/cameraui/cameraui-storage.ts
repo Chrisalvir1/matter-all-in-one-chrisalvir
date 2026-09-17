@@ -15,6 +15,7 @@ export class CameraUiStorage {
         serverUrl: "http://localhost:8181",
         mqttEnabled: true,
         mqttTopicPrefix: "camera.ui",
+        allowSelfSignedCertificate: true,
         pollIntervalSeconds: 300,
       },
       cameras: [],
