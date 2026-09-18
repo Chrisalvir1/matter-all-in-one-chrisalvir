@@ -1,3 +1,16 @@
+## [1.8.9] - 2026-09-18
+
+### Restauración de Stream HomeKit: Eliminación de dump_extra y Corrección de Códec HAP
+
+- **Eliminación Definitiva de `dump_extra` en Streaming HomeKit:**
+  - El filtro de bitstream `dump_extra=freq=keyframe` provocaba que FFmpeg abortara inmediatamente con error al no encontrar metadatos globales en streams RTSP en vivo. Se retiró por completo manteniendo remuxing puro `-c:v copy` para todos los flujos H.264.
+- **Protección de Inicialización HAP en `spawnFfmpegProcess`:**
+  - Restaurado `setTimeout` de 20 ms para verificar la estabilidad de FFmpeg antes de confirmar a HAP, evitando llamar dos veces el callback de sesión o cerrar prematuramente la conexión SRTP.
+- **Alineación de Códec con la Especificación HAP:**
+  - El protocolo HomeKit Camera RTP sólo admite video en H.264. Cámaras H.264 (Tapo C402, Wyze, Recamara, etc.) operan en passthrough puro (`-c:v copy`) sin carga de CPU. Flujos nativos HEVC se transcodifican a H.264 con `-preset ultrafast -tune zerolatency` para garantizar reproducción fluida en iOS.
+- **Corrección de Detección de Códec en Tapo C402:**
+  - Se eliminó la asignación errónea de HEVC a la Tapo C402; se reconoce correctamente como H.264 nativo en 2K (2304x1296).
+
 ## [1.8.8] - 2026-09-18
 
 ### Blindaje Universal de URLs RTSP y Actualización de Pruebas Unitarias CI

@@ -671,8 +671,8 @@ export class HomeKitCameraStreamingDelegate
       process.stderr?.on("data", (chunk: Buffer) => {
         stderr = `${stderr}${chunk.toString()}`.slice(-6000);
       });
-      // Settle HomeKit immediately once process is spawned and active
-      const guard = setImmediate(() => {
+      // Settle HomeKit once process is spawned and active (20ms)
+      const guard = setTimeout(() => {
         if (process.exitCode === null && !process.killed) {
           this.platform?.log?.notice?.(
             `[HomeKitCamera][${this.entityId}] HAP START callback success; FFmpeg active session=${session.sessionId}`,
@@ -681,13 +681,13 @@ export class HomeKitCameraStreamingDelegate
         } else {
           settle(new Error("FFmpeg exited during HAP startup"));
         }
-      });
+      }, 20);
       process.once("error", (error) => {
-        clearImmediate(guard);
+        clearTimeout(guard);
         settle(error);
       });
       process.once("close", (code) => {
-        clearImmediate(guard);
+        clearTimeout(guard);
         session.process = undefined;
         this.platform?.log?.warn?.(
           `[HomeKitCamera][${this.entityId}] FFmpeg closed code=${code} ${stderr.trim()}`,
@@ -864,33 +864,23 @@ export class HomeKitCameraStreamingDelegate
       );
     }
 
-    const isSupportedPassthroughCodec =
-      (this.capabilities.videoCodec || "h264").toLowerCase() === "h264" ||
-      (this.capabilities.videoCodec || "").toLowerCase() === "hevc" ||
-      (this.capabilities.videoCodec || "").toLowerCase() === "h265";
+    const isH264 = (this.capabilities.videoCodec || "h264").toLowerCase() === "h264";
 
     const canPassthrough =
       !forceTranscode &&
       !isHaProxyStream &&
-      isSupportedPassthroughCodec &&
+      isH264 &&
       (this.capabilities.strategy === "passthrough_h264" ||
-        this.capabilities.strategy === "passthrough_hevc" ||
         this.streamSource.supportsPassthrough ||
         !this.capabilities.requiresTranscoding);
 
     if (canPassthrough) {
-      const isHevcCodec =
-        (this.capabilities.videoCodec || "").toLowerCase() === "hevc" ||
-        (this.capabilities.videoCodec || "").toLowerCase() === "h265" ||
-        this.capabilities.strategy === "passthrough_hevc";
-
       // Pure passthrough remuxing without transcoding CPU overhead (native 4K, 2K, 1080p, 720p @ max fps)
-      // Pure -c:v copy for HEVC and H.264 matching Camera.UI native behavior with extradata parameter injection
+      // Pure -c:v copy for H.264 matching Camera.UI native behavior
       const videoPassArgs: string[] = [
         "-map", "0:v:0",
         "-an",
         "-c:v", "copy",
-        "-bsf:v", "dump_extra=freq=keyframe",
         "-f", "rtp",
         "-fflags", "+nobuffer+flush_packets",
         "-max_delay", "0",

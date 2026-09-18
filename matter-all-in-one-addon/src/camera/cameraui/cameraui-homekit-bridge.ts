@@ -65,14 +65,12 @@ export class CameraUiHomeKitBridge {
     const isRtspSource = Boolean(camera.rtspUrl && /^rtsps?:\/\//i.test(camera.rtspUrl));
     const isHaProxy = false;
     const rawCodec = (camera.videoCodec || "").toLowerCase();
+    const isExplicitH264 = rawCodec === "h264" || rawCodec === "avc";
     const isHevc =
-      rawCodec.includes("hevc") ||
-      rawCodec.includes("265") ||
-      /c402|c420|c425|c520|c320|c325|tc72/i.test(camera.model || "") ||
-      /c402|c420|c425|c520|c320|c325|tc72/i.test(camera.name || "") ||
-      Boolean(camera.width && camera.width >= 2304 && /tapo/i.test(camera.name || ""));
+      !isExplicitH264 &&
+      (rawCodec.includes("hevc") || rawCodec.includes("265"));
     const chosenCodec = isHevc ? "hevc" : "h264";
-    const chosenStrategy = isHevc ? "passthrough_hevc" : "passthrough_h264";
+    const chosenStrategy = isHevc ? "transcode" : "passthrough_h264";
 
     const capabilities: CameraCapabilitiesInfo = {
       hasLiveStream: hasSource,

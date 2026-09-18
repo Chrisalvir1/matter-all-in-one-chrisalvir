@@ -293,10 +293,10 @@ describe("HomeKitCameraStreamingDelegate", () => {
 
     const capturedArgs = delegate.buildStreamArgs(session, request);
 
-    // v1.8.7: Injects SPS/PPS on keyframes with dump_extra=freq=keyframe for instant zero-latency HomeKit playback
+    // v1.8.9: pure -c:v copy without dump_extra (which caused FFmpeg abort on RTSP streams)
     expect(capturedArgs).toContain("-c:v");
     expect(capturedArgs).toContain("copy");
-    expect(capturedArgs).toContain("dump_extra=freq=keyframe");
+    expect(capturedArgs).not.toContain("dump_extra=freq=keyframe");
 
     // Verify audio at HAP-compliant sample rate and bitrate
     // v1.6.7: no aresample filter (caused FFmpeg crash when stream has no audio track)
