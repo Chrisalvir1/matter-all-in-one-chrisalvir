@@ -325,7 +325,16 @@ export class CameraAiDetector extends EventEmitter {
 
     if (hkAccessory) {
       try {
-        hkAccessory.updateMotionState(true);
+        if (typeof hkAccessory.updateMotionState === "function") {
+          hkAccessory.updateMotionState(true);
+        }
+        if (hkAccessory.motionService?.setCharacteristic) {
+          const Characteristic = platform?.Characteristic;
+          hkAccessory.motionService.setCharacteristic(
+            Characteristic?.MotionDetected || "MotionDetected",
+            true,
+          );
+        }
       } catch {}
     }
 
@@ -356,7 +365,16 @@ export class CameraAiDetector extends EventEmitter {
       this.activeDetections.delete(cameraId);
       if (hkAccessory) {
         try {
-          hkAccessory.updateMotionState(false);
+          if (typeof hkAccessory.updateMotionState === "function") {
+            hkAccessory.updateMotionState(false);
+          }
+          if (hkAccessory.motionService?.setCharacteristic) {
+            const Characteristic = platform?.Characteristic;
+            hkAccessory.motionService.setCharacteristic(
+              Characteristic?.MotionDetected || "MotionDetected",
+              false,
+            );
+          }
         } catch {}
       }
       this.motionTimers.delete(cameraId);
