@@ -1026,6 +1026,96 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     this.cameraUiHealthMonitor = setInterval(() => void checkLiveness(), 30_000);
   }
 
+  private cameraUiMotionPoller: NodeJS.Timeout | null = null;
+  private lastCameraUiNotificationTime = Date.now() - 30_000;
+  private cameraUiActiveMotionTimers = new Map<string, NodeJS.Timeout>();
+
+  private startCameraUiMotionPoller(): void {
+    if (this.cameraUiMotionPoller) return;
+
+    const pollNotifications = async () => {
+      try {
+        const store = await CameraUiStorage.load();
+        if (!store.config.serverUrl && store.cameras.length === 0) return;
+
+        const client = new CameraUiClient(store.config);
+        const notifications = await client.getRecentNotifications();
+        if (!notifications || !Array.isArray(notifications) || notifications.length === 0) return;
+
+        const activeAccessories = CameraUiHomeKitBridge.getAllAccessories();
+        const clean = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+        for (const notif of notifications) {
+          const notifTime = Number(
+            notif.time ||
+            notif.timestamp ||
+            (notif.date ? new Date(notif.date).getTime() : 0) ||
+            (notif.createdAt ? new Date(notif.createdAt).getTime() : 0),
+          );
+
+          if (notifTime && notifTime <= this.lastCameraUiNotificationTime) {
+            continue;
+          }
+
+          if (notifTime && notifTime > this.lastCameraUiNotificationTime) {
+            this.lastCameraUiNotificationTime = notifTime;
+          }
+
+          const camIdentifier = String(
+            notif.camera ||
+            notif.name ||
+            notif.id ||
+            notif.cameraId ||
+            "",
+          ).trim();
+          const cleanId = clean(camIdentifier);
+
+          // Find matching mounted camera
+          let matchedCuiId: string | undefined;
+          let matchedAccessory: any = undefined;
+
+          for (const [cuiId, acc] of activeAccessories) {
+            const accCleanCuiId = clean(cuiId.replace(/^cameraui_/, ""));
+            const accCleanName = clean(acc.record?.name || "");
+            if (
+              cleanId === accCleanCuiId ||
+              cleanId === accCleanName ||
+              (cleanId.length >= 4 && (cleanId.includes(accCleanCuiId) || accCleanCuiId.includes(cleanId))) ||
+              (accCleanName.length >= 3 && (cleanId.includes(accCleanName) || accCleanName.includes(cleanId)))
+            ) {
+              matchedCuiId = cuiId;
+              matchedAccessory = acc;
+              break;
+            }
+          }
+
+          if (matchedAccessory && matchedCuiId) {
+            const triggerInfo = notif.label || notif.trigger || notif.type || "opencv";
+            this.log.notice(
+              `[Camera.UI][OpenCV] Detección de movimiento confirmada en cámara "${matchedAccessory.record?.name || matchedCuiId}" (${triggerInfo}). Activando sensor HomeKit.`,
+            );
+
+            matchedAccessory.updateMotionState(true);
+            this.broadcastSseMessage("cameraui_motion", { cameraId: matchedCuiId, motionOn: true });
+
+            const existingTimer = this.cameraUiActiveMotionTimers.get(matchedCuiId);
+            if (existingTimer) clearTimeout(existingTimer);
+
+            const resetTimer = setTimeout(() => {
+              matchedAccessory.updateMotionState(false);
+              this.broadcastSseMessage("cameraui_motion", { cameraId: matchedCuiId, motionOn: false });
+              this.cameraUiActiveMotionTimers.delete(matchedCuiId);
+            }, 10_000);
+
+            this.cameraUiActiveMotionTimers.set(matchedCuiId, resetTimer);
+          }
+        }
+      } catch {}
+    };
+
+    this.cameraUiMotionPoller = setInterval(() => void pollNotifications(), 1500);
+  }
+
   /**
    * Resolve the live Matter node for an entity. During the migration from
    * per-entity exports to one physical-device export, an existing legacy node
@@ -1661,6 +1751,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     await this.startUiServer();
     this.startMatterConnectionMonitor();
     this.startCameraUiHealthMonitor();
+    this.startCameraUiMotionPoller();
 
     // Ensure HAP persistent storage path is /data/hap-persist before mounting any cameras
     try {
@@ -3650,22 +3741,29 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
       // Update Camera.UI active accessories (OpenCV motion / person / vehicle / animal)
       const allCuiAccessories = CameraUiHomeKitBridge.getAllAccessories();
+      const clean = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+      const cleanEntityId = clean(entityId);
+
       for (const [cuiId, accessory] of allCuiAccessories) {
         if (!accessory) continue;
         const linkedId = accessory.linkedMotionEntityId;
-        const camName = (accessory.record?.name || "").toLowerCase();
-        const rawCuiId = cuiId.toLowerCase().replace(/^cameraui_/, "");
-        const idLower = entityId.toLowerCase();
+        const camName = accessory.record?.name || "";
+        const rawCuiId = cuiId.replace(/^cameraui_/, "");
+        const cleanCuiId = clean(rawCuiId);
+        const cleanCamName = clean(camName);
 
         const isLinked =
           linkedId === entityId ||
-          idLower.includes(rawCuiId) ||
-          (camName.length >= 3 && idLower.includes(camName.replace(/\s+/g, "_"))) ||
+          (cleanCuiId.length >= 4 && cleanEntityId.includes(cleanCuiId)) ||
+          (cleanCamName.length >= 3 && cleanEntityId.includes(cleanCamName)) ||
           (this.ha.hassEntities.get(entityId)?.device_id &&
             this.ha.hassEntities.get(entityId)?.device_id ===
               this.ha.hassEntities.get(`camera.${cuiId}`)?.device_id);
 
         if (isLinked) {
+          this.log.notice(
+            `[Camera.UI] Cambio de estado de movimiento (${isMotionState ? "DETECTADO" : "REPOSO"}) desde HA (${entityId}) para cámara "${accessory.record?.name || cuiId}"`,
+          );
           accessory.updateMotionState(isMotionState);
           this.broadcastSseMessage("cameraui_motion", { cameraId: cuiId, motionOn: isMotionState });
         }
@@ -6100,6 +6198,51 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           } catch (err: any) {
             res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
             res.end(JSON.stringify({ success: false, error: err.message || "Error al guardar configuración de Camera.UI" }));
+          }
+          return;
+        }
+
+        if (
+          req.method === "POST" &&
+          (pathname === "/api/cameraui/motion" ||
+            pathname === "/api/cameraui/webhook" ||
+            pathname === "/api/custom/cameraui/motion")
+        ) {
+          try {
+            const body = await this.readRequestBody(req);
+            let data: any = {};
+            try {
+              if (body) data = JSON.parse(body);
+            } catch {}
+
+            const camIdentifier = String(data.camera || data.name || data.id || "").trim();
+            const isActive = data.state !== false && data.motion !== false && data.active !== false;
+            const activeAccessories = CameraUiHomeKitBridge.getAllAccessories();
+            const clean = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+            const cleanId = clean(camIdentifier);
+
+            for (const [cuiId, acc] of activeAccessories) {
+              const accCleanCuiId = clean(cuiId.replace(/^cameraui_/, ""));
+              const accCleanName = clean(acc.record?.name || "");
+              if (
+                cleanId === accCleanCuiId ||
+                cleanId === accCleanName ||
+                (cleanId.length >= 4 && (cleanId.includes(accCleanCuiId) || accCleanCuiId.includes(cleanId))) ||
+                (accCleanName.length >= 3 && (cleanId.includes(accCleanName) || accCleanName.includes(cleanId)))
+              ) {
+                acc.updateMotionState(isActive);
+                this.broadcastSseMessage("cameraui_motion", { cameraId: cuiId, motionOn: isActive });
+                this.log.notice(
+                  `[Camera.UI][Webhook] Movimiento ${isActive ? "ACTIVADO" : "DESACTIVADO"} para "${acc.record?.name || cuiId}"`,
+                );
+                break;
+              }
+            }
+            res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+            res.end(JSON.stringify({ success: true }));
+          } catch (err: any) {
+            res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
+            res.end(JSON.stringify({ success: false, error: err.message }));
           }
           return;
         }

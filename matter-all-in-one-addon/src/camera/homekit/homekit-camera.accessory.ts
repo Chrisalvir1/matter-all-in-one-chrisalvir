@@ -487,12 +487,25 @@ export class HomeKitCameraAccessory {
       }
     }
     if (states) {
+      const clean = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+      const cleanCam = clean(this.record?.name || "");
+      const cleanBase = clean(cameraBase.replace(/^cameraui_/, ""));
       for (const [entityId, state] of states.entries()) {
         if (!entityId.startsWith("binary_sensor.")) continue;
         const deviceClass = state?.attributes?.device_class;
+        const isMotionClass =
+          ["motion", "occupancy", "presence"].includes(deviceClass || "") ||
+          entityId.includes("motion") ||
+          entityId.includes("movimiento") ||
+          entityId.includes("person") ||
+          entityId.includes("detection") ||
+          entityId.includes("animal") ||
+          entityId.includes("vehicle");
+        if (!isMotionClass) continue;
+        const cleanEntity = clean(entityId);
         if (
-          ["motion", "occupancy", "presence"].includes(deviceClass) &&
-          entityId.includes(cameraBase)
+          (cleanCam.length >= 3 && cleanEntity.includes(cleanCam)) ||
+          (cleanBase.length >= 4 && cleanEntity.includes(cleanBase))
         ) {
           return entityId;
         }

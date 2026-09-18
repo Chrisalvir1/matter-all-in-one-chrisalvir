@@ -669,5 +669,40 @@ export class CameraUiClient {
     }
     return undefined;
   }
+
+  /**
+   * Fetches recent notifications / OpenCV detections from Camera.UI API.
+   */
+  public async getRecentNotifications(): Promise<any[]> {
+    const candidates = this.getCandidateUrls();
+    if (candidates.length === 0) return [];
+
+    const endpoints = [
+      "/api/notifications?page=1&pageSize=10",
+      "/api/notifications",
+      "/notifications?page=1&pageSize=10",
+      "/notifications",
+    ];
+
+    for (const baseUrl of candidates) {
+      for (const ep of endpoints) {
+        try {
+          const res = await fetch(`${baseUrl}${ep}`, {
+            headers: this.getHeaders(),
+            signal: AbortSignal.timeout(2500),
+          });
+          if (res.ok) {
+            const json = await res.json();
+            if (Array.isArray(json)) return json;
+            if (Array.isArray(json?.result)) return json.result;
+            if (Array.isArray(json?.notifications)) return json.notifications;
+            if (Array.isArray(json?.data)) return json.data;
+            if (Array.isArray(json?.items)) return json.items;
+          }
+        } catch {}
+      }
+    }
+    return [];
+  }
 }
 
