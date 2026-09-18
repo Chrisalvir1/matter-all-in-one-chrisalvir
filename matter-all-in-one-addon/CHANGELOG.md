@@ -1,3 +1,13 @@
+## [1.8.8] - 2026-09-18
+
+### Blindaje Universal de URLs RTSP y Actualización de Pruebas Unitarias CI
+
+- **Blindaje Universal contra IPs/Puertos Inalcanzables:**
+  - `CameraUiStorage` ahora limpia agresivamente cualquier referencia a `rtsp://192.168.110.46` (sea con puerto 8554, 554 o sin puerto), redirigiendo siempre hacia el servidor activo go2rtc en Home Assistant (`192.168.110.147:8554`).
+  - Cobertura total para `Tapo C120` y `Ezviz Patio Trasero`, asegurando que ninguna sincronización con Camera.UI vuelva a inyectar URLs RTSP huérfanas.
+- **Pruebas Unitarias 100% Verificadas:**
+  - Actualizados los tests unitarios en `test/cameraui.test.ts` y `test/homekit-camera.test.ts` para validar la inyección de `dump_extra=freq=keyframe` y la sustitución automática hacia el host activo `192.168.110.147`.
+
 ## [1.8.7] - 2026-09-18
 
 ### Reparación Total de URLs RTSP, Eliminación de Spinner en HomeKit y Auto-Migración Global

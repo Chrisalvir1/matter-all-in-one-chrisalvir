@@ -191,13 +191,29 @@ export function repairCameraRecord(cam: CameraUiCameraRecord): { cam: CameraUiCa
     cam.strategy = "passthrough_h264";
   }
 
-  // Global repair for any remaining 192.168.110.46:8554 references
-  if (cam.rtspUrl && cam.rtspUrl.includes("192.168.110.46:8554")) {
-    cam.rtspUrl = cam.rtspUrl.replace("192.168.110.46:8554", "192.168.110.147:8554");
+  // Global repair for any rtsp://192.168.110.46 references
+  if (
+    cam.rtspUrl &&
+    (cam.rtspUrl.includes("192.168.110.46:8554") ||
+      cam.rtspUrl.includes("192.168.110.46:554") ||
+      cam.rtspUrl.startsWith("rtsp://192.168.110.46"))
+  ) {
+    cam.rtspUrl = cam.rtspUrl
+      .replace("192.168.110.46:8554", "192.168.110.147:8554")
+      .replace("192.168.110.46:554", "192.168.110.147:8554")
+      .replace("rtsp://192.168.110.46/", "rtsp://192.168.110.147:8554/");
     modified = true;
   }
-  if (cam.subRtspUrl && cam.subRtspUrl.includes("192.168.110.46:8554")) {
-    cam.subRtspUrl = cam.subRtspUrl.replace("192.168.110.46:8554", "192.168.110.147:8554");
+  if (
+    cam.subRtspUrl &&
+    (cam.subRtspUrl.includes("192.168.110.46:8554") ||
+      cam.subRtspUrl.includes("192.168.110.46:554") ||
+      cam.subRtspUrl.startsWith("rtsp://192.168.110.46"))
+  ) {
+    cam.subRtspUrl = cam.subRtspUrl
+      .replace("192.168.110.46:8554", "192.168.110.147:8554")
+      .replace("192.168.110.46:554", "192.168.110.147:8554")
+      .replace("rtsp://192.168.110.46/", "rtsp://192.168.110.147:8554/");
     modified = true;
   }
 
