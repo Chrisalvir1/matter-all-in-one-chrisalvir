@@ -80,14 +80,17 @@ export class MqttClientManager {
           );
       });
 
-      // Subscribe to Camera.UI native event topics
-      this.client?.subscribe(["camera.ui/#", "cameraui/#"], (err) => {
-        if (err) this.log.error(`[MQTT] Camera.UI subscription error: ${err}`);
-        else
-          this.log.info(
-            "[MQTT] Subscribed to camera.ui/# and cameraui/# for Camera.UI events",
-          );
-      });
+      // Subscribe to Camera.UI native event topics and Omni AI topics
+      this.client?.subscribe(
+        ["camera.ui/#", "cameraui/#", "omni_ai_mac/#", "omni_ai/#"],
+        (err) => {
+          if (err) this.log.error(`[MQTT] Camera / AI topic subscription error: ${err}`);
+          else
+            this.log.info(
+              "[MQTT] Subscribed to camera.ui/#, cameraui/#, and omni_ai_mac/# for camera & AI detection events",
+            );
+        },
+      );
     });
 
     this.client.on("message", (topic, message) => {
@@ -144,6 +147,8 @@ export class MqttClientManager {
         if (
           topic.startsWith("camera.ui/") ||
           topic.startsWith("cameraui/") ||
+          topic.startsWith("omni_ai_mac/") ||
+          topic.startsWith("omni_ai/") ||
           topic === "camera.ui"
         ) {
           if (this.onCameraUiMessageCallback) {

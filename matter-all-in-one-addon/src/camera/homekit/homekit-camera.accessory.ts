@@ -511,10 +511,15 @@ export class HomeKitCameraAccessory {
         const cleanFn = clean(fn);
         const camWords = (this.record?.name || "").toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 3);
         const wordsMatch = camWords.length > 0 && camWords.every((w) => cleanEntity.includes(w) || cleanFn.includes(w));
+        const aliasMatch =
+          typeof this.platform?.matchCameraIdentifier === "function" &&
+          (this.platform.matchCameraIdentifier({ id: this.entityId, name: this.record?.name }, entityId) ||
+            this.platform.matchCameraIdentifier({ id: this.entityId, name: this.record?.name }, fn));
         if (
           (cleanCam.length >= 3 && cleanEntity.includes(cleanCam)) ||
           (cleanBase.length >= 4 && cleanEntity.includes(cleanBase)) ||
-          wordsMatch
+          wordsMatch ||
+          aliasMatch
         ) {
           return entityId;
         }

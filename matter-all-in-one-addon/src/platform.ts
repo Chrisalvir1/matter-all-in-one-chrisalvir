@@ -396,6 +396,75 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     }
   }
 
+  public getCameraAliases(cameraName: string, cameraId: string): string[] {
+    const raw = `${cameraName || ""} ${cameraId || ""}`.toLowerCase();
+    const aliases: string[] = [];
+
+    // TAPO C402 / Frente de calle
+    if (raw.includes("c402") || (raw.includes("tapo") && !raw.includes("c120") && !raw.includes("spot"))) {
+      aliases.push("tapo_frente_de_calle", "frente_de_calle", "frente calle", "frentedecalle");
+    }
+
+    // Tapo C120 / Tapo Spot
+    if (raw.includes("c120") || raw.includes("spot")) {
+      aliases.push("tapo_spot", "spot");
+    }
+
+    // EZVIZ Patio Trasero / CS-H6c
+    if (raw.includes("ezviz") || raw.includes("cs_h6c") || raw.includes("h6c")) {
+      aliases.push("cs_h6c_r105_1l2wf", "cs_h6c", "ezviz");
+    }
+
+    // RING Bodega / Petcam
+    if (raw.includes("bodega") || raw.includes("petcam")) {
+      aliases.push("petcam_ring", "petcam");
+    }
+
+    // VIMTAG Recamara
+    if (raw.includes("recamara")) {
+      aliases.push("vimtag_recamara", "recamara");
+    }
+
+    // VIMTAG Area de cafe
+    if (raw.includes("cafe")) {
+      aliases.push("vimtag_area_de_cafe", "area_de_cafe");
+    }
+
+    // VIMTAG Gym / Ring Gym
+    if (raw.includes("gym")) {
+      aliases.push("ring_gym", "gym");
+    }
+
+    return aliases;
+  }
+
+  public matchCameraIdentifier(
+    cam: { id?: string; name?: string },
+    identifier: string,
+  ): boolean {
+    if (!identifier) return false;
+    const clean = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const cleanId = clean(identifier);
+    const cleanCamId = clean((cam.id || "").replace(/^cameraui_/, ""));
+    const cleanCamName = clean(cam.name || "");
+    if (cleanId === cleanCamId || cleanId === cleanCamName) return true;
+    if (cleanId.length >= 4 && (cleanCamName.includes(cleanId) || cleanId.includes(cleanCamName))) return true;
+    if (cleanCamId.length >= 4 && (cleanId.includes(cleanCamId) || cleanCamId.includes(cleanId))) return true;
+
+    const aliases = this.getCameraAliases(cam.name || "", cam.id || "");
+    for (const alias of aliases) {
+      const cleanAlias = clean(alias);
+      if (
+        cleanId === cleanAlias ||
+        (cleanAlias.length >= 3 && cleanId.includes(cleanAlias)) ||
+        (cleanId.length >= 3 && cleanAlias.includes(cleanId))
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   public findLinkedCameraEntities(
     cameraName: string,
     cameraId: string,
@@ -412,15 +481,25 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       .replace(/^_|_$/g, "");
 
     const words = baseRaw.split("_").filter((w) => w.length >= 3);
+    const aliases = this.getCameraAliases(cameraName, cameraId);
+    const clean = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const cleanAliases = aliases.map(clean);
 
     for (const [entityId, state] of states.entries()) {
       const fn = (state?.attributes?.friendly_name || "").toLowerCase();
       const idLower = entityId.toLowerCase();
+      const cleanId = clean(entityId);
+      const cleanFn = clean(fn);
       const entry = registry?.get(entityId);
+
+      const aliasMatch = cleanAliases.some(
+        (ca) => ca.length >= 3 && (cleanId.includes(ca) || cleanFn.includes(ca)),
+      );
 
       const matches =
         idLower.includes(baseRaw) ||
         fn.includes(baseRaw) ||
+        aliasMatch ||
         (words.length > 0 &&
           words.every((w) => idLower.includes(w) || fn.includes(w)));
 
@@ -1967,30 +2046,42 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           const isMotionAction = (act: string) =>
             [
               "motion",
+              "movimiento",
               "detection",
+              "deteccion",
               "opencv",
               "person",
+              "persona",
               "animal",
+              "mascota",
+              "pet",
               "vehicle",
+              "vehiculo",
               "car",
+              "carro",
+              "auto",
               "package",
+              "paquete",
               "face",
+              "cara",
               "movement",
             ].includes(act.toLowerCase());
 
           const parseActiveState = (pl: string): boolean => {
+            const trimmed = (pl || "").toString().trim();
             let act =
-              pl === "true" ||
-              pl === "ON" ||
-              pl === "1" ||
-              pl === "active" ||
-              pl === "start";
+              trimmed === "true" ||
+              trimmed.toUpperCase() === "ON" ||
+              trimmed === "1" ||
+              trimmed === "active" ||
+              trimmed === "start";
             try {
-              const parsed = JSON.parse(pl);
+              const parsed = JSON.parse(trimmed);
               if (typeof parsed === "boolean") return parsed;
               if (parsed.state !== undefined) {
                 return (
                   parsed.state === "ON" ||
+                  parsed.state === "on" ||
                   parsed.state === true ||
                   parsed.state === "active" ||
                   parsed.state === "start" ||
@@ -2010,7 +2101,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               const data = JSON.parse(payload);
               const camIdentifier = (data.camera || data.name || data.id || "").toString().toLowerCase();
               const found = store.cameras.find(
-                (c) => c.id.toLowerCase() === camIdentifier || c.name.toLowerCase() === camIdentifier,
+                (c) => this.matchCameraIdentifier(c, camIdentifier),
               );
               if (found) targetCameraId = found.id;
               active = parseActiveState(payload);
@@ -2024,12 +2115,20 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             const camIdentifier = parts[1].toLowerCase();
             const action = parts[2].toLowerCase();
             const found = store.cameras.find(
-              (c) =>
-                c.id.toLowerCase() === camIdentifier ||
-                c.name.toLowerCase().replace(/\s+/g, "_") === camIdentifier ||
-                c.name.toLowerCase() === camIdentifier,
+              (c) => this.matchCameraIdentifier(c, camIdentifier),
             );
-            targetCameraId = found ? found.id : camIdentifier;
+            if (found) {
+              targetCameraId = found.id;
+            } else {
+              const allCuiAccessories = CameraUiHomeKitBridge.getAllAccessories();
+              for (const [cuiId, acc] of allCuiAccessories) {
+                if (this.matchCameraIdentifier({ id: cuiId, name: acc.record?.name }, camIdentifier)) {
+                  targetCameraId = cuiId;
+                  break;
+                }
+              }
+              if (!targetCameraId) targetCameraId = camIdentifier;
+            }
             if (isMotionAction(action)) {
               isMotion = true;
               active = parseActiveState(payload);
@@ -3903,6 +4002,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           (cleanCuiId.length >= 4 && cleanEntityId.includes(cleanCuiId)) ||
           (cleanCamName.length >= 3 && cleanEntityId.includes(cleanCamName)) ||
           allWordsMatch ||
+          this.matchCameraIdentifier({ id: cuiId, name: camName }, entityId) ||
+          this.matchCameraIdentifier({ id: cuiId, name: camName }, entityFriendlyName) ||
+          accessory.record?.realEntities?.some((re: any) => re.id === entityId) ||
           (allCuiAccessories.size === 1 && isMotionClass) ||
           (this.ha.hassEntities.get(entityId)?.device_id &&
             this.ha.hassEntities.get(entityId)?.device_id ===

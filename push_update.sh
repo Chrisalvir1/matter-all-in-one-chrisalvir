@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-VERSION=$(node -p "require('./matter-all-in-one-addon/package.json').version")
+VERSION=$(python3 -c "import json; print(json.load(open('./matter-all-in-one-addon/package.json'))['version'])")
 TAG="v$VERSION"
 MESSAGE=${1:-"release: $TAG"}
 
