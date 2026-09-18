@@ -44,6 +44,7 @@ export interface CameraUiCameraRecord {
   motionTopic?: string;
   doorbellTopic?: string;
   motionActive?: boolean;
+  motionSource?: string;
   lastMotionAt?: string;
   doorbellActive?: boolean;
   lastDoorbellAt?: string;

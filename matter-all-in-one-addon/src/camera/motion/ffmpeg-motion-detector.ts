@@ -16,11 +16,13 @@ export interface FfmpegMotionDetectorOptions {
   cameraId: string;
   cameraName: string;
   rtspUrl: string;
-  /** Sensitivity 1–99. Higher = triggers on smaller movement. Default: 15. */
+  /** Percentage of changed pixels required to trigger motion (default: 4, meaning pblack <= 96 triggers). */
+  changeThresholdPercent?: number;
+  /** Sensitivity 1–99 (alternative). Higher = triggers on smaller movement. Default: 75. */
   sensitivity?: number;
-  /** Minimum ms between consecutive motion triggers. Default: 8000. */
+  /** Minimum ms between consecutive motion triggers. Default: 4000. */
   cooldownMs?: number;
-  /** ms after last trigger before resetting to no-motion. Default: 30000. */
+  /** ms after last trigger before resetting to no-motion. Default: 15000. */
   resetMs?: number;
 }
 
@@ -105,23 +107,35 @@ export class FfmpegMotionDetector extends EventEmitter {
     const hashIdx = url.indexOf("#");
     if (hashIdx !== -1) url = url.substring(0, hashIdx);
 
-    const sensitivity = Math.min(99, Math.max(1, this.opts.sensitivity ?? 15));
-    const pblackThreshold = 100 - sensitivity;
+    // Determine change threshold percentage (default 4% changed pixels triggers motion)
+    let minChangedPercent = this.opts.changeThresholdPercent;
+    if (minChangedPercent === undefined) {
+      if (typeof this.opts.sensitivity === "number" && this.opts.sensitivity > 0 && this.opts.sensitivity < 100) {
+        // Sensitivity 1-99: 99 -> 1% change, 75 -> 3% change, 50 -> 5% change, 15 -> 8% change
+        minChangedPercent = Math.max(1, Math.round(10 - (this.opts.sensitivity / 100) * 8));
+      } else {
+        minChangedPercent = 4;
+      }
+    }
+    // pblack = % of pixels with luminance difference <= 12 (i.e. static/unchanged)
+    // Motion: pblack drops to <= (100 - minChangedPercent), e.g. <= 96%
+    const pblackThreshold = 100 - minChangedPercent;
 
     /**
      * Pipeline:
-     *  fps=1          — 1 frame/sec, minimal CPU
-     *  scale=160:90   — downscale for speed
-     *  format=gray    — luma only, drop chroma
-     *  tblend=all_mode=difference128 — per-pixel diff between frame N and N-1
-     *  blackframe=amount=99:thresh=8 — measures how "black" (= no change) the diff is
-     *    stderr output: "[Parsed_blackframe...] frame:N pblack:P pts:..."
-     *    pblack < threshold → significant pixel changes → MOTION
+     *  fps=1        — 1 frame/sec, minimal CPU
+     *  scale=160:90 — downscale for speed
+     *  format=gray  — luma only, drop chroma
+     *  tblend=all_mode=difference — absolute pixel difference |frame_N - frame_N-1| (0 = no motion)
+     *  blackframe=amount=95:thresh=12 — measures percentage of black pixels (pblack)
+     *    outputs at info level: "[Parsed_blackframe...] frame:N pblack:P pts:..."
+     *    pblack <= threshold → significant pixel changes → MOTION
      */
-    const vf = "fps=1,scale=160:90,format=gray,tblend=all_mode=difference128,blackframe=amount=99:thresh=8";
+    const vf = "fps=1,scale=160:90,format=gray,tblend=all_mode=difference,blackframe=amount=95:thresh=12";
 
     const args = [
-      "-hide_banner", "-loglevel", "warning",
+      "-hide_banner",
+      "-loglevel", "info",
       "-rtsp_transport", "tcp",
       "-timeout", "10000000",
       "-i", url,
@@ -160,24 +174,36 @@ export class FfmpegMotionDetector extends EventEmitter {
     });
   }
 
+  private lastHeartbeatAt = 0;
+
   private parseLine(line: string, pblackThreshold: number, log?: any): void {
     const m = line.match(/pblack:(\d+)/);
     if (!m) return;
     const pblack = parseInt(m[1], 10);
-    if (pblack < pblackThreshold) {
-      this.onMotionDetected(pblack, log);
+    const changedPct = 100 - pblack;
+
+    const now = Date.now();
+    if (now - this.lastHeartbeatAt > 30000) {
+      this.lastHeartbeatAt = now;
+      log?.notice?.(
+        `[MotionDetector][${this.opts.cameraName}] 👁️ Analizando flujo activo a 1 FPS (cambio=${changedPct}%, pblack=${pblack}%, reposo)`,
+      );
+    }
+
+    if (pblack <= pblackThreshold) {
+      this.onMotionDetected(pblack, changedPct, log);
     }
   }
 
-  private onMotionDetected(pblack: number, log?: any): void {
+  private onMotionDetected(pblack: number, changedPct: number, log?: any): void {
     const now = Date.now();
-    if (now - this.lastTriggerAt < (this.opts.cooldownMs ?? 8000)) return;
+    if (now - this.lastTriggerAt < (this.opts.cooldownMs ?? 4000)) return;
     this.lastTriggerAt = now;
 
     if (!this.motionActive) {
       this.motionActive = true;
       log?.notice?.(
-        `[MotionDetector][${this.opts.cameraName}] 🎯 MOTION DETECTED (pblack=${pblack})`,
+        `[MotionDetector][${this.opts.cameraName}] 🎯 MOVIMIENTO DETECTADO EN CÁMARA (cambio=${changedPct}%, pblack=${pblack}%)`,
       );
       this.emit("motion", true);
     }
@@ -187,10 +213,10 @@ export class FfmpegMotionDetector extends EventEmitter {
       this.resetTimer = undefined;
       if (this.motionActive) {
         this.motionActive = false;
-        log?.notice?.(`[MotionDetector][${this.opts.cameraName}] Motion cleared`);
+        log?.notice?.(`[MotionDetector][${this.opts.cameraName}] Movimiento finalizado (reposo)`);
         this.emit("motion", false);
       }
-    }, this.opts.resetMs ?? 30_000);
+    }, this.opts.resetMs ?? 15000);
   }
 
   private scheduleRestart(log?: any): void {

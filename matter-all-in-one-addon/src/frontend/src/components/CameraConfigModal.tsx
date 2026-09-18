@@ -1049,17 +1049,58 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                 <p className="paired-card-desc">
                   Esta cámara ya está configurada en Apple Home para Live View HAP. El código QR se oculta para proteger la sesión activa.
                 </p>
+                <div
+                  style={{
+                    marginTop: 12,
+                    padding: "10px 14px",
+                    background: "rgba(59, 130, 246, 0.12)",
+                    borderRadius: 8,
+                    border: "1px solid rgba(59, 130, 246, 0.3)",
+                    fontSize: "0.82rem",
+                    textAlign: "left",
+                  }}
+                >
+                  <strong style={{ color: "#93c5fd" }}>💡 IMPORTANTE PARA GRABAR EN ICLOUD (HKSV):</strong>
+                  <div style={{ marginTop: 6, color: "#bfdbfe", lineHeight: 1.4 }}>
+                    Apple Home desactiva la grabación por defecto. En tu iPhone/iPad:
+                    <ol style={{ margin: "4px 0 0 16px", padding: 0 }}>
+                      <li>Abre la app <strong>Casa</strong> y toca esta cámara.</li>
+                      <li>Toca ⚙️ <strong>Ajustes de la cámara</strong> → <strong>Opciones de grabación</strong>.</li>
+                      <li>Selecciona <strong>«Transmitir y permitir la grabación»</strong> (tanto En casa como Fuera de casa).</li>
+                    </ol>
+                  </div>
+                </div>
               </div>
             ) : (
-              <QRCodeDisplay
-                pairingCode={pairingPayload}
-                manualCode={pinCode}
-                pinCode={activeTab === "homekit" ? pinCode : undefined}
-                variant={activeTab === "homekit" ? "hap-homekit" : "matter-badge"}
-                entityName={cameraName}
-                elementId="cam-modal-qr-code"
-                noteText="Escanea con la app Casa de Apple para Live View HAP"
-              />
+              <>
+                <QRCodeDisplay
+                  pairingCode={pairingPayload}
+                  manualCode={pinCode}
+                  pinCode={activeTab === "homekit" ? pinCode : undefined}
+                  variant={activeTab === "homekit" ? "hap-homekit" : "matter-badge"}
+                  entityName={cameraName}
+                  elementId="cam-modal-qr-code"
+                  noteText="Escanea con la app Casa de Apple para Live View HAP"
+                />
+                <div
+                  style={{
+                    marginTop: 10,
+                    padding: "10px 12px",
+                    background: "rgba(245, 158, 11, 0.1)",
+                    borderRadius: 8,
+                    border: "1px solid rgba(245, 158, 11, 0.3)",
+                    fontSize: "0.78rem",
+                    textAlign: "left",
+                  }}
+                >
+                  <strong style={{ color: "#fcd34d" }}>📲 Cómo vincular en Apple Casa:</strong>
+                  <ol style={{ margin: "4px 0 0 16px", padding: 0, color: "#fef08a" }}>
+                    <li>Abre la app <strong>Casa</strong> en tu iPhone o iPad.</li>
+                    <li>Toca <strong>+</strong> → <strong>Agregar accesorio</strong> y escanea el código QR.</li>
+                    <li>O toca <em>«Más opciones...»</em>, elige <strong>{cameraName}</strong> e introduce el PIN: <strong>{pinCode}</strong>.</li>
+                  </ol>
+                </div>
+              </>
             )}
 
             <div className="qr-actions" style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>

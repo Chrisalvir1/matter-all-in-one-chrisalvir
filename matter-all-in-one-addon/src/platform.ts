@@ -1942,7 +1942,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     );
     this.log.notice(`[Runtime] Matterbridge runtime: ${mbVersion}`);
     this.log.notice(`[Runtime] Node.js runtime: ${process.version}`);
-    this.log.notice(`[Runtime] Plugin version: 1.8.3`);
+    this.log.notice(`[Runtime] Plugin version: 1.8.4`);
     await this.loadEntityDiagnostics();
     await this.startUiServer();
     this.startMatterConnectionMonitor();
@@ -2139,8 +2139,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
           if (targetCameraId) {
             if (isMotion) {
-              CameraUiHomeKitBridge.updateMotion(targetCameraId, active);
-              this.broadcastSseMessage("cameraui_motion", { cameraId: targetCameraId, motionOn: active });
+              CameraUiHomeKitBridge.updateMotion(targetCameraId, active, this, `MQTT (${topic})`);
             }
             if (isDoorbell) {
               CameraUiHomeKitBridge.triggerDoorbell(targetCameraId);
@@ -4011,11 +4010,16 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               this.ha.hassEntities.get(`camera.${cuiId}`)?.device_id);
 
         if (isLinked) {
+          let detectedLabel = "HA Sensor";
+          if (cleanEntityId.includes("persona") || cleanEntityId.includes("person")) detectedLabel = "IA Persona";
+          else if (cleanEntityId.includes("vehiculo") || cleanEntityId.includes("vehicle") || cleanEntityId.includes("car") || cleanEntityId.includes("auto")) detectedLabel = "IA Vehículo";
+          else if (cleanEntityId.includes("animal") || cleanEntityId.includes("pet")) detectedLabel = "IA Animal";
+          else if (cleanEntityId.includes("motion") || cleanEntityId.includes("movimiento")) detectedLabel = "Sensor Movimiento";
+
           this.log.notice(
-            `[Camera.UI] Cambio de estado de movimiento (${isMotionState ? "DETECTADO" : "REPOSO"}) desde HA (${entityId}) para cámara "${accessory.record?.name || cuiId}"`,
+            `[Camera.UI] Cambio de estado de movimiento (${isMotionState ? "DETECTADO" : "REPOSO"}) desde HA (${entityId}, ${detectedLabel}) para cámara "${accessory.record?.name || cuiId}"`,
           );
-          accessory.updateMotionState(isMotionState);
-          this.broadcastSseMessage("cameraui_motion", { cameraId: cuiId, motionOn: isMotionState });
+          CameraUiHomeKitBridge.updateMotion(cuiId, isMotionState, this, `${detectedLabel} (${entityFriendlyName || entityId})`);
         }
       }
     }

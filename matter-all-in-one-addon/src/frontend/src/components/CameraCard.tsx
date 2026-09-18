@@ -82,7 +82,7 @@ export const CameraCard: React.FC<CameraCardProps> = ({
           <span className="device-icon" style={{ fontSize: "1.2rem" }}>📹</span>
           <div className="card-pills-group" style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
             <span className="badge-scrypted-tag">SCRYPTED</span>
-            {isHapPaired && (
+            {isHapPaired ? (
               <span
                 className="tag"
                 style={{
@@ -93,7 +93,20 @@ export const CameraCard: React.FC<CameraCardProps> = ({
                   fontWeight: 600,
                 }}
               >
-                🍏 HAP Apple Home
+                🍏 Enlazada a Casa
+              </span>
+            ) : (
+              <span
+                className="tag"
+                style={{
+                  fontSize: "0.68rem",
+                  background: "rgba(245, 158, 11, 0.15)",
+                  color: "#fcd34d",
+                  border: "1px solid rgba(245, 158, 11, 0.4)",
+                  fontWeight: 600,
+                }}
+              >
+                ⚠️ No enlazada a Casa
               </span>
             )}
             {isMatterPaired && (
@@ -136,20 +149,35 @@ export const CameraCard: React.FC<CameraCardProps> = ({
             </span>
           ))}
         </div>
-        <div className="card-footer">
+        <div className="card-footer" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span className="entity-summary">
             {entitiesCount} entidad{entitiesCount === 1 ? "" : "es"}
           </span>
-          <button
-            className="button button-secondary"
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onConfigure();
-            }}
-          >
-            Configurar
-          </button>
+          <div style={{ display: "flex", gap: 6 }}>
+            {!isHapPaired && (
+              <button
+                className="button button-primary"
+                type="button"
+                style={{ fontSize: "0.75rem", padding: "4px 8px" }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onConfigure();
+                }}
+              >
+                📲 Enlazar QR
+              </button>
+            )}
+            <button
+              className="button button-secondary"
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onConfigure();
+              }}
+            >
+              Configurar
+            </button>
+          </div>
         </div>
       </article>
     );
@@ -190,7 +218,7 @@ export const CameraCard: React.FC<CameraCardProps> = ({
           <span className="device-icon" style={{ fontSize: "1.2rem" }}>🎥</span>
           <div className="card-pills-group" style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
             <span className="badge-cameraui-tag">CAMERA.UI</span>
-            {isHapPaired && (
+            {isHapPaired ? (
               <span
                 className="tag"
                 style={{
@@ -201,7 +229,20 @@ export const CameraCard: React.FC<CameraCardProps> = ({
                   fontWeight: 600,
                 }}
               >
-                🍏 HAP Apple Home
+                🍏 Enlazada a Casa
+              </span>
+            ) : (
+              <span
+                className="tag"
+                style={{
+                  fontSize: "0.68rem",
+                  background: "rgba(245, 158, 11, 0.15)",
+                  color: "#fcd34d",
+                  border: "1px solid rgba(245, 158, 11, 0.4)",
+                  fontWeight: 600,
+                }}
+              >
+                ⚠️ No enlazada a Casa
               </span>
             )}
             <span
@@ -253,7 +294,7 @@ export const CameraCard: React.FC<CameraCardProps> = ({
                 fontWeight: 700,
               }}
             >
-              🚨 ¡MOVIMIENTO DETECTADO!
+              🚨 ¡MOVIMIENTO DETECTADO!{cameraUiCamera.motionSource ? ` (${cameraUiCamera.motionSource.split(' ')[0]})` : ""}
             </span>
           )}
           {realSensors.map((s, idx) => (
@@ -263,20 +304,35 @@ export const CameraCard: React.FC<CameraCardProps> = ({
           ))}
         </div>
 
-        <div className="card-footer">
+        <div className="card-footer" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span className="entity-summary">
             {entitiesCount} entidad{entitiesCount === 1 ? "" : "es"}
           </span>
-          <button
-            className="button button-secondary"
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onConfigure();
-            }}
-          >
-            Configurar
-          </button>
+          <div style={{ display: "flex", gap: 6 }}>
+            {!isHapPaired && (
+              <button
+                className="button button-primary"
+                type="button"
+                style={{ fontSize: "0.75rem", padding: "4px 8px" }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onConfigure();
+                }}
+              >
+                📲 Enlazar QR
+              </button>
+            )}
+            <button
+              className="button button-secondary"
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onConfigure();
+              }}
+            >
+              Configurar
+            </button>
+          </div>
         </div>
       </article>
     );

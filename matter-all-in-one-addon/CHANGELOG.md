@@ -1,3 +1,20 @@
+## [1.8.4] - 2026-09-18
+
+### Corrección Crítica del Detector de Movimiento FFmpeg, Vinculación Apple Home y Detección IA
+
+- **Corrección de Fórmula en Detección de Movimiento FFmpeg:**
+  - Cambiado filtro FFmpeg de `tblend=all_mode=difference128` a `tblend=all_mode=difference` (diferencia absoluta real: 0 = reposo).
+  - Corregido nivel de registro de FFmpeg de `-loglevel warning` a `-loglevel info` para permitir que el filtro `blackframe` emita métricas `pblack`.
+  - Recalibrado el umbral de detección: ahora se activa cuando `>= 4%` de los píxeles cambian (`pblack <= 96%`), detectando personas, vehículos y animales a cualquier distancia normal de la cámara.
+  - Heartbeat periódico cada 30 segundos en los registros: `[MotionDetector] 👁️ Analizando flujo activo a 1 FPS (cambio=X%, pblack=Y%, reposo)`.
+- **Integración Directa con Sensores IA de Home Assistant (Omni AI Sensors):**
+  - Vinculación directa de entidades binarias de IA (`persona`, `animal`, `vehículo`, `movimiento`) con `CameraUiHomeKitBridge.updateMotion()`.
+  - Registro explícito de la entidad que detonó la detección: `[Detección][Cámara] 🎯 MOVIMIENTO CONFIRMADO [Origen: IA Persona (...)] → Disparando HomeKit MotionDetected, HKSV iCloud y Matter Occupancy`.
+- **Claridad de Vinculación y HKSV en la Interfaz de Usuario:**
+  - Las tarjetas de cámara ahora indican explícitamente `🍏 Enlazada a Casa` o `⚠️ No enlazada a Casa`.
+  - Botón directo `📲 Enlazar QR` en cada cámara no enlazada para emparejar en Apple Home en un solo paso.
+  - Instrucción destacada en el modal de configuración explicando el requisito de Apple Home: activar **«Transmitir y permitir la grabación»** en los ajustes de la cámara en iOS para que Apple TV/HomePod guarde clips en iCloud.
+
 ## [1.8.3] - 2026-09-18
 
 ### Optimización Ultra-Rápida de Streaming en Vivo (Live View Instantáneo ~0s)

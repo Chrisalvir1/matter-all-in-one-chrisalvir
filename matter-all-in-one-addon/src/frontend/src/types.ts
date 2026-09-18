@@ -205,6 +205,7 @@ export interface CameraUiCameraItem {
   motionTopic?: string;
   doorbellTopic?: string;
   motionActive?: boolean;
+  motionSource?: string;
   doorbellActive?: boolean;
   hasLight?: boolean;
   lightActive?: boolean;

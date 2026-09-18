@@ -225,12 +225,12 @@ export class CameraUiHomeKitBridge {
           cameraId: camera.id,
           cameraName: camera.name || `Cámara ${camera.id}`,
           rtspUrl: camera.rtspUrl,
-          sensitivity: 15,
-          cooldownMs: 6000,
-          resetMs: 20000,
+          changeThresholdPercent: 4,
+          cooldownMs: 4000,
+          resetMs: 15000,
         });
         detector.on("motion", (active: boolean) => {
-          CameraUiHomeKitBridge.updateMotion(camera.id, active, platform);
+          CameraUiHomeKitBridge.updateMotion(camera.id, active, platform, "FFmpeg Video");
         });
         accessory.delegate.on("session-start", () => {
           detector.pause(platform?.log);
@@ -276,6 +276,7 @@ export class CameraUiHomeKitBridge {
     cameraId: string,
     active: boolean,
     platform?: any,
+    triggerSource?: string,
   ): boolean {
     const accessory = this.activeAccessories.get(cameraId);
     const camName = accessory?.record?.name || cameraId;
@@ -283,7 +284,7 @@ export class CameraUiHomeKitBridge {
     if (accessory) {
       accessory.updateMotionState(active);
       platform?.log?.notice?.(
-        `[Detección][${camName}] 🎯 ${active ? "MOVIMIENTO CONFIRMADO" : "MOVIMIENTO FINALIZADO"} → Disparando HomeKit MotionDetected, HKSV iCloud y Matter Occupancy (active=${active})`,
+        `[Detección][${camName}] 🎯 ${active ? `MOVIMIENTO CONFIRMADO${triggerSource ? ` [Origen: ${triggerSource}]` : ""}` : "MOVIMIENTO FINALIZADO"} → Disparando HomeKit MotionDetected, HKSV iCloud y Matter Occupancy (active=${active})`,
       );
     }
 
@@ -305,8 +306,10 @@ export class CameraUiHomeKitBridge {
       try {
         const store = await CameraUiStorage.load();
         const cam = store.cameras.find((c) => c.id === cameraId);
-        if (cam && cam.motionActive !== active) {
+        if (cam) {
           cam.motionActive = active;
+          cam.motionSource = active ? triggerSource : undefined;
+          if (active) cam.lastMotionAt = new Date().toISOString();
           await CameraUiStorage.save(store);
         }
       } catch {}
@@ -315,11 +318,13 @@ export class CameraUiHomeKitBridge {
     platform?.broadcastSseMessage?.("cameraui_motion", {
       cameraId,
       motionOn: active,
+      triggerSource: active ? triggerSource : undefined,
       timestamp: Date.now(),
     });
     platform?.broadcastSseMessage?.("cameraui_updated", {
       cameraId,
       motionActive: active,
+      timestamp: Date.now(),
     });
 
     // Forward to CameraAiDetector so UI "🧠 IA & Fauna" tab lights up in real time
