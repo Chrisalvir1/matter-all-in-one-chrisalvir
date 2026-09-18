@@ -1,3 +1,15 @@
+## [1.7.4] - 2026-09-17
+
+### Habilitación de Webhooks LAN en Ingress Proxy y Diagnóstico de Stream Amigable
+
+- **Habilitación de Webhooks LAN en `proxy.ts` (Ingress Proxy):**
+  - El proxy de Ingress en el puerto 8283 ahora permite peticiones entrantes a rutas `/api/*` desde la red local (LAN: `192.168.*`, `10.*`, `172.*`, loopback).
+  - Resuelve el bloqueo `403 Forbidden` cuando Camera.UI (`192.168.110.46`) envía webhooks de movimiento HTTP POST a `http://192.168.110.147:8283/api/cameraui/motion`.
+- **Detección Temprana de URL de Webhook en Verificador de Stream:**
+  - Si se introduce accidentalmente la URL de webhook en el verificador de stream, se informa inmediatamente con un mensaje claro en lugar del críptico error de decodificación RTSP.
+- **Tiempos de Espera Robustos para Cámaras a Batería:**
+  - Aumentado el tiempo de espera por defecto a 12s e incorporado `-stimeout 10000000` en ffprobe/ffmpeg para permitir que cámaras a batería (como Tapo C402) despierten su stream a través de go2rtc antes de fallar el sondeo.
+
 ## [1.6.5] - 2026-09-17
 
 ### Desvinculación Limpia de Scrypted, Detección Nativa de Cámaras de Home Assistant (Google Nest) y Fin del Timeout de 8000ms

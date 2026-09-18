@@ -13,7 +13,20 @@ const ALLOWED_INGRESS_CLIENTS = new Set([
 
 const server = http.createServer((req, res) => {
   const remoteAddress = req.socket.remoteAddress ?? "";
-  if (!ALLOWED_INGRESS_CLIENTS.has(remoteAddress)) {
+  const url = req.url || "";
+  const isApiRoute = url.startsWith("/api/");
+  const isLanClient =
+    remoteAddress.startsWith("192.168.") ||
+    remoteAddress.startsWith("::ffff:192.168.") ||
+    remoteAddress.startsWith("10.") ||
+    remoteAddress.startsWith("::ffff:10.") ||
+    remoteAddress.startsWith("172.") ||
+    remoteAddress.startsWith("::ffff:172.") ||
+    remoteAddress === "127.0.0.1" ||
+    remoteAddress === "::1" ||
+    remoteAddress === "::ffff:127.0.0.1";
+
+  if (!ALLOWED_INGRESS_CLIENTS.has(remoteAddress) && !(isLanClient && isApiRoute)) {
     res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
     res.end("Forbidden");
     return;

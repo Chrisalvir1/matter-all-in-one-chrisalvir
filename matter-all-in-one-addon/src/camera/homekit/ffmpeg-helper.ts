@@ -225,7 +225,21 @@ export async function probeCameraSource(
     customFfmpegPath?: string;
   } = {},
 ): Promise<ProbeResult> {
-  const timeoutMs = options.timeoutMs ?? 8000;
+  const cleanUrl = sourceUrl ? sourceUrl.trim() : "";
+  if (
+    cleanUrl.includes("/api/cameraui/motion") ||
+    cleanUrl.includes("/api/motion") ||
+    cleanUrl.endsWith("/api/cameraui/motion")
+  ) {
+    return {
+      valid: false,
+      hasAudio: false,
+      error:
+        "Esta URL es un Webhook HTTP para eventos de movimiento, no un stream de video RTSP/MJPEG. Debes configurarla en Camera.UI > Configuración > Webhooks como URL de destino, no como stream de la cámara.",
+    };
+  }
+
+  const timeoutMs = options.timeoutMs ?? 12000;
   const ffprobePath = options.customFfprobePath || resolveFfprobePath();
   let lastError: string | undefined;
 
@@ -353,6 +367,8 @@ function probeWithFfprobe(
       args.push(
         "-rtsp_transport",
         rtspTransport,
+        "-stimeout",
+        "10000000",
         "-probesize",
         "2097152",
         "-analyzeduration",
@@ -510,6 +526,10 @@ function probeWithFfmpeg(
       args.push(
         "-rtsp_transport",
         rtspTransport,
+        "-timeout",
+        "10000000",
+        "-stimeout",
+        "10000000",
       );
     } else if (
       sourceUrl.startsWith("http://") ||
