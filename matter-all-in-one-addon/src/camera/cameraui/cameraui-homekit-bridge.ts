@@ -232,6 +232,12 @@ export class CameraUiHomeKitBridge {
         detector.on("motion", (active: boolean) => {
           CameraUiHomeKitBridge.updateMotion(camera.id, active, platform);
         });
+        accessory.delegate.on("session-start", () => {
+          detector.pause(platform?.log);
+        });
+        accessory.delegate.on("session-end", () => {
+          detector.resume(platform?.log);
+        });
         detector.start(platform?.log);
         this.activeMotionDetectors.set(camera.id, detector);
       } catch (detErr) {

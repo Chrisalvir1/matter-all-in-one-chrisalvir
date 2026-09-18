@@ -51,9 +51,30 @@ export class FfmpegMotionDetector extends EventEmitter {
     this.spawnProcess(log);
   }
 
+  private paused = false;
+
+  public pause(log?: any): void {
+    if (!this.running || this.paused) return;
+    this.paused = true;
+    log?.notice?.(
+      `[MotionDetector][${this.opts.cameraName}] Pausing motion detector to yield RTSP socket to Live View`,
+    );
+    this.killProcess();
+  }
+
+  public resume(log?: any): void {
+    if (!this.running || !this.paused) return;
+    this.paused = false;
+    log?.notice?.(
+      `[MotionDetector][${this.opts.cameraName}] Resuming motion detector after Live View ended`,
+    );
+    this.spawnProcess(log);
+  }
+
   public stop(log?: any): void {
     if (!this.running) return;
     this.running = false;
+    this.paused = false;
     log?.notice?.(
       `[MotionDetector][${this.opts.cameraName}] Stopping motion detection`,
     );
@@ -74,7 +95,7 @@ export class FfmpegMotionDetector extends EventEmitter {
   }
 
   private spawnProcess(log?: any): void {
-    if (!this.running) return;
+    if (!this.running || this.paused) return;
     const ffmpegPath = resolveFfmpegPath();
     if (!ffmpegPath) return;
 
@@ -173,7 +194,7 @@ export class FfmpegMotionDetector extends EventEmitter {
   }
 
   private scheduleRestart(log?: any): void {
-    if (!this.running) return;
+    if (!this.running || this.paused) return;
     const delayMs = Math.min(3000 * Math.pow(2, Math.min(this.consecutiveErrors, 3)), 30_000);
     this.restartTimer = setTimeout(() => {
       this.restartTimer = undefined;

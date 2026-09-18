@@ -378,11 +378,11 @@ export class HomeKitCameraRecordingDelegate
         "-rtsp_transport",
         "tcp",
         "-timeout",
-        "20000000",
+        "15000000",
         "-probesize",
-        "1048576",
+        "4194304",
         "-analyzeduration",
-        "1000000",
+        "4000000",
         "-fflags",
         "+nobuffer+flush_packets+genpts",
         "-flags",
@@ -537,13 +537,7 @@ export class HomeKitCameraRecordingDelegate
     this.isStartingPipeline = false;
     if (this.ffmpegProcess) {
       try {
-        this.ffmpegProcess.kill("SIGTERM");
-        const proc = this.ffmpegProcess;
-        setTimeout(() => {
-          try {
-            proc.kill("SIGKILL");
-          } catch {}
-        }, 1000);
+        this.ffmpegProcess.kill("SIGKILL");
       } catch {}
       this.ffmpegProcess = undefined;
     }

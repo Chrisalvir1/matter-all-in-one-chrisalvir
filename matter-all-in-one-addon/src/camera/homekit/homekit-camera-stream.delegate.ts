@@ -620,6 +620,10 @@ export class HomeKitCameraStreamingDelegate
       `?rtcpport=${session.videoPort}&localrtcpport=${session.localVideoPort}&pkt_size=${mtu}`;
 
     this.emit("session-start", session.sessionId);
+    // Yield 150ms so background listeners (HKSV pre-buffer and local motion detector)
+    // finish terminating their background FFmpeg RTSP processes BEFORE Live View connects.
+    await new Promise((resolve) => setTimeout(resolve, 150));
+
     let callbackSettled = false;
     const settle = (error?: Error): void => {
       if (callbackSettled) return;
@@ -776,14 +780,12 @@ export class HomeKitCameraStreamingDelegate
       args.push(
         "-rtsp_transport",
         "tcp",
-        // Connection timeout: 5s — fast fail so HomeKit retries quickly instead
-        // of spinning for 20s waiting for FFmpeg to give up.
         "-timeout",
-        "5000000",
+        "15000000",
         "-probesize",
-        "1048576",
+        "4194304",
         "-analyzeduration",
-        "1000000",
+        "4000000",
         "-fflags",
         "+nobuffer+flush_packets+genpts",
         "-flags",

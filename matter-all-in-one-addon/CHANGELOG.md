@@ -1,3 +1,16 @@
+## [1.8.1] - 2026-09-18
+
+### Corrección Crítica: Live View Congelado / Error Unspecified Size & Operation Timed Out
+
+- **Solución al error FFmpeg `Could not find codec parameters: unspecified size` y `Error during demuxing: Operation timed out`:**
+  - Se incrementó `probesize` a `4194304` (4MB) y `analyzeduration` a `4000000` (4s) para streams RTSP en Live View y HKSV pre-buffer. FFmpeg requiere al menos un intervalo GOP completo para recibir los NAL units SPS/PPS e IDR en cámaras 2K (como Tapo C402 a 2304x1296) antes de demuxear.
+  - Se incrementó `-timeout` a `15000000` (15 segundos) para evitar cierres prematuros por handshake RTSP en redes locales.
+- **Liberación Inmediata de Socket RTSP (`SIGKILL` en HKSV Pre-buffer):**
+  - `stopPrebufferPipeline()` ahora termina el proceso FFmpeg de prebuffer con `SIGKILL` inmediatamente al solicitar Live View, en lugar de esperar 1000ms con `SIGTERM`.
+  - Se introdujo una pausa de 150ms al emitir `session-start` antes de levantar el proceso de Live View, garantizando que el socket TCP de la cámara esté 100% liberado antes de conectar.
+- **Coordinación de `FfmpegMotionDetector` con Live View:**
+  - El detector de movimiento local ahora pausa su captura RTSP (`pause()`) durante las sesiones de Live View para no saturar el canal de la cámara y reanuda automáticamente (`resume()`) al cerrar HomeKit.
+
 ## [1.8.0] - 2026-09-18
 
 ### Detección de Movimiento Nativa Local por FFmpeg + Corrección Crítica FFmpeg 8.0 `-stimeout`
