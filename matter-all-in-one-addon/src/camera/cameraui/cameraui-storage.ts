@@ -87,6 +87,10 @@ export class CameraUiStorage {
     discovered: CameraUiCameraRecord[],
   ): Promise<CameraUiStore> {
     const store = await this.load();
+    // Safety guard: never wipe stored cameras on an empty sync result.
+    // An empty list almost always means a transient error (bad credentials,
+    // network timeout, etc.) — preserve what we already have.
+    if (discovered.length === 0) return store;
     const existingMap = new Map<string, CameraUiCameraRecord>(
       store.cameras.map((c) => [c.id, c]),
     );

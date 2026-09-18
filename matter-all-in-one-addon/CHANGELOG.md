@@ -1,4 +1,20 @@
+## [1.7.8] - 2026-09-18
+
+### Corrección Crítica HEVC (TAPO C402 / H.265) + Guard Cero Cámaras + Colisión Nombres Matter
+
+- **Fix HEVC Detection (TAPO C402 y cámaras H.265):**
+  - v1.7.7 hardcodeó `chosenStrategy = "passthrough_h264"` para todas las cámaras, eliminando la detección HEVC. El TAPO C402 y cámaras similares envían H.265, por lo que FFmpeg fallaba con `non-existing PPS 0 referenced` y cerraba con código 255.
+  - Restaurada la detección HEVC en `CameraUiHomeKitBridge`: se detecta por `videoCodec`, modelo (`c402|c420|c425|c520|c320|c325|tc72`) y resolución ≥2304px en cámaras Tapo.
+  - `chosenStrategy` ahora es `"passthrough_hevc"` para H.265 y `"passthrough_h264"` para H.264.
+  - `capabilities.videoCodec` ahora usa el codec detectado (`chosenCodec`) en lugar de `"h264"` fijo.
+  - `hksvCapable: isRtspSource` se mantiene sin cambios (mejora de v1.7.7 correcta).
+- **Fix Colisión de Nombres en Matter:**
+  - Los sensores Matter de Camera.UI ahora se nombran `"<nombre> CUI Motion"` en lugar de `"<nombre> Movimiento"`, evitando colisión con dispositivos ya registrados en Scrypted/Tapo.
+- **Fix Guard Cero Cámaras en Storage:**
+  - `mergeDiscoveredCameras()` ahora retorna inmediatamente si `discovered.length === 0`, preservando las cámaras almacenadas ante errores de sincronización (credenciales incorrectas, timeout de red, etc.).
+
 ## [1.7.7] - 2026-09-18
+
 
 ### HKSV Universal (H.264/H.265) y Exportación Automática de Detección de Movimiento a Matter
 

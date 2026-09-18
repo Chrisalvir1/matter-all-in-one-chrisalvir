@@ -55,14 +55,21 @@ export class CameraUiHomeKitBridge {
     // el recordingDelegate transcodifica a H.264 vía FFmpeg cuando el origen es H.265,
     // por lo que el códec de origen nunca debe bloquear la capacidad HKSV.
     const isRtspSource = Boolean(camera.rtspUrl && /^rtsps?:\/\//i.test(camera.rtspUrl));
-    const chosenStrategy = "passthrough_h264";
-    const chosenCodec = "h264";
     const isHaProxy = false;
+    const rawCodec = (camera.videoCodec || "").toLowerCase();
+    const isHevc =
+      rawCodec.includes("hevc") ||
+      rawCodec.includes("265") ||
+      /c402|c420|c425|c520|c320|c325|tc72/i.test(camera.model || "") ||
+      /c402|c420|c425|c520|c320|c325|tc72/i.test(camera.name || "") ||
+      Boolean(camera.width && camera.width >= 2304 && /tapo/i.test(camera.name || ""));
+    const chosenCodec = isHevc ? "hevc" : "h264";
+    const chosenStrategy = isHevc ? "passthrough_hevc" : "passthrough_h264";
 
     const capabilities: CameraCapabilitiesInfo = {
       hasLiveStream: hasSource,
       streamSourceType: "rtsp",
-      videoCodec: "h264",
+      videoCodec: chosenCodec,
       hasAudio: camera.hasAudio,
       audioCodec: "aac_lc",
       resolution: {
@@ -159,7 +166,7 @@ export class CameraUiHomeKitBridge {
           id: uniqueId,
           mode: "server",
         });
-        matterEndpoint.deviceName = `${safeName} Movimiento`;
+        matterEndpoint.deviceName = `${safeName.substring(0, 24)} CUI Motion`;
         matterEndpoint.uniqueId = uniqueId;
         matterEndpoint.serialNumber = `CUI-${camera.id.toUpperCase()}`.substring(0, 32);
         matterEndpoint.vendorId = 0xfff1;
@@ -169,7 +176,7 @@ export class CameraUiHomeKitBridge {
         matterEndpoint.softwareVersionString = "Matterbridge 1.3.7";
 
         matterEndpoint.createDefaultBasicInformationClusterServer(
-          `${safeName} Movimiento`,
+          `${safeName.substring(0, 24)} CUI Motion`,
           matterEndpoint.serialNumber,
           0xfff1,
           matterEndpoint.vendorName,
