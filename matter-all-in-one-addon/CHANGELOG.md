@@ -1,4 +1,19 @@
+## [1.7.9] - 2026-09-18
+
+### Corrección Crítica: Stream HomeKit se Queda Cargando al Re-entrar (Todas las Cámaras)
+
+- **Fix SIGKILL en stopStream():**
+  - Reemplazado `SIGTERM` por `SIGKILL` inmediato al cerrar sesiones de stream. `SIGTERM` podía ser ignorado por FFmpeg cuando estaba bloqueado en lecturas RTSP o escrituras SRTP, dejando un proceso zombie que ocupaba la conexión RTSP de la cámara e impedía que la siguiente sesión pudiera conectar → spinner infinito.
+  - Agregado fallback SIGKILL secundario después de 300ms para garantizar que el OS recupere el handle del proceso.
+- **Fix Sesiones Fantasma (Ghost Sessions):**
+  - Al inicio de `prepareStreamAsync()`, se limpian automáticamente todas las entradas del Map `activeSessions` cuyos procesos FFmpeg hayan muerto. Esto evita que entradas zombie corrompan la lógica de cleanup de nuevas sesiones.
+  - En el handler `close` de FFmpeg, cuando no hay retry pendiente, se elimina la sesión del Map en lugar de dejarla huérfana.
+- **Fix RTSP Timeout 20s → 5s:**
+  - Reducido `-timeout` de 20 segundos a 5 segundos para conexión inicial RTSP. Un timeout largo hacía que HomeKit mostrara el spinner durante 20s esperando que FFmpeg fallara antes de reintentar.
+  - Agregado `-stimeout 5000000` (socket timeout durante streaming activo) para que FFmpeg detecte conexiones RTSP muertas dentro de 5s y salga limpiamente en lugar de colgarse.
+
 ## [1.7.8] - 2026-09-18
+
 
 ### Corrección Crítica HEVC (TAPO C402 / H.265) + Guard Cero Cámaras + Colisión Nombres Matter
 

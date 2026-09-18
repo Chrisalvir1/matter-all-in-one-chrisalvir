@@ -449,6 +449,19 @@ export class HomeKitCameraStreamingDelegate
     callback: PrepareStreamCallback,
   ): Promise<void> {
     try {
+      // Purge any zombie sessions (process died but Map entry survived) before
+      // setting up a new one — otherwise the old dead entry corrupts cleanup.
+      for (const [sid, s] of [...this.activeSessions.entries()]) {
+        if (!s.process || s.process.killed || s.process.exitCode !== null) {
+          this.platform?.log?.notice?.(
+            `[HomeKitCamera][${this.entityId}] Purging zombie session=${sid} before new prepare`,
+          );
+          if (s.pipeController) { try { s.pipeController.abort(); } catch {} }
+          if (s.process) { try { s.process.kill("SIGKILL"); } catch {} }
+          this.activeSessions.delete(sid);
+        }
+      }
+
       const localVideoPort = await this.allocateUdpPort([
         request.video.port,
       ]);
@@ -710,6 +723,10 @@ export class HomeKitCameraStreamingDelegate
         }
 
         settle(new Error(`FFmpeg exited during HAP startup (code ${code})`));
+        // Clean up the ghost session entry so the next HomeKit reconnect
+        // finds a clean Map — otherwise stopStream() later can't properly
+        // emit session-end and activeSessions grows with stale entries.
+        this.activeSessions.delete(session.sessionId);
         if (this.activeSessions.size === 0) {
           this.emit("session-end");
         }
@@ -759,8 +776,14 @@ export class HomeKitCameraStreamingDelegate
       args.push(
         "-rtsp_transport",
         "tcp",
+        // Connection timeout: 5s — fast fail so HomeKit retries quickly instead
+        // of spinning for 20s waiting for FFmpeg to give up.
         "-timeout",
-        "20000000",
+        "5000000",
+        // Socket timeout during active streaming: detect dead RTSP connections
+        // within 5s so FFmpeg exits cleanly and HomeKit can open a fresh session.
+        "-stimeout",
+        "5000000",
         "-probesize",
         "1048576",
         "-analyzeduration",
@@ -1117,9 +1140,21 @@ export class HomeKitCameraStreamingDelegate
       session.pipeController = undefined;
     }
     if (session.process) {
+      const proc = session.process;
+      session.process = undefined;
       try {
-        session.process.kill("SIGTERM");
+        // SIGKILL immediately — SIGTERM can be ignored by FFmpeg when blocked
+        // on RTSP reads or SRTP writes, leaving a zombie that holds the camera
+        // RTSP connection and prevents the next session from connecting.
+        proc.kill("SIGKILL");
       } catch {}
+      // Belt-and-suspenders: ensure the OS reclaims the process handle
+      const killTimer = setTimeout(() => {
+        try {
+          if (proc.exitCode === null && !proc.killed) proc.kill("SIGKILL");
+        } catch {}
+      }, 300);
+      killTimer.unref();
     }
     this.activeSessions.delete(sessionId);
     this.platform?.log?.notice?.(
