@@ -620,9 +620,8 @@ export class HomeKitCameraStreamingDelegate
       `?rtcpport=${session.videoPort}&localrtcpport=${session.localVideoPort}&pkt_size=${mtu}`;
 
     this.emit("session-start", session.sessionId);
-    // Yield 150ms so background listeners (HKSV pre-buffer and local motion detector)
-    // finish terminating their background FFmpeg RTSP processes BEFORE Live View connects.
-    await new Promise((resolve) => setTimeout(resolve, 150));
+    // Yield event loop without artificial delay so background listeners handle pause immediately
+    await new Promise((resolve) => setImmediate(resolve));
 
     let callbackSettled = false;
     const settle = (error?: Error): void => {
@@ -672,6 +671,7 @@ export class HomeKitCameraStreamingDelegate
       process.stderr?.on("data", (chunk: Buffer) => {
         stderr = `${stderr}${chunk.toString()}`.slice(-6000);
       });
+      // Settle HomeKit immediately once process is spawned and active (20ms instead of 400ms delay)
       const guard = setTimeout(() => {
         if (process.exitCode === null && !process.killed) {
           this.platform?.log?.notice?.(
@@ -681,7 +681,7 @@ export class HomeKitCameraStreamingDelegate
         } else {
           settle(new Error("FFmpeg exited during HAP startup"));
         }
-      }, 400);
+      }, 20);
       process.once("error", (error) => {
         clearTimeout(guard);
         settle(error);
@@ -783,9 +783,9 @@ export class HomeKitCameraStreamingDelegate
         "-timeout",
         "10000000",
         "-probesize",
-        "2097152",
+        "32768",
         "-analyzeduration",
-        "1500000",
+        "0",
         "-fpsprobesize",
         "0",
         "-fflags",

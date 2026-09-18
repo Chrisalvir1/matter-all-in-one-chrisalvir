@@ -495,18 +495,36 @@ export class CameraUiClient {
         snapshotSourceUrl ||
         this.cleanStreamUrl(videoConfig.stillImageSource);
 
-      // Ensure rtspUrl strictly prioritizes Stream 1 (Full 100% Quality / Main Stream)
+      // Ensure rtspUrl strictly prioritizes Stream 1 / Main (Full 100% Quality / Native Max Stream)
       if (rtspUrl) {
-        if (
-          (rtspUrl.includes("/stream2") || rtspUrl.includes("_sub") || rtspUrl.includes("/sub/")) &&
-          subRtspUrl &&
-          (subRtspUrl.includes("/stream1") || subRtspUrl.includes("_main") || subRtspUrl.includes("/main/"))
-        ) {
-          const temp = rtspUrl;
-          rtspUrl = subRtspUrl;
-          subRtspUrl = temp;
-        } else if (rtspUrl.includes("/stream2")) {
-          rtspUrl = rtspUrl.replace("/stream2", "/stream1");
+        const isWyze =
+          /wyze/i.test(name) ||
+          /wyze/i.test(videoConfig.source || "") ||
+          /wyze/i.test(rtspUrl);
+
+        if (isWyze) {
+          // Wyze cameras: /stream0 is 1080p/2K High Quality, /stream1 is 360p low-res
+          if (rtspUrl.includes("/stream1")) {
+            rtspUrl = rtspUrl.replace("/stream1", "/stream0");
+          }
+          if (subRtspUrl && subRtspUrl.includes("/stream0") && !rtspUrl.includes("/stream0")) {
+            const temp = rtspUrl;
+            rtspUrl = subRtspUrl;
+            subRtspUrl = temp;
+          }
+        } else {
+          // Standard cameras (Tapo, ONVIF, Reolink): /stream1, /main, /ch0 is High Quality, /stream2 or /sub is 360p
+          if (
+            (rtspUrl.includes("/stream2") || rtspUrl.includes("_sub") || rtspUrl.includes("/sub/")) &&
+            subRtspUrl &&
+            (subRtspUrl.includes("/stream1") || subRtspUrl.includes("_main") || subRtspUrl.includes("/main/"))
+          ) {
+            const temp = rtspUrl;
+            rtspUrl = subRtspUrl;
+            subRtspUrl = temp;
+          } else if (rtspUrl.includes("/stream2")) {
+            rtspUrl = rtspUrl.replace("/stream2", "/stream1");
+          }
         }
       }
 

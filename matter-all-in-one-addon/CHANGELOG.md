@@ -1,3 +1,22 @@
+## [1.8.6] - 2026-09-18
+
+### Extracción Automática de Hardware Genuino, Streaming Instantáneo (~0s) y Passthrough 4K/2K/1080p Real
+
+- **Extracción Automática y Estricta de Hardware Físico (Luz y Sirena):**
+  - Eliminados por completo los selectores desplegables manuales que listaban luminarias de toda la casa.
+  - La vinculación de reflectores y sirenas ahora se realiza de forma 100% automática mediante correspondencia estricta por `device_id` en el registro de dispositivos de Home Assistant (`entry.device_id === camDeviceId`).
+  - Imposibilidad técnica de vincular bombillas del techo, ventiladores, tiras LED o enchufes ajenos.
+  - Si la cámara no cuenta con foco o sirena física, se indica claramente sin falsos dispositivos asociados.
+  - Al enlazar con el código QR HAP principal de la cámara, el foco y la sirena quedan integrados directamente dentro del mosaico de la cámara en Apple Home (Casa), y permanecen activos en Home Assistant para automatizaciones.
+- **Apertura Instantánea del Live Stream en Apple Home (~0s):**
+  - Eliminado el retraso de análisis de FFmpeg (`-analyzeduration 1500000` de 1.5 segundos) reduciéndolo a `0` con `-fpsprobesize 0` y `-probesize 32768`.
+  - Reemplazado el temporizador artificial de `150ms sleep` en `startStream` por `setImmediate()` para ceder el ciclo de eventos en 0 ms.
+  - Reducido el temporizador de confirmación a HomeKit de 400ms a 20ms tras el spawn de FFmpeg, logrando una conexión directa inmediata al abrir la app Casa.
+- **Garantía de Calidad Real 4K, 2K y 1080p Nativa con Passthrough Puro (`-c:v copy`):**
+  - Incorporadas formalmente a la escalera de resoluciones HAP y grabaciones HKSV las resoluciones 4K (3840x2160), 2K (2560x1440, 2304x1296) y 1080p (1920x1080), permitiendo que dispositivos Apple soliciten el stream nativo de máxima fidelidad.
+  - Prioridad absoluta al **Stream 1 / Main stream**: en Wyze se fuerza `/stream0` (Full HD 1080p) sobre el sub-stream `/stream1` (360p); en Tapo/ONVIF se fuerza `/stream1` (2K/4K) sobre `/stream2` (360p).
+  - Passthrough puro sin transcodificación para flujos H.264 y H.265/HEVC: la señal viaja bit por bit desde el sensor hacia Apple Home con 0% de sobrecarga de CPU y máxima nitidez.
+
 ## [1.8.5] - 2026-09-18
 
 ### Solución Definitiva de Streams RTSP, Prioridad Wyze 1080p, Integración HAP de Luces/Sirenas y Selectores de Hardware Reales

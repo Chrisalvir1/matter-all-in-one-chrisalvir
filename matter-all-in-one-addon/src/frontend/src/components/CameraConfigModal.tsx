@@ -73,17 +73,9 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
   const [snapshotUrl, setSnapshotUrl] = useState<string | null>(null);
   const [isLoadingSnapshot, setIsLoadingSnapshot] = useState(false);
   const [snapshotLoaded, setSnapshotLoaded] = useState(false);
-  const [availableDevices, setAvailableDevices] = useState<any[]>([]);
   const [selectedLightId, setSelectedLightId] = useState<string>("auto");
   const [selectedSirenId, setSelectedSirenId] = useState<string>("auto");
   const [selectedMotionId, setSelectedMotionId] = useState<string>("auto");
-  const [isSavingHardware, setIsSavingHardware] = useState(false);
-
-  useEffect(() => {
-    api.getDevices().then((devs) => {
-      if (Array.isArray(devs)) setAvailableDevices(devs);
-    }).catch(() => {});
-  }, []);
 
   const isCameraUi = Boolean(camera && ("id" in camera && !("cameraId" in camera)));
   const cameraId = camera ? ("cameraId" in camera ? camera.cameraId : camera.id) : "";
@@ -576,25 +568,6 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
     }
   };
 
-  const handleSaveHardwareEntities = async () => {
-    setIsSavingHardware(true);
-    try {
-      await api.saveCameraExportConfig(cameraId, {
-        lightEntityId: selectedLightId,
-        sirenEntityId: selectedSirenId,
-        motionEntityId: selectedMotionId,
-        rtspUrl: rtspUrl.trim() || undefined,
-        model: modelInput.trim() || undefined,
-        homeKitEnabled: true,
-      });
-      showToast("✓ Asignación de hardware guardada y vinculada a HomeKit");
-      onRefresh();
-    } catch (err: any) {
-      showToast(err.message || "Error al guardar entidades de hardware", true);
-    } finally {
-      setIsSavingHardware(false);
-    }
-  };
 
   const handleSaveExport = async () => {
     try {
@@ -734,20 +707,6 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
       showToast("⚠️ No se pudo acceder al portapapeles", true);
     }
   };
-
-  const availableLights = availableDevices.filter((d: any) =>
-    (d.entityId || "").startsWith("light.")
-  );
-  const availableSirens = availableDevices.filter((d: any) =>
-    (d.entityId || "").startsWith("siren.") ||
-    ((d.entityId || "").startsWith("switch.") &&
-      /siren|alarm|alarma|status_light/i.test(
-        `${d.entityId} ${d.attributes?.friendly_name || ""}`,
-      ))
-  );
-  const availableMotionSensors = availableDevices.filter((d: any) =>
-    (d.entityId || "").startsWith("binary_sensor.")
-  );
 
   return (
     <div className="modal-backdrop open" role="dialog" aria-modal="true">
@@ -1508,117 +1467,27 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                 </div>
               </div>
 
-              {/* Hardware Selector Dropdowns */}
+              {/* Hardware Físico Genuino Status Banner */}
               <div
                 style={{
                   marginBottom: 14,
-                  padding: "12px",
+                  padding: "12px 14px",
                   borderRadius: 8,
-                  background: "rgba(0, 0, 0, 0.35)",
-                  border: "1px solid rgba(255, 255, 255, 0.08)",
+                  background: "rgba(0, 0, 0, 0.3)",
+                  border: "1px solid rgba(56, 189, 248, 0.2)",
                   display: "flex",
                   flexDirection: "column",
-                  gap: 10,
+                  gap: 6,
                 }}
               >
-                <div style={{ fontSize: "0.76rem", fontWeight: 700, color: "#38bdf8", textTransform: "uppercase" }}>
-                  🛠️ Selector de Hardware Genuino (Luz, Sirena, Sensor IA)
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: "1.1rem" }}>✨</span>
+                  <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#38bdf8" }}>
+                    Hardware Físico Genuino de la Cámara
+                  </span>
                 </div>
-
-                {/* Luz / Foco Selector */}
-                <div>
-                  <label style={{ fontSize: "0.74rem", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>
-                    💡 Luz / Reflector integrado (Foco de la cámara):
-                  </label>
-                  <select
-                    value={selectedLightId}
-                    onChange={(e) => setSelectedLightId(e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "6px 8px",
-                      borderRadius: 6,
-                      background: "rgba(255, 255, 255, 0.05)",
-                      border: "1px solid var(--border)",
-                      color: "var(--text)",
-                      fontSize: "0.78rem",
-                    }}
-                  >
-                    <option value="auto">🔍 Detección automática de hardware</option>
-                    <option value="none">🚫 Ninguna / Desactivar luz en HomeKit</option>
-                    {availableLights.map((l: any) => (
-                      <option key={l.entityId} value={l.entityId}>
-                        💡 {l.attributes?.friendly_name || l.entityId} ({l.entityId})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Sirena Selector */}
-                <div>
-                  <label style={{ fontSize: "0.74rem", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>
-                    🚨 Sirena de Alarma integrada:
-                  </label>
-                  <select
-                    value={selectedSirenId}
-                    onChange={(e) => setSelectedSirenId(e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "6px 8px",
-                      borderRadius: 6,
-                      background: "rgba(255, 255, 255, 0.05)",
-                      border: "1px solid var(--border)",
-                      color: "var(--text)",
-                      fontSize: "0.78rem",
-                    }}
-                  >
-                    <option value="auto">🔍 Detección automática de hardware</option>
-                    <option value="none">🚫 Ninguna / Desactivar sirena en HomeKit</option>
-                    {availableSirens.map((s: any) => (
-                      <option key={s.entityId} value={s.entityId}>
-                        🚨 {s.attributes?.friendly_name || s.entityId} ({s.entityId})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Sensor Movimiento / IA Selector */}
-                <div>
-                  <label style={{ fontSize: "0.74rem", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>
-                    🏃 Sensor de Movimiento / IA Vinculado:
-                  </label>
-                  <select
-                    value={selectedMotionId}
-                    onChange={(e) => setSelectedMotionId(e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "6px 8px",
-                      borderRadius: 6,
-                      background: "rgba(255, 255, 255, 0.05)",
-                      border: "1px solid var(--border)",
-                      color: "var(--text)",
-                      fontSize: "0.78rem",
-                    }}
-                  >
-                    <option value="auto">🔍 Automático / Detección local interna FFmpeg (Recomendado)</option>
-                    <option value="none">🚫 Ninguno (Solo streaming de video)</option>
-                    {availableMotionSensors.map((m: any) => (
-                      <option key={m.entityId} value={m.entityId}>
-                        🏃 {m.attributes?.friendly_name || m.entityId} ({m.entityId})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
-                  <button
-                    className="button button-sm button-primary"
-                    type="button"
-                    onClick={handleSaveHardwareEntities}
-                    disabled={isSavingHardware}
-                    style={{ fontSize: "0.76rem", padding: "5px 12px" }}
-                  >
-                    {isSavingHardware ? "Guardando y Remontando..." : "💾 Guardar Asignación y Sincronizar con HomeKit"}
-                  </button>
+                <div style={{ color: "#94a3b8", fontSize: "0.75rem", lineHeight: 1.4 }}>
+                  El sistema extrae y asocia <strong>única y exclusivamente los componentes físicos integrados en el cuerpo de esta cámara</strong> (foco/reflector, sirena y sensor de movimiento) a través de su identificador de hardware en Home Assistant. No se vincula ninguna luminaria ni interruptor ajeno del hogar.
                 </div>
               </div>
 

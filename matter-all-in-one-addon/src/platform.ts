@@ -560,19 +560,25 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
       const isSameDevice = Boolean(camDeviceId && entry?.device_id === camDeviceId);
 
-      const aliasMatch = cleanAliases.some(
-        (ca) => ca.length >= 3 && (cleanIdStr.includes(ca) || cleanFn.includes(ca)),
-      );
+      // CRITICAL: If the camera is a registered HA device (has camDeviceId), ONLY accept
+      // entities physically belonging to that exact same hardware (entry.device_id === camDeviceId).
+      // Never link room fixtures or ambient household bulbs to the camera!
+      if (camDeviceId) {
+        if (!isSameDevice) continue;
+      } else {
+        const aliasMatch = cleanAliases.some(
+          (ca) => ca.length >= 3 && (cleanIdStr.includes(ca) || cleanFn.includes(ca)),
+        );
 
-      const matches =
-        isSameDevice ||
-        idLower.includes(baseRaw) ||
-        fn.includes(baseRaw) ||
-        aliasMatch ||
-        (words.length > 0 &&
-          words.every((w) => idLower.includes(w) || fn.includes(w)));
+        const matches =
+          idLower.includes(baseRaw) ||
+          fn.includes(baseRaw) ||
+          aliasMatch ||
+          (words.length > 0 &&
+            words.every((w) => idLower.includes(w) || fn.includes(w)));
 
-      if (!matches) continue;
+        if (!matches) continue;
+      }
 
       const domain = entityId.split(".")[0];
       const deviceClass = state?.attributes?.device_class;

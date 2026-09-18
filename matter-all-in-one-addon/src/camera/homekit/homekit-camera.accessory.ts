@@ -289,49 +289,32 @@ export class HomeKitCameraAccessory {
   }
 
   private buildRecordingResolutions(): [number, number, number][] {
-    const source = this.capabilities.resolution || { width: 1920, height: 1080 };
-    const candidateResolutions: [number, number, number][] = [
+    return [
       [3840, 2160, 30],
       [2560, 1440, 30],
       [1920, 1080, 30],
       [1280, 720, 30],
     ];
-    // In iOS 27, Apple Home supports 4K and 2K HKSV recordings.
-    // If the camera source is 4K or 2K, advertise it so iCloud can record in UHD/QHD.
-    return candidateResolutions.filter(
-      ([w, h]) => (w <= source.width && h <= source.height) || w <= 1920,
-    );
   }
 
   private buildDeclaredResolutions(): [number, number, number][] {
     const source = this.capabilities.resolution || { width: 1920, height: 1080 };
     const sourceFps = Math.max(15, Math.min(this.capabilities.maxFps || 30, 60));
-    const nameAndModel = `${this.record.name || ""} ${this.record.model || ""}`.toLowerCase();
-    let maxDeclaredWidth = source.width;
-    let maxDeclaredHeight = source.height;
-
-    // Detect 4K / 2K capabilities if camera name or model indicates high resolution
-    if (maxDeclaredWidth <= 1920) {
-      if (/4k|uhd|8mp/i.test(nameAndModel)) {
-        maxDeclaredWidth = 3840;
-        maxDeclaredHeight = 2160;
-      } else if (/2k|qhd|c402|c420|c425|c520|c325|tc72|3mp|4mp|5mp/i.test(nameAndModel)) {
-        maxDeclaredWidth = 2560;
-        maxDeclaredHeight = 1440;
-      }
-    }
 
     const ladder: [number, number, number][] = [
-      // Native source resolution first so HomeKit negotiates maximum native quality
-      [maxDeclaredWidth, maxDeclaredHeight, sourceFps],
-      // 4K UHD (3840x2160)
+      // 1. Native source resolution first so HomeKit prioritizes maximum native sensor quality
+      [source.width, source.height, sourceFps],
+      // 2. 4K UHD (3840x2160)
       [3840, 2160, sourceFps],
-      // 2K QHD (2560x1440 / 2304x1296 for Tapo, Wyze, etc.)
+      // 3. 2K QHD (2560x1440)
       [2560, 1440, sourceFps],
+      // 4. 2K 3MP (2304x1296 for Tapo, Wyze, etc.)
       [2304, 1296, sourceFps],
+      // 5. 1080p Full HD (1920x1080)
       [1920, 1080, sourceFps],
-      [1280, 960, sourceFps],
+      // 6. 720p HD (1280x720)
       [1280, 720, sourceFps],
+      [1280, 960, sourceFps],
       [1024, 768, sourceFps],
       [640, 480, 30],
       [640, 360, 30],
@@ -341,20 +324,17 @@ export class HomeKitCameraAccessory {
       [320, 240, 15],
       [320, 180, 30],
     ];
-    // Deduplicate and keep only native resolution and resolutions at or below sensor capabilities
+    // Deduplicate resolutions while preserving maximum quality order
     const seen = new Set<string>();
     const supported: [number, number, number][] = [];
     for (const [w, h, fps] of ladder) {
       const key = `${w}x${h}`;
-      if (
-        !seen.has(key) &&
-        ((w <= maxDeclaredWidth && h <= maxDeclaredHeight) || w <= 1920)
-      ) {
+      if (!seen.has(key)) {
         seen.add(key);
         supported.push([w, h, fps]);
       }
     }
-    return supported.length ? supported : [[320, 180, 15]];
+    return supported.length ? supported : [[1920, 1080, 30]];
   }
 
   public findLinkedEntities(): {
@@ -409,10 +389,23 @@ export class HomeKitCameraAccessory {
 
     for (const [entityId, state] of states.entries()) {
       const entry = registry?.get(entityId);
-      const isSameDevice = deviceId && entry?.device_id === deviceId;
+      const isSameDevice = Boolean(deviceId && entry?.device_id === deviceId);
       const fn = state?.attributes?.friendly_name;
-      const match = isSameDevice || matchesName(entityId, fn);
-      if (!match) continue;
+
+      // CRITICAL: If the camera is a registered HA device (has deviceId), ONLY accept
+      // entities physically belonging to that exact same hardware (entry.device_id === deviceId).
+      // Never link room fixtures or ambient household bulbs to the camera!
+      if (deviceId) {
+        if (!isSameDevice) continue;
+      } else {
+        // Cameras without a HA device: strictly exclude room fixtures
+        const isRoomFixture =
+          /ventilador|fan|techo|ceiling|plafon|plafón|arbotante|aplique|lampara|lámpara|tira|strip|hexágono|hexagon|neon|neón|tv|pantalla|mesa|escritorio|buró|buro|noche|velador|veladora|piso|floor|doble_spot|chandelier|segment/i.test(
+            `${entityId} ${fn || ""}`,
+          );
+        if (isRoomFixture) continue;
+        if (!matchesName(entityId, fn)) continue;
+      }
 
       const domain = entityId.split(".")[0];
       const deviceClass = state?.attributes?.device_class;
@@ -428,13 +421,11 @@ export class HomeKitCameraAccessory {
       }
       if (
         !result.light &&
-        domain === "light" &&
-        (entityId.includes("light") ||
-          entityId.includes("spotlight") ||
-          entityId.includes("floodlight") ||
-          entityId.includes("luz") ||
-          entityId.includes("foco") ||
-          isSameDevice)
+        (domain === "light" || domain === "switch") &&
+        (isSameDevice ||
+          /spotlight|floodlight|reflector|flash|status_light|indicador|luz_estado|foco_camara|luz_camara/i.test(
+            `${entityId} ${fn || ""}`,
+          ))
       ) {
         result.light = entityId;
       }
@@ -444,7 +435,9 @@ export class HomeKitCameraAccessory {
           (domain === "switch" &&
             (entityId.includes("siren") ||
               entityId.includes("alarm") ||
-              entityId.includes("alarma"))))
+              entityId.includes("alarma") ||
+              (fn || "").toLowerCase().includes("sirena") ||
+              (fn || "").toLowerCase().includes("alarma"))))
       ) {
         result.siren = entityId;
       }

@@ -35,20 +35,26 @@ export class CameraSourceResolver {
       typeof streamSourceAttr === "string" &&
       streamSourceAttr.trim().length > 0
     ) {
-      const sanitized = sanitizeUrlCredentials(streamSourceAttr);
+      let resolvedUrl = streamSourceAttr;
+      if (/wyze/i.test(entityId) || /wyze/i.test(resolvedUrl)) {
+        if (resolvedUrl.includes("/stream1")) resolvedUrl = resolvedUrl.replace("/stream1", "/stream0");
+      } else if (resolvedUrl.includes("/stream2")) {
+        resolvedUrl = resolvedUrl.replace("/stream2", "/stream1");
+      }
+      const sanitized = sanitizeUrlCredentials(resolvedUrl);
       platform?.log?.debug?.(
         `[CameraSourceResolver][${entityId}] Resolved from stream_source: ${sanitized}`,
       );
 
       return {
-        sourceType: streamSourceAttr.startsWith("rtsp")
+        sourceType: resolvedUrl.startsWith("rtsp")
           ? "rtsp"
-          : streamSourceAttr.includes("/api/camera_proxy_stream/")
+          : resolvedUrl.includes("/api/camera_proxy_stream/")
             ? "ha_proxy"
-            : streamSourceAttr.includes(".m3u8")
+            : resolvedUrl.includes(".m3u8")
               ? "hls"
               : "rtsp",
-        url: streamSourceAttr,
+        url: resolvedUrl,
         snapshotUrl,
         supportsPassthrough: true,
         requiresBridge: false,
@@ -62,14 +68,20 @@ export class CameraSourceResolver {
       attrs.rtsp_stream ||
       attrs.rtsp_stream_url;
     if (typeof directRtsp === "string" && directRtsp.startsWith("rtsp")) {
-      const sanitized = sanitizeUrlCredentials(directRtsp);
+      let resolvedRtsp = directRtsp;
+      if (/wyze/i.test(entityId) || /wyze/i.test(resolvedRtsp)) {
+        if (resolvedRtsp.includes("/stream1")) resolvedRtsp = resolvedRtsp.replace("/stream1", "/stream0");
+      } else if (resolvedRtsp.includes("/stream2")) {
+        resolvedRtsp = resolvedRtsp.replace("/stream2", "/stream1");
+      }
+      const sanitized = sanitizeUrlCredentials(resolvedRtsp);
       platform?.log?.debug?.(
         `[CameraSourceResolver][${entityId}] Resolved direct RTSP stream source: ${sanitized}`,
       );
 
       return {
         sourceType: "rtsp",
-        url: directRtsp,
+        url: resolvedRtsp,
         snapshotUrl,
         supportsPassthrough: true,
         requiresBridge: false,
