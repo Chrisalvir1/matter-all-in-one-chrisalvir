@@ -5,6 +5,205 @@ import type { CameraUiCameraRecord, CameraUiConfig, CameraUiStore } from "./came
 const CONFIG_PATH = "/data/cameraui-config.json";
 const FALLBACK_CONFIG_PATH = "./cameraui-config.json";
 
+export function repairCameraRecord(cam: CameraUiCameraRecord): { cam: CameraUiCameraRecord; modified: boolean } {
+  let modified = false;
+  const name = (cam.name || "").toLowerCase();
+
+  // Strip trailing hash fragments
+  if (cam.rtspUrl && cam.rtspUrl.includes("#")) {
+    cam.rtspUrl = cam.rtspUrl.substring(0, cam.rtspUrl.indexOf("#"));
+    modified = true;
+  }
+  if (cam.subRtspUrl && cam.subRtspUrl.includes("#")) {
+    cam.subRtspUrl = cam.subRtspUrl.substring(0, cam.subRtspUrl.indexOf("#"));
+    modified = true;
+  }
+  if (cam.snapshotUrl && cam.snapshotUrl.includes("#")) {
+    cam.snapshotUrl = cam.snapshotUrl.substring(0, cam.snapshotUrl.indexOf("#"));
+    modified = true;
+  }
+
+  const url = (cam.rtspUrl || "").toLowerCase();
+
+  // Wyze Patio Trasero: strictly enforce 1080p stream0
+  if (name.includes("wyze") || url.includes("wyze") || url.includes("192.168.110.118")) {
+    if (cam.rtspUrl && cam.rtspUrl.includes("/stream1")) {
+      cam.rtspUrl = cam.rtspUrl.replace("/stream1", "/stream0");
+      modified = true;
+    }
+    if (!cam.rtspUrl || cam.rtspUrl.includes("192.168.110.46")) {
+      cam.rtspUrl = "rtsp://Gecko:Mrlsc%401503@192.168.110.118:554/stream0";
+      modified = true;
+    }
+    if (!cam.width || cam.width < 1920) {
+      cam.width = 1920;
+      cam.height = 1080;
+      cam.fps = 30;
+      modified = true;
+    }
+    cam.videoCodec = "h264";
+    cam.strategy = "passthrough_h264";
+  }
+  // Vimtag Gym: 2560x1440 2K HEVC
+  else if (url.includes("vimtag_gym") || name.includes("gym")) {
+    const targetUrl = "rtsp://192.168.110.147:8554/vimtag_113";
+    if (cam.rtspUrl !== targetUrl) {
+      cam.rtspUrl = targetUrl;
+      modified = true;
+    }
+    cam.width = 2560;
+    cam.height = 1440;
+    cam.fps = 20;
+    cam.videoCodec = "hevc";
+    cam.strategy = "passthrough_hevc";
+  }
+  // Vimtag Cochera: 2560x1440 2K HEVC
+  else if (url.includes("cochera") || name.includes("cochera")) {
+    const targetUrl = "rtsp://192.168.110.147:8554/cochera";
+    if (cam.rtspUrl !== targetUrl) {
+      cam.rtspUrl = targetUrl;
+      modified = true;
+    }
+    cam.width = 2560;
+    cam.height = 1440;
+    cam.fps = 20;
+    cam.videoCodec = "hevc";
+    cam.strategy = "passthrough_hevc";
+  }
+  // Vimtag Oficina / Jardin: 2560x1440 2K HEVC
+  else if (
+    url.includes("jardin") ||
+    url.includes("vimtag_oficina") ||
+    name.includes("jardin") ||
+    (name.includes("oficina") && (name.includes("vimtag") || url.includes("vimtag")))
+  ) {
+    const targetUrl = "rtsp://192.168.110.147:8554/jardin";
+    if (cam.rtspUrl !== targetUrl) {
+      cam.rtspUrl = targetUrl;
+      modified = true;
+    }
+    cam.width = 2560;
+    cam.height = 1440;
+    cam.fps = 20;
+    cam.videoCodec = "hevc";
+    cam.strategy = "passthrough_hevc";
+  }
+  // Vimtag Recamara Visita: 2560x1440 2K H264
+  else if (url.includes("recamara") || name.includes("recamara")) {
+    const targetUrl = "rtsp://192.168.110.147:8554/recamara";
+    if (cam.rtspUrl !== targetUrl) {
+      cam.rtspUrl = targetUrl;
+      modified = true;
+    }
+    cam.width = 2560;
+    cam.height = 1440;
+    cam.fps = 20;
+    cam.videoCodec = "h264";
+    cam.strategy = "passthrough_h264";
+  }
+  // Sala Vimtag: 2560x1440 2K HEVC
+  else if (url.includes("sala-vimtag") || url.includes("sala_vimtag") || name.includes("sala")) {
+    const targetUrl = "rtsp://192.168.110.147:8554/sala-vimtag";
+    if (cam.rtspUrl !== targetUrl) {
+      cam.rtspUrl = targetUrl;
+      modified = true;
+    }
+    cam.width = 2560;
+    cam.height = 1440;
+    cam.fps = 20;
+    cam.videoCodec = "hevc";
+    cam.strategy = "passthrough_hevc";
+  }
+  // Cocina Ring: 1080p H264
+  else if (url.includes("cocina_ring") || name.includes("cocina")) {
+    const targetUrl = "rtsp://192.168.110.147:8554/cocina_ring";
+    if (cam.rtspUrl !== targetUrl) {
+      cam.rtspUrl = targetUrl;
+      modified = true;
+    }
+    cam.width = 1920;
+    cam.height = 1080;
+    cam.fps = 30;
+    cam.videoCodec = "h264";
+    cam.strategy = "passthrough_h264";
+  }
+  // Ring Bodega: 1080p H264
+  else if (url.includes("ring_bodega") || name.includes("bodega")) {
+    const targetUrl = "rtsp://192.168.110.147:8554/ring_bodega";
+    if (cam.rtspUrl !== targetUrl) {
+      cam.rtspUrl = targetUrl;
+      modified = true;
+    }
+    cam.width = 1920;
+    cam.height = 1080;
+    cam.fps = 30;
+    cam.videoCodec = "h264";
+    cam.strategy = "passthrough_h264";
+  }
+  // Ring Lavanderia: 1080p H264
+  else if (url.includes("ring_lavanderia") || name.includes("lavanderia")) {
+    const targetUrl = "rtsp://192.168.110.147:8554/ring_lavanderia";
+    if (cam.rtspUrl !== targetUrl) {
+      cam.rtspUrl = targetUrl;
+      modified = true;
+    }
+    cam.width = 1920;
+    cam.height = 1080;
+    cam.fps = 30;
+    cam.videoCodec = "h264";
+    cam.strategy = "passthrough_h264";
+  }
+  // Tapo C402: 2304x1296 2K 3MP H264
+  else if (url.includes("tapo-c402") || name.includes("c402")) {
+    const targetUrl = "rtsp://192.168.110.147:62291/tapo-c402";
+    if (cam.rtspUrl !== targetUrl) {
+      cam.rtspUrl = targetUrl;
+      modified = true;
+    }
+    cam.width = 2304;
+    cam.height = 1296;
+    cam.fps = 15;
+    cam.videoCodec = "h264";
+    cam.strategy = "passthrough_h264";
+  }
+  // Tapo C120: 1080p H264
+  else if (url.includes("tapo_c120") || name.includes("c120")) {
+    if (cam.rtspUrl && cam.rtspUrl.includes("192.168.110.46:8554")) {
+      cam.rtspUrl = cam.rtspUrl.replace("192.168.110.46:8554", "192.168.110.147:8554");
+      modified = true;
+    }
+    cam.width = 1920;
+    cam.height = 1080;
+    cam.fps = 30;
+    cam.videoCodec = "h264";
+    cam.strategy = "passthrough_h264";
+  }
+  // Ezviz Patio Trasero: 1080p H264
+  else if (url.includes("ezviz") || name.includes("ezviz")) {
+    if (cam.rtspUrl && cam.rtspUrl.includes("192.168.110.46:8554")) {
+      cam.rtspUrl = cam.rtspUrl.replace("192.168.110.46:8554", "192.168.110.147:8554");
+      modified = true;
+    }
+    cam.width = 1920;
+    cam.height = 1080;
+    cam.fps = 30;
+    cam.videoCodec = "h264";
+    cam.strategy = "passthrough_h264";
+  }
+
+  // Global repair for any remaining 192.168.110.46:8554 references
+  if (cam.rtspUrl && cam.rtspUrl.includes("192.168.110.46:8554")) {
+    cam.rtspUrl = cam.rtspUrl.replace("192.168.110.46:8554", "192.168.110.147:8554");
+    modified = true;
+  }
+  if (cam.subRtspUrl && cam.subRtspUrl.includes("192.168.110.46:8554")) {
+    cam.subRtspUrl = cam.subRtspUrl.replace("192.168.110.46:8554", "192.168.110.147:8554");
+    modified = true;
+  }
+
+  return { cam, modified };
+}
+
 export class CameraUiStorage {
   private static cachedStore: CameraUiStore | null = null;
 
@@ -45,34 +244,9 @@ export class CameraUiStorage {
       let hadMigration = false;
       const cameras = Array.isArray(parsed.cameras)
         ? parsed.cameras.map((cam: CameraUiCameraRecord) => {
-            if (cam.rtspUrl && cam.rtspUrl.includes("#")) {
-              cam.rtspUrl = cam.rtspUrl.substring(0, cam.rtspUrl.indexOf("#"));
-            }
-            if (cam.subRtspUrl && cam.subRtspUrl.includes("#")) {
-              cam.subRtspUrl = cam.subRtspUrl.substring(0, cam.subRtspUrl.indexOf("#"));
-            }
-            if (cam.snapshotUrl && cam.snapshotUrl.includes("#")) {
-              cam.snapshotUrl = cam.snapshotUrl.substring(0, cam.snapshotUrl.indexOf("#"));
-            }
-            // Auto-repair dead host 192.168.110.46 to active local Home Assistant go2rtc host 192.168.110.147
-            if (cam.rtspUrl && cam.rtspUrl.includes("192.168.110.46:8554")) {
-              if (cam.rtspUrl.includes("vimtag_gym") || /gym/i.test(cam.name || "")) {
-                cam.rtspUrl = "rtsp://192.168.110.147:8554/vimtag_113";
-                hadMigration = true;
-              } else if (
-                cam.rtspUrl.includes("cochera") ||
-                cam.rtspUrl.includes("jardin") ||
-                cam.rtspUrl.includes("recamara") ||
-                cam.rtspUrl.includes("area_de_cafe") ||
-                cam.rtspUrl.includes("cocina_ring") ||
-                cam.rtspUrl.includes("camara_de_playroom") ||
-                cam.rtspUrl.includes("vimtag_113")
-              ) {
-                cam.rtspUrl = cam.rtspUrl.replace("192.168.110.46:8554", "192.168.110.147:8554");
-                hadMigration = true;
-              }
-            }
-            return cam;
+            const result = repairCameraRecord(cam);
+            if (result.modified) hadMigration = true;
+            return result.cam;
           })
         : [];
       const storeConfig = { ...this.getDefaultStore().config, ...(parsed.config || {}) };
@@ -109,35 +283,35 @@ export class CameraUiStorage {
     discovered: CameraUiCameraRecord[],
   ): Promise<CameraUiStore> {
     const store = await this.load();
-    // Safety guard: never wipe stored cameras on an empty sync result.
-    // An empty list almost always means a transient error (bad credentials,
-    // network timeout, etc.) — preserve what we already have.
     if (discovered.length === 0) return store;
     const existingMap = new Map<string, CameraUiCameraRecord>(
       store.cameras.map((c) => [c.id, c]),
     );
 
     const merged: CameraUiCameraRecord[] = [];
-    for (const item of discovered) {
-      const existing = existingMap.get(item.id);
+    for (const rawItem of discovered) {
+      const repaired = repairCameraRecord(rawItem).cam;
+      const existing = existingMap.get(repaired.id);
       if (existing) {
-        merged.push({
-          ...item,
+        // If existing has a valid working URL and repaired has .46, keep existing or repair it
+        const finalItem = repairCameraRecord({
+          ...repaired,
           // Preserve persistent HAP pairing and network settings
-          port: existing.port || item.port,
-          username: existing.username || item.username,
-          pincode: existing.pincode || item.pincode,
-          setupId: existing.setupId || item.setupId,
-          uuid: existing.uuid || item.uuid,
+          port: existing.port || repaired.port,
+          username: existing.username || repaired.username,
+          pincode: existing.pincode || repaired.pincode,
+          setupId: existing.setupId || repaired.setupId,
+          uuid: existing.uuid || repaired.uuid,
           isPaired: existing.isPaired ?? false,
           homeKitEnabled: existing.homeKitEnabled ?? true,
           motionActive: existing.motionActive ?? false,
           lastMotionAt: existing.lastMotionAt,
           doorbellActive: existing.doorbellActive ?? false,
           lastDoorbellAt: existing.lastDoorbellAt,
-        });
+        }).cam;
+        merged.push(finalItem);
       } else {
-        merged.push(item);
+        merged.push(repaired);
       }
     }
 

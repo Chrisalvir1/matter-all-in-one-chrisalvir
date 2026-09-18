@@ -1,3 +1,30 @@
+## [1.8.7] - 2026-09-18
+
+### Reparación Total de URLs RTSP, Eliminación de Spinner en HomeKit y Auto-Migración Global
+
+- **Eliminación Total del Spinner "Cargando..." en Apple HomeKit:**
+  - Inyección del bitstream filter `-bsf:v dump_extra=freq=keyframe` en el pipeline de passthrough remuxing (`-c:v copy`). Esto garantiza que cada fotograma clave (I-frame / IDR) contenga incrustados los conjuntos de parámetros de secuencia y de imagen (SPS, PPS y VPS en HEVC), permitiendo que el decodificador de video por hardware de iOS renderice la imagen inmediatamente en 0 segundos en lugar de esperar ciclos adicionales de GOP.
+  - Aceleración máxima de señalización HAP en `spawnFfmpegProcess`: el callback de `StartStream` se confirma de inmediato mediante `setImmediate()` en cuanto el proceso FFmpeg se genera con PID activo, logrando que Apple Home abra su socket receptor en milisegundos.
+- **Detección y Notificación Dinámica de Puerto Real en FFmpeg Helper:**
+  - Corregido el mensaje engañoso que quemaba `"en puerto 554"` cuando la conexión era rechazada en cualquier puerto.
+  - `probeWithFfprobe` y `probeWithFfmpeg` ahora extraen dinámicamente el puerto de la URL (`url.port`), mostrando con exactitud el puerto que falló (ej. `puerto 8554`).
+- **Auto-Migración y Auto-Reparación Exhaustiva Global en `CameraUiStorage`:**
+  - Implementada la función `repairCameraRecord()` que se ejecuta tanto al cargar (`load()`) como al sincronizar (`mergeDiscoveredCameras()`).
+  - Erradicada por completo la IP muerta `192.168.110.46:8554`: reescritura automática hacia el servidor activo go2rtc en Home Assistant (`192.168.110.147:8554`).
+  - Mapeo garantizado para todas las cámaras:
+    - `VIMTAG GYM` -> `rtsp://192.168.110.147:8554/vimtag_113` (2K QHD 2560x1440 HEVC)
+    - `VIMTAG COCHERA` -> `rtsp://192.168.110.147:8554/cochera` (2K QHD 2560x1440 HEVC)
+    - `VIMTAG OFICINA` y `JARDIN-VIMTAG` -> `rtsp://192.168.110.147:8554/jardin` (2K QHD 2560x1440 HEVC)
+    - `VIMTAG RECAMARA VISITA` -> `rtsp://192.168.110.147:8554/recamara` (2K QHD 2560x1440 H.264)
+    - `SALA-VIMTAG` -> `rtsp://192.168.110.147:8554/sala-vimtag` (2K QHD 2560x1440 HEVC vía ONVIF puerto 80)
+    - `COCINA RING`, `RING BODEGA`, `RING LAVANDERIA` -> `rtsp://192.168.110.147:8554/...`
+    - `WYZE PATIO TRASERO` -> `rtsp://Gecko:Mrlsc%401503@192.168.110.118:554/stream0` (Full HD 1080p con opción go2rtc de 0ms)
+    - `TAPO C402` -> `rtsp://192.168.110.147:62291/tapo-c402` (2K 2304x1296 H.264)
+- **Auto-Aprovisionamiento en go2rtc (`ensureGo2rtcStreamsRegistered`):**
+  - El backend registra automáticamente en go2rtc todas las rutas RTSP y alias en el arranque del add-on y tras cada sincronización, garantizando respuesta HTTP/RTSP 200 OK y entrega instantánea de keyframes desde memoria RAM.
+- **Remount Dinámico de Accesorios HAP al Modificar Stream URL:**
+  - Al cambiar la URL en `POST /api/custom/cameras/:id/stream-url`, el accesorio en memoria se desmonta y remonta automáticamente con `CameraUiHomeKitBridge.mountCamera`, aplicando el cambio al instante sin reiniciar el add-on.
+
 ## [1.8.6] - 2026-09-18
 
 ### Extracción Automática de Hardware Genuino, Streaming Instantáneo (~0s) y Passthrough 4K/2K/1080p Real

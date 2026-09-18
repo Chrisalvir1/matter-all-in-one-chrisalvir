@@ -461,20 +461,26 @@ function probeWithFfprobe(
         }
       }
 
+      let portStr = "554";
+      try {
+        const u = new URL(sourceUrl);
+        portStr = u.port || (u.protocol === "http:" ? "80" : u.protocol === "https:" ? "443" : "554");
+      } catch {}
+
       const raw = stderrData.trim();
       let friendly = raw;
       if (raw.includes("Host is down") || raw.includes("No route to host") || raw.includes("EHOSTDOWN") || raw.includes("EHOSTUNREACH")) {
         friendly = "Host inalcanzable (Host is down / No route to host). El equipo en esa IP está apagado, desconectado o cambió de dirección.";
       } else if (raw.includes("Connection refused") || raw.includes("ECONNREFUSED")) {
-        friendly = "Conexión rechazada (Connection refused en puerto 554). Verifica la IP y que el servicio RTSP esté activo.";
+        friendly = `Conexión rechazada (Connection refused en puerto ${portStr}). Verifica la IP y que el servicio RTSP esté activo en ese puerto.`;
       } else if (raw.includes("401") || raw.includes("Unauthorized")) {
-        friendly = "Autenticación requerida (401 Unauthorized). El stream RTSP requiere usuario y contraseña (rtsp://usuario:clave@ip:554/...).";
+        friendly = `Autenticación requerida (401 Unauthorized). El stream RTSP requiere usuario y contraseña (rtsp://usuario:clave@ip:${portStr}/...).`;
       } else if (raw.includes("404") || raw.includes("Not Found")) {
         friendly = "Ruta no encontrada (404 Not Found). La ruta RTSP no existe en este dispositivo.";
       } else if (raw.includes("timed out") || raw.includes("Operation not permitted") || raw.includes("ETIMEDOUT")) {
-        friendly = "Tiempo de espera agotado al conectar al stream RTSP (timeout). Verifica la conexión WiFi o si el host está encendido.";
+        friendly = `Tiempo de espera agotado al conectar al stream RTSP en puerto ${portStr} (timeout). Verifica la conexión WiFi o si el host está encendido.`;
       } else if (raw.includes("Invalid data found") || raw.includes("Error opening input")) {
-        friendly = "Respuesta RTSP no válida (Invalid data found). La cámara rechazó la conexión. Verifica si requiere usuario y contraseña (rtsp://usuario:clave@ip:554/...), si la ruta es /live en vez de /stream0, o cambia a UDP.";
+        friendly = `Respuesta RTSP no válida (Invalid data found). La cámara en puerto ${portStr} rechazó la conexión. Verifica si requiere usuario y contraseña (rtsp://usuario:clave@ip:${portStr}/...), si la ruta es /live en vez de /stream0, o cambia a UDP.`;
       } else if (raw.includes("Could not find codec parameters")) {
         friendly = "No se pudieron decodificar parámetros H.264 (no se detectaron fotogramas clave a tiempo).";
       } else if (!friendly) {
@@ -606,18 +612,24 @@ function probeWithFfmpeg(
       const raw = stderrData.trim();
       let friendly = raw;
       if (!valid) {
+        let portStr = "554";
+        try {
+          const u = new URL(sourceUrl);
+          portStr = u.port || (u.protocol === "http:" ? "80" : u.protocol === "https:" ? "443" : "554");
+        } catch {}
+
         if (raw.includes("Host is down") || raw.includes("No route to host") || raw.includes("EHOSTDOWN") || raw.includes("EHOSTUNREACH")) {
           friendly = "Host inalcanzable (Host is down / No route to host). El equipo en esa IP está apagado o cambió de dirección.";
         } else if (raw.includes("Connection refused") || raw.includes("ECONNREFUSED")) {
-          friendly = "Conexión rechazada (Connection refused en puerto 554).";
+          friendly = `Conexión rechazada (Connection refused en puerto ${portStr}). Verifica la IP y que el servicio RTSP esté activo en ese puerto.`;
         } else if (raw.includes("401") || raw.includes("Unauthorized")) {
-          friendly = "Autenticación requerida (401 Unauthorized). El stream RTSP requiere credenciales.";
+          friendly = `Autenticación requerida (401 Unauthorized). El stream RTSP requiere credenciales (rtsp://usuario:clave@ip:${portStr}/...).`;
         } else if (raw.includes("404") || raw.includes("Not Found")) {
           friendly = "Ruta de stream no encontrada (404 Not Found).";
         } else if (raw.includes("timed out") || raw.includes("ETIMEDOUT")) {
-          friendly = "Tiempo de espera agotado al conectar al stream RTSP (timeout).";
+          friendly = `Tiempo de espera agotado al conectar al stream RTSP en puerto ${portStr} (timeout).`;
         } else if (raw.includes("Invalid data found") || raw.includes("Error opening input")) {
-          friendly = "Respuesta RTSP no válida (Invalid data found). Verifica si la cámara requiere usuario y contraseña, si la ruta es /live en vez de /stream0, o cambia a UDP.";
+          friendly = `Respuesta RTSP no válida (Invalid data found). Verifica si la cámara requiere usuario y contraseña (rtsp://usuario:clave@ip:${portStr}/...), si la ruta es /live en vez de /stream0, o cambia a UDP.`;
         } else if (!friendly) {
           friendly = lastError || "No se detectaron paquetes de video H.264 válidos en el stream.";
         }

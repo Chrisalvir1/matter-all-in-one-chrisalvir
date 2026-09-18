@@ -671,8 +671,8 @@ export class HomeKitCameraStreamingDelegate
       process.stderr?.on("data", (chunk: Buffer) => {
         stderr = `${stderr}${chunk.toString()}`.slice(-6000);
       });
-      // Settle HomeKit immediately once process is spawned and active (20ms instead of 400ms delay)
-      const guard = setTimeout(() => {
+      // Settle HomeKit immediately once process is spawned and active
+      const guard = setImmediate(() => {
         if (process.exitCode === null && !process.killed) {
           this.platform?.log?.notice?.(
             `[HomeKitCamera][${this.entityId}] HAP START callback success; FFmpeg active session=${session.sessionId}`,
@@ -681,13 +681,13 @@ export class HomeKitCameraStreamingDelegate
         } else {
           settle(new Error("FFmpeg exited during HAP startup"));
         }
-      }, 20);
+      });
       process.once("error", (error) => {
-        clearTimeout(guard);
+        clearImmediate(guard);
         settle(error);
       });
       process.once("close", (code) => {
-        clearTimeout(guard);
+        clearImmediate(guard);
         session.process = undefined;
         this.platform?.log?.warn?.(
           `[HomeKitCamera][${this.entityId}] FFmpeg closed code=${code} ${stderr.trim()}`,
@@ -885,11 +885,12 @@ export class HomeKitCameraStreamingDelegate
         this.capabilities.strategy === "passthrough_hevc";
 
       // Pure passthrough remuxing without transcoding CPU overhead (native 4K, 2K, 1080p, 720p @ max fps)
-      // Pure -c:v copy for HEVC and H.264 matching Camera.UI native behavior
+      // Pure -c:v copy for HEVC and H.264 matching Camera.UI native behavior with extradata parameter injection
       const videoPassArgs: string[] = [
         "-map", "0:v:0",
         "-an",
         "-c:v", "copy",
+        "-bsf:v", "dump_extra=freq=keyframe",
         "-f", "rtp",
         "-fflags", "+nobuffer+flush_packets",
         "-max_delay", "0",

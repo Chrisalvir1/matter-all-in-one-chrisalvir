@@ -528,35 +528,40 @@ export class CameraUiClient {
         }
       }
 
-      // If no direct RTSP source was found, fallback to Camera.UI local RTSP restream
+      // If no direct RTSP source was found, fallback to local RTSP restream on active go2rtc host (192.168.110.147)
+      const rtspRestreamHost =
+        parsedHostname === "192.168.110.46" || parsedHostname === "localhost" || parsedHostname === "127.0.0.1"
+          ? "192.168.110.147"
+          : parsedHostname;
+
       if (!rtspUrl) {
         const safeName = encodeURIComponent(name.toLowerCase().replace(/\s+/g, "_"));
-        rtspUrl = `rtsp://${parsedHostname}:8554/${safeName}`;
+        rtspUrl = `rtsp://${rtspRestreamHost}:8554/${safeName}`;
       }
 
-      // Substitute localhost/127.0.0.1 in rtspUrl / subRtspUrl / snapshotUrl with actual server host
-      if (parsedHostname !== "localhost" && parsedHostname !== "127.0.0.1") {
-        if (rtspUrl) {
-          rtspUrl = rtspUrl
-            .replace("://localhost:", `://${parsedHostname}:`)
-            .replace("://127.0.0.1:", `://${parsedHostname}:`)
-            .replace("://localhost/", `://${parsedHostname}/`)
-            .replace("://127.0.0.1/", `://${parsedHostname}/`);
-        }
-        if (subRtspUrl) {
-          subRtspUrl = subRtspUrl
-            .replace("://localhost:", `://${parsedHostname}:`)
-            .replace("://127.0.0.1:", `://${parsedHostname}:`)
-            .replace("://localhost/", `://${parsedHostname}/`)
-            .replace("://127.0.0.1/", `://${parsedHostname}/`);
-        }
-        if (snapshotUrl) {
-          snapshotUrl = snapshotUrl
-            .replace("://localhost:", `://${parsedHostname}:`)
-            .replace("://127.0.0.1:", `://${parsedHostname}:`)
-            .replace("://localhost/", `://${parsedHostname}/`)
-            .replace("://127.0.0.1/", `://${parsedHostname}/`);
-        }
+      // Substitute localhost/127.0.0.1 or dead host in rtspUrl / subRtspUrl / snapshotUrl with actual active host
+      if (rtspUrl) {
+        rtspUrl = rtspUrl
+          .replace("://192.168.110.46:8554", "://192.168.110.147:8554")
+          .replace("://localhost:", `://${rtspRestreamHost}:`)
+          .replace("://127.0.0.1:", `://${rtspRestreamHost}:`)
+          .replace("://localhost/", `://${rtspRestreamHost}/`)
+          .replace("://127.0.0.1/", `://${rtspRestreamHost}/`);
+      }
+      if (subRtspUrl) {
+        subRtspUrl = subRtspUrl
+          .replace("://192.168.110.46:8554", "://192.168.110.147:8554")
+          .replace("://localhost:", `://${rtspRestreamHost}:`)
+          .replace("://127.0.0.1:", `://${rtspRestreamHost}:`)
+          .replace("://localhost/", `://${rtspRestreamHost}/`)
+          .replace("://127.0.0.1/", `://${rtspRestreamHost}/`);
+      }
+      if (snapshotUrl) {
+        snapshotUrl = snapshotUrl
+          .replace("://localhost:", `://${parsedHostname}:`)
+          .replace("://127.0.0.1:", `://${parsedHostname}:`)
+          .replace("://localhost/", `://${parsedHostname}/`)
+          .replace("://127.0.0.1/", `://${parsedHostname}/`);
       }
 
       // Default snapshot from Camera.UI feed if stillImageSource not present

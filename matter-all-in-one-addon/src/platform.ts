@@ -362,11 +362,35 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
   private cameraUiInitialized = false;
 
+  public async ensureGo2rtcStreamsRegistered(): Promise<void> {
+    const streamsToRegister = [
+      { name: "sala-vimtag", src: "onvif://admin:admin@192.168.110.51:80" },
+      { name: "sala_vimtag", src: "onvif://admin:admin@192.168.110.51:80" },
+      { name: "jardin-vimtag", src: "rtsp://127.0.0.1:8554/jardin" },
+      { name: "vimtag_cochera", src: "rtsp://127.0.0.1:8554/cochera" },
+      { name: "vimtag_gym", src: "rtsp://127.0.0.1:8554/vimtag_113" },
+      { name: "vimtag_oficina", src: "rtsp://127.0.0.1:8554/jardin" },
+      { name: "vimtag_recamara_visita", src: "rtsp://127.0.0.1:8554/recamara" },
+      { name: "ring_bodega", src: "hass:camera.oficina_ring_vista_en_vivo" },
+      { name: "ring_lavanderia", src: "hass:camera.petcam_ring_vista_en_vivo" },
+      { name: "petcam_ring", src: "hass:camera.petcam_ring_vista_en_vivo" },
+      { name: "wyze_patio_trasero", src: "rtsp://Gecko:Mrlsc%401503@192.168.110.118:554/stream0" },
+    ];
+
+    for (const item of streamsToRegister) {
+      try {
+        const url = `http://192.168.110.147:1984/api/streams?name=${encodeURIComponent(item.name)}&src=${encodeURIComponent(item.src)}`;
+        await fetch(url, { method: "PUT", signal: AbortSignal.timeout(2000) });
+      } catch {}
+    }
+  }
+
   public async initCameraUi(): Promise<void> {
     if (this.cameraUiInitialized) return;
     this.cameraUiInitialized = true;
 
     try {
+      void this.ensureGo2rtcStreamsRegistered();
       const store = await CameraUiStorage.load();
       if (!store.config.enabled && store.cameras.length === 0) {
         this.log.debug("[Camera.UI] Integration is disabled in storage.");
@@ -5808,6 +5832,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                 return cam;
               });
               updated = true;
+              try {
+                const refreshedStore = await CameraUiStorage.load();
+                const refreshedCam = refreshedStore.cameras.find((c) => c.id === cuiCam.id) || cuiCam;
+                await CameraUiHomeKitBridge.mountCamera(this, refreshedCam);
+              } catch (remountErr) {
+                this.log.warn(`[Camera.UI] Error al remontar cámara tras cambio de RTSP: ${remountErr}`);
+              }
             } else {
               // Check if it's a native Home Assistant camera entity (e.g. Google Nest / go2rtc)
               const haState =
@@ -6809,6 +6840,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             const previousIds = new Set(store.cameras.map((c) => c.id));
 
             await CameraUiStorage.mergeDiscoveredCameras(discovered);
+            void this.ensureGo2rtcStreamsRegistered();
             const updatedStore = await CameraUiStorage.updateConnectionStatus("connected");
 
             for (const camera of updatedStore.cameras) {
