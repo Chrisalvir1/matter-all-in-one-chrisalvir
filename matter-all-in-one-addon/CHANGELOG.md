@@ -1,3 +1,18 @@
+## [1.8.0] - 2026-09-18
+
+### Detección de Movimiento Nativa Local por FFmpeg + Corrección Crítica FFmpeg 8.0 `-stimeout`
+
+- **Detector de Movimiento FFmpeg Autónomo Local (`FfmpegMotionDetector`):**
+  - Implementado motor de detección de movimiento por diferencia de fotogramas directamente con FFmpeg (`tblend=difference128` + `blackframe`).
+  - No depende de la API de Camera.UI ni de sus notificaciones (que estaban vacías debido a zonas o configuraciones de alertas faltantes).
+  - Al detectar movimiento en el stream RTSP nativo, actualiza automáticamente:
+    1. La característica HomeKit HAP `MotionDetected` en Apple Home.
+    2. El disparador de grabación HKSV (`recordingDelegate.handleMotionDetected(true)`).
+    3. El sensor de ocupación Matter (`OccupancySensing.occupancy`).
+- **Corrección Crítica Error FFmpeg 8.0 `Unrecognized option 'stimeout'`:**
+  - FFmpeg 8.0 (`8.0-homebridge-alpine-aarch64-static`) rechaza `-stimeout` con código de error 8 (`Option not found`), lo que hacía crashear el proceso FFmpeg en 9ms durante cada apertura de Live View.
+  - Se eliminó `-stimeout` de los argumentos RTSP de `homekit-camera-stream.delegate.ts`, `ffmpeg-helper.ts` y del detector de movimiento, restaurando el arranque inmediato y fluido del streaming en vivo en Apple Home.
+
 ## [1.7.9] - 2026-09-18
 
 ### Corrección Crítica: Stream HomeKit se Queda Cargando al Re-entrar (Todas las Cámaras)

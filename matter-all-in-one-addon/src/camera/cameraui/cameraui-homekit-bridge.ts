@@ -9,12 +9,15 @@ import type {
   ResolvedStreamSource,
 } from "../camera-types.js";
 import { HomeKitCameraAccessory } from "../homekit/homekit-camera.accessory.js";
+import { FfmpegMotionDetector } from "../motion/ffmpeg-motion-detector.js";
 import type { CameraUiCameraRecord } from "./cameraui-types.js";
 import { CameraUiStorage } from "./cameraui-storage.js";
 
 export class CameraUiHomeKitBridge {
   private static activeAccessories = new Map<string, HomeKitCameraAccessory>();
   private static activeMatterEndpoints = new Map<string, MatterbridgeEndpoint>();
+  /** One FFmpeg motion detector per mounted camera, keyed by camera.id */
+  private static activeMotionDetectors = new Map<string, FfmpegMotionDetector>();
 
   public static getAccessory(cameraId: string): HomeKitCameraAccessory | undefined {
     return this.activeAccessories.get(cameraId);
@@ -48,6 +51,11 @@ export class CameraUiHomeKitBridge {
     if (existing) {
       await existing.unpublish();
       this.activeAccessories.delete(camera.id);
+      const oldDet = this.activeMotionDetectors.get(camera.id);
+      if (oldDet) {
+        oldDet.stop(platform?.log);
+        this.activeMotionDetectors.delete(camera.id);
+      }
     }
 
     const hasSource = Boolean(camera.rtspUrl);
@@ -210,10 +218,38 @@ export class CameraUiHomeKitBridge {
       await CameraUiStorage.save(store);
     }
 
+    // Start local FFmpeg motion detector for this camera if RTSP URL is available
+    if (camera.rtspUrl && !this.activeMotionDetectors.has(camera.id)) {
+      try {
+        const detector = new FfmpegMotionDetector({
+          cameraId: camera.id,
+          cameraName: camera.name || `Cámara ${camera.id}`,
+          rtspUrl: camera.rtspUrl,
+          sensitivity: 15,
+          cooldownMs: 6000,
+          resetMs: 20000,
+        });
+        detector.on("motion", (active: boolean) => {
+          CameraUiHomeKitBridge.updateMotion(camera.id, active, platform);
+        });
+        detector.start(platform?.log);
+        this.activeMotionDetectors.set(camera.id, detector);
+      } catch (detErr) {
+        platform?.log?.warn?.(
+          `[Camera.UI][${camera.name}] No se pudo iniciar el detector de movimiento FFmpeg local: ${detErr}`,
+        );
+      }
+    }
+
     return accessory;
   }
 
   public static async unmountCamera(cameraId: string, platform?: any): Promise<void> {
+    const detector = this.activeMotionDetectors.get(cameraId);
+    if (detector) {
+      detector.stop(platform?.log);
+      this.activeMotionDetectors.delete(cameraId);
+    }
     const accessory = this.activeAccessories.get(cameraId);
     if (accessory) {
       await accessory.unpublish();
@@ -238,6 +274,9 @@ export class CameraUiHomeKitBridge {
     const accessory = this.activeAccessories.get(cameraId);
     if (accessory) {
       accessory.updateMotionState(active);
+      platform?.log?.notice?.(
+        `[Camera.UI][${accessory.record?.name || cameraId}] Sensor de movimiento HAP y Matter actualizado: active=${active}`,
+      );
     }
     const matterEndpoint = this.activeMatterEndpoints.get(cameraId);
     if (matterEndpoint) {

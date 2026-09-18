@@ -367,7 +367,7 @@ function probeWithFfprobe(
       args.push(
         "-rtsp_transport",
         rtspTransport,
-        "-stimeout",
+        "-timeout",
         "10000000",
         "-probesize",
         "2097152",
@@ -527,8 +527,6 @@ function probeWithFfmpeg(
         "-rtsp_transport",
         rtspTransport,
         "-timeout",
-        "10000000",
-        "-stimeout",
         "10000000",
       );
     } else if (

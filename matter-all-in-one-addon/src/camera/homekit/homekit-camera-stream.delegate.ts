@@ -780,10 +780,6 @@ export class HomeKitCameraStreamingDelegate
         // of spinning for 20s waiting for FFmpeg to give up.
         "-timeout",
         "5000000",
-        // Socket timeout during active streaming: detect dead RTSP connections
-        // within 5s so FFmpeg exits cleanly and HomeKit can open a fresh session.
-        "-stimeout",
-        "5000000",
         "-probesize",
         "1048576",
         "-analyzeduration",
