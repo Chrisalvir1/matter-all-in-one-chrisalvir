@@ -1,3 +1,14 @@
+## [1.7.7] - 2026-09-18
+
+### HKSV Universal (H.264/H.265) y Exportación Automática de Detección de Movimiento a Matter
+
+- **Habilitación Universal de HKSV (HomeKit Secure Video):**
+  - Se flexibilizó la condición para activar `hksvCapable`, `hksvEnabled` y `hksvState` en `CameraUiHomeKitBridge`: ahora se valida con `isRtspSource = Boolean(camera.rtspUrl && /^rtsps?:\/\//i.test(camera.rtspUrl))`.
+  - HKSV funciona tanto para streams H.264 como H.265/HEVC (el `HomeKitCameraRecordingDelegate` transcodifica a H.264 vía FFmpeg cuando el origen es H.265), evitando que el códec de origen bloquee la grabación y análisis de video en Apple Home.
+- **Exportación Automática de Ocupación/Movimiento a Matter:**
+  - `shouldExportMatter` ahora se activa automáticamente para toda cámara con stream válido (`hasSource`), eliminando el requisito previo de un flag manual `matterExported: true` por entidad.
+  - Cada cámara montada desde Camera.UI registra de forma automática un endpoint Matter como `Occupancy Sensor`, permitiendo que Home Assistant y otros controladores Matter reciban detecciones de movimiento y OpenCV para automatizaciones sin configuración adicional.
+
 ## [1.7.5] - 2026-09-17
 
 ### Corrección Crítica de Conexión a Home Assistant (Supervisor API) y Restauración de IoT

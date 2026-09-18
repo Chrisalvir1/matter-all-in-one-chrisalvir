@@ -1,1 +1,305 @@
-aW1wb3J0IGNyeXB0byBmcm9tICJub2RlOmNyeXB0byI7CmltcG9ydCB7IHV1aWQgfSBmcm9tICJoYXAtbm9kZWpzIjsKaW1wb3J0IHsgTWF0dGVyYnJpZGdlRW5kcG9pbnQsIG9jY3VwYW5jeVNlbnNvciB9IGZyb20gIm1hdHRlcmJyaWRnZSI7CmltcG9ydCB7IE9jY3VwYW5jeVNlbnNpbmcgfSBmcm9tICJtYXR0ZXJicmlkZ2UvbWF0dGVyL2NsdXN0ZXJzIjsKaW1wb3J0IHsgc2FmZVNldEF0dHJpYnV0ZSB9IGZyb20gIi4uLy4uL3V0aWxzL21hdHRlci1hdHRyaWJ1dGVzLmpzIjsKaW1wb3J0IHR5cGUgewogIENhbWVyYUNhcGFiaWxpdGllc0luZm8sCiAgSG9tZUtpdENhbWVyYVN0b3JhZ2VSZWNvcmQsCiAgUmVzb2x2ZWRTdHJlYW1Tb3VyY2UsCn0gZnJvbSAiLi4vY2FtZXJhLXR5cGVzLmpzIjsKaW1wb3J0IHsgSG9tZUtpdENhbWVyYUFjY2Vzc29yeSB9IGZyb20gIi4uL2hvbWVraXQvaG9tZWtpdC1jYW1lcmEuYWNjZXNzb3J5LmpzIjsKaW1wb3J0IHR5cGUgeyBDYW1lcmFVaUNhbWVyYVJlY29yZCB9IGZyb20gIi4vY2FtZXJhdWktdHlwZXMuanMiOwppbXBvcnQgeyBDYW1lcmFVaVN0b3JhZ2UgfSBmcm9tICIuL2NhbWVyYXVpLXN0b3JhZ2UuanMiOwoKZXhwb3J0IGNsYXNzIENhbWVyYVVpSG9tZUtpdEJyaWRnZSB7CiAgcHJpdmF0ZSBzdGF0aWMgYWN0aXZlQWNjZXNzb3JpZXMgPSBuZXcgTWFwPHN0cmluZywgSG9tZUtpdENhbWVyYUFjY2Vzc29yeT4oKTsKICBwcml2YXRlIHN0YXRpYyBhY3RpdmVNYXR0ZXJFbmRwb2ludHMgPSBuZXcgTWFwPHN0cmluZywgTWF0dGVyYnJpZGdlRW5kcG9pbnQ+KCk7CgogIHB1YmxpYyBzdGF0aWMgZ2V0QWNjZXNzb3J5KGNhbWVyYUlkOiBzdHJpbmcpOiBIb21lS2l0Q2FtZXJhQWNjZXNzb3J5IHwgdW5kZWZpbmVkIHsKICAgIHJldHVybiB0aGlzLmFjdGl2ZUFjY2Vzc29yaWVzLmdldChjYW1lcmFJZCk7CiAgfQoKICBwdWJsaWMgc3RhdGljIGdldEFsbEFjY2Vzc29yaWVzKCk6IE1hcDxzdHJpbmcsIEhvbWVLaXRDYW1lcmFBY2Nlc3Nvcnk+IHsKICAgIHJldHVybiB0aGlzLmFjdGl2ZUFjY2Vzc29yaWVzOwogIH0KCiAgcHVibGljIHN0YXRpYyBnZXRNYXR0ZXJFbmRwb2ludChjYW1lcmFJZDogc3RyaW5nKTogTWF0dGVyYnJpZGdlRW5kcG9pbnQgfCB1bmRlZmluZWQgewogICAgcmV0dXJuIHRoaXMuYWN0aXZlTWF0dGVyRW5kcG9pbnRzLmdldChjYW1lcmFJZCk7CiAgfQoKICBwdWJsaWMgc3RhdGljIGdldEFsbE1hdHRlckVuZHBvaW50cygpOiBNYXA8c3RyaW5nLCBNYXR0ZXJicmlkZ2VFbmRwb2ludD4gewogICAgcmV0dXJuIHRoaXMuYWN0aXZlTWF0dGVyRW5kcG9pbnRzOwogIH0KCiAgcHVibGljIHN0YXRpYyBhc3luYyBtb3VudENhbWVyYSgKICAgIHBsYXRmb3JtOiBhbnksCiAgICBjYW1lcmE6IENhbWVyYVVpQ2FtZXJhUmVjb3JkLAogICk6IFByb21pc2U8SG9tZUtpdENhbWVyYUFjY2Vzc29yeSB8IHVuZGVmaW5lZD4gewogICAgaWYgKCFjYW1lcmEuaG9tZUtpdEVuYWJsZWQgfHwgIWNhbWVyYS5ydHNwVXJsKSB7CiAgICAgIHJldHVybiB1bmRlZmluZWQ7CiAgICB9CgogICAgY29uc3QgZXhpc3RpbmcgPSB0aGlzLmFjdGl2ZUFjY2Vzc29yaWVzLmdldChjYW1lcmEuaWQpOwogICAgaWYgKGV4aXN0aW5nICYmIGV4aXN0aW5nLmlzU3RyZWFtaW5nKSB7CiAgICAgIC8vIERvbid0IHVubW91bnQgb3IgaW50ZXJydXB0IGFjdGl2ZSBMaXZlIFZpZXcgc2Vzc2lvbnMKICAgICAgcmV0dXJuIGV4aXN0aW5nOwogICAgfQogICAgaWYgKGV4aXN0aW5nKSB7CiAgICAgIGF3YWl0IGV4aXN0aW5nLnVucHVibGlzaCgpOwogICAgICB0aGlzLmFjdGl2ZUFjY2Vzc29yaWVzLmRlbGV0ZShjYW1lcmEuaWQpOwogICAgfQoKICAgIGNvbnN0IGhhc1NvdXJjZSA9IEJvb2xlYW4oY2FtZXJhLnJ0c3BVcmwpOwogICAgLy8gVG9kbyBzdHJlYW0gUlRTUC9SVFNQUyBkZSBDYW1lcmEuVUkgKEguMjY0IG8gSC4yNjUvSEVWQykgZXMgdsOhbGlkbyBwYXJhIEhLU1Y6CiAgICAvLyBlbCByZWNvcmRpbmdEZWxlZ2F0ZSB0cmFuc2NvZGlmaWNhIGEgSC4yNjQgdsOtYSBGRm1wZWcgY3VhbmRvIGVsIG9yaWdlbiBlcyBILjI2NSwKICAgIC8vIHBvciBsbyBxdWUgZWwgY8OzZGVjIGRlIG9yaWdlbiBudW5jYSBkZWJlIGJsb3F1ZWFyIGxhIGNhcGFjaWRhZCBIS1NWLgogICAgY29uc3QgaXNSdHNwU291cmNlID0gQm9vbGVhbihjYW1lcmEucnRzcFVybCAmJiAvXnJ0c3BzPzpcL1wvL2kudGVzdChjYW1lcmEucnRzcFVybCkpOwogICAgY29uc3QgY2hvc2VuU3RyYXRlZ3kgPSAicGFzc3Rocm91Z2hfaDI2NCI7CiAgICBjb25zdCBjaG9zZW5Db2RlYyA9ICJoMjY0IjsKICAgIGNvbnN0IGlzSGFQcm94eSA9IGZhbHNlOwoKICAgIGNvbnN0IGNhcGFiaWxpdGllczogQ2FtZXJhQ2FwYWJpbGl0aWVzSW5mbyA9IHsKICAgICAgaGFzTGl2ZVN0cmVhbTogaGFzU291cmNlLAogICAgICBzdHJlYW1Tb3VyY2VUeXBlOiAicnRzcCIsCiAgICAgIHZpZGVvQ29kZWM6ICJoMjY0IiwKICAgICAgaGFzQXVkaW86IGNhbWVyYS5oYXNBdWRpbywKICAgICAgYXVkaW9Db2RlYzogImFhY19sYyIsCiAgICAgIHJlc29sdXRpb246IHsKICAgICAgICB3aWR0aDogY2FtZXJhLndpZHRoIHx8IDE5MjAsCiAgICAgICAgaGVpZ2h0OiBjYW1lcmEuaGVpZ2h0IHx8IDEwODAsCiAgICAgIH0sCiAgICAgIG1heEZwczogY2FtZXJhLmZwcyB8fCAzMCwKICAgICAgc3RyYXRlZ3k6IGNob3NlblN0cmF0ZWd5LAogICAgICByZXF1aXJlc1RyYW5zY29kaW5nOiBpc0hhUHJveHksCiAgICAgIHNuYXBzaG90U3VwcG9ydGVkOiBCb29sZWFuKGNhbWVyYS5zbmFwc2hvdFVybCksCiAgICAgIHNuYXBzaG90VXJsOiBjYW1lcmEuc25hcHNob3RVcmwsCiAgICAgIGhrc3ZDYXBhYmxlOiBpc1J0c3BTb3VyY2UsCiAgICB9OwoKICAgIGNvbnN0IHNvdXJjZTogUmVzb2x2ZWRTdHJlYW1Tb3VyY2UgPSB7CiAgICAgIHNvdXJjZVR5cGU6ICJydHNwIiwKICAgICAgdXJsOiBjYW1lcmEucnRzcFVybCwKICAgICAgc25hcHNob3RVcmw6IGNhbWVyYS5zbmFwc2hvdFVybCwKICAgICAgc3VwcG9ydHNQYXNzdGhyb3VnaDogdHJ1ZSwKICAgICAgcmVxdWlyZXNCcmlkZ2U6IHRydWUsCiAgICAgIG1ldGFkYXRhOiB7CiAgICAgICAgaXNDYW1lcmFVaTogdHJ1ZSwKICAgICAgICBjYW1lcmF1aUNhbWVyYUlkOiBjYW1lcmEuaWQsCiAgICAgICAgaGFzRG9vcmJlbGw6IEJvb2xlYW4oY2FtZXJhLmRvb3JiZWxsVG9waWMpLAogICAgICAgIG1vZGVsOiBjYW1lcmEubW9kZWwgfHwgIkNhbWVyYS5VSSBTdHJlYW0iLAogICAgICB9LAogICAgfTsKCiAgICAvLyBBbGxvY2F0ZSBwZXJzaXN0ZW50IEhvbWVLaXQgY29uZmlndXJhdGlvbiBpZiBub3QgYXNzaWduZWQKICAgIGlmICghY2FtZXJhLnBvcnQpIHsKICAgICAgY2FtZXJhLnBvcnQgPSB0aGlzLmFsbG9jYXRlTmV4dFBvcnQocGxhdGZvcm0pOwogICAgfQogICAgaWYgKCFjYW1lcmEucGluY29kZSkgewogICAgICBjYW1lcmEucGluY29kZSA9ICIwMzEtNDUtMTU0IjsKICAgIH0KICAgIGlmICghY2FtZXJhLnVzZXJuYW1lKSB7CiAgICAgIGNvbnN0IGhleCA9IGNyeXB0by5yYW5kb21CeXRlcyg1KS50b1N0cmluZygiaGV4IikudG9VcHBlckNhc2UoKTsKICAgICAgY2FtZXJhLnVzZXJuYW1lID0gYDBFOiR7aGV4Lm1hdGNoKC8uezJ9L2cpIS5qb2luKCI6Iil9YDsKICAgIH0KICAgIGlmICghY2FtZXJhLnNldHVwSWQpIHsKICAgICAgY2FtZXJhLnNldHVwSWQgPSBjcnlwdG8ucmFuZG9tQnl0ZXMoMikudG9TdHJpbmcoImhleCIpLnRvVXBwZXJDYXNlKCkuc2xpY2UoMCwgNCk7CiAgICB9CiAgICBpZiAoIWNhbWVyYS51dWlkKSB7CiAgICAgIGNhbWVyYS51dWlkID0gdXVpZC5nZW5lcmF0ZShgY2FtZXJhdWk6Y2FtZXJhOiR7Y2FtZXJhLmlkfWApOwogICAgfQoKICAgIGNvbnN0IHJlY29yZDogSG9tZUtpdENhbWVyYVN0b3JhZ2VSZWNvcmQgPSB7CiAgICAgIGVudGl0eUlkOiBgY2FtZXJhLiR7Y2FtZXJhLmlkfWAsCiAgICAgIHV1aWQ6IGNhbWVyYS51dWlkLAogICAgICB1c2VybmFtZTogY2FtZXJhLnVzZXJuYW1lLAogICAgICBwaW5jb2RlOiBjYW1lcmEucGluY29kZSwKICAgICAgc2V0dXBJZDogY2FtZXJhLnNldHVwSWQsCiAgICAgIHBvcnQ6IGNhbWVyYS5wb3J0LAogICAgICBwdWJsaXNoZWQ6IGZhbHNlLAogICAgICBpc1BhaXJlZDogY2FtZXJhLmlzUGFpcmVkID8/IGZhbHNlLAogICAgICBuYW1lOiBjYW1lcmEubmFtZSwKICAgICAgbWFudWZhY3R1cmVyOiBjYW1lcmEubWFudWZhY3R1cmVyIHx8ICJDYW1lcmEuVUkiLAogICAgICBtb2RlbDogY2FtZXJhLm1vZGVsIHx8ICJOZXR3b3JrIENhbWVyYSIsCiAgICAgIHNlcmlhbE51bWJlcjogY2FtZXJhLnNlcmlhbE51bWJlciB8fCBgQ1VJLSR7Y2FtZXJhLmlkLnRvVXBwZXJDYXNlKCl9YCwKICAgICAgc3RyYXRlZ3k6IGNob3NlblN0cmF0ZWd5LAogICAgICBzdGF0ZTogImlkbGUiLAogICAgICBoa3N2RW5hYmxlZDogaXNSdHNwU291cmNlLAogICAgICBoa3N2Q2FwYWJsZTogaXNSdHNwU291cmNlLAogICAgICBoa3N2VmVyaWZpZWQ6IGZhbHNlLAogICAgICBoa3N2U3RhdGU6IGlzUnRzcFNvdXJjZSA/ICJ3YWl0aW5nX2h1YiIgOiAibm90X2NhcGFibGUiLAogICAgfTsKCiAgICBjb25zdCBhY2Nlc3NvcnkgPSBuZXcgSG9tZUtpdENhbWVyYUFjY2Vzc29yeSgKICAgICAgcGxhdGZvcm0sCiAgICAgIHJlY29yZC5lbnRpdHlJZCwKICAgICAgcmVjb3JkLAogICAgICBjYXBhYmlsaXRpZXMsCiAgICAgIHNvdXJjZSwKICAgICk7CgogICAgYXdhaXQgYWNjZXNzb3J5LnB1Ymxpc2goKTsKICAgIGNhbWVyYS5zZXR1cFVyaSA9IGFjY2Vzc29yeS5zZXR1cFVyaTsKICAgIGNhbWVyYS5pc1BhaXJlZCA9IGFjY2Vzc29yeS5pc1BhaXJlZCgpOwogICAgdGhpcy5hY3RpdmVBY2Nlc3Nvcmllcy5zZXQoY2FtZXJhLmlkLCBhY2Nlc3NvcnkpOwoKICAgIHBsYXRmb3JtLmxvZz8ubm90aWNlPy4oCiAgICAgIGBbQ2FtZXJhLlVJXVske2NhbWVyYS5uYW1lfV0gUHVibGlzaGVkIHRvIEhvbWVLaXQgSEFQIG9uIHBvcnQgJHtjYW1lcmEucG9ydH0gKGNvZGU6ICR7Y2FtZXJhLnBpbmNvZGV9LCBjb2RlYzogJHtjaG9zZW5Db2RlY30sIHN0cmF0ZWd5OiAke2Nob3NlblN0cmF0ZWd5fSlgLAogICAgKTsKCiAgICAvLyBSZWdpc3RlciBNYXR0ZXIgT2NjdXBhbmN5IFNlbnNpbmcgZW5kcG9pbnQgYXV0b21hdGljYWxseSBmb3IgZXZlcnkgbW91bnRlZAogICAgLy8gQ2FtZXJhLlVJIGNhbWVyYSB3aXRoIGEgdmFsaWQgc3RyZWFtLCBzbyBIb21lIEFzc2lzdGFudCAvIE1hdHRlciBjb250cm9sbGVycwogICAgLy8gcmVjZWl2ZSBtb3Rpb24vT3BlbkNWIGRldGVjdGlvbnMgd2l0aG91dCByZXF1aXJpbmcgYSBtYW51YWwgcGVyLWVudGl0eSB0b2dnbGUuCiAgICBjb25zdCBzaG91bGRFeHBvcnRNYXR0ZXIgPSBoYXNTb3VyY2U7CiAgICBpZiAoc2hvdWxkRXhwb3J0TWF0dGVyICYmIHBsYXRmb3JtPy5yZWdpc3RlckRldmljZSAmJiAhdGhpcy5hY3RpdmVNYXR0ZXJFbmRwb2ludHMuaGFzKGNhbWVyYS5pZCkpIHsKICAgICAgdHJ5IHsKICAgICAgICBjb25zdCBzYWZlTmFtZSA9IChjYW1lcmEubmFtZSB8fCBgQ8OhbWFyYSAke2NhbWVyYS5pZH1gKS5zdWJzdHJpbmcoMCwgMzIpLnRyaW0oKTsKICAgICAgICBjb25zdCB1bmlxdWVJZCA9IGBjYW1lcmF1aV8ke2NhbWVyYS5pZH1fb2NjdXBhbmN5YDsKICAgICAgICBjb25zdCBtYXR0ZXJFbmRwb2ludCA9IG5ldyBNYXR0ZXJicmlkZ2VFbmRwb2ludChbb2NjdXBhbmN5U2Vuc29yXSwgewogICAgICAgICAgaWQ6IHVuaXF1ZUlkLAogICAgICAgICAgbW9kZTogInNlcnZlciIsCiAgICAgICAgfSk7CiAgICAgICAgbWF0dGVyRW5kcG9pbnQuZGV2aWNlTmFtZSA9IGAke3NhZmVOYW1lfSBNb3ZpbWllbnRvYDsKICAgICAgICBtYXR0ZXJFbmRwb2ludC51bmlxdWVJZCA9IHVuaXF1ZUlkOwogICAgICAgIG1hdHRlckVuZHBvaW50LnNlcmlhbE51bWJlciA9IGBDVUktJHtjYW1lcmEuaWQudG9VcHBlckNhc2UoKX1gLnN1YnN0cmluZygwLCAzMik7CiAgICAgICAgbWF0dGVyRW5kcG9pbnQudmVuZG9ySWQgPSAweGZmZjE7CiAgICAgICAgbWF0dGVyRW5kcG9pbnQudmVuZG9yTmFtZSA9IChjYW1lcmEubWFudWZhY3R1cmVyIHx8ICJDYW1lcmEuVUkiKS5zdWJzdHJpbmcoMCwgMzIpOwogICAgICAgIG1hdHRlckVuZHBvaW50LnByb2R1Y3RJZCA9IDB4ODAwMDsKICAgICAgICBtYXR0ZXJFbmRwb2ludC5zb2Z0d2FyZVZlcnNpb24gPSAxOwogICAgICAgIG1hdHRlckVuZHBvaW50LnNvZnR3YXJlVmVyc2lvblN0cmluZyA9ICJNYXR0ZXJicmlkZ2UgMS4zLjciOwoKICAgICAgICBtYXR0ZXJFbmRwb2ludC5jcmVhdGVEZWZhdWx0QmFzaWNJbmZvcm1hdGlvbkNsdXN0ZXJTZXJ2ZXIoCiAgICAgICAgICBgJHtzYWZlTmFtZX0gTW92aW1pZW50b2AsCiAgICAgICAgICBtYXR0ZXJFbmRwb2ludC5zZXJpYWxOdW1iZXIsCiAgICAgICAgICAweGZmZjEsCiAgICAgICAgICBtYXR0ZXJFbmRwb2ludC52ZW5kb3JOYW1lLAogICAgICAgICAgMHg4MDAwLAogICAgICAgICAgIlNlbnNvciBEZXRlY2Npw7NuIENhbWVyYS5VSSIsCiAgICAgICAgKTsKICAgICAgICBtYXR0ZXJFbmRwb2ludC5jcmVhdGVEZWZhdWx0T2NjdXBhbmN5U2Vuc2luZ0NsdXN0ZXJTZXJ2ZXIoZmFsc2UpOwogICAgICAgIG1hdHRlckVuZHBvaW50LmFkZFJlcXVpcmVkQ2x1c3RlclNlcnZlcnMoKTsKCiAgICAgICAgYXdhaXQgcGxhdGZvcm0ucmVnaXN0ZXJEZXZpY2UobWF0dGVyRW5kcG9pbnQpOwogICAgICAgIGNvbnN0IHNlcnZlck5vZGUgPSAobWF0dGVyRW5kcG9pbnQgYXMgYW55KS5zZXJ2ZXJOb2RlOwogICAgICAgIGlmIChzZXJ2ZXJOb2RlICYmICFzZXJ2ZXJOb2RlLmxpZmVjeWNsZT8uaXNPbmxpbmUpIHsKICAgICAgICAgIGF3YWl0IHNlcnZlck5vZGUuc3RhcnQoKTsKICAgICAgICB9CiAgICAgICAgdGhpcy5hY3RpdmVNYXR0ZXJFbmRwb2ludHMuc2V0KGNhbWVyYS5pZCwgbWF0dGVyRW5kcG9pbnQpOwogICAgICAgIHBsYXRmb3JtLmxvZz8ubm90aWNlPy4oCiAgICAgICAgICBgW0NhbWVyYS5VSV1bJHtjYW1lcmEubmFtZX1dIOKchSBFeHBvcnRhZG8gYSBNYXR0ZXIgY29tbyBPY2N1cGFuY3kgU2Vuc29yICh1bmlxdWVJZDogJHt1bmlxdWVJZH0pIHBhcmEgYXV0b21hdGl6YWNpb25lcyBlbiBIb21lIEFzc2lzdGFudC5gLAogICAgICAgICk7CiAgICAgIH0gY2F0Y2ggKGVycikgewogICAgICAgIHBsYXRmb3JtLmxvZz8ud2Fybj8uKAogICAgICAgICAgYFtDYW1lcmEuVUldWyR7Y2FtZXJhLm5hbWV9XSBObyBzZSBwdWRvIHJlZ2lzdHJhciBlbmRwb2ludCBNYXR0ZXIgcGFyYSBvY3VwYWNpw7NuOiAke2Vycn1gLAogICAgICAgICk7CiAgICAgIH0KICAgIH0KCiAgICAvLyBQZXJzaXN0IGNoYW5nZXMKICAgIGNvbnN0IHN0b3JlID0gYXdhaXQgQ2FtZXJhVWlTdG9yYWdlLmxvYWQoKTsKICAgIGNvbnN0IGlkeCA9IHN0b3JlLmNhbWVyYXMuZmluZEluZGV4KChjKSA9PiBjLmlkID09PSBjYW1lcmEuaWQpOwogICAgaWYgKGlkeCAhPT0gLTEpIHsKICAgICAgc3RvcmUuY2FtZXJhc1tpZHhdID0gY2FtZXJhOwogICAgICBhd2FpdCBDYW1lcmFVaVN0b3JhZ2Uuc2F2ZShzdG9yZSk7CiAgICB9CgogICAgcmV0dXJuIGFjY2Vzc29yeTsKICB9CgogIHB1YmxpYyBzdGF0aWMgYXN5bmMgdW5tb3VudENhbWVyYShjYW1lcmFJZDogc3RyaW5nLCBwbGF0Zm9ybT86IGFueSk6IFByb21pc2U8dm9pZD4gewogICAgY29uc3QgYWNjZXNzb3J5ID0gdGhpcy5hY3RpdmVBY2Nlc3Nvcmllcy5nZXQoY2FtZXJhSWQpOwogICAgaWYgKGFjY2Vzc29yeSkgewogICAgICBhd2FpdCBhY2Nlc3NvcnkudW5wdWJsaXNoKCk7CiAgICAgIHRoaXMuYWN0aXZlQWNjZXNzb3JpZXMuZGVsZXRlKGNhbWVyYUlkKTsKICAgIH0KICAgIGNvbnN0IG1hdHRlckVuZHBvaW50ID0gdGhpcy5hY3RpdmVNYXR0ZXJFbmRwb2ludHMuZ2V0KGNhbWVyYUlkKTsKICAgIGlmIChtYXR0ZXJFbmRwb2ludCkgewogICAgICB0cnkgewogICAgICAgIGlmIChwbGF0Zm9ybT8udW5yZWdpc3RlckRldmljZSkgewogICAgICAgICAgYXdhaXQgcGxhdGZvcm0udW5yZWdpc3RlckRldmljZShtYXR0ZXJFbmRwb2ludCk7CiAgICAgICAgfQogICAgICB9IGNhdGNoIHt9CiAgICAgIHRoaXMuYWN0aXZlTWF0dGVyRW5kcG9pbnRzLmRlbGV0ZShjYW1lcmFJZCk7CiAgICB9CiAgfQoKICBwdWJsaWMgc3RhdGljIHVwZGF0ZU1vdGlvbigKICAgIGNhbWVyYUlkOiBzdHJpbmcsCiAgICBhY3RpdmU6IGJvb2xlYW4sCiAgICBwbGF0Zm9ybT86IGFueSwKICApOiBib29sZWFuIHsKICAgIGNvbnN0IGFjY2Vzc29yeSA9IHRoaXMuYWN0aXZlQWNjZXNzb3JpZXMuZ2V0KGNhbWVyYUlkKTsKICAgIGlmIChhY2Nlc3NvcnkpIHsKICAgICAgYWNjZXNzb3J5LnVwZGF0ZU1vdGlvblN0YXRlKGFjdGl2ZSk7CiAgICB9CiAgICBjb25zdCBtYXR0ZXJFbmRwb2ludCA9IHRoaXMuYWN0aXZlTWF0dGVyRW5kcG9pbnRzLmdldChjYW1lcmFJZCk7CiAgICBpZiAobWF0dGVyRW5kcG9pbnQpIHsKICAgICAgdHJ5IHsKICAgICAgICB2b2lkIHNhZmVTZXRBdHRyaWJ1dGUoCiAgICAgICAgICBtYXR0ZXJFbmRwb2ludCwKICAgICAgICAgIE9jY3VwYW5jeVNlbnNpbmcuaWQsCiAgICAgICAgICAib2NjdXBhbmN5IiwKICAgICAgICAgIHsgb2NjdXBpZWQ6IEJvb2xlYW4oYWN0aXZlKSB9LAogICAgICAgICAgcGxhdGZvcm0/LmxvZywKICAgICAgICApOwogICAgICB9IGNhdGNoIHt9CiAgICB9CiAgICByZXR1cm4gQm9vbGVhbihhY2Nlc3NvcnkgfHwgbWF0dGVyRW5kcG9pbnQpOwogIH0KCiAgcHVibGljIHN0YXRpYyB0cmlnZ2VyRG9vcmJlbGwoY2FtZXJhSWQ6IHN0cmluZyk6IGJvb2xlYW4gewogICAgY29uc3QgYWNjZXNzb3J5ID0gdGhpcy5hY3RpdmVBY2Nlc3Nvcmllcy5nZXQoY2FtZXJhSWQpOwogICAgaWYgKGFjY2Vzc29yeT8uYWNjZXNzb3J5KSB7CiAgICAgIHRyeSB7CiAgICAgICAgY29uc3QgZG9vcmJlbGwgPSBhY2Nlc3NvcnkuYWNjZXNzb3J5LmdldFNlcnZpY2UoIkRvb3JiZWxsIik7CiAgICAgICAgaWYgKGRvb3JiZWxsKSB7CiAgICAgICAgICBkb29yYmVsbC5zZXRDaGFyYWN0ZXJpc3RpYygiUHJvZ3JhbW1hYmxlU3dpdGNoRXZlbnQiLCAwKTsgLy8gMCA9IFNJTkdMRV9QUkVTUwogICAgICAgICAgcmV0dXJuIHRydWU7CiAgICAgICAgfQogICAgICB9IGNhdGNoIHt9CiAgICB9CiAgICByZXR1cm4gZmFsc2U7CiAgfQoKICBwdWJsaWMgc3RhdGljIGFzeW5jIHJlc2V0UGFpcmluZygKICAgIHBsYXRmb3JtOiBhbnksCiAgICBjYW1lcmFJZDogc3RyaW5nLAogICk6IFByb21pc2U8Ym9vbGVhbj4gewogICAgY29uc3QgYWNjZXNzb3J5ID0gdGhpcy5hY3RpdmVBY2Nlc3Nvcmllcy5nZXQoY2FtZXJhSWQpOwogICAgaWYgKGFjY2Vzc29yeSkgewogICAgICBhd2FpdCBhY2Nlc3NvcnkucmVzZXRQYWlyaW5nKCk7CiAgICAgIGNvbnN0IHN0b3JlID0gYXdhaXQgQ2FtZXJhVWlTdG9yYWdlLmxvYWQoKTsKICAgICAgY29uc3QgY2FtZXJhID0gc3RvcmUuY2FtZXJhcy5maW5kKChjKSA9PiBjLmlkID09PSBjYW1lcmFJZCk7CiAgICAgIGlmIChjYW1lcmEpIHsKICAgICAgICBjYW1lcmEudXNlcm5hbWUgPSBhY2Nlc3NvcnkucmVjb3JkLnVzZXJuYW1lOwogICAgICAgIGNhbWVyYS5zZXR1cElkID0gYWNjZXNzb3J5LnJlY29yZC5zZXR1cElkOwogICAgICAgIGNhbWVyYS5wb3J0ID0gYWNjZXNzb3J5LnJlY29yZC5wb3J0OwogICAgICAgIGNhbWVyYS51dWlkID0gYWNjZXNzb3J5LnJlY29yZC51dWlkOwogICAgICAgIGNhbWVyYS5pc1BhaXJlZCA9IGZhbHNlOwogICAgICAgIGNhbWVyYS5zZXR1cFVyaSA9IGFjY2Vzc29yeS5zZXR1cFVyaTsKICAgICAgICBhd2FpdCBDYW1lcmFVaVN0b3JhZ2Uuc2F2ZShzdG9yZSk7CiAgICAgIH0KICAgICAgcmV0dXJuIHRydWU7CiAgICB9CiAgICByZXR1cm4gZmFsc2U7CiAgfQoKICBwcml2YXRlIHN0YXRpYyBhbGxvY2F0ZU5leHRQb3J0KHBsYXRmb3JtOiBhbnkpOiBudW1iZXIgewogICAgY29uc3QgdXNlZFBvcnRzID0gbmV3IFNldDxudW1iZXI+KCk7CiAgICBpZiAocGxhdGZvcm0/LmhvbWVraXRDYW1lcmFSZWNvcmRzKSB7CiAgICAgIGZvciAoY29uc3QgcmVjIG9mIHBsYXRmb3JtLmhvbWVraXRDYW1lcmFSZWNvcmRzLnZhbHVlcygpKSB7CiAgICAgICAgaWYgKHJlYy5wb3J0KSB1c2VkUG9ydHMuYWRkKHJlYy5wb3J0KTsKICAgICAgfQogICAgfQogICAgZm9yIChjb25zdCBhY2Mgb2YgdGhpcy5hY3RpdmVBY2Nlc3Nvcmllcy52YWx1ZXMoKSkgewogICAgICBpZiAoYWNjLnJlY29yZD8ucG9ydCkgdXNlZFBvcnRzLmFkZChhY2MucmVjb3JkLnBvcnQpOwogICAgfQogICAgbGV0IHBvcnQgPSA1MTg2MDsKICAgIHdoaWxlICh1c2VkUG9ydHMuaGFzKHBvcnQpKSB7CiAgICAgIHBvcnQrKzsKICAgIH0KICAgIHJldHVybiBwb3J0OwogIH0KfQoKKGdsb2JhbFRoaXMgYXMgYW55KS5fX2NhbWVyYXVpQnJpZGdlID0gQ2FtZXJhVWlIb21lS2l0QnJpZGdlOwo=
+import crypto from "node:crypto";
+import { uuid } from "hap-nodejs";
+import { MatterbridgeEndpoint, occupancySensor } from "matterbridge";
+import { OccupancySensing } from "matterbridge/matter/clusters";
+import { safeSetAttribute } from "../../utils/matter-attributes.js";
+import type {
+  CameraCapabilitiesInfo,
+  HomeKitCameraStorageRecord,
+  ResolvedStreamSource,
+} from "../camera-types.js";
+import { HomeKitCameraAccessory } from "../homekit/homekit-camera.accessory.js";
+import type { CameraUiCameraRecord } from "./cameraui-types.js";
+import { CameraUiStorage } from "./cameraui-storage.js";
+
+export class CameraUiHomeKitBridge {
+  private static activeAccessories = new Map<string, HomeKitCameraAccessory>();
+  private static activeMatterEndpoints = new Map<string, MatterbridgeEndpoint>();
+
+  public static getAccessory(cameraId: string): HomeKitCameraAccessory | undefined {
+    return this.activeAccessories.get(cameraId);
+  }
+
+  public static getAllAccessories(): Map<string, HomeKitCameraAccessory> {
+    return this.activeAccessories;
+  }
+
+  public static getMatterEndpoint(cameraId: string): MatterbridgeEndpoint | undefined {
+    return this.activeMatterEndpoints.get(cameraId);
+  }
+
+  public static getAllMatterEndpoints(): Map<string, MatterbridgeEndpoint> {
+    return this.activeMatterEndpoints;
+  }
+
+  public static async mountCamera(
+    platform: any,
+    camera: CameraUiCameraRecord,
+  ): Promise<HomeKitCameraAccessory | undefined> {
+    if (!camera.homeKitEnabled || !camera.rtspUrl) {
+      return undefined;
+    }
+
+    const existing = this.activeAccessories.get(camera.id);
+    if (existing && existing.isStreaming) {
+      // Don't unmount or interrupt active Live View sessions
+      return existing;
+    }
+    if (existing) {
+      await existing.unpublish();
+      this.activeAccessories.delete(camera.id);
+    }
+
+    const hasSource = Boolean(camera.rtspUrl);
+    // Todo stream RTSP/RTSPS de Camera.UI (H.264 o H.265/HEVC) es válido para HKSV:
+    // el recordingDelegate transcodifica a H.264 vía FFmpeg cuando el origen es H.265,
+    // por lo que el códec de origen nunca debe bloquear la capacidad HKSV.
+    const isRtspSource = Boolean(camera.rtspUrl && /^rtsps?:\/\//i.test(camera.rtspUrl));
+    const chosenStrategy = "passthrough_h264";
+    const chosenCodec = "h264";
+    const isHaProxy = false;
+
+    const capabilities: CameraCapabilitiesInfo = {
+      hasLiveStream: hasSource,
+      streamSourceType: "rtsp",
+      videoCodec: "h264",
+      hasAudio: camera.hasAudio,
+      audioCodec: "aac_lc",
+      resolution: {
+        width: camera.width || 1920,
+        height: camera.height || 1080,
+      },
+      maxFps: camera.fps || 30,
+      strategy: chosenStrategy,
+      requiresTranscoding: isHaProxy,
+      snapshotSupported: Boolean(camera.snapshotUrl),
+      snapshotUrl: camera.snapshotUrl,
+      hksvCapable: isRtspSource,
+    };
+
+    const source: ResolvedStreamSource = {
+      sourceType: "rtsp",
+      url: camera.rtspUrl,
+      snapshotUrl: camera.snapshotUrl,
+      supportsPassthrough: true,
+      requiresBridge: true,
+      metadata: {
+        isCameraUi: true,
+        camerauiCameraId: camera.id,
+        hasDoorbell: Boolean(camera.doorbellTopic),
+        model: camera.model || "Camera.UI Stream",
+      },
+    };
+
+    // Allocate persistent HomeKit configuration if not assigned
+    if (!camera.port) {
+      camera.port = this.allocateNextPort(platform);
+    }
+    if (!camera.pincode) {
+      camera.pincode = "031-45-154";
+    }
+    if (!camera.username) {
+      const hex = crypto.randomBytes(5).toString("hex").toUpperCase();
+      camera.username = `0E:${hex.match(/.{2}/g)!.join(":")}`;
+    }
+    if (!camera.setupId) {
+      camera.setupId = crypto.randomBytes(2).toString("hex").toUpperCase().slice(0, 4);
+    }
+    if (!camera.uuid) {
+      camera.uuid = uuid.generate(`cameraui:camera:${camera.id}`);
+    }
+
+    const record: HomeKitCameraStorageRecord = {
+      entityId: `camera.${camera.id}`,
+      uuid: camera.uuid,
+      username: camera.username,
+      pincode: camera.pincode,
+      setupId: camera.setupId,
+      port: camera.port,
+      published: false,
+      isPaired: camera.isPaired ?? false,
+      name: camera.name,
+      manufacturer: camera.manufacturer || "Camera.UI",
+      model: camera.model || "Network Camera",
+      serialNumber: camera.serialNumber || `CUI-${camera.id.toUpperCase()}`,
+      strategy: chosenStrategy,
+      state: "idle",
+      hksvEnabled: isRtspSource,
+      hksvCapable: isRtspSource,
+      hksvVerified: false,
+      hksvState: isRtspSource ? "waiting_hub" : "not_capable",
+    };
+
+    const accessory = new HomeKitCameraAccessory(
+      platform,
+      record.entityId,
+      record,
+      capabilities,
+      source,
+    );
+
+    await accessory.publish();
+    camera.setupUri = accessory.setupUri;
+    camera.isPaired = accessory.isPaired();
+    this.activeAccessories.set(camera.id, accessory);
+
+    platform.log?.notice?.(
+      `[Camera.UI][${camera.name}] Published to HomeKit HAP on port ${camera.port} (code: ${camera.pincode}, codec: ${chosenCodec}, strategy: ${chosenStrategy})`,
+    );
+
+    // Register Matter Occupancy Sensing endpoint automatically for every mounted
+    // Camera.UI camera with a valid stream, so Home Assistant / Matter controllers
+    // receive motion/OpenCV detections without requiring a manual per-entity toggle.
+    const shouldExportMatter = hasSource;
+    if (shouldExportMatter && platform?.registerDevice && !this.activeMatterEndpoints.has(camera.id)) {
+      try {
+        const safeName = (camera.name || `Cámara ${camera.id}`).substring(0, 32).trim();
+        const uniqueId = `cameraui_${camera.id}_occupancy`;
+        const matterEndpoint = new MatterbridgeEndpoint([occupancySensor], {
+          id: uniqueId,
+          mode: "server",
+        });
+        matterEndpoint.deviceName = `${safeName} Movimiento`;
+        matterEndpoint.uniqueId = uniqueId;
+        matterEndpoint.serialNumber = `CUI-${camera.id.toUpperCase()}`.substring(0, 32);
+        matterEndpoint.vendorId = 0xfff1;
+        matterEndpoint.vendorName = (camera.manufacturer || "Camera.UI").substring(0, 32);
+        matterEndpoint.productId = 0x8000;
+        matterEndpoint.softwareVersion = 1;
+        matterEndpoint.softwareVersionString = "Matterbridge 1.3.7";
+
+        matterEndpoint.createDefaultBasicInformationClusterServer(
+          `${safeName} Movimiento`,
+          matterEndpoint.serialNumber,
+          0xfff1,
+          matterEndpoint.vendorName,
+          0x8000,
+          "Sensor Detección Camera.UI",
+        );
+        matterEndpoint.createDefaultOccupancySensingClusterServer(false);
+        matterEndpoint.addRequiredClusterServers();
+
+        await platform.registerDevice(matterEndpoint);
+        const serverNode = (matterEndpoint as any).serverNode;
+        if (serverNode && !serverNode.lifecycle?.isOnline) {
+          await serverNode.start();
+        }
+        this.activeMatterEndpoints.set(camera.id, matterEndpoint);
+        platform.log?.notice?.(
+          `[Camera.UI][${camera.name}] ✅ Exportado a Matter como Occupancy Sensor (uniqueId: ${uniqueId}) para automatizaciones en Home Assistant.`,
+        );
+      } catch (err) {
+        platform.log?.warn?.(
+          `[Camera.UI][${camera.name}] No se pudo registrar endpoint Matter para ocupación: ${err}`,
+        );
+      }
+    }
+
+    // Persist changes
+    const store = await CameraUiStorage.load();
+    const idx = store.cameras.findIndex((c) => c.id === camera.id);
+    if (idx !== -1) {
+      store.cameras[idx] = camera;
+      await CameraUiStorage.save(store);
+    }
+
+    return accessory;
+  }
+
+  public static async unmountCamera(cameraId: string, platform?: any): Promise<void> {
+    const accessory = this.activeAccessories.get(cameraId);
+    if (accessory) {
+      await accessory.unpublish();
+      this.activeAccessories.delete(cameraId);
+    }
+    const matterEndpoint = this.activeMatterEndpoints.get(cameraId);
+    if (matterEndpoint) {
+      try {
+        if (platform?.unregisterDevice) {
+          await platform.unregisterDevice(matterEndpoint);
+        }
+      } catch {}
+      this.activeMatterEndpoints.delete(cameraId);
+    }
+  }
+
+  public static updateMotion(
+    cameraId: string,
+    active: boolean,
+    platform?: any,
+  ): boolean {
+    const accessory = this.activeAccessories.get(cameraId);
+    if (accessory) {
+      accessory.updateMotionState(active);
+    }
+    const matterEndpoint = this.activeMatterEndpoints.get(cameraId);
+    if (matterEndpoint) {
+      try {
+        void safeSetAttribute(
+          matterEndpoint,
+          OccupancySensing.id,
+          "occupancy",
+          { occupied: Boolean(active) },
+          platform?.log,
+        );
+      } catch {}
+    }
+    return Boolean(accessory || matterEndpoint);
+  }
+
+  public static triggerDoorbell(cameraId: string): boolean {
+    const accessory = this.activeAccessories.get(cameraId);
+    if (accessory?.accessory) {
+      try {
+        const doorbell = accessory.accessory.getService("Doorbell");
+        if (doorbell) {
+          doorbell.setCharacteristic("ProgrammableSwitchEvent", 0); // 0 = SINGLE_PRESS
+          return true;
+        }
+      } catch {}
+    }
+    return false;
+  }
+
+  public static async resetPairing(
+    platform: any,
+    cameraId: string,
+  ): Promise<boolean> {
+    const accessory = this.activeAccessories.get(cameraId);
+    if (accessory) {
+      await accessory.resetPairing();
+      const store = await CameraUiStorage.load();
+      const camera = store.cameras.find((c) => c.id === cameraId);
+      if (camera) {
+        camera.username = accessory.record.username;
+        camera.setupId = accessory.record.setupId;
+        camera.port = accessory.record.port;
+        camera.uuid = accessory.record.uuid;
+        camera.isPaired = false;
+        camera.setupUri = accessory.setupUri;
+        await CameraUiStorage.save(store);
+      }
+      return true;
+    }
+    return false;
+  }
+
+  private static allocateNextPort(platform: any): number {
+    const usedPorts = new Set<number>();
+    if (platform?.homekitCameraRecords) {
+      for (const rec of platform.homekitCameraRecords.values()) {
+        if (rec.port) usedPorts.add(rec.port);
+      }
+    }
+    for (const acc of this.activeAccessories.values()) {
+      if (acc.record?.port) usedPorts.add(acc.record.port);
+    }
+    let port = 51860;
+    while (usedPorts.has(port)) {
+      port++;
+    }
+    return port;
+  }
+}
+
+(globalThis as any).__camerauiBridge = CameraUiHomeKitBridge;
