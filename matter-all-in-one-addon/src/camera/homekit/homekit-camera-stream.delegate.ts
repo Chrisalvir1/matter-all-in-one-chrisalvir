@@ -863,7 +863,6 @@ export class HomeKitCameraStreamingDelegate
         "-map", "0:v:0",
         "-an",
         "-c:v", "copy",
-        "-bsf:v", "dump_extra=freq=keyframe",
         "-f", "rtp",
         "-payload_type", String(video.pt || 99),
         "-ssrc", String(session.videoSsrc),
