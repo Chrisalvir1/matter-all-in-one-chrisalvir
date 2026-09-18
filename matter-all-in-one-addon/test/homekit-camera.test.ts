@@ -294,17 +294,21 @@ describe("HomeKitCameraStreamingDelegate", () => {
     const capturedArgs = delegate.buildStreamArgs(session, request);
 
     // Verify H.264 passthrough remuxing without transcoding CPU overhead
+    // v1.6.7: pure -c:v copy without dump_extra (which caused FFmpeg abort on some streams)
     expect(capturedArgs).toContain("-c:v");
     expect(capturedArgs).toContain("copy");
-    expect(capturedArgs).toContain("dump_extra=freq=keyframe");
+    expect(capturedArgs).not.toContain("dump_extra=freq=keyframe");
 
-    // Verify audio at HAP-compliant 24k and audio filter with PTS sync & volume boost
+    // Verify audio at HAP-compliant sample rate and bitrate
+    // v1.6.7: no aresample filter (caused FFmpeg crash when stream has no audio track)
     expect(capturedArgs).toContain("24k");
-    expect(capturedArgs).toContain("aresample=async=1:first_pts=0,volume=2.5");
+    expect(capturedArgs).not.toContain("aresample=async=1:first_pts=0,volume=2.5");
+    expect(capturedArgs).toContain("-ar");
+    expect(capturedArgs).toContain("-ac");
+    expect(capturedArgs).toContain("1");
 
     // Verify HTTP/HTTPS robust flags
     expect(capturedArgs).toContain("-reconnect");
-    expect(capturedArgs).toContain("1");
     expect(capturedArgs).toContain("-tls_verify");
     expect(capturedArgs).toContain("0");
 
