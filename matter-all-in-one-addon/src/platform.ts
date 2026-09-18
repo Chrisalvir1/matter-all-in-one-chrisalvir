@@ -1027,8 +1027,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   }
 
   private cameraUiMotionPoller: NodeJS.Timeout | null = null;
-  private lastCameraUiNotificationTime = Date.now() - 30_000;
+  /**
+   * Tracks the last seen notification timestamp in SECONDS (Camera.UI uses Unix seconds, not ms).
+   * Initialized to 30 seconds ago (in seconds) so we pick up very recent events on startup.
+   */
+  private lastCameraUiNotificationTime = Math.floor(Date.now() / 1000) - 30;
   private cameraUiActiveMotionTimers = new Map<string, NodeJS.Timeout>();
+  private cameraUiPollerClient: import("./camera/cameraui/cameraui-client.js").CameraUiClient | null = null;
 
   private startCameraUiMotionPoller(): void {
     if (this.cameraUiMotionPoller) return;
@@ -1036,29 +1041,42 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     const pollNotifications = async () => {
       try {
         const store = await CameraUiStorage.load();
-        if (!store.config.serverUrl && store.cameras.length === 0) return;
+        // Return only if Camera.UI is not configured at all (no serverUrl)
+        if (!store.config.serverUrl) return;
 
-        const client = new CameraUiClient(store.config);
-        const notifications = await client.getRecentNotifications();
+        // Reuse or create the authenticated client (avoid re-logging every 1.5s)
+        if (!this.cameraUiPollerClient) {
+          const client = new CameraUiClient(store.config);
+          await client.login();
+          this.cameraUiPollerClient = client;
+        }
+
+        const notifications = await this.cameraUiPollerClient.getRecentNotifications();
         if (!notifications || !Array.isArray(notifications) || notifications.length === 0) return;
 
         const activeAccessories = CameraUiHomeKitBridge.getAllAccessories();
         const clean = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
         for (const notif of notifications) {
-          const notifTime = Number(
-            notif.time ||
-            notif.timestamp ||
-            (notif.date ? new Date(notif.date).getTime() : 0) ||
-            (notif.createdAt ? new Date(notif.createdAt).getTime() : 0),
-          );
-
-          if (notifTime && notifTime <= this.lastCameraUiNotificationTime) {
-            continue;
+          // Camera.UI stores timestamps as Unix SECONDS. Normalize to seconds.
+          let notifTimeSec = 0;
+          const rawTime = notif.time ?? notif.timestamp;
+          if (rawTime) {
+            const n = Number(rawTime);
+            // If value > 1e10 it's already in ms, convert to seconds
+            notifTimeSec = n > 1e10 ? Math.floor(n / 1000) : n;
+          } else if (notif.date) {
+            notifTimeSec = Math.floor(new Date(notif.date).getTime() / 1000);
+          } else if (notif.createdAt) {
+            notifTimeSec = Math.floor(new Date(notif.createdAt).getTime() / 1000);
           }
 
-          if (notifTime && notifTime > this.lastCameraUiNotificationTime) {
-            this.lastCameraUiNotificationTime = notifTime;
+          if (notifTimeSec && notifTimeSec <= this.lastCameraUiNotificationTime) {
+            continue; // Already processed
+          }
+
+          if (notifTimeSec && notifTimeSec > this.lastCameraUiNotificationTime) {
+            this.lastCameraUiNotificationTime = notifTimeSec;
           }
 
           const camIdentifier = String(
@@ -1070,7 +1088,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           ).trim();
           const cleanId = clean(camIdentifier);
 
-          // Find matching mounted camera
+          if (!cleanId) continue;
+
+          // Find matching mounted camera accessory
           let matchedCuiId: string | undefined;
           let matchedAccessory: any = undefined;
 
@@ -1092,7 +1112,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           if (matchedAccessory && matchedCuiId) {
             const triggerInfo = notif.label || notif.trigger || notif.type || "opencv";
             this.log.notice(
-              `[Camera.UI][OpenCV] Detección de movimiento confirmada en cámara "${matchedAccessory.record?.name || matchedCuiId}" (${triggerInfo}). Activando sensor HomeKit.`,
+              `[Camera.UI][OpenCV] Detección confirmada en "${matchedAccessory.record?.name || matchedCuiId}" (trigger=${triggerInfo}, t=${notifTimeSec}). Activando sensor HomeKit.`,
             );
 
             matchedAccessory.updateMotionState(true);
@@ -1108,9 +1128,16 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             }, 10_000);
 
             this.cameraUiActiveMotionTimers.set(matchedCuiId, resetTimer);
+          } else if (cleanId) {
+            this.log.debug(
+              `[Camera.UI][OpenCV] Notificación recibida para cámara "${camIdentifier}" pero no se encontró accesorio montado. Accesorios activos: [${[...activeAccessories.keys()].join(", ")}]`,
+            );
           }
         }
-      } catch {}
+      } catch (err) {
+        // Reset client on error so next poll re-authenticates
+        this.cameraUiPollerClient = null;
+      }
     };
 
     this.cameraUiMotionPoller = setInterval(() => void pollNotifications(), 1500);
@@ -1746,7 +1773,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     );
     this.log.notice(`[Runtime] Matterbridge runtime: ${mbVersion}`);
     this.log.notice(`[Runtime] Node.js runtime: ${process.version}`);
-    this.log.notice(`[Runtime] Plugin version: 1.5.12`);
+    this.log.notice(`[Runtime] Plugin version: 1.7.1`);
     await this.loadEntityDiagnostics();
     await this.startUiServer();
     this.startMatterConnectionMonitor();
@@ -6198,6 +6225,38 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           } catch (err: any) {
             res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
             res.end(JSON.stringify({ success: false, error: err.message || "Error al guardar configuración de Camera.UI" }));
+          }
+          return;
+        }
+
+        if (
+          req.method === "GET" &&
+          (pathname === "/api/cameraui/debug-notifications" ||
+            pathname === "/api/custom/cameraui/debug-notifications")
+        ) {
+          try {
+            const store = await CameraUiStorage.load();
+            const client = new CameraUiClient(store.config);
+            await client.login();
+            const rawNotifications = await client.getRecentNotifications();
+            const activeAccessories = CameraUiHomeKitBridge.getAllAccessories();
+            const mountedCameras = [...activeAccessories.entries()].map(([id, acc]) => ({
+              cuiId: id,
+              name: acc.record?.name,
+              entityId: (acc as any).entityId,
+            }));
+            res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+            res.end(JSON.stringify({
+              lastKnownTimeSec: this.lastCameraUiNotificationTime,
+              nowSec: Math.floor(Date.now() / 1000),
+              serverUrl: store.config.serverUrl,
+              notificationCount: rawNotifications.length,
+              first5Notifications: rawNotifications.slice(0, 5),
+              mountedCameras,
+            }, null, 2));
+          } catch (err: any) {
+            res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
+            res.end(JSON.stringify({ error: err.message }));
           }
           return;
         }
