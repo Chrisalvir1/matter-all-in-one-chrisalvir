@@ -219,8 +219,21 @@ export class CameraUiHomeKitBridge {
       await CameraUiStorage.save(store);
     }
 
-    // Start local FFmpeg motion detector for this camera if RTSP URL is available
-    if (camera.rtspUrl && !this.activeMotionDetectors.has(camera.id)) {
+    // Only run local FFmpeg motion detector if explicitly enabled in camera config
+    // and there are no existing Home Assistant motion entities.
+    // Running FFmpeg 24/7 on every camera consumes RTSP sockets, triggers false HKSV recordings,
+    // and blocks Apple Home Live View.
+    const hasRealMotionEntity = Boolean(
+      record.motionEntityId ||
+        camera.motionEntityId ||
+        camera.realEntities?.some((e) => e.type === "motion"),
+    );
+    const shouldRunMotionDetector =
+      Boolean((camera as any).enableFfmpegMotionDetector) &&
+      !hasRealMotionEntity &&
+      Boolean(camera.rtspUrl);
+
+    if (shouldRunMotionDetector && !this.activeMotionDetectors.has(camera.id)) {
       try {
         const detector = new FfmpegMotionDetector({
           cameraId: camera.id,
@@ -245,6 +258,13 @@ export class CameraUiHomeKitBridge {
         platform?.log?.warn?.(
           `[Camera.UI][${camera.name}] No se pudo iniciar el detector de movimiento FFmpeg local: ${detErr}`,
         );
+      }
+    } else {
+      // Ensure any legacy motion detector for this camera is stopped
+      const existingDet = this.activeMotionDetectors.get(camera.id);
+      if (existingDet) {
+        existingDet.stop(platform?.log);
+        this.activeMotionDetectors.delete(camera.id);
       }
     }
 

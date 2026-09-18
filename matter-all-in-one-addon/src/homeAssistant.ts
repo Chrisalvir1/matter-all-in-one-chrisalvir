@@ -1722,6 +1722,12 @@ export class HomeAssistant extends EventEmitter {
           }
           this.log.error(`WebSocket error: ${event.message}`);
           this.emit("error", `WebSocket error: ${event.message}`);
+          if (this.wsUrl.includes("supervisor")) {
+            this.log.warn(
+              `[HomeAssistant] Supervisor core proxy failed. Switching to direct localhost ws://127.0.0.1:8123/api/websocket...`,
+            );
+            this.wsUrl = "ws://127.0.0.1:8123/api/websocket";
+          }
           if (!this.closing) this.startReconnect();
           return reject(new Error(`WebSocket error: ${event.message}`));
         };
@@ -1856,10 +1862,16 @@ export class HomeAssistant extends EventEmitter {
     this.log.debug("Starting ping interval...");
     this.pingInterval = setInterval(() => {
       if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-        this.log.error(
-          "WebSocket not open sending ping. Closing connection...",
+        this.log.warn(
+          "WebSocket not open sending ping. Forcing reconnection...",
         );
-        void this.close().catch(/* istanbul ignore next */ () => {});
+        this.stopPing();
+        this.closing = false;
+        if (this.ws) {
+          this.ws.terminate();
+        } else {
+          this.startReconnect();
+        }
         return;
       }
       // Keep one watchdog per unanswered ping. Replacing this timer every 30
@@ -1914,7 +1926,8 @@ export class HomeAssistant extends EventEmitter {
   /**
    * Start the reconnection timeout if reconnectTimeoutTime and reconnectRetries are set in the config.
    */
-  private startReconnect() {
+  public startReconnect() {
+    this.closing = false;
     if (this.reconnectTimeout) {
       this.log.debug(`Reconnecting already in progress.`);
       return;
@@ -1959,10 +1972,12 @@ export class HomeAssistant extends EventEmitter {
    * @returns {Promise<void>} - A Promise that resolves when the connection is closed or rejects with an error if the connection could not be closed.
    */
   // eslint-disable-next-line @typescript-eslint/promise-function-async
-  close(code: number = 1000, reason: string = "Normal closure"): Promise<void> {
+  close(code: number = 1000, reason: string = "Normal closure", isPermanent: boolean = true): Promise<void> {
     return new Promise((resolve, reject) => {
       this.log.info("Closing Home Assistant connection...");
-      this.closing = true;
+      if (isPermanent) {
+        this.closing = true;
+      }
       this.connectionGeneration++;
 
       this.stopPing();

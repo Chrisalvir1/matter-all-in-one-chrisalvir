@@ -599,11 +599,10 @@ export class HomeKitCameraAccessory {
       category: Categories.IP_CAMERA,
       setupID: this.record.setupId,
       advertiser: MDNSAdvertiser.CIAO,
-      bind: primaryIface?.name ? [primaryIface.name] : undefined,
     });
     this.isPublished = true;
     this.platform?.log?.notice?.(
-      `[HomeKitCamera][${this.entityId}] Published production HAP camera port=${this.record.port} (advertiser=ciao, iface=${primaryIface?.name || "all"}) HKSV=${this.record.hksvEnabled ? "enabled" : "disabled"}`,
+      `[HomeKitCamera][${this.entityId}] Published production HAP camera port=${this.record.port} (advertiser=ciao, iface=all) HKSV=${this.record.hksvEnabled ? "enabled" : "disabled"}`,
     );
 
     // Asynchronously probe stream capabilities (HEVC vs H264, audio tracks) to adapt strategy dynamically

@@ -671,7 +671,7 @@ export class HomeKitCameraStreamingDelegate
       process.stderr?.on("data", (chunk: Buffer) => {
         stderr = `${stderr}${chunk.toString()}`.slice(-6000);
       });
-      // Settle HomeKit once process is spawned and active (20ms)
+      // Settle HomeKit once process is spawned and confirmed active (80ms)
       const guard = setTimeout(() => {
         if (process.exitCode === null && !process.killed) {
           this.platform?.log?.notice?.(
@@ -681,7 +681,7 @@ export class HomeKitCameraStreamingDelegate
         } else {
           settle(new Error("FFmpeg exited during HAP startup"));
         }
-      }, 20);
+      }, 80);
       process.once("error", (error) => {
         clearTimeout(guard);
         settle(error);
@@ -781,19 +781,17 @@ export class HomeKitCameraStreamingDelegate
         "-rtsp_transport",
         "tcp",
         "-timeout",
-        "10000000",
+        "5000000",
         "-probesize",
-        "32768",
+        "65536",
         "-analyzeduration",
-        "0",
-        "-fpsprobesize",
-        "0",
+        "100000",
         "-fflags",
-        "+nobuffer+flush_packets+genpts+discardcorrupt",
+        "+nobuffer+flush_packets+genpts",
         "-flags",
         "low_delay",
-        "-avioflags",
-        "direct",
+        "-max_delay",
+        "0",
         "-thread_queue_size",
         "1024",
         "-i",

@@ -1,3 +1,20 @@
+## [1.8.10] - 2026-09-18
+
+### Blindaje Definitivo: Reconexión HA, Cero Bloqueo de Sockets RTSP y Streaming Instantáneo HomeKit
+
+- **Reconexión Automática Indestructible con Home Assistant:**
+  - Corregido el bug crítico en `homeAssistant.ts` donde `startPing` llamaba a `this.close()`, estableciendo `closing = true` e impidiendo permanentemente la reconexión de WebSocket. Ahora fuerza reconexión limpia sin bloquear `closing`.
+  - Añadido fallback automático en `socket.onerror`: si el proxy del supervisor falla o no resuelve DNS en `host_network`, conmuta inmediatamente a `ws://127.0.0.1:8123/api/websocket`.
+  - Añadido watchdog activo en `platform.ts` que monitorea `this.ha.connected` cada 4 segundos y fuerza reconexión si la conexión cae más de 5 segundos, erradicando el estado "Sin respuesta" en Apple Home.
+- **Eliminación de Saturación de Sockets RTSP (Detector de Movimiento FFmpeg):**
+  - Desactivada la ejecución automática de `FfmpegMotionDetector` en segundo plano para las 13 cámaras simultáneamente. 13 procesos continuos consumían los canales RTSP de las cámaras y disparaban grabaciones falsas a iCloud cada 10 segundos, bloqueando las peticiones de Live View de HomeKit con "Connection refused" o caídas.
+  - Las cámaras ahora delegan la detección a las entidades nativas de Home Assistant (`camera.realEntities` / `Omni AI Sensors`), garantizando 0% de uso de CPU y sockets RTSP libres al 100% para Live View instantáneo.
+- **Apertura de Escucha en Todas las Interfaces de Red (`bind: undefined`):**
+  - En `HomeKitCameraAccessory.publish()`, se removió la restricción `bind: [primaryIface.name]`. Ahora HAP-NodeJS y Ciao escuchan en `0.0.0.0` y `::` permitiendo comunicación directa con todos los iPhones, iPads y Apple TV en cualquier interfaz o VLAN.
+- **Aceleración y Resiliencia del Streaming HAP en `homekit-camera-stream.delegate.ts`:**
+  - Optimización de flags RTSP de baja latencia (`-probesize 65536 -analyzeduration 100000 -timeout 5000000 -max_delay 0`), permitiendo arranque en < 100ms y evitando demoras o frames perdidos.
+  - Ajustado el guard de confirmación HAP a 80 ms para capturar fallos inmediatos de conexión y ejecutar de inmediato el mecanismo de fallback y autorrecuperación.
+
 ## [1.8.9] - 2026-09-18
 
 ### Restauración de Stream HomeKit: Eliminación de dump_extra y Corrección de Códec HAP

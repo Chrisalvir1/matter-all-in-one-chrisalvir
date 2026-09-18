@@ -1174,10 +1174,30 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     }
   }
 
+  private lastHaReconnectAttempt = 0;
+
+  private ensureHaConnected(): void {
+    if (!this.ha || this.ha.connected) return;
+    const now = Date.now();
+    if (now - this.lastHaReconnectAttempt < 5000) return;
+    this.lastHaReconnectAttempt = now;
+    this.log.notice(
+      `[Watchdog] Home Assistant WebSocket desconectado. Forzando reconexión inmediata...`,
+    );
+    try {
+      this.ha.startReconnect();
+    } catch (err) {
+      this.log.warn(`[Watchdog] Error al invocar startReconnect(): ${err}`);
+    }
+  }
+
   private startMatterConnectionMonitor() {
     if (this.matterConnectionMonitor) return;
     this.matterConnectionMonitor = setInterval(
-      () => this.monitorMatterConnections(),
+      () => {
+        this.ensureHaConnected();
+        this.monitorMatterConnections();
+      },
       4_000,
     );
   }
