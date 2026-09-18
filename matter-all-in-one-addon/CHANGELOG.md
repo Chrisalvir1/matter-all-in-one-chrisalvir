@@ -1,3 +1,14 @@
+## [1.8.3] - 2026-09-18
+
+### Optimización Ultra-Rápida de Streaming en Vivo (Live View Instantáneo ~0s)
+
+- **Arranque Instantáneo de Live View:**
+  - Reducido el timer de confirmación HAP de 1000ms a **400ms**, permitiendo que Apple Home conecte más de medio segundo antes.
+  - Agregado `-fpsprobesize 0` para evitar que FFmpeg retenga paquetes intentando calcular los FPS de la cámara.
+  - Agregado `-avioflags direct` y `-fflags +nobuffer+flush_packets+genpts+discardcorrupt` para bypass de colas internas de I/O.
+  - Agregado `-thread_queue_size 1024` para desacoplar el demuxing de audio y video, eliminando pausas y stalls de keyframes.
+  - Agregado `-fflags +nobuffer+flush_packets -max_delay 0` en la salida RTP para entrega inmediata de cada NAL unit al iPhone sin retraso de paquetes.
+
 ## [1.8.2] - 2026-09-18
 
 ### Visibilidad Completa en UI y Logs de Detección de Movimiento, HKSV y Grabación en iCloud

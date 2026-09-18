@@ -681,7 +681,7 @@ export class HomeKitCameraStreamingDelegate
         } else {
           settle(new Error("FFmpeg exited during HAP startup"));
         }
-      }, 1000);
+      }, 400);
       process.once("error", (error) => {
         clearTimeout(guard);
         settle(error);
@@ -781,15 +781,21 @@ export class HomeKitCameraStreamingDelegate
         "-rtsp_transport",
         "tcp",
         "-timeout",
-        "15000000",
+        "10000000",
         "-probesize",
-        "4194304",
+        "2097152",
         "-analyzeduration",
-        "4000000",
+        "1500000",
+        "-fpsprobesize",
+        "0",
         "-fflags",
-        "+nobuffer+flush_packets+genpts",
+        "+nobuffer+flush_packets+genpts+discardcorrupt",
         "-flags",
         "low_delay",
+        "-avioflags",
+        "direct",
+        "-thread_queue_size",
+        "1024",
         "-i",
         sourceUrl,
       );
@@ -885,6 +891,8 @@ export class HomeKitCameraStreamingDelegate
         "-an",
         "-c:v", "copy",
         "-f", "rtp",
+        "-fflags", "+nobuffer+flush_packets",
+        "-max_delay", "0",
         "-payload_type", String(video.pt || 99),
         "-ssrc", String(session.videoSsrc),
         "-srtp_out_suite", suiteName(session.videoCryptoSuite),
