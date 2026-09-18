@@ -1777,6 +1777,16 @@ export class HomeAssistant extends EventEmitter {
               this.connectionTimeout = undefined;
             }
             if (this.wsAccessToken) {
+              if (
+                process.env.SUPERVISOR_TOKEN &&
+                !this.wsUrl.includes("supervisor")
+              ) {
+                this.log.warn(
+                  `[HomeAssistant] Token rejected on ${this.wsUrl}. Auto-switching to supervisor core proxy ws://supervisor/core/api/websocket...`,
+                );
+                this.wsUrl = "ws://supervisor/core/api/websocket";
+                this.wsAccessToken = process.env.SUPERVISOR_TOKEN;
+              }
               return reject(
                 new Error(
                   `Home Assistant rejected the access token: ${msg}. Check your token in the plugin config.`,

@@ -110,11 +110,21 @@ export async function discoverHassUrl(
     return process.env.HA_URL;
   }
 
-  // 2. Well-known hostnames — fastest path on most networks
+  // 2. Supervisor proxy: Inside an add-on, SUPERVISOR_TOKEN is only valid on the supervisor API.
+  // Probing homeassistant.local:8123 first causes auth failure because port 8123 requires a Long-Lived Token.
+  if (process.env.SUPERVISOR_TOKEN) {
+    const supervisorProbe = await probeHassUrl("http://supervisor/core");
+    if (supervisorProbe) {
+      info(`Using Supervisor API at ${supervisorProbe}`);
+      return supervisorProbe;
+    }
+  }
+
+  // 3. Well-known hostnames — fastest path on most networks
   const wellKnown = [
+    "http://supervisor/core", // only works inside HA OS add-on
     "http://homeassistant.local:8123",
     "http://homeassistant:8123",
-    "http://supervisor/core", // only works inside HA OS add-on
   ];
 
   info("Probing well-known Home Assistant hostnames...");

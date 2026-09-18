@@ -1804,6 +1804,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     // We need to await discoverHassUrl() which probes the network, so we store
     // the raw config values here and complete the HA instance init in onStart().
     this._configHost = config.host;
+    if (!this._configHost && process.env.SUPERVISOR_TOKEN) {
+      this._configHost = "http://supervisor/core";
+    }
     this._configToken = token;
 
     this.log.info(`Platform initialised — host will be resolved on start.`);
@@ -1860,7 +1863,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     );
     this.log.notice(`[Runtime] Matterbridge runtime: ${mbVersion}`);
     this.log.notice(`[Runtime] Node.js runtime: ${process.version}`);
-    this.log.notice(`[Runtime] Plugin version: 1.7.4`);
+    this.log.notice(`[Runtime] Plugin version: 1.7.5`);
     await this.loadEntityDiagnostics();
     await this.startUiServer();
     this.startMatterConnectionMonitor();
@@ -2059,21 +2062,28 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     //   2. Scan local LAN subnets for port 8123
     let rawHost = this._configHost;
     if (!rawHost) {
-      this.log.info(
-        "No host configured — auto-discovering Home Assistant on the network...",
-      );
-      const discovered = await discoverHassUrl((msg) => this.log.debug(msg));
-      if (discovered) {
-        rawHost = discovered;
+      if (process.env.SUPERVISOR_TOKEN) {
+        rawHost = "http://supervisor/core";
         this.log.notice(
-          `Auto-discovered Home Assistant at ${CYAN}${rawHost}${nf}`,
+          `Running as Home Assistant add-on — using Supervisor core API at ${CYAN}${rawHost}${nf}`,
         );
       } else {
-        this.log.error(
-          "Could not find Home Assistant on the network. " +
-            'Set the "host" field in the plugin config (e.g. http://192.168.1.100:8123) and restart.',
+        this.log.info(
+          "No host configured — auto-discovering Home Assistant on the network...",
         );
-        return;
+        const discovered = await discoverHassUrl((msg) => this.log.debug(msg));
+        if (discovered) {
+          rawHost = discovered;
+          this.log.notice(
+            `Auto-discovered Home Assistant at ${CYAN}${rawHost}${nf}`,
+          );
+        } else {
+          this.log.error(
+            "Could not find Home Assistant on the network. " +
+              'Set the "host" field in the plugin config (e.g. http://192.168.1.100:8123) and restart.',
+          );
+          return;
+        }
       }
     }
 

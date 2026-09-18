@@ -247,8 +247,11 @@ export class CameraUiHomeKitBridge {
       `[Camera.UI][${camera.name}] Published to HomeKit HAP on port ${camera.port} (code: ${camera.pincode}, codec: ${chosenCodec}, strategy: ${chosenStrategy})`,
     );
 
-    // Register Matter Occupancy Sensing endpoint so Home Assistant can see it and run automations
-    if (platform?.registerDevice && !this.activeMatterEndpoints.has(camera.id)) {
+    // Register Matter Occupancy Sensing endpoint only if explicitly exported
+    const shouldExportMatter = camera.realEntities?.some(
+      (e) => (e.type === "motion" || e.domain === "binary_sensor") && e.matterExported,
+    );
+    if (shouldExportMatter && platform?.registerDevice && !this.activeMatterEndpoints.has(camera.id)) {
       try {
         const safeName = (camera.name || `Cámara ${camera.id}`).substring(0, 32).trim();
         const uniqueId = `cameraui_${camera.id}_occupancy`;

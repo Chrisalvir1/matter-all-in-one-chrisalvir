@@ -1,3 +1,18 @@
+## [1.7.5] - 2026-09-17
+
+### Corrección Crítica de Conexión a Home Assistant (Supervisor API) y Restauración de IoT
+
+- **Solución al Bloqueo `Invalid access token or password` con `homeassistant.local:8123`:**
+  - En entornos de Add-on de Home Assistant OS (`SUPERVISOR_TOKEN` inyectado), la conexión WebSocket debe ir dirigida a `http://supervisor/core/api/websocket`.
+  - El escaneo automático de red descubría `http://homeassistant.local:8123` primero e intentaba usar el `SUPERVISOR_TOKEN` contra el puerto 8123 directo, el cual lo rechazaba con `Code: 1000 Reason: Invalid access token or password`.
+  - Ahora se prioriza `http://supervisor/core` de manera inmediata cuando se detecta el entorno de add-on, restaurando la conexión instantánea con Home Assistant y todos los dispositivos IoT (luces, switches, clima).
+- **Auto-recuperación (Self-Healing) en `HomeAssistant` WebSocket Client:**
+  - Si una conexión previa fue rechazada con `auth_invalid` en una URL no-supervisor, el cliente conmuta automáticamente a `ws://supervisor/core/api/websocket` para restablecer el servicio de inmediato.
+- **Configuración Dual en `run.sh`:**
+  - Se genera configuración tanto para `matter-all-in-one-chrisalvir.config.json` como para `matter-all-in-one-addon.config.json`, asegurando que Matterbridge inicie siempre con las opciones correctas.
+- **Limpieza de Accesorios Matter en Camera.UI:**
+  - Evitada la creación innecesaria de 12 accesorios Matter de ocupación sin emparejar; los sensores Matter solo se exportan si la cámara tiene una entidad explícitamente activada para exportación Matter.
+
 ## [1.7.4] - 2026-09-17
 
 ### Habilitación de Webhooks LAN en Ingress Proxy y Diagnóstico de Stream Amigable

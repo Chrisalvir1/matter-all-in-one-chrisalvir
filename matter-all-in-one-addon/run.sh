@@ -41,15 +41,18 @@ ln -sfn /data/.matterbridge /root/.matterbridge
 
 # Write the plugin config file atomically and safely escape host/token values.
 CONFIG_PATH="/root/.matterbridge/matter-all-in-one-chrisalvir.config.json"
-echo "[Info] Generating config file at $CONFIG_PATH"
+CONFIG_PATH2="/root/.matterbridge/matter-all-in-one-addon.config.json"
+echo "[Info] Generating config file at $CONFIG_PATH and $CONFIG_PATH2"
 jq -n \
   --arg host "$HOST" \
   --arg token "$TOKEN" \
   --argjson groupByDeviceId "$GROUP_BY_DEVICE_ID" \
   '{name:"matter-all-in-one-chrisalvir",type:"dynamic",host:$host,token:$token,groupByDeviceId:$groupByDeviceId}' \
   > "$CONFIG_PATH.tmp"
+cp "$CONFIG_PATH.tmp" "$CONFIG_PATH2.tmp"
 mv "$CONFIG_PATH.tmp" "$CONFIG_PATH"
-chmod 600 "$CONFIG_PATH"
+mv "$CONFIG_PATH2.tmp" "$CONFIG_PATH2"
+chmod 600 "$CONFIG_PATH" "$CONFIG_PATH2"
 
 # Write the main matterbridge settings to automatically enable the plugin
 SETTINGS_PATH="/root/.matterbridge/matterbridge.json"
@@ -60,6 +63,10 @@ if [ ! -f "$SETTINGS_PATH" ]; then
   "bridgeMode": "bridge",
   "plugins": {
     "matter-all-in-one-chrisalvir": {
+      "enabled": true,
+      "path": "/app"
+    },
+    "matter-all-in-one-addon": {
       "enabled": true,
       "path": "/app"
     }
