@@ -1042,6 +1042,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
    * Initialized to 30 seconds ago (in seconds) so we pick up very recent events on startup.
    */
   private lastCameraUiNotificationTime = Math.floor(Date.now() / 1000) - 30;
+  private seenCameraUiNotificationIds = new Set<string>();
   private cameraUiActiveMotionTimers = new Map<string, NodeJS.Timeout>();
   private cameraUiPollerClient: import("./camera/cameraui/cameraui-client.js").CameraUiClient | null = null;
 
@@ -1066,8 +1067,14 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
         const activeAccessories = CameraUiHomeKitBridge.getAllAccessories();
         const clean = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+        let maxTimeInBatch = this.lastCameraUiNotificationTime;
 
         for (const notif of notifications) {
+          const notifId = String(notif.id || notif._id || notif.uuid || "");
+          if (notifId && this.seenCameraUiNotificationIds.has(notifId)) {
+            continue;
+          }
+
           // Camera.UI stores timestamps as Unix SECONDS. Normalize to seconds.
           let notifTimeSec = 0;
           const rawTime = notif.time ?? notif.timestamp;
@@ -1081,12 +1088,20 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             notifTimeSec = Math.floor(new Date(notif.createdAt).getTime() / 1000);
           }
 
-          if (notifTimeSec && notifTimeSec <= this.lastCameraUiNotificationTime) {
+          if (notifTimeSec && notifTimeSec <= this.lastCameraUiNotificationTime && !notifId) {
             continue; // Already processed
           }
 
-          if (notifTimeSec && notifTimeSec > this.lastCameraUiNotificationTime) {
-            this.lastCameraUiNotificationTime = notifTimeSec;
+          if (notifId) {
+            this.seenCameraUiNotificationIds.add(notifId);
+            if (this.seenCameraUiNotificationIds.size > 1000) {
+              const first = this.seenCameraUiNotificationIds.values().next().value;
+              if (first) this.seenCameraUiNotificationIds.delete(first);
+            }
+          }
+
+          if (notifTimeSec && notifTimeSec > maxTimeInBatch) {
+            maxTimeInBatch = notifTimeSec;
           }
 
           const camField = typeof notif.camera === "object" ? (notif.camera?.name || notif.camera?.id) : notif.camera;
@@ -1141,23 +1156,37 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               notif.label ||
               notif.trigger ||
               notif.type ||
+              notif.target ||
               notif.subtitle ||
               notif.body ||
               "opencv";
 
             this.log.notice(
-              `[Camera.UI][OpenCV] Detección confirmada en "${matchedAccessory.record?.name || matchedCuiId}" (trigger=${triggerInfo}, t=${notifTimeSec}). Activando sensor HomeKit.`,
+              `[Camera.UI][OpenCV] Detección confirmada en "${matchedAccessory.record?.name || matchedCuiId}" (trigger=${triggerInfo}, t=${notifTimeSec}). Activando sensor HomeKit y Matter.`,
             );
 
-            matchedAccessory.updateMotionState(true);
+            CameraUiHomeKitBridge.updateMotion(matchedCuiId, true, this);
             this.broadcastSseMessage("cameraui_motion", { cameraId: matchedCuiId, motionOn: true });
 
             // Forward to CameraAiDetector so UI "Detección Activa" & MQTT publish in real time
             if (this.cameraAiDetector) {
-              const lowerTrigger = String(triggerInfo).toLowerCase();
-              const isVehicle = /vehicle|vehiculo|car|auto/i.test(lowerTrigger);
-              const isPerson = /person|persona|face|humano/i.test(lowerTrigger);
-              const isPet = /dog|perro|cat|gato|pet|animal/i.test(lowerTrigger);
+              const allText = [
+                notif.label,
+                notif.trigger,
+                notif.type,
+                notif.target,
+                notif.tag,
+                notif.title,
+                notif.subtitle,
+                notif.body,
+                notif.message,
+                typeof notif.record === "string" ? notif.record : JSON.stringify(notif.record || {}),
+                typeof notif.details === "string" ? notif.details : JSON.stringify(notif.details || {}),
+              ].filter(Boolean).join(" ").toLowerCase();
+
+              const isVehicle = /vehicle|vehiculo|vehículo|car|auto|camion|camión|truck|bus|motorcycle|moto/i.test(allText);
+              const isPerson = /person|persona|humano|human|face|cara/i.test(allText);
+              const isPet = /dog|perro|cat|gato|pet|animal|mascota|bird|ave/i.test(allText);
               const targets: import("./camera/camera-types.js").CameraAiTarget[] = [];
               if (isVehicle) targets.push("vehicle");
               if (isPerson) targets.push("person");
@@ -1178,7 +1207,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             if (existingTimer) clearTimeout(existingTimer);
 
             const resetTimer = setTimeout(() => {
-              matchedAccessory.updateMotionState(false);
+              CameraUiHomeKitBridge.updateMotion(matchedCuiId, false, this);
               this.broadcastSseMessage("cameraui_motion", { cameraId: matchedCuiId, motionOn: false });
               this.cameraUiActiveMotionTimers.delete(matchedCuiId);
             }, 10_000);
@@ -1190,6 +1219,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             );
           }
         }
+
+        this.lastCameraUiNotificationTime = maxTimeInBatch;
       } catch (err) {
         // Reset client on error so next poll re-authenticates
         this.cameraUiPollerClient = null;
@@ -1829,7 +1860,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     );
     this.log.notice(`[Runtime] Matterbridge runtime: ${mbVersion}`);
     this.log.notice(`[Runtime] Node.js runtime: ${process.version}`);
-    this.log.notice(`[Runtime] Plugin version: 1.7.2`);
+    this.log.notice(`[Runtime] Plugin version: 1.7.3`);
     await this.loadEntityDiagnostics();
     await this.startUiServer();
     this.startMatterConnectionMonitor();
@@ -6383,11 +6414,56 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                 wordsMatch ||
                 (activeAccessories.size === 1)
               ) {
-                acc.updateMotionState(isActive);
+                CameraUiHomeKitBridge.updateMotion(cuiId, isActive, this);
                 this.broadcastSseMessage("cameraui_motion", { cameraId: cuiId, motionOn: isActive });
                 this.log.notice(
-                  `[Camera.UI][Webhook] Movimiento ${isActive ? "ACTIVADO" : "DESACTIVADO"} para "${acc.record?.name || cuiId}"`,
+                  `[Camera.UI][Webhook] Movimiento ${isActive ? "ACTIVADO" : "DESACTIVADO"} para "${acc.record?.name || cuiId}" en HomeKit y Matter`,
                 );
+
+                if (isActive && this.cameraAiDetector) {
+                  const triggerInfo = data.trigger || data.label || data.type || data.target || data.subtitle || data.body || "webhook";
+                  const allText = [
+                    data.label,
+                    data.trigger,
+                    data.type,
+                    data.target,
+                    data.tag,
+                    data.title,
+                    data.subtitle,
+                    data.body,
+                    data.message,
+                    typeof data.record === "string" ? data.record : JSON.stringify(data.record || {}),
+                    typeof data.details === "string" ? data.details : JSON.stringify(data.details || {}),
+                  ].filter(Boolean).join(" ").toLowerCase();
+
+                  const isVehicle = /vehicle|vehiculo|vehículo|car|auto|camion|camión|truck|bus|motorcycle|moto/i.test(allText);
+                  const isPerson = /person|persona|humano|human|face|cara/i.test(allText);
+                  const isPet = /dog|perro|cat|gato|pet|animal|mascota|bird|ave/i.test(allText);
+                  const targets: import("./camera/camera-types.js").CameraAiTarget[] = [];
+                  if (isVehicle) targets.push("vehicle");
+                  if (isPerson) targets.push("person");
+                  if (isPet) targets.push("dog");
+                  if (targets.length === 0) targets.push("person");
+
+                  this.cameraAiDetector.dispatchDetection(this, cuiId, {
+                    cameraId: cuiId,
+                    timestamp: Date.now(),
+                    targets,
+                    labels: [String(triggerInfo)],
+                    confidence: 0.95,
+                    rawDetails: `Camera.UI Webhook: ${triggerInfo}`,
+                  });
+
+                  // Auto-reset motion after 10 seconds if Camera.UI only pushes active events
+                  const existingTimer = this.cameraUiActiveMotionTimers.get(cuiId);
+                  if (existingTimer) clearTimeout(existingTimer);
+                  const resetTimer = setTimeout(() => {
+                    CameraUiHomeKitBridge.updateMotion(cuiId, false, this);
+                    this.broadcastSseMessage("cameraui_motion", { cameraId: cuiId, motionOn: false });
+                    this.cameraUiActiveMotionTimers.delete(cuiId);
+                  }, 10_000);
+                  this.cameraUiActiveMotionTimers.set(cuiId, resetTimer);
+                }
                 matched = true;
                 break;
               }

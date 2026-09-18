@@ -373,29 +373,29 @@ export class HomeKitCameraRecordingDelegate
       args.push("-headers", `Authorization: Bearer ${token}\r\n`);
     }
 
-    if (sourceUrl.startsWith("rtsp://")) {
+    if (sourceUrl.startsWith("rtsp://") || sourceUrl.startsWith("rtsps://")) {
       args.push(
-        "-probesize",
-        "32768",
-        "-analyzeduration",
-        "0",
         "-rtsp_transport",
         "tcp",
+        "-timeout",
+        "20000000",
+        "-probesize",
+        "1048576",
+        "-analyzeduration",
+        "1000000",
         "-fflags",
-        "+nobuffer+flush_packets",
+        "+nobuffer+flush_packets+genpts",
         "-flags",
         "low_delay",
-        "-max_delay",
-        "0",
       );
     } else {
       args.push(
         "-probesize",
-        "32768",
+        "1048576",
         "-analyzeduration",
-        "0",
+        "1000000",
         "-fflags",
-        "+nobuffer+flush_packets",
+        "+nobuffer+flush_packets+genpts",
         "-flags",
         "low_delay",
       );

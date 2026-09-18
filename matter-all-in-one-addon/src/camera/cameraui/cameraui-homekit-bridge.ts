@@ -1,5 +1,8 @@
 import crypto from "node:crypto";
 import { uuid } from "hap-nodejs";
+import { MatterbridgeEndpoint, occupancySensor } from "matterbridge";
+import { OccupancySensing } from "matterbridge/matter/clusters";
+import { safeSetAttribute } from "../../utils/matter-attributes.js";
 import type {
   CameraCapabilitiesInfo,
   HomeKitCameraStorageRecord,
@@ -11,6 +14,7 @@ import { CameraUiStorage } from "./cameraui-storage.js";
 
 export class CameraUiHomeKitBridge {
   private static activeAccessories = new Map<string, HomeKitCameraAccessory>();
+  private static activeMatterEndpoints = new Map<string, MatterbridgeEndpoint>();
 
   public static getAccessory(cameraId: string): HomeKitCameraAccessory | undefined {
     return this.activeAccessories.get(cameraId);
@@ -18,6 +22,14 @@ export class CameraUiHomeKitBridge {
 
   public static getAllAccessories(): Map<string, HomeKitCameraAccessory> {
     return this.activeAccessories;
+  }
+
+  public static getMatterEndpoint(cameraId: string): MatterbridgeEndpoint | undefined {
+    return this.activeMatterEndpoints.get(cameraId);
+  }
+
+  public static getAllMatterEndpoints(): Map<string, MatterbridgeEndpoint> {
+    return this.activeMatterEndpoints;
   }
 
   public static async mountCamera(
@@ -119,7 +131,7 @@ export class CameraUiHomeKitBridge {
       requiresTranscoding: isHaProxy,
       snapshotSupported: Boolean(camera.snapshotUrl),
       snapshotUrl: camera.snapshotUrl,
-      hksvCapable: false,
+      hksvCapable: Boolean(camera.rtspUrl),
     };
 
     const source: ResolvedStreamSource = {
@@ -171,10 +183,10 @@ export class CameraUiHomeKitBridge {
       serialNumber: camera.serialNumber || `CUI-${camera.id.toUpperCase()}`,
       strategy: chosenStrategy,
       state: "idle",
-      hksvEnabled: false,
-      hksvCapable: false,
+      hksvEnabled: Boolean(camera.rtspUrl),
+      hksvCapable: Boolean(camera.rtspUrl),
       hksvVerified: false,
-      hksvState: "not_capable",
+      hksvState: camera.rtspUrl ? "waiting_hub" : "not_capable",
     };
 
     const accessory = new HomeKitCameraAccessory(
@@ -235,6 +247,51 @@ export class CameraUiHomeKitBridge {
       `[Camera.UI][${camera.name}] Published to HomeKit HAP on port ${camera.port} (code: ${camera.pincode}, codec: ${chosenCodec}, strategy: ${chosenStrategy})`,
     );
 
+    // Register Matter Occupancy Sensing endpoint so Home Assistant can see it and run automations
+    if (platform?.registerDevice && !this.activeMatterEndpoints.has(camera.id)) {
+      try {
+        const safeName = (camera.name || `Cámara ${camera.id}`).substring(0, 32).trim();
+        const uniqueId = `cameraui_${camera.id}_occupancy`;
+        const matterEndpoint = new MatterbridgeEndpoint([occupancySensor], {
+          id: uniqueId,
+          mode: "server",
+        });
+        matterEndpoint.deviceName = `${safeName} Movimiento`;
+        matterEndpoint.uniqueId = uniqueId;
+        matterEndpoint.serialNumber = `CUI-${camera.id.toUpperCase()}`.substring(0, 32);
+        matterEndpoint.vendorId = 0xfff1;
+        matterEndpoint.vendorName = (camera.manufacturer || "Camera.UI").substring(0, 32);
+        matterEndpoint.productId = 0x8000;
+        matterEndpoint.softwareVersion = 1;
+        matterEndpoint.softwareVersionString = "Matterbridge 1.3.7";
+
+        matterEndpoint.createDefaultBasicInformationClusterServer(
+          `${safeName} Movimiento`,
+          matterEndpoint.serialNumber,
+          0xfff1,
+          matterEndpoint.vendorName,
+          0x8000,
+          "Sensor Detección Camera.UI",
+        );
+        matterEndpoint.createDefaultOccupancySensingClusterServer(false);
+        matterEndpoint.addRequiredClusterServers();
+
+        await platform.registerDevice(matterEndpoint);
+        const serverNode = (matterEndpoint as any).serverNode;
+        if (serverNode && !serverNode.lifecycle?.isOnline) {
+          await serverNode.start();
+        }
+        this.activeMatterEndpoints.set(camera.id, matterEndpoint);
+        platform.log?.notice?.(
+          `[Camera.UI][${camera.name}] ✅ Exportado a Matter como Occupancy Sensor (uniqueId: ${uniqueId}) para automatizaciones en Home Assistant.`,
+        );
+      } catch (err) {
+        platform.log?.warn?.(
+          `[Camera.UI][${camera.name}] No se pudo registrar endpoint Matter para ocupación: ${err}`,
+        );
+      }
+    }
+
     // Persist changes
     const store = await CameraUiStorage.load();
     const idx = store.cameras.findIndex((c) => c.id === camera.id);
@@ -246,21 +303,45 @@ export class CameraUiHomeKitBridge {
     return accessory;
   }
 
-  public static async unmountCamera(cameraId: string): Promise<void> {
+  public static async unmountCamera(cameraId: string, platform?: any): Promise<void> {
     const accessory = this.activeAccessories.get(cameraId);
     if (accessory) {
       await accessory.unpublish();
       this.activeAccessories.delete(cameraId);
     }
+    const matterEndpoint = this.activeMatterEndpoints.get(cameraId);
+    if (matterEndpoint) {
+      try {
+        if (platform?.unregisterDevice) {
+          await platform.unregisterDevice(matterEndpoint);
+        }
+      } catch {}
+      this.activeMatterEndpoints.delete(cameraId);
+    }
   }
 
-  public static updateMotion(cameraId: string, active: boolean): boolean {
+  public static updateMotion(
+    cameraId: string,
+    active: boolean,
+    platform?: any,
+  ): boolean {
     const accessory = this.activeAccessories.get(cameraId);
     if (accessory) {
       accessory.updateMotionState(active);
-      return true;
     }
-    return false;
+    const matterEndpoint = this.activeMatterEndpoints.get(cameraId);
+    if (matterEndpoint) {
+      try {
+        void safeSetAttribute(
+          matterEndpoint,
+          OccupancySensing.id,
+          "occupancy",
+          { occupied: Boolean(active) },
+          platform?.log,
+        );
+      } catch {}
+    }
+    return Boolean(accessory || matterEndpoint);
   }
 
   public static triggerDoorbell(cameraId: string): boolean {

@@ -146,9 +146,16 @@ export class CameraUiClient {
       } catch {}
     }
 
-    // Common Home Assistant add-on locations
+    // Common Home Assistant add-on and local network locations
     candidates.push("http://127.0.0.1:8181");
     candidates.push("http://localhost:8181");
+    candidates.push("https://192.168.110.46:3543");
+    candidates.push("http://192.168.110.46:3543");
+    candidates.push("http://192.168.110.46:8181");
+    candidates.push("https://127.0.0.1:3543");
+    candidates.push("http://127.0.0.1:3543");
+    candidates.push("https://localhost:3543");
+    candidates.push("http://localhost:3543");
     candidates.push("http://a0d7b954-camera-ui:8181");
     candidates.push("http://homeassistant:8181");
 

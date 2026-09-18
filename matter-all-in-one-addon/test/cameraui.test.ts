@@ -468,6 +468,7 @@ describe("Camera.UI Client and Storage Integration", () => {
     const candidates = client.getCandidateUrls();
     expect(candidates).toContain("http://localhost:8181");
     expect(candidates).toContain("http://127.0.0.1:8181");
+    expect(candidates).toContain("https://192.168.110.46:3543");
     expect(candidates).toContain("http://a0d7b954-camera-ui:8181");
     expect(candidates).toContain("http://homeassistant:8181");
   });
