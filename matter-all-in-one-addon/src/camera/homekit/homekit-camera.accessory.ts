@@ -498,14 +498,23 @@ export class HomeKitCameraAccessory {
           entityId.includes("motion") ||
           entityId.includes("movimiento") ||
           entityId.includes("person") ||
+          entityId.includes("persona") ||
           entityId.includes("detection") ||
           entityId.includes("animal") ||
-          entityId.includes("vehicle");
+          entityId.includes("pet") ||
+          entityId.includes("vehicle") ||
+          entityId.includes("vehiculo") ||
+          entityId.includes("car");
         if (!isMotionClass) continue;
         const cleanEntity = clean(entityId);
+        const fn = (state?.attributes?.friendly_name || "").toLowerCase();
+        const cleanFn = clean(fn);
+        const camWords = (this.record?.name || "").toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 3);
+        const wordsMatch = camWords.length > 0 && camWords.every((w) => cleanEntity.includes(w) || cleanFn.includes(w));
         if (
           (cleanCam.length >= 3 && cleanEntity.includes(cleanCam)) ||
-          (cleanBase.length >= 4 && cleanEntity.includes(cleanBase))
+          (cleanBase.length >= 4 && cleanEntity.includes(cleanBase)) ||
+          wordsMatch
         ) {
           return entityId;
         }

@@ -449,7 +449,17 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         domain === "binary_sensor" &&
         (["motion", "occupancy", "presence"].includes(deviceClass || "") ||
           idLower.includes("motion") ||
-          idLower.includes("movimiento"))
+          idLower.includes("movimiento") ||
+          idLower.includes("vehicle") ||
+          idLower.includes("vehiculo") ||
+          idLower.includes("car") ||
+          idLower.includes("auto") ||
+          idLower.includes("person") ||
+          idLower.includes("persona") ||
+          idLower.includes("animal") ||
+          idLower.includes("pet") ||
+          idLower.includes("detection") ||
+          idLower.includes("deteccion"))
       ) {
         if (!entities.some((e) => e.type === "motion")) {
           entities.push({
@@ -1079,16 +1089,19 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             this.lastCameraUiNotificationTime = notifTimeSec;
           }
 
-          const camIdentifier = String(
-            notif.camera ||
-            notif.name ||
-            notif.id ||
-            notif.cameraId ||
-            "",
-          ).trim();
-          const cleanId = clean(camIdentifier);
-
-          if (!cleanId) continue;
+          const camField = typeof notif.camera === "object" ? (notif.camera?.name || notif.camera?.id) : notif.camera;
+          const candidateTexts = [
+            camField,
+            notif.cameraName,
+            notif.cameraId,
+            notif.name,
+            notif.title,
+            notif.subtitle,
+            notif.tag,
+            notif.target,
+            notif.source,
+            notif.deepLink,
+          ].filter(Boolean).map((s) => String(s).trim());
 
           // Find matching mounted camera accessory
           let matchedCuiId: string | undefined;
@@ -1097,26 +1110,69 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           for (const [cuiId, acc] of activeAccessories) {
             const accCleanCuiId = clean(cuiId.replace(/^cameraui_/, ""));
             const accCleanName = clean(acc.record?.name || "");
-            if (
-              cleanId === accCleanCuiId ||
-              cleanId === accCleanName ||
-              (cleanId.length >= 4 && (cleanId.includes(accCleanCuiId) || accCleanCuiId.includes(cleanId))) ||
-              (accCleanName.length >= 3 && (cleanId.includes(accCleanName) || accCleanName.includes(cleanId)))
-            ) {
-              matchedCuiId = cuiId;
-              matchedAccessory = acc;
-              break;
+            const accWords = (acc.record?.name || "").toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 2);
+
+            for (const text of candidateTexts) {
+              const cleanText = clean(text);
+              if (
+                cleanText === accCleanCuiId ||
+                cleanText === accCleanName ||
+                (cleanText.length >= 4 && (cleanText.includes(accCleanCuiId) || accCleanCuiId.includes(cleanText))) ||
+                (cleanText.length >= 3 && (cleanText.includes(accCleanName) || accCleanName.includes(cleanText))) ||
+                (accWords.length > 0 && accWords.every((w) => cleanText.includes(w)))
+              ) {
+                matchedCuiId = cuiId;
+                matchedAccessory = acc;
+                break;
+              }
             }
+            if (matchedAccessory) break;
+          }
+
+          // Fallback: If only 1 camera is mounted in Camera.UI, any motion alert belongs to it
+          if (!matchedAccessory && activeAccessories.size === 1) {
+            const [firstId, firstAcc] = activeAccessories.entries().next().value!;
+            matchedCuiId = firstId;
+            matchedAccessory = firstAcc;
           }
 
           if (matchedAccessory && matchedCuiId) {
-            const triggerInfo = notif.label || notif.trigger || notif.type || "opencv";
+            const triggerInfo =
+              notif.label ||
+              notif.trigger ||
+              notif.type ||
+              notif.subtitle ||
+              notif.body ||
+              "opencv";
+
             this.log.notice(
               `[Camera.UI][OpenCV] Detección confirmada en "${matchedAccessory.record?.name || matchedCuiId}" (trigger=${triggerInfo}, t=${notifTimeSec}). Activando sensor HomeKit.`,
             );
 
             matchedAccessory.updateMotionState(true);
             this.broadcastSseMessage("cameraui_motion", { cameraId: matchedCuiId, motionOn: true });
+
+            // Forward to CameraAiDetector so UI "Detección Activa" & MQTT publish in real time
+            if (this.cameraAiDetector) {
+              const lowerTrigger = String(triggerInfo).toLowerCase();
+              const isVehicle = /vehicle|vehiculo|car|auto/i.test(lowerTrigger);
+              const isPerson = /person|persona|face|humano/i.test(lowerTrigger);
+              const isPet = /dog|perro|cat|gato|pet|animal/i.test(lowerTrigger);
+              const targets: import("./camera/camera-types.js").CameraAiTarget[] = [];
+              if (isVehicle) targets.push("vehicle");
+              if (isPerson) targets.push("person");
+              if (isPet) targets.push("dog");
+              if (targets.length === 0) targets.push("person");
+
+              this.cameraAiDetector.dispatchDetection(this, matchedCuiId, {
+                cameraId: matchedCuiId,
+                timestamp: Date.now(),
+                targets,
+                labels: [String(triggerInfo)],
+                confidence: 0.95,
+                rawDetails: `Camera.UI OpenCV: ${triggerInfo}`,
+              });
+            }
 
             const existingTimer = this.cameraUiActiveMotionTimers.get(matchedCuiId);
             if (existingTimer) clearTimeout(existingTimer);
@@ -1128,9 +1184,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             }, 10_000);
 
             this.cameraUiActiveMotionTimers.set(matchedCuiId, resetTimer);
-          } else if (cleanId) {
+          } else if (candidateTexts.length > 0) {
             this.log.debug(
-              `[Camera.UI][OpenCV] Notificación recibida para cámara "${camIdentifier}" pero no se encontró accesorio montado. Accesorios activos: [${[...activeAccessories.keys()].join(", ")}]`,
+              `[Camera.UI][OpenCV] Notificación recibida para "${candidateTexts.join(" / ")}" pero no coincidió con accesorios activos: [${[...activeAccessories.keys()].join(", ")}]`,
             );
           }
         }
@@ -1773,7 +1829,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     );
     this.log.notice(`[Runtime] Matterbridge runtime: ${mbVersion}`);
     this.log.notice(`[Runtime] Node.js runtime: ${process.version}`);
-    this.log.notice(`[Runtime] Plugin version: 1.7.1`);
+    this.log.notice(`[Runtime] Plugin version: 1.7.2`);
     await this.loadEntityDiagnostics();
     await this.startUiServer();
     this.startMatterConnectionMonitor();
@@ -3779,10 +3835,34 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         const cleanCuiId = clean(rawCuiId);
         const cleanCamName = clean(camName);
 
+        const entityFriendlyName = (this.ha?.hassStates?.get(entityId)?.attributes?.friendly_name || "").toLowerCase();
+        const cleanFriendlyName = clean(entityFriendlyName);
+        const nameWords = camName.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 3);
+        const allWordsMatch =
+          nameWords.length > 0 &&
+          nameWords.every((w) => cleanEntityId.includes(w) || cleanFriendlyName.includes(w));
+
+        const isMotionClass =
+          entityId.includes("motion") ||
+          entityId.includes("movimiento") ||
+          entityId.includes("vehicle") ||
+          entityId.includes("vehiculo") ||
+          entityId.includes("car") ||
+          entityId.includes("auto") ||
+          entityId.includes("person") ||
+          entityId.includes("persona") ||
+          entityId.includes("animal") ||
+          entityId.includes("pet") ||
+          entityId.includes("detection") ||
+          entityId.includes("occupancy") ||
+          entityId.includes("presence");
+
         const isLinked =
           linkedId === entityId ||
           (cleanCuiId.length >= 4 && cleanEntityId.includes(cleanCuiId)) ||
           (cleanCamName.length >= 3 && cleanEntityId.includes(cleanCamName)) ||
+          allWordsMatch ||
+          (allCuiAccessories.size === 1 && isMotionClass) ||
           (this.ha.hassEntities.get(entityId)?.device_id &&
             this.ha.hassEntities.get(entityId)?.device_id ===
               this.ha.hassEntities.get(`camera.${cuiId}`)?.device_id);
@@ -6274,26 +6354,41 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               if (body) data = JSON.parse(body);
             } catch {}
 
-            const camIdentifier = String(data.camera || data.name || data.id || "").trim();
+            const camIdentifier = String(
+              data.camera ||
+              data.name ||
+              data.id ||
+              data.title ||
+              data.cameraName ||
+              urlObj.searchParams.get("camera") ||
+              urlObj.searchParams.get("name") ||
+              "",
+            ).trim();
             const isActive = data.state !== false && data.motion !== false && data.active !== false;
             const activeAccessories = CameraUiHomeKitBridge.getAllAccessories();
             const clean = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
             const cleanId = clean(camIdentifier);
 
+            let matched = false;
             for (const [cuiId, acc] of activeAccessories) {
               const accCleanCuiId = clean(cuiId.replace(/^cameraui_/, ""));
               const accCleanName = clean(acc.record?.name || "");
+              const accWords = (acc.record?.name || "").toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 2);
+              const wordsMatch = accWords.length > 0 && accWords.every((w) => cleanId.includes(w));
               if (
                 cleanId === accCleanCuiId ||
                 cleanId === accCleanName ||
                 (cleanId.length >= 4 && (cleanId.includes(accCleanCuiId) || accCleanCuiId.includes(cleanId))) ||
-                (accCleanName.length >= 3 && (cleanId.includes(accCleanName) || accCleanName.includes(cleanId)))
+                (cleanId.length >= 3 && (cleanId.includes(accCleanName) || accCleanName.includes(cleanId))) ||
+                wordsMatch ||
+                (activeAccessories.size === 1)
               ) {
                 acc.updateMotionState(isActive);
                 this.broadcastSseMessage("cameraui_motion", { cameraId: cuiId, motionOn: isActive });
                 this.log.notice(
                   `[Camera.UI][Webhook] Movimiento ${isActive ? "ACTIVADO" : "DESACTIVADO"} para "${acc.record?.name || cuiId}"`,
                 );
+                matched = true;
                 break;
               }
             }

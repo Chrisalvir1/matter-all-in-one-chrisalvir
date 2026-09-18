@@ -130,6 +130,7 @@ export interface CameraActivationResult {
 
 export type CameraAiTarget =
   | "person"
+  | "vehicle"
   | "dog"
   | "cat"
   | "bird"

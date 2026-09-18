@@ -868,7 +868,7 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                 </div>
 
                 <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: 14 }}>
-                  Clasificación y detección local de personas y fauna sin compilar módulos C++ pesados.
+                  Integración y enrutamiento en tiempo real de detecciones OpenCV (vehículos, personas y fauna) desde Camera.UI y Home Assistant hacia Apple HomeKit.
                 </p>
 
                 {activeAiDetection && (
@@ -889,6 +889,7 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                     {[
                       { id: "person", label: "👤 Persona" },
+                      { id: "vehicle", label: "🚗 Vehículo" },
                       { id: "dog", label: "🐶 Perro" },
                       { id: "cat", label: "🐱 Gato" },
                       { id: "bird", label: "🦜 Ave" },

@@ -27,6 +27,7 @@ import type {
 
 export const ALL_AI_TARGETS: CameraAiTarget[] = [
   "person",
+  "vehicle",
   "dog",
   "cat",
   "bird",
@@ -37,6 +38,7 @@ export const ALL_AI_TARGETS: CameraAiTarget[] = [
 
 export const TARGET_LABELS_ES: Record<CameraAiTarget, string> = {
   person: "Persona",
+  vehicle: "Vehículo",
   dog: "Perro",
   cat: "Gato",
   bird: "Ave",
@@ -47,6 +49,7 @@ export const TARGET_LABELS_ES: Record<CameraAiTarget, string> = {
 
 export const TARGET_ICONS: Record<CameraAiTarget, string> = {
   person: "👤",
+  vehicle: "🚗",
   dog: "🐶",
   cat: "🐱",
   bird: "🦜",
@@ -166,6 +169,21 @@ export class CameraAiDetector extends EventEmitter {
         labels.push(TARGET_LABELS_ES.person);
       }
 
+      // Check Vehicle / Vehículo / Auto
+      if (
+        config.targets.includes("vehicle") &&
+        (lowerId.includes("vehicle") ||
+          lowerId.includes("vehiculo") ||
+          lowerId.includes("car") ||
+          lowerId.includes("auto") ||
+          stateAttrs.vehicle_detected ||
+          stateAttrs.detected_object === "vehicle" ||
+          stateAttrs.detected_object === "car")
+      ) {
+        detectedTargets.push("vehicle");
+        labels.push(TARGET_LABELS_ES.vehicle);
+      }
+
       // Check Dog / Perro
       if (
         config.targets.includes("dog") &&
@@ -281,16 +299,33 @@ export class CameraAiDetector extends EventEmitter {
       `[CameraAI][${cameraId}] Detección confirmada: ${event.labels.join(", ")} (Confianza: ${(event.confidence * 100).toFixed(0)}%)`,
     );
 
-    // 1. Trigger HomeKit Motion Sensor
+    // 1. Resolve camera accessory (Home Assistant entity or Camera.UI / Scrypted mounted accessory)
+    let hkAccessory: any = undefined;
     const cameraEntity = platform?.entities?.get?.(cameraId);
-    const hkAccessory = cameraEntity?.homekitAccessory;
-    if (hkAccessory?.motionService) {
+    if (cameraEntity?.homekitAccessory) {
+      hkAccessory = cameraEntity.homekitAccessory;
+    } else {
       try {
-        const Characteristic = platform.Characteristic;
-        hkAccessory.motionService.setCharacteristic(
-          Characteristic?.MotionDetected || "MotionDetected",
-          true,
-        );
+        const bridge = (globalThis as any).__camerauiBridge || platform?.cameraUiBridge;
+        if (bridge?.getAllAccessories) {
+          const cuiAccessories = bridge.getAllAccessories();
+          for (const [id, acc] of cuiAccessories) {
+            if (
+              id === cameraId ||
+              id.replace(/^cameraui_/, "") === cameraId.replace(/^cameraui_/, "") ||
+              cuiAccessories.size === 1
+            ) {
+              hkAccessory = acc;
+              break;
+            }
+          }
+        }
+      } catch {}
+    }
+
+    if (hkAccessory) {
+      try {
+        hkAccessory.updateMotionState(true);
       } catch {}
     }
 
@@ -319,13 +354,9 @@ export class CameraAiDetector extends EventEmitter {
     const timeout = (config.motionTimeoutSeconds || 15) * 1000;
     const timer = setTimeout(() => {
       this.activeDetections.delete(cameraId);
-      if (hkAccessory?.motionService) {
+      if (hkAccessory) {
         try {
-          const Characteristic = platform.Characteristic;
-          hkAccessory.motionService.setCharacteristic(
-            Characteristic?.MotionDetected || "MotionDetected",
-            false,
-          );
+          hkAccessory.updateMotionState(false);
         } catch {}
       }
       this.motionTimers.delete(cameraId);

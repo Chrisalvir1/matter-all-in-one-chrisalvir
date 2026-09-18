@@ -678,22 +678,39 @@ export class CameraUiClient {
     if (candidates.length === 0) return [];
 
     const endpoints = [
-      "/api/notifications?page=1&pageSize=10",
+      "/api/notifications/history?page=1&pageSize=20",
+      "/api/notifications/history",
+      "/notifications/history?page=1&pageSize=20",
+      "/notifications/history",
+      "/api/notifications?page=1&pageSize=20",
       "/api/notifications",
-      "/notifications?page=1&pageSize=10",
+      "/notifications?page=1&pageSize=20",
       "/notifications",
     ];
 
     for (const baseUrl of candidates) {
       for (const ep of endpoints) {
         try {
-          const res = await fetch(`${baseUrl}${ep}`, {
+          let res = await fetch(`${baseUrl}${ep}`, {
             headers: this.getHeaders(),
             signal: AbortSignal.timeout(2500),
           });
+
+          // If unauthorized, attempt re-login once with baseUrl
+          if (res.status === 401 && this.config.username && this.config.password) {
+            const loginRes = await this.login(baseUrl);
+            if (loginRes.ok) {
+              res = await fetch(`${baseUrl}${ep}`, {
+                headers: this.getHeaders(),
+                signal: AbortSignal.timeout(2500),
+              });
+            }
+          }
+
           if (res.ok) {
             const json = await res.json();
             if (Array.isArray(json)) return json;
+            if (Array.isArray(json?.history)) return json.history;
             if (Array.isArray(json?.result)) return json.result;
             if (Array.isArray(json?.notifications)) return json.notifications;
             if (Array.isArray(json?.data)) return json.data;

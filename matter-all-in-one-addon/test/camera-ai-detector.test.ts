@@ -12,8 +12,9 @@ describe("CameraAiDetector", () => {
     detector = new CameraAiDetector();
   });
 
-  it("includes all requested AI targets (person, dog, cat, bird, raccoon, snake, spider)", () => {
+  it("includes all requested AI targets (person, vehicle, dog, cat, bird, raccoon, snake, spider)", () => {
     expect(ALL_AI_TARGETS).toContain("person");
+    expect(ALL_AI_TARGETS).toContain("vehicle");
     expect(ALL_AI_TARGETS).toContain("dog");
     expect(ALL_AI_TARGETS).toContain("cat");
     expect(ALL_AI_TARGETS).toContain("bird");
@@ -22,6 +23,7 @@ describe("CameraAiDetector", () => {
     expect(ALL_AI_TARGETS).toContain("spider");
 
     expect(TARGET_LABELS_ES.person).toBe("Persona");
+    expect(TARGET_LABELS_ES.vehicle).toBe("Vehículo");
     expect(TARGET_LABELS_ES.dog).toBe("Perro");
     expect(TARGET_LABELS_ES.cat).toBe("Gato");
     expect(TARGET_LABELS_ES.bird).toBe("Ave");

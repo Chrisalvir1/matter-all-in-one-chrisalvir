@@ -317,3 +317,5 @@ export class CameraUiHomeKitBridge {
     return port;
   }
 }
+
+(globalThis as any).__camerauiBridge = CameraUiHomeKitBridge;
