@@ -4004,7 +4004,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           allWordsMatch ||
           this.matchCameraIdentifier({ id: cuiId, name: camName }, entityId) ||
           this.matchCameraIdentifier({ id: cuiId, name: camName }, entityFriendlyName) ||
-          accessory.record?.realEntities?.some((re: any) => re.id === entityId) ||
+          ((accessory.record as any)?.realEntities?.some((re: any) => re.id === entityId)) ||
           (allCuiAccessories.size === 1 && isMotionClass) ||
           (this.ha.hassEntities.get(entityId)?.device_id &&
             this.ha.hassEntities.get(entityId)?.device_id ===

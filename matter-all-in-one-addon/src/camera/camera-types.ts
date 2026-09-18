@@ -91,6 +91,7 @@ export interface HomeKitCameraStorageRecord {
     | "verified"
     | "error";
   lastUpdated?: string;
+  realEntities?: any[];
 }
 
 export type CameraActivationPhase =
