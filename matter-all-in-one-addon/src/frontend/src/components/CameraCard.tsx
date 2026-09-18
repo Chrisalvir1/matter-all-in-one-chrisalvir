@@ -242,6 +242,20 @@ export const CameraCard: React.FC<CameraCardProps> = ({
         </p>
 
         <div className="tags">
+          {cameraUiCamera.motionActive && (
+            <span
+              className="tag"
+              style={{
+                fontSize: "0.72rem",
+                background: "rgba(239, 68, 68, 0.25)",
+                color: "#ef4444",
+                border: "1px solid #ef4444",
+                fontWeight: 700,
+              }}
+            >
+              🚨 ¡MOVIMIENTO DETECTADO!
+            </span>
+          )}
           {realSensors.map((s, idx) => (
             <span className="tag" key={idx}>
               {s}

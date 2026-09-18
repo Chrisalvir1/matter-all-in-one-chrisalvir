@@ -1,3 +1,17 @@
+## [1.8.2] - 2026-09-18
+
+### Visibilidad Completa en UI y Logs de Detección de Movimiento, HKSV y Grabación en iCloud
+
+- **Logs Prominentes y Claros en Consola:**
+  - `[Detección][Cámara] 🎯 MOVIMIENTO CONFIRMADO → Disparando HomeKit MotionDetected, HKSV iCloud y Matter Occupancy`.
+  - `[HKSV][Cámara] 🚨 EVENTO HKSV: MOVIMIENTO DETECTADO → Enviando señal a Apple Home Hub para grabar en iCloud`.
+  - `[HKSV][Cámara] 🎬 GRABACIÓN HKSV EN CURSO (streamId N) → Transmitiendo video fMP4 a Apple Home Hub / iCloud`.
+  - `[HKSV][Cámara] ✅ GRABACIÓN CONFIRMADA: Apple Home Hub guardó el clip en iCloud`.
+- **Visibilidad en Tiempo Real en la UI del Add-on:**
+  - La tarjeta de la cámara ahora muestra un badge animado `🚨 ¡MOVIMIENTO DETECTADO!` en tiempo real cuando el sensor se activa.
+  - La pestaña `🧠 IA & Fauna` del modal de configuración ahora enciende la sección `🚨 Detección Activa` en tiempo real (`dispatchDetection`) con cada evento local de movimiento.
+  - Se agregaron los eventos SSE `cameraui_motion` y `camera_ai_detection` en el hook `useAddonState` para sincronización instantánea con el navegador.
+
 ## [1.8.1] - 2026-09-18
 
 ### Corrección Crítica: Live View Congelado / Error Unspecified Size & Operation Timed Out

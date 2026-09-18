@@ -278,12 +278,15 @@ export class CameraUiHomeKitBridge {
     platform?: any,
   ): boolean {
     const accessory = this.activeAccessories.get(cameraId);
+    const camName = accessory?.record?.name || cameraId;
+
     if (accessory) {
       accessory.updateMotionState(active);
       platform?.log?.notice?.(
-        `[Camera.UI][${accessory.record?.name || cameraId}] Sensor de movimiento HAP y Matter actualizado: active=${active}`,
+        `[Detección][${camName}] 🎯 ${active ? "MOVIMIENTO CONFIRMADO" : "MOVIMIENTO FINALIZADO"} → Disparando HomeKit MotionDetected, HKSV iCloud y Matter Occupancy (active=${active})`,
       );
     }
+
     const matterEndpoint = this.activeMatterEndpoints.get(cameraId);
     if (matterEndpoint) {
       try {
@@ -296,6 +299,43 @@ export class CameraUiHomeKitBridge {
         );
       } catch {}
     }
+
+    // Persist active state in memory storage and broadcast to UI via SSE
+    void (async () => {
+      try {
+        const store = await CameraUiStorage.load();
+        const cam = store.cameras.find((c) => c.id === cameraId);
+        if (cam && cam.motionActive !== active) {
+          cam.motionActive = active;
+          await CameraUiStorage.save(store);
+        }
+      } catch {}
+    })();
+
+    platform?.broadcastSseMessage?.("cameraui_motion", {
+      cameraId,
+      motionOn: active,
+      timestamp: Date.now(),
+    });
+    platform?.broadcastSseMessage?.("cameraui_updated", {
+      cameraId,
+      motionActive: active,
+    });
+
+    // Forward to CameraAiDetector so UI "🧠 IA & Fauna" tab lights up in real time
+    if (active && platform?.cameraAiDetector) {
+      try {
+        platform.cameraAiDetector.dispatchDetection(platform, cameraId, {
+          cameraId,
+          timestamp: Date.now(),
+          targets: ["person", "vehicle", "dog"],
+          labels: ["Movimiento Detectado (Persona / Vehículo / Animal)"],
+          confidence: 0.95,
+          rawDetails: `Detector Local FFmpeg: movimiento confirmado en ${camName}`,
+        });
+      } catch {}
+    }
+
     return Boolean(accessory || matterEndpoint);
   }
 

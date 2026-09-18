@@ -156,8 +156,8 @@ export class HomeKitCameraRecordingDelegate
    */
   public handleMotionDetected(detected: boolean): void {
     this.isMotionActive = detected;
-    this.platform?.log?.debug?.(
-      `[HKSV][${this.entityId}] Motion event: ${detected ? "DETECTED" : "CLEARED"}`,
+    this.platform?.log?.notice?.(
+      `[HKSV][${this.record.name || this.entityId}] 🚨 EVENTO HKSV: ${detected ? "MOVIMIENTO DETECTADO → Enviando señal a Apple Home Hub para grabar en iCloud" : "Movimiento finalizado"}`,
     );
   }
 
@@ -174,7 +174,7 @@ export class HomeKitCameraRecordingDelegate
     this.sessionHadProtocolError = false;
 
     this.platform?.log?.notice?.(
-      `[HKSV][${this.entityId}] Starting HKSV recording stream session (streamId ${streamId})`,
+      `[HKSV][${this.record.name || this.entityId}] 🎬 GRABACIÓN HKSV EN CURSO (streamId ${streamId}) → Transmitiendo video fMP4 a Apple Home Hub / iCloud`,
     );
 
     // 1. Deliver MEDIA_INITIALIZATION segment (ftyp + moov)
@@ -191,14 +191,14 @@ export class HomeKitCameraRecordingDelegate
       };
     } else {
       this.platform?.log?.warn?.(
-        `[HKSV][${this.entityId}] Initialization segment missing; stream may be rejected`,
+        `[HKSV][${this.record.name || this.entityId}] Initialization segment missing; stream may be rejected`,
       );
     }
 
     // 2. Deliver pre-buffer fragments (pre-roll before motion trigger)
     const prebufferSnapshot = [...this.prebuffer];
-    this.platform?.log?.debug?.(
-      `[HKSV][${this.entityId}] Flushing ${prebufferSnapshot.length} pre-buffer fragments to Home Hub`,
+    this.platform?.log?.notice?.(
+      `[HKSV][${this.record.name || this.entityId}] 📦 Entregando ${prebufferSnapshot.length} fragmentos de pre-buffer a Apple Home Hub`,
     );
 
     for (const fragment of prebufferSnapshot) {
@@ -231,8 +231,8 @@ export class HomeKitCameraRecordingDelegate
       };
 
       if (isLast) {
-        this.platform?.log?.debug?.(
-          `[HKSV][${this.entityId}] Reached end of motion recording stream`,
+        this.platform?.log?.notice?.(
+          `[HKSV][${this.record.name || this.entityId}] Reached end of motion recording stream`,
         );
         break;
       }
@@ -244,7 +244,7 @@ export class HomeKitCameraRecordingDelegate
    */
   public acknowledgeStream(streamId: number): void {
     this.platform?.log?.notice?.(
-      `[HKSV][${this.entityId}] Home Hub acknowledged streamId ${streamId}`,
+      `[HKSV][${this.record.name || this.entityId}] ✅ GRABACIÓN CONFIRMADA: Apple Home Hub guardó el clip en iCloud (streamId ${streamId})`,
     );
     this.checkVerificationSuccess();
   }

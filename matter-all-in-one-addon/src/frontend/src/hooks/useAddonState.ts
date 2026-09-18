@@ -107,6 +107,8 @@ export function useAddonState() {
               data.type === "scrypted_status" ||
               data.type === "camera_pairing_updated" ||
               data.type === "cameraui_updated" ||
+              data.type === "cameraui_motion" ||
+              data.type === "camera_ai_detection" ||
               data.type === "entity_state_changed"
             ) {
               refreshAll();
