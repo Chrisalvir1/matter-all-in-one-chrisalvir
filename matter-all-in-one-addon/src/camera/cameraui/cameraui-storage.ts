@@ -41,6 +41,7 @@ export class CameraUiStorage {
     const target = await this.getFilePath();
     try {
       const raw = await fs.readFile(target, "utf8");
+      const parsed = JSON.parse(raw);
       let hadMigration = false;
       const cameras = Array.isArray(parsed.cameras)
         ? parsed.cameras.map((cam: CameraUiCameraRecord) => {
