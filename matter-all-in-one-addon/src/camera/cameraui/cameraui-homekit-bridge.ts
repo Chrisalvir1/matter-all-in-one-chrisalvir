@@ -56,6 +56,9 @@ export class CameraUiHomeKitBridge {
     const isHevc =
       rawCodec.includes("hevc") ||
       rawCodec.includes("265") ||
+      /vimtag/i.test(
+        camera.name + " " + (camera.model || "") + " " + (camera.manufacturer || "") + " " + (camera.id || ""),
+      ) ||
       /c402|c420|c425|c520|c320|c325|tc72/i.test(camera.model || "") ||
       /c402|c420|c425|c520|c320|c325|tc72/i.test(camera.name || "") ||
       Boolean(
@@ -66,12 +69,22 @@ export class CameraUiHomeKitBridge {
           ),
       );
 
+    const isHaProxy = Boolean(
+      camera.rtspUrl &&
+        (camera.rtspUrl.includes("/api/camera_proxy") ||
+          camera.rtspUrl.includes("/api/camera_proxy_stream")),
+    );
+
     const chosenCodec = isHevc ? "hevc" : "h264";
-    const chosenStrategy = isHevc ? "passthrough_hevc" : "passthrough_h264";
+    const chosenStrategy = isHaProxy
+      ? "transcode_required"
+      : isHevc
+        ? "passthrough_hevc"
+        : "passthrough_h264";
 
     const capabilities: CameraCapabilitiesInfo = {
       hasLiveStream: hasSource,
-      streamSourceType: "rtsp",
+      streamSourceType: isHaProxy ? "ha_proxy" : "rtsp",
       videoCodec: chosenCodec,
       hasAudio: camera.hasAudio,
       audioCodec: "aac_lc",
@@ -81,17 +94,17 @@ export class CameraUiHomeKitBridge {
       },
       maxFps: camera.fps || 30,
       strategy: chosenStrategy,
-      requiresTranscoding: false,
+      requiresTranscoding: isHaProxy,
       snapshotSupported: Boolean(camera.snapshotUrl),
       snapshotUrl: camera.snapshotUrl,
       hksvCapable: false,
     };
 
     const source: ResolvedStreamSource = {
-      sourceType: "rtsp",
+      sourceType: isHaProxy ? "ha_proxy" : "rtsp",
       url: camera.rtspUrl,
       snapshotUrl: camera.snapshotUrl,
-      supportsPassthrough: true,
+      supportsPassthrough: !isHaProxy,
       requiresBridge: true,
       metadata: {
         isCameraUi: true,

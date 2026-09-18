@@ -48,6 +48,7 @@ export interface HomeKitStreamSession {
   audioCryptoSuite?: SRTPCryptoSuites;
   audioKeySalt?: Buffer;
   retried?: boolean;
+  pipeController?: AbortController;
 }
 
 const FALLBACK_JPEG_BUFFER = Buffer.from(
@@ -65,10 +66,91 @@ function isJpeg(buffer: Buffer): boolean {
   );
 }
 
+function isPng(buffer: Buffer): boolean {
+  return (
+    buffer.length > 8 &&
+    buffer[0] === 0x89 &&
+    buffer[1] === 0x50 &&
+    buffer[2] === 0x4e &&
+    buffer[3] === 0x47
+  );
+}
+
+function convertImageToJpeg(
+  inputBuffer: Buffer,
+  width?: number,
+  height?: number,
+): Promise<Buffer | null> {
+  const ffmpegPath = resolveFfmpegPath();
+  if (!ffmpegPath) return Promise.resolve(null);
+  return new Promise<Buffer | null>((resolve) => {
+    const scaleFilter =
+      width && height
+        ? `scale=w='min(${width},iw)':h='min(${height},ih)':force_original_aspect_ratio=decrease:force_divisible_by=2`
+        : undefined;
+    const args = [
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-i",
+      "pipe:0",
+      "-frames:v",
+      "1",
+    ];
+    if (scaleFilter) {
+      args.push("-vf", scaleFilter);
+    }
+    args.push("-f", "image2", "-c:v", "mjpeg", "-q:v", "3", "pipe:1");
+
+    const proc = spawn(ffmpegPath, args, {
+      stdio: ["pipe", "pipe", "ignore"],
+    });
+    const chunks: Buffer[] = [];
+    const timer = setTimeout(() => {
+      try {
+        proc.kill("SIGKILL");
+      } catch {}
+      resolve(null);
+    }, 2000);
+
+    proc.stdout.on("data", (c: Buffer) => chunks.push(c));
+    proc.once("error", () => {
+      clearTimeout(timer);
+      resolve(null);
+    });
+    proc.once("close", (code) => {
+      clearTimeout(timer);
+      if (code === 0) {
+        const out = Buffer.concat(chunks);
+        if (isJpeg(out) && out.length > 256) {
+          resolve(out);
+          return;
+        }
+      }
+      resolve(null);
+    });
+
+    try {
+      proc.stdin.write(inputBuffer);
+      proc.stdin.end();
+    } catch {
+      clearTimeout(timer);
+      resolve(null);
+    }
+  });
+}
+
 function formatHost(address: string): string {
-  if (!address.includes(":")) return address;
-  const escaped = address.replaceAll("%", "%25");
-  return escaped.startsWith("[") ? escaped : `[${escaped}]`;
+  // Strip IPv6 interface identifier like %en0 or %eth0 if present
+  let cleanAddr = address;
+  const pct = cleanAddr.indexOf("%");
+  if (pct !== -1) {
+    cleanAddr = cleanAddr.substring(0, pct);
+  }
+  // Strip IPv4-mapped IPv6 prefix (::ffff:192.168.x.x -> 192.168.x.x)
+  cleanAddr = cleanAddr.replace(/^::ffff:/i, "");
+  if (!cleanAddr.includes(":")) return cleanAddr;
+  return cleanAddr.startsWith("[") ? cleanAddr : `[${cleanAddr}]`;
 }
 
 function suiteName(suite: SRTPCryptoSuites): string {
@@ -223,6 +305,12 @@ export class HomeKitCameraStreamingDelegate
           if (buffer && isJpeg(buffer) && buffer.length > 512) {
             finish("ha-fetch-snapshot", buffer);
             return;
+          } else if (buffer && isPng(buffer)) {
+            const converted = await convertImageToJpeg(buffer, request.width, request.height);
+            if (converted) {
+              finish("ha-fetch-png-converted", converted);
+              return;
+            }
           }
         } catch {}
       }
@@ -239,13 +327,19 @@ export class HomeKitCameraStreamingDelegate
           }
           const response = await fetch(snapshotUrl, {
             headers,
-            signal: AbortSignal.timeout(2000),
+            signal: AbortSignal.timeout(2500),
           });
           if (response.ok) {
             const buffer = Buffer.from(await response.arrayBuffer());
             if (isJpeg(buffer) && buffer.length > 512) {
               finish("http-snapshot", buffer);
               return;
+            } else if (isPng(buffer)) {
+              const converted = await convertImageToJpeg(buffer, request.width, request.height);
+              if (converted) {
+                finish("http-png-converted", converted);
+                return;
+              }
             }
           }
         } catch (error) {
@@ -538,11 +632,23 @@ export class HomeKitCameraStreamingDelegate
       `[HomeKitCamera][${this.entityId}] HAP START ${video.width}x${video.height}@${fps} transcode=${forceTranscode} profile=${h264Profile(video.profile)} level=${h264Level(video.level)} mtu=${mtu} source=${sanitizeUrlCredentials(sourceUrl || "")} ffmpeg=${ffmpegPath} ${getFfmpegVersion(ffmpegPath) || "unknown"}`,
     );
 
+    const isHaProxyStream =
+      this.streamSource.sourceType === "ha_proxy" ||
+      this.streamSource.sourceType === "mjpeg" ||
+      Boolean(
+        sourceUrl &&
+          (sourceUrl.includes("/api/camera_proxy_stream/") ||
+            sourceUrl.includes("/api/camera_proxy/")),
+      );
+
     try {
       const process = spawn(ffmpegPath, args, {
-        stdio: ["ignore", "ignore", "pipe"],
+        stdio: [isHaProxyStream ? "pipe" : "ignore", "ignore", "pipe"],
       });
       session.process = process;
+      if (isHaProxyStream && sourceUrl) {
+        this.startHaCameraProxyPipe(session, process, sourceUrl);
+      }
       let stderr = "";
       process.stderr.on("data", (chunk: Buffer) => {
         stderr = `${stderr}${chunk.toString()}`.slice(-6000);
@@ -568,23 +674,32 @@ export class HomeKitCameraStreamingDelegate
           `[HomeKitCamera][${this.entityId}] FFmpeg closed code=${code} ${stderr.trim()}`,
         );
 
-        // Automatic fallback recovery: if initial attempt failed (e.g. passthrough on HEVC or missing audio track),
+        // Automatic fallback recovery: if initial attempt failed (e.g. missing audio track or incompatible passthrough),
         // retry immediately with safe transcoding and/or silent audio fallback
         if (code !== 0 && !session.retried && this.activeSessions.has(session.sessionId)) {
           session.retried = true;
+          const isAudioFailure =
+            stderr.includes("matches no streams") ||
+            stderr.includes("0:a:0") ||
+            stderr.includes("does not contain any stream") ||
+            stderr.includes("Output file #1");
+
+          if (isAudioFailure) {
+            this.capabilities.hasAudio = false;
+          }
+
           let retryTranscode = forceTranscode;
           if (
-            stderr.includes("dump_extra") ||
-            stderr.includes("extradata") ||
-            stderr.includes("codec") ||
-            stderr.includes("Error") ||
-            !forceTranscode
+            !isAudioFailure &&
+            (stderr.includes("dump_extra") ||
+              stderr.includes("extradata") ||
+              stderr.includes("codec") ||
+              stderr.includes("Error") ||
+              !forceTranscode)
           ) {
             retryTranscode = true;
           }
-          if (stderr.includes("matches no streams") || stderr.includes("0:a:0")) {
-            this.capabilities.hasAudio = false;
-          }
+
           this.platform?.log?.notice?.(
             `[HomeKitCamera][${this.entityId}] Retrying stream with safe fallback: forceTranscode=${retryTranscode} hasAudio=${this.capabilities.hasAudio}`,
           );
@@ -617,10 +732,28 @@ export class HomeKitCameraStreamingDelegate
     const host = formatHost(session.targetAddress);
     const videoUrl =
       `srtp://${host}:${session.videoPort}` +
-      `?rtcpport=${session.videoPort}&localrtcpport=${session.localVideoPort}&pkt_size=${mtu}`;
+      `?rtcpport=${session.videoPort}&pkt_size=${mtu}`;
 
-    const args: string[] = ["-hide_banner", "-loglevel", "warning"];
-    if (sourceUrl.startsWith("rtsp://") || sourceUrl.startsWith("rtsps://")) {
+    const isHaProxyStream =
+      this.streamSource.sourceType === "ha_proxy" ||
+      this.streamSource.sourceType === "mjpeg" ||
+      Boolean(
+        sourceUrl &&
+          (sourceUrl.includes("/api/camera_proxy_stream/") ||
+            sourceUrl.includes("/api/camera_proxy/")),
+      );
+
+    const args: string[] = [
+      "-hide_banner",
+      "-loglevel",
+      "warning",
+      "-protocol_whitelist",
+      "pipe,udp,rtp,file,crypto,srtp,tcp,tls,http,https,lavfi",
+    ];
+
+    if (isHaProxyStream) {
+      args.push("-f", "image2pipe", "-c:v", "png", "-r", "15", "-i", "pipe:0");
+    } else if (sourceUrl.startsWith("rtsp://") || sourceUrl.startsWith("rtsps://")) {
       args.push(
         "-rtsp_transport",
         "tcp",
@@ -634,6 +767,8 @@ export class HomeKitCameraStreamingDelegate
         "+nobuffer+flush_packets",
         "-flags",
         "low_delay",
+        "-i",
+        sourceUrl,
       );
     } else if (sourceUrl.startsWith("http://") || sourceUrl.startsWith("https://")) {
       args.push(
@@ -661,22 +796,7 @@ export class HomeKitCameraStreamingDelegate
       if (sourceUrl.startsWith("https://")) {
         args.push("-tls_verify", "0");
       }
-      const isHaProxy =
-        this.streamSource.sourceType === "ha_proxy" ||
-        this.streamSource.sourceType === "mjpeg" ||
-        Boolean(
-          this.streamSource.url &&
-            (this.streamSource.url.includes("/api/camera_proxy") ||
-              this.streamSource.url.includes("/api/camera_proxy_stream")),
-        );
-      if (isHaProxy) {
-        const token =
-          this.platform?.ha?.getAccessToken?.() ||
-          this.platform?.ha?.wsAccessToken;
-        if (token) {
-          args.push("-headers", `Authorization: Bearer ${token}\r\n`);
-        }
-      } else if (this.streamSource.metadata?.scryptedToken) {
+      if (this.streamSource.metadata?.scryptedToken) {
         const sToken = String(this.streamSource.metadata.scryptedToken).trim();
         if (sToken) {
           args.push(
@@ -685,8 +805,10 @@ export class HomeKitCameraStreamingDelegate
           );
         }
       }
+      args.push("-i", sourceUrl);
+    } else {
+      args.push("-i", sourceUrl);
     }
-    args.push("-i", sourceUrl);
 
     const hasAudioRequested = Boolean(
       request.audio &&
@@ -695,14 +817,6 @@ export class HomeKitCameraStreamingDelegate
       session.audioSsrc &&
       session.audioKeySalt
     );
-    const isHaProxyStream =
-      this.streamSource.sourceType === "ha_proxy" ||
-      this.streamSource.sourceType === "mjpeg" ||
-      Boolean(
-        this.streamSource.url &&
-          (this.streamSource.url.includes("/api/camera_proxy_stream/") ||
-            this.streamSource.url.includes("/api/camera_proxy/")),
-      );
     const needsSilentAudio =
       hasAudioRequested &&
       (isHaProxyStream || this.capabilities.hasAudio === false);
@@ -728,6 +842,7 @@ export class HomeKitCameraStreamingDelegate
 
     const canPassthrough =
       !forceTranscode &&
+      !isHaProxyStream &&
       isSupportedPassthroughCodec &&
       (this.capabilities.strategy === "passthrough_h264" ||
         this.capabilities.strategy === "passthrough_hevc" ||
@@ -741,24 +856,18 @@ export class HomeKitCameraStreamingDelegate
         this.capabilities.strategy === "passthrough_hevc";
 
       // Pure passthrough remuxing without transcoding CPU overhead (native 4K, 2K, 1080p, 720p @ max fps)
-      // For H.264: inject SPS/PPS on every keyframe via dump_extra so HomeKit decodes immediately
-      // For HEVC: use plain -c:v copy — HEVC RTP (RFC 7798) doesn't use dump_extra
+      // Pure -c:v copy for HEVC and H.264 matching Camera.UI native behavior
       const videoPassArgs: string[] = [
         "-map", "0:v:0",
         "-an",
         "-c:v", "copy",
-      ];
-      if (!isHevcCodec) {
-        videoPassArgs.push("-bsf:v", "dump_extra=freq=keyframe");
-      }
-      videoPassArgs.push(
         "-f", "rtp",
         "-payload_type", String(video.pt || 99),
         "-ssrc", String(session.videoSsrc),
         "-srtp_out_suite", suiteName(session.videoCryptoSuite),
         "-srtp_out_params", session.videoKeySalt.toString("base64"),
         videoUrl,
-      );
+      ];
       args.push(...videoPassArgs);
     } else {
       // High-fidelity transcoding fallback for HEVC / MJPEG / incompatible formats
@@ -827,7 +936,7 @@ export class HomeKitCameraStreamingDelegate
     ) {
       const audioUrl =
         `srtp://${host}:${session.audioPort}` +
-        `?rtcpport=${session.audioPort}&localrtcpport=${session.localAudioPort}&pkt_size=188`;
+        `?rtcpport=${session.audioPort}&pkt_size=188`;
       const isOpus = request.audio.codec === AudioStreamingCodecType.OPUS;
       const hasFdk = supportsFdkAac();
       const audioBitrate = Math.min(request.audio.max_bit_rate || 24, 24);
@@ -843,8 +952,6 @@ export class HomeKitCameraStreamingDelegate
           "-map",
           "0:a:0?",
           "-vn",
-          "-af",
-          "aresample=async=1:first_pts=0,volume=2.5",
         );
       }
 
@@ -871,16 +978,9 @@ export class HomeKitCameraStreamingDelegate
           "+global_header",
         );
       } else {
-        // Native FFmpeg AAC encoder with ELD profile — no license required,
-        // fully compatible with HomeKit/iOS for all source codecs
-        // (HEVC+AAC, RTSP+PCM/ALAW/G.711, RTSP+OPUS all arrive as AAC-ELD)
         args.push(
           "-c:a",
           "aac",
-          "-profile:a",
-          "aac_eld",
-          "-aac_coder",
-          "twoloop",
         );
       }
 
@@ -908,9 +1008,112 @@ export class HomeKitCameraStreamingDelegate
     return args;
   }
 
+  private startHaCameraProxyPipe(
+    session: HomeKitStreamSession,
+    process: ChildProcess,
+    sourceUrl: string,
+  ): void {
+    const controller = new AbortController();
+    session.pipeController = controller;
+    const cleanup = () => {
+      try {
+        controller.abort();
+      } catch {}
+    };
+    process.once("close", cleanup);
+    process.once("error", cleanup);
+
+    const token =
+      this.platform?.ha?.getAccessToken?.() ||
+      this.platform?.ha?.wsAccessToken;
+
+    void (async () => {
+      try {
+        const res = await fetch(sourceUrl, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          signal: controller.signal,
+        });
+        if (!res.ok || !res.body) {
+          this.platform?.log?.warn?.(
+            `[HomeKitCamera][${this.entityId}] Failed to connect to HA camera proxy: HTTP ${res.status}`,
+          );
+          return;
+        }
+
+        const reader = res.body.getReader();
+        let buffer = Buffer.alloc(0);
+
+        while (!controller.signal.aborted && process.exitCode === null) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (value) {
+            buffer = Buffer.concat([buffer, Buffer.from(value)]);
+
+            // Extract complete frames from buffer (supports both PNG and JPEG)
+            while (buffer.length > 8) {
+              const pngIdx = buffer.indexOf(Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+              const jpegIdx = buffer.indexOf(Buffer.from([0xff, 0xd8]));
+
+              if (pngIdx !== -1 && (jpegIdx === -1 || pngIdx < jpegIdx)) {
+                const iendIdx = buffer.indexOf(
+                  Buffer.from([0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82]),
+                  pngIdx,
+                );
+                if (iendIdx !== -1) {
+                  const frameEnd = iendIdx + 8;
+                  const frame = buffer.subarray(pngIdx, frameEnd);
+                  buffer = buffer.subarray(frameEnd);
+                  if (process.stdin && !process.stdin.destroyed) {
+                    process.stdin.write(frame);
+                  }
+                  continue;
+                } else {
+                  if (pngIdx > 0) buffer = buffer.subarray(pngIdx);
+                  break;
+                }
+              } else if (jpegIdx !== -1) {
+                const eoiIdx = buffer.indexOf(
+                  Buffer.from([0xff, 0xd9]),
+                  jpegIdx + 2,
+                );
+                if (eoiIdx !== -1) {
+                  const frameEnd = eoiIdx + 2;
+                  const frame = buffer.subarray(jpegIdx, frameEnd);
+                  buffer = buffer.subarray(frameEnd);
+                  if (process.stdin && !process.stdin.destroyed) {
+                    process.stdin.write(frame);
+                  }
+                  continue;
+                } else {
+                  if (jpegIdx > 0) buffer = buffer.subarray(jpegIdx);
+                  break;
+                }
+              } else {
+                buffer = buffer.subarray(-8);
+                break;
+              }
+            }
+          }
+        }
+      } catch (err: any) {
+        if (!controller.signal.aborted) {
+          this.platform?.log?.debug?.(
+            `[HomeKitCamera][${this.entityId}] HA camera pipe ended: ${err?.message || String(err)}`,
+          );
+        }
+      }
+    })();
+  }
+
   private stopStream(sessionId: string): void {
     const session = this.activeSessions.get(sessionId);
     if (!session) return;
+    if (session.pipeController) {
+      try {
+        session.pipeController.abort();
+      } catch {}
+      session.pipeController = undefined;
+    }
     if (session.process) {
       try {
         session.process.kill("SIGTERM");
