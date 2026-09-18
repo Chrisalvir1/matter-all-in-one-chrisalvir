@@ -113,7 +113,7 @@ function convertImageToJpeg(
       resolve(null);
     }, 2000);
 
-    proc.stdout.on("data", (c: Buffer) => chunks.push(c));
+    proc.stdout?.on("data", (c: Buffer) => chunks.push(c));
     proc.once("error", () => {
       clearTimeout(timer);
       resolve(null);
@@ -131,8 +131,10 @@ function convertImageToJpeg(
     });
 
     try {
-      proc.stdin.write(inputBuffer);
-      proc.stdin.end();
+      if (proc.stdin && !proc.stdin.destroyed) {
+        proc.stdin.write(inputBuffer);
+        proc.stdin.end();
+      }
     } catch {
       clearTimeout(timer);
       resolve(null);
@@ -650,7 +652,7 @@ export class HomeKitCameraStreamingDelegate
         this.startHaCameraProxyPipe(session, process, sourceUrl);
       }
       let stderr = "";
-      process.stderr.on("data", (chunk: Buffer) => {
+      process.stderr?.on("data", (chunk: Buffer) => {
         stderr = `${stderr}${chunk.toString()}`.slice(-6000);
       });
       const guard = setTimeout(() => {
