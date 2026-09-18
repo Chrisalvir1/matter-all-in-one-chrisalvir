@@ -66,6 +66,9 @@ export interface CameraUiCameraRecord {
   setupUri?: string;
   videoCodec?: string;
   strategy?: "passthrough_h264" | "passthrough_hevc" | "transcode";
+  lightEntityId?: string;
+  sirenEntityId?: string;
+  motionEntityId?: string;
 }
 
 export interface CameraUiStore {

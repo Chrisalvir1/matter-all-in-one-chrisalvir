@@ -1,3 +1,23 @@
+## [1.8.5] - 2026-09-18
+
+### Solución Definitiva de Streams RTSP, Prioridad Wyze 1080p, Integración HAP de Luces/Sirenas y Selectores de Hardware Reales
+
+- **Diagnóstico y Auto-Recuperación de Streams RTSP:**
+  - Identificada causa raíz de errores `Respuesta RTSP no válida (Invalid data found)`: 8 cámaras apuntaban a la IP `192.168.110.46:8554` (host inalcanzable).
+  - Implementada auto-migración en `CameraUiStorage.load()` hacia el servidor activo `go2rtc` local en Home Assistant (`192.168.110.147:8554`) para flujos 2K nativos (`cochera`, `jardin`, `recamara`, `area_de_cafe`, `vimtag_113`, `cocina_ring`).
+  - Diagnóstico preciso en `ffmpeg-helper.ts`: detecta `Host is down` y `No route to host` para indicar con exactitud cuando un equipo está apagado o desconectado en vez de advertir falsamente sobre claves o rutas.
+  - Desbloqueado el guardado de URL RTSP en el modal para cámaras Camera.UI (removida la condición `!isCameraUi` que descartaba la persistencia).
+- **Garantía de Calidad Máxima en Wyze (stream0 1080p vs stream1 360p):**
+  - Verificación técnica en vivo: en cámaras Wyze con firmware RTSP, `/stream0` es el flujo principal de alta definición **1920x1080 (Full HD @ 20fps)**, mientras que `/stream1` es el sub-stream de baja resolución (**640x360**).
+  - El sistema mantiene `/stream0` con máxima prioridad y opciones de cero latencia para streaming cristalino sin lag en Apple Home.
+- **Claridad de Exportación HomeKit vs Matter (Solución a «Ya está exportada en otra casa»):**
+  - Al enlazar la cámara con su QR HAP principal (`📲 Enlazar QR`), **Apple Home incluye de forma nativa la luz y la sirena dentro del mosaico de la cámara**.
+  - Aclaración y badges en la UI para evitar escanear códigos Matter redundantes dentro de la misma casa en Apple Home (el QR Matter queda reservado exclusivamente para Google Home o Alexa).
+- **Filtro Anti-Luces Ficticias y Selectores de Hardware Genuino:**
+  - Filtrado estricto contra accesorios ambientales de habitación (`ventilador`, `fan`, `techo`, `plafon`, `hexágonos`, `tiras`, etc.).
+  - Selectores desplegables en `CameraConfigModal`: permite al usuario elegir o redefinir con total libertad la Luz / Reflector real, la Sirena de alarma y el Sensor de movimiento / IA de cada cámara.
+  - Guardado persistente de `lightEntityId`, `sirenEntityId` y `motionEntityId` con reconfiguración dinámica del accesorio en HomeKit.
+
 ## [1.8.4] - 2026-09-18
 
 ### Corrección Crítica del Detector de Movimiento FFmpeg, Vinculación Apple Home y Detección IA

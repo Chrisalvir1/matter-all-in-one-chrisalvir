@@ -143,6 +143,9 @@ export class CameraUiHomeKitBridge {
       hksvCapable: isRtspSource,
       hksvVerified: false,
       hksvState: isRtspSource ? "waiting_hub" : "not_capable",
+      motionEntityId: camera.motionEntityId,
+      lightEntityId: camera.lightEntityId,
+      sirenEntityId: camera.sirenEntityId,
     };
 
     const accessory = new HomeKitCameraAccessory(

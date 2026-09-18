@@ -219,4 +219,8 @@ export interface CameraUiCameraItem {
   port?: number;
   pincode?: string;
   setupId?: string;
+  uuid?: string;
+  lightEntityId?: string;
+  sirenEntityId?: string;
+  motionEntityId?: string;
 }

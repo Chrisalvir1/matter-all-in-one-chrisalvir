@@ -59,9 +59,18 @@ export class HomeKitCameraAccessory {
     this.record.uuid = accessoryUuid;
     this.accessory = new Accessory(record.name || entityId, accessoryUuid);
     const linked = this.findLinkedEntities();
-    this.linkedMotionEntityId = linked.motion || this.findLinkedMotionEntity();
-    this.linkedLightEntityId = linked.light;
-    this.linkedSirenEntityId = linked.siren;
+    this.linkedMotionEntityId =
+      this.record.motionEntityId && this.record.motionEntityId !== "auto"
+        ? (this.record.motionEntityId === "none" ? undefined : this.record.motionEntityId)
+        : (linked.motion || this.findLinkedMotionEntity());
+    this.linkedLightEntityId =
+      this.record.lightEntityId && this.record.lightEntityId !== "auto"
+        ? (this.record.lightEntityId === "none" ? undefined : this.record.lightEntityId)
+        : linked.light;
+    this.linkedSirenEntityId =
+      this.record.sirenEntityId && this.record.sirenEntityId !== "auto"
+        ? (this.record.sirenEntityId === "none" ? undefined : this.record.sirenEntityId)
+        : linked.siren;
     this.linkedDoorbellEntityId = linked.doorbell;
     this.rebuildServiceGraph();
   }

@@ -73,6 +73,17 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
   const [snapshotUrl, setSnapshotUrl] = useState<string | null>(null);
   const [isLoadingSnapshot, setIsLoadingSnapshot] = useState(false);
   const [snapshotLoaded, setSnapshotLoaded] = useState(false);
+  const [availableDevices, setAvailableDevices] = useState<any[]>([]);
+  const [selectedLightId, setSelectedLightId] = useState<string>("auto");
+  const [selectedSirenId, setSelectedSirenId] = useState<string>("auto");
+  const [selectedMotionId, setSelectedMotionId] = useState<string>("auto");
+  const [isSavingHardware, setIsSavingHardware] = useState(false);
+
+  useEffect(() => {
+    api.getDevices().then((devs) => {
+      if (Array.isArray(devs)) setAvailableDevices(devs);
+    }).catch(() => {});
+  }, []);
 
   const isCameraUi = Boolean(camera && ("id" in camera && !("cameraId" in camera)));
   const cameraId = camera ? ("cameraId" in camera ? camera.cameraId : camera.id) : "";
@@ -81,6 +92,13 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
   // Initialize data when camera changes
   useEffect(() => {
     if (!camera) return;
+
+    const camLight = (camera as any)?.lightEntityId || "auto";
+    const camSiren = (camera as any)?.sirenEntityId || "auto";
+    const camMotion = (camera as any)?.motionEntityId || "auto";
+    setSelectedLightId(camLight);
+    setSelectedSirenId(camSiren);
+    setSelectedMotionId(camMotion);
 
     let initialUrl = "";
     let prefTransport: "tcp" | "udp" = "tcp";
@@ -550,29 +568,51 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
   const handleSaveStream = async () => {
     if (!rtspUrl.trim()) return;
     try {
-      if (!isCameraUi) {
-        await api.saveCameraStreamUrl(cameraId, rtspUrl.trim());
-      }
+      await api.saveCameraStreamUrl(cameraId, rtspUrl.trim());
       showToast("✓ URL de stream guardada");
+      onRefresh();
     } catch (err: any) {
       showToast(err.message || "Error al guardar stream", true);
     }
   };
 
+  const handleSaveHardwareEntities = async () => {
+    setIsSavingHardware(true);
+    try {
+      await api.saveCameraExportConfig(cameraId, {
+        lightEntityId: selectedLightId,
+        sirenEntityId: selectedSirenId,
+        motionEntityId: selectedMotionId,
+        rtspUrl: rtspUrl.trim() || undefined,
+        model: modelInput.trim() || undefined,
+        homeKitEnabled: true,
+      });
+      showToast("✓ Asignación de hardware guardada y vinculada a HomeKit");
+      onRefresh();
+    } catch (err: any) {
+      showToast(err.message || "Error al guardar entidades de hardware", true);
+    } finally {
+      setIsSavingHardware(false);
+    }
+  };
+
   const handleSaveExport = async () => {
     try {
-      if (!isCameraUi) {
-        await api.saveCameraExportConfig(cameraId, {
-          matterEnabled: true,
-          homeKitEnabled: true,
-          hksvEnabledByDefault: true,
-          googleHomeEnabled: false,
-          alexaEnabled: false,
-          smartThingsEnabled: false,
-          nasEnabled: false,
-          rtspTransportPreference: transport,
-        });
-      }
+      await api.saveCameraExportConfig(cameraId, {
+        matterEnabled: true,
+        homeKitEnabled: true,
+        hksvEnabledByDefault: true,
+        googleHomeEnabled: false,
+        alexaEnabled: false,
+        smartThingsEnabled: false,
+        nasEnabled: false,
+        rtspTransportPreference: transport,
+        rtspUrl: rtspUrl.trim() || undefined,
+        model: modelInput.trim() || undefined,
+        lightEntityId: selectedLightId,
+        sirenEntityId: selectedSirenId,
+        motionEntityId: selectedMotionId,
+      });
       showToast("✓ Configuración de cámara guardada");
       onRefresh();
       onClose();
@@ -694,6 +734,20 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
       showToast("⚠️ No se pudo acceder al portapapeles", true);
     }
   };
+
+  const availableLights = availableDevices.filter((d: any) =>
+    (d.entityId || "").startsWith("light.")
+  );
+  const availableSirens = availableDevices.filter((d: any) =>
+    (d.entityId || "").startsWith("siren.") ||
+    ((d.entityId || "").startsWith("switch.") &&
+      /siren|alarm|alarma|status_light/i.test(
+        `${d.entityId} ${d.attributes?.friendly_name || ""}`,
+      ))
+  );
+  const availableMotionSensors = availableDevices.filter((d: any) =>
+    (d.entityId || "").startsWith("binary_sensor.")
+  );
 
   return (
     <div className="modal-backdrop open" role="dialog" aria-modal="true">
@@ -1297,6 +1351,28 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                 </div>
               )}
 
+              {/wyze/i.test(cameraName || modelInput || rtspUrl) && (
+                <div
+                  style={{
+                    marginTop: 8,
+                    padding: "8px 12px",
+                    borderRadius: 6,
+                    fontSize: "0.78rem",
+                    background: "rgba(56, 189, 248, 0.08)",
+                    border: "1px solid rgba(56, 189, 248, 0.25)",
+                    color: "#7dd3fc",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <span style={{ fontSize: "1.1rem" }}>💡</span>
+                  <div>
+                    <strong>Calidad Prioritaria Wyze:</strong> <code>/stream0</code> es la resolución máxima <strong>1080p (Full HD @ 20fps)</strong>. El sub-stream <code>/stream1</code> reduce la calidad a <strong>360p</strong>. Nuestro sistema mantiene <code>/stream0</code> con transporte directo de cero latencia para máxima fidelidad visual sin lag.
+                  </div>
+                </div>
+              )}
+
               {/* Stream Live Preview Box */}
               <div
                 style={{
@@ -1408,9 +1484,147 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
 
             {/* Hardware & Real Entities Section */}
             <div style={{ marginTop: 14 }}>
+              {/* Apple Home vs Matter guidance notice */}
+              <div
+                style={{
+                  marginBottom: 10,
+                  padding: "10px 12px",
+                  borderRadius: 8,
+                  background: "rgba(59, 130, 246, 0.08)",
+                  border: "1px solid rgba(59, 130, 246, 0.25)",
+                  fontSize: "0.78rem",
+                  color: "#93c5fd",
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: 8,
+                }}
+              >
+                <span style={{ fontSize: "1.2rem", lineHeight: 1 }}>🍏</span>
+                <div>
+                  <strong style={{ color: "#dbeafe" }}>Luz y Sirena Nativas en Apple Home (Casa):</strong>
+                  <div style={{ marginTop: 3, color: "#bfdbfe", fontSize: "0.74rem", lineHeight: 1.4 }}>
+                    Al emparejar la cámara mediante su código QR HAP principal (<strong>📲 Enlazar QR</strong>), <strong>el foco/reflector y la sirena se integran de forma nativa dentro del mismo mosaico de la cámara en la app Casa</strong>. No necesitas escanear códigos adicionales en Casa. El botón <em>"⚡ QR Matter"</em> es exclusivamente si deseas sincronizar el foco o sirena como accesorio independiente en Google Home o Alexa.
+                  </div>
+                </div>
+              </div>
+
+              {/* Hardware Selector Dropdowns */}
+              <div
+                style={{
+                  marginBottom: 14,
+                  padding: "12px",
+                  borderRadius: 8,
+                  background: "rgba(0, 0, 0, 0.35)",
+                  border: "1px solid rgba(255, 255, 255, 0.08)",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 10,
+                }}
+              >
+                <div style={{ fontSize: "0.76rem", fontWeight: 700, color: "#38bdf8", textTransform: "uppercase" }}>
+                  🛠️ Selector de Hardware Genuino (Luz, Sirena, Sensor IA)
+                </div>
+
+                {/* Luz / Foco Selector */}
+                <div>
+                  <label style={{ fontSize: "0.74rem", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>
+                    💡 Luz / Reflector integrado (Foco de la cámara):
+                  </label>
+                  <select
+                    value={selectedLightId}
+                    onChange={(e) => setSelectedLightId(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "6px 8px",
+                      borderRadius: 6,
+                      background: "rgba(255, 255, 255, 0.05)",
+                      border: "1px solid var(--border)",
+                      color: "var(--text)",
+                      fontSize: "0.78rem",
+                    }}
+                  >
+                    <option value="auto">🔍 Detección automática de hardware</option>
+                    <option value="none">🚫 Ninguna / Desactivar luz en HomeKit</option>
+                    {availableLights.map((l: any) => (
+                      <option key={l.entityId} value={l.entityId}>
+                        💡 {l.attributes?.friendly_name || l.entityId} ({l.entityId})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Sirena Selector */}
+                <div>
+                  <label style={{ fontSize: "0.74rem", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>
+                    🚨 Sirena de Alarma integrada:
+                  </label>
+                  <select
+                    value={selectedSirenId}
+                    onChange={(e) => setSelectedSirenId(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "6px 8px",
+                      borderRadius: 6,
+                      background: "rgba(255, 255, 255, 0.05)",
+                      border: "1px solid var(--border)",
+                      color: "var(--text)",
+                      fontSize: "0.78rem",
+                    }}
+                  >
+                    <option value="auto">🔍 Detección automática de hardware</option>
+                    <option value="none">🚫 Ninguna / Desactivar sirena en HomeKit</option>
+                    {availableSirens.map((s: any) => (
+                      <option key={s.entityId} value={s.entityId}>
+                        🚨 {s.attributes?.friendly_name || s.entityId} ({s.entityId})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Sensor Movimiento / IA Selector */}
+                <div>
+                  <label style={{ fontSize: "0.74rem", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>
+                    🏃 Sensor de Movimiento / IA Vinculado:
+                  </label>
+                  <select
+                    value={selectedMotionId}
+                    onChange={(e) => setSelectedMotionId(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "6px 8px",
+                      borderRadius: 6,
+                      background: "rgba(255, 255, 255, 0.05)",
+                      border: "1px solid var(--border)",
+                      color: "var(--text)",
+                      fontSize: "0.78rem",
+                    }}
+                  >
+                    <option value="auto">🔍 Automático / Detección local interna FFmpeg (Recomendado)</option>
+                    <option value="none">🚫 Ninguno (Solo streaming de video)</option>
+                    {availableMotionSensors.map((m: any) => (
+                      <option key={m.entityId} value={m.entityId}>
+                        🏃 {m.attributes?.friendly_name || m.entityId} ({m.entityId})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
+                  <button
+                    className="button button-sm button-primary"
+                    type="button"
+                    onClick={handleSaveHardwareEntities}
+                    disabled={isSavingHardware}
+                    style={{ fontSize: "0.76rem", padding: "5px 12px" }}
+                  >
+                    {isSavingHardware ? "Guardando y Remontando..." : "💾 Guardar Asignación y Sincronizar con HomeKit"}
+                  </button>
+                </div>
+              </div>
+
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                 <span style={{ fontSize: "0.74rem", fontWeight: 700, color: "var(--dim)", textTransform: "uppercase" }}>
-                  FUNCIONES Y ENTIDADES REALES ({realEntities.length} DETECTADAS)
+                  ESTADO EN TIEMPO REAL ({realEntities.length} FUNCIONES ACTIVAS)
                 </span>
                 <span style={{ fontSize: "0.72rem", color: "#6ee7b7", fontWeight: 600 }}>
                   🍏 Live View HAP + Controles Interactivos
@@ -1624,7 +1838,7 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                                   entityName={ent.name}
                                   elementId={`matter-qr-entity-${ent.id.replace(/[^a-zA-Z0-9]/g, "_")}`}
                                   variant="matter-badge"
-                                  noteText="Escanea para agregar en Apple Home, Google Home o Alexa (Matter 1.6)"
+                                  noteText="⚡ Para Google Home o Alexa (Matter 1.6). En Apple Home ya está integrada de forma nativa dentro de la cámara (no escanear aquí para Casa)."
                                 />
                                 <button
                                   className="button button-sm button-secondary"

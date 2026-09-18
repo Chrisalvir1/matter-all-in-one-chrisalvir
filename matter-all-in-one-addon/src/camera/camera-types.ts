@@ -79,6 +79,10 @@ export interface HomeKitCameraStorageRecord {
   serialNumber: string;
   /** Explicit motion sensor for cameras whose HA entities are not co-registered. */
   motionEntityId?: string;
+  /** Explicit light entity ID (or 'none') for camera spotlight/floodlight. */
+  lightEntityId?: string;
+  /** Explicit siren entity ID (or 'none') for camera alarm siren. */
+  sirenEntityId?: string;
   isPaired?: boolean;
   hksvCapable?: boolean;
   hksvEnabled?: boolean;

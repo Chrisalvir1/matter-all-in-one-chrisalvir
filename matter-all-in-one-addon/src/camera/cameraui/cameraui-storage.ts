@@ -41,7 +41,7 @@ export class CameraUiStorage {
     const target = await this.getFilePath();
     try {
       const raw = await fs.readFile(target, "utf8");
-      const parsed = JSON.parse(raw);
+      let hadMigration = false;
       const cameras = Array.isArray(parsed.cameras)
         ? parsed.cameras.map((cam: CameraUiCameraRecord) => {
             if (cam.rtspUrl && cam.rtspUrl.includes("#")) {
@@ -52,6 +52,24 @@ export class CameraUiStorage {
             }
             if (cam.snapshotUrl && cam.snapshotUrl.includes("#")) {
               cam.snapshotUrl = cam.snapshotUrl.substring(0, cam.snapshotUrl.indexOf("#"));
+            }
+            // Auto-repair dead host 192.168.110.46 to active local Home Assistant go2rtc host 192.168.110.147
+            if (cam.rtspUrl && cam.rtspUrl.includes("192.168.110.46:8554")) {
+              if (cam.rtspUrl.includes("vimtag_gym") || /gym/i.test(cam.name || "")) {
+                cam.rtspUrl = "rtsp://192.168.110.147:8554/vimtag_113";
+                hadMigration = true;
+              } else if (
+                cam.rtspUrl.includes("cochera") ||
+                cam.rtspUrl.includes("jardin") ||
+                cam.rtspUrl.includes("recamara") ||
+                cam.rtspUrl.includes("area_de_cafe") ||
+                cam.rtspUrl.includes("cocina_ring") ||
+                cam.rtspUrl.includes("camara_de_playroom") ||
+                cam.rtspUrl.includes("vimtag_113")
+              ) {
+                cam.rtspUrl = cam.rtspUrl.replace("192.168.110.46:8554", "192.168.110.147:8554");
+                hadMigration = true;
+              }
             }
             return cam;
           })
@@ -65,6 +83,9 @@ export class CameraUiStorage {
         config: storeConfig,
         cameras,
       };
+      if (hadMigration) {
+        void this.save(this.cachedStore);
+      }
       return this.cachedStore;
     } catch {
       this.cachedStore = this.getDefaultStore();

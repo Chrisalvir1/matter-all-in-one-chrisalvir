@@ -474,6 +474,63 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     const registry = this.ha?.hassEntities;
     if (!states) return entities;
 
+    const cleanId = (cameraId || "")
+      .replace(/^camera\.cameraui_/, "")
+      .replace(/^camera\./, "")
+      .replace(/^cameraui_/, "");
+
+    // Check for explicit entity overrides from CameraUiStorage
+    const cuiStore = CameraUiStorage.getCachedStore();
+    const cuiCam = cuiStore?.cameras?.find(
+      (c) => c.id === cameraId || c.id === cleanId || `cameraui_${cleanId}` === c.id,
+    );
+    const explicitLightId = cuiCam?.lightEntityId;
+    const explicitSirenId = cuiCam?.sirenEntityId;
+    const explicitMotionId = cuiCam?.motionEntityId;
+
+    const buildEntityObj = (
+      entId: string,
+      type: "motion" | "light" | "siren" | "doorbell",
+    ): CameraRealEntity | null => {
+      const s = states.get(entId);
+      if (!s) return null;
+      const d = entId.split(".")[0] as any;
+      const reg = this.entities?.get(entId);
+      return {
+        id: entId,
+        domain: d,
+        type,
+        name: s.attributes?.friendly_name || entId,
+        state: s.state === "on",
+        matterExported: this.exportedDevices?.has(entId) ?? false,
+        matterPairingCode: (reg as any)?.pairingCode,
+        matterManualCode: (reg as any)?.manualPairingCode,
+        topic: (reg as any)?.topic,
+      };
+    };
+
+    if (explicitLightId && explicitLightId !== "auto") {
+      if (explicitLightId !== "none") {
+        const ent = buildEntityObj(explicitLightId, "light");
+        if (ent) entities.push(ent);
+      }
+    }
+    if (explicitSirenId && explicitSirenId !== "auto") {
+      if (explicitSirenId !== "none") {
+        const ent = buildEntityObj(explicitSirenId, "siren");
+        if (ent) entities.push(ent);
+      }
+    }
+    if (explicitMotionId && explicitMotionId !== "auto") {
+      if (explicitMotionId !== "none") {
+        const ent = buildEntityObj(explicitMotionId, "motion");
+        if (ent) entities.push(ent);
+      }
+    }
+
+    const haCamEntry = registry?.get(cameraId) || registry?.get(`camera.${cleanId}`);
+    const camDeviceId = haCamEntry?.device_id;
+
     const baseRaw = (cameraName || cameraId)
       .toLowerCase()
       .replace(/[^a-z0-9]/g, "_")
@@ -488,15 +545,27 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     for (const [entityId, state] of states.entries()) {
       const fn = (state?.attributes?.friendly_name || "").toLowerCase();
       const idLower = entityId.toLowerCase();
-      const cleanId = clean(entityId);
+      const cleanIdStr = clean(entityId);
       const cleanFn = clean(fn);
       const entry = registry?.get(entityId);
 
+      // Strict exclusion of ambient room fixtures (ceiling fan, hanging lamps, wall strips, room ceiling lights)
+      const isRoomFixture =
+        /ventilador|fan|techo|ceiling|plafon|plafón|arbotante|aplique|lampara|lámpara|tira|strip|hexágono|hexagon|neon|neón|tv|pantalla|mesa|escritorio|buró|buro|noche|velador|veladora|piso|floor|doble_spot|chandelier|segment/i.test(
+          `${entityId} ${fn}`,
+        );
+      if (isRoomFixture && (!camDeviceId || entry?.device_id !== camDeviceId)) {
+        continue;
+      }
+
+      const isSameDevice = Boolean(camDeviceId && entry?.device_id === camDeviceId);
+
       const aliasMatch = cleanAliases.some(
-        (ca) => ca.length >= 3 && (cleanId.includes(ca) || cleanFn.includes(ca)),
+        (ca) => ca.length >= 3 && (cleanIdStr.includes(ca) || cleanFn.includes(ca)),
       );
 
       const matches =
+        isSameDevice ||
         idLower.includes(baseRaw) ||
         fn.includes(baseRaw) ||
         aliasMatch ||
@@ -525,6 +594,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         (isMqtt ? `homeassistant/${domain}/${entityId.split(".")[1]}` : undefined);
 
       if (
+        !explicitMotionId &&
         domain === "binary_sensor" &&
         (["motion", "occupancy", "presence"].includes(deviceClass || "") ||
           idLower.includes("motion") ||
@@ -554,21 +624,19 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           });
         }
       } else if (
-        domain === "light" &&
-        (idLower.includes("light") ||
-          idLower.includes("spotlight") ||
-          idLower.includes("floodlight") ||
-          idLower.includes("luz") ||
-          idLower.includes("foco") ||
-          fn.includes("luz") ||
-          fn.includes("foco"))
+        !explicitLightId &&
+        (domain === "light" || domain === "switch") &&
+        (isSameDevice ||
+          /spotlight|floodlight|reflector|flash|status_light|indicador|luz_estado|foco_camara|luz_camara/i.test(
+            `${entityId} ${fn}`,
+          ))
       ) {
         if (!entities.some((e) => e.type === "light")) {
           entities.push({
             id: entityId,
-            domain: "light",
+            domain: domain as any,
             type: "light",
-            name: state?.attributes?.friendly_name || "Foco / Luz",
+            name: state?.attributes?.friendly_name || "Foco / Reflector",
             state: isStateOn,
             matterExported: isExported,
             matterPairingCode: matterCode,
@@ -577,13 +645,14 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           });
         }
       } else if (
-        domain === "siren" ||
-        (domain === "switch" &&
-          (idLower.includes("siren") ||
-            idLower.includes("alarm") ||
-            idLower.includes("alarma") ||
-            fn.includes("sirena") ||
-            fn.includes("alarma")))
+        !explicitSirenId &&
+        (domain === "siren" ||
+          (domain === "switch" &&
+            (idLower.includes("siren") ||
+              idLower.includes("alarm") ||
+              idLower.includes("alarma") ||
+              fn.includes("sirena") ||
+              fn.includes("alarma"))))
       ) {
         if (!entities.some((e) => e.type === "siren")) {
           entities.push({
@@ -6245,11 +6314,55 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           try {
             const body = await this.readRequestBody(req);
             const exportConfig = JSON.parse(body);
-            const updated = await ScryptedStorage.updateCameraExportConfig(
+            let updated = await ScryptedStorage.updateCameraExportConfig(
               cameraId,
               exportConfig,
             );
+            let cam: any = null;
             if (!updated) {
+              const cuiStore = await CameraUiStorage.load();
+              const cleanId = cameraId
+                .replace(/^camera\.cameraui_/, "")
+                .replace(/^camera\./, "")
+                .replace(/^cameraui_/, "");
+              const cuiCam = cuiStore.cameras.find(
+                (c) =>
+                  c.id === cameraId ||
+                  c.id === cleanId ||
+                  `cameraui_${cleanId}` === c.id,
+              );
+              if (cuiCam) {
+                await CameraUiStorage.updateCamera(cuiCam.id, (c) => {
+                  if (exportConfig.rtspUrl) c.rtspUrl = exportConfig.rtspUrl;
+                  if (exportConfig.model) c.model = exportConfig.model;
+                  if (exportConfig.homeKitEnabled !== undefined) {
+                    c.homeKitEnabled = exportConfig.homeKitEnabled;
+                  }
+                  if (exportConfig.lightEntityId !== undefined) {
+                    c.lightEntityId = exportConfig.lightEntityId;
+                  }
+                  if (exportConfig.sirenEntityId !== undefined) {
+                    c.sirenEntityId = exportConfig.sirenEntityId;
+                  }
+                  if (exportConfig.motionEntityId !== undefined) {
+                    c.motionEntityId = exportConfig.motionEntityId;
+                  }
+                  return c;
+                });
+                const updatedStore = await CameraUiStorage.load();
+                const freshCam =
+                  updatedStore.cameras.find((c) => c.id === cuiCam.id) || cuiCam;
+                if (freshCam.homeKitEnabled !== false) {
+                  await CameraUiHomeKitBridge.mountCamera(this, freshCam);
+                } else {
+                  await CameraUiHomeKitBridge.unmountCamera(freshCam.id);
+                }
+                res.writeHead(200, {
+                  "Content-Type": "application/json; charset=utf-8",
+                });
+                res.end(JSON.stringify({ success: true, camera: freshCam }));
+                return;
+              }
               res.writeHead(404, {
                 "Content-Type": "application/json; charset=utf-8",
               });
@@ -6257,7 +6370,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               return;
             }
             const store = ScryptedStorage.getStore();
-            const cam = store.cameras.cameras.find(
+            cam = store.cameras.cameras.find(
               (c) => c.cameraId === cameraId,
             );
             if (cam) {
