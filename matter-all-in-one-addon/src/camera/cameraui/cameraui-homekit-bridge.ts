@@ -16,6 +16,10 @@ export class CameraUiHomeKitBridge {
     return this.activeAccessories.get(cameraId);
   }
 
+  public static getAllAccessories(): Map<string, HomeKitCameraAccessory> {
+    return this.activeAccessories;
+  }
+
   public static async mountCamera(
     platform: any,
     camera: CameraUiCameraRecord,
@@ -82,6 +86,24 @@ export class CameraUiHomeKitBridge {
         ? "passthrough_hevc"
         : "passthrough_h264";
 
+    let detectedWidth = camera.width || 1920;
+    let detectedHeight = camera.height || 1080;
+    const nameAndModel = `${camera.name} ${camera.model || ""} ${camera.manufacturer || ""}`.toLowerCase();
+    if (detectedWidth <= 1920) {
+      if (/4k|uhd|8mp/i.test(nameAndModel)) {
+        detectedWidth = 3840;
+        detectedHeight = 2160;
+      } else if (/2k|qhd|c402|c420|c425|c520|c325|tc72|3mp|4mp|5mp/i.test(nameAndModel)) {
+        detectedWidth = 2560;
+        detectedHeight = 1440;
+      }
+    }
+
+    const linkedEntities = platform?.findLinkedCameraEntities?.(camera.name, camera.id) || [];
+    const hasLight = Boolean(camera.hasLight || linkedEntities.some((e: any) => e.type === "light"));
+    const hasSiren = Boolean(camera.hasSiren || linkedEntities.some((e: any) => e.type === "siren"));
+    const hasDoorbell = Boolean(camera.doorbellTopic || linkedEntities.some((e: any) => e.type === "doorbell"));
+
     const capabilities: CameraCapabilitiesInfo = {
       hasLiveStream: hasSource,
       streamSourceType: isHaProxy ? "ha_proxy" : "rtsp",
@@ -89,8 +111,8 @@ export class CameraUiHomeKitBridge {
       hasAudio: camera.hasAudio,
       audioCodec: "aac_lc",
       resolution: {
-        width: camera.width || 1920,
-        height: camera.height || 1080,
+        width: detectedWidth,
+        height: detectedHeight,
       },
       maxFps: camera.fps || 30,
       strategy: chosenStrategy,
@@ -109,7 +131,9 @@ export class CameraUiHomeKitBridge {
       metadata: {
         isCameraUi: true,
         camerauiCameraId: camera.id,
-        hasDoorbell: Boolean(camera.doorbellTopic),
+        hasDoorbell,
+        hasLight,
+        hasSiren,
         model: camera.model || "Camera.UI Stream",
       },
     };

@@ -1756,7 +1756,48 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           let active = false;
 
           const parts = topic.split("/");
-          if (parts.length === 2 && (parts[1] === "motion" || parts[1] === "doorbell")) {
+          const isMotionAction = (act: string) =>
+            [
+              "motion",
+              "detection",
+              "opencv",
+              "person",
+              "animal",
+              "vehicle",
+              "car",
+              "package",
+              "face",
+              "movement",
+            ].includes(act.toLowerCase());
+
+          const parseActiveState = (pl: string): boolean => {
+            let act =
+              pl === "true" ||
+              pl === "ON" ||
+              pl === "1" ||
+              pl === "active" ||
+              pl === "start";
+            try {
+              const parsed = JSON.parse(pl);
+              if (typeof parsed === "boolean") return parsed;
+              if (parsed.state !== undefined) {
+                return (
+                  parsed.state === "ON" ||
+                  parsed.state === true ||
+                  parsed.state === "active" ||
+                  parsed.state === "start" ||
+                  parsed.state === 1
+                );
+              }
+              if (parsed.active !== undefined) return Boolean(parsed.active);
+              if (parsed.motion !== undefined) return Boolean(parsed.motion);
+              if (Array.isArray(parsed.detected) && parsed.detected.length > 0) return true;
+              if (parsed.trigger === "opencv" || parsed.trigger === "motion") return true;
+            } catch {}
+            return act;
+          };
+
+          if (parts.length === 2 && (isMotionAction(parts[1]) || parts[1] === "doorbell")) {
             try {
               const data = JSON.parse(payload);
               const camIdentifier = (data.camera || data.name || data.id || "").toString().toLowerCase();
@@ -1764,10 +1805,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                 (c) => c.id.toLowerCase() === camIdentifier || c.name.toLowerCase() === camIdentifier,
               );
               if (found) targetCameraId = found.id;
-              active = data.state === true || data.state === "ON" || data.state === "active" || data.motion === true;
-              if (parts[1] === "motion") isMotion = true;
+              active = parseActiveState(payload);
+              if (isMotionAction(parts[1])) isMotion = true;
               if (parts[1] === "doorbell") isDoorbell = true;
-            } catch {}
+            } catch {
+              active = parseActiveState(payload);
+              if (isMotionAction(parts[1])) isMotion = true;
+            }
           } else if (parts.length >= 3) {
             const camIdentifier = parts[1].toLowerCase();
             const action = parts[2].toLowerCase();
@@ -1778,14 +1822,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                 c.name.toLowerCase() === camIdentifier,
             );
             targetCameraId = found ? found.id : camIdentifier;
-            if (action === "motion") {
+            if (isMotionAction(action)) {
               isMotion = true;
-              active = payload === "true" || payload === "ON" || payload === "1" || payload === "active";
-              try {
-                const parsed = JSON.parse(payload);
-                if (typeof parsed === "boolean") active = parsed;
-                else if (parsed.state !== undefined) active = parsed.state === "ON" || parsed.state === true;
-              } catch {}
+              active = parseActiveState(payload);
             } else if (action === "doorbell") {
               isDoorbell = true;
             }
@@ -2109,6 +2148,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       "vacuum",
       "media_player",
       "humidifier",
+      "siren",
     ];
     if (
       !allowedDomains.includes(domain) &&
@@ -3594,6 +3634,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       this.queueStateUpdate(entityId, newState);
 
     if (entityId.startsWith("binary_sensor.")) {
+      const isMotionState = newState.state === "on";
       for (const cam of this.entities.values()) {
         if (cam instanceof CameraEntity && cam.homekitAccessory) {
           const isLinked =
@@ -3602,8 +3643,55 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               this.ha.hassEntities.get(entityId)?.device_id ===
                 this.ha.hassEntities.get(cam.entityId)?.device_id);
           if (isLinked) {
-            cam.homekitAccessory.updateMotionState(newState.state === "on");
+            cam.homekitAccessory.updateMotionState(isMotionState);
           }
+        }
+      }
+
+      // Update Camera.UI active accessories (OpenCV motion / person / vehicle / animal)
+      const allCuiAccessories = CameraUiHomeKitBridge.getAllAccessories();
+      for (const [cuiId, accessory] of allCuiAccessories) {
+        if (!accessory) continue;
+        const linkedId = accessory.linkedMotionEntityId;
+        const camName = (accessory.record?.name || "").toLowerCase();
+        const rawCuiId = cuiId.toLowerCase().replace(/^cameraui_/, "");
+        const idLower = entityId.toLowerCase();
+
+        const isLinked =
+          linkedId === entityId ||
+          idLower.includes(rawCuiId) ||
+          (camName.length >= 3 && idLower.includes(camName.replace(/\s+/g, "_"))) ||
+          (this.ha.hassEntities.get(entityId)?.device_id &&
+            this.ha.hassEntities.get(entityId)?.device_id ===
+              this.ha.hassEntities.get(`camera.${cuiId}`)?.device_id);
+
+        if (isLinked) {
+          accessory.updateMotionState(isMotionState);
+          this.broadcastSseMessage("cameraui_motion", { cameraId: cuiId, motionOn: isMotionState });
+        }
+      }
+    }
+
+    if (entityId.startsWith("light.") || entityId.startsWith("switch.") || entityId.startsWith("siren.")) {
+      const isOn = newState.state === "on";
+      for (const cam of this.entities.values()) {
+        if (cam instanceof CameraEntity && cam.homekitAccessory) {
+          if (cam.homekitAccessory.linkedLightEntityId === entityId) {
+            cam.homekitAccessory.updateLightState(isOn);
+          }
+          if (cam.homekitAccessory.linkedSirenEntityId === entityId) {
+            cam.homekitAccessory.updateSirenState(isOn);
+          }
+        }
+      }
+      const allCuiAccessories = CameraUiHomeKitBridge.getAllAccessories();
+      for (const [, accessory] of allCuiAccessories) {
+        if (!accessory) continue;
+        if (accessory.linkedLightEntityId === entityId) {
+          accessory.updateLightState(isOn);
+        }
+        if (accessory.linkedSirenEntityId === entityId) {
+          accessory.updateSirenState(isOn);
         }
       }
     }

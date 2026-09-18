@@ -539,12 +539,41 @@ export class CameraUiClient {
         snapshotUrl = `${effectiveBaseUrl}/api/cameras/${encodeURIComponent(name)}/snapshot`;
       }
 
-      const width = Number(videoConfig.maxWidth || item.width || 1920);
-      const height = Number(videoConfig.maxHeight || item.height || 1080);
-      const fps = Number(videoConfig.maxFPS || item.fps || 30);
+      // Extract width & height from sources, videoConfig, resolution string, or model heuristics
+      let width = Number(videoConfig.maxWidth || videoConfig.width || item.width || (sources[0] && sources[0].width) || 0);
+      let height = Number(videoConfig.maxHeight || videoConfig.height || item.height || (sources[0] && sources[0].height) || 0);
+
+      const resString = String(sources[0]?.resolution || item.resolution || videoConfig.resolution || "");
+      if ((!width || !height) && resString.includes("x")) {
+        const [rw, rh] = resString.split("x").map((s: string) => Number(s.trim()));
+        if (rw && rh) {
+          width = rw;
+          height = rh;
+        }
+      }
+
+      const modelName = String(item.info?.model || item.model || "").toLowerCase();
+      const cameraTitle = name.toLowerCase();
+      const combinedTitleAndModel = `${cameraTitle} ${modelName}`;
+
+      if (!width || width <= 1920) {
+        if (/4k|uhd|8mp/i.test(combinedTitleAndModel)) {
+          width = 3840;
+          height = 2160;
+        } else if (/2k|qhd|c402|c420|c425|c520|c325|tc72|3mp|4mp|5mp/i.test(combinedTitleAndModel)) {
+          width = 2560;
+          height = 1440;
+        } else {
+          width = width || 1920;
+          height = height || 1080;
+        }
+      }
+      if (!height) height = Math.round((width * 9) / 16);
+
+      const fps = Number(videoConfig.maxFPS || item.fps || (sources[0] && sources[0].fps) || 30);
       const hasAudio = !isMuted && videoConfig.audio !== false && item.muted !== true;
 
-      // MQTT topics
+      // MQTT topics & OpenCV detection support
       const mqttConfig = item.mqtt || {};
       const safeSlug = name.toLowerCase().replace(/[^a-z0-9_-]/g, "_");
       const motionTopic =
@@ -566,8 +595,6 @@ export class CameraUiClient {
         "",
       ).toLowerCase();
 
-      const modelName = String(item.info?.model || item.model || "").toLowerCase();
-      const cameraTitle = name.toLowerCase();
       const isHevcDetected =
         rawCodec.includes("hevc") ||
         rawCodec.includes("265") ||

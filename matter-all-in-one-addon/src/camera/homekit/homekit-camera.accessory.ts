@@ -40,6 +40,8 @@ export class HomeKitCameraAccessory {
   public delegate!: HomeKitCameraStreamingDelegate;
   public recordingDelegate?: HomeKitCameraRecordingDelegate;
   public motionService?: Service;
+  public lightService?: Service;
+  public sirenService?: Service;
   public linkedMotionEntityId?: string;
   public linkedLightEntityId?: string;
   public linkedSirenEntityId?: string;
@@ -91,7 +93,11 @@ export class HomeKitCameraAccessory {
     const isScrypted =
       this.entityId.startsWith("scrypted.") ||
       Boolean(this.streamSource.metadata?.isScrypted);
-    if (this.linkedMotionEntityId || isScrypted) {
+    const isCameraUi =
+      this.entityId.startsWith("camera.cameraui_") ||
+      this.entityId.startsWith("cameraui.") ||
+      Boolean(this.streamSource.metadata?.isCameraUi);
+    if (this.linkedMotionEntityId || isScrypted || isCameraUi) {
       this.motionService = this.accessory.addService(
         Service.MotionSensor,
         `${this.record.name || this.entityId} Movimiento`,
@@ -111,13 +117,14 @@ export class HomeKitCameraAccessory {
         doorbell.setCharacteristic(Characteristic.ProgrammableSwitchEvent, 0);
       } catch {}
     }
+    this.lightService = undefined;
     if (this.linkedLightEntityId || Boolean(this.streamSource.metadata?.hasLight)) {
       try {
-        const light = this.accessory.addService(
+        this.lightService = this.accessory.addService(
           Service.Lightbulb,
           `${this.record.name || this.entityId} Luz`,
         );
-        light
+        this.lightService
           .getCharacteristic(Characteristic.On)
           .onGet(() => {
             if (this.linkedLightEntityId) {
@@ -136,13 +143,14 @@ export class HomeKitCameraAccessory {
           });
       } catch {}
     }
+    this.sirenService = undefined;
     if (this.linkedSirenEntityId || Boolean(this.streamSource.metadata?.hasSiren)) {
       try {
-        const siren = this.accessory.addService(
+        this.sirenService = this.accessory.addService(
           Service.Switch,
           `${this.record.name || this.entityId} Sirena`,
         );
-        siren
+        this.sirenService
           .getCharacteristic(Characteristic.On)
           .onGet(() => {
             if (this.linkedSirenEntityId) {
@@ -289,11 +297,24 @@ export class HomeKitCameraAccessory {
   private buildDeclaredResolutions(): [number, number, number][] {
     const source = this.capabilities.resolution || { width: 1920, height: 1080 };
     const sourceFps = Math.max(15, Math.min(this.capabilities.maxFps || 30, 60));
-    const maxDeclaredWidth = source.width;
-    const maxDeclaredHeight = source.height;
+    const nameAndModel = `${this.record.name || ""} ${this.record.model || ""}`.toLowerCase();
+    let maxDeclaredWidth = source.width;
+    let maxDeclaredHeight = source.height;
+
+    // Detect 4K / 2K capabilities if camera name or model indicates high resolution
+    if (maxDeclaredWidth <= 1920) {
+      if (/4k|uhd|8mp/i.test(nameAndModel)) {
+        maxDeclaredWidth = 3840;
+        maxDeclaredHeight = 2160;
+      } else if (/2k|qhd|c402|c420|c425|c520|c325|tc72|3mp|4mp|5mp/i.test(nameAndModel)) {
+        maxDeclaredWidth = 2560;
+        maxDeclaredHeight = 1440;
+      }
+    }
+
     const ladder: [number, number, number][] = [
       // Native source resolution first so HomeKit negotiates maximum native quality
-      [source.width, source.height, sourceFps],
+      [maxDeclaredWidth, maxDeclaredHeight, sourceFps],
       // 4K UHD (3840x2160)
       [3840, 2160, sourceFps],
       // 2K QHD (2560x1440 / 2304x1296 for Tapo, Wyze, etc.)
@@ -334,6 +355,23 @@ export class HomeKitCameraAccessory {
     doorbell?: string;
   } {
     const result: { motion?: string; light?: string; siren?: string; doorbell?: string } = {};
+
+    // 1. Leverage platform multi-strategy matcher if available
+    if (typeof this.platform?.findLinkedCameraEntities === "function") {
+      try {
+        const realEntities = this.platform.findLinkedCameraEntities(
+          this.record.name || "",
+          this.entityId,
+        );
+        for (const ent of realEntities) {
+          if (ent.type === "motion" && !result.motion) result.motion = ent.id;
+          if (ent.type === "light" && !result.light) result.light = ent.id;
+          if (ent.type === "siren" && !result.siren) result.siren = ent.id;
+          if (ent.type === "doorbell" && !result.doorbell) result.doorbell = ent.id;
+        }
+      } catch {}
+    }
+
     const registry = this.platform?.ha?.hassEntities;
     const states = this.platform?.ha?.hassStates;
     if (!states) return result;
@@ -350,7 +388,12 @@ export class HomeKitCameraAccessory {
       const idLower = entityId.toLowerCase();
       const fnLower = (friendlyName || "").toLowerCase();
       if (idLower.includes(cameraBase) || fnLower.includes(cameraBase)) return true;
-      return words.length > 0 && words.every((w: string) => idLower.includes(w) || fnLower.includes(w));
+      const modelKeywords = words.filter((w: string) => /^[a-z]+\d+|\d+[a-z]+|vimtag|tapo|wyze|reolink|nest/i.test(w));
+      if (modelKeywords.length > 0 && modelKeywords.some((k: string) => idLower.includes(k) || fnLower.includes(k))) {
+        return true;
+      }
+      const matchingWords = words.filter((w: string) => idLower.includes(w) || fnLower.includes(w));
+      return matchingWords.length >= Math.min(2, words.length);
     };
 
     const deviceId = registry?.get(this.entityId)?.device_id;
@@ -484,6 +527,20 @@ export class HomeKitCameraAccessory {
       motionDetected,
     );
     this.recordingDelegate?.handleMotionDetected(motionDetected);
+  }
+
+  public updateLightState(isOn: boolean): void {
+    if (!this.lightService) return;
+    try {
+      this.lightService.updateCharacteristic(Characteristic.On, isOn);
+    } catch {}
+  }
+
+  public updateSirenState(isOn: boolean): void {
+    if (!this.sirenService) return;
+    try {
+      this.sirenService.updateCharacteristic(Characteristic.On, isOn);
+    } catch {}
   }
 
   public async publish(): Promise<void> {
