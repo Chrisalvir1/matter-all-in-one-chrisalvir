@@ -60,6 +60,7 @@ export class HomeKitCameraRecordingDelegate
 
     this.segmenter.on("initialization", (initSeg: Buffer) => {
       this.initializationSegment = initSeg;
+      this.emit("initialization", initSeg);
       this.platform?.log?.debug?.(
         `[HKSV][${this.entityId}] Received fMP4 Initialization Segment (${initSeg.length} bytes)`,
       );
@@ -213,7 +214,7 @@ export class HomeKitCameraRecordingDelegate
     // 3. Stream ongoing live fragments while motion is active or until Home Hub closes
     let postRollFragmentsRemaining = 2; // At least 2 post-roll fragments after motion clears
     while (!signal?.aborted) {
-      const nextFragment = await this.waitForNextFragment(signal, 5000);
+      const nextFragment = await this.waitForNextFragment(signal, 15000);
       if (!nextFragment || signal?.aborted) {
         yield {
           data: Buffer.alloc(0),
@@ -377,6 +378,8 @@ export class HomeKitCameraRecordingDelegate
       args.push(
         "-rtsp_transport",
         "tcp",
+        "-stimeout",
+        "15000000",
         "-timeout",
         "15000000",
         "-probesize",
@@ -408,7 +411,7 @@ export class HomeKitCameraRecordingDelegate
       this.capabilities.videoCodec === "h264" &&
       this.streamSource.sourceType !== "ha_proxy";
     if (isH264) {
-      args.push("-map", "0:v:0", "-vcodec", "copy");
+      args.push("-map", "0:v:0", "-vcodec", "copy", "-bsf:v", "dump_extra=freq=keyframe");
     } else {
       const res = this.selectedConfiguration?.videoCodec.resolution || [
         1920, 1080, 30,
@@ -464,7 +467,7 @@ export class HomeKitCameraRecordingDelegate
       const bitrate = audioCodecConfig.bitrate || 32;
       args.push(
         "-map",
-        "0:a:0",
+        "0:a:0?",
         "-acodec",
         "aac",
         "-ar",

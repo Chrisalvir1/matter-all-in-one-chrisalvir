@@ -31,8 +31,9 @@ export function repairCameraRecord(cam: CameraUiCameraRecord): { cam: CameraUiCa
       cam.rtspUrl = cam.rtspUrl.replace("/stream1", "/stream0");
       modified = true;
     }
-    if (!cam.rtspUrl || cam.rtspUrl.includes("192.168.110.46")) {
-      cam.rtspUrl = "rtsp://Gecko:Mrlsc%401503@192.168.110.118:554/stream0";
+    const targetUrl = "rtsp://192.168.110.147:8554/wyze_patio_trasero";
+    if (cam.rtspUrl !== targetUrl) {
+      cam.rtspUrl = targetUrl;
       modified = true;
     }
     if (!cam.width || cam.width < 1920) {

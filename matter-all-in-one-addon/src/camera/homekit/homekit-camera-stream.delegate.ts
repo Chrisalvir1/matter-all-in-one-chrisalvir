@@ -780,6 +780,8 @@ export class HomeKitCameraStreamingDelegate
       args.push(
         "-rtsp_transport",
         "tcp",
+        "-stimeout",
+        "5000000",
         "-timeout",
         "5000000",
         "-probesize",
@@ -874,11 +876,12 @@ export class HomeKitCameraStreamingDelegate
 
     if (canPassthrough) {
       // Pure passthrough remuxing without transcoding CPU overhead (native 4K, 2K, 1080p, 720p @ max fps)
-      // Pure -c:v copy for H.264 matching Camera.UI native behavior
+      // Pure -c:v copy for H.264 with in-band SPS/PPS extradata injection for instant iOS decoding
       const videoPassArgs: string[] = [
         "-map", "0:v:0",
         "-an",
         "-c:v", "copy",
+        "-bsf:v", "dump_extra=freq=keyframe",
         "-f", "rtp",
         "-fflags", "+nobuffer+flush_packets",
         "-max_delay", "0",

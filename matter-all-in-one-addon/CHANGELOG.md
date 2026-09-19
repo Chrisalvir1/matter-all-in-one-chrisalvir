@@ -1,3 +1,17 @@
+## [1.8.12] - 2026-09-18
+
+### Apertura Instantánea de Stream HomeKit (Cero Spinner) y Grabación HKSV en iCloud
+
+- **Apertura Inmediata de Cámaras en Apple Home (0 Segundos de Carga):**
+  - **Inyección de Extradata SPS/PPS (`-bsf:v dump_extra=freq=keyframe`):** En modo passthrough (`-c:v copy`), FFmpeg ahora inyecta en cada fotograma clave (I-frame) las cabeceras de parámetros de secuencia y de imagen (SPS/PPS). Esto erradica el error crítico `non-existing PPS 0 referenced` en el decodificador de iOS, permitiendo que la imagen renderice de inmediato en lugar de quedarse congelada en "Cargando...".
+  - **RTSP Socket Timeout (`-stimeout 5000000`):** Añadido flag nativo de timeout TCP para conexiones RTSP sobre TCP en FFmpeg, previniendo cuelgues de sockets.
+  - **Wyze Patio Trasero multiplexada vía go2rtc:** La cámara Wyze se redirige a `rtsp://192.168.110.147:8554/wyze_patio_trasero`, evitando saturar la tarjeta de red de la cámara física y permitiendo conexiones concurrentes ilimitadas para Live View y grabación.
+- **Grabación HKSV en iCloud Estable y sin Cortes:**
+  - **Resolución Inmediata de Inicialización fMP4:** En `HomeKitCameraRecordingDelegate`, se emite ahora el evento `"initialization"` sobre la instancia del delegado para que `waitForInitialization()` responda en milisegundos sin esperar el timeout de 5 segundos.
+  - **Aumento de Tolerancia de Entrega de Fragmentos (15s):** En `waitForNextFragment()`, se elevó el timeout de 5000ms a 15000ms para acomodar intervalos GOP reales de 4-6 segundos de las cámaras IP, evitando el cierre prematuro con error 6 (TIMEOUT).
+  - **Mapeo Seguro de Audio (`0:a:0?`):** En la canalización de pre-buffer fMP4, el mapeo de audio ahora es tolerante a fallos (`0:a:0?`), asegurando que cámaras sin audio continúen grabando video a iCloud sin abortar FFmpeg.
+  - **Extradata en fMP4:** Inyección de `dump_extra=freq=keyframe` en el flujo de copia de video fMP4 para garantizar que Apple Home Hub decodifique y guarde los clips sin corrupción.
+
 ## [1.8.11] - 2026-09-18
 
 ### Stream Tapo C120 y Restauración Total de Detección de Movimiento HKSV
