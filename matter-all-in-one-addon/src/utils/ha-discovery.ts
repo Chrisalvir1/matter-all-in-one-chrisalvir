@@ -25,7 +25,7 @@ const PROBE_TIMEOUT_MS = 1500;
  * Probe a single URL to see if it responds with a Home Assistant /api/ endpoint.
  * Returns the base URL (http://host:port) if reachable, or null.
  */
-async function probeHassUrl(baseUrl: string): Promise<string | null> {
+export async function probeHassUrl(baseUrl: string): Promise<string | null> {
   return new Promise((resolve) => {
     const url = `${baseUrl}/api/`;
     try {

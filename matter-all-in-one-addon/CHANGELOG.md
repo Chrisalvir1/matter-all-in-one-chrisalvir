@@ -1,3 +1,18 @@
+## [1.8.13] - 2026-09-18
+
+### Corrección Crítica: Live Stream Instantáneo en HomeKit y Grabación HKSV Pre-Buffer
+
+- **Corrección de Live Stream en Apple Home (Fin al spinner infinito y fallo de START):**
+  - **Inyección de `addressOverride` en `PrepareStreamResponse`:** En entornos Docker con red host, HAP-NodeJS resolvía erróneamente interfaces internas (172.30.x.x / 172.17.x.x) al responder a `SetupEndpoints`. Los dispositivos iOS no podían alcanzar dicha IP, quedando en espera hasta abortar a los 10 segundos sin llegar a enviar el comando `START`. Ahora se inyecta la IP LAN real (192.168.110.147), permitiendo a iOS iniciar el stream SRTP inmediatamente.
+  - **Puertos de retorno RTCP y Localport:** Vinculados `localport` y `localrtcpport` en los parámetros de salida SRTP de video y audio en FFmpeg para alinearse exactamente con los puertos UDP negociados por HAP.
+- **Grabación HKSV en iCloud Pre-Buffer y Segmento de Inicialización:**
+  - **Autoarranque de Pre-buffer HKSV en Segundo Plano:** El proceso FFmpeg de pre-buffer se inicia inmediatamente al montar las cámaras HKSV, garantizando que el segmento de inicialización fMP4 (`ftyp` + `moov`) y los fotogramas clave previos ya estén en memoria cuando Apple Home Hub solicite la grabación.
+  - **Garantía de Arranque en `handleRecordingStreamRequest`:** Si por cualquier motivo el proceso no estuviera activo al detectarse movimiento, se invoca de inmediato evitando que el hub rechace el stream por falta de segmento inicial.
+  - **Preservación de `initializationSegment`:** Se mantiene en caché el encabezado fMP4 a través de limpiezas de búfer para entrega en 0ms.
+- **Estabilidad de Conexión WebSocket con Home Assistant Core:**
+  - **Conexión Directa a `127.0.0.1:8123` con Token:** Evita desconexiones de proxy Supervisor (código 1006) conectando directamente a Core en red host.
+  - **Protección de Token de Usuario:** Se previene que el token de larga duración sea sobrescrito accidentalmente con `SUPERVISOR_TOKEN`.
+
 ## [1.8.12] - 2026-09-18
 
 ### Apertura Instantánea de Stream HomeKit (Cero Spinner) y Grabación HKSV en iCloud

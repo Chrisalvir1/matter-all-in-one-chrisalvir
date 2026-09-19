@@ -22,7 +22,7 @@ const FALLBACK_JPEG_BUFFER = Buffer.from(
 );
 import { HomeAssistant } from "./homeAssistant.js";
 import { HassState, isUnavailable } from "./utils/ha-state.js";
-import { discoverHassUrl, toWsUrl } from "./utils/ha-discovery.js";
+import { discoverHassUrl, probeHassUrl, toWsUrl } from "./utils/ha-discovery.js";
 import {
   getDeviceTypeForEntity,
   MatterDeviceTypes,
@@ -2006,7 +2006,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     // We need to await discoverHassUrl() which probes the network, so we store
     // the raw config values here and complete the HA instance init in onStart().
     this._configHost = config.host;
-    if (!this._configHost && process.env.SUPERVISOR_TOKEN) {
+    if (!this._configHost && !config.token && process.env.SUPERVISOR_TOKEN) {
       this._configHost = "http://supervisor/core";
     }
     this._configToken = token;
@@ -2283,7 +2283,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     //   2. Scan local LAN subnets for port 8123
     let rawHost = this._configHost;
     if (!rawHost) {
-      if (process.env.SUPERVISOR_TOKEN) {
+      const localCore = await probeHassUrl("http://127.0.0.1:8123");
+      if (localCore && this._configToken) {
+        rawHost = localCore;
+        this.log.notice(
+          `Connected directly to local Home Assistant core at ${CYAN}${rawHost}${nf}`,
+        );
+      } else if (process.env.SUPERVISOR_TOKEN) {
         rawHost = "http://supervisor/core";
         this.log.notice(
           `Running as Home Assistant add-on — using Supervisor core API at ${CYAN}${rawHost}${nf}`,

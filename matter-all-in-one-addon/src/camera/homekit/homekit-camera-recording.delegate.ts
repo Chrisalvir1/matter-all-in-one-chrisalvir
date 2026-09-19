@@ -69,6 +69,15 @@ export class HomeKitCameraRecordingDelegate
     this.segmenter.on("fragment", (fragment: Fmp4MediaFragment) => {
       this.handleNewFragment(fragment);
     });
+
+    // Automatically start HKSV pre-buffer pipeline on startup so fMP4 initialization segment (ftyp + moov)
+    // and rolling pre-roll buffer are cached and ready BEFORE motion events occur.
+    if (this.record.hksvEnabled !== false && Boolean(this.streamSource.url)) {
+      this.recordingActive = true;
+      setImmediate(() => {
+        void this.startPrebufferPipeline();
+      });
+    }
   }
 
   /**
@@ -173,10 +182,16 @@ export class HomeKitCameraRecordingDelegate
     this.deliveredFragmentsInSession = 0;
     this.deliveredInitInSession = false;
     this.sessionHadProtocolError = false;
+    this.recordingActive = true;
 
     this.platform?.log?.notice?.(
       `[HKSV][${this.record.name || this.entityId}] 🎬 GRABACIÓN HKSV EN CURSO (streamId ${streamId}) → Transmitiendo video fMP4 a Apple Home Hub / iCloud`,
     );
+
+    // Ensure prebuffer FFmpeg pipeline is running
+    if (!this.ffmpegProcess) {
+      void this.startPrebufferPipeline();
+    }
 
     // 1. Deliver MEDIA_INITIALIZATION segment (ftyp + moov)
     if (!this.initializationSegment) {
@@ -549,7 +564,6 @@ export class HomeKitCameraRecordingDelegate
   private clearPrebuffer(): void {
     this.prebuffer = [];
     this.currentPrebufferBytes = 0;
-    this.initializationSegment = null;
   }
 
   private waitForInitialization(timeoutMs: number): Promise<void> {

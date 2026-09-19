@@ -1785,7 +1785,8 @@ export class HomeAssistant extends EventEmitter {
             if (this.wsAccessToken) {
               if (
                 process.env.SUPERVISOR_TOKEN &&
-                !this.wsUrl.includes("supervisor")
+                !this.wsUrl.includes("supervisor") &&
+                !this.token
               ) {
                 this.log.warn(
                   `[HomeAssistant] Token rejected on ${this.wsUrl}. Auto-switching to supervisor core proxy ws://supervisor/core/api/websocket...`,
