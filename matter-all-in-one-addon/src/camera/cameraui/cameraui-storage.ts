@@ -1,13 +1,19 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { CameraUiCameraRecord, CameraUiConfig, CameraUiStore } from "./cameraui-types.js";
+import type {
+  CameraUiCameraRecord,
+  CameraUiConfig,
+  CameraUiStore,
+} from "./cameraui-types.js";
 
 const CONFIG_PATH = "/data/cameraui-config.json";
 const FALLBACK_CONFIG_PATH = "./cameraui-config.json";
 
-export function repairCameraRecord(cam: CameraUiCameraRecord): { cam: CameraUiCameraRecord; modified: boolean } {
+export function repairCameraRecord(cam: CameraUiCameraRecord): {
+  cam: CameraUiCameraRecord;
+  modified: boolean;
+} {
   let modified = false;
-  const name = (cam.name || "").toLowerCase();
 
   // Strip trailing hash fragments
   if (cam.rtspUrl && cam.rtspUrl.includes("#")) {
@@ -19,14 +25,20 @@ export function repairCameraRecord(cam: CameraUiCameraRecord): { cam: CameraUiCa
     modified = true;
   }
   if (cam.snapshotUrl && cam.snapshotUrl.includes("#")) {
-    cam.snapshotUrl = cam.snapshotUrl.substring(0, cam.snapshotUrl.indexOf("#"));
+    cam.snapshotUrl = cam.snapshotUrl.substring(
+      0,
+      cam.snapshotUrl.indexOf("#"),
+    );
     modified = true;
   }
 
-  const url = (cam.rtspUrl || "").toLowerCase();
-
-  // Wyze Patio Trasero: strictly enforce 1080p stream0
-  if (name.includes("wyze") || url.includes("wyze") || url.includes("192.168.110.118")) {
+  /*
+   * Camera.UI is the source of truth for RTSP URLs and probed capabilities.
+   * Do not infer a camera from its display name or replace its source with a
+   * site-specific URL here: doing so breaks newly discovered cameras and can
+   * remount an already paired accessory with the wrong stream.
+   */
+  /* if (name.includes("wyze") || url.includes("wyze") || url.includes("192.168.110.118")) {
     if (cam.rtspUrl && cam.rtspUrl.includes("/stream1")) {
       cam.rtspUrl = cam.rtspUrl.replace("/stream1", "/stream0");
       modified = true;
@@ -206,8 +218,8 @@ export function repairCameraRecord(cam: CameraUiCameraRecord): { cam: CameraUiCa
       .replace("192.168.110.46:554", "192.168.110.147:8554")
       .replace("rtsp://192.168.110.46/", "rtsp://192.168.110.147:8554/");
     modified = true;
-  }
-  if (
+  } */
+  /* if (
     cam.subRtspUrl &&
     (cam.subRtspUrl.includes("192.168.110.46:8554") ||
       cam.subRtspUrl.includes("192.168.110.46:554") ||
@@ -218,7 +230,7 @@ export function repairCameraRecord(cam: CameraUiCameraRecord): { cam: CameraUiCa
       .replace("192.168.110.46:554", "192.168.110.147:8554")
       .replace("rtsp://192.168.110.46/", "rtsp://192.168.110.147:8554/");
     modified = true;
-  }
+  } */
 
   return { cam, modified };
 }
@@ -231,7 +243,8 @@ export const DEFAULT_CAMERAS: CameraUiCameraRecord[] = [
     model: "Indoor Cam",
     serialNumber: "CUI-F9922B88-19EE-4960-87D9-6EDD4A139DA6",
     rtspUrl: "rtsp://192.168.110.147:8554/cocina_ring",
-    snapshotUrl: "https://192.168.110.46:3543/api/cameras/COCINA%20RING/snapshot",
+    snapshotUrl:
+      "https://192.168.110.46:3543/api/cameras/COCINA%20RING/snapshot",
     hasAudio: true,
     width: 1920,
     height: 1080,
@@ -272,7 +285,8 @@ export const DEFAULT_CAMERAS: CameraUiCameraRecord[] = [
     model: "Vimtag PTZ",
     serialNumber: "CUI-C47ABC56-42A1-47D5-9C99-FAFA2BBA5193",
     rtspUrl: "rtsp://192.168.110.147:8554/jardin",
-    snapshotUrl: "https://192.168.110.46:3543/api/cameras/JARDIN-VIMTAG/snapshot",
+    snapshotUrl:
+      "https://192.168.110.46:3543/api/cameras/JARDIN-VIMTAG/snapshot",
     hasAudio: true,
     width: 2560,
     height: 1440,
@@ -313,7 +327,8 @@ export const DEFAULT_CAMERAS: CameraUiCameraRecord[] = [
     model: "Indoor Cam",
     serialNumber: "CUI-3A3CB94B-AE88-4D9C-B7F0-A5280CDD7F80",
     rtspUrl: "rtsp://192.168.110.147:8554/ring_bodega",
-    snapshotUrl: "https://192.168.110.46:3543/api/cameras/RING%20BODEGA/snapshot",
+    snapshotUrl:
+      "https://192.168.110.46:3543/api/cameras/RING%20BODEGA/snapshot",
     hasAudio: true,
     width: 1920,
     height: 1080,
@@ -354,7 +369,8 @@ export const DEFAULT_CAMERAS: CameraUiCameraRecord[] = [
     model: "Indoor Cam",
     serialNumber: "CUI-5019A1A4-D6E7-4E2C-B2FF-989D60219540",
     rtspUrl: "rtsp://192.168.110.147:8554/ring_lavanderia",
-    snapshotUrl: "https://192.168.110.46:3543/api/cameras/RING%20LAVANDERIA/snapshot",
+    snapshotUrl:
+      "https://192.168.110.46:3543/api/cameras/RING%20LAVANDERIA/snapshot",
     hasAudio: true,
     width: 1920,
     height: 1080,
@@ -436,7 +452,8 @@ export const DEFAULT_CAMERAS: CameraUiCameraRecord[] = [
     model: "CS-H6c",
     serialNumber: "CUI-4661FAE4-808D-436C-96DB-15BE59E01D6B",
     rtspUrl: "rtsp://192.168.110.147:8554/ezviz_patio_trasero",
-    snapshotUrl: "https://192.168.110.46:3543/api/cameras/EZVIZ%20PATIO%20TRASERO/snapshot",
+    snapshotUrl:
+      "https://192.168.110.46:3543/api/cameras/EZVIZ%20PATIO%20TRASERO/snapshot",
     hasAudio: true,
     width: 1920,
     height: 1080,
@@ -518,7 +535,8 @@ export const DEFAULT_CAMERAS: CameraUiCameraRecord[] = [
     model: "VIMTAG PTZ",
     serialNumber: "CUI-FFD37848-AE95-403B-87F5-3FFF4AFE8334",
     rtspUrl: "rtsp://192.168.110.147:8554/cochera",
-    snapshotUrl: "https://192.168.110.46:3543/api/cameras/VIMTAG%20COCHERA/snapshot",
+    snapshotUrl:
+      "https://192.168.110.46:3543/api/cameras/VIMTAG%20COCHERA/snapshot",
     hasAudio: true,
     width: 2560,
     height: 1440,
@@ -559,7 +577,8 @@ export const DEFAULT_CAMERAS: CameraUiCameraRecord[] = [
     model: "VIMTAG PTZ",
     serialNumber: "CUI-25237D2A-48AE-4F77-9CB9-C26608D58128",
     rtspUrl: "rtsp://192.168.110.147:8554/vimtag_113",
-    snapshotUrl: "https://192.168.110.46:3543/api/cameras/VIMTAG%20GYM/snapshot",
+    snapshotUrl:
+      "https://192.168.110.46:3543/api/cameras/VIMTAG%20GYM/snapshot",
     hasAudio: true,
     width: 2560,
     height: 1440,
@@ -600,7 +619,8 @@ export const DEFAULT_CAMERAS: CameraUiCameraRecord[] = [
     model: "VIMTAG PTZ",
     serialNumber: "CUI-C0ABED4C-0A46-4331-B480-32AA614973F8",
     rtspUrl: "rtsp://192.168.110.147:8554/jardin",
-    snapshotUrl: "https://192.168.110.46:3543/api/cameras/VIMTAG%20OFICINA/snapshot",
+    snapshotUrl:
+      "https://192.168.110.46:3543/api/cameras/VIMTAG%20OFICINA/snapshot",
     hasAudio: true,
     width: 2560,
     height: 1440,
@@ -641,7 +661,8 @@ export const DEFAULT_CAMERAS: CameraUiCameraRecord[] = [
     model: "VIMTAG RECAMARA PRINCIPAL",
     serialNumber: "CUI-5715A9D4-FC49-4417-B477-C3159472CA29",
     rtspUrl: "rtsp://192.168.110.147:8554/recamara",
-    snapshotUrl: "https://192.168.110.46:3543/api/cameras/VIMTAG%20RECAMARA%20VISITA/snapshot",
+    snapshotUrl:
+      "https://192.168.110.46:3543/api/cameras/VIMTAG%20RECAMARA%20VISITA/snapshot",
     hasAudio: true,
     width: 1920,
     height: 1080,
@@ -673,7 +694,8 @@ export const DEFAULT_CAMERAS: CameraUiCameraRecord[] = [
     model: "PAN V2",
     serialNumber: "CUI-CBA17B87-E6C0-4CC9-B6AB-E88B8CBC7CB4",
     rtspUrl: "rtsp://192.168.110.147:8554/wyze_patio_trasero",
-    snapshotUrl: "https://192.168.110.46:3543/api/cameras/WYZE%20PATIO%20TRASERO/snapshot",
+    snapshotUrl:
+      "https://192.168.110.46:3543/api/cameras/WYZE%20PATIO%20TRASERO/snapshot",
     hasAudio: true,
     width: 1920,
     height: 1080,
@@ -768,7 +790,10 @@ export class CameraUiStorage {
         pollIntervalSeconds: 300,
         connectionStatus: "connected",
       },
-      cameras: DEFAULT_CAMERAS.map((c) => ({ ...c })),
+      // An empty install must stay empty until Camera.UI discovery succeeds.
+      // Never synthesize cameras: their persisted HAP identity belongs to the
+      // user's actual Camera.UI records.
+      cameras: [],
     };
   }
 
@@ -797,21 +822,10 @@ export class CameraUiStorage {
           })
         : [];
 
-      // Guarantee all 13 canonical cameras are always present with persistent HAP ports
-      if (cameras.length === 0) {
-        cameras = DEFAULT_CAMERAS.map((cam) => repairCameraRecord({ ...cam }).cam);
-        hadMigration = true;
-      } else {
-        const existingIds = new Set(cameras.map((c: CameraUiCameraRecord) => c.id));
-        for (const defaultCam of DEFAULT_CAMERAS) {
-          if (!existingIds.has(defaultCam.id)) {
-            cameras.push(repairCameraRecord({ ...defaultCam }).cam);
-            hadMigration = true;
-          }
-        }
-      }
-
-      const storeConfig = { ...this.getDefaultStore().config, ...(parsed.config || {}) };
+      const storeConfig = {
+        ...this.getDefaultStore().config,
+        ...(parsed.config || {}),
+      };
       storeConfig.enabled = true;
       this.cachedStore = {
         config: storeConfig,
@@ -848,14 +862,20 @@ export class CameraUiStorage {
       store.cameras.map((c) => [c.id, c]),
     );
 
-    const merged: CameraUiCameraRecord[] = [];
+    // Start with persistent records. Discovery is a snapshot of a remote
+    // service and can be incomplete while Camera.UI/go2rtc is starting; an
+    // incomplete response must never remove an exported or paired camera.
+    const merged: CameraUiCameraRecord[] = [...store.cameras];
     for (const rawItem of discovered) {
       const repaired = repairCameraRecord(rawItem).cam;
       const existing = existingMap.get(repaired.id);
       if (existing) {
-        // If existing has a valid working URL and repaired has .46, keep existing or repair it
         const finalItem = repairCameraRecord({
           ...repaired,
+          // Preserve a known stream when a transient discovery result omitted it.
+          rtspUrl: repaired.rtspUrl || existing.rtspUrl,
+          subRtspUrl: repaired.subRtspUrl || existing.subRtspUrl,
+          snapshotUrl: repaired.snapshotUrl || existing.snapshotUrl,
           // Preserve persistent HAP pairing and network settings
           port: existing.port || repaired.port,
           username: existing.username || repaired.username,
@@ -869,7 +889,8 @@ export class CameraUiStorage {
           doorbellActive: existing.doorbellActive ?? false,
           lastDoorbellAt: existing.lastDoorbellAt,
         }).cam;
-        merged.push(finalItem);
+        const index = merged.findIndex((camera) => camera.id === repaired.id);
+        merged[index] = finalItem;
       } else {
         merged.push(repaired);
       }

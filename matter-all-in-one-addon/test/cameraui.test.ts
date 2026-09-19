@@ -1,5 +1,8 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { CameraUiClient, isCameraStreamReachable } from "../src/camera/cameraui/cameraui-client.js";
+import {
+  CameraUiClient,
+  isCameraStreamReachable,
+} from "../src/camera/cameraui/cameraui-client.js";
 import { CameraUiStorage } from "../src/camera/cameraui/cameraui-storage.js";
 import { CameraUiHomeKitBridge } from "../src/camera/cameraui/cameraui-homekit-bridge.js";
 import type { CameraUiCameraRecord } from "../src/camera/cameraui/cameraui-types.js";
@@ -46,7 +49,8 @@ describe("Camera.UI Client and Storage Integration", () => {
       {
         name: "Entrada Principal",
         videoConfig: {
-          source: "-i rtsp://admin:secret@192.168.1.120:554/h264Preview_01_main",
+          source:
+            "-i rtsp://admin:secret@192.168.1.120:554/h264Preview_01_main",
           stillImageSource: "-i http://192.168.1.120/snapshot.jpg",
           maxWidth: 2560,
           maxHeight: 1440,
@@ -72,7 +76,9 @@ describe("Camera.UI Client and Storage Integration", () => {
     const cam = cameras[0];
     expect(cam.name).toBe("Entrada Principal");
     expect(cam.id).toBe("cameraui_entrada_principal");
-    expect(cam.rtspUrl).toContain("rtsp://admin:secret@192.168.1.120:554/h264Preview_01_main");
+    expect(cam.rtspUrl).toContain(
+      "rtsp://admin:secret@192.168.1.120:554/h264Preview_01_main",
+    );
     expect(cam.width).toBe(2560);
     expect(cam.height).toBe(1440);
     expect(cam.hasAudio).toBe(true);
@@ -80,29 +86,35 @@ describe("Camera.UI Client and Storage Integration", () => {
   });
 
   it("authenticates via POST /api/auth/login and sends Bearer token on subsequent requests", async () => {
-    const fetchMock = vi.fn().mockImplementation(async (url: string, opts?: any) => {
-      if (url.endsWith("/api/auth/login")) {
-        return {
-          ok: true,
-          status: 200,
-          json: async () => ({
-            access_token: "mock-jwt-token-xyz",
-            access_token_expires_at: 9999999999,
-          }),
-        };
-      }
-      if (url.endsWith("/api/cameras")) {
-        if (opts?.headers?.Authorization === "Bearer mock-jwt-token-xyz") {
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(async (url: string, opts?: any) => {
+        if (url.endsWith("/api/auth/login")) {
           return {
             ok: true,
             status: 200,
-            json: async () => [{ name: "Living Room", id: "cam_1" }],
+            json: async () => ({
+              access_token: "mock-jwt-token-xyz",
+              access_token_expires_at: 9999999999,
+            }),
           };
         }
-        return { ok: false, status: 401, json: async () => ({ statusCode: 401 }) };
-      }
-      return { ok: false, status: 404 };
-    });
+        if (url.endsWith("/api/cameras")) {
+          if (opts?.headers?.Authorization === "Bearer mock-jwt-token-xyz") {
+            return {
+              ok: true,
+              status: 200,
+              json: async () => [{ name: "Living Room", id: "cam_1" }],
+            };
+          }
+          return {
+            ok: false,
+            status: 401,
+            json: async () => ({ statusCode: 401 }),
+          };
+        }
+        return { ok: false, status: 404 };
+      });
 
     global.fetch = fetchMock;
 
@@ -154,13 +166,17 @@ describe("Camera.UI Client and Storage Integration", () => {
         sources: [
           {
             role: "high-resolution",
-            urls: ["rtsp://admin:pass@192.168.1.100:554/cam/realmonitor?channel=1&subtype=0"],
+            urls: [
+              "rtsp://admin:pass@192.168.1.100:554/cam/realmonitor?channel=1&subtype=0",
+            ],
             muted: false,
             useForSnapshot: false,
           },
           {
             role: "mid-resolution",
-            urls: ["rtsp://admin:pass@192.168.1.100:554/cam/realmonitor?channel=1&subtype=1"],
+            urls: [
+              "rtsp://admin:pass@192.168.1.100:554/cam/realmonitor?channel=1&subtype=1",
+            ],
           },
           {
             role: "snapshot",
@@ -195,8 +211,12 @@ describe("Camera.UI Client and Storage Integration", () => {
     const cam = cameras[0];
     expect(cam.name).toBe("Jardin Exterior");
     expect(cam.id).toBe("cameraui_cui_gardencam_01");
-    expect(cam.rtspUrl).toBe("rtsp://admin:pass@192.168.1.100:554/cam/realmonitor?channel=1&subtype=0");
-    expect(cam.subRtspUrl).toBe("rtsp://admin:pass@192.168.1.100:554/cam/realmonitor?channel=1&subtype=1");
+    expect(cam.rtspUrl).toBe(
+      "rtsp://admin:pass@192.168.1.100:554/cam/realmonitor?channel=1&subtype=0",
+    );
+    expect(cam.subRtspUrl).toBe(
+      "rtsp://admin:pass@192.168.1.100:554/cam/realmonitor?channel=1&subtype=1",
+    );
     expect(cam.snapshotUrl).toBe("http://192.168.1.100/snapshot.jpg");
     expect(cam.hasAudio).toBe(true);
     expect(cam.motionTopic).toBe("camera.ui/jardin/motion");
@@ -240,7 +260,8 @@ describe("Camera.UI Client and Storage Integration", () => {
       },
     ];
 
-    const result = await CameraUiStorage.mergeDiscoveredCameras(freshlyDiscovered);
+    const result =
+      await CameraUiStorage.mergeDiscoveredCameras(freshlyDiscovered);
     expect(result.cameras.length).toBe(1);
     const merged = result.cameras[0];
     // Preserved HAP pairing credentials
@@ -252,6 +273,75 @@ describe("Camera.UI Client and Storage Integration", () => {
     // Updated stream URL
     expect(merged.rtspUrl).toBe("rtsp://192.168.1.121:554/stream1_hq");
     expect(saveSpy).toHaveBeenCalled();
+  });
+
+  it("keeps an exported paired camera when a Camera.UI sync is partial", async () => {
+    const pairedCamera: CameraUiCameraRecord = {
+      id: "garage",
+      name: "Garage",
+      rtspUrl: "rtsp://camera.local:554/main",
+      port: 51878,
+      uuid: "garage-hap-uuid",
+      isPaired: true,
+      homeKitEnabled: true,
+    };
+    const discoveredCamera: CameraUiCameraRecord = {
+      id: "front-door",
+      name: "Front Door",
+      rtspUrl: "rtsp://camera.local:554/front-door",
+      homeKitEnabled: true,
+    };
+    const store = {
+      config: { enabled: true },
+      cameras: [pairedCamera, discoveredCamera],
+    };
+
+    vi.spyOn(CameraUiStorage, "load").mockResolvedValue(store as any);
+    vi.spyOn(CameraUiStorage, "save").mockResolvedValue();
+
+    const result = await CameraUiStorage.mergeDiscoveredCameras([
+      discoveredCamera,
+    ]);
+
+    expect(result.cameras).toHaveLength(2);
+    expect(
+      result.cameras.find((camera) => camera.id === "garage"),
+    ).toMatchObject({
+      rtspUrl: "rtsp://camera.local:554/main",
+      port: 51878,
+      uuid: "garage-hap-uuid",
+      isPaired: true,
+    });
+  });
+
+  it("does not republish an idle paired HAP accessory during a Camera.UI refresh", async () => {
+    const accessory = {
+      isStreaming: false,
+      unpublish: vi.fn(),
+    };
+    const accessories = (CameraUiHomeKitBridge as any).activeAccessories as Map<
+      string,
+      unknown
+    >;
+    accessories.set("paired-camera", accessory);
+
+    try {
+      const result = await CameraUiHomeKitBridge.mountCamera(
+        {},
+        {
+          id: "paired-camera",
+          name: "Paired Camera",
+          rtspUrl: "rtsp://camera.local:554/main",
+          homeKitEnabled: true,
+          isPaired: true,
+        },
+      );
+
+      expect(result).toBe(accessory);
+      expect(accessory.unpublish).not.toHaveBeenCalled();
+    } finally {
+      accessories.delete("paired-camera");
+    }
   });
 
   it("fetchCameras parses Camera.UI v5 { result: [...] } and replaces localhost in stream URLs", async () => {
@@ -312,7 +402,9 @@ describe("Camera.UI Client and Storage Integration", () => {
     expect(cam.serialNumber).toBe("95270001");
     // Localhost must be substituted by the server host (192.168.110.147)
     expect(cam.rtspUrl).toBe("rtsp://192.168.110.147:8554/camara_patio_2k");
-    expect(cam.subRtspUrl).toBe("rtsp://192.168.110.147:8554/camara_patio_2k_sub");
+    expect(cam.subRtspUrl).toBe(
+      "rtsp://192.168.110.147:8554/camara_patio_2k_sub",
+    );
   });
 
   it("fetchCameras parses dictionary schema from /api/config", async () => {
@@ -427,7 +519,9 @@ describe("Camera.UI Client and Storage Integration", () => {
 
     const cameras = await client.fetchCameras();
     expect(cameras.length).toBe(1);
-    expect(cameras[0].rtspUrl).toBe("rtsp://admin:mypassword@192.168.110.150:554/stream1");
+    expect(cameras[0].rtspUrl).toBe(
+      "rtsp://admin:mypassword@192.168.110.150:554/stream1",
+    );
     expect(cameras[0].videoCodec).toBe("hevc");
     expect(cameras[0].strategy).toBe("passthrough_hevc");
   });
@@ -474,24 +568,29 @@ describe("Camera.UI Client and Storage Integration", () => {
   });
 
   it("testConnection succeeds via HTTP Basic Auth even when /api/auth/login returns 404", async () => {
-    global.fetch = vi.fn().mockImplementation(async (url: string, opts?: any) => {
-      if (url.includes("/api/auth/login")) {
-        return { ok: false, status: 404 };
-      }
-      if (url.includes("/api/cameras")) {
-        const auth = opts?.headers?.Authorization || "";
-        const expectedAuth = `Basic ${Buffer.from("myuser:mypassword").toString("base64")}`;
-        if (auth === expectedAuth) {
-          return {
-            ok: true,
-            status: 200,
-            json: async () => ({ version: "5.0.28", result: [{ id: "c1", name: "Patio" }] }),
-          };
+    global.fetch = vi
+      .fn()
+      .mockImplementation(async (url: string, opts?: any) => {
+        if (url.includes("/api/auth/login")) {
+          return { ok: false, status: 404 };
         }
-        return { ok: false, status: 401 };
-      }
-      return { ok: false, status: 404 };
-    });
+        if (url.includes("/api/cameras")) {
+          const auth = opts?.headers?.Authorization || "";
+          const expectedAuth = `Basic ${Buffer.from("myuser:mypassword").toString("base64")}`;
+          if (auth === expectedAuth) {
+            return {
+              ok: true,
+              status: 200,
+              json: async () => ({
+                version: "5.0.28",
+                result: [{ id: "c1", name: "Patio" }],
+              }),
+            };
+          }
+          return { ok: false, status: 401 };
+        }
+        return { ok: false, status: 404 };
+      });
 
     const client = new CameraUiClient({
       enabled: true,
@@ -519,7 +618,10 @@ describe("Camera.UI Client and Storage Integration", () => {
     ];
     await CameraUiStorage.save(store);
 
-    await CameraUiStorage.updateConnectionStatus("disconnected", "Server restarting");
+    await CameraUiStorage.updateConnectionStatus(
+      "disconnected",
+      "Server restarting",
+    );
     const reloaded = await CameraUiStorage.load();
     expect(reloaded.config.connectionStatus).toBe("disconnected");
     expect(reloaded.config.lastError).toBe("Server restarting");
@@ -535,10 +637,10 @@ describe("Camera.UI Client and Storage Integration", () => {
     expect(res2).toBe(false);
 
     // Reserved test IP that drops packets immediately
-    const res3 = await isCameraStreamReachable("rtsp://192.0.2.1:554/stream", 50);
+    const res3 = await isCameraStreamReachable(
+      "rtsp://192.0.2.1:554/stream",
+      50,
+    );
     expect(res3).toBe(false);
   });
 });
-
-
-

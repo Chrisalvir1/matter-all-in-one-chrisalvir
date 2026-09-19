@@ -38,14 +38,19 @@ export class CameraUiHomeKitBridge {
   public static async mountCamera(
     platform: any,
     camera: CameraUiCameraRecord,
+    options: { forceRemount?: boolean } = {},
   ): Promise<HomeKitCameraAccessory | undefined> {
     if (!camera.homeKitEnabled || !camera.rtspUrl) {
       return undefined;
     }
 
     const existing = this.activeAccessories.get(camera.id);
-    if (existing && existing.isStreaming) {
-      // Don't unmount or interrupt active Live View sessions
+    if (existing && (existing.isStreaming || !options.forceRemount)) {
+      // A Camera.UI refresh is not a configuration change. Re-publishing an
+      // already paired HAP accessory tears down its mDNS/HAP listener and
+      // interrupts the next Live View. Keep the live accessory, its pairing,
+      // recording delegate and motion detector until an explicit edit asks for
+      // a remount.
       return existing;
     }
     if (existing) {
