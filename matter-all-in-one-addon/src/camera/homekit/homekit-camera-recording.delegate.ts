@@ -392,8 +392,6 @@ export class HomeKitCameraRecordingDelegate
       args.push(
         "-rtsp_transport",
         "tcp",
-        "-stimeout",
-        "5000000",
         "-timeout",
         "5000000",
         "-probesize",

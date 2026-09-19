@@ -1,3 +1,11 @@
+## [1.8.15] - 2026-09-18
+
+### Corrección Crítica: Eliminación de Opción No Reconocida `-stimeout` en FFmpeg
+
+- **Corrección de Error Fatal `Unrecognized option 'stimeout'` (exit code 8):**
+  - Las versiones modernas de FFmpeg en el contenedor rechazan `-stimeout` con código de salida 8 (`Unrecognized option 'stimeout'`), provocando la caída instantánea de los procesos FFmpeg tanto en streaming en vivo (Live View) como en pre-búfer HKSV.
+  - Se eliminó `-stimeout` en favor de `-timeout 5000000` (timeout TCP nativo estándar en microsegundos), permitiendo que FFmpeg arranque y mantenga los streams activos sin abortar.
+
 ## [1.8.14] - 2026-09-18
 
 ### Corrección Definitiva: Live View Instantáneo y Grabación HKSV con Inicialización fMP4
