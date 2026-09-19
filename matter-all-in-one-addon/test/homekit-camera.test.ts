@@ -293,10 +293,10 @@ describe("HomeKitCameraStreamingDelegate", () => {
 
     const capturedArgs = delegate.buildStreamArgs(session, request);
 
-    // v1.8.12: -c:v copy with dump_extra ensures in-band SPS/PPS for instant iOS decoding
+    // Preserve the source codec instead of injecting a H.264-only bitstream filter.
     expect(capturedArgs).toContain("-c:v");
     expect(capturedArgs).toContain("copy");
-    expect(capturedArgs).toContain("dump_extra=freq=keyframe");
+    expect(capturedArgs).not.toContain("dump_extra=freq=keyframe");
 
     // Verify audio at HAP-compliant sample rate and bitrate
     // v1.6.7: no aresample filter (caused FFmpeg crash when stream has no audio track)

@@ -781,17 +781,19 @@ export class HomeKitCameraStreamingDelegate
         "-rtsp_transport",
         "tcp",
         "-timeout",
-        "5000000",
+        "10000000",
         "-probesize",
-        "65536",
+        "32768",
         "-analyzeduration",
-        "100000",
+        "0",
+        "-fpsprobesize",
+        "0",
         "-fflags",
-        "+nobuffer+flush_packets+genpts",
+        "+nobuffer+flush_packets+genpts+discardcorrupt",
         "-flags",
         "low_delay",
-        "-max_delay",
-        "0",
+        "-avioflags",
+        "direct",
         "-thread_queue_size",
         "1024",
         "-i",
@@ -862,24 +864,26 @@ export class HomeKitCameraStreamingDelegate
       );
     }
 
-    const isH264 = (this.capabilities.videoCodec || "h264").toLowerCase() === "h264";
+    const codec = (this.capabilities.videoCodec || "h264").toLowerCase();
+    const isSupportedPassthroughCodec =
+      codec === "h264" || codec === "hevc" || codec === "h265";
 
     const canPassthrough =
       !forceTranscode &&
       !isHaProxyStream &&
-      isH264 &&
+      isSupportedPassthroughCodec &&
       (this.capabilities.strategy === "passthrough_h264" ||
+        this.capabilities.strategy === "passthrough_hevc" ||
         this.streamSource.supportsPassthrough ||
         !this.capabilities.requiresTranscoding);
 
     if (canPassthrough) {
       // Pure passthrough remuxing without transcoding CPU overhead (native 4K, 2K, 1080p, 720p @ max fps)
-      // Pure -c:v copy for H.264 with in-band SPS/PPS extradata injection for instant iOS decoding
+      // Preserve the native H.264 or HEVC stream negotiated by Apple Home.
       const videoPassArgs: string[] = [
         "-map", "0:v:0",
         "-an",
         "-c:v", "copy",
-        "-bsf:v", "dump_extra=freq=keyframe",
         "-f", "rtp",
         "-fflags", "+nobuffer+flush_packets",
         "-max_delay", "0",

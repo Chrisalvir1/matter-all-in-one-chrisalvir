@@ -528,33 +528,32 @@ export class CameraUiClient {
         }
       }
 
-      // If no direct RTSP source was found, fallback to local RTSP restream on active go2rtc host (192.168.110.147)
-      const rtspRestreamHost =
-        parsedHostname === "192.168.110.46" || parsedHostname === "localhost" || parsedHostname === "127.0.0.1"
-          ? "192.168.110.147"
-          : parsedHostname;
+      // Camera.UI owns the stream endpoint. Never substitute an address from
+      // another installation into a discovered camera URL.
+      const rtspRestreamHost = parsedHostname;
 
       if (!rtspUrl) {
         const safeName = encodeURIComponent(name.toLowerCase().replace(/\s+/g, "_"));
         rtspUrl = `rtsp://${rtspRestreamHost}:8554/${safeName}`;
       }
 
-      // Substitute localhost/127.0.0.1 or dead host in rtspUrl / subRtspUrl / snapshotUrl with actual active host
-      if (rtspUrl) {
-        rtspUrl = rtspUrl
-          .replace("://192.168.110.46:8554", "://192.168.110.147:8554")
-          .replace("://localhost:", `://${rtspRestreamHost}:`)
-          .replace("://127.0.0.1:", `://${rtspRestreamHost}:`)
-          .replace("://localhost/", `://${rtspRestreamHost}/`)
-          .replace("://127.0.0.1/", `://${rtspRestreamHost}/`);
-      }
-      if (subRtspUrl) {
-        subRtspUrl = subRtspUrl
-          .replace("://192.168.110.46:8554", "://192.168.110.147:8554")
-          .replace("://localhost:", `://${rtspRestreamHost}:`)
-          .replace("://127.0.0.1:", `://${rtspRestreamHost}:`)
-          .replace("://localhost/", `://${rtspRestreamHost}/`)
-          .replace("://127.0.0.1/", `://${rtspRestreamHost}/`);
+      // Resolve only Camera.UI's localhost restream against its configured
+      // host. A real camera address must remain exactly as Camera.UI returned it.
+      if (parsedHostname !== "localhost" && parsedHostname !== "127.0.0.1") {
+        if (rtspUrl) {
+          rtspUrl = rtspUrl
+            .replace("://localhost:", `://${rtspRestreamHost}:`)
+            .replace("://127.0.0.1:", `://${rtspRestreamHost}:`)
+            .replace("://localhost/", `://${rtspRestreamHost}/`)
+            .replace("://127.0.0.1/", `://${rtspRestreamHost}/`);
+        }
+        if (subRtspUrl) {
+          subRtspUrl = subRtspUrl
+            .replace("://localhost:", `://${rtspRestreamHost}:`)
+            .replace("://127.0.0.1:", `://${rtspRestreamHost}:`)
+            .replace("://localhost/", `://${rtspRestreamHost}/`)
+            .replace("://127.0.0.1/", `://${rtspRestreamHost}/`);
+        }
       }
       if (snapshotUrl) {
         snapshotUrl = snapshotUrl
@@ -752,4 +751,3 @@ export class CameraUiClient {
     return [];
   }
 }
-
