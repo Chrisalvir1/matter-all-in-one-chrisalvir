@@ -219,21 +219,13 @@ export class CameraUiHomeKitBridge {
       await CameraUiStorage.save(store);
     }
 
-    // Only run local FFmpeg motion detector if explicitly enabled in camera config
-    // and there are no existing Home Assistant motion entities.
-    // Running FFmpeg 24/7 on every camera consumes RTSP sockets, triggers false HKSV recordings,
-    // and blocks Apple Home Live View.
-    const hasRealMotionEntity = Boolean(
-      record.motionEntityId ||
-        camera.motionEntityId ||
-        camera.realEntities?.some((e) => e.type === "motion"),
-    );
-    const shouldRunMotionDetector =
-      Boolean((camera as any).enableFfmpegMotionDetector) &&
-      !hasRealMotionEntity &&
-      Boolean(camera.rtspUrl);
-
-    if (shouldRunMotionDetector && !this.activeMotionDetectors.has(camera.id)) {
+    // Start local FFmpeg motion detector for all cameras with a valid RTSP URL.
+    // This is the HKSV trigger that drives iCloud recording in Apple HomeKit.
+    // HA entity state changes are an additional source and are handled separately via
+    // handleEntityStateChange → CameraUiHomeKitBridge.updateMotion().
+    // The detector pauses automatically when Live View opens and resumes when it ends,
+    // so it never competes with the viewer's RTSP connection.
+    if (camera.rtspUrl && !this.activeMotionDetectors.has(camera.id)) {
       try {
         const detector = new FfmpegMotionDetector({
           cameraId: camera.id,
@@ -258,13 +250,6 @@ export class CameraUiHomeKitBridge {
         platform?.log?.warn?.(
           `[Camera.UI][${camera.name}] No se pudo iniciar el detector de movimiento FFmpeg local: ${detErr}`,
         );
-      }
-    } else {
-      // Ensure any legacy motion detector for this camera is stopped
-      const existingDet = this.activeMotionDetectors.get(camera.id);
-      if (existingDet) {
-        existingDet.stop(platform?.log);
-        this.activeMotionDetectors.delete(camera.id);
       }
     }
 

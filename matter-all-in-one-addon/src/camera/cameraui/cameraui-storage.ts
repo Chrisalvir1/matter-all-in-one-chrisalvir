@@ -166,10 +166,11 @@ export function repairCameraRecord(cam: CameraUiCameraRecord): { cam: CameraUiCa
     cam.videoCodec = "h264";
     cam.strategy = "passthrough_h264";
   }
-  // Tapo C120: 1080p H264
+  // Tapo C120 ("TAPO-SPOT"): 1080p H264 — real source via go2rtc tapo_c120 stream
   else if (url.includes("tapo_c120") || name.includes("c120")) {
-    if (cam.rtspUrl && cam.rtspUrl.includes("192.168.110.46:8554")) {
-      cam.rtspUrl = cam.rtspUrl.replace("192.168.110.46:8554", "192.168.110.147:8554");
+    const targetUrl = "rtsp://192.168.110.147:8554/tapo_c120";
+    if (cam.rtspUrl !== targetUrl) {
+      cam.rtspUrl = targetUrl;
       modified = true;
     }
     cam.width = 1920;
@@ -178,10 +179,11 @@ export function repairCameraRecord(cam: CameraUiCameraRecord): { cam: CameraUiCa
     cam.videoCodec = "h264";
     cam.strategy = "passthrough_h264";
   }
-  // Ezviz Patio Trasero: 1080p H264
+  // Ezviz Patio Trasero (CS-H6c): 1080p H264 — real source via go2rtc ezviz_patio_trasero stream
   else if (url.includes("ezviz") || name.includes("ezviz")) {
-    if (cam.rtspUrl && cam.rtspUrl.includes("192.168.110.46:8554")) {
-      cam.rtspUrl = cam.rtspUrl.replace("192.168.110.46:8554", "192.168.110.147:8554");
+    const targetUrl = "rtsp://192.168.110.147:8554/ezviz_patio_trasero";
+    if (cam.rtspUrl !== targetUrl) {
+      cam.rtspUrl = targetUrl;
       modified = true;
     }
     cam.width = 1920;

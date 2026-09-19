@@ -375,6 +375,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       { name: "ring_lavanderia", src: "hass:camera.petcam_ring_vista_en_vivo" },
       { name: "petcam_ring", src: "hass:camera.petcam_ring_vista_en_vivo" },
       { name: "wyze_patio_trasero", src: "rtsp://Gecko:Mrlsc%401503@192.168.110.118:554/stream0" },
+      // Tapo C120 ("TAPO-SPOT") — real IP is 192.168.110.219, ONVIF port 2020
+      { name: "tapo_c120", src: "onvif://Geckom:Gckm1503@192.168.110.219:2020" },
+      // EZVIZ Patio Trasero (CS-H6c) — real IP is 192.168.110.145, ONVIF/RTSP port 554
+      { name: "ezviz_patio_trasero", src: "onvif://admin:Gckm1503@192.168.110.145" },
     ];
 
     for (const item of streamsToRegister) {

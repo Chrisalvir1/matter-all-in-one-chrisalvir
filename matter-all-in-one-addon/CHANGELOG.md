@@ -1,3 +1,16 @@
+## [1.8.11] - 2026-09-18
+
+### Stream Tapo C120 y Restauración Total de Detección de Movimiento HKSV
+
+- **Tapo C120 — Stream Funcionando en HomeKit (0 × 404):**
+  - Registrado el stream `tapo_c120` en go2rtc apuntando a su fuente ONVIF real: `onvif://Geckom:Gckm1503@192.168.110.219:2020`. Resuelve el error `404 Not Found` al abrir esta cámara desde Apple HomeKit.
+  - Reforzado `repairCameraRecord` en `cameraui-storage.ts` para la Tapo C120: ahora siempre fuerza `rtsp://192.168.110.147:8554/tapo_c120`, en lugar de solo reemplazar el host cuando era `.46`.
+- **Restauración de `FfmpegMotionDetector` para todas las cámaras (HKSV iCloud):**
+  - Revertido el guardado condicional `enableFfmpegMotionDetector` de v1.8.10. El detector FFmpeg se ejecuta en segundo plano para todas las cámaras con URL RTSP válida, como lo hacía en v1.8.6.
+  - El detector cede automáticamente el socket RTSP cuando se abre Live View (`session-start` → `pause`) y lo retoma al cerrar (`session-end` → `resume`), evitando conflicto con el viewer en Apple Home.
+  - Los eventos de entidades HA (`binary_sensor.omni_ai_sensors_*`) siguen siendo una fuente adicional de detección, procesados paralelamente por `handleEntityStateChange`.
+  - Resultado: grabación automática a iCloud (HKSV) restaurada en todas las cámaras sin `Connection refused` en Live View.
+
 ## [1.8.10] - 2026-09-18
 
 ### Blindaje Definitivo: Reconexión HA, Cero Bloqueo de Sockets RTSP y Streaming Instantáneo HomeKit
