@@ -5865,7 +5865,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               try {
                 const refreshedStore = await CameraUiStorage.load();
                 const refreshedCam = refreshedStore.cameras.find((c) => c.id === cuiCam.id) || cuiCam;
-                await CameraUiHomeKitBridge.mountCamera(this, refreshedCam);
+                await CameraUiHomeKitBridge.mountCamera(this, refreshedCam, {
+                  forceRemount: true,
+                });
               } catch (remountErr) {
                 this.log.warn(`[Camera.UI] Error al remontar cámara tras cambio de RTSP: ${remountErr}`);
               }
