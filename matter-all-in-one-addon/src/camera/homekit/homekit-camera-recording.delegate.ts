@@ -399,7 +399,12 @@ export class HomeKitCameraRecordingDelegate
         "-analyzeduration",
         "100000",
         "-fflags",
-        "+nobuffer+flush_packets+genpts",
+        // Camera.UI/go2rtc can restart an RTSP publisher with DTS values that
+        // move backwards.  Generate a fresh monotonic timeline for fMP4/HKSV
+        // instead of forwarding invalid timestamps to the Apple Home Hub.
+        "+nobuffer+flush_packets+genpts+igndts",
+        "-use_wallclock_as_timestamps",
+        "1",
         "-flags",
         "low_delay",
       );
@@ -410,7 +415,7 @@ export class HomeKitCameraRecordingDelegate
         "-analyzeduration",
         "100000",
         "-fflags",
-        "+nobuffer+flush_packets+genpts",
+        "+nobuffer+flush_packets+genpts+igndts",
         "-flags",
         "low_delay",
       );
@@ -423,7 +428,14 @@ export class HomeKitCameraRecordingDelegate
       this.capabilities.videoCodec === "h264" &&
       this.streamSource.sourceType !== "ha_proxy";
     if (isH264) {
-      args.push("-map", "0:v:0", "-vcodec", "copy");
+      // Keep H.264 native for HKSV, but normalize the MP4 timing and repeat
+      // parameter sets.  This fixes the non-monotonous DTS fragments seen on
+      // Camera.UI restreams without a global video transcode.
+      args.push(
+        "-map", "0:v:0",
+        "-vcodec", "copy",
+        "-bsf:v", "dump_extra=freq=keyframe",
+      );
     } else {
       const res = this.selectedConfiguration?.videoCodec.resolution || [
         1920, 1080, 30,
@@ -499,6 +511,12 @@ export class HomeKitCameraRecordingDelegate
 
     // Output fragmented MP4 to stdout pipe
     args.push(
+      "-avoid_negative_ts",
+      "make_zero",
+      "-muxdelay",
+      "0",
+      "-muxpreload",
+      "0",
       "-f",
       "mp4",
       "-movflags",

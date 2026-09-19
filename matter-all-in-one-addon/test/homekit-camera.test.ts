@@ -293,10 +293,11 @@ describe("HomeKitCameraStreamingDelegate", () => {
 
     const capturedArgs = delegate.buildStreamArgs(session, request);
 
-    // Preserve the source codec instead of injecting a H.264-only bitstream filter.
+    // H.264 passthrough must repeat SPS/PPS on every keyframe so a newly opened
+    // Apple Home view can decode the first GOP from a warm RTSP restream.
     expect(capturedArgs).toContain("-c:v");
     expect(capturedArgs).toContain("copy");
-    expect(capturedArgs).not.toContain("dump_extra=freq=keyframe");
+    expect(capturedArgs).toContain("dump_extra=freq=keyframe");
 
     // Verify audio at HAP-compliant sample rate and bitrate
     // v1.6.7: no aresample filter (caused FFmpeg crash when stream has no audio track)
@@ -313,5 +314,37 @@ describe("HomeKitCameraStreamingDelegate", () => {
 
     // Verify NO Home Assistant token was leaked to external URL
     expect(capturedArgs.join(" ")).not.toContain("Authorization: Bearer");
+  });
+
+  it("transcodes HEVC only at the HAP output boundary", () => {
+    const delegate = new HomeKitCameraStreamingDelegate(
+      createPlatform(),
+      "camera.hevc",
+      {
+        ...capabilities,
+        videoCodec: "hevc",
+        strategy: "passthrough_hevc",
+        requiresTranscoding: false,
+      } as any,
+      { ...rtspSource, supportsPassthrough: true },
+    );
+    const args = delegate.buildStreamArgs(
+      {
+        sessionId: "hevc-session",
+        targetAddress: "192.168.1.50",
+        videoPort: 5000,
+        localVideoPort: 5001,
+        videoCryptoSuite: SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
+        videoKeySalt: Buffer.alloc(30, 1),
+        videoSsrc: 1111,
+      },
+      {
+        sessionID: "hevc-session",
+        type: StreamRequestTypes.START,
+        video: { fps: 30, width: 1920, height: 1080, pt: 99 } as any,
+      } as any,
+    );
+    expect(args).toContain("libx264");
+    expect(args).not.toContain("-bsf:v");
   });
 });
