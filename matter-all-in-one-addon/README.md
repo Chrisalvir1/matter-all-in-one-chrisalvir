@@ -1,4 +1,4 @@
-# Matter All-in-One for Home Assistant — v1.8.19
+# Matter All-in-One for Home Assistant — v1.8.20
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/chrisalvir1/matter-all-in-one-chrisalvir/main/matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
@@ -15,7 +15,7 @@ This file is intentionally structured for both humans and AI agents.
 
 ```yaml
 project: matter-all-in-one-chrisalvir
-version: "1.8.19"
+version: "1.8.20"
 spec: "Matter 1.6"
 engine: matterbridge
 engine_version: "3.10.7"
@@ -135,6 +135,13 @@ npm update -g matter-all-in-one-chrisalvir
 ---
 
 ## Changelog Summary (latest)
+
+### v1.8.20 (2026-09-18) — HAP Live View y HKSV fiables
+
+- H.264 mantiene copia RTP/SRTP nativa, ahora repitiendo SPS/PPS por keyframe para que Apple Home pueda decodificar inmediatamente un restream ya abierto.
+- HEVC/H.265 conserva la fuente original y se convierte a H.264 solo en el límite RTP de HAP, porque el accesorio negocia perfiles H.264; evita paquetes no negociados y «Sin respuesta».
+- HKSV conserva H.264 nativo y normaliza DTS/PTS para generar fragmentos fMP4 monotónicos y válidos para detección y grabación.
+- Las cámaras HAP ya emparejadas no se eliminan ni se vuelven a enlazar.
 
 ### v1.2.62 (2026-07-24) — Estabilidad y actualización a 3.10.2
 

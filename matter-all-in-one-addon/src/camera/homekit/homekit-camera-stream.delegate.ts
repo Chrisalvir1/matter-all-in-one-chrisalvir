@@ -865,15 +865,16 @@ export class HomeKitCameraStreamingDelegate
     }
 
     const codec = (this.capabilities.videoCodec || "h264").toLowerCase();
-    const isSupportedPassthroughCodec =
-      codec === "h264" || codec === "hevc" || codec === "h265";
-
+    // HAP's RTP VideoStream service advertises H.264 profiles only.  Copying
+    // HEVC into that RTP session makes FFmpeg appear healthy while Apple Home
+    // receives packets it did not negotiate, ending in "No Response".  HEVC
+    // remains native up to this output boundary, then is converted solely for
+    // the HAP session (and never changes the Camera.UI source).
     const canPassthrough =
       !forceTranscode &&
       !isHaProxyStream &&
-      isSupportedPassthroughCodec &&
+      codec === "h264" &&
       (this.capabilities.strategy === "passthrough_h264" ||
-        this.capabilities.strategy === "passthrough_hevc" ||
         this.streamSource.supportsPassthrough ||
         !this.capabilities.requiresTranscoding);
 
@@ -884,6 +885,10 @@ export class HomeKitCameraStreamingDelegate
         "-map", "0:v:0",
         "-an",
         "-c:v", "copy",
+        // A cold RTSP/restream join may start after the source emitted SPS/PPS.
+        // Repeat codec headers with each keyframe so HomeKit can decode the
+        // first received GOP instead of waiting for a later camera keyframe.
+        "-bsf:v", "dump_extra=freq=keyframe",
         "-f", "rtp",
         "-fflags", "+nobuffer+flush_packets",
         "-max_delay", "0",
