@@ -520,7 +520,7 @@ export class HomeKitCameraStreamingDelegate
           srtp_key: request.video.srtp_key,
           srtp_salt: request.video.srtp_salt,
         },
-      };
+      } as any;
       if (request.audio && localAudioPort) {
         response.audio = {
           port: localAudioPort,

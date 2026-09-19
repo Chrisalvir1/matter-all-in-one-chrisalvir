@@ -1199,6 +1199,7 @@ export class HomeAssistant extends EventEmitter {
   ws: WebSocket | null = null;
   wsUrl: string;
   wsAccessToken: string;
+  private readonly initialAccessToken: string = "";
   log: AnsiLogger;
   /** Map of Home Assistant devices keyed by their device.id */
   hassDevices = new Map<string, HassDevice>();
@@ -1320,6 +1321,7 @@ export class HomeAssistant extends EventEmitter {
     super();
     this.wsUrl = url;
     this.wsAccessToken = accessToken;
+    this.initialAccessToken = accessToken;
     this.reconnectTimeoutTime = reconnectTimeoutTime * 1000;
     this.reconnectRetries = reconnectRetries;
     this.certificatePath = certificatePath;
@@ -1786,7 +1788,7 @@ export class HomeAssistant extends EventEmitter {
               if (
                 process.env.SUPERVISOR_TOKEN &&
                 !this.wsUrl.includes("supervisor") &&
-                !this.token
+                !this.initialAccessToken
               ) {
                 this.log.warn(
                   `[HomeAssistant] Token rejected on ${this.wsUrl}. Auto-switching to supervisor core proxy ws://supervisor/core/api/websocket...`,
