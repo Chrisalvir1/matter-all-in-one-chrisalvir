@@ -1,3 +1,17 @@
+## [1.8.14] - 2026-09-18
+
+### Corrección Definitiva: Live View Instantáneo y Grabación HKSV con Inicialización fMP4
+
+- **Corrección Crítica de Grabación HKSV en iCloud:**
+  - **Eliminación de `-bsf:v dump_extra=freq=keyframe` en fMP4:** En contenedores MP4 (`-f mp4`), los filtros Annex-B (`dump_extra`) son incompatibles con el formato AVCC y provocaban el fallo prematuro del proceso FFmpeg.
+  - **Arranque Instantáneo de Pre-buffer (`analyzeduration 100000`, `probesize 65536`):** Reducido el tiempo de análisis de entrada de 4 segundos a 100ms, generando los segmentos de inicialización (`ftyp` + `moov`) en milisegundos.
+  - **Canal de Audio AAC Garantizado desde el Arranque:** Se incluye pista AAC en el encabezado `moov` desde el inicio para cumplir con la especificación estricta de HKSV de Apple Home Hub.
+  - **Protección de Pre-buffer Activo:** `updateRecordingConfiguration` ya no destruye el pipeline activo al negociar ajustes con el hub, preservando el búfer rodante de pre-grabación.
+  - **Logs Visibles de FFmpeg:** Canalizados los avisos y salidas de FFmpeg a nivel `warn` para auditoría directa en tiempo real.
+- **Corrección de Live View en Apple Home:**
+  - **Eliminación de `localport` / `localrtcpport` Conflictivos:** Evita el error `EADDRINUSE (Address already in use)` cuando FFmpeg intentaba enlazar el socket RTP y RTCP al mismo puerto local.
+  - **Preservación de `addressOverride: 192.168.110.147`:** Respuestas a `SetupEndpoints` devuelven la IP LAN directa.
+
 ## [1.8.13] - 2026-09-18
 
 ### Corrección Crítica: Live Stream Instantáneo en HomeKit y Grabación HKSV Pre-Buffer

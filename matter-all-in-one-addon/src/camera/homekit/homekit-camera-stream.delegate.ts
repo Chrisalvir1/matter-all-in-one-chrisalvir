@@ -776,7 +776,7 @@ export class HomeKitCameraStreamingDelegate
     const host = formatHost(session.targetAddress);
     const videoUrl =
       `srtp://${host}:${session.videoPort}` +
-      `?rtcpport=${session.videoPort}&localport=${session.localVideoPort}&localrtcpport=${session.localVideoPort}&pkt_size=${mtu}`;
+      `?rtcpport=${session.videoPort}&pkt_size=${mtu}`;
 
     const isHaProxyStream =
       this.streamSource.sourceType === "ha_proxy" ||
@@ -980,7 +980,7 @@ export class HomeKitCameraStreamingDelegate
     ) {
       const audioUrl =
         `srtp://${host}:${session.audioPort}` +
-        `?rtcpport=${session.audioPort}&localport=${session.localAudioPort}&localrtcpport=${session.localAudioPort}&pkt_size=188`;
+        `?rtcpport=${session.audioPort}&pkt_size=188`;
       const isOpus = request.audio.codec === AudioStreamingCodecType.OPUS;
       const hasFdk = supportsFdkAac();
       const audioBitrate = Math.min(request.audio.max_bit_rate || 24, 24);

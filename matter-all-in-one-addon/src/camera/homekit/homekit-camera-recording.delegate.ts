@@ -61,7 +61,7 @@ export class HomeKitCameraRecordingDelegate
     this.segmenter.on("initialization", (initSeg: Buffer) => {
       this.initializationSegment = initSeg;
       this.emit("initialization", initSeg);
-      this.platform?.log?.debug?.(
+      this.platform?.log?.notice?.(
         `[HKSV][${this.entityId}] Received fMP4 Initialization Segment (${initSeg.length} bytes)`,
       );
     });
@@ -149,9 +149,8 @@ export class HomeKitCameraRecordingDelegate
         `[HKSV][${this.entityId}] Negotiated HKSV Configuration: ${res[0]}x${res[1]}@${res[2]}fps, fragmentLength=${fragLen}ms, prebuffer=${configuration.prebufferLength}ms`,
       );
 
-      // Restart prebuffer pipeline with negotiated settings if active
-      if (this.recordingActive) {
-        this.stopPrebufferPipeline();
+      // Keep running prebuffer pipeline if already active; only spawn if missing
+      if (this.recordingActive && !this.ffmpegProcess) {
         this.startPrebufferPipeline();
       }
     } else {
@@ -394,13 +393,13 @@ export class HomeKitCameraRecordingDelegate
         "-rtsp_transport",
         "tcp",
         "-stimeout",
-        "15000000",
+        "5000000",
         "-timeout",
-        "15000000",
+        "5000000",
         "-probesize",
-        "4194304",
+        "65536",
         "-analyzeduration",
-        "4000000",
+        "100000",
         "-fflags",
         "+nobuffer+flush_packets+genpts",
         "-flags",
@@ -409,9 +408,9 @@ export class HomeKitCameraRecordingDelegate
     } else {
       args.push(
         "-probesize",
-        "1048576",
+        "65536",
         "-analyzeduration",
-        "1000000",
+        "100000",
         "-fflags",
         "+nobuffer+flush_packets+genpts",
         "-flags",
@@ -426,7 +425,7 @@ export class HomeKitCameraRecordingDelegate
       this.capabilities.videoCodec === "h264" &&
       this.streamSource.sourceType !== "ha_proxy";
     if (isH264) {
-      args.push("-map", "0:v:0", "-vcodec", "copy", "-bsf:v", "dump_extra=freq=keyframe");
+      args.push("-map", "0:v:0", "-vcodec", "copy");
     } else {
       const res = this.selectedConfiguration?.videoCodec.resolution || [
         1920, 1080, 30,
@@ -455,42 +454,45 @@ export class HomeKitCameraRecordingDelegate
       );
     }
 
-    // Audio pipeline: format according to negotiated configuration
+    // Audio pipeline: format according to negotiated configuration or default AAC
     const audioCodecConfig = this.selectedConfiguration?.audioCodec;
-    if (this.capabilities.hasAudio && audioCodecConfig) {
+    if (this.capabilities.hasAudio) {
       let samplerateStr = "32k";
-      switch (audioCodecConfig.samplerate) {
-        case AudioRecordingSamplerate.KHZ_8:
-          samplerateStr = "8k";
-          break;
-        case AudioRecordingSamplerate.KHZ_16:
-          samplerateStr = "16k";
-          break;
-        case AudioRecordingSamplerate.KHZ_24:
-          samplerateStr = "24k";
-          break;
-        case AudioRecordingSamplerate.KHZ_32:
-          samplerateStr = "32k";
-          break;
-        case AudioRecordingSamplerate.KHZ_44_1:
-          samplerateStr = "44.1k";
-          break;
-        case AudioRecordingSamplerate.KHZ_48:
-          samplerateStr = "48k";
-          break;
+      if (audioCodecConfig) {
+        switch (audioCodecConfig.samplerate) {
+          case AudioRecordingSamplerate.KHZ_8:
+            samplerateStr = "8k";
+            break;
+          case AudioRecordingSamplerate.KHZ_16:
+            samplerateStr = "16k";
+            break;
+          case AudioRecordingSamplerate.KHZ_24:
+            samplerateStr = "24k";
+            break;
+          case AudioRecordingSamplerate.KHZ_32:
+            samplerateStr = "32k";
+            break;
+          case AudioRecordingSamplerate.KHZ_44_1:
+            samplerateStr = "44.1k";
+            break;
+          case AudioRecordingSamplerate.KHZ_48:
+            samplerateStr = "48k";
+            break;
+        }
       }
-      const bitrate = audioCodecConfig.bitrate || 32;
+      const bitrate = audioCodecConfig?.bitrate || 32;
+      const channels = audioCodecConfig?.audioChannels || 1;
       args.push(
         "-map",
         "0:a:0?",
-        "-acodec",
+        "-c:a",
         "aac",
         "-ar",
         samplerateStr,
         "-b:a",
         `${bitrate}k`,
         "-ac",
-        String(audioCodecConfig.audioChannels || 1),
+        String(channels),
       );
     } else {
       // Disable audio if not available or incompatible
@@ -502,7 +504,7 @@ export class HomeKitCameraRecordingDelegate
       "-f",
       "mp4",
       "-movflags",
-      "frag_keyframe+empty_moov+default_base_moof",
+      "frag_keyframe+empty_moov+default_base_moof+skip_sidx+skip_trailer",
       "pipe:1",
     );
 
@@ -522,14 +524,14 @@ export class HomeKitCameraRecordingDelegate
       this.ffmpegProcess.stderr?.on("data", (data: Buffer) => {
         const msg = data.toString().trim();
         if (msg) {
-          this.platform?.log?.debug?.(
+          this.platform?.log?.warn?.(
             `[HKSV][${this.entityId}][ffmpeg] ${msg}`,
           );
         }
       });
 
       this.ffmpegProcess.on("close", (code) => {
-        this.platform?.log?.debug?.(
+        this.platform?.log?.warn?.(
           `[HKSV][${this.entityId}] HKSV pre-buffer FFmpeg exited with code ${code}`,
         );
         this.ffmpegProcess = undefined;
