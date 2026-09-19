@@ -1,4 +1,4 @@
-# Matter All-in-One for Home Assistant — v1.4.72
+# Matter All-in-One for Home Assistant — v1.8.18
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/chrisalvir1/matter-all-in-one-chrisalvir/main/matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
@@ -15,7 +15,7 @@ This file is intentionally structured for both humans and AI agents.
 
 ```yaml
 project: matter-all-in-one-chrisalvir
-version: "1.4.65"
+version: "1.8.18"
 spec: "Matter 1.6"
 engine: matterbridge
 engine_version: "3.10.7"
@@ -38,6 +38,13 @@ matterbridge_ui_port: 8284
 | Joint Fabric | Not implemented (controller / fabric admin feature). |
 | Thermostat Suggestions | Supported via Matterbridge 3.10.6 (`Thermostat.Feature.ThermostatSuggestions`). |
 | Security Sensor Event History | Not yet mapped — pending HA event_log integration. |
+
+### Camera.UI / HomeKit stability
+
+Camera.UI is the source of truth for each camera URL and capabilities. A normal
+Camera.UI refresh preserves existing HAP UUIDs, ports, pairings, motion
+detectors, HKSV pre-buffering, and Live View listeners. A paired camera is
+remounted only after an explicit stream-source edit.
 
 ---
 

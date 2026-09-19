@@ -1,3 +1,13 @@
+## [1.8.18] - 2026-09-18
+
+### Estabilidad de cámaras Camera.UI ya emparejadas en Apple Home
+
+- **Pairings HAP preservados:** las cámaras ya exportadas conservan su UUID, puerto, PIN y estado de emparejamiento durante una sincronización de Camera.UI.
+- **Live View sin reinicios por refresh:** una sincronización normal ya no desmonta ni vuelve a publicar accesorios HAP inactivos. Esto mantiene el servicio HAP/mDNS, el detector de movimiento y el pre-buffer HKSV listos para la siguiente apertura del stream.
+- **Sin borrado ante descubrimiento parcial:** una respuesta incompleta o temporalmente vacía de Camera.UI ya no elimina cámaras persistidas, incluidas las emparejadas.
+- **Fuente de stream preservada:** Camera.UI vuelve a ser la fuente de verdad de URL RTSP y capacidades; el bridge no redirige cámaras según coincidencias de nombre.
+- **Cambios explícitos sí se aplican:** al editar manualmente una URL RTSP, el accesorio se vuelve a montar de forma controlada para aplicar la nueva fuente.
+
 ## [1.8.17] - 2026-09-18
 
 ### Corrección Crítica: Stream HomeKit Restaurado — Eliminación de `addressOverride`
