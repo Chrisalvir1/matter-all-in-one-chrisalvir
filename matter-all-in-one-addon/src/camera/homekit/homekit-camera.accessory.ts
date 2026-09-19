@@ -599,6 +599,7 @@ export class HomeKitCameraAccessory {
       category: Categories.IP_CAMERA,
       setupID: this.record.setupId,
       advertiser: MDNSAdvertiser.CIAO,
+      bind: primaryIface?.name ? [primaryIface.name] : undefined,
     });
     this.isPublished = true;
     this.platform?.log?.notice?.(

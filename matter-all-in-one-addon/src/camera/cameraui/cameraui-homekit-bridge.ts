@@ -75,7 +75,7 @@ export class CameraUiHomeKitBridge {
       !isExplicitH264 &&
       (rawCodec.includes("hevc") || rawCodec.includes("265"));
     const chosenCodec = isHevc ? "hevc" : "h264";
-    const chosenStrategy = isHevc ? "transcode" : "passthrough_h264";
+    const chosenStrategy = isHevc ? "passthrough_hevc" : "passthrough_h264";
 
     const capabilities: CameraCapabilitiesInfo = {
       hasLiveStream: hasSource,

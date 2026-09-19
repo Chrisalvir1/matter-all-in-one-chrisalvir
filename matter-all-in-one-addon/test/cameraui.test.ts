@@ -400,10 +400,10 @@ describe("Camera.UI Client and Storage Integration", () => {
     expect(cam.manufacturer).toBe("Reolink");
     expect(cam.model).toBe("RLC-810A");
     expect(cam.serialNumber).toBe("95270001");
-    // Localhost must be substituted by the server host (192.168.110.147)
-    expect(cam.rtspUrl).toBe("rtsp://192.168.110.147:8554/camara_patio_2k");
+    // Localhost is substituted only by the configured Camera.UI host.
+    expect(cam.rtspUrl).toBe("rtsp://192.168.110.46:8554/camara_patio_2k");
     expect(cam.subRtspUrl).toBe(
-      "rtsp://192.168.110.147:8554/camara_patio_2k_sub",
+      "rtsp://192.168.110.46:8554/camara_patio_2k_sub",
     );
   });
 
@@ -449,7 +449,7 @@ describe("Camera.UI Client and Storage Integration", () => {
     expect(cameras.length).toBe(1);
     expect(cameras[0].name).toBe("Entrada");
     expect(cameras[0].manufacturer).toBe("Hikvision");
-    expect(cameras[0].rtspUrl).toBe("rtsp://192.168.110.147:8554/entrada");
+    expect(cameras[0].rtspUrl).toBe("rtsp://192.168.110.46:8554/entrada");
   });
 
   it("authenticates via tokens.access object shape", async () => {

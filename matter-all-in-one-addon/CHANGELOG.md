@@ -1,3 +1,12 @@
+## [1.8.19] - 2026-09-18
+
+### Restauración del stream nativo de Camera.UI / Apple Home
+
+- **URLs de Camera.UI sin reescrituras ajenas:** se elimina la sustitución de IPs privadas codificadas de otra instalación. Solo `localhost` del propio Camera.UI se resuelve contra el host configurado.
+- **HEVC/H.265 sin transcodificación:** las cámaras Vimtag y demás fuentes HEVC vuelven a usar `passthrough_hevc` y `-c:v copy`, conservando resolución, bitrate y arranque rápido nativos.
+- **Parámetros Live View de v1.8.6:** se restablecen los parámetros RTSP que funcionaban para apertura rápida y se elimina el filtro H.264 `dump_extra` del camino de passthrough.
+- **HAP en la interfaz LAN:** el accesorio vuelve a publicar enlazado a la interfaz de red primaria, como en v1.8.6, para que Apple Home alcance correctamente el endpoint ya emparejado.
+
 ## [1.8.18] - 2026-09-18
 
 ### Estabilidad de cámaras Camera.UI ya emparejadas en Apple Home
