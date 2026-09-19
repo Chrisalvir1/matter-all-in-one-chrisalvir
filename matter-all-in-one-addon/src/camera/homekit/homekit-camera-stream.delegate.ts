@@ -1,7 +1,6 @@
 import { EventEmitter } from "node:events";
 import fs from "node:fs/promises";
 import fsSync from "node:fs";
-import os from "node:os";
 import {
   AudioStreamingCodecType,
   AudioStreamingSamplerate,
@@ -154,24 +153,6 @@ function formatHost(address: string): string {
   cleanAddr = cleanAddr.replace(/^::ffff:/i, "");
   if (!cleanAddr.includes(":")) return cleanAddr;
   return cleanAddr.startsWith("[") ? cleanAddr : `[${cleanAddr}]`;
-}
-
-function detectLocalIp(): string {
-  try {
-    const ifaces = os.networkInterfaces();
-    const ignoredPatterns = /^(lo|docker|hassio|veth|br-|dummy|tun|tap|tailscale|wg|utun|llw|awdl)/i;
-    for (const [name, addrs] of Object.entries(ifaces)) {
-      if (ignoredPatterns.test(name)) continue;
-      for (const addr of addrs || []) {
-        if (addr.internal) continue;
-        if (addr.family === "IPv4" || (addr.family as any) === 4) {
-          if (addr.address.startsWith("172.17.") || addr.address.startsWith("172.30.")) continue;
-          return addr.address;
-        }
-      }
-    }
-  } catch {}
-  return "192.168.110.147";
 }
 
 function suiteName(suite: SRTPCryptoSuites): string {
@@ -511,16 +492,14 @@ export class HomeKitCameraStreamingDelegate
       }
       this.activeSessions.set(request.sessionID, session);
 
-      const localIp = detectLocalIp();
       const response: PrepareStreamResponse = {
-        addressOverride: localIp,
         video: {
           port: localVideoPort,
           ssrc: session.videoSsrc,
           srtp_key: request.video.srtp_key,
           srtp_salt: request.video.srtp_salt,
         },
-      } as any;
+      };
       if (request.audio && localAudioPort) {
         response.audio = {
           port: localAudioPort,
@@ -530,7 +509,7 @@ export class HomeKitCameraStreamingDelegate
         };
       }
       this.platform?.log?.notice?.(
-        `[HomeKitCamera][${this.entityId}] HAP SetupEndpoints session=${request.sessionID} remote=${request.targetAddress}:${request.video.port} localVideoRTCP=${localVideoPort} (addressOverride: ${localIp}) videoSSRC=${session.videoSsrc}${localAudioPort ? ` localAudioRTCP=${localAudioPort} audioSSRC=${session.audioSsrc}` : ""}`,
+        `[HomeKitCamera][${this.entityId}] HAP SetupEndpoints session=${request.sessionID} remote=${request.targetAddress}:${request.video.port} localVideoRTCP=${localVideoPort} videoSSRC=${session.videoSsrc}${localAudioPort ? ` localAudioRTCP=${localAudioPort} audioSSRC=${session.audioSsrc}` : ""}`,
       );
       callback(undefined, response);
     } catch (error) {

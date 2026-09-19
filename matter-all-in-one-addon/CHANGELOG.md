@@ -1,4 +1,19 @@
-## [1.8.15] - 2026-09-18
+## [1.8.17] - 2026-09-18
+
+### Corrección Crítica: Stream HomeKit Restaurado — Eliminación de `addressOverride`
+
+- **Causa Raíz del Problema "SIN RESPUESTA / Sin Stream":**
+  - Desde v1.8.13, `prepareStream` incluía `addressOverride: detectLocalIp()` en el `PrepareStreamResponse`.
+  - Dentro del contenedor Docker/Home Assistant, `detectLocalIp()` detecta la IP del **contenedor** (172.x.x.x o una IP interna de HA) en lugar de la IP del **host real** (`192.168.110.147`) que Apple Home puede alcanzar.
+  - Como resultado, Apple Home enviaba los paquetes SRTP/RTP a una dirección incorrecta y el stream nunca llegaba al proceso FFmpeg. La cámara mostraba snapshot (HTTP) pero el Live View no cargaba (UDP/SRTP).
+- **Solución:**
+  - Se eliminó completamente `addressOverride` del `PrepareStreamResponse`, restaurando el comportamiento de v1.8.6 donde funcionaba correctamente.
+  - hap-nodejs usa la IP correcta negociada automáticamente vía mDNS/Bonjour durante el descubrimiento HAP, sin necesidad de forzarla manualmente.
+  - Se eliminaron `detectLocalIp()` y el `import os` que quedaban sin usar.
+
+## [1.8.16] - 2026-09-18
+
+
 
 ### Corrección Crítica: Eliminación de Opción No Reconocida `-stimeout` en FFmpeg
 
