@@ -1226,6 +1226,8 @@ export class HomeAssistant extends EventEmitter {
   private readonly reconnectRetries: number = 0; // 0 means retry indefinitely.
   private readonly connectionTimeoutTime: number;
   private _responseTimeout: number = 10000; // Default WebSocket timeout for responses in milliseconds
+  /** Large HA installations can take longer than the realtime command timeout to build a snapshot. */
+  private readonly snapshotTimeout = 60000;
   private _serviceTimeout: number = 25000; // Dedicated timeout for call_service to accommodate BLE and slow integrations
   private readonly deviceCommandQueues = new Map<string, Promise<any>>();
   private readonly certificatePath: string | undefined = undefined; // Full path to the CA certificate for secure connections
@@ -2058,7 +2060,7 @@ export class HomeAssistant extends EventEmitter {
     try {
       this.log.debug("Fetching initial data from Home Assistant...");
 
-      this.hassConfig = (await this.fetch("get_config")) as HassConfig;
+      this.hassConfig = (await this.fetch("get_config", this.snapshotTimeout)) as HassConfig;
       HomeAssistant.hassConfig = this.hassConfig;
       this.log.debug("Received config.");
       this.emit("config", this.hassConfig);
@@ -2071,20 +2073,20 @@ export class HomeAssistant extends EventEmitter {
         );
         retries += 1;
         await new Promise((resolve) => setTimeout(resolve, 1000));
-        this.hassConfig = (await this.fetch("get_config")) as HassConfig;
+        this.hassConfig = (await this.fetch("get_config", this.snapshotTimeout)) as HassConfig;
         HomeAssistant.hassConfig = this.hassConfig;
         this.emit("config", this.hassConfig);
       }
 
-      const [services, devices, entities, states, areas, labels] =
-        await Promise.all([
-          this.fetch("get_services") as Promise<HassServices>,
-          this.fetch("config/device_registry/list") as Promise<HassDevice[]>,
-          this.fetch("config/entity_registry/list") as Promise<HassEntity[]>,
-          this.fetch("get_states") as Promise<HassState[]>,
-          this.fetch("config/area_registry/list") as Promise<HassArea[]>,
-          this.fetch("config/label_registry/list") as Promise<HassLabel[]>,
-        ]);
+      // Fetch the snapshot serially. Sending six large registry requests at once
+      // can starve HA's WebSocket event loop and leave a large installation with
+      // an incomplete inventory. Every request has its own generous timeout.
+      const services = (await this.fetch("get_services", this.snapshotTimeout)) as HassServices;
+      const devices = (await this.fetch("config/device_registry/list", this.snapshotTimeout)) as HassDevice[];
+      const entities = (await this.fetch("config/entity_registry/list", this.snapshotTimeout)) as HassEntity[];
+      const states = (await this.fetch("get_states", this.snapshotTimeout)) as HassState[];
+      const areas = (await this.fetch("config/area_registry/list", this.snapshotTimeout)) as HassArea[];
+      const labels = (await this.fetch("config/label_registry/list", this.snapshotTimeout)) as HassLabel[];
 
       // Replace each snapshot only after every request succeeded. A partial
       // reconnect must never mix stale and current registry data.
@@ -2134,8 +2136,8 @@ export class HomeAssistant extends EventEmitter {
    *   });
    */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/promise-function-async
-  fetch(type: string): Promise<any> {
-    return this.request({ type }).then((response) => {
+  fetch(type: string, timeoutMs = this._responseTimeout): Promise<any> {
+    return this.request({ type }, timeoutMs).then((response) => {
       if (!response.success)
         throw new Error(response.error?.message ?? `Fetch ${type} failed`);
       return response.result;

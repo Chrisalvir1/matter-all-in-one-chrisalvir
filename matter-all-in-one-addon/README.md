@@ -1,4 +1,4 @@
-# Matter All-in-One for Home Assistant — v1.8.21
+# Matter All-in-One for Home Assistant — v1.8.22
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/chrisalvir1/matter-all-in-one-chrisalvir/main/matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
@@ -15,7 +15,7 @@ This file is intentionally structured for both humans and AI agents.
 
 ```yaml
 project: matter-all-in-one-chrisalvir
-version: "1.8.21"
+version: "1.8.22"
 spec: "Matter 1.6"
 engine: matterbridge
 engine_version: "3.10.10"
@@ -135,6 +135,12 @@ npm update -g matter-all-in-one-chrisalvir
 ---
 
 ## Changelog Summary (latest)
+
+### v1.8.22 (2026-09-20) — sincronización HA para instalaciones grandes
+
+- Snapshot de Home Assistant con timeout de 60 s por solicitud.
+- Lectura serial de servicios, registros y estados para evitar saturar el WebSocket en instalaciones grandes.
+- Conservación del inventario anterior si el snapshot nuevo falla.
 
 ### v1.8.21 (2026-09-20) — Matterbridge 3.10.10 y disponibilidad real
 
