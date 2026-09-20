@@ -1,4 +1,4 @@
-# Matter All-in-One for Home Assistant — v1.8.24
+# Matter All-in-One for Home Assistant — v1.8.25
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/chrisalvir1/matter-all-in-one-chrisalvir/main/matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
@@ -15,7 +15,7 @@ This file is intentionally structured for both humans and AI agents.
 
 ```yaml
 project: matter-all-in-one-chrisalvir
-version: "1.8.24"
+version: "1.8.25"
 spec: "Matter 1.6"
 engine: matterbridge
 engine_version: "3.10.10"
@@ -135,6 +135,8 @@ npm update -g matter-all-in-one-chrisalvir
 ---
 
 ## Changelog Summary (latest)
+
+### v1.8.25 (2026-09-20) — reintento BLE sin bloquear llamadas normales
 
 ### v1.8.24 (2026-09-20) — reintentar comandos BLE/fan tras reconexión de Home Assistant
 

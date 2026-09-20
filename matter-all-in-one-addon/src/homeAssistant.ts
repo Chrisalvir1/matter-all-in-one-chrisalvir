@@ -2236,10 +2236,9 @@ export class HomeAssistant extends EventEmitter {
         service_data: { ...serviceData },
         target: { entity_id: entityId },
       };
-      // BLE integrations can keep HA busy while reconnecting. Do not fail the
-      // Matter command immediately just because the WebSocket is between
-      // connections; wait briefly and retry once before surfacing the error.
-      await this.waitForConnection(this._serviceTimeout);
+      // Send immediately when connected. If the socket is between connections,
+      // the request below will produce the specific disconnect error that
+      // triggers the bounded wait/retry path without delaying normal calls.
       let response: HassWebSocketResponseResult;
       try {
         response = await this.request(payload, this._serviceTimeout);
