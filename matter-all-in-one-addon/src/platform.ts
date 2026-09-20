@@ -363,52 +363,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   private cameraUiInitialized = false;
 
   public async ensureGo2rtcStreamsRegistered(): Promise<void> {
-    const streamsToRegister = [
-      { name: "sala-vimtag", src: "onvif://admin:admin@192.168.110.51:80" },
-      { name: "sala_vimtag", src: "onvif://admin:admin@192.168.110.51:80" },
-      { name: "jardin-vimtag", src: "rtsp://127.0.0.1:8554/jardin" },
-      { name: "vimtag_cochera", src: "rtsp://127.0.0.1:8554/cochera" },
-      { name: "vimtag_gym", src: "rtsp://127.0.0.1:8554/vimtag_113" },
-      { name: "vimtag_oficina", src: "rtsp://127.0.0.1:8554/jardin" },
-      { name: "vimtag_recamara_visita", src: "rtsp://127.0.0.1:8554/recamara" },
-      { name: "ring_bodega", src: "hass:camera.oficina_ring_vista_en_vivo" },
-      { name: "ring_lavanderia", src: "hass:camera.petcam_ring_vista_en_vivo" },
-      { name: "petcam_ring", src: "hass:camera.petcam_ring_vista_en_vivo" },
-      { name: "wyze_patio_trasero", src: "rtsp://Gecko:Mrlsc%401503@192.168.110.118:554/stream0" },
-      // Tapo C120 ("TAPO-SPOT") — real IP is 192.168.110.219, ONVIF port 2020
-      { name: "tapo_c120", src: "onvif://Geckom:Gckm1503@192.168.110.219:2020" },
-      // EZVIZ Patio Trasero (CS-H6c) — real IP is 192.168.110.145, ONVIF/RTSP port 554
-      { name: "ezviz_patio_trasero", src: "onvif://admin:Gckm1503@192.168.110.145" },
-    ];
-
-    const go2rtcBase = "http://192.168.110.147:1984";
-    let existing = new Set<string>();
-    try {
-      const response = await fetch(`${go2rtcBase}/api/streams`, {
-        signal: AbortSignal.timeout(3000),
-      });
-      if (response.ok) {
-        const payload = (await response.json()) as Record<string, unknown>;
-        existing = new Set(Object.keys(payload));
-        this.log.info(
-          `[Camera.UI] Preserving ${existing.size} existing go2rtc stream definitions.`,
-        );
-      }
-    } catch (error) {
-      this.log.warn(
-        `[Camera.UI] Could not read existing go2rtc streams; defaults will only fill missing entries: ${String(error)}`,
-      );
-    }
-
-    for (const item of streamsToRegister) {
-      // Camera.UI is the source of truth. Never overwrite a stream that it has
-      // already configured, since its URL may differ from the legacy defaults.
-      if (existing.has(item.name)) continue;
-      try {
-        const url = `${go2rtcBase}/api/streams?name=${encodeURIComponent(item.name)}&src=${encodeURIComponent(item.src)}`;
-        await fetch(url, { method: "PUT", signal: AbortSignal.timeout(2000) });
-      } catch {}
-    }
+    // This bridge must not seed go2rtc with guessed or historical camera URLs.
+    // Camera.UI is the sole source of truth for camera streams; its live camera
+    // records are loaded below and passed through unchanged (including H.264/H.265).
+    this.log.info("[Camera.UI] Skipping legacy go2rtc stream registration; using live Camera.UI sources.");
   }
 
   public async initCameraUi(): Promise<void> {
