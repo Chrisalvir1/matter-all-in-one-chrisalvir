@@ -8,7 +8,10 @@ import type {
   HomeKitCameraStorageRecord,
   ResolvedStreamSource,
 } from "../camera-types.js";
-import { HomeKitCameraAccessory } from "../homekit/homekit-camera.accessory.js";
+import {
+  generateFreshHomeKitPin,
+  HomeKitCameraAccessory,
+} from "../homekit/homekit-camera.accessory.js";
 import { FfmpegMotionDetector } from "../motion/ffmpeg-motion-detector.js";
 import type { CameraUiCameraRecord } from "./cameraui-types.js";
 import { CameraUiStorage } from "./cameraui-storage.js";
@@ -113,8 +116,11 @@ export class CameraUiHomeKitBridge {
     if (!camera.port) {
       camera.port = this.allocateNextPort(platform);
     }
-    if (!camera.pincode) {
-      camera.pincode = "031-45-154";
+    // The old seeded records all used the same manual HAP code.  Migrate an
+    // unpaired default safely before publishing; paired accessories retain
+    // their established identity until the user explicitly resets them.
+    if (!camera.pincode || (!camera.isPaired && camera.pincode === "031-45-154")) {
+      camera.pincode = generateFreshHomeKitPin(camera.pincode);
     }
     if (!camera.username) {
       const hex = crypto.randomBytes(5).toString("hex").toUpperCase();
@@ -385,6 +391,7 @@ export class CameraUiHomeKitBridge {
       const camera = store.cameras.find((c) => c.id === cameraId);
       if (camera) {
         camera.username = accessory.record.username;
+        camera.pincode = accessory.record.pincode;
         camera.setupId = accessory.record.setupId;
         camera.port = accessory.record.port;
         camera.uuid = accessory.record.uuid;

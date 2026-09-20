@@ -35,7 +35,7 @@ import { probeCameraSource, supportsFdkAac } from "./ffmpeg-helper.js";
 import { NestCameraAdapter } from "../nest/nest-camera-adapter.js";
 
 /** Generate a fresh, HAP-valid setup PIN for an explicit pairing reset. */
-function generateFreshHomeKitPin(previous?: string): string {
+export function generateFreshHomeKitPin(previous?: string): string {
   for (;;) {
     const digits = crypto.randomBytes(4).readUInt32BE(0).toString().padStart(10, "0").slice(-8);
     if (
@@ -621,15 +621,20 @@ export class HomeKitCameraAccessory {
       `[HomeKitCamera][${this.entityId}] Published production HAP camera port=${this.record.port} (advertiser=ciao, iface=all) HKSV=${this.record.hksvEnabled ? "enabled" : "disabled"}`,
     );
 
-    // Asynchronously probe stream capabilities (HEVC vs H264, audio tracks) to adapt strategy dynamically
-    void this.probeAndAdaptCapabilities();
-
-    setTimeout(() => {
-      void this.delegate.handleSnapshotRequest(
-        { width: 1280, height: 720 },
-        () => {},
-      );
-    }, 1500);
+    // Camera.UI already supplies its RTSP codec/audio metadata.  Probing and
+    // warming every Camera.UI source after a restart opened dozens of extra
+    // RTSP readers at once, which is precisely what makes cameras become
+    // unavailable.  Capabilities are refreshed by the explicit verification
+    // action; snapshots are fetched only when Apple Home requests one.
+    if (!this.streamSource.metadata?.isCameraUi) {
+      void this.probeAndAdaptCapabilities();
+      setTimeout(() => {
+        void this.delegate.handleSnapshotRequest(
+          { width: 1280, height: 720 },
+          () => {},
+        );
+      }, 1500);
+    }
   }
 
   public async probeAndAdaptCapabilities(): Promise<void> {

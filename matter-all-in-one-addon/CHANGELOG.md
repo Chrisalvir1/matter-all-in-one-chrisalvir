@@ -3118,3 +3118,11 @@ All notable changes to this project will be documented in this file.
 - El pre-búfer HKSV se inicia bajo demanda por el Home Hub o una grabación, en lugar de abrir lectores RTSP para todas las cámaras al inicio.
 - Para cámaras Camera.UI con tópico MQTT de movimiento nativo se evita un detector FFmpeg duplicado. Los eventos MQTT continúan accionando detección y HKSV.
 - La verificación rápida usa solamente un probe acotado; no encadena fallback, UDP ni medición GOP. Si ya hay una verificación activa responde de inmediato en vez de quedar en espera.
+## [1.8.35] - 2026-09-20
+
+### Identidad HAP por cámara y arranque Camera.UI
+
+- Los registros Camera.UI no emparejados dejan de reutilizar el PIN heredado compartido; cada QR manual obtiene un PIN HAP individual.
+- El restablecimiento desde la tarjeta Camera.UI persiste también el PIN recién generado.
+- Se eliminan el probe y snapshot RTSP automáticos al publicar Camera.UI: la metadata llega de Camera.UI y el stream se abre bajo demanda, sin agotar lectores RTSP al reiniciar.
+- La interfaz distingue explícitamente Activar HomeKit de Desactivar HomeKit.

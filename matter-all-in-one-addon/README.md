@@ -1,4 +1,4 @@
-# Matter All-in-One for Home Assistant — v1.8.34
+# Matter All-in-One for Home Assistant — v1.8.35
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/chrisalvir1/matter-all-in-one-chrisalvir/main/matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
@@ -15,7 +15,7 @@ This file is intentionally structured for both humans and AI agents.
 
 ```yaml
 project: matter-all-in-one-chrisalvir
-version: "1.8.34"
+version: "1.8.35"
 spec: "Matter 1.6"
 engine: matterbridge
 engine_version: "3.10.10"
@@ -135,6 +135,12 @@ npm update -g matter-all-in-one-chrisalvir
 ---
 
 ## Changelog Summary (latest)
+
+### v1.8.35 (2026-09-20) — QR individuales y Camera.UI sin lectores duplicados
+
+- Los registros Camera.UI sin emparejar migran del PIN compartido heredado a un PIN HAP individual; al restablecer, el nuevo PIN también se persiste correctamente.
+- Las cámaras Camera.UI no hacen probe ni snapshot RTSP automáticos durante el arranque. Se usa la metadata de Camera.UI y se abre el stream solo bajo petición de Casa o al verificar manualmente.
+- La acción de la interfaz muestra claramente Activar o Desactivar HomeKit para evitar invertir el estado por accidente.
 
 ### v1.8.34 (2026-09-20) — HAP, Live View y arranque sin saturación
 

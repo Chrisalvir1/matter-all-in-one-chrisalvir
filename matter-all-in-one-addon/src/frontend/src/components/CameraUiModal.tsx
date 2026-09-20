@@ -447,8 +447,9 @@ export const CameraUiModal: React.FC<CameraUiModalProps> = ({
                           className={`button ${cam.homeKitEnabled ? "button-primary" : "button-secondary"}`}
                           style={{ fontSize: "0.75rem", padding: "3px 8px" }}
                           onClick={() => handleToggleHomeKit(cam.id)}
+                          title={cam.homeKitEnabled ? "Desactiva la exportación HAP de esta cámara" : "Activa y publica esta cámara para Apple Home"}
                         >
-                          {cam.homeKitEnabled ? "Activada en HomeKit" : "Desactivada"}
+                          {cam.homeKitEnabled ? "Desactivar HomeKit" : "Activar HomeKit"}
                         </button>
                       </div>
                     </div>
