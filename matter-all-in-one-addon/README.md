@@ -1,4 +1,4 @@
-# Matter All-in-One for Home Assistant — v1.8.22
+# Matter All-in-One for Home Assistant — v1.8.23
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/chrisalvir1/matter-all-in-one-chrisalvir/main/matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
@@ -15,7 +15,7 @@ This file is intentionally structured for both humans and AI agents.
 
 ```yaml
 project: matter-all-in-one-chrisalvir
-version: "1.8.22"
+version: "1.8.23"
 spec: "Matter 1.6"
 engine: matterbridge
 engine_version: "3.10.10"
@@ -135,6 +135,11 @@ npm update -g matter-all-in-one-chrisalvir
 ---
 
 ## Changelog Summary (latest)
+
+### v1.8.23 (2026-09-20) — conservar RTSP y diagnosticar comandos BLE/fan
+
+- No sobrescribe streams existentes de go2rtc configurados por Camera.UI.
+- Registra errores reales de servicios HA para ventiladores BLE en lugar de ocultarlos.
 
 ### v1.8.22 (2026-09-20) — sincronización HA para instalaciones grandes
 

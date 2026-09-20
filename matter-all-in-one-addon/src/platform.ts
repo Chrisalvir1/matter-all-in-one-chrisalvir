@@ -381,9 +381,31 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       { name: "ezviz_patio_trasero", src: "onvif://admin:Gckm1503@192.168.110.145" },
     ];
 
+    const go2rtcBase = "http://192.168.110.147:1984";
+    let existing = new Set<string>();
+    try {
+      const response = await fetch(`${go2rtcBase}/api/streams`, {
+        signal: AbortSignal.timeout(3000),
+      });
+      if (response.ok) {
+        const payload = (await response.json()) as Record<string, unknown>;
+        existing = new Set(Object.keys(payload));
+        this.log.info(
+          `[Camera.UI] Preserving ${existing.size} existing go2rtc stream definitions.`,
+        );
+      }
+    } catch (error) {
+      this.log.warn(
+        `[Camera.UI] Could not read existing go2rtc streams; defaults will only fill missing entries: ${String(error)}`,
+      );
+    }
+
     for (const item of streamsToRegister) {
+      // Camera.UI is the source of truth. Never overwrite a stream that it has
+      // already configured, since its URL may differ from the legacy defaults.
+      if (existing.has(item.name)) continue;
       try {
-        const url = `http://192.168.110.147:1984/api/streams?name=${encodeURIComponent(item.name)}&src=${encodeURIComponent(item.src)}`;
+        const url = `${go2rtcBase}/api/streams?name=${encodeURIComponent(item.name)}&src=${encodeURIComponent(item.src)}`;
         await fetch(url, { method: "PUT", signal: AbortSignal.timeout(2000) });
       } catch {}
     }
@@ -2086,7 +2108,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     );
     this.log.notice(`[Runtime] Matterbridge runtime: ${mbVersion}`);
     this.log.notice(`[Runtime] Node.js runtime: ${process.version}`);
-    this.log.notice(`[Runtime] Plugin version: 1.8.22`);
+    this.log.notice(`[Runtime] Plugin version: 1.8.23`);
     await this.loadEntityDiagnostics();
     await this.startUiServer();
     this.startMatterConnectionMonitor();

@@ -389,11 +389,7 @@ export class BaseEntity {
 
     if (delayMs <= 0) {
       this.serviceDebounceTimers.delete(key);
-      if (data !== undefined) {
-        void this.platform.ha.callService(domain, service, this.entityId, data);
-      } else {
-        void this.platform.ha.callService(domain, service, this.entityId);
-      }
+      void this.callServiceTracked(domain, service, data);
       return;
     }
 
@@ -405,13 +401,30 @@ export class BaseEntity {
         );
         return;
       }
-      if (data !== undefined) {
-        void this.platform.ha.callService(domain, service, this.entityId, data);
-      } else {
-        void this.platform.ha.callService(domain, service, this.entityId);
-      }
+      void this.callServiceTracked(domain, service, data);
     }, delayMs);
     this.serviceDebounceTimers.set(key, timer);
+  }
+
+  /** Keep BLE/service failures observable instead of creating unhandled promises. */
+  private callServiceTracked(
+    domain: string,
+    service: string,
+    data?: Record<string, any>,
+  ): Promise<void> {
+    return this.platform.ha
+      .callService(
+        domain,
+        service,
+        this.entityId,
+        data ?? {},
+      )
+      .then(() => undefined)
+      .catch((error) => {
+        this.platform.log?.warn?.(
+          `[${this.entityId}] Home Assistant ${domain}.${service} failed (BLE/fan included): ${String(error)}`,
+        );
+      });
   }
 
   protected registerCommandHandlers(_endpoint?: MatterbridgeEndpoint) {
