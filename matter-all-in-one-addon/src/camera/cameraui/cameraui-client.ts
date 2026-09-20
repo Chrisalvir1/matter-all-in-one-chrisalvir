@@ -452,6 +452,8 @@ export class CameraUiClient {
             mainSourceUrl = this.cleanStreamUrl(highRes.url);
           } else if (typeof highRes.stream === "string") {
             mainSourceUrl = this.cleanStreamUrl(highRes.stream);
+          } else if (typeof highRes.source === "string") {
+            mainSourceUrl = this.cleanStreamUrl(highRes.source);
           }
           if (highRes.muted === true) {
             isMuted = true;
@@ -474,6 +476,8 @@ export class CameraUiClient {
             subSourceUrl = this.cleanStreamUrl(subRes.url);
           } else if (typeof subRes.stream === "string") {
             subSourceUrl = this.cleanStreamUrl(subRes.stream);
+          } else if (typeof subRes.source === "string") {
+            subSourceUrl = this.cleanStreamUrl(subRes.source);
           }
         }
 
@@ -489,8 +493,11 @@ export class CameraUiClient {
       }
 
       // Legacy fallback to videoConfig
-      let rtspUrl = mainSourceUrl || this.cleanStreamUrl(videoConfig.source);
-      let subRtspUrl = subSourceUrl || this.cleanStreamUrl(videoConfig.subSource);
+      let rtspUrl = mainSourceUrl || this.cleanStreamUrl(videoConfig.source) ||
+        this.cleanStreamUrl(videoConfig.rtspUrl) || this.cleanStreamUrl(item.rtspUrl) ||
+        this.cleanStreamUrl(item.streamUrl) || this.cleanStreamUrl(item.stream);
+      let subRtspUrl = subSourceUrl || this.cleanStreamUrl(videoConfig.subSource) ||
+        this.cleanStreamUrl(videoConfig.subRtspUrl);
       let snapshotUrl =
         snapshotSourceUrl ||
         this.cleanStreamUrl(videoConfig.stillImageSource);
@@ -532,10 +539,10 @@ export class CameraUiClient {
       // another installation into a discovered camera URL.
       const rtspRestreamHost = parsedHostname;
 
-      if (!rtspUrl) {
-        const safeName = encodeURIComponent(name.toLowerCase().replace(/\s+/g, "_"));
-        rtspUrl = `rtsp://${rtspRestreamHost}:8554/${safeName}`;
-      }
+      // Do not invent rtsp://<bridge>:8554/<camera-name>. A reachable stale
+      // go2rtc route looked valid even though Camera.UI had a different source.
+      // The record is retained for its HAP identity, but is not mounted until
+      // Camera.UI provides a real source.
 
       // Resolve only Camera.UI's localhost restream against its configured
       // host. A real camera address must remain exactly as Camera.UI returned it.

@@ -166,6 +166,8 @@ export interface CameraUiConfigResponse {
   serverUrl?: string;
   username?: string;
   hasPassword?: boolean;
+  rtspUsername?: string;
+  hasRtspPassword?: boolean;
   mqttEnabled?: boolean;
   mqttTopicPrefix?: string;
   allowSelfSignedCertificate?: boolean;

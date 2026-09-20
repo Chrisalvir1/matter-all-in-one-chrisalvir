@@ -19,6 +19,8 @@ export const CameraUiModal: React.FC<CameraUiModalProps> = ({
   const [serverUrl, setServerUrl] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [rtspUsername, setRtspUsername] = useState("");
+  const [rtspPassword, setRtspPassword] = useState("");
   const [allowSelfSigned, setAllowSelfSigned] = useState(true);
   const [mqttEnabled, setMqttEnabled] = useState(true);
   const [mqttTopicPrefix, setMqttTopicPrefix] = useState("camera.ui");
@@ -37,6 +39,7 @@ export const CameraUiModal: React.FC<CameraUiModalProps> = ({
       const configuredUrl = (config.serverUrl || "").trim();
       setServerUrl(configuredUrl || "http://127.0.0.1:8181");
       setUsername(config.username || "");
+      setRtspUsername(config.rtspUsername || "");
       setAllowSelfSigned(config.allowSelfSignedCertificate ?? true);
       setMqttEnabled(config.mqttEnabled ?? true);
       setMqttTopicPrefix(config.mqttTopicPrefix || "camera.ui");
@@ -145,6 +148,8 @@ export const CameraUiModal: React.FC<CameraUiModalProps> = ({
         serverUrl: serverUrl.trim(),
         username: username.trim() || undefined,
         password: password || undefined,
+        rtspUsername: rtspUsername.trim() || undefined,
+        rtspPassword: rtspPassword || undefined,
         allowSelfSignedCertificate: allowSelfSigned,
         mqttEnabled,
         mqttTopicPrefix: mqttTopicPrefix.trim() || "camera.ui",
@@ -220,7 +225,7 @@ export const CameraUiModal: React.FC<CameraUiModalProps> = ({
                 style={{ width: "100%", padding: "8px 12px", borderRadius: 8, background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff" }}
               />
               <span style={{ fontSize: "0.75rem", color: "var(--dim)" }}>
-                Puerto REST por defecto de Camera.UI: 8181 (o HTTPS en 3543). Restreaming RTSP nativo en puerto 8554.
+                Puerto REST por defecto de Camera.UI: 8181 (o HTTPS en 3543). El RTSP nativo de esta instalación usa el puerto 2101.
               </span>
               <div style={{ marginTop: 8 }}>
                 <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: "0.8rem", color: "var(--dim)" }}>
@@ -231,6 +236,17 @@ export const CameraUiModal: React.FC<CameraUiModalProps> = ({
                   />
                   <span>Permitir certificados SSL autofirmados (HTTPS local)</span>
                 </label>
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <div>
+                <label style={{ display: "block", fontSize: "0.8rem", color: "var(--dim)", marginBottom: 4 }}>Usuario RTSP de Camera.UI</label>
+                <input type="text" value={rtspUsername} onChange={(e) => setRtspUsername(e.target.value)} placeholder="admin" style={{ width: "100%", padding: "8px 12px", borderRadius: 8, background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff" }} />
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: "0.8rem", color: "var(--dim)", marginBottom: 4 }}>Contraseña RTSP</label>
+                <input type="password" value={rtspPassword} onChange={(e) => setRtspPassword(e.target.value)} placeholder={config?.hasRtspPassword ? "•••••••• (guardada)" : "••••••••"} style={{ width: "100%", padding: "8px 12px", borderRadius: 8, background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff" }} />
               </div>
             </div>
 

@@ -7,6 +7,9 @@ export interface CameraUiConfig {
   serverUrl: string;
   username?: string;
   password?: string;
+  /** Credentials for Camera.UI's RTSP listener, stored only in local add-on data. */
+  rtspUsername?: string;
+  rtspPassword?: string;
   mqttEnabled?: boolean;
   mqttTopicPrefix?: string;
   allowSelfSignedCertificate?: boolean;

@@ -1,3 +1,11 @@
+## [1.8.27] - 2026-09-20
+
+### Camera.UI RTSP canónico
+
+- **Rutas reales de Camera.UI:** se migran los aliases antiguos del bridge (`192.168.110.147:8554`) a los streams canónicos `cui_*` en el listener RTSP de Camera.UI (`:2101`). La Tapo C402 no se modifica.
+- **Credenciales RTSP locales:** la pantalla de Camera.UI permite guardar usuario y contraseña específicos de RTSP solamente en `/data/cameraui-config.json`; nunca se incluyen en Git, el add-on ni el release.
+- **HAP preservado:** el cambio de fuente aplica un remount controlado únicamente cuando el accesorio está inactivo, conservando puerto, UUID, PIN y emparejamiento existentes.
+
 ## [1.8.19] - 2026-09-18
 
 ### Restauración del stream nativo de Camera.UI / Apple Home

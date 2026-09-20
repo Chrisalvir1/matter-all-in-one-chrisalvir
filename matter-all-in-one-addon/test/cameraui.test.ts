@@ -3,7 +3,7 @@ import {
   CameraUiClient,
   isCameraStreamReachable,
 } from "../src/camera/cameraui/cameraui-client.js";
-import { CameraUiStorage } from "../src/camera/cameraui/cameraui-storage.js";
+import { CameraUiStorage, isLegacyBridgeStreamUrl } from "../src/camera/cameraui/cameraui-storage.js";
 import { CameraUiHomeKitBridge } from "../src/camera/cameraui/cameraui-homekit-bridge.js";
 import type { CameraUiCameraRecord } from "../src/camera/cameraui/cameraui-types.js";
 
@@ -83,6 +83,21 @@ describe("Camera.UI Client and Storage Integration", () => {
     expect(cam.height).toBe(1440);
     expect(cam.hasAudio).toBe(true);
     expect(cam.homeKitEnabled).toBe(true);
+  });
+
+  it("does not invent a bridge go2rtc URL when Camera.UI omits a live source", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [{ _id: "source-missing", name: "Source Missing" }],
+    } as any);
+    const [camera] = await new CameraUiClient({ enabled: true, serverUrl: "https://192.168.110.46:3543" }).fetchCameras();
+    expect(camera.rtspUrl).toBeUndefined();
+  });
+
+  it("identifies old bridge routes while preserving the approved C402 endpoint", () => {
+    expect(isLegacyBridgeStreamUrl("rtsp://192.168.110.147:8554/jardin")).toBe(true);
+    expect(isLegacyBridgeStreamUrl("rtsp://127.0.0.1:2101/cui_ezviz_patio_trasero_stream_1")).toBe(true);
+    expect(isLegacyBridgeStreamUrl("rtsp://192.168.110.147:62291/tapo-c402")).toBe(false);
   });
 
   it("authenticates via POST /api/auth/login and sends Bearer token on subsequent requests", async () => {

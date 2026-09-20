@@ -375,7 +375,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
     try {
       void this.ensureGo2rtcStreamsRegistered();
-      const store = await CameraUiStorage.load();
+      let store = await CameraUiStorage.load();
       if (!store.config.enabled && store.cameras.length === 0) {
         this.log.debug("[Camera.UI] Integration is disabled in storage.");
         return;
@@ -384,8 +384,23 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         store.config.enabled = true;
         await CameraUiStorage.save(store);
       }
+      // Pairing identity is local, but the stream source must be read from
+      // Camera.UI before HAP is mounted. This prevents a cached old route
+      // from winning at boot.
+      try {
+        const client = new CameraUiClient(store.config);
+        const discovered = await client.fetchCameras();
+        if (discovered.length > 0) {
+          store = await CameraUiStorage.mergeDiscoveredCameras(discovered);
+          this.log.info(`[Camera.UI] Live source refresh: ${discovered.length} camera(s) received from Camera.UI.`);
+        } else {
+          this.log.warn("[Camera.UI] Live source refresh returned no cameras; paired identities were kept and no legacy RTSP route will be mounted.");
+        }
+      } catch (err) {
+        this.log.warn(`[Camera.UI] Live source refresh failed: ${err}`);
+      }
       this.log.info(
-        `[Camera.UI] Fast Boot: ${store.cameras.length} cached cameras found. Initializing endpoints...`,
+        `[Camera.UI] Fast Boot: ${store.cameras.length} camera records found. Initializing endpoints...`,
       );
 
       for (const camera of store.cameras) {
@@ -6591,6 +6606,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               serverUrl: store.config.serverUrl,
               username: store.config.username || "",
               hasPassword: Boolean(store.config.password),
+              rtspUsername: store.config.rtspUsername || "",
+              hasRtspPassword: Boolean(store.config.rtspPassword),
               mqttEnabled: store.config.mqttEnabled ?? true,
               mqttTopicPrefix: store.config.mqttTopicPrefix || "camera.ui",
               allowSelfSignedCertificate: store.config.allowSelfSignedCertificate ?? true,
@@ -6622,6 +6639,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               store.config.password = String(data.password);
             }
             if (data.clearPassword === true) store.config.password = undefined;
+            if (data.rtspUsername !== undefined) store.config.rtspUsername = String(data.rtspUsername).trim();
+            if (data.rtspPassword !== undefined && String(data.rtspPassword).length > 0) {
+              store.config.rtspPassword = String(data.rtspPassword);
+            }
+            if (data.clearRtspPassword === true) store.config.rtspPassword = undefined;
             if (typeof data.mqttEnabled === "boolean") store.config.mqttEnabled = data.mqttEnabled;
             if (data.mqttTopicPrefix !== undefined) store.config.mqttTopicPrefix = String(data.mqttTopicPrefix).trim();
             if (typeof data.allowSelfSignedCertificate === "boolean") {
@@ -6629,6 +6651,15 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             }
 
             await CameraUiStorage.save(store);
+
+            for (const camera of store.cameras) {
+              if (!camera.homeKitEnabled || !camera.rtspUrl) continue;
+              try {
+                await CameraUiHomeKitBridge.mountCamera(this, camera, { forceRemount: true });
+              } catch (mountErr) {
+                this.log.warn(`[Camera.UI] Error applying RTSP configuration to ${camera.name}: ${mountErr}`);
+              }
+            }
 
             res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
             res.end(JSON.stringify({ success: true, config: store.config }));
@@ -6871,6 +6902,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             const client = new CameraUiClient(store.config);
             const discovered = await client.fetchCameras();
             const previousIds = new Set(store.cameras.map((c) => c.id));
+            const previousSources = new Map(store.cameras.map((c) => [c.id, c.rtspUrl]));
+
+            if (discovered.length === 0) {
+              throw new Error("Camera.UI no devolvió cámaras ni una fuente RTSP viva. Se conservaron los emparejamientos y no se aplicó ninguna ruta almacenada.");
+            }
 
             await CameraUiStorage.mergeDiscoveredCameras(discovered);
             void this.ensureGo2rtcStreamsRegistered();
@@ -6879,7 +6915,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             for (const camera of updatedStore.cameras) {
               if (camera.homeKitEnabled) {
                 try {
-                  await CameraUiHomeKitBridge.mountCamera(this, camera);
+                  await CameraUiHomeKitBridge.mountCamera(this, camera, {
+                    // Preserve the HAP port, UUID and pairing while replacing
+                    // an idle delegate whose Camera.UI source changed.
+                    forceRemount: previousSources.has(camera.id) && previousSources.get(camera.id) !== camera.rtspUrl,
+                  });
                 } catch (mountErr) {
                   this.log.warn(`[Camera.UI] Error mounting ${camera.name}: ${mountErr}`);
                 }
