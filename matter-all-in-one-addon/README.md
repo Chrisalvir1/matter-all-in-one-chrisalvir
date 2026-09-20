@@ -1,4 +1,4 @@
-# Matter All-in-One for Home Assistant — v1.8.33
+# Matter All-in-One for Home Assistant — v1.8.34
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/chrisalvir1/matter-all-in-one-chrisalvir/main/matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
@@ -15,7 +15,7 @@ This file is intentionally structured for both humans and AI agents.
 
 ```yaml
 project: matter-all-in-one-chrisalvir
-version: "1.8.33"
+version: "1.8.34"
 spec: "Matter 1.6"
 engine: matterbridge
 engine_version: "3.10.10"
@@ -135,6 +135,13 @@ npm update -g matter-all-in-one-chrisalvir
 ---
 
 ## Changelog Summary (latest)
+
+### v1.8.34 (2026-09-20) — HAP, Live View y arranque sin saturación
+
+- Restablecer emparejamiento conserva el PIN HAP recién generado: ya no se sobrescribe con el PIN por defecto. QR, Setup ID, MAC y puerto cambian juntos.
+- HKSV deja de abrir pre-buffers RTSP para todas las cámaras al arrancar; se activa cuando el Home Hub configura grabación o solicita un clip. Esto libera Camera.UI y protege Live View, incluida la Tapo C402.
+- Las cámaras con movimiento MQTT nativo de Camera.UI no abren un detector FFmpeg adicional; la detección nativa sigue vinculada a la misma cámara.
+- Verificar Stream usa un único probe acotado y devuelve una respuesta rápida si ya hay otra verificación activa; el diagnóstico profundo conserva las mediciones extendidas.
 
 ### v1.8.33 (2026-09-20) — guardado Camera.UI inmediato
 

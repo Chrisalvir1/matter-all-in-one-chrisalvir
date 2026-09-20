@@ -226,13 +226,16 @@ export class CameraUiHomeKitBridge {
       await CameraUiStorage.save(store);
     }
 
-    // Start local FFmpeg motion detector for all cameras with a valid RTSP URL.
-    // This is the HKSV trigger that drives iCloud recording in Apple HomeKit.
-    // HA entity state changes are an additional source and are handled separately via
-    // handleEntityStateChange → CameraUiHomeKitBridge.updateMotion().
-    // The detector pauses automatically when Live View opens and resumes when it ends,
-    // so it never competes with the viewer's RTSP connection.
-    if (camera.rtspUrl && !this.activeMotionDetectors.has(camera.id)) {
+    // Camera.UI already publishes a native motion topic for discovered
+    // cameras.  Do not also open a permanent FFmpeg RTSP reader in that
+    // case: doing so consumed the limited reader slots of Camera.UI and made
+    // Live View unavailable after a restart.  Keep the local detector only
+    // as a fallback for cameras that do not expose native motion events.
+    if (
+      camera.rtspUrl &&
+      !camera.motionTopic &&
+      !this.activeMotionDetectors.has(camera.id)
+    ) {
       try {
         const detector = new FfmpegMotionDetector({
           cameraId: camera.id,

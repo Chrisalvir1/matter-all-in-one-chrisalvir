@@ -3110,3 +3110,11 @@ All notable changes to this project will be documented in this file.
 ### Inicio y guardado no bloqueante
 
 - Guardar host o credenciales Camera.UI persiste la configuración y responde de inmediato. Los remontajes HAP necesarios pasan a segundo plano, evitando bloquear la interfaz mientras reinicia múltiples cámaras.
+## [1.8.34] - 2026-09-20
+
+### Recuperación de Live View, HAP y carga de Camera.UI
+
+- El reinicio de emparejamiento conserva el PIN aleatorio recién creado junto con MAC, Setup ID, UUID y puerto; ya no vuelve a imponer el PIN por defecto.
+- El pre-búfer HKSV se inicia bajo demanda por el Home Hub o una grabación, en lugar de abrir lectores RTSP para todas las cámaras al inicio.
+- Para cámaras Camera.UI con tópico MQTT de movimiento nativo se evita un detector FFmpeg duplicado. Los eventos MQTT continúan accionando detección y HKSV.
+- La verificación rápida usa solamente un probe acotado; no encadena fallback, UDP ni medición GOP. Si ya hay una verificación activa responde de inmediato en vez de quedar en espera.

@@ -48,6 +48,7 @@ export class HomeKitCameraRecordingDelegate
   private currentStreamId?: number;
   private streamAbortController?: AbortController;
   private isStartingPipeline = false;
+  private lastPrebufferStderrAt = 0;
 
   constructor(
     private readonly platform: any,
@@ -70,13 +71,14 @@ export class HomeKitCameraRecordingDelegate
       this.handleNewFragment(fragment);
     });
 
-    // Automatically start HKSV pre-buffer pipeline on startup so fMP4 initialization segment (ftyp + moov)
-    // and rolling pre-roll buffer are cached and ready BEFORE motion events occur.
+    // Do not open an RTSP/FFmpeg reader for every exported camera at startup.
+    // Camera.UI and several physical cameras permit only a small number of
+    // simultaneous readers; eager HKSV prebuffers starved Live View and even
+    // made the add-on HTTP API unresponsive.  HAP starts this pipeline once a
+    // Home Hub enables/configures recording (or requests a recording stream).
     if (this.record.hksvEnabled !== false && Boolean(this.streamSource.url)) {
       this.recordingActive = true;
-      setImmediate(() => {
-        void this.startPrebufferPipeline();
-      });
+      this.record.hksvState = "waiting_hub";
     }
   }
 
@@ -547,7 +549,12 @@ export class HomeKitCameraRecordingDelegate
 
       this.ffmpegProcess.stderr?.on("data", (data: Buffer) => {
         const msg = data.toString().trim();
-        if (msg) {
+        const now = Date.now();
+        // Repeated RTSP/AAC timestamp warnings can arrive thousands of times
+        // per minute.  Logging every chunk blocks Node's event loop and makes
+        // the dashboard and HomeKit accessory appear offline.
+        if (msg && now - this.lastPrebufferStderrAt >= 30000) {
+          this.lastPrebufferStderrAt = now;
           this.platform?.log?.warn?.(
             `[HKSV][${this.entityId}][ffmpeg] ${msg}`,
           );

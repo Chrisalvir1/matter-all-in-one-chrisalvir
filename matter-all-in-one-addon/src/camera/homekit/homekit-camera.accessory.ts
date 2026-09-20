@@ -804,8 +804,9 @@ export class HomeKitCameraAccessory {
 
     this.record.published = false;
     this.record.isPaired = false;
-    this.record.hksvEnabled = false;
-    this.record.hksvCapable = false;
+    // Pairing identity is independent from camera capabilities.  Clearing
+    // HKSV here made a reset look like a camera that could no longer record
+    // until a later remount rebuilt the service graph.
     this.record.uuid = uuid.generate(
       `homekit:camera:${this.entityId}:${Date.now()}`,
     );

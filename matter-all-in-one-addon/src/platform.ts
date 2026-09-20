@@ -2081,7 +2081,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     );
     this.log.notice(`[Runtime] Matterbridge runtime: ${mbVersion}`);
     this.log.notice(`[Runtime] Node.js runtime: ${process.version}`);
-    this.log.notice(`[Runtime] Plugin version: 1.8.33`);
+    this.log.notice(`[Runtime] Plugin version: 1.8.34`);
     await this.loadEntityDiagnostics();
     await this.startUiServer();
     this.startMatterConnectionMonitor();
@@ -3501,7 +3501,6 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         }
 
         const newRecord = await acc.resetPairing();
-        newRecord.pincode = "031-45-154";
         this.homekitCameraRecords.set(entityId, newRecord);
         await this.saveHomeKitCameraRecords();
 
@@ -3548,7 +3547,6 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         }
 
         const newRecord = await acc.resetPairing();
-        newRecord.pincode = "031-45-154";
         const store = await CameraUiStorage.load();
         const cam = store.cameras.find((c) => c.id === cameraId);
         if (cam) {
@@ -6074,10 +6072,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
           const transport = parsed.transport === "udp" ? "udp" : "tcp";
           ScryptedStreamValidator.clearCache();
+          // An on-demand UI check must never monopolize the add-on.  It is a
+          // quick reachability/metadata check; the full GOP analysis belongs
+          // to the explicit diagnostics endpoint below.
           const validation = await ScryptedStreamValidator.validateStreamUrl(
             targetUrl,
             cameraId,
-            parsed.timeoutMs ? Number(parsed.timeoutMs) : 8000,
+            Math.min(Math.max(Number(parsed.timeoutMs) || 3500, 1000), 5000),
             undefined,
             transport,
           );

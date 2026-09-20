@@ -223,6 +223,7 @@ export async function probeCameraSource(
     transport?: "tcp" | "udp";
     customFfprobePath?: string;
     customFfmpegPath?: string;
+    allowFallback?: boolean;
   } = {},
 ): Promise<ProbeResult> {
   const cleanUrl = sourceUrl ? sourceUrl.trim() : "";
@@ -260,7 +261,7 @@ export async function probeCameraSource(
       // If RTSP failed with TCP and user didn't explicitly force TCP, try UDP fallback
       if (
         sourceUrl.startsWith("rtsp://") &&
-        (!options.transport || options.transport === "tcp")
+        !options.transport
       ) {
         const udpResult = await probeWithFfprobe(
           ffprobePath,
@@ -279,6 +280,14 @@ export async function probeCameraSource(
     } catch (err) {
       lastError = String(err);
     }
+  }
+
+  if (options.allowFallback === false) {
+    return {
+      valid: false,
+      hasAudio: false,
+      error: lastError || "FFprobe no pudo validar el stream",
+    };
   }
 
   const ffmpegPath = options.customFfmpegPath || resolveFfmpegPath();
@@ -300,7 +309,7 @@ export async function probeCameraSource(
       // If RTSP failed with TCP and user didn't explicitly force TCP, try UDP fallback with ffmpeg
       if (
         sourceUrl.startsWith("rtsp://") &&
-        (!options.transport || options.transport === "tcp")
+        !options.transport
       ) {
         const udpResult = await probeWithFfmpeg(
           ffmpegPath,

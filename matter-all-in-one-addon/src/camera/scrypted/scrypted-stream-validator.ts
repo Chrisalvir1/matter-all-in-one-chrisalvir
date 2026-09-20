@@ -35,6 +35,8 @@ interface CacheEntry {
 export class ScryptedStreamValidator {
   /** Global queue to ensure only one probe runs at a time */
   private static queue: Promise<any> = Promise.resolve();
+  /** A UI verification must not pile up behind long-running RTSP probes. */
+  private static pendingProbeCount = 0;
 
   /** Cache of recent validation results keyed by sanitized URL (30s TTL) */
   private static cache = new Map<string, CacheEntry>();
@@ -113,7 +115,17 @@ export class ScryptedStreamValidator {
       };
     }
 
+    if (this.pendingProbeCount > 0) {
+      return {
+        status: "not_checked",
+        url: sanitized,
+        error: "Ya hay una verificación de stream en curso. Espera unos segundos antes de iniciar otra.",
+        validatedAt: now,
+      };
+    }
+
     // Serialize probe execution through global queue
+    this.pendingProbeCount++;
     return new Promise<StreamValidationResult>((resolve) => {
       this.queue = this.queue
         .then(async () => {
@@ -132,6 +144,10 @@ export class ScryptedStreamValidator {
             const probe: ProbeResult = await probeCameraSource(trimmedUrl, {
               timeoutMs,
               transport,
+              // ffprobe is sufficient for the fast UI check.  A second
+              // FFmpeg fallback doubles the wait and used to leave the UI in
+              // "Verificando" behind other cameras.
+              allowFallback: false,
             });
 
             const elapsedMs = Date.now() - startTime;
@@ -171,18 +187,9 @@ export class ScryptedStreamValidator {
                 ffmpegRestartCount: 0,
               };
 
-              let gopSeconds: number | undefined;
-              try {
-                gopSeconds = await measureStreamGop(trimmedUrl, 2500);
-                if (gopSeconds !== undefined && gopSeconds > 0) {
-                  metrics.observedGopSeconds = {
-                    value: gopSeconds,
-                    source: "ffprobe",
-                    confidence: "high",
-                    measuredAt: now,
-                  };
-                }
-              } catch {}
+              // GOP measurement opens another reader and is intentionally
+              // reserved for the explicit diagnostic action.
+              const gopSeconds: number | undefined = undefined;
 
               const result: StreamValidationResult = {
                 status: "verified",
@@ -277,6 +284,9 @@ export class ScryptedStreamValidator {
             error: "Error interno en cola de validación",
             validatedAt: now,
           });
+        })
+        .finally(() => {
+          this.pendingProbeCount = Math.max(0, this.pendingProbeCount - 1);
         });
     });
   }
