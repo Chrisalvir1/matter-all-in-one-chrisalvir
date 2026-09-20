@@ -13,7 +13,7 @@ const FALLBACK_CONFIG_PATH = "./cameraui-config.json";
 export function isLegacyBridgeStreamUrl(url?: string): boolean {
   if (!url) return false;
   // The approved Tapo C402 endpoint uses port 62291 and is intentionally not matched.
-  return /^rtsps?:\/\/192\.168\.110\.147:8554\//i.test(url) ||
+  return /^rtsps?:\/\/192\.168\.110\.(?:46|147):8554\//i.test(url) ||
     /^rtsps?:\/\/(?:127\.0\.0\.1|localhost):2101\/cui_/i.test(url);
 }
 

@@ -96,6 +96,7 @@ describe("Camera.UI Client and Storage Integration", () => {
 
   it("identifies old bridge routes while preserving the approved C402 endpoint", () => {
     expect(isLegacyBridgeStreamUrl("rtsp://192.168.110.147:8554/jardin")).toBe(true);
+    expect(isLegacyBridgeStreamUrl("rtsp://192.168.110.46:8554/tapo_c120")).toBe(true);
     expect(isLegacyBridgeStreamUrl("rtsp://127.0.0.1:2101/cui_ezviz_patio_trasero_stream_1")).toBe(true);
     expect(isLegacyBridgeStreamUrl("rtsp://192.168.110.147:62291/tapo-c402")).toBe(false);
   });

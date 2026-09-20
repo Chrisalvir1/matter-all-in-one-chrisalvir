@@ -1,3 +1,9 @@
+## [1.8.28] - 2026-09-20
+
+### Corrección de aliases RTSP persistidos
+
+- Se reconoce y migra también el alias heredado `192.168.110.46:8554/*` a los streams `192.168.110.46:2101/cui_*` de Camera.UI. Esto evita el error 404 y que un reinicio restaure la ruta incorrecta.
+
 ## [1.8.27] - 2026-09-20
 
 ### Camera.UI RTSP canónico
