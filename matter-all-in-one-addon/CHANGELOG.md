@@ -3094,3 +3094,9 @@ All notable changes to this project will be documented in this file.
 
 ### BLE sin bloqueo
 - Corrige el flujo de recuperación de comandos BLE tras reconexiones de Home Assistant.
+## [1.8.31] - 2026-09-20
+
+### Restablecimiento HAP y accesorios de cámara
+
+- **Nuevo código de emparejamiento:** el restablecimiento cambia MAC HAP, UUID, puerto, Setup ID y PIN; Casa recibe un QR nuevo, en vez de reutilizar el código anterior.
+- **Servicios bajo la cámara:** luz, sirena y sensor de movimiento seleccionados desde Camera.UI se montan como servicios del mismo accesorio HAP. Cambiar una selección reconstruye dicho accesorio de forma controlada para aplicar el grafo actualizado.

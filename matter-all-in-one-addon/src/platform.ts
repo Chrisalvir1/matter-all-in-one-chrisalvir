@@ -2081,7 +2081,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     );
     this.log.notice(`[Runtime] Matterbridge runtime: ${mbVersion}`);
     this.log.notice(`[Runtime] Node.js runtime: ${process.version}`);
-    this.log.notice(`[Runtime] Plugin version: 1.8.26`);
+    this.log.notice(`[Runtime] Plugin version: 1.8.31`);
     await this.loadEntityDiagnostics();
     await this.startUiServer();
     this.startMatterConnectionMonitor();
@@ -6438,7 +6438,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                 const freshCam =
                   updatedStore.cameras.find((c) => c.id === cuiCam.id) || cuiCam;
                 if (freshCam.homeKitEnabled !== false) {
-                  await CameraUiHomeKitBridge.mountCamera(this, freshCam);
+                  const servicesChanged =
+                    exportConfig.lightEntityId !== undefined ||
+                    exportConfig.sirenEntityId !== undefined ||
+                    exportConfig.motionEntityId !== undefined;
+                  await CameraUiHomeKitBridge.mountCamera(this, freshCam, {
+                    forceRemount: servicesChanged,
+                  });
                 } else {
                   await CameraUiHomeKitBridge.unmountCamera(freshCam.id);
                 }

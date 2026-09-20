@@ -146,9 +146,11 @@ export class CameraUiHomeKitBridge {
       hksvCapable: isRtspSource,
       hksvVerified: false,
       hksvState: isRtspSource ? "waiting_hub" : "not_capable",
-      motionEntityId: camera.motionEntityId,
-      lightEntityId: camera.lightEntityId,
-      sirenEntityId: camera.sirenEntityId,
+      // Explicit selections win. Otherwise, Camera.UI linked entities become
+      // services of this same HAP camera accessory.
+      motionEntityId: camera.motionEntityId || camera.realEntities?.find((entity) => entity.type === "motion")?.id,
+      lightEntityId: camera.lightEntityId || camera.realEntities?.find((entity) => entity.type === "light")?.id,
+      sirenEntityId: camera.sirenEntityId || camera.realEntities?.find((entity) => entity.type === "siren")?.id,
     };
 
     const accessory = new HomeKitCameraAccessory(

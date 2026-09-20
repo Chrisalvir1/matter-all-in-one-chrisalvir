@@ -34,6 +34,21 @@ import { CameraUiStorage } from "../cameraui/cameraui-storage.js";
 import { probeCameraSource, supportsFdkAac } from "./ffmpeg-helper.js";
 import { NestCameraAdapter } from "../nest/nest-camera-adapter.js";
 
+/** Generate a fresh, HAP-valid setup PIN for an explicit pairing reset. */
+function generateFreshHomeKitPin(previous?: string): string {
+  for (;;) {
+    const digits = crypto.randomBytes(4).readUInt32BE(0).toString().padStart(10, "0").slice(-8);
+    if (
+      digits === "00000000" ||
+      digits === "11111111" ||
+      digits === "12345678" ||
+      digits === "87654321"
+    ) continue;
+    const pin = `${digits.slice(0, 3)}-${digits.slice(3, 5)}-${digits.slice(5)}`;
+    if (pin !== previous) return pin;
+  }
+}
+
 export class HomeKitCameraAccessory {
   public accessory: Accessory;
   public controller!: CameraController;
@@ -766,6 +781,7 @@ export class HomeKitCameraAccessory {
     const randomHex = crypto.randomBytes(5).toString("hex").toUpperCase();
     this.record.username = `0E:${randomHex.match(/.{2}/g)!.join(":")}`;
     this.record.setupId = crypto.randomBytes(2).toString("hex").toUpperCase().slice(0, 4);
+    this.record.pincode = generateFreshHomeKitPin(this.record.pincode);
 
     // Pick next free port across both HomeKit records and Camera.UI store
     const usedPorts = new Set<number>();

@@ -1,4 +1,4 @@
-# Matter All-in-One for Home Assistant — v1.8.30
+# Matter All-in-One for Home Assistant — v1.8.31
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/chrisalvir1/matter-all-in-one-chrisalvir/main/matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
@@ -15,7 +15,7 @@ This file is intentionally structured for both humans and AI agents.
 
 ```yaml
 project: matter-all-in-one-chrisalvir
-version: "1.8.30"
+version: "1.8.31"
 spec: "Matter 1.6"
 engine: matterbridge
 engine_version: "3.10.10"
@@ -135,6 +135,11 @@ npm update -g matter-all-in-one-chrisalvir
 ---
 
 ## Changelog Summary (latest)
+
+### v1.8.31 (2026-09-20) — reinicio HAP real y servicios de cámara
+
+- Restablecer emparejamiento genera una identidad HAP completa y un PIN/QR nuevos.
+- Las selecciones de luz, sirena y sensores se reconstruyen como servicios del mismo accesorio de cámara en Apple Casa.
 
 ### v1.8.30 (2026-09-20) — audio HKSV tolerante a discontinuidades
 
