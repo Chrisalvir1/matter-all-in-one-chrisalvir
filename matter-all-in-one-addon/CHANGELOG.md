@@ -3056,3 +3056,13 @@ All notable changes to this project will be documented in this file.
 - Video camera streaming management and RTSP/WebRTC support.
 - Soil moisture and temperature sensor mapping.
 - Automatic Supervisor API token and WebSocket host detection.
+## [1.8.26] - 2026-09-20
+
+### BLE y fuentes de cámara
+- Reintenta comandos BLE/fan únicamente cuando Home Assistant confirma una desconexión.
+- Camera.UI permanece como fuente única de RTSP; no se inyectan rutas antiguas de go2rtc.
+
+## [1.8.25] - 2026-09-20
+
+### BLE sin bloqueo
+- Corrige el flujo de recuperación de comandos BLE tras reconexiones de Home Assistant.
