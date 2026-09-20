@@ -2229,16 +2229,27 @@ export class HomeAssistant extends EventEmitter {
       this.deviceCommandQueues.get(queueKey) ?? Promise.resolve();
 
     const executeCall = async () => {
-      const response = await this.request(
-        {
-          type: "call_service",
-          domain,
-          service,
-          service_data: { ...serviceData },
-          target: { entity_id: entityId },
-        },
-        this._serviceTimeout,
-      );
+      const payload = {
+        type: "call_service",
+        domain,
+        service,
+        service_data: { ...serviceData },
+        target: { entity_id: entityId },
+      };
+      // BLE integrations can keep HA busy while reconnecting. Do not fail the
+      // Matter command immediately just because the WebSocket is between
+      // connections; wait briefly and retry once before surfacing the error.
+      await this.waitForConnection(this._serviceTimeout);
+      let response: HassWebSocketResponseResult;
+      try {
+        response = await this.request(payload, this._serviceTimeout);
+      } catch (error) {
+        if (!/not connected to Home Assistant|WebSocket closed/i.test(String(error))) {
+          throw error;
+        }
+        await this.waitForConnection(5000);
+        response = await this.request(payload, this._serviceTimeout);
+      }
 
       if (!response.success) {
         throw new Error(
@@ -2266,6 +2277,16 @@ export class HomeAssistant extends EventEmitter {
       .catch(() => undefined);
 
     return nextPromise;
+  }
+
+  private async waitForConnection(timeoutMs: number): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    while (!this.connected || !this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      if (Date.now() >= deadline) {
+        throw new Error("Home Assistant WebSocket unavailable for service command");
+      }
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
   }
 
   /**
