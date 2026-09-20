@@ -35,9 +35,15 @@ function migrateLegacyBridgeStream(
   cam: CameraUiCameraRecord,
   config: CameraUiConfig,
 ): CameraUiCameraRecord {
-  if (!isLegacyBridgeStreamUrl(cam.rtspUrl)) return cam;
   const streamName = CANONICAL_CUI_STREAMS[cam.id];
-  if (!streamName) return cam;
+  if (!streamName) return cam; // Tapo C402 and unknown cameras stay untouched.
+  // Camera.UI may disclose the physical Wyze RTSP address during discovery.
+  // That endpoint is not a stable bridge source: it goes unavailable whenever
+  // the camera reconnects, while Camera.UI's own `cui_*` restream persists.
+  // Prefer the configured Camera.UI listener for every known canonical stream.
+  const isCanonical = new RegExp(`:2101/${streamName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i").test(cam.rtspUrl || "");
+  if (isCanonical) return cam;
+  if (!isLegacyBridgeStreamUrl(cam.rtspUrl) && cam.id !== "cameraui_cba17b87-e6c0-4cc9-b6ab-e88b8cbc7cb4") return cam;
   try {
     const host = new URL(config.serverUrl).hostname;
     if (!host) return cam;
@@ -921,7 +927,7 @@ export class CameraUiStorage {
       const repaired = repairCameraRecord(rawItem).cam;
       const existing = existingMap.get(repaired.id);
       if (existing) {
-        const finalItem = repairCameraRecord({
+        const mergedItem = repairCameraRecord({
           ...repaired,
           // Camera.UI is authoritative. Retain a manual URL only if live
           // discovery omitted it; never revive an old generated bridge route.
@@ -941,10 +947,11 @@ export class CameraUiStorage {
           doorbellActive: existing.doorbellActive ?? false,
           lastDoorbellAt: existing.lastDoorbellAt,
         }).cam;
+        const finalItem = migrateLegacyBridgeStream(mergedItem, store.config);
         const index = merged.findIndex((camera) => camera.id === repaired.id);
         merged[index] = finalItem;
       } else {
-        merged.push(repaired);
+        merged.push(migrateLegacyBridgeStream(repaired, store.config));
       }
     }
 

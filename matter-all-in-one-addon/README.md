@@ -1,4 +1,4 @@
-# Matter All-in-One for Home Assistant — v1.8.31
+# Matter All-in-One for Home Assistant — v1.8.32
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/chrisalvir1/matter-all-in-one-chrisalvir/main/matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
@@ -15,7 +15,7 @@ This file is intentionally structured for both humans and AI agents.
 
 ```yaml
 project: matter-all-in-one-chrisalvir
-version: "1.8.31"
+version: "1.8.32"
 spec: "Matter 1.6"
 engine: matterbridge
 engine_version: "3.10.10"
@@ -135,6 +135,10 @@ npm update -g matter-all-in-one-chrisalvir
 ---
 
 ## Changelog Summary (latest)
+
+### v1.8.32 (2026-09-20) — Wyze mediante restream Camera.UI
+
+- Wyze deja de depender del RTSP físico efímero y usa el stream canónico `cui_*` de Camera.UI.
 
 ### v1.8.31 (2026-09-20) — reinicio HAP real y servicios de cámara
 

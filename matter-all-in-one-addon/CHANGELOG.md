@@ -3100,3 +3100,8 @@ All notable changes to this project will be documented in this file.
 
 - **Nuevo código de emparejamiento:** el restablecimiento cambia MAC HAP, UUID, puerto, Setup ID y PIN; Casa recibe un QR nuevo, en vez de reutilizar el código anterior.
 - **Servicios bajo la cámara:** luz, sirena y sensor de movimiento seleccionados desde Camera.UI se montan como servicios del mismo accesorio HAP. Cambiar una selección reconstruye dicho accesorio de forma controlada para aplicar el grafo actualizado.
+## [1.8.32] - 2026-09-20
+
+### Fuente estable de Wyze
+
+- La cámara Wyze Patio Trasero usa siempre su restream canónico de Camera.UI en lugar de la URL RTSP física que puede quedar inaccesible tras una reconexión. La cámara mantiene identidad, PIN, puerto y pairing HAP persistentes.

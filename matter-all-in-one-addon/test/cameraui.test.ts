@@ -291,6 +291,24 @@ describe("Camera.UI Client and Storage Integration", () => {
     expect(saveSpy).toHaveBeenCalled();
   });
 
+  it("uses the Camera.UI restream for the known Wyze camera instead of its fragile physical RTSP URL", async () => {
+    const store = {
+      config: { enabled: true, serverUrl: "https://192.168.110.46:3543", rtspUsername: "admin", rtspPassword: "local-only" },
+      cameras: [],
+    };
+    vi.spyOn(CameraUiStorage, "load").mockResolvedValue(store as any);
+    vi.spyOn(CameraUiStorage, "save").mockResolvedValue();
+
+    const result = await CameraUiStorage.mergeDiscoveredCameras([{
+      id: "cameraui_cba17b87-e6c0-4cc9-b6ab-e88b8cbc7cb4",
+      name: "WYZE PATIO TRASERO",
+      rtspUrl: "rtsp://camera-lan.invalid:554/stream0",
+      homeKitEnabled: true,
+    }]);
+
+    expect(result.cameras[0].rtspUrl).toContain("192.168.110.46:2101/cui_wyze_patio_trasero_wyze_pan_v2");
+  });
+
   it("keeps an exported paired camera when a Camera.UI sync is partial", async () => {
     const pairedCamera: CameraUiCameraRecord = {
       id: "garage",
