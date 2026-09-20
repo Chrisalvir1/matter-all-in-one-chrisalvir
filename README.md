@@ -4,9 +4,9 @@
   <img src="matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
 </div>
 
-> **Matter All-in-One for Home Assistant (v1.8.19)**
+> **Matter All-in-One for Home Assistant (v1.8.21)**
 > Expone entidades verificadas de Home Assistant como accesorios Matter 1.6 estables, cámaras Scrypted passthrough con HKSV y cámaras HomeKit con Live View en Apple Home.
-> **Base:** `matterbridge@3.10.7` · **Node.js:** `26.8.1-alpine3.24` · **TypeScript:** `7.0.2` · **Vitest:** `5.0.0-rc.4` · **Vite:** `8.2.2` · **Spec:** Matter 1.6 (CSA, 17 Jun 2026)
+> **Base:** `matterbridge@3.10.10` · **Node.js:** `24.21.0-alpine3.24` · **TypeScript:** `7.0.2` · **Vitest:** `5.0.0-rc.4` · **Vite:** `8.2.2` · **Spec:** Matter 1.6 (CSA, 17 Jun 2026)
 
 ---
 
@@ -18,7 +18,7 @@
 * **Red dual-stack**: IPv4 e IPv6 permanecen habilitados y mDNS escucha las interfaces disponibles para sobrevivir cambios de ruta entre Ethernet y Wi-Fi.
 * **Liquid Glass UI Integration**: View QR codes and manual codes natively inside a custom dark-themed control panel, without leaving the page.
 * **Apple Home con tipos verificados**: luces, enchufes, persianas `windowCovering`, cerraduras, termostatos, ventiladores, RVC y sensores admitidos.
-* **Camera.UI → Apple Home estable**: las cámaras HAP ya emparejadas conservan su identidad, stream, detección y HKSV durante las sincronizaciones; un refresh no reinicia el accesorio ni obliga a emparejar de nuevo.
+* **Camera.UI → Apple Home estable**: H.264 conserva passthrough RTP con SPS/PPS por keyframe para aperturas rápidas; HEVC se adapta únicamente en la salida HAP; HKSV normaliza el timeline fMP4 para detección y grabación fiables. Las cámaras ya emparejadas conservan su identidad durante sincronizaciones.
 * **Thread externo**: el bridge usa IP; una red Thread requiere un Thread Border Router compatible en la LAN.
 
 ---

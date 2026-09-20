@@ -1,11 +1,11 @@
-# Matter All-in-One for Home Assistant — v1.8.19
+# Matter All-in-One for Home Assistant — v1.8.21
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/chrisalvir1/matter-all-in-one-chrisalvir/main/matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
 </div>
 
 > Puente Matter 1.6 para Home Assistant con código QR independiente para apagadores dobles/triples, perfiles conservadores para Apple Home y modelo/marca real en el campo Model.
-> **Base:** `matterbridge@3.10.7` · **Node.js:** `26.8.1-alpine3.24` · **TypeScript:** `7.0.2` · **Spec:** Matter 1.6 (CSA, 17 Jun 2026)
+> **Base:** `matterbridge@3.10.10` · **Node.js:** `24.21.0-alpine3.24` · **TypeScript:** `7.0.2` · **Spec:** Matter 1.6 (CSA, 17 Jun 2026)
 
 ---
 
@@ -15,10 +15,10 @@ This file is intentionally structured for both humans and AI agents.
 
 ```yaml
 project: matter-all-in-one-chrisalvir
-version: "1.8.19"
+version: "1.8.21"
 spec: "Matter 1.6"
 engine: matterbridge
-engine_version: "3.10.7"
+engine_version: "3.10.10"
 node_image: "node:26.8.1-alpine3.24"
 bridge_mode: server       # Each HA device = ServerNode; standalone entities keep their own QR
 plugin_mode: dynamic      # MatterbridgeDynamicPlatform
@@ -107,7 +107,7 @@ Matter 1.6 Network (mDNS + BLE commissioning)
 | `src/entities/composite-device.entity.ts` | Fan+Light grouped by HA device_id or explicit include list |
 | `src/converters/vacuum.converter.ts` | HA vacuum state → Matter RVC attributes |
 | `run.sh` | Startup: mDNS interface detection, plugin registration, proxy |
-| `Dockerfile` | Imagen multi-stage reproducible con `node:26.8.1-alpine3.24` y `matterbridge@3.10.7` |
+| `Dockerfile` | Imagen multi-stage reproducible con `node:24.21.0-alpine3.24` y `matterbridge@3.10.10` |
 
 ---
 
@@ -117,7 +117,7 @@ Matter 1.6 Network (mDNS + BLE commissioning)
 
 ```bash
 # 1. Instalar Matterbridge (última versión requerida)
-npm install -g matterbridge@3.10.7
+npm install -g matterbridge@3.10.10
 
 # 2. Instalar el plugin
 npm install -g matter-all-in-one-chrisalvir@1.4.64
@@ -135,6 +135,19 @@ npm update -g matter-all-in-one-chrisalvir
 ---
 
 ## Changelog Summary (latest)
+
+### v1.8.21 (2026-09-20) — Matterbridge 3.10.10 y disponibilidad real
+
+- Matterbridge actualizado a 3.10.10, incluyendo las correcciones de Camera/WebRTC y el SDK Matter 1.6 más reciente.
+- Una caída del WebSocket de Home Assistant marca los accesorios exportados como no alcanzables sin eliminarlos ni romper su emparejamiento HAP; al reconectar vuelven a estar disponibles.
+- Se elimina el fallback incorrecto a `127.0.0.1` dentro del contenedor, que producía respuestas 404 y dejaba estados y streams congelados.
+
+### v1.8.20 (2026-09-18) — HAP Live View y HKSV fiables
+
+- H.264 mantiene copia RTP/SRTP nativa, ahora repitiendo SPS/PPS por keyframe para que Apple Home pueda decodificar inmediatamente un restream ya abierto.
+- HEVC/H.265 conserva la fuente original y se convierte a H.264 solo en el límite RTP de HAP, porque el accesorio negocia perfiles H.264; evita paquetes no negociados y «Sin respuesta».
+- HKSV conserva H.264 nativo y normaliza DTS/PTS para generar fragmentos fMP4 monotónicos y válidos para detección y grabación.
+- Las cámaras HAP ya emparejadas no se eliminan ni se vuelven a enlazar.
 
 ### v1.2.62 (2026-07-24) — Estabilidad y actualización a 3.10.2
 

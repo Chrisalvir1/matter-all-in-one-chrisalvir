@@ -7,6 +7,8 @@ on:
     paths:
       - "matter-all-in-one-addon/**"
       - ".github/workflows/publish-addon-image.yml"
+  release:
+    types: [created]
   workflow_dispatch:
 
 concurrency:
