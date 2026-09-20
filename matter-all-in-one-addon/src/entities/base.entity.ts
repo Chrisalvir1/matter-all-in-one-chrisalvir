@@ -412,13 +412,10 @@ export class BaseEntity {
     service: string,
     data?: Record<string, any>,
   ): Promise<void> {
-    return this.platform.ha
-      .callService(
-        domain,
-        service,
-        this.entityId,
-        data ?? {},
-      )
+    const request = data === undefined
+      ? this.platform.ha.callService(domain, service, this.entityId)
+      : this.platform.ha.callService(domain, service, this.entityId, data)
+    return request
       .then(() => undefined)
       .catch((error) => {
         this.platform.log?.warn?.(
