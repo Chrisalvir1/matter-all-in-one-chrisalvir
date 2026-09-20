@@ -837,6 +837,26 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       this.recordEntityDiagnostic(entityId, message, "warning");
   }
 
+  /**
+   * Home Assistant WebSocket loss is a real availability loss. Keep the
+   * paired HAP accessories and Matter endpoints published, but mark them
+   * unreachable so Apple Home does not present stale devices as available.
+   */
+  private markExportedDevicesUnreachable(reason: string): void {
+    this.recordConnectionProblem(reason);
+    for (const [entityId, entity] of this.entities) {
+      if (!this.isEntityExported(entityId)) continue;
+      if (typeof (entity as any).setReachability === "function") {
+        void (entity as any).setReachability(false);
+      }
+    }
+    for (const composite of this.compositeDevices.values()) {
+      if (typeof (composite as any).setReachability === "function") {
+        void (composite as any).setReachability(false);
+      }
+    }
+  }
+
   private observeHomeAssistantAvailability(
     entityId: string,
     state: HassState,
@@ -2036,6 +2056,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       }
       const message = this.describeHomeAssistantConnectionFailure(reason);
       this.log.warn(`Disconnected from Home Assistant: ${message}`);
+      this.markExportedDevicesUnreachable(`Home Assistant desconectado: ${message}`);
     });
 
     this.ha.on("error", (err) => {
@@ -2065,7 +2086,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     );
     this.log.notice(`[Runtime] Matterbridge runtime: ${mbVersion}`);
     this.log.notice(`[Runtime] Node.js runtime: ${process.version}`);
-    this.log.notice(`[Runtime] Plugin version: 1.8.20`);
+    this.log.notice(`[Runtime] Plugin version: 1.8.21`);
     await this.loadEntityDiagnostics();
     await this.startUiServer();
     this.startMatterConnectionMonitor();

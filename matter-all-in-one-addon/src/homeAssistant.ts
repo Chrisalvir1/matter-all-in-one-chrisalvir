@@ -1724,12 +1724,10 @@ export class HomeAssistant extends EventEmitter {
           }
           this.log.error(`WebSocket error: ${event.message}`);
           this.emit("error", `WebSocket error: ${event.message}`);
-          if (this.wsUrl.includes("supervisor")) {
-            this.log.warn(
-              `[HomeAssistant] Supervisor core proxy failed. Switching to direct localhost ws://127.0.0.1:8123/api/websocket...`,
-            );
-            this.wsUrl = "ws://127.0.0.1:8123/api/websocket";
-          }
+          // Never fall back to 127.0.0.1 from an add-on container: that
+          // address is the bridge container, not Home Assistant Core. Keep
+          // the configured supervisor/direct host and let the bounded retry
+          // reconnect after HA or the Supervisor proxy becomes ready.
           if (!this.closing) this.startReconnect();
           return reject(new Error(`WebSocket error: ${event.message}`));
         };

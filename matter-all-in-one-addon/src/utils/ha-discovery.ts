@@ -167,7 +167,11 @@ export function toWsUrl(url: string): string {
 
   let parsedUrl = url
     .replace(/^\/core\/?$/, "") // bare /core path
-    .replace(/\/core\/?$/, ""); // trailing /core
+    .replace(/\/core\/?$/, "") // trailing /core
+    // Configurations are sometimes persisted with the websocket suffix.
+    // HomeAssistant appends it when opening the socket, so normalize it here
+    // to avoid /api/websocket/api/websocket after a restart or migration.
+    .replace(/\/api\/websocket\/?$/, "");
 
   // If the user just typed an IP or hostname without protocol, assume http (which becomes ws)
   if (!parsedUrl.includes("://")) {
