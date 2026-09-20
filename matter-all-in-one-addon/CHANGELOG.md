@@ -1,3 +1,9 @@
+## [1.8.29] - 2026-09-20
+
+### Vimtag Camera.UI streams
+
+- Añade los streams principales canónicos de Sala, Gimnasio, Oficina y Recámara de las Vimtag cuando Camera.UI no los devuelve en su inventario REST. Los emparejamientos HAP existentes se conservan.
+
 ## [1.8.28] - 2026-09-20
 
 ### Corrección de aliases RTSP persistidos

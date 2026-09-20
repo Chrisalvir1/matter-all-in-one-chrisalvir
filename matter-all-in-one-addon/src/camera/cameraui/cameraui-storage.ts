@@ -21,9 +21,13 @@ export function isLegacyBridgeStreamUrl(url?: string): boolean {
 // identifiers, not camera credentials, and replace old bridge-local aliases.
 const CANONICAL_CUI_STREAMS: Record<string, string> = {
   "cameraui_c47abc56-42a1-47d5-9c99-fafa2bba5193": "cui_jardin-vimtag_stream_1",
+  "cameraui_af880e8a-1ef3-4545-a0c8-9877d8bca4f3": "cui_sala-vimtag_stream_1",
   "cameraui_ec110a11-ed20-44f7-8468-2bd8c7dce18f": "cui_tapo_c120_tapo_c120_2k",
   "cameraui_cba17b87-e6c0-4cc9-b6ab-e88b8cbc7cb4": "cui_wyze_patio_trasero_wyze_pan_v2",
   "cameraui_ffd37848-ae95-403b-87f5-3fff4afe8334": "cui_vimtag_cochera_stream_1",
+  "cameraui_25237d2a-48ae-4f77-9cb9-c26608d58128": "cui_vimtag_gym_stream_1",
+  "cameraui_c0abed4c-0a46-4331-b480-32aa614973f8": "cui_vimtag_oficina_stream_1",
+  "cameraui_5715a9d4-fc49-4417-b477-c3159472ca29": "cui_vimtag_recamara_visita_stream_1",
   "cameraui_4661fae4-808d-436c-96db-15be59e01d6b": "cui_ezviz_patio_trasero_stream_1",
 };
 
