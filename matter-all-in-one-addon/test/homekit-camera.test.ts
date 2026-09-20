@@ -299,10 +299,11 @@ describe("HomeKitCameraStreamingDelegate", () => {
     expect(capturedArgs).toContain("copy");
     expect(capturedArgs).toContain("dump_extra=freq=keyframe");
 
-    // Verify audio at HAP-compliant sample rate and bitrate
-    // v1.6.7: no aresample filter (caused FFmpeg crash when stream has no audio track)
+    // Audio is mapped only when the Home Hub requested it, and is normalized
+    // after that optional map so malformed Camera.UI AAC timestamps cannot
+    // stall a HomeKit RTP session.
     expect(capturedArgs).toContain("24k");
-    expect(capturedArgs).not.toContain("aresample=async=1:first_pts=0,volume=2.5");
+    expect(capturedArgs).toContain("aresample=async=1:first_pts=0");
     expect(capturedArgs).toContain("-ar");
     expect(capturedArgs).toContain("-ac");
     expect(capturedArgs).toContain("1");

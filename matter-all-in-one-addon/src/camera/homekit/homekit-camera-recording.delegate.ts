@@ -497,6 +497,11 @@ export class HomeKitCameraRecordingDelegate
         "0:a:0?",
         "-c:a",
         "aac",
+        // Camera.UI sources can restart with an AAC timestamp discontinuity.
+        // Audio is already re-encoded for HKSV, so repair that timeline here
+        // without changing the native video passthrough.
+        "-af",
+        "aresample=async=1:first_pts=0",
         "-ar",
         samplerateStr,
         "-b:a",
@@ -513,6 +518,9 @@ export class HomeKitCameraRecordingDelegate
     args.push(
       "-avoid_negative_ts",
       "make_zero",
+      // Do not let an audio timestamp jump hold fMP4 video fragments hostage.
+      "-max_interleave_delta",
+      "0",
       "-muxdelay",
       "0",
       "-muxpreload",

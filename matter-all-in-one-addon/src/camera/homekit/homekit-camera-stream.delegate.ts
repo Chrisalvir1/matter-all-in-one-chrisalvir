@@ -513,6 +513,9 @@ export class HomeKitCameraStreamingDelegate
       );
       callback(undefined, response);
     } catch (error) {
+      this.platform?.log?.warn?.(
+        `[HomeKitCamera][${this.entityId}] HAP SetupEndpoints failed: ${String(error)}`,
+      );
       callback(error as Error);
     }
   }
@@ -547,6 +550,9 @@ export class HomeKitCameraStreamingDelegate
     if (request.type === StreamRequestTypes.START) {
       const session = this.activeSessions.get(request.sessionID);
       if (!session) {
+        this.platform?.log?.warn?.(
+          `[HomeKitCamera][${this.entityId}] HAP START rejected: session=${request.sessionID} was not prepared`,
+        );
         callback(new Error(`Session ${request.sessionID} was not prepared`));
         return;
       }
@@ -585,6 +591,9 @@ export class HomeKitCameraStreamingDelegate
     const ffmpegPath = resolveFfmpegPath();
     const sourceUrl = this.getCleanSourceUrl();
     if (!ffmpegPath || !sourceUrl) {
+      this.platform?.log?.warn?.(
+        `[HomeKitCamera][${this.entityId}] HAP START rejected: ${!ffmpegPath ? "FFmpeg unavailable" : "stream source unavailable"}`,
+      );
       callback(new Error("FFmpeg or RTSP source is unavailable"));
       return;
     }
@@ -1015,6 +1024,10 @@ export class HomeKitCameraStreamingDelegate
       }
 
       args.push(
+        // Audio is mapped only when HAP requested it.  Reset a broken Camera.UI
+        // AAC timeline here, without changing the video passthrough path.
+        "-af",
+        "aresample=async=1:first_pts=0",
         "-ar",
         String(sampleRate),
         "-ac",

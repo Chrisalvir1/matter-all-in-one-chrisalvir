@@ -1,3 +1,11 @@
+## [1.8.30] - 2026-09-20
+
+### Estabilidad HAP y HKSV para Camera.UI
+
+- **Audio con timestamps discontinuos:** normaliza el audio AAC en las salidas HKSV y HAP RTP mediante `aresample=async=1:first_pts=0`. El vídeo continúa en passthrough H.264 cuando es compatible; no se modifica la fuente Camera.UI.
+- **Fragmentos fMP4 independientes:** evita que un salto de tiempo de audio bloquee la entrega de fragmentos de vídeo al Home Hub.
+- **Diagnóstico HAP:** registra errores de `SetupEndpoints` y solicitudes `START` rechazadas, distinguiendo una fuente RTSP viva de una sesión HomeKit que no llegó a prepararse.
+
 ## [1.8.29] - 2026-09-20
 
 ### Vimtag Camera.UI streams
