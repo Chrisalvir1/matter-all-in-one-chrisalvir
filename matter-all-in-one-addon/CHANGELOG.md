@@ -3105,3 +3105,8 @@ All notable changes to this project will be documented in this file.
 ### Fuente estable de Wyze
 
 - La cámara Wyze Patio Trasero usa siempre su restream canónico de Camera.UI en lugar de la URL RTSP física que puede quedar inaccesible tras una reconexión. La cámara mantiene identidad, PIN, puerto y pairing HAP persistentes.
+## [1.8.33] - 2026-09-20
+
+### Inicio y guardado no bloqueante
+
+- Guardar host o credenciales Camera.UI persiste la configuración y responde de inmediato. Los remontajes HAP necesarios pasan a segundo plano, evitando bloquear la interfaz mientras reinicia múltiples cámaras.

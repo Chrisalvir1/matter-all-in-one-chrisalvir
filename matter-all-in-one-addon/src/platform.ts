@@ -2081,7 +2081,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     );
     this.log.notice(`[Runtime] Matterbridge runtime: ${mbVersion}`);
     this.log.notice(`[Runtime] Node.js runtime: ${process.version}`);
-    this.log.notice(`[Runtime] Plugin version: 1.8.32`);
+    this.log.notice(`[Runtime] Plugin version: 1.8.33`);
     await this.loadEntityDiagnostics();
     await this.startUiServer();
     this.startMatterConnectionMonitor();
@@ -6637,6 +6637,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             const body = await this.readRequestBody(req);
             const data = JSON.parse(body);
             const store = await CameraUiStorage.load();
+            const previousServerUrl = store.config.serverUrl;
+            const previousRtspUsername = store.config.rtspUsername;
+            const previousRtspPassword = store.config.rtspPassword;
 
             if (typeof data.enabled === "boolean") store.config.enabled = data.enabled;
             if (data.serverUrl !== undefined) store.config.serverUrl = String(data.serverUrl).trim();
@@ -6657,18 +6660,28 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             }
 
             await CameraUiStorage.save(store);
-
-            for (const camera of store.cameras) {
-              if (!camera.homeKitEnabled || !camera.rtspUrl) continue;
-              try {
-                await CameraUiHomeKitBridge.mountCamera(this, camera, { forceRemount: true });
-              } catch (mountErr) {
-                this.log.warn(`[Camera.UI] Error applying RTSP configuration to ${camera.name}: ${mountErr}`);
-              }
-            }
-
             res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
             res.end(JSON.stringify({ success: true, config: store.config }));
+
+            // Respond before touching HAP. Previously each persisted camera was
+            // remounted serially here, leaving the UI stuck on “Guardando”.
+            const rtspChanged =
+              previousServerUrl !== store.config.serverUrl ||
+              previousRtspUsername !== store.config.rtspUsername ||
+              previousRtspPassword !== store.config.rtspPassword;
+            if (rtspChanged) {
+              void (async () => {
+                for (const camera of store.cameras) {
+                  if (!camera.homeKitEnabled || !camera.rtspUrl) continue;
+                  try {
+                    await CameraUiHomeKitBridge.mountCamera(this, camera, { forceRemount: true });
+                  } catch (mountErr) {
+                    this.log.warn(`[Camera.UI] Error applying RTSP configuration to ${camera.name}: ${mountErr}`);
+                  }
+                }
+                this.broadcastSseMessage("cameraui_updated", { connectionStatus: "connecting" });
+              })();
+            }
           } catch (err: any) {
             res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
             res.end(JSON.stringify({ success: false, error: err.message || "Error al guardar configuración de Camera.UI" }));
