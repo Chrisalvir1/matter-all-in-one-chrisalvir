@@ -384,7 +384,18 @@ export class CameraUiHomeKitBridge {
     platform: any,
     cameraId: string,
   ): Promise<boolean> {
-    const accessory = this.activeAccessories.get(cameraId);
+    let accessory = this.activeAccessories.get(cameraId);
+    // "Eliminar de exportación" deliberately unmounts the HAP accessory.
+    // A subsequent explicit reset is also an explicit request to make that
+    // camera available again, so restore its export before creating the QR.
+    if (!accessory) {
+      const store = await CameraUiStorage.load();
+      const camera = store.cameras.find((c) => c.id === cameraId);
+      if (!camera || !camera.rtspUrl) return false;
+      camera.homeKitEnabled = true;
+      await CameraUiStorage.save(store);
+      accessory = await this.mountCamera(platform, camera);
+    }
     if (accessory) {
       await accessory.resetPairing();
       const store = await CameraUiStorage.load();

@@ -42,7 +42,31 @@ function migrateLegacyBridgeStream(
   // the camera reconnects, while Camera.UI's own `cui_*` restream persists.
   // Prefer the configured Camera.UI listener for every known canonical stream.
   const isCanonical = new RegExp(`:2101/${streamName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i").test(cam.rtspUrl || "");
-  if (isCanonical) return cam;
+  if (isCanonical) {
+    // Older releases persisted the Camera.UI stream with stale/placeholder
+    // userinfo. Camera.UI then returns 401 even though its own HomeKit bridge
+    // works. Refresh only credentials for known canonical cui_* routes from
+    // the locally saved RTSP configuration; do not alter Tapo C402 or any
+    // physical/manual camera URL.
+    if (!config.rtspUsername) return cam;
+    try {
+      const url = new URL(cam.rtspUrl!);
+      const currentUser = decodeURIComponent(url.username || "");
+      const currentPassword = decodeURIComponent(url.password || "");
+      const desiredUser = config.rtspUsername;
+      const desiredPassword = config.rtspPassword || "";
+      if (currentUser === desiredUser && currentPassword === desiredPassword) {
+        return cam;
+      }
+      const credentials = `${encodeURIComponent(desiredUser)}:${encodeURIComponent(desiredPassword)}@`;
+      return {
+        ...cam,
+        rtspUrl: `rtsp://${credentials}${url.hostname}:2101/${streamName}`,
+      };
+    } catch {
+      return cam;
+    }
+  }
   if (!isLegacyBridgeStreamUrl(cam.rtspUrl) && cam.id !== "cameraui_cba17b87-e6c0-4cc9-b6ab-e88b8cbc7cb4") return cam;
   try {
     const host = new URL(config.serverUrl).hostname;

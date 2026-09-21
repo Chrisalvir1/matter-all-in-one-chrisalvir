@@ -3126,3 +3126,10 @@ All notable changes to this project will be documented in this file.
 - El restablecimiento desde la tarjeta Camera.UI persiste también el PIN recién generado.
 - Se eliminan el probe y snapshot RTSP automáticos al publicar Camera.UI: la metadata llega de Camera.UI y el stream se abre bajo demanda, sin agotar lectores RTSP al reiniciar.
 - La interfaz distingue explícitamente Activar HomeKit de Desactivar HomeKit.
+## [1.8.36] - 2026-09-20
+
+### Reactivación HAP y autenticación Camera.UI
+
+- Restablecer una cámara Camera.UI vuelve a activar su exportación HAP cuando había sido eliminada previamente.
+- Las rutas RTSP canónicas `cui_*` reparan credenciales persistidas obsoletas usando solamente las credenciales RTSP locales configuradas.
+- La migración no modifica Tapo C402, rutas manuales ni cámaras fuera de la lista canónica Camera.UI.

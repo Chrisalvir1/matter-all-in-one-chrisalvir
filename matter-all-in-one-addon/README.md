@@ -1,4 +1,4 @@
-# Matter All-in-One for Home Assistant — v1.8.35
+# Matter All-in-One for Home Assistant — v1.8.36
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/chrisalvir1/matter-all-in-one-chrisalvir/main/matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
@@ -15,7 +15,7 @@ This file is intentionally structured for both humans and AI agents.
 
 ```yaml
 project: matter-all-in-one-chrisalvir
-version: "1.8.35"
+version: "1.8.36"
 spec: "Matter 1.6"
 engine: matterbridge
 engine_version: "3.10.10"
@@ -135,6 +135,11 @@ npm update -g matter-all-in-one-chrisalvir
 ---
 
 ## Changelog Summary (latest)
+
+### v1.8.36 (2026-09-20) — restaurar exportación y credenciales Camera.UI
+
+- Un restablecimiento HAP reactiva una cámara que fue eliminada de la exportación antes de generar su QR nuevo.
+- Los streams canónicos `cui_*` actualizan credenciales RTSP antiguas desde la configuración Camera.UI guardada; evita 401 sin modificar Tapo C402 ni URLs manuales.
 
 ### v1.8.35 (2026-09-20) — QR individuales y Camera.UI sin lectores duplicados
 
