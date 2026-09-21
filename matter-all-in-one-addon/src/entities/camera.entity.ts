@@ -174,11 +174,8 @@ export class CameraEntity extends BaseEntity {
 
   public override async setReachability(reachable: boolean): Promise<void> {
     await super.setReachability(reachable);
-    if (this.homekitAccessory?.accessory) {
-      try {
-        this.homekitAccessory.accessory.updateReachability(reachable);
-      } catch {}
-    }
+    // Note: Accessory.updateReachability() was removed in @homebridge/hap-nodejs v2.
+    // HAP v2 no longer supports the reachability API — no action needed here.
   }
 
   public override async updateState(

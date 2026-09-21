@@ -19,7 +19,7 @@ import {
   StreamRequestCallback,
   StreamRequestTypes,
   StreamingRequest,
-} from "hap-nodejs";
+} from "@homebridge/hap-nodejs";
 import { spawn, type ChildProcess } from "node:child_process";
 import dgram from "node:dgram";
 import type {

@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { uuid } from "hap-nodejs";
+import { uuid } from "@homebridge/hap-nodejs";
 import { MatterbridgeEndpoint, occupancySensor } from "matterbridge";
 import { OccupancySensing } from "matterbridge/matter/clusters";
 import { safeSetAttribute } from "../../utils/matter-attributes.js";
@@ -276,6 +276,25 @@ export class CameraUiHomeKitBridge {
     accessory.recordingDelegate?.on("recording-configured", () => {
       startLocalMotionFallback();
     });
+
+    // For cameras that are already paired at mount time (e.g. EZVIZ, Tapo C120)
+    // Apple Home may not re-send recording-active if it never went offline.
+    // Start motion detection after 90s if: paired + RTSP + no detector yet.
+    // The delay avoids saturating RTSP sockets at cold-start across all cameras.
+    if (camera.isPaired && camera.rtspUrl && isRtspSource) {
+      const pairedFallbackTimer = setTimeout(() => {
+        if (!this.activeMotionDetectors.has(camera.id)) {
+          platform?.log?.notice?.(
+            `[Camera.UI][${camera.name}] Cámara ya pareada: iniciando detector de movimiento FFmpeg sin esperar HKSV`,
+          );
+          startLocalMotionFallback();
+        }
+      }, 90_000);
+      // Clean up the timer if the accessory is unpublished before it fires
+      try {
+        accessory.accessory?.once?.("unpublish", () => clearTimeout(pairedFallbackTimer));
+      } catch { /* HAP accessory may not support once on 'unpublish' */ }
+    }
 
     return accessory;
   }

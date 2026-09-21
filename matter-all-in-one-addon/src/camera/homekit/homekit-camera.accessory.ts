@@ -18,7 +18,7 @@ import {
   uuid,
   VideoCodecType,
   MDNSAdvertiser,
-} from "hap-nodejs";
+} from "@homebridge/hap-nodejs";
 import type {
   CameraCapabilitiesInfo,
   HomeKitCameraStorageRecord,

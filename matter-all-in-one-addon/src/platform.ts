@@ -31,7 +31,7 @@ import { BaseEntity } from "./entities/base.entity.js";
 import { ClosureEntity } from "./entities/closure.entity.js";
 import { LockEntity } from "./entities/lock.entity.js";
 import crypto from "crypto";
-import { uuid, HAPStorage } from "hap-nodejs";
+import { uuid, HAPStorage } from "@homebridge/hap-nodejs";
 import type { HomeKitCameraStorageRecord } from "./camera/camera-types.js";
 import {
   resolveFfmpegPath,

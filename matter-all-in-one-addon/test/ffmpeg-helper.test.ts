@@ -7,7 +7,7 @@ import {
   buildFfmpegStreamArgs,
   StreamPipelineConfig,
 } from "../src/camera/homekit/ffmpeg-helper.js";
-import { SRTPCryptoSuites } from "hap-nodejs";
+import { SRTPCryptoSuites } from "@homebridge/hap-nodejs";
 
 describe("FFmpeg Helper", () => {
   it("sanitizes username:password in RTSP URLs", () => {

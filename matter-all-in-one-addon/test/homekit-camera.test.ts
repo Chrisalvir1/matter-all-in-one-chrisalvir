@@ -4,7 +4,7 @@ import {
   SRTPCryptoSuites,
   StreamRequestTypes,
   AudioStreamingCodecType,
-} from "hap-nodejs";
+} from "@homebridge/hap-nodejs";
 import { EventEmitter } from "node:events";
 import * as ffmpegHelper from "../src/camera/homekit/ffmpeg-helper.js";
 import { HomeKitCameraAccessory } from "../src/camera/homekit/homekit-camera.accessory.js";

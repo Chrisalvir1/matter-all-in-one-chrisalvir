@@ -1,4 +1,21 @@
+## [1.8.38] - 2026-09-21
+
+### Migración HAP: `hap-nodejs` → `@homebridge/hap-nodejs 2.2.3`
+
+- Migrada dependencia de `hap-nodejs ^0.14.3` a `@homebridge/hap-nodejs 2.2.3` (sin cambios funcionales — API idéntica).
+- Actualizados imports en 8 archivos fuente y 3 archivos de test.
+- Corregida incompatibilidad de API: `Accessory.updateReachability()` eliminada en HAP v2 (`camera.entity.ts`).
+- Errores preexistentes de `@matter/protocol` no atribuibles a esta migración.
+- 52 suites, 427 tests pasan ✅.
+
+### Detección de movimiento para cámaras ya pareadas
+
+- Añadido fallback timer (90s) en `cameraui-homekit-bridge.ts`: cámaras ya pareadas con RTSP (EZVIZ, Tapo C120, etc.) inician el detector FFmpeg automáticamente al arrancar el addon, sin esperar que Apple Home active HKSV explícitamente.
+- Sin cambios en WYZE PATIO TRASERO ni TAPO C402 (ya funcionan correctamente).
+- Cámaras no pareadas y sin RTSP (RING) no afectadas.
+
 ## [1.8.30] - 2026-09-20
+
 
 ### Estabilidad HAP y HKSV para Camera.UI
 
