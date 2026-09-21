@@ -1,3 +1,12 @@
+## [1.8.42] - 2026-09-21
+
+### Recuperación de Live View, movimiento y HKSV
+
+- **HKSV se recupera tras una caída RTSP:** si Camera.UI/go2rtc pierde temporalmente el publicador, el prebuffer fMP4 vuelve a abrirse con espera progresiva. Ya no queda desactivado hasta que Apple Home reescriba su configuración.
+- **Movimiento para cámaras ya vinculadas:** C402, EZVIZ, Wyze y otras cámaras Camera.UI vuelven a iniciar su detector local cuando el Home Hub confirma HKSV, incluso si el indicador persistido de pairing quedó atrasado después de un reinicio.
+- **Menos competencia por el stream:** el detector usa el substream cuando Camera.UI lo ofrece y se detiene durante Live View; así reserva el stream principal nativo para Apple Home y HKSV.
+- **C120 preservada:** no se modifica su URL RTSP, identidad HAP, PIN, emparejamiento ni se inicia un detector RTSP adicional para ella.
+
 ## [1.8.40] - 2026-09-21
 
 ### Apple Home / HKSV: Pipeline de Audio AAC, Cero Transcodificación de Vídeo y Resolución Nativa
