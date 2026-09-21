@@ -3133,3 +3133,10 @@ All notable changes to this project will be documented in this file.
 - Restablecer una cámara Camera.UI vuelve a activar su exportación HAP cuando había sido eliminada previamente.
 - Las rutas RTSP canónicas `cui_*` reparan credenciales persistidas obsoletas usando solamente las credenciales RTSP locales configuradas.
 - La migración no modifica Tapo C402, rutas manuales ni cámaras fuera de la lista canónica Camera.UI.
+## [1.8.37] - 2026-09-20
+
+### Detección y grabación HKSV de Camera.UI
+
+- Restaura detección local de movimiento como fallback cuando los tópicos MQTT de Camera.UI no alcanzan el bridge.
+- El fallback se habilita solo después de emparejamiento HAP y configuración HKSV por el Home Hub, protegiendo el inicio y las cámaras no enlazadas.
+- Las detecciones vuelven a emitir `MotionDetected` al mismo accesorio y disparan la grabación HKSV.

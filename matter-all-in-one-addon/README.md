@@ -1,4 +1,4 @@
-# Matter All-in-One for Home Assistant — v1.8.36
+# Matter All-in-One for Home Assistant — v1.8.37
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/chrisalvir1/matter-all-in-one-chrisalvir/main/matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
@@ -15,7 +15,7 @@ This file is intentionally structured for both humans and AI agents.
 
 ```yaml
 project: matter-all-in-one-chrisalvir
-version: "1.8.36"
+version: "1.8.37"
 spec: "Matter 1.6"
 engine: matterbridge
 engine_version: "3.10.10"
@@ -135,6 +135,11 @@ npm update -g matter-all-in-one-chrisalvir
 ---
 
 ## Changelog Summary (latest)
+
+### v1.8.37 (2026-09-20) — detección HKSV bajo demanda
+
+- Recupera el detector local de movimiento como respaldo cuando Camera.UI MQTT no entrega eventos al bridge.
+- El detector se abre solo tras emparejamiento real y negociación HKSV de Apple Home; no arranca para QR pendientes ni durante la carga inicial.
 
 ### v1.8.36 (2026-09-20) — restaurar exportación y credenciales Camera.UI
 

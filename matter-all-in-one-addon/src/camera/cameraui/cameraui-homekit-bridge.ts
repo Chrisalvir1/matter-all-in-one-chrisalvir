@@ -232,16 +232,12 @@ export class CameraUiHomeKitBridge {
       await CameraUiStorage.save(store);
     }
 
-    // Camera.UI already publishes a native motion topic for discovered
-    // cameras.  Do not also open a permanent FFmpeg RTSP reader in that
-    // case: doing so consumed the limited reader slots of Camera.UI and made
-    // Live View unavailable after a restart.  Keep the local detector only
-    // as a fallback for cameras that do not expose native motion events.
-    if (
-      camera.rtspUrl &&
-      !camera.motionTopic &&
-      !this.activeMotionDetectors.has(camera.id)
-    ) {
+    const startLocalMotionFallback = () => {
+      // HKSV fallback is meaningful only for an accessory that Apple Home has
+      // actually paired. Do not consume an RTSP reader for a QR waiting to be
+      // scanned or for a camera intentionally not exported.
+      if (!accessory.isPaired()) return;
+      if (!camera.rtspUrl || this.activeMotionDetectors.has(camera.id)) return;
       try {
         const detector = new FfmpegMotionDetector({
           cameraId: camera.id,
@@ -267,7 +263,19 @@ export class CameraUiHomeKitBridge {
           `[Camera.UI][${camera.name}] No se pudo iniciar el detector de movimiento FFmpeg local: ${detErr}`,
         );
       }
-    }
+    };
+
+    // Prefer Camera.UI MQTT events when they arrive, but do not leave HKSV
+    // blind when that optional event path is unavailable.  The RTSP fallback
+    // starts only after Apple Home has enabled/configured HKSV, never for all
+    // cameras during add-on startup.  This restores MotionDetected and clip
+    // recording without reintroducing the cold-start RTSP saturation.
+    accessory.recordingDelegate?.on("recording-active", (active: boolean) => {
+      if (active) startLocalMotionFallback();
+    });
+    accessory.recordingDelegate?.on("recording-configured", () => {
+      startLocalMotionFallback();
+    });
 
     return accessory;
   }

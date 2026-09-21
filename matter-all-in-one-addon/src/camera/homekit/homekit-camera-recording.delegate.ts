@@ -106,6 +106,7 @@ export class HomeKitCameraRecordingDelegate
       this.stopPrebufferPipeline();
       this.clearPrebuffer();
     }
+    this.emit("recording-active", active);
   }
 
   private isPausedByLiveStream = false;
@@ -155,6 +156,7 @@ export class HomeKitCameraRecordingDelegate
       if (this.recordingActive && !this.ffmpegProcess) {
         this.startPrebufferPipeline();
       }
+      this.emit("recording-configured");
     } else {
       this.record.hksvState = "waiting_hub";
       this.stopPrebufferPipeline();
