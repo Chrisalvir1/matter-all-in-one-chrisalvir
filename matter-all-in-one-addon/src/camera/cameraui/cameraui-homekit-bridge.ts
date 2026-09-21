@@ -47,6 +47,13 @@ export class CameraUiHomeKitBridge {
       return undefined;
     }
 
+    // `AccessoryInfo` is not always available during the first few moments
+    // after the add-on starts. Keep this only as a short-lived recovery hint:
+    // it lets an already-paired camera restore motion detection while HAP is
+    // bringing its persistent pairing database online. It is never written
+    // back as the authoritative pairing state.
+    const wasMarkedPairedBeforePublish = camera.isPaired === true;
+
     const existing = this.activeAccessories.get(camera.id);
     if (existing && (existing.isStreaming || !options.forceRemount)) {
       // A Camera.UI refresh is not a configuration change. Re-publishing an
@@ -253,9 +260,11 @@ export class CameraUiHomeKitBridge {
         const detector = new FfmpegMotionDetector({
           cameraId: camera.id,
           cameraName: camera.name || `Cámara ${camera.id}`,
-          // Prefer the low-bandwidth stream for frame differencing. This keeps
-          // the full native source available to Live View and HKSV.
-          rtspUrl: camera.subRtspUrl || camera.rtspUrl,
+          // Use the same verified primary source advertised to HAP. Camera.UI
+          // sub-stream aliases can survive a server restart while their RTSP
+          // route no longer exists; that made the detector silently retry and
+          // left HomeKit without MotionDetected even though Live View worked.
+          rtspUrl: camera.rtspUrl,
           changeThresholdPercent: 4,
           cooldownMs: 4000,
           resetMs: 15000,
@@ -290,19 +299,20 @@ export class CameraUiHomeKitBridge {
       startLocalMotionFallback(true);
     });
 
-    // For non-C120 cameras that are already paired at mount time (e.g. EZVIZ, Tapo C402)
-    // Apple Home may not re-send recording-active if it never went offline.
-    // Start motion detection after 20s if: paired + RTSP + no detector yet.
-    // The delay avoids saturating RTSP sockets at cold-start across all cameras.
-    if (accessory.isPaired() && camera.rtspUrl && isRtspSource && !isProtectedC120) {
+    // Apple Home may not re-send recording-active after an add-on restart. In
+    // that case HAP's pairing lookup can also be briefly unavailable even for
+    // an already paired accessory. Restore only a *previously marked* paired
+    // camera (or one HAP confirms as paired now), and never touch the C120.
+    // The delay prevents a cold-start surge of RTSP readers.
+    if ((wasMarkedPairedBeforePublish || accessory.isPaired()) && camera.rtspUrl && isRtspSource && !isProtectedC120) {
       const pairedFallbackTimer = setTimeout(() => {
         if (!this.activeMotionDetectors.has(camera.id)) {
           platform?.log?.notice?.(
-            `[Camera.UI][${camera.name}] Cámara ya pareada: iniciando detector de movimiento FFmpeg sin esperar HKSV`,
+            `[Camera.UI][${camera.name}] Recuperando detector de movimiento FFmpeg para cámara ya pareada`,
           );
-          startLocalMotionFallback();
+          startLocalMotionFallback(wasMarkedPairedBeforePublish);
         }
-      }, 20_000);
+      }, 8_000);
       // Clean up the timer if the accessory is unpublished before it fires
       try {
         accessory.accessory?.once?.("unpublish", () => clearTimeout(pairedFallbackTimer));

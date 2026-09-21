@@ -3216,3 +3216,11 @@ All notable changes to this project will be documented in this file.
 - **Medición ligada a la URL:** se conserva códec, audio, resolución y fecha de la prueba únicamente mientras la URL RTSP sea la misma. Al cambiarla, la interfaz exige una nueva verificación.
 - **Sin valores ficticios:** se eliminan los rellenos H.264, 30 fps, AAC y 32 kHz del diagnóstico; se muestra **No verificado** cuando no existe evidencia de stream reciente.
 - **HAP/HKSV H.264:** se mantiene la negociación nativa de resolución/perfil y el audio AAC sólo se copia cuando coincide con lo seleccionado por Apple Home. Vídeo permanece en passthrough.
+## [1.8.43] - 2026-09-21
+
+### Recuperación fiable de detección y HKSV
+
+- **C402, Wyze y EZVIZ:** el detector local de movimiento se recupera tras reiniciar el add-on para cámaras que ya estaban emparejadas, aunque HAP tarde unos segundos en volver a cargar su base de pairing o el Home Hub no reenvíe inmediatamente la configuración HKSV.
+- **Evento correcto para Apple Home:** el detector vuelve a emitir `MotionDetected`; ese evento es el que permite al Home Hub iniciar clips HKSV y aplicar sus clasificaciones de personas, animales o vehículos.
+- **Fuente RTSP coherente:** la detección utiliza el stream principal verificado que también recibe HAP; ya no prioriza un alias de sub-stream que pueda haber quedado obsoleto después de reiniciar Camera.UI.
+- **Arranque protegido:** se espera ocho segundos para evitar saturar lectores RTSP durante el inicio. La Tapo C120 permanece excluida de este fallback y no se modifica su flujo estable.
