@@ -157,6 +157,7 @@ export class CameraUiHomeKitBridge {
       motionEntityId: camera.motionEntityId || camera.realEntities?.find((entity) => entity.type === "motion")?.id,
       lightEntityId: camera.lightEntityId || camera.realEntities?.find((entity) => entity.type === "light")?.id,
       sirenEntityId: camera.sirenEntityId || camera.realEntities?.find((entity) => entity.type === "siren")?.id,
+      realEntities: camera.realEntities,
     };
 
     const accessory = new HomeKitCameraAccessory(
@@ -277,9 +278,9 @@ export class CameraUiHomeKitBridge {
       startLocalMotionFallback();
     });
 
-    // For cameras that are already paired at mount time (e.g. EZVIZ, Tapo C120)
+    // For cameras that are already paired at mount time (e.g. EZVIZ, Tapo C120, Tapo C402)
     // Apple Home may not re-send recording-active if it never went offline.
-    // Start motion detection after 90s if: paired + RTSP + no detector yet.
+    // Start motion detection after 20s if: paired + RTSP + no detector yet.
     // The delay avoids saturating RTSP sockets at cold-start across all cameras.
     if (camera.isPaired && camera.rtspUrl && isRtspSource) {
       const pairedFallbackTimer = setTimeout(() => {
@@ -289,7 +290,7 @@ export class CameraUiHomeKitBridge {
           );
           startLocalMotionFallback();
         }
-      }, 90_000);
+      }, 20_000);
       // Clean up the timer if the accessory is unpublished before it fires
       try {
         accessory.accessory?.once?.("unpublish", () => clearTimeout(pairedFallbackTimer));
