@@ -251,10 +251,10 @@ export class CameraUiHomeKitBridge {
         detector.on("motion", (active: boolean) => {
           CameraUiHomeKitBridge.updateMotion(camera.id, active, platform, "FFmpeg Video");
         });
-        accessory.delegate.on("session-start", () => {
+        accessory.delegate?.on("session-start", () => {
           detector.pause(platform?.log);
         });
-        accessory.delegate.on("session-end", () => {
+        accessory.delegate?.on("session-end", () => {
           detector.resume(platform?.log);
         });
         detector.start(platform?.log);

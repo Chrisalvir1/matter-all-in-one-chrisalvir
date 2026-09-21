@@ -31,6 +31,7 @@ import {
   resolveFfmpegPath,
   sanitizeUrlCredentials,
   supportsFdkAac,
+  checkAudioPassthroughCompatibility,
 } from "./ffmpeg-helper.js";
 
 export interface HomeKitStreamSession {
@@ -51,7 +52,7 @@ export interface HomeKitStreamSession {
   pipeController?: AbortController;
 }
 
-const FALLBACK_JPEG_BUFFER = Buffer.from(
+export const FALLBACK_JPEG_BUFFER = Buffer.from(
   "/9j/4AAQSkZJRgABAgAAAQABAAD//gAPTGF2YzYwLjMuMTAwAP/bAEMACAYGBwYHCAgICAgICQkJCgoKCQkJCQoKCgoKCgwMDAoKCgoKCgoMDAwMDQ4NDQ0MDQ4ODw8PEhIRERUVFRkZH//EAEwAAQEAAAAAAAAAAAAAAAAAAAAHAQEBAAAAAAAAAAAAAAAAAAAAARABAAAAAAAAAAAAAAAAAAAAABEBAAAAAAAAAAAAAAAAAAAAAP/AABEIAPABQAMBIgACEQADEQD/2gAMAwEAAhEDEQA/AI2AoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//9k=",
   "base64",
 );
@@ -909,62 +910,10 @@ export class HomeKitCameraStreamingDelegate
       ];
       args.push(...videoPassArgs);
     } else {
-      // High-fidelity transcoding fallback for HEVC / MJPEG / incompatible formats
-      const videoBitrate =
-        video.width >= 3840
-          ? 8000
-          : video.width >= 2560
-            ? 5000
-            : video.width >= 1920
-              ? 3500
-              : 2000;
-
-      args.push(
-        "-map",
-        "0:v:0",
-        "-an",
-        "-c:v",
-        "libx264",
-        "-pix_fmt",
-        "yuv420p",
-        "-profile:v",
-        h264Profile(video.profile),
-        "-preset",
-        "ultrafast",
-        "-tune",
-        "zerolatency",
-        "-bf",
-        "0",
-        "-crf",
-        "18",
-        "-threads",
-        "0",
-        "-vf",
-        `scale=w='min(${video.width},iw)':h='min(${video.height},ih)':force_original_aspect_ratio=decrease:force_divisible_by=2`,
-        "-r",
-        String(fps),
-        "-g",
-        String(fps),
-        "-keyint_min",
-        String(fps),
-        "-b:v",
-        `${videoBitrate}k`,
-        "-maxrate",
-        `${videoBitrate}k`,
-        "-bufsize",
-        `${videoBitrate * 2}k`,
-        "-f",
-        "rtp",
-        "-payload_type",
-        String(video.pt || 99),
-        "-ssrc",
-        String(session.videoSsrc),
-        "-srtp_out_suite",
-        suiteName(session.videoCryptoSuite),
-        "-srtp_out_params",
-        session.videoKeySalt.toString("base64"),
-        videoUrl,
+      this.platform?.log?.error?.(
+        `[Stream][${this.entityId}] Error: Cámara no entrega H.264 nativo (${this.capabilities.videoCodec || "desconocido"}). Transcodificación con libx264 prohibida en modo passthrough.`,
       );
+      throw new Error(`Cámara no entrega H.264 nativo; transcodificación no permitida`);
     }
 
     if (
@@ -976,76 +925,40 @@ export class HomeKitCameraStreamingDelegate
       const audioUrl =
         `srtp://${host}:${session.audioPort}` +
         `?rtcpport=${session.audioPort}&pkt_size=188`;
-      const isOpus = request.audio.codec === AudioStreamingCodecType.OPUS;
-      const hasFdk = supportsFdkAac();
-      const audioBitrate = Math.min(request.audio.max_bit_rate || 24, 24);
 
-      if (needsSilentAudio) {
-        args.push(
-          "-map",
-          "1:a:0",
-          "-vn",
+      const audioCompat = checkAudioPassthroughCompatibility(
+        this.capabilities.audioCodec,
+        this.capabilities.audioSampleRate,
+        this.capabilities.audioChannels,
+      );
+
+      if (audioCompat.compatible) {
+        this.platform?.log?.notice?.(
+          `[Stream][${this.entityId}] Audio fuente es AAC compatible: transmitiendo con passthrough (-c:a copy)`,
         );
-      } else {
         args.push(
           "-map",
           "0:a:0?",
           "-vn",
-        );
-      }
-
-      if (isOpus) {
-        // HomeKit explicitly negotiated OPUS — use it
-        args.push(
           "-c:a",
-          "libopus",
-          "-application",
-          "lowdelay",
-          "-frame_duration",
-          "20",
-          "-packet_loss",
-          "5",
-        );
-      } else if (hasFdk) {
-        // libfdk_aac: best quality AAC-ELD encoder (premium, low-delay)
-        args.push(
-          "-c:a",
-          "libfdk_aac",
-          "-profile:a",
-          "aac_eld",
-          "-flags",
-          "+global_header",
+          "copy",
+          "-f",
+          "rtp",
+          "-payload_type",
+          String(request.audio.pt || 110),
+          "-ssrc",
+          String(session.audioSsrc),
+          "-srtp_out_suite",
+          suiteName(session.audioCryptoSuite || session.videoCryptoSuite),
+          "-srtp_out_params",
+          session.audioKeySalt.toString("base64"),
+          audioUrl,
         );
       } else {
-        args.push(
-          "-c:a",
-          "aac",
+        this.platform?.log?.notice?.(
+          `[Stream][${this.entityId}] ${audioCompat.reason || "Audio no compatible con passthrough"}. Streaming sólo de vídeo en passthrough sin transcodificación.`,
         );
       }
-
-      args.push(
-        // Audio is mapped only when HAP requested it.  Reset a broken Camera.UI
-        // AAC timeline here, without changing the video passthrough path.
-        "-af",
-        "aresample=async=1:first_pts=0",
-        "-ar",
-        String(sampleRate),
-        "-ac",
-        "1",
-        "-b:a",
-        `${audioBitrate}k`,
-        "-f",
-        "rtp",
-        "-payload_type",
-        String(request.audio.pt || 110),
-        "-ssrc",
-        String(session.audioSsrc),
-        "-srtp_out_suite",
-        suiteName(session.audioCryptoSuite || session.videoCryptoSuite),
-        "-srtp_out_params",
-        session.audioKeySalt.toString("base64"),
-        audioUrl,
-      );
     }
 
     return args;

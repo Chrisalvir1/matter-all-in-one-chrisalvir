@@ -3704,7 +3704,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       // 2. Direct DeviceCommissioner call if agent didn't handle it
       if (!opened) {
         try {
-          const { DeviceCommissioner } = await import("@matter/protocol");
+          const { DeviceCommissioner } = (await import("@matter/protocol" as any)) as any;
           const commissioner = (serverNode as any).env?.get?.(
             DeviceCommissioner,
           );
@@ -3827,7 +3827,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
       // 1. Try deleting fabric directly via dynamic import of FabricManager if available
       try {
-        const { FabricManager } = await import("@matter/protocol");
+        const { FabricManager } = (await import("@matter/protocol" as any)) as any;
         const fabricManager = (serverNode as any).env?.get?.(FabricManager);
         if (fabricManager) {
           let fabric = fabricManager.maybeFor(fabricIndex);

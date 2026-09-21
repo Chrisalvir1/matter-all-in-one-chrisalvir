@@ -15,6 +15,9 @@ export interface ProbeResult {
   error?: string;
   probeMethod?: "ffprobe" | "ffmpeg";
   selectedTransport?: "tcp" | "udp";
+  videoProfile?: string;
+  audioSampleRate?: number;
+  audioChannels?: number;
 }
 
 /**
@@ -595,10 +598,18 @@ function probeWithFfmpeg(
       let width: number | undefined;
       let height: number | undefined;
       let fps: number | undefined;
+      let videoProfile: string | undefined;
+      let bitrateKbps: number | undefined;
+      let audioSampleRate: number | undefined;
+      let audioChannels: number | undefined;
 
-      const videoMatch = stderrData.match(/Video:\s+([a-zA-Z0-9_-]+)/i);
+      const videoMatch = stderrData.match(/Video:\s+([a-zA-Z0-9_-]+)(?:\s+\(([^)]+)\))?/i);
       if (videoMatch) {
-        videoCodec = videoMatch[1].toLowerCase();
+        const rawCodec = videoMatch[1].toLowerCase();
+        videoCodec = rawCodec === "h265" ? "hevc" : rawCodec;
+        if (videoMatch[2]) {
+          videoProfile = videoMatch[2].split(",")[0].trim();
+        }
       }
 
       const resMatch = stderrData.match(/(\d{3,5})x(\d{3,5})/);
@@ -612,9 +623,25 @@ function probeWithFfmpeg(
         fps = Math.round(parseFloat(fpsMatch[1]));
       }
 
+      const bitrateMatch = stderrData.match(/bitrate:\s+(\d+)\s+kb\/s/i);
+      if (bitrateMatch) {
+        bitrateKbps = parseInt(bitrateMatch[1], 10);
+      }
+
       const audioMatch = stderrData.match(/Audio:\s+([a-zA-Z0-9_-]+)/i);
       if (audioMatch) {
         audioCodec = audioMatch[1].toLowerCase();
+      }
+
+      const sampleRateMatch = stderrData.match(/(\d{4,6})\s+Hz/i);
+      if (sampleRateMatch) {
+        audioSampleRate = parseInt(sampleRateMatch[1], 10);
+      }
+
+      if (/mono/i.test(stderrData)) {
+        audioChannels = 1;
+      } else if (/stereo/i.test(stderrData)) {
+        audioChannels = 2;
       }
 
       const valid = Boolean(videoCodec);
@@ -640,7 +667,7 @@ function probeWithFfmpeg(
         } else if (raw.includes("Invalid data found") || raw.includes("Error opening input")) {
           friendly = `Respuesta RTSP no válida (Invalid data found). Verifica si la cámara requiere usuario y contraseña (rtsp://usuario:clave@ip:${portStr}/...), si la ruta es /live en vez de /stream0, o cambia a UDP.`;
         } else if (!friendly) {
-          friendly = lastError || "No se detectaron paquetes de video H.264 válidos en el stream.";
+          friendly = lastError || "No se detectaron paquetes de video válidos en el stream.";
         }
       }
 
@@ -651,6 +678,10 @@ function probeWithFfmpeg(
         width,
         height,
         fps,
+        videoProfile,
+        bitrateKbps,
+        audioSampleRate,
+        audioChannels,
         hasAudio: Boolean(audioCodec),
         probeMethod: "ffmpeg",
         selectedTransport: transport || "tcp",
@@ -667,6 +698,61 @@ function probeWithFfmpeg(
       });
     });
   });
+}
+
+export interface AudioCompatibilityResult {
+  compatible: boolean;
+  reason?: string;
+  sourceSpec?: {
+    codec: string;
+    sampleRate?: number;
+    channels?: number;
+  };
+}
+
+/**
+ * Validates whether a source audio stream can be passed through (-c:a copy)
+ * into an Apple Home / HAP session without transcoding.
+ */
+export function checkAudioPassthroughCompatibility(
+  sourceAudioCodec?: string,
+  sourceSampleRate?: number,
+  sourceChannels?: number,
+  targetRequirement?: {
+    expectedCodec?: string;
+    allowedSampleRates?: number[];
+  },
+): AudioCompatibilityResult {
+  if (!sourceAudioCodec || sourceAudioCodec === "none" || sourceAudioCodec === "unknown") {
+    return {
+      compatible: false,
+      reason: "La cámara no tiene pista de audio detectada",
+    };
+  }
+
+  const normalized = sourceAudioCodec.toLowerCase();
+  if (normalized !== "aac") {
+    return {
+      compatible: false,
+      reason: `Códec de audio fuente (${sourceAudioCodec}) no es AAC. Transcodificación prohibida.`,
+      sourceSpec: { codec: sourceAudioCodec, sampleRate: sourceSampleRate, channels: sourceChannels },
+    };
+  }
+
+  if (targetRequirement?.allowedSampleRates && sourceSampleRate) {
+    if (!targetRequirement.allowedSampleRates.includes(sourceSampleRate)) {
+      return {
+        compatible: false,
+        reason: `Frecuencia de muestreo fuente (${sourceSampleRate} Hz) no compatible sin transcodificación.`,
+        sourceSpec: { codec: sourceAudioCodec, sampleRate: sourceSampleRate, channels: sourceChannels },
+      };
+    }
+  }
+
+  return {
+    compatible: true,
+    sourceSpec: { codec: "aac", sampleRate: sourceSampleRate, channels: sourceChannels },
+  };
 }
 
 /**

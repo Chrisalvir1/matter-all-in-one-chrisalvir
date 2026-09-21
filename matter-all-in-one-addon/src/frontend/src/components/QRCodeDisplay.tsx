@@ -206,10 +206,7 @@ export const QRCodeDisplay: React.FC<QRCodeDisplayProps> = ({
 
   const isMultiAdmin = variant === "multi-admin-glass";
   const isHomeKit = variant === "hap-homekit";
-  const isHevcCodec = Boolean(
-    isHevc ||
-    (videoCodec && (videoCodec.toLowerCase().includes("hevc") || videoCodec.toLowerCase().includes("265")))
-  );
+  const isHevcCodec = Boolean(isHevc);
 
   useEffect(() => {
     if (!pairingCode || !canvasRef.current) return;

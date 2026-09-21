@@ -1,0 +1,27 @@
+{
+  "name": "@homebridge/hap-nodejs",
+  "version": "2.2.3",
+  "upstream": "https://github.com/seydx/HAP-NodeJS.git",
+  "branch": "secure-video",
+  "commit": "d81fba565ee26e82170d5f4f8cd358c2fd773f6c",
+  "builtAt": "2026-09-21T17:53:50Z",
+  "builder": "tsc (TypeScript 6.0.3)",
+  "features": [
+    "SecureVideoController",
+    "SecureVideoTypes",
+    "SecureVideoCredentials",
+    "CameraBufferManagement",
+    "CameraCapabilities",
+    "CameraClientCertificateManagement",
+    "CameraGlobalOperatingMode",
+    "CameraKeyManagement",
+    "CameraMotionZones",
+    "CameraMultiTierRTPStreamManagement",
+    "CameraWebRTCStreamManagement"
+  ],
+  "checksums": {
+    "dist/index.js": "e7c503d986925270cd99b543afa53eb52ec6bddcee44d4c45e863d6bd0044ec5",
+    "dist/lib/controller/SecureVideoController.js": "d95f9ffb1ce42f8ee3ef769a1dc733917b99e0a8e7edee7864fd5705cd4dd6d3",
+    "package.json": "75403e32360059d27559c8cba0d90212be961f924ee88a2936014b7bcfe85d4a"
+  }
+}

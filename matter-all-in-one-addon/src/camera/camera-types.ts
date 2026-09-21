@@ -32,6 +32,12 @@ export interface CameraCapabilitiesInfo {
   hasAudio: boolean;
   /** Detected audio codec. */
   audioCodec: AudioCodecType;
+  /** Audio sample rate in Hz. */
+  audioSampleRate?: number;
+  /** Audio channels count (1 for mono, 2 for stereo). */
+  audioChannels?: number;
+  /** Video profile (e.g. baseline, main, high, main 10). */
+  videoProfile?: string;
   /** Target resolution width and height. */
   resolution: { width: number; height: number };
   /** Maximum frame rate (FPS). */
@@ -96,6 +102,31 @@ export interface HomeKitCameraStorageRecord {
     | "error";
   lastUpdated?: string;
   realEntities?: any[];
+  /** Export mode selected for Apple Home / HAP */
+  exportMode?: "auto" | "passthrough_h264" | "passthrough_hevc" | "disabled";
+  /** Currently active HAP controller type */
+  activeController?: "CameraController" | "SecureVideoController" | "none";
+  /** Codec negotiated in last active streaming/recording session */
+  lastNegotiatedCodec?: "h264" | "hevc" | "none";
+  /** Incompatibility explanation if video or codec cannot be exported via passthrough */
+  videoIncompatibleReason?: string;
+  /** Incompatibility explanation if audio cannot be exported via passthrough */
+  audioIncompatibleReason?: string;
+  /** Detailed probe specs observed directly from source */
+  observedSpecs?: {
+    videoCodec: "h264" | "hevc" | "h265" | "mjpeg" | "unknown";
+    width?: number;
+    height?: number;
+    fps?: number;
+    profile?: string;
+    bitrateKbps?: number;
+    audioCodec?: "aac" | "opus" | "pcm" | "none" | "unknown";
+    audioSampleRate?: number;
+    audioChannels?: number;
+    probedAt?: string;
+    probeStatus?: "verified" | "failed" | "unprobed";
+    probeError?: string;
+  };
 }
 
 export type CameraActivationPhase =

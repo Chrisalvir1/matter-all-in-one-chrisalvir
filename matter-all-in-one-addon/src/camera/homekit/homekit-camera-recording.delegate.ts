@@ -441,80 +441,31 @@ export class HomeKitCameraRecordingDelegate
         "-bsf:v", "dump_extra=freq=keyframe",
       );
     } else {
-      const res = this.selectedConfiguration?.videoCodec.resolution || [
-        1920, 1080, 30,
-      ];
-      args.push(
-        "-map",
-        "0:v:0",
-        "-vcodec",
-        "libx264",
-        "-pix_fmt",
-        "yuv420p",
-        "-profile:v",
-        "baseline",
-        "-level:v",
-        "3.1",
-        "-r",
-        String(res[2] || 30),
-        "-g",
-        String(Math.max(1, (res[2] || 30) * 2)),
-        "-keyint_min",
-        String(Math.max(1, res[2] || 30)),
-        "-preset",
-        "ultrafast",
-        "-tune",
-        "zerolatency",
+      this.platform?.log?.error?.(
+        `[HKSV][${this.entityId}] Cámara no entrega H.264 nativo (${this.capabilities.videoCodec || "desconocido"}). Transcodificación con libx264 prohibida en modo passthrough.`,
       );
+      this.record.hksvState = "not_capable";
+      return;
     }
 
-    // Audio pipeline: format according to negotiated configuration or default AAC
-    const audioCodecConfig = this.selectedConfiguration?.audioCodec;
-    if (this.capabilities.hasAudio) {
-      let samplerateStr = "32k";
-      if (audioCodecConfig) {
-        switch (audioCodecConfig.samplerate) {
-          case AudioRecordingSamplerate.KHZ_8:
-            samplerateStr = "8k";
-            break;
-          case AudioRecordingSamplerate.KHZ_16:
-            samplerateStr = "16k";
-            break;
-          case AudioRecordingSamplerate.KHZ_24:
-            samplerateStr = "24k";
-            break;
-          case AudioRecordingSamplerate.KHZ_32:
-            samplerateStr = "32k";
-            break;
-          case AudioRecordingSamplerate.KHZ_44_1:
-            samplerateStr = "44.1k";
-            break;
-          case AudioRecordingSamplerate.KHZ_48:
-            samplerateStr = "48k";
-            break;
-        }
-      }
-      const bitrate = audioCodecConfig?.bitrate || 32;
-      const channels = audioCodecConfig?.audioChannels || 1;
+    // Audio pipeline: strict passthrough (-c:a copy) if source is AAC; otherwise -an
+    const isAac = this.capabilities.audioCodec?.toLowerCase() === "aac";
+    if (this.capabilities.hasAudio && isAac) {
+      this.platform?.log?.notice?.(
+        `[HKSV][${this.entityId}] Grabación HKSV: Passthrough de audio AAC nativo activo (-c:a copy)`,
+      );
       args.push(
         "-map",
         "0:a:0?",
         "-c:a",
-        "aac",
-        // Camera.UI sources can restart with an AAC timestamp discontinuity.
-        // Audio is already re-encoded for HKSV, so repair that timeline here
-        // without changing the native video passthrough.
-        "-af",
-        "aresample=async=1:first_pts=0",
-        "-ar",
-        samplerateStr,
-        "-b:a",
-        `${bitrate}k`,
-        "-ac",
-        String(channels),
+        "copy",
       );
     } else {
-      // Disable audio if not available or incompatible
+      if (this.capabilities.hasAudio) {
+        this.platform?.log?.notice?.(
+          `[HKSV][${this.entityId}] Audio fuente (${this.capabilities.audioCodec || "desconocido"}) no es AAC compatible sin transcodificación. Grabando sólo vídeo (-an).`,
+        );
+      }
       args.push("-an");
     }
 

@@ -76,6 +76,7 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
   const [selectedLightId, setSelectedLightId] = useState<string>("auto");
   const [selectedSirenId, setSelectedSirenId] = useState<string>("auto");
   const [selectedMotionId, setSelectedMotionId] = useState<string>("auto");
+  const [exportMode, setExportMode] = useState<string>("auto");
 
   const isCameraUi = Boolean(camera && ("id" in camera && !("cameraId" in camera)));
   const cameraId = camera ? ("cameraId" in camera ? camera.cameraId : camera.id) : "";
@@ -88,9 +89,14 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
     const camLight = (camera as any)?.lightEntityId || "auto";
     const camSiren = (camera as any)?.sirenEntityId || "auto";
     const camMotion = (camera as any)?.motionEntityId || "auto";
+    const initialExportMode =
+      (camera as any)?.exportConfig?.exportMode ||
+      (camera as any)?.exportMode ||
+      "auto";
     setSelectedLightId(camLight);
     setSelectedSirenId(camSiren);
     setSelectedMotionId(camMotion);
+    setExportMode(initialExportMode);
 
     let initialUrl = "";
     let prefTransport: "tcp" | "udp" = "tcp";
@@ -573,7 +579,8 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
     try {
       await api.saveCameraExportConfig(cameraId, {
         matterEnabled: true,
-        homeKitEnabled: true,
+        homeKitEnabled: exportMode !== "disabled",
+        exportMode,
         hksvEnabledByDefault: true,
         googleHomeEnabled: false,
         alexaEnabled: false,
@@ -1096,12 +1103,10 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                   noteText="Escanea con la app Casa de Apple para Live View HAP"
                   videoCodec={(camera as any)?.videoCodec || (camera as any)?.capabilities?.observed?.videoCodec}
                   isHevc={
-                    String((camera as any)?.videoCodec || (camera as any)?.capabilities?.observed?.videoCodec || "")
-                      .toLowerCase()
-                      .includes("hevc") ||
-                    String((camera as any)?.videoCodec || (camera as any)?.capabilities?.observed?.videoCodec || "")
-                      .toLowerCase()
-                      .includes("265")
+                    Boolean(
+                      (camera as any)?.activeController === "SecureVideoController" &&
+                      (camera as any)?.lastNegotiatedCodec === "hevc"
+                    )
                   }
                 />
                 <div
@@ -1430,22 +1435,122 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                 <div
                   style={{
                     display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginTop: 8,
-                    fontSize: "0.72rem",
-                    color: "var(--text-muted)",
+                    flexDirection: "column",
+                    gap: 6,
+                    marginTop: 10,
+                    padding: "10px 12px",
+                    background: "rgba(255, 255, 255, 0.03)",
+                    borderRadius: 6,
+                    border: "1px solid rgba(255, 255, 255, 0.06)",
+                    fontSize: "0.75rem",
                   }}
                 >
-                  <span>
-                    ⚡ Códec: <strong style={{ color: "#f8fafc" }}>{videoCodec}</strong> · Res:{" "}
-                    <strong style={{ color: "#f8fafc" }}>{resDisplay}</strong>
-                  </span>
-                  <span style={{ color: "#34d399", fontWeight: 600 }}>
-                    {videoCodec.includes("HEVC") || videoCodec.includes("265")
-                      ? "🚀 Passthrough Puro HEVC (Zero Transcode)"
-                      : "🚀 Passthrough Puro H.264"}
-                  </span>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span>
+                      📹 Vídeo fuente: <strong style={{ color: "#f8fafc" }}>{videoCodec}</strong> ({resDisplay})
+                    </span>
+                    <span style={{ color: "#38bdf8", fontWeight: 600 }}>
+                      Controlador HAP:{" "}
+                      <strong>
+                        {(camera as any)?.activeController ||
+                          (videoCodec.toLowerCase().includes("hevc") || videoCodec.toLowerCase().includes("265")
+                            ? "SecureVideoController"
+                            : "CameraController")}
+                      </strong>
+                    </span>
+                  </div>
+
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span>
+                      🔊 Audio fuente:{" "}
+                      <strong style={{ color: "#f8fafc" }}>
+                        {(camera as any)?.audioCodec ||
+                          (camera as any)?.capabilities?.observed?.audioCodec ||
+                          ((camera as any)?.hasAudio ? "AAC" : "Sin audio")}
+                      </strong>
+                    </span>
+                    <span style={{ color: "#34d399", fontWeight: 600 }}>
+                      {videoCodec.toLowerCase().includes("hevc") || videoCodec.toLowerCase().includes("265")
+                        ? "🚀 Passthrough Puro HEVC (Zero Transcode)"
+                        : "🚀 Passthrough Puro H.264 (Zero Transcode)"}
+                    </span>
+                  </div>
+
+                  {((camera as any)?.audioIncompatibleReason || (camera as any)?.homekitCamera?.audioIncompatibleReason) && (
+                    <div
+                      style={{
+                        padding: "6px 8px",
+                        background: "rgba(239, 68, 68, 0.15)",
+                        border: "1px solid rgba(239, 68, 68, 0.4)",
+                        borderRadius: 4,
+                        color: "#fca5a5",
+                        fontSize: "0.72rem",
+                        marginTop: 4,
+                      }}
+                    >
+                      ⚠️ Audio fuente no compatible con Apple Home sin transcodificación:{" "}
+                      {(camera as any)?.audioIncompatibleReason || (camera as any)?.homekitCamera?.audioIncompatibleReason}
+                    </div>
+                  )}
+                </div>
+
+                {/* Selector: Modo de exportación Apple Home */}
+                <div
+                  style={{
+                    marginTop: 12,
+                    padding: "10px 12px",
+                    background: "rgba(15, 23, 42, 0.6)",
+                    borderRadius: 6,
+                    border: "1px solid rgba(255, 255, 255, 0.08)",
+                  }}
+                >
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "0.78rem",
+                      fontWeight: 700,
+                      color: "#93c5fd",
+                      marginBottom: 6,
+                    }}
+                  >
+                    🍏 Modo de exportación Apple Home / HAP
+                  </label>
+                  {(() => {
+                    const isTapoC402 =
+                      cameraId.toLowerCase().includes("c402") ||
+                      (modelInput || "").toLowerCase().includes("c402") ||
+                      (cameraName || "").toLowerCase().includes("c402");
+                    return (
+                      <>
+                        <select
+                          className="input"
+                          value={isTapoC402 ? "passthrough_h264" : exportMode}
+                          onChange={(e) => setExportMode(e.target.value)}
+                          disabled={isTapoC402}
+                          style={{ width: "100%", fontSize: "0.8rem", padding: "6px 10px" }}
+                        >
+                          <option value="auto">Auto (Detectar automáticamente por códec fuente)</option>
+                          <option value="passthrough_h264">Passthrough H.264 (CameraController clásico)</option>
+                          <option value="passthrough_hevc" disabled={isTapoC402}>
+                            {isTapoC402
+                              ? "Passthrough HEVC / HKSV3 (No disponible para Tapo C402)"
+                              : "Passthrough HEVC (SecureVideoController / iOS 27)"}
+                          </option>
+                          <option value="disabled">Desactivado (No exportar a Apple Home)</option>
+                        </select>
+                        {isTapoC402 && (
+                          <div style={{ fontSize: "0.72rem", color: "#60a5fa", marginTop: 4 }}>
+                            🔒 Tapo C402 está fijada en H.264 passthrough clásico en CameraController.
+                          </div>
+                        )}
+                        {!isTapoC402 && exportMode === "passthrough_hevc" && (
+                          <div style={{ fontSize: "0.72rem", color: "#fb923c", marginTop: 4 }}>
+                            ⚠️ Requiere concentrador Apple Home con iOS 27 / tvOS 27. Si la cámara ya estaba vinculada en Casa, deberás restablecerla y volver a enlazarla.
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
             </div>

@@ -1,0 +1,54 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.LegacyTypes = exports.uuid = void 0;
+exports.HAPLibraryVersion = HAPLibraryVersion;
+const tslib_1 = require("tslib");
+require("source-map-support/register"); // registering node-source-map-support for typescript stack traces
+require("./lib/definitions"); // must be loaded before Characteristic and Service class
+const debug_1 = tslib_1.__importDefault(require("debug"));
+const node_fs_1 = require("node:fs");
+/**
+ * @group Utils
+ */
+exports.uuid = tslib_1.__importStar(require("./lib/util/uuid"));
+tslib_1.__exportStar(require("./lib/model/HAPFileStorage"), exports);
+tslib_1.__exportStar(require("./lib/model/HAPStorage"), exports);
+tslib_1.__exportStar(require("./lib/Accessory"), exports);
+tslib_1.__exportStar(require("./lib/Bridge"), exports);
+tslib_1.__exportStar(require("./lib/Service"), exports);
+tslib_1.__exportStar(require("./lib/Characteristic"), exports);
+tslib_1.__exportStar(require("./lib/camera"), exports);
+tslib_1.__exportStar(require("./lib/tv/AccessControlManagement"), exports);
+tslib_1.__exportStar(require("./lib/HAPServer"), exports);
+tslib_1.__exportStar(require("./lib/datastream"), exports);
+tslib_1.__exportStar(require("./lib/controller"), exports);
+tslib_1.__exportStar(require("./lib/model/AccessoryInfo"), exports);
+tslib_1.__exportStar(require("./lib/util/clone"), exports);
+tslib_1.__exportStar(require("./lib/util/once"), exports);
+tslib_1.__exportStar(require("./lib/util/tlv"), exports);
+tslib_1.__exportStar(require("./lib/util/hapStatusError"), exports);
+tslib_1.__exportStar(require("./lib/util/color-utils"), exports);
+tslib_1.__exportStar(require("./lib/util/time"), exports);
+tslib_1.__exportStar(require("./lib/util/eventedhttp"), exports);
+tslib_1.__exportStar(require("./types"), exports);
+/**
+ * @group Utils
+ */
+exports.LegacyTypes = tslib_1.__importStar(require("./accessories/types"));
+const debug = (0, debug_1.default)("HAP-NodeJS:Advertiser");
+/**
+ * This method can be used to retrieve the current running library version of the HAP-NodeJS framework.
+ * @returns The SemVer version string.
+ *
+ * @group Utils
+ */
+function HAPLibraryVersion() {
+    const packageJson = JSON.parse((0, node_fs_1.readFileSync)(require.resolve("../package.json"), "utf-8"));
+    const { version } = packageJson;
+    return version;
+}
+function printInit() {
+    debug("Initializing HAP-NodeJS v%s ...", HAPLibraryVersion());
+}
+printInit();
+//# sourceMappingURL=index.js.map

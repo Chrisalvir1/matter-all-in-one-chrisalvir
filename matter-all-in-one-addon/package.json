@@ -1,6 +1,6 @@
 {
   "name": "matter-all-in-one-addon",
-  "version": "1.8.38",
+  "version": "1.8.39",
   "description": "Matterbridge all-in-one addon with local storage, web UI and Home Assistant Ingress support with complete Scrypted, BLE, Smart Dimmers, Vacuum, AC, Climate, Lock and Multi-Platform ecosystem compatibility",
   "author": "chrisalvir",
   "license": "Apache-2.0",
@@ -28,7 +28,7 @@
     "react-dom": "^19.3.0",
     "werift": "^0.24.4",
     "ws": "^8.21.3",
-    "@homebridge/hap-nodejs": "2.2.3"
+    "@homebridge/hap-nodejs": "file:./vendor/hap-nodejs"
   },
   "peerDependencies": {
     "matterbridge": ">= 3.10.8"
@@ -50,7 +50,7 @@
   },
   "scripts": {
     "clean": "node scripts/clean-dist.mjs",
-    "build": "npm run clean && tsc -p tsconfig.build.json && tsc -p src/frontend/tsconfig.json && vite build",
+    "build": "node scripts/clean-dist.mjs && tsc -p tsconfig.build.json && tsc -p src/frontend/tsconfig.json && vite build",
     "build:backend": "tsc -p tsconfig.build.json",
     "build:frontend": "tsc -p src/frontend/tsconfig.json && vite build",
     "dev": "tsc --watch",

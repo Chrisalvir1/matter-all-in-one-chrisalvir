@@ -5,6 +5,7 @@
 .cache/
 coverage/
 dist/
+!matter-all-in-one-addon/vendor/**/dist/
 jest/
 node_modules/
 temp/

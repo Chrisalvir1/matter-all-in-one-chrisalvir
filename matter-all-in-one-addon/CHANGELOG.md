@@ -1,3 +1,25 @@
+## [1.8.39] - 2026-09-21
+
+### Apple Home / HAP: Passthrough Real (Zero Transcode) y Soporte Exclusivo HEVC (HKSV3)
+
+- **Cero Transcodificación Estricta en Vídeo y Audio:**
+  - Vídeo siempre con `-c:v copy` sin recodificar en `libx264` ni `libx265`.
+  - Validación de compatibilidad de audio nativo con `checkAudioPassthroughCompatibility()`. Si la fuente es compatible con AAC, se reenvía con `-c:a copy`; de lo contrario, se omite el audio (`-an`) sin transcodificar y se reporta en la UI.
+  - Grabación HKSV remuxada directamente en fMP4 con `-c:v copy` (usando `-tag:v hvc1` para HEVC). Inyección de átomo `prft` (*Producer Reference Time*) para hubs iOS 27 / tvOS 27 y normalización de timestamps `tfdt`.
+- **Aislamiento Estricto de Controladores (Sin mezclar):**
+  - **Tapo C402 (Intacta y Protegida):** Guardián de seguridad inmutable que fuerza `CameraController` clásico con H.264 passthrough.
+  - **Cámaras H.264:** Utilizan exclusivamente `CameraController` clásico.
+  - **Cámaras HEVC (Vimtag):** Utilizan exclusivamente `SecureVideoController` con streaming Multi-Tier RTP y WebRTC con cifrado SFrame (RFC 9605). Jamás se instancian ambos controladores en un mismo accesorio.
+- **Vendored HAP con `SecureVideoController`:**
+  - Integrado de forma local y reproducible en `vendor/hap-nodejs/` desde el fork compilado del commit `d81fba565ee26e82170d5f4f8cd358c2fd773f6c` (`refs/heads/secure-video`).
+  - Incluye script reproducible `scripts/build-vendor-hap.sh`, `NOTICE.md` y `METADATA.json` con hashes SHA256.
+- **Honestidad en la Interfaz de Usuario:**
+  - Eliminado el QR morado preventivo de HKSV3: ahora solo se muestra si la cámara está en `SecureVideoController` y Apple Home ha negociado una sesión HEVC real.
+  - Nuevo selector en modal: *"Modo de exportación Apple Home"* (`auto`, `passthrough_h264`, `passthrough_hevc`, `disabled`).
+  - Diagnóstico en tiempo real de códec de vídeo, resolución/FPS, códec de audio y advertencias de incompatibilidad en rojo.
+- **Pruebas y Verificación:**
+  - 53 suites de pruebas, 434 tests completados al 100% de éxito.
+
 ## [1.8.38] - 2026-09-21
 
 ### Migración HAP: `hap-nodejs` → `@homebridge/hap-nodejs 2.2.3`

@@ -1,6 +1,7 @@
 import {
   Accessory,
   AccessoryInfo,
+  AudioBitrate,
   AudioRecordingCodecType,
   AudioRecordingSamplerate,
   AudioStreamingCodecType,
@@ -13,18 +14,28 @@ import {
   H264Level,
   H264Profile,
   MediaContainerType,
+  SecureVideoController,
   Service,
   SRTPCryptoSuites,
+  StreamTierVideoCodec,
   uuid,
   VideoCodecType,
   MDNSAdvertiser,
 } from "@homebridge/hap-nodejs";
+import {
+  MultiTierRtpDelegate,
+  WebRtcSessionManager,
+  HevcRecordingDelegate,
+  DEFAULT_HEVC_VIDEO_TIERS,
+  DEFAULT_HEVC_AUDIO_TIER,
+  type MultiTierConfig,
+} from "./hevc/index.js";
 import type {
   CameraCapabilitiesInfo,
   HomeKitCameraStorageRecord,
   ResolvedStreamSource,
 } from "../camera-types.js";
-import { HomeKitCameraStreamingDelegate } from "./homekit-camera-stream.delegate.js";
+import { HomeKitCameraStreamingDelegate, FALLBACK_JPEG_BUFFER } from "./homekit-camera-stream.delegate.js";
 import { HomeKitCameraRecordingDelegate } from "./homekit-camera-recording.delegate.js";
 import crypto from "node:crypto";
 import os from "node:os";
@@ -51,9 +62,13 @@ export function generateFreshHomeKitPin(previous?: string): string {
 
 export class HomeKitCameraAccessory {
   public accessory: Accessory;
-  public controller!: CameraController;
-  public delegate!: HomeKitCameraStreamingDelegate;
+  public controller?: CameraController;
+  public secureVideoController?: SecureVideoController;
+  public delegate?: HomeKitCameraStreamingDelegate;
   public recordingDelegate?: HomeKitCameraRecordingDelegate;
+  public multiTierRtpDelegate?: MultiTierRtpDelegate;
+  public webrtcSessionManager?: WebRtcSessionManager;
+  public hevcRecordingDelegate?: HevcRecordingDelegate;
   public motionService?: Service;
   public lightService?: Service;
   public sirenService?: Service;
@@ -92,27 +107,6 @@ export class HomeKitCameraAccessory {
 
   private rebuildServiceGraph(): void {
     this.configureAccessoryInformation();
-    this.delegate = new HomeKitCameraStreamingDelegate(
-      this.platform,
-      this.entityId,
-      this.capabilities,
-      this.streamSource,
-    );
-    this.recordingDelegate = new HomeKitCameraRecordingDelegate(
-      this.platform,
-      this.entityId,
-      this.record,
-      this.capabilities,
-      this.streamSource,
-    );
-
-    // Coordinate Live Stream and HKSV Recording to prevent camera RTSP socket contention
-    this.delegate.on("session-start", () => {
-      this.recordingDelegate?.pausePrebuffer();
-    });
-    this.delegate.on("session-end", () => {
-      this.recordingDelegate?.resumePrebuffer();
-    });
     this.motionService = undefined;
     const isScrypted =
       this.entityId.startsWith("scrypted.") ||
@@ -198,8 +192,189 @@ export class HomeKitCameraAccessory {
     this.record.hksvEnabled = isStreamingUsable;
     this.record.hksvCapable = isStreamingUsable;
     this.record.hksvState = isStreamingUsable ? "waiting_hub" : "not_capable";
+
+    const isTapoC402 =
+      this.entityId.toLowerCase().includes("c402") ||
+      (this.record.model || "").toLowerCase().includes("c402") ||
+      (this.record.name || "").toLowerCase().includes("c402");
+
+    const configuredMode = this.record.exportMode || "auto";
+    let effectiveMode: "passthrough_h264" | "passthrough_hevc" | "disabled" = "passthrough_h264";
+
+    if (configuredMode === "disabled") {
+      effectiveMode = "disabled";
+    } else if (isTapoC402) {
+      effectiveMode = "passthrough_h264";
+      if (configuredMode === "passthrough_hevc") {
+        this.platform?.log?.warn?.(
+          `[HomeKitCamera][${this.entityId}] Tapo C402 cannot be configured for HEVC/HKSV3. Forcing passthrough_h264 on classic CameraController.`,
+        );
+      }
+    } else if (configuredMode === "passthrough_hevc") {
+      effectiveMode = "passthrough_hevc";
+    } else if (configuredMode === "passthrough_h264") {
+      effectiveMode = "passthrough_h264";
+    } else {
+      const rawCodec = (this.capabilities.videoCodec || this.streamSource.metadata?.videoCodec || "").toLowerCase();
+      const isHevc = rawCodec.includes("hevc") || rawCodec.includes("265") || rawCodec.includes("hvc1");
+      effectiveMode = isHevc ? "passthrough_hevc" : "passthrough_h264";
+    }
+
+    if (effectiveMode === "disabled") {
+      this.record.activeController = undefined;
+      this.platform?.log?.notice?.(
+        `[HomeKitCamera][${this.entityId}] Apple Home export disabled by configuration`,
+      );
+      return;
+    }
+
+    if (effectiveMode === "passthrough_hevc") {
+      this.configureSecureVideoController();
+    } else {
+      this.configureClassicCameraController();
+    }
+  }
+
+  private configureClassicCameraController(): void {
+    this.record.activeController = "CameraController";
+    this.delegate = new HomeKitCameraStreamingDelegate(
+      this.platform,
+      this.entityId,
+      this.capabilities,
+      this.streamSource,
+    );
+    this.recordingDelegate = new HomeKitCameraRecordingDelegate(
+      this.platform,
+      this.entityId,
+      this.record,
+      this.capabilities,
+      this.streamSource,
+    );
+
+    this.delegate.on("session-start", () => {
+      this.recordingDelegate?.pausePrebuffer();
+    });
+    this.delegate.on("session-end", () => {
+      this.recordingDelegate?.resumePrebuffer();
+    });
+
     this.controller = new CameraController(this.buildControllerOptions());
     this.accessory.configureController(this.controller);
+    this.platform?.log?.notice?.(
+      `[HomeKitCamera][${this.entityId}] Configured classic CameraController (H.264 passthrough)`,
+    );
+  }
+
+  private configureSecureVideoController(): void {
+    this.record.activeController = "SecureVideoController";
+
+    const multiTierConfig: MultiTierConfig = {
+      videoTiers: DEFAULT_HEVC_VIDEO_TIERS,
+      audioTier: DEFAULT_HEVC_AUDIO_TIER,
+      videoPayloadType: 99,
+      audioPayloadType: 110,
+    };
+    this.multiTierRtpDelegate = new MultiTierRtpDelegate(
+      this.platform,
+      this.entityId,
+      this.capabilities,
+      this.streamSource,
+      multiTierConfig,
+    );
+    this.webrtcSessionManager = new WebRtcSessionManager(
+      this.platform,
+      this.entityId,
+      this.capabilities,
+      this.streamSource,
+      DEFAULT_HEVC_VIDEO_TIERS,
+    );
+    this.hevcRecordingDelegate = new HevcRecordingDelegate(
+      this.platform,
+      this.entityId,
+      this.record,
+      this.capabilities,
+      this.streamSource,
+    );
+
+    this.delegate = new HomeKitCameraStreamingDelegate(
+      this.platform,
+      this.entityId,
+      this.capabilities,
+      this.streamSource,
+    );
+
+    const sourceRes = this.capabilities.resolution || { width: 1920, height: 1080 };
+    const sensorUuid = uuid.generate(`secure-video:sensor:${this.entityId}`);
+
+    this.secureVideoController = new SecureVideoController({
+      sensor: {
+        uuid: sensorUuid,
+        width: sourceRes.width || 1920,
+        height: sourceRes.height || 1080,
+      },
+      video: {
+        codec: StreamTierVideoCodec.H265,
+        payloadType: 99,
+        tiers: DEFAULT_HEVC_VIDEO_TIERS,
+      },
+      audio: {
+        payloadType: 110,
+        tier: DEFAULT_HEVC_AUDIO_TIER,
+        twoWayAudio: false,
+      },
+      webrtc: {
+        delegate: this.webrtcSessionManager,
+      },
+      rtp: {
+        delegate: this.multiTierRtpDelegate,
+      },
+      recording: {
+        options: {
+          prebufferLength: 4000,
+          overrideEventTriggerOptions: [EventTriggerOption.MOTION],
+          mediaContainerConfiguration: {
+            type: MediaContainerType.FRAGMENTED_MP4,
+            fragmentLength: 4000,
+          },
+          video: {
+            type: VideoCodecType.H264,
+            parameters: {
+              profiles: [H264Profile.BASELINE, H264Profile.MAIN, H264Profile.HIGH],
+              levels: [H264Level.LEVEL3_1, H264Level.LEVEL3_2, H264Level.LEVEL4_0],
+            },
+            resolutions: this.buildRecordingResolutions(),
+          },
+          audio: {
+            codecs: {
+              type: AudioRecordingCodecType.AAC_LC,
+              audioChannels: 1,
+              samplerate: [
+                AudioRecordingSamplerate.KHZ_16,
+                AudioRecordingSamplerate.KHZ_32,
+              ],
+            },
+          },
+        },
+        delegate: this.hevcRecordingDelegate,
+      },
+      motionService: this.motionService,
+      snapshot: async (request) => {
+        return new Promise<Buffer>((resolve) => {
+          this.delegate!.handleSnapshotRequest(
+            request || { width: 1280, height: 720 },
+            (_err, buffer) => {
+              if (buffer && buffer.length > 0) resolve(buffer);
+              else resolve(FALLBACK_JPEG_BUFFER);
+            },
+          );
+        });
+      },
+    });
+
+    this.accessory.configureController(this.secureVideoController);
+    this.platform?.log?.notice?.(
+      `[HomeKitCamera][${this.entityId}] Configured SecureVideoController (HEVC/HKSV3 passthrough)`,
+    );
   }
 
   private configureAccessoryInformation(): void {
@@ -251,7 +426,7 @@ export class HomeKitCameraAccessory {
 
     const options: CameraControllerOptions = {
       cameraStreamCount: 2,
-      delegate: this.delegate,
+      delegate: this.delegate!,
       streamingOptions: {
         supportedCryptoSuites: [SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80],
         video: {
@@ -569,12 +744,18 @@ export class HomeKitCameraAccessory {
   }
 
   public updateMotionState(motionDetected: boolean): void {
-    if (!this.motionService) return;
-    this.motionService.updateCharacteristic(
-      Characteristic.MotionDetected,
-      motionDetected,
-    );
+    if (this.secureVideoController) {
+      try {
+        this.secureVideoController.setMotionDetected(motionDetected);
+      } catch {}
+    } else if (this.motionService) {
+      this.motionService.updateCharacteristic(
+        Characteristic.MotionDetected,
+        motionDetected,
+      );
+    }
     this.recordingDelegate?.handleMotionDetected(motionDetected);
+    this.hevcRecordingDelegate?.handleMotionDetected(motionDetected);
   }
 
   public updateLightState(isOn: boolean): void {
@@ -633,7 +814,7 @@ export class HomeKitCameraAccessory {
     if (!this.streamSource.metadata?.isCameraUi) {
       void this.probeAndAdaptCapabilities();
       setTimeout(() => {
-        void this.delegate.handleSnapshotRequest(
+        void this.delegate?.handleSnapshotRequest(
           { width: 1280, height: 720 },
           () => {},
         );
@@ -762,12 +943,19 @@ export class HomeKitCameraAccessory {
   }
 
   public get isStreaming(): boolean {
-    return this.delegate?.isStreaming ?? false;
+    return (
+      (this.delegate?.isStreaming ?? false) ||
+      (this.multiTierRtpDelegate?.isStreaming ?? false) ||
+      ((this.secureVideoController?.activeWebRTCSessions.length ?? 0) > 0)
+    );
   }
 
   public async unpublish(): Promise<void> {
     this.delegate?.cleanupAllSessions();
     this.recordingDelegate?.updateRecordingActive(false);
+    void this.multiTierRtpDelegate?.stopAll?.();
+    this.webrtcSessionManager?.closeAll?.();
+    this.hevcRecordingDelegate?.updateRecordingActive(false);
     if (!this.isPublished) return;
     try {
       await this.accessory.unpublish();

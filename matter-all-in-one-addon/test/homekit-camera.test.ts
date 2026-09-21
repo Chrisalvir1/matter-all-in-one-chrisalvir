@@ -299,14 +299,11 @@ describe("HomeKitCameraStreamingDelegate", () => {
     expect(capturedArgs).toContain("copy");
     expect(capturedArgs).toContain("dump_extra=freq=keyframe");
 
-    // Audio is mapped only when the Home Hub requested it, and is normalized
-    // after that optional map so malformed Camera.UI AAC timestamps cannot
-    // stall a HomeKit RTP session.
-    expect(capturedArgs).toContain("24k");
-    expect(capturedArgs).toContain("aresample=async=1:first_pts=0");
-    expect(capturedArgs).toContain("-ar");
-    expect(capturedArgs).toContain("-ac");
-    expect(capturedArgs).toContain("1");
+    // Audio must NEVER be re-encoded: either -c:a copy or omitted (-an).
+    // Absolutely no libopus, libfdk_aac, 24k bitrate or aresample filters.
+    expect(capturedArgs).not.toContain("libopus");
+    expect(capturedArgs).not.toContain("libfdk_aac");
+    expect(capturedArgs).not.toContain("aresample");
 
     // Verify HTTP/HTTPS robust flags
     expect(capturedArgs).toContain("-reconnect");
@@ -317,7 +314,7 @@ describe("HomeKitCameraStreamingDelegate", () => {
     expect(capturedArgs.join(" ")).not.toContain("Authorization: Bearer");
   });
 
-  it("transcodes HEVC only at the HAP output boundary", () => {
+  it("refuses to transcode HEVC in classic H.264 streaming delegate", () => {
     const delegate = new HomeKitCameraStreamingDelegate(
       createPlatform(),
       "camera.hevc",
@@ -329,23 +326,23 @@ describe("HomeKitCameraStreamingDelegate", () => {
       } as any,
       { ...rtspSource, supportsPassthrough: true },
     );
-    const args = delegate.buildStreamArgs(
-      {
-        sessionId: "hevc-session",
-        targetAddress: "192.168.1.50",
-        videoPort: 5000,
-        localVideoPort: 5001,
-        videoCryptoSuite: SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
-        videoKeySalt: Buffer.alloc(30, 1),
-        videoSsrc: 1111,
-      },
-      {
-        sessionID: "hevc-session",
-        type: StreamRequestTypes.START,
-        video: { fps: 30, width: 1920, height: 1080, pt: 99 } as any,
-      } as any,
-    );
-    expect(args).toContain("libx264");
-    expect(args).not.toContain("-bsf:v");
+    expect(() =>
+      delegate.buildStreamArgs(
+        {
+          sessionId: "hevc-session",
+          targetAddress: "192.168.1.50",
+          videoPort: 5000,
+          localVideoPort: 5001,
+          videoCryptoSuite: SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
+          videoKeySalt: Buffer.alloc(30, 1),
+          videoSsrc: 1111,
+        },
+        {
+          sessionID: "hevc-session",
+          type: StreamRequestTypes.START,
+          video: { fps: 30, width: 1920, height: 1080, pt: 99 } as any,
+        } as any,
+      ),
+    ).toThrow("Cámara no entrega H.264 nativo; transcodificación no permitida");
   });
 });

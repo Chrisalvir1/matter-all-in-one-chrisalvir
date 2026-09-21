@@ -122,6 +122,7 @@ export interface CameraRecord {
     matterEnabled?: boolean;
     homeKitEnabled?: boolean;
     hksvEnabledByDefault?: boolean;
+    exportMode?: "auto" | "passthrough_h264" | "passthrough_hevc" | "disabled";
     googleHomeEnabled?: boolean;
     alexaEnabled?: boolean;
     smartThingsEnabled?: boolean;
