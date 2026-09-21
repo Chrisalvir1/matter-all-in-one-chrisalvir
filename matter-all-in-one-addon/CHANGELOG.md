@@ -1,3 +1,23 @@
+## [1.8.40] - 2026-09-21
+
+### Apple Home / HKSV: Pipeline de Audio AAC, Cero Transcodificación de Vídeo y Resolución Nativa
+
+- **Pipeline de Audio AAC Universal:**
+  - Cámaras con audio AAC nativo compatible (Tapo C402, Tapo C120, EZVIZ): passthrough directo con `-c:a copy`.
+  - Cámaras con fuentes de audio no-AAC (Wyze u otras): transcodificación exclusiva de audio a AAC adaptado a la negociación de Apple Home (`-c:a aac -af aresample=async=1:first_pts=0 -ar <rate> -b:a <bitrate>k -ac <ch>`) tanto en Live View como en fMP4 HKSV.
+  - Se eliminó la omisión forzada de audio (`-an`) por no ser AAC nativo, garantizando audio funcional en HomeKit.
+- **Cero Transcodificación Estricta en Vídeo:**
+  - Vídeo siempre con `-c:v copy` (Live View) y `-vcodec copy -bsf:v dump_extra=freq=keyframe` (HKSV fMP4) en todas las cámaras, preservando resolución fuente, FPS, perfil y bitrate sin recodificar.
+- **Anuncio Estricto de Resolución Nativa en HKSV:**
+  - `buildRecordingResolutions()` anuncia exclusivamente la resolución y framerate nativos detectados de la cámara (`[[width, height, fps]]`), evitando discrepancias en la negociación fMP4 con los hubs de Apple Home.
+  - Verificación confirmada de grabación HKSV mediante `acknowledgeStream(streamId)`.
+- **Desactivación Honesta de Exportación HEVC sin Stubs:**
+  - Cámaras HEVC (Vimtag) sin exportación activa a Apple Home (`activeController = "none"`, `hksvCapable = false`), sin controladores ficticios ni anuncios falsos de HKSV3.
+  - Advertencia clara de migración en la UI para cámaras HEVC ya pareadas y bloqueo de generación de QR para nuevas.
+- **Diagnóstico Transparente en la Interfaz (UI):**
+  - Modal con 4 secciones diagnósticas: 1. Fuente detectada, 2. Configuración anunciada a Apple Home, 3. Negociación recibida de Apple Home, 4. Grabación HKSV confirmada.
+  - Eliminados selectores engañosos de exportación HEVC y badges morados falsos.
+
 ## [1.8.39] - 2026-09-21
 
 ### Apple Home / HAP: Passthrough Real (Zero Transcode) y Soporte Exclusivo HEVC (HKSV3)

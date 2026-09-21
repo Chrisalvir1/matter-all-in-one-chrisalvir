@@ -217,7 +217,7 @@ export const QRCodeDisplay: React.FC<QRCodeDisplayProps> = ({
       width: 180,
       margin: 1,
       color: {
-        dark: isHevcCodec ? "#6b21a8" : isMultiAdmin ? "#09101f" : "#000000",
+        dark: isMultiAdmin ? "#09101f" : "#000000",
         light: "#ffffff",
       },
       errorCorrectionLevel: isMultiAdmin ? "H" : "M",
@@ -343,7 +343,7 @@ export const QRCodeDisplay: React.FC<QRCodeDisplayProps> = ({
           {/* Quick Copy Pill Inside Sticker Footer */}
           <div className="sticker-footer-row">
             <span className="sticker-badge-tag">
-              {isHevcCodec ? "Apple Home (HKSV3 / HEVC)" : isHomeKit ? "Apple HomeKit HAP" : "Matter (Apple Home)"}
+              {isHomeKit ? "Apple HomeKit HAP" : "Matter (Apple Home)"}
             </span>
             <button
               className="button-sticker-copy"

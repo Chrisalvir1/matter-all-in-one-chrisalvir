@@ -229,10 +229,17 @@ export class HomeKitCameraAccessory {
     }
 
     if (effectiveMode === "passthrough_hevc") {
-      this.configureSecureVideoController();
-    } else {
-      this.configureClassicCameraController();
+      this.record.activeController = "none";
+      this.record.hksvCapable = false;
+      this.record.hksvEnabled = false;
+      this.record.hksvState = "not_capable";
+      this.platform?.log?.warn?.(
+        `[HomeKitCamera][${this.entityId}] HEVC/HKSV3 aún no disponible; no se exporta sin transcodificación`,
+      );
+      return;
     }
+
+    this.configureClassicCameraController();
   }
 
   private configureClassicCameraController(): void {
@@ -478,17 +485,12 @@ export class HomeKitCameraAccessory {
     return options;
   }
 
-  private buildRecordingResolutions(): [number, number, number][] {
+  public buildRecordingResolutions(): [number, number, number][] {
     const source = this.capabilities.resolution || { width: 1920, height: 1080 };
+    const width = source.width || 1920;
+    const height = source.height || 1080;
     const sourceFps = Math.max(15, Math.min(this.capabilities.maxFps || 30, 60));
-    return [
-      ...(source.width && source.height ? [[source.width, source.height, sourceFps] as [number, number, number]] : []),
-      [3840, 2160, 30],
-      [2560, 1440, 30],
-      [2304, 1296, 30],
-      [1920, 1080, 30],
-      [1280, 720, 30],
-    ];
+    return [[width, height, sourceFps]];
   }
 
   private buildDeclaredResolutions(): [number, number, number][] {

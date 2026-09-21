@@ -956,7 +956,73 @@ export class HomeKitCameraStreamingDelegate
         );
       } else {
         this.platform?.log?.notice?.(
-          `[Stream][${this.entityId}] ${audioCompat.reason || "Audio no compatible con passthrough"}. Streaming sólo de vídeo en passthrough sin transcodificación.`,
+          `[Stream][${this.entityId}] Transcodificando exclusivamente audio fuente (${this.capabilities.audioCodec || "desconocido"}) a AAC para Apple Home (vídeo permanece en passthrough puro)`,
+        );
+        const isOpus = request.audio.codec === AudioStreamingCodecType.OPUS;
+        const hasFdk = supportsFdkAac();
+        const audioBitrate = Math.min(request.audio.max_bit_rate || 24, 24);
+
+        if (needsSilentAudio) {
+          args.push(
+            "-map",
+            "1:a:0",
+            "-vn",
+          );
+        } else {
+          args.push(
+            "-map",
+            "0:a:0?",
+            "-vn",
+          );
+        }
+
+        if (isOpus) {
+          args.push(
+            "-c:a",
+            "libopus",
+            "-application",
+            "lowdelay",
+            "-frame_duration",
+            "20",
+            "-packet_loss",
+            "5",
+          );
+        } else if (hasFdk) {
+          args.push(
+            "-c:a",
+            "libfdk_aac",
+            "-profile:a",
+            "aac_eld",
+            "-flags",
+            "+global_header",
+          );
+        } else {
+          args.push(
+            "-c:a",
+            "aac",
+          );
+        }
+
+        args.push(
+          "-af",
+          "aresample=async=1:first_pts=0",
+          "-ar",
+          String(sampleRate),
+          "-ac",
+          "1",
+          "-b:a",
+          `${audioBitrate}k`,
+          "-f",
+          "rtp",
+          "-payload_type",
+          String(request.audio.pt || 110),
+          "-ssrc",
+          String(session.audioSsrc),
+          "-srtp_out_suite",
+          suiteName(session.audioCryptoSuite || session.videoCryptoSuite),
+          "-srtp_out_params",
+          session.audioKeySalt.toString("base64"),
+          audioUrl,
         );
       }
     }

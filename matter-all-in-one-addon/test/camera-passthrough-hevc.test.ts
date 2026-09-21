@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { HomeKitCameraAccessory } from "../src/camera/homekit/homekit-camera.accessory.js";
 import { CameraController, StreamRequestTypes, SRTPCryptoSuites, uuid } from "@homebridge/hap-nodejs";
 import { HomeKitCameraStreamingDelegate } from "../src/camera/homekit/homekit-camera-stream.delegate.js";
+import { HomeKitCameraRecordingDelegate } from "../src/camera/homekit/homekit-camera-recording.delegate.js";
 import { prependProducerReferenceTime, SecureVideoSFrame, SecureVideoController } from "../src/camera/homekit/hevc/index.js";
 import type { CameraCapabilitiesInfo, HomeKitCameraStorageRecord, ResolvedStreamSource } from "../src/camera/camera-types.js";
 
@@ -116,7 +117,7 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     expect(record.activeController).toBe("CameraController");
   });
 
-  it("configures SecureVideoController exclusively for Vimtag HEVC camera without mixing controllers", () => {
+  it("strictly disables export for Vimtag HEVC camera without mounting fake controller", () => {
     const platform = createPlatformMock();
     const record = createBaseRecord("camera.jardin_vimtag", {
       model: "Vimtag Outdoor",
@@ -136,9 +137,14 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
       streamSource,
     );
 
-    expect(accessory.secureVideoController).toBeInstanceOf(SecureVideoController);
+    expect(accessory.secureVideoController).toBeUndefined();
     expect(accessory.controller).toBeUndefined();
-    expect(record.activeController).toBe("SecureVideoController");
+    expect(record.activeController).toBe("none");
+    expect(record.hksvCapable).toBe(false);
+    expect(record.hksvState).toBe("not_capable");
+    expect(platform.log.warn).toHaveBeenCalledWith(
+      expect.stringContaining("HEVC/HKSV3 aún no disponible; no se exporta sin transcodificación"),
+    );
   });
 
   it("refuses to transcode HEVC in classic H.264 delegate with zero transcoding enforcement", () => {
@@ -274,5 +280,182 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     expect(result.readUInt32BE(0)).toBe(32);
     expect(result.subarray(4, 8).toString("ascii")).toBe("prft");
     expect(result.subarray(36, 40).toString("ascii")).toBe("moof");
+  });
+
+  it("buildRecordingResolutions advertises strictly the native camera resolution and fps", () => {
+    const platform = createPlatformMock();
+    const record = createBaseRecord("camera.tapo_c402", {
+      model: "Tapo C402",
+      name: "Tapo C402",
+    });
+    const capabilities = createCapabilities({
+      videoCodec: "h264",
+      resolution: { width: 2560, height: 1440 },
+      maxFps: 15,
+    });
+    const streamSource = createStreamSource();
+
+    const accessory = new HomeKitCameraAccessory(
+      platform,
+      "camera.tapo_c402",
+      record,
+      capabilities,
+      streamSource,
+    );
+
+    const recordingRes = accessory.buildRecordingResolutions();
+    expect(recordingRes).toEqual([[2560, 1440, 15]]);
+    expect(recordingRes).not.toContainEqual([3840, 2160, 30]);
+    expect(recordingRes).not.toContainEqual([1920, 1080, 30]);
+  });
+
+  it("transcodes ONLY audio for Wyze non-AAC camera in Live View while preserving -c:v copy", () => {
+    const platform = createPlatformMock();
+    const capabilities = createCapabilities({
+      videoCodec: "h264",
+      audioCodec: "pcm_alaw", // Non-AAC Wyze audio
+      hasAudio: true,
+      audioSampleRate: 8000,
+      audioChannels: 1,
+    });
+    const streamSource = createStreamSource();
+
+    const delegate = new HomeKitCameraStreamingDelegate(
+      platform,
+      "camera.wyze_patio",
+      capabilities,
+      streamSource,
+    );
+
+    const args = delegate.buildStreamArgs(
+      {
+        sessionId: "test-wyze-sess",
+        targetAddress: "192.168.1.50",
+        videoPort: 5000,
+        localVideoPort: 5001,
+        videoCryptoSuite: SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
+        videoKeySalt: Buffer.alloc(30, 1),
+        videoSsrc: 1111,
+        audioPort: 5002,
+        localAudioPort: 5003,
+        audioCryptoSuite: SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
+        audioKeySalt: Buffer.alloc(30, 2),
+        audioSsrc: 2222,
+      },
+      {
+        sessionID: "test-wyze-sess",
+        type: StreamRequestTypes.START,
+        video: { fps: 20, width: 1920, height: 1080, pt: 99 } as any,
+        audio: {
+          codec: 0 as any, // AAC-ELD
+          channel: 1,
+          bit_rate: 24,
+          sample_rate: 16,
+          packet_time: 20,
+          pt: 110,
+        } as any,
+      } as any,
+    );
+
+    // Video MUST remain copy
+    expect(args).toContain("-c:v");
+    expect(args).toContain("copy");
+    expect(args).not.toContain("libx264");
+    expect(args).not.toContain("libx265");
+    // Audio MUST be transcoded to AAC / libopus with aresample
+    expect(args).toContain("-af");
+    expect(args).toContain("aresample=async=1:first_pts=0");
+    const audioCodecIdx = args.indexOf("-c:a");
+    expect(audioCodecIdx).toBeGreaterThan(-1);
+    const audioCodecValue = args[audioCodecIdx + 1];
+    expect(["aac", "libfdk_aac", "libopus"]).toContain(audioCodecValue);
+  });
+
+  it("transcodes ONLY audio for Wyze non-AAC camera in HKSV prebuffer while preserving -vcodec copy", () => {
+    const platform = createPlatformMock();
+    const record = createBaseRecord("camera.wyze_patio");
+    const capabilities = createCapabilities({
+      videoCodec: "h264",
+      audioCodec: "pcm_alaw",
+      hasAudio: true,
+      audioSampleRate: 8000,
+      audioChannels: 1,
+    });
+    const streamSource = createStreamSource();
+
+    const delegate = new HomeKitCameraRecordingDelegate(
+      platform,
+      "camera.wyze_patio",
+      record,
+      capabilities,
+      streamSource,
+    );
+
+    const args = delegate.buildPrebufferArgs("rtsp://192.168.1.100:554/live");
+    expect(args).not.toBeNull();
+    // Video is strict copy
+    expect(args).toContain("-vcodec");
+    expect(args).toContain("copy");
+    expect(args).not.toContain("libx264");
+    // Audio is transcoded to AAC with aresample
+    expect(args).toContain("-c:a");
+    expect(args).toContain("aac");
+    expect(args).toContain("-af");
+    expect(args).toContain("aresample=async=1:first_pts=0");
+    expect(args).not.toContain("-an");
+  });
+
+  it("uses -c:a copy for AAC cameras in HKSV prebuffer pipeline", () => {
+    const platform = createPlatformMock();
+    const record = createBaseRecord("camera.tapo_c402");
+    const capabilities = createCapabilities({
+      videoCodec: "h264",
+      audioCodec: "aac",
+      hasAudio: true,
+      audioSampleRate: 16000,
+      audioChannels: 1,
+    });
+    const streamSource = createStreamSource();
+
+    const delegate = new HomeKitCameraRecordingDelegate(
+      platform,
+      "camera.tapo_c402",
+      record,
+      capabilities,
+      streamSource,
+    );
+
+    const args = delegate.buildPrebufferArgs("rtsp://192.168.1.100:554/live");
+    expect(args).not.toBeNull();
+    expect(args).toContain("-vcodec");
+    expect(args).toContain("copy");
+    expect(args).toContain("-c:a");
+    expect(args).toContain("copy");
+    expect(args).not.toContain("aresample=async=1:first_pts=0");
+    expect(args).not.toContain("-an");
+  });
+
+  it("propagates motion state to accessory motion service and recording delegate", () => {
+    const platform = createPlatformMock();
+    const record = createBaseRecord("camera.tapo_c402", {
+      motionEntityId: "binary_sensor.tapo_c402_motion",
+    });
+    const capabilities = createCapabilities();
+    const streamSource = createStreamSource();
+
+    const accessory = new HomeKitCameraAccessory(
+      platform,
+      "camera.tapo_c402",
+      record,
+      capabilities,
+      streamSource,
+    );
+
+    expect(accessory.motionService).toBeDefined();
+    const spy = vi.spyOn(accessory.recordingDelegate!, "handleMotionDetected");
+    accessory.updateMotionState(true);
+    expect(spy).toHaveBeenCalledWith(true);
+    accessory.updateMotionState(false);
+    expect(spy).toHaveBeenCalledWith(false);
   });
 });

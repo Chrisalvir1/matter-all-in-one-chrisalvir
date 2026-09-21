@@ -734,7 +734,7 @@ export function checkAudioPassthroughCompatibility(
   if (normalized !== "aac") {
     return {
       compatible: false,
-      reason: `Códec de audio fuente (${sourceAudioCodec}) no es AAC. Transcodificación prohibida.`,
+      reason: `Códec de audio fuente (${sourceAudioCodec}) requiere transcodificación a AAC para Apple Home.`,
       sourceSpec: { codec: sourceAudioCodec, sampleRate: sourceSampleRate, channels: sourceChannels },
     };
   }

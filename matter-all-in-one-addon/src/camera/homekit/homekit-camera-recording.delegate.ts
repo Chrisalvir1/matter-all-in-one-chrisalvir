@@ -27,7 +27,7 @@ export class HomeKitCameraRecordingDelegate
   implements CameraRecordingDelegate
 {
   private recordingActive = false;
-  private selectedConfiguration?: CameraRecordingConfiguration;
+  public selectedConfiguration?: CameraRecordingConfiguration;
   private prebuffer: Fmp4MediaFragment[] = [];
   private initializationSegment: Buffer | null = null;
 
@@ -338,6 +338,158 @@ export class HomeKitCameraRecordingDelegate
     this.emit("new-fragment", fragment);
   }
 
+  public buildPrebufferArgs(sourceUrl: string): string[] | null {
+    const token =
+      this.platform?.ha?.getAccessToken?.() || this.platform?.ha?.wsAccessToken;
+
+    // Build FFmpeg fMP4 args
+    const args = ["-hide_banner", "-loglevel", "warning"];
+
+    if (
+      (sourceUrl.startsWith("http://") || sourceUrl.startsWith("https://")) &&
+      token
+    ) {
+      args.push("-headers", `Authorization: Bearer ${token}\r\n`);
+    }
+
+    if (sourceUrl.startsWith("rtsp://") || sourceUrl.startsWith("rtsps://")) {
+      args.push(
+        "-rtsp_transport",
+        "tcp",
+        "-timeout",
+        "5000000",
+        "-probesize",
+        "65536",
+        "-analyzeduration",
+        "100000",
+        "-fflags",
+        // Camera.UI/go2rtc can restart an RTSP publisher with DTS values that
+        // move backwards. Generate a fresh monotonic timeline for fMP4/HKSV
+        // instead of forwarding invalid timestamps to the Apple Home Hub.
+        "+nobuffer+flush_packets+genpts+igndts",
+        "-use_wallclock_as_timestamps",
+        "1",
+        "-flags",
+        "low_delay",
+      );
+    } else {
+      args.push(
+        "-probesize",
+        "65536",
+        "-analyzeduration",
+        "100000",
+        "-fflags",
+        "+nobuffer+flush_packets+genpts+igndts",
+        "-flags",
+        "low_delay",
+      );
+    }
+    args.push("-i", sourceUrl);
+
+    // camera_proxy_stream is multipart MJPEG; the physical camera codec must
+    // not be used to decide whether that proxy can be copied.
+    const isH264 =
+      this.capabilities.videoCodec === "h264" &&
+      this.streamSource.sourceType !== "ha_proxy";
+    if (isH264) {
+      // Keep H.264 native for HKSV, but normalize the MP4 timing and repeat
+      // parameter sets. This fixes the non-monotonous DTS fragments seen on
+      // Camera.UI restreams without a global video transcode.
+      args.push(
+        "-map", "0:v:0",
+        "-vcodec", "copy",
+        "-bsf:v", "dump_extra=freq=keyframe",
+      );
+    } else {
+      this.platform?.log?.error?.(
+        `[HKSV][${this.entityId}] Cámara no entrega H.264 nativo (${this.capabilities.videoCodec || "desconocido"}). Transcodificación con libx264 prohibida en modo passthrough.`,
+      );
+      this.record.hksvState = "not_capable";
+      return null;
+    }
+
+    // Audio pipeline: strict passthrough (-c:a copy) if source is AAC; otherwise transcode ONLY audio to AAC
+    const audioCodecConfig = this.selectedConfiguration?.audioCodec;
+    const isAac = this.capabilities.audioCodec?.toLowerCase() === "aac";
+    if (this.capabilities.hasAudio && isAac) {
+      this.platform?.log?.notice?.(
+        `[HKSV][${this.entityId}] Grabación HKSV: Passthrough de audio AAC nativo activo (-c:a copy)`,
+      );
+      args.push(
+        "-map",
+        "0:a:0?",
+        "-c:a",
+        "copy",
+      );
+    } else if (this.capabilities.hasAudio) {
+      let samplerateStr = "32k";
+      if (audioCodecConfig) {
+        switch (audioCodecConfig.samplerate) {
+          case AudioRecordingSamplerate.KHZ_8:
+            samplerateStr = "8k";
+            break;
+          case AudioRecordingSamplerate.KHZ_16:
+            samplerateStr = "16k";
+            break;
+          case AudioRecordingSamplerate.KHZ_24:
+            samplerateStr = "24k";
+            break;
+          case AudioRecordingSamplerate.KHZ_32:
+            samplerateStr = "32k";
+            break;
+          case AudioRecordingSamplerate.KHZ_44_1:
+            samplerateStr = "44.1k";
+            break;
+          case AudioRecordingSamplerate.KHZ_48:
+            samplerateStr = "48k";
+            break;
+        }
+      }
+      const bitrate = audioCodecConfig?.bitrate || 32;
+      const channels = audioCodecConfig?.audioChannels || 1;
+
+      this.platform?.log?.notice?.(
+        `[HKSV][${this.entityId}] Grabación HKSV: Transcodificando exclusivamente audio fuente (${this.capabilities.audioCodec || "desconocido"}) a AAC (${samplerateStr}, ${bitrate}kbps, ${channels}ch). Vídeo permanece en passthrough puro.`,
+      );
+      args.push(
+        "-map",
+        "0:a:0?",
+        "-c:a",
+        "aac",
+        "-af",
+        "aresample=async=1:first_pts=0",
+        "-ar",
+        samplerateStr,
+        "-b:a",
+        `${bitrate}k`,
+        "-ac",
+        String(channels),
+      );
+    } else {
+      args.push("-an");
+    }
+
+    // Output fragmented MP4 to stdout pipe
+    args.push(
+      "-avoid_negative_ts",
+      "make_zero",
+      // Do not let an audio timestamp jump hold fMP4 video fragments hostage.
+      "-max_interleave_delta",
+      "0",
+      "-muxdelay",
+      "0",
+      "-muxpreload",
+      "0",
+      "-f",
+      "mp4",
+      "-movflags",
+      "frag_keyframe+empty_moov+default_base_moof+skip_sidx+skip_trailer",
+      "pipe:1",
+    );
+
+    return args;
+  }
+
   private async startPrebufferPipeline(): Promise<void> {
     if (this.ffmpegProcess || this.isStartingPipeline || this.isPausedByLiveStream) return;
     this.isStartingPipeline = true;
@@ -381,111 +533,8 @@ export class HomeKitCameraRecordingDelegate
     const token =
       this.platform?.ha?.getAccessToken?.() || this.platform?.ha?.wsAccessToken;
     const sanitizedUrl = sanitizeUrlCredentials(sourceUrl);
-
-    // Build FFmpeg fMP4 args
-    const args = ["-hide_banner", "-loglevel", "warning"];
-
-    if (
-      (sourceUrl.startsWith("http://") || sourceUrl.startsWith("https://")) &&
-      token
-    ) {
-      args.push("-headers", `Authorization: Bearer ${token}\r\n`);
-    }
-
-    if (sourceUrl.startsWith("rtsp://") || sourceUrl.startsWith("rtsps://")) {
-      args.push(
-        "-rtsp_transport",
-        "tcp",
-        "-timeout",
-        "5000000",
-        "-probesize",
-        "65536",
-        "-analyzeduration",
-        "100000",
-        "-fflags",
-        // Camera.UI/go2rtc can restart an RTSP publisher with DTS values that
-        // move backwards.  Generate a fresh monotonic timeline for fMP4/HKSV
-        // instead of forwarding invalid timestamps to the Apple Home Hub.
-        "+nobuffer+flush_packets+genpts+igndts",
-        "-use_wallclock_as_timestamps",
-        "1",
-        "-flags",
-        "low_delay",
-      );
-    } else {
-      args.push(
-        "-probesize",
-        "65536",
-        "-analyzeduration",
-        "100000",
-        "-fflags",
-        "+nobuffer+flush_packets+genpts+igndts",
-        "-flags",
-        "low_delay",
-      );
-    }
-    args.push("-i", sourceUrl);
-
-    // camera_proxy_stream is multipart MJPEG; the physical camera codec must
-    // not be used to decide whether that proxy can be copied.
-    const isH264 =
-      this.capabilities.videoCodec === "h264" &&
-      this.streamSource.sourceType !== "ha_proxy";
-    if (isH264) {
-      // Keep H.264 native for HKSV, but normalize the MP4 timing and repeat
-      // parameter sets.  This fixes the non-monotonous DTS fragments seen on
-      // Camera.UI restreams without a global video transcode.
-      args.push(
-        "-map", "0:v:0",
-        "-vcodec", "copy",
-        "-bsf:v", "dump_extra=freq=keyframe",
-      );
-    } else {
-      this.platform?.log?.error?.(
-        `[HKSV][${this.entityId}] Cámara no entrega H.264 nativo (${this.capabilities.videoCodec || "desconocido"}). Transcodificación con libx264 prohibida en modo passthrough.`,
-      );
-      this.record.hksvState = "not_capable";
-      return;
-    }
-
-    // Audio pipeline: strict passthrough (-c:a copy) if source is AAC; otherwise -an
-    const isAac = this.capabilities.audioCodec?.toLowerCase() === "aac";
-    if (this.capabilities.hasAudio && isAac) {
-      this.platform?.log?.notice?.(
-        `[HKSV][${this.entityId}] Grabación HKSV: Passthrough de audio AAC nativo activo (-c:a copy)`,
-      );
-      args.push(
-        "-map",
-        "0:a:0?",
-        "-c:a",
-        "copy",
-      );
-    } else {
-      if (this.capabilities.hasAudio) {
-        this.platform?.log?.notice?.(
-          `[HKSV][${this.entityId}] Audio fuente (${this.capabilities.audioCodec || "desconocido"}) no es AAC compatible sin transcodificación. Grabando sólo vídeo (-an).`,
-        );
-      }
-      args.push("-an");
-    }
-
-    // Output fragmented MP4 to stdout pipe
-    args.push(
-      "-avoid_negative_ts",
-      "make_zero",
-      // Do not let an audio timestamp jump hold fMP4 video fragments hostage.
-      "-max_interleave_delta",
-      "0",
-      "-muxdelay",
-      "0",
-      "-muxpreload",
-      "0",
-      "-f",
-      "mp4",
-      "-movflags",
-      "frag_keyframe+empty_moov+default_base_moof+skip_sidx+skip_trailer",
-      "pipe:1",
-    );
+    const args = this.buildPrebufferArgs(sourceUrl);
+    if (!args) return;
 
     this.platform?.log?.notice?.(
       `[HKSV][${this.entityId}] Spawning HKSV pre-buffer pipeline: ${sanitizedUrl}`,
