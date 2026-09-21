@@ -68,6 +68,13 @@ export interface CameraUiCameraRecord {
   isPaired?: boolean;
   setupUri?: string;
   videoCodec?: string;
+  /** Origin of the displayed codec. Only ffprobe is a measurement of the selected RTSP output. */
+  videoCodecSource?: "ffprobe" | "camera_ui" | "unknown";
+  codecProbeUrl?: string;
+  codecProbedAt?: string;
+  audioCodec?: string;
+  audioSampleRate?: number;
+  audioChannels?: number;
   strategy?: "passthrough_h264" | "passthrough_hevc" | "transcode";
   lightEntityId?: string;
   sirenEntityId?: string;

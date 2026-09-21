@@ -1000,6 +1000,33 @@ export class CameraUiStorage {
           lastMotionAt: existing.lastMotionAt,
           doorbellActive: existing.doorbellActive ?? false,
           lastDoorbellAt: existing.lastDoorbellAt,
+          // A direct ffprobe result remains authoritative only for the exact
+          // RTSP URL it measured. Discovery metadata must not overwrite it.
+          videoCodec:
+            existing.videoCodecSource === "ffprobe" &&
+            existing.codecProbeUrl === repaired.rtspUrl
+              ? existing.videoCodec
+              : repaired.videoCodec,
+          videoCodecSource:
+            existing.videoCodecSource === "ffprobe" &&
+            existing.codecProbeUrl === repaired.rtspUrl
+              ? "ffprobe"
+              : repaired.videoCodecSource || "unknown",
+          codecProbeUrl:
+            existing.videoCodecSource === "ffprobe" &&
+            existing.codecProbeUrl === repaired.rtspUrl
+              ? existing.codecProbeUrl
+              : undefined,
+          codecProbedAt:
+            existing.videoCodecSource === "ffprobe" &&
+            existing.codecProbeUrl === repaired.rtspUrl
+              ? existing.codecProbedAt
+              : undefined,
+          audioCodec:
+            existing.videoCodecSource === "ffprobe" &&
+            existing.codecProbeUrl === repaired.rtspUrl
+              ? existing.audioCodec
+              : undefined,
         }).cam;
         const finalItem = migrateLegacyBridgeStream(mergedItem, store.config);
         const index = merged.findIndex((camera) => camera.id === repaired.id);

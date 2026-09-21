@@ -621,7 +621,9 @@ export class CameraUiClient {
         item.doorbellTopic ||
         (item.doorbell ? `camera.ui/${safeSlug}/doorbell` : undefined);
 
-      // Detect video codec: check videoConfig, sources, or known Tapo 2K/HEVC camera models
+      // Camera.UI metadata is useful, but it is not a substitute for probing
+      // the selected RTSP output. Do not invent a codec from camera model or
+      // resolution: an HEVC-capable camera may deliberately publish H.264.
       const rawCodec = String(
         videoConfig.vcodec ||
         videoConfig.codec ||
@@ -631,13 +633,7 @@ export class CameraUiClient {
         "",
       ).toLowerCase();
 
-      const isHevcDetected =
-        rawCodec.includes("hevc") ||
-        rawCodec.includes("265") ||
-        /c402|c420|c425|c520|c320|c325|tc72/i.test(modelName) ||
-        /c402|c420|c425|c520|c320|c325|tc72/i.test(cameraTitle) ||
-        (width >= 2304 && (/tapo/i.test(cameraTitle) || /tapo/i.test(modelName)));
-
+      const isHevcDetected = rawCodec.includes("hevc") || rawCodec.includes("265");
       const videoCodec = isHevcDetected ? "hevc" : rawCodec.includes("h264") ? "h264" : undefined;
       const strategy = isHevcDetected ? "passthrough_hevc" : "passthrough_h264";
 
@@ -655,6 +651,7 @@ export class CameraUiClient {
         height,
         fps,
         videoCodec,
+        videoCodecSource: videoCodec ? "camera_ui" : "unknown",
         strategy,
         motionTopic,
         doorbellTopic,

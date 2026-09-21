@@ -42,6 +42,7 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
   const [isDeleting, setIsDeleting] = useState(false);
   const [streamResult, setStreamResult] = useState<{ text: string; isError?: boolean } | null>(null);
   const [streamVerified, setStreamVerified] = useState(false);
+  const [latestProbe, setLatestProbe] = useState<any>(null);
   const [multiAdminOpen, setMultiAdminOpen] = useState(false);
   const [freshMatterCode, setFreshMatterCode] = useState<string | null>(null);
   const [freshMatterManualCode, setFreshMatterManualCode] = useState<string | null>(null);
@@ -97,6 +98,7 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
     setSelectedSirenId(camSiren);
     setSelectedMotionId(camMotion);
     setExportMode(initialExportMode);
+    setLatestProbe(null);
 
     let initialUrl = "";
     let prefTransport: "tcp" | "udp" = "tcp";
@@ -113,20 +115,24 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
       setFreshMatterManualCode(null);
       setMultiAdminOpen(false);
 
-      if (cui.width && cui.height) {
+      const hasCurrentProbe =
+        cui.videoCodecSource === "ffprobe" &&
+        cui.codecProbeUrl === initialUrl &&
+        Boolean(cui.codecProbedAt);
+      if (hasCurrentProbe && cui.width && cui.height) {
         setStreamVerified(true);
         const w = cui.width;
         const h = cui.height;
-        const codec = (cui.videoCodec || "H.264").toUpperCase();
-        const fpsVal = cui.fps || 30;
-        const audioStr = cui.hasAudio ? "Con Audio (AAC)" : "Sin Audio";
+        const codec = (cui.videoCodec || "desconocido").toUpperCase();
+        const fpsVal = cui.fps || "—";
+        const audioStr = cui.hasAudio ? `Con Audio (${cui.audioCodec || "códec no medido"})` : "Sin Audio";
         setStreamResult({
-          text: `✓ Stream nativo activo (${codec} ${w}x${h} @ ${fpsVal}fps, ${audioStr}). Passthrough puro listo para Apple Home.`,
+          text: `✓ RTSP medido por ffprobe (${codec} ${w}x${h} @ ${fpsVal}fps, ${audioStr}).`,
         });
       } else if (initialUrl) {
         setStreamVerified(false);
         setStreamResult({
-          text: "ℹ️ Pulsa 'Verificar Stream' para comprobar la resolución y códec en tiempo real.",
+          text: "ℹ️ Sin medición ffprobe vigente para esta URL. Pulsa 'Verificar Stream' para comprobar el códec real entregado por RTSP.",
         });
       } else {
         setStreamVerified(false);
@@ -373,20 +379,36 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
   let fpsDisplay = "—";
   let audioDisplay = "—";
   let isProbedVerified = false;
+  let probeEvidence = "Sin medición ffprobe vigente";
 
   if (isCameraUi) {
     const cui = camera as CameraUiCameraItem;
-    if (cui.videoCodec) {
-      videoCodec = cui.videoCodec.toUpperCase();
+    const storedProbe =
+      cui.videoCodecSource === "ffprobe" &&
+      cui.codecProbeUrl === rtspUrl &&
+      cui.codecProbedAt
+        ? cui
+        : undefined;
+    const probe = latestProbe?.sourceUrl === rtspUrl ? latestProbe : storedProbe;
+    if (probe?.videoCodec) {
+      videoCodec = String(probe.videoCodec).toUpperCase();
+      probeEvidence = `ffprobe ${probe.validatedAt || probe.codecProbedAt || "reciente"}`;
     }
-    if (cui.width && cui.height) {
-      resDisplay = `${cui.width}x${cui.height}`;
+    const probeResolution = probe?.resolution || (storedProbe
+      ? { width: storedProbe.width, height: storedProbe.height }
+      : undefined);
+    if (probeResolution?.width && probeResolution?.height) {
+      resDisplay = `${probeResolution.width}x${probeResolution.height}`;
       isProbedVerified = true;
     }
-    if (cui.fps) {
-      fpsDisplay = `${cui.fps} fps`;
+    if (probe?.fps) {
+      fpsDisplay = `${probe.fps} fps`;
     }
-    audioDisplay = cui.hasAudio ? "Con Audio (AAC)" : "Sin Audio detectado";
+    if (probe?.hasAudio !== undefined) {
+      audioDisplay = probe.hasAudio
+        ? String(probe.audioCodec || "códec no medido").toUpperCase()
+        : "Sin Audio";
+    }
   } else {
     const sc = camera as CameraRecord;
     const obs = sc.capabilities?.observed;
@@ -397,6 +419,7 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
 
     if (obs?.videoCodec) {
       videoCodec = obs.videoCodec.toUpperCase();
+      if (isVerified) probeEvidence = "Validación de stream almacenada";
     }
     if (obs?.resolution?.width && obs?.resolution?.height) {
       resDisplay = `${obs.resolution.width}x${obs.resolution.height}`;
@@ -503,6 +526,7 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
       const res = await api.verifyCameraStream(cameraId, rtspUrl.trim(), transport);
       if (res.ok && res.status === "verified") {
         setStreamVerified(true);
+        setLatestProbe({ ...res.validation, sourceUrl: rtspUrl.trim() });
         if (res.validation) {
           if (!isCameraUi) {
             const sc = camera as CameraRecord;
@@ -517,8 +541,8 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
         }
         const w = res.validation?.resolution?.width || 1920;
         const h = res.validation?.resolution?.height || 1080;
-        const codec = (res.validation?.videoCodec || "H.264").toUpperCase();
-        const fpsVal = res.validation?.fps || 30;
+        const codec = (res.validation?.videoCodec || "desconocido").toUpperCase();
+        const fpsVal = res.validation?.fps || "—";
         setStreamResult({
           text: `✓ Stream verificado con éxito (${codec} ${w}x${h} @ ${fpsVal}fps). Live View listo para Apple Home.`,
         });
@@ -1278,10 +1302,10 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                 </span>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, fontSize: "0.8rem" }}>
-                <div><strong>📹 Video:</strong> {videoCodec !== "—" ? videoCodec : "H.264 (Nativo)"} · {resDisplay !== "—" ? resDisplay : "Pendiente de detección"} {fpsDisplay !== "—" ? `@ ${fpsDisplay}` : ""}</div>
-                <div><strong>🔊 Audio:</strong> {audioDisplay !== "—" ? audioDisplay : "Passthrough"}</div>
+                <div><strong>📹 Video:</strong> {videoCodec !== "—" ? videoCodec : "No verificado"} · {resDisplay !== "—" ? resDisplay : "Pendiente de detección"} {fpsDisplay !== "—" ? `@ ${fpsDisplay}` : ""}</div>
+                <div><strong>🔊 Audio:</strong> {audioDisplay !== "—" ? audioDisplay : "No verificado"}</div>
                 <div><strong>⚡ Latencia:</strong> &lt;200ms (LAN Ultra Baja)</div>
-                <div><strong>🍏 HAP:</strong> Passthrough Puro H.264 (0% CPU / Sin transcode)</div>
+                <div><strong>🍏 HAP:</strong> {isHevcCamera ? "No exportable por HAP clásico sin transcodificar" : "Passthrough H.264 (sin transcodificación de vídeo)"}</div>
               </div>
             </div>
 
@@ -1494,14 +1518,17 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                     </div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 8px", color: "#cbd5e1" }}>
                       <div>Vídeo: <strong style={{ color: "#f8fafc" }}>{videoCodec}</strong> ({resDisplay})</div>
-                      <div>FPS: <strong style={{ color: "#f8fafc" }}>{(camera as any)?.fps || "30"} fps</strong></div>
+                      <div>FPS: <strong style={{ color: "#f8fafc" }}>{fpsDisplay}</strong></div>
                       <div>Audio: <strong style={{ color: "#f8fafc" }}>
-                        {(camera as any)?.audioCodec || (camera as any)?.capabilities?.observed?.audioCodec || ((camera as any)?.hasAudio ? "AAC" : "Sin audio")}
+                        {audioDisplay}
                       </strong></div>
                       <div>Muestreo / Ch: <strong style={{ color: "#f8fafc" }}>
-                        {(camera as any)?.audioSampleRate ? `${(camera as any).audioSampleRate} Hz` : "32000 Hz"} / {(camera as any)?.audioChannels || 1} ch
+                        {isCameraUi && latestProbe?.sourceUrl === rtspUrl && latestProbe?.audioSampleRate
+                          ? `${latestProbe.audioSampleRate} Hz / ${latestProbe.audioChannels || "—"} ch`
+                          : "No medido"}
                       </strong></div>
                     </div>
+                    <div style={{ color: "#94a3b8", marginTop: 6 }}>Evidencia: {probeEvidence}</div>
                   </div>
 
                   {/* 2. Configuración anunciada a Apple Home */}

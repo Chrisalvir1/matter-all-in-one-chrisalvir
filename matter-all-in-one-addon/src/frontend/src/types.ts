@@ -204,6 +204,12 @@ export interface CameraUiCameraItem {
   height?: number;
   fps?: number;
   videoCodec?: string;
+  videoCodecSource?: "ffprobe" | "camera_ui" | "unknown";
+  codecProbeUrl?: string;
+  codecProbedAt?: string;
+  audioCodec?: string;
+  audioSampleRate?: number;
+  audioChannels?: number;
   strategy?: string;
   motionTopic?: string;
   doorbellTopic?: string;

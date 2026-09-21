@@ -523,7 +523,7 @@ describe("Camera.UI Client and Storage Integration", () => {
     expect(res.message).toContain("1 cámara detectada");
   });
 
-  it("converts tapo:// URLs to standard RTSP stream1 endpoints", async () => {
+  it("converts tapo:// URLs to standard RTSP stream1 endpoints without guessing its codec", async () => {
     global.fetch = vi.fn().mockImplementation(async (url: string) => {
       if (url.includes("/api/cameras")) {
         return {
@@ -556,8 +556,8 @@ describe("Camera.UI Client and Storage Integration", () => {
     expect(cameras[0].rtspUrl).toBe(
       "rtsp://admin:mypassword@192.168.110.150:554/stream1",
     );
-    expect(cameras[0].videoCodec).toBe("hevc");
-    expect(cameras[0].strategy).toBe("passthrough_hevc");
+    expect(cameras[0].videoCodec).toBeUndefined();
+    expect(cameras[0].videoCodecSource).toBe("unknown");
   });
 
   it("CameraUiStorage.updateCamera modifies the specified camera and persists updates", async () => {

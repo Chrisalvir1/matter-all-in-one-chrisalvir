@@ -6125,12 +6125,16 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               cam.rtspUrl = targetUrl;
               if (validation.status === "verified") {
                 cam.status = "online";
+                cam.videoCodecSource = "ffprobe";
+                cam.codecProbeUrl = targetUrl;
+                cam.codecProbedAt = validation.validatedAt;
                 if (validation.resolution) {
                   cam.width = validation.resolution.width;
                   cam.height = validation.resolution.height;
                 }
                 if (validation.fps) cam.fps = validation.fps;
                 if (validation.videoCodec) cam.videoCodec = validation.videoCodec;
+                if (validation.audioCodec) cam.audioCodec = validation.audioCodec;
                 if (validation.hasAudio !== undefined)
                   cam.hasAudio = validation.hasAudio;
               }
@@ -7010,7 +7014,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               port: acc?.record?.port || cam.port,
               pincode: acc?.record?.pincode || cam.pincode || "031-45-154",
               setupId: acc?.record?.setupId || cam.setupId,
-              videoCodec: acc?.capabilities?.videoCodec || cam.videoCodec,
+              // The UI must never promote stale bridge capabilities to a
+              // measured source codec. A verified ffprobe result wins, then
+              // Camera.UI metadata is shown as metadata rather than proof.
+              videoCodec:
+                cam.videoCodecSource === "ffprobe" && cam.codecProbeUrl === cam.rtspUrl
+                  ? cam.videoCodec
+                  : cam.videoCodec,
               strategy: (acc?.capabilities?.strategy as any) || cam.strategy,
               width: acc?.capabilities?.resolution?.width || cam.width,
               height: acc?.capabilities?.resolution?.height || cam.height,
