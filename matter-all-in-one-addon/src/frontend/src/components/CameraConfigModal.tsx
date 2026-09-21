@@ -1094,6 +1094,15 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                   entityName={cameraName}
                   elementId="cam-modal-qr-code"
                   noteText="Escanea con la app Casa de Apple para Live View HAP"
+                  videoCodec={(camera as any)?.videoCodec || (camera as any)?.capabilities?.observed?.videoCodec}
+                  isHevc={
+                    String((camera as any)?.videoCodec || (camera as any)?.capabilities?.observed?.videoCodec || "")
+                      .toLowerCase()
+                      .includes("hevc") ||
+                    String((camera as any)?.videoCodec || (camera as any)?.capabilities?.observed?.videoCodec || "")
+                      .toLowerCase()
+                      .includes("265")
+                  }
                 />
                 <div
                   style={{

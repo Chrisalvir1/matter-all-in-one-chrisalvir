@@ -11,19 +11,23 @@ interface QRCodeDisplayProps {
   elementId?: string;
   noteText?: string;
   variant?: QRVariant;
+  videoCodec?: string;
+  isHevc?: boolean;
 }
 
 /**
  * Official Modern Apple Home App Icon (3-tiered layered depth with chimney)
- * Variant "color": Apple signature warm orange & golden amber for HAP (HomeKit)
+ * Variant "color": Apple signature warm orange & golden amber for HAP H.264
+ * Variant "purple": Royal violet & purple for HAP HEVC / HKSV3
  * Variant "mono": Sleek dark graphite & silver for Matter IoT
  */
-export const AppleHomeModernIcon: React.FC<{ variant?: "color" | "mono"; size?: number }> = ({
+export const AppleHomeModernIcon: React.FC<{ variant?: "color" | "mono" | "purple"; size?: number }> = ({
   variant = "color",
   size = 48,
 }) => {
+  const isPurple = variant === "purple";
   const isColor = variant === "color";
-  const p = isColor ? "col" : "mon";
+  const p = isPurple ? "purp" : isColor ? "col" : "mon";
 
   return (
     <svg
@@ -36,7 +40,28 @@ export const AppleHomeModernIcon: React.FC<{ variant?: "color" | "mono"; size?: 
       aria-hidden="true"
     >
       <defs>
-        {isColor ? (
+        {isPurple ? (
+          <>
+            <linearGradient id={`${p}-out`} x1="50" y1="8" x2="50" y2="92" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stopColor="#9333ea" />
+              <stop offset="100%" stopColor="#7e22ce" />
+            </linearGradient>
+            <linearGradient id={`${p}-mid`} x1="50" y1="26" x2="50" y2="82" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stopColor="#c084fc" />
+              <stop offset="100%" stopColor="#a855f7" />
+            </linearGradient>
+            <linearGradient id={`${p}-in`} x1="50" y1="44" x2="50" y2="74" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stopColor="#faf5ff" />
+              <stop offset="100%" stopColor="#f3e8ff" />
+            </linearGradient>
+            <filter id={`${p}-sh1`} x="0" y="0" width="100" height="100" filterUnits="userSpaceOnUse">
+              <feDropShadow dx="0" dy="2.5" stdDeviation="2.5" floodColor="#581c87" floodOpacity="0.4" />
+            </filter>
+            <filter id={`${p}-sh2`} x="0" y="0" width="100" height="100" filterUnits="userSpaceOnUse">
+              <feDropShadow dx="0" dy="1.5" stdDeviation="1.5" floodColor="#6b21a8" floodOpacity="0.3" />
+            </filter>
+          </>
+        ) : isColor ? (
           <>
             <linearGradient id={`${p}-out`} x1="50" y1="8" x2="50" y2="92" gradientUnits="userSpaceOnUse">
               <stop offset="0%" stopColor="#ff9f0a" />
@@ -172,6 +197,8 @@ export const QRCodeDisplay: React.FC<QRCodeDisplayProps> = ({
   elementId = "device-qr-code",
   noteText,
   variant = "matter-badge",
+  videoCodec,
+  isHevc = false,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [copied, setCopied] = useState(false);
@@ -179,6 +206,10 @@ export const QRCodeDisplay: React.FC<QRCodeDisplayProps> = ({
 
   const isMultiAdmin = variant === "multi-admin-glass";
   const isHomeKit = variant === "hap-homekit";
+  const isHevcCodec = Boolean(
+    isHevc ||
+    (videoCodec && (videoCodec.toLowerCase().includes("hevc") || videoCodec.toLowerCase().includes("265")))
+  );
 
   useEffect(() => {
     if (!pairingCode || !canvasRef.current) return;
@@ -188,13 +219,16 @@ export const QRCodeDisplay: React.FC<QRCodeDisplayProps> = ({
     QRCode.toCanvas(canvasRef.current, pairingCode, {
       width: 180,
       margin: 1,
-      color: { dark: isMultiAdmin ? "#09101f" : "#000000", light: "#ffffff" },
+      color: {
+        dark: isHevcCodec ? "#6b21a8" : isMultiAdmin ? "#09101f" : "#000000",
+        light: "#ffffff",
+      },
       errorCorrectionLevel: isMultiAdmin ? "H" : "M",
     }).catch((err) => {
       console.error("Error al renderizar código QR:", err);
       setQrError("Error al generar código QR");
     });
-  }, [pairingCode, isMultiAdmin]);
+  }, [pairingCode, isMultiAdmin, isHevcCodec]);
 
   const handleCopyCode = async (codeToCopy?: string) => {
     const text = codeToCopy || manualCode || pinCode || pairingCode;
@@ -290,11 +324,11 @@ export const QRCodeDisplay: React.FC<QRCodeDisplayProps> = ({
     <div className="qr-display-container" style={{ display: "block" }}>
       {/* 1. iOS 27 Liquid Glass Physical Setup Sticker (HAP and Matter IoT) */}
       {!isMultiAdmin ? (
-        <div className={`ios27-glass-sticker ${isHomeKit ? "sticker-hap" : "sticker-matter"}`}>
+        <div className={`ios27-glass-sticker ${isHevcCodec ? "sticker-hevc" : isHomeKit ? "sticker-hap" : "sticker-matter"}`}>
           {/* Top Header: Apple Home Modern Layered Icon (Left) + 2-Row Digits (Right) */}
           <div className="sticker-header">
             <div className="sticker-house-col">
-              <AppleHomeModernIcon variant={isHomeKit ? "color" : "mono"} size={48} />
+              <AppleHomeModernIcon variant={isHevcCodec ? "purple" : isHomeKit ? "color" : "mono"} size={48} />
             </div>
             <div className="sticker-code-col">
               <div className="sticker-code-line line-1">{stickerDigits.line1}</div>
@@ -311,7 +345,9 @@ export const QRCodeDisplay: React.FC<QRCodeDisplayProps> = ({
 
           {/* Quick Copy Pill Inside Sticker Footer */}
           <div className="sticker-footer-row">
-            <span className="sticker-badge-tag">{isHomeKit ? "Apple HomeKit HAP" : "Matter (Apple Home)"}</span>
+            <span className="sticker-badge-tag">
+              {isHevcCodec ? "Apple Home (HKSV3 / HEVC)" : isHomeKit ? "Apple HomeKit HAP" : "Matter (Apple Home)"}
+            </span>
             <button
               className="button-sticker-copy"
               type="button"
