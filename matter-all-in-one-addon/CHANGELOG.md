@@ -3199,3 +3199,11 @@ All notable changes to this project will be documented in this file.
 - Restaura detección local de movimiento como fallback cuando los tópicos MQTT de Camera.UI no alcanzan el bridge.
 - El fallback se habilita solo después de emparejamiento HAP y configuración HKSV por el Home Hub, protegiendo el inicio y las cámaras no enlazadas.
 - Las detecciones vuelven a emitir `MotionDetected` al mismo accesorio y disparan la grabación HKSV.
+## [1.8.41] - 2026-09-21
+
+### Honest codec diagnostics and stable Apple Home passthrough
+
+- **Codec real, no inferido:** Camera.UI ya no presenta H.264/HEVC por modelo, resolución o valores almacenados. La interfaz sólo marca como fuente detectada el códec medido por `ffprobe` contra la URL RTSP actual.
+- **Medición ligada a la URL:** se conserva códec, audio, resolución y fecha de la prueba únicamente mientras la URL RTSP sea la misma. Al cambiarla, la interfaz exige una nueva verificación.
+- **Sin valores ficticios:** se eliminan los rellenos H.264, 30 fps, AAC y 32 kHz del diagnóstico; se muestra **No verificado** cuando no existe evidencia de stream reciente.
+- **HAP/HKSV H.264:** se mantiene la negociación nativa de resolución/perfil y el audio AAC sólo se copia cuando coincide con lo seleccionado por Apple Home. Vídeo permanece en passthrough.
