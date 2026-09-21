@@ -10,9 +10,9 @@
   - **Tapo C402 (Intacta y Protegida):** Guardián de seguridad inmutable que fuerza `CameraController` clásico con H.264 passthrough.
   - **Cámaras H.264:** Utilizan exclusivamente `CameraController` clásico.
   - **Cámaras HEVC (Vimtag):** Utilizan exclusivamente `SecureVideoController` con streaming Multi-Tier RTP y WebRTC con cifrado SFrame (RFC 9605). Jamás se instancian ambos controladores en un mismo accesorio.
-- **Vendored HAP con `SecureVideoController`:**
-  - Integrado de forma local y reproducible en `vendor/hap-nodejs/` desde el fork compilado del commit `d81fba565ee26e82170d5f4f8cd358c2fd773f6c` (`refs/heads/secure-video`).
-  - Incluye script reproducible `scripts/build-vendor-hap.sh`, `NOTICE.md` y `METADATA.json` con hashes SHA256.
+- **Controlador `SecureVideoController` Autónomo (100% compatible con CI/Docker):**
+  - Implementado de forma limpia y autocontenida en `src/camera/homekit/hevc/secure-video-controller.ts`, manteniendo `@homebridge/hap-nodejs 2.2.3` oficial de npm sincronizado al 100% con `package-lock.json` para garantizar `npm ci` perfecto en GitHub Actions y contenedores Docker.
+  - Soporte para streaming Multi-Tier RTP y WebRTC con cifrado SFrame RFC 9605 nativo.
 - **Honestidad en la Interfaz de Usuario:**
   - Eliminado el QR morado preventivo de HKSV3: ahora solo se muestra si la cámara está en `SecureVideoController` y Apple Home ha negociado una sesión HEVC real.
   - Nuevo selector en modal: *"Modo de exportación Apple Home"* (`auto`, `passthrough_h264`, `passthrough_hevc`, `disabled`).

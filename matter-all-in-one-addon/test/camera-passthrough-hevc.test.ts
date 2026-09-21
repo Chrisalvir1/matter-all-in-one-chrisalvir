@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 import { HomeKitCameraAccessory } from "../src/camera/homekit/homekit-camera.accessory.js";
-import { CameraController, SecureVideoController, StreamRequestTypes, SRTPCryptoSuites, uuid } from "@homebridge/hap-nodejs";
+import { CameraController, StreamRequestTypes, SRTPCryptoSuites, uuid } from "@homebridge/hap-nodejs";
 import { HomeKitCameraStreamingDelegate } from "../src/camera/homekit/homekit-camera-stream.delegate.js";
-import { prependProducerReferenceTime, SecureVideoSFrame } from "../src/camera/homekit/hevc/index.js";
+import { prependProducerReferenceTime, SecureVideoSFrame, SecureVideoController } from "../src/camera/homekit/hevc/index.js";
 import type { CameraCapabilitiesInfo, HomeKitCameraStorageRecord, ResolvedStreamSource } from "../src/camera/camera-types.js";
 
 function createPlatformMock() {

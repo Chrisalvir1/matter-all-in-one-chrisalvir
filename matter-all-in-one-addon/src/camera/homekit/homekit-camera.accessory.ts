@@ -14,10 +14,8 @@ import {
   H264Level,
   H264Profile,
   MediaContainerType,
-  SecureVideoController,
   Service,
   SRTPCryptoSuites,
-  StreamTierVideoCodec,
   uuid,
   VideoCodecType,
   MDNSAdvertiser,
@@ -29,6 +27,8 @@ import {
   DEFAULT_HEVC_VIDEO_TIERS,
   DEFAULT_HEVC_AUDIO_TIER,
   type MultiTierConfig,
+  SecureVideoController,
+  StreamTierVideoCodec,
 } from "./hevc/index.js";
 import type {
   CameraCapabilitiesInfo,
@@ -358,7 +358,7 @@ export class HomeKitCameraAccessory {
         delegate: this.hevcRecordingDelegate,
       },
       motionService: this.motionService,
-      snapshot: async (request) => {
+      snapshot: async (request: any) => {
         return new Promise<Buffer>((resolve) => {
           this.delegate!.handleSnapshotRequest(
             request || { width: 1280, height: 720 },

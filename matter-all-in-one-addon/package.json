@@ -28,7 +28,7 @@
     "react-dom": "^19.3.0",
     "werift": "^0.24.4",
     "ws": "^8.21.3",
-    "@homebridge/hap-nodejs": "file:./vendor/hap-nodejs"
+    "@homebridge/hap-nodejs": "2.2.3"
   },
   "peerDependencies": {
     "matterbridge": ">= 3.10.8"
