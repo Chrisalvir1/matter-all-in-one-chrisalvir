@@ -22,6 +22,18 @@ import { Fmp4Segmenter, Fmp4MediaFragment } from "./fmp4-parser.js";
 import { resolveFfmpegPath, sanitizeUrlCredentials } from "./ffmpeg-helper.js";
 import { CameraSourceResolver } from "../camera-source-resolver.js";
 
+function recordingSampleRateHz(sampleRate?: AudioRecordingSamplerate): number | undefined {
+  switch (sampleRate) {
+    case AudioRecordingSamplerate.KHZ_8: return 8000;
+    case AudioRecordingSamplerate.KHZ_16: return 16000;
+    case AudioRecordingSamplerate.KHZ_24: return 24000;
+    case AudioRecordingSamplerate.KHZ_32: return 32000;
+    case AudioRecordingSamplerate.KHZ_44_1: return 44100;
+    case AudioRecordingSamplerate.KHZ_48: return 48000;
+    default: return undefined;
+  }
+}
+
 export class HomeKitCameraRecordingDelegate
   extends EventEmitter
   implements CameraRecordingDelegate
@@ -410,8 +422,19 @@ export class HomeKitCameraRecordingDelegate
 
     // Audio pipeline: strict passthrough (-c:a copy) if source is AAC; otherwise transcode ONLY audio to AAC
     const audioCodecConfig = this.selectedConfiguration?.audioCodec;
-    const isAac = this.capabilities.audioCodec?.toLowerCase() === "aac";
-    if (this.capabilities.hasAudio && isAac) {
+    const sourceAudioCodec = (this.capabilities.audioCodec || "").toLowerCase();
+    const isAac = sourceAudioCodec === "aac" || sourceAudioCodec === "aac_lc";
+    const requestedSampleRate = recordingSampleRateHz(audioCodecConfig?.samplerate);
+    const requestedChannels = audioCodecConfig?.audioChannels;
+    const canCopyAac =
+      isAac &&
+      !!this.capabilities.audioSampleRate &&
+      !!requestedSampleRate &&
+      this.capabilities.audioSampleRate === requestedSampleRate &&
+      (!requestedChannels || !this.capabilities.audioChannels ||
+        this.capabilities.audioChannels === requestedChannels);
+
+    if (this.capabilities.hasAudio && canCopyAac) {
       this.platform?.log?.notice?.(
         `[HKSV][${this.entityId}] Grabación HKSV: Passthrough de audio AAC nativo activo (-c:a copy)`,
       );
@@ -449,7 +472,7 @@ export class HomeKitCameraRecordingDelegate
       const channels = audioCodecConfig?.audioChannels || 1;
 
       this.platform?.log?.notice?.(
-        `[HKSV][${this.entityId}] Grabación HKSV: Transcodificando exclusivamente audio fuente (${this.capabilities.audioCodec || "desconocido"}) a AAC (${samplerateStr}, ${bitrate}kbps, ${channels}ch). Vídeo permanece en passthrough puro.`,
+        `[HKSV][${this.entityId}] Grabación HKSV: Normalizando exclusivamente audio fuente (${this.capabilities.audioCodec || "desconocido"}) a AAC (${samplerateStr}, ${bitrate}kbps, ${channels}ch). Vídeo permanece en passthrough puro.`,
       );
       args.push(
         "-map",

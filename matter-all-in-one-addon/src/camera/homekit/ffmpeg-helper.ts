@@ -721,6 +721,7 @@ export function checkAudioPassthroughCompatibility(
   targetRequirement?: {
     expectedCodec?: string;
     allowedSampleRates?: number[];
+    expectedChannels?: number;
   },
 ): AudioCompatibilityResult {
   if (!sourceAudioCodec || sourceAudioCodec === "none" || sourceAudioCodec === "unknown") {
@@ -731,7 +732,7 @@ export function checkAudioPassthroughCompatibility(
   }
 
   const normalized = sourceAudioCodec.toLowerCase();
-  if (normalized !== "aac") {
+  if (normalized !== "aac" && normalized !== "aac_lc") {
     return {
       compatible: false,
       reason: `Códec de audio fuente (${sourceAudioCodec}) requiere transcodificación a AAC para Apple Home.`,
@@ -739,14 +740,25 @@ export function checkAudioPassthroughCompatibility(
     };
   }
 
-  if (targetRequirement?.allowedSampleRates && sourceSampleRate) {
-    if (!targetRequirement.allowedSampleRates.includes(sourceSampleRate)) {
+  if (targetRequirement?.allowedSampleRates) {
+    if (!sourceSampleRate || !targetRequirement.allowedSampleRates.includes(sourceSampleRate)) {
       return {
         compatible: false,
         reason: `Frecuencia de muestreo fuente (${sourceSampleRate} Hz) no compatible sin transcodificación.`,
         sourceSpec: { codec: sourceAudioCodec, sampleRate: sourceSampleRate, channels: sourceChannels },
       };
     }
+  }
+
+  if (
+    targetRequirement?.expectedChannels &&
+    (!sourceChannels || sourceChannels !== targetRequirement.expectedChannels)
+  ) {
+    return {
+      compatible: false,
+      reason: `Canales de audio fuente (${sourceChannels || "desconocidos"}) no compatibles sin transcodificación.`,
+      sourceSpec: { codec: sourceAudioCodec, sampleRate: sourceSampleRate, channels: sourceChannels },
+    };
   }
 
   return {

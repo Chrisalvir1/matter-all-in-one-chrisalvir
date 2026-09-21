@@ -262,4 +262,52 @@ describe("HomeKitCameraRecordingDelegate", () => {
 
     delegate.destroy();
   });
+
+  it("copies AAC only when its exact sample rate and channel layout match Home Hub", () => {
+    const capabilities = {
+      ...createMockCapabilities(),
+      audioCodec: "aac",
+      audioSampleRate: 32000,
+      audioChannels: 1,
+    };
+    const delegate = new HomeKitCameraRecordingDelegate(
+      mockPlatform,
+      "camera.driveway",
+      createMockRecord(),
+      capabilities,
+      { sourceType: "rtsp", url: "rtsp://camera.local/stream", supportsPassthrough: true, requiresBridge: false },
+    );
+    (delegate as any).selectedConfiguration = createMockConfiguration();
+
+    const args = delegate.buildPrebufferArgs("rtsp://camera.local/stream");
+    expect(args).toContain("-vcodec");
+    expect(args).toContain("copy");
+    expect(args).toContain("-c:a");
+    expect(args?.[args.indexOf("-c:a") + 1]).toBe("copy");
+    delegate.destroy();
+  });
+
+  it("normalizes only audio when native AAC does not match Home Hub", () => {
+    const capabilities = {
+      ...createMockCapabilities(),
+      audioCodec: "aac",
+      audioSampleRate: 48000,
+      audioChannels: 2,
+    };
+    const delegate = new HomeKitCameraRecordingDelegate(
+      mockPlatform,
+      "camera.driveway",
+      createMockRecord(),
+      capabilities,
+      { sourceType: "rtsp", url: "rtsp://camera.local/stream", supportsPassthrough: true, requiresBridge: false },
+    );
+    (delegate as any).selectedConfiguration = createMockConfiguration();
+
+    const args = delegate.buildPrebufferArgs("rtsp://camera.local/stream");
+    expect(args?.[args.indexOf("-vcodec") + 1]).toBe("copy");
+    expect(args?.[args.indexOf("-c:a") + 1]).toBe("aac");
+    expect(args).toContain("32k");
+    expect(args).toContain("1");
+    delegate.destroy();
+  });
 });

@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
 import { HomeKitCameraAccessory } from "../src/camera/homekit/homekit-camera.accessory.js";
-import { CameraController, StreamRequestTypes, SRTPCryptoSuites, uuid } from "@homebridge/hap-nodejs";
+import { AudioRecordingSamplerate, CameraController, StreamRequestTypes, SRTPCryptoSuites, uuid } from "@homebridge/hap-nodejs";
 import { HomeKitCameraStreamingDelegate } from "../src/camera/homekit/homekit-camera-stream.delegate.js";
 import { HomeKitCameraRecordingDelegate } from "../src/camera/homekit/homekit-camera-recording.delegate.js";
-import { prependProducerReferenceTime, SecureVideoSFrame, SecureVideoController } from "../src/camera/homekit/hevc/index.js";
+import { prependProducerReferenceTime, SecureVideoSFrame } from "../src/camera/homekit/hevc/index.js";
 import type { CameraCapabilitiesInfo, HomeKitCameraStorageRecord, ResolvedStreamSource } from "../src/camera/camera-types.js";
 
 function createPlatformMock() {
@@ -86,7 +86,6 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     );
 
     expect(accessory.controller).toBeInstanceOf(CameraController);
-    expect(accessory.secureVideoController).toBeUndefined();
     expect(record.activeController).toBe("CameraController");
     expect(platform.log.warn).toHaveBeenCalledWith(
       expect.stringContaining("Tapo C402 cannot be configured for HEVC/HKSV3"),
@@ -113,7 +112,6 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     );
 
     expect(accessory.controller).toBeInstanceOf(CameraController);
-    expect(accessory.secureVideoController).toBeUndefined();
     expect(record.activeController).toBe("CameraController");
   });
 
@@ -137,7 +135,6 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
       streamSource,
     );
 
-    expect(accessory.secureVideoController).toBeUndefined();
     expect(accessory.controller).toBeUndefined();
     expect(record.activeController).toBe("none");
     expect(record.hksvCapable).toBe(false);
@@ -390,7 +387,6 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
       capabilities,
       streamSource,
     );
-
     const args = delegate.buildPrebufferArgs("rtsp://192.168.1.100:554/live");
     expect(args).not.toBeNull();
     // Video is strict copy
@@ -424,6 +420,12 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
       capabilities,
       streamSource,
     );
+    (delegate as any).selectedConfiguration = {
+      audioCodec: {
+        samplerate: AudioRecordingSamplerate.KHZ_16,
+        audioChannels: 1,
+      },
+    };
 
     const args = delegate.buildPrebufferArgs("rtsp://192.168.1.100:554/live");
     expect(args).not.toBeNull();

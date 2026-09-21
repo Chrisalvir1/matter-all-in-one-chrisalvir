@@ -20,22 +20,12 @@ import {
   VideoCodecType,
   MDNSAdvertiser,
 } from "@homebridge/hap-nodejs";
-import {
-  MultiTierRtpDelegate,
-  WebRtcSessionManager,
-  HevcRecordingDelegate,
-  DEFAULT_HEVC_VIDEO_TIERS,
-  DEFAULT_HEVC_AUDIO_TIER,
-  type MultiTierConfig,
-  SecureVideoController,
-  StreamTierVideoCodec,
-} from "./hevc/index.js";
 import type {
   CameraCapabilitiesInfo,
   HomeKitCameraStorageRecord,
   ResolvedStreamSource,
 } from "../camera-types.js";
-import { HomeKitCameraStreamingDelegate, FALLBACK_JPEG_BUFFER } from "./homekit-camera-stream.delegate.js";
+import { HomeKitCameraStreamingDelegate } from "./homekit-camera-stream.delegate.js";
 import { HomeKitCameraRecordingDelegate } from "./homekit-camera-recording.delegate.js";
 import crypto from "node:crypto";
 import os from "node:os";
@@ -63,12 +53,8 @@ export function generateFreshHomeKitPin(previous?: string): string {
 export class HomeKitCameraAccessory {
   public accessory: Accessory;
   public controller?: CameraController;
-  public secureVideoController?: SecureVideoController;
   public delegate?: HomeKitCameraStreamingDelegate;
   public recordingDelegate?: HomeKitCameraRecordingDelegate;
-  public multiTierRtpDelegate?: MultiTierRtpDelegate;
-  public webrtcSessionManager?: WebRtcSessionManager;
-  public hevcRecordingDelegate?: HevcRecordingDelegate;
   public motionService?: Service;
   public lightService?: Service;
   public sirenService?: Service;
@@ -272,118 +258,6 @@ export class HomeKitCameraAccessory {
     );
   }
 
-  private configureSecureVideoController(): void {
-    this.record.activeController = "SecureVideoController";
-
-    const multiTierConfig: MultiTierConfig = {
-      videoTiers: DEFAULT_HEVC_VIDEO_TIERS,
-      audioTier: DEFAULT_HEVC_AUDIO_TIER,
-      videoPayloadType: 99,
-      audioPayloadType: 110,
-    };
-    this.multiTierRtpDelegate = new MultiTierRtpDelegate(
-      this.platform,
-      this.entityId,
-      this.capabilities,
-      this.streamSource,
-      multiTierConfig,
-    );
-    this.webrtcSessionManager = new WebRtcSessionManager(
-      this.platform,
-      this.entityId,
-      this.capabilities,
-      this.streamSource,
-      DEFAULT_HEVC_VIDEO_TIERS,
-    );
-    this.hevcRecordingDelegate = new HevcRecordingDelegate(
-      this.platform,
-      this.entityId,
-      this.record,
-      this.capabilities,
-      this.streamSource,
-    );
-
-    this.delegate = new HomeKitCameraStreamingDelegate(
-      this.platform,
-      this.entityId,
-      this.capabilities,
-      this.streamSource,
-    );
-
-    const sourceRes = this.capabilities.resolution || { width: 1920, height: 1080 };
-    const sensorUuid = uuid.generate(`secure-video:sensor:${this.entityId}`);
-
-    this.secureVideoController = new SecureVideoController({
-      sensor: {
-        uuid: sensorUuid,
-        width: sourceRes.width || 1920,
-        height: sourceRes.height || 1080,
-      },
-      video: {
-        codec: StreamTierVideoCodec.H265,
-        payloadType: 99,
-        tiers: DEFAULT_HEVC_VIDEO_TIERS,
-      },
-      audio: {
-        payloadType: 110,
-        tier: DEFAULT_HEVC_AUDIO_TIER,
-        twoWayAudio: false,
-      },
-      webrtc: {
-        delegate: this.webrtcSessionManager,
-      },
-      rtp: {
-        delegate: this.multiTierRtpDelegate,
-      },
-      recording: {
-        options: {
-          prebufferLength: 4000,
-          overrideEventTriggerOptions: [EventTriggerOption.MOTION],
-          mediaContainerConfiguration: {
-            type: MediaContainerType.FRAGMENTED_MP4,
-            fragmentLength: 4000,
-          },
-          video: {
-            type: VideoCodecType.H264,
-            parameters: {
-              profiles: [H264Profile.BASELINE, H264Profile.MAIN, H264Profile.HIGH],
-              levels: [H264Level.LEVEL3_1, H264Level.LEVEL3_2, H264Level.LEVEL4_0],
-            },
-            resolutions: this.buildRecordingResolutions(),
-          },
-          audio: {
-            codecs: {
-              type: AudioRecordingCodecType.AAC_LC,
-              audioChannels: 1,
-              samplerate: [
-                AudioRecordingSamplerate.KHZ_16,
-                AudioRecordingSamplerate.KHZ_32,
-              ],
-            },
-          },
-        },
-        delegate: this.hevcRecordingDelegate,
-      },
-      motionService: this.motionService,
-      snapshot: async (request: any) => {
-        return new Promise<Buffer>((resolve) => {
-          this.delegate!.handleSnapshotRequest(
-            request || { width: 1280, height: 720 },
-            (_err, buffer) => {
-              if (buffer && buffer.length > 0) resolve(buffer);
-              else resolve(FALLBACK_JPEG_BUFFER);
-            },
-          );
-        });
-      },
-    });
-
-    this.accessory.configureController(this.secureVideoController);
-    this.platform?.log?.notice?.(
-      `[HomeKitCamera][${this.entityId}] Configured SecureVideoController (HEVC/HKSV3 passthrough)`,
-    );
-  }
-
   private configureAccessoryInformation(): void {
     this.accessory
       .getService(Service.AccessoryInformation)
@@ -438,7 +312,9 @@ export class HomeKitCameraAccessory {
         supportedCryptoSuites: [SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80],
         video: {
           codec: {
-            profiles: [H264Profile.BASELINE, H264Profile.MAIN, H264Profile.HIGH],
+            // A copied RTP stream cannot honour a profile Apple Home selected
+            // for a different encoder. Advertise the observed profile only.
+            profiles: [this.nativeH264Profile()],
             levels: [H264Level.LEVEL3_1, H264Level.LEVEL3_2, H264Level.LEVEL4_0],
           },
           resolutions: this.buildDeclaredResolutions(),
@@ -462,7 +338,7 @@ export class HomeKitCameraAccessory {
           video: {
             type: VideoCodecType.H264,
             parameters: {
-              profiles: [H264Profile.BASELINE, H264Profile.MAIN, H264Profile.HIGH],
+              profiles: [this.nativeH264Profile()],
               levels: [H264Level.LEVEL3_1, H264Level.LEVEL3_2, H264Level.LEVEL4_0],
             },
             resolutions: this.buildRecordingResolutions(),
@@ -493,44 +369,25 @@ export class HomeKitCameraAccessory {
     return [[width, height, sourceFps]];
   }
 
+  private nativeH264Profile(): H264Profile {
+    const profile = (this.capabilities.videoProfile || "").toLowerCase();
+    if (profile.includes("baseline") || profile.includes("constrained baseline")) {
+      return H264Profile.BASELINE;
+    }
+    if (profile.includes("main")) return H264Profile.MAIN;
+    // Most camera RTSP main streams are High when ffprobe does not report a
+    // profile. Choosing High is safer than advertising Baseline/Main that a
+    // passthrough source cannot actually produce.
+    return H264Profile.HIGH;
+  }
+
   private buildDeclaredResolutions(): [number, number, number][] {
     const source = this.capabilities.resolution || { width: 1920, height: 1080 };
     const sourceFps = Math.max(15, Math.min(this.capabilities.maxFps || 30, 60));
-
-    const ladder: [number, number, number][] = [
-      // 1. Native source resolution first so HomeKit prioritizes maximum native sensor quality
-      [source.width, source.height, sourceFps],
-      // 2. 4K UHD (3840x2160)
-      [3840, 2160, sourceFps],
-      // 3. 2K QHD (2560x1440)
-      [2560, 1440, sourceFps],
-      // 4. 2K 3MP (2304x1296 for Tapo, Wyze, etc.)
-      [2304, 1296, sourceFps],
-      // 5. 1080p Full HD (1920x1080)
-      [1920, 1080, sourceFps],
-      // 6. 720p HD (1280x720)
-      [1280, 720, sourceFps],
-      [1280, 960, sourceFps],
-      [1024, 768, sourceFps],
-      [640, 480, 30],
-      [640, 360, 30],
-      [480, 360, 30],
-      [480, 270, 30],
-      [320, 240, 30],
-      [320, 240, 15],
-      [320, 180, 30],
-    ];
-    // Deduplicate resolutions while preserving maximum quality order
-    const seen = new Set<string>();
-    const supported: [number, number, number][] = [];
-    for (const [w, h, fps] of ladder) {
-      const key = `${w}x${h}`;
-      if (!seen.has(key)) {
-        seen.add(key);
-        supported.push([w, h, fps]);
-      }
-    }
-    return supported.length ? supported : [[1920, 1080, 30]];
+    // Video is passthrough-only. A universal ladder invites Apple Home to
+    // negotiate a size/FPS that would require an encoder we intentionally do
+    // not run, producing delayed or black live streams.
+    return [[source.width || 1920, source.height || 1080, sourceFps]];
   }
 
   public findLinkedEntities(): {
@@ -746,18 +603,13 @@ export class HomeKitCameraAccessory {
   }
 
   public updateMotionState(motionDetected: boolean): void {
-    if (this.secureVideoController) {
-      try {
-        this.secureVideoController.setMotionDetected(motionDetected);
-      } catch {}
-    } else if (this.motionService) {
+    if (this.motionService) {
       this.motionService.updateCharacteristic(
         Characteristic.MotionDetected,
         motionDetected,
       );
     }
     this.recordingDelegate?.handleMotionDetected(motionDetected);
-    this.hevcRecordingDelegate?.handleMotionDetected(motionDetected);
   }
 
   public updateLightState(isOn: boolean): void {
@@ -945,19 +797,12 @@ export class HomeKitCameraAccessory {
   }
 
   public get isStreaming(): boolean {
-    return (
-      (this.delegate?.isStreaming ?? false) ||
-      (this.multiTierRtpDelegate?.isStreaming ?? false) ||
-      ((this.secureVideoController?.activeWebRTCSessions.length ?? 0) > 0)
-    );
+    return this.delegate?.isStreaming ?? false;
   }
 
   public async unpublish(): Promise<void> {
     this.delegate?.cleanupAllSessions();
     this.recordingDelegate?.updateRecordingActive(false);
-    void this.multiTierRtpDelegate?.stopAll?.();
-    this.webrtcSessionManager?.closeAll?.();
-    this.hevcRecordingDelegate?.updateRecordingActive(false);
     if (!this.isPublished) return;
     try {
       await this.accessory.unpublish();

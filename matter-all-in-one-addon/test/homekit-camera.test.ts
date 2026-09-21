@@ -112,6 +112,26 @@ describe("HomeKitCameraAccessory production HAP graph", () => {
     ).toBe(true);
   });
 
+  it("advertises only the native H.264 stream dimensions for video passthrough", () => {
+    const nativeCapabilities = {
+      ...capabilities,
+      resolution: { width: 2560, height: 1440 },
+      maxFps: 20,
+      videoProfile: "main",
+    };
+    const accessory = new HomeKitCameraAccessory(
+      createPlatform(),
+      "camera.backyard",
+      createRecord(),
+      nativeCapabilities,
+      rtspSource,
+    );
+
+    expect((accessory as any).buildDeclaredResolutions()).toEqual([[2560, 1440, 20]]);
+    const options = (accessory as any).buildControllerOptions();
+    expect(options.streamingOptions.video.resolutions).toEqual([[2560, 1440, 20]]);
+  });
+
   it("creates an integrated motion service for a Scrypted camera", () => {
     const platform = createPlatform();
     platform.ha.hassEntities = new Map();

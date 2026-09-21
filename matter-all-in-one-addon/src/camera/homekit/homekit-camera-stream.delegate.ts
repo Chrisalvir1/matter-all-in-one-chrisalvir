@@ -930,6 +930,11 @@ export class HomeKitCameraStreamingDelegate
         this.capabilities.audioCodec,
         this.capabilities.audioSampleRate,
         this.capabilities.audioChannels,
+        {
+          expectedCodec: "aac",
+          allowedSampleRates: [sampleRate],
+          expectedChannels: 1,
+        },
       );
 
       if (audioCompat.compatible) {
