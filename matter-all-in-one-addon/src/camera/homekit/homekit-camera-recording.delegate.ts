@@ -61,6 +61,9 @@ export class HomeKitCameraRecordingDelegate
   private streamAbortController?: AbortController;
   private isStartingPipeline = false;
   private lastPrebufferStderrAt = 0;
+  /** A transient RTSP/go2rtc interruption must not permanently disable HKSV. */
+  private prebufferRestartTimer?: NodeJS.Timeout;
+  private consecutivePrebufferFailures = 0;
 
   constructor(
     private readonly platform: any,
@@ -73,6 +76,10 @@ export class HomeKitCameraRecordingDelegate
 
     this.segmenter.on("initialization", (initSeg: Buffer) => {
       this.initializationSegment = initSeg;
+      // A valid fMP4 init segment proves that the recovered reader is healthy;
+      // a later transient disconnect should begin its backoff from the first
+      // short retry again.
+      this.consecutivePrebufferFailures = 0;
       this.emit("initialization", initSeg);
       this.platform?.log?.notice?.(
         `[HKSV][${this.entityId}] Received fMP4 Initialization Segment (${initSeg.length} bytes)`,
@@ -564,15 +571,16 @@ export class HomeKitCameraRecordingDelegate
     );
 
     this.segmenter.reset();
-    this.ffmpegProcess = spawn(ffmpegPath, args, {
+    const process = spawn(ffmpegPath, args, {
         stdio: ["ignore", "pipe", "pipe"],
       });
+    this.ffmpegProcess = process;
 
-      this.ffmpegProcess.stdout?.on("data", (chunk: Buffer) => {
+      process.stdout?.on("data", (chunk: Buffer) => {
         this.segmenter.push(chunk);
       });
 
-      this.ffmpegProcess.stderr?.on("data", (data: Buffer) => {
+      process.stderr?.on("data", (data: Buffer) => {
         const msg = data.toString().trim();
         const now = Date.now();
         // Repeated RTSP/AAC timestamp warnings can arrive thousands of times
@@ -586,18 +594,24 @@ export class HomeKitCameraRecordingDelegate
         }
       });
 
-      this.ffmpegProcess.on("close", (code) => {
+      process.on("close", (code) => {
+        // A stop caused by Live View deliberately clears the current process.
+        // Do not race that cleanup by starting a second reader.
+        if (this.ffmpegProcess !== process) return;
         this.platform?.log?.warn?.(
           `[HKSV][${this.entityId}] HKSV pre-buffer FFmpeg exited with code ${code}`,
         );
         this.ffmpegProcess = undefined;
+        this.schedulePrebufferRecovery();
       });
 
-      this.ffmpegProcess.on("error", (err) => {
+      process.on("error", (err) => {
+        if (this.ffmpegProcess !== process) return;
         this.platform?.log?.error?.(
           `[HKSV][${this.entityId}] HKSV pre-buffer FFmpeg error: ${err}`,
         );
         this.ffmpegProcess = undefined;
+        this.schedulePrebufferRecovery();
       });
     } catch (err) {
       this.platform?.log?.error?.(
@@ -611,6 +625,10 @@ export class HomeKitCameraRecordingDelegate
 
   private stopPrebufferPipeline(): void {
     this.isStartingPipeline = false;
+    if (this.prebufferRestartTimer) {
+      clearTimeout(this.prebufferRestartTimer);
+      this.prebufferRestartTimer = undefined;
+    }
     if (this.ffmpegProcess) {
       try {
         this.ffmpegProcess.kill("SIGKILL");
@@ -622,6 +640,41 @@ export class HomeKitCameraRecordingDelegate
   private clearPrebuffer(): void {
     this.prebuffer = [];
     this.currentPrebufferBytes = 0;
+  }
+
+  /**
+   * Camera.UI/go2rtc can briefly drop an RTSP publisher while the physical
+   * camera reconnects.  Previously that single exit left a paired camera with
+   * no HKSV prebuffer until HomeKit happened to rewrite its configuration.
+   * Recover one reader at a time, with a bounded backoff, and never while a
+   * Live View session owns the camera socket.
+   */
+  private schedulePrebufferRecovery(): void {
+    if (
+      !this.recordingActive ||
+      !this.selectedConfiguration ||
+      this.isPausedByLiveStream ||
+      this.prebufferRestartTimer
+    ) {
+      return;
+    }
+
+    this.consecutivePrebufferFailures = Math.min(
+      this.consecutivePrebufferFailures + 1,
+      6,
+    );
+    const delayMs = Math.min(
+      2_000 * 2 ** (this.consecutivePrebufferFailures - 1),
+      60_000,
+    );
+    this.platform?.log?.warn?.(
+      `[HKSV][${this.entityId}] El prebuffer se recuperará en ${Math.round(delayMs / 1000)}s (intento ${this.consecutivePrebufferFailures})`,
+    );
+    this.prebufferRestartTimer = setTimeout(() => {
+      this.prebufferRestartTimer = undefined;
+      void this.startPrebufferPipeline();
+    }, delayMs);
+    this.prebufferRestartTimer.unref?.();
   }
 
   private waitForInitialization(timeoutMs: number): Promise<void> {

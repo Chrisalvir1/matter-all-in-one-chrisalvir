@@ -233,17 +233,29 @@ export class CameraUiHomeKitBridge {
       await CameraUiStorage.save(store);
     }
 
-    const startLocalMotionFallback = () => {
+    // C120 is the known-good reference camera. Its native event path is
+    // healthy, so never add a second RTSP reader or alter its HAP lifecycle.
+    const isProtectedC120 = /(?:\bc120\b|tapo[-_ ]?c120)/i.test(
+      `${camera.name || ""} ${camera.model || ""}`,
+    );
+
+    const startLocalMotionFallback = (confirmedByHomeHub = false) => {
       // HKSV fallback is meaningful only for an accessory that Apple Home has
       // actually paired. Do not consume an RTSP reader for a QR waiting to be
       // scanned or for a camera intentionally not exported.
-      if (!accessory.isPaired()) return;
+      if (isProtectedC120) return;
+      // A recording-active/configured callback can only come from a Home Hub.
+      // Trust it even when the persisted paired flag is stale after an add-on
+      // restart; otherwise C402/EZVIZ/Wyze never regain their detector.
+      if (!confirmedByHomeHub && !accessory.isPaired()) return;
       if (!camera.rtspUrl || this.activeMotionDetectors.has(camera.id)) return;
       try {
         const detector = new FfmpegMotionDetector({
           cameraId: camera.id,
           cameraName: camera.name || `Cámara ${camera.id}`,
-          rtspUrl: camera.rtspUrl,
+          // Prefer the low-bandwidth stream for frame differencing. This keeps
+          // the full native source available to Live View and HKSV.
+          rtspUrl: camera.subRtspUrl || camera.rtspUrl,
           changeThresholdPercent: 4,
           cooldownMs: 4000,
           resetMs: 15000,
@@ -272,17 +284,17 @@ export class CameraUiHomeKitBridge {
     // cameras during add-on startup.  This restores MotionDetected and clip
     // recording without reintroducing the cold-start RTSP saturation.
     accessory.recordingDelegate?.on("recording-active", (active: boolean) => {
-      if (active) startLocalMotionFallback();
+      if (active) startLocalMotionFallback(true);
     });
     accessory.recordingDelegate?.on("recording-configured", () => {
-      startLocalMotionFallback();
+      startLocalMotionFallback(true);
     });
 
-    // For cameras that are already paired at mount time (e.g. EZVIZ, Tapo C120, Tapo C402)
+    // For non-C120 cameras that are already paired at mount time (e.g. EZVIZ, Tapo C402)
     // Apple Home may not re-send recording-active if it never went offline.
     // Start motion detection after 20s if: paired + RTSP + no detector yet.
     // The delay avoids saturating RTSP sockets at cold-start across all cameras.
-    if (camera.isPaired && camera.rtspUrl && isRtspSource) {
+    if (accessory.isPaired() && camera.rtspUrl && isRtspSource && !isProtectedC120) {
       const pairedFallbackTimer = setTimeout(() => {
         if (!this.activeMotionDetectors.has(camera.id)) {
           platform?.log?.notice?.(
