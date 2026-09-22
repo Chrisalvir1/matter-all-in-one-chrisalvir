@@ -34,6 +34,8 @@ export interface CameraRealEntity {
 export interface CameraUiCameraRecord {
   id: string;
   name: string;
+  /** Actual live-stream origin; the accessory may still be managed in the shared camera UI. */
+  sourceProvider?: "camera_ui" | "home_assistant" | "manual";
   manufacturer?: string;
   model?: string;
   serialNumber?: string;

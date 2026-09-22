@@ -20,6 +20,8 @@ export interface StreamValidationResult {
   resolution?: { width: number; height: number };
   fps?: number;
   hasAudio?: boolean;
+  audioSampleRate?: number;
+  audioChannels?: number;
   needsDumpExtra?: boolean;
   gopSeconds?: number;
   metrics?: StreamLatencyMetrics;
@@ -202,6 +204,8 @@ export class ScryptedStreamValidator {
                     : undefined,
                 fps: probe.fps,
                 hasAudio: probe.hasAudio,
+                audioSampleRate: probe.audioSampleRate,
+                audioChannels: probe.audioChannels,
                 needsDumpExtra: probe.videoCodec.toLowerCase() === "h264",
                 gopSeconds,
                 metrics,

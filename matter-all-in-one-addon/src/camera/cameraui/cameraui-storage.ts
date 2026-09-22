@@ -86,6 +86,16 @@ export function repairCameraRecord(cam: CameraUiCameraRecord): {
 } {
   let modified = false;
 
+  // The C402 RTSP endpoint is published by the Home Assistant add-on at
+  // 192.168.110.147:62291, not by Camera.UI. Keep its existing single UI card
+  // and HAP identity, but label its real stream origin accurately.
+  if (/tapo-c402/i.test(cam.rtspUrl || "") || /tapo\s*c402/i.test(cam.name || "")) {
+    if (cam.sourceProvider !== "home_assistant") {
+      cam.sourceProvider = "home_assistant";
+      modified = true;
+    }
+  }
+
   // Strip trailing hash fragments
   if (cam.rtspUrl && cam.rtspUrl.includes("#")) {
     cam.rtspUrl = cam.rtspUrl.substring(0, cam.rtspUrl.indexOf("#"));
@@ -817,6 +827,7 @@ export const DEFAULT_CAMERAS: CameraUiCameraRecord[] = [
   {
     id: "cameraui_5199854c-2694-4d69-bcc4-5cc6651fad0c",
     name: "TAPO C402",
+    sourceProvider: "home_assistant",
     manufacturer: "Gecko",
     model: "Tapo C402",
     serialNumber: "CUI-5199854C-2694-4D69-BCC4-5CC6651FAD0C",

@@ -92,7 +92,11 @@ export class CameraUiHomeKitBridge {
       streamSourceType: "rtsp",
       videoCodec: chosenCodec,
       hasAudio: camera.hasAudio,
-      audioCodec: "aac_lc",
+      // Keep the measured source codec. The HAP delegates copy AAC when
+      // compatible and transcode only non-AAC audio (e.g. PCM A-law) to AAC.
+      audioCodec: (camera.audioCodec || "unknown") as CameraCapabilitiesInfo["audioCodec"],
+      audioSampleRate: camera.audioSampleRate,
+      audioChannels: camera.audioChannels,
       resolution: {
         width: camera.width || 1920,
         height: camera.height || 1080,
@@ -113,6 +117,7 @@ export class CameraUiHomeKitBridge {
       requiresBridge: true,
       metadata: {
         isCameraUi: true,
+        streamProvider: camera.sourceProvider || "camera_ui",
         camerauiCameraId: camera.id,
         hasDoorbell: Boolean(camera.doorbellTopic),
         model: camera.model || "Camera.UI Stream",

@@ -193,6 +193,7 @@ export interface CameraRealEntity {
 export interface CameraUiCameraItem {
   id: string;
   name: string;
+  sourceProvider?: "camera_ui" | "home_assistant" | "manual";
   rtspUrl: string;
   subRtspUrl?: string;
   snapshotUrl?: string;

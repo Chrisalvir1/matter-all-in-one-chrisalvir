@@ -6098,6 +6098,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                     resolution: validation.resolution,
                     fps: validation.fps,
                     hasAudio: validation.hasAudio ?? true,
+                    audioSampleRate: validation.audioSampleRate,
+                    audioChannels: validation.audioChannels,
                     needsDumpExtra: validation.needsDumpExtra,
                     gopSeconds: validation.gopSeconds,
                   }
@@ -6137,11 +6139,33 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                 if (validation.fps) cam.fps = validation.fps;
                 if (validation.videoCodec) cam.videoCodec = validation.videoCodec;
                 if (validation.audioCodec) cam.audioCodec = validation.audioCodec;
+                if (validation.audioSampleRate)
+                  cam.audioSampleRate = validation.audioSampleRate;
+                if (validation.audioChannels)
+                  cam.audioChannels = validation.audioChannels;
                 if (validation.hasAudio !== undefined)
                   cam.hasAudio = validation.hasAudio;
               }
               return cam;
             });
+
+            // Refresh the already-published accessory from the newly measured
+            // source metadata. mountCamera preserves its persisted HAP identity
+            // (UUID, pairing username/PIN, setup ID and port); do not reset it.
+            if (validation.status === "verified" && cuiCam.homeKitEnabled) {
+              const refreshedStore = await CameraUiStorage.load();
+              const refreshedCamera = refreshedStore.cameras.find(
+                (cam) => cam.id === cuiCam.id,
+              );
+              const active = CameraUiHomeKitBridge.getAccessory(cuiCam.id);
+              if (refreshedCamera && !active?.isStreaming) {
+                await CameraUiHomeKitBridge.mountCamera(
+                  this,
+                  refreshedCamera,
+                  { forceRemount: true },
+                );
+              }
+            }
           }
 
           res.writeHead(200, {
@@ -7016,6 +7040,21 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               port: acc?.record?.port || cam.port,
               pincode: acc?.record?.pincode || cam.pincode || "031-45-154",
               setupId: acc?.record?.setupId || cam.setupId,
+              // A live accessory may still hold metadata from before the most
+              // recent explicit RTSP probe. Prefer the probe stored for this
+              // exact source URL in both UI and diagnostics.
+              audioCodec:
+                cam.videoCodecSource === "ffprobe" && cam.codecProbeUrl === cam.rtspUrl
+                  ? cam.audioCodec
+                  : acc?.capabilities?.audioCodec || cam.audioCodec,
+              audioSampleRate:
+                cam.videoCodecSource === "ffprobe" && cam.codecProbeUrl === cam.rtspUrl
+                  ? cam.audioSampleRate
+                  : acc?.capabilities?.audioSampleRate || cam.audioSampleRate,
+              audioChannels:
+                cam.videoCodecSource === "ffprobe" && cam.codecProbeUrl === cam.rtspUrl
+                  ? cam.audioChannels
+                  : acc?.capabilities?.audioChannels || cam.audioChannels,
               // The UI must never promote stale bridge capabilities to a
               // measured source codec. A verified ffprobe result wins, then
               // Camera.UI metadata is shown as metadata rather than proof.
@@ -7024,16 +7063,22 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                   ? cam.videoCodec
                   : cam.videoCodec,
               strategy: (acc?.capabilities?.strategy as any) || cam.strategy,
-              width: acc?.capabilities?.resolution?.width || cam.width,
-              height: acc?.capabilities?.resolution?.height || cam.height,
-              fps: acc?.capabilities?.maxFps || cam.fps,
+              width:
+                cam.videoCodecSource === "ffprobe" && cam.codecProbeUrl === cam.rtspUrl
+                  ? cam.width
+                  : acc?.capabilities?.resolution?.width || cam.width,
+              height:
+                cam.videoCodecSource === "ffprobe" && cam.codecProbeUrl === cam.rtspUrl
+                  ? cam.height
+                  : acc?.capabilities?.resolution?.height || cam.height,
+              fps:
+                cam.videoCodecSource === "ffprobe" && cam.codecProbeUrl === cam.rtspUrl
+                  ? cam.fps
+                  : acc?.capabilities?.maxFps || cam.fps,
               activeController: acc?.record?.activeController || (acc ? "CameraController" : undefined),
               exportMode: acc?.record?.exportMode,
               hksvState: acc?.record?.hksvState,
               hksvVerified: acc?.record?.hksvVerified,
-              audioCodec: acc?.capabilities?.audioCodec || (cam as any).audioCodec,
-              audioSampleRate: acc?.capabilities?.audioSampleRate,
-              audioChannels: acc?.capabilities?.audioChannels,
               audioIncompatibleReason: acc?.record?.audioIncompatibleReason,
               negotiatedConfiguration: acc?.recordingDelegate?.selectedConfiguration ? {
                 resolution: acc.recordingDelegate.selectedConfiguration.videoCodec.resolution,

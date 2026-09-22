@@ -1,4 +1,4 @@
-# Matter All-in-One for Home Assistant — v1.8.49
+# Matter All-in-One for Home Assistant — v1.8.50
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/chrisalvir1/matter-all-in-one-chrisalvir/main/matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
@@ -15,7 +15,7 @@ This file is intentionally structured for both humans and AI agents.
 
 ```yaml
 project: matter-all-in-one-chrisalvir
-version: "1.8.49"
+version: "1.8.50"
 spec: "Matter 1.6"
 engine: matterbridge
 engine_version: "3.10.10"
@@ -41,10 +41,13 @@ matterbridge_ui_port: 8284
 
 ### Camera.UI / HomeKit stability
 
-Camera.UI is the source of truth for each camera URL and capabilities. A normal
+Each camera uses its configured live-stream origin. Camera.UI cameras use the
+Camera.UI RTSP feed; the Tapo C402 uses the direct Home Assistant add-on RTSP
+feed. The C402 remains a single camera card in the project UI, but its source
+is labeled Home Assistant RTSP. A
 Camera.UI refresh preserves existing HAP UUIDs, ports, pairings, motion
 detectors, HKSV pre-buffering, and Live View listeners. A paired camera is
-remounted only after an explicit stream-source edit.
+remounted only after an explicit stream-source edit or live verification.
 
 ---
 

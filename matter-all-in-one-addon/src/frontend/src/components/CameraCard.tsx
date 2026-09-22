@@ -217,7 +217,9 @@ export const CameraCard: React.FC<CameraCardProps> = ({
         <div className="card-top">
           <span className="device-icon" style={{ fontSize: "1.2rem" }}>🎥</span>
           <div className="card-pills-group" style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-            <span className="badge-cameraui-tag">CAMERA.UI</span>
+            <span className="badge-cameraui-tag">
+              {cameraUiCamera.sourceProvider === "home_assistant" ? "HOME ASSISTANT RTSP" : "CAMERA.UI"}
+            </span>
             {isHapPaired ? (
               <span
                 className="tag"

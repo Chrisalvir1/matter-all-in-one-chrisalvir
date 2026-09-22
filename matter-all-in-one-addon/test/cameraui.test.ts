@@ -3,7 +3,7 @@ import {
   CameraUiClient,
   isCameraStreamReachable,
 } from "../src/camera/cameraui/cameraui-client.js";
-import { CameraUiStorage, isLegacyBridgeStreamUrl } from "../src/camera/cameraui/cameraui-storage.js";
+import { CameraUiStorage, isLegacyBridgeStreamUrl, repairCameraRecord } from "../src/camera/cameraui/cameraui-storage.js";
 import { CameraUiHomeKitBridge } from "../src/camera/cameraui/cameraui-homekit-bridge.js";
 import type { CameraUiCameraRecord } from "../src/camera/cameraui/cameraui-types.js";
 
@@ -13,6 +13,35 @@ describe("Camera.UI Client and Storage Integration", () => {
   afterEach(() => {
     global.fetch = originalFetch;
     vi.restoreAllMocks();
+  });
+
+  it("labels the Tapo C402 as Home Assistant RTSP without changing its HAP identity or source URL", () => {
+    const input: CameraUiCameraRecord = {
+      id: "cameraui_5199854c-2694-4d69-bcc4-5cc6651fad0c",
+      name: "TAPO C402",
+      rtspUrl: "rtsp://192.168.110.147:62291/tapo-c402",
+      hasAudio: true,
+      status: "online",
+      homeKitEnabled: true,
+      port: 51848,
+      username: "0E:01:02:03:04:05",
+      pincode: "123-45-678",
+      setupId: "ABCD",
+      uuid: "c402-hap-uuid",
+      isPaired: false,
+    };
+
+    const repaired = repairCameraRecord(input).cam;
+    expect(repaired.sourceProvider).toBe("home_assistant");
+    expect(repaired.rtspUrl).toBe(input.rtspUrl);
+    expect(repaired).toMatchObject({
+      port: input.port,
+      username: input.username,
+      pincode: input.pincode,
+      setupId: input.setupId,
+      uuid: input.uuid,
+      isPaired: false,
+    });
   });
 
   it("testConnection returns ok: true when /api/cameras returns 200", async () => {

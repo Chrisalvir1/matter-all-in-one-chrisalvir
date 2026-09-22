@@ -1,3 +1,14 @@
+## [1.8.50] - 2026-09-22
+
+### Tapo C402: fuente directa de Home Assistant, AAC y diagnóstico HAP honesto
+
+- **Fuente de vídeo identificada correctamente:** la C402 usa el RTSP directo del add-on de Home Assistant, no el restream de Camera.UI. Sigue apareciendo como una sola cámara en el panel, ahora rotulada como `HOME ASSISTANT RTSP`.
+- **Audio medido y compatible con Apple Home:** `ffprobe` detecta codec, frecuencia y canales de la fuente. La C402 actualmente entrega PCM A-law; HAP convierte solo ese audio a AAC, manteniendo el vídeo en passthrough sin recodificación.
+- **Verificación refresca HAP:** tras una verificación RTSP exitosa se actualizan las capacidades de la cámara montada cuando no tiene una sesión de vídeo activa. Se preservan UUID, puerto, MAC HAP, PIN, Setup ID y estado de emparejamiento.
+- **UI/diagnóstico:** se muestran los parámetros de audio almacenados y se distingue la fuente HA RTSP de las cámaras realmente provenientes de Camera.UI.
+- **Validación local:** `pnpm run typecheck`, `pnpm run build` y `pnpm exec vitest run test/cameraui.test.ts`.
+- **Validación de red previa a la publicación:** la fuente RTSP y el puerto HAP respondieron; la verificación RTSP observó H.264 2304×1296/15 fps y PCM A-law. HKSV requiere completar pairing en Apple Home para confirmarse en vivo.
+
 ## [1.8.47] - 2026-09-22
 
 ### HKSV y detección confiables para Tapo C402, Tapo C120, EZVIZ y Wyze

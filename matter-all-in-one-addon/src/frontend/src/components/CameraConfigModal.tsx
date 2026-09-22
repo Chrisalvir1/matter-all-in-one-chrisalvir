@@ -380,10 +380,11 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
   let audioDisplay = "—";
   let isProbedVerified = false;
   let probeEvidence = "Sin medición ffprobe vigente";
+  let storedProbe: CameraUiCameraItem | undefined;
 
   if (isCameraUi) {
     const cui = camera as CameraUiCameraItem;
-    const storedProbe =
+    storedProbe =
       cui.videoCodecSource === "ffprobe" &&
       cui.codecProbeUrl === rtspUrl &&
       cui.codecProbedAt
@@ -717,7 +718,7 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
       `=== DIAGNÓSTICO DE CÁMARA ===`,
       `ID: ${cameraId}`,
       `Nombre: ${cameraName}`,
-      `Tipo de Puente: ${isCameraUi ? "Camera.UI" : "Scrypted"}`,
+      `Fuente de vídeo: ${isCameraUi ? ((camera as CameraUiCameraItem).sourceProvider === "home_assistant" ? "Home Assistant RTSP directo" : "Camera.UI") : "Scrypted"}`,
       `Marca: ${brand}`,
       `Modelo: ${modelDisplay}`,
       `Estado: ${isOnline ? "En línea" : "Desconectada"}`,
@@ -755,7 +756,11 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
           <span className="modal-icon" style={{ fontSize: "1.8rem" }}>📹</span>
           <div>
             <p className="eyebrow">
-              {isCameraUi ? "CÁMARA CAMERA.UI · APPLE HOME HAP & MATTER" : "CÁMARA SCRYPTED · APPLE HOME HAP & MATTER"}
+              {isCameraUi
+                ? (camera as CameraUiCameraItem).sourceProvider === "home_assistant"
+                  ? "CÁMARA HOME ASSISTANT RTSP · APPLE HOME HAP"
+                  : "CÁMARA CAMERA.UI · APPLE HOME HAP & MATTER"
+                : "CÁMARA SCRYPTED · APPLE HOME HAP & MATTER"}
             </p>
             <h2>{cameraName}</h2>
             <p className="entity-id">
@@ -1525,7 +1530,9 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                       <div>Muestreo / Ch: <strong style={{ color: "#f8fafc" }}>
                         {isCameraUi && latestProbe?.sourceUrl === rtspUrl && latestProbe?.audioSampleRate
                           ? `${latestProbe.audioSampleRate} Hz / ${latestProbe.audioChannels || "—"} ch`
-                          : "No medido"}
+                          : storedProbe?.audioSampleRate
+                            ? `${storedProbe.audioSampleRate} Hz / ${storedProbe.audioChannels || "—"} ch`
+                            : "No medido"}
                       </strong></div>
                     </div>
                     <div style={{ color: "#94a3b8", marginTop: 6 }}>Evidencia: {probeEvidence}</div>
