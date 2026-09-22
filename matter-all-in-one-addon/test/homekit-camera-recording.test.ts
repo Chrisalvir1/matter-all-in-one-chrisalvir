@@ -336,9 +336,11 @@ describe("HomeKitCameraRecordingDelegate", () => {
     const args = delegate.buildPrebufferArgs("rtsp://camera.local/c402");
     expect(args).toContain("1048576");
     expect(args).toContain("1000000");
-    expect(args).toContain("+genpts+igndts+discardcorrupt");
+    expect(args).toContain("+genpts+discardcorrupt");
     expect(args).not.toContain("+nobuffer+flush_packets+genpts+igndts");
     expect(args).toContain("asetpts=N/SR/TB,aresample=async=1:min_hard_comp=0.100:first_pts=0");
+    expect(args).toContain("-copyts");
+    expect(args).toContain("-start_at_zero");
     expect(args).not.toContain("-use_wallclock_as_timestamps");
     delegate.destroy();
   });
@@ -356,7 +358,28 @@ describe("HomeKitCameraRecordingDelegate", () => {
     const args = delegate.buildPrebufferArgs("rtsp://camera.local/ezviz");
     expect(args).toContain("524288");
     expect(args).toContain("500000");
-    expect(args).toContain("+genpts+igndts+discardcorrupt");
+    expect(args).toContain("+genpts+discardcorrupt");
+    expect(args).toContain("-copyts");
+    expect(args).toContain("-start_at_zero");
+    expect(args).not.toContain("-use_wallclock_as_timestamps");
+    delegate.destroy();
+  });
+
+  it("repairs the C120 AAC clock without changing its H.264 video passthrough", () => {
+    const record = { ...createMockRecord(), entityId: "camera.tapo_c120", name: "Tapo C120" };
+    const delegate = new HomeKitCameraRecordingDelegate(
+      mockPlatform,
+      "camera.tapo_c120",
+      record,
+      createMockCapabilities(),
+      { sourceType: "rtsp", url: "rtsp://camera.local/c120", supportsPassthrough: true, requiresBridge: false },
+    );
+    (delegate as any).selectedConfiguration = createMockConfiguration();
+    const args = delegate.buildPrebufferArgs("rtsp://camera.local/c120");
+    expect(args?.[args.indexOf("-vcodec") + 1]).toBe("copy");
+    expect(args).toContain("+genpts+discardcorrupt");
+    expect(args).toContain("-copyts");
+    expect(args).toContain("-start_at_zero");
     expect(args).not.toContain("-use_wallclock_as_timestamps");
     delegate.destroy();
   });

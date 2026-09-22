@@ -2081,7 +2081,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     );
     this.log.notice(`[Runtime] Matterbridge runtime: ${mbVersion}`);
     this.log.notice(`[Runtime] Node.js runtime: ${process.version}`);
-    this.log.notice(`[Runtime] Plugin version: 1.8.41`);
+    // Do not hard-code this: it made every installed image claim to be 1.8.41
+    // and hid whether Home Assistant had actually applied a camera/HKSV fix.
+    this.log.notice(`[Runtime] Plugin version: ${await this.getPackageVersion()}`);
     await this.loadEntityDiagnostics();
     await this.startUiServer();
     this.startMatterConnectionMonitor();

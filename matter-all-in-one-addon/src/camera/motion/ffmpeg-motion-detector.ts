@@ -24,6 +24,11 @@ export interface FfmpegMotionDetectorOptions {
   cooldownMs?: number;
   /** ms after last trigger before resetting to no-motion. Default: 15000. */
   resetMs?: number;
+  /** Analysis resolution. Defaults to 160x90 to keep the background reader inexpensive. */
+  analysisWidth?: number;
+  analysisHeight?: number;
+  /** Luma difference below which a pixel is considered unchanged. Default: 12. */
+  pixelDifferenceThreshold?: number;
 }
 
 export class FfmpegMotionDetector extends EventEmitter {
@@ -131,7 +136,13 @@ export class FfmpegMotionDetector extends EventEmitter {
      *    outputs at info level: "[Parsed_blackframe...] frame:N pblack:P pts:..."
      *    pblack <= threshold → significant pixel changes → MOTION
      */
-    const vf = "fps=1,scale=160:90,format=gray,tblend=all_mode=difference,blackframe=amount=95:thresh=12";
+    const analysisWidth = Math.max(64, Math.min(this.opts.analysisWidth ?? 160, 640));
+    const analysisHeight = Math.max(36, Math.min(this.opts.analysisHeight ?? 90, 360));
+    const pixelDifferenceThreshold = Math.max(
+      1,
+      Math.min(this.opts.pixelDifferenceThreshold ?? 12, 255),
+    );
+    const vf = `fps=1,scale=${analysisWidth}:${analysisHeight},format=gray,tblend=all_mode=difference,blackframe=amount=95:thresh=${pixelDifferenceThreshold}`;
 
     const args = [
       "-hide_banner",

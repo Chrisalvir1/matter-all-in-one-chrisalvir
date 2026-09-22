@@ -1,3 +1,13 @@
+## [1.8.47] - 2026-09-22
+
+### HKSV y detección confiables para Tapo C402, Tapo C120, EZVIZ y Wyze
+
+- **Prebuffer fMP4 aislado por reconexión:** al reiniciar una fuente RTSP se descartan el `moov` y los fragmentos de la sesión anterior. Ya no se pueden mezclar dos timelines fMP4, causa de cierres HDS por `TIMEOUT` o datos inválidos.
+- **Protección contra salida tardía de FFmpeg:** la salida de un proceso ya sustituido se ignora, para que una reconexión o el cierre de Live View no corrompa la grabación HKSV que se está reconstruyendo.
+- **AAC reparado también en Tapo C120:** C120, C402, EZVIZ y Wyze conservan vídeo H.264 en passthrough; su audio se normaliza desde una línea de tiempo relativa, evitando los saltos de timestamp que bloqueaban los fragmentos HKSV.
+- **Movimiento C120 más preciso:** solo la C120 usa análisis local a 1 FPS con mayor detalle y sensibilidad ajustada. No modifica su Live View ni rebaja el umbral de las demás cámaras.
+- **Versión de runtime real:** el registro de inicio deja de declarar falsamente `1.8.41` y lee la versión incluida en la imagen instalada.
+
 ## [1.8.46] - 2026-09-22
 
 ### Detección C120 sin afectar Live View

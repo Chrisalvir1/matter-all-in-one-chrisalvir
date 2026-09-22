@@ -250,6 +250,12 @@ export class CameraUiHomeKitBridge {
       if (!confirmedByHomeHub && !accessory.isPaired()) return;
       if (!camera.rtspUrl || this.activeMotionDetectors.has(camera.id)) return;
       try {
+        const cameraIdentity = `${camera.name || ""} ${camera.model || ""}`.toLowerCase();
+        // C120's low-light RTSP feed is much less sensitive at 160x90. Keep
+        // the reader at 1 FPS and use a more detailed, C120-only analysis so
+        // that a person in front of the camera crosses the threshold without
+        // lowering every other camera into false motion from its clock overlay.
+        const isTapoC120 = /(?:\bc120\b|tapo[-_ ]?c120)/i.test(cameraIdentity);
         const detector = new FfmpegMotionDetector({
           cameraId: camera.id,
           cameraName: camera.name || `Cámara ${camera.id}`,
@@ -258,9 +264,16 @@ export class CameraUiHomeKitBridge {
           // route no longer exists; that made the detector silently retry and
           // left HomeKit without MotionDetected even though Live View worked.
           rtspUrl: camera.rtspUrl,
-          changeThresholdPercent: 4,
+          changeThresholdPercent: isTapoC120 ? 2 : 4,
           cooldownMs: 4000,
           resetMs: 15000,
+          ...(isTapoC120
+            ? {
+                analysisWidth: 320,
+                analysisHeight: 180,
+                pixelDifferenceThreshold: 8,
+              }
+            : {}),
         });
         detector.on("motion", (active: boolean) => {
           CameraUiHomeKitBridge.updateMotion(camera.id, active, platform, "FFmpeg Video");

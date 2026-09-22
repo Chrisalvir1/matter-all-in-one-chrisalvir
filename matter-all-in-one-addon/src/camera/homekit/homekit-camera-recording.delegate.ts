@@ -370,7 +370,7 @@ export class HomeKitCameraRecordingDelegate
     // Camera.UI sources from these cameras have demonstrated discontinuous
     // audio clocks. Rebuild the audio timeline before AAC encoding while
     // keeping their video stream in strict passthrough.
-    const needsAudioTimestampRepair = /(?:\bc402\b|\bwyze\b|\bezviz\b)/i.test(cameraIdentity);
+    const needsAudioTimestampRepair = /(?:\bc402\b|\bc120\b|\bwyze\b|\bezviz\b)/i.test(cameraIdentity);
 
     // Build FFmpeg fMP4 args
     const args = ["-hide_banner", "-loglevel", "warning"];
@@ -397,7 +397,7 @@ export class HomeKitCameraRecordingDelegate
         // move backwards. Generate a fresh monotonic timeline for fMP4/HKSV
         // instead of forwarding invalid timestamps to the Apple Home Hub.
         needsAudioTimestampRepair
-          ? "+genpts+igndts+discardcorrupt"
+          ? "+genpts+discardcorrupt"
           : "+nobuffer+flush_packets+genpts+igndts",
         "-flags",
         needsAudioTimestampRepair ? "0" : "low_delay",
@@ -406,7 +406,13 @@ export class HomeKitCameraRecordingDelegate
       // them with wall-clock timestamps makes FFmpeg drop audio packets before
       // the aresample filter can normalize them. Keep only these repaired
       // sources on their native timeline.
-      if (!needsAudioTimestampRepair) {
+      if (needsAudioTimestampRepair) {
+        // Keep the source's relative timestamps, then shift this reader to
+        // zero.  `igndts` reset one stream to zero while leaving Camera.UI's
+        // AAC stream at a large absolute timestamp, which made FFmpeg drop
+        // audio before the AAC repair filter could process it.
+        args.push("-copyts", "-start_at_zero");
+      } else {
         args.push("-use_wallclock_as_timestamps", "1");
       }
     } else {
@@ -590,17 +596,26 @@ export class HomeKitCameraRecordingDelegate
       `[HKSV][${this.entityId}] Spawning HKSV pre-buffer pipeline: ${sanitizedUrl}`,
     );
 
+    // A restarted RTSP reader begins a new fMP4 timeline. Never send its
+    // fragments with the previous reader's moov/pre-roll: that produces
+    // malformed fMP4 and HomeKit closes the HDS stream with TIMEOUT/BAD_DATA.
     this.segmenter.reset();
+    this.initializationSegment = null;
+    this.clearPrebuffer();
     const process = spawn(ffmpegPath, args, {
         stdio: ["ignore", "pipe", "pipe"],
       });
     this.ffmpegProcess = process;
 
       process.stdout?.on("data", (chunk: Buffer) => {
+        // A killed process can flush after its replacement is assigned. Do not
+        // combine fMP4 output from two independent recording timelines.
+        if (this.ffmpegProcess !== process) return;
         this.segmenter.push(chunk);
       });
 
       process.stderr?.on("data", (data: Buffer) => {
+        if (this.ffmpegProcess !== process) return;
         const msg = data.toString().trim();
         const now = Date.now();
         // Repeated RTSP/AAC timestamp warnings can arrive thousands of times
