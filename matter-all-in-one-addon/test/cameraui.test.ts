@@ -3,8 +3,15 @@ import {
   CameraUiClient,
   isCameraStreamReachable,
 } from "../src/camera/cameraui/cameraui-client.js";
-import { CameraUiStorage, isLegacyBridgeStreamUrl, repairCameraRecord } from "../src/camera/cameraui/cameraui-storage.js";
-import { CameraUiHomeKitBridge } from "../src/camera/cameraui/cameraui-homekit-bridge.js";
+import {
+  CameraUiStorage,
+  isLegacyBridgeStreamUrl,
+  repairCameraRecord,
+} from "../src/camera/cameraui/cameraui-storage.js";
+import {
+  applyCameraSourceProbe,
+  CameraUiHomeKitBridge,
+} from "../src/camera/cameraui/cameraui-homekit-bridge.js";
 import type { CameraUiCameraRecord } from "../src/camera/cameraui/cameraui-types.js";
 
 describe("Camera.UI Client and Storage Integration", () => {
@@ -13,6 +20,87 @@ describe("Camera.UI Client and Storage Integration", () => {
   afterEach(() => {
     global.fetch = originalFetch;
     vi.restoreAllMocks();
+  });
+
+  it("uses measured HA RTSP capabilities instead of seeded C402 metadata", () => {
+    const camera: CameraUiCameraRecord = {
+      id: "cameraui_c402",
+      name: "TAPO C402",
+      sourceProvider: "home_assistant",
+      rtspUrl: "rtsp://ha.local:62291/tapo-c402",
+      videoCodec: "h264",
+      width: 2304,
+      height: 1296,
+      fps: 15,
+      hasAudio: true,
+      homeKitEnabled: true,
+    };
+
+    expect(
+      applyCameraSourceProbe(
+        camera,
+        {
+          valid: true,
+          videoCodec: "h264",
+          audioCodec: "pcm_alaw",
+          width: 2560,
+          height: 1440,
+          fps: 30,
+          hasAudio: true,
+          audioSampleRate: 8000,
+          audioChannels: 1,
+        },
+        camera.rtspUrl,
+      ),
+    ).toBe(true);
+    expect(camera).toMatchObject({
+      videoCodec: "h264",
+      videoCodecSource: "ffprobe",
+      codecProbeUrl: "rtsp://ha.local:62291/tapo-c402",
+      width: 2560,
+      height: 1440,
+      fps: 30,
+      audioCodec: "pcm_alaw",
+      audioSampleRate: 8000,
+      audioChannels: 1,
+    });
+    expect(camera.codecProbedAt).toBeTruthy();
+  });
+
+  it("does not accept a failed or non-H.264/HEVC source probe as measured capabilities", () => {
+    const camera: CameraUiCameraRecord = {
+      id: "cameraui_c402",
+      name: "TAPO C402",
+      videoCodec: "h264",
+      width: 2304,
+      height: 1296,
+      fps: 15,
+      homeKitEnabled: true,
+    };
+    const original = { ...camera };
+
+    expect(
+      applyCameraSourceProbe(
+        camera,
+        { valid: false, hasAudio: false, error: "timeout" },
+        "rtsp://ha.local/tapo-c402",
+      ),
+    ).toBe(false);
+    expect(
+      applyCameraSourceProbe(
+        camera,
+        {
+          valid: true,
+          videoCodec: "mjpeg",
+          width: 1920,
+          height: 1080,
+          fps: 30,
+          hasAudio: false,
+        },
+        "rtsp://ha.local/tapo-c402",
+      ),
+    ).toBe(false);
+    expect(camera).toEqual(original);
   });
 
   it("labels the Tapo C402 as Home Assistant RTSP without changing its HAP identity or source URL", () => {
@@ -119,15 +207,28 @@ describe("Camera.UI Client and Storage Integration", () => {
       ok: true,
       json: async () => [{ _id: "source-missing", name: "Source Missing" }],
     } as any);
-    const [camera] = await new CameraUiClient({ enabled: true, serverUrl: "https://192.168.110.46:3543" }).fetchCameras();
+    const [camera] = await new CameraUiClient({
+      enabled: true,
+      serverUrl: "https://192.168.110.46:3543",
+    }).fetchCameras();
     expect(camera.rtspUrl).toBeUndefined();
   });
 
   it("identifies old bridge routes while preserving the approved C402 endpoint", () => {
-    expect(isLegacyBridgeStreamUrl("rtsp://192.168.110.147:8554/jardin")).toBe(true);
-    expect(isLegacyBridgeStreamUrl("rtsp://192.168.110.46:8554/tapo_c120")).toBe(true);
-    expect(isLegacyBridgeStreamUrl("rtsp://127.0.0.1:2101/cui_ezviz_patio_trasero_stream_1")).toBe(true);
-    expect(isLegacyBridgeStreamUrl("rtsp://192.168.110.147:62291/tapo-c402")).toBe(false);
+    expect(isLegacyBridgeStreamUrl("rtsp://192.168.110.147:8554/jardin")).toBe(
+      true,
+    );
+    expect(
+      isLegacyBridgeStreamUrl("rtsp://192.168.110.46:8554/tapo_c120"),
+    ).toBe(true);
+    expect(
+      isLegacyBridgeStreamUrl(
+        "rtsp://127.0.0.1:2101/cui_ezviz_patio_trasero_stream_1",
+      ),
+    ).toBe(true);
+    expect(
+      isLegacyBridgeStreamUrl("rtsp://192.168.110.147:62291/tapo-c402"),
+    ).toBe(false);
   });
 
   it("authenticates via POST /api/auth/login and sends Bearer token on subsequent requests", async () => {
@@ -322,20 +423,29 @@ describe("Camera.UI Client and Storage Integration", () => {
 
   it("uses the Camera.UI restream for the known Wyze camera instead of its fragile physical RTSP URL", async () => {
     const store = {
-      config: { enabled: true, serverUrl: "https://192.168.110.46:3543", rtspUsername: "admin", rtspPassword: "local-only" },
+      config: {
+        enabled: true,
+        serverUrl: "https://192.168.110.46:3543",
+        rtspUsername: "admin",
+        rtspPassword: "local-only",
+      },
       cameras: [],
     };
     vi.spyOn(CameraUiStorage, "load").mockResolvedValue(store as any);
     vi.spyOn(CameraUiStorage, "save").mockResolvedValue();
 
-    const result = await CameraUiStorage.mergeDiscoveredCameras([{
-      id: "cameraui_cba17b87-e6c0-4cc9-b6ab-e88b8cbc7cb4",
-      name: "WYZE PATIO TRASERO",
-      rtspUrl: "rtsp://camera-lan.invalid:554/stream0",
-      homeKitEnabled: true,
-    }]);
+    const result = await CameraUiStorage.mergeDiscoveredCameras([
+      {
+        id: "cameraui_cba17b87-e6c0-4cc9-b6ab-e88b8cbc7cb4",
+        name: "WYZE PATIO TRASERO",
+        rtspUrl: "rtsp://camera-lan.invalid:554/stream0",
+        homeKitEnabled: true,
+      },
+    ]);
 
-    expect(result.cameras[0].rtspUrl).toContain("192.168.110.46:2101/cui_wyze_patio_trasero_wyze_pan_v2");
+    expect(result.cameras[0].rtspUrl).toContain(
+      "192.168.110.46:2101/cui_wyze_patio_trasero_wyze_pan_v2",
+    );
   });
 
   it("keeps an exported paired camera when a Camera.UI sync is partial", async () => {

@@ -1,3 +1,13 @@
+## [1.8.51] - 2026-09-22
+
+### Tapo C402: passthrough HAP verificado por frames
+
+- **Fuente real antes de publicar HAP:** la cámara servida por Home Assistant se mide antes de crear el controlador; codec, resolución, FPS y audio se toman del RTSP actual, no de capacidades sembradas antiguas. Si la medición falla, no se publica un QR con datos obsoletos.
+- **Inicio Live View honesto para C402:** HomeKit solo recibe confirmación después de que FFmpeg reporte el primer frame. Si el proceso no entrega vídeo en 6 segundos, se rechaza el inicio en lugar de indicar falsamente que el stream está listo.
+- **Passthrough preservado:** el origen RTSP no se reescribe ni se transcodifica; Live View y HKSV mantienen copia del vídeo. No cambia el pipeline de la Tapo C120.
+- **Diagnóstico de HKSV:** la prueba automatizada confirma las opciones y argumentos de passthrough. Esta compilación local no sustituye una prueba en HomeKit/iCloud; la grabación real debe confirmarse en el add-on instalado.
+- **Validación local:** 54 suites / 453 tests, typecheck, build y `git diff --check` correctos.
+
 ## [1.8.50] - 2026-09-22
 
 ### Tapo C402: fuente directa de Home Assistant, AAC y diagnóstico HAP honesto

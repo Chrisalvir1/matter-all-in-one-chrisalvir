@@ -112,7 +112,32 @@ describe("HomeKitCameraAccessory production HAP graph", () => {
     ).toBe(true);
   });
 
-  it("advertises only the native H.264 stream dimensions for video passthrough", () => {
+  it("keeps a Home Assistant RTSP camera motion service without mislabeling it Camera.UI", () => {
+    const haSource = {
+      ...rtspSource,
+      metadata: {
+        streamProvider: "home_assistant",
+        hasCameraMotion: true,
+        capabilitiesProbedBeforePublish: true,
+      },
+    };
+    const accessory = new HomeKitCameraAccessory(
+      createPlatform(),
+      "camera.cameraui_c402",
+      createRecord("camera.cameraui_c402"),
+      capabilities,
+      haSource,
+    );
+
+    expect(accessory.motionService).toBeDefined();
+    accessory.updateMotionState(true);
+    expect(
+      accessory.motionService?.getCharacteristic(Characteristic.MotionDetected)
+        .value,
+    ).toBe(true);
+  });
+
+  it("advertises the measured native H.264 dimensions for passthrough, including 1440p", () => {
     const nativeCapabilities = {
       ...capabilities,
       resolution: { width: 2560, height: 1440 },
@@ -127,9 +152,13 @@ describe("HomeKitCameraAccessory production HAP graph", () => {
       rtspSource,
     );
 
-    expect((accessory as any).buildDeclaredResolutions()).toEqual([[2560, 1440, 20]]);
+    expect((accessory as any).buildDeclaredResolutions()).toEqual([
+      [2560, 1440, 20],
+    ]);
     const options = (accessory as any).buildControllerOptions();
-    expect(options.streamingOptions.video.resolutions).toEqual([[2560, 1440, 20]]);
+    expect(options.streamingOptions.video.resolutions).toEqual([
+      [2560, 1440, 20],
+    ]);
   });
 
   it("creates an integrated motion service for a Scrypted camera", () => {
@@ -152,7 +181,10 @@ describe("HomeKitCameraAccessory production HAP graph", () => {
       ["camera.standalone", { device_id: "standalone" }],
     ]);
     platform.ha.hassStates = new Map();
-    const source = { ...rtspSource, metadata: { validationStatus: "verified" } };
+    const source = {
+      ...rtspSource,
+      metadata: { validationStatus: "verified" },
+    };
     const accessory = new HomeKitCameraAccessory(
       platform,
       "camera.standalone",
@@ -269,7 +301,10 @@ describe("HomeKitCameraStreamingDelegate", () => {
       createPlatform(),
       "scrypted.51",
       { ...capabilities, strategy: "passthrough_h264" },
-      { ...rtspSource, url: "https://home.scrypted.app/endpoint/13/public/abc" },
+      {
+        ...rtspSource,
+        url: "https://home.scrypted.app/endpoint/13/public/abc",
+      },
     );
 
     const session = {
@@ -371,7 +406,11 @@ describe("HomeKitCameraStreamingDelegate", () => {
       createPlatform(),
       "camera.tapo_c402",
       capabilities,
-      { ...rtspSource, url: "rtsp://camera.local/tapo-c402", supportsPassthrough: true },
+      {
+        ...rtspSource,
+        url: "rtsp://camera.local/tapo-c402",
+        supportsPassthrough: true,
+      },
     );
     const args = delegate.buildStreamArgs(
       {
@@ -383,10 +422,22 @@ describe("HomeKitCameraStreamingDelegate", () => {
         videoKeySalt: Buffer.alloc(30, 1),
         videoSsrc: 1111,
       },
-      { sessionID: "c402-session", type: StreamRequestTypes.START, video: { fps: 30, width: 1920, height: 1080, pt: 99 } as any } as any,
+      {
+        sessionID: "c402-session",
+        type: StreamRequestTypes.START,
+        video: { fps: 30, width: 1920, height: 1080, pt: 99 } as any,
+      } as any,
     );
+    // HomeKit may request a smaller RTP session, but the video payload remains
+    // the camera's original maximum-quality H.264 stream (no scale/re-encode).
+    expect(args).toContain("-c:v");
+    expect(args).toContain("copy");
+    expect(args).not.toContain("libx264");
+    expect(args).not.toContain("-vf");
     expect(args).toContain("2097152");
     expect(args).toContain("3000000");
+    expect(args).toContain("-progress");
+    expect(args).toContain("pipe:1");
     expect(args).toContain("+genpts+igndts+discardcorrupt");
     expect(args).not.toContain("-avioflags");
   });

@@ -277,13 +277,19 @@ export class HomeKitCameraStreamingDelegate
     this.isTakingSnapshot = true;
 
     try {
-      let haEntityToQuery: string | undefined = this.entityId.startsWith("camera.")
+      let haEntityToQuery: string | undefined = this.entityId.startsWith(
+        "camera.",
+      )
         ? this.entityId
         : undefined;
 
       if (!haEntityToQuery && this.platform?.ha?.hassStates) {
-        const cleanName = this.entityId.replace(/^scrypted\./, "").toLowerCase();
-        const cameraModel = (this.streamSource.metadata?.model || "").toLowerCase();
+        const cleanName = this.entityId
+          .replace(/^scrypted\./, "")
+          .toLowerCase();
+        const cameraModel = (
+          this.streamSource.metadata?.model || ""
+        ).toLowerCase();
         for (const [id, state] of this.platform.ha.hassStates.entries()) {
           if (!id.startsWith("camera.")) continue;
           const fn = (state.attributes?.friendly_name || "").toLowerCase();
@@ -309,7 +315,11 @@ export class HomeKitCameraStreamingDelegate
             finish("ha-fetch-snapshot", buffer);
             return;
           } else if (buffer && isPng(buffer)) {
-            const converted = await convertImageToJpeg(buffer, request.width, request.height);
+            const converted = await convertImageToJpeg(
+              buffer,
+              request.width,
+              request.height,
+            );
             if (converted) {
               finish("ha-fetch-png-converted", converted);
               return;
@@ -319,7 +329,10 @@ export class HomeKitCameraStreamingDelegate
       }
 
       const snapshotUrl = this.streamSource.snapshotUrl;
-      if (snapshotUrl?.startsWith("http://") || snapshotUrl?.startsWith("https://")) {
+      if (
+        snapshotUrl?.startsWith("http://") ||
+        snapshotUrl?.startsWith("https://")
+      ) {
         try {
           const headers: Record<string, string> = {};
           const token =
@@ -338,7 +351,11 @@ export class HomeKitCameraStreamingDelegate
               finish("http-snapshot", buffer);
               return;
             } else if (isPng(buffer)) {
-              const converted = await convertImageToJpeg(buffer, request.width, request.height);
+              const converted = await convertImageToJpeg(
+                buffer,
+                request.width,
+                request.height,
+              );
               if (converted) {
                 finish("http-png-converted", converted);
                 return;
@@ -373,7 +390,10 @@ export class HomeKitCameraStreamingDelegate
           "-flags",
           "low_delay",
         );
-      } else if (sourceUrl.startsWith("http://") || sourceUrl.startsWith("https://")) {
+      } else if (
+        sourceUrl.startsWith("http://") ||
+        sourceUrl.startsWith("https://")
+      ) {
         args.push(
           "-probesize",
           "32768",
@@ -457,15 +477,21 @@ export class HomeKitCameraStreamingDelegate
           this.platform?.log?.notice?.(
             `[HomeKitCamera][${this.entityId}] Purging zombie session=${sid} before new prepare`,
           );
-          if (s.pipeController) { try { s.pipeController.abort(); } catch {} }
-          if (s.process) { try { s.process.kill("SIGKILL"); } catch {} }
+          if (s.pipeController) {
+            try {
+              s.pipeController.abort();
+            } catch {}
+          }
+          if (s.process) {
+            try {
+              s.process.kill("SIGKILL");
+            } catch {}
+          }
           this.activeSessions.delete(sid);
         }
       }
 
-      const localVideoPort = await this.allocateUdpPort([
-        request.video.port,
-      ]);
+      const localVideoPort = await this.allocateUdpPort([request.video.port]);
       const localAudioPort = request.audio
         ? await this.allocateUdpPort([request.audio.port, localVideoPort])
         : undefined;
@@ -580,7 +606,10 @@ export class HomeKitCameraStreamingDelegate
       url = url.substring(0, hashIdx);
     }
     // Replace localhost with 127.0.0.1 to avoid IPv6 connection issues in FFmpeg
-    url = url.replace(/^(rtsps?|https?):\/\/localhost(?=[:/])/i, "$1://127.0.0.1");
+    url = url.replace(
+      /^(rtsps?|https?):\/\/localhost(?=[:/])/i,
+      "$1://127.0.0.1",
+    );
     return url;
   }
 
@@ -655,6 +684,7 @@ export class HomeKitCameraStreamingDelegate
     const mtu = video.mtu || 1378;
 
     const args = this.buildStreamArgs(session, request, forceTranscode);
+    const isTapoC402 = /(?:\bc402\b|tapo[-_ ]?c402)/i.test(sourceUrl || "");
 
     this.platform?.log?.notice?.(
       `[HomeKitCamera][${this.entityId}] HAP START ${video.width}x${video.height}@${fps} transcode=${forceTranscode} profile=${h264Profile(video.profile)} level=${h264Level(video.level)} mtu=${mtu} source=${sanitizeUrlCredentials(sourceUrl || "")} ffmpeg=${ffmpegPath} ${getFfmpegVersion(ffmpegPath) || "unknown"}`,
@@ -665,38 +695,79 @@ export class HomeKitCameraStreamingDelegate
       this.streamSource.sourceType === "mjpeg" ||
       Boolean(
         sourceUrl &&
-          (sourceUrl.includes("/api/camera_proxy_stream/") ||
-            sourceUrl.includes("/api/camera_proxy/")),
+        (sourceUrl.includes("/api/camera_proxy_stream/") ||
+          sourceUrl.includes("/api/camera_proxy/")),
       );
     try {
       const process = spawn(ffmpegPath, args, {
-        stdio: [isHaProxyStream ? "pipe" : "ignore", "ignore", "pipe"],
+        stdio: [
+          isHaProxyStream ? "pipe" : "ignore",
+          isTapoC402 ? "pipe" : "ignore",
+          "pipe",
+        ],
       });
       session.process = process;
       if (isHaProxyStream && sourceUrl) {
         this.startHaCameraProxyPipe(session, process, sourceUrl);
       }
       let stderr = "";
+      let progress = "";
+      let startupTimer: NodeJS.Timeout | undefined;
+      let startupConfirmed = false;
+      process.stdout?.on("data", (chunk: Buffer) => {
+        if (!isTapoC402 || startupConfirmed) return;
+        progress = `${progress}${chunk.toString()}`.slice(-2048);
+        for (const match of progress.matchAll(/(?:^|\n)frame=\s*(\d+)/g)) {
+          if (Number(match[1]) > 0) {
+            startupConfirmed = true;
+            if (startupTimer) clearTimeout(startupTimer);
+            this.platform?.log?.notice?.(
+              `[HomeKitCamera][${this.entityId}] C402 HAP startup confirmed by first video frame`,
+            );
+            settle();
+            break;
+          }
+        }
+      });
       process.stderr?.on("data", (chunk: Buffer) => {
         stderr = `${stderr}${chunk.toString()}`.slice(-6000);
       });
-      // Settle HomeKit once process is spawned and confirmed active (80ms)
+      // Only confirm C402 to HomeKit after FFmpeg reports a real video frame.
+      // The old 80ms process-only test reported success while the preview stayed
+      // black because FFmpeg had not decoded or emitted any media yet.
       const guard = setTimeout(() => {
-        if (process.exitCode === null && !process.killed) {
+        if (!isTapoC402 && process.exitCode === null && !process.killed) {
           this.platform?.log?.notice?.(
             `[HomeKitCamera][${this.entityId}] HAP START callback success; FFmpeg active session=${session.sessionId}`,
           );
           settle();
-        } else {
+        } else if (!isTapoC402) {
           settle(new Error("FFmpeg exited during HAP startup"));
         }
       }, 80);
+      if (isTapoC402) {
+        clearTimeout(guard);
+        startupTimer = setTimeout(() => {
+          if (startupConfirmed) return;
+          this.platform?.log?.error?.(
+            `[HomeKitCamera][${this.entityId}] FFmpeg produced no C402 video frame within 6s; rejecting HAP START`,
+          );
+          try {
+            process.kill("SIGTERM");
+          } catch {}
+          settle(
+            new Error("C402 stream produced no video frame within 6 seconds"),
+          );
+        }, 6000);
+      }
       process.once("error", (error) => {
         clearTimeout(guard);
+        if (startupTimer) clearTimeout(startupTimer);
         settle(error);
       });
       process.once("close", (code) => {
         clearTimeout(guard);
+        if (startupTimer) clearTimeout(startupTimer);
         session.process = undefined;
         this.platform?.log?.warn?.(
           `[HomeKitCamera][${this.entityId}] FFmpeg closed code=${code} ${stderr.trim()}`,
@@ -704,7 +775,12 @@ export class HomeKitCameraStreamingDelegate
 
         // Automatic fallback recovery: if initial attempt failed (e.g. missing audio track or incompatible passthrough),
         // retry immediately with safe transcoding and/or silent audio fallback
-        if (code !== 0 && !session.retried && this.activeSessions.has(session.sessionId)) {
+        if (
+          code !== 0 &&
+          !isTapoC402 &&
+          !session.retried &&
+          this.activeSessions.has(session.sessionId)
+        ) {
           session.retried = true;
           const isAudioFailure =
             stderr.includes("matches no streams") ||
@@ -771,8 +847,8 @@ export class HomeKitCameraStreamingDelegate
       this.streamSource.sourceType === "mjpeg" ||
       Boolean(
         sourceUrl &&
-          (sourceUrl.includes("/api/camera_proxy_stream/") ||
-            sourceUrl.includes("/api/camera_proxy/")),
+        (sourceUrl.includes("/api/camera_proxy_stream/") ||
+          sourceUrl.includes("/api/camera_proxy/")),
       );
     // Camera.UI/go2rtc can accept RTSP before its next keyframe is available.
     // A 32 KiB / zero-duration probe then exits with "non-existing PPS" after
@@ -787,10 +863,16 @@ export class HomeKitCameraStreamingDelegate
       "-protocol_whitelist",
       "pipe,udp,rtp,file,crypto,srtp,tcp,tls,http,https,lavfi",
     ];
+    if (isTapoC402) {
+      args.push("-progress", "pipe:1", "-stats_period", "0.25");
+    }
 
     if (isHaProxyStream) {
       args.push("-f", "image2pipe", "-c:v", "png", "-r", "15", "-i", "pipe:0");
-    } else if (sourceUrl.startsWith("rtsp://") || sourceUrl.startsWith("rtsps://")) {
+    } else if (
+      sourceUrl.startsWith("rtsp://") ||
+      sourceUrl.startsWith("rtsps://")
+    ) {
       args.push(
         "-rtsp_transport",
         "tcp",
@@ -813,7 +895,10 @@ export class HomeKitCameraStreamingDelegate
         "-i",
         sourceUrl,
       );
-    } else if (sourceUrl.startsWith("http://") || sourceUrl.startsWith("https://")) {
+    } else if (
+      sourceUrl.startsWith("http://") ||
+      sourceUrl.startsWith("https://")
+    ) {
       args.push(
         "-reconnect",
         "1",
@@ -858,7 +943,7 @@ export class HomeKitCameraStreamingDelegate
       session.audioPort &&
       session.localAudioPort &&
       session.audioSsrc &&
-      session.audioKeySalt
+      session.audioKeySalt,
     );
     const needsSilentAudio =
       hasAudioRequested &&
@@ -896,20 +981,30 @@ export class HomeKitCameraStreamingDelegate
       // Pure passthrough remuxing without transcoding CPU overhead (native 4K, 2K, 1080p, 720p @ max fps)
       // Preserve the native H.264 or HEVC stream negotiated by Apple Home.
       const videoPassArgs: string[] = [
-        "-map", "0:v:0",
+        "-map",
+        "0:v:0",
         "-an",
-        "-c:v", "copy",
+        "-c:v",
+        "copy",
         // A cold RTSP/restream join may start after the source emitted SPS/PPS.
         // Repeat codec headers with each keyframe so HomeKit can decode the
         // first received GOP instead of waiting for a later camera keyframe.
-        "-bsf:v", "dump_extra=freq=keyframe",
-        "-f", "rtp",
-        "-fflags", "+nobuffer+flush_packets",
-        "-max_delay", "0",
-        "-payload_type", String(video.pt || 99),
-        "-ssrc", String(session.videoSsrc),
-        "-srtp_out_suite", suiteName(session.videoCryptoSuite),
-        "-srtp_out_params", session.videoKeySalt.toString("base64"),
+        "-bsf:v",
+        "dump_extra=freq=keyframe",
+        "-f",
+        "rtp",
+        "-fflags",
+        "+nobuffer+flush_packets",
+        "-max_delay",
+        "0",
+        "-payload_type",
+        String(video.pt || 99),
+        "-ssrc",
+        String(session.videoSsrc),
+        "-srtp_out_suite",
+        suiteName(session.videoCryptoSuite),
+        "-srtp_out_params",
+        session.videoKeySalt.toString("base64"),
         videoUrl,
       ];
       args.push(...videoPassArgs);
@@ -917,7 +1012,9 @@ export class HomeKitCameraStreamingDelegate
       this.platform?.log?.error?.(
         `[Stream][${this.entityId}] Error: Cámara no entrega H.264 nativo (${this.capabilities.videoCodec || "desconocido"}). Transcodificación con libx264 prohibida en modo passthrough.`,
       );
-      throw new Error(`Cámara no entrega H.264 nativo; transcodificación no permitida`);
+      throw new Error(
+        `Cámara no entrega H.264 nativo; transcodificación no permitida`,
+      );
     }
 
     if (
@@ -972,17 +1069,9 @@ export class HomeKitCameraStreamingDelegate
         const audioBitrate = Math.min(request.audio.max_bit_rate || 24, 24);
 
         if (needsSilentAudio) {
-          args.push(
-            "-map",
-            "1:a:0",
-            "-vn",
-          );
+          args.push("-map", "1:a:0", "-vn");
         } else {
-          args.push(
-            "-map",
-            "0:a:0?",
-            "-vn",
-          );
+          args.push("-map", "0:a:0?", "-vn");
         }
 
         if (isOpus) {
@@ -1006,10 +1095,7 @@ export class HomeKitCameraStreamingDelegate
             "+global_header",
           );
         } else {
-          args.push(
-            "-c:a",
-            "aac",
-          );
+          args.push("-c:a", "aac");
         }
 
         args.push(
@@ -1055,8 +1141,7 @@ export class HomeKitCameraStreamingDelegate
     process.once("error", cleanup);
 
     const token =
-      this.platform?.ha?.getAccessToken?.() ||
-      this.platform?.ha?.wsAccessToken;
+      this.platform?.ha?.getAccessToken?.() || this.platform?.ha?.wsAccessToken;
 
     void (async () => {
       try {
@@ -1082,7 +1167,9 @@ export class HomeKitCameraStreamingDelegate
 
             // Extract complete frames from buffer (supports both PNG and JPEG)
             while (buffer.length > 8) {
-              const pngIdx = buffer.indexOf(Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+              const pngIdx = buffer.indexOf(
+                Buffer.from([0x89, 0x50, 0x4e, 0x47]),
+              );
               const jpegIdx = buffer.indexOf(Buffer.from([0xff, 0xd8]));
 
               if (pngIdx !== -1 && (jpegIdx === -1 || pngIdx < jpegIdx)) {

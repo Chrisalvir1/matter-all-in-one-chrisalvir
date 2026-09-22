@@ -15,14 +15,70 @@ import {
 import { FfmpegMotionDetector } from "../motion/ffmpeg-motion-detector.js";
 import type { CameraUiCameraRecord } from "./cameraui-types.js";
 import { CameraUiStorage } from "./cameraui-storage.js";
+import {
+  probeCameraSource,
+  sanitizeUrlCredentials,
+  type ProbeResult,
+} from "../homekit/ffmpeg-helper.js";
+
+/** Apply only measured stream properties; never infer a codec from the model name. */
+export function applyCameraSourceProbe(
+  camera: CameraUiCameraRecord,
+  probe: ProbeResult,
+  sourceUrl: string,
+): boolean {
+  if (
+    !probe.valid ||
+    !probe.videoCodec ||
+    !probe.width ||
+    !probe.height ||
+    !probe.fps
+  ) {
+    return false;
+  }
+
+  const codec = probe.videoCodec.toLowerCase();
+  if (
+    codec.includes("265") ||
+    codec.includes("hevc") ||
+    codec.includes("hvc1")
+  ) {
+    camera.videoCodec = "hevc";
+  } else if (codec.includes("264") || codec.includes("avc")) {
+    camera.videoCodec = "h264";
+  } else {
+    return false;
+  }
+  camera.videoCodecSource = "ffprobe";
+  camera.codecProbeUrl = sourceUrl;
+  camera.codecProbedAt = new Date().toISOString();
+  camera.width = probe.width;
+  camera.height = probe.height;
+  camera.fps = probe.fps;
+  camera.hasAudio = probe.hasAudio;
+  camera.audioCodec = probe.audioCodec?.toLowerCase();
+  camera.audioSampleRate = probe.audioSampleRate;
+  camera.audioChannels = probe.audioChannels;
+  camera.strategy =
+    camera.videoCodec === "hevc" ? "passthrough_hevc" : "passthrough_h264";
+  return true;
+}
 
 export class CameraUiHomeKitBridge {
   private static activeAccessories = new Map<string, HomeKitCameraAccessory>();
-  private static activeMatterEndpoints = new Map<string, MatterbridgeEndpoint>();
+  private static activeMatterEndpoints = new Map<
+    string,
+    MatterbridgeEndpoint
+  >();
   /** One FFmpeg motion detector per mounted camera, keyed by camera.id */
-  private static activeMotionDetectors = new Map<string, FfmpegMotionDetector>();
+  private static activeMotionDetectors = new Map<
+    string,
+    FfmpegMotionDetector
+  >();
 
-  public static getAccessory(cameraId: string): HomeKitCameraAccessory | undefined {
+  public static getAccessory(
+    cameraId: string,
+  ): HomeKitCameraAccessory | undefined {
     return this.activeAccessories.get(cameraId);
   }
 
@@ -30,7 +86,9 @@ export class CameraUiHomeKitBridge {
     return this.activeAccessories;
   }
 
-  public static getMatterEndpoint(cameraId: string): MatterbridgeEndpoint | undefined {
+  public static getMatterEndpoint(
+    cameraId: string,
+  ): MatterbridgeEndpoint | undefined {
     return this.activeMatterEndpoints.get(cameraId);
   }
 
@@ -74,10 +132,43 @@ export class CameraUiHomeKitBridge {
     }
 
     const hasSource = Boolean(camera.rtspUrl);
+    // The C402 stream is served by the Home Assistant Tapo satellite, not
+    // Camera.UI. Measure that exact RTSP endpoint before constructing HAP so
+    // CameraController advertises the real codec, dimensions and frame rate.
+    // The previous seeded 2304x1296/15 metadata did not match its live
+    // 2560x1440/30 stream and HAP was permanently configured with stale values.
+    const isHomeAssistantSource = camera.sourceProvider === "home_assistant";
+    if (isHomeAssistantSource && camera.rtspUrl) {
+      try {
+        const probe = await probeCameraSource(camera.rtspUrl, {
+          timeoutMs: 4000,
+        });
+        if (applyCameraSourceProbe(camera, probe, camera.rtspUrl)) {
+          platform.log?.notice?.(
+            `[Camera.UI][${camera.name}] Pre-publish RTSP probe verified: ${camera.videoCodec} ${camera.width}x${camera.height}@${camera.fps}fps audio=${camera.audioCodec || "none"}`,
+          );
+        } else {
+          const safeError = probe.error
+            ? sanitizeUrlCredentials(probe.error)
+            : "no se detectaron códec, resolución y FPS";
+          platform.log?.error?.(
+            `[Camera.UI][${camera.name}] No se publica HAP con capacidades antiguas: el stream HA no se pudo medir (${safeError})`,
+          );
+          return undefined;
+        }
+      } catch (error) {
+        platform.log?.error?.(
+          `[Camera.UI][${camera.name}] No se publica HAP: falló la medición previa del stream HA (${String(error)})`,
+        );
+        return undefined;
+      }
+    }
     // Todo stream RTSP/RTSPS de Camera.UI (H.264 o H.265/HEVC) es válido para HKSV:
     // el recordingDelegate transcodifica a H.264 vía FFmpeg cuando el origen es H.265,
     // por lo que el códec de origen nunca debe bloquear la capacidad HKSV.
-    const isRtspSource = Boolean(camera.rtspUrl && /^rtsps?:\/\//i.test(camera.rtspUrl));
+    const isRtspSource = Boolean(
+      camera.rtspUrl && /^rtsps?:\/\//i.test(camera.rtspUrl),
+    );
     const isHaProxy = false;
     const rawCodec = (camera.videoCodec || "").toLowerCase();
     const isExplicitH264 = rawCodec === "h264" || rawCodec === "avc";
@@ -94,7 +185,8 @@ export class CameraUiHomeKitBridge {
       hasAudio: camera.hasAudio,
       // Keep the measured source codec. The HAP delegates copy AAC when
       // compatible and transcode only non-AAC audio (e.g. PCM A-law) to AAC.
-      audioCodec: (camera.audioCodec || "unknown") as CameraCapabilitiesInfo["audioCodec"],
+      audioCodec: (camera.audioCodec ||
+        "unknown") as CameraCapabilitiesInfo["audioCodec"],
       audioSampleRate: camera.audioSampleRate,
       audioChannels: camera.audioChannels,
       resolution: {
@@ -116,7 +208,9 @@ export class CameraUiHomeKitBridge {
       supportsPassthrough: true,
       requiresBridge: true,
       metadata: {
-        isCameraUi: true,
+        isCameraUi: !isHomeAssistantSource,
+        hasCameraMotion: true,
+        capabilitiesProbedBeforePublish: isHomeAssistantSource,
         streamProvider: camera.sourceProvider || "camera_ui",
         camerauiCameraId: camera.id,
         hasDoorbell: Boolean(camera.doorbellTopic),
@@ -131,7 +225,10 @@ export class CameraUiHomeKitBridge {
     // The old seeded records all used the same manual HAP code.  Migrate an
     // unpaired default safely before publishing; paired accessories retain
     // their established identity until the user explicitly resets them.
-    if (!camera.pincode || (!camera.isPaired && camera.pincode === "031-45-154")) {
+    if (
+      !camera.pincode ||
+      (!camera.isPaired && camera.pincode === "031-45-154")
+    ) {
       camera.pincode = generateFreshHomeKitPin(camera.pincode);
     }
     if (!camera.username) {
@@ -139,7 +236,11 @@ export class CameraUiHomeKitBridge {
       camera.username = `0E:${hex.match(/.{2}/g)!.join(":")}`;
     }
     if (!camera.setupId) {
-      camera.setupId = crypto.randomBytes(2).toString("hex").toUpperCase().slice(0, 4);
+      camera.setupId = crypto
+        .randomBytes(2)
+        .toString("hex")
+        .toUpperCase()
+        .slice(0, 4);
     }
     if (!camera.uuid) {
       camera.uuid = uuid.generate(`cameraui:camera:${camera.id}`);
@@ -166,9 +267,15 @@ export class CameraUiHomeKitBridge {
       hksvState: isRtspSource ? "waiting_hub" : "not_capable",
       // Explicit selections win. Otherwise, Camera.UI linked entities become
       // services of this same HAP camera accessory.
-      motionEntityId: camera.motionEntityId || camera.realEntities?.find((entity) => entity.type === "motion")?.id,
-      lightEntityId: camera.lightEntityId || camera.realEntities?.find((entity) => entity.type === "light")?.id,
-      sirenEntityId: camera.sirenEntityId || camera.realEntities?.find((entity) => entity.type === "siren")?.id,
+      motionEntityId:
+        camera.motionEntityId ||
+        camera.realEntities?.find((entity) => entity.type === "motion")?.id,
+      lightEntityId:
+        camera.lightEntityId ||
+        camera.realEntities?.find((entity) => entity.type === "light")?.id,
+      sirenEntityId:
+        camera.sirenEntityId ||
+        camera.realEntities?.find((entity) => entity.type === "siren")?.id,
       realEntities: camera.realEntities,
     };
 
@@ -193,9 +300,15 @@ export class CameraUiHomeKitBridge {
     // Camera.UI camera with a valid stream, so Home Assistant / Matter controllers
     // receive motion/OpenCV detections without requiring a manual per-entity toggle.
     const shouldExportMatter = hasSource;
-    if (shouldExportMatter && platform?.registerDevice && !this.activeMatterEndpoints.has(camera.id)) {
+    if (
+      shouldExportMatter &&
+      platform?.registerDevice &&
+      !this.activeMatterEndpoints.has(camera.id)
+    ) {
       try {
-        const safeName = (camera.name || `Cámara ${camera.id}`).substring(0, 32).trim();
+        const safeName = (camera.name || `Cámara ${camera.id}`)
+          .substring(0, 32)
+          .trim();
         const uniqueId = `cameraui_${camera.id}_occupancy`;
         const matterEndpoint = new MatterbridgeEndpoint([occupancySensor], {
           id: uniqueId,
@@ -203,9 +316,12 @@ export class CameraUiHomeKitBridge {
         });
         matterEndpoint.deviceName = `${safeName.substring(0, 24)} CUI Motion`;
         matterEndpoint.uniqueId = uniqueId;
-        matterEndpoint.serialNumber = `CUI-${camera.id.toUpperCase()}`.substring(0, 32);
+        matterEndpoint.serialNumber =
+          `CUI-${camera.id.toUpperCase()}`.substring(0, 32);
         matterEndpoint.vendorId = 0xfff1;
-        matterEndpoint.vendorName = (camera.manufacturer || "Camera.UI").substring(0, 32);
+        matterEndpoint.vendorName = (
+          camera.manufacturer || "Camera.UI"
+        ).substring(0, 32);
         matterEndpoint.productId = 0x8000;
         matterEndpoint.softwareVersion = 1;
         matterEndpoint.softwareVersionString = "Matterbridge 1.3.7";
@@ -255,7 +371,8 @@ export class CameraUiHomeKitBridge {
       if (!confirmedByHomeHub && !accessory.isPaired()) return;
       if (!camera.rtspUrl || this.activeMotionDetectors.has(camera.id)) return;
       try {
-        const cameraIdentity = `${camera.name || ""} ${camera.model || ""}`.toLowerCase();
+        const cameraIdentity =
+          `${camera.name || ""} ${camera.model || ""}`.toLowerCase();
         // The C120, C402 and EZVIZ feeds routinely report only 1–3% changed
         // pixels at the generic 160x90 analysis size.  That made their motion
         // service remain idle while Wyze (whose feed changes more pixels per
@@ -288,7 +405,12 @@ export class CameraUiHomeKitBridge {
             : {}),
         });
         detector.on("motion", (active: boolean) => {
-          CameraUiHomeKitBridge.updateMotion(camera.id, active, platform, "FFmpeg Video");
+          CameraUiHomeKitBridge.updateMotion(
+            camera.id,
+            active,
+            platform,
+            "FFmpeg Video",
+          );
         });
         accessory.delegate?.on("session-start", () => {
           detector.pause(platform?.log);
@@ -324,7 +446,11 @@ export class CameraUiHomeKitBridge {
     // cold-start surge of RTSP readers. C120 is included here: its assumed
     // native event path is absent in this installation, while the detector
     // pauses whenever Live View starts so its working stream is not changed.
-    if ((wasMarkedPairedBeforePublish || accessory.isPaired()) && camera.rtspUrl && isRtspSource) {
+    if (
+      (wasMarkedPairedBeforePublish || accessory.isPaired()) &&
+      camera.rtspUrl &&
+      isRtspSource
+    ) {
       const pairedFallbackTimer = setTimeout(() => {
         if (!this.activeMotionDetectors.has(camera.id)) {
           platform?.log?.notice?.(
@@ -335,14 +461,21 @@ export class CameraUiHomeKitBridge {
       }, 8_000);
       // Clean up the timer if the accessory is unpublished before it fires
       try {
-        accessory.accessory?.once?.("unpublish", () => clearTimeout(pairedFallbackTimer));
-      } catch { /* HAP accessory may not support once on 'unpublish' */ }
+        accessory.accessory?.once?.("unpublish", () =>
+          clearTimeout(pairedFallbackTimer),
+        );
+      } catch {
+        /* HAP accessory may not support once on 'unpublish' */
+      }
     }
 
     return accessory;
   }
 
-  public static async unmountCamera(cameraId: string, platform?: any): Promise<void> {
+  public static async unmountCamera(
+    cameraId: string,
+    platform?: any,
+  ): Promise<void> {
     const detector = this.activeMotionDetectors.get(cameraId);
     if (detector) {
       detector.stop(platform?.log);
@@ -425,14 +558,23 @@ export class CameraUiHomeKitBridge {
         const detectorOwnsMotion = /\bc402\b|\bc120\b|\bezviz\b|\bh6c\b/i.test(
           `${camName} ${accessory?.record?.model || ""}`,
         );
-        platform.cameraAiDetector.dispatchDetection(platform, cameraId, {
+        platform.cameraAiDetector.dispatchDetection(
+          platform,
           cameraId,
-          timestamp: Date.now(),
-          targets: detectorOwnsMotion ? [] : ["person", "vehicle", "dog"],
-          labels: [detectorOwnsMotion ? "Movimiento detectado" : "Movimiento Detectado (Persona / Vehículo / Animal)"],
-          confidence: 0.95,
-          rawDetails: `Detector Local FFmpeg: movimiento confirmado en ${camName}`,
-        }, { updateHomeKitMotion: !detectorOwnsMotion });
+          {
+            cameraId,
+            timestamp: Date.now(),
+            targets: detectorOwnsMotion ? [] : ["person", "vehicle", "dog"],
+            labels: [
+              detectorOwnsMotion
+                ? "Movimiento detectado"
+                : "Movimiento Detectado (Persona / Vehículo / Animal)",
+            ],
+            confidence: 0.95,
+            rawDetails: `Detector Local FFmpeg: movimiento confirmado en ${camName}`,
+          },
+          { updateHomeKitMotion: !detectorOwnsMotion },
+        );
       } catch {}
     }
 

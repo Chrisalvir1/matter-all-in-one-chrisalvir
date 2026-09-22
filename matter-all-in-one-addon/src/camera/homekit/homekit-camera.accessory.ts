@@ -38,13 +38,19 @@ import { NestCameraAdapter } from "../nest/nest-camera-adapter.js";
 /** Generate a fresh, HAP-valid setup PIN for an explicit pairing reset. */
 export function generateFreshHomeKitPin(previous?: string): string {
   for (;;) {
-    const digits = crypto.randomBytes(4).readUInt32BE(0).toString().padStart(10, "0").slice(-8);
+    const digits = crypto
+      .randomBytes(4)
+      .readUInt32BE(0)
+      .toString()
+      .padStart(10, "0")
+      .slice(-8);
     if (
       digits === "00000000" ||
       digits === "11111111" ||
       digits === "12345678" ||
       digits === "87654321"
-    ) continue;
+    )
+      continue;
     const pin = `${digits.slice(0, 3)}-${digits.slice(3, 5)}-${digits.slice(5)}`;
     if (pin !== previous) return pin;
   }
@@ -71,21 +77,28 @@ export class HomeKitCameraAccessory {
     public capabilities: CameraCapabilitiesInfo,
     public streamSource: ResolvedStreamSource,
   ) {
-    const accessoryUuid = record.uuid || uuid.generate(`homekit:camera:${entityId}`);
+    const accessoryUuid =
+      record.uuid || uuid.generate(`homekit:camera:${entityId}`);
     this.record.uuid = accessoryUuid;
     this.accessory = new Accessory(record.name || entityId, accessoryUuid);
     const linked = this.findLinkedEntities();
     this.linkedMotionEntityId =
       this.record.motionEntityId && this.record.motionEntityId !== "auto"
-        ? (this.record.motionEntityId === "none" ? undefined : this.record.motionEntityId)
-        : (linked.motion || this.findLinkedMotionEntity());
+        ? this.record.motionEntityId === "none"
+          ? undefined
+          : this.record.motionEntityId
+        : linked.motion || this.findLinkedMotionEntity();
     this.linkedLightEntityId =
       this.record.lightEntityId && this.record.lightEntityId !== "auto"
-        ? (this.record.lightEntityId === "none" ? undefined : this.record.lightEntityId)
+        ? this.record.lightEntityId === "none"
+          ? undefined
+          : this.record.lightEntityId
         : linked.light;
     this.linkedSirenEntityId =
       this.record.sirenEntityId && this.record.sirenEntityId !== "auto"
-        ? (this.record.sirenEntityId === "none" ? undefined : this.record.sirenEntityId)
+        ? this.record.sirenEntityId === "none"
+          ? undefined
+          : this.record.sirenEntityId
         : linked.siren;
     this.linkedDoorbellEntityId = linked.doorbell;
     this.rebuildServiceGraph();
@@ -101,18 +114,33 @@ export class HomeKitCameraAccessory {
       this.entityId.startsWith("camera.cameraui_") ||
       this.entityId.startsWith("cameraui.") ||
       Boolean(this.streamSource.metadata?.isCameraUi);
-    if (this.linkedMotionEntityId || isScrypted || isCameraUi) {
+    const hasIntegratedCameraMotion = Boolean(
+      this.streamSource.metadata?.hasCameraMotion,
+    );
+    if (
+      this.linkedMotionEntityId ||
+      isScrypted ||
+      isCameraUi ||
+      hasIntegratedCameraMotion
+    ) {
       this.motionService = this.accessory.addService(
         Service.MotionSensor,
         `${this.record.name || this.entityId} Movimiento`,
       );
       const motionOn = this.linkedMotionEntityId
-        ? this.platform?.ha?.hassStates?.get(this.linkedMotionEntityId)?.state === "on"
+        ? this.platform?.ha?.hassStates?.get(this.linkedMotionEntityId)
+            ?.state === "on"
         : false;
-      this.motionService.setCharacteristic(Characteristic.MotionDetected, motionOn);
+      this.motionService.setCharacteristic(
+        Characteristic.MotionDetected,
+        motionOn,
+      );
       this.motionService.setCharacteristic(Characteristic.StatusActive, true);
     }
-    if (this.linkedDoorbellEntityId || Boolean(this.streamSource.metadata?.hasDoorbell)) {
+    if (
+      this.linkedDoorbellEntityId ||
+      Boolean(this.streamSource.metadata?.hasDoorbell)
+    ) {
       try {
         const doorbell = this.accessory.addService(
           Service.Doorbell,
@@ -122,7 +150,10 @@ export class HomeKitCameraAccessory {
       } catch {}
     }
     this.lightService = undefined;
-    if (this.linkedLightEntityId || Boolean(this.streamSource.metadata?.hasLight)) {
+    if (
+      this.linkedLightEntityId ||
+      Boolean(this.streamSource.metadata?.hasLight)
+    ) {
       try {
         this.lightService = this.accessory.addService(
           Service.Lightbulb,
@@ -132,7 +163,9 @@ export class HomeKitCameraAccessory {
           .getCharacteristic(Characteristic.On)
           .onGet(() => {
             if (this.linkedLightEntityId) {
-              const state = this.platform?.ha?.hassStates?.get(this.linkedLightEntityId)?.state;
+              const state = this.platform?.ha?.hassStates?.get(
+                this.linkedLightEntityId,
+              )?.state;
               return state === "on";
             }
             return false;
@@ -141,14 +174,21 @@ export class HomeKitCameraAccessory {
             if (this.linkedLightEntityId) {
               const service = value ? "turn_on" : "turn_off";
               try {
-                await this.platform?.ha?.callService("light", service, this.linkedLightEntityId);
+                await this.platform?.ha?.callService(
+                  "light",
+                  service,
+                  this.linkedLightEntityId,
+                );
               } catch {}
             }
           });
       } catch {}
     }
     this.sirenService = undefined;
-    if (this.linkedSirenEntityId || Boolean(this.streamSource.metadata?.hasSiren)) {
+    if (
+      this.linkedSirenEntityId ||
+      Boolean(this.streamSource.metadata?.hasSiren)
+    ) {
       try {
         this.sirenService = this.accessory.addService(
           Service.Switch,
@@ -158,7 +198,9 @@ export class HomeKitCameraAccessory {
           .getCharacteristic(Characteristic.On)
           .onGet(() => {
             if (this.linkedSirenEntityId) {
-              const state = this.platform?.ha?.hassStates?.get(this.linkedSirenEntityId)?.state;
+              const state = this.platform?.ha?.hassStates?.get(
+                this.linkedSirenEntityId,
+              )?.state;
               return state === "on";
             }
             return false;
@@ -168,7 +210,11 @@ export class HomeKitCameraAccessory {
               const domain = this.linkedSirenEntityId.split(".")[0] || "siren";
               const service = value ? "turn_on" : "turn_off";
               try {
-                await this.platform?.ha?.callService(domain, service, this.linkedSirenEntityId);
+                await this.platform?.ha?.callService(
+                  domain,
+                  service,
+                  this.linkedSirenEntityId,
+                );
               } catch {}
             }
           });
@@ -185,7 +231,8 @@ export class HomeKitCameraAccessory {
       (this.record.name || "").toLowerCase().includes("c402");
 
     const configuredMode = this.record.exportMode || "auto";
-    let effectiveMode: "passthrough_h264" | "passthrough_hevc" | "disabled" = "passthrough_h264";
+    let effectiveMode: "passthrough_h264" | "passthrough_hevc" | "disabled" =
+      "passthrough_h264";
 
     if (configuredMode === "disabled") {
       effectiveMode = "disabled";
@@ -201,8 +248,15 @@ export class HomeKitCameraAccessory {
     } else if (configuredMode === "passthrough_h264") {
       effectiveMode = "passthrough_h264";
     } else {
-      const rawCodec = (this.capabilities.videoCodec || this.streamSource.metadata?.videoCodec || "").toLowerCase();
-      const isHevc = rawCodec.includes("hevc") || rawCodec.includes("265") || rawCodec.includes("hvc1");
+      const rawCodec = (
+        this.capabilities.videoCodec ||
+        this.streamSource.metadata?.videoCodec ||
+        ""
+      ).toLowerCase();
+      const isHevc =
+        rawCodec.includes("hevc") ||
+        rawCodec.includes("265") ||
+        rawCodec.includes("hvc1");
       effectiveMode = isHevc ? "passthrough_hevc" : "passthrough_h264";
     }
 
@@ -315,7 +369,11 @@ export class HomeKitCameraAccessory {
             // A copied RTP stream cannot honour a profile Apple Home selected
             // for a different encoder. Advertise the observed profile only.
             profiles: [this.nativeH264Profile()],
-            levels: [H264Level.LEVEL3_1, H264Level.LEVEL3_2, H264Level.LEVEL4_0],
+            levels: [
+              H264Level.LEVEL3_1,
+              H264Level.LEVEL3_2,
+              H264Level.LEVEL4_0,
+            ],
           },
           resolutions: this.buildDeclaredResolutions(),
         },
@@ -339,7 +397,11 @@ export class HomeKitCameraAccessory {
             type: VideoCodecType.H264,
             parameters: {
               profiles: [this.nativeH264Profile()],
-              levels: [H264Level.LEVEL3_1, H264Level.LEVEL3_2, H264Level.LEVEL4_0],
+              levels: [
+                H264Level.LEVEL3_1,
+                H264Level.LEVEL3_2,
+                H264Level.LEVEL4_0,
+              ],
             },
             resolutions: this.buildRecordingResolutions(),
           },
@@ -362,16 +424,25 @@ export class HomeKitCameraAccessory {
   }
 
   public buildRecordingResolutions(): [number, number, number][] {
-    const source = this.capabilities.resolution || { width: 1920, height: 1080 };
+    const source = this.capabilities.resolution || {
+      width: 1920,
+      height: 1080,
+    };
     const width = source.width || 1920;
     const height = source.height || 1080;
-    const sourceFps = Math.max(15, Math.min(this.capabilities.maxFps || 30, 60));
+    const sourceFps = Math.max(
+      15,
+      Math.min(this.capabilities.maxFps || 30, 60),
+    );
     return [[width, height, sourceFps]];
   }
 
   private nativeH264Profile(): H264Profile {
     const profile = (this.capabilities.videoProfile || "").toLowerCase();
-    if (profile.includes("baseline") || profile.includes("constrained baseline")) {
+    if (
+      profile.includes("baseline") ||
+      profile.includes("constrained baseline")
+    ) {
       return H264Profile.BASELINE;
     }
     if (profile.includes("main")) return H264Profile.MAIN;
@@ -382,8 +453,14 @@ export class HomeKitCameraAccessory {
   }
 
   private buildDeclaredResolutions(): [number, number, number][] {
-    const source = this.capabilities.resolution || { width: 1920, height: 1080 };
-    const sourceFps = Math.max(15, Math.min(this.capabilities.maxFps || 30, 60));
+    const source = this.capabilities.resolution || {
+      width: 1920,
+      height: 1080,
+    };
+    const sourceFps = Math.max(
+      15,
+      Math.min(this.capabilities.maxFps || 30, 60),
+    );
     // Video is passthrough-only. A universal ladder invites Apple Home to
     // negotiate a size/FPS that would require an encoder we intentionally do
     // not run, producing delayed or black live streams.
@@ -396,7 +473,12 @@ export class HomeKitCameraAccessory {
     siren?: string;
     doorbell?: string;
   } {
-    const result: { motion?: string; light?: string; siren?: string; doorbell?: string } = {};
+    const result: {
+      motion?: string;
+      light?: string;
+      siren?: string;
+      doorbell?: string;
+    } = {};
 
     // 1. Leverage platform multi-strategy matcher if available
     if (typeof this.platform?.findLinkedCameraEntities === "function") {
@@ -409,7 +491,8 @@ export class HomeKitCameraAccessory {
           if (ent.type === "motion" && !result.motion) result.motion = ent.id;
           if (ent.type === "light" && !result.light) result.light = ent.id;
           if (ent.type === "siren" && !result.siren) result.siren = ent.id;
-          if (ent.type === "doorbell" && !result.doorbell) result.doorbell = ent.id;
+          if (ent.type === "doorbell" && !result.doorbell)
+            result.doorbell = ent.id;
         }
       } catch {}
     }
@@ -429,12 +512,22 @@ export class HomeKitCameraAccessory {
     const matchesName = (entityId: string, friendlyName?: string) => {
       const idLower = entityId.toLowerCase();
       const fnLower = (friendlyName || "").toLowerCase();
-      if (idLower.includes(cameraBase) || fnLower.includes(cameraBase)) return true;
-      const modelKeywords = words.filter((w: string) => /^[a-z]+\d+|\d+[a-z]+|vimtag|tapo|wyze|reolink|nest/i.test(w));
-      if (modelKeywords.length > 0 && modelKeywords.some((k: string) => idLower.includes(k) || fnLower.includes(k))) {
+      if (idLower.includes(cameraBase) || fnLower.includes(cameraBase))
+        return true;
+      const modelKeywords = words.filter((w: string) =>
+        /^[a-z]+\d+|\d+[a-z]+|vimtag|tapo|wyze|reolink|nest/i.test(w),
+      );
+      if (
+        modelKeywords.length > 0 &&
+        modelKeywords.some(
+          (k: string) => idLower.includes(k) || fnLower.includes(k),
+        )
+      ) {
         return true;
       }
-      const matchingWords = words.filter((w: string) => idLower.includes(w) || fnLower.includes(w));
+      const matchingWords = words.filter(
+        (w: string) => idLower.includes(w) || fnLower.includes(w),
+      );
       return matchingWords.length >= Math.min(2, words.length);
     };
 
@@ -506,11 +599,19 @@ export class HomeKitCameraAccessory {
     }
 
     // Correlate Google Nest companion sensors (Person, Doorbell, Sound)
-    if (NestCameraAdapter.isNestCamera(this.entityId, states.get(this.entityId))) {
-      const nestEntities = NestCameraAdapter.findLinkedNestEntities(this.platform, this.entityId);
-      if (nestEntities.motion && !result.motion) result.motion = nestEntities.motion;
-      if (nestEntities.person && !result.motion) result.motion = nestEntities.person;
-      if (nestEntities.doorbell && !result.doorbell) result.doorbell = nestEntities.doorbell;
+    if (
+      NestCameraAdapter.isNestCamera(this.entityId, states.get(this.entityId))
+    ) {
+      const nestEntities = NestCameraAdapter.findLinkedNestEntities(
+        this.platform,
+        this.entityId,
+      );
+      if (nestEntities.motion && !result.motion)
+        result.motion = nestEntities.motion;
+      if (nestEntities.person && !result.motion)
+        result.motion = nestEntities.person;
+      if (nestEntities.doorbell && !result.doorbell)
+        result.doorbell = nestEntities.doorbell;
     }
 
     return result;
@@ -529,7 +630,11 @@ export class HomeKitCameraAccessory {
     const cameraBase = this.entityId.split(".")[1] || this.entityId;
     if (deviceId && registry) {
       for (const [entityId, entry] of registry.entries()) {
-        if (entry.device_id !== deviceId || !entityId.startsWith("binary_sensor.")) continue;
+        if (
+          entry.device_id !== deviceId ||
+          !entityId.startsWith("binary_sensor.")
+        )
+          continue;
         const state = states?.get(entityId);
         const deviceClass = state?.attributes?.device_class;
         if (
@@ -564,12 +669,23 @@ export class HomeKitCameraAccessory {
         const cleanEntity = clean(entityId);
         const fn = (state?.attributes?.friendly_name || "").toLowerCase();
         const cleanFn = clean(fn);
-        const camWords = (this.record?.name || "").toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 3);
-        const wordsMatch = camWords.length > 0 && camWords.every((w) => cleanEntity.includes(w) || cleanFn.includes(w));
+        const camWords = (this.record?.name || "")
+          .toLowerCase()
+          .split(/[^a-z0-9]+/)
+          .filter((w) => w.length >= 3);
+        const wordsMatch =
+          camWords.length > 0 &&
+          camWords.every((w) => cleanEntity.includes(w) || cleanFn.includes(w));
         const aliasMatch =
           typeof this.platform?.matchCameraIdentifier === "function" &&
-          (this.platform.matchCameraIdentifier({ id: this.entityId, name: this.record?.name }, entityId) ||
-            this.platform.matchCameraIdentifier({ id: this.entityId, name: this.record?.name }, fn));
+          (this.platform.matchCameraIdentifier(
+            { id: this.entityId, name: this.record?.name },
+            entityId,
+          ) ||
+            this.platform.matchCameraIdentifier(
+              { id: this.entityId, name: this.record?.name },
+              fn,
+            ));
         if (
           (cleanCam.length >= 3 && cleanEntity.includes(cleanCam)) ||
           (cleanBase.length >= 4 && cleanEntity.includes(cleanBase)) ||
@@ -583,17 +699,23 @@ export class HomeKitCameraAccessory {
     return undefined;
   }
 
-  public static detectPrimaryNetworkInterface(): { name: string; ip: string } | undefined {
+  public static detectPrimaryNetworkInterface():
+    { name: string; ip: string } | undefined {
     try {
       const ifaces = os.networkInterfaces();
-      const ignoredPatterns = /^(lo|docker|hassio|veth|br-|dummy|tun|tap|tailscale|wg|utun|llw|awdl)/i;
+      const ignoredPatterns =
+        /^(lo|docker|hassio|veth|br-|dummy|tun|tap|tailscale|wg|utun|llw|awdl)/i;
 
       for (const [name, addrs] of Object.entries(ifaces)) {
         if (ignoredPatterns.test(name)) continue;
         for (const addr of addrs || []) {
           if (addr.internal) continue;
           if (addr.family === "IPv4" || (addr.family as any) === 4) {
-            if (addr.address.startsWith("172.17.") || addr.address.startsWith("172.30.")) continue;
+            if (
+              addr.address.startsWith("172.17.") ||
+              addr.address.startsWith("172.30.")
+            )
+              continue;
             return { name, ip: addr.address };
           }
         }
@@ -665,7 +787,10 @@ export class HomeKitCameraAccessory {
     // RTSP readers at once, which is precisely what makes cameras become
     // unavailable.  Capabilities are refreshed by the explicit verification
     // action; snapshots are fetched only when Apple Home requests one.
-    if (!this.streamSource.metadata?.isCameraUi) {
+    if (
+      !this.streamSource.metadata?.isCameraUi &&
+      !this.streamSource.metadata?.capabilitiesProbedBeforePublish
+    ) {
       void this.probeAndAdaptCapabilities();
       setTimeout(() => {
         void this.delegate?.handleSnapshotRequest(
@@ -679,18 +804,25 @@ export class HomeKitCameraAccessory {
   public async probeAndAdaptCapabilities(): Promise<void> {
     if (!this.streamSource.url) return;
     try {
-      const probe = await probeCameraSource(this.streamSource.url, { timeoutMs: 4000 });
+      const probe = await probeCameraSource(this.streamSource.url, {
+        timeoutMs: 4000,
+      });
       if (probe.valid && probe.videoCodec) {
         const codec = probe.videoCodec.toLowerCase();
         const isHevc = codec.includes("hevc") || codec.includes("265");
         this.capabilities.videoCodec = isHevc ? "hevc" : "h264";
         this.capabilities.requiresTranscoding = false;
-        this.capabilities.strategy = isHevc ? "passthrough_hevc" : "passthrough_h264";
+        this.capabilities.strategy = isHevc
+          ? "passthrough_hevc"
+          : "passthrough_h264";
         if (probe.hasAudio !== undefined) {
           this.capabilities.hasAudio = probe.hasAudio;
         }
         if (probe.width && probe.height) {
-          this.capabilities.resolution = { width: probe.width, height: probe.height };
+          this.capabilities.resolution = {
+            width: probe.width,
+            height: probe.height,
+          };
         }
         if (probe.fps) {
           this.capabilities.maxFps = probe.fps;
@@ -700,7 +832,9 @@ export class HomeKitCameraAccessory {
         );
 
         if (this.entityId.includes("cameraui")) {
-          const cuiId = this.entityId.replace(/^camera\.cameraui_/, "").replace(/^camera\./, "");
+          const cuiId = this.entityId
+            .replace(/^camera\.cameraui_/, "")
+            .replace(/^camera\./, "");
           void CameraUiStorage.updateCamera(cuiId, (cam) => {
             cam.videoCodec = this.capabilities.videoCodec;
             cam.strategy = this.capabilities.strategy as any;
@@ -733,7 +867,9 @@ export class HomeKitCameraAccessory {
       }
 
       // Update Camera.UI storage if applicable
-      const cuiId = this.entityId.replace(/^camera\.cameraui_/, "").replace(/^camera\./, "");
+      const cuiId = this.entityId
+        .replace(/^camera\.cameraui_/, "")
+        .replace(/^camera\./, "");
       void CameraUiStorage.updateCamera(cuiId, (cam) => {
         cam.isPaired = paired;
         return cam;
@@ -814,7 +950,8 @@ export class HomeKitCameraAccessory {
   public async resetPairing(): Promise<HomeKitCameraStorageRecord> {
     await this.unpublish();
     try {
-      if (this.record.username) AccessoryInfo.remove(this.record.username as any);
+      if (this.record.username)
+        AccessoryInfo.remove(this.record.username as any);
     } catch (error) {
       this.platform?.log?.warn?.(
         `[HomeKitCamera][${this.entityId}] Unable to remove old pairing: ${String(error)}`,
@@ -824,13 +961,17 @@ export class HomeKitCameraAccessory {
     // Generate fresh MAC address (username) and setupId so iOS sees a brand-new device
     const randomHex = crypto.randomBytes(5).toString("hex").toUpperCase();
     this.record.username = `0E:${randomHex.match(/.{2}/g)!.join(":")}`;
-    this.record.setupId = crypto.randomBytes(2).toString("hex").toUpperCase().slice(0, 4);
+    this.record.setupId = crypto
+      .randomBytes(2)
+      .toString("hex")
+      .toUpperCase()
+      .slice(0, 4);
     this.record.pincode = generateFreshHomeKitPin(this.record.pincode);
 
     // Pick next free port across both HomeKit records and Camera.UI store
     const usedPorts = new Set<number>();
     if (this.platform?.homekitCameraRecords) {
-      for (const r of (this.platform.homekitCameraRecords.values() as Iterable<HomeKitCameraStorageRecord>)) {
+      for (const r of this.platform.homekitCameraRecords.values() as Iterable<HomeKitCameraStorageRecord>) {
         if (r.port && r.port !== this.record.port) usedPorts.add(r.port);
       }
     }
