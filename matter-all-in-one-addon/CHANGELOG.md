@@ -1,3 +1,10 @@
+## [1.8.46] - 2026-09-22
+
+### Detección C120 sin afectar Live View
+
+- **Tapo C120:** se elimina la exclusión incorrecta del fallback de detección. Si Apple Home ya activó HKSV, el detector local emite `MotionDetected` y permite al Home Hub solicitar clips.
+- **Live View preservado:** el detector se pausa antes de una sesión HAP y se reanuda al terminar; no cambia URL, codec, audio ni argumentos de streaming de C120.
+
 ## [1.8.45] - 2026-09-22
 
 ### Estabilidad RTSP de Live View, movimiento y HKSV

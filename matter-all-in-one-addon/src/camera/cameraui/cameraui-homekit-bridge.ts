@@ -240,17 +240,10 @@ export class CameraUiHomeKitBridge {
       await CameraUiStorage.save(store);
     }
 
-    // C120 is the known-good reference camera. Its native event path is
-    // healthy, so never add a second RTSP reader or alter its HAP lifecycle.
-    const isProtectedC120 = /(?:\bc120\b|tapo[-_ ]?c120)/i.test(
-      `${camera.name || ""} ${camera.model || ""}`,
-    );
-
     const startLocalMotionFallback = (confirmedByHomeHub = false) => {
       // HKSV fallback is meaningful only for an accessory that Apple Home has
       // actually paired. Do not consume an RTSP reader for a QR waiting to be
       // scanned or for a camera intentionally not exported.
-      if (isProtectedC120) return;
       // A recording-active/configured callback can only come from a Home Hub.
       // Trust it even when the persisted paired flag is stale after an add-on
       // restart; otherwise C402/EZVIZ/Wyze never regain their detector.
@@ -302,9 +295,11 @@ export class CameraUiHomeKitBridge {
     // Apple Home may not re-send recording-active after an add-on restart. In
     // that case HAP's pairing lookup can also be briefly unavailable even for
     // an already paired accessory. Restore only a *previously marked* paired
-    // camera (or one HAP confirms as paired now), and never touch the C120.
-    // The delay prevents a cold-start surge of RTSP readers.
-    if ((wasMarkedPairedBeforePublish || accessory.isPaired()) && camera.rtspUrl && isRtspSource && !isProtectedC120) {
+    // camera (or one HAP confirms as paired now). The delay prevents a
+    // cold-start surge of RTSP readers. C120 is included here: its assumed
+    // native event path is absent in this installation, while the detector
+    // pauses whenever Live View starts so its working stream is not changed.
+    if ((wasMarkedPairedBeforePublish || accessory.isPaired()) && camera.rtspUrl && isRtspSource) {
       const pairedFallbackTimer = setTimeout(() => {
         if (!this.activeMotionDetectors.has(camera.id)) {
           platform?.log?.notice?.(
