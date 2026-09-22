@@ -251,11 +251,17 @@ export class CameraUiHomeKitBridge {
       if (!camera.rtspUrl || this.activeMotionDetectors.has(camera.id)) return;
       try {
         const cameraIdentity = `${camera.name || ""} ${camera.model || ""}`.toLowerCase();
-        // C120's low-light RTSP feed is much less sensitive at 160x90. Keep
-        // the reader at 1 FPS and use a more detailed, C120-only analysis so
-        // that a person in front of the camera crosses the threshold without
-        // lowering every other camera into false motion from its clock overlay.
+        // The C120, C402 and EZVIZ feeds routinely report only 1–3% changed
+        // pixels at the generic 160x90 analysis size.  That made their motion
+        // service remain idle while Wyze (whose feed changes more pixels per
+        // frame) worked.  Analyse only those feeds at 320x180 and trigger from
+        // a sustained 2% luma change.  This is deliberately not a global
+        // change: it preserves Wyze's proven detector and avoids clock-overlay
+        // false positives on the remaining Camera.UI cameras.
         const isTapoC120 = /(?:\bc120\b|tapo[-_ ]?c120)/i.test(cameraIdentity);
+        const isTapoC402 = /(?:\bc402\b|tapo[-_ ]?c402)/i.test(cameraIdentity);
+        const isEzviz = /\bezviz\b|\bh6c\b/i.test(cameraIdentity);
+        const needsDetailedMotionAnalysis = isTapoC120 || isTapoC402 || isEzviz;
         const detector = new FfmpegMotionDetector({
           cameraId: camera.id,
           cameraName: camera.name || `Cámara ${camera.id}`,
@@ -264,10 +270,10 @@ export class CameraUiHomeKitBridge {
           // route no longer exists; that made the detector silently retry and
           // left HomeKit without MotionDetected even though Live View worked.
           rtspUrl: camera.rtspUrl,
-          changeThresholdPercent: isTapoC120 ? 2 : 4,
+          changeThresholdPercent: needsDetailedMotionAnalysis ? 2 : 4,
           cooldownMs: 4000,
           resetMs: 15000,
-          ...(isTapoC120
+          ...(needsDetailedMotionAnalysis
             ? {
                 analysisWidth: 320,
                 analysisHeight: 180,

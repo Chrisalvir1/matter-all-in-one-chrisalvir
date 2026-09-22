@@ -282,7 +282,7 @@ export class HomeKitCameraRecordingDelegate
    */
   public acknowledgeStream(streamId: number): void {
     this.platform?.log?.notice?.(
-      `[HKSV][${this.record.name || this.entityId}] ✅ GRABACIÓN CONFIRMADA: Apple Home Hub guardó el clip en iCloud (streamId ${streamId})`,
+      `[HKSV][${this.record.name || this.entityId}] ✅ Apple Home Hub aceptó el final de la transmisión HKSV (streamId ${streamId})`,
     );
     this.checkVerificationSuccess();
   }
@@ -321,7 +321,7 @@ export class HomeKitCameraRecordingDelegate
         this.record.hksvVerified = true;
         this.record.hksvState = "verified";
         this.platform?.log?.notice?.(
-          `[HKSV][${this.entityId}] ✅ HomeKit Secure Video (HKSV) VERIFIED: Multi-fragment iCloud recording confirmed!`,
+          `[HKSV][${this.entityId}] ✅ HKSV VERIFIED: Apple Home Hub aceptó una transmisión con múltiples fragmentos.`,
         );
         if (this.platform?.saveHomeKitCameraRecords) {
           this.platform.saveHomeKitCameraRecords();
