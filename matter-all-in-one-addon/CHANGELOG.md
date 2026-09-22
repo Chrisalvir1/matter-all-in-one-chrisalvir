@@ -3224,3 +3224,11 @@ All notable changes to this project will be documented in this file.
 - **Evento correcto para Apple Home:** el detector vuelve a emitir `MotionDetected`; ese evento es el que permite al Home Hub iniciar clips HKSV y aplicar sus clasificaciones de personas, animales o vehículos.
 - **Fuente RTSP coherente:** la detección utiliza el stream principal verificado que también recibe HAP; ya no prioriza un alias de sub-stream que pueda haber quedado obsoleto después de reiniciar Camera.UI.
 - **Arranque protegido:** se espera ocho segundos para evitar saturar lectores RTSP durante el inicio. La Tapo C120 permanece excluida de este fallback y no se modifica su flujo estable.
+## [1.8.44] - 2026-09-22
+
+### Recuperación de fragmentos HKSV para C402, EZVIZ y Wyze
+
+- **Tapo C402:** el lector HKSV emplea una sonda RTSP ampliada y tolerante a paquetes corruptos al volver de Live View. Esto evita que una apertura antes de SPS/PPS termine en `non-existing PPS` y deje el prebuffer sin vídeo.
+- **EZVIZ y Wyze:** antes de codificar audio a AAC para fMP4 se reconstruye su timeline (`asetpts` + `aresample`). Se corrigen los saltos DTS de Camera.UI que producían clips sin fragmentos y cierres de protocolo por parte del Home Hub.
+- **Vídeo sin transcodificar:** H.264 sigue con `-vcodec copy`; el cambio afecta únicamente lectura RTSP de C402 y reloj de audio de C402/EZVIZ/Wyze.
+- **C120 preservada:** no recibe la sonda ampliada ni el filtro de audio específico; su pipeline estable permanece intacto.

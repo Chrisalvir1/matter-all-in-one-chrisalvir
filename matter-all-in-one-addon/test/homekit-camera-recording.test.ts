@@ -310,4 +310,35 @@ describe("HomeKitCameraRecordingDelegate", () => {
     expect(args).toContain("1");
     delegate.destroy();
   });
+
+  it("uses a bounded SPS/PPS probe and repaired audio clock for Tapo C402 HKSV", () => {
+    const record = {
+      ...createMockRecord(),
+      entityId: "camera.tapo_c402",
+      name: "Tapo C402",
+      model: "Tapo C402",
+    };
+    const capabilities = {
+      ...createMockCapabilities(),
+      audioCodec: "aac_lc",
+      audioSampleRate: 16000,
+      audioChannels: 1,
+    };
+    const delegate = new HomeKitCameraRecordingDelegate(
+      mockPlatform,
+      "camera.tapo_c402",
+      record,
+      capabilities,
+      { sourceType: "rtsp", url: "rtsp://camera.local/c402", supportsPassthrough: true, requiresBridge: false },
+    );
+    (delegate as any).selectedConfiguration = createMockConfiguration();
+
+    const args = delegate.buildPrebufferArgs("rtsp://camera.local/c402");
+    expect(args).toContain("1048576");
+    expect(args).toContain("1000000");
+    expect(args).toContain("+genpts+igndts+discardcorrupt");
+    expect(args).not.toContain("+nobuffer+flush_packets+genpts+igndts");
+    expect(args).toContain("asetpts=N/SR/TB,aresample=async=1:min_hard_comp=0.100:first_pts=0");
+    delegate.destroy();
+  });
 });

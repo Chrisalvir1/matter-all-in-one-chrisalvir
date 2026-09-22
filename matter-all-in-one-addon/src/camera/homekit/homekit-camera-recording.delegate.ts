@@ -361,6 +361,17 @@ export class HomeKitCameraRecordingDelegate
     const token =
       this.platform?.ha?.getAccessToken?.() || this.platform?.ha?.wsAccessToken;
 
+    const cameraIdentity = `${this.entityId} ${this.record.name || ""} ${this.record.model || ""}`.toLowerCase();
+    // The C402 may reopen its direct RTSP publisher between Live View and the
+    // HKSV reader. Its first packets can arrive before SPS/PPS, so a normal
+    // low-latency probe drops the parameter sets and the fMP4 reader exits
+    // with "non-existing PPS". Give only this source a bounded full probe.
+    const isTapoC402 = /(?:\bc402\b|tapo[-_ ]?c402)/i.test(cameraIdentity);
+    // Camera.UI sources from these cameras have demonstrated discontinuous
+    // audio clocks. Rebuild the audio timeline before AAC encoding while
+    // keeping their video stream in strict passthrough.
+    const needsAudioTimestampRepair = /(?:\bc402\b|\bwyze\b|\bezviz\b)/i.test(cameraIdentity);
+
     // Build FFmpeg fMP4 args
     const args = ["-hide_banner", "-loglevel", "warning"];
 
@@ -378,14 +389,16 @@ export class HomeKitCameraRecordingDelegate
         "-timeout",
         "5000000",
         "-probesize",
-        "65536",
+        isTapoC402 ? "1048576" : "65536",
         "-analyzeduration",
-        "100000",
+        isTapoC402 ? "1000000" : "100000",
         "-fflags",
         // Camera.UI/go2rtc can restart an RTSP publisher with DTS values that
         // move backwards. Generate a fresh monotonic timeline for fMP4/HKSV
         // instead of forwarding invalid timestamps to the Apple Home Hub.
-        "+nobuffer+flush_packets+genpts+igndts",
+        isTapoC402
+          ? "+genpts+igndts+discardcorrupt"
+          : "+nobuffer+flush_packets+genpts+igndts",
         "-use_wallclock_as_timestamps",
         "1",
         "-flags",
@@ -487,7 +500,9 @@ export class HomeKitCameraRecordingDelegate
         "-c:a",
         "aac",
         "-af",
-        "aresample=async=1:first_pts=0",
+        needsAudioTimestampRepair
+          ? "asetpts=N/SR/TB,aresample=async=1:min_hard_comp=0.100:first_pts=0"
+          : "aresample=async=1:first_pts=0",
         "-ar",
         samplerateStr,
         "-b:a",
