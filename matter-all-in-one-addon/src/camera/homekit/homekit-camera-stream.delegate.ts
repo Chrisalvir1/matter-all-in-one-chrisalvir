@@ -668,7 +668,6 @@ export class HomeKitCameraStreamingDelegate
           (sourceUrl.includes("/api/camera_proxy_stream/") ||
             sourceUrl.includes("/api/camera_proxy/")),
       );
-
     try {
       const process = spawn(ffmpegPath, args, {
         stdio: [isHaProxyStream ? "pipe" : "ignore", "ignore", "pipe"],
@@ -775,6 +774,11 @@ export class HomeKitCameraStreamingDelegate
           (sourceUrl.includes("/api/camera_proxy_stream/") ||
             sourceUrl.includes("/api/camera_proxy/")),
       );
+    // Camera.UI/go2rtc can accept RTSP before its next keyframe is available.
+    // A 32 KiB / zero-duration probe then exits with "non-existing PPS" after
+    // HAP has already accepted the Live View request.  C402 needs a complete
+    // GOP to join reliably; video remains strict H.264 passthrough.
+    const isTapoC402 = /(?:\bc402\b|tapo[-_ ]?c402)/i.test(sourceUrl);
 
     const args: string[] = [
       "-hide_banner",
@@ -793,17 +797,17 @@ export class HomeKitCameraStreamingDelegate
         "-timeout",
         "10000000",
         "-probesize",
-        "32768",
+        isTapoC402 ? "2097152" : "524288",
         "-analyzeduration",
-        "0",
+        isTapoC402 ? "3000000" : "500000",
         "-fpsprobesize",
-        "0",
+        isTapoC402 ? "10" : "5",
         "-fflags",
-        "+nobuffer+flush_packets+genpts+discardcorrupt",
+        isTapoC402
+          ? "+genpts+igndts+discardcorrupt"
+          : "+nobuffer+flush_packets+genpts+discardcorrupt",
         "-flags",
-        "low_delay",
-        "-avioflags",
-        "direct",
+        isTapoC402 ? "0" : "low_delay",
         "-thread_queue_size",
         "1024",
         "-i",

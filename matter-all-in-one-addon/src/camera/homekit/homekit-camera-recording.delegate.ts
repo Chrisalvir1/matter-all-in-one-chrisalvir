@@ -389,21 +389,26 @@ export class HomeKitCameraRecordingDelegate
         "-timeout",
         "5000000",
         "-probesize",
-        isTapoC402 ? "1048576" : "65536",
+        isTapoC402 ? "1048576" : needsAudioTimestampRepair ? "524288" : "65536",
         "-analyzeduration",
-        isTapoC402 ? "1000000" : "100000",
+        isTapoC402 ? "1000000" : needsAudioTimestampRepair ? "500000" : "100000",
         "-fflags",
         // Camera.UI/go2rtc can restart an RTSP publisher with DTS values that
         // move backwards. Generate a fresh monotonic timeline for fMP4/HKSV
         // instead of forwarding invalid timestamps to the Apple Home Hub.
-        isTapoC402
+        needsAudioTimestampRepair
           ? "+genpts+igndts+discardcorrupt"
           : "+nobuffer+flush_packets+genpts+igndts",
-        "-use_wallclock_as_timestamps",
-        "1",
         "-flags",
-        "low_delay",
+        needsAudioTimestampRepair ? "0" : "low_delay",
       );
+      // Camera.UI AAC streams can restart with discontinuous DTS.  Replacing
+      // them with wall-clock timestamps makes FFmpeg drop audio packets before
+      // the aresample filter can normalize them. Keep only these repaired
+      // sources on their native timeline.
+      if (!needsAudioTimestampRepair) {
+        args.push("-use_wallclock_as_timestamps", "1");
+      }
     } else {
       args.push(
         "-probesize",

@@ -1,3 +1,12 @@
+## [1.8.45] - 2026-09-22
+
+### Estabilidad RTSP de Live View, movimiento y HKSV
+
+- **Tapo C402 Live View:** la apertura HAP espera un GOP completo y parámetros SPS/PPS antes de reenviar el vídeo H.264. Esto corrige la secuencia documentada en el log: HAP aceptaba la sesión y FFmpeg cerraba después con `non-existing PPS`.
+- **C402, EZVIZ y Wyze HKSV:** sus fuentes Camera.UI ya no sustituyen el timeline de entrada por reloj de pared. Se descartan paquetes corruptos y se normaliza AAC antes de fMP4, evitando los DTS inválidos que impedían entregar fragmentos al Home Hub.
+- **Detector de movimiento:** usa una sonda RTSP acotada antes de abrir el flujo a 1 FPS. Evita ciclos de reconexión sin SPS/PPS que competían con Live View y HKSV.
+- **Sin transcodificación de vídeo:** los cambios son de lectura, timestamps y estabilidad RTSP; el vídeo H.264 continúa con passthrough `-c:v copy`.
+
 ## [1.8.42] - 2026-09-21
 
 ### Recuperación de Live View, movimiento y HKSV

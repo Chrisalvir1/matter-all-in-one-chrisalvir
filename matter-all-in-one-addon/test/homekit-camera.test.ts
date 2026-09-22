@@ -365,4 +365,29 @@ describe("HomeKitCameraStreamingDelegate", () => {
       ),
     ).toThrow("Cámara no entrega H.264 nativo; transcodificación no permitida");
   });
+
+  it("waits for a complete SPS/PPS GOP for Tapo C402 Live View", () => {
+    const delegate = new HomeKitCameraStreamingDelegate(
+      createPlatform(),
+      "camera.tapo_c402",
+      capabilities,
+      { ...rtspSource, url: "rtsp://camera.local/tapo-c402", supportsPassthrough: true },
+    );
+    const args = delegate.buildStreamArgs(
+      {
+        sessionId: "c402-session",
+        targetAddress: "192.168.1.50",
+        videoPort: 5000,
+        localVideoPort: 5001,
+        videoCryptoSuite: SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
+        videoKeySalt: Buffer.alloc(30, 1),
+        videoSsrc: 1111,
+      },
+      { sessionID: "c402-session", type: StreamRequestTypes.START, video: { fps: 30, width: 1920, height: 1080, pt: 99 } as any } as any,
+    );
+    expect(args).toContain("2097152");
+    expect(args).toContain("3000000");
+    expect(args).toContain("+genpts+igndts+discardcorrupt");
+    expect(args).not.toContain("-avioflags");
+  });
 });

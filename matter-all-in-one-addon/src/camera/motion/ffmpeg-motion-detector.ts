@@ -138,6 +138,11 @@ export class FfmpegMotionDetector extends EventEmitter {
       "-loglevel", "info",
       "-rtsp_transport", "tcp",
       "-timeout", "10000000",
+      // A short bounded probe avoids repeatedly connecting before Camera.UI's
+      // next SPS/PPS, which would otherwise compete with Live View/HKSV.
+      "-probesize", "524288",
+      "-analyzeduration", "500000",
+      "-fflags", "+genpts+igndts+discardcorrupt",
       "-i", url,
       "-vf", vf,
       "-an", "-f", "null", "-",

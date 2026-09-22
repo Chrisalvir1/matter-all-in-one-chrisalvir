@@ -339,6 +339,25 @@ describe("HomeKitCameraRecordingDelegate", () => {
     expect(args).toContain("+genpts+igndts+discardcorrupt");
     expect(args).not.toContain("+nobuffer+flush_packets+genpts+igndts");
     expect(args).toContain("asetpts=N/SR/TB,aresample=async=1:min_hard_comp=0.100:first_pts=0");
+    expect(args).not.toContain("-use_wallclock_as_timestamps");
+    delegate.destroy();
+  });
+
+  it("keeps Camera.UI wall-clock input disabled for EZVIZ timestamp repair", () => {
+    const record = { ...createMockRecord(), entityId: "camera.ezviz", name: "EZVIZ Patio" };
+    const delegate = new HomeKitCameraRecordingDelegate(
+      mockPlatform,
+      "camera.ezviz",
+      record,
+      createMockCapabilities(),
+      { sourceType: "rtsp", url: "rtsp://camera.local/ezviz", supportsPassthrough: true, requiresBridge: false },
+    );
+    (delegate as any).selectedConfiguration = createMockConfiguration();
+    const args = delegate.buildPrebufferArgs("rtsp://camera.local/ezviz");
+    expect(args).toContain("524288");
+    expect(args).toContain("500000");
+    expect(args).toContain("+genpts+igndts+discardcorrupt");
+    expect(args).not.toContain("-use_wallclock_as_timestamps");
     delegate.destroy();
   });
 });
