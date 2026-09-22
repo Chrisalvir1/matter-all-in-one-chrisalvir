@@ -3258,3 +3258,11 @@ All notable changes to this project will be documented in this file.
 - **EZVIZ y Wyze:** antes de codificar audio a AAC para fMP4 se reconstruye su timeline (`asetpts` + `aresample`). Se corrigen los saltos DTS de Camera.UI que producían clips sin fragmentos y cierres de protocolo por parte del Home Hub.
 - **Vídeo sin transcodificar:** H.264 sigue con `-vcodec copy`; el cambio afecta únicamente lectura RTSP de C402 y reloj de audio de C402/EZVIZ/Wyze.
 - **C120 preservada:** no recibe la sonda ampliada ni el filtro de audio específico; su pipeline estable permanece intacto.
+## [1.8.48] - 2026-09-22
+
+### Detección focalizada para Tapo C402 y EZVIZ
+
+- **C402 y EZVIZ:** el detector local analiza únicamente estas cámaras a 320×180 y activa movimiento desde un cambio sostenido del 2 %. Sus fuentes mostraban cambios de 1–3 % con el perfil genérico 160×90/4 %, por lo que HomeKit no recibía `MotionDetected` pese a que el stream funcionaba.
+- **Tapo C120:** conserva el mismo perfil sensible que ya estaba aplicado.
+- **Wyze intacta:** no se cambian URL, códec, audio, detector ni parámetros de Live View/HKSV de Wyze.
+- **Diagnóstico HKSV honesto:** aceptar el cierre de una transmisión por HDS ya no se presenta como garantía de que iCloud haya mostrado el clip; el registro indica exactamente la confirmación recibida del Home Hub.
