@@ -6,6 +6,23 @@ import {
 } from "../src/camera/ai/camera-ai-detector.js";
 
 describe("CameraAiDetector", () => {
+  it("does not clear detector-owned HomeKit motion when the UI notification expires", () => {
+    vi.useFakeTimers();
+    try {
+      const detector = new CameraAiDetector();
+      const accessory = { updateMotionState: vi.fn(), motionService: { setCharacteristic: vi.fn() } };
+      const platform = { entities: new Map([["camera.c120", { homekitAccessory: accessory }]]) };
+      detector.setConfig("camera.c120", { enabled: true, motionTimeoutSeconds: 15 });
+      detector.dispatchDetection(platform, "camera.c120", {
+        cameraId: "camera.c120", timestamp: Date.now(), targets: [], labels: ["Movimiento"], confidence: 1,
+      }, { updateHomeKitMotion: false });
+      expect(detector.getActiveDetection("camera.c120")).toBeDefined();
+      vi.advanceTimersByTime(16_000);
+      expect(detector.getActiveDetection("camera.c120")).toBeUndefined();
+      expect(accessory.updateMotionState).not.toHaveBeenCalled();
+      expect(accessory.motionService.setCharacteristic).not.toHaveBeenCalled();
+    } finally { vi.useRealTimers(); }
+  });
   let detector: CameraAiDetector;
 
   beforeEach(() => {

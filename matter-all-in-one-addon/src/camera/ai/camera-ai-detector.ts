@@ -288,6 +288,7 @@ export class CameraAiDetector extends EventEmitter {
     platform: any,
     cameraId: string,
     event: CameraAiDetectionEvent,
+    options: { updateHomeKitMotion?: boolean } = {},
   ): void {
     const config = this.getConfig(cameraId);
     if (!config.enabled) return;
@@ -323,6 +324,7 @@ export class CameraAiDetector extends EventEmitter {
       } catch {}
     }
 
+    if (options.updateHomeKitMotion === false) hkAccessory = undefined;
     if (hkAccessory) {
       try {
         if (typeof hkAccessory.updateMotionState === "function") {

@@ -3266,3 +3266,12 @@ All notable changes to this project will be documented in this file.
 - **Tapo C120:** conserva el mismo perfil sensible que ya estaba aplicado.
 - **Wyze intacta:** no se cambian URL, códec, audio, detector ni parámetros de Live View/HKSV de Wyze.
 - **Diagnóstico HKSV honesto:** aceptar el cierre de una transmisión por HDS ya no se presenta como garantía de que iCloud haya mostrado el clip; el registro indica exactamente la confirmación recibida del Home Hub.
+## [1.8.49] - 2026-09-22
+
+### Diagnóstico HKSV y detección persistente
+
+- Los perfiles C402, C120 y EZVIZ informan también los cambios grandes de imagen; el filtro anterior podía descartar precisamente esos fotogramas.
+- La notificación de Camera AI ya no puede apagar el sensor MotionDetected que mantiene el detector de vídeo.
+- El estado HKSV queda como `waiting_hub` si Apple Home activa la grabación pero no ha enviado `SelectedCameraRecordingConfiguration`.
+- Se registra la acción necesaria para que Casa vuelva a negociar la configuración, evitando reportar una cámara como lista cuando HomeKit aún la rechaza.
+- Wyze conserva su detector, stream, audio y configuración sin cambios.

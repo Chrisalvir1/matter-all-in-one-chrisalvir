@@ -29,6 +29,8 @@ export interface FfmpegMotionDetectorOptions {
   analysisHeight?: number;
   /** Luma difference below which a pixel is considered unchanged. Default: 12. */
   pixelDifferenceThreshold?: number;
+  /** Report high-motion frames too; opt-in preserves existing camera profiles. */
+  reportAllFrameChanges?: boolean;
 }
 
 export class FfmpegMotionDetector extends EventEmitter {
@@ -142,7 +144,10 @@ export class FfmpegMotionDetector extends EventEmitter {
       1,
       Math.min(this.opts.pixelDifferenceThreshold ?? 12, 255),
     );
-    const vf = `fps=1,scale=${analysisWidth}:${analysisHeight},format=gray,tblend=all_mode=difference,blackframe=amount=95:thresh=${pixelDifferenceThreshold}`;
+    // amount=95 suppresses reports when more than 5% of pixels change,
+    // exactly the frames a motion detector needs. amount=0 reports every frame.
+    const reportAmount = this.opts.reportAllFrameChanges ? 0 : 95;
+    const vf = `fps=1,scale=${analysisWidth}:${analysisHeight},format=gray,tblend=all_mode=difference,blackframe=amount=${reportAmount}:thresh=${pixelDifferenceThreshold}`;
 
     const args = [
       "-hide_banner",

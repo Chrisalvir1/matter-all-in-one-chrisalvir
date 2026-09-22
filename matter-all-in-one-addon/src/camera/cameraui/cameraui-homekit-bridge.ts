@@ -278,6 +278,7 @@ export class CameraUiHomeKitBridge {
                 analysisWidth: 320,
                 analysisHeight: 180,
                 pixelDifferenceThreshold: 8,
+                reportAllFrameChanges: true,
               }
             : {}),
         });
@@ -416,14 +417,17 @@ export class CameraUiHomeKitBridge {
     // Forward to CameraAiDetector so UI "🧠 IA & Fauna" tab lights up in real time
     if (active && platform?.cameraAiDetector) {
       try {
+        const detectorOwnsMotion = /\bc402\b|\bc120\b|\bezviz\b|\bh6c\b/i.test(
+          `${camName} ${accessory?.record?.model || ""}`,
+        );
         platform.cameraAiDetector.dispatchDetection(platform, cameraId, {
           cameraId,
           timestamp: Date.now(),
-          targets: ["person", "vehicle", "dog"],
-          labels: ["Movimiento Detectado (Persona / Vehículo / Animal)"],
+          targets: detectorOwnsMotion ? [] : ["person", "vehicle", "dog"],
+          labels: [detectorOwnsMotion ? "Movimiento detectado" : "Movimiento Detectado (Persona / Vehículo / Animal)"],
           confidence: 0.95,
           rawDetails: `Detector Local FFmpeg: movimiento confirmado en ${camName}`,
-        });
+        }, { updateHomeKitMotion: !detectorOwnsMotion });
       } catch {}
     }
 

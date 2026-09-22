@@ -107,7 +107,7 @@ export class HomeKitCameraRecordingDelegate
   public updateRecordingActive(active: boolean): void {
     this.recordingActive = active;
     this.record.hksvState = active
-      ? "ready"
+      ? (this.selectedConfiguration ? "ready" : "waiting_hub")
       : this.selectedConfiguration
         ? "configurable"
         : "waiting_hub";
@@ -115,6 +115,11 @@ export class HomeKitCameraRecordingDelegate
     this.platform?.log?.notice?.(
       `[HKSV][${this.entityId}] Recording active state changed: ${active ? "ENABLED" : "PAUSED"}`,
     );
+    if (active && !this.selectedConfiguration) {
+      this.platform?.log?.warn?.(
+        `[HKSV][${this.entityId}] Grabación activada, pero falta SelectedCameraRecordingConfiguration del Home Hub. Aún no está lista para grabar; alternar Transmitir y Transmitir y permitir grabación en Casa solicita una nueva negociación.`,
+      );
+    }
 
     if (active) {
       if (!this.isPausedByLiveStream) {
