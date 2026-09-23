@@ -366,15 +366,16 @@ export function repairCameraRecord(cam: CameraUiCameraRecord): {
       }
     }
   }
-  // Tapo C120 ("TAPO-SPOT"): 1080p H264 (declared to HAP as 1920x1080 to avoid UDP socket overflow at 2K)
+  // Tapo C120 ("TAPO-SPOT"): 2K QHD 2560x1440 H264 — real source via go2rtc tapo_c120 stream.
+  // Must match actual stream resolution because passthrough (-c:v copy) sends raw H.264 SPS with 2560x1440.
   else if (url.includes("tapo_c120") || name.includes("c120")) {
     const targetUrl = "rtsp://192.168.110.147:8554/tapo_c120";
     if (cam.rtspUrl !== targetUrl) {
       cam.rtspUrl = targetUrl;
       modified = true;
     }
-    cam.width = 1920;
-    cam.height = 1080;
+    cam.width = 2560;
+    cam.height = 1440;
     cam.fps = 30;
     cam.videoCodec = "h264";
     cam.strategy = "passthrough_h264";
@@ -741,8 +742,8 @@ export const DEFAULT_CAMERAS: CameraUiCameraRecord[] = [
     snapshotUrl: "https://192.168.110.46:3543/api/cameras/Tapo%20C120/snapshot",
     hasAudio: true,
     audioCodec: "aac",
-    width: 1920,
-    height: 1080,
+    width: 2560,
+    height: 1440,
     fps: 30,
     strategy: "passthrough_h264",
     motionTopic: "camera.ui/tapo_c120/motion",

@@ -1,3 +1,30 @@
+## [1.8.85] - 2026-09-23
+
+### Restauración completa de C120 a estado funcional v1.8.81 + corrección definitiva "Sin Respuesta"
+
+- **Dos causas raíz de "Sin Respuesta" identificadas y corregidas:**
+
+  **Bug 1 — Guard timeout 1500ms hacía que iOS perdiera todos los keyframes:**
+  - Con el guard en 1500ms, FFmpeg empezaba → go2rtc enviaba el primer IDR a los ~200ms → FFmpeg lo reenviaba por SRTP → pero iOS NO estaba escuchando todavía porque HAP no había respondido (settle() se llama al cumplirse el guard). iOS solo empieza a recibir RTP DESPUÉS de que HAP responde. Los primeros 1-2 keyframes se perdían, y HomeKit hacía timeout esperando el siguiente → **"Sin Respuesta"**.
+  - **Corrección:** Guard de C120 y C402 vuelve a 80ms. Wyze/EZVIZ usan 600ms (suficiente para que go2rtc prepare el primer keyframe sin que iOS haga timeout).
+
+  **Bug 2 — Resolución 1080p declarada con stream 2K real = mismatch fatal:**
+  - Declarar 1920×1080 a HAP mientras FFmpeg enviaba `-c:v copy` del stream 2560×1440 real: el SPS del H.264 especificaba `2560×1440` pero HAP había negociado `1920×1080`. VideoToolbox en iOS detectaba la discrepancia y rechazaba el stream → **"Sin Respuesta"**.
+  - **Corrección:** Restaurado C120 a 2560×1440 en DEFAULT_CAMERAS y repairCameraRecord. La resolución declarada DEBE coincidir con la del stream cuando se usa passthrough (-c:v copy).
+
+- **Parámetros de input C120 restaurados exactamente a v1.8.81 (estado funcional):**
+  - `probesize: 524288` (512KB para leer SPS/PPS del stream 2K)
+  - `analyzeduration: 1000000` (1s para análisis completo del GOP)
+  - `fflags: +genpts+igndts` (sin +nobuffer en input — causaba starving del demuxer)
+  - `flags: 0` (sin low_delay en input — causaba que FFmpeg saltara espera de keyframe)
+  - `thread_queue_size: 1024`
+
+- **Probe pre-publicación eliminada permanentemente para C120:**
+  - Solo C402 (fuente `home_assistant`) requiere probe. C120 tiene capacidades fijas y conocidas.
+
+- **Tapo C402 Estrictamente Intacta:**
+  - Ningún parámetro fue modificado.
+
 ## [1.8.84] - 2026-09-23
 
 ### Corrección "Sin Respuesta" Tapo C120 — reversión probesize + eliminación probe pre-publicación

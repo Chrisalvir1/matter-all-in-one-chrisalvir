@@ -745,7 +745,7 @@ export class HomeKitCameraStreamingDelegate
         } else {
           settle(new Error("FFmpeg exited during HAP startup"));
         }
-      }, isTapoC402 ? 80 : 1500);
+      }, isTapoC402 || isTapoC120 ? 80 : 600);
       process.once("error", (error) => {
         clearTimeout(guard);
         settle(error);
@@ -897,13 +897,12 @@ export class HomeKitCameraStreamingDelegate
         "tcp",
         "-timeout",
         "10000000",
-        // C120: use same probesize/analyzeduration as default cameras.
-        // analyzeduration=0 caused FFmpeg to emit invalid RTP (no SPS/PPS parsed) → "No Response" in HomeKit.
-        // go2rtc serves a clean RTSP so 64KB probe + 100ms analysis is instant and reliable.
+        // Probesize: C402 needs 2MB for its long GOP analysis; C120 needs 512KB for 2K SPS/PPS;
+        // everything else (Wyze, EZVIZ) uses the minimal 64KB for fast startup.
         "-probesize",
-        isTapoC402 ? "2097152" : "65536",
+        isTapoC402 ? "2097152" : isTapoC120 ? "524288" : "65536",
         "-analyzeduration",
-        isTapoC402 ? "3000000" : "100000",
+        isTapoC402 ? "3000000" : isTapoC120 ? "1000000" : "100000",
       );
       if (isTapoC402) {
         args.push(
@@ -915,13 +914,15 @@ export class HomeKitCameraStreamingDelegate
           "0",
         );
       } else if (isTapoC120) {
-        // +nobuffer+flush_packets: forward packets immediately without accumulating in input buffer.
-        // +genpts+igndts: fix broken DTS from go2rtc transcoder. No +discardcorrupt: keep partial frames.
+        // v1.8.81 proven working config: genpts+igndts fixes go2rtc broken DTS.
+        // NO +nobuffer/flush_packets on INPUT — these caused "No Response" by starving
+        // the demuxer before SPS/PPS were fully parsed.
+        // NO low_delay on input flags — causes FFmpeg to skip keyframe wait logic.
         args.push(
           "-fflags",
-          "+nobuffer+flush_packets+genpts+igndts",
+          "+genpts+igndts",
           "-flags",
-          "low_delay",
+          "0",
         );
       } else {
         args.push(
@@ -933,7 +934,7 @@ export class HomeKitCameraStreamingDelegate
       }
       args.push(
         "-thread_queue_size",
-        "512",
+        isTapoC120 ? "1024" : "512",
         "-i",
         sourceUrl,
       );
