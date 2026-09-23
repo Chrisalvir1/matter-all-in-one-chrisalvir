@@ -1,3 +1,14 @@
+## [1.8.61] - 2026-09-22
+
+### Wyze, EZVIZ y Tapo C120: Restauración integral del motor de streaming HAP v1.8.51
+
+- **Restauración de `homekit-camera-stream.delegate.ts` de v1.8.51:**
+  - Se reactiva el guard de inicio con resolución en 80ms para cámaras estándar (Wyze, EZVIZ, Tapo C120), resolviendo la causa por la cual Apple Home reportaba "Sin respuesta" / se quedaba en rueda de carga infinita al conectar a estas cámaras.
+  - Se reincorpora la whitelist global de protocolos (`pipe,udp,rtp,file,crypto,srtp,tcp,tls,http,https,lavfi,rtsp,rtsps`), necesaria para que el muxer SRTP/RTP de FFmpeg transmita sin errores de protocolo a HomeKit y pueda conectar a go2rtc.
+  - Se mantiene la lógica de reintento con fallback seguro si el proceso FFmpeg se cerrara prematuramente.
+- **Aislamiento preservado para Tapo C402:**
+  - La Tapo C402 conserva su validación de primer fotograma de vídeo H.264, su probesize amplio (2MB) y analyzeduration (3s), su ladder de resoluciones HAP y la detección IA en Home Assistant para personas, animales y vehículos.
+
 ## [1.8.60] - 2026-09-22
 
 ### Tapo C402: Detección completa de personas, animales / mascotas y vehículos

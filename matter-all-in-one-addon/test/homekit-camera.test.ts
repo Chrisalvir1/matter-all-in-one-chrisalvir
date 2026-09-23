@@ -475,11 +475,11 @@ describe("HomeKitCameraStreamingDelegate", () => {
     expect(args).toContain("copy");
     expect(args).not.toContain("libx264");
     expect(args).not.toContain("-vf");
-    expect(args).toContain("524288");
-    expect(args).toContain("500000");
-    expect(args).not.toContain("-progress");
-    expect(args).not.toContain("pipe:1");
-    expect(args).toContain("+nobuffer+flush_packets+genpts+discardcorrupt");
+    expect(args).toContain("2097152");
+    expect(args).toContain("3000000");
+    expect(args).toContain("-progress");
+    expect(args).toContain("pipe:1");
+    expect(args).toContain("+genpts+igndts+discardcorrupt");
     expect(args).not.toContain("-avioflags");
   });
 });
