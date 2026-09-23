@@ -1,3 +1,9 @@
+## [1.8.65] - 2026-09-23
+
+### Validación de capacidades nativas HAP
+
+- La prueba de integración HAP ahora valida la configuración restaurada para cámaras passthrough: OPUS y el perfil H.264 medido. AAC-ELD y el conjunto Baseline/Main/High continúan reservados para la Tapo C402.
+
 ## [1.8.64] - 2026-09-22
 
 ### Restauración del passthrough real para Wyze, EZVIZ y Tapo C120
