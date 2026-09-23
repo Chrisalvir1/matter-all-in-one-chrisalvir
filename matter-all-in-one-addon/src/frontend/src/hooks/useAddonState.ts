@@ -175,8 +175,19 @@ export function useAddonState() {
     [cameras, isScryptedConnected]
   );
 
-  // Real HA Camera devices
+  // Real HA Camera devices (deduplicated against both Scrypted and Camera.UI cameras)
   const realHaCameraDevices = useMemo(() => {
+    const cuiNames = new Set(cameraUiCameras.map((c) => (c.name || "").toLowerCase().trim()));
+    const cuiIds = new Set(cameraUiCameras.map((c) => String(c.id).toLowerCase().trim()));
+    const cuiEntityIds = new Set<string>();
+    for (const cam of cameraUiCameras) {
+      if (Array.isArray(cam.realEntities)) {
+        for (const re of cam.realEntities) {
+          if (re.id) cuiEntityIds.add(re.id.toLowerCase().trim());
+        }
+      }
+    }
+
     return allDevices.filter((device) =>
       device.entities.some(
         (entity) =>
@@ -186,10 +197,14 @@ export function useAddonState() {
           !entity.entityId.includes("radar") &&
           !entity.entityId.includes("screen") &&
           !scryptedNames.has((device.name || "").toLowerCase().trim()) &&
-          !scryptedIds.has((device.id || "").toLowerCase().trim())
+          !scryptedIds.has((device.id || "").toLowerCase().trim()) &&
+          !cuiNames.has((device.name || "").toLowerCase().trim()) &&
+          !cuiIds.has((device.id || "").toLowerCase().trim()) &&
+          !cuiEntityIds.has(entity.entityId.toLowerCase().trim()) &&
+          !cuiEntityIds.has(device.id.toLowerCase().trim())
       )
     );
-  }, [allDevices, scryptedNames, scryptedIds]);
+  }, [allDevices, scryptedNames, scryptedIds, cameraUiCameras]);
 
   // Stats for Control Center and Filters
   const stats = useMemo(() => {

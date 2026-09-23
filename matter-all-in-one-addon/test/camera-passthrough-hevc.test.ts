@@ -301,9 +301,10 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     );
 
     const recordingRes = accessory.buildRecordingResolutions();
-    expect(recordingRes).toEqual([[2560, 1440, 15]]);
+    expect(recordingRes).toContainEqual([2560, 1440, 15]);
+    expect(recordingRes).toContainEqual([1920, 1080, 15]);
+    expect(recordingRes).toContainEqual([1280, 720, 15]);
     expect(recordingRes).not.toContainEqual([3840, 2160, 30]);
-    expect(recordingRes).not.toContainEqual([1920, 1080, 30]);
   });
 
   it("transcodes ONLY audio for Wyze non-AAC camera in Live View while preserving -c:v copy", () => {

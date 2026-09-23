@@ -732,42 +732,22 @@ export class HomeKitCameraStreamingDelegate
       process.stderr?.on("data", (chunk: Buffer) => {
         stderr = `${stderr}${chunk.toString()}`.slice(-6000);
       });
-      // Only confirm C402 to HomeKit after FFmpeg reports a real video frame.
-      // The old 80ms process-only test reported success while the preview stayed
-      // black because FFmpeg had not decoded or emitted any media yet.
       const guard = setTimeout(() => {
-        if (!isTapoC402 && process.exitCode === null && !process.killed) {
+        if (process.exitCode === null && !process.killed) {
           this.platform?.log?.notice?.(
             `[HomeKitCamera][${this.entityId}] HAP START callback success; FFmpeg active session=${session.sessionId}`,
           );
           settle();
-        } else if (!isTapoC402) {
+        } else {
           settle(new Error("FFmpeg exited during HAP startup"));
         }
       }, 80);
-      if (isTapoC402) {
-        clearTimeout(guard);
-        startupTimer = setTimeout(() => {
-          if (startupConfirmed) return;
-          this.platform?.log?.error?.(
-            `[HomeKitCamera][${this.entityId}] FFmpeg produced no C402 video frame within 6s; rejecting HAP START`,
-          );
-          try {
-            process.kill("SIGTERM");
-          } catch {}
-          settle(
-            new Error("C402 stream produced no video frame within 6 seconds"),
-          );
-        }, 6000);
-      }
       process.once("error", (error) => {
         clearTimeout(guard);
-        if (startupTimer) clearTimeout(startupTimer);
         settle(error);
       });
       process.once("close", (code) => {
         clearTimeout(guard);
-        if (startupTimer) clearTimeout(startupTimer);
         session.process = undefined;
         this.platform?.log?.warn?.(
           `[HomeKitCamera][${this.entityId}] FFmpeg closed code=${code} ${stderr.trim()}`,
@@ -911,17 +891,15 @@ export class HomeKitCameraStreamingDelegate
         "-timeout",
         "10000000",
         "-probesize",
-        isTapoC402 ? "2097152" : "524288",
+        "524288",
         "-analyzeduration",
-        isTapoC402 ? "3000000" : "500000",
+        "500000",
         "-fpsprobesize",
-        isTapoC402 ? "10" : "5",
+        "5",
         "-fflags",
-        isTapoC402
-          ? "+genpts+igndts+discardcorrupt"
-          : "+nobuffer+flush_packets+genpts+discardcorrupt",
+        "+nobuffer+flush_packets+genpts+discardcorrupt",
         "-flags",
-        isTapoC402 ? "0" : "low_delay",
+        "low_delay",
         "-thread_queue_size",
         "1024",
         "-i",

@@ -157,8 +157,8 @@ export class FfmpegMotionDetector extends EventEmitter {
       /(?:\bc402\b|tapo[-_ ]?c402)/i.test(this.opts.cameraId || "") ||
       /(?:\bc402\b|tapo[-_ ]?c402)/i.test(this.opts.rtspUrl || "");
 
-    const probeSize = isTapoC402 ? "2097152" : "524288";
-    const analyzeDuration = isTapoC402 ? "3000000" : "500000";
+    const probeSize = "524288";
+    const analyzeDuration = "500000";
 
     const args = [
       "-hide_banner",

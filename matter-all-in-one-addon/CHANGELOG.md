@@ -1,3 +1,17 @@
+## [1.8.74] - 2026-09-23
+
+### Deduplicación en UI, eliminación de lag en streaming y restauración de grabación HKSV / iCloud para C402
+
+- **Eliminación de tarjetas duplicadas en la Web UI:**
+  - En `useAddonState.ts`, se filtran de `realHaCameraDevices` las cámaras que ya están registradas y expuestas a través de `cameraUiCameras` (Tapo C120, TAPO C402, Ring Bodega, Ring Lavanderia). Desaparece la doble tarjeta en el panel de control.
+- **Eliminación de lag de 2 a 10 segundos en Wyze, EZVIZ y Tapo C120:**
+  - Se restauró la escalera de resoluciones universal y los perfiles H.264 (Baseline/Main/High) para todas las cámaras, evitando que Apple HomeKit en iOS se bloquee o renegocie durante 10 segundos.
+  - Se reactivó el anuncio prioritario de audio `AAC_ELD` (16kHz / 24kHz) y `OPUS` para todas las cámaras.
+  - Inicio de proceso FFmpeg en 80ms y parámetros de análisis optimizados (`probesize 524288`, `analyzeduration 500000`, `-flags low_delay`).
+- **Grabación HKSV en iCloud y detección de movimiento de Tapo C402:**
+  - `buildRecordingResolutions()` incluye resoluciones estándar de 1080p y 720p requeridas por los hubs de Apple (Apple TV / HomePod) para aceptar la configuración de grabación fMP4 de iCloud.
+  - Parámetros de sondeo del detector de movimiento calibrados a baja latencia para respuesta inmediata.
+
 ## [1.8.73] - 2026-09-23
 
 ### Sincronización de config.yaml del add-on para Home Assistant Supervisor
