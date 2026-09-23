@@ -2246,43 +2246,67 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             return act;
           };
 
+          // 1. Direct match on configured camera motionTopic
+          const directTopicMatch = store.cameras.find(
+            (c) => c.motionTopic && (c.motionTopic === topic || topic.endsWith(c.motionTopic)),
+          );
+          if (directTopicMatch) {
+            targetCameraId = directTopicMatch.id;
+          }
+
           if (parts.length === 2 && (isMotionAction(parts[1]) || parts[1] === "doorbell")) {
+            let camIdentifier = parts[0].toLowerCase();
             try {
               const data = JSON.parse(payload);
-              const camIdentifier = (data.camera || data.name || data.id || "").toString().toLowerCase();
+              if (data.camera || data.name || data.id) {
+                camIdentifier = (data.camera || data.name || data.id).toString().toLowerCase();
+              }
+            } catch {}
+            if (!targetCameraId) {
               const found = store.cameras.find(
                 (c) => this.matchCameraIdentifier(c, camIdentifier),
               );
-              if (found) targetCameraId = found.id;
-              active = parseActiveState(payload);
-              if (isMotionAction(parts[1])) isMotion = true;
-              if (parts[1] === "doorbell") isDoorbell = true;
-            } catch {
-              active = parseActiveState(payload);
-              if (isMotionAction(parts[1])) isMotion = true;
+              if (found) {
+                targetCameraId = found.id;
+              } else {
+                const allCuiAccessories = CameraUiHomeKitBridge.getAllAccessories();
+                for (const [cuiId, acc] of allCuiAccessories) {
+                  if (this.matchCameraIdentifier({ id: cuiId, name: acc.record?.name }, camIdentifier)) {
+                    targetCameraId = cuiId;
+                    break;
+                  }
+                }
+                if (!targetCameraId) targetCameraId = camIdentifier;
+              }
             }
+            active = parseActiveState(payload);
+            if (isMotionAction(parts[1])) isMotion = true;
+            if (parts[1] === "doorbell") isDoorbell = true;
           } else if (parts.length >= 3) {
-            const camIdentifier = parts[1].toLowerCase();
-            const action = parts[2].toLowerCase();
-            const found = store.cameras.find(
-              (c) => this.matchCameraIdentifier(c, camIdentifier),
-            );
-            if (found) {
-              targetCameraId = found.id;
-            } else {
-              const allCuiAccessories = CameraUiHomeKitBridge.getAllAccessories();
-              for (const [cuiId, acc] of allCuiAccessories) {
-                if (this.matchCameraIdentifier({ id: cuiId, name: acc.record?.name }, camIdentifier)) {
-                  targetCameraId = cuiId;
+            if (!targetCameraId) {
+              for (const part of parts) {
+                const p = part.toLowerCase();
+                if (p === "camera.ui" || p === "cameraui" || p === "homeassistant" || isMotionAction(p)) continue;
+                const found = store.cameras.find((c) => this.matchCameraIdentifier(c, p));
+                if (found) {
+                  targetCameraId = found.id;
                   break;
                 }
+                const allCuiAccessories = CameraUiHomeKitBridge.getAllAccessories();
+                for (const [cuiId, acc] of allCuiAccessories) {
+                  if (this.matchCameraIdentifier({ id: cuiId, name: acc.record?.name }, p)) {
+                    targetCameraId = cuiId;
+                    break;
+                  }
+                }
+                if (targetCameraId) break;
               }
-              if (!targetCameraId) targetCameraId = camIdentifier;
             }
-            if (isMotionAction(action)) {
+            const lastPart = parts[parts.length - 1].toLowerCase();
+            if (isMotionAction(lastPart) || parts.some((p) => isMotionAction(p))) {
               isMotion = true;
               active = parseActiveState(payload);
-            } else if (action === "doorbell") {
+            } else if (lastPart === "doorbell" || parts.includes("doorbell")) {
               isDoorbell = true;
             }
           }

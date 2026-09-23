@@ -891,17 +891,28 @@ export class HomeKitCameraStreamingDelegate
         "-timeout",
         "10000000",
         "-probesize",
-        isTapoC402 ? "2097152" : "524288",
+        isTapoC402 ? "2097152" : "65536",
         "-analyzeduration",
-        isTapoC402 ? "3000000" : "500000",
-        "-fpsprobesize",
-        isTapoC402 ? "10" : "5",
-        "-fflags",
-        isTapoC402
-          ? "+genpts+igndts+discardcorrupt"
-          : "+nobuffer+flush_packets+genpts+discardcorrupt",
-        "-flags",
-        isTapoC402 ? "0" : "low_delay",
+        isTapoC402 ? "3000000" : "100000",
+      );
+      if (isTapoC402) {
+        args.push(
+          "-fpsprobesize",
+          "10",
+          "-fflags",
+          "+genpts+igndts+discardcorrupt",
+          "-flags",
+          "0",
+        );
+      } else {
+        args.push(
+          "-fflags",
+          "+nobuffer+flush_packets+genpts+discardcorrupt",
+          "-flags",
+          "low_delay",
+        );
+      }
+      args.push(
         "-thread_queue_size",
         "1024",
         "-i",
@@ -1071,6 +1082,10 @@ export class HomeKitCameraStreamingDelegate
           "copy",
           "-f",
           "rtp",
+          "-fflags",
+          "+nobuffer+flush_packets",
+          "-max_delay",
+          "0",
           "-payload_type",
           String(request.audio.pt || 110),
           "-ssrc",
@@ -1129,6 +1144,10 @@ export class HomeKitCameraStreamingDelegate
           `${audioBitrate}k`,
           "-f",
           "rtp",
+          "-fflags",
+          "+nobuffer+flush_packets",
+          "-max_delay",
+          "0",
           "-payload_type",
           String(request.audio.pt || 110),
           "-ssrc",

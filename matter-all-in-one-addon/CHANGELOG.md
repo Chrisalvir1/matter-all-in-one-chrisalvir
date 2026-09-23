@@ -1,3 +1,17 @@
+## [1.8.77] - 2026-09-23
+
+### Carga ultrarrápida y cero lag en Tapo C120, y optimización de detección de movimiento vía MQTT
+
+- **Carga instantánea de streaming para Tapo C120 y cámaras Live View:**
+  - Reducción drástica del búfer de sondeo inicial: `probesize` reducido de 512 KiB a 64 KiB (`65536`) y `analyzeduration` reducido de 500ms a 100ms (`100000`).
+  - Eliminación de la espera forzada de 5 fotogramas (`fpsprobesize 5`), permitiendo que el stream de vídeo y audio comience a fluir en ~150-200ms en lugar de 3 a 5 segundos.
+  - Se añadieron banderas de baja latencia (`-fflags +nobuffer+flush_packets -max_delay 0`) a ambas salidas RTP de audio, eliminando la retención de fotogramas de vídeo por sincronización de cola.
+- **Mejora y mayor reactividad en la detección de movimiento mediante MQTT:**
+  - Se ampliaron las suscripciones del broker MQTT a los tópicos nativos de Tapo (`tapo/#`, `tapo_c120/#`, `tapo-c120/#`, `+/motion`, `+/+/motion`).
+  - Resolución robusta de cámaras para tópicos MQTT de 2 partes (ej. `tapo_c120/motion`) y coincidencia directa con el `motionTopic` configurado de la cámara (`camera.ui/tapo_c120/motion`), disparando notificaciones y grabaciones en Apple HomeKit de forma inmediata sin sobrecargar el análisis por software.
+- **Tapo C402 estrictamente intacta:**
+  - Los parámetros específicos de la Tapo C402 (`probesize 2097152`, `analyzeduration 3000000`, `fpsprobesize 10`, `-progress pipe:1`) se mantienen exactamente iguales al 100%.
+
 ## [1.8.76] - 2026-09-23
 
 ### Restauración de audio en Tapo C120 y EZVIZ y eliminación del lag de vídeo de 10 segundos

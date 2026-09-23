@@ -292,6 +292,11 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     expect(args).toContain("copy");
     expect(args).not.toContain("libx264");
     expect(args).not.toContain("libx265");
+    // Fast startup probe sizes
+    expect(args).toContain("-probesize");
+    expect(args).toContain("65536");
+    expect(args).toContain("-analyzeduration");
+    expect(args).toContain("100000");
     // Audio MUST be transcoded to AAC-ELD with aresample
     expect(args).toContain("-af");
     expect(args).toContain("aresample=async=1:first_pts=0");
@@ -299,6 +304,69 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     expect(audioCodecIdx).toBeGreaterThan(-1);
     const audioCodecValue = args[audioCodecIdx + 1];
     expect(["aac", "libfdk_aac", "libopus"]).toContain(audioCodecValue);
+  });
+
+  it("strictly preserves Tapo C402 input and audio parameters untouched", () => {
+    const platform = createPlatformMock();
+    const capabilities = createCapabilities({
+      videoCodec: "h264",
+      audioCodec: "aac",
+      audioSampleRate: 16000,
+      audioChannels: 1,
+    });
+    const streamSource = createStreamSource({
+      url: "rtsp://192.168.110.147:62291/tapo-c402",
+    });
+
+    const delegate = new HomeKitCameraStreamingDelegate(
+      platform,
+      "camera.cameraui_tapo_c402",
+      capabilities,
+      streamSource,
+    );
+
+    const args = delegate.buildStreamArgs(
+      {
+        sessionId: "test-c402-sess",
+        targetAddress: "192.168.1.50",
+        videoPort: 5000,
+        localVideoPort: 5001,
+        videoCryptoSuite: SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
+        videoKeySalt: Buffer.alloc(30, 1),
+        videoSsrc: 1111,
+        audioPort: 5002,
+        localAudioPort: 5003,
+        audioCryptoSuite: SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
+        audioKeySalt: Buffer.alloc(30, 2),
+        audioSsrc: 2222,
+      },
+      {
+        sessionID: "test-c402-sess",
+        type: StreamRequestTypes.START,
+        video: { fps: 30, width: 2560, height: 1440, pt: 99 } as any,
+        audio: {
+          codec: 0 as any, // AAC-ELD
+          channel: 1,
+          bit_rate: 24,
+          sample_rate: 16,
+          packet_time: 20,
+          pt: 110,
+        } as any,
+      } as any,
+    );
+
+    // C402 preserves exact required probe size and GOP analysis
+    expect(args).toContain("-probesize");
+    expect(args).toContain("2097152");
+    expect(args).toContain("-analyzeduration");
+    expect(args).toContain("3000000");
+    expect(args).toContain("-fpsprobesize");
+    expect(args).toContain("10");
+    expect(args).toContain("-progress");
+    expect(args).toContain("pipe:1");
+    // Video remains pure copy
+    expect(args).toContain("-c:v");
+    expect(args).toContain("copy");
   });
 
   it("SFrame frame encryption protects and validates frames correctly", () => {

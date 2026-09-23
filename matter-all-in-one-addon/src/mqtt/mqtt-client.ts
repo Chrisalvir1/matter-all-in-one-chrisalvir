@@ -80,14 +80,24 @@ export class MqttClientManager {
           );
       });
 
-      // Subscribe to Camera.UI native event topics and Omni AI topics
+      // Subscribe to Camera.UI native event topics, Omni AI, and Tapo motion topics
       this.client?.subscribe(
-        ["camera.ui/#", "cameraui/#", "omni_ai_mac/#", "omni_ai/#"],
+        [
+          "camera.ui/#",
+          "cameraui/#",
+          "omni_ai_mac/#",
+          "omni_ai/#",
+          "tapo/#",
+          "tapo_c120/#",
+          "tapo-c120/#",
+          "+/motion",
+          "+/+/motion",
+        ],
         (err) => {
           if (err) this.log.error(`[MQTT] Camera / AI topic subscription error: ${err}`);
           else
             this.log.info(
-              "[MQTT] Subscribed to camera.ui/#, cameraui/#, and omni_ai_mac/# for camera & AI detection events",
+              "[MQTT] Subscribed to camera.ui/#, cameraui/#, omni_ai_mac/#, and tapo topics for camera & AI detection events",
             );
         },
       );
@@ -149,6 +159,12 @@ export class MqttClientManager {
           topic.startsWith("cameraui/") ||
           topic.startsWith("omni_ai_mac/") ||
           topic.startsWith("omni_ai/") ||
+          topic.startsWith("tapo/") ||
+          topic.startsWith("tapo_c120/") ||
+          topic.startsWith("tapo-c120/") ||
+          topic.endsWith("/motion") ||
+          topic.endsWith("/movimiento") ||
+          topic.includes("motion") ||
           topic === "camera.ui"
         ) {
           if (this.onCameraUiMessageCallback) {
