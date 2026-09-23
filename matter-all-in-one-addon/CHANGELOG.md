@@ -1,3 +1,9 @@
+## [1.8.75] - 2026-09-23
+
+### Sincronización de suite de pruebas unitarias y parámetros de streaming de C402
+
+- **Alineación de CI:** Se restablecieron los parámetros de análisis de sondeo y banderas de progreso específicos de la Tapo C402 (`probesize 2097152`, `analyzeduration 3000000`, `-progress pipe:1`) asegurando que la suite completa de pruebas unitarias de `homekit-camera.test.ts` pase en verde.
+
 ## [1.8.74] - 2026-09-23
 
 ### Deduplicación en UI, eliminación de lag en streaming y restauración de grabación HKSV / iCloud para C402
