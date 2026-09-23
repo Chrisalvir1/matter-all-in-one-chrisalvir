@@ -1,3 +1,12 @@
+## [1.8.54] - 2026-09-22
+
+### Tapo C402 & HAP: Corrección de perfil H.264 Baseline, escalera de resoluciones y optimización de sondeo FFmpeg
+
+- **Cumplimiento estricto de Apple HomeKit HAP (H.264 Baseline, Main y High):** Se declaran explícitamente los perfiles `H264Profile.BASELINE`, `H264Profile.MAIN` y `H264Profile.HIGH` tanto en opciones de streaming en vivo como en HKSV. La especificación HAP de Apple exige mandatoriamente el perfil Baseline para aceptar el accessory; omitirlo provocaba el estado "Sin respuesta" en Live View en iOS y macOS.
+- **Escalera de resoluciones con 2K nativo prioritario:** `buildDeclaredResolutions()` anuncia la resolución nativa 2K (`2560x1440@30`) como primera opción preferente para iOS 27 / tvOS 27, acompañada de los escalones estándar (`1080p`, `720p`, `360p`, `270p`, `180p`) para vistas compactas o de baja tasa de transferencia.
+- **Eliminación del timeout de 8000ms en diagnóstico:** Se redujo el `probesize` a 512KB y `analyzeduration` a 1s para flujos RTSP, evitando lecturas excesivas de buffer. El tiempo de espera máximo de diagnóstico se amplió a 15000ms.
+- **Prevención de contención de socket RTSP en diagnóstico:** La herramienta de diagnóstico en la UI web pausa temporalmente el detector de movimiento en segundo plano (`CameraUiHomeKitBridge.pauseMotionDetector`) durante el análisis y lo reactiva inmediatamente al finalizar, garantizando que el socket RTSP no se congestione.
+
 ## [1.8.53] - 2026-09-22
 
 ### Tapo C402: Live View instantáneo, soporte 2K nativo HAP/HKSV y activación de detección de movimiento

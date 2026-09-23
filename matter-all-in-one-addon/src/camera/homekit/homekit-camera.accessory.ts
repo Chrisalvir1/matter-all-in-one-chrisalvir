@@ -366,9 +366,11 @@ export class HomeKitCameraAccessory {
         supportedCryptoSuites: [SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80],
         video: {
           codec: {
-            // A copied RTP stream cannot honour a profile Apple Home selected
-            // for a different encoder. Advertise the observed profile only.
-            profiles: [this.nativeH264Profile()],
+            profiles: [
+              H264Profile.BASELINE,
+              H264Profile.MAIN,
+              H264Profile.HIGH,
+            ],
             levels: [
               H264Level.LEVEL3_1,
               H264Level.LEVEL3_2,
@@ -396,7 +398,11 @@ export class HomeKitCameraAccessory {
           video: {
             type: VideoCodecType.H264,
             parameters: {
-              profiles: [this.nativeH264Profile()],
+              profiles: [
+                H264Profile.BASELINE,
+                H264Profile.MAIN,
+                H264Profile.HIGH,
+              ],
               levels: [
                 H264Level.LEVEL3_1,
                 H264Level.LEVEL3_2,
@@ -454,11 +460,33 @@ export class HomeKitCameraAccessory {
       width: 1920,
       height: 1080,
     };
+    const width = source.width || 1920;
+    const height = source.height || 1080;
     const sourceFps = Math.max(
       15,
       Math.min(this.capabilities.maxFps || 30, 60),
     );
-    return [[source.width || 1920, source.height || 1080, sourceFps]];
+
+    // Native resolution is declared first as the primary stream
+    const ladder: [number, number, number][] = [
+      [width, height, sourceFps],
+      [1920, 1080, Math.min(sourceFps, 30)],
+      [1280, 720, Math.min(sourceFps, 30)],
+      [640, 360, 30],
+      [480, 270, 30],
+      [320, 180, 30],
+    ];
+
+    const seen = new Set<string>();
+    const unique: [number, number, number][] = [];
+    for (const res of ladder) {
+      const key = `${res[0]}x${res[1]}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        unique.push(res);
+      }
+    }
+    return unique;
   }
 
   public findLinkedEntities(): {

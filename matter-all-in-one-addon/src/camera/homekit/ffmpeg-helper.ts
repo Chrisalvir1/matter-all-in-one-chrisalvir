@@ -243,7 +243,7 @@ export async function probeCameraSource(
     };
   }
 
-  const timeoutMs = options.timeoutMs ?? 12000;
+  const timeoutMs = options.timeoutMs ?? 15000;
   const ffprobePath = options.customFfprobePath || resolveFfprobePath();
   let lastError: string | undefined;
 
@@ -380,11 +380,11 @@ function probeWithFfprobe(
         "-rtsp_transport",
         rtspTransport,
         "-timeout",
-        "10000000",
+        "5000000",
         "-probesize",
-        "2097152",
+        "524288",
         "-analyzeduration",
-        "3000000",
+        "1000000",
       );
     } else if (
       sourceUrl.startsWith("http://") ||
@@ -529,9 +529,9 @@ function probeWithFfmpeg(
     const args = [
       "-hide_banner",
       "-probesize",
-      "2097152",
+      "524288",
       "-analyzeduration",
-      "3000000",
+      "1000000",
     ];
 
     if (
@@ -547,7 +547,7 @@ function probeWithFfmpeg(
         "-rtsp_transport",
         rtspTransport,
         "-timeout",
-        "10000000",
+        "5000000",
       );
     } else if (
       sourceUrl.startsWith("http://") ||

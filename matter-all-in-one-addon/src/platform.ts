@@ -6274,13 +6274,20 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           );
 
           const transport = parsed.transport === "udp" ? "udp" : "tcp";
+          const timeoutMs = parsed.timeoutMs ? Number(parsed.timeoutMs) : 15000;
           ScryptedStreamValidator.clearCache();
-          const metrics = await ScryptedStreamValidator.diagnoseStreamUrl(
-            targetUrl,
-            cameraId,
-            parsed.timeoutMs ? Number(parsed.timeoutMs) : 8000,
-            transport,
-          );
+          CameraUiHomeKitBridge.pauseMotionDetector(cameraId, this.log);
+          let metrics;
+          try {
+            metrics = await ScryptedStreamValidator.diagnoseStreamUrl(
+              targetUrl,
+              cameraId,
+              timeoutMs,
+              transport,
+            );
+          } finally {
+            CameraUiHomeKitBridge.resumeMotionDetector(cameraId, this.log);
+          }
 
           if (scryptedCam) {
             scryptedCam.capabilities.latencyMetrics = metrics;

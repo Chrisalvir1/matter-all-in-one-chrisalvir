@@ -328,7 +328,7 @@ export class ScryptedStreamValidator {
   public static async diagnoseStreamUrl(
     rawUrl: string,
     cameraId: string,
-    timeoutMs: number = 8000,
+    timeoutMs: number = 15000,
     transport?: "tcp" | "udp",
   ): Promise<StreamLatencyMetrics> {
     const trimmed = (rawUrl || "").trim();

@@ -507,6 +507,20 @@ export class CameraUiHomeKitBridge {
     }
   }
 
+  public static pauseMotionDetector(cameraId: string, log?: any): void {
+    const detector = this.activeMotionDetectors.get(cameraId);
+    if (detector) {
+      detector.pause(log);
+    }
+  }
+
+  public static resumeMotionDetector(cameraId: string, log?: any): void {
+    const detector = this.activeMotionDetectors.get(cameraId);
+    if (detector) {
+      detector.resume(log);
+    }
+  }
+
   public static updateMotion(
     cameraId: string,
     active: boolean,
