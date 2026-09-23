@@ -706,7 +706,7 @@ export class HomeKitCameraStreamingDelegate
       const process = spawn(ffmpegPath, args, {
         stdio: [
           isHaProxyStream ? "pipe" : "ignore",
-          isTapoCamera ? "pipe" : "ignore",
+          isTapoC402 ? "pipe" : "ignore",
           "pipe",
         ],
       });
@@ -719,14 +719,14 @@ export class HomeKitCameraStreamingDelegate
       let startupTimer: NodeJS.Timeout | undefined;
       let startupConfirmed = false;
       process.stdout?.on("data", (chunk: Buffer) => {
-        if (!isTapoCamera || startupConfirmed) return;
+        if (!isTapoC402 || startupConfirmed) return;
         progress = `${progress}${chunk.toString()}`.slice(-2048);
         for (const match of progress.matchAll(/(?:^|\n)frame=\s*(\d+)/g)) {
           if (Number(match[1]) > 0) {
             startupConfirmed = true;
             if (startupTimer) clearTimeout(startupTimer);
             this.platform?.log?.notice?.(
-              `[HomeKitCamera][${this.entityId}] ${isTapoC402 ? "C402" : "C120"} HAP startup confirmed by first video frame`,
+              `[HomeKitCamera][${this.entityId}] C402 HAP startup confirmed by first video frame`,
             );
             settle();
             break;
@@ -882,7 +882,7 @@ export class HomeKitCameraStreamingDelegate
       "-protocol_whitelist",
       "pipe,udp,rtp,file,crypto,srtp,tcp,tls,http,https,lavfi,rtsp,rtsps",
     ];
-    if (isTapoC402 || isTapoC120) {
+    if (isTapoC402) {
       args.push("-progress", "pipe:1", "-stats_period", "0.25");
     }
 
@@ -898,14 +898,21 @@ export class HomeKitCameraStreamingDelegate
         "-timeout",
         "10000000",
         "-probesize",
-        isTapoC402 || isTapoC120 ? "2097152" : "65536",
+        isTapoC402 ? "2097152" : isTapoC120 ? "524288" : "65536",
         "-analyzeduration",
-        isTapoC402 || isTapoC120 ? "3000000" : "100000",
+        isTapoC402 ? "3000000" : isTapoC120 ? "1000000" : "100000",
       );
-      if (isTapoC402 || isTapoC120) {
+      if (isTapoC402) {
         args.push(
           "-fpsprobesize",
           "10",
+          "-fflags",
+          "+genpts+igndts+discardcorrupt",
+          "-flags",
+          "0",
+        );
+      } else if (isTapoC120) {
+        args.push(
           "-fflags",
           "+genpts+igndts+discardcorrupt",
           "-flags",
@@ -1062,9 +1069,10 @@ export class HomeKitCameraStreamingDelegate
       const isOpus = request.audio.codec === AudioStreamingCodecType.OPUS;
       const targetCodec = isOpus ? "opus" : "aac_eld";
 
-      // Tapo C402 is working as expected and must remain 100% untouched.
-      // Other cameras passing standard RTSP audio (AAC-LC) need transcoding to AAC-ELD/Opus for Apple Home Live View.
-      const targetReq = isTapoC402
+      // Tapo C402 and Tapo C120 send standard AAC (AAC-LC) from RTSP and must use direct passthrough (-c:a copy)
+      // to keep video and audio timelines synchronized from the same clock and eliminate transcoding latency.
+      const isAudioPassthroughEligible = isTapoC402 || isTapoC120;
+      const targetReq = isAudioPassthroughEligible
         ? undefined
         : {
             expectedCodec: targetCodec,

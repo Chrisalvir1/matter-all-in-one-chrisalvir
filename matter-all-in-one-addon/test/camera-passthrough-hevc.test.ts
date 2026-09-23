@@ -238,7 +238,7 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     expect(args).not.toContain("aresample");
   });
 
-  it("transcodes ONLY audio for Tapo C120 and EZVIZ AAC cameras in Live View while preserving -c:v copy", () => {
+  it("uses direct passthrough -c:a copy for Tapo C120 to preserve synchronized A/V clocks without lag", () => {
     const platform = createPlatformMock();
     const capabilities = createCapabilities({
       videoCodec: "h264",
@@ -275,7 +275,7 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
       {
         sessionID: "test-c120-sess",
         type: StreamRequestTypes.START,
-        video: { fps: 30, width: 1920, height: 1080, pt: 99 } as any,
+        video: { fps: 30, width: 2560, height: 1440, pt: 99 } as any,
         audio: {
           codec: 0 as any, // AAC-ELD
           channel: 1,
@@ -292,21 +292,19 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     expect(args).toContain("copy");
     expect(args).not.toContain("libx264");
     expect(args).not.toContain("libx265");
-    // Robust probe sizes and flags for Tapo C120 to prevent frozen video
+    // Probe sizes and flags for Tapo C120
     expect(args).toContain("-probesize");
-    expect(args).toContain("2097152");
+    expect(args).toContain("524288");
     expect(args).toContain("-analyzeduration");
-    expect(args).toContain("3000000");
+    expect(args).toContain("1000000");
     expect(args).toContain("+genpts+igndts+discardcorrupt");
     expect(args).toContain("-max_interleave_delta");
     expect(args).toContain("100000");
-    // Audio MUST be transcoded to AAC-ELD with aresample
-    expect(args).toContain("-af");
-    expect(args).toContain("aresample=async=1:first_pts=0");
+    // Audio is direct copy passthrough to avoid timestamp desync
+    expect(args).toContain("-c:a");
     const audioCodecIdx = args.indexOf("-c:a");
     expect(audioCodecIdx).toBeGreaterThan(-1);
-    const audioCodecValue = args[audioCodecIdx + 1];
-    expect(["aac", "libfdk_aac", "libopus"]).toContain(audioCodecValue);
+    expect(args[audioCodecIdx + 1]).toBe("copy");
   });
 
   it("strictly preserves Tapo C402 input and audio parameters untouched", () => {

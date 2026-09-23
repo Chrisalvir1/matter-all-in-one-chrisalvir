@@ -1,3 +1,19 @@
+## [1.8.80] - 2026-09-23
+
+### Solución definitiva de lag y congelamiento en Tapo C120: Passthrough directo AAC y alineación 2K nativa
+
+- **Passthrough directo de audio AAC (-c:a copy) sin desfase temporal:**
+  - Se eliminó la transcodificación de audio AAC-ELD para la Tapo C120. Al transcodificar con `libfdk_aac` y `aresample=async=1:first_pts=0`, el reloj de audio se reiniciaba a 0 mientras el vídeo viajaba con el reloj PTS del origen RTSP, provocando que el reproductor de Apple Home congelara el vídeo a la espera de sincronización temporal. Al habilitar `-c:a copy` directo, tanto audio como vídeo viajan en perfecta sincronía temporal desde el origen sin consumo de CPU ni retrasos.
+- **Resolución nativa 2K QHD (2560x1440) para Tapo C120:**
+  - Se corrigió la resolución almacenada y declarada para la Tapo C120 de 1920x1080 a su resolución real 2K (2560x1440). Con esto, Apple Home negocia la resolución exacta que la cámara emite por RTSP en modo passthrough, eliminando fallos de decodificación en VideoToolbox.
+  - Se habilitó la medición previa del stream RTSP (`probeCameraSource`) para Tapo C120 antes de publicar el accesorio HAP.
+- **Optimización de inicio y eliminación de demoras de sondeo:**
+  - Reducción del sondeo de la Tapo C120 a 512 KiB (`524288`) y 1 segundo (`1000000`), eliminando `fpsprobesize 10` que demoraba el arranque 3 segundos.
+- **Tapo C402 Estrictamente Intacta y Protegida:**
+  - Se preservan al 100% todos los parámetros, flags, pipes y sincronización de la Tapo C402 sin modificación alguna.
+- **Wyze y EZVIZ Totalmente Intactas:**
+  - Se preservan intactas las configuraciones de Wyze y EZVIZ.
+
 ## [1.8.79] - 2026-09-23
 
 ### Solución al congelamiento cada 10 segundos y pantalla de carga en Tapo C120
