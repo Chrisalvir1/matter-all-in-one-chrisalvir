@@ -1046,15 +1046,19 @@ export class HomeKitCameraStreamingDelegate
           session.audioKeySalt.toString("base64"),
           audioUrl,
         );
-      } else if (needsSilentAudio) {
+      } else {
         this.platform?.log?.notice?.(
-          `[Stream][${this.entityId}] Inyectando audio silencioso para Apple Home`,
+          `[Stream][${this.entityId}] Transcodificando exclusivamente audio fuente (${this.capabilities.audioCodec || "desconocido"}) a AAC para Apple Home (vídeo permanece en passthrough puro)`,
         );
         const isOpus = request.audio.codec === AudioStreamingCodecType.OPUS;
         const hasFdk = supportsFdkAac();
         const audioBitrate = Math.min(request.audio.max_bit_rate || 24, 24);
 
-        args.push("-map", "1:a:0", "-vn");
+        if (needsSilentAudio) {
+          args.push("-map", "1:a:0", "-vn");
+        } else {
+          args.push("-map", "0:a:0?", "-vn");
+        }
 
         if (isOpus) {
           args.push(
@@ -1100,10 +1104,6 @@ export class HomeKitCameraStreamingDelegate
           "-srtp_out_params",
           session.audioKeySalt.toString("base64"),
           audioUrl,
-        );
-      } else {
-        this.platform?.log?.notice?.(
-          `[Stream][${this.entityId}] ${audioCompat.reason || "Audio no compatible con passthrough"}. Streaming sólo de vídeo en passthrough sin transcodificación.`,
         );
       }
     }
