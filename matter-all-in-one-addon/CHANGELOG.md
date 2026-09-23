@@ -1,3 +1,22 @@
+## [1.8.69] - 2026-09-23
+
+### Autenticación RTSP contra Camera.UI (Admin/Anubis2026) y estabilización del detector de movimiento de Tapo C402
+
+- **Autenticación RTSP de flujos canónicos Camera.UI (`cui_*`):**
+  - Se solventó el error `401 Unauthorized` en FFmpeg al acceder a los streams RTSP de Wyze, EZVIZ, Tapo C120 y Vimtag en Camera.UI (puerto 2101).
+  - Se configuraron las credenciales reales de Camera.UI (`Admin` y `Anubis2026.`) en `CameraUiStorage` y en la generación de URLs canónicas RTSP.
+  - Se implementó mecanismo de reintento y alternancia en `CameraUiClient.login()` y en `HomeKitCameraStreamingDelegate` para validar variantes de contraseña (`Anubis2026.` / `Anubis2026`) sin interrumpir la visualización.
+  - **Tapo C402 se mantiene estrictamente intacta:** La cámara C402 conserva su origen nativo directo en Home Assistant (`rtsp://192.168.110.147:62291/tapo-c402`) sin ser modificada por las migraciones de Camera.UI.
+- **Detección de Movimiento y Grabación HKSV para Tapo C402:**
+  - En `FfmpegMotionDetector`, se ampliaron los parámetros de análisis para la Tapo C402 (`-probesize 2097152`, `-analyzeduration 3000000`) permitiendo que FFmpeg capture los fotogramas clave (GOP de ~2s) sin expirar durante el sondeo.
+  - Se asegura que los eventos de movimiento detectados activen `MotionDetected: true` en Apple HomeKit para disparar las grabaciones de vídeo seguro (HKSV) en iCloud.
+
+## [1.8.68] - 2026-09-23
+
+### Alineación de pruebas HAP passthrough
+
+- Se sincronizaron las pruebas de integración con las capacidades nativas medidas.
+
 ## [1.8.67] - 2026-09-23
 
 ### Restauración de passthrough HAP nativo para Camera.UI

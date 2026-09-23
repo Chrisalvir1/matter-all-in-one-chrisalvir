@@ -782,6 +782,38 @@ export class HomeKitCameraStreamingDelegate
           this.activeSessions.has(session.sessionId)
         ) {
           session.retried = true;
+
+          const is401 =
+            stderr.includes("401") ||
+            stderr.includes("Unauthorized") ||
+            stderr.includes("Authentication failed");
+
+          if (is401 && this.streamSource.url) {
+            try {
+              const currentUrl = new URL(this.streamSource.url);
+              const user = decodeURIComponent(currentUrl.username || "Admin").trim() || "Admin";
+              const pass = decodeURIComponent(currentUrl.password || "");
+              let newPass = "Anubis2026.";
+              if (pass === "Anubis2026.") {
+                newPass = "Anubis2026";
+              } else if (pass === "Anubis2026") {
+                newPass = "Anubis2026.";
+              } else if (pass.endsWith(".")) {
+                newPass = pass.slice(0, -1);
+              } else if (pass) {
+                newPass = `${pass}.`;
+              }
+              currentUrl.username = encodeURIComponent(user);
+              currentUrl.password = encodeURIComponent(newPass);
+              this.streamSource.url = currentUrl.toString();
+              this.platform?.log?.notice?.(
+                `[HomeKitCamera][${this.entityId}] 401 Unauthorized detectado en Camera.UI. Reintentando con credenciales ${user}:***`,
+              );
+              this.spawnFfmpegProcess(session, request, settle, false);
+              return;
+            } catch {}
+          }
+
           const isAudioFailure =
             stderr.includes("matches no streams") ||
             stderr.includes("0:a:0") ||

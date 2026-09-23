@@ -152,15 +152,21 @@ export class FfmpegMotionDetector extends EventEmitter {
     const analysisFps = Math.max(1, Math.min(this.opts.fps ?? 1, 5));
     const vf = `fps=${analysisFps},scale=${analysisWidth}:${analysisHeight},format=gray,tblend=all_mode=difference,blackframe=amount=${reportAmount}:thresh=${pixelDifferenceThreshold}`;
 
+    const isTapoC402 =
+      /(?:\bc402\b|tapo[-_ ]?c402)/i.test(this.opts.cameraName || "") ||
+      /(?:\bc402\b|tapo[-_ ]?c402)/i.test(this.opts.cameraId || "") ||
+      /(?:\bc402\b|tapo[-_ ]?c402)/i.test(this.opts.rtspUrl || "");
+
+    const probeSize = isTapoC402 ? "2097152" : "524288";
+    const analyzeDuration = isTapoC402 ? "3000000" : "500000";
+
     const args = [
       "-hide_banner",
       "-loglevel", "info",
       "-rtsp_transport", "tcp",
       "-timeout", "10000000",
-      // A short bounded probe avoids repeatedly connecting before Camera.UI's
-      // next SPS/PPS, which would otherwise compete with Live View/HKSV.
-      "-probesize", "524288",
-      "-analyzeduration", "500000",
+      "-probesize", probeSize,
+      "-analyzeduration", analyzeDuration,
       "-fflags", "+genpts+igndts+discardcorrupt",
       "-i", url,
       "-vf", vf,

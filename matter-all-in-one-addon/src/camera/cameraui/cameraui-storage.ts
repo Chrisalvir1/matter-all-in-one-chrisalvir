@@ -37,28 +37,29 @@ function migrateLegacyBridgeStream(
 ): CameraUiCameraRecord {
   const streamName = CANONICAL_CUI_STREAMS[cam.id];
   if (!streamName) return cam; // Tapo C402 and unknown cameras stay untouched.
+
+  const desiredUser = (config.rtspUsername || config.username || "Admin").trim();
+  const desiredPassword = (config.rtspPassword || config.password || "Anubis2026.").trim();
+  const credentials = `${encodeURIComponent(desiredUser)}:${encodeURIComponent(desiredPassword)}@`;
+
   // Camera.UI may disclose the physical Wyze RTSP address during discovery.
   // That endpoint is not a stable bridge source: it goes unavailable whenever
   // the camera reconnects, while Camera.UI's own `cui_*` restream persists.
   // Prefer the configured Camera.UI listener for every known canonical stream.
   const isCanonical = new RegExp(`:2101/${streamName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i").test(cam.rtspUrl || "");
   if (isCanonical) {
-    // Older releases persisted the Camera.UI stream with stale/placeholder
-    // userinfo. Camera.UI then returns 401 even though its own HomeKit bridge
-    // works. Refresh only credentials for known canonical cui_* routes from
-    // the locally saved RTSP configuration; do not alter Tapo C402 or any
-    // physical/manual camera URL.
-    if (!config.rtspUsername) return cam;
     try {
       const url = new URL(cam.rtspUrl!);
       const currentUser = decodeURIComponent(url.username || "");
       const currentPassword = decodeURIComponent(url.password || "");
-      const desiredUser = config.rtspUsername;
-      const desiredPassword = config.rtspPassword || "";
-      if (currentUser === desiredUser && currentPassword === desiredPassword) {
+      if (
+        currentUser === desiredUser &&
+        (currentPassword === desiredPassword ||
+          currentPassword === desiredPassword.replace(/\.$/, "") ||
+          `${currentPassword}.` === desiredPassword)
+      ) {
         return cam;
       }
-      const credentials = `${encodeURIComponent(desiredUser)}:${encodeURIComponent(desiredPassword)}@`;
       return {
         ...cam,
         rtspUrl: `rtsp://${credentials}${url.hostname}:2101/${streamName}`,
@@ -67,13 +68,25 @@ function migrateLegacyBridgeStream(
       return cam;
     }
   }
-  if (!isLegacyBridgeStreamUrl(cam.rtspUrl) && cam.id !== "cameraui_cba17b87-e6c0-4cc9-b6ab-e88b8cbc7cb4") return cam;
+
   try {
-    const host = new URL(config.serverUrl).hostname;
-    if (!host) return cam;
-    const credentials = config.rtspUsername
-      ? `${encodeURIComponent(config.rtspUsername)}:${encodeURIComponent(config.rtspPassword || "")}@`
-      : "";
+    let host = "192.168.110.46";
+    if (cam.rtspUrl) {
+      try {
+        const u = new URL(cam.rtspUrl);
+        if (u.hostname && u.hostname !== "127.0.0.1" && u.hostname !== "localhost") {
+          host = u.hostname;
+        }
+      } catch {}
+    }
+    if (config.serverUrl) {
+      try {
+        const u = new URL(config.serverUrl);
+        if (u.hostname && u.hostname !== "127.0.0.1" && u.hostname !== "localhost") {
+          host = u.hostname;
+        }
+      } catch {}
+    }
     return { ...cam, rtspUrl: `rtsp://${credentials}${host}:2101/${streamName}` };
   } catch {
     return cam;
@@ -994,6 +1007,10 @@ export class CameraUiStorage {
       config: {
         enabled: true,
         serverUrl: "http://127.0.0.1:8181",
+        username: "Admin",
+        password: "Anubis2026.",
+        rtspUsername: "Admin",
+        rtspPassword: "Anubis2026.",
         mqttEnabled: true,
         mqttTopicPrefix: "camera.ui",
         allowSelfSignedCertificate: true,
@@ -1037,6 +1054,22 @@ export class CameraUiStorage {
         ...(parsed.config || {}),
       };
       storeConfig.enabled = true;
+      if (!storeConfig.username) {
+        storeConfig.username = "Admin";
+        hadMigration = true;
+      }
+      if (!storeConfig.password) {
+        storeConfig.password = "Anubis2026.";
+        hadMigration = true;
+      }
+      if (!storeConfig.rtspUsername) {
+        storeConfig.rtspUsername = "Admin";
+        hadMigration = true;
+      }
+      if (!storeConfig.rtspPassword) {
+        storeConfig.rtspPassword = "Anubis2026.";
+        hadMigration = true;
+      }
       cameras = cameras.map((cam: CameraUiCameraRecord) => {
         const migrated = migrateLegacyBridgeStream(cam, storeConfig);
         if (migrated.rtspUrl !== cam.rtspUrl) hadMigration = true;

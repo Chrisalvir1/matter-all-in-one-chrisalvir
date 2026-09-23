@@ -197,45 +197,68 @@ export class CameraUiClient {
     }
 
     const authEndpoints = ["/api/auth/login", "/api/login", "/auth/login"];
+    const basePwd = this.config.password || "Anubis2026.";
+    const passwordCandidates = Array.from(
+      new Set(
+        [
+          basePwd,
+          basePwd.endsWith(".") ? basePwd.slice(0, -1) : `${basePwd}.`,
+          "Anubis2026.",
+          "Anubis2026",
+        ].filter(Boolean),
+      ),
+    );
 
-    for (const ep of authEndpoints) {
-      try {
-        const res = await fetch(`${baseUrl}${ep}`, {
-          method: "POST",
-          headers: {
+    for (const pwd of passwordCandidates) {
+      for (const ep of authEndpoints) {
+        try {
+          const creds = Buffer.from(
+            `${this.config.username || "Admin"}:${pwd}`,
+          ).toString("base64");
+          const headers: Record<string, string> = {
             "Content-Type": "application/json",
             Accept: "application/json",
-            ...this.getHeaders(),
-          },
-          body: JSON.stringify({
-            username: this.config.username,
-            password: this.config.password,
-            kind: "web",
-            persistent: true,
-            device: { id: "matter-all-in-one", name: "Matter All-in-One Bridge" },
-          }),
-          signal: AbortSignal.timeout(5000),
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          const token =
-            data?.access_token ||
-            data?.tokens?.access ||
-            data?.tokens?.access_token ||
-            data?.token ||
-            data?.accessToken;
-          if (token) {
-            this.accessToken = String(token);
-            this.loginError = undefined;
-            return { ok: true };
+            Authorization: `Basic ${creds}`,
+          };
+          if (this.accessToken) {
+            headers["Authorization"] = `Bearer ${this.accessToken}`;
           }
-        }
 
-        if (res.status === 401 || res.status === 403) {
-          this.loginError = `Credenciales incorrectas: usuario o contraseña rechazados por Camera.UI en ${baseUrl} (HTTP ${res.status}).`;
-        }
-      } catch {}
+          const res = await fetch(`${baseUrl}${ep}`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({
+              username: this.config.username || "Admin",
+              password: pwd,
+              kind: "web",
+              persistent: true,
+              device: { id: "matter-all-in-one", name: "Matter All-in-One Bridge" },
+            }),
+            signal: AbortSignal.timeout(5000),
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            const token =
+              data?.access_token ||
+              data?.tokens?.access ||
+              data?.tokens?.access_token ||
+              data?.token ||
+              data?.accessToken;
+            if (token) {
+              this.accessToken = String(token);
+              this.loginError = undefined;
+              this.config.password = pwd;
+              this.config.rtspPassword = pwd;
+              return { ok: true };
+            }
+          }
+
+          if (res.status === 401 || res.status === 403) {
+            this.loginError = `Credenciales incorrectas: usuario o contraseña rechazados por Camera.UI en ${baseUrl} (HTTP ${res.status}).`;
+          }
+        } catch {}
+      }
     }
 
     return { ok: true, skipped: true };
