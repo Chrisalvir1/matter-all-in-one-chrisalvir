@@ -1,3 +1,10 @@
+## [1.8.73] - 2026-09-23
+
+### Sincronización de config.yaml del add-on para Home Assistant Supervisor
+
+- **Detección de actualización en Home Assistant:** Se actualizó `matter-all-in-one-addon/config.yaml` a `version: "1.8.73"` (estaba retenido en 1.8.69), permitiendo que el Supervisor de Home Assistant detecte inmediatamente la actualización.
+- **Automatización del script de despliegue:** `push_update.sh` ahora sincroniza automáticamente `config.yaml` con `package.json` en cada publicación.
+
 ## [1.8.72] - 2026-09-23
 
 ### Sincronización de pruebas unitarias y auto-recuperación de endpoints de streaming
