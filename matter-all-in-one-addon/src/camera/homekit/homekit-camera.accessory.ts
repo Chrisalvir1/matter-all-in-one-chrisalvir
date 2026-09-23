@@ -340,15 +340,20 @@ export class HomeKitCameraAccessory {
     // negotiation introduced in 1.8.54/1.8.55.  Other cameras remain strict
     // passthrough: they must advertise only profiles, resolutions and audio
     // encoders the existing stream pipeline can actually deliver.
+    const isTapoC402 = this.isTapoC402();
     const audioCodecs = [
-      {
-        type: AudioStreamingCodecType.AAC_ELD,
-        samplerate: AudioStreamingSamplerate.KHZ_16,
-      },
-      {
-        type: AudioStreamingCodecType.AAC_ELD,
-        samplerate: AudioStreamingSamplerate.KHZ_24,
-      },
+      ...(isTapoC402 || hasFdk
+        ? [
+            {
+              type: AudioStreamingCodecType.AAC_ELD,
+              samplerate: AudioStreamingSamplerate.KHZ_16,
+            },
+            {
+              type: AudioStreamingCodecType.AAC_ELD,
+              samplerate: AudioStreamingSamplerate.KHZ_24,
+            },
+          ]
+        : []),
       {
         type: AudioStreamingCodecType.OPUS,
         samplerate: AudioStreamingSamplerate.KHZ_16,
@@ -366,11 +371,9 @@ export class HomeKitCameraAccessory {
         supportedCryptoSuites: [SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80],
         video: {
           codec: {
-            profiles: [
-              H264Profile.BASELINE,
-              H264Profile.MAIN,
-              H264Profile.HIGH,
-            ],
+            profiles: isTapoC402
+              ? [H264Profile.BASELINE, H264Profile.MAIN, H264Profile.HIGH]
+              : [this.nativeH264Profile()],
             levels: [
               H264Level.LEVEL3_1,
               H264Level.LEVEL3_2,
@@ -398,11 +401,9 @@ export class HomeKitCameraAccessory {
           video: {
             type: VideoCodecType.H264,
             parameters: {
-              profiles: [
-                H264Profile.BASELINE,
-                H264Profile.MAIN,
-                H264Profile.HIGH,
-              ],
+              profiles: isTapoC402
+                ? [H264Profile.BASELINE, H264Profile.MAIN, H264Profile.HIGH]
+                : [this.nativeH264Profile()],
               levels: [
                 H264Level.LEVEL3_1,
                 H264Level.LEVEL3_2,
@@ -467,9 +468,14 @@ export class HomeKitCameraAccessory {
       Math.min(this.capabilities.maxFps || 30, 60),
     );
 
-    // All cameras need the HAP resolution ladder so Apple Home can negotiate
-    // the display frame size (full screen, grid, picture-in-picture).
-    // Video remains pure passthrough (-c:v copy) without re-encoding overhead.
+    // These Camera.UI feeds are copied, not resized or re-profiled.  Advertising
+    // a conversion variant lets Home request media this process cannot produce.
+    // Keep the C120 at its measured 2304x1296 source resolution.
+    if (!this.isTapoC402()) {
+      return [[width, height, sourceFps]];
+    }
+
+    // The direct HA RTSP source of the C402 needs its HAP resolution ladder.
     const ladder: [number, number, number][] = [
       [width, height, sourceFps],
       [1920, 1080, Math.min(sourceFps, 30)],

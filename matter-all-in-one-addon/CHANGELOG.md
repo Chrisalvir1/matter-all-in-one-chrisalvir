@@ -1,3 +1,11 @@
+## [1.8.64] - 2026-09-22
+
+### Restauración del passthrough real para Wyze, EZVIZ y Tapo C120
+
+- **Capacidades exactas:** Wyze, EZVIZ y Tapo C120 vuelven a anunciar solamente el perfil H.264, la resolución y los códecs que sus streams ya entregan. El proceso FFmpeg copia el vídeo y no puede convertir perfiles ni escalas durante la negociación HAP.
+- **Tapo C120 2K:** conserva su fuente nativa de 2304x1296 a 15 fps y ya no ofrece 1080p ni 720p a Apple Home.
+- **C402 aislada:** el RTSP directo de Home Assistant mantiene AAC-ELD, Baseline/Main/High y la escalera HAP exclusivos que requiere su ruta directa.
+
 ## [1.8.63] - 2026-09-22
 
 ### Restauración directa de passthrough de audio AAC (-c:a copy) para Wyze, EZVIZ, Tapo C120 y Tapo C402
