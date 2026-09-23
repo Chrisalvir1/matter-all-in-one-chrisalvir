@@ -179,11 +179,11 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     ).toThrow("Cámara no entrega H.264 nativo; transcodificación no permitida");
   });
 
-  it("produces passthrough stream args (-c:v copy) without re-encoding video or audio filters", () => {
+  it("produces passthrough stream args (-c:v copy) without re-encoding video or audio filters when audio is native aac_eld", () => {
     const platform = createPlatformMock();
     const capabilities = createCapabilities({
       videoCodec: "h264",
-      audioCodec: "aac",
+      audioCodec: "aac_eld",
       audioSampleRate: 16000,
       audioChannels: 1,
     });
@@ -236,6 +236,69 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     expect(args).not.toContain("libopus");
     expect(args).not.toContain("libfdk_aac");
     expect(args).not.toContain("aresample");
+  });
+
+  it("transcodes ONLY audio for Tapo C120 and EZVIZ AAC cameras in Live View while preserving -c:v copy", () => {
+    const platform = createPlatformMock();
+    const capabilities = createCapabilities({
+      videoCodec: "h264",
+      audioCodec: "aac", // RTSP camera sends AAC-LC
+      audioSampleRate: 16000,
+      audioChannels: 1,
+    });
+    const streamSource = createStreamSource({
+      url: "rtsp://192.168.110.147:8554/tapo_c120",
+    });
+
+    const delegate = new HomeKitCameraStreamingDelegate(
+      platform,
+      "camera.cameraui_ec110a11_ed20_44f7_8468_2bd8c7dce18f",
+      capabilities,
+      streamSource,
+    );
+
+    const args = delegate.buildStreamArgs(
+      {
+        sessionId: "test-c120-sess",
+        targetAddress: "192.168.1.50",
+        videoPort: 5000,
+        localVideoPort: 5001,
+        videoCryptoSuite: SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
+        videoKeySalt: Buffer.alloc(30, 1),
+        videoSsrc: 1111,
+        audioPort: 5002,
+        localAudioPort: 5003,
+        audioCryptoSuite: SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
+        audioKeySalt: Buffer.alloc(30, 2),
+        audioSsrc: 2222,
+      },
+      {
+        sessionID: "test-c120-sess",
+        type: StreamRequestTypes.START,
+        video: { fps: 30, width: 1920, height: 1080, pt: 99 } as any,
+        audio: {
+          codec: 0 as any, // AAC-ELD
+          channel: 1,
+          bit_rate: 24,
+          sample_rate: 16,
+          packet_time: 20,
+          pt: 110,
+        } as any,
+      } as any,
+    );
+
+    // Video MUST remain copy
+    expect(args).toContain("-c:v");
+    expect(args).toContain("copy");
+    expect(args).not.toContain("libx264");
+    expect(args).not.toContain("libx265");
+    // Audio MUST be transcoded to AAC-ELD with aresample
+    expect(args).toContain("-af");
+    expect(args).toContain("aresample=async=1:first_pts=0");
+    const audioCodecIdx = args.indexOf("-c:a");
+    expect(audioCodecIdx).toBeGreaterThan(-1);
+    const audioCodecValue = args[audioCodecIdx + 1];
+    expect(["aac", "libfdk_aac", "libopus"]).toContain(audioCodecValue);
   });
 
   it("SFrame frame encryption protects and validates frames correctly", () => {

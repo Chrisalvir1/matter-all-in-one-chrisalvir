@@ -732,7 +732,28 @@ export function checkAudioPassthroughCompatibility(
   }
 
   const normalized = sourceAudioCodec.toLowerCase();
-  if (normalized !== "aac" && normalized !== "aac_lc") {
+
+  // If a specific target codec is expected (e.g. AAC-ELD for Apple Home Live View RTP),
+  // standard RTSP camera AAC-LC is not compatible without transcoding.
+  if (targetRequirement?.expectedCodec) {
+    const expected = targetRequirement.expectedCodec.toLowerCase();
+    if ((expected === "aac_eld" || expected === "aac-eld") && normalized !== "aac_eld") {
+      return {
+        compatible: false,
+        reason: `Códec de audio fuente (${sourceAudioCodec}) requiere transcodificación a AAC-ELD para Apple Home Live View.`,
+        sourceSpec: { codec: sourceAudioCodec, sampleRate: sourceSampleRate, channels: sourceChannels },
+      };
+    }
+    if (expected === "opus" && normalized !== "opus") {
+      return {
+        compatible: false,
+        reason: `Códec de audio fuente (${sourceAudioCodec}) requiere transcodificación a OPUS para Apple Home Live View.`,
+        sourceSpec: { codec: sourceAudioCodec, sampleRate: sourceSampleRate, channels: sourceChannels },
+      };
+    }
+  }
+
+  if (normalized !== "aac" && normalized !== "aac_lc" && normalized !== "aac_eld") {
     return {
       compatible: false,
       reason: `Códec de audio fuente (${sourceAudioCodec}) requiere transcodificación a AAC para Apple Home.`,

@@ -1,3 +1,15 @@
+## [1.8.76] - 2026-09-23
+
+### Restauración de audio en Tapo C120 y EZVIZ y eliminación del lag de vídeo de 10 segundos
+
+- **Transcodificación exclusiva de audio AAC-ELD en Live View para Apple HomeKit:**
+  - Las cámaras RTSP convencionales (como Tapo C120 y EZVIZ) emiten audio en AAC-LC, el cual no es compatible con el perfil RTP de Apple HomeKit (que exige estrictamente AAC-ELD u Opus). El envío de AAC-LC mediante copia directa (`-c:a copy`) causaba silencio total en dispositivos Apple.
+  - Se activa la transcodificación de audio a AAC-ELD (`libfdk_aac`, `-profile:a aac_eld -flags +global_header`) con remuestreo y sincronización temporal (`-af aresample=async=1:first_pts=0`), exactamente igual al flujo que funciona en Wyze. El vídeo permanece 100% en passthrough nativo (`-c:v copy`).
+- **Eliminación del lag y congelamiento de vídeo cada 10 segundos en Tapo C120:**
+  - Al sincronizar monótonamente las marcas de tiempo del audio con `aresample=async=1:first_pts=0`, el muxer RTP de FFmpeg ya no retiene los paquetes de vídeo esperando paquetes de audio desalineados (interleave delta de 10s por defecto de FFmpeg). El stream en vivo fluye de forma continua e instantánea.
+- **Tapo C402 estrictamente protegida e intacta:**
+  - Todos los parámetros de streaming, grabación y detección de movimiento de la Tapo C402 se preservan al 100% sin modificaciones.
+
 ## [1.8.75] - 2026-09-23
 
 ### Sincronización de suite de pruebas unitarias y parámetros de streaming de C402

@@ -1039,10 +1039,24 @@ export class HomeKitCameraStreamingDelegate
         `srtp://${host}:${session.audioPort}` +
         `?rtcpport=${session.audioPort}&pkt_size=188`;
 
+      const isOpus = request.audio.codec === AudioStreamingCodecType.OPUS;
+      const targetCodec = isOpus ? "opus" : "aac_eld";
+
+      // Tapo C402 is working as expected and must remain 100% untouched.
+      // Other cameras passing standard RTSP audio (AAC-LC) need transcoding to AAC-ELD/Opus for Apple Home Live View.
+      const targetReq = isTapoC402
+        ? undefined
+        : {
+            expectedCodec: targetCodec,
+            allowedSampleRates: [sampleRate],
+            expectedChannels: 1,
+          };
+
       const audioCompat = checkAudioPassthroughCompatibility(
         this.capabilities.audioCodec,
         this.capabilities.audioSampleRate,
         this.capabilities.audioChannels,
+        targetReq,
       );
 
       if (audioCompat.compatible) {
@@ -1071,7 +1085,6 @@ export class HomeKitCameraStreamingDelegate
         this.platform?.log?.notice?.(
           `[Stream][${this.entityId}] Transcodificando exclusivamente audio fuente (${this.capabilities.audioCodec || "desconocido"}) a AAC para Apple Home (vídeo permanece en passthrough puro)`,
         );
-        const isOpus = request.audio.codec === AudioStreamingCodecType.OPUS;
         const hasFdk = supportsFdkAac();
         const audioBitrate = Math.min(request.audio.max_bit_rate || 24, 24);
 
