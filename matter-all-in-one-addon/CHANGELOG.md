@@ -1,3 +1,17 @@
+## [1.8.78] - 2026-09-23
+
+### Corrección definitiva del congelamiento de vídeo en Live View para Tapo C120
+
+- **Sondeo Robusto y Decodificación Fiable de Vídeo 2K para Tapo C120:**
+  - Se ajustó el tamaño de sondeo (`probesize`) a 512 KiB (`524288`) y la duración de análisis (`analyzeduration`) a 500ms (`500000`) para la Tapo C120, igualando la configuración que hace funcionar de forma excelente la grabación HKSV. Esto garantiza que FFmpeg capture los conjuntos de parámetros de secuencia y de imagen (SPS/PPS) y el fotograma IDR completo de resolución 2K sin truncamiento.
+  - Se incorporó la bandera `+igndts` (`-fflags +nobuffer+flush_packets+genpts+igndts+discardcorrupt`) y se eliminó la restricción rígida `-flags low_delay` (reemplazada por `-flags 0`), evitando que el muxer descarte fotogramas de vídeo debido a pequeñas fluctuaciones de DTS en el origen RTSP.
+- **Alineación Temporal Monótona y Cero Desfase (A/V Sync):**
+  - Se añadió `-avoid_negative_ts make_zero` a la salida de vídeo RTP, garantizando que el reloj de vídeo empiece estrictamente en 0, sincronizado a la perfección con la salida de audio transcodificada (`aresample=async=1:first_pts=0`). Esto elimina por completo el estado "congelado" de VideoToolbox en iOS/iPadOS/macOS al abrir la vista en directo.
+- **Tapo C402 estrictamente protegida e intacta:**
+  - Todos los parámetros de streaming, grabación y detección de movimiento de la Tapo C402 (`probesize 2097152`, `analyzeduration 3000000`, `fpsprobesize 10`, `-progress pipe:1`) se mantienen exactamente iguales al 100%.
+- **Preservación Total de Wyze y EZVIZ:**
+  - Ambas cámaras continúan con sus parámetros de streaming y audio AAC-ELD estables y sin cambios.
+
 ## [1.8.77] - 2026-09-23
 
 ### Carga ultrarrápida y cero lag en Tapo C120, y optimización de detección de movimiento vía MQTT

@@ -867,6 +867,9 @@ export class HomeKitCameraStreamingDelegate
     // HAP has already accepted the Live View request.  C402 needs a complete
     // GOP to join reliably; video remains strict H.264 passthrough.
     const isTapoC402 = /(?:\bc402\b|tapo[-_ ]?c402)/i.test(sourceUrl);
+    const isTapoC120 = /(?:\bc120\b|tapo[-_ ]?c120)/i.test(
+      `${this.entityId} ${sourceUrl} ${this.streamSource.metadata?.name || ""}`,
+    );
 
     const args: string[] = [
       "-hide_banner",
@@ -891,9 +894,9 @@ export class HomeKitCameraStreamingDelegate
         "-timeout",
         "10000000",
         "-probesize",
-        isTapoC402 ? "2097152" : "65536",
+        isTapoC402 ? "2097152" : isTapoC120 ? "524288" : "65536",
         "-analyzeduration",
-        isTapoC402 ? "3000000" : "100000",
+        isTapoC402 ? "3000000" : isTapoC120 ? "500000" : "100000",
       );
       if (isTapoC402) {
         args.push(
@@ -901,6 +904,13 @@ export class HomeKitCameraStreamingDelegate
           "10",
           "-fflags",
           "+genpts+igndts+discardcorrupt",
+          "-flags",
+          "0",
+        );
+      } else if (isTapoC120) {
+        args.push(
+          "-fflags",
+          "+nobuffer+flush_packets+genpts+igndts+discardcorrupt",
           "-flags",
           "0",
         );
@@ -1014,6 +1024,8 @@ export class HomeKitCameraStreamingDelegate
         // first received GOP instead of waiting for a later camera keyframe.
         "-bsf:v",
         "dump_extra=freq=keyframe",
+        "-avoid_negative_ts",
+        "make_zero",
         "-f",
         "rtp",
         "-fflags",
