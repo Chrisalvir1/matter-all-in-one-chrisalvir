@@ -336,15 +336,24 @@ export class HomeKitCameraAccessory {
   private buildControllerOptions(): CameraControllerOptions {
     const isStreamingUsable = Boolean(this.streamSource.url);
     const hasFdk = supportsFdkAac();
+    // The C402's direct Home Assistant RTSP endpoint needs the broader HAP
+    // negotiation introduced in 1.8.54/1.8.55.  Other cameras remain strict
+    // passthrough: they must advertise only profiles, resolutions and audio
+    // encoders the existing stream pipeline can actually deliver.
+    const isTapoC402 = this.isTapoC402();
     const audioCodecs = [
-      {
-        type: AudioStreamingCodecType.AAC_ELD,
-        samplerate: AudioStreamingSamplerate.KHZ_16,
-      },
-      {
-        type: AudioStreamingCodecType.AAC_ELD,
-        samplerate: AudioStreamingSamplerate.KHZ_24,
-      },
+      ...(isTapoC402 || hasFdk
+        ? [
+            {
+              type: AudioStreamingCodecType.AAC_ELD,
+              samplerate: AudioStreamingSamplerate.KHZ_16,
+            },
+            {
+              type: AudioStreamingCodecType.AAC_ELD,
+              samplerate: AudioStreamingSamplerate.KHZ_24,
+            },
+          ]
+        : []),
       {
         type: AudioStreamingCodecType.OPUS,
         samplerate: AudioStreamingSamplerate.KHZ_16,
@@ -362,11 +371,9 @@ export class HomeKitCameraAccessory {
         supportedCryptoSuites: [SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80],
         video: {
           codec: {
-            profiles: [
-              H264Profile.BASELINE,
-              H264Profile.MAIN,
-              H264Profile.HIGH,
-            ],
+            profiles: isTapoC402
+              ? [H264Profile.BASELINE, H264Profile.MAIN, H264Profile.HIGH]
+              : [this.nativeH264Profile()],
             levels: [
               H264Level.LEVEL3_1,
               H264Level.LEVEL3_2,
@@ -394,11 +401,9 @@ export class HomeKitCameraAccessory {
           video: {
             type: VideoCodecType.H264,
             parameters: {
-              profiles: [
-                H264Profile.BASELINE,
-                H264Profile.MAIN,
-                H264Profile.HIGH,
-              ],
+              profiles: isTapoC402
+                ? [H264Profile.BASELINE, H264Profile.MAIN, H264Profile.HIGH]
+                : [this.nativeH264Profile()],
               levels: [
                 H264Level.LEVEL3_1,
                 H264Level.LEVEL3_2,
@@ -463,7 +468,14 @@ export class HomeKitCameraAccessory {
       Math.min(this.capabilities.maxFps || 30, 60),
     );
 
-    // Native resolution is declared first as the primary stream
+    // The C120 and all existing Camera.UI cameras retain their measured
+    // native stream. In particular, C120 remains 2K (2304x1296), rather than
+    // inviting HomeKit to request a 1080p/720p variant from a copy-only path.
+    if (!this.isTapoC402()) {
+      return [[width, height, sourceFps]];
+    }
+
+    // C402 needs the HAP resolution ladder for direct HA RTSP negotiation.
     const ladder: [number, number, number][] = [
       [width, height, sourceFps],
       [1920, 1080, Math.min(sourceFps, 30)],
@@ -483,6 +495,18 @@ export class HomeKitCameraAccessory {
       }
     }
     return unique;
+  }
+
+  private isTapoC402(): boolean {
+    const identity = [
+      this.record.name,
+      this.record.model,
+      this.entityId,
+      this.streamSource.url,
+    ]
+      .filter(Boolean)
+      .join(" ");
+    return /(?:\bc402\b|tapo[-_ ]?c402)/i.test(identity);
   }
 
   public findLinkedEntities(): {

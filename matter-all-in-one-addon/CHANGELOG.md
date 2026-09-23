@@ -3320,3 +3320,10 @@ All notable changes to this project will be documented in this file.
 - El estado HKSV queda como `waiting_hub` si Apple Home activa la grabación pero no ha enviado `SelectedCameraRecordingConfiguration`.
 - Se registra la acción necesaria para que Casa vuelva a negociar la configuración, evitando reportar una cámara como lista cuando HomeKit aún la rechaza.
 - Wyze conserva su detector, stream, audio y configuración sin cambios.
+## [1.8.56] - 2026-09-22
+
+### Restauración de cámaras existentes tras la corrección C402
+
+- **Wyze, EZVIZ y Tapo C120:** vuelven a anunciar exclusivamente su perfil H.264, resolución y códec de audio realmente disponibles. El pipeline de vídeo sigue siendo passthrough, por lo que ya no se ofrecen perfiles ni resoluciones que no puede convertir.
+- **Tapo C120 conserva 2K:** la C120 mantiene su resolución nativa medida de 2304x1296; Apple Home no recibirá una escalera que fuerce una petición de 1080p o 720p.
+- **Tapo C402 preservada:** mantiene el RTSP directo de Home Assistant, la eliminación del bloqueo `protocol_whitelist`, AAC-ELD y la escalera HAP que requiere para su negociación directa.
