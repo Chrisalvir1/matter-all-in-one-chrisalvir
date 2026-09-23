@@ -1,4 +1,10 @@
-## [1.8.55] - 2026-09-22
+## [1.8.57] - 2026-09-22
+
+### Tapo C402: Robustez en resolución de identificadores de movimiento y HKSV
+
+- **Resolución resiliente de accesorio para eventos de movimiento:** Se mejoró `CameraUiHomeKitBridge.updateMotion()` para resolver el accesorio de la cámara tanto con prefijo `cameraui_` como sin él, por nombre o por ID de entidad. Esto garantiza que eventos de movimiento provenientes de FFmpeg, sensores binarios de Home Assistant o webhooks disparen de inmediato `MotionDetected` en HomeKit, inicien la grabación HKSV en iCloud y actualicen Matter Occupancy sin fallar por discrepancias de clave.
+
+## [1.8.56] - 2026-09-22
 
 ### Tapo C402 & HAP: Corrección definitiva de whitelist de protocolos FFmpeg y audio AAC-ELD
 

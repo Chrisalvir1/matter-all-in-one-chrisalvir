@@ -508,14 +508,20 @@ export class CameraUiHomeKitBridge {
   }
 
   public static pauseMotionDetector(cameraId: string, log?: any): void {
-    const detector = this.activeMotionDetectors.get(cameraId);
+    const detector =
+      this.activeMotionDetectors.get(cameraId) ||
+      this.activeMotionDetectors.get(`cameraui_${cameraId}`) ||
+      this.activeMotionDetectors.get(cameraId.replace(/^cameraui_/, ""));
     if (detector) {
       detector.pause(log);
     }
   }
 
   public static resumeMotionDetector(cameraId: string, log?: any): void {
-    const detector = this.activeMotionDetectors.get(cameraId);
+    const detector =
+      this.activeMotionDetectors.get(cameraId) ||
+      this.activeMotionDetectors.get(`cameraui_${cameraId}`) ||
+      this.activeMotionDetectors.get(cameraId.replace(/^cameraui_/, ""));
     if (detector) {
       detector.resume(log);
     }
@@ -527,7 +533,16 @@ export class CameraUiHomeKitBridge {
     platform?: any,
     triggerSource?: string,
   ): boolean {
-    const accessory = this.activeAccessories.get(cameraId);
+    const accessory =
+      this.activeAccessories.get(cameraId) ||
+      this.activeAccessories.get(`cameraui_${cameraId}`) ||
+      this.activeAccessories.get(cameraId.replace(/^cameraui_/, "")) ||
+      [...this.activeAccessories.values()].find(
+        (a) =>
+          a.record?.name?.toLowerCase() === cameraId.toLowerCase() ||
+          a.entityId === cameraId ||
+          a.entityId === `camera.${cameraId}`,
+      );
     const camName = accessory?.record?.name || cameraId;
 
     if (accessory) {
@@ -537,7 +552,10 @@ export class CameraUiHomeKitBridge {
       );
     }
 
-    const matterEndpoint = this.activeMatterEndpoints.get(cameraId);
+    const matterEndpoint =
+      this.activeMatterEndpoints.get(cameraId) ||
+      this.activeMatterEndpoints.get(`cameraui_${cameraId}`) ||
+      this.activeMatterEndpoints.get(cameraId.replace(/^cameraui_/, ""));
     if (matterEndpoint) {
       try {
         void safeSetAttribute(
