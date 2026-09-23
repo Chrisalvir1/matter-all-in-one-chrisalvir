@@ -138,7 +138,7 @@ describe("HomeKitCameraAccessory production HAP graph", () => {
     ).toBe(true);
   });
 
-  it("advertises only the native passthrough capabilities outside C402", () => {
+  it("advertises universal HAP capabilities and resolution ladder for passthrough cameras", () => {
     const nativeCapabilities = {
       ...capabilities,
       resolution: { width: 2560, height: 1440 },
@@ -161,10 +161,12 @@ describe("HomeKitCameraAccessory production HAP graph", () => {
       2560, 1440, 20,
     ]);
     expect(options.streamingOptions.audio.codecs[0].type).toEqual(
-      AudioStreamingCodecType.OPUS,
+      AudioStreamingCodecType.AAC_ELD,
     );
     expect(options.streamingOptions.video.codec.profiles).toEqual([
+      H264Profile.BASELINE,
       H264Profile.MAIN,
+      H264Profile.HIGH,
     ]);
   });
 

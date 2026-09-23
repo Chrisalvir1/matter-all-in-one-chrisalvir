@@ -1,3 +1,17 @@
+## [1.8.66] - 2026-09-23
+
+### Exposición de Sensor de Movimiento en HomeKit para todas las cámaras y restauración total de Live View
+
+- **Exposición universal del Sensor de Movimiento en Apple Home (`Service.MotionSensor`):**
+  - Se corrigió la creación y recuperación segura del servicio de movimiento en `homekit-camera.accessory.ts` utilizando `getService(Service.MotionSensor) || addService(...)` para evitar excepciones al restaurar accesorios existentes.
+  - Se garantiza que todas las cámaras de Camera.UI (Wyze, EZVIZ, Tapo C120, Tapo C402) expongan su sensor de movimiento a HomeKit (`Service.MotionSensor`), configurando `Characteristic.StatusActive` en `true` y enlazándolo en `CameraControllerOptions.sensors.motion`.
+  - Se expandió la detección de sensores en `findLinkedEntities` para incluir eventos IA de personas, vehículos y mascotas (`persona`, `person`, `vehiculo`, `vehicle`, `animal`, `pet`, `mascota`).
+- **Enlace directo de sensores Omni AI (Vehículos / Personas / Mascotas) para Tapo C402:**
+  - En `platform.ts`, se agregó correlación explícita para que entidades como `binary_sensor.omni_ai_sensors_mac_mac_vehiculo_tapo_frente_de_calle` y sensores con alias `frente_de_calle` / `tapo_frente` activen inmediatamente los eventos de movimiento en Apple HomeKit y grabaciones iCloud HKSV para la cámara Tapo C402.
+- **Restauración de compatibilidad HAP completa para Wyze, EZVIZ y Tapo C120:**
+  - Se restauró el anuncio de perfiles H.264 `[BASELINE, MAIN, HIGH]`, códecs de audio `[AAC_ELD, OPUS]` y la escalera de resoluciones HAP estándar para todas las cámaras, eliminando las restricciones que bloqueaban la negociación de Live View en la app Casa de iOS/macOS.
+  - Se preservó el passthrough directo de vídeo (`-c:v copy`) y audio AAC (`-c:a copy`).
+
 ## [1.8.65] - 2026-09-23
 
 ### Validación de capacidades nativas HAP

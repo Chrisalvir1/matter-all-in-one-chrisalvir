@@ -4104,7 +4104,14 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       const isMotionState = newState.state === "on";
       for (const cam of this.entities.values()) {
         if (cam instanceof CameraEntity && cam.homekitAccessory) {
+          const isTapoC402Entity =
+            /tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle|tapo[-_ ]?frente|\bc402\b/i.test(entityId);
+          const isTapoC402Cam =
+            /tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle|tapo[-_ ]?frente|\bc402\b/i.test(`${cam.entityId} ${(cam.state?.attributes?.friendly_name || "")}`);
+          const isC402Match = isTapoC402Entity && isTapoC402Cam;
+
           const isLinked =
+            isC402Match ||
             cam.homekitAccessory.linkedMotionEntityId === entityId ||
             (this.ha.hassEntities.get(entityId)?.device_id &&
               this.ha.hassEntities.get(entityId)?.device_id ===
@@ -4151,7 +4158,14 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           entityId.includes("occupancy") ||
           entityId.includes("presence");
 
+        const isTapoC402Entity =
+          /tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle|tapo[-_ ]?frente|\bc402\b/i.test(`${entityId} ${entityFriendlyName}`);
+        const isTapoC402Cam =
+          /tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle|tapo[-_ ]?frente|\bc402\b/i.test(`${cuiId} ${camName}`);
+        const isC402Match = isTapoC402Entity && isTapoC402Cam && isMotionClass;
+
         const isLinked =
+          isC402Match ||
           linkedId === entityId ||
           (cleanCuiId.length >= 4 && cleanEntityId.includes(cleanCuiId)) ||
           (cleanCamName.length >= 3 && cleanEntityId.includes(cleanCamName)) ||

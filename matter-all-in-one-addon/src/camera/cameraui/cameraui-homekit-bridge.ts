@@ -208,7 +208,7 @@ export class CameraUiHomeKitBridge {
       supportsPassthrough: true,
       requiresBridge: true,
       metadata: {
-        isCameraUi: !isHomeAssistantSource,
+        isCameraUi: true,
         hasCameraMotion: true,
         capabilitiesProbedBeforePublish: isHomeAssistantSource,
         streamProvider: camera.sourceProvider || "camera_ui",
