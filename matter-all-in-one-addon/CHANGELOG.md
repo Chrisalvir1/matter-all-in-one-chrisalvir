@@ -1,3 +1,14 @@
+## [1.8.70] - 2026-09-23
+
+### Fix definitivo: Wyze, EZVIZ y Tapo C120 vuelven a sus rutas go2rtc correctas
+
+- **Causa raíz del 401 identificada y eliminada:**
+  - `CANONICAL_CUI_STREAMS` contenía los IDs de Wyze Patio Trasero (`cba17b87`), EZVIZ Patio Trasero (`4661fae4`) y Tapo C120 (`ec110a11`).
+  - `migrateLegacyBridgeStream()` usaba ese mapa para sobreescribir sus URLs con `rtsp://Admin:Anubis2026.@192.168.110.46:2101/cui_*`, que falla con `401 Unauthorized` porque Camera.UI/go2rtc no acepta esas credenciales.
+  - Esas 3 cámaras tienen rutas go2rtc correctas en `DEFAULT_CAMERAS` (sin credenciales, en `192.168.110.147:8554`) que ahora se preservan sin ser sobreescritas.
+- **Lógica de reintento 401 mejorada:** El reintento de credenciales alternativas solo actúa si la URL RTSP tiene credenciales embebidas. URLs sin credenciales (como las rutas go2rtc en `192.168.110.147:8554`) ya no desencadenan el reintento inútil.
+- **Tapo C402 no tocada:** Sigue usando `rtsp://192.168.110.147:62291/tapo-c402`.
+
 ## [1.8.69] - 2026-09-23
 
 ### Autenticación RTSP contra Camera.UI (Admin/Anubis2026) y estabilización del detector de movimiento de Tapo C402
