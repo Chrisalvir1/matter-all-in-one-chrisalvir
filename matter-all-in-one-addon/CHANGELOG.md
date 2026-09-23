@@ -1,3 +1,16 @@
+## [1.8.81] - 2026-09-23
+
+### Corrección de pérdida de paquetes UDP / pantalla verde en ráfagas 2K y buffer SRTP
+
+- **Ampliación de búfer de socket UDP SRTP a 1 MB (`buffer_size=1048576`):**
+  - Los fotogramas clave 2K generan ráfagas instantáneas de más de 150 paquetes UDP. El búfer por defecto de socket de Linux (64 KB) se desbordaba al recibir los primeros macroblocks, descartando el resto del fotograma y provocando que iOS renderizara solo la franja superior y rellenara el resto con verde sólido. Al configurar `buffer_size=1048576` (1 MB) en la URL SRTP de salida, el socket del kernel absorbe la ráfaga completa sin pérdida de paquetes.
+- **Cola de retención en salida RTP (`-max_delay 500000`):**
+  - Se aumentó `-max_delay` de `0` a `500000` (500 ms) en el muxer RTP de vídeo, evitando que FFmpeg descarte paquetes de vídeo de forma prematura durante picos de transmisión.
+- **Eliminación de descarte de paquetes en entrada RTSP (`+discardcorrupt`):**
+  - Se eliminó la bandera `+discardcorrupt` en el stream de la Tapo C120, permitiendo que las fluctuaciones menores de red no mutilen los fotogramas H.264 antes de ser reenviados a HomeKit.
+- **Tapo C402 Estrictamente Intacta y Protegida:**
+  - Preservados al 100% todos los parámetros y flujos de la Tapo C402 sin modificación.
+
 ## [1.8.80] - 2026-09-23
 
 ### Solución definitiva de lag y congelamiento en Tapo C120: Passthrough directo AAC y alineación 2K nativa

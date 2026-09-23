@@ -297,7 +297,7 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     expect(args).toContain("524288");
     expect(args).toContain("-analyzeduration");
     expect(args).toContain("1000000");
-    expect(args).toContain("+genpts+igndts+discardcorrupt");
+    expect(args).toContain("+genpts+igndts");
     expect(args).toContain("-max_interleave_delta");
     expect(args).toContain("100000");
     // Audio is direct copy passthrough to avoid timestamp desync

@@ -656,7 +656,7 @@ export class HomeKitCameraStreamingDelegate
     const host = formatHost(session.targetAddress);
     const videoUrl =
       `srtp://${host}:${session.videoPort}` +
-      `?rtcpport=${session.videoPort}&localrtcpport=${session.localVideoPort}&pkt_size=${mtu}`;
+      `?rtcpport=${session.videoPort}&localrtcpport=${session.localVideoPort}&pkt_size=${mtu}&buffer_size=1048576`;
 
     this.emit("session-start", session.sessionId);
     // Yield event loop without artificial delay so background listeners handle pause immediately
@@ -856,7 +856,7 @@ export class HomeKitCameraStreamingDelegate
     const host = formatHost(session.targetAddress);
     const videoUrl =
       `srtp://${host}:${session.videoPort}` +
-      `?rtcpport=${session.videoPort}&pkt_size=${mtu}`;
+      `?rtcpport=${session.videoPort}&pkt_size=${mtu}&buffer_size=1048576`;
 
     const isHaProxyStream =
       this.streamSource.sourceType === "ha_proxy" ||
@@ -914,7 +914,7 @@ export class HomeKitCameraStreamingDelegate
       } else if (isTapoC120) {
         args.push(
           "-fflags",
-          "+genpts+igndts+discardcorrupt",
+          "+genpts+igndts",
           "-flags",
           "0",
         );
@@ -1033,7 +1033,7 @@ export class HomeKitCameraStreamingDelegate
         "-fflags",
         "+nobuffer+flush_packets",
         "-max_delay",
-        "0",
+        "500000",
         "-max_interleave_delta",
         "100000",
         "-payload_type",
