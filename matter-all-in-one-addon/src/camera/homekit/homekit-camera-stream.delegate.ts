@@ -813,8 +813,6 @@ export class HomeKitCameraStreamingDelegate
       "-hide_banner",
       "-loglevel",
       "warning",
-      "-protocol_whitelist",
-      "pipe,udp,rtp,file,crypto,srtp,tcp,tls,http,https,lavfi",
     ];
 
     if (isHaProxyStream) {

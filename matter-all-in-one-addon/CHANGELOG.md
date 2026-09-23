@@ -1,3 +1,10 @@
+## [1.8.55] - 2026-09-22
+
+### Tapo C402 & HAP: Corrección definitiva de whitelist de protocolos FFmpeg y audio AAC-ELD
+
+- **Eliminación de `-protocol_whitelist` restrictivo:** Se eliminó la restricción artificial de protocolos en los argumentos de streaming de FFmpeg que omitía `rtsp` y `rtsps`, provocando que FFmpeg abortara inmediatamente con error al intentar conectarse al flujo RTSP de la cámara y dejando a Apple Home sin paquetes de vídeo ("Sin respuesta").
+- **Anuncio incondicional de codec de audio `AAC-ELD`:** Se asegura que `AudioStreamingCodecType.AAC_ELD` (16kHz y 24kHz) se anuncie siempre a Apple HomeKit independientemente de la presencia de `libfdk_aac`, cumpliendo con el requisito mandatorio de audio HAP para visualización en directo en iOS y macOS.
+
 ## [1.8.54] - 2026-09-22
 
 ### Tapo C402 & HAP: Corrección de perfil H.264 Baseline, escalera de resoluciones y optimización de sondeo FFmpeg

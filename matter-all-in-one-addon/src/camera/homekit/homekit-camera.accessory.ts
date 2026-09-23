@@ -338,6 +338,14 @@ export class HomeKitCameraAccessory {
     const hasFdk = supportsFdkAac();
     const audioCodecs = [
       {
+        type: AudioStreamingCodecType.AAC_ELD,
+        samplerate: AudioStreamingSamplerate.KHZ_16,
+      },
+      {
+        type: AudioStreamingCodecType.AAC_ELD,
+        samplerate: AudioStreamingSamplerate.KHZ_24,
+      },
+      {
         type: AudioStreamingCodecType.OPUS,
         samplerate: AudioStreamingSamplerate.KHZ_16,
       },
@@ -345,18 +353,6 @@ export class HomeKitCameraAccessory {
         type: AudioStreamingCodecType.OPUS,
         samplerate: AudioStreamingSamplerate.KHZ_24,
       },
-      ...(hasFdk
-        ? [
-            {
-              type: AudioStreamingCodecType.AAC_ELD,
-              samplerate: AudioStreamingSamplerate.KHZ_16,
-            },
-            {
-              type: AudioStreamingCodecType.AAC_ELD,
-              samplerate: AudioStreamingSamplerate.KHZ_24,
-            },
-          ]
-        : []),
     ];
 
     const options: CameraControllerOptions = {
