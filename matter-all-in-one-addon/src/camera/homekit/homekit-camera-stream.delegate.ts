@@ -684,8 +684,6 @@ export class HomeKitCameraStreamingDelegate
     const mtu = video.mtu || 1378;
 
     const args = this.buildStreamArgs(session, request, forceTranscode);
-    const isTapoC402 = /(?:\bc402\b|tapo[-_ ]?c402)/i.test(sourceUrl || "");
-
     this.platform?.log?.notice?.(
       `[HomeKitCamera][${this.entityId}] HAP START ${video.width}x${video.height}@${fps} transcode=${forceTranscode} profile=${h264Profile(video.profile)} level=${h264Level(video.level)} mtu=${mtu} source=${sanitizeUrlCredentials(sourceUrl || "")} ffmpeg=${ffmpegPath} ${getFfmpegVersion(ffmpegPath) || "unknown"}`,
     );
@@ -702,7 +700,7 @@ export class HomeKitCameraStreamingDelegate
       const process = spawn(ffmpegPath, args, {
         stdio: [
           isHaProxyStream ? "pipe" : "ignore",
-          isTapoC402 ? "pipe" : "ignore",
+          "ignore",
           "pipe",
         ],
       });
@@ -711,88 +709,34 @@ export class HomeKitCameraStreamingDelegate
         this.startHaCameraProxyPipe(session, process, sourceUrl);
       }
       let stderr = "";
-      let progress = "";
-      let startupTimer: NodeJS.Timeout | undefined;
-      let startupConfirmed = false;
-      process.stdout?.on("data", (chunk: Buffer) => {
-        if (!isTapoC402 || startupConfirmed) return;
-        progress = `${progress}${chunk.toString()}`.slice(-2048);
-        for (const match of progress.matchAll(/(?:^|\n)frame=\s*(\d+)/g)) {
-          if (Number(match[1]) > 0) {
-            startupConfirmed = true;
-            if (startupTimer) clearTimeout(startupTimer);
-            this.platform?.log?.notice?.(
-              `[HomeKitCamera][${this.entityId}] C402 HAP startup confirmed by first video frame`,
-            );
-            settle();
-            break;
-          }
-        }
-      });
       process.stderr?.on("data", (chunk: Buffer) => {
         stderr = `${stderr}${chunk.toString()}`.slice(-6000);
       });
-      // Only confirm C402 to HomeKit after FFmpeg reports a real video frame.
-      // The old 80ms process-only test reported success while the preview stayed
-      // black because FFmpeg had not decoded or emitted any media yet.
       const guard = setTimeout(() => {
-        if (!isTapoC402 && process.exitCode === null && !process.killed) {
+        if (process.exitCode === null && !process.killed) {
           this.platform?.log?.notice?.(
             `[HomeKitCamera][${this.entityId}] HAP START callback success; FFmpeg active session=${session.sessionId}`,
           );
           settle();
-        } else if (!isTapoC402) {
+        } else {
           settle(new Error("FFmpeg exited during HAP startup"));
         }
       }, 80);
-      if (isTapoC402) {
-        clearTimeout(guard);
-        startupTimer = setTimeout(() => {
-          if (startupConfirmed) return;
-          this.platform?.log?.error?.(
-            `[HomeKitCamera][${this.entityId}] FFmpeg produced no C402 video frame within 6s; restarting the RTSP passthrough once`,
-          );
-          try {
-            process.kill("SIGTERM");
-          } catch {}
-        }, 6000);
-      }
       process.once("error", (error) => {
         clearTimeout(guard);
-        if (startupTimer) clearTimeout(startupTimer);
         settle(error);
       });
       process.once("close", (code) => {
         clearTimeout(guard);
-        if (startupTimer) clearTimeout(startupTimer);
         session.process = undefined;
         this.platform?.log?.warn?.(
           `[HomeKitCamera][${this.entityId}] FFmpeg closed code=${code} ${stderr.trim()}`,
         );
 
-        // The HA satellite can accept RTSP before a decodable H.264 keyframe
-        // (SPS/PPS) arrives. For the C402 only, retry the same passthrough
-        // session once if the first process never emitted a video frame. Do
-        // not transcode: that would break the requested native 2K path.
-        if (
-          isTapoC402 &&
-          !startupConfirmed &&
-          !session.retried &&
-          this.activeSessions.has(session.sessionId)
-        ) {
-          session.retried = true;
-          this.platform?.log?.notice?.(
-            `[HomeKitCamera][${this.entityId}] Retrying C402 RTSP passthrough after startup without a decodable frame`,
-          );
-          this.spawnFfmpegProcess(session, request, settle, false);
-          return;
-        }
-
         // Automatic fallback recovery: if initial attempt failed (e.g. missing audio track or incompatible passthrough),
         // retry immediately with safe transcoding and/or silent audio fallback
         if (
           code !== 0 &&
-          !isTapoC402 &&
           !session.retried &&
           this.activeSessions.has(session.sessionId)
         ) {
@@ -865,12 +809,6 @@ export class HomeKitCameraStreamingDelegate
         (sourceUrl.includes("/api/camera_proxy_stream/") ||
           sourceUrl.includes("/api/camera_proxy/")),
       );
-    // Camera.UI/go2rtc can accept RTSP before its next keyframe is available.
-    // A 32 KiB / zero-duration probe then exits with "non-existing PPS" after
-    // HAP has already accepted the Live View request.  C402 needs a complete
-    // GOP to join reliably; video remains strict H.264 passthrough.
-    const isTapoC402 = /(?:\bc402\b|tapo[-_ ]?c402)/i.test(sourceUrl);
-
     const args: string[] = [
       "-hide_banner",
       "-loglevel",
@@ -878,9 +816,6 @@ export class HomeKitCameraStreamingDelegate
       "-protocol_whitelist",
       "pipe,udp,rtp,file,crypto,srtp,tcp,tls,http,https,lavfi",
     ];
-    if (isTapoC402) {
-      args.push("-progress", "pipe:1", "-stats_period", "0.25");
-    }
 
     if (isHaProxyStream) {
       args.push("-f", "image2pipe", "-c:v", "png", "-r", "15", "-i", "pipe:0");
@@ -894,17 +829,15 @@ export class HomeKitCameraStreamingDelegate
         "-timeout",
         "10000000",
         "-probesize",
-        isTapoC402 ? "2097152" : "524288",
+        "524288",
         "-analyzeduration",
-        isTapoC402 ? "3000000" : "500000",
+        "500000",
         "-fpsprobesize",
-        isTapoC402 ? "10" : "5",
+        "5",
         "-fflags",
-        isTapoC402
-          ? "+genpts+igndts+discardcorrupt"
-          : "+nobuffer+flush_packets+genpts+discardcorrupt",
+        "+nobuffer+flush_packets+genpts+discardcorrupt",
         "-flags",
-        isTapoC402 ? "0" : "low_delay",
+        "low_delay",
         "-thread_queue_size",
         "1024",
         "-i",

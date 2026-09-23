@@ -247,16 +247,25 @@ export function repairCameraRecord(cam: CameraUiCameraRecord): {
     cam.videoCodec = "h264";
     cam.strategy = "passthrough_h264";
   }
-  // Tapo C402: 2304x1296 2K 3MP H264
+  // Tapo C402: 2K QHD 2560x1440@30 H264
   else if (url.includes("tapo-c402") || name.includes("c402")) {
     const targetUrl = "rtsp://192.168.110.147:62291/tapo-c402";
     if (cam.rtspUrl !== targetUrl) {
       cam.rtspUrl = targetUrl;
       modified = true;
     }
-    cam.width = 2304;
-    cam.height = 1296;
-    cam.fps = 15;
+    if (!cam.width || cam.width < 1920) {
+      cam.width = 2560;
+      modified = true;
+    }
+    if (!cam.height || cam.height < 1080) {
+      cam.height = 1440;
+      modified = true;
+    }
+    if (!cam.fps || cam.fps < 15) {
+      cam.fps = 30;
+      modified = true;
+    }
     cam.videoCodec = "h264";
     cam.strategy = "passthrough_h264";
     if (!cam.realEntities?.some(e => e.id === "binary_sensor.omni_ai_sensors_persona_tapo_c402")) {
@@ -834,9 +843,9 @@ export const DEFAULT_CAMERAS: CameraUiCameraRecord[] = [
     rtspUrl: "rtsp://192.168.110.147:62291/tapo-c402",
     snapshotUrl: "https://192.168.110.46:3543/api/cameras/TAPO%20C402/snapshot",
     hasAudio: true,
-    width: 2304,
-    height: 1296,
-    fps: 15,
+    width: 2560,
+    height: 1440,
+    fps: 30,
     videoCodec: "h264",
     strategy: "passthrough_h264",
     motionTopic: "camera.ui/tapo_c402/motion",

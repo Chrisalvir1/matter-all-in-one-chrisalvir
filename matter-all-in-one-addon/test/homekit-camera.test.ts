@@ -152,12 +152,11 @@ describe("HomeKitCameraAccessory production HAP graph", () => {
       rtspSource,
     );
 
-    expect((accessory as any).buildDeclaredResolutions()).toEqual([
-      [2560, 1440, 20],
-    ]);
+    const declared = (accessory as any).buildDeclaredResolutions();
+    expect(declared[0]).toEqual([2560, 1440, 20]);
     const options = (accessory as any).buildControllerOptions();
-    expect(options.streamingOptions.video.resolutions).toEqual([
-      [2560, 1440, 20],
+    expect(options.streamingOptions.video.resolutions[0]).toEqual([
+      2560, 1440, 20,
     ]);
   });
 
@@ -401,7 +400,7 @@ describe("HomeKitCameraStreamingDelegate", () => {
     ).toThrow("Cámara no entrega H.264 nativo; transcodificación no permitida");
   });
 
-  it("waits for a complete SPS/PPS GOP for Tapo C402 Live View", () => {
+  it("builds low-latency RTSP passthrough args for Tapo C402 Live View", () => {
     const delegate = new HomeKitCameraStreamingDelegate(
       createPlatform(),
       "camera.tapo_c402",
@@ -434,11 +433,11 @@ describe("HomeKitCameraStreamingDelegate", () => {
     expect(args).toContain("copy");
     expect(args).not.toContain("libx264");
     expect(args).not.toContain("-vf");
-    expect(args).toContain("2097152");
-    expect(args).toContain("3000000");
-    expect(args).toContain("-progress");
-    expect(args).toContain("pipe:1");
-    expect(args).toContain("+genpts+igndts+discardcorrupt");
+    expect(args).toContain("524288");
+    expect(args).toContain("500000");
+    expect(args).not.toContain("-progress");
+    expect(args).not.toContain("pipe:1");
+    expect(args).toContain("+nobuffer+flush_packets+genpts+discardcorrupt");
     expect(args).not.toContain("-avioflags");
   });
 });

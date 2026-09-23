@@ -1,6 +1,10 @@
 ## [1.8.52] - 2026-09-22
 
-- Tapo C402: retry once with the same native RTSP/H.264 passthrough if FFmpeg fails to deliver its first video frame during HomeKit startup. This recovery applies only to the C402 and does not transcode the source.
+### Tapo C402: Live View instantáneo, soporte 2K nativo HAP/HKSV y activación de detección de movimiento
+
+- **Live View instantáneo sin "Sin respuesta":** Se eliminó el retraso y timeout artificial de 6s en el handshake HAP de la Tapo C402. Se restauró la confirmación HAP inmediata (80ms) y los parámetros RTSP de baja latencia (`-probesize 524288`, `-analyzeduration 500000`, `low_delay`), permitiendo que el stream inicie en HomeKit de inmediato.
+- **Soporte nativo 2K en HAP y HKSV (compatible con iOS 27 / tvOS 27):** Se anuncian resoluciones 2K nativas (2560x1440 / 2304x1296) en primer lugar de la escalera tanto para streaming como para grabación HKSV, junto a los perfiles `BASELINE`, `MAIN` y `HIGH` exigidos por Apple Home. Se preserva la resolución nativa de 2560x1440@30 sin forzar reducciones a 2304x1296.
+- **Detección de movimiento inmediata:** `FfmpegMotionDetector` ahora se activa automáticamente tan pronto como la cámara se empareja (`paired` event) o si el registro ya estaba emparejado, enviando eventos de movimiento a Apple Home para iniciar grabaciones HKSV en iCloud.
 
 ## [1.8.51] - 2026-09-22
 

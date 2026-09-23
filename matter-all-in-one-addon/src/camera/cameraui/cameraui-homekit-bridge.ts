@@ -368,7 +368,7 @@ export class CameraUiHomeKitBridge {
       // A recording-active/configured callback can only come from a Home Hub.
       // Trust it even when the persisted paired flag is stale after an add-on
       // restart; otherwise C402/EZVIZ/Wyze never regain their detector.
-      if (!confirmedByHomeHub && !accessory.isPaired()) return;
+      if (!confirmedByHomeHub && !accessory.isPaired() && !camera.isPaired) return;
       if (!camera.rtspUrl || this.activeMotionDetectors.has(camera.id)) return;
       try {
         const cameraIdentity =
@@ -439,6 +439,16 @@ export class CameraUiHomeKitBridge {
       startLocalMotionFallback(true);
     });
 
+    try {
+      accessory.accessory?.on?.("paired", () => {
+        platform?.log?.notice?.(
+          `[Camera.UI][${camera.name}] Cámara emparejada en Apple Home; iniciando detector de movimiento FFmpeg local`,
+        );
+        camera.isPaired = true;
+        startLocalMotionFallback(true);
+      });
+    } catch {}
+
     // Apple Home may not re-send recording-active after an add-on restart. In
     // that case HAP's pairing lookup can also be briefly unavailable even for
     // an already paired accessory. Restore only a *previously marked* paired
@@ -447,7 +457,7 @@ export class CameraUiHomeKitBridge {
     // native event path is absent in this installation, while the detector
     // pauses whenever Live View starts so its working stream is not changed.
     if (
-      (wasMarkedPairedBeforePublish || accessory.isPaired()) &&
+      (wasMarkedPairedBeforePublish || accessory.isPaired() || camera.isPaired) &&
       camera.rtspUrl &&
       isRtspSource
     ) {
@@ -456,7 +466,7 @@ export class CameraUiHomeKitBridge {
           platform?.log?.notice?.(
             `[Camera.UI][${camera.name}] Recuperando detector de movimiento FFmpeg para cámara ya pareada`,
           );
-          startLocalMotionFallback(wasMarkedPairedBeforePublish);
+          startLocalMotionFallback(true);
         }
       }, 8_000);
       // Clean up the timer if the accessory is unpublished before it fires
