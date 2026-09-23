@@ -1,3 +1,11 @@
+## [1.8.58] - 2026-09-22
+
+### Restauración de compatibilidad v1.8.51 para Wyze, EZVIZ y Tapo C120 manteniendo Tapo C402 aislado
+
+- **Restauración exacta de negociación de audio para Wyze, EZVIZ y Tapo C120:** Se restaura la prioridad estricta de códec OPUS primero para todas las cámaras excepto Tapo C402. En versiones intermedias, el anuncio incondicional de AAC-ELD provocaba que Apple Home solicitara AAC-ELD a cámaras passthrough sin compatibilidad de audio nativo, bloqueando el pipeline de streaming. Wyze, EZVIZ y Tapo C120 vuelven a negociar OPUS de forma idéntica a la versión v1.8.51.
+- **Restauración de parámetros de sondeo FFmpeg de v1.8.51:** Se restablecen el `timeout` de 10s (`10000000`), `probesize` de 2MB (`2097152`) y `analyzeduration` de 3s (`3000000`) en `ffmpeg-helper.ts` para garantizar la detección confiable de flujos RTSP con GOPs largos o arranque lento en cámaras Wyze y EZVIZ.
+- **Aislamiento preservado para Tapo C402:** Tapo C402 mantiene intactas sus correcciones: URL directa de Home Assistant, anuncio preferente de AAC-ELD, soporte de perfiles Baseline/Main/High, escalera de resoluciones 2K nativa y detector de movimiento con resolución flexible de ID de entidad.
+
 ## [1.8.57] - 2026-09-22
 
 ### Tapo C402: Robustez en resolución de identificadores de movimiento y HKSV

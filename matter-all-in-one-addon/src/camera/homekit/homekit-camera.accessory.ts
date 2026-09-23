@@ -341,28 +341,47 @@ export class HomeKitCameraAccessory {
     // passthrough: they must advertise only profiles, resolutions and audio
     // encoders the existing stream pipeline can actually deliver.
     const isTapoC402 = this.isTapoC402();
-    const audioCodecs = [
-      ...(isTapoC402 || hasFdk
-        ? [
-            {
-              type: AudioStreamingCodecType.AAC_ELD,
-              samplerate: AudioStreamingSamplerate.KHZ_16,
-            },
-            {
-              type: AudioStreamingCodecType.AAC_ELD,
-              samplerate: AudioStreamingSamplerate.KHZ_24,
-            },
-          ]
-        : []),
-      {
-        type: AudioStreamingCodecType.OPUS,
-        samplerate: AudioStreamingSamplerate.KHZ_16,
-      },
-      {
-        type: AudioStreamingCodecType.OPUS,
-        samplerate: AudioStreamingSamplerate.KHZ_24,
-      },
-    ];
+    const audioCodecs = isTapoC402
+      ? [
+          {
+            type: AudioStreamingCodecType.AAC_ELD,
+            samplerate: AudioStreamingSamplerate.KHZ_16,
+          },
+          {
+            type: AudioStreamingCodecType.AAC_ELD,
+            samplerate: AudioStreamingSamplerate.KHZ_24,
+          },
+          {
+            type: AudioStreamingCodecType.OPUS,
+            samplerate: AudioStreamingSamplerate.KHZ_16,
+          },
+          {
+            type: AudioStreamingCodecType.OPUS,
+            samplerate: AudioStreamingSamplerate.KHZ_24,
+          },
+        ]
+      : [
+          {
+            type: AudioStreamingCodecType.OPUS,
+            samplerate: AudioStreamingSamplerate.KHZ_16,
+          },
+          {
+            type: AudioStreamingCodecType.OPUS,
+            samplerate: AudioStreamingSamplerate.KHZ_24,
+          },
+          ...(hasFdk
+            ? [
+                {
+                  type: AudioStreamingCodecType.AAC_ELD,
+                  samplerate: AudioStreamingSamplerate.KHZ_16,
+                },
+                {
+                  type: AudioStreamingCodecType.AAC_ELD,
+                  samplerate: AudioStreamingSamplerate.KHZ_24,
+                },
+              ]
+            : []),
+        ];
 
     const options: CameraControllerOptions = {
       cameraStreamCount: 2,

@@ -380,11 +380,11 @@ function probeWithFfprobe(
         "-rtsp_transport",
         rtspTransport,
         "-timeout",
-        "5000000",
+        "10000000",
         "-probesize",
-        "524288",
+        "2097152",
         "-analyzeduration",
-        "1000000",
+        "3000000",
       );
     } else if (
       sourceUrl.startsWith("http://") ||
@@ -529,9 +529,9 @@ function probeWithFfmpeg(
     const args = [
       "-hide_banner",
       "-probesize",
-      "524288",
+      "2097152",
       "-analyzeduration",
-      "1000000",
+      "3000000",
     ];
 
     if (
@@ -547,7 +547,7 @@ function probeWithFfmpeg(
         "-rtsp_transport",
         rtspTransport,
         "-timeout",
-        "5000000",
+        "10000000",
       );
     } else if (
       sourceUrl.startsWith("http://") ||
