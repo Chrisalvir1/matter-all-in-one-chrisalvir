@@ -1,3 +1,10 @@
+## [1.8.59] - 2026-09-22
+
+### Tapo C402: Detección instantánea de vehículos, muestreo a 2 FPS y enlace de sensores de Home Assistant
+
+- **Sensibilidad y muestreo de movimiento mejorados (2 FPS / umbral 1%):** Se aumentó la frecuencia de análisis de movimiento a 2 fotogramas por segundo (2 FPS) y se ajustó el umbral de activación a 1% de cambio de píxeles (`pblack <= 99`) para la Tapo C402 en `cameraui-homekit-bridge.ts`. Esto permite capturar vehículos en movimiento rápido o a distancia que en 1 FPS pasaban entre fotogramas o se descartaban con un cambio del 1% como reposo.
+- **Enlace y alias extendidos para sensores de vehículos y personas de Home Assistant:** Se agregaron alias `tapo_c402`, `c402`, `tapo_frente`, `frente` y se registraron en el almacenamiento de Camera.UI las entidades `binary_sensor.omni_ai_sensors_mac_mac_vehiculo_tapo_frente_de_calle` y `binary_sensor.omni_ai_sensors_vehiculo_tapo_c402`. Cualquier detección de vehículo o persona en Home Assistant ahora dispara inmediatamente el evento de movimiento en HomeKit y la grabación HKSV en iCloud.
+
 ## [1.8.58] - 2026-09-22
 
 ### Restauración de compatibilidad v1.8.51 para Wyze, EZVIZ y Tapo C120 manteniendo Tapo C402 aislado

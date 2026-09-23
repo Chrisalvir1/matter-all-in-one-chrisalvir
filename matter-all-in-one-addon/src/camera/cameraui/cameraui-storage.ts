@@ -268,19 +268,43 @@ export function repairCameraRecord(cam: CameraUiCameraRecord): {
     }
     cam.videoCodec = "h264";
     cam.strategy = "passthrough_h264";
-    if (!cam.realEntities?.some(e => e.id === "binary_sensor.omni_ai_sensors_persona_tapo_c402")) {
-      cam.realEntities = [
-        ...(cam.realEntities || []),
-        {
-          id: "binary_sensor.omni_ai_sensors_persona_tapo_c402",
-          domain: "binary_sensor",
-          type: "motion",
-          name: "Omni AI Sensors persona_tapo_C402",
-          state: false,
-          matterExported: false,
-        },
-      ];
-      modified = true;
+    const knownC402Sensors = [
+      {
+        id: "binary_sensor.omni_ai_sensors_persona_tapo_c402",
+        name: "Omni AI Sensors persona_tapo_C402",
+      },
+      {
+        id: "binary_sensor.omni_ai_sensors_mac_mac_persona_tapo_frente_de_calle",
+        name: "Omni AI Sensors - Mac MAC - Persona - TAPO-FRENTE DE CALLE",
+      },
+      {
+        id: "binary_sensor.omni_ai_sensors_mac_mac_mascota_tapo_frente_de_calle",
+        name: "Omni AI Sensors - Mac MAC - Mascota - TAPO-FRENTE DE CALLE",
+      },
+      {
+        id: "binary_sensor.omni_ai_sensors_mac_mac_vehiculo_tapo_frente_de_calle",
+        name: "Omni AI Sensors - Mac MAC - Vehiculo - TAPO-FRENTE DE CALLE",
+      },
+      {
+        id: "binary_sensor.omni_ai_sensors_vehiculo_tapo_c402",
+        name: "Omni AI Sensors vehiculo_tapo_C402",
+      },
+    ];
+    for (const sensor of knownC402Sensors) {
+      if (!cam.realEntities?.some(e => e.id === sensor.id)) {
+        cam.realEntities = [
+          ...(cam.realEntities || []),
+          {
+            id: sensor.id,
+            domain: "binary_sensor",
+            type: "motion",
+            name: sensor.name,
+            state: false,
+            matterExported: false,
+          },
+        ];
+        modified = true;
+      }
     }
   }
   // Tapo C120 ("TAPO-SPOT"): 1080p H264 — real source via go2rtc tapo_c120 stream
@@ -886,6 +910,14 @@ export const DEFAULT_CAMERAS: CameraUiCameraRecord[] = [
         domain: "binary_sensor",
         type: "motion",
         name: "Omni AI Sensors - Mac MAC - Mascota - TAPO-FRENTE DE CALLE",
+        state: false,
+        matterExported: false,
+      },
+      {
+        id: "binary_sensor.omni_ai_sensors_mac_mac_vehiculo_tapo_frente_de_calle",
+        domain: "binary_sensor",
+        type: "motion",
+        name: "Omni AI Sensors - Mac MAC - Vehiculo - TAPO-FRENTE DE CALLE",
         state: false,
         matterExported: false,
       },

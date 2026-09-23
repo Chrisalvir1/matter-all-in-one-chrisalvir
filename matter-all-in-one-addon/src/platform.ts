@@ -425,7 +425,16 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
     // TAPO C402 / Frente de calle
     if (raw.includes("c402") || (raw.includes("tapo") && !raw.includes("c120") && !raw.includes("spot"))) {
-      aliases.push("tapo_frente_de_calle", "frente_de_calle", "frente calle", "frentedecalle");
+      aliases.push(
+        "tapo_frente_de_calle",
+        "frente_de_calle",
+        "frente calle",
+        "frentedecalle",
+        "tapo_c402",
+        "c402",
+        "tapo_frente",
+        "frente",
+      );
     }
 
     // Tapo C120 / Tapo Spot

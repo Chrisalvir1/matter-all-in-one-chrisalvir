@@ -392,14 +392,15 @@ export class CameraUiHomeKitBridge {
           // route no longer exists; that made the detector silently retry and
           // left HomeKit without MotionDetected even though Live View worked.
           rtspUrl: camera.rtspUrl,
-          changeThresholdPercent: needsDetailedMotionAnalysis ? 2 : 4,
-          cooldownMs: 4000,
+          changeThresholdPercent: needsDetailedMotionAnalysis ? 1 : 4,
+          cooldownMs: 2500,
           resetMs: 15000,
           ...(needsDetailedMotionAnalysis
             ? {
                 analysisWidth: 320,
                 analysisHeight: 180,
                 pixelDifferenceThreshold: 8,
+                fps: 2,
                 reportAllFrameChanges: true,
               }
             : {}),

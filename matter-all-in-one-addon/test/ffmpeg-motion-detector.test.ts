@@ -44,4 +44,31 @@ describe("motion reporting", () => {
     expect(motion).not.toHaveBeenCalled();
     detector.stop();
   });
+
+  it("detects subtle vehicle motion with fps=2 and changeThresholdPercent=1", () => {
+    const process = Object.assign(new EventEmitter(), { stderr: new EventEmitter(), kill: vi.fn() });
+    vi.mocked(spawn).mockReturnValue(process as any);
+    const detector = new FfmpegMotionDetector({
+      cameraId: "c402",
+      cameraName: "Tapo C402",
+      rtspUrl: "rtsp://example/live",
+      changeThresholdPercent: 1,
+      fps: 2,
+      analysisWidth: 320,
+      analysisHeight: 180,
+      pixelDifferenceThreshold: 8,
+      reportAllFrameChanges: true,
+    });
+    const motion = vi.fn();
+    detector.on("motion", motion);
+    detector.start();
+    const args = vi.mocked(spawn).mock.calls[0][1] as string[];
+    expect(args[args.indexOf("-vf") + 1]).toBe(
+      "fps=2,scale=320:180,format=gray,tblend=all_mode=difference,blackframe=amount=0:thresh=8",
+    );
+    // 1% change (pblack:99) triggers motion
+    process.stderr.emit("data", Buffer.from("frame:1 pblack:99 pts:1\n"));
+    expect(motion).toHaveBeenCalledWith(true);
+    detector.stop();
+  });
 });
