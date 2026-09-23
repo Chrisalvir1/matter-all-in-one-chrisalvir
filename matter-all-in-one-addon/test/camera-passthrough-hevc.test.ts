@@ -294,10 +294,10 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     expect(args).not.toContain("libx265");
     // Probe sizes and flags for Tapo C120
     expect(args).toContain("-probesize");
-    expect(args).toContain("524288");
+    expect(args).toContain("32768");
     expect(args).toContain("-analyzeduration");
-    expect(args).toContain("1000000");
-    expect(args).toContain("+genpts+igndts");
+    expect(args).toContain("0");
+    expect(args).toContain("+nobuffer+flush_packets+genpts+igndts");
     expect(args).toContain("-max_interleave_delta");
     expect(args).toContain("100000");
     // Audio is direct copy passthrough to avoid timestamp desync

@@ -1,3 +1,10 @@
+## [1.8.83] - 2026-09-23
+
+### Sincronización de pruebas unitarias CI (Build and Test)
+
+- **Actualización de pruebas unitarias en `camera-passthrough-hevc.test.ts`:**
+  - Sincronizadas las expectativas de pruebas para Tapo C120 con los nuevos valores de producción: `probesize 32768`, `analyzeduration 0` y `+nobuffer+flush_packets+genpts+igndts`. Corrige el fallo del workflow de GitHub Actions `Build and Test`.
+
 ## [1.8.82] - 2026-09-23
 
 ### Corrección definitiva pantalla verde/congelado C120 + carga lenta Wyze/EZVIZ
