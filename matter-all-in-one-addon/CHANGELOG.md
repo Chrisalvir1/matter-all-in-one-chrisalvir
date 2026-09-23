@@ -1,3 +1,18 @@
+## [1.8.79] - 2026-09-23
+
+### Solución al congelamiento cada 10 segundos y pantalla de carga en Tapo C120
+
+- **Eliminación del límite de entrelazado de 10 segundos (`max_interleave_delta`):**
+  - Se configuró `-max_interleave_delta 100000` (100 ms) tanto en la salida de vídeo como de audio RTP. Por defecto, FFmpeg utiliza un búfer de entrelazado de 10 segundos (`10,000,000 µs`), lo que provocaba que el vídeo se detuviera y congelara exactamente cada 10 segundos esperando sincronización de paquetes de audio o fluctuaciones temporales de la cámara RTSP.
+- **Sondeo Robusto y Decodificación Fiable de 2K idéntica a Tapo C402:**
+  - Se aplicaron a la Tapo C120 los parámetros de entrada probados y estables de la Tapo C402: `probesize 2097152`, `analyzeduration 3000000`, `fpsprobesize 10`, `-fflags +genpts+igndts+discardcorrupt` (sin `+nobuffer` que provocaba pérdida de paquetes UDP en ráfagas de fotogramas clave 2K causando pantalla verde/rueda de carga) y `-flags 0`.
+- **Confirmación de Inicio HAP en Primer Fotograma de Vídeo:**
+  - Se integró la Tapo C120 en el listener `-progress pipe:1` de FFmpeg para notificar la inicialización del stream a HomeKit únicamente cuando el primer fotograma de vídeo (`frame= 1`) haya sido recibido y emitido, eliminando el fallo prematuro por timeout o inicio en falso.
+- **Tapo C402 Estrictamente Protegida e Intacta:**
+  - Ninguna línea de configuración o flujo de la Tapo C402 fue modificada.
+- **Wyze y EZVIZ Totalmente Intactas:**
+  - Se mantiene intacto el comportamiento y configuración de las cámaras Wyze y EZVIZ.
+
 ## [1.8.78] - 2026-09-23
 
 ### Corrección definitiva del congelamiento de vídeo en Live View para Tapo C120

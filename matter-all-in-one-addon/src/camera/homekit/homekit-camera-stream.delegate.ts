@@ -685,6 +685,10 @@ export class HomeKitCameraStreamingDelegate
 
     const args = this.buildStreamArgs(session, request, forceTranscode);
     const isTapoC402 = /(?:\bc402\b|tapo[-_ ]?c402)/i.test(sourceUrl || "");
+    const isTapoC120 = /(?:\bc120\b|tapo[-_ ]?c120)/i.test(
+      `${this.entityId} ${sourceUrl || ""} ${this.streamSource.metadata?.name || ""}`,
+    );
+    const isTapoCamera = isTapoC402 || isTapoC120;
 
     this.platform?.log?.notice?.(
       `[HomeKitCamera][${this.entityId}] HAP START ${video.width}x${video.height}@${fps} transcode=${forceTranscode} profile=${h264Profile(video.profile)} level=${h264Level(video.level)} mtu=${mtu} source=${sanitizeUrlCredentials(sourceUrl || "")} ffmpeg=${ffmpegPath} ${getFfmpegVersion(ffmpegPath) || "unknown"}`,
@@ -702,7 +706,7 @@ export class HomeKitCameraStreamingDelegate
       const process = spawn(ffmpegPath, args, {
         stdio: [
           isHaProxyStream ? "pipe" : "ignore",
-          isTapoC402 ? "pipe" : "ignore",
+          isTapoCamera ? "pipe" : "ignore",
           "pipe",
         ],
       });
@@ -715,14 +719,14 @@ export class HomeKitCameraStreamingDelegate
       let startupTimer: NodeJS.Timeout | undefined;
       let startupConfirmed = false;
       process.stdout?.on("data", (chunk: Buffer) => {
-        if (!isTapoC402 || startupConfirmed) return;
+        if (!isTapoCamera || startupConfirmed) return;
         progress = `${progress}${chunk.toString()}`.slice(-2048);
         for (const match of progress.matchAll(/(?:^|\n)frame=\s*(\d+)/g)) {
           if (Number(match[1]) > 0) {
             startupConfirmed = true;
             if (startupTimer) clearTimeout(startupTimer);
             this.platform?.log?.notice?.(
-              `[HomeKitCamera][${this.entityId}] C402 HAP startup confirmed by first video frame`,
+              `[HomeKitCamera][${this.entityId}] ${isTapoC402 ? "C402" : "C120"} HAP startup confirmed by first video frame`,
             );
             settle();
             break;
@@ -878,7 +882,7 @@ export class HomeKitCameraStreamingDelegate
       "-protocol_whitelist",
       "pipe,udp,rtp,file,crypto,srtp,tcp,tls,http,https,lavfi,rtsp,rtsps",
     ];
-    if (isTapoC402) {
+    if (isTapoC402 || isTapoC120) {
       args.push("-progress", "pipe:1", "-stats_period", "0.25");
     }
 
@@ -894,23 +898,16 @@ export class HomeKitCameraStreamingDelegate
         "-timeout",
         "10000000",
         "-probesize",
-        isTapoC402 ? "2097152" : isTapoC120 ? "524288" : "65536",
+        isTapoC402 || isTapoC120 ? "2097152" : "65536",
         "-analyzeduration",
-        isTapoC402 ? "3000000" : isTapoC120 ? "500000" : "100000",
+        isTapoC402 || isTapoC120 ? "3000000" : "100000",
       );
-      if (isTapoC402) {
+      if (isTapoC402 || isTapoC120) {
         args.push(
           "-fpsprobesize",
           "10",
           "-fflags",
           "+genpts+igndts+discardcorrupt",
-          "-flags",
-          "0",
-        );
-      } else if (isTapoC120) {
-        args.push(
-          "-fflags",
-          "+nobuffer+flush_packets+genpts+igndts+discardcorrupt",
           "-flags",
           "0",
         );
@@ -1024,14 +1021,14 @@ export class HomeKitCameraStreamingDelegate
         // first received GOP instead of waiting for a later camera keyframe.
         "-bsf:v",
         "dump_extra=freq=keyframe",
-        "-avoid_negative_ts",
-        "make_zero",
         "-f",
         "rtp",
         "-fflags",
         "+nobuffer+flush_packets",
         "-max_delay",
         "0",
+        "-max_interleave_delta",
+        "100000",
         "-payload_type",
         String(video.pt || 99),
         "-ssrc",
@@ -1160,6 +1157,8 @@ export class HomeKitCameraStreamingDelegate
           "+nobuffer+flush_packets",
           "-max_delay",
           "0",
+          "-max_interleave_delta",
+          "100000",
           "-payload_type",
           String(request.audio.pt || 110),
           "-ssrc",
