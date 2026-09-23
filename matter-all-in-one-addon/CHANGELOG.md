@@ -1,3 +1,11 @@
+## [1.8.71] - 2026-09-23
+
+### Auto-migración en disco de URLs guardadas para Wyze, EZVIZ y Tapo C120
+
+- **Reparación automática en `load()` / `repairCameraRecord()`:**
+  - Si el archivo de configuración persistido en `/data/cameraui-config.json` aún contenía las URLs viejas con `:2101` o `192.168.110.46`, ahora son reparadas en el arranque automáticamente a sus endpoints go2rtc en `192.168.110.147:8554`.
+  - **No es necesario volver a emparejar:** El emparejamiento con HomeKit (UUIDs, PIN, MAC virtual HAP) se mantiene intacto sin cambios.
+
 ## [1.8.70] - 2026-09-23
 
 ### Fix definitivo: Wyze, EZVIZ y Tapo C120 vuelven a sus rutas go2rtc correctas

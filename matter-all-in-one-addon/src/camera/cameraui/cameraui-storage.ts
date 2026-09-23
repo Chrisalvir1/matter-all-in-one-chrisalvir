@@ -419,6 +419,37 @@ export function repairCameraRecord(cam: CameraUiCameraRecord): {
     modified = true;
   }
 
+  // Automatic recovery for Wyze, EZVIZ, and Tapo C120:
+  // If previously saved to disk with Camera.UI port 2101 or 192.168.110.46, restore their working go2rtc streams
+  if (
+    cam.id === "cameraui_ec110a11-ed20-44f7-8468-2bd8c7dce18f" ||
+    /tapo[-_ ]?c120/i.test(cam.name || "")
+  ) {
+    const targetUrl = "rtsp://192.168.110.147:8554/tapo_c120";
+    if (cam.rtspUrl !== targetUrl && (cam.rtspUrl?.includes(":2101") || cam.rtspUrl?.includes("192.168.110.46"))) {
+      cam.rtspUrl = targetUrl;
+      modified = true;
+    }
+  } else if (
+    cam.id === "cameraui_cba17b87-e6c0-4cc9-b6ab-e88b8cbc7cb4" ||
+    /wyze/i.test(cam.name || "")
+  ) {
+    const targetUrl = "rtsp://192.168.110.147:8554/wyze_patio_trasero";
+    if (cam.rtspUrl !== targetUrl && (cam.rtspUrl?.includes(":2101") || cam.rtspUrl?.includes("192.168.110.46"))) {
+      cam.rtspUrl = targetUrl;
+      modified = true;
+    }
+  } else if (
+    cam.id === "cameraui_4661fae4-808d-436c-96db-15be59e01d6b" ||
+    /ezviz/i.test(cam.name || "")
+  ) {
+    const targetUrl = "rtsp://192.168.110.147:8554/ezviz_patio_trasero";
+    if (cam.rtspUrl !== targetUrl && (cam.rtspUrl?.includes(":2101") || cam.rtspUrl?.includes("192.168.110.46"))) {
+      cam.rtspUrl = targetUrl;
+      modified = true;
+    }
+  }
+
   return { cam, modified };
 }
 
