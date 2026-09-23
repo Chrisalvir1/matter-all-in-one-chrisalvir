@@ -792,17 +792,8 @@ export class HomeKitCameraStreamingDelegate
             this.capabilities.hasAudio = false;
           }
 
-          let retryTranscode = forceTranscode;
-          if (
-            !isAudioFailure &&
-            (stderr.includes("dump_extra") ||
-              stderr.includes("extradata") ||
-              stderr.includes("codec") ||
-              stderr.includes("Error") ||
-              !forceTranscode)
-          ) {
-            retryTranscode = true;
-          }
+          // Keep passthrough active: do not force transcoding which is prohibited
+          const retryTranscode = false;
 
           this.platform?.log?.notice?.(
             `[HomeKitCamera][${this.entityId}] Retrying stream with safe fallback: forceTranscode=${retryTranscode} hasAudio=${this.capabilities.hasAudio}`,

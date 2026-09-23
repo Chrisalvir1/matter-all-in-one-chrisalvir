@@ -1,3 +1,14 @@
+## [1.8.62] - 2026-09-22
+
+### Restauración definitiva: Anuncio universal de perfiles H.264 (Baseline/Main/High), escalera HAP y códecs de audio para Wyze, EZVIZ y Tapo C120
+
+- **Perfiles H.264 completos (`Baseline`, `Main`, `High`) para todas las cámaras:**
+  - Según la especificación oficial de Apple HomeKit (HAP), todo accesorio de vídeo **debe anunciar obligatoriamente el perfil Baseline**. Se corrigió la restricción previa que limitaba a Wyze, EZVIZ y Tapo C120 a anunciar únicamente High profile, provocando que los dispositivos Apple iOS / iPadOS rechazaran la conexión ("Sin respuesta") al no encontrar el perfil Baseline requerido.
+- **Escalera de resoluciones HAP completa:**
+  - Se declara la escalera estándar de resoluciones (`[nativo]`, `1080p`, `720p`, `360p`, `270p`, `180p`) para todas las cámaras, permitiendo que la app Casa en iPhone y iPad negocie de inmediato el tamaño de visualización en vista cuadrícula, detalle o pantalla completa.
+- **Anuncio universal de audio (AAC-ELD y OPUS):**
+  - Todas las cámaras anuncian `AAC-ELD` (16kHz y 24kHz) y `OPUS` (16kHz y 24kHz). En caso de reintento de conexión, se preserva el modo passthrough limpio sin forzar recodificación errónea.
+
 ## [1.8.61] - 2026-09-22
 
 ### Wyze, EZVIZ y Tapo C120: Restauración integral del motor de streaming HAP v1.8.51
