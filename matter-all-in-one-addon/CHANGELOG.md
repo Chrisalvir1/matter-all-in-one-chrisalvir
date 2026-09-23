@@ -1,3 +1,9 @@
+## [1.8.60] - 2026-09-22
+
+### Tapo C402: Detección completa de personas, animales / mascotas y vehículos
+
+- **Soporte exhaustivo de sensores de IA:** Se añade reconocimiento explícito de sensores de animales y mascotas (`mascota`, `animal`, `pet`) en `platform.ts`, garantizando que eventos tanto de personas como de mascotas y vehículos reportados por Home Assistant activen la notificación y grabación de inmediato.
+
 ## [1.8.59] - 2026-09-22
 
 ### Tapo C402: Detección instantánea de vehículos, muestreo a 2 FPS y enlace de sensores de Home Assistant

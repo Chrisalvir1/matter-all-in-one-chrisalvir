@@ -4146,6 +4146,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           entityId.includes("persona") ||
           entityId.includes("animal") ||
           entityId.includes("pet") ||
+          entityId.includes("mascota") ||
           entityId.includes("detection") ||
           entityId.includes("occupancy") ||
           entityId.includes("presence");
@@ -4168,7 +4169,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           let detectedLabel = "HA Sensor";
           if (cleanEntityId.includes("persona") || cleanEntityId.includes("person")) detectedLabel = "IA Persona";
           else if (cleanEntityId.includes("vehiculo") || cleanEntityId.includes("vehicle") || cleanEntityId.includes("car") || cleanEntityId.includes("auto")) detectedLabel = "IA Vehículo";
-          else if (cleanEntityId.includes("animal") || cleanEntityId.includes("pet")) detectedLabel = "IA Animal";
+          else if (cleanEntityId.includes("animal") || cleanEntityId.includes("pet") || cleanEntityId.includes("mascota")) detectedLabel = "IA Animal";
           else if (cleanEntityId.includes("motion") || cleanEntityId.includes("movimiento")) detectedLabel = "Sensor Movimiento";
 
           this.log.notice(
