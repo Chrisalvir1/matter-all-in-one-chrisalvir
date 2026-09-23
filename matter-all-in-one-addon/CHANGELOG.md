@@ -1,3 +1,16 @@
+## [1.8.63] - 2026-09-22
+
+### Restauración directa de passthrough de audio AAC (-c:a copy) para Wyze, EZVIZ, Tapo C120 y Tapo C402
+
+- **Passthrough de audio AAC directo (`-c:a copy`) sin barreras de transcodificación:**
+  - Se eliminaron las restricciones arbitrarias de frecuencia de muestreo (16k/24k) y canales de `checkAudioPassthroughCompatibility` en `homekit-camera-stream.delegate.ts`. Ahora todo flujo con audio AAC original se transmite directamente mediante copia pura (`-c:a copy`), exactamente como operaba en las versiones estables previas.
+  - Se suprime la transcodificación forzada mediante `libfdk_aac` y los filtros `aresample=async=1:first_pts=0`, los cuales causaban fallos de inicio, desfases o desconexiones inmediatas en Apple Home al recibir transmisiones RTSP estándar (48kHz/44.1kHz).
+  - En caso de cámaras sin audio o incompatibles, se emite únicamente vídeo en passthrough puro sin colapsar el proceso FFmpeg.
+- **Predeterminado `audioCodec: "aac"` garantizado:**
+  - En `cameraui-homekit-bridge.ts` y `cameraui-storage.ts`, todas las cámaras con soporte de audio se configuran con `audioCodec: "aac"` por defecto, asegurando que Wyze, EZVIZ, Tapo C120 y Tapo C402 inicien inmediatamente con audio AAC nativo.
+- **Preservación total de Tapo C402:**
+  - Se mantiene la compatibilidad de visualización en directo 2K QHD, grabación HKSV y detección de movimiento por IA para personas, mascotas y vehículos.
+
 ## [1.8.62] - 2026-09-22
 
 ### Restauración definitiva: Anuncio universal de perfiles H.264 (Baseline/Main/High), escalera HAP y códecs de audio para Wyze, EZVIZ y Tapo C120

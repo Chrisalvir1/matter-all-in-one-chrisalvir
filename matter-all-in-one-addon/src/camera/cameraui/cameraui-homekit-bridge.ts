@@ -186,7 +186,7 @@ export class CameraUiHomeKitBridge {
       // Keep the measured source codec. The HAP delegates copy AAC when
       // compatible and transcode only non-AAC audio (e.g. PCM A-law) to AAC.
       audioCodec: (camera.audioCodec ||
-        "unknown") as CameraCapabilitiesInfo["audioCodec"],
+        (camera.hasAudio !== false ? "aac" : "none")) as CameraCapabilitiesInfo["audioCodec"],
       audioSampleRate: camera.audioSampleRate,
       audioChannels: camera.audioChannels,
       resolution: {

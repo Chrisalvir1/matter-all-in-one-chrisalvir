@@ -94,6 +94,50 @@ export function repairCameraRecord(cam: CameraUiCameraRecord): {
       cam.sourceProvider = "home_assistant";
       modified = true;
     }
+    const knownC402Sensors = [
+      {
+        id: "binary_sensor.omni_ai_sensors_persona_tapo_c402",
+        name: "Omni AI Sensors persona_tapo_C402",
+      },
+      {
+        id: "binary_sensor.omni_ai_sensors_mac_mac_persona_tapo_frente_de_calle",
+        name: "Omni AI Sensors - Mac MAC - Persona - TAPO-FRENTE DE CALLE",
+      },
+      {
+        id: "binary_sensor.omni_ai_sensors_mac_mac_mascota_tapo_frente_de_calle",
+        name: "Omni AI Sensors - Mac MAC - Mascota - TAPO-FRENTE DE CALLE",
+      },
+      {
+        id: "binary_sensor.omni_ai_sensors_mac_mac_vehiculo_tapo_frente_de_calle",
+        name: "Omni AI Sensors - Mac MAC - Vehiculo - TAPO-FRENTE DE CALLE",
+      },
+      {
+        id: "binary_sensor.omni_ai_sensors_vehiculo_tapo_c402",
+        name: "Omni AI Sensors vehiculo_tapo_C402",
+      },
+    ];
+    for (const sensor of knownC402Sensors) {
+      if (!cam.realEntities?.some((e) => e.id === sensor.id)) {
+        cam.realEntities = [
+          ...(cam.realEntities || []),
+          {
+            id: sensor.id,
+            domain: "binary_sensor",
+            type: "motion",
+            name: sensor.name,
+            state: false,
+            matterExported: false,
+          },
+        ];
+        modified = true;
+      }
+    }
+  }
+
+  // Ensure any camera with audio defaults to AAC audioCodec for zero-transcoding HomeKit passthrough
+  if (cam.hasAudio !== false && (!cam.audioCodec || cam.audioCodec === "unknown")) {
+    cam.audioCodec = "aac";
+    modified = true;
   }
 
   // Strip trailing hash fragments
@@ -332,7 +376,7 @@ export function repairCameraRecord(cam: CameraUiCameraRecord): {
     cam.fps = 30;
     cam.videoCodec = "h264";
     cam.strategy = "passthrough_h264";
-  }
+  } */
 
   // Global repair for any rtsp://192.168.110.46 references
   if (
@@ -346,8 +390,8 @@ export function repairCameraRecord(cam: CameraUiCameraRecord): {
       .replace("192.168.110.46:554", "192.168.110.147:8554")
       .replace("rtsp://192.168.110.46/", "rtsp://192.168.110.147:8554/");
     modified = true;
-  } */
-  /* if (
+  }
+  if (
     cam.subRtspUrl &&
     (cam.subRtspUrl.includes("192.168.110.46:8554") ||
       cam.subRtspUrl.includes("192.168.110.46:554") ||
@@ -358,7 +402,7 @@ export function repairCameraRecord(cam: CameraUiCameraRecord): {
       .replace("192.168.110.46:554", "192.168.110.147:8554")
       .replace("rtsp://192.168.110.46/", "rtsp://192.168.110.147:8554/");
     modified = true;
-  } */
+  }
 
   return { cam, modified };
 }
@@ -374,6 +418,7 @@ export const DEFAULT_CAMERAS: CameraUiCameraRecord[] = [
     snapshotUrl:
       "https://192.168.110.46:3543/api/cameras/COCINA%20RING/snapshot",
     hasAudio: true,
+    audioCodec: "aac",
     width: 1920,
     height: 1080,
     fps: 30,
@@ -416,6 +461,7 @@ export const DEFAULT_CAMERAS: CameraUiCameraRecord[] = [
     snapshotUrl:
       "https://192.168.110.46:3543/api/cameras/JARDIN-VIMTAG/snapshot",
     hasAudio: true,
+    audioCodec: "aac",
     width: 2560,
     height: 1440,
     fps: 20,
@@ -458,6 +504,7 @@ export const DEFAULT_CAMERAS: CameraUiCameraRecord[] = [
     snapshotUrl:
       "https://192.168.110.46:3543/api/cameras/RING%20BODEGA/snapshot",
     hasAudio: true,
+    audioCodec: "aac",
     width: 1920,
     height: 1080,
     fps: 30,
@@ -500,6 +547,7 @@ export const DEFAULT_CAMERAS: CameraUiCameraRecord[] = [
     snapshotUrl:
       "https://192.168.110.46:3543/api/cameras/RING%20LAVANDERIA/snapshot",
     hasAudio: true,
+    audioCodec: "aac",
     width: 1920,
     height: 1080,
     fps: 30,
@@ -541,6 +589,7 @@ export const DEFAULT_CAMERAS: CameraUiCameraRecord[] = [
     rtspUrl: "rtsp://192.168.110.147:8554/sala-vimtag",
     snapshotUrl: "https://192.168.110.46:3543/api/cameras/SALA-VIMTAG/snapshot",
     hasAudio: true,
+    audioCodec: "aac",
     width: 2560,
     height: 1440,
     fps: 20,
@@ -583,6 +632,7 @@ export const DEFAULT_CAMERAS: CameraUiCameraRecord[] = [
     snapshotUrl:
       "https://192.168.110.46:3543/api/cameras/EZVIZ%20PATIO%20TRASERO/snapshot",
     hasAudio: true,
+    audioCodec: "aac",
     width: 1920,
     height: 1080,
     fps: 30,
@@ -624,6 +674,7 @@ export const DEFAULT_CAMERAS: CameraUiCameraRecord[] = [
     rtspUrl: "rtsp://192.168.110.147:8554/tapo_c120",
     snapshotUrl: "https://192.168.110.46:3543/api/cameras/Tapo%20C120/snapshot",
     hasAudio: true,
+    audioCodec: "aac",
     width: 1920,
     height: 1080,
     fps: 30,
@@ -666,6 +717,7 @@ export const DEFAULT_CAMERAS: CameraUiCameraRecord[] = [
     snapshotUrl:
       "https://192.168.110.46:3543/api/cameras/VIMTAG%20COCHERA/snapshot",
     hasAudio: true,
+    audioCodec: "aac",
     width: 2560,
     height: 1440,
     fps: 20,
@@ -708,6 +760,7 @@ export const DEFAULT_CAMERAS: CameraUiCameraRecord[] = [
     snapshotUrl:
       "https://192.168.110.46:3543/api/cameras/VIMTAG%20GYM/snapshot",
     hasAudio: true,
+    audioCodec: "aac",
     width: 2560,
     height: 1440,
     fps: 20,
@@ -750,6 +803,7 @@ export const DEFAULT_CAMERAS: CameraUiCameraRecord[] = [
     snapshotUrl:
       "https://192.168.110.46:3543/api/cameras/VIMTAG%20OFICINA/snapshot",
     hasAudio: true,
+    audioCodec: "aac",
     width: 2560,
     height: 1440,
     fps: 20,
@@ -792,6 +846,7 @@ export const DEFAULT_CAMERAS: CameraUiCameraRecord[] = [
     snapshotUrl:
       "https://192.168.110.46:3543/api/cameras/VIMTAG%20RECAMARA%20VISITA/snapshot",
     hasAudio: true,
+    audioCodec: "aac",
     width: 1920,
     height: 1080,
     fps: 30,
@@ -825,6 +880,7 @@ export const DEFAULT_CAMERAS: CameraUiCameraRecord[] = [
     snapshotUrl:
       "https://192.168.110.46:3543/api/cameras/WYZE%20PATIO%20TRASERO/snapshot",
     hasAudio: true,
+    audioCodec: "aac",
     width: 1920,
     height: 1080,
     fps: 30,
@@ -867,6 +923,7 @@ export const DEFAULT_CAMERAS: CameraUiCameraRecord[] = [
     rtspUrl: "rtsp://192.168.110.147:62291/tapo-c402",
     snapshotUrl: "https://192.168.110.46:3543/api/cameras/TAPO%20C402/snapshot",
     hasAudio: true,
+    audioCodec: "aac",
     width: 2560,
     height: 1440,
     fps: 30,

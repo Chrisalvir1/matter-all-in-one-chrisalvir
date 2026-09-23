@@ -398,6 +398,8 @@ describe("HomeKitCameraStreamingDelegate", () => {
 
     // Audio must NEVER be re-encoded: either -c:a copy or omitted (-an).
     // Absolutely no libopus, libfdk_aac, 24k bitrate or aresample filters.
+    expect(capturedArgs).toContain("-c:a");
+    expect(capturedArgs).toContain("copy");
     expect(capturedArgs).not.toContain("libopus");
     expect(capturedArgs).not.toContain("libfdk_aac");
     expect(capturedArgs).not.toContain("aresample");
