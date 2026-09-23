@@ -1,3 +1,11 @@
+## [1.8.67] - 2026-09-23
+
+### Restauración de passthrough HAP nativo para Camera.UI
+
+- Se revierte el anuncio de resoluciones y perfiles que no puede producir una cámara en modo `-c:v copy`. Wyze Patio Trasero, EZVIZ Patio Trasero y Tapo C120 vuelven a anunciar únicamente su resolución y perfil H.264 medidos.
+- La Tapo C402 conserva su escalera de resoluciones, perfiles H.264 y AAC-ELD para su RTSP directo de Home Assistant.
+- Se mantienen las correcciones de sensores de movimiento introducidas en 1.8.66.
+
 ## [1.8.66] - 2026-09-23
 
 ### Exposición de Sensor de Movimiento en HomeKit para todas las cámaras y restauración total de Live View
