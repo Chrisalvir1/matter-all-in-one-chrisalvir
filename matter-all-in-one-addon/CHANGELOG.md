@@ -1,4 +1,4 @@
-## [1.8.52] - 2026-09-22
+## [1.8.53] - 2026-09-22
 
 ### Tapo C402: Live View instantáneo, soporte 2K nativo HAP/HKSV y activación de detección de movimiento
 

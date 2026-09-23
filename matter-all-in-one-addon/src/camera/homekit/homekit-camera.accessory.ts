@@ -366,11 +366,9 @@ export class HomeKitCameraAccessory {
         supportedCryptoSuites: [SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80],
         video: {
           codec: {
-            profiles: [
-              H264Profile.BASELINE,
-              H264Profile.MAIN,
-              H264Profile.HIGH,
-            ],
+            // A copied RTP stream cannot honour a profile Apple Home selected
+            // for a different encoder. Advertise the observed profile only.
+            profiles: [this.nativeH264Profile()],
             levels: [
               H264Level.LEVEL3_1,
               H264Level.LEVEL3_2,
@@ -398,11 +396,7 @@ export class HomeKitCameraAccessory {
           video: {
             type: VideoCodecType.H264,
             parameters: {
-              profiles: [
-                H264Profile.BASELINE,
-                H264Profile.MAIN,
-                H264Profile.HIGH,
-              ],
+              profiles: [this.nativeH264Profile()],
               levels: [
                 H264Level.LEVEL3_1,
                 H264Level.LEVEL3_2,
@@ -440,24 +434,7 @@ export class HomeKitCameraAccessory {
       15,
       Math.min(this.capabilities.maxFps || 30, 60),
     );
-    // Include native resolution first (e.g. 2K 2560x1440 or 2304x1296) for tvOS 27/iOS 27,
-    // followed by standard resolutions for maximum ecosystem compatibility.
-    const candidates: [number, number, number][] = [
-      [width, height, sourceFps],
-      [2560, 1440, Math.min(sourceFps, 30)],
-      [1920, 1080, Math.min(sourceFps, 30)],
-      [1280, 720, Math.min(sourceFps, 30)],
-    ];
-    const seen = new Set<string>();
-    const res: [number, number, number][] = [];
-    for (const [w, h, f] of candidates) {
-      const key = `${w}x${h}`;
-      if (!seen.has(key)) {
-        seen.add(key);
-        res.push([w, h, f]);
-      }
-    }
-    return res;
+    return [[width, height, sourceFps]];
   }
 
   private nativeH264Profile(): H264Profile {
@@ -477,34 +454,11 @@ export class HomeKitCameraAccessory {
       width: 1920,
       height: 1080,
     };
-    const width = source.width || 1920;
-    const height = source.height || 1080;
     const sourceFps = Math.max(
       15,
       Math.min(this.capabilities.maxFps || 30, 60),
     );
-    // Offer native resolution first (e.g. 2K 2560x1440 or 2304x1296) so modern Apple Home
-    // devices (iOS 27 / tvOS 27) select maximum fidelity, while offering standard resolutions
-    // down to 320x180 for Apple Watch or constrained network modes.
-    const candidates: [number, number, number][] = [
-      [width, height, sourceFps],
-      [2560, 1440, Math.min(sourceFps, 30)],
-      [1920, 1080, Math.min(sourceFps, 30)],
-      [1280, 720, Math.min(sourceFps, 30)],
-      [640, 360, 30],
-      [480, 270, 30],
-      [320, 180, 30],
-    ];
-    const seen = new Set<string>();
-    const res: [number, number, number][] = [];
-    for (const [w, h, f] of candidates) {
-      const key = `${w}x${h}`;
-      if (!seen.has(key)) {
-        seen.add(key);
-        res.push([w, h, f]);
-      }
-    }
-    return res;
+    return [[source.width || 1920, source.height || 1080, sourceFps]];
   }
 
   public findLinkedEntities(): {

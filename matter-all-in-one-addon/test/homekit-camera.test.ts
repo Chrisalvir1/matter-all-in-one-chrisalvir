@@ -152,11 +152,12 @@ describe("HomeKitCameraAccessory production HAP graph", () => {
       rtspSource,
     );
 
-    const declared = (accessory as any).buildDeclaredResolutions();
-    expect(declared[0]).toEqual([2560, 1440, 20]);
+    expect((accessory as any).buildDeclaredResolutions()).toEqual([
+      [2560, 1440, 20],
+    ]);
     const options = (accessory as any).buildControllerOptions();
-    expect(options.streamingOptions.video.resolutions[0]).toEqual([
-      2560, 1440, 20,
+    expect(options.streamingOptions.video.resolutions).toEqual([
+      [2560, 1440, 20],
     ]);
   });
 
