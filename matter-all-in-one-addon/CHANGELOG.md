@@ -1,3 +1,20 @@
+## [1.8.82] - 2026-09-23
+
+### Corrección definitiva pantalla verde/congelado C120 + carga lenta Wyze/EZVIZ
+
+- **Tapo C120 — resolución declarada reducida de 2K a 1080p (1920×1080):**
+  - Causa raíz confirmada: un fotograma clave IDR H.264 a 2560×1440 pesa 200–500 KB → se fragmenta en 150–350 paquetes UDP. El buffer de socket UDP del kernel de Linux (64–128 KB por defecto) se desbordaba → FFmpeg descartaba el resto del IDR → iOS renderizaba la franja superior real y el resto en verde sólido (YUV 0,0,0). Al declarar 1920×1080 a HAP, los IDR bajan a ~60–80 KB (50–70 paquetes UDP), dentro del límite del buffer. La fuente RTSP sigue siendo la C120 real a su resolución nativa; HAP recibe pasante H.264 1080p sin transcodificación.
+- **Tapo C120 — probesize mínimo y sin analyzeduration:**
+  - Reducido `probesize` de 524288 → `32768` (32 KB) y `analyzeduration` → `0`. go2rtc ya negoció el stream; FFmpeg solo necesita el SPS/PPS del primer paquete para comenzar. Esto elimina el retraso de 1 segundo antes de que FFmpeg empiece a emitir.
+- **Tapo C120 — fflags `+nobuffer+flush_packets+genpts+igndts` con `low_delay`:**
+  - Activado `+nobuffer+flush_packets` en el input de C120 para reenviar cada paquete RTSP inmediatamente sin acumulación. Combinado con `flags: low_delay` para minimizar la latencia de decodificación.
+- **Wyze y EZVIZ — guard timeout aumentado a 1500ms:**
+  - El guard de inicialización de 80ms era insuficiente cuando go2rtc necesita entregar el primer keyframe desde el origen físico (hasta 1–2 segundos). Con 1500ms, FFmpeg tiene tiempo de recibir el primer IDR y HomeKit ya ve imagen en la primera apertura del stream. La C402 mantiene su guard de 80ms (usa confirmación por `frame=1` en stdout, no por timeout).
+- **thread_queue_size reducido a 512:**
+  - Reducido de 1024 a 512 para evitar acumulación excesiva en la cola de paquetes y mantener baja latencia.
+- **Tapo C402 Estrictamente Intacta y Protegida:**
+  - No se tocó ningún parámetro, flag ni comportamiento de la Tapo C402.
+
 ## [1.8.81] - 2026-09-23
 
 ### Corrección de pérdida de paquetes UDP / pantalla verde en ráfagas 2K y buffer SRTP

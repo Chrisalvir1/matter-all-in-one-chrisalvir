@@ -745,7 +745,7 @@ export class HomeKitCameraStreamingDelegate
         } else {
           settle(new Error("FFmpeg exited during HAP startup"));
         }
-      }, 80);
+      }, isTapoC402 ? 80 : 1500);
       process.once("error", (error) => {
         clearTimeout(guard);
         settle(error);
@@ -897,10 +897,12 @@ export class HomeKitCameraStreamingDelegate
         "tcp",
         "-timeout",
         "10000000",
+        // C120: minimal probesize/analyzeduration = fastest RTSP handshake, no buffering delay.
+        // go2rtc already negotiated the stream; we just need SPS/PPS from the first packet.
         "-probesize",
-        isTapoC402 ? "2097152" : isTapoC120 ? "524288" : "65536",
+        isTapoC402 ? "2097152" : isTapoC120 ? "32768" : "65536",
         "-analyzeduration",
-        isTapoC402 ? "3000000" : isTapoC120 ? "1000000" : "100000",
+        isTapoC402 ? "3000000" : isTapoC120 ? "0" : "100000",
       );
       if (isTapoC402) {
         args.push(
@@ -912,11 +914,13 @@ export class HomeKitCameraStreamingDelegate
           "0",
         );
       } else if (isTapoC120) {
+        // +nobuffer+flush_packets: forward packets immediately without accumulating in input buffer.
+        // +genpts+igndts: fix broken DTS from go2rtc transcoder. No +discardcorrupt: keep partial frames.
         args.push(
           "-fflags",
-          "+genpts+igndts",
+          "+nobuffer+flush_packets+genpts+igndts",
           "-flags",
-          "0",
+          "low_delay",
         );
       } else {
         args.push(
@@ -928,7 +932,7 @@ export class HomeKitCameraStreamingDelegate
       }
       args.push(
         "-thread_queue_size",
-        "1024",
+        "512",
         "-i",
         sourceUrl,
       );

@@ -1,6 +1,6 @@
 name: "Matter All-in-One (Chrisalvir)"
 description: "All-in-One Matterbridge bridge with persistent storage, web UI, Camera.UI OpenCV integration, and Home Assistant Ingress"
-version: "1.8.81"
+version: "1.8.82"
 slug: "matter_all_in_one_bridge"
 image: "ghcr.io/chrisalvir1/matter-all-in-one-chrisalvir"
 init: false
