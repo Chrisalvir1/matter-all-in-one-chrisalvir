@@ -137,9 +137,13 @@ export class CameraUiHomeKitBridge {
     // CameraController advertises the real codec, dimensions and frame rate.
     // The previous seeded 2304x1296/15 metadata did not match its live
     // 2560x1440/30 stream and HAP was permanently configured with stale values.
+    // NOTE: C120 is intentionally excluded from pre-publish probe. The probe
+    // calls applyCameraSourceProbe which overwrites camera.width/height with
+    // the actual 2K RTSP stream (2560x1440), defeating the 1080p HAP declaration
+    // we need to prevent UDP socket buffer overflow (green screen / no response).
+    // C120 capabilities are fully known: H264, 1920x1080 HAP, AAC audio, 30fps.
     const isHomeAssistantSource = camera.sourceProvider === "home_assistant";
-    const isTapoC120 = /(?:\bc120\b|tapo[-_ ]?c120)/i.test(`${camera.id} ${camera.name || ""}`);
-    if ((isHomeAssistantSource || isTapoC120) && camera.rtspUrl) {
+    if (isHomeAssistantSource && camera.rtspUrl) {
       try {
         const probe = await probeCameraSource(camera.rtspUrl, {
           timeoutMs: 4000,
@@ -148,7 +152,7 @@ export class CameraUiHomeKitBridge {
           platform.log?.notice?.(
             `[Camera.UI][${camera.name}] Pre-publish RTSP probe verified: ${camera.videoCodec} ${camera.width}x${camera.height}@${camera.fps}fps audio=${camera.audioCodec || "none"}`,
           );
-        } else if (isHomeAssistantSource) {
+        } else {
           const safeError = probe.error
             ? sanitizeUrlCredentials(probe.error)
             : "no se detectaron códec, resolución y FPS";
@@ -158,16 +162,10 @@ export class CameraUiHomeKitBridge {
           return undefined;
         }
       } catch (error) {
-        if (isHomeAssistantSource) {
-          platform.log?.error?.(
-            `[Camera.UI][${camera.name}] No se publica HAP: falló la medición previa del stream HA (${String(error)})`,
-          );
-          return undefined;
-        } else {
-          platform.log?.warn?.(
-            `[Camera.UI][${camera.name}] Pre-publish probe warning: ${String(error)}`,
-          );
-        }
+        platform.log?.error?.(
+          `[Camera.UI][${camera.name}] No se publica HAP: falló la medición previa del stream HA (${String(error)})`,
+        );
+        return undefined;
       }
     }
     // Todo stream RTSP/RTSPS de Camera.UI (H.264 o H.265/HEVC) es válido para HKSV:

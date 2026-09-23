@@ -1,3 +1,21 @@
+## [1.8.84] - 2026-09-23
+
+### Corrección "Sin Respuesta" Tapo C120 — reversión probesize + eliminación probe pre-publicación
+
+- **Causa raíz identificada para "Sin Respuesta":**
+  - `analyzeduration=0` con `probesize=32768` causaba que FFmpeg no pudiera parsear los headers SPS/PPS del stream H.264 → generaba paquetes RTP inválidos sin datos de codec → HomeKit recibía un stream vacío y reportaba "Sin Respuesta".
+  - Adicionalmente, la probe pre-publicación llamaba `applyCameraSourceProbe()` que sobreescribía `camera.width/height` con la resolución real del stream (2560×1440), deshaciendo la declaración 1080p necesaria para evitar el desbordamiento de buffer UDP.
+- **Restauración de probesize/analyzeduration a valores seguros:**
+  - `probesize=65536` (64KB, mismo que cámaras por defecto) y `analyzeduration=100000` (100ms). go2rtc sirve un stream RTSP limpio; 100ms son más que suficientes para leer SPS/PPS y comenzar con RTP válido.
+- **Eliminación de probe pre-publicación para C120:**
+  - La Tapo C120 ya no ejecuta la probe RTSP previa al montaje HAP. Sus capacidades son fijas y conocidas: H264, 1920×1080 (declarado a HAP), AAC, 30fps. Solo la C402 (fuente `home_assistant`) sigue requiriendo probe obligatoria.
+- **Flags de input C120 se mantienen optimizados:**
+  - `+nobuffer+flush_packets+genpts+igndts` con `flags: low_delay` — reenvío inmediato de paquetes RTSP sin acumulación.
+- **Guard timeout 1500ms se mantiene:**
+  - Wyze y EZVIZ siguen beneficiándose del guard extendido para primera carga.
+- **Tapo C402 Estrictamente Intacta:**
+  - Ningún parámetro ni comportamiento de la C402 fue modificado.
+
 ## [1.8.83] - 2026-09-23
 
 ### Sincronización de pruebas unitarias CI (Build and Test)

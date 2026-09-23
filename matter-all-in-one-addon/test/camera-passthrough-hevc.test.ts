@@ -292,11 +292,11 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     expect(args).toContain("copy");
     expect(args).not.toContain("libx264");
     expect(args).not.toContain("libx265");
-    // Probe sizes and flags for Tapo C120
+    // Probe sizes and flags for Tapo C120 (same as default cameras, safe values)
     expect(args).toContain("-probesize");
-    expect(args).toContain("32768");
+    expect(args).toContain("65536");
     expect(args).toContain("-analyzeduration");
-    expect(args).toContain("0");
+    expect(args).toContain("100000");
     expect(args).toContain("+nobuffer+flush_packets+genpts+igndts");
     expect(args).toContain("-max_interleave_delta");
     expect(args).toContain("100000");

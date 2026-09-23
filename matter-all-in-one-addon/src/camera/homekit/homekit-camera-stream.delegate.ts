@@ -897,12 +897,13 @@ export class HomeKitCameraStreamingDelegate
         "tcp",
         "-timeout",
         "10000000",
-        // C120: minimal probesize/analyzeduration = fastest RTSP handshake, no buffering delay.
-        // go2rtc already negotiated the stream; we just need SPS/PPS from the first packet.
+        // C120: use same probesize/analyzeduration as default cameras.
+        // analyzeduration=0 caused FFmpeg to emit invalid RTP (no SPS/PPS parsed) → "No Response" in HomeKit.
+        // go2rtc serves a clean RTSP so 64KB probe + 100ms analysis is instant and reliable.
         "-probesize",
-        isTapoC402 ? "2097152" : isTapoC120 ? "32768" : "65536",
+        isTapoC402 ? "2097152" : "65536",
         "-analyzeduration",
-        isTapoC402 ? "3000000" : isTapoC120 ? "0" : "100000",
+        isTapoC402 ? "3000000" : "100000",
       );
       if (isTapoC402) {
         args.push(
