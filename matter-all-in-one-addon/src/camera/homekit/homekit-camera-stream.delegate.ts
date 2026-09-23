@@ -750,14 +750,11 @@ export class HomeKitCameraStreamingDelegate
         startupTimer = setTimeout(() => {
           if (startupConfirmed) return;
           this.platform?.log?.error?.(
-            `[HomeKitCamera][${this.entityId}] FFmpeg produced no C402 video frame within 6s; rejecting HAP START`,
+            `[HomeKitCamera][${this.entityId}] FFmpeg produced no C402 video frame within 6s; restarting the RTSP passthrough once`,
           );
           try {
             process.kill("SIGTERM");
           } catch {}
-          settle(
-            new Error("C402 stream produced no video frame within 6 seconds"),
-          );
         }, 6000);
       }
       process.once("error", (error) => {
@@ -772,6 +769,24 @@ export class HomeKitCameraStreamingDelegate
         this.platform?.log?.warn?.(
           `[HomeKitCamera][${this.entityId}] FFmpeg closed code=${code} ${stderr.trim()}`,
         );
+
+        // The HA satellite can accept RTSP before a decodable H.264 keyframe
+        // (SPS/PPS) arrives. For the C402 only, retry the same passthrough
+        // session once if the first process never emitted a video frame. Do
+        // not transcode: that would break the requested native 2K path.
+        if (
+          isTapoC402 &&
+          !startupConfirmed &&
+          !session.retried &&
+          this.activeSessions.has(session.sessionId)
+        ) {
+          session.retried = true;
+          this.platform?.log?.notice?.(
+            `[HomeKitCamera][${this.entityId}] Retrying C402 RTSP passthrough after startup without a decodable frame`,
+          );
+          this.spawnFfmpegProcess(session, request, settle, false);
+          return;
+        }
 
         // Automatic fallback recovery: if initial attempt failed (e.g. missing audio track or incompatible passthrough),
         // retry immediately with safe transcoding and/or silent audio fallback

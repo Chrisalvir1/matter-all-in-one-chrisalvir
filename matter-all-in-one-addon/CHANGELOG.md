@@ -1,3 +1,7 @@
+## [1.8.52] - 2026-09-22
+
+- Tapo C402: retry once with the same native RTSP/H.264 passthrough if FFmpeg fails to deliver its first video frame during HomeKit startup. This recovery applies only to the C402 and does not transcode the source.
+
 ## [1.8.51] - 2026-09-22
 
 ### Tapo C402: passthrough HAP verificado por frames
