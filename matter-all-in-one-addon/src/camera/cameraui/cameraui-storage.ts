@@ -420,13 +420,20 @@ export function repairCameraRecord(cam: CameraUiCameraRecord): {
   }
 
   // Automatic recovery for Wyze, EZVIZ, and Tapo C120:
-  // If previously saved to disk with Camera.UI port 2101 or 192.168.110.46, restore their working go2rtc streams
+  // If previously saved to disk with Camera.UI port 2101, 192.168.110.46, or discovered with a fragile physical LAN endpoint,
+  // restore their working go2rtc streams at 192.168.110.147:8554
   if (
     cam.id === "cameraui_ec110a11-ed20-44f7-8468-2bd8c7dce18f" ||
     /tapo[-_ ]?c120/i.test(cam.name || "")
   ) {
     const targetUrl = "rtsp://192.168.110.147:8554/tapo_c120";
-    if (cam.rtspUrl !== targetUrl && (cam.rtspUrl?.includes(":2101") || cam.rtspUrl?.includes("192.168.110.46"))) {
+    if (
+      cam.rtspUrl !== targetUrl &&
+      (!cam.rtspUrl ||
+        cam.rtspUrl.includes(":2101") ||
+        cam.rtspUrl.includes("192.168.110.46") ||
+        cam.rtspUrl.includes(".invalid"))
+    ) {
       cam.rtspUrl = targetUrl;
       modified = true;
     }
@@ -435,7 +442,14 @@ export function repairCameraRecord(cam: CameraUiCameraRecord): {
     /wyze/i.test(cam.name || "")
   ) {
     const targetUrl = "rtsp://192.168.110.147:8554/wyze_patio_trasero";
-    if (cam.rtspUrl !== targetUrl && (cam.rtspUrl?.includes(":2101") || cam.rtspUrl?.includes("192.168.110.46"))) {
+    if (
+      cam.rtspUrl !== targetUrl &&
+      (!cam.rtspUrl ||
+        cam.rtspUrl.includes(":2101") ||
+        cam.rtspUrl.includes("192.168.110.46") ||
+        cam.rtspUrl.includes(".invalid") ||
+        cam.rtspUrl.includes("camera-lan"))
+    ) {
       cam.rtspUrl = targetUrl;
       modified = true;
     }
@@ -444,7 +458,13 @@ export function repairCameraRecord(cam: CameraUiCameraRecord): {
     /ezviz/i.test(cam.name || "")
   ) {
     const targetUrl = "rtsp://192.168.110.147:8554/ezviz_patio_trasero";
-    if (cam.rtspUrl !== targetUrl && (cam.rtspUrl?.includes(":2101") || cam.rtspUrl?.includes("192.168.110.46"))) {
+    if (
+      cam.rtspUrl !== targetUrl &&
+      (!cam.rtspUrl ||
+        cam.rtspUrl.includes(":2101") ||
+        cam.rtspUrl.includes("192.168.110.46") ||
+        cam.rtspUrl.includes(".invalid"))
+    ) {
       cam.rtspUrl = targetUrl;
       modified = true;
     }

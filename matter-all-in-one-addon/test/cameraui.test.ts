@@ -421,7 +421,7 @@ describe("Camera.UI Client and Storage Integration", () => {
     expect(saveSpy).toHaveBeenCalled();
   });
 
-  it("uses the Camera.UI restream for the known Wyze camera instead of its fragile physical RTSP URL", async () => {
+  it("uses the go2rtc restream for the known Wyze camera instead of its fragile physical RTSP URL", async () => {
     const store = {
       config: {
         enabled: true,
@@ -444,7 +444,7 @@ describe("Camera.UI Client and Storage Integration", () => {
     ]);
 
     expect(result.cameras[0].rtspUrl).toContain(
-      "192.168.110.46:2101/cui_wyze_patio_trasero_wyze_pan_v2",
+      "192.168.110.147:8554/wyze_patio_trasero",
     );
   });
 

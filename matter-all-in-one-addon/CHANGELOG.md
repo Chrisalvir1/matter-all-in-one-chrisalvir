@@ -1,3 +1,10 @@
+## [1.8.72] - 2026-09-23
+
+### Sincronización de pruebas unitarias y auto-recuperación de endpoints de streaming
+
+- **Pruebas unitarias de CI:** Se actualizó la aserción en `test/cameraui.test.ts` para validar que la cámara Wyze se redirige a `rtsp://192.168.110.147:8554/wyze_patio_trasero` (sin credenciales), alineando la suite de pruebas automatizadas con el nuevo flujo sin 401.
+- **Auto-reparación ampliada:** Detección de endpoints `.invalid` o de LAN frágil durante la fusión de descubrimiento para Wyze, EZVIZ y Tapo C120.
+
 ## [1.8.71] - 2026-09-23
 
 ### Auto-migración en disco de URLs guardadas para Wyze, EZVIZ y Tapo C120
