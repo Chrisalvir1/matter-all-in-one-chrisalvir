@@ -1075,9 +1075,10 @@ export class HomeKitCameraStreamingDelegate
       const isOpus = request.audio.codec === AudioStreamingCodecType.OPUS;
       const targetCodec = isOpus ? "opus" : "aac_eld";
 
-      // Tapo C402 and Tapo C120 send standard AAC (AAC-LC) from RTSP and must use direct passthrough (-c:a copy)
-      // to keep video and audio timelines synchronized from the same clock and eliminate transcoding latency.
-      const isAudioPassthroughEligible = isTapoC402 || isTapoC120;
+      // Tapo C402 sends standard AAC (AAC-LC) from RTSP and can use direct passthrough (-c:a copy).
+      // Tapo C120 sends PCMA (pcm_alaw at 8000 Hz) from RTSP (go2rtc), which MUST be transcoded to AAC-ELD/AAC
+      // with aresample=async=1:first_pts=0 so Apple Home receives valid audio and the AV clock runs smoothly without freezing.
+      const isAudioPassthroughEligible = isTapoC402;
       const targetReq = isAudioPassthroughEligible
         ? undefined
         : {

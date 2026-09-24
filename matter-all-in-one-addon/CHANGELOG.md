@@ -1,3 +1,24 @@
+## [1.8.87] - 2026-09-23
+
+### Solución definitiva de audio y vídeo congelado/verde en Tapo C120: Detección real de PCM_ALAW y normalización a AAC
+
+- **Causa raíz descubierta mediante auditoría en vivo de go2rtc:**
+  - Se inspeccionó directamente la API interna de go2rtc en tiempo de ejecución (`http://192.168.110.147:1984/api/streams`).
+  - La Tapo C120 **NO transmite AAC**. Su pista de audio RTSP real es **PCMA (pcm_alaw a 8000 Hz mono)**:
+    ```
+    codec_name: "pcm_alaw", codec_type: "audio", sample_rate: 8000
+    ```
+  - En versiones anteriores se había asumido erróneamente que la C120 era AAC y se configuró `-c:a copy` passthrough directo en el stream de HomeKit.
+  - Al forzar `-c:a copy`, FFmpeg enviaba paquetes crudos de PCM A-law de 8 kHz como payload type 110 (AAC-ELD) a HomeKit.
+  - El decodificador CoreAudio de iOS recibía datos binarios corruptos para AAC, provocando que el reloj de audio se detuviera inmediatamente.
+  - Como el pipeline de renderizado de vídeo (VideoToolbox) en iOS sincroniza sus fotogramas al reloj de audio, la detención del reloj de audio **congelaba el renderizado de vídeo tras el primer fragmento de fotograma**, dejando el 85% inferior de la pantalla en verde sólido (buffer YUV 0,0,0 sin actualizar) y sin sonido.
+- **Corrección integral aplicada:**
+  - **Eliminada la Tapo C120 de `isAudioPassthroughEligible`:** Ahora la C120 procesa su audio a través del pipeline de normalización de audio (igual que la cámara Wyze).
+  - **Transcodificación de audio exclusiva a AAC-ELD (`libfdk_aac` / `aac`):** Normalización de la pista de 8 kHz a 16 kHz con timestamps monotónicos garantizados (`-af aresample=async=1:first_pts=0`), eliminando cualquier estancamiento del reloj AV.
+  - **Vídeo 2K (2560x1440) se mantiene en passthrough puro (`-c:v copy`):** Cero consumo de CPU en la Raspberry Pi 5.
+  - **Identidad de códec de audio actualizada:** En `cameraui-storage.ts` y `cameraui-homekit-bridge.ts`, la C120 queda formalmente registrada con `audioCodec: "pcm_alaw"`, `audioSampleRate: 8000`, `audioChannels: 1`.
+  - **Tapo C402 Estrictamente Intacta y Protegida:** No se tocó ninguna línea de configuración o flujo de la Tapo C402.
+
 ## [1.8.86] - 2026-09-23
 
 ### Corrección definitiva "Sin Respuesta" C120 — enforce explícito de dimensiones 2560×1440 en mountCamera

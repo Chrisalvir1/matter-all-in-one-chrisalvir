@@ -152,7 +152,9 @@ export class CameraUiHomeKitBridge {
       camera.videoCodec = "h264";
       camera.strategy = "passthrough_h264";
       camera.hasAudio = camera.hasAudio !== false; // preserve explicit false
-      if (!camera.audioCodec) camera.audioCodec = "aac";
+      camera.audioCodec = "pcm_alaw";
+      camera.audioSampleRate = 8000;
+      camera.audioChannels = 1;
     }
 
     if (isHomeAssistantSource && camera.rtspUrl) {

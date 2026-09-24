@@ -238,12 +238,12 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     expect(args).not.toContain("aresample");
   });
 
-  it("uses direct passthrough -c:a copy for Tapo C120 to preserve synchronized A/V clocks without lag", () => {
+  it("transcodes ONLY audio for Tapo C120 (pcm_alaw) while preserving pure -c:v copy video passthrough", () => {
     const platform = createPlatformMock();
     const capabilities = createCapabilities({
       videoCodec: "h264",
-      audioCodec: "aac", // RTSP camera sends AAC-LC
-      audioSampleRate: 16000,
+      audioCodec: "pcm_alaw", // Tapo C120 RTSP produces PCMA 8000Hz
+      audioSampleRate: 8000,
       audioChannels: 1,
     });
     const streamSource = createStreamSource({
@@ -300,11 +300,12 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     expect(args).toContain("+genpts+igndts");
     expect(args).toContain("-max_interleave_delta");
     expect(args).toContain("100000");
-    // Audio is direct copy passthrough to avoid timestamp desync
+    // Audio is transcoded to AAC/AAC-ELD to prevent CoreAudio clock stall
     expect(args).toContain("-c:a");
     const audioCodecIdx = args.indexOf("-c:a");
     expect(audioCodecIdx).toBeGreaterThan(-1);
-    expect(args[audioCodecIdx + 1]).toBe("copy");
+    expect(["libfdk_aac", "aac"]).toContain(args[audioCodecIdx + 1]);
+    expect(args).toContain("aresample=async=1:first_pts=0");
   });
 
   it("strictly preserves Tapo C402 input and audio parameters untouched", () => {
