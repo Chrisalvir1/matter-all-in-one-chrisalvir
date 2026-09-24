@@ -233,17 +233,25 @@ export class HomeKitCameraStreamingDelegate
   private sourceOutputMetadata(): VideoStreamMetadata {
     const measured = this.capabilities.measuredVideo;
     return {
-      codec: measured?.codec || this.capabilities.videoCodec,
-      profile: measured?.profile || this.capabilities.videoProfile,
+      codec: measured?.codec,
+      profile: measured?.profile,
       level: measured?.level,
-      width: measured?.width || this.capabilities.resolution?.width,
-      height: measured?.height || this.capabilities.resolution?.height,
+      width: measured?.width,
+      height: measured?.height,
       rFrameRate: measured?.rFrameRate,
       avgFrameRate: measured?.avgFrameRate,
-      fps: measured?.fps || this.capabilities.maxFps,
+      nominalFps: measured?.rFrameRate
+        ? Number(measured.rFrameRate.split("/")[0]) /
+          Number(measured.rFrameRate.split("/")[1] || 1)
+        : undefined,
+      averageFps: measured?.avgFrameRate
+        ? Number(measured.avgFrameRate.split("/")[0]) /
+          Number(measured.avgFrameRate.split("/")[1] || 1)
+        : undefined,
+      fps: measured?.avgFrameRate ? measured.fps : undefined,
       bitrateKbps: measured?.bitrateKbps,
       pixFmt: measured?.pixFmt,
-      metadataSource: "effective-command",
+      metadataSource: measured ? "ffprobe" : undefined,
     };
   }
 
@@ -253,10 +261,12 @@ export class HomeKitCameraStreamingDelegate
     effectiveMode: LiveViewProcessingMode,
     output: VideoStreamMetadata,
     fallbackReason?: string,
+    fpsProcessing?: LiveViewSessionTelemetry["fpsProcessing"],
   ): void {
     const video = request.video;
     const audio = request.audio;
     session.telemetry = createSessionTelemetry({
+      cameraId: this.entityId,
       sessionId: session.sessionId,
       videoSsrc: session.videoSsrc,
       video: {
@@ -279,6 +289,7 @@ export class HomeKitCameraStreamingDelegate
           }
         : undefined,
       effectiveMode,
+      fpsProcessing: fpsProcessing || effectiveMode,
       output,
       fallbackReason,
     });
@@ -1237,7 +1248,7 @@ export class HomeKitCameraStreamingDelegate
           level: "4.0",
           width: targetWidth,
           height: targetHeight,
-          fps,
+          configuredFps: fps,
           bitrateKbps: 4500,
           pixFmt: "yuv420p",
           metadataSource: "effective-command",

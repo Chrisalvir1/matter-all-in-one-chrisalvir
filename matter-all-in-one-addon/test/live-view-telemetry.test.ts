@@ -8,6 +8,7 @@ import {
   retainRecentSessions,
   sanitizeDiagnosticText,
   sourceMetadataFromProbe,
+  classifyLiveViewProcessing,
 } from "../src/camera/homekit/live-view-telemetry.js";
 
 describe("Live View telemetry", () => {
@@ -51,6 +52,7 @@ describe("Live View telemetry", () => {
 
   it("records only sanitized session diagnostics and finalizes duration", () => {
     const session = createSessionTelemetry({
+      cameraId: "camera.c120",
       sessionId: "session-1",
       videoSsrc: 1234,
       effectiveMode: "normalization",
@@ -66,6 +68,28 @@ describe("Live View telemetry", () => {
     expect(finished.durationMs).toBeGreaterThanOrEqual(0);
     expect(JSON.stringify(finished)).not.toContain("secret");
     expect(JSON.stringify(finished)).not.toContain("camera.local");
+    expect(finished.cameraId).toBe("camera.c120");
+  });
+
+  it("keeps telemetry camera scoped and does not leak rates between cameras", () => {
+    const c120 = createSessionTelemetry({
+      cameraId: "camera.c120",
+      sessionId: "c120-session",
+      effectiveMode: "normalization",
+      video: { fps: 15 },
+      output: sourceMetadataFromProbe({ avgFrameRate: "15/1" }),
+    });
+    const wyze = createSessionTelemetry({
+      cameraId: "camera.wyze",
+      sessionId: "wyze-session",
+      effectiveMode: "copy",
+      video: { fps: 20 },
+      output: sourceMetadataFromProbe({ avgFrameRate: "20/1" }),
+    });
+    expect(c120.cameraId).toBe("camera.c120");
+    expect(wyze.cameraId).toBe("camera.wyze");
+    expect(c120.output?.averageFps).toBe(15);
+    expect(wyze.output?.averageFps).toBe(20);
   });
 
   it("records only safe ffmpeg progress fields", () => {
@@ -105,6 +129,7 @@ describe("Live View telemetry", () => {
       videoLevel: "5.0",
       width: 2560,
       height: 1440,
+      rFrameRate: "15/1",
       avgFrameRate: "15/1",
       bitrateKbps: 2800,
       pixFmt: "yuv420p",
@@ -114,10 +139,74 @@ describe("Live View telemetry", () => {
       height: 1440,
       level: "5.0",
       fps: 15,
+      nominalFps: 15,
+      averageFps: 15,
     });
     expect(
       sanitizeDiagnosticText("srtp_out_params=abc123 token=xyz"),
     ).not.toContain("abc123");
+  });
+
+  it.each([10, 15, 20, 30])(
+    "does not replace measured %s fps with a global default",
+    (fps) => {
+      const source = sourceMetadataFromProbe({
+        videoCodec: "h264",
+        width: 1920,
+        height: 1080,
+        rFrameRate: `${fps}/1`,
+        avgFrameRate: `${fps}/1`,
+      });
+      expect(source.nominalFps).toBe(fps);
+      expect(source.averageFps).toBe(fps);
+      expect(source.fps).toBe(fps);
+    },
+  );
+
+  it("leaves missing measured FPS as no measurement and detects variable output", () => {
+    const source = sourceMetadataFromProbe({
+      videoCodec: "h264",
+      width: 1920,
+      height: 1080,
+    });
+    expect(source.fps).toBeUndefined();
+    const output = mergeFfmpegProgress(undefined, "fps=10");
+    const next = mergeFfmpegProgress(output, "fps=20");
+    expect(next).toMatchObject({
+      observedFps: 20,
+      observedFpsMin: 10,
+      observedFpsMax: 20,
+    });
+  });
+
+  it("classifies copy, downscale, FPS normalization, transcode and fallback per session", () => {
+    expect(
+      classifyLiveViewProcessing({
+        copiedVideo: true,
+        sourceWidth: 1920,
+        outputWidth: 1920,
+        requestedFps: 15,
+        outputFps: 15,
+      }),
+    ).toBe("copy");
+    expect(
+      classifyLiveViewProcessing({
+        copiedVideo: false,
+        sourceWidth: 2560,
+        outputWidth: 1920,
+      }),
+    ).toBe("normalization");
+    expect(
+      classifyLiveViewProcessing({
+        copiedVideo: false,
+        requestedFps: 15,
+        outputFps: 10,
+      }),
+    ).toBe("fps-normalization");
+    expect(classifyLiveViewProcessing({ copiedVideo: false })).toBe(
+      "transcode",
+    );
+    expect(classifyLiveViewProcessing({ fallback: true })).toBe("fallback");
   });
 
   it("keeps only a bounded, newest-first session history", () => {
@@ -126,6 +215,7 @@ describe("Live View telemetry", () => {
       history = retainRecentSessions(
         history,
         createSessionTelemetry({
+          cameraId: "camera.c120",
           sessionId: `session-${index}`,
           effectiveMode: "copy",
         }),

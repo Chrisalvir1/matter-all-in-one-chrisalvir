@@ -5,6 +5,14 @@
 
 export type LiveViewProcessingMode =
   "copy" | "normalization" | "transcode" | "fallback";
+export type LiveViewFpsProcessingMode =
+  | "copy"
+  | "normalization"
+  | "fps-normalization"
+  | "transcode"
+  | "transcode-fps-normalization"
+  | "substream"
+  | "fallback";
 
 export interface VideoStreamMetadata {
   codec?: string;
@@ -14,6 +22,17 @@ export interface VideoStreamMetadata {
   height?: number;
   rFrameRate?: string;
   avgFrameRate?: string;
+  /** Nominal/container rate from r_frame_rate; never treated as observed FPS. */
+  nominalFps?: number;
+  /** Average rate reported by ffprobe. */
+  averageFps?: number;
+  /** Measured output rate from progress/frame observation. */
+  observedFps?: number;
+  observedFpsMin?: number;
+  observedFpsMax?: number;
+  variableFrameRate?: boolean;
+  /** FPS configured on the output command, distinct from observed FPS. */
+  configuredFps?: number;
   fps?: number;
   bitrateKbps?: number;
   pixFmt?: string;
@@ -22,6 +41,7 @@ export interface VideoStreamMetadata {
 }
 
 export interface LiveViewSessionTelemetry {
+  cameraId: string;
   sessionId: string;
   videoSsrc?: number;
   startedAt: string;
@@ -41,7 +61,8 @@ export interface LiveViewSessionTelemetry {
     sampleRate?: number;
     maxBitrateKbps?: number;
   };
-  effectiveMode: LiveViewProcessingMode;
+  effectiveMode: LiveViewFpsProcessingMode;
+  fpsProcessing?: LiveViewFpsProcessingMode;
   output?: VideoStreamMetadata;
   fallbackReason?: string;
   error?: string;
@@ -93,7 +114,14 @@ export function mergeFfmpegProgress(
   };
   if (match[1] === "fps") {
     const fps = Number(match[2]);
-    if (Number.isFinite(fps) && fps >= 0) next.fps = fps;
+    if (Number.isFinite(fps) && fps >= 0) {
+      next.fps = fps;
+      next.observedFps = fps;
+      next.observedFpsMin = Math.min(next.observedFpsMin ?? fps, fps);
+      next.observedFpsMax = Math.max(next.observedFpsMax ?? fps, fps);
+      next.variableFrameRate =
+        (next.observedFpsMax ?? fps) - (next.observedFpsMin ?? fps) > 0.01;
+    }
   } else {
     const bitrate = Number.parseFloat(match[2].replace(/\s*kbits\/s/i, ""));
     if (Number.isFinite(bitrate) && bitrate >= 0) next.bitrateKbps = bitrate;
@@ -132,6 +160,7 @@ export function mergeFfmpegStreamHeader(
 }
 
 export function createSessionTelemetry(input: {
+  cameraId: string;
   sessionId: string;
   videoSsrc?: number;
   video?: {
@@ -143,11 +172,13 @@ export function createSessionTelemetry(input: {
     maxBitrateKbps?: number;
   };
   audio?: { codec?: string; sampleRate?: number; maxBitrateKbps?: number };
-  effectiveMode: LiveViewProcessingMode;
+  effectiveMode: LiveViewFpsProcessingMode;
+  fpsProcessing?: LiveViewFpsProcessingMode;
   output?: VideoStreamMetadata;
   fallbackReason?: string;
 }): LiveViewSessionTelemetry {
   return {
+    cameraId: input.cameraId,
     sessionId: input.sessionId,
     videoSsrc: input.videoSsrc,
     startedAt: new Date().toISOString(),
@@ -155,6 +186,7 @@ export function createSessionTelemetry(input: {
     requestedVideo: input.video || {},
     requestedAudio: input.audio,
     effectiveMode: input.effectiveMode,
+    fpsProcessing: input.fpsProcessing,
     output: input.output,
     fallbackReason: sanitizeDiagnosticText(input.fallbackReason),
   };
@@ -208,9 +240,53 @@ export function sourceMetadataFromProbe(probe: {
     height: probe.height,
     rFrameRate,
     avgFrameRate,
-    fps: rateToFps(avgFrameRate) || rateToFps(rFrameRate),
+    nominalFps: rateToFps(rFrameRate),
+    averageFps: rateToFps(avgFrameRate),
+    // `fps` is retained for compatibility but is measured only when an
+    // average rate exists. Never invent a default from camera capabilities.
+    fps: rateToFps(avgFrameRate),
     bitrateKbps: probe.bitrateKbps,
     pixFmt: probe.pixFmt,
     metadataSource: "ffprobe",
   };
+}
+
+/** Classify the actually selected pipeline from requested and observed values. */
+export function classifyLiveViewProcessing(input: {
+  requestedWidth?: number;
+  requestedHeight?: number;
+  requestedFps?: number;
+  sourceWidth?: number;
+  sourceHeight?: number;
+  sourceFps?: number;
+  outputWidth?: number;
+  outputHeight?: number;
+  outputFps?: number;
+  copiedVideo?: boolean;
+  substream?: boolean;
+  fallback?: boolean;
+}): LiveViewFpsProcessingMode {
+  if (input.fallback) return "fallback";
+  if (input.substream) return "substream";
+  const downscale =
+    Boolean(
+      input.sourceWidth &&
+      input.outputWidth &&
+      input.outputWidth < input.sourceWidth,
+    ) ||
+    Boolean(
+      input.sourceHeight &&
+      input.outputHeight &&
+      input.outputHeight < input.sourceHeight,
+    );
+  const fpsChanged = Boolean(
+    input.requestedFps &&
+    input.outputFps &&
+    Math.abs(input.requestedFps - input.outputFps) > 0.01,
+  );
+  if (input.copiedVideo && !downscale && !fpsChanged) return "copy";
+  if (downscale && fpsChanged) return "transcode-fps-normalization";
+  if (downscale) return "normalization";
+  if (fpsChanged) return "fps-normalization";
+  return input.copiedVideo ? "copy" : "transcode";
 }
