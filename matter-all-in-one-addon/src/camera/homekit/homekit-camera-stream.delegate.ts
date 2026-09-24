@@ -900,9 +900,9 @@ export class HomeKitCameraStreamingDelegate
         // Probesize: C402 needs 2MB for its long GOP analysis; C120 needs 512KB for 2K SPS/PPS;
         // everything else (Wyze, EZVIZ) uses the minimal 64KB for fast startup.
         "-probesize",
-        isTapoC402 ? "2097152" : isTapoC120 ? "524288" : "65536",
+        isTapoC402 ? "2097152" : isTapoC120 ? "131072" : "65536",
         "-analyzeduration",
-        isTapoC402 ? "3000000" : isTapoC120 ? "1000000" : "100000",
+        isTapoC402 ? "3000000" : isTapoC120 ? "200000" : "100000",
       );
       if (isTapoC402) {
         args.push(
@@ -914,15 +914,13 @@ export class HomeKitCameraStreamingDelegate
           "0",
         );
       } else if (isTapoC120) {
-        // v1.8.81 proven working config: genpts+igndts fixes go2rtc broken DTS.
-        // NO +nobuffer/flush_packets on INPUT — these caused "No Response" by starving
-        // the demuxer before SPS/PPS were fully parsed.
-        // NO low_delay on input flags — causes FFmpeg to skip keyframe wait logic.
+        // C120 ultra-low latency: nobuffer and flush_packets prevent demuxer queue buildup.
+        // low_delay flag ensures zero-delay packet forwarding for instant, fluid 2K live view.
         args.push(
           "-fflags",
-          "+genpts+igndts",
+          "+nobuffer+flush_packets+genpts+discardcorrupt",
           "-flags",
-          "0",
+          "low_delay",
         );
       } else {
         args.push(
@@ -934,7 +932,7 @@ export class HomeKitCameraStreamingDelegate
       }
       args.push(
         "-thread_queue_size",
-        isTapoC120 ? "1024" : "512",
+        "512",
         "-i",
         sourceUrl,
       );
@@ -1039,7 +1037,7 @@ export class HomeKitCameraStreamingDelegate
         "-fflags",
         "+nobuffer+flush_packets",
         "-max_delay",
-        "500000",
+        "0",
         "-max_interleave_delta",
         "100000",
         "-payload_type",

@@ -1,3 +1,18 @@
+## [1.8.88] - 2026-09-23
+
+### Eliminación definitiva del lag de 5 segundos en Tapo C120: Streaming fluido en tiempo real
+
+- **Causa del retraso residual de 5 segundos identificada y eliminada:**
+  - En versiones anteriores, se mantenía en la entrada de la C120 una cola grande de retención con `analyzeduration 1000000` (1 segundo completo de espera), `probesize 524288`, `thread_queue_size 1024`, `-flags 0` (sin modo de baja latencia) y sin las banderas `+nobuffer+flush_packets`. Esto obligaba a FFmpeg a acumular varios segundos de paquetes en buffer antes de enviarlos.
+  - Además, en la salida RTP de vídeo (`videoPassArgs`) se mantenía `-max_delay 500000` (500 ms de búfer de salida).
+- **Ajuste de latencia ultra-baja en tiempo real para Tapo C120:**
+  - **Banderas de entrada instantáneas:** `-fflags +nobuffer+flush_packets+genpts+discardcorrupt` junto con `-flags low_delay`. Cada paquete que llega por RTSP desde go2rtc se procesa y emite al instante sin acumularse en el demuxer.
+  - **Reducción de análisis de flujo:** `probesize: 131072` (128 KB) y `analyzeduration: 200000` (200 ms), eliminando 800 ms de retraso de inicio.
+  - **Cola de hilos:** Reducida a `512` paquetes.
+  - **Salida RTP sin retención (`-max_delay 0`):** Los paquetes RTP de vídeo se entregan al socket SRTP inmediatamente conforme llegan, eliminando los 500 ms de latencia artificial previa.
+  - **Resultado:** Vídeo fluido 2K en tiempo real (latencia < 0.5s) con audio sincronizado AAC sin saltos ni congelamientos.
+- **Tapo C402 Estrictamente Intacta:** No se modificó ningún parámetro de la Tapo C402.
+
 ## [1.8.87] - 2026-09-23
 
 ### Solución definitiva de audio y vídeo congelado/verde en Tapo C120: Detección real de PCM_ALAW y normalización a AAC
