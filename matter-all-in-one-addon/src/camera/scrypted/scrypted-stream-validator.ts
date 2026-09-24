@@ -19,6 +19,12 @@ export interface StreamValidationResult {
   audioCodec?: string;
   resolution?: { width: number; height: number };
   fps?: number;
+  videoProfile?: string;
+  videoLevel?: string;
+  rFrameRate?: string;
+  avgFrameRate?: string;
+  bitrateKbps?: number;
+  pixFmt?: string;
   hasAudio?: boolean;
   audioSampleRate?: number;
   audioChannels?: number;
@@ -121,7 +127,8 @@ export class ScryptedStreamValidator {
       return {
         status: "not_checked",
         url: sanitized,
-        error: "Ya hay una verificación de stream en curso. Espera unos segundos antes de iniciar otra.",
+        error:
+          "Ya hay una verificación de stream en curso. Espera unos segundos antes de iniciar otra.",
         validatedAt: now,
       };
     }
@@ -203,6 +210,12 @@ export class ScryptedStreamValidator {
                     ? { width: probe.width, height: probe.height }
                     : undefined,
                 fps: probe.fps,
+                videoProfile: probe.videoProfile,
+                videoLevel: probe.videoLevel,
+                rFrameRate: probe.rFrameRate,
+                avgFrameRate: probe.avgFrameRate,
+                bitrateKbps: probe.bitrateKbps,
+                pixFmt: probe.pixFmt,
                 hasAudio: probe.hasAudio,
                 audioSampleRate: probe.audioSampleRate,
                 audioChannels: probe.audioChannels,

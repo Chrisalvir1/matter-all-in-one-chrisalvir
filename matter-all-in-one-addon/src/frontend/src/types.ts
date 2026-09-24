@@ -35,7 +35,17 @@ export interface DeviceRecord {
 export interface CameraSensorRecord {
   sensorId: string;
   name: string;
-  type: "motion" | "doorbell" | "person" | "package" | "vehicle" | "animal" | "light" | "siren" | "ptz" | "other";
+  type:
+    | "motion"
+    | "doorbell"
+    | "person"
+    | "package"
+    | "vehicle"
+    | "animal"
+    | "light"
+    | "siren"
+    | "ptz"
+    | "other";
   scryptedInterface?: string;
   enabled: boolean;
   state?: boolean | string | number;
@@ -59,6 +69,51 @@ export interface StreamLatencyMetrics {
   error?: string;
 }
 
+export interface LiveViewVideoMetadata {
+  codec?: string;
+  profile?: string;
+  level?: string;
+  width?: number;
+  height?: number;
+  rFrameRate?: string;
+  avgFrameRate?: string;
+  fps?: number;
+  bitrateKbps?: number;
+  pixFmt?: string;
+  metadataSource?: string;
+}
+
+export interface LiveViewTelemetry {
+  active: LiveViewSessionTelemetry[];
+  recent: LiveViewSessionTelemetry[];
+}
+
+export interface LiveViewSessionTelemetry {
+  sessionId: string;
+  videoSsrc?: number;
+  startedAt: string;
+  endedAt?: string;
+  durationMs?: number;
+  state: "active" | "finished" | "failed";
+  requestedVideo: LiveViewVideoMetadata & { maxBitrateKbps?: number };
+  requestedAudio?: {
+    codec?: string;
+    sampleRate?: number;
+    maxBitrateKbps?: number;
+  };
+  effectiveMode: "copy" | "normalization" | "transcode" | "fallback";
+  output?: LiveViewVideoMetadata;
+  fallbackReason?: string;
+  error?: string;
+}
+
+export interface LiveViewCapabilities {
+  codec: string;
+  profiles: string[];
+  levels: string[];
+  resolutions: Array<[number, number, number]>;
+}
+
 export interface CameraRecord {
   cameraId: string;
   name: string;
@@ -70,7 +125,11 @@ export interface CameraRecord {
   displaySerialNumber?: string;
   sourceManufacturer?: string;
   sourceModel?: string;
-  identityOverride?: { manufacturer?: string; model?: string; serialNumber?: string };
+  identityOverride?: {
+    manufacturer?: string;
+    model?: string;
+    serialNumber?: string;
+  };
   fps?: number;
   resolution?: { width: number; height: number };
   status?: {
@@ -78,7 +137,12 @@ export interface CameraRecord {
     isOnline?: boolean;
     cache?: "fresh" | "stale" | "expired";
     lastError?: string;
-    logs?: Array<{ timestamp: string; level: string; message: string; details?: any }>;
+    logs?: Array<{
+      timestamp: string;
+      level: string;
+      message: string;
+      details?: any;
+    }>;
   };
   sensors?: CameraSensorRecord[];
   realEntities?: CameraRealEntity[];
@@ -134,6 +198,15 @@ export interface CameraRecord {
     matterCommissioned?: boolean;
     fabrics?: Array<{ label?: string; fabricIndex?: number }>;
   };
+  liveViewCapabilities?: LiveViewCapabilities;
+  liveViewTelemetry?: LiveViewTelemetry;
+  hksvConfiguration?: {
+    resolution: [number, number, number];
+    fragmentLength: number;
+    prebufferLength: number;
+    audioSamplerate: number;
+  };
+  recordingCapabilities?: Array<[number, number, number]>;
 }
 
 export interface StatusResponse {
@@ -208,6 +281,12 @@ export interface CameraUiCameraItem {
   videoCodecSource?: "ffprobe" | "camera_ui" | "unknown";
   codecProbeUrl?: string;
   codecProbedAt?: string;
+  videoProfile?: string;
+  videoLevel?: string;
+  rFrameRate?: string;
+  avgFrameRate?: string;
+  videoBitrateKbps?: number;
+  videoPixFmt?: string;
   audioCodec?: string;
   audioSampleRate?: number;
   audioChannels?: number;
@@ -233,4 +312,13 @@ export interface CameraUiCameraItem {
   lightEntityId?: string;
   sirenEntityId?: string;
   motionEntityId?: string;
+  liveViewCapabilities?: LiveViewCapabilities;
+  liveViewTelemetry?: LiveViewTelemetry;
+  hksvConfiguration?: {
+    resolution: [number, number, number];
+    fragmentLength: number;
+    prebufferLength: number;
+    audioSamplerate: number;
+  };
+  recordingCapabilities?: Array<[number, number, number]>;
 }

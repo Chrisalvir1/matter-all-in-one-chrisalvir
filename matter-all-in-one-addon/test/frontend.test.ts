@@ -29,6 +29,20 @@ describe("frontend accessibility contract", () => {
     expect(stylesheet).toMatch(/\.modal-backdrop/);
   });
 
+  it("keeps source, Live View and HKSV diagnostics separate", async () => {
+    const cameraModal = await readFile(
+      new URL("components/CameraConfigModal.tsx", frontendSrcPath),
+      "utf8",
+    );
+    expect(cameraModal).toContain("Fuente detectada");
+    expect(cameraModal).toContain("Live View anunciado a Apple Home");
+    expect(cameraModal).toContain("Solicitud Live View de Apple Home");
+    expect(cameraModal).toContain("Salida efectiva de FFmpeg");
+    expect(cameraModal).toContain("Grabación HKSV");
+    expect(cameraModal).not.toContain("Cero transcodificación");
+    expect(cameraModal).not.toContain("announcedResolutions");
+  });
+
   it("provides per-accessory Matter recovery controls and an explicit diagnostics state", async () => {
     const deviceModal = await readFile(
       new URL("components/DeviceModal.tsx", frontendSrcPath),
@@ -42,7 +56,9 @@ describe("frontend accessibility contract", () => {
     expect(deviceModal).toContain('id="regenerate-code-button"');
     expect(deviceModal).toContain('id="reset-accessory-button"');
     expect(apiClient).toContain("/refresh-accessory/");
-    expect(deviceModal).toContain("Sin errores registrados para este accesorio.");
+    expect(deviceModal).toContain(
+      "Sin errores registrados para este accesorio.",
+    );
     expect(deviceModal).toContain("selectedEntity?.logs");
     expect(deviceModal).toContain('id="fabrics-section"');
     expect(deviceModal).toContain("Desconectar de");
@@ -69,7 +85,7 @@ describe("frontend accessibility contract", () => {
     expect(controlCenter).toContain("MATTER ACTIVO SIN EMPAREJAR");
     expect(controlCenter).toContain("liquid-control-center");
     expect(controlCenter).toContain('role="tablist"');
-    expect(controlCenter).toContain('id={`tab-${card.id}`}');
+    expect(controlCenter).toContain("id={`tab-${card.id}`}");
     expect(controlCenter).toContain('id: "all"');
     expect(controlCenter).toContain('id: "unpaired"');
     expect(controlCenter).toContain('id: "issues"');
@@ -136,7 +152,9 @@ describe("frontend accessibility contract", () => {
     );
 
     // QRCodeDisplay component contract
-    expect(qrDisplay).toContain('export type QRVariant = "hap-homekit" | "matter-badge" | "multi-admin-glass"');
+    expect(qrDisplay).toContain(
+      'export type QRVariant = "hap-homekit" | "matter-badge" | "multi-admin-glass"',
+    );
     expect(qrDisplay).toContain("export const AppleHomeModernIcon");
     expect(qrDisplay).toContain("ios27-glass-sticker");
     expect(qrDisplay).toContain("sticker-header");
@@ -147,17 +165,27 @@ describe("frontend accessibility contract", () => {
     expect(qrDisplay).toContain("code-cyan");
 
     // CameraConfigModal passes hap-homekit variant and pinCode, and uses AppleHomeModernIcon for paired state
-    expect(cameraModal).toContain('variant={activeTab === "homekit" ? "hap-homekit" : "matter-badge"}');
-    expect(cameraModal).toContain("pinCode={activeTab === \"homekit\" ? pinCode : undefined}");
+    expect(cameraModal).toMatch(
+      /variant=\{\s*activeTab === "homekit" \? "hap-homekit" : "matter-badge"\s*\}/,
+    );
+    expect(cameraModal).toContain(
+      'pinCode={activeTab === "homekit" ? pinCode : undefined}',
+    );
     expect(cameraModal).toContain("paired-success-glass-card");
-    expect(cameraModal).toContain("<AppleHomeModernIcon variant=\"color\" size={56} />");
+    expect(cameraModal).toContain(
+      '<AppleHomeModernIcon variant="color" size={56} />',
+    );
 
     // DeviceModal hides initial QR when commissioned, shows paired-success-glass-card, and toggles multi-admin
     expect(deviceModal).toContain("isCommissioned && !multiAdminOpen ?");
     expect(deviceModal).toContain("paired-success-glass-card");
-    expect(deviceModal).toContain("<AppleHomeModernIcon variant=\"color\" size={56} />");
+    expect(deviceModal).toContain(
+      '<AppleHomeModernIcon variant="color" size={56} />',
+    );
     expect(deviceModal).toContain("button-open-multiadmin");
-    expect(deviceModal).toContain('variant={multiAdminOpen ? "multi-admin-glass" : "matter-badge"}');
+    expect(deviceModal).toContain(
+      'variant={multiAdminOpen ? "multi-admin-glass" : "matter-badge"}',
+    );
 
     // CSS contract for iOS 27 Liquid Glass sticker and paired success card
     expect(stylesheet).toContain(".ios27-glass-sticker");
@@ -170,6 +198,3 @@ describe("frontend accessibility contract", () => {
     expect(stylesheet).toContain(".qr-liquid-glass-card.multi-admin-mode");
   });
 });
-
-
-

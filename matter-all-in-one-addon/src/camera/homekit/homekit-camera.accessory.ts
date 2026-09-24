@@ -521,6 +521,21 @@ export class HomeKitCameraAccessory {
     return unique;
   }
 
+  /** Read-only description of Live View capabilities advertised by this accessory. */
+  public getLiveViewCapabilitiesDiagnostic(): {
+    codec: "h264";
+    profiles: string[];
+    levels: string[];
+    resolutions: [number, number, number][];
+  } {
+    return {
+      codec: "h264",
+      profiles: ["baseline", "main", "high"],
+      levels: ["3.1", "3.2", "4.0"],
+      resolutions: this.buildDeclaredResolutions(),
+    };
+  }
+
   private isTapoC402(): boolean {
     const identity = [
       this.record.name,
@@ -912,6 +927,18 @@ export class HomeKitCameraAccessory {
         if (probe.fps) {
           this.capabilities.maxFps = probe.fps;
         }
+        this.capabilities.measuredVideo = {
+          codec: probe.videoCodec,
+          profile: probe.videoProfile,
+          level: probe.videoLevel,
+          width: probe.width,
+          height: probe.height,
+          rFrameRate: probe.rFrameRate,
+          avgFrameRate: probe.avgFrameRate,
+          fps: probe.fps,
+          bitrateKbps: probe.bitrateKbps,
+          pixFmt: probe.pixFmt,
+        };
         this.platform?.log?.notice?.(
           `[HomeKitCamera][${this.entityId}] Probed capabilities: codec=${probe.videoCodec} ${probe.width}x${probe.height}@${probe.fps}fps hasAudio=${probe.hasAudio} -> strategy=${this.capabilities.strategy}`,
         );

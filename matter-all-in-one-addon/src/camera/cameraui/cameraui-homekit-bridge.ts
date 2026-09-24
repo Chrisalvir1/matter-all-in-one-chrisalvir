@@ -55,6 +55,12 @@ export function applyCameraSourceProbe(
   camera.width = probe.width;
   camera.height = probe.height;
   camera.fps = probe.fps;
+  camera.videoProfile = probe.videoProfile;
+  camera.videoLevel = probe.videoLevel;
+  camera.rFrameRate = probe.rFrameRate;
+  camera.avgFrameRate = probe.avgFrameRate;
+  camera.videoBitrateKbps = probe.bitrateKbps;
+  camera.videoPixFmt = probe.pixFmt;
   camera.hasAudio = probe.hasAudio;
   camera.audioCodec = probe.audioCodec?.toLowerCase();
   camera.audioSampleRate = probe.audioSampleRate;
@@ -139,12 +145,15 @@ export class CameraUiHomeKitBridge {
     // 2560x1440/30 stream and HAP was permanently configured with stale values.
     const isHomeAssistantSource = camera.sourceProvider === "home_assistant";
 
-    // The C120 H.264 stream is copied directly into HAP. Its dimensions and FPS
-    // must therefore be exactly those produced by RTSP; FFmpeg cannot add frames.
+    // C120 source metadata is measured from RTSP. The existing classic-HAP Live
+    // View path can normalize its 2K source to a negotiated 1080p output; do not
+    // present source dimensions as the output delivered to Apple Home.
     // This camera currently delivers 15 fps even though its physical maximum is
     // 20 fps. Advertising a hard-coded 30 fps made Apple Home negotiate a rate
     // that the copied stream cannot satisfy, which appeared as choppy Live View.
-    const isTapoC120Mount = /(?:\bc120\b|tapo[-_ ]?c120)/i.test(`${camera.id} ${camera.name || ""}`);
+    const isTapoC120Mount = /(?:\bc120\b|tapo[-_ ]?c120)/i.test(
+      `${camera.id} ${camera.name || ""}`,
+    );
     if (isTapoC120Mount) {
       camera.width = 2560;
       camera.height = 1440;
@@ -227,7 +236,9 @@ export class CameraUiHomeKitBridge {
       // Keep the measured source codec. The HAP delegates copy AAC when
       // compatible and transcode only non-AAC audio (e.g. PCM A-law) to AAC.
       audioCodec: (camera.audioCodec ||
-        (camera.hasAudio !== false ? "aac" : "none")) as CameraCapabilitiesInfo["audioCodec"],
+        (camera.hasAudio !== false
+          ? "aac"
+          : "none")) as CameraCapabilitiesInfo["audioCodec"],
       audioSampleRate: camera.audioSampleRate,
       audioChannels: camera.audioChannels,
       resolution: {
@@ -235,6 +246,21 @@ export class CameraUiHomeKitBridge {
         height: camera.height || 1080,
       },
       maxFps: camera.fps || 30,
+      measuredVideo:
+        camera.videoCodecSource === "ffprobe"
+          ? {
+              codec: camera.videoCodec,
+              profile: camera.videoProfile,
+              level: camera.videoLevel,
+              width: camera.width,
+              height: camera.height,
+              rFrameRate: camera.rFrameRate,
+              avgFrameRate: camera.avgFrameRate,
+              fps: camera.fps,
+              bitrateKbps: camera.videoBitrateKbps,
+              pixFmt: camera.videoPixFmt,
+            }
+          : undefined,
       strategy: chosenStrategy,
       requiresTranscoding: isHaProxy,
       snapshotSupported: Boolean(camera.snapshotUrl),
@@ -409,7 +435,8 @@ export class CameraUiHomeKitBridge {
       // A recording-active/configured callback can only come from a Home Hub.
       // Trust it even when the persisted paired flag is stale after an add-on
       // restart; otherwise C402/EZVIZ/Wyze never regain their detector.
-      if (!confirmedByHomeHub && !accessory.isPaired() && !camera.isPaired) return;
+      if (!confirmedByHomeHub && !accessory.isPaired() && !camera.isPaired)
+        return;
       if (!camera.rtspUrl || this.activeMotionDetectors.has(camera.id)) return;
       try {
         const cameraIdentity =
@@ -499,7 +526,9 @@ export class CameraUiHomeKitBridge {
     // native event path is absent in this installation, while the detector
     // pauses whenever Live View starts so its working stream is not changed.
     if (
-      (wasMarkedPairedBeforePublish || accessory.isPaired() || camera.isPaired) &&
+      (wasMarkedPairedBeforePublish ||
+        accessory.isPaired() ||
+        camera.isPaired) &&
       camera.rtspUrl &&
       isRtspSource
     ) {

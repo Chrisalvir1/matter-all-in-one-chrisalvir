@@ -16,6 +16,13 @@ export interface ProbeResult {
   probeMethod?: "ffprobe" | "ffmpeg";
   selectedTransport?: "tcp" | "udp";
   videoProfile?: string;
+  /** H.264 level from ffprobe, formatted for display (for example 5.0). */
+  videoLevel?: string;
+  /** Exact frame-rate values reported by the selected source stream. */
+  rFrameRate?: string;
+  avgFrameRate?: string;
+  /** Pixel format reported by ffprobe (for example yuv420p). */
+  pixFmt?: string;
   audioSampleRate?: number;
   audioChannels?: number;
 }
@@ -132,8 +139,7 @@ export function supportsFdkAac(): boolean {
       timeout: 5000,
       stdio: ["ignore", "pipe", "ignore"],
     });
-    cachedFdkSupport =
-      probe.stdout?.toString().includes("libfdk_aac") ?? false;
+    cachedFdkSupport = probe.stdout?.toString().includes("libfdk_aac") ?? false;
   } catch {
     cachedFdkSupport = false;
   }
@@ -262,10 +268,7 @@ export async function probeCameraSource(
       lastError = result.error;
 
       // If RTSP failed with TCP and user didn't explicitly force TCP, try UDP fallback
-      if (
-        sourceUrl.startsWith("rtsp://") &&
-        !options.transport
-      ) {
+      if (sourceUrl.startsWith("rtsp://") && !options.transport) {
         const udpResult = await probeWithFfprobe(
           ffprobePath,
           sourceUrl,
@@ -310,10 +313,7 @@ export async function probeCameraSource(
       lastError = result.error;
 
       // If RTSP failed with TCP and user didn't explicitly force TCP, try UDP fallback with ffmpeg
-      if (
-        sourceUrl.startsWith("rtsp://") &&
-        !options.transport
-      ) {
+      if (sourceUrl.startsWith("rtsp://") && !options.transport) {
         const udpResult = await probeWithFfmpeg(
           ffmpegPath,
           sourceUrl,
@@ -350,6 +350,61 @@ export async function probeCameraSource(
   };
 }
 
+/** Convert ffprobe JSON into only the measured, source-safe fields used by diagnostics. */
+export function parseFfprobeJson(
+  data: unknown,
+  transport: "tcp" | "udp" = "tcp",
+): ProbeResult | undefined {
+  const streams = Array.isArray((data as any)?.streams)
+    ? (data as any).streams
+    : [];
+  const video = streams.find((stream: any) => stream.codec_type === "video");
+  const audio = streams.find((stream: any) => stream.codec_type === "audio");
+  if (!video?.codec_name) return undefined;
+  const rFrameRate =
+    typeof video.r_frame_rate === "string" ? video.r_frame_rate : undefined;
+  const avgFrameRate =
+    typeof video.avg_frame_rate === "string" ? video.avg_frame_rate : undefined;
+  const rate =
+    avgFrameRate && avgFrameRate !== "0/0" ? avgFrameRate : rFrameRate;
+  const [numerator, denominator] = (rate || "").split("/").map(Number);
+  const fps =
+    Number.isFinite(numerator) &&
+    Number.isFinite(denominator) &&
+    denominator > 0
+      ? Math.round(numerator / denominator)
+      : undefined;
+  const numericLevel =
+    typeof video.level === "number" ? video.level : Number(video.level);
+  return {
+    valid: true,
+    videoCodec: String(video.codec_name).toLowerCase(),
+    audioCodec: audio?.codec_name
+      ? String(audio.codec_name).toLowerCase()
+      : undefined,
+    width: video.width,
+    height: video.height,
+    fps,
+    rFrameRate,
+    avgFrameRate,
+    videoProfile: video.profile || undefined,
+    videoLevel: Number.isFinite(numericLevel)
+      ? `${Math.floor(numericLevel / 10)}.${numericLevel % 10}`
+      : undefined,
+    bitrateKbps:
+      Number(video.bit_rate) > 0
+        ? Math.round(Number(video.bit_rate) / 1000)
+        : undefined,
+    pixFmt: video.pix_fmt || undefined,
+    audioSampleRate: Number(audio?.sample_rate) || undefined,
+    audioChannels:
+      typeof audio?.channels === "number" ? audio.channels : undefined,
+    hasAudio: Boolean(audio),
+    probeMethod: "ffprobe",
+    selectedTransport: transport,
+  };
+}
+
 function probeWithFfprobe(
   ffprobePath: string,
   sourceUrl: string,
@@ -362,7 +417,7 @@ function probeWithFfprobe(
       "-v",
       "error",
       "-show_entries",
-      "stream=codec_type,codec_name,width,height,r_frame_rate",
+      "stream=codec_type,codec_name,profile,level,width,height,r_frame_rate,avg_frame_rate,bit_rate,pix_fmt,sample_rate,channels",
       "-of",
       "json",
     ];
@@ -435,37 +490,9 @@ function probeWithFfprobe(
       if (code === 0 && stdoutData.trim()) {
         try {
           const data = JSON.parse(stdoutData);
-          const streams = Array.isArray(data.streams) ? data.streams : [];
-          const videoStream = streams.find(
-            (s: any) => s.codec_type === "video",
-          );
-          const audioStream = streams.find(
-            (s: any) => s.codec_type === "audio",
-          );
-
-          if (videoStream && videoStream.codec_name) {
-            let fps: number | undefined;
-            if (videoStream.r_frame_rate) {
-              const parts = videoStream.r_frame_rate.split("/");
-              if (parts.length === 2 && parseInt(parts[1], 10) > 0) {
-                fps = Math.round(
-                  parseInt(parts[0], 10) / parseInt(parts[1], 10),
-                );
-              }
-            }
-
-            resolve({
-              valid: true,
-              videoCodec: (videoStream.codec_name || "").toLowerCase(),
-              audioCodec:
-                (audioStream?.codec_name || "").toLowerCase() || undefined,
-              width: videoStream.width,
-              height: videoStream.height,
-              fps,
-              hasAudio: Boolean(audioStream),
-              probeMethod: "ffprobe",
-              selectedTransport: transport || "tcp",
-            });
+          const parsed = parseFfprobeJson(data, transport || "tcp");
+          if (parsed) {
+            resolve(parsed);
             return;
           }
         } catch {
@@ -476,25 +503,49 @@ function probeWithFfprobe(
       let portStr = "554";
       try {
         const u = new URL(sourceUrl);
-        portStr = u.port || (u.protocol === "http:" ? "80" : u.protocol === "https:" ? "443" : "554");
+        portStr =
+          u.port ||
+          (u.protocol === "http:"
+            ? "80"
+            : u.protocol === "https:"
+              ? "443"
+              : "554");
       } catch {}
 
       const raw = stderrData.trim();
       let friendly = raw;
-      if (raw.includes("Host is down") || raw.includes("No route to host") || raw.includes("EHOSTDOWN") || raw.includes("EHOSTUNREACH")) {
-        friendly = "Host inalcanzable (Host is down / No route to host). El equipo en esa IP está apagado, desconectado o cambió de dirección.";
-      } else if (raw.includes("Connection refused") || raw.includes("ECONNREFUSED")) {
+      if (
+        raw.includes("Host is down") ||
+        raw.includes("No route to host") ||
+        raw.includes("EHOSTDOWN") ||
+        raw.includes("EHOSTUNREACH")
+      ) {
+        friendly =
+          "Host inalcanzable (Host is down / No route to host). El equipo en esa IP está apagado, desconectado o cambió de dirección.";
+      } else if (
+        raw.includes("Connection refused") ||
+        raw.includes("ECONNREFUSED")
+      ) {
         friendly = `Conexión rechazada (Connection refused en puerto ${portStr}). Verifica la IP y que el servicio RTSP esté activo en ese puerto.`;
       } else if (raw.includes("401") || raw.includes("Unauthorized")) {
         friendly = `Autenticación requerida (401 Unauthorized). El stream RTSP requiere usuario y contraseña (rtsp://usuario:clave@ip:${portStr}/...).`;
       } else if (raw.includes("404") || raw.includes("Not Found")) {
-        friendly = "Ruta no encontrada (404 Not Found). La ruta RTSP no existe en este dispositivo.";
-      } else if (raw.includes("timed out") || raw.includes("Operation not permitted") || raw.includes("ETIMEDOUT")) {
+        friendly =
+          "Ruta no encontrada (404 Not Found). La ruta RTSP no existe en este dispositivo.";
+      } else if (
+        raw.includes("timed out") ||
+        raw.includes("Operation not permitted") ||
+        raw.includes("ETIMEDOUT")
+      ) {
         friendly = `Tiempo de espera agotado al conectar al stream RTSP en puerto ${portStr} (timeout). Verifica la conexión WiFi o si el host está encendido.`;
-      } else if (raw.includes("Invalid data found") || raw.includes("Error opening input")) {
+      } else if (
+        raw.includes("Invalid data found") ||
+        raw.includes("Error opening input")
+      ) {
         friendly = `Respuesta RTSP no válida (Invalid data found). La cámara en puerto ${portStr} rechazó la conexión. Verifica si requiere usuario y contraseña (rtsp://usuario:clave@ip:${portStr}/...), si la ruta es /live en vez de /stream0, o cambia a UDP.`;
       } else if (raw.includes("Could not find codec parameters")) {
-        friendly = "No se pudieron decodificar parámetros H.264 (no se detectaron fotogramas clave a tiempo).";
+        friendly =
+          "No se pudieron decodificar parámetros H.264 (no se detectaron fotogramas clave a tiempo).";
       } else if (!friendly) {
         friendly = `ffprobe finalizó sin datos de video válidos (código ${code})`;
       }
@@ -543,12 +594,7 @@ function probeWithFfmpeg(
 
     if (sourceUrl.startsWith("rtsp://")) {
       const rtspTransport = transport || "tcp";
-      args.push(
-        "-rtsp_transport",
-        rtspTransport,
-        "-timeout",
-        "10000000",
-      );
+      args.push("-rtsp_transport", rtspTransport, "-timeout", "10000000");
     } else if (
       sourceUrl.startsWith("http://") ||
       sourceUrl.startsWith("https://")
@@ -603,7 +649,9 @@ function probeWithFfmpeg(
       let audioSampleRate: number | undefined;
       let audioChannels: number | undefined;
 
-      const videoMatch = stderrData.match(/Video:\s+([a-zA-Z0-9_-]+)(?:\s+\(([^)]+)\))?/i);
+      const videoMatch = stderrData.match(
+        /Video:\s+([a-zA-Z0-9_-]+)(?:\s+\(([^)]+)\))?/i,
+      );
       if (videoMatch) {
         const rawCodec = videoMatch[1].toLowerCase();
         videoCodec = rawCodec === "h265" ? "hevc" : rawCodec;
@@ -651,12 +699,27 @@ function probeWithFfmpeg(
         let portStr = "554";
         try {
           const u = new URL(sourceUrl);
-          portStr = u.port || (u.protocol === "http:" ? "80" : u.protocol === "https:" ? "443" : "554");
+          portStr =
+            u.port ||
+            (u.protocol === "http:"
+              ? "80"
+              : u.protocol === "https:"
+                ? "443"
+                : "554");
         } catch {}
 
-        if (raw.includes("Host is down") || raw.includes("No route to host") || raw.includes("EHOSTDOWN") || raw.includes("EHOSTUNREACH")) {
-          friendly = "Host inalcanzable (Host is down / No route to host). El equipo en esa IP está apagado o cambió de dirección.";
-        } else if (raw.includes("Connection refused") || raw.includes("ECONNREFUSED")) {
+        if (
+          raw.includes("Host is down") ||
+          raw.includes("No route to host") ||
+          raw.includes("EHOSTDOWN") ||
+          raw.includes("EHOSTUNREACH")
+        ) {
+          friendly =
+            "Host inalcanzable (Host is down / No route to host). El equipo en esa IP está apagado o cambió de dirección.";
+        } else if (
+          raw.includes("Connection refused") ||
+          raw.includes("ECONNREFUSED")
+        ) {
           friendly = `Conexión rechazada (Connection refused en puerto ${portStr}). Verifica la IP y que el servicio RTSP esté activo en ese puerto.`;
         } else if (raw.includes("401") || raw.includes("Unauthorized")) {
           friendly = `Autenticación requerida (401 Unauthorized). El stream RTSP requiere credenciales (rtsp://usuario:clave@ip:${portStr}/...).`;
@@ -664,10 +727,15 @@ function probeWithFfmpeg(
           friendly = "Ruta de stream no encontrada (404 Not Found).";
         } else if (raw.includes("timed out") || raw.includes("ETIMEDOUT")) {
           friendly = `Tiempo de espera agotado al conectar al stream RTSP en puerto ${portStr} (timeout).`;
-        } else if (raw.includes("Invalid data found") || raw.includes("Error opening input")) {
+        } else if (
+          raw.includes("Invalid data found") ||
+          raw.includes("Error opening input")
+        ) {
           friendly = `Respuesta RTSP no válida (Invalid data found). Verifica si la cámara requiere usuario y contraseña (rtsp://usuario:clave@ip:${portStr}/...), si la ruta es /live en vez de /stream0, o cambia a UDP.`;
         } else if (!friendly) {
-          friendly = lastError || "No se detectaron paquetes de video válidos en el stream.";
+          friendly =
+            lastError ||
+            "No se detectaron paquetes de video válidos en el stream.";
         }
       }
 
@@ -724,7 +792,11 @@ export function checkAudioPassthroughCompatibility(
     expectedChannels?: number;
   },
 ): AudioCompatibilityResult {
-  if (!sourceAudioCodec || sourceAudioCodec === "none" || sourceAudioCodec === "unknown") {
+  if (
+    !sourceAudioCodec ||
+    sourceAudioCodec === "none" ||
+    sourceAudioCodec === "unknown"
+  ) {
     return {
       compatible: false,
       reason: "La cámara no tiene pista de audio detectada",
@@ -737,36 +809,62 @@ export function checkAudioPassthroughCompatibility(
   // standard RTSP camera AAC-LC is not compatible without transcoding.
   if (targetRequirement?.expectedCodec) {
     const expected = targetRequirement.expectedCodec.toLowerCase();
-    if ((expected === "aac_eld" || expected === "aac-eld") && normalized !== "aac_eld") {
+    if (
+      (expected === "aac_eld" || expected === "aac-eld") &&
+      normalized !== "aac_eld"
+    ) {
       return {
         compatible: false,
         reason: `Códec de audio fuente (${sourceAudioCodec}) requiere transcodificación a AAC-ELD para Apple Home Live View.`,
-        sourceSpec: { codec: sourceAudioCodec, sampleRate: sourceSampleRate, channels: sourceChannels },
+        sourceSpec: {
+          codec: sourceAudioCodec,
+          sampleRate: sourceSampleRate,
+          channels: sourceChannels,
+        },
       };
     }
     if (expected === "opus" && normalized !== "opus") {
       return {
         compatible: false,
         reason: `Códec de audio fuente (${sourceAudioCodec}) requiere transcodificación a OPUS para Apple Home Live View.`,
-        sourceSpec: { codec: sourceAudioCodec, sampleRate: sourceSampleRate, channels: sourceChannels },
+        sourceSpec: {
+          codec: sourceAudioCodec,
+          sampleRate: sourceSampleRate,
+          channels: sourceChannels,
+        },
       };
     }
   }
 
-  if (normalized !== "aac" && normalized !== "aac_lc" && normalized !== "aac_eld") {
+  if (
+    normalized !== "aac" &&
+    normalized !== "aac_lc" &&
+    normalized !== "aac_eld"
+  ) {
     return {
       compatible: false,
       reason: `Códec de audio fuente (${sourceAudioCodec}) requiere transcodificación a AAC para Apple Home.`,
-      sourceSpec: { codec: sourceAudioCodec, sampleRate: sourceSampleRate, channels: sourceChannels },
+      sourceSpec: {
+        codec: sourceAudioCodec,
+        sampleRate: sourceSampleRate,
+        channels: sourceChannels,
+      },
     };
   }
 
   if (targetRequirement?.allowedSampleRates) {
-    if (!sourceSampleRate || !targetRequirement.allowedSampleRates.includes(sourceSampleRate)) {
+    if (
+      !sourceSampleRate ||
+      !targetRequirement.allowedSampleRates.includes(sourceSampleRate)
+    ) {
       return {
         compatible: false,
         reason: `Frecuencia de muestreo fuente (${sourceSampleRate} Hz) no compatible sin transcodificación.`,
-        sourceSpec: { codec: sourceAudioCodec, sampleRate: sourceSampleRate, channels: sourceChannels },
+        sourceSpec: {
+          codec: sourceAudioCodec,
+          sampleRate: sourceSampleRate,
+          channels: sourceChannels,
+        },
       };
     }
   }
@@ -778,13 +876,21 @@ export function checkAudioPassthroughCompatibility(
     return {
       compatible: false,
       reason: `Canales de audio fuente (${sourceChannels || "desconocidos"}) no compatibles sin transcodificación.`,
-      sourceSpec: { codec: sourceAudioCodec, sampleRate: sourceSampleRate, channels: sourceChannels },
+      sourceSpec: {
+        codec: sourceAudioCodec,
+        sampleRate: sourceSampleRate,
+        channels: sourceChannels,
+      },
     };
   }
 
   return {
     compatible: true,
-    sourceSpec: { codec: "aac", sampleRate: sourceSampleRate, channels: sourceChannels },
+    sourceSpec: {
+      codec: "aac",
+      sampleRate: sourceSampleRate,
+      channels: sourceChannels,
+    },
   };
 }
 

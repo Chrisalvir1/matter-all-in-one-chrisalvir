@@ -74,6 +74,13 @@ export interface CameraUiCameraRecord {
   videoCodecSource?: "ffprobe" | "camera_ui" | "unknown";
   codecProbeUrl?: string;
   codecProbedAt?: string;
+  /** Additional fields are populated only by a verified ffprobe of rtspUrl. */
+  videoProfile?: string;
+  videoLevel?: string;
+  rFrameRate?: string;
+  avgFrameRate?: string;
+  videoBitrateKbps?: number;
+  videoPixFmt?: string;
   audioCodec?: string;
   audioSampleRate?: number;
   audioChannels?: number;
