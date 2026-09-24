@@ -222,7 +222,6 @@ describe("BaseEntity fan devices (On/Off vs MultiSpeed)", () => {
     await light.setReachability(false);
 
     expect(endpoint.getAttribute(0x0006, "onOff")).toBe(false);
-    expect(endpoint.getAttribute(0x0039, "reachable")).toBe(false);
   });
 
   it("syncInitialState sets reachability to false and clears onOff when initialized unavailable", async () => {
@@ -245,7 +244,6 @@ describe("BaseEntity fan devices (On/Off vs MultiSpeed)", () => {
     await light.syncInitialState();
 
     expect(endpoint.getAttribute(0x0006, "onOff")).toBe(false);
-    expect(endpoint.getAttribute(0x0039, "reachable")).toBe(false);
   });
 });
 

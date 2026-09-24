@@ -1021,49 +1021,17 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         endpoint?.serverNode?.behaviors?.operationalCredentials?.state?.fabrics;
 
       let rawFabrics: any[] = [];
-
-      // 1. Priority: Check live operational credentials behavior state
-      const behaviorOperationalFabrics =
-        endpoint?.serverNode?.behaviors?.operationalCredentials?.state?.fabrics;
-      if (
-        behaviorOperationalFabrics !== undefined &&
-        behaviorOperationalFabrics !== null
-      ) {
-        const list = Array.isArray(behaviorOperationalFabrics)
-          ? behaviorOperationalFabrics
-          : Object.values(behaviorOperationalFabrics);
-        if (list.length > 0) rawFabrics = list;
-      }
-
-      // 2. Check liveFabricSource (nodeState operationalCredentials) if non-empty
-      if (
-        rawFabrics.length === 0 &&
-        liveFabricSource !== undefined &&
-        liveFabricSource !== null
-      ) {
-        const list = Array.isArray(liveFabricSource)
+      if (liveFabricSource !== undefined && liveFabricSource !== null) {
+        rawFabrics = Array.isArray(liveFabricSource)
           ? liveFabricSource
           : Object.values(liveFabricSource);
-        if (list.length > 0) rawFabrics = list;
-      }
-
-      // 3. Fallback to commissioning.fabrics or behavior commissioning state unless operational credentials explicitly wiped
-      const hasExplicitEmptyOperationalFabrics =
-        Array.isArray(nodeState.operationalCredentials?.fabrics) &&
-        nodeState.operationalCredentials.fabrics.length === 0 &&
-        rawFabrics.length === 0;
-
-      if (rawFabrics.length === 0 && !hasExplicitEmptyOperationalFabrics) {
-        const commFabrics =
-          commissioning.fabrics ??
-          endpoint?.serverNode?.behaviors?.commissioning?.state?.fabrics ??
-          endpoint?.serverNode?.behaviors?.commissioning?.fabrics;
-        if (commFabrics !== undefined && commFabrics !== null) {
-          const list = Array.isArray(commFabrics)
-            ? commFabrics
-            : Object.values(commFabrics);
-          if (list.length > 0) rawFabrics = list;
-        }
+      } else if (
+        commissioning.fabrics !== undefined &&
+        commissioning.fabrics !== null
+      ) {
+        rawFabrics = Array.isArray(commissioning.fabrics)
+          ? commissioning.fabrics
+          : Object.values(commissioning.fabrics);
       }
 
       const homeLocation = (this.ha as any)?.hassConfig?.location_name || null;
@@ -1098,29 +1066,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         };
       });
 
-      const nodeLifecycle =
-        endpoint?.serverNode?.lifecycle ?? endpoint?.lifecycle;
-      const isLifecycleCommissioned = Boolean(nodeLifecycle?.isCommissioned);
-      const isBehaviorCommissioned = Boolean(
-        commissioning.commissioned ||
-          Boolean(nodeState.operationalCredentials?.commissionedFabrics),
-      );
-
-      // An accessory is commissioned if it has active fabrics, or if Matter lifecycle confirms it is commissioned
-      const isCommissioned =
-        fabrics.length > 0 ||
-        isLifecycleCommissioned ||
-        (!hasExplicitEmptyOperationalFabrics && isBehaviorCommissioned);
-
-      if (fabrics.length === 0 && isCommissioned) {
-        fabrics.push({
-          label: homeLocation || "Apple Home / Matter",
-          controller: "Controlador Matter (Enlazado)",
-          vendorId: null,
-          fabricId: null,
-          fabricIndex: "1",
-        });
-      }
+      const isCommissioned = fabrics.length > 0;
 
       const controllerNames = [
         ...new Set(
@@ -1656,7 +1602,33 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         typeof this.getDeviceByUniqueId === "function"
           ? this.getDeviceByUniqueId(compKey)
           : undefined;
-      if (byCompUnique?.serverNode) return byCompUnique;
+      if (byCompUnique?.serverNode) {
+        this.matterbridgeDevices.set(
+          this.compositeStorageKey(compositeDeviceId),
+          byCompUnique,
+        );
+        return byCompUnique;
+      }
+
+      const cand = this.getCompositeCandidate(entityId);
+      if (cand) {
+        const info = this.getHaRegistryInfo(entityId);
+        const nodeName =
+          cand.config?.friendly_name ||
+          cand.config?.name ||
+          info.device_name ||
+          this.entities.get(entityId)?.state?.attributes?.friendly_name;
+        if (nodeName && typeof this.getDeviceByName === "function") {
+          const byName = this.getDeviceByName(nodeName);
+          if (byName?.serverNode) {
+            this.matterbridgeDevices.set(
+              this.compositeStorageKey(compositeDeviceId),
+              byName,
+            );
+            return byName;
+          }
+        }
+      }
     }
 
     const uniqueId = entityId.replaceAll(".", "_");
@@ -1664,13 +1636,19 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       typeof this.getDeviceByUniqueId === "function"
         ? this.getDeviceByUniqueId(uniqueId)
         : undefined;
-    if (byUnique?.serverNode) return byUnique;
+    if (byUnique?.serverNode) {
+      this.matterbridgeDevices.set(entityId, byUnique);
+      return byUnique;
+    }
 
     const friendlyName =
       this.entities.get(entityId)?.state?.attributes?.friendly_name;
     if (friendlyName && typeof this.getDeviceByName === "function") {
       const byName = this.getDeviceByName(friendlyName);
-      if (byName?.serverNode) return byName;
+      if (byName?.serverNode) {
+        this.matterbridgeDevices.set(entityId, byName);
+        return byName;
+      }
     }
 
     return compositeEndpoint ?? directEndpoint;
@@ -3095,8 +3073,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     let migratedLegacyEntries = false;
     const entries = Array.from(this.exportedDevices);
 
-    // Process all exported devices fully in parallel for instant reconnection at startup
-    const batchSize = entries.length || 1;
+    // Process in batches of 4 to prevent I/O stampede while maintaining fast startup
+    const batchSize = 4;
     for (let i = 0; i < entries.length; i += batchSize) {
       const batch = entries.slice(i, i + batchSize);
       await Promise.all(

@@ -422,13 +422,6 @@ export class CompositeDeviceEntity {
         .trim();
       child.deviceName = childFriendlyName;
       (child as any).nodeLabel = childFriendlyName;
-      child.createDefaultBridgedDeviceBasicInformationClusterServer(
-        childFriendlyName,
-        `${this.endpoint.serialNumber}-${endpointIndex}`,
-        0xfff1,
-        this.endpoint.vendorName,
-        childFriendlyName,
-      );
 
       this.addCommandHandlers(child, member);
       this.endpoints.set(member.entityId, child);

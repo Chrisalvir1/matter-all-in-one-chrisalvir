@@ -249,7 +249,6 @@ describe("CompositeDeviceEntity", () => {
     await composite.syncInitialState();
 
     expect(lightChild.getAttribute(0x0006, "onOff")).toBe(false);
-    expect(lightChild.getAttribute(0x0039, "reachable")).toBe(false);
   });
 });
 

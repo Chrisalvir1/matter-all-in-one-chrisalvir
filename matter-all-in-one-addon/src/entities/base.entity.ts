@@ -253,13 +253,6 @@ export class BaseEntity {
       0x8000,
       this.endpoint.productName,
     );
-    this.endpoint.createDefaultBridgedDeviceBasicInformationClusterServer(
-      uniqueName,
-      this.endpoint.serialNumber,
-      MATTER_BRIDGE_VENDOR_ID,
-      this.endpoint.vendorName,
-      this.endpoint.productName,
-    );
     this.applyMatterbridgeFirmware();
 
     const isFanProfile =

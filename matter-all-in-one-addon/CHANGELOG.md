@@ -1,3 +1,16 @@
+## [1.8.97] - 2026-09-24
+
+### Restauración completa de accesorios emparejados Matter IoT y eliminación de colisión de esquema
+
+- **Eliminación de colisión de esquema en endpoints raíz ServerNode (`base.entity.ts`, `composite-device.entity.ts`):**
+  - Se eliminó la inyección indebida de `createDefaultBridgedDeviceBasicInformationClusterServer` (cluster 0x0039) en los endpoints raíz e hijos que causaba que Matter.js y Matterbridge invalidaran los ServerNodes existentes en `matterstorage` y los regeneraran como nodos vírgenes sin emparejar.
+  - Se restauró la estructura limpia y validada de `v1.8.92`, preservando las telas y enlaces existentes en Apple Home / HomeKit sin romper las vinculaciones ya establecidas.
+- **Resolución robusta de telas operacionales en `getMatterConnectionInfo` (`platform.ts`):**
+  - Se restauró la verificación fidedigna de telas desde `liveFabricSource` (`operationalCredentials.fabrics`) y `commissioning.fabrics`, eliminando la supresión accidental por arrays vacíos transitorios.
+  - Se optimizó `getMatterEndpointForEntity` con búsqueda extendida por nombre de nodo (`nodeName`) y almacenamiento en caché para una resolución inmediata O(1).
+- **Control de concurrencia en la restauración de arranque (`platform.ts`):**
+  - Se restauró el procesamiento por lotes seguros (`batchSize = 4`) en `restoreExportedDevices()`, evitando condiciones de carrera de sockets y colisiones de I/O en `/data/matterstorage` durante el encendido de más de 30 accesorios simultáneos.
+
 ## [1.8.96] - 2026-09-24
 
 ### Restauración de accesorios Matter IoT en HomeKit y corrección de detección de telas operacionales
