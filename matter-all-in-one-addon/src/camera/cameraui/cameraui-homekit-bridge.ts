@@ -139,22 +139,44 @@ export class CameraUiHomeKitBridge {
     // 2560x1440/30 stream and HAP was permanently configured with stale values.
     const isHomeAssistantSource = camera.sourceProvider === "home_assistant";
 
-    // C120 explicit dimension enforcement: the camera MUST be declared as 2560×1440.
-    // -c:v copy sends the raw H.264 SPS which contains 2560×1440. If HAP declares a
-    // different resolution (e.g. stale 1920×1080 saved during v1.8.82-84), iOS's
-    // VideoToolbox rejects the SPS dimension mismatch → "Sin Respuesta".
-    // This override runs every startup regardless of what cameraui-config.json has stored.
+    // The C120 H.264 stream is copied directly into HAP. Its dimensions and FPS
+    // must therefore be exactly those produced by RTSP; FFmpeg cannot add frames.
+    // This camera currently delivers 15 fps even though its physical maximum is
+    // 20 fps. Advertising a hard-coded 30 fps made Apple Home negotiate a rate
+    // that the copied stream cannot satisfy, which appeared as choppy Live View.
     const isTapoC120Mount = /(?:\bc120\b|tapo[-_ ]?c120)/i.test(`${camera.id} ${camera.name || ""}`);
     if (isTapoC120Mount) {
       camera.width = 2560;
       camera.height = 1440;
-      camera.fps = 30;
+      camera.fps = 15;
       camera.videoCodec = "h264";
       camera.strategy = "passthrough_h264";
       camera.hasAudio = camera.hasAudio !== false; // preserve explicit false
       camera.audioCodec = "pcm_alaw";
       camera.audioSampleRate = 8000;
       camera.audioChannels = 1;
+
+      if (camera.rtspUrl) {
+        try {
+          const probe = await probeCameraSource(camera.rtspUrl, {
+            timeoutMs: 6000,
+            transport: "tcp",
+          });
+          if (applyCameraSourceProbe(camera, probe, camera.rtspUrl)) {
+            platform.log?.notice?.(
+              `[Camera.UI][${camera.name}] C120 RTSP medido antes de publicar: ${camera.width}x${camera.height}@${camera.fps}fps`,
+            );
+          } else {
+            platform.log?.notice?.(
+              `[Camera.UI][${camera.name}] C120 RTSP no reportó FPS; usando 2560x1440@15fps medidos como valor seguro`,
+            );
+          }
+        } catch {
+          platform.log?.notice?.(
+            `[Camera.UI][${camera.name}] C120 RTSP no se pudo medir; usando 2560x1440@15fps medidos como valor seguro`,
+          );
+        }
+      }
     }
 
     if (isHomeAssistantSource && camera.rtspUrl) {

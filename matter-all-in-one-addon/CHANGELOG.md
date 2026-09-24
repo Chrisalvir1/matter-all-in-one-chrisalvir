@@ -3703,3 +3703,10 @@ All notable changes to this project will be documented in this file.
 
 - Se corrige la prueba de integración HAP para validar las capacidades reales de Wyze Patio Trasero, EZVIZ Patio Trasero y Tapo C120: resolución y perfil H.264 de origen, más OPUS cuando el contenedor no dispone de `libfdk_aac`.
 - No cambia la ruta de streaming introducida en 1.8.67; esta versión permite que la compilación valide esa restauración y publique la imagen del add-on.
+## [1.8.89] - 2026-09-23
+
+### Tapo C120: negociación HAP con FPS real
+
+- La Tapo C120 deja de anunciar 30 fps fijos para su vídeo 2K en passthrough. El RTSP actual entrega 15 fps; Apple Home recibe ese valor real en lugar de negociar cuadros que FFmpeg no puede generar con `-c:v copy`.
+- Al iniciar, el add-on intenta medir el RTSP de la C120. Si la fuente no informa el FPS, conserva el valor seguro de 2560×1440 a 15 fps.
+- No se modificaron las rutas ni las capacidades de las demás cámaras.
