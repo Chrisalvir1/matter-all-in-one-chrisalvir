@@ -238,7 +238,7 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     expect(args).not.toContain("aresample");
   });
 
-  it("transcodes ONLY audio for Tapo C120 (pcm_alaw) while preserving pure -c:v copy video passthrough", () => {
+  it("normalizes C120 video to HAP level 4.0 and transcodes its PCMA audio", () => {
     const platform = createPlatformMock();
     const capabilities = createCapabilities({
       videoCodec: "h264",
@@ -287,19 +287,19 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
       } as any,
     );
 
-    // Video MUST remain copy
+    // C120 is 2K H.264 High L5.0. HAP only negotiates through L4.0, so Live
+    // View must be normalized to a decodable 1080p stream.
     expect(args).toContain("-c:v");
-    expect(args).toContain("copy");
-    expect(args).not.toContain("libx264");
+    expect(args).toContain("libx264");
     expect(args).not.toContain("libx265");
-    // Probe sizes and flags for Tapo C120 (low-latency realtime streaming)
+    expect(args).toContain("scale=1920:1080:flags=fast_bilinear");
+    expect(args).toContain("4.0");
+    // C120 retains enough input analysis to start from a complete 2K keyframe.
     expect(args).toContain("-probesize");
-    expect(args).toContain("131072");
+    expect(args).toContain("524288");
     expect(args).toContain("-analyzeduration");
-    expect(args).toContain("200000");
-    expect(args).toContain("+nobuffer+flush_packets+genpts+discardcorrupt");
-    expect(args).toContain("-max_interleave_delta");
-    expect(args).toContain("100000");
+    expect(args).toContain("1000000");
+    expect(args).toContain("+genpts+igndts+discardcorrupt");
     // Audio is transcoded to AAC/AAC-ELD to prevent CoreAudio clock stall
     expect(args).toContain("-c:a");
     const audioCodecIdx = args.indexOf("-c:a");

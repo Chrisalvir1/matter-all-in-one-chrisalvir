@@ -3717,3 +3717,9 @@ All notable changes to this project will be documented in this file.
 - El RTSP de la C120 entrega H.264 High nivel 5.0, mientras HAP negocia nivel 4.0. Copiar el bitstream incompatible provocaba la imagen congelada con líneas verdes aunque el audio siguiera activo.
 - Sólo el Live View de la C120 ahora se normaliza a H.264 High nivel 4.0, 1080p a 15 fps, con cuadros clave regulares y timestamps estables. La fuente RTSP 2K, HKSV, audio y detección permanecen intactos.
 - Se restaura el margen de análisis necesario para recibir un cuadro clave 2K completo antes de iniciar el decodificador de Apple Home.
+## [1.8.91] - 2026-09-23
+
+### Verificación de la normalización HAP de Tapo C120
+
+- Se actualiza la prueba de integración para validar la normalización C120 a 1080p/H.264 nivel 4.0 y su audio PCMA a AAC.
+- Esta versión publica la reparación de vídeo de 1.8.90 con la suite de CI alineada.
