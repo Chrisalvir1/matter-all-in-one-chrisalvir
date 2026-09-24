@@ -1,3 +1,18 @@
+## [1.8.96] - 2026-09-24
+
+### Restauración de accesorios Matter IoT en HomeKit y corrección de detección de telas operacionales
+
+- **Arranque garantizado de ServerNodes Matter adoptados (`platform.ts`):**
+  - Al reutilizar endpoints Matter existentes (`activateComposite`, `activateEntity`, `activateMqttEntity`), se asegura el inicio inmediato del `serverNode` con `await serverNode.start()` si se encontraba fuera de línea tras el reinicio.
+  - Se notifica activamente la alcanzabilidad (`setReachability(true)`) a controladores como Apple Home.
+  - Al completar la sincronización inicial de recuperación, un bucle de verificación garantiza que todos los `serverNode` registrados estén en línea y transmitiendo mDNS.
+- **Corrección de falsos negativos en telas operacionales y comisionado (`platform.ts`):**
+  - Se eliminó la supresión accidental causada por snapshots vacíos de `operationalCredentials.fabrics`.
+  - Ahora se leen las telas activas secuencialmente desde el estado de comportamiento de credenciales operacionales, fuentes en vivo y telas de comisionado.
+  - Se respeta incondicionalmente el estado del ciclo de vida de Matter (`nodeLifecycle.isCommissioned`), evitando que accesorios IoT comisionados aparezcan falsamente como "sin emparejar".
+- **Búsqueda tolerante a fallos en `getMatterEndpointForEntity`:**
+  - Si un endpoint no está en la caché interna en memoria, se consulta la tabla de dispositivos de Matterbridge mediante `getDeviceByUniqueId` y `getDeviceByName`, impidiendo que los endpoints pierdan su estado de comisionado ante recargas SSE o consultas REST.
+
 ## [1.8.95] - 2026-09-24
 
 ### Corrección integral del conteo y persistencia de accesorios vinculados (Matter y HomeKit HAP)

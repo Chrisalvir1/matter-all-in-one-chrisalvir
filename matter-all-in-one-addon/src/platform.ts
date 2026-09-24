@@ -1021,24 +1021,48 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         endpoint?.serverNode?.behaviors?.operationalCredentials?.state?.fabrics;
 
       let rawFabrics: any[] = [];
+
+      // 1. Priority: Check live operational credentials behavior state
+      const behaviorOperationalFabrics =
+        endpoint?.serverNode?.behaviors?.operationalCredentials?.state?.fabrics;
+      if (
+        behaviorOperationalFabrics !== undefined &&
+        behaviorOperationalFabrics !== null
+      ) {
+        const list = Array.isArray(behaviorOperationalFabrics)
+          ? behaviorOperationalFabrics
+          : Object.values(behaviorOperationalFabrics);
+        if (list.length > 0) rawFabrics = list;
+      }
+
+      // 2. Check liveFabricSource (nodeState operationalCredentials) if non-empty
+      if (
+        rawFabrics.length === 0 &&
+        liveFabricSource !== undefined &&
+        liveFabricSource !== null
+      ) {
+        const list = Array.isArray(liveFabricSource)
+          ? liveFabricSource
+          : Object.values(liveFabricSource);
+        if (list.length > 0) rawFabrics = list;
+      }
+
+      // 3. Fallback to commissioning.fabrics or behavior commissioning state unless operational credentials explicitly wiped
       const hasExplicitEmptyOperationalFabrics =
         Array.isArray(nodeState.operationalCredentials?.fabrics) &&
-        nodeState.operationalCredentials.fabrics.length === 0;
+        nodeState.operationalCredentials.fabrics.length === 0 &&
+        rawFabrics.length === 0;
 
-      if (!hasExplicitEmptyOperationalFabrics) {
-        if (liveFabricSource !== undefined && liveFabricSource !== null) {
-          rawFabrics = Array.isArray(liveFabricSource)
-            ? liveFabricSource
-            : Object.values(liveFabricSource);
-        }
-        if (
-          rawFabrics.length === 0 &&
-          commissioning.fabrics !== undefined &&
-          commissioning.fabrics !== null
-        ) {
-          rawFabrics = Array.isArray(commissioning.fabrics)
-            ? commissioning.fabrics
-            : Object.values(commissioning.fabrics);
+      if (rawFabrics.length === 0 && !hasExplicitEmptyOperationalFabrics) {
+        const commFabrics =
+          commissioning.fabrics ??
+          endpoint?.serverNode?.behaviors?.commissioning?.state?.fabrics ??
+          endpoint?.serverNode?.behaviors?.commissioning?.fabrics;
+        if (commFabrics !== undefined && commFabrics !== null) {
+          const list = Array.isArray(commFabrics)
+            ? commFabrics
+            : Object.values(commFabrics);
+          if (list.length > 0) rawFabrics = list;
         }
       }
 
@@ -1082,11 +1106,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           Boolean(nodeState.operationalCredentials?.commissionedFabrics),
       );
 
-      // An accessory is commissioned if it has active fabrics, or if its Matter lifecycle/commissioning state reports commissioned (unless explicitly cleared)
+      // An accessory is commissioned if it has active fabrics, or if Matter lifecycle confirms it is commissioned
       const isCommissioned =
         fabrics.length > 0 ||
-        (!hasExplicitEmptyOperationalFabrics &&
-          (isLifecycleCommissioned || isBehaviorCommissioned));
+        isLifecycleCommissioned ||
+        (!hasExplicitEmptyOperationalFabrics && isBehaviorCommissioned);
 
       if (fabrics.length === 0 && isCommissioned) {
         fabrics.push({
@@ -1624,6 +1648,29 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         primaryEntityId,
       ) as any;
       if (primaryEndpoint?.serverNode) return primaryEndpoint;
+    }
+
+    if (compositeDeviceId) {
+      const compKey = `device_${compositeDeviceId}`.substring(0, 32);
+      const byCompUnique =
+        typeof this.getDeviceByUniqueId === "function"
+          ? this.getDeviceByUniqueId(compKey)
+          : undefined;
+      if (byCompUnique?.serverNode) return byCompUnique;
+    }
+
+    const uniqueId = entityId.replaceAll(".", "_");
+    const byUnique =
+      typeof this.getDeviceByUniqueId === "function"
+        ? this.getDeviceByUniqueId(uniqueId)
+        : undefined;
+    if (byUnique?.serverNode) return byUnique;
+
+    const friendlyName =
+      this.entities.get(entityId)?.state?.attributes?.friendly_name;
+    if (friendlyName && typeof this.getDeviceByName === "function") {
+      const byName = this.getDeviceByName(friendlyName);
+      if (byName?.serverNode) return byName;
     }
 
     return compositeEndpoint ?? directEndpoint;
@@ -2845,6 +2892,20 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         }
       }
       await this.restoreExportedDevices();
+      // Ensure all exported Matter serverNodes are running and online
+      for (const [key, dev] of this.matterbridgeDevices.entries()) {
+        const sn = (dev as any)?.serverNode;
+        if (sn && !sn.lifecycle?.isOnline) {
+          try {
+            await sn.start();
+            this.log.info(`[Startup] Started offline Matter serverNode for ${key}`);
+          } catch (err) {
+            this.log.error(
+              `[Startup] Failed to start serverNode for ${key}: ${err}`,
+            );
+          }
+        }
+      }
       // Do not announce recovery while the HA snapshot is still merely queued
       // for Matter. Await it so every available accessory is current.
       if (this.pendingStateUpdates.size) await this.flushStateUpdates();
@@ -3173,17 +3234,30 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         candidate.members.forEach((member) =>
           this.compositeMembership.set(member.entityId, candidate.deviceId),
         );
+        if (!existingEndpoint.serverNode.lifecycle?.isOnline) {
+          try {
+            await existingEndpoint.serverNode.start();
+          } catch (err) {
+            this.log.error(
+              `Failed to start adopted serverNode for composite ${nodeName}: ${err}`,
+            );
+          }
+        }
         await composite.syncInitialState();
         for (const member of candidate.members) {
           const memberState = this.entities.get(member.entityId)?.state;
           if (memberState && isUnavailable(memberState)) {
             void (composite as any).setMemberReachability?.(member.entityId, false);
             void (composite as any).setMemberInactiveState?.(member.entityId);
+          } else if (memberState) {
+            void (composite as any).setMemberReachability?.(member.entityId, true);
           }
         }
         const primaryState = this.entities.get(composite.primaryEntityId)?.state;
         if (primaryState && isUnavailable(primaryState)) {
           void (composite as any).setReachability?.(false);
+        } else if (primaryState) {
+          void (composite as any).setReachability?.(true);
         }
         this.log.notice(
           `Reused existing Matter node ${idn}${nodeName}${rs}; it remains paired and was not recreated.`,
@@ -3281,10 +3355,21 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         if (existingEndpoint?.serverNode) {
           entity.adoptEndpoint(existingEndpoint);
           this.matterbridgeDevices.set(entityId, existingEndpoint);
+          if (!existingEndpoint.serverNode.lifecycle?.isOnline) {
+            try {
+              await existingEndpoint.serverNode.start();
+            } catch (err) {
+              this.log.error(
+                `Failed to start adopted serverNode for ${entityId}: ${err}`,
+              );
+            }
+          }
           await entity.syncInitialState();
           if (isUnavailable(entity.state)) {
             void (entity as any).setReachability?.(false);
             void (entity as any).setInactiveState?.();
+          } else {
+            void (entity as any).setReachability?.(true);
           }
           this.log.notice(
             `Reused existing Matter endpoint ${idn}${entityId}${rs}; it remains paired and was not recreated.`,
@@ -3337,6 +3422,15 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       if (existingEndpoint?.serverNode) {
         entity.adoptEndpoint(existingEndpoint);
         this.matterbridgeDevices.set(entityId, existingEndpoint);
+        if (!existingEndpoint.serverNode.lifecycle?.isOnline) {
+          try {
+            await existingEndpoint.serverNode.start();
+          } catch (err) {
+            this.log.error(
+              `Failed to start adopted serverNode for MQTT ${entityId}: ${err}`,
+            );
+          }
+        }
         await entity.syncInitialState();
         this.log.notice(
           `Reused existing Matter endpoint ${idn}${entityId}${rs}; it remains paired.`,
