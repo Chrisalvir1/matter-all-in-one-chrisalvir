@@ -94,6 +94,7 @@ export class MqttEntity {
   public config: any;
   public deviceType: DeviceTypeDefinition;
   public friendlyName: string;
+  public name: string;
   public deviceId: string;
   public deviceName: string;
   public manufacturer: string;
@@ -112,22 +113,35 @@ export class MqttEntity {
     this.config = entry.config;
     this.domain = entry.component;
 
-    // Generate clean entityId e.g. mqtt.zigbee2mqtt_living_room_light
+    const device = this.config.device || {};
+    const devName = device.name || "";
+
+    // In Home Assistant 2023.8+, if has_entity_name is true, config.name may be null or relative
+    let name = this.config.name;
+    if (!name && devName) {
+      name = devName;
+    } else if (name && devName && !name.toLowerCase().includes(devName.toLowerCase())) {
+      name = `${devName} ${name}`;
+    }
+    this.friendlyName = name || entry.objectId || this.config.unique_id || this.domain;
+    this.name = this.friendlyName;
+
     const rawId =
       this.config.unique_id ||
-      `${entry.component}_${entry.objectId || entry.nodeId || "device"}`;
+      `${entry.component}_${entry.nodeId ? `${entry.nodeId}_` : ""}${entry.objectId || "device"}`;
     const cleanId = rawId.replace(/[^a-zA-Z0-9_]/g, "_").toLowerCase();
     this.entityId = `mqtt.${cleanId}`;
 
     this.deviceType = getMqttDeviceType(this.domain, this.config);
-    this.friendlyName = this.config.name || entry.objectId || this.entityId;
 
-    const device = this.config.device || {};
-    this.deviceId =
-      device.identifiers && device.identifiers[0]
-        ? `mqtt:${device.identifiers[0]}`
-        : `mqtt:${rawId}`;
-    this.deviceName = device.name || this.friendlyName;
+    const devId =
+      Array.isArray(device.identifiers) && device.identifiers[0]
+        ? device.identifiers[0]
+        : typeof device.identifiers === "string"
+        ? device.identifiers
+        : rawId;
+    this.deviceId = `mqtt:${devId}`;
+    this.deviceName = devName || this.friendlyName;
     this.manufacturer = device.manufacturer || "MQTT";
     this.model = device.model || device.model_id || "MQTT Generic Accessory";
     this.areaName = device.suggested_area || null;
@@ -175,6 +189,13 @@ export class MqttEntity {
       this.endpoint.vendorName,
       0x8000,
       this.endpoint.productName,
+    );
+    this.endpoint.createDefaultBridgedDeviceBasicInformationClusterServer(
+      rawName,
+      this.endpoint.serialNumber,
+      0xfff1,
+      this.endpoint.vendorName,
+      rawName,
     );
 
     // Apply behaviors according to domain
@@ -277,6 +298,44 @@ export class MqttEntity {
     this.endpoint = endpoint;
   }
 
+  public async setReachability(reachable: boolean): Promise<void> {
+    const ep = this.endpoint as any;
+    if (!ep) return;
+    try {
+      if (typeof ep.setAttribute === "function") {
+        if (ep.hasAttributeServer?.(0x0028, "reachable")) {
+          await ep.setAttribute(0x0028, "reachable", reachable, this.platform.log);
+        }
+        if (ep.hasAttributeServer?.(0x0039, "reachable")) {
+          await ep.setAttribute(0x0039, "reachable", reachable, this.platform.log);
+        }
+      }
+      if (typeof ep.updateAttribute === "function") {
+        if (ep.hasAttributeServer?.(0x0039, "reachable")) {
+          await ep.updateAttribute(0x0039, "reachable", reachable, this.platform.log);
+        }
+        if (ep.hasAttributeServer?.(0x0028, "reachable")) {
+          await ep.updateAttribute(0x0028, "reachable", reachable, this.platform.log);
+        }
+      }
+    } catch {}
+  }
+
+  public async setInactiveState(): Promise<void> {
+    if (!this.endpoint) return;
+    try {
+      if (this.endpoint.hasAttributeServer(OnOff.id, "onOff")) {
+        safeSetAttribute(
+          this.endpoint,
+          OnOff.Cluster.id,
+          "onOff",
+          false,
+          this.platform.log,
+        );
+      }
+    } catch {}
+  }
+
   public async syncInitialState(): Promise<void> {
     if (!this.stateTopic) return;
     const lastPayload = this.mqttManager.deviceStates.get(this.stateTopic);
@@ -287,10 +346,8 @@ export class MqttEntity {
 
   public handleStateUpdate(payload: string) {
     this.currentState = payload;
-    if (!this.endpoint) return;
 
     try {
-      // Try to parse JSON payload if state is JSON (e.g. Zigbee2MQTT {"state":"ON", "brightness": 254})
       let parsed: any = null;
       try {
         if (payload.startsWith("{") && payload.endsWith("}")) {
@@ -300,16 +357,51 @@ export class MqttEntity {
         /* plain string */
       }
 
+      // Check availability payloads
+      const stateStr = payload.trim().toLowerCase();
+      if (
+        stateStr === "offline" ||
+        stateStr === "unavailable" ||
+        (this.config.payload_not_available &&
+          stateStr === String(this.config.payload_not_available).toLowerCase())
+      ) {
+        this.currentState = "unavailable";
+        void this.setReachability(false);
+        void this.setInactiveState();
+        return;
+      }
+      if (
+        stateStr === "online" ||
+        (this.config.payload_available &&
+          stateStr === String(this.config.payload_available).toLowerCase())
+      ) {
+        void this.setReachability(true);
+      }
+
       if (
         this.domain === "switch" ||
         this.domain === "light" ||
         this.domain === "fan"
       ) {
         let isOn = false;
-        if (parsed && typeof parsed.state === "string") {
-          isOn =
-            parsed.state.toUpperCase() ===
-            (this.config.payload_on || "ON").toUpperCase();
+        if (parsed) {
+          const propMatch = this.config.value_template?.match(
+            /value_json\.([a-zA-Z0-9_]+)/,
+          );
+          const propVal = propMatch ? parsed[propMatch[1]] : undefined;
+          if (typeof propVal === "boolean") {
+            isOn = propVal;
+          } else if (typeof propVal === "string") {
+            isOn =
+              propVal.toUpperCase() ===
+              (this.config.payload_on || "ON").toUpperCase();
+          } else if (typeof parsed.state === "string") {
+            isOn =
+              parsed.state.toUpperCase() ===
+              (this.config.payload_on || "ON").toUpperCase();
+          } else if (typeof parsed.state === "boolean") {
+            isOn = parsed.state;
+          }
         } else {
           isOn =
             payload.toUpperCase() ===
@@ -317,66 +409,132 @@ export class MqttEntity {
             payload === "1" ||
             payload.toLowerCase() === "true";
         }
-        safeSetAttribute(
-          this.endpoint,
-          OnOff.Cluster.id,
-          "onOff",
-          isOn,
-          this.platform.log,
-        );
+        this.currentState = isOn
+          ? this.config.payload_on || "ON"
+          : this.config.payload_off || "OFF";
 
-        if (
-          parsed &&
-          typeof parsed.brightness === "number" &&
-          this.endpoint.hasAttributeServer(LevelControl.id, "currentLevel")
-        ) {
-          const scale = this.config.brightness_scale || 255;
-          const level = Math.round((parsed.brightness / scale) * 254);
+        if (this.endpoint) {
           safeSetAttribute(
             this.endpoint,
-            LevelControl.Cluster.id,
-            "currentLevel",
-            level,
+            OnOff.Cluster.id,
+            "onOff",
+            isOn,
             this.platform.log,
           );
+
+          if (
+            parsed &&
+            typeof parsed.brightness === "number" &&
+            this.endpoint.hasAttributeServer(LevelControl.id, "currentLevel")
+          ) {
+            const scale = this.config.brightness_scale || 255;
+            const level = Math.round((parsed.brightness / scale) * 254);
+            safeSetAttribute(
+              this.endpoint,
+              LevelControl.Cluster.id,
+              "currentLevel",
+              level,
+              this.platform.log,
+            );
+          }
         }
       } else if (this.domain === "lock") {
         const isLocked =
           payload.toUpperCase() ===
           (this.config.state_locked || "LOCKED").toUpperCase();
-        safeSetAttribute(
-          this.endpoint,
-          DoorLock.Cluster.id,
-          "lockState",
-          isLocked ? DoorLock.LockState.Locked : DoorLock.LockState.Unlocked,
-          this.platform.log,
-        );
-      } else if (this.domain === "binary_sensor") {
-        const isOn =
-          payload.toUpperCase() ===
-          (this.config.payload_on || "ON").toUpperCase();
-        if (this.deviceType === contactSensor) {
+        this.currentState = isLocked
+          ? this.config.state_locked || "LOCKED"
+          : this.config.state_unlocked || "UNLOCKED";
+
+        if (this.endpoint) {
           safeSetAttribute(
             this.endpoint,
-            BooleanState.Cluster.id,
-            "stateValue",
-            !isOn,
-            this.platform.log,
-          );
-        } else if (this.deviceType === occupancySensor) {
-          safeSetAttribute(
-            this.endpoint,
-            OccupancySensing.Cluster.id,
-            "occupancy",
-            { occupied: isOn },
+            DoorLock.Cluster.id,
+            "lockState",
+            isLocked ? DoorLock.LockState.Locked : DoorLock.LockState.Unlocked,
             this.platform.log,
           );
         }
+      } else if (this.domain === "binary_sensor") {
+        let isOn = false;
+        if (parsed) {
+          const propMatch = this.config.value_template?.match(
+            /value_json\.([a-zA-Z0-9_]+)/,
+          );
+          const propVal = propMatch ? parsed[propMatch[1]] : undefined;
+          if (typeof propVal === "boolean") {
+            isOn = propVal;
+          } else if (typeof propVal === "string") {
+            isOn =
+              propVal.toUpperCase() ===
+              (this.config.payload_on || "ON").toUpperCase();
+          } else if (typeof parsed.contact === "boolean") {
+            isOn = !parsed.contact;
+          } else if (typeof parsed.occupancy === "boolean") {
+            isOn = parsed.occupancy;
+          } else if (typeof parsed.presence === "boolean") {
+            isOn = parsed.presence;
+          } else if (typeof parsed.motion === "boolean") {
+            isOn = parsed.motion;
+          } else if (typeof parsed.water_leak === "boolean") {
+            isOn = parsed.water_leak;
+          } else if (typeof parsed.smoke === "boolean") {
+            isOn = parsed.smoke;
+          } else if (typeof parsed.state === "boolean") {
+            isOn = parsed.state;
+          } else if (typeof parsed.state === "string") {
+            isOn =
+              parsed.state.toUpperCase() ===
+              (this.config.payload_on || "ON").toUpperCase();
+          }
+        } else {
+          isOn =
+            payload.toUpperCase() ===
+            (this.config.payload_on || "ON").toUpperCase();
+        }
+
+        this.currentState = isOn
+          ? this.config.payload_on || "on"
+          : this.config.payload_off || "off";
+
+        if (this.endpoint) {
+          if (this.deviceType === contactSensor) {
+            safeSetAttribute(
+              this.endpoint,
+              BooleanState.Cluster.id,
+              "stateValue",
+              !isOn,
+              this.platform.log,
+            );
+          } else if (this.deviceType === occupancySensor) {
+            safeSetAttribute(
+              this.endpoint,
+              OccupancySensing.Cluster.id,
+              "occupancy",
+              { occupied: isOn },
+              this.platform.log,
+            );
+          }
+        }
       } else if (this.domain === "sensor") {
-        const val = parseFloat(
-          parsed?.value ?? parsed?.temperature ?? parsed?.humidity ?? payload,
+        const propMatch = this.config.value_template?.match(
+          /value_json\.([a-zA-Z0-9_]+)/,
         );
-        if (!isNaN(val)) {
+        const propVal = propMatch ? parsed?.[propMatch[1]] : undefined;
+        const rawVal =
+          propVal ??
+          parsed?.temperature ??
+          parsed?.humidity ??
+          parsed?.illuminance ??
+          parsed?.illuminance_lux ??
+          parsed?.pressure ??
+          parsed?.value ??
+          payload;
+        if (rawVal !== undefined) {
+          this.currentState = String(rawVal);
+        }
+        const val = parseFloat(String(rawVal));
+        if (this.endpoint && !isNaN(val)) {
           if (this.deviceType === temperatureSensor) {
             safeSetAttribute(
               this.endpoint,

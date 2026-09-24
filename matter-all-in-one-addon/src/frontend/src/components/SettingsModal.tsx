@@ -14,6 +14,7 @@ interface SettingsModalProps {
     pairedTotal: number;
     issues: number;
   };
+  onRefresh?: () => void;
 }
 
 function getLogSeverity(line: string): "error" | "warn" | "info" | "default" {
@@ -30,6 +31,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   showToast,
   status,
   stats,
+  onRefresh,
 }) => {
   const [mqttHost, setMqttHost] = useState("");
   const [mqttPort, setMqttPort] = useState(1883);
@@ -67,7 +69,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         if (cfg) {
           setMqttHost(cfg.host || "");
           setMqttPort(cfg.port || 1883);
-          setMqttUser(cfg.username || "");
+          setMqttUser(cfg.username || cfg.user || "");
           setMqttPass(cfg.password || "");
         }
       })
@@ -119,10 +121,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       await api.saveMqttConfig({
         host: mqttHost,
         port: Number(mqttPort),
+        user: mqttUser,
         username: mqttUser,
         password: mqttPass,
       });
       showToast("✓ Configuración MQTT guardada");
+      if (onRefresh) onRefresh();
     } catch (err: any) {
       showToast(err.message || "Error al guardar MQTT", true);
     } finally {

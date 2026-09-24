@@ -3,6 +3,7 @@ import { getMqttDeviceType, MqttEntity } from "../src/mqtt/mqtt.entity.js";
 import {
   MqttClientManager,
   MqttDiscoveryEntry,
+  normalizeMqttDiscoveryConfig,
 } from "../src/mqtt/mqtt-client.js";
 import {
   onOffLight,
@@ -100,6 +101,69 @@ describe("MQTT Auto-Discovery and Entity Mapping", () => {
     expect(entity.getStateString()).toBe("ON");
 
     entity.handleStateUpdate('{"state":"OFF"}');
-    expect(entity.getStateString()).toBe('{"state":"OFF"}');
+    expect(entity.getStateString()).toBe("OFF");
+  });
+
+  it("normalizes Home Assistant MQTT discovery abbreviations and base topic prefixes", () => {
+    const rawConfig = {
+      "~": "zigbee2mqtt/kitchen_sensor",
+      stat_t: "~/state",
+      cmd_t: "~/set",
+      avty_t: "~/availability",
+      uniq_id: "0x00158d0001",
+      pl_on: "ON",
+      pl_off: "OFF",
+      dev: {
+        ids: ["0x00158d0001"],
+        name: "Kitchen Sensor",
+        mf: "Xiaomi",
+        mdl: "MCCGQ11LM",
+      },
+    };
+
+    const mockLog: any = {
+      info: vi.fn(),
+      debug: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+      notice: vi.fn(),
+    };
+    const mockPlatform: any = { log: mockLog };
+    const mockMqttManager = new MqttClientManager(mockLog, {
+      host: "127.0.0.1",
+    });
+
+    const normalized = normalizeMqttDiscoveryConfig(rawConfig);
+    expect(normalized.state_topic).toBe("zigbee2mqtt/kitchen_sensor/state");
+    expect(normalized.command_topic).toBe("zigbee2mqtt/kitchen_sensor/set");
+    expect(normalized.availability_topic).toBe("zigbee2mqtt/kitchen_sensor/availability");
+    expect(normalized.unique_id).toBe("0x00158d0001");
+    expect(normalized.device.identifiers).toEqual(["0x00158d0001"]);
+    expect(normalized.device.manufacturer).toBe("Xiaomi");
+    expect(normalized.device.model).toBe("MCCGQ11LM");
+
+    const entry: MqttDiscoveryEntry = {
+      topic: "homeassistant/binary_sensor/kitchen_sensor/contact/config",
+      component: "binary_sensor",
+      config: normalized,
+    };
+
+    const entity = new MqttEntity(mockPlatform, mockMqttManager, entry);
+    expect(entity.entityId).toBe("mqtt.0x00158d0001");
+    expect(entity.friendlyName).toBe("Kitchen Sensor");
+    expect(entity.manufacturer).toBe("Xiaomi");
+    expect(entity.model).toBe("MCCGQ11LM");
+    expect(entity.stateTopic).toBe("zigbee2mqtt/kitchen_sensor/state");
+
+    // Test JSON state update handling (contact sensor)
+    entity.handleStateUpdate(JSON.stringify({ contact: false }));
+    expect(entity.getStateString().toLowerCase()).toBe("on");
+
+    entity.handleStateUpdate(JSON.stringify({ contact: true }));
+    expect(entity.getStateString().toLowerCase()).toBe("off");
+
+    // Test availability handling
+    entity.handleStateUpdate("offline");
+    expect(entity.getStateString()).toBe("unavailable");
   });
 });

@@ -535,6 +535,7 @@ export const App: React.FC = () => {
         showToast={showToast}
         status={status}
         stats={stats}
+        onRefresh={refreshAll}
       />
 
       {/* Toast Notification */}

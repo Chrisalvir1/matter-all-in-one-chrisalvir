@@ -2234,256 +2234,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       fsSync.existsSync("/data") ? "/data" : "./persist",
     );
 
-    // Load MQTT Config if exists
-    try {
-      const mqttConfigRaw = await fs.readFile("/data/mqtt-config.json", "utf8");
-      const mqttData = JSON.parse(mqttConfigRaw);
-      (this.config as any).mqttHost = mqttData.host;
-      (this.config as any).mqttPort = mqttData.port;
-      (this.config as any).mqttUser = mqttData.user;
-      (this.config as any).mqttPassword = mqttData.password;
-    } catch {
-      // File missing, that's fine
-    }
-
-    if ((this.config as any).mqttHost) {
-      this.mqttManager = new MqttClientManager(this.log, {
-        host: (this.config as any).mqttHost,
-        port: Number((this.config as any).mqttPort) || 1883,
-        user: (this.config as any).mqttUser,
-        password: (this.config as any).mqttPassword,
-      });
-
-      this.mqttManager.onDeviceDiscovered(async (entry) => {
-        if (entry.component === "camera") {
-          this.log.info(
-            `[MQTT] Discovered camera component "${entry.config?.name || entry.objectId}". Apple Home requires cameras via HomeKit HAP; skipped Matter bridge.`,
-          );
-          return;
-        }
-
-        const entity = new MqttEntity(this, this.mqttManager!, entry);
-        this.mqttEntities.set(entity.entityId, entity);
-        this.log.info(
-          `[MQTT] Discovered ${entity.domain}: "${entity.friendlyName}" (${entity.entityId})`,
-        );
-
-        if (this.isEntityExported(entity.entityId)) {
-          try {
-            await this.activateMqttEntity(entity.entityId);
-          } catch (err) {
-            this.log.error(
-              `[MQTT] Failed to activate exported MQTT device ${entity.entityId}: ${err}`,
-            );
-          }
-        }
-      });
-
-      this.mqttManager.onDeviceRemoved((topic) => {
-        for (const [entityId, entity] of this.mqttEntities.entries()) {
-          if (
-            entity.stateTopic === topic ||
-            entity.entityId.includes(topic.split("/").pop() || "")
-          ) {
-            this.mqttEntities.delete(entityId);
-            this.log.info(`[MQTT] Removed entity ${entityId}`);
-            break;
-          }
-        }
-      });
-
-      this.mqttManager.onStateChanged((topic, payload) => {
-        for (const entity of this.mqttEntities.values()) {
-          if (entity.stateTopic === topic) {
-            entity.handleStateUpdate(payload);
-          }
-        }
-      });
-
-      this.mqttManager.onCameraUiMessage(async (topic, payload) => {
-        try {
-          const store = await CameraUiStorage.load();
-          let targetCameraId: string | undefined;
-          let isMotion = false;
-          let isDoorbell = false;
-          let active = false;
-
-          const parts = topic.split("/");
-          const isMotionAction = (act: string) =>
-            [
-              "motion",
-              "movimiento",
-              "detection",
-              "deteccion",
-              "opencv",
-              "person",
-              "persona",
-              "animal",
-              "mascota",
-              "pet",
-              "vehicle",
-              "vehiculo",
-              "car",
-              "carro",
-              "auto",
-              "package",
-              "paquete",
-              "face",
-              "cara",
-              "movement",
-            ].includes(act.toLowerCase());
-
-          const parseActiveState = (pl: string): boolean => {
-            const trimmed = (pl || "").toString().trim();
-            let act =
-              trimmed === "true" ||
-              trimmed.toUpperCase() === "ON" ||
-              trimmed === "1" ||
-              trimmed === "active" ||
-              trimmed === "start";
-            try {
-              const parsed = JSON.parse(trimmed);
-              if (typeof parsed === "boolean") return parsed;
-              if (parsed.state !== undefined) {
-                return (
-                  parsed.state === "ON" ||
-                  parsed.state === "on" ||
-                  parsed.state === true ||
-                  parsed.state === "active" ||
-                  parsed.state === "start" ||
-                  parsed.state === 1
-                );
-              }
-              if (parsed.active !== undefined) return Boolean(parsed.active);
-              if (parsed.motion !== undefined) return Boolean(parsed.motion);
-              if (Array.isArray(parsed.detected) && parsed.detected.length > 0)
-                return true;
-              if (parsed.trigger === "opencv" || parsed.trigger === "motion")
-                return true;
-            } catch {}
-            return act;
-          };
-
-          // 1. Direct match on configured camera motionTopic
-          const directTopicMatch = store.cameras.find(
-            (c) =>
-              c.motionTopic &&
-              (c.motionTopic === topic || topic.endsWith(c.motionTopic)),
-          );
-          if (directTopicMatch) {
-            targetCameraId = directTopicMatch.id;
-          }
-
-          if (
-            parts.length === 2 &&
-            (isMotionAction(parts[1]) || parts[1] === "doorbell")
-          ) {
-            let camIdentifier = parts[0].toLowerCase();
-            try {
-              const data = JSON.parse(payload);
-              if (data.camera || data.name || data.id) {
-                camIdentifier = (data.camera || data.name || data.id)
-                  .toString()
-                  .toLowerCase();
-              }
-            } catch {}
-            if (!targetCameraId) {
-              const found = store.cameras.find((c) =>
-                this.matchCameraIdentifier(c, camIdentifier),
-              );
-              if (found) {
-                targetCameraId = found.id;
-              } else {
-                const allCuiAccessories =
-                  CameraUiHomeKitBridge.getAllAccessories();
-                for (const [cuiId, acc] of allCuiAccessories) {
-                  if (
-                    this.matchCameraIdentifier(
-                      { id: cuiId, name: acc.record?.name },
-                      camIdentifier,
-                    )
-                  ) {
-                    targetCameraId = cuiId;
-                    break;
-                  }
-                }
-                if (!targetCameraId) targetCameraId = camIdentifier;
-              }
-            }
-            active = parseActiveState(payload);
-            if (isMotionAction(parts[1])) isMotion = true;
-            if (parts[1] === "doorbell") isDoorbell = true;
-          } else if (parts.length >= 3) {
-            if (!targetCameraId) {
-              for (const part of parts) {
-                const p = part.toLowerCase();
-                if (
-                  p === "camera.ui" ||
-                  p === "cameraui" ||
-                  p === "homeassistant" ||
-                  isMotionAction(p)
-                )
-                  continue;
-                const found = store.cameras.find((c) =>
-                  this.matchCameraIdentifier(c, p),
-                );
-                if (found) {
-                  targetCameraId = found.id;
-                  break;
-                }
-                const allCuiAccessories =
-                  CameraUiHomeKitBridge.getAllAccessories();
-                for (const [cuiId, acc] of allCuiAccessories) {
-                  if (
-                    this.matchCameraIdentifier(
-                      { id: cuiId, name: acc.record?.name },
-                      p,
-                    )
-                  ) {
-                    targetCameraId = cuiId;
-                    break;
-                  }
-                }
-                if (targetCameraId) break;
-              }
-            }
-            const lastPart = parts[parts.length - 1].toLowerCase();
-            if (
-              isMotionAction(lastPart) ||
-              parts.some((p) => isMotionAction(p))
-            ) {
-              isMotion = true;
-              active = parseActiveState(payload);
-            } else if (lastPart === "doorbell" || parts.includes("doorbell")) {
-              isDoorbell = true;
-            }
-          }
-
-          if (targetCameraId) {
-            if (isMotion) {
-              CameraUiHomeKitBridge.updateMotion(
-                targetCameraId,
-                active,
-                this,
-                `MQTT (${topic})`,
-              );
-            }
-            if (isDoorbell) {
-              CameraUiHomeKitBridge.triggerDoorbell(targetCameraId);
-              this.broadcastSseMessage("cameraui_doorbell", {
-                cameraId: targetCameraId,
-              });
-            }
-          }
-        } catch (e) {
-          this.log.debug(
-            `[Camera.UI] Error processing MQTT event on ${topic}: ${e}`,
-          );
-        }
-      });
-
-      this.mqttManager.connect();
-    }
+    // Load & Initialize MQTT Discovery & Management
+    void this.initMqtt();
 
     // ── Resolve Home Assistant URL ─────────────────────────────────────────
     // If the user didn’t set config.host we run the network discovery:
@@ -2546,6 +2298,324 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     } catch (err) {
       this.log.error(`Failed to connect to Home Assistant: ${err}`);
     }
+  }
+
+  public async initMqtt(): Promise<void> {
+    const persistDir = fsSync.existsSync("/data") ? "/data" : "./persist";
+    const mqttConfigFile = path.join(persistDir, "mqtt-config.json");
+
+    try {
+      if (fsSync.existsSync(mqttConfigFile)) {
+        const raw = await fs.readFile(mqttConfigFile, "utf8");
+        const data = JSON.parse(raw);
+        if (data.host) {
+          (this.config as any).mqttHost = data.host;
+          (this.config as any).mqttPort = data.port || 1883;
+          (this.config as any).mqttUser = data.user || data.username || "";
+          (this.config as any).mqttPassword = data.password || "";
+        }
+      }
+    } catch {}
+
+    // Auto-discover Mosquitto Broker service from Home Assistant Supervisor if not manually configured
+    if (!(this.config as any).mqttHost) {
+      const supervisorToken =
+        process.env.SUPERVISOR_TOKEN || process.env.HASSIO_TOKEN;
+      if (supervisorToken) {
+        try {
+          const res = await fetch("http://supervisor/services/mqtt", {
+            headers: { Authorization: `Bearer ${supervisorToken}` },
+          });
+          if (res.ok) {
+            const data: any = await res.json();
+            if (data?.result === "ok" && data?.data?.host) {
+              (this.config as any).mqttHost = data.data.host;
+              (this.config as any).mqttPort = data.data.port || 1883;
+              (this.config as any).mqttUser = data.data.username || "";
+              (this.config as any).mqttPassword = data.data.password || "";
+              this.log.info(
+                `[MQTT] Auto-discovered Home Assistant Mosquitto broker from Supervisor (${data.data.host}:${data.data.port || 1883})`,
+              );
+            }
+          }
+        } catch {}
+      }
+    }
+
+    if (!(this.config as any).mqttHost) {
+      this.log.debug(
+        "[MQTT] No MQTT broker host configured; MQTT auto-discovery is in standby.",
+      );
+      return;
+    }
+
+    if (this.mqttManager) {
+      try {
+        this.mqttManager.disconnect();
+      } catch {}
+      this.mqttManager = undefined;
+    }
+
+    this.mqttManager = new MqttClientManager(this.log, {
+      host: (this.config as any).mqttHost,
+      port: Number((this.config as any).mqttPort) || 1883,
+      user: (this.config as any).mqttUser || undefined,
+      password: (this.config as any).mqttPassword || undefined,
+    });
+
+    this.mqttManager.onDeviceDiscovered(async (entry) => {
+      if (entry.component === "camera") {
+        this.log.info(
+          `[MQTT] Discovered camera component "${entry.config?.name || entry.objectId}". Apple Home requires cameras via HomeKit HAP; skipped Matter bridge.`,
+        );
+        return;
+      }
+
+      const entity = new MqttEntity(this, this.mqttManager!, entry);
+      this.mqttEntities.set(entity.entityId, entity);
+      this.log.notice(
+        `[MQTT] Discovered ${entity.domain} device: ${entity.entityId} (${entity.friendlyName})`,
+      );
+
+      if (this.isEntityExported(entity.entityId)) {
+        try {
+          await this.activateMqttEntity(entity.entityId);
+        } catch (err) {
+          this.log.error(
+            `[MQTT] Failed to activate exported entity ${entity.entityId}: ${err}`,
+          );
+        }
+      }
+      this.broadcastSseMessage("device_update", {
+        origin: "mqtt",
+        entityId: entity.entityId,
+      });
+    });
+
+    this.mqttManager.onDeviceRemoved((topic) => {
+      for (const [entityId, entity] of this.mqttEntities.entries()) {
+        if (
+          entity.stateTopic === topic ||
+          entity.commandTopic === topic ||
+          entity.entityId === topic
+        ) {
+          this.mqttEntities.delete(entityId);
+          this.log.info(`[MQTT] Removed entity ${entityId}`);
+          this.broadcastSseMessage("device_update", {
+            origin: "mqtt",
+            entityId,
+          });
+          break;
+        }
+      }
+    });
+
+    this.mqttManager.onStateChanged((topic, payload) => {
+      for (const entity of this.mqttEntities.values()) {
+        if (entity.stateTopic === topic) {
+          entity.handleStateUpdate(payload);
+          this.broadcastSseMessage("state_change", {
+            origin: "mqtt",
+            entityId: entity.entityId,
+            state: payload,
+          });
+        }
+      }
+    });
+
+    this.mqttManager.onCameraUiMessage(async (topic, payload) => {
+      try {
+        const store = await CameraUiStorage.load();
+        let targetCameraId: string | undefined;
+        let isMotion = false;
+        let isDoorbell = false;
+        let active = false;
+
+        const parts = topic.split("/");
+        const isMotionAction = (act: string) =>
+          [
+            "motion",
+            "movimiento",
+            "detection",
+            "deteccion",
+            "opencv",
+            "person",
+            "persona",
+            "linecrossing",
+          ].includes(act.toLowerCase());
+
+        const parseActiveState = (act: any): boolean => {
+          if (typeof act === "boolean") return act;
+          if (typeof act === "number") return act > 0;
+          const str = String(act).trim().toLowerCase();
+          if (
+            str === "true" ||
+            str === "on" ||
+            str === "1" ||
+            str === "motion" ||
+            str === "active" ||
+            str === "start" ||
+            str === "detected" ||
+            str === "person" ||
+            str === "linecrossing"
+          )
+            return true;
+          if (
+            str === "false" ||
+            str === "off" ||
+            str === "0" ||
+            str === "reset" ||
+            str === "inactive" ||
+            str === "stop" ||
+            str === "none"
+          )
+            return false;
+          try {
+            const parsed = JSON.parse(act);
+            if (parsed.state !== undefined) {
+              return (
+                parsed.state === "on" ||
+                parsed.state === true ||
+                parsed.state === "active" ||
+                parsed.state === "start" ||
+                parsed.state === 1
+              );
+            }
+            if (parsed.active !== undefined) return Boolean(parsed.active);
+            if (parsed.motion !== undefined) return Boolean(parsed.motion);
+            if (Array.isArray(parsed.detected) && parsed.detected.length > 0)
+              return true;
+            if (parsed.trigger === "opencv" || parsed.trigger === "motion")
+              return true;
+          } catch {}
+          return false;
+        };
+
+        // 1. Direct match on configured camera motionTopic
+        const directTopicMatch = store.cameras.find(
+          (c) =>
+            c.motionTopic &&
+            (c.motionTopic === topic || topic.endsWith(c.motionTopic)),
+        );
+        if (directTopicMatch) {
+          targetCameraId = directTopicMatch.id;
+        }
+
+        if (
+          parts.length === 2 &&
+          (isMotionAction(parts[1]) || parts[1] === "doorbell")
+        ) {
+          let camIdentifier = parts[0].toLowerCase();
+          try {
+            const data = JSON.parse(payload);
+            if (data.camera || data.name || data.id) {
+              camIdentifier = (data.camera || data.name || data.id)
+                .toString()
+                .toLowerCase();
+            }
+          } catch {}
+          if (!targetCameraId) {
+            const found = store.cameras.find((c) =>
+              this.matchCameraIdentifier(c, camIdentifier),
+            );
+            if (found) {
+              targetCameraId = found.id;
+            } else {
+              const allCuiAccessories =
+                CameraUiHomeKitBridge.getAllAccessories();
+              for (const [cuiId, acc] of allCuiAccessories) {
+                if (
+                  this.matchCameraIdentifier(
+                    { id: cuiId, name: acc.record?.name },
+                    camIdentifier,
+                  )
+                ) {
+                  targetCameraId = cuiId;
+                  break;
+                }
+              }
+              if (!targetCameraId) targetCameraId = camIdentifier;
+            }
+          }
+          active = parseActiveState(payload);
+          if (isMotionAction(parts[1])) isMotion = true;
+          if (parts[1] === "doorbell") isDoorbell = true;
+        } else if (parts.length >= 3) {
+          if (!targetCameraId) {
+            for (const part of parts) {
+              const p = part.toLowerCase();
+              if (
+                isMotionAction(p) ||
+                p === "doorbell" ||
+                p === "events" ||
+                p === "state" ||
+                p === "motion"
+              )
+                continue;
+              const found = store.cameras.find((c) =>
+                this.matchCameraIdentifier(c, p),
+              );
+              if (found) {
+                targetCameraId = found.id;
+                break;
+              }
+              const allCuiAccessories =
+                CameraUiHomeKitBridge.getAllAccessories();
+              for (const [cuiId, acc] of allCuiAccessories) {
+                if (
+                  this.matchCameraIdentifier(
+                    { id: cuiId, name: acc.record?.name },
+                    p,
+                  )
+                ) {
+                  targetCameraId = cuiId;
+                  break;
+                }
+              }
+              if (targetCameraId) break;
+            }
+          }
+          const lastPart = parts[parts.length - 1];
+          const secondLastPart = parts[parts.length - 2];
+          if (isMotionAction(lastPart) || isMotionAction(secondLastPart)) {
+            isMotion = true;
+            active = parseActiveState(payload);
+          } else if (lastPart === "doorbell" || secondLastPart === "doorbell") {
+            isDoorbell = true;
+            active = parseActiveState(payload);
+          } else {
+            active = parseActiveState(payload);
+            isMotion = active;
+          }
+        }
+
+        if (targetCameraId && active) {
+          if (isMotion) {
+            CameraUiHomeKitBridge.updateMotion(
+              targetCameraId,
+              true,
+              this,
+              "MQTT",
+            );
+            this.broadcastSseMessage("cameraui_motion", {
+              cameraId: targetCameraId,
+            });
+          }
+          if (isDoorbell) {
+            CameraUiHomeKitBridge.triggerDoorbell(targetCameraId);
+            this.broadcastSseMessage("cameraui_doorbell", {
+              cameraId: targetCameraId,
+            });
+          }
+        }
+      } catch (e) {
+        this.log.debug(
+          `[Camera.UI] Error processing MQTT event on ${topic}: ${e}`,
+        );
+      }
+    });
+
+    this.mqttManager.connect();
   }
 
   /**
@@ -3277,7 +3347,15 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         this.log.notice(
           `Manually exported bridged MQTT endpoint for ${entityId}`,
         );
-        return { success: true };
+        const endpoint = this.matterbridgeDevices.get(entityId);
+        const connection = endpoint
+          ? this.getMatterConnectionInfo(endpoint)
+          : null;
+        return {
+          success: true,
+          pairingCode: connection?.pairingCode ?? null,
+          manualPairingCode: connection?.manualPairingCode ?? null,
+        };
       } catch (err) {
         this.exportedDevices.delete(entityId);
         this.log.error(
@@ -4724,6 +4802,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         }
 
         if (req.method === "GET" && pathname === "/api/custom/mqtt-config") {
+          const user = (this.config as any).mqttUser || "";
           res.writeHead(200, {
             "Content-Type": "application/json; charset=utf-8",
           });
@@ -4731,7 +4810,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             JSON.stringify({
               host: (this.config as any).mqttHost || "",
               port: (this.config as any).mqttPort || 1883,
-              user: (this.config as any).mqttUser || "",
+              user,
+              username: user,
               password: (this.config as any).mqttPassword || "",
             }),
           );
@@ -4742,30 +4822,46 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           try {
             const body = await this.readRequestBody(req);
             const data = JSON.parse(body);
+            const user = data.user || data.username || "";
             (this.config as any).mqttHost = data.host;
-            (this.config as any).mqttPort = data.port;
-            (this.config as any).mqttUser = data.user;
-            (this.config as any).mqttPassword = data.password;
+            (this.config as any).mqttPort = Number(data.port) || 1883;
+            (this.config as any).mqttUser = user;
+            (this.config as any).mqttPassword = data.password || "";
 
-            // To persist, write to /data/mqtt-config.json
+            const persistDir = fsSync.existsSync("/data") ? "/data" : "./persist";
+            const mqttConfigFile = path.join(persistDir, "mqtt-config.json");
             await fs.writeFile(
-              "/data/mqtt-config.json",
-              JSON.stringify(data),
+              mqttConfigFile,
+              JSON.stringify(
+                {
+                  host: data.host,
+                  port: Number(data.port) || 1883,
+                  user,
+                  username: user,
+                  password: data.password || "",
+                },
+                null,
+                2,
+              ),
               "utf8",
             );
+
+            // Re-initialize MQTT manager dynamically
+            await this.initMqtt();
+            this.broadcastSseMessage("device_update", { origin: "mqtt" });
 
             res.writeHead(200, {
               "Content-Type": "application/json; charset=utf-8",
             });
             res.end(JSON.stringify({ success: true }));
-          } catch {
+          } catch (err: any) {
             res.writeHead(400, {
               "Content-Type": "application/json; charset=utf-8",
             });
             res.end(
               JSON.stringify({
                 success: false,
-                error: "Invalid MQTT configuration payload.",
+                error: "Invalid MQTT configuration payload: " + String(err),
               }),
             );
           }
@@ -5025,6 +5121,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               const connection = this.getMatterConnectionInfo(endpoint);
               return {
                 entityId: m.entityId,
+                name: m.friendlyName,
                 domain: m.domain,
                 state: m.getStateString(),
                 origin: "mqtt",

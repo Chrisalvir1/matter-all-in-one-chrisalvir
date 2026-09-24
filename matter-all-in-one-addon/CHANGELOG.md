@@ -1,3 +1,17 @@
+## [1.8.94] - 2026-09-24
+
+### Auto-Descubrimiento MQTT completo, normalización de abreviaturas y exportación fluida a Matter
+
+- **Auto-descubrimiento robusto y compatibilidad universal MQTT:**
+  - **Normalización de abreviaturas Home Assistant MQTT Discovery:** Soporte completo para cargas de configuración comprimidas de Zigbee2MQTT, Tasmota, Shelly, etc. (`stat_t`, `cmd_t`, `avty_t`, `uniq_id`, `dev`, `ids`, `mf`, `mdl`, `pl_on`, `pl_off`, `val_tpl`, etc.), así como resolución del prefijo base `~`.
+  - **Suscripción ampliada:** Inclusión de topics `homeassistant/#`, `ha/#`, `+/+/config`, `+/+/+/config`, `tasmota/discovery/#`, `zigbee2mqtt/#` y topics de atributos JSON.
+  - **Auto-descubrimiento del Broker Mosquitto desde Home Assistant:** Conexión automática mediante `http://supervisor/services/mqtt` usando `SUPERVISOR_TOKEN` si no se configura broker manual.
+  - **Reconexión dinámica sin reinicio:** Guardar cambios de host, puerto, usuario o contraseña en el modal de configuración reconecta inmediatamente el cliente MQTT y refresca la UI en tiempo real mediante SSE.
+- **Visualización y contenedores de dispositivos MQTT en la UI:**
+  - **Nombre y etiquetas de dispositivo:** Mapeo correcto de `name: m.friendlyName` en `/api/custom/devices`, permitiendo que los dispositivos MQTT se agrupen con su nombre real y la etiqueta `📡 MQTT`.
+  - **Exportación instantánea a Matter:** `manualRegister` para entidades `mqtt.` ahora devuelve `pairingCode` y `manualPairingCode` inmediatamente tras activar el endpoint puenteado, mostrando el código QR de emparejamiento al instante.
+  - **Manejo de estados y disponibilidad en vivo:** Soporte para estados de disponibilidad (`offline`, `unavailable`, `online`) y extracción inteligente de valores JSON (contactos, presencia, temperatura, humedad, etc.).
+
 ## [1.8.88] - 2026-09-23
 
 ### Eliminación definitiva del lag de 5 segundos en Tapo C120: Streaming fluido en tiempo real
