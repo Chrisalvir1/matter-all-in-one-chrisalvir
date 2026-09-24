@@ -475,7 +475,7 @@
 - **Cero Transcodificación Estricta en Vídeo y Audio:**
   - Vídeo siempre con `-c:v copy` sin recodificar en `libx264` ni `libx265`.
   - Validación de compatibilidad de audio nativo con `checkAudioPassthroughCompatibility()`. Si la fuente es compatible con AAC, se reenvía con `-c:a copy`; de lo contrario, se omite el audio (`-an`) sin transcodificar y se reporta en la UI.
-  - Grabación HKSV remuxada directamente en fMP4 con `-c:v copy` (usando `-tag:v hvc1` para HEVC). Inyección de átomo `prft` (*Producer Reference Time*) para hubs iOS 27 / tvOS 27 y normalización de timestamps `tfdt`.
+  - Grabación HKSV remuxada directamente en fMP4 con `-c:v copy` (usando `-tag:v hvc1` para HEVC). Inyección de átomo `prft` (_Producer Reference Time_) para hubs iOS 27 / tvOS 27 y normalización de timestamps `tfdt`.
 - **Aislamiento Estricto de Controladores (Sin mezclar):**
   - **Tapo C402 (Intacta y Protegida):** Guardián de seguridad inmutable que fuerza `CameraController` clásico con H.264 passthrough.
   - **Cámaras H.264:** Utilizan exclusivamente `CameraController` clásico.
@@ -485,7 +485,7 @@
   - Soporte para streaming Multi-Tier RTP y WebRTC con cifrado SFrame RFC 9605 nativo.
 - **Honestidad en la Interfaz de Usuario:**
   - Eliminado el QR morado preventivo de HKSV3: ahora solo se muestra si la cámara está en `SecureVideoController` y Apple Home ha negociado una sesión HEVC real.
-  - Nuevo selector en modal: *"Modo de exportación Apple Home"* (`auto`, `passthrough_h264`, `passthrough_hevc`, `disabled`).
+  - Nuevo selector en modal: _"Modo de exportación Apple Home"_ (`auto`, `passthrough_h264`, `passthrough_hevc`, `disabled`).
   - Diagnóstico en tiempo real de códec de vídeo, resolución/FPS, códec de audio y advertencias de incompatibilidad en rojo.
 - **Pruebas y Verificación:**
   - 53 suites de pruebas, 434 tests completados al 100% de éxito.
@@ -507,7 +507,6 @@
 - Cámaras no pareadas y sin RTSP (RING) no afectadas.
 
 ## [1.8.30] - 2026-09-20
-
 
 ### Estabilidad HAP y HKSV para Camera.UI
 
@@ -568,8 +567,6 @@
   - Se eliminaron `detectLocalIp()` y el `import os` que quedaban sin usar.
 
 ## [1.8.16] - 2026-09-18
-
-
 
 ### Corrección Crítica: Eliminación de Opción No Reconocida `-stimeout` en FFmpeg
 
@@ -825,7 +822,6 @@
 
 ## [1.7.8] - 2026-09-18
 
-
 ### Corrección Crítica HEVC (TAPO C402 / H.265) + Guard Cero Cámaras + Colisión Nombres Matter
 
 - **Fix HEVC Detection (TAPO C402 y cámaras H.265):**
@@ -840,7 +836,6 @@
   - `mergeDiscoveredCameras()` ahora retorna inmediatamente si `discovered.length === 0`, preservando las cámaras almacenadas ante errores de sincronización (credenciales incorrectas, timeout de red, etc.).
 
 ## [1.7.7] - 2026-09-18
-
 
 ### HKSV Universal (H.264/H.265) y Exportación Automática de Detección de Movimiento a Matter
 
@@ -1107,7 +1102,7 @@
 ### Detección Universal de Cámaras Camera.UI v5 (`result` Array, Diccionario Clave-Valor), Reemplazo IP Localhost y Eliminación de Error de Localhost
 
 - **Extractor Universal de Cámaras (`extractRawCameras`):**
-  - Soluciona de forma definitiva el problema de *"0 cámaras detectadas"* en Camera.UI v5.
+  - Soluciona de forma definitiva el problema de _"0 cámaras detectadas"_ en Camera.UI v5.
   - La API de Camera.UI v5 entrega las cámaras bajo el esquema paginado `{ result: [ ... ], total: N, page: 1, pageSize: -1 }` y en `/api/config` bajo diccionarios clave-valor `{ cameras: { "patio": { ... } } }`. El nuevo extractor detecta y normaliza cámaras automáticamente sin importar si vienen en `result`, `cameras`, `data`, `items` o como diccionario de objetos.
   - Consulta multi-endpoint en cascada (`/api/cameras?page=1&pageSize=-1`, `/api/cameras`, `/cameras`, `/api/config`, `/config`).
 - **Eliminación Total del Error de Localhost al Probar Conexión:**
@@ -1144,7 +1139,7 @@
 
 - **Soporte Completo para HTTPS y Certificados SSL Autofirmados:**
   - Habilitada la opción `allowSelfSignedCertificate: true` (por defecto) tanto en backend como frontend, permitiendo conectar sin restricciones a servidores Camera.UI locales vía HTTPS (`https://192.168.x.x:3543`) sin errores de `SELF_SIGNED_CERT_IN_CHAIN`.
-  - Agregado checkbox interactivo en `CameraUiModal`: *"Permitir certificados SSL autofirmados (HTTPS local)"*.
+  - Agregado checkbox interactivo en `CameraUiModal`: _"Permitir certificados SSL autofirmados (HTTPS local)"_.
 - **Autenticación Nativa Moderna de Camera.UI (`POST /api/auth/login`):**
   - Implementado flujo de inicio de sesión completo que obtiene y renueva el token JWT Bearer (`access_token`), enviándolo en encabezados `Authorization: Bearer <access_token>` para `/api/cameras` y `/api/config`.
   - Diagnóstico preciso de errores de credenciales (HTTP 401 / 403) con mensajes claros en la interfaz en lugar de fallos genéricos.
@@ -1198,7 +1193,7 @@
   - En `HomeKitCameraAccessory.buildDeclaredResolutions()`, la resolución nativa de la cámara se declara como la opción preferente y prioritaria, restringiendo las resoluciones anunciadas a las capacidades reales del sensor para evitar que iOS intente solicitar 4K en cámaras de 2K o 1080p forzando reescalado en CPU.
   - En `HomeKitCameraStreamingDelegate`, se elevaron los pisos de tasa de bits a 3500-6000 kbps para 2K y hasta 12000 kbps para 4K, garantizando que el passthrough directo (`-c:v copy`) entregue la máxima nitidez cristalina sin compresión ni pérdidas.
 - **Limpieza de Sensores y Botones Ficticios de PTZ:**
-  - Eliminado el botón artificial *"⚡ Activar Giro PTZ"* y la inyección sintética de sensores `_ptz` basados en nombres o modelos de texto.
+  - Eliminado el botón artificial _"⚡ Activar Giro PTZ"_ y la inyección sintética de sensores `_ptz` basados en nombres o modelos de texto.
   - Las capacidades motorizadas PTZ ahora sólo se reportan cuando la cámara física expone genuinamente las interfaces `PanTilt` o `PanTiltZoom` en hardware.
 
 ## [1.5.88] - 2026-09-16
@@ -1220,7 +1215,7 @@
 - **Rechazo inmediato de comandos en entidades fuera de línea:**
   - Se introdujo `assertOnline()` en `BaseEntity` y `assertMemberOnline()` en `CompositeDeviceEntity`.
   - Cuando un dispositivo pasa a estado `unavailable` o `unknown` en Home Assistant, cualquier comando recibido desde Apple Home o Matter (`on`, `off`, `moveToLevel`, `sendColor`, `FanControl`, `lockDoor`, etc.) es rechazado inmediatamente arrojando una excepción de protocolo en lugar de confirmar la orden con éxito a ciegas.
-  - Esto fuerza a la app Casa a actualizar la baldosa al estado real de fallo y mostrar de inmediato el cartel de *"Sin respuesta"*.
+  - Esto fuerza a la app Casa a actualizar la baldosa al estado real de fallo y mostrar de inmediato el cartel de _"Sin respuesta"_.
 - **Descarte de envíos asíncronos en cola:**
   - `callServiceDebounced` verifica el estado de la entidad antes de programar y antes de despachar llamadas diferidas a Home Assistant.
 - **Emisión activa de suscripción Matter para Reachability:**
@@ -1381,7 +1376,7 @@
   - Se unificó el antiguo bloque superior pasivo con la barra inferior redundante de chips: ahora cada tarjeta del Centro de Control actúa como un **tab interactivo** que filtra directamente la lista inferior.
   - Indicadores visuales de estado activo (borde glowing, fondo iluminado y micro-punto indicador), más estados semánticos para advertencias (ámbar pulsante) y éxito (verde esmeralda).
 - **Renombramiento Solicitado por el Usuario:**
-  - El filtro de dispositivos no enlazados ahora se denomina formalmente **"MATTER ACTIVO SIN EMPAREJAR"** (con subtítulo descriptivo *"Código QR listo para enlazar"*), garantizando claridad absoluta sobre el estado de la entidad.
+  - El filtro de dispositivos no enlazados ahora se denomina formalmente **"MATTER ACTIVO SIN EMPAREJAR"** (con subtítulo descriptivo _"Código QR listo para enlazar"_), garantizando claridad absoluta sobre el estado de la entidad.
 - **Sincronización Exacta de Métricas (100% Coherencia de Datos):**
   - Se erradicó la discrepancia numérica (`Dispositivos: 101` vs `TODOS 117`): `stats.totalDevices` ahora representa con exactitud la totalidad de los accesorios gestionados (117 = 94 IoT + 23 Cámaras), desglosados explícitamente en el subtítulo de la tarjeta.
   - El contador en vivo del encabezado y la insignia de filtro activo reflejan dinámicamente la cantidad exacta de accesorios mostrados en pantalla.
@@ -1436,7 +1431,7 @@
   - Depuración de `NECESITA ATENCIÓN`: Limita las alertas exclusivamente a accesorios activos o exportados que presenten fallos de comunicación o errores reales, eliminando falsas alarmas de dispositivos inactivos de Home Assistant.
 - **Diagnóstico Explícito y Claridad de Causa en `UNAVAILABLE`:**
   - Corrección de la contradicción visual en el modal de accesorio: Ya no muestra "✓ Sin errores" cuando el badge indica `UNAVAILABLE`.
-  - Despliegue de banner explicativo en color ámbar: *Home Assistant perdió comunicación con el dispositivo físico. El puente Matter sigue activo, pero el aparato no responde en su origen (posiblemente apagado, sin batería o sin Wi-Fi).*
+  - Despliegue de banner explicativo en color ámbar: _Home Assistant perdió comunicación con el dispositivo físico. El puente Matter sigue activo, pero el aparato no responde en su origen (posiblemente apagado, sin batería o sin Wi-Fi)._
   - Exportación completa en el botón "📋 Copiar logs" incluyendo el motivo explícito y la cronología del evento.
 - **Propagación Real de Desconexión a Apple Home / Matter (`reachable: false`):**
   - Cuando un dispositivo se apaga o desconecta en Home Assistant, el puente Matter propaga dinámicamente `reachable: false` vía `BasicInformationServer` (y código de error `rvcOperationalState = 3` en aspiradoras Robot).
@@ -1471,6 +1466,7 @@
 ### Release consolidado — todas las actualizaciones y correcciones de v1.5.66–v1.5.69
 
 Versión de lanzamiento limpia que consolida:
+
 - Corrección QR no aparecía al activar interruptor maestro compuesto (v1.5.66)
 - Corrección recámara sin interruptor maestro + QR desaparecía tras reset (v1.5.67)
 - Actualización de todas las dependencias a versiones estables: react 19.3.0, vitest 5.0.0, vite 8.3.0, matterbridge 3.10.9 (v1.5.68)
@@ -1490,16 +1486,16 @@ Versión de lanzamiento limpia que consolida:
 
 Todas las dependencias actualizadas a su versión estable más reciente. Se eliminaron versiones beta/RC.
 
-| Paquete | Antes | Después |
-|---------|-------|---------|
-| `react` + `react-dom` | `19.2.8` | `19.3.0` |
-| `@types/react` + `@types/react-dom` | `19.2.18 / 19.2.7` | `19.3.0` |
-| `vitest` | `5.0.0-rc.4` ⚠️ beta | `5.0.0` ✅ |
-| `@vitest/coverage-v8` | `5.0.0-rc.4` ⚠️ beta | `5.0.0` ✅ |
-| `vite` | `8.2.2` | `8.3.0` |
-| `lucide-react` | `1.40.0` | `1.45.0` |
-| `matterbridge` | `3.10.7` | `3.10.9` |
-| `@types/node` | `24.13.3` | `24.13.4` |
+| Paquete                             | Antes                | Después    |
+| ----------------------------------- | -------------------- | ---------- |
+| `react` + `react-dom`               | `19.2.8`             | `19.3.0`   |
+| `@types/react` + `@types/react-dom` | `19.2.18 / 19.2.7`   | `19.3.0`   |
+| `vitest`                            | `5.0.0-rc.4` ⚠️ beta | `5.0.0` ✅ |
+| `@vitest/coverage-v8`               | `5.0.0-rc.4` ⚠️ beta | `5.0.0` ✅ |
+| `vite`                              | `8.2.2`              | `8.3.0`    |
+| `lucide-react`                      | `1.40.0`             | `1.45.0`   |
+| `matterbridge`                      | `3.10.7`             | `3.10.9`   |
+| `@types/node`                       | `24.13.3`            | `24.13.4`  |
 
 - 388/388 tests pasando con vitest v5.0.0 estable.
 - Build limpio con vite v8.3.0.
@@ -1792,7 +1788,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 - **Convivencia Armoniosa de Stream en Vivo y Grabación HKSV:** El delegado de grabación suspende temporalmente el pre-buffer de fMP4 mientras una sesión de transmisión en vivo está activa (`pausePrebuffer`), liberando el socket RTSP único de la cámara y garantizando 0% colisiones de ancho de banda y 0 congelamientos. Al cerrar la app Casa, el pre-buffer se reanuda de inmediato (`resumePrebuffer`).
 - **Soporte de Video Ultra Fluido hasta 60 FPS:** Se incrementó el límite de cuadros por segundo de 30 a 60 fps en las resoluciones declaradas y en la codificación de FFmpeg (`-g String(fps) -keyint_min String(fps)`).
 - **Arranque Inmediato sin Pantalla Negra:** Se eliminó `-skip_frame nokey`, se implementó búsqueda de instantáneas en Home Assistant para cámaras de Scrypted y se persisten las capturas a disco en `/data/snapshots/`.
-- **UI con Estado en Tiempo Real y Nombre de Casa:** La interfaz ahora detecta en tiempo real cuándo la cámara está emparejada (oculta el QR y muestra *"✓ Emparejado a [Nombre de tu Casa] (Apple Home)"*) y cuando se elimina de Apple Home hace reaparecer el código QR automáticamente.
+- **UI con Estado en Tiempo Real y Nombre de Casa:** La interfaz ahora detecta en tiempo real cuándo la cámara está emparejada (oculta el QR y muestra _"✓ Emparejado a [Nombre de tu Casa] (Apple Home)"_) y cuando se elimina de Apple Home hace reaparecer el código QR automáticamente.
 
 ## [1.5.03] - 2026-09-03
 
@@ -1823,6 +1819,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ### Arquitectura Universal de Video en Vivo Estable y Corrección de Fallo de Pantalla Negra
 
 #### Resolución Definitiva de Transmisión de Cámaras (Tapo, Wyze, Ezviz, Ring, Vimtag, Scrypted)
+
 - **Eliminación del Bloqueo WebRTC (`url: undefined`):** Se corrigió la condición que abortaba la resolución de URL para cámaras de Home Assistant con `frontend_stream_type: "webrtc"`, asignando el flujo continuo de proxy `${httpBase}/api/camera_proxy_stream/{entityId}` o HLS.
 - **Autenticación Bearer en FFmpeg y Snapshots:** Se agregaron encabezados de autorización HTTP (`Authorization: Bearer <token>`) para que FFmpeg y las solicitudes de instantáneas no sean rechazadas con error `401 Unauthorized` por Home Assistant.
 - **Inyección Segura de Audio Silencioso (`anullsrc`):** Se previene el error crítico de FFmpeg `Output file #1 does not contain any stream` cuando una cámara o proxy carece de canal de audio, inyectando un flujo silencioso generado en memoria para cumplir los requisitos de Apple HomeKit sin congelar el video.
@@ -1833,6 +1830,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ### Eliminación Completa de go2rtc y Flujo Directo de Cámara Nativo de Alta Calidad
 
 #### Conexión Directa sin Errores 404
+
 - **Eliminación Total de go2rtc:** Se desmantela completamente el motor `go2rtc` que provocaba errores `404 Not Found` en el handshake DESCRIBE de RTSP e impedía el inicio de la transmisión en vivo de las cámaras de Scrypted y Home Assistant.
 - **Ruta Directa al Stream de la Cámara:** FFmpeg se conecta de manera directa a la URL RTSP original de la cámara (`directUrl`), eliminando cualquier intermediario local y garantizando el arranque inmediato de la sesión HAP sin fallos de socket.
 - **Tasa de Bits Elevada (3500k - 8000k):** Se incrementa sustancialmente la tasa de bits para entregar video nítido a máxima resolución 2K/1080p sin compresión excesiva ni downscaling.
@@ -1843,6 +1841,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ### Pipeline Universal Zerolatency a 30fps sin Congelamientos y Detección Automática de Audio
 
 #### Transmisión Fluida a Calidad Completa
+
 - **Eliminación Definitiva de Congelamientos:** Se implementa codificación H.264 ultrafast con `-tune zerolatency` y forzado estricto de I-Frames cada 1 segundo (`-g 30 -keyint_min 30`). Se eliminan los B-frames de cámaras como Tapo Spot que bloqueaban el decodificador de iOS, garantizando que el segundero avance suavemente en tiempo real a 30 fps en todas las cámaras.
 - **Sin Reducción de Escala:** Se transmite a la resolución completa del sensor (2560x1440 2K o 1080p) con un bitrate elevado de 3000 kbps sin aplicar filtros de escala reductora.
 - **Detección Automática de Micrófono:** Toda cámara con audio disponible activa automáticamente el mapeo de audio a AAC-ELD/OPUS con ganancia de volumen amplificada (3.0x).
@@ -1853,6 +1852,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ### Integración Nativa de go2rtc para Restreaming Transparente, Passthrough Puro y Snapshots en RAM
 
 #### Motor Interno go2rtc Embebido
+
 - **Multiplexor Universal sin Saturación:** Se integra el binario nativo de `go2rtc` en el contenedor del Add-on (puertos internos `19840` API y `18554` RTSP). La cámara física (Tapo, Vimtag, Ezviz, ONVIF) solo ve 1 conexión RTSP permanente. Todos los clientes (iPhone, Apple TV 4K, HKSV, dashboard) se conectan al restreamer local sin saturar el chip de la cámara.
 - **Passthrough Directo (`-c:v copy`):** Máxima calidad nativa del sensor (2560x1440p en Tapo 2K) a 0% de uso de CPU y 0 lag.
 - **Snapshots Instantáneos en RAM (<15ms):** La captura de miniaturas para notificaciones de movimiento en Apple Home se obtiene directamente del búfer en memoria (`/api/frame.jpeg`) de go2rtc en menos de 15ms, sin procesos FFmpeg en segundo plano y con cero riesgo de congelamiento.
@@ -1863,10 +1863,12 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ### Passthrough Nativo Directo (-c:v copy) para Calidad Sensor 2K/4K y Garantía de Binarios FFmpeg/FFprobe
 
 #### Calidad Máxima Sensor y Eliminación de Lag
+
 - **Passthrough Directo (`-c:v copy`):** Si la cámara ya emite en H.264 (Tapo, Vimtag, Ezviz, Scrypted Rebroadcast), el stream se transmite en modo copia directa sin decodificar ni re-escalar. Esto entrega exactamente el 100% de la resolución del sensor (2560x1440p en Tapo) a 0% de uso de CPU y latencia cero, exactamente como Scrypted.
 - **Sin Reducción de Escala:** Se elimina la reducción forzada a resoluciones bajas en transcodificación de respaldo, permitiendo que iOS reproduzca la imagen nativa en Apple Home y Apple TV 4K.
 
 #### Disponibilidad Garantizada de FFprobe y FFmpeg con libfdk_aac
+
 - **Docker Multi-Arch:** El contenedor instala siempre los paquetes de Alpine (`apk add ffmpeg`) garantizando la presencia de `/usr/bin/ffprobe`, y sobrepone el binario estático `/usr/local/bin/ffmpeg` compilado con `libfdk_aac` para audio AAC-ELD nativo.
 
 ## [1.4.95] - 2026-09-02
@@ -1874,6 +1876,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ### Diagnóstico Preciso de Errores RTSP (401, 404, Conexión Rechazada)
 
 #### Detección de Errores en Tiempo Real
+
 - **Registro Detallado (`-v warning` y `-stimeout`):** Se ajusta el sondeo de `ffprobe` para capturar con exactitud las respuestas del servidor RTSP (401 Unauthorized, 404 Not Found, Connection Refused), mostrando en la interfaz el error real y la solución exacta en vez del mensaje genérico.
 
 ## [1.4.94] - 2026-09-02
@@ -1881,6 +1884,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ### Captura de Miniaturas Limpias (Snapshots) al Salir del Stream
 
 #### Eliminación de Miniaturas Negras en Cuadrícula de HomeKit
+
 - **Esperar por I-Frame (`-skip_frame nokey`):** Al tomar un snapshot, FFmpeg descarta paquetes P incompletos y captura únicamente cuadros clave completos (I-Frame/IDR), evitando que la miniatura de la cámara en Apple Home quede en negro tras salir del Live View.
 - **Protección de Caché:** `lastSnapshotBuffer` ya no cachea la imagen de reserva negra (`FALLBACK_JPEG_BUFFER`), asegurando que siempre se intente obtener una captura real y válida de la cámara.
 - **Eliminación de bordes grises:** Se retira el filtro `pad` en snapshots, preservando el aspecto nativo sin marcos artificiales en los mosaicos de HomeKit.
@@ -1890,10 +1894,12 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ### Eliminación del Artefacto Gris de Video, Descarte de Cuadros Corruptos y Activación Universal de Audio en Vivo
 
 #### Corrección Crítica de Video
+
 - **Eliminación del filtro `pad`:** Se sustituyó el filtro de relleno por escalado nativo con preservación de relación de aspecto (`scale=w='min(width,iw)':h='min(height,ih)':force_original_aspect_ratio=decrease`). Esto elimina de raíz el rectángulo/barra gris estática que aparecía en streams de Vimtag y Scrypted Rebroadcast.
 - **Descarte de paquetes incompletos (`+discardcorrupt -flags low_delay`):** FFmpeg descarta paquetes iniciales huérfanos hasta recibir el primer cuadro clave (IDR/I-Frame), evitando que la pantalla quede negra o a medio cargar.
 
 #### Activación Universal de Audio
+
 - **Eliminación de la restricción `this.capabilities.hasAudio`:** El pipeline de audio (`-map 0:a:0? -c:a libfdk_aac`) se activa ahora de forma incondicional en cuanto iOS solicita audio, permitiendo escuchar en vivo todas las cámaras (Vimtag, Tapo, Ezviz, ONVIF) sin requerir validación previa de metadatos.
 
 ## [1.4.92] - 2026-09-02
@@ -1901,6 +1907,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ### Validación y Diagnóstico Instantáneo sin Bloqueo de Caché para RTSP Directo
 
 #### Invalidación Inmediata de Caché en Verificación y Diagnóstico Bajo Demanda
+
 - **Pruebas en tiempo real:** Cuando el usuario pulsa "Verificar stream" o "Diagnosticar stream" en el modal de configuración de la cámara, se invoca `ScryptedStreamValidator.clearCache()`, eliminando inmediatamente cualquier caché de fallo o backoff previo de 30s. Si el usuario corrige una IP, puerto, usuario o contraseña, la prueba se ejecuta en tiempo real sin esperas ni reportes obsoletos.
 
 ## [1.4.91] - 2026-09-02
@@ -1908,11 +1915,13 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ### Calidad Ultra HD / 2K para Live View y Audio Nativo AAC-ELD (libfdk_aac)
 
 #### Calidad Máxima y Nitidez en Streaming de Video
+
 - **Piso de Calidad de Bitrate:** Se elimina la restricción que permitía que HomeKit negociara bitrates bajos de 299kbps-500kbps para resoluciones HD/2K. Se establece un piso dinámico de **4000 kbps para 1440p (2K Tapo) / 4K** y **2500 kbps para 1080p**, garantizando imagen nítida sin pixelación ni artefactos de compresión.
 - **Transcodificación Optimizada (x264 veryfast + CRF 21):** Se sustituye el preset `ultrafast` (que degradaba severamente la calidad de imagen para ahorrar CPU) por `veryfast` con factor de calidad constante `-crf 21` y `-tune zerolatency`. En Raspberry Pi 5 esto consume apenas ~15% de CPU y entrega más de un 300% de mayor nitidez visual.
 - **Passthrough de Stream Verificado:** Se activa `supportsPassthrough: validationStatus === 'verified'` para cámaras Scrypted con stream validado.
 
 #### Audio en Tiempo Real Nativo con libfdk_aac (AAC-ELD)
+
 - **Binario FFmpeg para Homebridge en Alpine:** El `Dockerfile` ahora descarga el binario estático optimizado de `ffmpeg-for-homebridge` para Alpine Linux (`aarch64` para Raspberry Pi 5 y `x86_64` para Intel/AMD), con soporte completo para `libfdk_aac` y aceleración de hardware V4L2M2M. Si la descarga fallara, se mantiene el fallback a `apk add ffmpeg`.
 - **Detección Dinámica de libfdk_aac:** La función `supportsFdkAac()` en `ffmpeg-helper.ts` detecta en tiempo de ejecución si el binario cuenta con `libfdk_aac`.
 - **Codificación AAC-ELD:** Si `libfdk_aac` está disponible, FFmpeg codifica el audio con `-c:a libfdk_aac -profile:a aac_eld -flags +global_header`, permitiendo que el iPhone/iPad reproduzca el audio en vivo en tiempo real directamente en la app Casa.
@@ -1922,13 +1931,16 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ### Corrección Crítica de Negociación de Live View en iOS (AAC-ELD y Concurrencia HKSV)
 
 #### Restauración de AAC-ELD en Streaming HAP
+
 - **Causa raíz de "No Response":** En v1.4.88 y v1.4.89 se configuró `audio: undefined` en `CameraController`. HAP-NodeJS, al no recibir códecs de audio, publica un códec de respaldo (OPUS a 16kHz/24kHz). Los dispositivos iOS (iPhone/iPad) **rechazan** de inmediato cualquier cámara que no soporte **AAC-ELD**, abortando la conexión antes de enviar `prepareStream`. Esto causaba que la cámara mostrara "No Response" constante en Apple Home.
 - **Solución:** Se declara formalmente `AudioStreamingCodecType.AAC_ELD` a 16kHz en las opciones de streaming del controlador de HomeKit, permitiendo a iOS negociar la sesión y abrir el Live View.
 
 #### Concurrencia de Streams (cameraStreamCount: 2)
+
 - **Soporte de 2 streams paralelos:** Permite que el Apple Home Hub realice grabaciones/análisis HKSV en segundo plano sin bloquear el Live View del iPhone.
 
 #### Robustez del Pipeline HKSV y Control de Procesos
+
 - **Protección contra procesos duplicados:** Se añade guardia de sincronización `isStartingPipeline` para evitar que la inicialización concurrente cree múltiples instancias de FFmpeg contra la misma cámara RTSP.
 - **Tiempo de inicialización ampliado:** Se aumenta la espera de inicialización a 5s para garantizar la entrega del segmento `moov` (ftyp) al Home Hub.
 - **Terminación limpia de grabaciones:** Se asegura que el generador de paquetes fMP4 siempre envíe `RecordingPacket.isLast: true` al cerrar streams de grabación.
@@ -1938,18 +1950,22 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ### Corrección Crítica de Transmisión (Probesize), HomeKit Secure Video (HKSV) y 4K
 
 #### Corrección Crítica de Live View (Regresión de Probesize 32 bytes)
+
 - **Causa raíz:** `-probesize 32` y `-analyzeduration 0` causaban que FFmpeg limitara el buffer de prueba de paquetes a solo 32 bytes literales. Como los encabezados H.264 (NAL units SPS/PPS/SEI) superan los 32 bytes (ej. `SEI type 764 size 34 truncated at 32`), FFmpeg descartaba los frames de video, generando advertencias de timestamps (`Non-monotonic DTS`), buffer de audio invertido y cerrando con código 255 por "Output file is empty".
 - **Solución:** Se eliminan `-probesize 32` y `-analyzeduration 0`. Se restaura el timeout de RTSP a 5s y se preserva `+nobuffer+genpts` para baja latencia sin truncar paquetes H.264.
 
 #### Activación de HomeKit Secure Video (HKSV) — Grabación en iCloud
+
 - **Opciones de grabación desbloqueadas:** Se conecta `HomeKitCameraRecordingDelegate` con el `CameraController` de HAP-NodeJS mediante `CameraRecordingOptions` (contenedor fMP4/fragmented MP4, video H.264 1080p/720p, audio AAC-LC a 16kHz/32kHz).
 - **Ver y Grabar (Stream & Allow Recording):** Apple Home ahora muestra las opciones completas de grabación en iCloud y activa los clips cuando el sensor de movimiento detecta actividad.
 
 #### Soporte de 4K UHD y Bitrate Elevado
+
 - **Resoluciones 4K:** Ladder ampliado con soporte de 3840×2160 (4K) y 2560×1440 (2K).
 - **Bitrate máximo:** Capped a 8000kbps (8 Mbps) para soportar la fidelidad requerida por cámaras 4K y 2K.
 
 #### Resolución de Streams para Cámaras Scrypted (Ezviz, Wyze, Ring, Vimtag)
+
 - **Resolución Multi-Método en MediaManager:** Para cámaras conectadas a Scrypted vía SDK, `resolveMediaObjectUri` ahora prueba secuencialmente `convertMediaObjectToUrl`, `convertMediaObjectToLocalUrl` y `convertMediaObjectToInsecureLocalUrl`. Esto permite resolver endpoints locales generados por Scrypted sin requerir conexión a Scrypted Cloud.
 - **Soporte de Destino Local:** Se intenta `getVideoStream({ id, destination: "local" })` para activar restreamers locales de Scrypted.
 
@@ -1958,17 +1974,21 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ### Mejoras de calidad, latencia y metadatos en Apple Home Live View
 
 #### Calidad de video
+
 - **Resolución nativa declarada a HomeKit:** El ladder de resoluciones ahora incluye la resolución real de la cámara (ej. 2560×1440 para Tapo Spot) como primera opción. HomeKit puede negociar la calidad máxima que soporta la cámara en lugar de limitarse a 1920×1080.
 - **Bitrate máximo aumentado a 4000kbps:** Antes estaba limitado a 2000kbps (independientemente de lo que HomeKit solicitara). Ahora el límite es 4000kbps para soportar resoluciones altas.
 
 #### Latencia reducida
+
 - `-probesize 32 -analyzeduration 0` añadidos al pipeline RTSP: FFmpeg ya no analiza el stream antes de empezar a enviar frames, reduciendo el tiempo inicial de pantalla negra.
 - Timeout de conexión RTSP reducido de 5s a 2s.
 
 #### Audio (sin cambios de comportamiento, sí de honestidad)
+
 - **Audio desactivado en HAP:** HAP solo soporta AAC-ELD, que requiere `libfdk_aac`. Alpine FFmpeg no incluye ese encoder. Declarar AAC-ELD pero enviar AAC-LC causaba que iOS mostrara el ícono de audio pero sin sonido real. Ahora se desactiva el audio a nivel HAP: no aparece el control de volumen en Apple Home y el pipeline de video nunca se ve interrumpido por un encoder de audio roto.
 
 #### Metadatos en Apple Home
+
 - **Modelo:** Usa el nombre de la cámara en Scrypted si no hay `sourceModel` disponible. La Tapo Spot mostrará "TAPO-SPOT" en lugar de "Modelo no identificado".
 - **Serial Number:** Usa el serial real del fabricante cuando Scrypted lo expone; si no, genera `CAM-{id}` (ej. "CAM-51") en lugar de "Serial no disponible".
 - **Fabricante:** Ahora muestra "Scrypted (Chrisalvir)".
@@ -2144,7 +2164,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 
 ### Scrypted-First Camera Passthrough, Matter 1.6 Joint Fabric & HKSV iOS 27
 
-- **Arquitectura Scrypted-First Passthrough (Cero Recodificación de Vídeo):** Conexión directa a servidores Scrypted externos con aceleración GPU (Ubuntu, Mac, Windows, HA). Adquisición de streams H.264 nativos listos para Matter y HomeKit mediante *video stream-copy* directo (`-vcodec copy`), liberando la CPU del host de transcodificaciones innecesarias.
+- **Arquitectura Scrypted-First Passthrough (Cero Recodificación de Vídeo):** Conexión directa a servidores Scrypted externos con aceleración GPU (Ubuntu, Mac, Windows, HA). Adquisición de streams H.264 nativos listos para Matter y HomeKit mediante _video stream-copy_ directo (`-vcodec copy`), liberando la CPU del host de transcodificaciones innecesarias.
 - **Matter Camera 1.5 & Matter 1.6 Joint Fabric:** Implementación de clusters oficiales de cámara CSA (`0x0551` Camera AV Stream Management y `0x0553` WebRTC Transport Provider) con soporte para Joint Fabric multi-admin compartido entre Apple Home, Google Home, Alexa y SmartThings. Integración de clusters de sensores incrustados (`0x040D` Occupancy Sensing y `0x0552` Boolean State Doorbell) directamente en el endpoint de la cámara.
 - **Apple HomeKit HKSV (iOS 27, tvOS 27, homeOS 27):** Publicación como accesorio independiente HomeKit HAP con HomeKit Secure Video habilitado por defecto. Búfer circular pre-buffer fMP4 en RAM (4 segundos) que alimenta directamente el flujo HDS hacia el Apple Home Hub (Apple TV 4K / HomePod) para su análisis y almacenamiento en iCloud+.
 - **Seguridad Criptográfica Empresarial (Zero-Plaintext):** Cifrado autenticado AES-256-GCM para tokens Scrypted y credenciales NAS con clave de instalación de 256 bits generada en `/data/encryption-key.bin` (`0o600`), blindada contra derivaciones públicas por metadata o machine-id, con separación estricta de propósitos mediante datos adicionales autenticados (AAD).
@@ -2204,6 +2224,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ## [1.4.55] - 2026-08-27
 
 ### Fast Graceful Shutdown, SSE Hardening & Zero-Hang Camera Gating
+
 - **Diagnóstico y Apagado Limpio Rápido (`onShutdown`):**
   - Cierre inmediato de todos los clientes y streams SSE (`sseSubscribers`) al recibir SIGTERM, evitando que sockets abiertos impidan el apagado de Node.js (resolviendo el exit code 137).
   - Cierre de servidores HTTP con `server.closeAllConnections()`, despublicación y terminación forzada de todos los procesos FFmpeg de Live View y HKSV, y limpieza de RAM de prebuffers.
@@ -2219,6 +2240,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ## [1.4.54] - 2026-08-27
 
 ### Camera Proxy Stream Continuous Pipeline & URL Normalization
+
 - **Resolución Universal de Continuous Proxy Stream:**
   - Integrado soporte automático para cámaras sin stream HLS ni RTSP (`supported_features & 2 === 0`) utilizando el endpoint continuo `/api/camera_proxy_stream/{entity_id}` con autenticación Bearer token.
   - FFmpeg transcodifica el stream continuo de Home Assistant en H.264 de latencia ultrabaja (`-preset ultrafast -tune zerolatency`) para Live View y fragmentos fMP4 para HomeKit Secure Video.
@@ -2228,6 +2250,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ## [1.4.53] - 2026-08-27
 
 ### Camera Source Validation, Real MotionSensor Discovery & Track B Isolation
+
 - **Detección y Validación Estricta de Fuente de Video (`camera-source-resolver.ts`):**
   - Validación previa del bit `SUPPORT_STREAM` (`supported_features & 2 !== 0`) antes de solicitar streams HLS o invocar `camera.play_stream`, eliminando el error en Home Assistant `does not support play stream service`.
   - Orden estricto de resolución: `stream_source` -> RTSP directo (`rtsp_url`, `stream_url`, `rtsp_stream`) -> WebRTC / go2rtc -> HLS validado por ffprobe.
@@ -2244,6 +2267,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ## [1.4.52] - 2026-08-27
 
 ### HomeKit Secure Video (HKSV) Production Pipeline for Apple Home (iOS 27+)
+
 - **Segmentación ISO BMFF y Parser fMP4 (`fmp4-parser.ts`):**
   - Implementado parser binario nativo de alta eficiencia para cajas `ftyp`, `moov`, `moof`, `mdat`.
   - Validación e inspección rigurosa de fotogramas clave (Keyframe / IDR sync sample) en las banderas `trun` / `traf` de cada fragmento `MEDIA_FRAGMENT`.
@@ -2262,6 +2286,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ## [1.4.51] - 2026-08-27
 
 ### Camera Live Stream Engine & Apple Home Pairing Reliability
+
 - **Resolución Dinámica de Stream HA (`camera/stream` & `camera_proxy_stream`):**
   - Implementada integración directa con la API WebSocket nativa de Home Assistant (`ha.requestCameraStream`), obteniendo el endpoint HLS maestro (`/api/hls/...`) compatible con passthrough H.264.
   - Añadido fallback universal mediante `/api/camera_proxy_stream/${entityId}` garantizando que cualquier cámara existente en Home Assistant cuente con una fuente de video funcional.
@@ -2276,6 +2301,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ## [1.4.50] - 2026-08-27
 
 ### HomeKit Live View Streaming & Matter Isolation
+
 - **FFmpeg en Contenedor:** Instalación de `ffmpeg` y `jq` en el runtime de Dockerfile (`apk add --no-cache ffmpeg jq`).
 - **Detección Dinámica de Binarios:** Detección de `resolveFfmpegPath()`, `resolveFfprobePath()`, versión y sanitización de URLs en logs (`sanitizeUrlCredentials`).
 - **Diagnóstico y Prioridad de Fuentes:** Inspección previa con `probeCameraSource()` (ffprobe/ffmpeg) y resolución estricta (`stream_source` -> RTSP directo -> WebRTC/go2rtc -> HLS validado -> unknown).
@@ -2287,11 +2313,13 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ## [1.4.49] - 2026-08-27
 
 ### Fixes
+
 - **Matter Module Resolution Fix:** Imported `CameraAvStreamManagement` and `WebRtcTransportProvider` cluster and behavior servers from `matterbridge/matter/clusters` and `matterbridge/matter/behaviors` rather than external `@matter/main` package, ensuring 100% reliable startup in production Docker containers.
 
 ## [1.4.48] - 2026-08-27
 
 ### Dual-Track Camera Streaming & Apple Home Native Live View
+
 - **TRACK A (HomeKit / HAP Camera — Soporte Completo en Apple Home):**
   - Publica cada cámara de Home Assistant como un accesorio HomeKit IP Camera independiente mediante el protocolo HAP (`hap-nodejs`) con streaming en vivo RTP/SRTP.
   - **Live View & Audio:** Soporte para vista en vivo en tiempo real, snapshots periódicos y audio compatible (AAC-LC/Opus) o modo solo video cuando el codec de origen es incompatible.
@@ -2311,6 +2339,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ## [1.4.46] - 2026-08-27
 
 ### Camera Discovery, Live Stream & Intelligent Brand Classification
+
 - **Camera Auto-Discovery:** Enabled discovery for all Home Assistant cameras (Google Nest, Ring, Tapo, Ezviz, Wyze, Reolink, Unifi, ONVIF, generic) in `allowedDomains`.
 - **Matter 1.6 Live Streaming:** Native support for Matter Camera Device Type (`0x0510`), `CameraAvStreamManagement` (`0x0551`), `WebRtcTransportProvider` (`0x0553`), and `OnOff` (`0x0006`) with bidirectional streaming/recording synchronization.
 - **Unified Composite Accessory:** Automatically bundles camera devices and all related child entities (motion sensors, doorbells, integrated lights/spotlights, privacy switches, sirens, battery levels) under a single Matter node and QR code for Apple Home (HomeKit) and Multi-Admin.
@@ -2320,10 +2349,12 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ## [1.4.44] - 2026-08-26
 
 ### Matterbridge
+
 - Updated compatibility to Matterbridge 3.10.6 (`peerDependencies >= 3.10.6`, `devDependencies ^3.10.6`).
 - Updated Matter 1.6 fan architecture and cluster servers.
 
 ### Fan improvements
+
 - Corrected independent fan power and speed state handling (power strictly derived from `state === 'on'` / `is_on === true`).
 - Added native six-speed physical fan mapping (`speedMax = 6`).
 - Improved percent/speed synchronization across `speedSetting`, `speedCurrent`, `percentSetting`, `percentCurrent`.
@@ -2333,6 +2364,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 - Added intelligent command deduplication and hysteresis (4%) replacing blind command lockouts.
 
 ### Light improvements
+
 - Fixed phantom light reactivation caused by `MatterbridgeLevelControlServer` / `OnOff` coupling (synchronized `LevelControl` / `ColorControl` before final authoritative `OnOff` state).
 - Home Assistant OnOff state is now authoritative (`state === 'off'` guarantees `Matter OnOff = false`).
 - Improved brightness conversion HA 1..255 ↔ Matter 1..254 with stable rounding and defensive non-zero handling.
@@ -2342,6 +2374,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 - Improved synchronization after HA/WebSocket reconnects (`isInitialSync = true` restores full authoritative state).
 
 ### Stability
+
 - Improved state recovery and reconnect handling.
 - Improved anti-loop behavior through expected-state acknowledgement.
 - Preserved Matter topology, fabric, Node IDs, endpoint IDs, and existing Apple Home pairing.
@@ -2349,6 +2382,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ## [1.4.33] - 2026-08-22
 
 ### Fixed
+
 - **FAN+Luz en Apple Home:** al apagar una luz regulable, Apple Home puede
   enviar primero un nivel `1` y enseguida `Off`. El encendido diferido creado
   por el nivel mínimo ahora se cancela al recibir `Off` (y viceversa), evitando
@@ -2357,6 +2391,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ## [1.4.32] - 2026-08-22
 
 ### Removed
+
 - **Scrypted NVR y escáner de cámaras:** se elimina la integración, los
   endpoints API, el panel y las reconexiones automáticas. El complemento deja
   de intentar conectar a puertos Scrypted inexistentes cada 15 segundos.
@@ -2364,6 +2399,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ## [1.4.31] - 2026-08-22
 
 ### Fixed
+
 - **Conflicto Matter al regular la luz de un FAN:** `moveToLevelWithOnOff`
   modificaba `OnOff` dos veces dentro de la misma transacción. Se elimina la
   escritura duplicada, que provocaba `synchronous-transaction-conflict`,
@@ -2372,6 +2408,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ## [1.4.30] - 2026-08-22
 
 ### Fixed
+
 - **Transporte Matter para Apple Home:** se elimina el forzado de IPv4. Matter
   requiere IPv6 link-local dentro de la red local (por ejemplo `fe80::…%end0`),
   aunque el proveedor de Internet no ofrezca IPv6 WAN. Bloquearlo provocaba
@@ -2382,6 +2419,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ## [1.4.29] - 2026-08-22
 
 ### Fixed
+
 - **Estabilidad para ventiladores BLE y accesorios FAN+Luz:**
   - Las fallas o tiempos de espera de servicios BLE ya no dejan una promesa rechazada sin controlar que pueda detener el bridge.
   - El bloqueo de intención para `OnOff` y `fanMode` se extiende a 30 segundos, evitando que estados atrasados vuelvan a encender una luz recién apagada en Apple Home.
@@ -2392,13 +2430,15 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ## [1.4.28] - 2026-08-20
 
 ### Fixed
+
 - **Solución Definitiva al Bucle de Apagado de Luz en Ventiladores/Difusores (Apple HomeKit):**
   - Se actualiza de forma optimista e inmediata el atributo `OnOff.onOff = false` en el endpoint Matter al recibir el comando `off` o `moveToLevel(0)`.
-  - Se amplió la ventana de protección (*command lockout*) a 6000ms y se eliminó la limpieza prematura del candado de estado ante ecos intermedios de dispositivos Tuya/BLE/WiFi, impidiendo que Apple HomeKit vuelva a encender la luz sola en bucle tras apagarla.
+  - Se amplió la ventana de protección (_command lockout_) a 6000ms y se eliminó la limpieza prematura del candado de estado ante ecos intermedios de dispositivos Tuya/BLE/WiFi, impidiendo que Apple HomeKit vuelva a encender la luz sola en bucle tras apagarla.
 
 ## [1.4.27] - 2026-08-20
 
 ### Added
+
 - **Pestaña Dedicada "Cámaras 📹" en el Frontend:**
   - Nueva pestaña de filtro en la barra superior con contador interactivo de cámaras.
   - Botón directo de escaneo "🔍 Escanear Cámaras en Red (macOS / LAN)" dentro de la pestaña para descubrir cámaras de Scrypted / NVR / RTSP sin abrir ajustes.
@@ -2408,24 +2448,27 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ## [1.4.26] - 2026-08-20
 
 ### Added
+
 - **Escáner Universal Automático de Cámaras en Red Local (macOS / LAN / Scrypted / RTSP):**
   - Barrido automático de toda la subred local (IPs 1-254) para detectar cámaras IP estándar (RTSP puerto 554 / ONVIF puerto 8000) e instancias de Scrypted NVR en macOS (puertos 10443, 10444, 11080).
   - Botón interactivo "🔍 Escanear Cámaras Ahora" en la sección de Ajustes para descubrimiento instantáneo sin formularios ni tokens.
   - Exportación automática a Matter con código QR independiente por cámara.
 
 ### Fixed
+
 - **Control Preciso de Vapor y Velocidad de Difusores y Ventiladores en Apple HomeKit:**
   - Suscripción completa al atributo `FanControl.percentSetting` en `BaseEntity`, `CompositeDeviceEntity` y `HumidifierEntity`. Los controles deslizantes (0% al 100%, incluyendo 10%) ahora ajustan la velocidad o nivel de vapor en tiempo real hacia Home Assistant (`fan.set_percentage`, `humidifier.set_humidity` o `humidifier.set_mode`).
 - **Soporte Bidireccional de Modos Automático y Manual (`fanMode`):**
   - Suscripción completa al atributo `FanControl.fanMode` para conmutar entre los modos Automático (5) y Manual/On (4) de HomeKit, invocando `fan.set_preset_mode` y `humidifier.set_mode`. Sincronización continua de `preset_mode` / `mode` de HA hacia HomeKit.
-- **Protección Anti-Rebote en Apagado de Luces de Ventilador (*Command Lockout*):**
-  - Incorporado el comando `onOff` al mecanismo de bloqueo temporal de comandos (*command lockout*) y actualización de estado optimista en `BaseEntity` y `CompositeDeviceEntity`. Evita que ecos de estado intermedios de dispositivos Tuya/BLE vuelvan a encender la luz sola en HomeKit tras apagarla.
+- **Protección Anti-Rebote en Apagado de Luces de Ventilador (_Command Lockout_):**
+  - Incorporado el comando `onOff` al mecanismo de bloqueo temporal de comandos (_command lockout_) y actualización de estado optimista en `BaseEntity` y `CompositeDeviceEntity`. Evita que ecos de estado intermedios de dispositivos Tuya/BLE vuelvan a encender la luz sola en HomeKit tras apagarla.
 - **Soporte Completo de Luz Kelvin (Blanco Cálido/Frío) en Ventiladores:**
   - Soporte robusto para llamadas de servicio `color_temp_kelvin` y límites de Mireds físicos en Matter (`colorTempPhysicalMinMireds` / `colorTempPhysicalMaxMireds`), garantizando que la rueda de temperatura de color funcione en todos los ventiladores con luz.
 
 ## [1.4.25] - 2026-08-20
 
 ### Added
+
 - **Integración con Scrypted NVR (Cámaras & Sensores en Matter):**
   - Detección y auto-descubrimiento en red local (LAN / Zeroconf / Subnet Probing) de servidores Scrypted NVR.
   - Exportación de cámaras como accesorios Matter independientes con código QR propio.
@@ -2435,6 +2478,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ## [1.4.24] - 2026-08-20
 
 ### Fixed
+
 - **Limpieza Automática del Estado de Diagnósticos en Accesorios Emparejados (Difusores y Entidades Matter):**
   - Se corrigió el cálculo de `hasIssue`: los accesorios que están activamente emparejados (`commissioned: true`) y en línea en Home Assistant ya no son marcados como problemáticos ni quedan congelados en la pestaña "Revisar".
   - Se implementó la resolución automática de problemas (`clearEntityProblem`) en cuanto Matter confirma la presencia de uno o más fabrics activos (Apple Home / Google Home), registrando el evento de salud en verde y manteniendo limpia la interfaz.
@@ -2442,6 +2486,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ## [1.4.23] - 2026-08-20
 
 ### Changed
+
 - **Runtime & Toolchain Upgrade:**
   - Actualizado `matterbridge` a `3.10.5` (cumplimiento con Matter 1.6.0).
   - Actualizado `ws` a `8.21.3`.
@@ -2451,10 +2496,12 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
   - Actualizados los workflows de CI/CD para utilizar Node.js `24.19.x`.
 
 ### Added
+
 - **Matter 1.6 - Thermostat Suggestions Support:**
   - Soporte de `Thermostat.Feature.ThermostatSuggestions` a través de Matterbridge 3.10.5.
 
 ## Matter 1.6 compliance notes
+
 - Joint Fabric: not implemented. Requires fabric-administrator role,
   which is out of scope for a Matterbridge-based bridge. No controller
   (Apple Home, Google Home, Alexa) has shipped Joint Fabric as of Aug 2026.
@@ -2469,29 +2516,33 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ## [1.4.22] - 2026-08-16
 
 ### Fixed
+
 - **Eliminación del Rebote y Movimiento Autónomo de Interruptores y Deslizadores en Apple Home:**
-  - Se corrigió la lógica de *Command Lockout* (`shouldIgnoreStateUpdate`): ahora ignora estrictamente cualquier eco de estado desactualizado proveniente de Home Assistant durante la ventana de 3.5 segundos tras el comando, evitando que el interruptor o deslizador regrese al estado anterior antes de que el dispositivo físico termine de procesar.
+  - Se corrigió la lógica de _Command Lockout_ (`shouldIgnoreStateUpdate`): ahora ignora estrictamente cualquier eco de estado desactualizado proveniente de Home Assistant durante la ventana de 3.5 segundos tras el comando, evitando que el interruptor o deslizador regrese al estado anterior antes de que el dispositivo físico termine de procesar.
   - Se aplicó la protección de bloqueo a los atributos `OnOff.onOff` de ventiladores, luces, interruptores y difusores.
   - El estado visual en HomeKit se mantiene firme e idéntico a lo accionado por el usuario.
 
 ## [1.4.21] - 2026-08-16
 
 ### Fixed
+
 - **Procesamiento No-Bloqueante e Instantáneo para Comandos de Luces, Dimmers, Ventiladores y Difusores:**
   - Se desacopló la respuesta del protocolo Matter de la comunicación de red con Home Assistant (las órdenes de Home Assistant se ejecutan de forma asíncrona no-bloqueante), permitiendo que Matter responda a Apple Home en <1ms y liberando inmediatamente las colas de transacciones.
-  - Se implementó *Debouncing* inteligente de 40ms en los deslizadores de brillo y velocidad: al mover el dedo rápidamente, se cancelan ráfagas intermedias y se envía únicamente el valor final, evitando saturar la radio Bluetooth/BLE o provocar `Operation already in progress`.
+  - Se implementó _Debouncing_ inteligente de 40ms en los deslizadores de brillo y velocidad: al mover el dedo rápidamente, se cancelan ráfagas intermedias y se envía únicamente el valor final, evitando saturar la radio Bluetooth/BLE o provocar `Operation already in progress`.
   - Se eliminaron todos los registros duplicados de comandos (`'OnOff.on'`, `'LevelControl.moveToLevel'`) y suscripciones redundantes que disparaban múltiples peticiones por cada toque.
 
 ## [1.4.20] - 2026-08-16
 
 ### Fixed
+
 - **Eliminación Definitiva de Bloqueos por Deadlock en Transacciones de Matter (`Tx waiting on ...`):**
-  - Se identificó y resolvió la causa raíz por la cual **Dimmer Café** y otros dispositivos se quedaban en "Sin respuesta" o cargando al mover el deslizador: las llamadas sincronizadas a `safeUpdateAttribute` dentro de los handlers de comandos generaban un interbloqueo (*deadlock*) con el gestor de transacciones de Matter.js.
+  - Se identificó y resolvió la causa raíz por la cual **Dimmer Café** y otros dispositivos se quedaban en "Sin respuesta" o cargando al mover el deslizador: las llamadas sincronizadas a `safeUpdateAttribute` dentro de los handlers de comandos generaban un interbloqueo (_deadlock_) con el gestor de transacciones de Matter.js.
   - Al remover las modificaciones de atributos redundantes dentro de las transacciones activas, los comandos de nivel de luz y velocidad se procesan y responden de forma instantánea sin bloquear transacciones sucesivas.
 
 ## [1.4.19] - 2026-08-16
 
 ### Fixed
+
 - **Control Preciso del Deslizador de Brillo en Luces y Dimmers (`LevelControl`):**
   - Se garantizó la instalación del cluster `LevelControl` en todos los perfiles de dimerización (`dimmableLight`, `dimmablePlugInUnit`, `colorTemperatureLight`, `extendedColorLight`), incluso si la entidad en Home Assistant no reportaba modos de color explícitos.
   - Se añadieron todos los comandos estándar de Matter (`moveToLevel`, `LevelControl.moveToLevel`, `moveToLevelWithOnOff`, `LevelControl.moveToLevelWithOnOff`, `step`, `stepWithOnOff`) junto con la suscripción reactiva a cambios de atributo `currentLevel`.
@@ -2500,6 +2551,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ## [1.4.18] - 2026-08-16
 
 ### Fixed
+
 - **Eliminación de Interruptores Inútiles / Desconectados en Difusores y Ventiladores:**
   - Se filtran automáticamente todos los interruptores auxiliares de configuración/diagnóstico (`entity_category: config/diagnostic`, beepers, zumbadores, indicadores o interruptores duplicados de energía) en difusores y ventiladores compuestos.
   - Ahora el difusor se exporta exclusivamente con sus dos funciones reales: **Vapor/Difusor (`humidifier.*`) + Luz (`light.*`)**, sin el tercer interruptor fantasma que aparecía como no disponible en HomeKit.
@@ -2507,6 +2559,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ## [1.4.17] - 2026-08-16
 
 ### Fixed
+
 - **Detección y Agrupación Completa de Difusores con Luz y Múltiples Interruptores:**
   - Se corrigió la función `isMultiSwitchDevice` para que los dispositivos físicos que contienen difusores (`humidifier.*`) o ventiladores (`fan.*`) nunca se dividan erróneamente en múltiples accesorios independientes cuando tienen una luz o interruptores adicionales (beeper, luz ambiental, etc.). Ahora se agrupan siempre bajo un único accesorio compuesto con su luz en HomeKit.
   - **Control Preciso de Velocidad de Ventiladores:** Al mover el deslizador en Apple Home, el comando `fan.set_percentage` se transmite de forma limpia y directa a Home Assistant ajustando las velocidades reales en el ventilador.
@@ -2514,6 +2567,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ## [1.4.16] - 2026-08-16
 
 ### Added / Improved
+
 - **Agrupación Automática de Difusores con Luz en un Solo Accesorio Compuesto:**
   - Se habilitó `humidifier.*` como entidad controlable primaria en la detección de candidatos compuestos (`getCompositeCandidate`).
   - Ahora cualquier difusor o humidificador que contenga su luz integrada en Home Assistant (mismo `device_id`) se agrupa y exporta automáticamente en un **único accesorio Matter con un único código QR**, permitiendo controlar tanto la niebla/humedad como la luz en el mismo dispositivo desde HomeKit.
@@ -2521,12 +2575,14 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ## [1.4.15] - 2026-08-16
 
 ### Fixed
+
 - **Soporte y Creación de Difusores / Humidificadores:**
   - **Eliminación de Conflicto de Cluster OnOff (`incompatible implementation already exists`):** Se corrigió la inicialización de difusores y dispositivos compuestos con humidificadores para evitar que se intentara requerir el cluster `OnOff` dos veces de forma incompatible, permitiendo que difusores y humidificadores se creen y vinculen correctamente.
 
 ## [1.4.14] - 2026-08-16
 
 ### Fixed
+
 - **Desbloqueo Total de Vinculación y Event Loop en Matterbridge:**
   - **Fin de Rejecciones y Bucles de Sincronización:** Se previno que los cambios de atributos recibidos desde Home Assistant disparen callbacks de suscripción que enviaban llamadas redundantes o no autorizadas a HA durante el arranque o en estado desconectado (`WebSocket request failed: not connected to Home Assistant`).
   - **Emparejamiento Inmediato (PASE Commissioning):** Al liberar el Event Loop de bloqueos de transacciones (`#updateTotalOperationalHoursCounter` y `#subscriptionCancelled`), HomeKit ahora descubre e intercambia claves PASE con el nuevo accesorio inmediatamente sin quedarse "pensando" o expirando por timeout.
@@ -2534,6 +2590,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ## [1.4.13] - 2026-08-16
 
 ### Fixed
+
 - **Respuesta Instantánea en HomeKit y Corrección de Fan al 100%:**
   - **Corrección de Estado Inconsistente:** Se solucionó el problema por el cual un ventilador apagado en Home Assistant reportaba 100% de velocidad a HomeKit debido a que HA retiene el último porcentaje. Ahora, cuando el ventilador está apagado, el puente reporta 0% de velocidad y modo apagado inmediatamente.
   - **Eliminación de Comandos Duplicados y Retardos:** Se eliminaron los suscriptores redundantes que disparaban dos llamadas paralelas hacia Home Assistant por cada toque en HomeKit (provocando demoras y spinners de carga en la app Casa).
@@ -2542,6 +2599,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ## [1.4.12] - 2026-08-16
 
 ### Fixed
+
 - **Restauración Completa de Comandos en Ventiladores y Luces:**
   - Se corrigió la captura de comandos de Apple Home / Matterbridge registrando tanto los manejadores de comandos explícitos (`on`, `off`, `OnOff.on`, `OnOff.off`, `toggle`, `OnOff.toggle`) como las suscripciones de atributos, garantizando que todas las órdenes lleguen instantáneamente a Home Assistant.
   - Eliminación de auto-actualizaciones recursivas en suscripciones de ventiladores y difusores que provocaban bloqueos o picos de CPU.
@@ -2550,6 +2608,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ## [1.4.11] - 2026-08-16
 
 ### Fixed
+
 - **Luces y Ventiladores no responden desde HomeKit (Error Crítico):**
   - Se solucionó un error crítico introducido en la versión 1.4.8 (al actualizar los controladores de Matter) que ignoraba los comandos de encendido y apagado (On/Off) de las luces, ventiladores, purificadores, interruptores y aspiradoras.
   - Ahora se utiliza un sistema robusto de suscripción de atributos (`subscribeAttribute`) que detecta correctamente cualquier cambio de estado On/Off ordenado desde HomeKit y lo transmite de manera instantánea y confiable a Home Assistant, sin depender de los antiguos manejadores de comandos.
@@ -2558,6 +2617,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ## [1.4.10] - 2026-08-16
 
 ### Fixed
+
 - **Uso excesivo de CPU (30%+):**
   - Corrección de un bucle infinito (ping-pong) causado por la actualización optimista del estado de un dispositivo en HomeKit.
   - Al cambiar un estado desde HomeKit (ej. Humedad o Ventilador), el servidor enviaba una confirmación innecesaria que volvía a disparar el evento internamente en un bucle infinito de retroalimentación en Matterbridge. Esto disparaba el uso de CPU. Se implementó una verificación de igualdad de estado estricto para evitar notificaciones redundantes.
@@ -2565,13 +2625,15 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ## [1.4.9] - 2026-08-16
 
 ### Enhanced & Fixed
+
 - **Modos Completos y Dirección en HomeKit para Ventiladores (Adelante/Reversa, Auto/Manual):**
   - Implementación de `MatterbridgeFanControlServer.with(Feature.AirflowDirection, Feature.Auto, Feature.Step)` en la inicialización de ventiladores y humidificadores.
-  - Esto garantiza que HomeKit *muestre* los controles de Adelante/Reversa y los modos Automático/Manual que antes no aparecían en Apple Home.
+  - Esto garantiza que HomeKit _muestre_ los controles de Adelante/Reversa y los modos Automático/Manual que antes no aparecían en Apple Home.
 
 ## [1.4.8] - 2026-08-16
 
 ### Enhanced & Fixed
+
 - **Soporte Completo de Dirección de Flujo (Adelante / Reversa) en Ventiladores:**
   - Añadido e inicializado el atributo `airflowDirection` en el cluster `FanControl` cuando el ventilador de Home Assistant soporta reversa / dirección.
   - Sincronización bidireccional inmediata de reversa y adelante con el servicio `fan.set_direction`.
@@ -2587,6 +2649,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ## [1.4.7] - 2026-08-16
 
 ### Enhanced & Fixed
+
 - **Manejadores de Comandos Completos para Ventiladores (FAN) y Luces (on/off/toggle):**
   - Añadidos listeners directos para comandos `toggle`, `OnOff.toggle`, `OnOff.on` y `OnOff.off`.
   - Ahora al presionar el botón del ventilador o la luz directamente en la casilla de Apple Home, el comando se envía y ejecuta en Home Assistant en tiempo real sin perder sincronización.
@@ -2599,6 +2662,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ## [1.4.6] - 2026-08-16
 
 ### Enhanced & Fixed
+
 - **Soporte Compuesto Completo para Difusores y Humidificadores (Govee H7143 y similares):**
   - Añadido `humidifier` a la lista de entidades compatibles con agrupación de dispositivos compuestos.
   - Al activar la entidad principal de un difusor (`humidifier.difusor_sala`), se publican automáticamente todos sus endpoints (vapor + luz nocturna RGB + interruptores) bajo **un único accesorio físico Matter** con un solo código QR, en lugar de separarlos como 3 accesorios desconectados.
@@ -2609,9 +2673,10 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ## [1.4.5] - 2026-08-16
 
 ### UI/UX & Performance Overhaul
+
 - **Carga Ultra Rápida (50x más rápida):** Eliminado el re-escaneo pesado e innecesario de catálogo en cada petición de `/devices`, haciendo que la navegación y apertura de dispositivos responda en milisegundos.
 - **Claridad de Estado y Flujo de Emparejamiento:**
-  - En accesorios ya emparejados (`✓ Emparejado`), el código QR de configuración inicial se oculta para evitar que el usuario intente escanear un código bloqueado (que provocaba el error *"Unable to add accessory"* en Apple Home).
+  - En accesorios ya emparejados (`✓ Emparejado`), el código QR de configuración inicial se oculta para evitar que el usuario intente escanear un código bloqueado (que provocaba el error _"Unable to add accessory"_ en Apple Home).
   - Se muestra una tarjeta informativa clara indicando cómo desvincular o cómo añadir a una segunda casa vía Multi-Admin.
 - **Corrección Visual de Título y Badges:** Corregido el solapamiento de texto y distintivo de casa en el panel de selección, haciendo el título 100% legible y adaptable.
 - **Nombre Real de la Casa:** Integrado el nombre de ubicación real de Home Assistant (`location_name`) como valor predeterminado para la casa cuando el controlador no reporta una etiqueta personalizada.
@@ -2619,6 +2684,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ## [1.4.4] - 2026-08-16
 
 ### Enhanced & Fixed
+
 - **Eliminación Total y Definitiva de Fabrics Huérfanos:**
   - Implementado `forceRecreate` estricto en el restablecimiento y desconexión de accesorios Matter. Cuando se desconecta un accesorio de Apple Home o Google Home, se purga completamente el almacenamiento local y se genera un nuevo código QR limpio sin reciclar nodos antiguos.
   - Añadida guía contextual en la tarjeta de casas conectadas: si un accesorio fue eliminado previamente en iOS/HomeKit, pulsar «Desconectar» lo libera al instante y actualiza la UI.
@@ -2629,6 +2695,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ## [1.4.3] - 2026-08-16
 
 ### UI/UX — Tiempo Real y Layout 3 Columnas
+
 - **SSE (Server-Sent Events):** El backend ahora hace push en tiempo real al frontend cuando un fabric se desconecta, se agrega o se completa un reset — sin esperar el poll de 4 segundos.
 - **Spinner de QR animado:** El mensaje estático "Generando código Matter..." fue reemplazado por un spinner real en el panel QR. El poll se extendió a 40 intentos (~12 segundos) para cubrir nodos que tardan en inicializarse.
 - **Toggle sin re-apertura de modal:** Activar/desactivar una entidad ahora actualiza únicamente la fila y el panel de selección — el modal ya no se cierra y reabre, eliminando el flash visual.
@@ -2637,6 +2704,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 - **Diagnóstico automático de fabric:** Al desconectarse de un controlador (Apple Home, Google Home, etc.), se registra automáticamente en el log de diagnósticos con nombre del controlador y hora.
 
 ### Backend — Reconexión Paralela al Reiniciar
+
 - **Reconexión completamente paralela:** Al reiniciar el sistema, todos los dispositivos exportados se reconectan de forma simultánea (no 1 a 1 secuencial), reduciendo drásticamente el tiempo de reconexión.
 - **`resetMatterAccessory` más rápido:** Tras el `erase()`, el backend ahora sondea activamente `lifecycle.isOnline` para retornar el nuevo QR en cuanto esté listo (máx 6s de espera activa) sin delays arbitrarios.
 - **`pushEntityUpdate()`:** Nuevo método que serializa el estado de una entidad y lo envía por SSE a todos los clientes conectados inmediatamente tras una operación de fabric.
@@ -2644,6 +2712,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ## [1.4.2] - 2026-08-16
 
 ### Added & Enhanced
+
 - **Soporte Nativo y Completo para Difusores y Humidificadores:**
   - Habilitada la exportación de entidades `humidifier.*` (Govee, Tuya, Meross, Levoit, Xiaomi, etc.) compatibles con Apple Home / HomeKit.
   - Soporte de dispositivos compuestos: unifica el control de vapor (`humidifier`), luz nocturna ambiental RGB (`light`) y sensores (`temperature`/`humidity`) bajo un solo accesorio y un único código QR.
@@ -2654,6 +2723,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ## [1.4.1] - 2026-08-16
 
 ### Fixed & Enhanced
+
 - **Solución Definitiva al Error 'This view is read-only':**
   - Eliminación de asignaciones directas sobre el proxy inmutable de estado de Matter.js (`serverNode.state`).
   - Transacciones de desemparejamiento nativas y asíncronas con `serverNode.act` y borrado total con `serverNode.erase()`.
@@ -2671,6 +2741,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ## [1.4.0] - 2026-08-16
 
 ### Added & Enhanced
+
 - **Soporte Completo Multi-Ecosistema con Samsung SmartThings:**
   - Identificación nativa de los Vendor IDs de Samsung SmartThings (`0x10e1`, `0x110a`, `0x127b`, `0x1175`, `0x1360`), Apple Home, Google Home, Alexa, Tuya, LG ThinQ y Home Assistant.
   - Sección visual dedicada de **"Casas / Controladores Conectados"** con iconos distintivos (`💠 Samsung SmartThings`, `🍎 Apple Home`, `🌐 Google Home`, `🔊 Amazon Alexa`) y botón independiente **`[Desconectar]`** por casa.
@@ -2700,6 +2771,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ## [1.3.9] - 2026-08-16
 
 ### Fixed & Enhanced
+
 - **Control Completo de Ventiladores (FAN) en HomeKit / Matter:**
   - Soporte de deslizador de velocidad real (0–100%) mediante `FanControl.percentSetting`.
   - Soporte de modos de ventilador (`fanMode`: Auto, Manual, Bajo 33%, Medio 66%, Alto 100%, On/Off).
@@ -2728,6 +2800,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ## [1.3.8] - 2026-08-14
 
 ### Fixed
+
 - **Solución al error "UNABLE TO ADD ACCESSORY" en Apple HomeKit (MQTT):**
   - Incorporados todos los clusters obligatorios de medición para sensores ambientales (temperatura, humedad, iluminación, presión) y sensores binarios (contacto, ocupación) en `MqttEntity`.
   - Añadida versión de software y firmware en el cluster BasicInformation de Matter para cumplir estrictamente con los requisitos de validación de Apple Home.
@@ -2735,6 +2808,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ## [1.3.7] - 2026-08-14
 
 ### Fixed
+
 - **Eliminación del Parpadeo y Recargas en Bucle en la Pantalla de Inicio:**
   - Sustituida la recarga fija (`window.location.reload()`) cada 2 segundos en la pantalla de Ingress por una comprobación silenciosa en segundo plano (`checkReady`). La tarjeta y animación morada permanecen estables sin parpadear ni recargar la ventana hasta que el backend responde.
 - **Rendimiento y Sincronización de Accesorios en HomeKit:**
@@ -2743,8 +2817,9 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ## [1.3.6] - 2026-08-14
 
 ### Fixed
+
 - **Emparejamiento Instantáneo de Dispositivos MQTT en Apple Home:**
-  - Añadida la invocación obligatoria de `addRequiredClusterServers()` y soporte del cluster `LevelControl` en `MqttEntity`. Resuelve el problema donde Apple Home / HomeKit se quedaba indefinidamente en *"Conectando..."*.
+  - Añadida la invocación obligatoria de `addRequiredClusterServers()` y soporte del cluster `LevelControl` en `MqttEntity`. Resuelve el problema donde Apple Home / HomeKit se quedaba indefinidamente en _"Conectando..."_.
 - **Arranque Ultra Rápido de Accesorios Emparejados:**
   - Paralelización por lotes concurrentes en `restoreExportedDevices()`. Reduce el tiempo de recuperación de los accesorios emparejados de ~40 segundos a ~3-5 segundos tras reiniciar.
 - **Reconexión Infinita y Rápida con Home Assistant:**
@@ -2755,15 +2830,17 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ## [1.3.5] - 2026-08-14
 
 ### Added
+
 - **Identificación y Resaltado Visual de Coincidencias en la Búsqueda:**
   - Las tarjetas de dispositivo ahora muestran un bloque de vista previa con las entidades internas que coinciden con el término buscado (ej. `↳ Patrulla Cochera`).
   - Resaltado visual con `<mark>` del texto buscado en títulos de dispositivos, subtítulos y entidades internas.
   - Subtítulo de contenedor con origen explícito (`Home Assistant` vs `MQTT Auto-Discovery`) para diferenciar dispositivos con el mismo nombre.
-  - Apertura inteligente: al hacer clic en *"Configurar"* desde una búsqueda, el modal preselecciona y resalta automáticamente la entidad que coincidió.
+  - Apertura inteligente: al hacer clic en _"Configurar"_ desde una búsqueda, el modal preselecciona y resalta automáticamente la entidad que coincidió.
 
 ## [1.3.4] - 2026-08-14
 
 ### Added
+
 - **Integración Visual Completa de Dispositivos MQTT en la UI:**
   - Los dispositivos descubiertos por `MqttClientManager` (`homeassistant/#`) ahora se muestran automáticamente en el panel principal con tarjeta propia, distintivo `📡 MQTT` y metadatos de broker.
   - Añadido filtro dedicado `MQTT 📡` en la barra de filtros para segmentar rápidamente las entidades MQTT.
@@ -2773,18 +2850,21 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ## [1.3.3] - 2026-08-14
 
 ### Removed
+
 - **Eliminación de soporte para Paneles de Alarma (`alarm_control_panel`):**
   - Removida la lógica experimental de alarma/seguridad para mantener el enfoque exclusivo en dispositivos físicos y estándares nativos soportados por Matter.
 
 ## [1.3.2] - 2026-08-13
 
 ### Fixed
+
 - **Corrección de API en Interfaz de Usuario (UI):**
   - Corregida la llamada al endpoint de configuración MQTT en `script.js` para utilizar la función auxiliar `request()` en lugar de `api()`, solucionando el error al guardar parámetros de conexión del broker MQTT.
 
 ## [1.3.1] - 2026-08-13
 
 ### Added
+
 - **Soporte Nativo para MQTT (Auto-Discovery):**
   - Nuevo gestor `MqttClientManager` y entidad `MqttEntity` para descubrir e integrar automáticamente dispositivos MQTT (`homeassistant/+/+/config`) en Matter sin depender del WebSocket de Home Assistant.
   - Pestaña de configuración de Broker MQTT (Host, Puerto, Usuario, Contraseña) añadida a la interfaz gráfica de usuario (UI frontend) en Ajustes del Servicio.
@@ -2796,6 +2876,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ## [1.3.0] - 2026-08-10
 
 ### Changed
+
 - **Dependencias Actualizadas:**
   - `matterbridge` actualizado a la versión `3.10.4`.
   - SDK transitivo `@matter/main` a `0.17.9`.
@@ -2812,6 +2893,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ## [1.2.77] - 2026-08-02
 
 ### Changed
+
 - **Dependencias Actualizadas:**
   - `matterbridge` actualizado a la versión `3.10.3`.
   - Node.js de la imagen Docker actualizado a `24.18.1-alpine3.24`.
@@ -2883,7 +2965,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 
 ### Fixed
 
-- **Visualización y Detección de Dispositivos Virtuales / Broadlink / Add-ons:** Se corrigió un problema en el agrupamiento de la interfaz web (`groupEntities` en `script.js`). Anteriormente, todas las entidades sin un `device_id` asignado en el registro de Home Assistant (como controles remotos IR de Broadlink, switches virtuales o dispositivos creados por otros add-ons) se agrupaban erróneamente dentro de una única tarjeta genérica llamada "switch", haciendo imposible encontrarlas o configurarlas individualmente. Ahora cada entidad autónoma recibe su propia tarjeta independiente con su Nombre Amigable (*Friendly Name*), permitiendo detectarlas, buscarlas y exportarlas a Matter fácilmente.
+- **Visualización y Detección de Dispositivos Virtuales / Broadlink / Add-ons:** Se corrigió un problema en el agrupamiento de la interfaz web (`groupEntities` en `script.js`). Anteriormente, todas las entidades sin un `device_id` asignado en el registro de Home Assistant (como controles remotos IR de Broadlink, switches virtuales o dispositivos creados por otros add-ons) se agrupaban erróneamente dentro de una única tarjeta genérica llamada "switch", haciendo imposible encontrarlas o configurarlas individualmente. Ahora cada entidad autónoma recibe su propia tarjeta independiente con su Nombre Amigable (_Friendly Name_), permitiendo detectarlas, buscarlas y exportarlas a Matter fácilmente.
 
 ## [1.2.67] - 2026-07-27
 
@@ -2916,6 +2998,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 - **Rendimiento O(1) definitivo en UI:** Se corrigió por completo la evaluación de logs en la API de la interfaz. La versión anterior reducía los arrays pero aún iteraba las expresiones regulares miles de veces en cada refresco, lo que podía causar micro-bloqueos en el Event Loop con cientos de entidades. Ahora la lectura es 100% plana.
 
 ## [1.2.63] - 2026-07-24
+
 ### Fixed
 
 - **Rendimiento extremo de la UI (Anti-Crash):** Se corrigió un error crítico en el endpoint `/api/custom/devices` que causaba la desconexión total del puente (causando "Sin Respuesta" en Apple Home). Anteriormente, la API iteraba sobre todas las entidades, leyendo y ejecutando expresiones regulares sobre el historial completo de logs en cada paso (complejidad O(N*L)). Se optimizó extrayendo la lectura de logs fuera del bucle, reduciendo drástically el uso de CPU.
@@ -2924,6 +3007,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 - **Restauración del Polling en tiempo real:** Gracias a la liberación del 99% de la carga de CPU, la interfaz ha vuelto a escanear los estados de emparejamiento cada 4 segundos, dándole al usuario retroalimentación en tiempo real cuando empareja un accesorio mediante código QR.
 
 ## [1.2.62] - 2026-07-24
+
 ### Fixed
 
 - **Reconexión estable sin carreras:** Se elimina la llamada redundante a `startReconnect()` dentro del callback de `connectionTimeout`. Cuando `socket.terminate()` es invocado, Node.js siempre emite el evento `close` que dispara `onClose()` → `startReconnect()`. La llamada duplicada podía avanzar el contador `reconnectRetry` dos veces y generar mensajes de log redundantes de reconexión. Ahora hay un único punto de entrada garantizado.
@@ -2960,33 +3044,33 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 
 ### Fixed
 
-- **Actualización de identidad visual en el panel:** Se actualiza el encabezado del panel lateral superior a `MATTER 1.6 BRIDGE` y el título principal a `Matter All In One Chrisalvir`, eliminando el texto genérico *Home Assistant*.
+- **Actualización de identidad visual en el panel:** Se actualiza el encabezado del panel lateral superior a `MATTER 1.6 BRIDGE` y el título principal a `Matter All In One Chrisalvir`, eliminando el texto genérico _Home Assistant_.
 
 ## [1.2.57] - 2026-07-23
 
 ### Fixed
 
-- **Actualización de identidad visual en el panel:** Se actualiza el encabezado del panel lateral superior a `MATTER 1.6 BRIDGE` y el título principal a `Matter All In One Chrisalvir`, eliminando el texto genérico *Home Assistant*.
+- **Actualización de identidad visual en el panel:** Se actualiza el encabezado del panel lateral superior a `MATTER 1.6 BRIDGE` y el título principal a `Matter All In One Chrisalvir`, eliminando el texto genérico _Home Assistant_.
 
 ## [1.2.56] - 2026-07-23
 
 ### Fixed
 
-- **Contador de pendientes en tiempo real:** Se agrega el indicador numérico dinámico (`badge`) al botón de filtro *Por emparejar*. Cuando un accesorio Matter es desemparejado o está publicado pero aún no se escanea en Apple Home / Google Home, el contador *Emparejados* disminuye inmediatamente y el badge *Por emparejar* se incrementa en tiempo real.
-- **Filtro activo de emparejamiento:** Al pulsar el filtro *Por emparejar*, la lista se filtra para mostrar únicamente los dispositivos que contienen accesorios Matter pendientes de escanear y emparejar.
+- **Contador de pendientes en tiempo real:** Se agrega el indicador numérico dinámico (`badge`) al botón de filtro _Por emparejar_. Cuando un accesorio Matter es desemparejado o está publicado pero aún no se escanea en Apple Home / Google Home, el contador _Emparejados_ disminuye inmediatamente y el badge _Por emparejar_ se incrementa en tiempo real.
+- **Filtro activo de emparejamiento:** Al pulsar el filtro _Por emparejar_, la lista se filtra para mostrar únicamente los dispositivos que contienen accesorios Matter pendientes de escanear y emparejar.
 
 ## [1.2.55] - 2026-07-23
 
 ### Fixed
 
-- **Conteo exacto de accesorios emparejados:** El indicador *Emparejados* en la barra de estadísticas del panel superior ahora calcula el total de nodos Matter accesorios independientes emparejados (basado en `matterNodeKey`) en lugar de contar únicamente los grupos de tarjetas de dispositivos físicos de HA. Esto resuelve la inconsistencia donde dispositivos con múltiples canales independientes (apagadores/enchufes dobles o triples) solo sumaban 1 al contador de emparejados.
-- **Filtro de accesorios pendientes:** El filtro *Por emparejar* muestra ahora cualquier tarjeta que contenga al menos un accesorio Matter exportado pendiente de emparejar.
+- **Conteo exacto de accesorios emparejados:** El indicador _Emparejados_ en la barra de estadísticas del panel superior ahora calcula el total de nodos Matter accesorios independientes emparejados (basado en `matterNodeKey`) en lugar de contar únicamente los grupos de tarjetas de dispositivos físicos de HA. Esto resuelve la inconsistencia donde dispositivos con múltiples canales independientes (apagadores/enchufes dobles o triples) solo sumaban 1 al contador de emparejados.
+- **Filtro de accesorios pendientes:** El filtro _Por emparejar_ muestra ahora cualquier tarjeta que contenga al menos un accesorio Matter exportado pendiente de emparejar.
 
 ## [1.2.54] - 2026-07-23
 
 ### Fixed
 
-- **Modelo (Marca + Modelo Real) en HomeKit:** El campo *Model* en Apple Home muestra ahora la combinación de la Marca y Modelo real del dispositivo (p. ej. `Tuya CB03-SBL`, `Shelly SHSW-25`), mientras que *Manufacturer* se mantiene consistentemente como `Matter All-in-One Chrisalvir`.
+- **Modelo (Marca + Modelo Real) en HomeKit:** El campo _Model_ en Apple Home muestra ahora la combinación de la Marca y Modelo real del dispositivo (p. ej. `Tuya CB03-SBL`, `Shelly SHSW-25`), mientras que _Manufacturer_ se mantiene consistentemente como `Matter All-in-One Chrisalvir`.
 - **QR independiente por canal en apagadores dobles/triples y enchufes dobles:** Los dispositivos físicos de HA con 2 o más entidades `switch.*` o `light.*` bajo el mismo `device_id` ahora publican cada canal como un accesorio Matter independiente con su propio código QR y proceso de emparejamiento. Se elimina el agrupamiento erróneo que impedía generar un segundo QR cuando ya había uno activo.
 - **Filtrado de entidades DPS genéricas:** Las entidades cuyo `friendly_name` empieza con `"DPS"` o cuyo `original_name` contiene `"DPS"` se ocultan del panel de control. Estas son entidades de datapoint genérico de Tuya que no tienen nombre significativo y no se pueden publicar en Matter. Si el usuario les cambia el nombre en HA, vuelven a aparecer automáticamente.
 
@@ -3055,13 +3139,13 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 
 ### Fixed
 
-- **Runtime Dependency Regression:** Removida la importación inválida de `@matter/protocol` que causaba que el plugin colapsara durante el inicio (startup) en el entorno de producción de Home Assistant (Matterbridge). La lógica de lectura de *fabrics* ahora utiliza exclusivamente los snapshots nativos en su lugar.
+- **Runtime Dependency Regression:** Removida la importación inválida de `@matter/protocol` que causaba que el plugin colapsara durante el inicio (startup) en el entorno de producción de Home Assistant (Matterbridge). La lógica de lectura de _fabrics_ ahora utiliza exclusivamente los snapshots nativos en su lugar.
 
 ## 1.2.44
 
 ### Fixed
 
-- **Live Pairing Count:** El contador de emparejados (paired) y la condición de "commissioned" ahora se extraen fidedignamente del `FabricManager` del protocolo, previniendo estados cacheados o inconsistentes (commissioned: false) al tener *fabrics* activos.
+- **Live Pairing Count:** El contador de emparejados (paired) y la condición de "commissioned" ahora se extraen fidedignamente del `FabricManager` del protocolo, previniendo estados cacheados o inconsistentes (commissioned: false) al tener _fabrics_ activos.
 - **Entity Logs Panel:** El panel de diagnóstico por accesorio ahora carga y muestra de manera consistente los eventos y logs del sistema asociados exclusivamente al dispositivo, previniendo fallos donde la interfaz omitía los errores recientes en nodos estables.
 
 ## 1.2.43
@@ -3076,7 +3160,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 ### Added
 
 - **NPM Package Metadata:** Añadidos los enlaces de repositorio, bugs y homepage al paquete para mejorar su visibilidad en el registro NPM.
-- **Trusted Publishing:** Migrada la publicación automatizada de GitHub Actions a OIDC Trusted Publishing, eliminando la dependencia de tokens (NPM_TOKEN) y habilitando *provenance* nativo.
+- **Trusted Publishing:** Migrada la publicación automatizada de GitHub Actions a OIDC Trusted Publishing, eliminando la dependencia de tokens (NPM_TOKEN) y habilitando _provenance_ nativo.
 
 ## 1.2.41
 
@@ -3225,6 +3309,7 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 - **Desvinculación de entidades atascadas:** `manualUnregister` ahora elimina el identificador del dispositivo compuesto incluso si Matterbridge no pudo arrancarlo. Esto evita que los dispositivos corruptos o conflictivos se queden "atascados" en la base de datos interna impidiendo que la UI refleje el botón de desactivación correctamente.
 
 ## 1.2.22
+
 ### Changed
 
 - **Matter 1.6:** Actualización de branding, metadata y keywords al estándar Matter 1.6 (CSA, 17 Jun 2026). Las nuevas características del protocolo (NFC commissioning, Joint Fabric, Thermostat Suggestions) son implementadas por el controlador Matter (Apple Home, Google, Amazon) y este bridge las soporta automáticamente al usar el SDK actualizado.
@@ -3240,7 +3325,6 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 - **Dispositivos preservados:** vacuum (RVC), cerrojo (DoorLock) y luces (OnOff/Dimmable/Color) continúan funcionando sin cambios.
 
 ## 1.2.19
-
 
 ### Fixed
 
@@ -3292,61 +3376,70 @@ All notable changes to this project will be documented in this file.
 ## [1.2.11] - 2026-06-21
 
 ### Fixed
-- **Endpoint de luz compuesto en Apple Home:** Se corrigió el bug crítico donde los clusters del child endpoint de luz (`LevelControl`, `ColorControl`) se añadían *después* de crear el endpoint en lugar de *durante* su creación con `addChildDeviceTypeWithClusterServer()`. Apple Home y Google Home leen el Descriptor cluster en el momento de la comisión; clusters añadidos post-creación no eran visibles, por eso solo el ventilador aparecía en Apple Home.
+
+- **Endpoint de luz compuesto en Apple Home:** Se corrigió el bug crítico donde los clusters del child endpoint de luz (`LevelControl`, `ColorControl`) se añadían _después_ de crear el endpoint en lugar de _durante_ su creación con `addChildDeviceTypeWithClusterServer()`. Apple Home y Google Home leen el Descriptor cluster en el momento de la comisión; clusters añadidos post-creación no eran visibles, por eso solo el ventilador aparecía en Apple Home.
 - **Temperatura de color bidireccional:** El handler `moveToColorTemperature` ahora envía `color_temp_kelvin` a HA cuando el dispositivo lo soporta, y `color_temp` (mireds) como fallback. La sincronización de estado también convierte correctamente entre ambas unidades.
 - **Soporte RGB/HS en dispositivos compuestos:** Añadido handler `moveToHueAndSaturation` para luces Extended Color. El estado HS ahora se sincroniza bidireccionalmente con los atributos `hs_color` de HA.
 - **Logging diagnóstico enriquecido:** `getCompositeCandidate` ahora emite logs de debug para cada punto de retorno temprano (sin device_id, agrupación desactivada, sin miembro fan.*, menos de 2 miembros). `createEndpoint` emite un registro detallado de capacidades de la luz detectadas (modos, clusters, rango de temperatura).
 
 ### Changed
+
 - **Separación de responsabilidades:** Se reestructuró `composite-device.entity.ts` separando la inicialización de clusters (`addRootClusters`, `computeClusterIds`) del registro de handlers de comandos (`addCommandHandlers`). Los endpoints hijos reciben sus clusters en la llamada de creación, no en una llamada posterior.
 
 ## [1.2.10] - 2026-06-21
 
-
 ### Added
+
 - **Dispositivos compuestos por `device_id`:** modo opt-in `group_by_device_id` para publicar un Fan con Light/Switch/Sensor relacionados como endpoints de un solo nodo Matter, con un QR compartido.
 - **Selección de capacidades reales de luces:** On/Off, Dimmable, Color Temperature y Extended Color se eligen a partir de las capacidades reportadas por Home Assistant.
 
 ### Changed
+
 - **Activación compuesta por defecto:** Fan + Light/Switch/Sensor que comparten `device_id` usan un solo interruptor de publicación en el panel y un único QR Matter. Las filas secundarias se muestran como **Integrada** antes y después de activar. Use `group_by_device_id: false` para recuperar el comportamiento por entidad.
 
 ## [1.2.8] - 2026-06-21
 
 ### Fixed
+
 - **QR de accesorios registrados dinámicamente:** el `ServerNode` ahora se inicia de forma explícita después de registrarlo. Antes, un nodo recreado desde el panel podía mostrar un QR válido pero no publicar `_matterc._udp`, provocando “Accessory Not Found” en Apple Home.
 
 ## [1.2.7] - 2026-06-21
 
 ### Fixed
+
 - **Fabric Matter residual por accesorio:** se añade el restablecimiento individual de un nodo Matter. Borra únicamente los fabrics de ese accesorio y vuelve a abrir su comisión, sin afectar otros dispositivos exportados.
 - **Estado de emparejamiento en tiempo real:** el panel actualiza automáticamente cada cuatro segundos el estado de comisión y el nombre de la casa/fabric, sin recargar la página.
 
 ## [1.2.6] - 2026-06-21
 
 ### Fixed
+
 - **Estado de carga RVC:** una señal física de base/carga (`status`, `activity` o `raw_dps` de la integración) ahora prevalece sobre un estado HA obsoleto `cleaning`. El RVC publica `Charging`, `Idle` y la carga de batería correcta en Apple Home.
 
 ## [1.2.5] - 2026-06-21
 
 ### Fixed
+
 - **RVC Matter nativo para Apple Home:** `vacuum.*` continúa exponiéndose exclusivamente como `RoboticVacuumCleaner` (`0x0074`) en un nodo independiente `mode: 'server'`; se eliminó cualquier alternativa de degradarlo a interruptor.
 - **Nombres de Home Assistant preservados:** se eliminaron los sufijos internos añadidos a los nombres visibles de accesorios. La identidad Matter sigue siendo estable mediante `entity_id`, número de serie y `uniqueId`, sin alterar el `friendly_name` de HA.
 - **Factory reset real:** la restauración de fábrica borra también `/data/.matterbridge`, incluidos fabrics y estado de comisión. Esto evita que un intento de comisión revertido reutilice una identidad Matter que parecía ya emparejada.
 - **Documentación técnica actualizada:** se documentan la topología RVC requerida por Apple Home, las restricciones de identidad y el procedimiento de recuperación para futuras contribuciones e IAs.
 
 ### Changed
+
 - **Perfil RVC:** el panel declara el perfil `RoboticVacuumCleaner` como compatible con Apple Home y muestra que ofrece controles RVC nativos.
 
 ## [1.2.4] - 2026-06-21
 
 ### Fixed
+
 - **Aspiradora sin código QR (root cause encontrado y corregido):** El aspirador se registraba como endpoint `bridgeado` (sin QR propio) porque en `vacuum.entity.ts` el tercer argumento del constructor `RoboticVacuumCleaner(name, serial, mode, ...)` se pasaba como `undefined` en lugar de `'server'`. La API de Matterbridge (`registerDevice`) verifica `device.mode === undefined` y, si el bridge está en modo `bridge`, convierte automáticamente el endpoint en un endpoint bridgeado añadiéndole `bridgedDeviceBasicInformation`. Al pasar `'server'` explícitamente, el aspirador ahora genera su propio ServerNode Matter con QR y código manual de emparejamiento únicos.
 - **Comentario incorrecto en `base.entity.ts` corregido:** El comentario decía "Este es un endpoint bridgeado" cuando en realidad el endpoint usa `mode: 'server'`. Actualizado para evitar confusión futura.
 
 ## [1.2.3] - 2026-06-21
 
-
 ### Fixed
+
 - **Error crítico al desactivar dispositivo:** Eliminadas las llamadas a `this.matterbridge.stopServerNode()` y `this.matterbridge.startServerNode()` que no existen en la API real de `MatterbridgePlatform` y causaban `TypeError: this.matterbridge.stopServerNode is not a function` al intentar desactivar un accesorio. El ciclo de vida completo del nodo Matter (arranque y parada) es manejado internamente por los métodos heredados `registerDevice()` y `unregisterDevice()`.
 - **Nombre de la casa conectada visible:** El panel ahora muestra junto al nombre del dispositivo activo la casa o controlador Matter al que está emparejado (por ejemplo `🏠 Casa de Chris`) extraído del `label` del fabric de commissioning.
 - **Botón de código QR siempre visible:** El botón "Mostrar Código de Emparejamiento" ahora aparece para todos los accesorios exportados (no solo cuando hay `pairingCode` precargado). Si el código aún se está generando, el panel hace polling automático cada 2 segundos hasta obtenerlo.
@@ -3356,26 +3449,31 @@ All notable changes to this project will be documented in this file.
 ## [1.2.2] - 2026-06-21
 
 ### Fixed
+
 - **Arranque Dinámico de Servidores Matter:** Se implementó el inicio explícito (`startServerNode`) del nodo del dispositivo cuando se registra una entidad dinámicamente desde el panel UI. Esto fuerza la generación inmediata de los códigos de emparejamiento QR/manual y activa la difusión mDNS en su respectivo puerto.
 - **Detención Dinámica de Servidores:** Se agregó el apagado explícito (`stopServerNode`) del nodo del dispositivo al des-registrar una entidad desde el panel, liberando los puertos asignados y evitando fugas de memoria o publicidad mDNS huérfana.
 
 ## [1.2.1] - 2026-06-21
 
 ### Fixed
+
 - **Extracción de Códigos QR de Servidores Matter:** Corregido el mapeo en el endpoint de la API `/api/custom/devices` para extraer correctamente los códigos de emparejamiento QR y manual y el estado de comisión desde la estructura interna de `serverNode.state.commissioning.pairingCodes` de Matterbridge. Esto soluciona el problema de los códigos QR que aparecían en blanco o no se mostraban.
 - **Clarificación de Interfaz:** Removidas todas las referencias legacy que hablaban de "bridge Matter" en la interfaz de usuario, actualizando los textos para reflejar con precisión el modo de accesorios independientes.
 
 ## [1.2.0] - 2026-06-21
 
 ### Added
+
 - **Plan B Completado (Código QR único por dispositivo):** Arquitectura migrada de Modo Bridge a Modo Servidor Independiente. Cada entidad exportada (como aspiradoras, luces, etc.) ahora tiene un servidor Matter propio, generando un Código QR único por dispositivo.
 - **Integración de QR Nativo:** El código QR se dibuja directamente dentro del panel Liquid Glass con `qrcode.min.js`, eliminando la redirección al portal nativo de Matterbridge (puerto 8284).
 
 ### Changed
+
 - Modificado `MatterbridgeEndpoint` a `mode: 'server'` en `base.entity.ts`.
 - La API `/api/custom/devices` extrae el `qrPairingCode` y estado de `commissioned` de los endpoints dinámicamente.
 
 ### Removed
+
 - Toda la lógica y botones antiguos que redirigían a la interfaz global del bridge han sido eliminados por completo del frontend para mantener al usuario en el nuevo panel.
 
 ## [1.1.67] - 2026-06-21
@@ -3417,12 +3515,16 @@ All notable changes to this project will be documented in this file.
 - Esta versión cambia la topología Matter. Haz copia de `/data/.matterbridge`, elimina los accesorios individuales de la versión anterior y vuelve a emparejar **una vez** el bridge. Consulta `docs/production-migration.md`.
 
 ## [1.1.24] - 2026-06-18
+
 ### Added
+
 - **Logs de depuración adicionales:** Se inyectaron logs para imprimir las propiedades del endpoint justo antes de su registro, ayudando a diagnosticar por qué no se inicia el servidor Matter individual.
 
 ## [1.1.23] - 2026-06-18
+
 ### Fixed
-- **Generación de códigos QR / Servidores de accesorios independientes:** 
+
+- **Generación de códigos QR / Servidores de accesorios independientes:**
   - Se configuró el modo de los endpoints explícitamente a `'server'` y se completaron todas las propiedades requeridas por Matterbridge (`deviceType`, `deviceName`, `serialNumber`, `uniqueId`, `vendorId`, `vendorName`, `productId`, `productName`). Esto fuerza a Matterbridge a inicializar un `ServerNode` independiente por cada accesorio, posibilitando la generación real de su QR único.
   - Se corrigió la lectura del estado de vinculación y fabrics del dispositivo apuntando a `serverNode.state.commissioning` (donde reside en la versión actual de Matterbridge).
   - Se corrigió la propiedad `domain` faltante en el payload JSON de la API `/api/custom/devices`, resolviendo el bug que deshabilitaba los selectores de tipos en el frontend ("Tipo no configurable...").
@@ -3431,25 +3533,33 @@ All notable changes to this project will be documented in this file.
   - Se añadió en la interfaz web un botón rojo de **"❌ Desconectar de la casa"** dentro del modal que aparece únicamente cuando el accesorio está emparejado.
 
 ## [1.1.22] - 2026-06-18
+
 ### Fixed
+
 - **Inicialización de Aspiradora (RVC):** Se corrigió la excepción `TypeError: this.endpoint.addClusterServer is not a function` en la entidad `VacuumEntity` migrando al API correcto de Matterbridge v3.9+ (`this.endpoint.behaviors.require()`).
 - **Apertura de modal en el Frontend:** Se añadió una validación de seguridad en `script.js` al asignar el nombre al label del QR (`emQrLabel`), evitando errores por selectores inexistentes que bloqueaban el despliegue del modal de configuración.
 
 ## [1.1.21] - 2026-06-18
+
 ### Fixed
-- **Advertencias de Estado Inactivo (`inactive state`):** 
+
+- **Advertencias de Estado Inactivo (`inactive state`):**
   - Se corrigió el flujo de sincronización inicial difiriendo `syncInitialState()` para ejecutarse solo después de que el dispositivo ha sido registrado y activado en Matterbridge.
   - Se optimizó `clampLevel` para evitar llamadas a `getAttribute` durante la sincronización inicial.
   - Se restringió el flujo de actualización de estados de Home Assistant (`handleEntityStateChange`) para sincronizar únicamente los dispositivos que están activamente exportados, eliminando por completo las advertencias y errores de consola sobre endpoints inactivos para entidades no exportadas.
 
 ## [1.1.20] - 2026-06-18
+
 ### Fixed
+
 - **Visibilidad del Icono de Engranaje (⚙️):** Se corrigió un problema por el cual el botón de configuración (engranaje) no se mostraba para dispositivos sin tipos personalizados de HomeKit en el panel (como las aspiradoras). Ahora el botón se muestra siempre permitiendo ver el código QR y manual de Matter individual.
 
 ## [1.1.10] - 2026-06-18
+
 ### Fixed
+
 - **Actualización de Estados en Apple Home/Google Home:** Se implementó `safeUpdateAttribute` (que llama a `updateAttribute`) en lugar de `safeSetAttribute` para notificar en tiempo real los cambios a los fabrics suscritos.
-- **Advertencias de Estado Inactivo (`setStateOf ... locked`):** Se ajustó el flujo de registro en `registerHAEntity()` para sincronizar el estado inicial *antes* de registrar el dispositivo, garantizando que `setAttribute` se use de forma segura cuando el endpoint está inactivo.
+- **Advertencias de Estado Inactivo (`setStateOf ... locked`):** Se ajustó el flujo de registro en `registerHAEntity()` para sincronizar el estado inicial _antes_ de registrar el dispositivo, garantizando que `setAttribute` se use de forma segura cuando el endpoint está inactivo.
 - **Estabilidad del Lifecycle de Home Assistant:** Se removió la inicialización duplicada de la instancia de `HomeAssistant` en el constructor de `HomeAssistantPlatform`, inicializándola y vinculando sus listeners una sola vez en `onStart()`.
 - **Filtro de Entidades No Disponibles:** Se omiten las entidades con estado `unavailable` o `unknown` durante el descubrimiento.
 - **Comportamiento del Factory Reset:** Se limitó el alcance de la restauración de fábrica para limpiar únicamente `/data/device-overrides.json` en lugar de borrar la carpeta de Matterbridge al completo.
@@ -3457,48 +3567,66 @@ All notable changes to this project will be documented in this file.
 - **Evitado de Handlers Duplicados:** Se removió la sobreescritura duplicada de `createEndpoint` en `VacuumEntity` para evitar el registro repetido de command handlers.
 
 ### Changed
+
 - **Limpieza de Código Legacy:** Eliminada la carpeta residual `/src` en la raíz del repositorio.
 
 ## [1.1.9] - 2026-06-18
+
 ### Fixed
+
 - **Panel agrupado por dispositivos reales de Home Assistant:** La API `/api/custom/devices` ahora incluye `device_id`, `device_name`, `area_name`, fabricante, modelo y metadatos del entity registry. El frontend puede mostrar dispositivos reales y dejar sus entidades dentro de cada dispositivo.
 - **QR del modal de entidad:** El modal ahora renderiza el payload QR Matter real del bridge y mantiene el código manual como texto/copiar, evitando generar un QR inválido desde el código manual.
 - **Exportación de QR:** Se añadió botón para exportar el QR mostrado como PNG desde el modal.
 
 ### Changed
+
 - **Versión del addon:** Se sube a `1.1.9` y se ajustan textos visibles a Matter `1.5.x`, porque `matterbridge@3.9.0` sigue siendo la última versión publicada estable; Matter 1.6 queda en preparación hasta que el SDK/base lo soporte explícitamente.
 
 ## [1.1.8] - 2026-06-17
+
 ### Fixed
+
 - **Eliminación de Advertencias de Inicialización (Inactive State):** Se movió la sincronización de estado inicial de los dispositivos a una fase posterior a su registro (`registerDevice`) en Matterbridge. Esto elimina las advertencias del tipo `is in the inactive state` al obtener/establecer atributos en el arranque, ya que las operaciones se ejecutan cuando los endpoints están completamente activos.
 
 ## [1.1.7] - 2026-06-17
+
 ### Added
+
 - **Proxy de Inicio de Ingress (Eliminación de error 502):** Se implementó un servidor proxy en el puerto `8283` (el puerto de Ingress) que se inicia de forma inmediata cuando arranca el contenedor.
 - **Pantalla de Carga Premium:** Si la interfaz del plugin aún no está lista (debido al tiempo de inicialización de Matterbridge), el proxy sirve una pantalla de carga glassmorphic en español ("Iniciando Matter Bridge...") con auto-recarga automática cada 2 segundos.
 - **Cambio de Puerto de Interfaz:** Se movió el servidor HTTP del plugin en `src/platform.ts` al puerto interno `8285` (escuchando únicamente en `127.0.0.1`), al cual el proxy redirige el tráfico transparentemente una vez que está en línea.
 
 ## [1.1.6] - 2026-06-17
+
 ### Fixed
+
 - **Plugin peerDependencies Check (Bug Crítico):** Se amplió la limpieza dinámica en el `Dockerfile` usando `jq` para remover también `peerDependencies.matterbridge` de `package.json` en producción. Esto resuelve el bloqueo restante de Matterbridge 3.9.0 (error `package.json not found` debido a la presencia de `matterbridge` en `peerDependencies`), permitiendo que el plugin se registre y se inicie correctamente la interfaz Liquid Glass.
 
 ## [1.1.5] - 2026-06-17
+
 ### Fixed
+
 - **Plugin devDependencies Check (Bug Crítico):** Se implementó una solución en el `Dockerfile` para remover dinámicamente el paquete `matterbridge` de los bloques `dependencies` y `devDependencies` de `package.json` a nivel de contenedor usando `jq`. Esto resuelve el rechazo del plugin por parte de Matterbridge 3.9.0 (error `package.json not found` por tener la clave en `devDependencies`) y permite que se registre con éxito e inicie el servidor de interfaz local en el puerto `8283`.
 
 ## [1.1.4] - 2026-06-17
+
 ### Fixed
+
 - **Plugin Rejection (Bug Crítico):** Se eliminó el paquete `matterbridge` de las dependencias de producción (`dependencies`) en `package.json` y se movió a `peerDependencies` y `devDependencies`, resolviendo el rechazo del plugin por parte de Matterbridge 3.9.0 que arrojaba el error `package.json not found` y no iniciaba el puerto de la interfaz `8283`.
 
 ## [1.1.3] - 2026-06-17
+
 ### Fixed
+
 - **HA Ingress Routing (Bug Crítico):** Se añadió soporte para parsear y remover el prefijo de ruta de Ingress de Home Assistant (`/api/hassio_ingress/TOKEN/`), resolviendo el error `502: Bad Gateway` y la pantalla de "App no lista" en la interfaz.
 - **Redirección de Ingress sin slash final:** Se implementó una redirección automática para peticiones que acceden a la URL de Ingress sin la barra final (`/api/hassio_ingress/TOKEN` -> `/api/hassio_ingress/TOKEN/`), garantizando que los recursos relativos (`./script.js`, `./style.css`) se carguen correctamente.
 - **Conflicto de Dependencia de Matter:** Se eliminó la dependencia duplicada de `@matter/main` en `package.json` que causaba que la carga del plugin fallara con errores de duplicación en Matterbridge 3.9.0.
 - **Versión de Matterbridge:** Se bloqueó la instalación global de matterbridge a la versión `3.9.0` en el `Dockerfile` para asegurar coherencia y estabilidad en producción.
 
 ## [1.0.25] - 2026-06-16
+
 ### Added
+
 - **Matter 1.4 Robotic Vacuum Cleaner (RVC):** Soporte completo para entidades `vacuum.*` de Home Assistant usando el device type Matter 0x0074. Compatible con Tuya, Smart Life, Roborock, iRobot, Dreame, Ecovacs y cualquier vacuum expuesto por HA.
 - **`vacuum.converter.ts`:** Nuevo converter con mapeo completo de estados HA → `RvcOperationalState` (cleaning→Running, docked→Docked, returning→SeekingCharger, paused→Paused, error→Error), normalización de velocidades de succión Tuya (`quiet/eco/standard/strong/turbo/max` → 0-100), routing de comandos Matter hacia servicios HA (`vacuum.start`, `vacuum.pause`, `vacuum.stop`, `vacuum.return_to_base`), y detección automática de vendor (Tuya/Roborock/iRobot/Dreame).
 - **`vacuum.entity.ts`:** Nueva entidad Matterbridge que crea el endpoint RVC, sincroniza estado a clusters Matter (`OnOff`, `RvcOperationalState`, `PowerSource` batería 0-200, `FanControl` velocidad), y registra handlers para comandos de Apple Home (start/pause/stop/goHome/resume).
@@ -3506,15 +3634,19 @@ All notable changes to this project will be documented in this file.
 - **30 tests Vitest:** `test/converters/vacuum.test.ts` cubre todos los estados, velocidades, comandos, extracción de atributos y detección de vendor.
 
 ### Changed
+
 - `device-registry.ts`: Añadido `roboticVacuumCleaner` (0x0074) a `MatterDeviceTypes` y branch `vacuum` en `getDeviceTypeForEntity()`.
 - `platform.ts`: Import y branch de instanciación para `VacuumEntity`.
 - `converters/index.ts`: Barrel export de `vacuum.converter`.
 
 ### Notes
+
 - Apple Home reconoce el tipo RVC nativamente desde iOS 18.4. No se requiere plugin iRobot — funciona directamente vía `vacuum.*` de HA.
 
 ## [1.0.24] - 2026-06-16
+
 ### Added
+
 - **Matter 1.5 Camera Entity:** `CameraEntity` con soporte completo de `CameraAvStreamManagement` (cluster 0x00B0) y `WebRTCTransportProvider` (cluster 0x00B1). Integra cámaras de Home Assistant como dispositivos nativos en HomeKit con RTSP/HLS automático.
 - **Matter 1.5 Closure Entity:** `ClosureEntity` unificada para `cover.*` con `ClosureControl` y `ClosureDimension` clusters. Distingue automáticamente `garage_door`, `gate`, `blind`, `shade`, `curtain` y `awning` según el `device_class` de HA.
 - **Matter 1.5 Soil Sensor Entity:** `SoilEntity` para sensores de humedad/temperatura de suelo (`device_class: moisture`) con `SoilMoistureMeasurement` (cluster 0x0408).
@@ -3524,30 +3656,40 @@ All notable changes to this project will be documented in this file.
 - **Base Entity mejorada:** Mayor resiliencia en `createEndpoint()` con manejo de errores por cluster y logging detallado de Matter.
 
 ### Changed
+
 - Versión bumped a `1.0.24` en `package.json` y metadata de Matterbridge.
 - `device-registry.ts` ahora identifica correctamente `closure` vs `windowCovering` según `device_class`.
 - `homekit.compat.ts` documentado con compatibilidad HomeKit 2026 para Matter 1.5.
 
 ## [1.0.23] - 2026-06-16
+
 ### Fixed
+
 - **QR Code (Bug crítico):** El endpoint `/api/bridge` no existe en Matterbridge. Ahora el backend intenta `/api/plugins` (endpoint real de Matterbridge), luego `/api/settings`, y finalmente lee el archivo `/root/.matterbridge/matterbridge.json` directamente del disco como último recurso. Esto garantiza que el código QR siempre esté disponible.
 - **Nombres duplicados:** El error "Device with name X is already registered" se producía cuando varios dispositivos de la misma área tenían nombres truncados idénticos a 32 caracteres. Ahora se añade un sufijo único basado en el `entity_id` para garantizar unicidad en Matterbridge.
 
 ## [1.0.9] - 2026-06-16
+
 ### Fixed
+
 - Fixed Matterbridge 3.9 plugin rejection caused by `matterbridge` being listed in `devDependencies`. The plugin manager now accepts the custom UI plugin and starts the web server on port 8283 properly.
 
 ## [1.0.8] - 2026-06-16
+
 ### Fixed
+
 - Fixed Matterbridge 3.9.0 startup error where it rejected the plugin due to the presence of `@matter/main` in dependencies.
 
-
 ## [1.0.7] - 2026-06-16
+
 ### Fixed
+
 - Fixed Docker build error (`npm ci` fail) by switching to `npm install` inside the Docker image to handle missing `package-lock.json` synchronizations during add-on build.
 
 ## [1.0.6] - 2026-06-16
+
 ### Changed
+
 - UI Limpia: Eliminada la pestaña de "Ajustes" y toda la información técnica innecesaria del panel. Los controles avanzados (Reiniciar, Restablecer) ahora están en un modal discreto en la pestaña Puente.
 - Toggle de Exportación: Añadido un interruptor (toggle) en cada tarjeta de dispositivo para habilitar o deshabilitar su exportación a Matter individualmente.
 - Filtro estricto: El puente ahora filtra automáticamente dominios no soportados y sensores de sistema/energía para mantener la red limpia.
@@ -3555,7 +3697,9 @@ All notable changes to this project will be documented in this file.
 - Soporte para Persistencia de Overrides: El backend ahora guarda y carga las preferencias de exportación y tipo Matter en un archivo local para que se mantengan tras los reinicios.
 
 ## [1.0.5] - 2026-06-16
+
 ### Changed
+
 - Completely rebuilt UI: nueva interfaz en español con diseño Liquid Glass premium (sidebar, tarjetas de dispositivos, y fondo con orbes animados).
 - Los dispositivos se muestran como tarjetas clickeables. Al hacer clic en un dispositivo se abre un panel de detalles con:
   - Selector de tipo HomeKit 2026 con descripción de cada categoría compatible.
@@ -3566,59 +3710,76 @@ All notable changes to this project will be documented in this file.
 - Optimizado Dockerfile: separación de capas para mayor velocidad de actualización en Home Assistant.
 
 ## [1.0.4] - 2026-06-16
+
 ### Added
+
 - Replaced the default cockpit/dashboard with a premium, fully local, custom Spanish "Liquid Glass" (glassmorphism) Web UI on port 8283.
 - Completely zero-config: automatic environment detection for local Home Assistant host and Supervisor token.
 - Clean layout: display only critical bridge details, dynamic bridged devices list, and action tools (Restart/Factory Reset).
 
 ## [1.0.3] - 2026-06-16
+
 ### Fixed
+
 - Restored original add-on directory structure to allow standard updates in Home Assistant.
 
 ## [1.0.2] - 2026-06-16
+
 ### Changed
+
 - Cleaned up legacy repository branding and references.
 - Consolidated version specifications across package configurations.
 
 ## [1.0.1] - 2026-06-16
+
 ### Added
+
 - Home Assistant Add-on Ingress support for sidebar integration.
 - Bypassed manual setup by implementing zero-config auto-discovery.
 
 ## [1.0.0] - 2026-06-16
+
 ### Added
+
 - Initial release of Matter 1.5 Bridge for Home Assistant (matter-all-in-one-chrisalvir).
 - Native support for Apple HomeKit 2025/2026 specifications.
 - Unified Closure support (cover.* -> garage doors, blinds, curtains, gates, shades, awnings).
 - Video camera streaming management and RTSP/WebRTC support.
 - Soil moisture and temperature sensor mapping.
 - Automatic Supervisor API token and WebSocket host detection.
+
 ## [1.8.26] - 2026-09-20
 
 ### BLE y fuentes de cámara
+
 - Reintenta comandos BLE/fan únicamente cuando Home Assistant confirma una desconexión.
 - Camera.UI permanece como fuente única de RTSP; no se inyectan rutas antiguas de go2rtc.
 
 ## [1.8.25] - 2026-09-20
 
 ### BLE sin bloqueo
+
 - Corrige el flujo de recuperación de comandos BLE tras reconexiones de Home Assistant.
+
 ## [1.8.31] - 2026-09-20
 
 ### Restablecimiento HAP y accesorios de cámara
 
 - **Nuevo código de emparejamiento:** el restablecimiento cambia MAC HAP, UUID, puerto, Setup ID y PIN; Casa recibe un QR nuevo, en vez de reutilizar el código anterior.
 - **Servicios bajo la cámara:** luz, sirena y sensor de movimiento seleccionados desde Camera.UI se montan como servicios del mismo accesorio HAP. Cambiar una selección reconstruye dicho accesorio de forma controlada para aplicar el grafo actualizado.
+
 ## [1.8.32] - 2026-09-20
 
 ### Fuente estable de Wyze
 
 - La cámara Wyze Patio Trasero usa siempre su restream canónico de Camera.UI en lugar de la URL RTSP física que puede quedar inaccesible tras una reconexión. La cámara mantiene identidad, PIN, puerto y pairing HAP persistentes.
+
 ## [1.8.33] - 2026-09-20
 
 ### Inicio y guardado no bloqueante
 
 - Guardar host o credenciales Camera.UI persiste la configuración y responde de inmediato. Los remontajes HAP necesarios pasan a segundo plano, evitando bloquear la interfaz mientras reinicia múltiples cámaras.
+
 ## [1.8.34] - 2026-09-20
 
 ### Recuperación de Live View, HAP y carga de Camera.UI
@@ -3627,6 +3788,7 @@ All notable changes to this project will be documented in this file.
 - El pre-búfer HKSV se inicia bajo demanda por el Home Hub o una grabación, en lugar de abrir lectores RTSP para todas las cámaras al inicio.
 - Para cámaras Camera.UI con tópico MQTT de movimiento nativo se evita un detector FFmpeg duplicado. Los eventos MQTT continúan accionando detección y HKSV.
 - La verificación rápida usa solamente un probe acotado; no encadena fallback, UDP ni medición GOP. Si ya hay una verificación activa responde de inmediato en vez de quedar en espera.
+
 ## [1.8.35] - 2026-09-20
 
 ### Identidad HAP por cámara y arranque Camera.UI
@@ -3635,6 +3797,7 @@ All notable changes to this project will be documented in this file.
 - El restablecimiento desde la tarjeta Camera.UI persiste también el PIN recién generado.
 - Se eliminan el probe y snapshot RTSP automáticos al publicar Camera.UI: la metadata llega de Camera.UI y el stream se abre bajo demanda, sin agotar lectores RTSP al reiniciar.
 - La interfaz distingue explícitamente Activar HomeKit de Desactivar HomeKit.
+
 ## [1.8.36] - 2026-09-20
 
 ### Reactivación HAP y autenticación Camera.UI
@@ -3642,6 +3805,7 @@ All notable changes to this project will be documented in this file.
 - Restablecer una cámara Camera.UI vuelve a activar su exportación HAP cuando había sido eliminada previamente.
 - Las rutas RTSP canónicas `cui_*` reparan credenciales persistidas obsoletas usando solamente las credenciales RTSP locales configuradas.
 - La migración no modifica Tapo C402, rutas manuales ni cámaras fuera de la lista canónica Camera.UI.
+
 ## [1.8.37] - 2026-09-20
 
 ### Detección y grabación HKSV de Camera.UI
@@ -3649,6 +3813,7 @@ All notable changes to this project will be documented in this file.
 - Restaura detección local de movimiento como fallback cuando los tópicos MQTT de Camera.UI no alcanzan el bridge.
 - El fallback se habilita solo después de emparejamiento HAP y configuración HKSV por el Home Hub, protegiendo el inicio y las cámaras no enlazadas.
 - Las detecciones vuelven a emitir `MotionDetected` al mismo accesorio y disparan la grabación HKSV.
+
 ## [1.8.41] - 2026-09-21
 
 ### Honest codec diagnostics and stable Apple Home passthrough
@@ -3657,6 +3822,7 @@ All notable changes to this project will be documented in this file.
 - **Medición ligada a la URL:** se conserva códec, audio, resolución y fecha de la prueba únicamente mientras la URL RTSP sea la misma. Al cambiarla, la interfaz exige una nueva verificación.
 - **Sin valores ficticios:** se eliminan los rellenos H.264, 30 fps, AAC y 32 kHz del diagnóstico; se muestra **No verificado** cuando no existe evidencia de stream reciente.
 - **HAP/HKSV H.264:** se mantiene la negociación nativa de resolución/perfil y el audio AAC sólo se copia cuando coincide con lo seleccionado por Apple Home. Vídeo permanece en passthrough.
+
 ## [1.8.43] - 2026-09-21
 
 ### Recuperación fiable de detección y HKSV
@@ -3665,6 +3831,7 @@ All notable changes to this project will be documented in this file.
 - **Evento correcto para Apple Home:** el detector vuelve a emitir `MotionDetected`; ese evento es el que permite al Home Hub iniciar clips HKSV y aplicar sus clasificaciones de personas, animales o vehículos.
 - **Fuente RTSP coherente:** la detección utiliza el stream principal verificado que también recibe HAP; ya no prioriza un alias de sub-stream que pueda haber quedado obsoleto después de reiniciar Camera.UI.
 - **Arranque protegido:** se espera ocho segundos para evitar saturar lectores RTSP durante el inicio. La Tapo C120 permanece excluida de este fallback y no se modifica su flujo estable.
+
 ## [1.8.44] - 2026-09-22
 
 ### Recuperación de fragmentos HKSV para C402, EZVIZ y Wyze
@@ -3673,6 +3840,7 @@ All notable changes to this project will be documented in this file.
 - **EZVIZ y Wyze:** antes de codificar audio a AAC para fMP4 se reconstruye su timeline (`asetpts` + `aresample`). Se corrigen los saltos DTS de Camera.UI que producían clips sin fragmentos y cierres de protocolo por parte del Home Hub.
 - **Vídeo sin transcodificar:** H.264 sigue con `-vcodec copy`; el cambio afecta únicamente lectura RTSP de C402 y reloj de audio de C402/EZVIZ/Wyze.
 - **C120 preservada:** no recibe la sonda ampliada ni el filtro de audio específico; su pipeline estable permanece intacto.
+
 ## [1.8.48] - 2026-09-22
 
 ### Detección focalizada para Tapo C402 y EZVIZ
@@ -3681,6 +3849,7 @@ All notable changes to this project will be documented in this file.
 - **Tapo C120:** conserva el mismo perfil sensible que ya estaba aplicado.
 - **Wyze intacta:** no se cambian URL, códec, audio, detector ni parámetros de Live View/HKSV de Wyze.
 - **Diagnóstico HKSV honesto:** aceptar el cierre de una transmisión por HDS ya no se presenta como garantía de que iCloud haya mostrado el clip; el registro indica exactamente la confirmación recibida del Home Hub.
+
 ## [1.8.49] - 2026-09-22
 
 ### Diagnóstico HKSV y detección persistente
@@ -3690,6 +3859,7 @@ All notable changes to this project will be documented in this file.
 - El estado HKSV queda como `waiting_hub` si Apple Home activa la grabación pero no ha enviado `SelectedCameraRecordingConfiguration`.
 - Se registra la acción necesaria para que Casa vuelva a negociar la configuración, evitando reportar una cámara como lista cuando HomeKit aún la rechaza.
 - Wyze conserva su detector, stream, audio y configuración sin cambios.
+
 ## [1.8.56] - 2026-09-22
 
 ### Restauración de cámaras existentes tras la corrección C402
@@ -3697,12 +3867,14 @@ All notable changes to this project will be documented in this file.
 - **Wyze, EZVIZ y Tapo C120:** vuelven a anunciar exclusivamente su perfil H.264, resolución y códec de audio realmente disponibles. El pipeline de vídeo sigue siendo passthrough, por lo que ya no se ofrecen perfiles ni resoluciones que no puede convertir.
 - **Tapo C120 conserva 2K:** la C120 mantiene su resolución nativa medida de 2304x1296; Apple Home no recibirá una escalera que fuerce una petición de 1080p o 720p.
 - **Tapo C402 preservada:** mantiene el RTSP directo de Home Assistant, la eliminación del bloqueo `protocol_whitelist`, AAC-ELD y la escalera HAP que requiere para su negociación directa.
+
 ## [1.8.68] - 2026-09-23
 
 ### Corrección de verificación de passthrough nativo
 
 - Se corrige la prueba de integración HAP para validar las capacidades reales de Wyze Patio Trasero, EZVIZ Patio Trasero y Tapo C120: resolución y perfil H.264 de origen, más OPUS cuando el contenedor no dispone de `libfdk_aac`.
 - No cambia la ruta de streaming introducida en 1.8.67; esta versión permite que la compilación valide esa restauración y publique la imagen del add-on.
+
 ## [1.8.89] - 2026-09-23
 
 ### Tapo C120: negociación HAP con FPS real
@@ -3710,6 +3882,7 @@ All notable changes to this project will be documented in this file.
 - La Tapo C120 deja de anunciar 30 fps fijos para su vídeo 2K en passthrough. El RTSP actual entrega 15 fps; Apple Home recibe ese valor real en lugar de negociar cuadros que FFmpeg no puede generar con `-c:v copy`.
 - Al iniciar, el add-on intenta medir el RTSP de la C120. Si la fuente no informa el FPS, conserva el valor seguro de 2560×1440 a 15 fps.
 - No se modificaron las rutas ni las capacidades de las demás cámaras.
+
 ## [1.8.90] - 2026-09-23
 
 ### Tapo C120: reparación de vídeo congelado y artefactos verdes en Apple Home
@@ -3717,9 +3890,22 @@ All notable changes to this project will be documented in this file.
 - El RTSP de la C120 entrega H.264 High nivel 5.0, mientras HAP negocia nivel 4.0. Copiar el bitstream incompatible provocaba la imagen congelada con líneas verdes aunque el audio siguiera activo.
 - Sólo el Live View de la C120 ahora se normaliza a H.264 High nivel 4.0, 1080p a 15 fps, con cuadros clave regulares y timestamps estables. La fuente RTSP 2K, HKSV, audio y detección permanecen intactos.
 - Se restaura el margen de análisis necesario para recibir un cuadro clave 2K completo antes de iniciar el decodificador de Apple Home.
+
 ## [1.8.91] - 2026-09-23
 
 ### Verificación de la normalización HAP de Tapo C120
 
 - Se actualiza la prueba de integración para validar la normalización C120 a 1080p/H.264 nivel 4.0 y su audio PCMA a AAC.
 - Esta versión publica la reparación de vídeo de 1.8.90 con la suite de CI alineada.
+
+## [1.8.92] - 2026-09-24
+
+### Telemetría sanitizada de Live View para HomeKit
+
+- Añade medición ffprobe de perfil, nivel, FPS, bitrate y formato de píxel.
+- Separa en la UI fuente medida, capacidades Live View, solicitud de Apple,
+  salida FFmpeg e HKSV, sin presentar valores configurados como medidos.
+- Conserva un historial limitado de sesiones Live View sin URLs, credenciales,
+  tokens ni material SRTP.
+- Aísla Camera.UI en `platform.test.ts` para evitar que accesorios del host
+  abran listeners HAP durante la suite de pruebas.
