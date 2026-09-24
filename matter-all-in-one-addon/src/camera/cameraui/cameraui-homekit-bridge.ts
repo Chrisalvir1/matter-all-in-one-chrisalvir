@@ -137,12 +137,24 @@ export class CameraUiHomeKitBridge {
     // CameraController advertises the real codec, dimensions and frame rate.
     // The previous seeded 2304x1296/15 metadata did not match its live
     // 2560x1440/30 stream and HAP was permanently configured with stale values.
-    // NOTE: C120 is intentionally excluded from pre-publish probe. The probe
-    // calls applyCameraSourceProbe which overwrites camera.width/height with
-    // the actual 2K RTSP stream (2560x1440), defeating the 1080p HAP declaration
-    // we need to prevent UDP socket buffer overflow (green screen / no response).
-    // C120 capabilities are fully known: H264, 1920x1080 HAP, AAC audio, 30fps.
     const isHomeAssistantSource = camera.sourceProvider === "home_assistant";
+
+    // C120 explicit dimension enforcement: the camera MUST be declared as 2560×1440.
+    // -c:v copy sends the raw H.264 SPS which contains 2560×1440. If HAP declares a
+    // different resolution (e.g. stale 1920×1080 saved during v1.8.82-84), iOS's
+    // VideoToolbox rejects the SPS dimension mismatch → "Sin Respuesta".
+    // This override runs every startup regardless of what cameraui-config.json has stored.
+    const isTapoC120Mount = /(?:\bc120\b|tapo[-_ ]?c120)/i.test(`${camera.id} ${camera.name || ""}`);
+    if (isTapoC120Mount) {
+      camera.width = 2560;
+      camera.height = 1440;
+      camera.fps = 30;
+      camera.videoCodec = "h264";
+      camera.strategy = "passthrough_h264";
+      camera.hasAudio = camera.hasAudio !== false; // preserve explicit false
+      if (!camera.audioCodec) camera.audioCodec = "aac";
+    }
+
     if (isHomeAssistantSource && camera.rtspUrl) {
       try {
         const probe = await probeCameraSource(camera.rtspUrl, {

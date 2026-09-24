@@ -1,3 +1,14 @@
+## [1.8.86] - 2026-09-23
+
+### Corrección definitiva "Sin Respuesta" C120 — enforce explícito de dimensiones 2560×1440 en mountCamera
+
+- **Bug raíz encontrado y corregido:**
+  - El bloque `repairCameraRecord` para C120 en `cameraui-storage.ts` está dentro de un comment `/* ... */` que abarca también el bloque EZVIZ y **NUNCA SE EJECUTABA**. Esto significa que `cameraui-config.json` guardado en disco durante v1.8.82-84 (con `width: 1920, height: 1080`) nunca fue reparado al volver a v1.8.85. HAP seguía declarando 1080p al inicio → iOS negociaba 1080p → FFmpeg enviaba SPS con 2560×1440 → discrepancia → **"Sin Respuesta"**.
+- **Fix aplicado en `cameraui-homekit-bridge.ts` (`mountCamera`):**
+  - Antes de construir las `CameraCapabilitiesInfo`, se ejecuta un bloque explícito que fuerza `camera.width = 2560`, `camera.height = 1440`, `camera.fps = 30`, `camera.videoCodec = "h264"`, `camera.strategy = "passthrough_h264"` para la Tapo C120. **Esto corre en CADA reinicio**, independientemente de lo que haya guardado en disco. Es la única forma confiable de garantizar las dimensiones correctas.
+- **Tapo C402 Estrictamente Intacta:**
+  - El probe pre-publicación de C402 no fue modificado.
+
 ## [1.8.85] - 2026-09-23
 
 ### Restauración completa de C120 a estado funcional v1.8.81 + corrección definitiva "Sin Respuesta"
