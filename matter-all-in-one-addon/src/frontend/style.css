@@ -433,7 +433,9 @@ h2 {
     0 16px 40px rgba(0, 0, 0, 0.28),
     inset 0 1px 0 0 rgba(255, 255, 255, 0.12),
     inset 0 0 20px rgba(124, 168, 255, 0.03);
-  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  transition:
+    border-color 0.3s ease,
+    box-shadow 0.3s ease;
 }
 
 .liquid-control-center:hover {
@@ -467,7 +469,11 @@ h2 {
   width: 34px;
   height: 34px;
   border-radius: 10px;
-  background: linear-gradient(135deg, rgba(124, 168, 255, 0.25), rgba(99, 102, 241, 0.15));
+  background: linear-gradient(
+    135deg,
+    rgba(124, 168, 255, 0.25),
+    rgba(99, 102, 241, 0.15)
+  );
   border: 1px solid rgba(124, 168, 255, 0.35);
   color: #a5c7ff;
   font-size: 16px;
@@ -518,8 +524,14 @@ h2 {
 }
 
 @keyframes pulseAmber {
-  0%, 100% { opacity: 0.9; }
-  50% { opacity: 1; filter: drop-shadow(0 0 6px rgba(246, 200, 102, 0.4)); }
+  0%,
+  100% {
+    opacity: 0.9;
+  }
+  50% {
+    opacity: 1;
+    filter: drop-shadow(0 0 6px rgba(246, 200, 102, 0.4));
+  }
 }
 
 .control-center-summary-text {
@@ -560,18 +572,28 @@ h2 {
   font-size: 12px;
   font-weight: 600;
   color: #d6e4ff;
-  background: linear-gradient(135deg, rgba(124, 168, 255, 0.14), rgba(124, 168, 255, 0.05));
+  background: linear-gradient(
+    135deg,
+    rgba(124, 168, 255, 0.14),
+    rgba(124, 168, 255, 0.05)
+  );
   border: 1px solid rgba(124, 168, 255, 0.3);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .refresh-glass-button:hover:not(:disabled) {
-  background: linear-gradient(135deg, rgba(124, 168, 255, 0.25), rgba(124, 168, 255, 0.12));
+  background: linear-gradient(
+    135deg,
+    rgba(124, 168, 255, 0.25),
+    rgba(124, 168, 255, 0.12)
+  );
   border-color: rgba(124, 168, 255, 0.5);
   color: #ffffff;
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(124, 168, 255, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  box-shadow:
+    0 4px 12px rgba(124, 168, 255, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .refresh-glass-button:active:not(:disabled) {
@@ -589,8 +611,12 @@ h2 {
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* Glass Tabs Grid */
@@ -617,11 +643,21 @@ h2 {
   border: 1px solid rgba(140, 175, 235, 0.12);
   text-align: left;
   position: relative;
-  overflow: hidden;
+  /* Keep every modal scrollable when its content exceeds the viewport. */
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   cursor: pointer;
   outline: none;
   transition: all 0.22s cubic-bezier(0.2, 0.8, 0.3, 1);
   box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.04);
+}
+
+/* Nested layouts may still provide their own scroll regions, but the modal
+ * itself remains a reliable fallback for wheel, touch and keyboard scrolling. */
+.modal > .modal-layout,
+.modal > .camera-modal-layout {
+  min-height: 0;
 }
 
 .glass-card-tab:hover {
@@ -1712,7 +1748,7 @@ mark {
   background: linear-gradient(
     145deg,
     rgba(255, 255, 255, 0.96) 0%,
-    rgba(244, 248, 255, 0.90) 100%
+    rgba(244, 248, 255, 0.9) 100%
   );
   border: 1.5px solid rgba(255, 255, 255, 0.9);
   border-radius: 26px;
@@ -1725,7 +1761,9 @@ mark {
     inset 0 1px 2px rgba(255, 255, 255, 0.95);
   max-width: 250px;
   margin: 0 auto;
-  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease;
+  transition:
+    transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.3s ease;
   overflow: hidden;
   box-sizing: border-box;
 }
@@ -1782,7 +1820,9 @@ mark {
 }
 
 .sticker-code-line {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    monospace;
   font-size: 19px;
   font-weight: 800;
   color: #0f172a;
@@ -2841,7 +2881,11 @@ mark {
   align-items: center;
   gap: 16px;
   padding: 16px 24px;
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+  background: linear-gradient(
+    135deg,
+    rgba(102, 126, 234, 0.1) 0%,
+    rgba(118, 75, 162, 0.1) 100%
+  );
   border-radius: 12px;
   margin-bottom: 24px;
   border: 1px solid rgba(102, 126, 234, 0.2);
@@ -2984,7 +3028,10 @@ mark {
   min-height: auto;
   gap: 4px;
   cursor: pointer;
-  transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+  transition:
+    transform 0.15s ease,
+    border-color 0.15s ease,
+    background 0.15s ease;
 }
 
 .scrypted-camera-card:hover,
@@ -3134,7 +3181,11 @@ mark {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.25), rgba(6, 182, 212, 0.25));
+  background: linear-gradient(
+    135deg,
+    rgba(16, 185, 129, 0.25),
+    rgba(6, 182, 212, 0.25)
+  );
   border: 1px solid rgba(52, 211, 153, 0.5);
   color: #6ee7b7;
   font-weight: 700;
@@ -3510,6 +3561,7 @@ mark {
   max-width: 98vw !important;
   height: min(96vh, 960px) !important;
   max-height: 96vh !important;
+  overflow-y: auto;
 }
 
 @media (min-width: 1200px) {
@@ -3946,7 +3998,9 @@ mark {
   overflow-y: auto;
   overflow-x: auto;
   padding: 12px 14px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
   font-size: 11px;
   line-height: 1.6;
   user-select: text;
@@ -4028,5 +4082,3 @@ mark {
     min-height: 420px;
   }
 }
-
-
