@@ -39,6 +39,8 @@ describe("frontend accessibility contract", () => {
     expect(cameraModal).toContain("Solicitud Live View de Apple Home");
     expect(cameraModal).toContain("Salida efectiva de FFmpeg");
     expect(cameraModal).toContain("Grabación HKSV");
+    expect(cameraModal).toContain("Sin medición ffprobe vigente");
+    expect(cameraModal).toContain("Configuración declarada, no medida");
     expect(cameraModal).not.toContain("Cero transcodificación");
     expect(cameraModal).not.toContain("announcedResolutions");
   });

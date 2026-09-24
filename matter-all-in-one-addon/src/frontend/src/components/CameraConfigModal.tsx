@@ -471,14 +471,9 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
     if (obs?.resolution?.width && obs?.resolution?.height) {
       resDisplay = `${obs.resolution.width}x${obs.resolution.height}`;
       isProbedVerified = true;
-    } else if (sc.resolution?.width && sc.resolution?.height) {
-      resDisplay = `${sc.resolution.width}x${sc.resolution.height}`;
-      isProbedVerified = true;
     }
     if (obs?.fps) {
       fpsDisplay = `${obs.fps} fps`;
-    } else if (sc.fps) {
-      fpsDisplay = `${sc.fps} fps`;
     }
     if (obs?.hasAudio !== undefined) {
       audioDisplay = obs.hasAudio
@@ -499,20 +494,22 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
     liveViewTelemetry?.active?.[0] || liveViewTelemetry?.recent?.[0];
   const hksvConfiguration = (camera as any)?.hksvConfiguration;
   const sourceProfile = isCameraUi
-    ? (camera as CameraUiCameraItem).videoProfile
+    ? storedProbe?.videoProfile
     : (camera as CameraRecord).capabilities?.observed?.profile;
-  const sourceLevel = isCameraUi
-    ? (camera as CameraUiCameraItem).videoLevel
-    : undefined;
-  const sourceBitrate = isCameraUi
-    ? (camera as CameraUiCameraItem).videoBitrateKbps
-    : undefined;
-  const sourcePixFmt = isCameraUi
-    ? (camera as CameraUiCameraItem).videoPixFmt
-    : undefined;
+  const sourceLevel = isCameraUi ? storedProbe?.videoLevel : undefined;
+  const sourceBitrate = isCameraUi ? storedProbe?.videoBitrateKbps : undefined;
+  const sourcePixFmt = isCameraUi ? storedProbe?.videoPixFmt : undefined;
   const sourceRates = isCameraUi
-    ? `${(camera as CameraUiCameraItem).rFrameRate || "—"} / ${(camera as CameraUiCameraItem).avgFrameRate || "—"}`
+    ? storedProbe
+      ? `${storedProbe.rFrameRate || "No medido"} / ${storedProbe.avgFrameRate || "No medido"}`
+      : "No medido"
     : "No medido";
+  const configuredSource = !isCameraUi
+    ? {
+        resolution: (camera as CameraRecord).resolution,
+        fps: (camera as CameraRecord).fps,
+      }
+    : undefined;
   const processingLabel: Record<string, string> = {
     copy: "Copia directa",
     normalization: "Normalización / downscale",
@@ -2149,6 +2146,18 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                     <div style={{ color: "#94a3b8", marginTop: 6 }}>
                       Evidencia: {probeEvidence}
                     </div>
+                    {configuredSource &&
+                      (configuredSource.resolution || configuredSource.fps) && (
+                        <div style={{ color: "#94a3b8", marginTop: 4 }}>
+                          Configuración declarada, no medida:{" "}
+                          {configuredSource.resolution
+                            ? `${configuredSource.resolution.width}×${configuredSource.resolution.height}`
+                            : "resolución no indicada"}
+                          {configuredSource.fps
+                            ? ` @ ${configuredSource.fps} fps`
+                            : ""}
+                        </div>
+                      )}
                   </div>
 
                   {/* 2. Live View announced capabilities */}
