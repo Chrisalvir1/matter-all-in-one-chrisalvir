@@ -1,14 +1,6 @@
 name: Publish Home Assistant add-on image
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - "matter-all-in-one-addon/**"
-      - ".github/workflows/publish-addon-image.yml"
-  release:
-    types: [created]
   workflow_dispatch:
 
 concurrency:
@@ -22,6 +14,7 @@ permissions:
 jobs:
   build-and-publish:
     name: Build multi-arch image and publish to GHCR
+    if: github.ref == 'refs/heads/feature/camera-telemetry-2k'
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.metadata.outputs.version }}
@@ -33,8 +26,30 @@ jobs:
         id: metadata
         run: |
           version="$(sed -nE 's/^version:[[:space:]]*"?([^"[:space:]]+)"?$/\1/p' matter-all-in-one-addon/config.yaml)"
-          test -n "$version"
+          test "$version" = "1.8.92"
           echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Calculate and validate test image tags
+        id: image-tags
+        run: |
+          version="${{ steps.metadata.outputs.version }}"
+          image="ghcr.io/chrisalvir1/matter-all-in-one-chrisalvir"
+          tags=("${image}:${version}")
+          echo "Tags calculados antes de publicar:"
+          printf '  %s\n' "${tags[@]}"
+          if printf '%s\n' "${tags[@]}" | grep -Eq '(^|:)latest$'; then
+            echo "::error::Se detectó el tag prohibido :latest; se cancela antes del push de la imagen."
+            exit 1
+          fi
+          if [ "${#tags[@]}" -ne 1 ] || [ "${tags[0]}" != "${image}:1.8.92" ]; then
+            echo "::error::La lista de tags no coincide exactamente con ${image}:1.8.92."
+            exit 1
+          fi
+          image_tag="${tags[0]}"
+          test -n "$image_tag"
+          test "$image_tag" != "${image}:latest"
+          test "$image_tag" = "${image}:1.8.92"
+          echo "image_tag=${tags[0]}" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@288220e341e5c445ddb6d73e19a57a9012ceca88
@@ -55,9 +70,7 @@ jobs:
           context: ./matter-all-in-one-addon
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: |
-            ghcr.io/chrisalvir1/matter-all-in-one-chrisalvir:${{ steps.metadata.outputs.version }}
-            ghcr.io/chrisalvir1/matter-all-in-one-chrisalvir:latest
+          tags: ${{ steps.image-tags.outputs.image_tag }}
           labels: |
             io.hass.type=app
             io.hass.name=Matter All-in-One Bridge
