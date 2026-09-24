@@ -74,6 +74,12 @@ import { CameraUiHomeKitBridge } from "./camera/cameraui/cameraui-homekit-bridge
 import type { CameraRealEntity } from "./camera/cameraui/cameraui-types.js";
 import { sanitizeUrlCredentials } from "./camera/homekit/ffmpeg-helper.js";
 import { CameraAiDetector } from "./camera/ai/camera-ai-detector.js";
+import {
+  HapGenericAccessory,
+  type HapAccessoryRecord,
+  type HapProfile,
+  HAP_PROFILE_LABELS,
+} from "./hap/hap-generic-accessory.js";
 
 export interface HomeAssistantPlatformConfig extends PlatformConfig {
   host?: string; // Optional: auto-detected from network/supervisor if not set
@@ -257,6 +263,225 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   }
 
   public cameraAiDetector!: CameraAiDetector;
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // HAP Generic Accessories (non-camera, non-Matter)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Persistent records for HAP generic accessories (humidifiers, TVs, valves,
+   * alarm panels, garage doors, etc.) that are NOT exposed as Matter devices.
+   * Keyed by entityId.  Stored in /data/homekit-accessories.json.
+   *
+   * REGLA: Nunca modificar las entradas de exportedDevices ni matterbridgeDevices
+   * desde este mapa — los dos subsistemas son independientes.
+   */
+  public readonly hapAccessoryRecords = new Map<string, HapAccessoryRecord>();
+
+  /**
+   * Runtime accessories currently published.  Keyed by entityId.
+   * Cleared on startup, repopulated by restoreHapAccessories().
+   */
+  public readonly hapAccessories = new Map<string, HapGenericAccessory>();
+
+  public async saveHapAccessoryRecords(): Promise<void> {
+    try {
+      const list = Array.from(this.hapAccessoryRecords.values());
+      await fs.writeFile(
+        "/data/homekit-accessories.json",
+        JSON.stringify(list, null, 2),
+        "utf8",
+      );
+    } catch (err) {
+      this.log.debug(`Failed to save homekit-accessories.json: ${err}`);
+    }
+  }
+
+  public async loadHapAccessoryRecords(): Promise<void> {
+    try {
+      const raw = await fs.readFile(
+        "/data/homekit-accessories.json",
+        "utf8",
+      );
+      const list = JSON.parse(raw);
+      if (Array.isArray(list)) {
+        for (const rec of list) {
+          if (rec && rec.entityId && rec.hapProfile) {
+            this.hapAccessoryRecords.set(rec.entityId, rec);
+          }
+        }
+      }
+      this.log.info(
+        `Loaded ${this.hapAccessoryRecords.size} HAP generic accessory configurations.`,
+      );
+    } catch {
+      this.log.debug(
+        "No homekit-accessories.json found, starting fresh.",
+      );
+    }
+  }
+
+  /**
+   * Builds (or retrieves) a HapAccessoryRecord for an entity.
+   * If the record already exists it is returned as-is (preserving pairing state).
+   */
+  public getOrCreateHapAccessoryRecord(
+    entityId: string,
+    hapProfile: HapProfile,
+  ): HapAccessoryRecord {
+    let record = this.hapAccessoryRecords.get(entityId);
+    if (!record) {
+      const rawName =
+        this.entities.get(entityId)?.state?.attributes?.friendly_name ||
+        entityId;
+      const info = this.getHaRegistryInfo(entityId);
+
+      // Collect all used ports from both camera records and generic HAP records
+      const usedPorts = new Set<number>([
+        ...Array.from(this.homekitCameraRecords.values()).map((r) => r.port),
+        ...Array.from(this.hapAccessoryRecords.values()).map((r) => r.port),
+      ]);
+
+      const creds = HapGenericAccessory.generateCredentials(
+        entityId,
+        usedPorts,
+        52000,
+      );
+
+      record = {
+        entityId,
+        hapProfile,
+        name: rawName,
+        pincode: creds.pincode,
+        port: creds.port,
+        username: creds.username,
+        setupId: creds.setupId,
+        uuid: creds.uuid,
+        published: false,
+        manufacturer: info.manufacturer || "Home Assistant",
+        model: info.model || HAP_PROFILE_LABELS[hapProfile] || "HAP Device",
+        serialNumber: entityId.replaceAll(".", "_"),
+        lastUpdated: new Date().toISOString(),
+      };
+      this.hapAccessoryRecords.set(entityId, record);
+      void this.saveHapAccessoryRecords();
+    } else if (record.hapProfile !== hapProfile) {
+      // If the user changed the profile, update it but keep credentials intact
+      record.hapProfile = hapProfile;
+      record.lastUpdated = new Date().toISOString();
+      void this.saveHapAccessoryRecords();
+    }
+    return record;
+  }
+
+  /**
+   * Activate and publish a HAP generic accessory.
+   * Safe to call multiple times — if already published it returns immediately.
+   */
+  public async activateHapEntity(
+    entityId: string,
+    hapProfile: HapProfile,
+  ): Promise<void> {
+    if (this.hapAccessories.has(entityId)) return;
+    const record = this.getOrCreateHapAccessoryRecord(entityId, hapProfile);
+    const acc = new HapGenericAccessory(this, entityId, record);
+    await acc.publish();
+    record.published = true;
+    record.lastUpdated = new Date().toISOString();
+    this.hapAccessories.set(entityId, acc);
+    await this.saveHapAccessoryRecords();
+    this.log.notice(
+      `Exported HAP generic accessory for ${idn}${entityId}${rs} as "${HAP_PROFILE_LABELS[hapProfile]}" (port ${record.port}, PIN: ${record.pincode})`,
+    );
+  }
+
+  /**
+   * Restore all previously published HAP generic accessories on startup.
+   * Called from onStart() BEFORE restoreExportedDevices() so HAP port
+   * reservations are known before cameras try to grab ports too.
+   */
+  public async restoreHapAccessories(): Promise<void> {
+    const toRestore = Array.from(this.hapAccessoryRecords.values()).filter(
+      (r) => r.published,
+    );
+    if (toRestore.length === 0) return;
+    this.log.info(
+      `Restoring ${toRestore.length} HAP generic accessor${toRestore.length === 1 ? "y" : "ies"}...`,
+    );
+    for (const record of toRestore) {
+      try {
+        if (this.hapAccessories.has(record.entityId)) continue;
+        const acc = new HapGenericAccessory(this, record.entityId, record);
+        await acc.publish();
+        this.hapAccessories.set(record.entityId, acc);
+        this.log.info(
+          `Restored HAP generic accessory ${record.entityId} (${HAP_PROFILE_LABELS[record.hapProfile]})`,
+        );
+      } catch (err) {
+        this.log.error(
+          `Failed to restore HAP generic accessory ${record.entityId}: ${err}`,
+        );
+      }
+    }
+  }
+
+  /**
+   * Manual register: export an entity as a HAP generic accessory.
+   * Called from the POST /api/custom/register-hap/:entityId route.
+   */
+  public async manualRegisterHap(
+    entityId: string,
+    hapProfile: HapProfile,
+  ): Promise<{ success: boolean; pincode?: string; port?: number; error?: string }> {
+    try {
+      if (!this.entities.has(entityId)) {
+        return { success: false, error: "Device not found in discovery." };
+      }
+      if (this.hapAccessories.has(entityId)) {
+        const rec = this.hapAccessoryRecords.get(entityId)!;
+        return { success: true, pincode: rec.pincode, port: rec.port };
+      }
+      await this.activateHapEntity(entityId, hapProfile);
+      this.exportedDevices.add(entityId);
+      await this.saveExportedDevices();
+      const rec = this.hapAccessoryRecords.get(entityId)!;
+      return { success: true, pincode: rec.pincode, port: rec.port };
+    } catch (err) {
+      this.log.error(`Failed to register HAP entity ${entityId}: ${err}`);
+      return { success: false, error: String(err) };
+    }
+  }
+
+  /**
+   * Manual unregister: unpublish a HAP generic accessory.
+   * Called from the POST /api/custom/unregister-hap/:entityId route.
+   */
+  public async manualUnregisterHap(
+    entityId: string,
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const acc = this.hapAccessories.get(entityId);
+      if (acc) {
+        await acc.unpublish();
+        this.hapAccessories.delete(entityId);
+      }
+      const record = this.hapAccessoryRecords.get(entityId);
+      if (record) {
+        record.published = false;
+        await this.saveHapAccessoryRecords();
+      }
+      this.exportedDevices.delete(entityId);
+      await this.saveExportedDevices();
+      this.log.notice(`Removed HAP generic accessory for ${entityId}`);
+      return { success: true };
+    } catch (err) {
+      this.log.error(
+        `Failed to unregister HAP entity ${entityId}: ${err}`,
+      );
+      return { success: false, error: String(err) };
+    }
+  }
+
 
   private scryptedInitialized = false;
 
@@ -2283,6 +2508,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
     // Load persisted camera configurations BEFORE Scrypted fast boot so existing PINs, MACs, and ports are preserved
     await this.loadHomeKitCameraRecords();
+    // Load persisted HAP generic accessory configurations (humidifiers, TVs, alarms, etc.)
+    await this.loadHapAccessoryRecords();
     void this.initScrypted();
     void this.initCameraUi();
     this.cameraAiDetector = CameraAiDetector.getInstance(
@@ -2869,6 +3096,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           this.entities.delete(entityId);
         }
       }
+      await this.restoreHapAccessories();
       await this.restoreExportedDevices();
       // Ensure all exported Matter serverNodes are running and online
       for (const [key, dev] of this.matterbridgeDevices.entries()) {
@@ -5215,6 +5443,26 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                       };
                     })()
                   : null,
+              hapAccessory: (() => {
+                const hapRec = this.hapAccessoryRecords.get(e.entityId);
+                if (!hapRec) return null;
+                const hapAcc = this.hapAccessories.get(e.entityId);
+                return {
+                  published: hapRec.published ?? false,
+                  isPaired: hapAcc?.isPaired() ?? hapRec.isPaired ?? false,
+                  hapProfile: hapRec.hapProfile,
+                  profileLabel:
+                    HAP_PROFILE_LABELS[hapRec.hapProfile] || hapRec.hapProfile,
+                  pincode: hapRec.pincode,
+                  port: hapRec.port,
+                  username: hapRec.username,
+                  setupUri: hapAcc?.setupUri || "",
+                  pairingState:
+                    hapAcc?.isPaired() || hapRec.isPaired
+                      ? "✅ Vinculado a Apple Home (Activo)"
+                      : "⏳ Listo para vincular (Escanea el código QR en Apple Home)",
+                };
+              })(),
             };
           });
           const mqttResults = Array.from(this.mqttEntities.values()).map(
@@ -5311,6 +5559,56 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             "Content-Type": "application/json; charset=utf-8",
           });
           res.end(JSON.stringify(result));
+          return;
+        }
+
+        // POST /api/custom/register-hap/:entityId  — Export as HAP generic accessory
+        if (
+          req.method === "POST" &&
+          pathname.startsWith("/api/custom/register-hap/")
+        ) {
+          const entityId = decodeURIComponent(
+            pathname.substring("/api/custom/register-hap/".length),
+          );
+          let hapProfile: HapProfile = "humidifier";
+          try {
+            const body = await this.readRequestBody(req);
+            const data = JSON.parse(body);
+            if (data.hapProfile) hapProfile = data.hapProfile as HapProfile;
+          } catch {}
+          const result = await this.manualRegisterHap(entityId, hapProfile);
+          res.writeHead(result.success ? 200 : 400, {
+            "Content-Type": "application/json; charset=utf-8",
+          });
+          res.end(JSON.stringify(result));
+          return;
+        }
+
+        // POST /api/custom/unregister-hap/:entityId — Remove HAP generic accessory
+        if (
+          req.method === "POST" &&
+          pathname.startsWith("/api/custom/unregister-hap/")
+        ) {
+          const entityId = decodeURIComponent(
+            pathname.substring("/api/custom/unregister-hap/".length),
+          );
+          const result = await this.manualUnregisterHap(entityId);
+          res.writeHead(result.success ? 200 : 400, {
+            "Content-Type": "application/json; charset=utf-8",
+          });
+          res.end(JSON.stringify(result));
+          return;
+        }
+
+        // GET /api/custom/hap-profiles — Returns available HAP profiles with labels
+        if (req.method === "GET" && pathname === "/api/custom/hap-profiles") {
+          const profiles = Object.entries(HAP_PROFILE_LABELS).map(
+            ([id, label]) => ({ id, label }),
+          );
+          res.writeHead(200, {
+            "Content-Type": "application/json; charset=utf-8",
+          });
+          res.end(JSON.stringify(profiles));
           return;
         }
 

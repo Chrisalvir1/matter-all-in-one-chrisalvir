@@ -48,6 +48,9 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({ device, searchQuery, onC
   const commissioned = device.entities.filter((e) => e.exported && e.commissioned).length;
   const isDeviceCommissioned = commissioned > 0;
   const isMqtt = device.entities.some((e) => e.origin === "mqtt" || e.entityId.startsWith("mqtt."));
+  const hapEntity = device.entities.find((e) => e.hapAccessory?.published);
+  const isHapExported = Boolean(hapEntity);
+  const isHapPaired = Boolean(hapEntity?.hapAccessory?.isPaired);
   const isDeviceActive = exported > 0 || isDeviceCommissioned;
   const problematicEntities = device.entities.filter(
     (e) =>
@@ -157,6 +160,21 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({ device, searchQuery, onC
           </span>
         )}
         {isMqtt && <span className="tag tag-mqtt">📡 MQTT</span>}
+        {isHapExported && (
+          <span
+            className="tag"
+            style={{
+              background: isHapPaired
+                ? "rgba(16,185,129,0.15)"
+                : "rgba(245,158,11,0.15)",
+              color: isHapPaired ? "#6ee7b7" : "#fcd34d",
+              border: `1px solid ${isHapPaired ? "rgba(52,211,153,0.3)" : "rgba(245,158,11,0.35)"}`,
+              fontWeight: 600,
+            }}
+          >
+            {isHapPaired ? "🍏 Enlazada a Casa" : "🏠 HomeKit HAP"}
+          </span>
+        )}
         {device.manufacturer && <span className="tag tag-brand">{device.manufacturer}</span>}
         {hasUnavailable ? (
           <span

@@ -179,4 +179,23 @@ export const api = {
   getLogs: () => request<{ logs: string[] }>("/logs"),
 
   clearLogs: () => request<{ success: boolean }>("/logs/clear", { method: "POST" }),
+
+  // ── HAP Generic Accessory endpoints ──────────────────────────────────────
+  getHapProfiles: () =>
+    request<Array<{ id: string; label: string }>>("/hap-profiles"),
+
+  registerHap: (entityId: string, hapProfile: string) =>
+    request<{ success: boolean; pincode?: string; port?: number; error?: string }>(
+      `/register-hap/${encodeURIComponent(entityId)}`,
+      {
+        method: "POST",
+        body: JSON.stringify({ hapProfile }),
+      }
+    ),
+
+  unregisterHap: (entityId: string) =>
+    request<{ success: boolean; error?: string }>(
+      `/unregister-hap/${encodeURIComponent(entityId)}`,
+      { method: "POST" }
+    ),
 };

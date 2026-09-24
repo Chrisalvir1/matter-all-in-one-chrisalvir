@@ -3,6 +3,7 @@ import { DeviceRecord, EntityRecord } from "../types";
 import { api } from "../api/client";
 import { QRCodeDisplay, AppleHomeModernIcon } from "./QRCodeDisplay";
 import { copyToClipboard } from "../utils/clipboard";
+import { HapExportModal, isHapEligible, isMatterOnlyDomain } from "./HapExportModal";
 
 interface DeviceModalProps {
   device: DeviceRecord | null;
@@ -78,6 +79,10 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
   const [freshPairingCode, setFreshPairingCode] = useState<string | null>(null);
   const [freshManualCode, setFreshManualCode] = useState<string | null>(null);
   const [resetFabrics, setResetFabrics] = useState<boolean>(false);
+  /** Entidad seleccionada para exportar como HAP — abre el modal HAP */
+  const [hapExportTarget, setHapExportTarget] = useState<EntityRecord | null>(null);
+  /** Resultado de un export HAP reciente para mostrar QR/PIN */
+  const [hapFreshPin, setHapFreshPin] = useState<{ pincode: string; port: number } | null>(null);
   // localCompositeExported tracks the toggle state as proper React state so that
   // flipping the master switch immediately re-renders the QR panel without waiting
   // for onRefresh() to complete (mutating device.entities props directly is invisible to React).
@@ -824,6 +829,151 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
               </div>
             </dl>
 
+            {/* ── HAP Generic Export Panel ────────────────────────────────────── */}
+            {activeEntity && isHapEligible(activeEntity.domain) && !isComposite && (
+              <div
+                style={{
+                  marginTop: 14,
+                  padding: "14px 16px",
+                  background: activeEntity.hapAccessory?.published
+                    ? "rgba(245,158,11,0.08)"
+                    : "rgba(255,255,255,0.03)",
+                  border: `1px solid ${
+                    activeEntity.hapAccessory?.published
+                      ? "rgba(245,158,11,0.35)"
+                      : "rgba(255,255,255,0.1)"
+                  }`,
+                  borderRadius: 10,
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 10,
+                    marginBottom: activeEntity.hapAccessory?.published ? 12 : 0,
+                  }}
+                >
+                  <div>
+                    <span style={{ fontWeight: 700, fontSize: 13, color: "#fcd34d" }}>
+                      🏠 HomeKit HAP
+                    </span>
+                    {activeEntity.hapAccessory?.published && (
+                      <span
+                        style={{
+                          marginLeft: 8,
+                          fontSize: 11,
+                          color: activeEntity.hapAccessory.isPaired ? "#34d399" : "#fbbf24",
+                          background: activeEntity.hapAccessory.isPaired
+                            ? "rgba(16,185,129,0.12)"
+                            : "rgba(245,158,11,0.12)",
+                          border: `1px solid ${
+                            activeEntity.hapAccessory.isPaired
+                              ? "rgba(16,185,129,0.3)"
+                              : "rgba(245,158,11,0.3)"
+                          }`,
+                          borderRadius: 6,
+                          padding: "2px 7px",
+                        }}
+                      >
+                        {activeEntity.hapAccessory.isPaired ? "✓ Vinculado" : "Listo para vincular"}
+                      </span>
+                    )}
+                  </div>
+                  {activeEntity.hapAccessory?.published ? (
+                    <button
+                      className="button button-secondary"
+                      style={{ fontSize: 12, padding: "6px 14px", color: "#f87171" }}
+                      onClick={async () => {
+                        if (!confirm("¿Retirar este accesorio de HomeKit HAP?")) return;
+                        try {
+                          await api.unregisterHap(activeEntity.entityId);
+                          activeEntity.hapAccessory = null;
+                          showToast(`${activeEntity.name || activeEntity.entityId} retirado de HomeKit HAP`);
+                          onRefresh();
+                        } catch (err: any) {
+                          showToast(err.message || "Error al retirar accesorio HAP", true);
+                        }
+                      }}
+                    >
+                      Retirar HAP
+                    </button>
+                  ) : (
+                    <button
+                      className="button"
+                      style={{
+                        fontSize: 12,
+                        padding: "6px 14px",
+                        background: "rgba(245,158,11,0.15)",
+                        border: "1px solid rgba(245,158,11,0.4)",
+                        color: "#fcd34d",
+                        fontWeight: 700,
+                        borderRadius: 8,
+                        cursor: "pointer",
+                      }}
+                      onClick={() => setHapExportTarget(activeEntity)}
+                    >
+                      🏠 Exportar como HAP
+                    </button>
+                  )}
+                </div>
+
+                {/* HAP published info */}
+                {activeEntity.hapAccessory?.published && (
+                  <div style={{ fontSize: 12, color: "#9ca3af" }}>
+                    <div style={{ marginBottom: 6 }}>
+                      <span style={{ color: "#d1d5db" }}>Perfil:</span>{" "}
+                      <strong style={{ color: "#fcd34d" }}>
+                        {activeEntity.hapAccessory.profileLabel}
+                      </strong>
+                    </div>
+                    <div style={{ marginBottom: 6 }}>
+                      <span style={{ color: "#d1d5db" }}>PIN:</span>{" "}
+                      <code
+                        style={{
+                          background: "rgba(255,255,255,0.08)",
+                          borderRadius: 4,
+                          padding: "2px 7px",
+                          fontSize: 13,
+                          color: "#fcd34d",
+                          fontWeight: 700,
+                          letterSpacing: 2,
+                          cursor: "pointer",
+                        }}
+                        title="Clic para copiar"
+                        onClick={() => {
+                          void navigator.clipboard?.writeText(activeEntity.hapAccessory!.pincode);
+                          showToast("✓ PIN copiado");
+                        }}
+                      >
+                        {activeEntity.hapAccessory.pincode}
+                      </code>
+                    </div>
+                    <div>
+                      <span style={{ color: "#d1d5db" }}>Puerto:</span>{" "}
+                      {activeEntity.hapAccessory.port}
+                    </div>
+                    {!activeEntity.hapAccessory.isPaired && (
+                      <div
+                        style={{
+                          marginTop: 10,
+                          padding: "8px 12px",
+                          background: "rgba(245,158,11,0.06)",
+                          border: "1px solid rgba(245,158,11,0.2)",
+                          borderRadius: 8,
+                          fontSize: 11,
+                          color: "#fbbf24",
+                        }}
+                      >
+                        ⏳ Abre <strong>Apple Home</strong> → Añadir accesorio → Más opciones y escanea o introduce el PIN <strong>{activeEntity.hapAccessory.pincode}</strong>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Fabrics section */}
             <section className="fabrics-section" id="fabrics-section">
               <div className="fabrics-heading">
@@ -1101,6 +1251,31 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
           </div>
         </div>
       </section>
+
+      {/* HAP Export Modal — rendered outside the scroll container */}
+      {hapExportTarget && (
+        <HapExportModal
+          entity={hapExportTarget}
+          onClose={() => setHapExportTarget(null)}
+          onSuccess={(pincode, port) => {
+            // Update entity's hapAccessory inline so the panel refreshes immediately
+            if (hapExportTarget) {
+              hapExportTarget.hapAccessory = {
+                published: true,
+                isPaired: false,
+                hapProfile: "humidifier" as any,
+                profileLabel: "",
+                pincode,
+                port,
+              };
+            }
+            setHapExportTarget(null);
+            setHapFreshPin({ pincode, port });
+            onRefresh();
+          }}
+          showToast={showToast}
+        />
+      )}
     </div>
   );
 };

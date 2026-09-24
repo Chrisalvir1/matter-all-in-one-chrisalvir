@@ -1,3 +1,40 @@
+## [1.8.98] - 2026-09-24
+
+### Sistema HAP Híbrido — Exportar cualquier entidad como accesorio HomeKit HAP nativo
+
+- **Nuevo módulo `src/hap/hap-generic-accessory.ts`:**
+  - Clase `HapGenericAccessory` que publica cualquier entidad de Home Assistant como accesorio HAP nativo de hap-nodejs 2.2.3.
+  - Catálogo completo de 35 perfiles: humidificador, deshumidificador, purificador de aire, televisor, altavoz TV, válvulas (irrigación / grifo / ducha), panel de alarma, puerta de garaje, timbre, ventilador HAP, calefactor, termostato HAP, enchufe, interruptor, bombilla, cerradura, persianas, puerta, ventana, sensor de movimiento, contacto, humo, CO, CO₂, fuga, ocupación, temperatura, humedad, luz, calidad de aire, batería, altavoz, sistema de irrigación.
+  - Credenciales HAP deterministas por entityId (PIN, MAC/username, setupId, puerto).  Mismo patrón que cámaras.
+  - `publish()` / `unpublish()` / `isPaired()` / `setupUri` compatibles con el sistema de cámaras.
+
+- **`platform.ts` — Infraestructura HAP genérica:**
+  - `hapAccessoryRecords: Map<string, HapAccessoryRecord>` — registros persistentes en `/data/homekit-accessories.json`.
+  - `hapAccessories: Map<string, HapGenericAccessory>` — instancias en ejecución.
+  - `loadHapAccessoryRecords()` / `saveHapAccessoryRecords()` — persistencia análoga a cámaras.
+  - `getOrCreateHapAccessoryRecord(entityId, hapProfile)` — crea/recupera registro sin sobrescribir credenciales ni estado de pairing.
+  - `activateHapEntity(entityId, hapProfile)` — publica el accesorio; idempotente.
+  - `restoreHapAccessories()` — restaura en arranque todos los accesorios publicados; llamado ANTES de `restoreExportedDevices()`.
+  - `manualRegisterHap(entityId, hapProfile)` / `manualUnregisterHap(entityId)` — API pública para el sistema de rutas.
+  - **Garantía absoluta: NO modifica `exportedDevices`, `matterbridgeDevices`, `matterstorage` ni `hap-persist` de dispositivos ya emparejados.**
+
+- **Nuevas rutas API HTTP:**
+  - `POST /api/custom/register-hap/:entityId` — Exporta entidad como HAP genérico. Body JSON: `{ hapProfile: "humidifier" }`.
+  - `POST /api/custom/unregister-hap/:entityId` — Retira accesorio HAP genérico.
+  - `GET /api/custom/hap-profiles` — Devuelve lista de perfiles disponibles con etiquetas en español.
+  - `/api/custom/devices` — Ahora incluye campo `hapAccessory` por entidad con estado de publicación, isPaired, perfil, PIN y puerto.
+
+- **Frontend — UI Híbrida:**
+  - `HapExportModal.tsx`: Modal completo con dropdown de perfiles HAP, pre-selección por dominio, y confirmación. Carga perfiles desde la API.
+  - `DeviceModal.tsx`: Panel "🏠 HomeKit HAP" en la columna de selección; botón "Exportar como HAP" / "Retirar HAP"; muestra PIN, puerto y estado de vinculación inline.
+  - `DeviceCard.tsx`: Badge ámbar `🏠 HomeKit HAP` (sin vincular) o verde `🍏 Enlazada a Casa` (vinculado) — idéntico al sistema de cámaras.
+  - `types.ts`: Nuevos tipos `HapProfile`, `HapAccessoryInfo`, `HapProfileOption`.
+  - `client.ts`: Nuevos métodos `api.getHapProfiles()`, `api.registerHap()`, `api.unregisterHap()`.
+
+- **Regla de protocolo aplicada:**
+  - Dominios Matter-nativos (`light`, `switch`, `fan`, `lock`, `sensor`, `binary_sensor`, `vacuum`, `climate`) NO se ofrecen como HAP — sólo Matter.
+  - Dominios HAP-exclusivos y genéricos (humidifier, media_player, valve, alarm_control_panel, cover-garage, input_boolean, remote, water_heater, etc.) pueden elegir entre Matter (si aplica) y HAP.
+
 ## [1.8.97] - 2026-09-24
 
 ### Restauración completa de accesorios emparejados Matter IoT y eliminación de colisión de esquema
