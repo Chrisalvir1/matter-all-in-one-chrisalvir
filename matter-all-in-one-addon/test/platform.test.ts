@@ -12,6 +12,7 @@ import "./mocks/matterbridge.mock.js";
 import "./mocks/ha-api.mock.js";
 import { HomeAssistantPlatform } from "../src/platform.js";
 import { mockMatterbridge, mockLog } from "./mocks/matterbridge.mock.js";
+import { CameraUiStorage } from "../src/camera/cameraui/cameraui-storage.js";
 
 /** True when the OS allows binding a TCP server on loopback (false in sandboxed runners). */
 let networkAvailable = false;
@@ -28,6 +29,14 @@ describe("HomeAssistantPlatform", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // Platform tests exercise HA/Matter registration. Do not let the host's
+    // persisted Camera.UI cameras publish HAP listeners during those tests.
+    // This is test isolation only; production storage and HAP behavior remain
+    // untouched.
+    vi.spyOn(CameraUiStorage, "load").mockResolvedValue({
+      config: { ...CameraUiStorage.getDefaultStore().config, enabled: false },
+      cameras: [],
+    });
     platform = new HomeAssistantPlatform(
       mockMatterbridge as any,
       mockLog as any,
@@ -699,12 +708,15 @@ describe("HomeAssistantPlatform", () => {
       device_id: "device-ventilador-sala-tuya",
       platform: "tuya",
     });
-    platform.ha.hassEntities.set("switch.sala_tv_ventilador_de_sala_main_fan_beep", {
-      id: "entity-switch-sala-beep",
-      entity_id: "switch.sala_tv_ventilador_de_sala_main_fan_beep",
-      device_id: "device-ventilador-sala-tuya",
-      platform: "tuya",
-    });
+    platform.ha.hassEntities.set(
+      "switch.sala_tv_ventilador_de_sala_main_fan_beep",
+      {
+        id: "entity-switch-sala-beep",
+        entity_id: "switch.sala_tv_ventilador_de_sala_main_fan_beep",
+        device_id: "device-ventilador-sala-tuya",
+        platform: "tuya",
+      },
+    );
 
     await (platform as any).registerHAEntity({
       entity_id: "fan.ventilador_de_sala_main_fan",
@@ -737,17 +749,23 @@ describe("HomeAssistantPlatform", () => {
     });
 
     // 1. isMultiSwitchDevice should return FALSE for fan with integrated light
-    expect(platform.isMultiSwitchDevice("device-ventilador-sala-tuya")).toBe(false);
+    expect(platform.isMultiSwitchDevice("device-ventilador-sala-tuya")).toBe(
+      false,
+    );
 
     // 2. getCompositeCandidate should produce a composite candidate with fan + light, excluding auxiliary switches
-    const candidate = (platform as any).getCompositeCandidate("fan.ventilador_de_sala_main_fan");
+    const candidate = (platform as any).getCompositeCandidate(
+      "fan.ventilador_de_sala_main_fan",
+    );
     expect(candidate).toBeDefined();
     expect(candidate.deviceId).toBe("device-ventilador-sala-tuya");
     // Should contain fan and light, but NOT the beep switch
     const memberIds = candidate.members.map((m: any) => m.entityId);
     expect(memberIds).toContain("fan.ventilador_de_sala_main_fan");
     expect(memberIds).toContain("light.ventilador_de_sala_light");
-    expect(memberIds).not.toContain("switch.sala_tv_ventilador_de_sala_main_fan_beep");
+    expect(memberIds).not.toContain(
+      "switch.sala_tv_ventilador_de_sala_main_fan_beep",
+    );
     // Primary entity (Endpoint 1) should be the fan
     expect(memberIds[0]).toBe("fan.ventilador_de_sala_main_fan");
     expect(memberIds[1]).toBe("light.ventilador_de_sala_light");
@@ -913,7 +931,10 @@ describe("HomeAssistantPlatform", () => {
           },
         },
       };
-      (platform as any).matterbridgeDevices.set("fan.test_fan", regeneratedEndpoint);
+      (platform as any).matterbridgeDevices.set(
+        "fan.test_fan",
+        regeneratedEndpoint,
+      );
     });
 
     const res = await fetch(
@@ -930,4 +951,3 @@ describe("HomeAssistantPlatform", () => {
     expect(closeFn).toHaveBeenCalled();
   });
 });
-
