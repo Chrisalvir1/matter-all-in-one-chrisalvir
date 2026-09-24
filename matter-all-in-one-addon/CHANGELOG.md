@@ -3710,3 +3710,10 @@ All notable changes to this project will be documented in this file.
 - La Tapo C120 deja de anunciar 30 fps fijos para su vídeo 2K en passthrough. El RTSP actual entrega 15 fps; Apple Home recibe ese valor real en lugar de negociar cuadros que FFmpeg no puede generar con `-c:v copy`.
 - Al iniciar, el add-on intenta medir el RTSP de la C120. Si la fuente no informa el FPS, conserva el valor seguro de 2560×1440 a 15 fps.
 - No se modificaron las rutas ni las capacidades de las demás cámaras.
+## [1.8.90] - 2026-09-23
+
+### Tapo C120: reparación de vídeo congelado y artefactos verdes en Apple Home
+
+- El RTSP de la C120 entrega H.264 High nivel 5.0, mientras HAP negocia nivel 4.0. Copiar el bitstream incompatible provocaba la imagen congelada con líneas verdes aunque el audio siguiera activo.
+- Sólo el Live View de la C120 ahora se normaliza a H.264 High nivel 4.0, 1080p a 15 fps, con cuadros clave regulares y timestamps estables. La fuente RTSP 2K, HKSV, audio y detección permanecen intactos.
+- Se restaura el margen de análisis necesario para recibir un cuadro clave 2K completo antes de iniciar el decodificador de Apple Home.

@@ -491,6 +491,14 @@ export class HomeKitCameraAccessory {
       Math.min(this.capabilities.maxFps || 30, 60),
     );
 
+    // HAP only defines H.264 levels up to 4.0. The C120 source is 2K High
+    // level 5.0, which cannot be sent as a valid HAP RTP stream. Its Live
+    // View is normalized to 1080p/15 by the streaming delegate; advertise
+    // exactly that mode while keeping the 2K source for recording.
+    if (this.isTapoC120()) {
+      return [[1920, 1080, Math.min(sourceFps, 15)]];
+    }
+
     const ladder: [number, number, number][] = [
       [width, height, sourceFps],
       [2560, 1440, Math.min(sourceFps, 30)],
@@ -523,6 +531,18 @@ export class HomeKitCameraAccessory {
       .filter(Boolean)
       .join(" ");
     return /(?:\bc402\b|tapo[-_ ]?c402)/i.test(identity);
+  }
+
+  private isTapoC120(): boolean {
+    const identity = [
+      this.record.name,
+      this.record.model,
+      this.entityId,
+      this.streamSource.url,
+    ]
+      .filter(Boolean)
+      .join(" ");
+    return /(?:\bc120\b|tapo[-_ ]?c120)/i.test(identity);
   }
 
   public findLinkedEntities(): {

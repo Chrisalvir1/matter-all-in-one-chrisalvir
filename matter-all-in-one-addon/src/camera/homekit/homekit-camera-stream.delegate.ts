@@ -745,7 +745,9 @@ export class HomeKitCameraStreamingDelegate
         } else {
           settle(new Error("FFmpeg exited during HAP startup"));
         }
-      }, isTapoC402 || isTapoC120 ? 80 : 600);
+      // C120 now normalizes its H.264 stream for HAP and needs time for the
+      // first encoded keyframe before HomeKit accepts the RTP session.
+      }, isTapoC402 ? 80 : isTapoC120 ? 1200 : 600);
       process.once("error", (error) => {
         clearTimeout(guard);
         settle(error);
@@ -897,12 +899,13 @@ export class HomeKitCameraStreamingDelegate
         "tcp",
         "-timeout",
         "10000000",
-        // Probesize: C402 needs 2MB for its long GOP analysis; C120 needs 512KB for 2K SPS/PPS;
+        // C402 needs 2MB for its long GOP analysis. C120 needs enough data to
+        // receive a complete 2K keyframe before the H.264 decoder starts.
         // everything else (Wyze, EZVIZ) uses the minimal 64KB for fast startup.
         "-probesize",
-        isTapoC402 ? "2097152" : isTapoC120 ? "131072" : "65536",
+        isTapoC402 ? "2097152" : isTapoC120 ? "524288" : "65536",
         "-analyzeduration",
-        isTapoC402 ? "3000000" : isTapoC120 ? "200000" : "100000",
+        isTapoC402 ? "3000000" : isTapoC120 ? "1000000" : "100000",
       );
       if (isTapoC402) {
         args.push(
@@ -914,13 +917,14 @@ export class HomeKitCameraStreamingDelegate
           "0",
         );
       } else if (isTapoC120) {
-        // C120 ultra-low latency: nobuffer and flush_packets prevent demuxer queue buildup.
-        // low_delay flag ensures zero-delay packet forwarding for instant, fluid 2K live view.
+        // Do not drop C120 packets before decoding. This source is 2K H.264
+        // High level 5.0; stripping its initial frame data caused the green
+        // slices and permanently frozen frame seen by Apple Home.
         args.push(
           "-fflags",
-          "+nobuffer+flush_packets+genpts+discardcorrupt",
+          "+genpts+igndts+discardcorrupt",
           "-flags",
-          "low_delay",
+          "0",
         );
       } else {
         args.push(
@@ -932,7 +936,7 @@ export class HomeKitCameraStreamingDelegate
       }
       args.push(
         "-thread_queue_size",
-        "512",
+        isTapoC120 ? "1024" : "512",
         "-i",
         sourceUrl,
       );
@@ -1010,8 +1014,14 @@ export class HomeKitCameraStreamingDelegate
     // receives packets it did not negotiate, ending in "No Response".  HEVC
     // remains native up to this output boundary, then is converted solely for
     // the HAP session (and never changes the Camera.UI source).
+    // The C120's physical RTSP source is H.264 High level 5.0, while HAP is
+    // negotiated at level 4.0. Copying that bitstream makes iOS decode a few
+    // slices, then freeze with green corruption. Normalize this one camera at
+    // the HAP boundary; its source, HKSV and motion pipeline are unchanged.
+    const needsC120VideoNormalization = isTapoC120;
     const canPassthrough =
       !forceTranscode &&
+      !needsC120VideoNormalization &&
       !isHaProxyStream &&
       codec === "h264" &&
       (this.capabilities.strategy === "passthrough_h264" ||
@@ -1051,6 +1061,70 @@ export class HomeKitCameraStreamingDelegate
         videoUrl,
       ];
       args.push(...videoPassArgs);
+    } else if (needsC120VideoNormalization) {
+      // HAP supports H.264 only through level 4.0, whose maximum frame size
+      // is 1920x1080. Clamp a cached 2K request as well, so an existing Home
+      // pairing recovers before it receives the refreshed capabilities.
+      const targetWidth = Math.min(
+        1920,
+        Math.max(2, Math.floor((video.width || 1920) / 2) * 2),
+      );
+      const targetHeight = Math.min(
+        1080,
+        Math.max(2, Math.floor((video.height || 1080) / 2) * 2),
+      );
+      const keyframeInterval = Math.max(15, fps * 2);
+      this.platform?.log?.notice?.(
+        `[Stream][${this.entityId}] Normalizando C120 H.264 High L5.0 a HAP High L4.0 ${targetWidth}x${targetHeight}@${fps}`,
+      );
+      args.push(
+        "-map",
+        "0:v:0",
+        "-an",
+        "-vf",
+        `scale=${targetWidth}:${targetHeight}:flags=fast_bilinear`,
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-tune",
+        "zerolatency",
+        "-profile:v",
+        "high",
+        "-level:v",
+        "4.0",
+        "-pix_fmt",
+        "yuv420p",
+        "-r",
+        String(fps),
+        "-g",
+        String(keyframeInterval),
+        "-keyint_min",
+        String(fps),
+        "-sc_threshold",
+        "0",
+        "-b:v",
+        "4500k",
+        "-maxrate",
+        "5000k",
+        "-bufsize",
+        "5000k",
+        "-f",
+        "rtp",
+        "-fflags",
+        "+nobuffer+flush_packets",
+        "-max_delay",
+        "0",
+        "-payload_type",
+        String(video.pt || 99),
+        "-ssrc",
+        String(session.videoSsrc),
+        "-srtp_out_suite",
+        suiteName(session.videoCryptoSuite),
+        "-srtp_out_params",
+        session.videoKeySalt.toString("base64"),
+        videoUrl,
+      );
     } else {
       this.platform?.log?.error?.(
         `[Stream][${this.entityId}] Error: Cámara no entrega H.264 nativo (${this.capabilities.videoCodec || "desconocido"}). Transcodificación con libx264 prohibida en modo passthrough.`,
