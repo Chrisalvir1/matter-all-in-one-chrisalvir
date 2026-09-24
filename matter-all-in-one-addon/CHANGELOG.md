@@ -1,3 +1,19 @@
+## [1.8.95] - 2026-09-24
+
+### Corrección integral del conteo y persistencia de accesorios vinculados (Matter y HomeKit HAP)
+
+- **Corrección del cálculo de accesorios emparejados en el Centro de Control:**
+  - Se corrigió el subtexto del Centro de Control (`ControlCenter.tsx`) para contabilizar todas las fuentes HAP vinculadas (Camera.UI, Home Assistant HAP y Scrypted), evitando que se mostrara erróneamente `0 HAP`.
+  - Se corrigió el cálculo de `pairedTotal` en `useAddonState.ts` integrando `haCamsPaired` y `camerauiPaired` junto a `pairedNodes` y `scryptedPaired`.
+  - Se corrigieron los filtros de estado (`paired`, `unpaired`, `unactivated`, `issues`) en `App.tsx` para evaluar adecuadamente el estado de enlace HomeKit (`homekitCamera.isPaired` y `published`) en cámaras de Home Assistant.
+- **Resiliencia de comisionado Matter en `platform.ts`:**
+  - `getMatterConnectionInfo` ahora verifica el estado de ciclo de vida del nodo Matter (`nodeLifecycle.isCommissioned` y `commissioning.commissioned || nodeState.operationalCredentials?.commissionedFabrics`) además de las telas activas.
+  - Previene que reinicios temporales o latencias en la carga de credenciales operacionales marquen accesorios comisionados válidos como no emparejados.
+  - Incorpora fallback con inyección de tejido sintético para accesorios Matter confirmados como comisionados.
+- **Mejoras visuales y de estado en tarjetas de cámaras:**
+  - Distintivos claros para cámaras Home Assistant: `🍏 Enlazada a Casa` para accesorios vinculados por HomeKit HAP y `🍏 Matter Vinculado` para accesorios comisionados por Matter.
+  - Botón de enlace QR disponible para cámaras publicadas pendientes de emparejamiento.
+
 ## [1.8.94] - 2026-09-24
 
 ### Auto-Descubrimiento MQTT completo, normalización de abreviaturas y exportación fluida a Matter

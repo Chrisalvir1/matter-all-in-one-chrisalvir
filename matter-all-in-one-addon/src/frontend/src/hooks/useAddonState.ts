@@ -226,28 +226,47 @@ export function useAddonState() {
     const totalCameras = scryptedTotal + haCamsTotal + camerauiTotal;
     const iotDevices = allDevices.filter((d) => !haCameraIds.has(d.id)).length;
 
-    // Paired total includes all active paired accessories (Matter nodes + Scrypted HAP/Matter cameras + Camera.UI HAP)
+    // Paired total includes all active paired accessories (Matter nodes + Scrypted HAP/Matter cameras + Camera.UI HAP + HA cameras)
     const scryptedPaired = cameras.filter(
       (c) => c.identity?.homeKitPairingState === "paired" || c.bindingState?.matterCommissioned === true
     ).length;
     const haCamsPaired = realHaCameraDevices.filter((d) =>
-      d.entities.some((e) => e.exported && e.commissioned)
+      d.entities.some((e) => e.homekitCamera?.isPaired || (e.exported && e.commissioned))
     ).length;
     const camerauiPaired = cameraUiCameras.filter((c) => c.isPaired).length;
-    const pairedTotal = pairedNodes + scryptedPaired + camerauiPaired;
+    const totalHapPaired = scryptedPaired + haCamsPaired + camerauiPaired;
+    const pairedTotal = pairedNodes + totalHapPaired;
 
     // Unpaired total represents accessories actively exported for Matter/HomeKit but waiting to be commissioned
+    const haCamsPending = realHaCameraDevices.filter((d) =>
+      d.entities.some(
+        (e) =>
+          (e.exported || e.homekitCamera?.published) &&
+          !e.homekitCamera?.isPaired &&
+          !e.commissioned
+      )
+    ).length;
     const scryptedPending = cameras.filter(
       (c) =>
         Boolean(c.identity?.matterPairingCode) &&
         !(c.identity?.homeKitPairingState === "paired" || c.bindingState?.matterCommissioned === true)
     ).length;
     const camerauiPending = cameraUiCameras.filter((c) => c.homeKitEnabled && !c.isPaired).length;
-    const unpairedTotal = pendingNodes + scryptedPending + camerauiPending;
+    const unpairedTotal = pendingNodes + scryptedPending + camerauiPending + haCamsPending;
 
     // Unactivated devices: discovered devices and cameras that are neither exported nor commissioned
-    const unactivatedDevices = allDevices.filter(
-      (d) => !d.entities.some((e) => e.exported || e.commissioned)
+    const unactivatedIotDevices = allDevices.filter(
+      (d) => !haCameraIds.has(d.id) && !d.entities.some((e) => e.exported || e.commissioned)
+    ).length;
+    const unactivatedHaCameras = realHaCameraDevices.filter(
+      (d) =>
+        !d.entities.some(
+          (e) =>
+            e.exported ||
+            e.commissioned ||
+            e.homekitCamera?.isPaired ||
+            e.homekitCamera?.published
+        )
     ).length;
     const unactivatedScrypted = cameras.filter(
       (c) =>
@@ -255,7 +274,8 @@ export function useAddonState() {
         !Boolean(c.identity?.matterPairingCode)
     ).length;
     const unactivatedCameraUi = cameraUiCameras.filter((c) => !c.homeKitEnabled).length;
-    const unactivatedTotal = unactivatedDevices + unactivatedScrypted + unactivatedCameraUi;
+    const unactivatedTotal =
+      unactivatedIotDevices + unactivatedHaCameras + unactivatedScrypted + unactivatedCameraUi;
 
     // Issues detection across all ACTIVE (exported) HA, MQTT devices and Cameras
     const issuesDevices = allDevices.filter((d) => {
@@ -308,6 +328,7 @@ export function useAddonState() {
       scryptedPaired,
       camerauiTotal,
       camerauiPaired,
+      totalHapPaired,
       haCamsTotal,
       haCamsPaired,
       totalCameras,

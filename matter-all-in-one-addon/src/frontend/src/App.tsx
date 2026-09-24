@@ -219,14 +219,38 @@ export const App: React.FC = () => {
     }
 
     if (activeFilter === "paired") {
-      haList = haList.filter((d) => d.entities.some((e) => e.exported && e.commissioned));
+      haList = haList.filter((d) =>
+        d.entities.some((e) => e.homekitCamera?.isPaired || (e.exported && e.commissioned))
+      );
     } else if (activeFilter === "unpaired") {
-      haList = haList.filter((d) => d.entities.some((e) => e.exported && !e.commissioned));
+      haList = haList.filter((d) =>
+        d.entities.some(
+          (e) =>
+            (e.exported || e.homekitCamera?.published) &&
+            !e.homekitCamera?.isPaired &&
+            !e.commissioned
+        )
+      );
     } else if (activeFilter === "unactivated") {
-      haList = haList.filter((d) => !d.entities.some((e) => e.exported || e.commissioned));
+      haList = haList.filter(
+        (d) =>
+          !d.entities.some(
+            (e) =>
+              e.exported ||
+              e.commissioned ||
+              e.homekitCamera?.isPaired ||
+              e.homekitCamera?.published
+          )
+      );
     } else if (activeFilter === "issues") {
       haList = haList.filter((d) => {
-        const isCameraActive = d.entities.some((e) => e.exported || e.commissioned);
+        const isCameraActive = d.entities.some(
+          (e) =>
+            e.exported ||
+            e.commissioned ||
+            e.homekitCamera?.published ||
+            e.homekitCamera?.isPaired
+        );
         if (!isCameraActive) return false;
         return d.entities.some(
           (e) =>
@@ -234,7 +258,9 @@ export const App: React.FC = () => {
             e.state === "unavailable" ||
             e.state === "unknown" ||
             e.state === "offline" ||
-            (Array.isArray(e.logs) && e.logs.length > 0 && e.exported)
+            (Array.isArray(e.logs) &&
+              e.logs.length > 0 &&
+              (e.exported || e.homekitCamera?.published))
         );
       });
     }
@@ -315,7 +341,9 @@ export const App: React.FC = () => {
         matterExported: Boolean(e.exported),
       }));
 
-    const isCommissioned = dev.entities.some((e) => e.exported && e.commissioned);
+    const isPaired = dev.entities.some(
+      (e) => e.homekitCamera?.isPaired || (e.exported && e.commissioned)
+    );
 
     return {
       cameraId: camEnt?.entityId || dev.id,
@@ -330,7 +358,7 @@ export const App: React.FC = () => {
       sensors: realSensors,
       realEntities,
       identity: {
-        homeKitPairingState: isCommissioned ? "paired" : "not_paired",
+        homeKitPairingState: isPaired ? "paired" : "not_paired",
         homeKitSetupId: "HA01",
         homeKitPincode: "031-45-154",
       },

@@ -1021,17 +1021,25 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         endpoint?.serverNode?.behaviors?.operationalCredentials?.state?.fabrics;
 
       let rawFabrics: any[] = [];
-      if (liveFabricSource !== undefined && liveFabricSource !== null) {
-        rawFabrics = Array.isArray(liveFabricSource)
-          ? liveFabricSource
-          : Object.values(liveFabricSource);
-      } else if (
-        commissioning.fabrics !== undefined &&
-        commissioning.fabrics !== null
-      ) {
-        rawFabrics = Array.isArray(commissioning.fabrics)
-          ? commissioning.fabrics
-          : Object.values(commissioning.fabrics);
+      const hasExplicitEmptyOperationalFabrics =
+        Array.isArray(nodeState.operationalCredentials?.fabrics) &&
+        nodeState.operationalCredentials.fabrics.length === 0;
+
+      if (!hasExplicitEmptyOperationalFabrics) {
+        if (liveFabricSource !== undefined && liveFabricSource !== null) {
+          rawFabrics = Array.isArray(liveFabricSource)
+            ? liveFabricSource
+            : Object.values(liveFabricSource);
+        }
+        if (
+          rawFabrics.length === 0 &&
+          commissioning.fabrics !== undefined &&
+          commissioning.fabrics !== null
+        ) {
+          rawFabrics = Array.isArray(commissioning.fabrics)
+            ? commissioning.fabrics
+            : Object.values(commissioning.fabrics);
+        }
       }
 
       const homeLocation = (this.ha as any)?.hassConfig?.location_name || null;
@@ -1065,6 +1073,31 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               : null,
         };
       });
+
+      const nodeLifecycle =
+        endpoint?.serverNode?.lifecycle ?? endpoint?.lifecycle;
+      const isLifecycleCommissioned = Boolean(nodeLifecycle?.isCommissioned);
+      const isBehaviorCommissioned = Boolean(
+        commissioning.commissioned ||
+          Boolean(nodeState.operationalCredentials?.commissionedFabrics),
+      );
+
+      // An accessory is commissioned if it has active fabrics, or if its Matter lifecycle/commissioning state reports commissioned (unless explicitly cleared)
+      const isCommissioned =
+        fabrics.length > 0 ||
+        (!hasExplicitEmptyOperationalFabrics &&
+          (isLifecycleCommissioned || isBehaviorCommissioned));
+
+      if (fabrics.length === 0 && isCommissioned) {
+        fabrics.push({
+          label: homeLocation || "Apple Home / Matter",
+          controller: "Controlador Matter (Enlazado)",
+          vendorId: null,
+          fabricId: null,
+          fabricIndex: "1",
+        });
+      }
+
       const controllerNames = [
         ...new Set(
           fabrics
@@ -1107,9 +1140,6 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           ?.manualPairingCode ??
         endpoint?.manualPairingCode ??
         null;
-
-      // An accessory is commissioned if and only if it has at least one active fabric
-      const isCommissioned = fabrics.length > 0;
 
       return {
         commissioned: isCommissioned,

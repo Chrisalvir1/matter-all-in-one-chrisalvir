@@ -10,6 +10,9 @@ interface ControlCenterProps {
     pairedNodes: number;
     scryptedTotal: number;
     scryptedPaired: number;
+    camerauiTotal?: number;
+    camerauiPaired?: number;
+    totalHapPaired?: number;
     haCamsTotal: number;
     haCamsPaired: number;
     unpairedTotal: number;
@@ -33,6 +36,16 @@ export const ControlCenter: React.FC<ControlCenterProps> = ({
   onRefresh,
   filteredCount,
 }) => {
+  const cameraSubtext = [
+    stats.camerauiTotal && stats.camerauiTotal > 0 ? `${stats.camerauiTotal} Camera.UI` : null,
+    stats.scryptedTotal > 0 ? `${stats.scryptedTotal} Scrypted` : null,
+    stats.haCamsTotal > 0 ? `${stats.haCamsTotal} HA` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ") || "Sin cámaras";
+
+  const totalHap = stats.totalHapPaired ?? (stats.scryptedPaired + stats.haCamsPaired + (stats.camerauiPaired ?? 0));
+
   const cards: Array<{
     id: FilterType;
     icon: string;
@@ -62,7 +75,7 @@ export const ControlCenter: React.FC<ControlCenterProps> = ({
       icon: "📹",
       label: "CÁMARAS HAP & MATTER",
       count: stats.totalCameras,
-      subtext: `${stats.scryptedTotal} Scrypted · ${stats.haCamsTotal} HA`,
+      subtext: cameraSubtext,
       variant: "default",
     },
     {
@@ -70,7 +83,7 @@ export const ControlCenter: React.FC<ControlCenterProps> = ({
       icon: "🍏",
       label: "EMPAREJADOS",
       count: stats.pairedTotal,
-      subtext: `${stats.pairedNodes} Matter · ${stats.scryptedPaired} HAP`,
+      subtext: `${stats.pairedNodes} Matter · ${totalHap} HAP`,
       variant: "success",
     },
     {

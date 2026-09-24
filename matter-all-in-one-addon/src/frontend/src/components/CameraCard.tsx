@@ -354,6 +354,9 @@ export const CameraCard: React.FC<CameraCardProps> = ({
     const entitiesCount = camEntities.length + realSensors.length;
     const isExported = haDevice.entities.some((e) => e.exported);
     const isCommissioned = haDevice.entities.some((e) => e.exported && e.commissioned);
+    const isHapPaired = haDevice.entities.some((e) => e.homekitCamera?.isPaired);
+    const isHapPublished = haDevice.entities.some((e) => e.homekitCamera?.published);
+    const isPaired = isCommissioned || isHapPaired;
 
     // Detect Google Nest cameras that need go2rtc configuration
     const isNestCamera =
@@ -385,7 +388,22 @@ export const CameraCard: React.FC<CameraCardProps> = ({
                 🍏 Matter Vinculado
               </span>
             )}
-            {!isCommissioned && isExported && <span className="tag tag-mqtt">EN MATTER</span>}
+            {!isCommissioned && isHapPaired && (
+              <span
+                className="tag"
+                style={{
+                  fontSize: "0.68rem",
+                  background: "rgba(16, 185, 129, 0.15)",
+                  color: "#6ee7b7",
+                  border: "1px solid rgba(52, 211, 153, 0.4)",
+                  fontWeight: 600,
+                }}
+              >
+                🍏 Enlazada a Casa
+              </span>
+            )}
+            {!isPaired && isExported && <span className="tag tag-mqtt">EN MATTER</span>}
+            {!isPaired && !isExported && isHapPublished && <span className="tag tag-mqtt">EN HOMEKIT</span>}
             {needsGo2rtc && (
               <span
                 className="tag"
@@ -417,20 +435,35 @@ export const CameraCard: React.FC<CameraCardProps> = ({
             </span>
           ))}
         </div>
-        <div className="card-footer">
+        <div className="card-footer" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span className="entity-summary">
             {entitiesCount} entidad{entitiesCount === 1 ? "" : "es"}
           </span>
-          <button
-            className="button button-secondary"
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onConfigure();
-            }}
-          >
-            Configurar
-          </button>
+          <div style={{ display: "flex", gap: 6 }}>
+            {!isPaired && (isExported || isHapPublished) && (
+              <button
+                className="button button-primary"
+                type="button"
+                style={{ fontSize: "0.75rem", padding: "4px 8px" }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onConfigure();
+                }}
+              >
+                📲 Enlazar QR
+              </button>
+            )}
+            <button
+              className="button button-secondary"
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onConfigure();
+              }}
+            >
+              Configurar
+            </button>
+          </div>
         </div>
       </article>
     );
