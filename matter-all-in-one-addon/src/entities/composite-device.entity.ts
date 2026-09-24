@@ -235,7 +235,9 @@ export class CompositeDeviceEntity {
     try {
       const serverNode = ep.serverNode;
       if (serverNode && typeof serverNode.setStateOf === "function") {
-        await serverNode.setStateOf(BasicInformationServer, { reachable });
+        try {
+          await serverNode.setStateOf(BasicInformationServer, { reachable });
+        } catch {}
       }
       if (typeof ep.setAttribute === "function") {
         if (ep.hasAttributeServer?.(0x0028, "reachable")) {
@@ -253,12 +255,97 @@ export class CompositeDeviceEntity {
           await ep.updateAttribute(0x0028, "reachable", reachable, this.platform.log);
         }
       }
+      for (const memberEntityId of this.endpoints.keys()) {
+        await this.setMemberReachability(memberEntityId, reachable);
+      }
       this.platform.log?.debug?.(
         `[Composite:${this.deviceId}] Updated Matter reachability to ${reachable}`,
       );
     } catch (err) {
       this.platform.log?.debug?.(
         `[Composite:${this.deviceId}] Could not update reachability to ${reachable}: ${err}`,
+      );
+    }
+  }
+
+  async setMemberReachability(memberEntityId: string, reachable: boolean): Promise<void> {
+    const childEp = this.endpoints.get(memberEntityId) as any;
+    if (!childEp) return;
+    try {
+      if (typeof childEp.setStateOf === "function") {
+        try {
+          await childEp.setStateOf(BridgedDeviceBasicInformationServer, { reachable });
+        } catch {}
+      }
+      if (typeof childEp.setAttribute === "function") {
+        if (childEp.hasAttributeServer?.(0x0039, "reachable")) {
+          await childEp.setAttribute(0x0039, "reachable", reachable, this.platform.log);
+        }
+      }
+      if (typeof childEp.updateAttribute === "function") {
+        if (childEp.hasAttributeServer?.(0x0039, "reachable")) {
+          await childEp.updateAttribute(0x0039, "reachable", reachable, this.platform.log);
+        }
+      }
+      this.platform.log?.debug?.(
+        `[Composite:${this.deviceId}][${memberEntityId}] Updated Matter reachability to ${reachable}`,
+      );
+    } catch (err) {
+      this.platform.log?.debug?.(
+        `[Composite:${this.deviceId}][${memberEntityId}] Could not update reachability to ${reachable}: ${err}`,
+      );
+    }
+  }
+
+  async setMemberInactiveState(memberEntityId: string): Promise<void> {
+    const childEp = this.endpoints.get(memberEntityId) as any;
+    if (!childEp) return;
+    const [domain] = memberEntityId.split(".");
+    try {
+      if (
+        domain === "light" ||
+        domain === "switch" ||
+        domain === "fan" ||
+        domain === "media_player" ||
+        domain === "vacuum"
+      ) {
+        if (childEp.hasAttributeServer?.(OnOff.id, "onOff")) {
+          await safeUpdateAttribute(
+            childEp,
+            OnOff.id,
+            "onOff",
+            false,
+            this.platform.log,
+          );
+        }
+        if (
+          domain === "fan" &&
+          childEp.hasAttributeServer?.(FanControl.id, "fanMode")
+        ) {
+          await safeUpdateAttribute(
+            childEp,
+            FanControl.id,
+            "fanMode",
+            FanControl.FanMode.Off,
+            this.platform.log,
+          );
+          if (childEp.hasAttributeServer?.(FanControl.id, "percentCurrent")) {
+            await safeUpdateAttribute(
+              childEp,
+              FanControl.id,
+              "percentCurrent",
+              0,
+              this.platform.log,
+            );
+          }
+        }
+        this.platform.log?.debug?.(
+          `[Composite:${this.deviceId}][${memberEntityId}] Applied inactive Matter state (onOff=false) due to HA unavailable/offline status`,
+        );
+      }
+    } catch (err) {
+      this.platform.log?.debug?.(
+        `[Composite:${this.deviceId}][${memberEntityId}] Could not set inactive state on Matter endpoint: ${err}`,
       );
     }
   }
@@ -335,6 +422,13 @@ export class CompositeDeviceEntity {
         .trim();
       child.deviceName = childFriendlyName;
       (child as any).nodeLabel = childFriendlyName;
+      child.createDefaultBridgedDeviceBasicInformationClusterServer(
+        childFriendlyName,
+        `${this.endpoint.serialNumber}-${endpointIndex}`,
+        0xfff1,
+        this.endpoint.vendorName,
+        childFriendlyName,
+      );
 
       this.addCommandHandlers(child, member);
       this.endpoints.set(member.entityId, child);
@@ -378,6 +472,12 @@ export class CompositeDeviceEntity {
     await Promise.all(
       this.members.map((m) => this.updateEntity(m.entityId, m.state, true)),
     );
+    for (const member of this.members) {
+      if (isUnavailable(member.state)) {
+        await this.setMemberInactiveState(member.entityId);
+        await this.setMemberReachability(member.entityId, false);
+      }
+    }
   }
 
   private haUpdateDepth = new Map<string, number>();

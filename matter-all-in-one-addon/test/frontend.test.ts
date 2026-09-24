@@ -27,6 +27,8 @@ describe("frontend accessibility contract", () => {
       "utf8",
     );
     expect(stylesheet).toMatch(/\.modal-backdrop/);
+    expect(stylesheet).toMatch(/\.modal\s*\{[^}]*overflow-y:\s*auto/);
+    expect(stylesheet).toMatch(/\.camera-modal-layout/);
   });
 
   it("keeps source, Live View and HKSV diagnostics separate", async () => {

@@ -643,10 +643,7 @@ h2 {
   border: 1px solid rgba(140, 175, 235, 0.12);
   text-align: left;
   position: relative;
-  /* Keep every modal scrollable when its content exceeds the viewport. */
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  overflow: hidden;
   cursor: pointer;
   outline: none;
   transition: all 0.22s cubic-bezier(0.2, 0.8, 0.3, 1);
@@ -1165,6 +1162,8 @@ mark {
   background: rgba(2, 6, 14, 0.72);
   backdrop-filter: blur(12px);
   transition: opacity 0.17s ease;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .modal-backdrop.open {
   opacity: 1;
@@ -1173,15 +1172,22 @@ mark {
 .modal {
   position: relative;
   width: min(100%, 1280px);
-  max-height: min(92vh, 880px);
+  max-height: min(92vh, 900px);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 24px 28px;
   border-radius: 22px;
   background: #101b2f;
   transform: translateY(10px) scale(0.98);
   transition: transform 0.17s ease;
+  scrollbar-width: thin;
+}
+.modal-wide {
+  width: min(100%, 980px);
+  max-width: 980px;
 }
 .modal-backdrop.open .modal {
   transform: translateY(0) scale(1);
@@ -3108,37 +3114,41 @@ mark {
   grid-template-columns: 330px minmax(0, 1fr);
   gap: 22px;
   padding-top: 14px;
-  flex: 1;
   min-height: 0;
-  max-height: calc(88vh - 100px);
-  overflow: hidden;
-  align-items: stretch;
+  align-items: start;
 }
 
 .camera-modal-layout .qr-panel {
-  max-height: 100%;
-  overflow-y: auto;
+  min-height: 0;
   padding-right: 8px;
-  scrollbar-width: thin;
 }
 
 .camera-modal-layout .selection-panel {
-  max-height: 100%;
-  overflow-y: auto;
+  min-height: 0;
+  min-width: 0;
   padding-right: 8px;
-  scrollbar-width: thin;
+}
+
+@media (min-width: 861px) {
+  .camera-modal-layout .qr-panel {
+    position: sticky;
+    top: 0;
+    max-height: calc(90vh - 120px);
+    overflow-y: auto;
+    scrollbar-width: thin;
+  }
 }
 
 @media (max-width: 860px) {
   .camera-modal-layout {
     grid-template-columns: 1fr;
-    max-height: none;
-    overflow-y: auto;
+    gap: 16px;
   }
   .camera-modal-layout .qr-panel,
   .camera-modal-layout .selection-panel {
     max-height: none;
-    overflow-y: visible;
+    overflow: visible;
+    padding-right: 0;
   }
 }
 

@@ -224,4 +224,32 @@ describe("CompositeDeviceEntity", () => {
     );
     await expect(restored.syncInitialState()).resolves.toBeUndefined();
   });
+
+  it("marks unavailable members as unreachable and inactive during syncInitialState", async () => {
+    const members = [
+      {
+        entityId: "fan.sala",
+        state: state("fan.sala", "on", { percentage: 40 }),
+      },
+      {
+        entityId: "light.sala",
+        state: state("light.sala", "unavailable"),
+      },
+    ];
+    const composite = new CompositeDeviceEntity(
+      platform,
+      "fan-device",
+      "Ventilador Sala",
+      members,
+    );
+    await composite.createEndpoint();
+    const lightChild = composite.endpoints.get("light.sala") as any;
+    lightChild.setAttribute(0x0006, "onOff", true);
+
+    await composite.syncInitialState();
+
+    expect(lightChild.getAttribute(0x0006, "onOff")).toBe(false);
+    expect(lightChild.getAttribute(0x0039, "reachable")).toBe(false);
+  });
 });
+

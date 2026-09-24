@@ -253,6 +253,13 @@ export class BaseEntity {
       0x8000,
       this.endpoint.productName,
     );
+    this.endpoint.createDefaultBridgedDeviceBasicInformationClusterServer(
+      uniqueName,
+      this.endpoint.serialNumber,
+      MATTER_BRIDGE_VENDOR_ID,
+      this.endpoint.vendorName,
+      this.endpoint.productName,
+    );
     this.applyMatterbridgeFirmware();
 
     const isFanProfile =
@@ -888,6 +895,62 @@ export class BaseEntity {
 
   public async syncInitialState(): Promise<void> {
     await this.updateState(this.state, true);
+    if (isUnavailable(this.state)) {
+      await this.setInactiveState();
+      await this.setReachability(false);
+    }
+  }
+
+  public async setInactiveState(): Promise<void> {
+    if (!this.endpoint) return;
+    const [domain] = this.entityId.split(".");
+    try {
+      if (
+        domain === "light" ||
+        domain === "switch" ||
+        domain === "fan" ||
+        domain === "media_player" ||
+        domain === "vacuum"
+      ) {
+        if (this.endpoint.hasAttributeServer(OnOff.id, "onOff")) {
+          await safeUpdateAttribute(
+            this.endpoint,
+            OnOff.id,
+            "onOff",
+            false,
+            this.platform.log,
+          );
+        }
+        if (
+          domain === "fan" &&
+          this.endpoint.hasAttributeServer(FanControl.id, "fanMode")
+        ) {
+          await safeUpdateAttribute(
+            this.endpoint,
+            FanControl.id,
+            "fanMode",
+            FanControl.FanMode.Off,
+            this.platform.log,
+          );
+          if (this.endpoint.hasAttributeServer(FanControl.id, "percentCurrent")) {
+            await safeUpdateAttribute(
+              this.endpoint,
+              FanControl.id,
+              "percentCurrent",
+              0,
+              this.platform.log,
+            );
+          }
+        }
+        this.platform.log?.debug?.(
+          `[${this.entityId}] Applied inactive Matter state (onOff=false) due to HA unavailable/offline status`,
+        );
+      }
+    } catch (err) {
+      this.platform.log?.debug?.(
+        `[${this.entityId}] Could not set inactive state on Matter endpoint: ${err}`,
+      );
+    }
   }
 
   private clampLevel(rawLevel: number, isInitialSync = false): number {

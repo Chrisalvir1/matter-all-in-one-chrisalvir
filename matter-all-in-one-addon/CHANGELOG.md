@@ -3909,3 +3909,26 @@ All notable changes to this project will be documented in this file.
   tokens ni material SRTP.
 - Aísla Camera.UI en `platform.test.ts` para evitar que accesorios del host
   abran listeners HAP durante la suite de pruebas.
+
+## [1.8.93] - 2026-09-24
+
+### Actualización de dependencias estables y correcciones de UI/disponibilidad
+
+- **Actualización de dependencias estables**:
+  - `matterbridge@^3.10.10`
+  - `mqtt@^5.16.0`
+  - `lucide-react@^1.48.0`
+  - `@types/node@^24.13.6`
+  - `vite@^8.3.1`
+  - `vitest@^5.0.1` y `@vitest/coverage-v8@^5.0.1`
+  - `prettier@^3.9.9`
+- **Modal de cámaras**:
+  - Se restaura el desplazamiento vertical completo en el modal (`overflow-y: auto`, `max-height: min(92vh, 900px)`).
+  - En escritorio, el panel QR se mantiene estático mientras la lista de opciones y configuraciones se desplaza sin desbordamiento.
+  - En móviles, el diseño se adapta a columna única fluida sin recortar contenido.
+- **Disponibilidad y estado inactivo en HomeKit / Apple Home**:
+  - Corrección de dispositivos (como Govee u otros enchufes/luces/ventiladores) que aparecían activos al estar desconectados o sin energía.
+  - Se registra el clúster `BridgedDeviceBasicInformation` (`0x0039`) en endpoints bridged y compuestos.
+  - Al recibir estado `unavailable`/`unknown` de Home Assistant, se limpia el estado activo (`onOff: false`, fan mode `Off`) y se emite `setReachability(false)`.
+  - Se sincroniza la disponibilidad de cada miembro en dispositivos compuestos de forma individual.
+

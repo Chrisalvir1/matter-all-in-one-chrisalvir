@@ -887,10 +887,18 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       if (typeof (entity as any).setReachability === "function") {
         void (entity as any).setReachability(false);
       }
+      if (typeof (entity as any).setInactiveState === "function") {
+        void (entity as any).setInactiveState();
+      }
     }
     for (const composite of this.compositeDevices.values()) {
       if (typeof (composite as any).setReachability === "function") {
         void (composite as any).setReachability(false);
+      }
+      for (const member of composite.members ?? []) {
+        if (typeof (composite as any).setMemberInactiveState === "function") {
+          void (composite as any).setMemberInactiveState(member.entityId);
+        }
       }
     }
   }
@@ -904,12 +912,21 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     // Only emit visible warnings for entities that are fully exported AND actively converted
     // into Matter endpoints. Unsupported entities (like Samsung TVs) must not flood the log.
     const entity = this.entities.get(entityId);
-    const hasEndpoint =
-      entity &&
-      (("endpoint" in entity && entity.endpoint !== undefined) ||
-        ("endpoints" in entity &&
-          (entity as any).endpoints !== undefined &&
-          (entity as any).endpoints.size > 0));
+    const compositeDeviceId =
+      this.compositeMembership.get(entityId) ??
+      this.getCompositeCandidate(entityId)?.deviceId;
+    const compDevice = compositeDeviceId
+      ? this.compositeDevices.get(compositeDeviceId)
+      : undefined;
+
+    const hasEndpoint = Boolean(
+      (entity &&
+        (("endpoint" in entity && entity.endpoint !== undefined) ||
+          ("endpoints" in entity &&
+            (entity as any).endpoints !== undefined &&
+            (entity as any).endpoints.size > 0))) ||
+      (compDevice && compDevice.endpoints && compDevice.endpoints.has(entityId)),
+    );
     const isActivelyExported = this.isEntityExported(entityId) && hasEndpoint;
 
     if (isUnavailable(state)) {
@@ -917,16 +934,19 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         if (entity && typeof (entity as any).setReachability === "function") {
           void (entity as any).setReachability(false);
         }
-        const compositeDeviceId =
-          this.compositeMembership.get(entityId) ??
-          this.getCompositeCandidate(entityId)?.deviceId;
-        const compDevice = compositeDeviceId
-          ? this.compositeDevices.get(compositeDeviceId)
-          : undefined;
+        if (entity && typeof (entity as any).setInactiveState === "function") {
+          void (entity as any).setInactiveState();
+        }
         if (
           compDevice &&
           typeof (compDevice as any).setReachability === "function"
         ) {
+          if (typeof (compDevice as any).setMemberReachability === "function") {
+            void (compDevice as any).setMemberReachability(entityId, false);
+          }
+          if (typeof (compDevice as any).setMemberInactiveState === "function") {
+            void (compDevice as any).setMemberInactiveState(entityId);
+          }
           const allUnavailable = compDevice.members?.every((m: any) => {
             const st = this.entities.get(m.entityId)?.state;
             return !st || isUnavailable(st);
@@ -965,16 +985,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         if (entity && typeof (entity as any).setReachability === "function") {
           void (entity as any).setReachability(true);
         }
-        const compositeDeviceId =
-          this.compositeMembership.get(entityId) ??
-          this.getCompositeCandidate(entityId)?.deviceId;
-        const compDevice = compositeDeviceId
-          ? this.compositeDevices.get(compositeDeviceId)
-          : undefined;
         if (
           compDevice &&
           typeof (compDevice as any).setReachability === "function"
         ) {
+          if (typeof (compDevice as any).setMemberReachability === "function") {
+            void (compDevice as any).setMemberReachability(entityId, true);
+          }
           void (compDevice as any).setReachability(true);
         }
       } else {
@@ -3057,6 +3074,17 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           this.compositeMembership.set(member.entityId, candidate.deviceId),
         );
         await composite.syncInitialState();
+        for (const member of candidate.members) {
+          const memberState = this.entities.get(member.entityId)?.state;
+          if (memberState && isUnavailable(memberState)) {
+            void (composite as any).setMemberReachability?.(member.entityId, false);
+            void (composite as any).setMemberInactiveState?.(member.entityId);
+          }
+        }
+        const primaryState = this.entities.get(composite.primaryEntityId)?.state;
+        if (primaryState && isUnavailable(primaryState)) {
+          void (composite as any).setReachability?.(false);
+        }
         this.log.notice(
           `Reused existing Matter node ${idn}${nodeName}${rs}; it remains paired and was not recreated.`,
         );
@@ -3100,6 +3128,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       this.compositeMembership.set(member.entityId, candidate.deviceId),
     );
     await composite.syncInitialState();
+    for (const member of candidate.members) {
+      const memberState = this.entities.get(member.entityId)?.state;
+      if (memberState && isUnavailable(memberState)) {
+        void (composite as any).setMemberReachability?.(member.entityId, false);
+        void (composite as any).setMemberInactiveState?.(member.entityId);
+      }
+    }
     const primaryState = this.entities.get(composite.primaryEntityId)?.state;
     if (primaryState && isUnavailable(primaryState)) {
       void (composite as any).setReachability?.(false);
@@ -3149,6 +3184,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           await entity.syncInitialState();
           if (isUnavailable(entity.state)) {
             void (entity as any).setReachability?.(false);
+            void (entity as any).setInactiveState?.();
           }
           this.log.notice(
             `Reused existing Matter endpoint ${idn}${entityId}${rs}; it remains paired and was not recreated.`,
@@ -3172,6 +3208,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       await entity.syncInitialState();
       if (isUnavailable(entity.state)) {
         void (entity as any).setReachability?.(false);
+        void (entity as any).setInactiveState?.();
       }
       this.log.notice(`Exported bridged endpoint ${idn}${entityId}${rs}`);
     } catch (err) {

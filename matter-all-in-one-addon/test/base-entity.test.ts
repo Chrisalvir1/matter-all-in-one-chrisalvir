@@ -207,4 +207,45 @@ describe("BaseEntity fan devices (On/Off vs MultiSpeed)", () => {
       },
     );
   });
+
+  it("clears onOff attribute and sets reachability to false when entity is set inactive", async () => {
+    const light = new BaseEntity(
+      platform as any,
+      state({ supported_color_modes: ["brightness"] }),
+      MatterDeviceTypes.dimmableLight,
+    );
+    const endpoint = (await light.createEndpoint()) as any;
+    endpoint.setAttribute(0x0006, "onOff", true);
+    expect(endpoint.getAttribute(0x0006, "onOff")).toBe(true);
+
+    await light.setInactiveState();
+    await light.setReachability(false);
+
+    expect(endpoint.getAttribute(0x0006, "onOff")).toBe(false);
+    expect(endpoint.getAttribute(0x0039, "reachable")).toBe(false);
+  });
+
+  it("syncInitialState sets reachability to false and clears onOff when initialized unavailable", async () => {
+    const unavailableState = {
+      entity_id: "light.govee_test",
+      state: "unavailable",
+      attributes: { friendly_name: "Govee Test Offline" },
+      last_changed: "",
+      last_updated: "",
+    } as any;
+
+    const light = new BaseEntity(
+      platform as any,
+      unavailableState,
+      MatterDeviceTypes.dimmableLight,
+    );
+    const endpoint = (await light.createEndpoint()) as any;
+    endpoint.setAttribute(0x0006, "onOff", true);
+
+    await light.syncInitialState();
+
+    expect(endpoint.getAttribute(0x0006, "onOff")).toBe(false);
+    expect(endpoint.getAttribute(0x0039, "reachable")).toBe(false);
+  });
 });
+
