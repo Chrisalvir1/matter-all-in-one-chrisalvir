@@ -38,6 +38,19 @@ export interface CameraCapabilitiesInfo {
   audioChannels?: number;
   /** Video profile (e.g. baseline, main, high, main 10). */
   videoProfile?: string;
+  /** Source metadata measured by ffprobe. It is observational only. */
+  measuredVideo?: {
+    codec?: string;
+    profile?: string;
+    level?: string;
+    width?: number;
+    height?: number;
+    rFrameRate?: string;
+    avgFrameRate?: string;
+    fps?: number;
+    bitrateKbps?: number;
+    pixFmt?: string;
+  };
   /** Target resolution width and height. */
   resolution: { width: number; height: number };
   /** Maximum frame rate (FPS). */

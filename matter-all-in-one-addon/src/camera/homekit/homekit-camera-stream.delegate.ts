@@ -33,6 +33,17 @@ import {
   supportsFdkAac,
   checkAudioPassthroughCompatibility,
 } from "./ffmpeg-helper.js";
+import {
+  createSessionTelemetry,
+  finishSessionTelemetry,
+  mergeFfmpegProgress,
+  mergeFfmpegStreamHeader,
+  retainRecentSessions,
+  sanitizeDiagnosticText,
+  type LiveViewProcessingMode,
+  type LiveViewSessionTelemetry,
+  type VideoStreamMetadata,
+} from "./live-view-telemetry.js";
 
 export interface HomeKitStreamSession {
   sessionId: string;
@@ -50,6 +61,9 @@ export interface HomeKitStreamSession {
   audioKeySalt?: Buffer;
   retried?: boolean;
   pipeController?: AbortController;
+  telemetry?: LiveViewSessionTelemetry;
+  /** FFmpeg writes input and output headers alike; observe only output fields. */
+  ffmpegOutputHeaderSeen?: boolean;
 }
 
 export const FALLBACK_JPEG_BUFFER = Buffer.from(
@@ -179,6 +193,8 @@ export class HomeKitCameraStreamingDelegate
   implements CameraStreamingDelegate
 {
   private readonly activeSessions = new Map<string, HomeKitStreamSession>();
+  private readonly recentSessions: LiveViewSessionTelemetry[] = [];
+  private static readonly MAX_RECENT_SESSIONS = 8;
   private lastSnapshotBuffer: Buffer = FALLBACK_JPEG_BUFFER;
 
   public get isStreaming(): boolean {
@@ -196,6 +212,111 @@ export class HomeKitCameraStreamingDelegate
   ) {
     super();
     this.loadPersistedSnapshot();
+  }
+
+  /** Diagnostics only: never returns URLs, FFmpeg arguments, tokens, or SRTP material. */
+  public getLiveViewTelemetry(): {
+    active: LiveViewSessionTelemetry[];
+    recent: LiveViewSessionTelemetry[];
+  } {
+    const active = [...this.activeSessions.values()]
+      .map((session) => session.telemetry)
+      .filter((telemetry): telemetry is LiveViewSessionTelemetry =>
+        Boolean(telemetry),
+      );
+    return {
+      active,
+      recent: [...this.recentSessions],
+    };
+  }
+
+  private sourceOutputMetadata(): VideoStreamMetadata {
+    const measured = this.capabilities.measuredVideo;
+    return {
+      codec: measured?.codec || this.capabilities.videoCodec,
+      profile: measured?.profile || this.capabilities.videoProfile,
+      level: measured?.level,
+      width: measured?.width || this.capabilities.resolution?.width,
+      height: measured?.height || this.capabilities.resolution?.height,
+      rFrameRate: measured?.rFrameRate,
+      avgFrameRate: measured?.avgFrameRate,
+      fps: measured?.fps || this.capabilities.maxFps,
+      bitrateKbps: measured?.bitrateKbps,
+      pixFmt: measured?.pixFmt,
+      metadataSource: "effective-command",
+    };
+  }
+
+  private startTelemetry(
+    session: HomeKitStreamSession,
+    request: StartStreamRequest,
+    effectiveMode: LiveViewProcessingMode,
+    output: VideoStreamMetadata,
+    fallbackReason?: string,
+  ): void {
+    const video = request.video;
+    const audio = request.audio;
+    session.telemetry = createSessionTelemetry({
+      sessionId: session.sessionId,
+      videoSsrc: session.videoSsrc,
+      video: {
+        width: video.width,
+        height: video.height,
+        fps: video.fps,
+        profile: h264Profile(video.profile),
+        level: h264Level(video.level),
+        maxBitrateKbps: video.max_bit_rate,
+      },
+      audio: audio
+        ? {
+            codec:
+              audio.codec === AudioStreamingCodecType.OPUS ? "opus" : "aac-eld",
+            sampleRate:
+              audio.sample_rate === AudioStreamingSamplerate.KHZ_24
+                ? 24000
+                : 16000,
+            maxBitrateKbps: audio.max_bit_rate,
+          }
+        : undefined,
+      effectiveMode,
+      output,
+      fallbackReason,
+    });
+  }
+
+  private finishTelemetry(
+    session: HomeKitStreamSession,
+    state: "finished" | "failed",
+    error?: unknown,
+  ): void {
+    if (!session.telemetry || session.telemetry.state !== "active") return;
+    const finished = finishSessionTelemetry(session.telemetry, state, error);
+    session.telemetry = finished;
+    this.recentSessions.splice(
+      0,
+      this.recentSessions.length,
+      ...retainRecentSessions(
+        this.recentSessions,
+        finished,
+        HomeKitCameraStreamingDelegate.MAX_RECENT_SESSIONS,
+      ),
+    );
+  }
+
+  private recordFfmpegProgress(
+    session: HomeKitStreamSession,
+    line: string,
+  ): void {
+    if (!session.telemetry) return;
+    if (/^Output #\d+/i.test(line.trim())) {
+      session.ffmpegOutputHeaderSeen = true;
+      return;
+    }
+    const progress = mergeFfmpegProgress(session.telemetry.output, line);
+    const output = session.ffmpegOutputHeaderSeen
+      ? mergeFfmpegStreamHeader(progress, line)
+      : progress;
+    if (output) session.telemetry.output = output;
   }
 
   private loadPersistedSnapshot(): void {
@@ -719,6 +840,9 @@ export class HomeKitCameraStreamingDelegate
       let startupTimer: NodeJS.Timeout | undefined;
       let startupConfirmed = false;
       process.stdout?.on("data", (chunk: Buffer) => {
+        for (const line of chunk.toString().split(/\r?\n/)) {
+          this.recordFfmpegProgress(session, line);
+        }
         if (!isTapoC402 || startupConfirmed) return;
         progress = `${progress}${chunk.toString()}`.slice(-2048);
         for (const match of progress.matchAll(/(?:^|\n)frame=\s*(\d+)/g)) {
@@ -734,20 +858,30 @@ export class HomeKitCameraStreamingDelegate
         }
       });
       process.stderr?.on("data", (chunk: Buffer) => {
-        stderr = `${stderr}${chunk.toString()}`.slice(-6000);
-      });
-      const guard = setTimeout(() => {
-        if (process.exitCode === null && !process.killed) {
-          this.platform?.log?.notice?.(
-            `[HomeKitCamera][${this.entityId}] HAP START callback success; FFmpeg active session=${session.sessionId}`,
-          );
-          settle();
-        } else {
-          settle(new Error("FFmpeg exited during HAP startup"));
+        const text = chunk.toString();
+        for (const line of text.split(/\r?\n/)) {
+          this.recordFfmpegProgress(session, line);
         }
-      // C120 now normalizes its H.264 stream for HAP and needs time for the
-      // first encoded keyframe before HomeKit accepts the RTP session.
-      }, isTapoC402 ? 80 : isTapoC120 ? 1200 : 600);
+        // Keep a short, pre-sanitized failure summary only. Raw FFmpeg stderr
+        // can contain source URLs or HTTP authorization headers.
+        const safe = sanitizeDiagnosticText(text);
+        if (safe) stderr = `${stderr}\n${safe}`.slice(-1200);
+      });
+      const guard = setTimeout(
+        () => {
+          if (process.exitCode === null && !process.killed) {
+            this.platform?.log?.notice?.(
+              `[HomeKitCamera][${this.entityId}] HAP START callback success; FFmpeg active session=${session.sessionId}`,
+            );
+            settle();
+          } else {
+            settle(new Error("FFmpeg exited during HAP startup"));
+          }
+          // C120 now normalizes its H.264 stream for HAP and needs time for the
+          // first encoded keyframe before HomeKit accepts the RTP session.
+        },
+        isTapoC402 ? 80 : isTapoC120 ? 1200 : 600,
+      );
       process.once("error", (error) => {
         clearTimeout(guard);
         settle(error);
@@ -768,6 +902,11 @@ export class HomeKitCameraStreamingDelegate
           this.activeSessions.has(session.sessionId)
         ) {
           session.retried = true;
+          this.finishTelemetry(
+            session,
+            "failed",
+            stderr || `FFmpeg exited with code ${code}`,
+          );
 
           const is401 =
             stderr.includes("401") ||
@@ -829,6 +968,11 @@ export class HomeKitCameraStreamingDelegate
           return;
         }
 
+        this.finishTelemetry(
+          session,
+          code === 0 ? "finished" : "failed",
+          code === 0 ? undefined : stderr || `FFmpeg exited with code ${code}`,
+        );
         settle(new Error(`FFmpeg exited during HAP startup (code ${code})`));
         // Clean up the ghost session entry so the next HomeKit reconnect
         // finds a clean Map — otherwise stopStream() later can't properly
@@ -880,12 +1024,17 @@ export class HomeKitCameraStreamingDelegate
     const args: string[] = [
       "-hide_banner",
       "-loglevel",
-      "warning",
+      // Info is required only to observe FFmpeg's output stream header. The
+      // parser retains structured fields and discards every raw log line.
+      "info",
       "-protocol_whitelist",
       "pipe,udp,rtp,file,crypto,srtp,tcp,tls,http,https,lavfi,rtsp,rtsps",
     ];
     if (isTapoC402) {
       args.push("-progress", "pipe:1", "-stats_period", "0.25");
+    } else {
+      // Progress is diagnostics only. It does not alter RTP/SRTP, codecs, or media flow.
+      args.push("-progress", "pipe:2", "-stats_period", "0.5");
     }
 
     if (isHaProxyStream) {
@@ -920,12 +1069,7 @@ export class HomeKitCameraStreamingDelegate
         // Do not drop C120 packets before decoding. This source is 2K H.264
         // High level 5.0; stripping its initial frame data caused the green
         // slices and permanently frozen frame seen by Apple Home.
-        args.push(
-          "-fflags",
-          "+genpts+igndts+discardcorrupt",
-          "-flags",
-          "0",
-        );
+        args.push("-fflags", "+genpts+igndts+discardcorrupt", "-flags", "0");
       } else {
         args.push(
           "-fflags",
@@ -1029,6 +1173,15 @@ export class HomeKitCameraStreamingDelegate
         !this.capabilities.requiresTranscoding);
 
     if (canPassthrough) {
+      this.startTelemetry(
+        session,
+        request,
+        session.retried ? "fallback" : "copy",
+        this.sourceOutputMetadata(),
+        session.retried
+          ? "FFmpeg restarted after an initial stream failure"
+          : undefined,
+      );
       // Pure passthrough remuxing without transcoding CPU overhead (native 4K, 2K, 1080p, 720p @ max fps)
       // Preserve the native H.264 or HEVC stream negotiated by Apple Home.
       const videoPassArgs: string[] = [
@@ -1074,6 +1227,25 @@ export class HomeKitCameraStreamingDelegate
         Math.max(2, Math.floor((video.height || 1080) / 2) * 2),
       );
       const keyframeInterval = Math.max(15, fps * 2);
+      this.startTelemetry(
+        session,
+        request,
+        session.retried ? "fallback" : "normalization",
+        {
+          codec: "h264",
+          profile: "high",
+          level: "4.0",
+          width: targetWidth,
+          height: targetHeight,
+          fps,
+          bitrateKbps: 4500,
+          pixFmt: "yuv420p",
+          metadataSource: "effective-command",
+        },
+        session.retried
+          ? "FFmpeg restarted after an initial stream failure"
+          : undefined,
+      );
       this.platform?.log?.notice?.(
         `[Stream][${this.entityId}] Normalizando C120 H.264 High L5.0 a HAP High L4.0 ${targetWidth}x${targetHeight}@${fps}`,
       );
@@ -1386,6 +1558,7 @@ export class HomeKitCameraStreamingDelegate
       }, 300);
       killTimer.unref();
     }
+    this.finishTelemetry(session, "finished");
     this.activeSessions.delete(sessionId);
     this.platform?.log?.notice?.(
       `[HomeKitCamera][${this.entityId}] HAP STOP cleanup session=${sessionId}`,

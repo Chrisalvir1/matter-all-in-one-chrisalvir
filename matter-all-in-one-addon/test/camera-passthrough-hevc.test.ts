@@ -1,10 +1,23 @@
 import { describe, it, expect, vi } from "vitest";
 import { HomeKitCameraAccessory } from "../src/camera/homekit/homekit-camera.accessory.js";
-import { AudioRecordingSamplerate, CameraController, StreamRequestTypes, SRTPCryptoSuites, uuid } from "@homebridge/hap-nodejs";
+import {
+  AudioRecordingSamplerate,
+  CameraController,
+  StreamRequestTypes,
+  SRTPCryptoSuites,
+  uuid,
+} from "@homebridge/hap-nodejs";
 import { HomeKitCameraStreamingDelegate } from "../src/camera/homekit/homekit-camera-stream.delegate.js";
 import { HomeKitCameraRecordingDelegate } from "../src/camera/homekit/homekit-camera-recording.delegate.js";
-import { prependProducerReferenceTime, SecureVideoSFrame } from "../src/camera/homekit/hevc/index.js";
-import type { CameraCapabilitiesInfo, HomeKitCameraStorageRecord, ResolvedStreamSource } from "../src/camera/camera-types.js";
+import {
+  prependProducerReferenceTime,
+  SecureVideoSFrame,
+} from "../src/camera/homekit/hevc/index.js";
+import type {
+  CameraCapabilitiesInfo,
+  HomeKitCameraStorageRecord,
+  ResolvedStreamSource,
+} from "../src/camera/camera-types.js";
 
 function createPlatformMock() {
   return {
@@ -23,7 +36,10 @@ function createPlatformMock() {
   };
 }
 
-function createBaseRecord(entityId: string, overrides: Partial<HomeKitCameraStorageRecord> = {}): HomeKitCameraStorageRecord {
+function createBaseRecord(
+  entityId: string,
+  overrides: Partial<HomeKitCameraStorageRecord> = {},
+): HomeKitCameraStorageRecord {
   return {
     entityId,
     uuid: uuid.generate(`test-uuid-${entityId}`),
@@ -38,7 +54,9 @@ function createBaseRecord(entityId: string, overrides: Partial<HomeKitCameraStor
   };
 }
 
-function createCapabilities(overrides: Partial<CameraCapabilitiesInfo> = {}): CameraCapabilitiesInfo {
+function createCapabilities(
+  overrides: Partial<CameraCapabilitiesInfo> = {},
+): CameraCapabilitiesInfo {
   return {
     hasLiveStream: true,
     streamSourceType: "rtsp",
@@ -53,7 +71,9 @@ function createCapabilities(overrides: Partial<CameraCapabilitiesInfo> = {}): Ca
   };
 }
 
-function createStreamSource(overrides: Partial<ResolvedStreamSource> = {}): ResolvedStreamSource {
+function createStreamSource(
+  overrides: Partial<ResolvedStreamSource> = {},
+): ResolvedStreamSource {
   return {
     sourceType: "rtsp",
     url: "rtsp://192.168.1.100:554/live",
@@ -140,7 +160,9 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     expect(record.hksvCapable).toBe(false);
     expect(record.hksvState).toBe("not_capable");
     expect(platform.log.warn).toHaveBeenCalledWith(
-      expect.stringContaining("HEVC/HKSV3 aún no disponible; no se exporta sin transcodificación"),
+      expect.stringContaining(
+        "HEVC/HKSV3 aún no disponible; no se exporta sin transcodificación",
+      ),
     );
   });
 
