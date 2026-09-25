@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { DeviceRecord, EntityRecord, HapProfile, HapAccessoryInfo } from "../types";
 import { api } from "../api/client";
 import { QRCodeDisplay, AppleHomeModernIcon } from "./QRCodeDisplay";
@@ -448,6 +448,19 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     if (!nextState) {
       setFreshPairingCode(null);
       setFreshManualCode(null);
+    } else {
+      // Mutual exclusion: when Matter is activated, unregister HAP
+      if (localHapAccessory?.published) {
+        try {
+          await api.unregisterHap(compositePrimary.entityId);
+        } catch {}
+        device.entities.forEach((e) => {
+          e.hapAccessory = null;
+        });
+        if (activeEntity) activeEntity.hapAccessory = null;
+        setLocalHapAccessory(null);
+        setHapFreshPin(null);
+      }
     }
     device.entities.forEach((e) => {
       if (e.composite) {
@@ -489,6 +502,19 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     if (!nextState) {
       setFreshPairingCode(null);
       setFreshManualCode(null);
+    } else {
+      // Mutual exclusion: when Matter is activated, unregister HAP
+      if (localHapAccessory?.published) {
+        try {
+          await api.unregisterHap(entity.entityId);
+        } catch {}
+        device.entities.forEach((e) => {
+          e.hapAccessory = null;
+        });
+        if (activeEntity) activeEntity.hapAccessory = null;
+        setLocalHapAccessory(null);
+        setHapFreshPin(null);
+      }
     }
     try {
       const res: any = await api.toggleExport(entity.entityId, nextState);
@@ -543,9 +569,17 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
         };
         device.entities.forEach((e) => {
           e.hapAccessory = updatedAcc as any;
+          // Mutual exclusion: when HAP is published, deactivate Matter
+          e.exported = false;
         });
-        if (activeEntity) activeEntity.hapAccessory = updatedAcc as any;
+        if (activeEntity) {
+          activeEntity.hapAccessory = updatedAcc as any;
+          activeEntity.exported = false;
+        }
         setLocalHapAccessory(updatedAcc);
+        setLocalCompositeExported(false);
+        setFreshPairingCode(null);
+        setFreshManualCode(null);
         setHapFreshPin({ pincode: res.pincode || "", port: res.port || 0 });
         void onRefresh();
       } else {
@@ -557,6 +591,22 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
       setIsBusy(false);
     }
   };
+
+  const hasAutoActivatedHap = useRef(false);
+
+  useEffect(() => {
+    // If device is recommended for HAP and is not yet published in either protocol,
+    // auto-activate HAP by default as requested in v1.9.0 so HAP QR is ready immediately.
+    if (
+      hapRecDetails.isRecommended &&
+      !isDeviceHapPublished &&
+      !isExported &&
+      !hasAutoActivatedHap.current
+    ) {
+      hasAutoActivatedHap.current = true;
+      void handlePublishHapDirect();
+    }
+  }, [hapRecDetails.isRecommended, isDeviceHapPublished, isExported]);
 
   // Direct HAP unregister handler with 0ms optimistic UI update
   const handleUnregisterHapDirect = async () => {
@@ -861,15 +911,24 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
             <button
               type="button"
               onClick={() => setSelectedProtocol("hap")}
+              className={hapRecDetails.isRecommended ? "hap-recommended-pulse" : ""}
               style={{
                 padding: "6px 16px",
                 borderRadius: 8,
                 fontSize: 12.5,
                 fontWeight: 600,
                 cursor: "pointer",
-                border: selectedProtocol === "hap" ? "1px solid rgba(245,158,11,0.5)" : "none",
-                background: selectedProtocol === "hap" ? "rgba(245,158,11,0.22)" : "transparent",
-                color: selectedProtocol === "hap" ? "#fcd34d" : "var(--muted)",
+                border: selectedProtocol === "hap"
+                  ? "1px solid rgba(245,158,11,0.6)"
+                  : hapRecDetails.isRecommended
+                  ? "1px solid rgba(245,158,11,0.5)"
+                  : "none",
+                background: selectedProtocol === "hap"
+                  ? "rgba(245,158,11,0.25)"
+                  : hapRecDetails.isRecommended
+                  ? "rgba(245,158,11,0.12)"
+                  : "transparent",
+                color: selectedProtocol === "hap" ? "#fcd34d" : hapRecDetails.isRecommended ? "#fde68a" : "var(--muted)",
                 transition: "all 0.15s ease",
               }}
             >
@@ -1516,69 +1575,6 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                 </section>
               </>
             )}
-
-            {/* Fabrics section */}
-            <section className="fabrics-section" id="fabrics-section">
-              <div className="fabrics-heading">
-                <span className="fabrics-icon" aria-hidden="true">🏠</span>
-                <strong>Casas / Controladores Conectados</strong>
-              </div>
-              <p className="fabrics-subtitle">
-                Desconectar de ecosistemas Matter existentes si cambias de controlador o si ya eliminaste este accesorio en tu app de Apple Home, Google Home o Alexa.
-              </p>
-
-              {matterFabrics.length > 0 ? (
-                <div className="fabrics-list">
-                  {matterFabrics.map((fabric: any, idx: number) => {
-                    const badge = getControllerBadge(fabric.vendorId, fabric.controller);
-                    const targetIndex = fabric.fabricIndex ?? fabric.fabricId ?? idx + 1;
-                    return (
-                      <div key={targetIndex} className="fabric-item">
-                        <div className="fabric-info">
-                          <div className="fabric-controller-line">
-                            <span style={{ fontSize: 15 }}>{badge.icon}</span>
-                            <span className="fabric-name">{badge.name}</span>
-                          </div>
-                          {fabric.label && (
-                            <span className="fabric-home-name">
-                              Casa: <strong>{fabric.label}</strong>
-                            </span>
-                          )}
-                          <span className="fabric-detail">
-                            Fabric {targetIndex}
-                            {fabric.vendorId ? ` · VID: 0x${Number(fabric.vendorId).toString(16).toUpperCase()}` : ""}
-                          </span>
-                        </div>
-                        <button
-                          type="button"
-                          className="button button-danger-outline button-xs"
-                          onClick={() => handleRemoveFabric(targetIndex)}
-                          disabled={isBusy}
-                          title="Desconectar únicamente esta casa"
-                          style={{
-                            padding: "4px 8px",
-                            fontSize: "11px",
-                            borderRadius: "6px",
-                            cursor: "pointer",
-                            background: "rgba(239, 68, 68, 0.15)",
-                            color: "#fca5a5",
-                            border: "1px solid rgba(239, 68, 68, 0.35)",
-                          }}
-                        >
-                          Desconectar
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div style={{ fontSize: 11, color: "var(--muted)", fontStyle: "italic", padding: "4px 0" }}>
-                  {isCommissioned
-                    ? "Sesión registrada en el puente (sin etiquetas de controlador reportadas)."
-                    : "No hay casas ni controladores vinculados a este accesorio."}
-                </div>
-              )}
-            </section>
 
             {/* Diagnostics Panel */}
             <section

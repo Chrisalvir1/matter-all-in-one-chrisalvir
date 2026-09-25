@@ -1,3 +1,21 @@
+## [1.9.0] - 2026-09-24
+
+### Exclusividad mutua HAP / Matter, efecto parpadeo en recomendados y activación QR HAP por defecto
+
+- **Exclusividad mutua entre HAP y Matter:**
+  - Al activar HomeKit HAP para un dispositivo o accesorio, se desactiva y retira automáticamente su exportación en Matter para evitar accesorios duplicados en Apple Home.
+  - Al activar Matter para un dispositivo o accesorio (con Multi-Admin para Apple Home, Google Home, Alexa y SmartThings), se despublica y retira automáticamente cualquier accesorio HomeKit HAP activo asociado.
+  - Sincronización bidireccional tanto en el backend (`HomeAssistantPlatform.manualRegisterHap` y `manualRegister`) como en el frontend de forma optimista e instantánea.
+- **Efecto de parpadeo (pulsing glow) para dispositivos HAP recomendados:**
+  - Los dispositivos donde HAP es la opción recomendada para Apple Home (paneles de alarma como Argus Alarm Card, difusores, televisores, válvulas, purificadores, etc.) muestran la pestaña `🏠 HomeKit HAP ⭐ Recomendado` con una animación luminosa dorada (`hap-recommended-pulse` / `@keyframes hap-pulse-glow`) que atrae la atención del usuario de manera elegante.
+- **Activación y visualización del código QR HAP por defecto:**
+  - Al abrir la configuración de un dispositivo con recomendación HAP que no esté aún publicado, se pre-selecciona automáticamente la pestaña HAP y se activa el accesorio generando de inmediato el código QR de HomeKit con su casita amarilla y código PIN sin requerir pulsaciones extras.
+  - Si el usuario prefiere utilizar Matter, puede desactivar HAP o alternar a la pestaña Matter y publicarlo allí libremente.
+- **Eliminación de secciones duplicadas de controladores y unificación visual:**
+  - Se eliminó el bloque duplicado de controladores y casas conectadas en la columna central, manteniéndose exclusivamente dentro del protocolo Matter cuando corresponde y reservando la columna derecha de forma limpia para el código QR y controles de HomeKit HAP.
+- **Garantía absoluta de persistencia:**
+  - Todos los dispositivos previamente enlazados y emparejados en Matter y HAP conservan intacta su configuración en almacenamiento.
+
 ## [1.8.101] - 2026-09-24
 
 ### Unificación de interfaz HAP: eliminación de caja duplicada en columna izquierda

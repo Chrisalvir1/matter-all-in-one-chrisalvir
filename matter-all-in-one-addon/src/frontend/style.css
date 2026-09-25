@@ -4092,3 +4092,23 @@ mark {
     min-height: 420px;
   }
 }
+
+@keyframes hap-pulse-glow {
+  0% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7);
+    border-color: rgba(245, 158, 11, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 16px 4px rgba(245, 158, 11, 0.5);
+    border-color: #fde047;
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0);
+    border-color: rgba(245, 158, 11, 0.7);
+  }
+}
+
+.hap-recommended-pulse {
+  animation: hap-pulse-glow 1.8s infinite ease-in-out !important;
+}
+
