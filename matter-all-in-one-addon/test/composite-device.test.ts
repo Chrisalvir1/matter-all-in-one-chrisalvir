@@ -250,5 +250,35 @@ describe("CompositeDeviceEntity", () => {
 
     expect(lightChild.getAttribute(0x0006, "onOff")).toBe(false);
   });
+
+  it("creates a lock-rooted composite device and syncs attributes safely", async () => {
+    const members = [
+      {
+        entityId: "lock.cerrojo",
+        state: state("lock.cerrojo", "locked"),
+      },
+      {
+        entityId: "binary_sensor.door",
+        state: state("binary_sensor.door", "off", { device_class: "door" }),
+      },
+    ];
+    const composite = new CompositeDeviceEntity(
+      platform,
+      "lock-device",
+      "Cerrojo",
+      members,
+    );
+    const root = await composite.createEndpoint();
+    expect(composite.primaryEntityId).toBe("lock.cerrojo");
+    expect(composite.endpoints.get("lock.cerrojo")).toBe(root);
+    await expect(composite.syncInitialState()).resolves.toBeUndefined();
+
+    await (composite.endpoints.get("lock.cerrojo") as any).invokeCommand("unlockDoor");
+    expect(platform.ha.callService).toHaveBeenCalledWith(
+      "lock",
+      "unlock",
+      "lock.cerrojo",
+    );
+  });
 });
 

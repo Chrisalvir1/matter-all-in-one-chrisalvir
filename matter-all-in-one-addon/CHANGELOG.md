@@ -1,3 +1,19 @@
+## [1.9.3] - 2026-09-24
+
+### Corrección de rebote de interruptor Matter, exclusión de switches auxiliares de cerraduras y robustez en endpoints compuestos
+
+- **Corrección de reversión / rebote del interruptor de activación Matter:**
+  - Se corrigió el manejo de respuesta en `handleToggleExport` y `handleToggleCompositeExport` dentro de `DeviceModal.tsx`.
+  - Anteriormente, las respuestas con `{ success: false, error: ... }` no lanzaban excepción por recibir HTTP 200, provocando que la UI mostrara un toast de éxito temporal antes de que `onRefresh()` sobreescribiera el estado a desactivado y parpadeara la pantalla.
+  - Se añadió bloqueo por concurrencia (`isBusy`) durante la activación/desactivación para evitar clics dobles y carreras de actualización.
+- **Exclusión automática de switches auxiliares en cerraduras inteligentes (Smart Locks):**
+  - En cerraduras inteligentes (ej. cerraduras TT Lock como `"CERROJO DE OFICINA"`, SwitchBot Lock, etc.), Home Assistant expone interruptores auxiliares internos como bloqueo automático (`auto_lock`), sonido de bloqueo (`lock_sound`), zumbador, alarma, etc.
+  - `getCompositeCandidate()` ahora filtra automáticamente estos interruptores de configuración interna para evitar empaquetarlos como accesorios Matter secundarios conflictivos.
+  - Si una cerradura solo posee interruptores de configuración internos, se publica limpiamente y de forma instantánea como un accesorio `LockEntity` dedicado (DoorLock deadbolt) con su propio código QR y sin fallos.
+- **Soporte de cluster OnOff en endpoints secundarios de dispositivos compuestos:**
+  - Se solucionó una omisión en `computeClusterIds` para miembros de dominio `switch` en dispositivos compuestos, asegurando que reciban el cluster server `OnOff` requerido por la especificación Matter.
+  - Se movió la sincronización de atributos de cerraduras (`actuatorEnabled`, `operatingMode`, `supportedOperatingModes`) al ciclo de inicialización `updateEntity(..., initial=true)`, evitando llamadas prematuras antes de que el nodo esté en línea.
+
 ## [1.9.2] - 2026-09-24
 
 ### Interruptores maestros dedicados (HAP y Matter Multi-Admin), persistencia de pestaña y etiqueta de pegatina

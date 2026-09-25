@@ -2205,6 +2205,22 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       }
     }
 
+    // If the composite group is a lock, exclude auxiliary configuration switches (auto-lock, sound, beep, buzzer, etc.)
+    if (
+      members.some((m) => m.entityId.startsWith("lock.")) &&
+      !explicitlyIncluded?.length
+    ) {
+      members = members.filter((m) => {
+        if (!m.entityId.startsWith("switch.")) return true;
+        const name = (
+          this.ha.hassEntities.get(m.entityId)?.name || m.entityId
+        ).toLowerCase();
+        return !/auto|bloqueo|sound|sonido|audio|beep|buzz|silence|timb|config|alarm|tamper|reverse|direction/i.test(
+          name,
+        );
+      });
+    }
+
     this.log.debug(
       `[Composite] ${entityId}: device_id=${compositeDeviceId}, candidate members=[${members.map((m) => m.entityId).join(", ")}]`,
     );

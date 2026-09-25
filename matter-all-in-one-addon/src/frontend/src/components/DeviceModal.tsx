@@ -439,7 +439,8 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
 
   // Optimistic, instantaneous toggle for Composite Matter
   const handleToggleCompositeExport = async () => {
-    if (!compositePrimary) return;
+    if (!compositePrimary || isBusy) return;
+    setIsBusy(true);
     const nextState = !isCompositeExported;
     setLocalCompositeExported(nextState);
     if (!nextState) {
@@ -453,6 +454,9 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     });
     try {
       const res: any = await api.toggleExport(compositePrimary.entityId, nextState);
+      if (res && res.success === false) {
+        throw new Error(res.error || "No se pudo modificar la publicación en Matter");
+      }
       if (nextState && (res as any)?.pairingCode) {
         setFreshPairingCode((res as any).pairingCode);
       }
@@ -464,7 +468,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
           ? `✓ Accesorio publicado en Matter`
           : `Accesorio retirado de Matter`
       );
-      void onRefresh();
+      await onRefresh();
     } catch (err: any) {
       setLocalCompositeExported(!nextState);
       device.entities.forEach((e) => {
@@ -473,11 +477,15 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
         }
       });
       showToast(err.message || "Error al modificar publicación", true);
+    } finally {
+      setIsBusy(false);
     }
   };
 
   // Optimistic, instantaneous toggle for Individual Matter entity
   const handleToggleExport = async (entity: EntityRecord) => {
+    if (isBusy) return;
+    setIsBusy(true);
     const nextState = !entity.exported;
     entity.exported = nextState;
     if (activeEntity?.entityId === entity.entityId) {
@@ -489,6 +497,9 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     }
     try {
       const res: any = await api.toggleExport(entity.entityId, nextState);
+      if (res && res.success === false) {
+        throw new Error(res.error || "No se pudo modificar la publicación en Matter");
+      }
       if (nextState && res?.pairingCode) {
         setFreshPairingCode(res.pairingCode);
       }
@@ -500,13 +511,15 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
           ? `✓ ${entity.name || entity.entityId} publicado en Matter`
           : `${entity.name || entity.entityId} retirado de Matter`
       );
-      void onRefresh();
+      await onRefresh();
     } catch (err: any) {
       entity.exported = !nextState;
       if (activeEntity?.entityId === entity.entityId) {
         setSelectedEntity({ ...activeEntity, exported: !nextState });
       }
       showToast(err.message || "Error al modificar publicación", true);
+    } finally {
+      setIsBusy(false);
     }
   };
 

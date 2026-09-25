@@ -598,6 +598,35 @@ export class CompositeDeviceEntity {
       }
 
       if (domain === "lock") {
+        if (initial) {
+          await safeSetAttribute(
+            endpoint,
+            DoorLock.id,
+            "actuatorEnabled",
+            true,
+            this.platform.log,
+          );
+          await safeSetAttribute(
+            endpoint,
+            DoorLock.id,
+            "operatingMode",
+            DoorLock.OperatingMode.Normal,
+            this.platform.log,
+          );
+          await safeSetAttribute(
+            endpoint,
+            DoorLock.id,
+            "supportedOperatingModes",
+            {
+              normal: true,
+              vacation: false,
+              privacy: false,
+              noRemoteLockUnlock: false,
+              passage: false,
+            },
+            this.platform.log,
+          );
+        }
         const matterState = this.toLockState(state);
         await update(
           endpoint,
@@ -925,7 +954,7 @@ export class CompositeDeviceEntity {
     if (domain === "camera") return [OnOff.id];
     if (domain === "light")
       return lightClusterIds(member.state, this.typeFor(member));
-    if (domain === "switch") return [];
+    if (domain === "switch") return [OnOff.id];
     if (domain === "fan") {
       return isFanProfile(this.typeFor(member)) ? [FanControl.id] : [];
     }
@@ -1066,33 +1095,6 @@ export class CompositeDeviceEntity {
         DoorLock.LockType.DeadBolt,
       );
       endpoint.addRequiredClusterServers();
-      await safeSetAttribute(
-        endpoint,
-        DoorLock.id,
-        "actuatorEnabled",
-        true,
-        this.platform.log,
-      );
-      await safeSetAttribute(
-        endpoint,
-        DoorLock.id,
-        "operatingMode",
-        DoorLock.OperatingMode.Normal,
-        this.platform.log,
-      );
-      await safeSetAttribute(
-        endpoint,
-        DoorLock.id,
-        "supportedOperatingModes",
-        {
-          normal: true,
-          vacation: false,
-          privacy: false,
-          noRemoteLockUnlock: false,
-          passage: false,
-        },
-        this.platform.log,
-      );
       return;
     }
 
