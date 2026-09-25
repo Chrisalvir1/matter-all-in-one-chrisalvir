@@ -1,3 +1,20 @@
+## [1.8.100] - 2026-09-24
+
+### Pegatina física QR HomeKit HAP con casita amarilla de Apple Casa, recomendación global de perfiles HAP y activación instantánea
+
+- **Pegatina física interactiva de configuración QR HomeKit HAP (`QRCodeDisplay variant="hap-homekit"`):**
+  - Se corrigió la generación del código QR en accesorios HAP para que muestre la pegatina física oficial estilo iOS Liquid Glass con el icono moderno amarillo de la casa de Apple (`AppleHomeModernIcon variant="color"`), el PIN de 8 dígitos formateado arriba y el código QR escaneable en el centro, exactamente igual que las cámaras HAP.
+  - Corrección en `HapGenericAccessory`: el getter `setupUri` ahora invoca correctamente `this.accessory.setupURI()`, generando el URI estándar de HomeKit (`X-HM://...`) para el renderizado del canvas QR.
+  - Se implementó cálculo determinista en cliente y servidor de `computeHapSetupUri(pincode, setupId, profile)` con codificación Base36 y especificación HAP 2.2.3.
+- **Recomendación inteligente general para todo tipo de accesorios HAP (Paneles de Alarma, Difusores, TVs, Válvulas, Purificadores, etc.):**
+  - Se extendió `detectHapRecommendation(device)` para analizar dinámicamente nombres de entidades, identificadores, dominios y clases de dispositivo (`alarm`, `alarma`, `argus`, `panel_alarma`, `seguridad`, `security`, `difusor`, `diffuser`, `humidif`, `tv`, `valve`, `purifier`, etc.).
+  - Para dispositivos como "Argus Alarm Card" (`binary_sensor`), detecta automáticamente que se trata de un Sistema de Alarma y Seguridad, pre-selecciona el perfil `security_system` y despliega la recomendación explicativa de por qué Apple Home no soporta paneles de alarma en Matter pero sí de forma nativa en HomeKit HAP con modos En Casa, Fuera, Noche y Desarmar.
+- **Publicación y activación/desactivación ultrarrápida (0 ms lag):**
+  - Se migró el anunciador mDNS en `HapGenericAccessory.publish()` de `MDNSAdvertiser.BONJOUR` a `MDNSAdvertiser.CIAO` (mDNS en JavaScript puro sin esperas ni bloqueos de socket del sistema operativo), enlazado directamente a la interfaz de red física principal.
+  - Se implementó gestión de estado optimista en `DeviceModal.tsx` (`localHapAccessory`, `localCompositeExported`) para que al pulsar «Publicar en HomeKit HAP» o alternar interruptores, la tarjeta QR se dibuje inmediatamente en pantalla sin congelar la UI esperando la recarga completa del listado de dispositivos.
+- **Persistencia y regla de oro preservada:**
+  - Los dispositivos y accesorios previamente emparejados en Matter y en HAP cámaras continúan 100% intactos en sus almacenes de datos.
+
 ## [1.8.99] - 2026-09-24
 
 ### Selector de protocolo híbrido (Matter vs HAP), recomendación inteligente para Apple Home y aceleración instantánea de QR

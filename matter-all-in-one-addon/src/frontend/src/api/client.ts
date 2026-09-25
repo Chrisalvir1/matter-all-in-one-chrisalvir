@@ -185,7 +185,14 @@ export const api = {
     request<Array<{ id: string; label: string }>>("/hap-profiles"),
 
   registerHap: (entityId: string, hapProfile: string) =>
-    request<{ success: boolean; pincode?: string; port?: number; error?: string }>(
+    request<{
+      success: boolean;
+      pincode?: string;
+      port?: number;
+      setupUri?: string;
+      setupId?: string;
+      error?: string;
+    }>(
       `/register-hap/${encodeURIComponent(entityId)}`,
       {
         method: "POST",

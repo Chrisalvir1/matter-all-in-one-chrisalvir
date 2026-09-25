@@ -48,6 +48,7 @@ export interface HapAccessoryInfo {
   pincode: string;
   port: number;
   username?: string;
+  setupId?: string;
   setupUri?: string;
   pairingState?: string;
 }

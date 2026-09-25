@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { DeviceRecord, EntityRecord, HapProfile } from "../types";
+import { DeviceRecord, EntityRecord, HapProfile, HapAccessoryInfo } from "../types";
 import { api } from "../api/client";
 import { QRCodeDisplay, AppleHomeModernIcon } from "./QRCodeDisplay";
 import { copyToClipboard } from "../utils/clipboard";
@@ -11,6 +11,218 @@ interface DeviceModalProps {
   onClose: () => void;
   onRefresh: () => void;
   showToast: (msg: string, isError?: boolean) => void;
+}
+
+const HAP_CATEGORY_IDS: Record<string, number> = {
+  humidifier: 8,
+  dehumidifier: 8,
+  air_purifier: 19,
+  television: 24,
+  television_speaker: 24,
+  valve_irrigation: 29,
+  valve_faucet: 29,
+  valve_shower: 29,
+  security_system: 11,
+  garage_door: 4,
+  doorbell: 18,
+  fan_hap: 3,
+  heater_cooler: 9,
+  thermostat_hap: 9,
+  outlet_hap: 7,
+  switch_hap: 8,
+  lightbulb_hap: 5,
+  lock_hap: 6,
+  window_covering_hap: 14,
+  door_hap: 12,
+  window_hap: 13,
+  motion_sensor_hap: 10,
+  contact_sensor_hap: 10,
+  smoke_sensor_hap: 10,
+  carbon_monoxide_sensor_hap: 10,
+  carbon_dioxide_sensor_hap: 10,
+  leak_sensor_hap: 10,
+  occupancy_sensor_hap: 10,
+  temperature_sensor_hap: 10,
+  humidity_sensor_hap: 10,
+  light_sensor_hap: 10,
+  air_quality_sensor_hap: 10,
+  battery_hap: 16,
+  speaker_hap: 26,
+  irrigation_system: 28,
+};
+
+function computeHapSetupUri(
+  pincode: string,
+  setupId: string = "HAP1",
+  profile: string = "humidifier",
+): string {
+  try {
+    const cleanPin = parseInt((pincode || "").replace(/-/g, ""), 10);
+    if (isNaN(cleanPin)) return "";
+    const category = HAP_CATEGORY_IDS[profile] || 1;
+    const total = (BigInt(category) << 31n) | (1n << 28n) | BigInt(cleanPin);
+    let encoded = total.toString(36).toUpperCase();
+    while (encoded.length < 9) encoded = "0" + encoded;
+    const cleanSetupId = (setupId || "HAP1")
+      .toUpperCase()
+      .replace(/[^0-9A-Z]/g, "")
+      .slice(0, 4)
+      .padEnd(4, "0");
+    return "X-HM://" + encoded + cleanSetupId;
+  } catch {
+    return "";
+  }
+}
+
+interface HapRecommendation {
+  isRecommended: boolean;
+  recommendedProfile: HapProfile;
+  categoryName: string;
+  badgeText: string;
+  reason: string;
+  appleAdvantage: string;
+}
+
+function detectHapRecommendation(
+  device: DeviceRecord | null | undefined,
+): HapRecommendation {
+  if (!device || !device.entities || device.entities.length === 0) {
+    return {
+      isRecommended: false,
+      recommendedProfile: "humidifier",
+      categoryName: "",
+      badgeText: "",
+      reason: "",
+      appleAdvantage: "",
+    };
+  }
+
+  const allStrings = [
+    device.name || "",
+    device.model || "",
+    device.manufacturer || "",
+    ...device.entities.flatMap((e) => [
+      e.entityId,
+      e.name || "",
+      e.domain || "",
+      (e as any).device_class || "",
+    ]),
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  const domains = new Set(device.entities.map((e) => e.domain));
+
+  // 1. Panel de Alarma / Security System
+  if (
+    domains.has("alarm_control_panel") ||
+    /alarm|alarma|argus|seguridad|security|panel_alarma|siren|sirena/i.test(
+      allStrings,
+    )
+  ) {
+    return {
+      isRecommended: true,
+      recommendedProfile: "security_system",
+      categoryName: "Panel de Alarma / Sistema de Seguridad",
+      badgeText: "⭐ Recomendado para Apple Home (Sistema de Alarma)",
+      reason:
+        "Apple Home no soporta Paneles de Alarma de forma nativa en la especificación actual de Matter.",
+      appleAdvantage:
+        "En HomeKit HAP se reconoce con el widget nativo de Sistema de Seguridad en Apple Casa (Armar en casa, Armar fuera, Noche y Desarmar) con alertas y notificaciones críticas de iOS.",
+    };
+  }
+
+  // 2. Difusor / Humidificador / Deshumidificador
+  if (
+    domains.has("humidifier") ||
+    /difusor|diffuser|humidif|deshumidif|dehumidif|aroma|esencia/i.test(
+      allStrings,
+    )
+  ) {
+    const isDehum = /deshumidif|dehumidif/i.test(allStrings);
+    return {
+      isRecommended: true,
+      recommendedProfile: isDehum ? "dehumidifier" : "humidifier",
+      categoryName: isDehum ? "Deshumidificador" : "Difusor / Humidificador",
+      badgeText: `⭐ Recomendado para Apple Home (${isDehum ? "Deshumidificador" : "Difusor"})`,
+      reason:
+        "Matter no incluye la categoría de Difusor ni Humidificador en Apple Home, exponiéndolos como simples ventiladores con niebla.",
+      appleAdvantage: `En HomeKit HAP se integra como ${isDehum ? "Deshumidificador" : "Difusor / Humidificador"} nativo en Apple Casa con icono propio y ajuste porcentual de humedad relativa.`,
+    };
+  }
+
+  // 3. Purificador de Aire
+  if (/purificad|air_purifier|purifier|filtro_aire/i.test(allStrings)) {
+    return {
+      isRecommended: true,
+      recommendedProfile: "air_purifier",
+      categoryName: "Purificador de Aire",
+      badgeText: "⭐ Recomendado para Apple Home (Purificador)",
+      reason:
+        "En Matter los purificadores suelen exponerse como simples interruptores o ventiladores sin calidad de aire.",
+      appleAdvantage:
+        "En HomeKit HAP se integra como Purificador de Aire nativo con velocidad de ventilador, calidad del aire y estado de filtro.",
+    };
+  }
+
+  // 4. Televisión / Reproductor Multimedia
+  if (
+    domains.has("media_player") ||
+    /televisi[oó]n|tv|media_player|roku|appletv|apple_tv|chromecast|soundbar|kodi/i.test(
+      allStrings,
+    )
+  ) {
+    return {
+      isRecommended: true,
+      recommendedProfile: "television",
+      categoryName: "Televisor / Reproductor Multimedia",
+      badgeText: "⭐ Recomendado para Apple Home (Televisor)",
+      reason:
+        "Apple Home no soporta reproductores multimedia en Matter de manera completa.",
+      appleAdvantage:
+        "En HomeKit HAP se integra como Televisor en Apple Casa y activa el mando a distancia interactivo en el Centro de Control de iOS con cambio de entradas y encendido/apagado.",
+    };
+  }
+
+  // 5. Válvula / Riego / Grifo
+  if (
+    domains.has("valve") ||
+    /v[aá]lvula|valve|riego|irrigation|grifo|faucet|sprinkler/i.test(allStrings)
+  ) {
+    const isFaucet = /grifo|faucet/i.test(allStrings);
+    return {
+      isRecommended: true,
+      recommendedProfile: isFaucet ? "valve_faucet" : "valve_irrigation",
+      categoryName: isFaucet ? "Grifo / Válvula" : "Sistema de Riego / Válvula",
+      badgeText: "⭐ Recomendado para Apple Home (Válvula)",
+      reason:
+        "Las válvulas en Matter tienen soporte limitado y no interactivo en Apple Home.",
+      appleAdvantage:
+        "En HomeKit HAP ofrece temporizador de apertura configurable y control directo de agua en Apple Casa.",
+    };
+  }
+
+  // 6. Puerta de Garaje
+  if (/garaje|garage/i.test(allStrings)) {
+    return {
+      isRecommended: true,
+      recommendedProfile: "garage_door",
+      categoryName: "Puerta de Garaje",
+      badgeText: "⭐ Recomendado para Apple Home (Garaje)",
+      reason: "En Matter suele aparecer como persiana genérica.",
+      appleAdvantage:
+        "En HomeKit HAP muestra el icono nativo de Garaje, estados 'Abriendo/Cerrando' y compatibilidad con Siri y CarPlay al aproximarte a tu casa.",
+    };
+  }
+
+  return {
+    isRecommended: false,
+    recommendedProfile: "humidifier",
+    categoryName: "",
+    badgeText: "",
+    reason: "",
+    appleAdvantage: "",
+  };
 }
 
 function getDomainIcon(domain?: string): string {
@@ -42,9 +254,13 @@ function getDomainIcon(domain?: string): string {
   }
 }
 
-function getControllerBadge(vendorId?: number | null, controllerName?: string): { icon: string; name: string } {
+function getControllerBadge(
+  vendorId?: number | null,
+  controllerName?: string,
+): { icon: string; name: string } {
   const name = controllerName || "Controlador Matter";
-  const vid = vendorId !== null && vendorId !== undefined ? Number(vendorId) : null;
+  const vid =
+    vendorId !== null && vendorId !== undefined ? Number(vendorId) : null;
   if (vid === 0x1349 || /apple/i.test(name)) {
     return { icon: "🍎", name: "Apple Home" };
   }
@@ -83,43 +299,39 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
   const [hapExportTarget, setHapExportTarget] = useState<EntityRecord | null>(null);
   /** Resultado de un export HAP reciente para mostrar QR/PIN */
   const [hapFreshPin, setHapFreshPin] = useState<{ pincode: string; port: number } | null>(null);
-  // localCompositeExported tracks the toggle state as proper React state so that
-  // flipping the master switch immediately re-renders the QR panel without waiting
-  // for onRefresh() to complete (mutating device.entities props directly is invisible to React).
+
+  // Recommendations calculated once based on device properties
+  const hapRecDetails = useMemo(() => detectHapRecommendation(device), [device]);
+
+  // Initial props extraction
+  const activeHapFromProps =
+    device?.entities.find((e) => e.hapAccessory?.published)?.hapAccessory ||
+    (device?.entities[0]?.hapAccessory?.published ? device.entities[0].hapAccessory : null);
+
+  // localHapAccessory tracks HAP publication as proper React state for 0ms reactivity
+  const [localHapAccessory, setLocalHapAccessory] = useState<HapAccessoryInfo | null>(
+    () => activeHapFromProps || null
+  );
+
+  // localCompositeExported tracks the toggle state as proper React state
   const [localCompositeExported, setLocalCompositeExported] = useState<boolean>(
     () => Boolean(device?.entities.some((e) => e.composite && e.exported))
   );
 
-  const isDeviceHapPublished = Boolean(
-    device?.entities.some((e) => e.hapAccessory?.published)
-  );
-
-  const activeHapAccessory =
-    device?.entities.find((e) => e.hapAccessory?.published)?.hapAccessory ||
-    (device?.entities[0]?.hapAccessory?.published ? device.entities[0].hapAccessory : null);
-
-  const isHapRecommended = Boolean(
-    device?.entities.some((e) =>
-      ["humidifier", "media_player", "valve", "alarm_control_panel"].includes(e.domain)
-    )
-  );
+  const isDeviceHapPublished = Boolean(localHapAccessory?.published);
+  const activeHapAccessory = localHapAccessory;
+  const isHapRecommended = hapRecDetails.isRecommended;
 
   const [selectedProtocol, setSelectedProtocol] = useState<"matter" | "hap">(() => {
-    if (isDeviceHapPublished) return "hap";
-    if (isHapRecommended) return "hap";
+    if (activeHapFromProps?.published) return "hap";
+    if (hapRecDetails.isRecommended && !device?.entities.some((e) => e.exported)) return "hap";
     return "matter";
   });
 
   const [hapProfiles, setHapProfiles] = useState<Array<{ id: string; label: string }>>([]);
   const [selectedHapProfile, setSelectedHapProfile] = useState<HapProfile>(() => {
-    const dom = device?.entities.find((e) => e.domain === "humidifier")
-      ? "humidifier"
-      : device?.entities[0]?.domain || "";
-    if (dom === "humidifier") return "humidifier";
-    if (dom === "media_player") return "television";
-    if (dom === "valve") return "valve_irrigation";
-    if (dom === "alarm_control_panel") return "security_system";
-    if (dom === "cover") return "garage_door";
+    if (activeHapFromProps?.hapProfile) return activeHapFromProps.hapProfile;
+    if (hapRecDetails.isRecommended) return hapRecDetails.recommendedProfile;
     return "humidifier";
   });
 
@@ -155,6 +367,9 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     if (!device) return;
     // Sync composite exported state whenever the parent pushes fresh device data
     setLocalCompositeExported(device.entities.some((e) => e.composite && e.exported));
+    if (activeHapFromProps) {
+      setLocalHapAccessory(activeHapFromProps);
+    }
     if (isDeviceHapPublished) {
       setSelectedProtocol("hap");
     }
@@ -176,7 +391,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     if (!stillCommissioned) {
       setResetFabrics(false);
     }
-  }, [device, targetEntity, isDeviceHapPublished]);
+  }, [device, targetEntity, isDeviceHapPublished, activeHapFromProps]);
 
   if (!device) return null;
 
@@ -230,6 +445,10 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     if (!compositePrimary) return;
     const nextState = !isCompositeExported;
     setLocalCompositeExported(nextState);
+    if (!nextState) {
+      setFreshPairingCode(null);
+      setFreshManualCode(null);
+    }
     device.entities.forEach((e) => {
       if (e.composite) {
         e.exported = nextState;
@@ -264,6 +483,13 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
   const handleToggleExport = async (entity: EntityRecord) => {
     const nextState = !entity.exported;
     entity.exported = nextState;
+    if (activeEntity?.entityId === entity.entityId) {
+      setSelectedEntity({ ...activeEntity, exported: nextState });
+    }
+    if (!nextState) {
+      setFreshPairingCode(null);
+      setFreshManualCode(null);
+    }
     try {
       const res: any = await api.toggleExport(entity.entityId, nextState);
       if (nextState && res?.pairingCode) {
@@ -280,11 +506,14 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
       void onRefresh();
     } catch (err: any) {
       entity.exported = !nextState;
+      if (activeEntity?.entityId === entity.entityId) {
+        setSelectedEntity({ ...activeEntity, exported: !nextState });
+      }
       showToast(err.message || "Error al modificar publicación", true);
     }
   };
 
-  // Direct HAP publish handler
+  // Direct HAP publish handler with 0ms optimistic UI update
   const handlePublishHapDirect = async () => {
     const targetId = compositePrimary?.entityId || activeEntity?.entityId || device.entities[0].entityId;
     setIsBusy(true);
@@ -292,18 +521,31 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
       const res = await api.registerHap(targetId, selectedHapProfile);
       if (res.success) {
         showToast(`✓ Publicado en HomeKit HAP (PIN: ${res.pincode})`);
-        const updatedAcc = {
+        const setupUri =
+          res.setupUri ||
+          computeHapSetupUri(
+            res.pincode || "",
+            res.setupId || "HAP1",
+            selectedHapProfile
+          );
+        const updatedAcc: HapAccessoryInfo = {
           published: true,
           isPaired: false,
           hapProfile: selectedHapProfile,
-          profileLabel: hapProfiles.find((p) => p.id === selectedHapProfile)?.label || selectedHapProfile,
+          profileLabel:
+            hapProfiles.find((p) => p.id === selectedHapProfile)?.label ||
+            selectedHapProfile,
           pincode: res.pincode || "",
           port: res.port || 0,
+          setupId: res.setupId || "HAP1",
+          setupUri,
+          pairingState: "⏳ Listo para vincular (Escanea el código QR en Apple Home)",
         };
         device.entities.forEach((e) => {
           e.hapAccessory = updatedAcc as any;
         });
         if (activeEntity) activeEntity.hapAccessory = updatedAcc as any;
+        setLocalHapAccessory(updatedAcc);
         setHapFreshPin({ pincode: res.pincode || "", port: res.port || 0 });
         void onRefresh();
       } else {
@@ -316,7 +558,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     }
   };
 
-  // Direct HAP unregister handler
+  // Direct HAP unregister handler with 0ms optimistic UI update
   const handleUnregisterHapDirect = async () => {
     if (!confirm("¿Retirar este accesorio de HomeKit HAP?")) return;
     const targetId = compositePrimary?.entityId || activeEntity?.entityId || device.entities[0].entityId;
@@ -327,6 +569,8 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
         e.hapAccessory = null;
       });
       if (activeEntity) activeEntity.hapAccessory = null;
+      setLocalHapAccessory(null);
+      setHapFreshPin(null);
       showToast("Accesorio retirado de HomeKit HAP");
       void onRefresh();
     } catch (err: any) {
@@ -629,23 +873,25 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                 transition: "all 0.15s ease",
               }}
             >
-              🏠 HomeKit HAP {isDeviceHapPublished ? "✓ Activo" : isHapRecommended ? "⭐ Recomendado para Apple" : ""}
+              🏠 HomeKit HAP {isDeviceHapPublished ? "✓ Activo" : hapRecDetails.isRecommended ? `⭐ Recomendado (${hapRecDetails.categoryName})` : ""}
             </button>
           </div>
 
           <div style={{ fontSize: 11.5, color: "var(--muted)" }}>
             {selectedProtocol === "matter"
               ? "Compatible con Apple Home, Google Home, Alexa y SmartThings"
-              : "Accesorio HomeKit nativo (reconocido como Difusor, TV, Válvula, etc.)"}
+              : hapRecDetails.isRecommended
+              ? `Accesorio HomeKit nativo (reconocido como ${hapRecDetails.categoryName})`
+              : "Accesorio HomeKit nativo (reconocido como Alarma, Difusor, TV, Válvula, etc.)"}
           </div>
         </div>
 
         {/* ── Smart Recommendation Banner (Apple Home) ── */}
-        {isHapRecommended && selectedProtocol === "matter" && !isExported && (
+        {hapRecDetails.isRecommended && selectedProtocol === "matter" && !isExported && (
           <div
             style={{
-              background: "rgba(245, 158, 11, 0.08)",
-              border: "1px solid rgba(245, 158, 11, 0.28)",
+              background: "linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(245, 158, 11, 0.05))",
+              border: "1px solid rgba(245, 158, 11, 0.35)",
               borderRadius: 10,
               padding: "10px 14px",
               marginBottom: 10,
@@ -657,33 +903,32 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <span style={{ fontSize: 18 }}>💡</span>
+              <span style={{ fontSize: 20 }}>⭐</span>
               <div style={{ fontSize: 12, color: "#fef3c7", lineHeight: 1.4 }}>
-                <strong>Recomendación para Apple Home:</strong> Este dispositivo es un{" "}
-                <span style={{ color: "#fcd34d", fontWeight: 700 }}>
-                  {device.entities.find((e) => e.domain === "humidifier")
-                    ? "Difusor / Humidificador"
-                    : activeEntity?.domain === "media_player"
-                    ? "Televisor"
-                    : "Accesorio especial"}
-                </span>
-                . Apple Home en Matter lo expondrá como un ventilador con deslizador de niebla.
-                En <strong>HomeKit HAP</strong> aparecerá con icono nativo de <strong>Difusor / Humidificador</strong> y control real de humedad.
+                <strong style={{ color: "#fcd34d" }}>Recomendación para Apple Home ({hapRecDetails.categoryName}):</strong>{" "}
+                {hapRecDetails.reason}{" "}
+                {hapRecDetails.appleAdvantage}
               </div>
             </div>
             <button
               type="button"
-              onClick={() => setSelectedProtocol("hap")}
+              onClick={() => {
+                setSelectedProtocol("hap");
+                if (hapRecDetails.recommendedProfile) {
+                  setSelectedHapProfile(hapRecDetails.recommendedProfile);
+                }
+              }}
               style={{
                 whiteSpace: "nowrap",
                 padding: "6px 14px",
-                background: "rgba(245, 158, 11, 0.2)",
-                border: "1px solid rgba(245, 158, 11, 0.45)",
+                background: "rgba(245, 158, 11, 0.25)",
+                border: "1px solid rgba(245, 158, 11, 0.5)",
                 color: "#fde68a",
                 borderRadius: 8,
                 fontSize: 12,
-                fontWeight: 600,
+                fontWeight: 650,
                 cursor: "pointer",
+                boxShadow: "0 2px 8px rgba(245,158,11,0.2)",
               }}
             >
               Cambiar a HomeKit HAP →
@@ -1080,16 +1325,22 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                       </option>
                     ))}
                   </select>
-                  <small style={{ color: "var(--muted)", fontSize: 11, lineHeight: 1.4 }}>
-                    {selectedHapProfile === "humidifier"
-                      ? "Apple Home lo reconocerá como Difusor / Humidificador nativo con icono de gota, porcentaje de humedad actual y deslizador de vapor/humedad deseada."
+                  <small style={{ color: "#fef08a", fontSize: 11, lineHeight: 1.4, marginTop: 4 }}>
+                    {selectedHapProfile === "security_system"
+                      ? "Apple Home lo reconocerá como Panel de Alarma / Sistema de Seguridad nativo con modos En Casa, Fuera, Noche y Desarmado."
+                      : selectedHapProfile === "humidifier"
+                      ? "Apple Home lo reconocerá como Difusor / Humidificador nativo con icono de gota, porcentaje de humedad y control de niebla."
+                      : selectedHapProfile === "dehumidifier"
+                      ? "Apple Home lo reconocerá como Deshumidificador nativo con control porcentual de humedad."
+                      : selectedHapProfile === "air_purifier"
+                      ? "Apple Home lo reconocerá como Purificador de Aire nativo con velocidad de ventilador y estado de filtros."
                       : selectedHapProfile === "television"
                       ? "Apple Home lo reconocerá como Televisor nativo con selector de entradas HDMI y control remoto integrado en iOS."
-                      : selectedHapProfile === "valve_irrigation"
-                      ? "Apple Home lo reconocerá como Válvula de Riego con temporizador nativo."
-                      : selectedHapProfile === "security_system"
-                      ? "Apple Home lo reconocerá como Panel de Seguridad y Alarma."
-                      : "Apple Home creará el accesorio con los servicios y características nativas de este tipo de perfil."}
+                      : selectedHapProfile.startsWith("valve")
+                      ? "Apple Home lo reconocerá como Válvula / Sistema de Riego con temporizador nativo."
+                      : selectedHapProfile === "garage_door"
+                      ? "Apple Home lo reconocerá como Puerta de Garaje con compatibilidad Siri y CarPlay."
+                      : "Apple Home creará el accesorio con los servicios y características nativas de hap-nodejs 2.2.3."}
                   </small>
                 </div>
 
@@ -1500,108 +1751,113 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
 
             {selectedProtocol === "hap" ? (
               isDeviceHapPublished && activeHapAccessory ? (
-                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                  <div
-                    style={{
-                      background: "rgba(245, 158, 11, 0.08)",
-                      border: "1px solid rgba(245, 158, 11, 0.35)",
-                      borderRadius: 14,
-                      padding: "20px 16px",
-                      textAlign: "center",
-                    }}
-                  >
-                    <div style={{ fontSize: 10.5, fontWeight: 750, color: "#fcd34d", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                      CÓDIGO PIN DE CONFIGURACIÓN
+                activeHapAccessory.isPaired ? (
+                  <div className="paired-success-glass-card" id="paired-hap-device-card">
+                    <div className="paired-apple-home-badge">
+                      <AppleHomeModernIcon variant="color" size={56} />
                     </div>
+                    <h4 className="paired-card-title">¡Accesorio HAP vinculado en Apple Home!</h4>
+                    <p className="paired-card-desc">
+                      Este accesorio ya está vinculado y activo en tu app Casa de Apple como{" "}
+                      <strong style={{ color: "#fcd34d" }}>
+                        {activeHapAccessory.profileLabel || activeHapAccessory.hapProfile}
+                      </strong>.
+                    </p>
                     <div
                       style={{
-                        fontSize: 32,
-                        fontWeight: 800,
-                        letterSpacing: 4,
-                        color: "#fef08a",
-                        fontFamily: "monospace",
-                        margin: "10px 0",
-                        cursor: "pointer",
-                        userSelect: "all",
-                      }}
-                      title="Clic para copiar"
-                      onClick={() => {
-                        void navigator.clipboard?.writeText(activeHapAccessory.pincode);
-                        showToast("✓ PIN copiado al portapapeles");
+                        marginTop: 12,
+                        padding: "10px 14px",
+                        background: "rgba(245, 158, 11, 0.1)",
+                        borderRadius: 10,
+                        border: "1px solid rgba(245, 158, 11, 0.3)",
+                        fontSize: 12,
+                        textAlign: "left",
+                        color: "#fde68a",
                       }}
                     >
-                      {activeHapAccessory.pincode}
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "center", gap: 8, flexWrap: "wrap" }}>
-                      <button
-                        type="button"
-                        style={{
-                          padding: "5px 14px",
-                          borderRadius: 6,
-                          background: "rgba(255,255,255,0.08)",
-                          border: "1px solid rgba(255,255,255,0.18)",
-                          color: "#e5e7eb",
-                          fontSize: 12,
-                          fontWeight: 600,
-                          cursor: "pointer",
-                        }}
-                        onClick={() => {
-                          void navigator.clipboard?.writeText(activeHapAccessory.pincode);
-                          showToast("✓ PIN copiado al portapapeles");
-                        }}
-                      >
-                        📋 Copiar PIN
-                      </button>
-                      <span
-                        style={{
-                          padding: "5px 12px",
-                          borderRadius: 6,
-                          background: activeHapAccessory.isPaired ? "rgba(16, 185, 129, 0.15)" : "rgba(245, 158, 11, 0.15)",
-                          color: activeHapAccessory.isPaired ? "#6ee7b7" : "#fcd34d",
-                          border: `1px solid ${activeHapAccessory.isPaired ? "rgba(52, 211, 153, 0.3)" : "rgba(245, 158, 11, 0.3)"}`,
-                          fontSize: 12,
-                          fontWeight: 600,
-                        }}
-                      >
-                        {activeHapAccessory.isPaired ? "🍏 Enlazada a Casa" : "⏳ Esperando Vinculación"}
-                      </span>
+                      <div>
+                        <strong>Código PIN de configuración:</strong> <code>{activeHapAccessory.pincode}</code>
+                      </div>
+                      <div style={{ marginTop: 4 }}>
+                        <strong>Puerto HAP:</strong> {activeHapAccessory.port}
+                      </div>
                     </div>
                   </div>
-
-                  <div
-                    style={{
-                      background: "rgba(255, 255, 255, 0.03)",
-                      border: "1px solid var(--border)",
-                      borderRadius: 12,
-                      padding: "14px 16px",
-                      fontSize: 12,
-                      color: "var(--muted)",
-                      lineHeight: 1.6,
-                    }}
-                  >
-                    <strong style={{ color: "#fcd34d", display: "block", marginBottom: 6 }}>
-                      📱 Pasos para añadir a Apple Home:
-                    </strong>
-                    <ol style={{ margin: 0, paddingLeft: 18 }}>
-                      <li>Abre la app <strong>Casa</strong> en tu iPhone, iPad o Mac.</li>
-                      <li>Toca <strong>+</strong> en la esquina superior derecha y selecciona <strong>Añadir accesorio</strong>.</li>
-                      <li>Toca <strong>Más opciones...</strong> (o <em>"¿No tienes un código o no puedes escanearlo?"</em>).</li>
-                      <li>Selecciona <strong>{device.name}</strong> de la lista de accesorios cercanos.</li>
-                      <li>Introduce el PIN de 8 dígitos: <strong style={{ color: "#fef08a" }}>{activeHapAccessory.pincode}</strong></li>
-                    </ol>
-                  </div>
-                </div>
+                ) : (
+                  <>
+                    <QRCodeDisplay
+                      pairingCode={
+                        activeHapAccessory.setupUri ||
+                        computeHapSetupUri(
+                          activeHapAccessory.pincode,
+                          activeHapAccessory.setupId || "HAP1",
+                          activeHapAccessory.hapProfile
+                        )
+                      }
+                      manualCode={activeHapAccessory.pincode}
+                      pinCode={activeHapAccessory.pincode}
+                      variant="hap-homekit"
+                      entityName={device.name}
+                      elementId="hap-device-qr-code"
+                      noteText="Escanea con la app Casa de Apple para vincular accesorio HAP"
+                    />
+                    <div
+                      style={{
+                        marginTop: 10,
+                        padding: "10px 12px",
+                        background: "rgba(245, 158, 11, 0.1)",
+                        borderRadius: 8,
+                        border: "1px solid rgba(245, 158, 11, 0.3)",
+                        fontSize: "0.78rem",
+                        textAlign: "left",
+                      }}
+                    >
+                      <strong style={{ color: "#fcd34d" }}>
+                        📲 Cómo vincular en Apple Casa:
+                      </strong>
+                      <ol style={{ margin: "4px 0 0 16px", padding: 0, color: "#fef3c7", lineHeight: 1.4 }}>
+                        <li>Abre la app <strong>Casa</strong> en tu iPhone, iPad o Mac.</li>
+                        <li>Toca <strong>+</strong> y selecciona <strong>Añadir accesorio</strong>.</li>
+                        <li>Escanea la pegatina interactiva amarilla de arriba o introduce el PIN manual <strong>{activeHapAccessory.pincode}</strong>.</li>
+                      </ol>
+                    </div>
+                  </>
+                )
               ) : (
                 <div
                   className="qr-liquid-glass-card"
-                  style={{ padding: 24, textAlign: "center", color: "var(--text-secondary)", flexShrink: 0 }}
+                  style={{ padding: 22, textAlign: "center", color: "var(--text-secondary)", flexShrink: 0 }}
                 >
-                  <p style={{ fontSize: 13.5, color: "#fcd34d", fontWeight: 600, marginBottom: 8 }}>
-                    🏠 HomeKit HAP no publicado
+                  <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
+                    <AppleHomeModernIcon variant="color" size={54} />
+                  </div>
+                  <h4 style={{ margin: "0 0 8px 0", color: "#fcd34d", fontSize: 15, fontWeight: 700 }}>
+                    Accesorio HomeKit HAP no publicado
+                  </h4>
+                  <p style={{ fontSize: 12.5, lineHeight: 1.5, margin: "0 0 16px 0", color: "#e5e7eb" }}>
+                    {hapRecDetails.isRecommended
+                      ? `Recomendado para este dispositivo (${hapRecDetails.categoryName}): se publicará como accesorio HAP nativo con soporte directo en Apple Casa.`
+                      : "Publica este accesorio en HomeKit HAP para generar su código QR interactivo con la casita amarilla de Apple Casa y código PIN de 8 dígitos."}
                   </p>
-                  <p style={{ fontSize: 12, lineHeight: 1.5 }}>
-                    Selecciona el perfil deseado en la columna central y pulsa <strong>"Publicar en HomeKit HAP"</strong> en la columna izquierda para generar el código PIN de 8 dígitos y anunciar el accesorio en Apple Home.
-                  </p>
+                  <button
+                    type="button"
+                    className="button button-primary"
+                    style={{
+                      background: "linear-gradient(135deg, #f59e0b, #d97706)",
+                      color: "#000",
+                      fontWeight: 750,
+                      padding: "9px 18px",
+                      borderRadius: 8,
+                      border: "none",
+                      cursor: "pointer",
+                      width: "100%",
+                      boxShadow: "0 4px 12px rgba(245, 158, 11, 0.25)",
+                    }}
+                    onClick={handlePublishHapDirect}
+                    disabled={isBusy}
+                  >
+                    ⚡ Publicar en HomeKit HAP ahora
+                  </button>
                 </div>
               )
             ) : isExported ? (
@@ -1667,7 +1923,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
             )}
 
             <div className="accessory-controls" id="accessory-controls" style={{ flexShrink: 0, paddingTop: 6 }}>
-              {isExported && (
+              {selectedProtocol === "matter" && isExported && (
                 <div className="matter-actions" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   <button
                     className="button button-secondary action-btn"
@@ -1702,6 +1958,21 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                     style={{ padding: "7px 10px", fontSize: 11.5 }}
                   >
                     Desconectar todo y nuevo QR
+                  </button>
+                </div>
+              )}
+              {selectedProtocol === "hap" && isDeviceHapPublished && (
+                <div className="hap-actions" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <button
+                    className="button button-danger action-btn"
+                    id="unregister-hap-button"
+                    type="button"
+                    onClick={handleUnregisterHapDirect}
+                    disabled={isBusy}
+                    title="Retirar accesorio de HomeKit HAP"
+                    style={{ padding: "7px 10px", fontSize: 11.5 }}
+                  >
+                    Retirar de HomeKit HAP
                   </button>
                 </div>
               )}

@@ -18,6 +18,7 @@ import {
   MDNSAdvertiser,
 } from "@homebridge/hap-nodejs";
 import crypto from "node:crypto";
+import os from "node:os";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tipos exportados
@@ -787,14 +788,43 @@ export class HapGenericAccessory {
 
   public get setupUri(): string {
     try {
+      if (typeof this.accessory.setupURI === "function") {
+        return this.accessory.setupURI();
+      }
       return (this.accessory as any)._setupURI || "";
     } catch {
       return "";
     }
   }
 
+  public static detectPrimaryNetworkInterface():
+    { name: string; ip: string } | undefined {
+    try {
+      const ifaces = os.networkInterfaces();
+      const ignoredPatterns =
+        /^(lo|docker|hassio|veth|br-|dummy|tun|tap|tailscale|wg|utun|llw|awdl)/i;
+
+      for (const [name, addrs] of Object.entries(ifaces)) {
+        if (ignoredPatterns.test(name)) continue;
+        for (const addr of addrs || []) {
+          if (addr.internal) continue;
+          if (addr.family === "IPv4" || (addr.family as any) === 4) {
+            if (
+              addr.address.startsWith("172.17.") ||
+              addr.address.startsWith("172.30.")
+            )
+              continue;
+            return { name, ip: addr.address };
+          }
+        }
+      }
+    } catch {}
+    return undefined;
+  }
+
   public async publish(): Promise<void> {
     const category = HAP_PROFILE_CATEGORIES[this.record.hapProfile] ?? Categories.OTHER;
+    const primaryIface = HapGenericAccessory.detectPrimaryNetworkInterface();
     await this.accessory.publish(
       {
         username: this.record.username,
@@ -802,11 +832,15 @@ export class HapGenericAccessory {
         setupID: this.record.setupId,
         port: this.record.port,
         category,
-        advertiser: MDNSAdvertiser.BONJOUR,
+        advertiser: MDNSAdvertiser.CIAO,
+        bind: primaryIface?.name ? [primaryIface.name] : undefined,
       },
       true,
     );
     this.isPublished = true;
+    try {
+      this.accessory.setupURI();
+    } catch {}
   }
 
   public async unpublish(): Promise<void> {

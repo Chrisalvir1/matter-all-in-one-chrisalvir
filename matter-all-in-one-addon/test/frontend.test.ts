@@ -191,6 +191,12 @@ describe("frontend accessibility contract", () => {
       'variant={multiAdminOpen ? "multi-admin-glass" : "matter-badge"}',
     );
 
+    // DeviceModal renders official iOS Liquid Glass HAP QR code with yellow Apple Home house
+    expect(deviceModal).toContain('variant="hap-homekit"');
+    expect(deviceModal).toContain("computeHapSetupUri");
+    expect(deviceModal).toContain("detectHapRecommendation");
+    expect(deviceModal).toContain("security_system");
+
     // CSS contract for iOS 27 Liquid Glass sticker and paired success card
     expect(stylesheet).toContain(".ios27-glass-sticker");
     expect(stylesheet).toContain(".ios27-glass-sticker.sticker-hap");

@@ -432,18 +432,39 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   public async manualRegisterHap(
     entityId: string,
     hapProfile: HapProfile,
-  ): Promise<{ success: boolean; pincode?: string; port?: number; error?: string }> {
+  ): Promise<{
+    success: boolean;
+    pincode?: string;
+    port?: number;
+    setupUri?: string;
+    setupId?: string;
+    error?: string;
+  }> {
     try {
       if (!this.entities.has(entityId)) {
         return { success: false, error: "Device not found in discovery." };
       }
       if (this.hapAccessories.has(entityId)) {
         const rec = this.hapAccessoryRecords.get(entityId)!;
-        return { success: true, pincode: rec.pincode, port: rec.port };
+        const acc = this.hapAccessories.get(entityId);
+        return {
+          success: true,
+          pincode: rec.pincode,
+          port: rec.port,
+          setupUri: acc?.setupUri || "",
+          setupId: rec.setupId,
+        };
       }
       await this.activateHapEntity(entityId, hapProfile);
       const rec = this.hapAccessoryRecords.get(entityId)!;
-      return { success: true, pincode: rec.pincode, port: rec.port };
+      const acc = this.hapAccessories.get(entityId);
+      return {
+        success: true,
+        pincode: rec.pincode,
+        port: rec.port,
+        setupUri: acc?.setupUri || "",
+        setupId: rec.setupId,
+      };
     } catch (err) {
       this.log.error(`Failed to register HAP entity ${entityId}: ${err}`);
       return { success: false, error: String(err) };
@@ -5463,6 +5484,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                   pincode: hapRec.pincode,
                   port: hapRec.port,
                   username: hapRec.username,
+                  setupId: hapRec.setupId,
                   setupUri: hapAcc?.setupUri || "",
                   pairingState:
                     hapAcc?.isPaired() || hapRec.isPaired
