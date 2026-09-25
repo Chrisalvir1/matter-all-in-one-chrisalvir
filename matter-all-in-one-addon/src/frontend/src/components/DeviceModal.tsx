@@ -963,7 +963,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                   {selectedProtocol === "hap"
                     ? isDeviceHapPublished
                       ? "1 accesorio activo en HomeKit HAP"
-                      : "Sin publicar en HomeKit HAP"
+                      : "Publica y gestiona el accesorio desde el panel derecho"
                     : isComposite
                     ? "1 accesorio Matter unificado (1 solo código QR)"
                     : `0/${device.entities.length} publicadas`}
@@ -972,7 +972,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
               <span id="modal-export-count">
                 {selectedProtocol === "hap"
                   ? isDeviceHapPublished
-                    ? "✓ 1/1 HAP"
+                    ? "✓ 1 HAP"
                     : "0/1 HAP"
                   : isComposite
                   ? isCompositeExported
@@ -984,64 +984,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
               </span>
             </div>
 
-            {selectedProtocol === "hap" ? (
-              <div
-                style={{
-                  padding: "14px",
-                  background: isDeviceHapPublished ? "rgba(16, 185, 129, 0.08)" : "rgba(245, 158, 11, 0.08)",
-                  border: `1px solid ${isDeviceHapPublished ? "rgba(16, 185, 129, 0.28)" : "rgba(245, 158, 11, 0.28)"}`,
-                  borderRadius: "10px",
-                  marginBottom: "10px",
-                  flexShrink: 0,
-                }}
-              >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: "13px", color: isDeviceHapPublished ? "#34d399" : "#fcd34d" }}>
-                      {isDeviceHapPublished ? "✓ Activo en HomeKit HAP" : "🏠 Exportar a Apple HomeKit"}
-                    </div>
-                    <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "2px" }}>
-                      {isDeviceHapPublished
-                        ? `Puerto: ${activeHapAccessory?.port || 52000}`
-                        : "Anuncia el accesorio directamente en Apple Home"}
-                    </div>
-                  </div>
-                </div>
-                <div style={{ marginTop: "12px" }}>
-                  {isDeviceHapPublished ? (
-                    <button
-                      type="button"
-                      className="button button-danger"
-                      style={{ width: "100%", padding: "8px 12px", fontSize: "12px" }}
-                      onClick={handleUnregisterHapDirect}
-                      disabled={isBusy}
-                    >
-                      {isBusy ? "Retirando…" : "Retirar de HomeKit HAP"}
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="button"
-                      style={{
-                        width: "100%",
-                        padding: "9px 14px",
-                        fontSize: "12.5px",
-                        fontWeight: 700,
-                        background: "rgba(245, 158, 11, 0.2)",
-                        border: "1px solid rgba(245, 158, 11, 0.5)",
-                        color: "#fcd34d",
-                        borderRadius: "8px",
-                        cursor: isBusy ? "not-allowed" : "pointer",
-                      }}
-                      onClick={handlePublishHapDirect}
-                      disabled={isBusy}
-                    >
-                      {isBusy ? "Publicando en HAP…" : "🏠 Publicar en HomeKit HAP"}
-                    </button>
-                  )}
-                </div>
-              </div>
-            ) : isComposite ? (
+            {selectedProtocol === "matter" && isComposite ? (
               <div
                 style={{
                   display: "flex",
@@ -1173,7 +1116,24 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                       className="export-control"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      {isComposite ? (
+                      {selectedProtocol === "hap" ? (
+                        <span
+                          className="badge"
+                          style={{
+                            fontSize: "10.5px",
+                            padding: "2px 8px",
+                            borderRadius: "6px",
+                            background: isDeviceHapPublished
+                              ? "rgba(245, 158, 11, 0.18)"
+                              : "rgba(255, 255, 255, 0.05)",
+                            color: isDeviceHapPublished ? "#fcd34d" : "var(--muted)",
+                            border: `1px solid ${isDeviceHapPublished ? "rgba(245, 158, 11, 0.4)" : "rgba(255, 255, 255, 0.1)"}`,
+                            fontWeight: 550,
+                          }}
+                        >
+                          {isDeviceHapPublished ? "✓ HAP Activo" : "HAP"}
+                        </span>
+                      ) : isComposite ? (
                         isExcludedAuxiliary ? (
                           <span
                             style={{

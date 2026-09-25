@@ -1,3 +1,12 @@
+## [1.8.101] - 2026-09-24
+
+### Unificación de interfaz HAP: eliminación de caja duplicada en columna izquierda
+
+- **Eliminación de caja duplicada en columna 1:**
+  - Se eliminó la caja duplicada de "Exportar a Apple HomeKit / Publicar en HomeKit HAP" en la columna izquierda de `DeviceModal`.
+  - La publicación, despublicación y visualización del código QR y pegatina física de Apple Home ahora residen de forma limpia y exclusiva en la columna derecha (Columna 3).
+  - En la columna izquierda, cuando se navega en la pestaña HomeKit HAP, las filas de entidades muestran una insignia informativa de estado (`✓ HAP Activo` o `HAP`) sin interruptores ni acciones redundantes.
+
 ## [1.8.100] - 2026-09-24
 
 ### Pegatina física QR HomeKit HAP con casita amarilla de Apple Casa, recomendación global de perfiles HAP y activación instantánea
