@@ -444,26 +444,6 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       if (!this.entities.has(entityId)) {
         return { success: false, error: "Device not found in discovery." };
       }
-      // Mutual exclusion: if currently exported in Matter, unregister from Matter
-      const compositeDeviceId =
-        this.compositeMembership.get(entityId) ??
-        this.getCompositeCandidate(entityId)?.deviceId;
-      const compositeKey = compositeDeviceId
-        ? this.compositeStorageKey(compositeDeviceId)
-        : null;
-      if (
-        this.exportedDevices.has(entityId) ||
-        (compositeKey && this.exportedDevices.has(compositeKey))
-      ) {
-        try {
-          await this.manualUnregister(entityId);
-          this.log.notice(
-            `[HAP] Automatically unregistered Matter export for ${entityId} to enforce protocol exclusivity.`,
-          );
-        } catch (mErr) {
-          this.log.warn(`[HAP] Could not unregister Matter for ${entityId}: ${mErr}`);
-        }
-      }
       if (this.hapAccessories.has(entityId)) {
         const rec = this.hapAccessoryRecords.get(entityId)!;
         const acc = this.hapAccessories.get(entityId);
@@ -3755,36 +3735,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     // Skip the composite path entirely so every switch gets its own QR code.
     const isMultiSwitch = deviceId ? this.isMultiSwitchDevice(deviceId) : false;
 
-    // Mutual exclusion: if currently published as HAP generic accessory, unpublish from HAP
-    if (
-      this.hapAccessories.has(entityId) ||
-      this.hapAccessoryRecords.get(entityId)?.published
-    ) {
-      try {
-        await this.manualUnregisterHap(entityId);
-        this.log.notice(
-          `[Matter] Automatically unregistered HAP accessory for ${entityId} to enforce protocol exclusivity.`,
-        );
-      } catch (hErr) {
-        this.log.warn(`[Matter] Could not unregister HAP for ${entityId}: ${hErr}`);
-      }
-    }
-
     try {
       const composite = isMultiSwitch
         ? undefined
         : this.getCompositeCandidate(entityId);
       if (composite) {
-        for (const member of composite.members) {
-          if (
-            this.hapAccessories.has(member.entityId) ||
-            this.hapAccessoryRecords.get(member.entityId)?.published
-          ) {
-            try {
-              await this.manualUnregisterHap(member.entityId);
-            } catch {}
-          }
-        }
         const key = this.compositeStorageKey(composite.deviceId);
         this.exportedDevices.add(key);
         composite.members.forEach((member) =>

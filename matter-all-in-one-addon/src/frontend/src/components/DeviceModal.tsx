@@ -448,19 +448,6 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     if (!nextState) {
       setFreshPairingCode(null);
       setFreshManualCode(null);
-    } else {
-      // Mutual exclusion: when Matter is activated, unregister HAP
-      if (localHapAccessory?.published) {
-        try {
-          await api.unregisterHap(compositePrimary.entityId);
-        } catch {}
-        device.entities.forEach((e) => {
-          e.hapAccessory = null;
-        });
-        if (activeEntity) activeEntity.hapAccessory = null;
-        setLocalHapAccessory(null);
-        setHapFreshPin(null);
-      }
     }
     device.entities.forEach((e) => {
       if (e.composite) {
@@ -502,19 +489,6 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     if (!nextState) {
       setFreshPairingCode(null);
       setFreshManualCode(null);
-    } else {
-      // Mutual exclusion: when Matter is activated, unregister HAP
-      if (localHapAccessory?.published) {
-        try {
-          await api.unregisterHap(entity.entityId);
-        } catch {}
-        device.entities.forEach((e) => {
-          e.hapAccessory = null;
-        });
-        if (activeEntity) activeEntity.hapAccessory = null;
-        setLocalHapAccessory(null);
-        setHapFreshPin(null);
-      }
     }
     try {
       const res: any = await api.toggleExport(entity.entityId, nextState);
@@ -569,17 +543,11 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
         };
         device.entities.forEach((e) => {
           e.hapAccessory = updatedAcc as any;
-          // Mutual exclusion: when HAP is published, deactivate Matter
-          e.exported = false;
         });
         if (activeEntity) {
           activeEntity.hapAccessory = updatedAcc as any;
-          activeEntity.exported = false;
         }
         setLocalHapAccessory(updatedAcc);
-        setLocalCompositeExported(false);
-        setFreshPairingCode(null);
-        setFreshManualCode(null);
         setHapFreshPin({ pincode: res.pincode || "", port: res.port || 0 });
         void onRefresh();
       } else {
@@ -992,6 +960,35 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
             >
               Cambiar a HomeKit HAP →
             </button>
+          </div>
+        )}
+
+        {/* ── Coexistence Banner (HAP Active + Matter Tab) ── */}
+        {isDeviceHapPublished && selectedProtocol === "matter" && (
+          <div
+            style={{
+              background: "linear-gradient(135deg, rgba(59, 130, 246, 0.12), rgba(16, 185, 129, 0.08))",
+              border: "1px solid rgba(59, 130, 246, 0.35)",
+              borderRadius: 10,
+              padding: "10px 14px",
+              marginBottom: 10,
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              flexShrink: 0,
+              fontSize: 12,
+              color: "#e2e8f0",
+              lineHeight: 1.4,
+            }}
+          >
+            <span style={{ fontSize: 18 }}>🌐</span>
+            <div>
+              <strong style={{ color: "#60a5fa" }}>Modo Coexistencia HAP + Matter Multi-Admin:</strong>{" "}
+              Accesorio activo en <strong>HomeKit HAP (Apple Home)</strong>. Puedes publicar y escanear este código QR de Matter en <strong>Google Home</strong>, <strong>Alexa</strong> o <strong>SmartThings</strong> para controlarlo en todas tus plataformas.
+              <span style={{ display: "block", fontSize: 11, color: "#94a3b8", marginTop: 2 }}>
+                💡 Importante: Como ya lo tienes en Apple Casa vía HAP, escanea este código Matter exclusivamente en Google Home, Alexa o SmartThings para evitar duplicados en tu iPhone.
+              </span>
+            </div>
           </div>
         )}
 

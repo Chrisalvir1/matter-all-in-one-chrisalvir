@@ -1,3 +1,15 @@
+## [1.9.1] - 2026-09-24
+
+### Modo Coexistencia HAP + Matter Multi-Admin simultáneo
+
+- **Coexistencia simultánea de protocolos (HAP + Matter):**
+  - Se permite que un mismo dispositivo esté publicado activamente en **HomeKit HAP (Apple Home)** con su accesorio nativo (panel de alarma, difusor, TV, etc.) y al mismo tiempo en **Matter (Multi-Admin)** para ser vinculado y controlado en **Google Home, Amazon Alexa o Samsung SmartThings**.
+  - Se removió la auto-desactivación cruzada forzada entre ambos protocolos, permitiendo que convivan en puertos y anunciadores mDNS independientes sin interferencias.
+- **Banner guía de Modo Coexistencia en la interfaz:**
+  - Al visualizar la pestaña Matter con el accesorio ya activo en HAP, la interfaz muestra un banner informativo destacando que el modo coexistencia está activo y recomendando escanear el código QR de Matter exclusivamente en Google Home, Alexa o SmartThings para evitar accesorios duplicados en la app Casa del iPhone.
+- **Persistencia absoluta:**
+  - Los dispositivos previamente exportados y configurados continúan 100% protegidos e inalterados.
+
 ## [1.9.0] - 2026-09-24
 
 ### Exclusividad mutua HAP / Matter, efecto parpadeo en recomendados y activación QR HAP por defecto
