@@ -370,9 +370,6 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     if (activeHapFromProps) {
       setLocalHapAccessory(activeHapFromProps);
     }
-    if (isDeviceHapPublished) {
-      setSelectedProtocol("hap");
-    }
     setSelectedEntity((prev) => {
       if (prev) {
         const found = device.entities.find((e) => e.entityId === prev.entityId);
@@ -391,7 +388,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     if (!stillCommissioned) {
       setResetFabrics(false);
     }
-  }, [device, targetEntity, isDeviceHapPublished, activeHapFromProps]);
+  }, [device, targetEntity, activeHapFromProps]);
 
   if (!device) return null;
 
@@ -1040,40 +1037,136 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
               </span>
             </div>
 
-            {selectedProtocol === "matter" && isComposite ? (
+            {/* Master Protocol Toggle Card in Column 1 */}
+            {selectedProtocol === "hap" ? (
               <div
                 style={{
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
-                  padding: "10px 14px",
-                  background: isCompositeExported
-                    ? "rgba(16, 185, 129, 0.08)"
+                  padding: "12px 14px",
+                  background: isDeviceHapPublished
+                    ? "rgba(245, 158, 11, 0.12)"
                     : "rgba(255, 255, 255, 0.03)",
-                  border: `1px solid ${isCompositeExported ? "rgba(16, 185, 129, 0.25)" : "var(--border)"}`,
+                  border: `1px solid ${
+                    isDeviceHapPublished ? "rgba(245, 158, 11, 0.4)" : "var(--border)"
+                  }`,
                   borderRadius: "10px",
-                  marginBottom: "10px",
+                  marginBottom: "12px",
                   flexShrink: 0,
                 }}
               >
                 <div>
-                  <div style={{ fontSize: "12.5px", fontWeight: 600, color: "var(--text)" }}>
-                    Publicar Accesorio en Matter
+                  <div
+                    style={{
+                      fontSize: "13px",
+                      fontWeight: 700,
+                      color: isDeviceHapPublished ? "#fcd34d" : "var(--text)",
+                    }}
+                  >
+                    Activar HomeKit HAP (Apple Home)
                   </div>
-                  <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "2px" }}>
-                    Ventilador y luz juntos bajo un solo código QR
+                  <div
+                    style={{
+                      fontSize: "11px",
+                      color: "var(--muted)",
+                      marginTop: "2px",
+                    }}
+                  >
+                    {isDeviceHapPublished
+                      ? "✓ Accesorio activo en HomeKit HAP con código QR y PIN"
+                      : "Apagado (activa el switch para generar código QR en Apple Casa)"}
                   </div>
                 </div>
                 <label className="toggle" style={{ margin: 0 }}>
                   <input
                     type="checkbox"
-                    checked={Boolean(isCompositeExported)}
-                    onChange={handleToggleCompositeExport}
+                    checked={Boolean(isDeviceHapPublished)}
+                    onChange={() => {
+                      if (isDeviceHapPublished) {
+                        void handleUnregisterHapDirect();
+                      } else {
+                        void handlePublishHapDirect();
+                      }
+                    }}
+                    disabled={isBusy}
                   />
                   <span />
                 </label>
               </div>
-            ) : null}
+            ) : (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "12px 14px",
+                  background: isExported
+                    ? isDeviceHapPublished
+                      ? "rgba(59, 130, 246, 0.12)"
+                      : "rgba(16, 185, 129, 0.1)"
+                    : "rgba(255, 255, 255, 0.03)",
+                  border: `1px solid ${
+                    isExported
+                      ? isDeviceHapPublished
+                        ? "rgba(59, 130, 246, 0.4)"
+                        : "rgba(16, 185, 129, 0.35)"
+                      : "var(--border)"
+                  }`,
+                  borderRadius: "10px",
+                  marginBottom: "12px",
+                  flexShrink: 0,
+                }}
+              >
+                <div>
+                  <div
+                    style={{
+                      fontSize: "13px",
+                      fontWeight: 700,
+                      color: isExported
+                        ? isDeviceHapPublished
+                          ? "#93c5fd"
+                          : "#34d399"
+                        : "var(--text)",
+                    }}
+                  >
+                    {isDeviceHapPublished
+                      ? "Activar Matter Multi-Admin (Google, Alexa, SmartThings)"
+                      : "Activar Matter (Multi-plataforma)"}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "11px",
+                      color: "var(--muted)",
+                      marginTop: "2px",
+                    }}
+                  >
+                    {isExported
+                      ? isDeviceHapPublished
+                        ? "✓ Matter activo para Google Home, Alexa o SmartThings"
+                        : "✓ Accesorio publicado en Matter"
+                      : isDeviceHapPublished
+                      ? "HAP está activo en Apple Casa. Activa aquí para compartir con Google/Alexa"
+                      : "Apagado (activa el switch para publicar en Matter)"}
+                  </div>
+                </div>
+                <label className="toggle" style={{ margin: 0 }}>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(isExported)}
+                    onChange={() => {
+                      if (isComposite) {
+                        void handleToggleCompositeExport();
+                      } else if (activeEntity) {
+                        void handleToggleExport(activeEntity);
+                      }
+                    }}
+                    disabled={isBusy}
+                  />
+                  <span />
+                </label>
+              </div>
+            )}
 
             <div
               className="entity-list"
@@ -1257,7 +1350,9 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
               <span className="selection-title-text">
                 {selectedProtocol === "hap"
                   ? `${device.name} (Apple Home)`
-                  : activeEntity?.name || activeEntity?.entityId || "Selecciona una entidad"}
+                  : (activeEntity?.name && activeEntity.name.trim().length > 1
+                      ? activeEntity.name
+                      : (device.name || activeEntity?.entityId || "Selecciona una entidad"))}
               </span>
               {selectedProtocol === "hap" ? (
                 isDeviceHapPublished && (
@@ -1753,6 +1848,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                       entityName={device.name}
                       elementId="hap-device-qr-code"
                       noteText="Escanea con la app Casa de Apple para vincular accesorio HAP"
+                      badgeLabel="Apple HomeKit HAP"
                     />
                     <div
                       style={{
@@ -1861,6 +1957,11 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                     }
                     elementId="device-qr-code"
                     variant={multiAdminOpen ? "multi-admin-glass" : "matter-badge"}
+                    badgeLabel={
+                      isDeviceHapPublished
+                        ? "Matter (Google / Alexa / SmartThings)"
+                        : "Matter (Multi-plataforma)"
+                    }
                   />
                 </>
               )

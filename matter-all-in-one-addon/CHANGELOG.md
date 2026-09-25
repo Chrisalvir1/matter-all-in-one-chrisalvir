@@ -1,3 +1,18 @@
+## [1.9.2] - 2026-09-24
+
+### Interruptores maestros dedicados (HAP y Matter Multi-Admin), persistencia de pestaña y etiqueta de pegatina
+
+- **Interruptores maestros dedicados en Columna 1:**
+  - En la pestaña **HomeKit HAP**: tarjeta con interruptor maestro `"Activar HomeKit HAP (Apple Home)"`, permitiendo encender o apagar HAP con 1 clic.
+  - En la pestaña **Matter**: si HAP está activo, el interruptor maestro se titula dinámicamente `"Activar Matter Multi-Admin (Google, Alexa, SmartThings)"`; si HAP está apagado, se titula `"Activar Matter (Multi-plataforma)"` (Matter normal).
+  - Al apagar HAP desde su pestaña, al volver a Matter se puede activar Matter normal limpiamente.
+- **Corrección de parpadeo de pestaña y persistencia:**
+  - Se eliminó el reset forzado en `useEffect` que devolvía la interfaz a la pestaña HAP cada vez que se pulsaba Matter, permitiendo permanecer en Matter sin que el banner ni la vista desaparezcan.
+- **Etiqueta diferenciada en pegatina física QR:**
+  - La pegatina QR interactiva de Matter ahora muestra la insignia `"Matter (Google / Alexa / SmartThings)"` cuando está en modo coexistencia con HAP, y `"Matter (Multi-plataforma)"` en modo normal, evitando confusiones con Apple Home.
+- **Corrección de título de entidad (fallback):**
+  - Se corrigió el encabezado de selección de entidad para evitar que atributos de un solo carácter (ej. `"r"`) sobrescriban el nombre real del dispositivo.
+
 ## [1.9.1] - 2026-09-24
 
 ### Modo Coexistencia HAP + Matter Multi-Admin simultáneo

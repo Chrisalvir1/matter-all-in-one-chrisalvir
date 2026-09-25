@@ -13,6 +13,7 @@ interface QRCodeDisplayProps {
   variant?: QRVariant;
   videoCodec?: string;
   isHevc?: boolean;
+  badgeLabel?: string;
 }
 
 /**
@@ -199,6 +200,7 @@ export const QRCodeDisplay: React.FC<QRCodeDisplayProps> = ({
   variant = "matter-badge",
   videoCodec,
   isHevc = false,
+  badgeLabel,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [copied, setCopied] = useState(false);
@@ -343,7 +345,7 @@ export const QRCodeDisplay: React.FC<QRCodeDisplayProps> = ({
           {/* Quick Copy Pill Inside Sticker Footer */}
           <div className="sticker-footer-row">
             <span className="sticker-badge-tag">
-              {isHomeKit ? "Apple HomeKit HAP" : "Matter (Apple Home)"}
+              {badgeLabel || (isHomeKit ? "Apple HomeKit HAP" : "Matter (Multi-plataforma)")}
             </span>
             <button
               className="button-sticker-copy"
