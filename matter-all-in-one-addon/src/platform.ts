@@ -442,8 +442,6 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         return { success: true, pincode: rec.pincode, port: rec.port };
       }
       await this.activateHapEntity(entityId, hapProfile);
-      this.exportedDevices.add(entityId);
-      await this.saveExportedDevices();
       const rec = this.hapAccessoryRecords.get(entityId)!;
       return { success: true, pincode: rec.pincode, port: rec.port };
     } catch (err) {
@@ -470,8 +468,6 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         record.published = false;
         await this.saveHapAccessoryRecords();
       }
-      this.exportedDevices.delete(entityId);
-      await this.saveExportedDevices();
       this.log.notice(`Removed HAP generic accessory for ${entityId}`);
       return { success: true };
     } catch (err) {
@@ -3331,6 +3327,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               return;
             }
             if (!this.entities.has(exportedId)) return;
+            if (this.hapAccessoryRecords.get(exportedId)?.published) return;
             const composite = this.getCompositeCandidate(exportedId);
             if (composite) {
               try {
@@ -3751,7 +3748,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       this.log.notice(
         `Manually exported bridged endpoint for ${entityId}${isMultiSwitch ? " (multi-switch: independent QR)" : ""}`,
       );
-      return { success: true };
+      const ep = this.matterbridgeDevices.get(entityId);
+      const connection = ep ? this.getMatterConnectionInfo(ep) : null;
+      return {
+        success: true,
+        pairingCode: connection?.pairingCode ?? null,
+        manualPairingCode: connection?.manualPairingCode ?? null,
+      };
     } catch (err) {
       this.exportedDevices.delete(entityId);
       this.log.error(`Failed to manually register ${entityId}: ${err}`);
@@ -4940,6 +4943,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             if (entity && this.isEntityExported(entityId)) {
               await entity.updateState(state);
               if (!isUnavailable(state)) this.clearEntityProblem(entityId);
+            }
+            const hapAcc = this.hapAccessories.get(entityId);
+            if (hapAcc) {
+              hapAcc.updateFromHassState(state);
             }
           }),
         );

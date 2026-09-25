@@ -225,17 +225,96 @@ export class HapGenericAccessory {
           Service.HumidifierDehumidifier,
           this.record.name,
         );
-        svc
-          .getCharacteristic(Characteristic.CurrentHumidifierDehumidifierState)
-          .setValue(0);
-        svc
-          .getCharacteristic(Characteristic.TargetHumidifierDehumidifierState)
-          .setValue(profile === "humidifier" ? 1 : 2);
-        svc.getCharacteristic(Characteristic.CurrentRelativeHumidity).setValue(50);
-        svc.getCharacteristic(Characteristic.Active).setValue(0);
-        svc
-          .getCharacteristic(Characteristic.RelativeHumidityHumidifierThreshold)
-          .setValue(50);
+
+        svc.getCharacteristic(Characteristic.Active)
+          .onGet(() => {
+            const ent = this.platform.entities.get(this.entityId);
+            return ent?.state?.state === "on" ? 1 : 0;
+          })
+          .onSet(async (value) => {
+            const [domain] = this.entityId.split(".");
+            const service = value === 1 ? "turn_on" : "turn_off";
+            await this.platform.ha?.callService(domain, service, this.entityId);
+          });
+
+        svc.getCharacteristic(Characteristic.CurrentHumidifierDehumidifierState)
+          .onGet(() => {
+            const ent = this.platform.entities.get(this.entityId);
+            if (ent?.state?.state !== "on") return 1; // INACTIVE
+            return profile === "humidifier" ? 2 : 3; // HUMIDIFYING or DEHUMIDIFYING
+          });
+
+        svc.getCharacteristic(Characteristic.TargetHumidifierDehumidifierState)
+          .setValue(profile === "humidifier" ? 1 : 2)
+          .onGet(() => (profile === "humidifier" ? 1 : 2));
+
+        svc.getCharacteristic(Characteristic.CurrentRelativeHumidity)
+          .onGet(() => {
+            const ent = this.platform.entities.get(this.entityId);
+            const val = Number(ent?.state?.attributes?.current_humidity);
+            return !isNaN(val) && val >= 0 && val <= 100 ? val : 50;
+          });
+
+        svc.getCharacteristic(Characteristic.RelativeHumidityHumidifierThreshold)
+          .onGet(() => {
+            const ent = this.platform.entities.get(this.entityId);
+            const val = Number(ent?.state?.attributes?.humidity);
+            return !isNaN(val) && val >= 0 && val <= 100 ? val : 50;
+          })
+          .onSet(async (value) => {
+            const [domain] = this.entityId.split(".");
+            await this.platform.ha?.callService(domain, "set_humidity", this.entityId, {
+              humidity: Number(value),
+            });
+          });
+
+        // Detect linked light if part of a composite device (e.g. Govee Diffuser)
+        const candidate = this.platform.getCompositeCandidate?.(this.entityId);
+        const lightMember = candidate?.members.find((m: any) =>
+          m.entityId.startsWith("light."),
+        );
+        if (lightMember) {
+          const lightEnt = this.platform.entities.get(lightMember.entityId);
+          const lightName =
+            lightEnt?.state?.attributes?.friendly_name || `${this.record.name} Luz`;
+          const lightSvc = this.accessory.addService(
+            Service.Lightbulb,
+            lightName,
+            "light",
+          );
+          lightSvc
+            .getCharacteristic(Characteristic.On)
+            .onGet(() => {
+              const ent = this.platform.entities.get(lightMember.entityId);
+              return ent?.state?.state === "on";
+            })
+            .onSet(async (val) => {
+              await this.platform.ha?.callService(
+                "light",
+                val ? "turn_on" : "turn_off",
+                lightMember.entityId,
+              );
+            });
+
+          lightSvc
+            .getCharacteristic(Characteristic.Brightness)
+            .onGet(() => {
+              const ent = this.platform.entities.get(lightMember.entityId);
+              const bri = ent?.state?.attributes?.brightness;
+              return bri !== undefined
+                ? Math.round((Number(bri) / 255) * 100)
+                : 100;
+            })
+            .onSet(async (val) => {
+              await this.platform.ha?.callService(
+                "light",
+                "turn_on",
+                lightMember.entityId,
+                { brightness_pct: Number(val) },
+              );
+            });
+          svc.addLinkedService(lightSvc);
+        }
         break;
       }
 
@@ -737,6 +816,39 @@ export class HapGenericAccessory {
       // Ignorar si ya estaba sin publicar
     }
     this.isPublished = false;
+  }
+
+  public updateFromHassState(state: any): void {
+    try {
+      if (
+        this.record.hapProfile === "humidifier" ||
+        this.record.hapProfile === "dehumidifier"
+      ) {
+        const svc = this.accessory.getService(Service.HumidifierDehumidifier);
+        if (svc) {
+          const isOn = state?.state === "on";
+          svc.updateCharacteristic(Characteristic.Active, isOn ? 1 : 0);
+          svc.updateCharacteristic(
+            Characteristic.CurrentHumidifierDehumidifierState,
+            isOn ? (this.record.hapProfile === "humidifier" ? 2 : 3) : 1,
+          );
+          const curHum = Number(state?.attributes?.current_humidity);
+          if (!isNaN(curHum) && curHum >= 0 && curHum <= 100) {
+            svc.updateCharacteristic(
+              Characteristic.CurrentRelativeHumidity,
+              curHum,
+            );
+          }
+          const targetHum = Number(state?.attributes?.humidity);
+          if (!isNaN(targetHum) && targetHum >= 0 && targetHum <= 100) {
+            svc.updateCharacteristic(
+              Characteristic.RelativeHumidityHumidifierThreshold,
+              targetHum,
+            );
+          }
+        }
+      }
+    } catch {}
   }
 
   // ──────────────────────────────────────────────

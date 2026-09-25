@@ -1,3 +1,22 @@
+## [1.8.99] - 2026-09-24
+
+### Selector de protocolo híbrido (Matter vs HAP), recomendación inteligente para Apple Home y aceleración instantánea de QR
+
+- **Selector de protocolo nativo en DeviceModal (Matter vs HomeKit HAP):**
+  - Barra de selector con pestañas claras: `⚡ Matter (Multi-plataforma)` y `🏠 HomeKit HAP (Apple Home)`.
+  - Permite exportar cualquier dispositivo/accesorio (incluidos difusores compuestos como Govee H7143) tanto a Matter como a HomeKit HAP.
+- **Recomendación inteligente automática para Apple Home:**
+  - Detecta automáticamente entidades que Apple Home no soporta en Matter (ej. difusores/humidificadores, televisores, válvulas de riego, paneles de alarma).
+  - Muestra un banner destacado indicando que Apple Home representaría el difusor como un ventilador en Matter, recomendando exportarlo como HomeKit HAP para obtener el icono nativo de Difusor y control de humedad real.
+- **Generación y alternancia instantánea de código QR (0 ms lag):**
+  - Las acciones de publicación y alternancia actualizan la interfaz de forma optimista inmediatamente.
+  - La respuesta de registro ahora devuelve `pairingCode` y `manualPairingCode` directamente sin requerir esperas en el re-sondeo completo de entidades.
+- **Soporte bidireccional y servicios vinculados en HAP (`HapGenericAccessory`):**
+  - Conexión de características `Active`, `CurrentHumidifierDehumidifierState`, `CurrentRelativeHumidity` y `RelativeHumidityHumidifierThreshold` con servicios de Home Assistant.
+  - Vinculación automática del servicio de luz (`Lightbulb`) en difusores compuestos para control de luz y vapor en un único accesorio.
+- **Aislamiento total y garantía de persistencia:**
+  - Los dispositivos ya emparejados en Matter y en HAP permanecen 100% intactos en `/data/exported-devices.json`, `/data/matterstorage` y `/data/hap-persist`.
+
 ## [1.8.98] - 2026-09-24
 
 ### Sistema HAP Híbrido — Exportar cualquier entidad como accesorio HomeKit HAP nativo
