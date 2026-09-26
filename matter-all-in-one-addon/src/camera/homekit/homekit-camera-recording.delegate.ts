@@ -45,6 +45,83 @@ function recordingSampleRateHz(
   }
 }
 
+/**
+ * Resolves camera source FPS using strict priority:
+ * 1. Measured real FPS (`measuredVideo.fps`) if valid (> 0 and finite)
+ * 2. `avg_frame_rate` (parsed from fractional "num/den") if valid (> 0 and finite)
+ * 3. `r_frame_rate` (parsed from fractional "num/den") if valid (> 0 and finite)
+ * 4. Configured / max FPS (`capabilities.maxFps` or `record.fps`) if valid (> 0 and finite)
+ * 5. Returns `undefined` if no valid FPS can be determined (NEVER fallback to arbitrary 15 fps).
+ */
+export function resolveCameraSourceFps(
+  capabilities?: CameraCapabilitiesInfo,
+  record?: HomeKitCameraStorageRecord,
+): number | undefined {
+  if (!capabilities && !record) return undefined;
+
+  // 1. Measured FPS directly from ffprobe
+  if (
+    typeof capabilities?.measuredVideo?.fps === "number" &&
+    Number.isFinite(capabilities.measuredVideo.fps) &&
+    capabilities.measuredVideo.fps > 0
+  ) {
+    return Math.round(capabilities.measuredVideo.fps);
+  }
+
+  // Helper to parse fractional frame rate string e.g. "15/1", "30000/1001", "24/1"
+  const parseFractionalFps = (rateStr?: string): number | undefined => {
+    if (!rateStr || typeof rateStr !== "string") return undefined;
+    const parts = rateStr.split("/").map((p) => Number(p.trim()));
+    if (parts.length === 2) {
+      const [num, den] = parts;
+      if (Number.isFinite(num) && Number.isFinite(den) && num > 0 && den > 0) {
+        const val = num / den;
+        if (Number.isFinite(val) && val > 0) {
+          return Math.round(val);
+        }
+      }
+    } else if (parts.length === 1) {
+      const val = parts[0];
+      if (Number.isFinite(val) && val > 0) {
+        return Math.round(val);
+      }
+    }
+    return undefined;
+  };
+
+  // 2. avg_frame_rate from ffprobe (handles variable/nominal rate)
+  const avgFps = parseFractionalFps(capabilities?.measuredVideo?.avgFrameRate);
+  if (avgFps !== undefined) {
+    return avgFps;
+  }
+
+  // 3. r_frame_rate from ffprobe
+  const rFps = parseFractionalFps(capabilities?.measuredVideo?.rFrameRate);
+  if (rFps !== undefined) {
+    return rFps;
+  }
+
+  // 4. Configured / maxFps validated
+  if (
+    typeof capabilities?.maxFps === "number" &&
+    Number.isFinite(capabilities.maxFps) &&
+    capabilities.maxFps > 0
+  ) {
+    return Math.round(capabilities.maxFps);
+  }
+
+  const recordFps = (record as any)?.fps;
+  if (
+    typeof recordFps === "number" &&
+    Number.isFinite(recordFps) &&
+    recordFps > 0
+  ) {
+    return Math.round(recordFps);
+  }
+
+  return undefined;
+}
+
 export class HomeKitCameraRecordingDelegate
   extends EventEmitter
   implements CameraRecordingDelegate
@@ -507,16 +584,16 @@ export class HomeKitCameraRecordingDelegate
       // Tapo C120 outputs 2560x1440 @ 15fps H.264 High Level 5.0.
       // Apple Home Hub rejects HKSV recording clips with H.264 Level > 4.0 or > 1080p.
       // Transcode HKSV prebuffer specifically to 1920x1080 High Level 4.0, preserving
-      // the camera's native source rate only if it really is 15 fps (never assume 15 fps globally).
-      let cameraSourceFps =
-        this.capabilities.measuredVideo?.fps || this.capabilities.maxFps || 15;
-      if (this.capabilities.measuredVideo?.avgFrameRate) {
-        const [num, den] = this.capabilities.measuredVideo.avgFrameRate
-          .split("/")
-          .map(Number);
-        if (num && den && den > 0) cameraSourceFps = Math.round(num / den);
+      // the camera's native source rate strictly when measured or configured (never assume 15 fps globally).
+      const sourceFps = resolveCameraSourceFps(this.capabilities, this.record);
+      if (!sourceFps) {
+        this.platform?.log?.error?.(
+          `[HKSV][${this.entityId}] Tapo C120 detectada pero no tiene FPS medido ni configurado. Transcodificación detenida por seguridad.`,
+        );
+        this.record.hksvState = "not_capable";
+        return null;
       }
-      const c120Fps = Math.max(1, Math.min(Math.round(cameraSourceFps), 30));
+      const c120Fps = Math.max(1, Math.min(sourceFps, 30));
       this.platform?.log?.notice?.(
         `[HKSV][${this.entityId}] Tapo C120 detectada (modelo: "${this.record.model || "C120"}") — transcodificando HKSV prebuffer 2K->1920x1080@${c120Fps}fps High Level 4.0 para compatibilidad Apple Home Hub`,
       );
@@ -718,11 +795,10 @@ export class HomeKitCameraRecordingDelegate
       );
       const inWidth = this.capabilities.resolution?.width ?? 1920;
       const inHeight = this.capabilities.resolution?.height ?? 1080;
-      const inFps =
-        this.capabilities.measuredVideo?.fps ?? this.capabilities.maxFps ?? 15;
+      const inFps = resolveCameraSourceFps(this.capabilities, this.record) ?? 0;
       const outWidth = isC120 ? 1920 : inWidth;
       const outHeight = isC120 ? 1080 : inHeight;
-      const outFps = isC120 ? Math.min(inFps, 15) : inFps;
+      const outFps = isC120 ? (inFps > 0 ? Math.min(inFps, 30) : 0) : inFps;
       let droppedFrames = 0;
       let encodingErrors = 0;
 

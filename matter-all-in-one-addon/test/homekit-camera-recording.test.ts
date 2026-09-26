@@ -6,7 +6,10 @@ vi.mock("../src/camera/homekit/ffmpeg-helper.js", () => ({
   getFfmpegVersion: () => "6.1.1",
 }));
 
-import { HomeKitCameraRecordingDelegate } from "../src/camera/homekit/homekit-camera-recording.delegate.js";
+import {
+  HomeKitCameraRecordingDelegate,
+  resolveCameraSourceFps,
+} from "../src/camera/homekit/homekit-camera-recording.delegate.js";
 import {
   AudioRecordingCodecType,
   AudioBitrate,
@@ -697,6 +700,203 @@ describe("HomeKitCameraRecordingDelegate — structured C120 identification & fa
     // Must remain passthrough copy, NOT libx264
     expect(args?.[args.indexOf("-vcodec") + 1]).toBe("copy");
     expect(args).not.toContain("libx264");
+    delegate.destroy();
+  });
+});
+
+describe("HomeKitCameraRecordingDelegate — resolveCameraSourceFps & dynamic frame-rate handling", () => {
+  it("returns undefined when camera has no measurement, no maxFps, and no record.fps", () => {
+    const capabilities = createMockCapabilities();
+    delete (capabilities as any).maxFps;
+    delete (capabilities as any).measuredVideo;
+    const record = createMockRecord();
+
+    const fps = resolveCameraSourceFps(capabilities, record);
+    expect(fps).toBeUndefined();
+  });
+
+  it("returns undefined if measured fps is non-positive or invalid", () => {
+    const capabilities = {
+      ...createMockCapabilities(),
+      maxFps: 0,
+      measuredVideo: { fps: 0, avgFrameRate: "0/0" },
+    };
+    expect(resolveCameraSourceFps(capabilities)).toBeUndefined();
+  });
+
+  it("correctly parses fractional avg_frame_rate (e.g. 24/1, 30000/1001)", () => {
+    const cap24 = {
+      ...createMockCapabilities(),
+      maxFps: 0,
+      measuredVideo: { avgFrameRate: "24/1" },
+    };
+    expect(resolveCameraSourceFps(cap24)).toBe(24);
+
+    const cap30 = {
+      ...createMockCapabilities(),
+      maxFps: 0,
+      measuredVideo: { avgFrameRate: "30000/1001" },
+    };
+    expect(resolveCameraSourceFps(cap30)).toBe(30);
+  });
+
+  it("strictly prioritizes measured fps over avg_frame_rate, and avg_frame_rate over r_frame_rate", () => {
+    // 1. Measured fps beats avgFrameRate
+    const cap1 = {
+      ...createMockCapabilities(),
+      measuredVideo: { fps: 20, avgFrameRate: "18/1", rFrameRate: "15/1" },
+      maxFps: 30,
+    };
+    expect(resolveCameraSourceFps(cap1)).toBe(20);
+
+    // 2. avgFrameRate beats rFrameRate and maxFps when fps is absent
+    const cap2 = {
+      ...createMockCapabilities(),
+      measuredVideo: { avgFrameRate: "24/1", rFrameRate: "15/1" },
+      maxFps: 30,
+    };
+    expect(resolveCameraSourceFps(cap2)).toBe(24);
+
+    // 3. rFrameRate beats maxFps when fps and avgFrameRate are absent
+    const cap3 = {
+      ...createMockCapabilities(),
+      measuredVideo: { rFrameRate: "25/1" },
+      maxFps: 30,
+    };
+    expect(resolveCameraSourceFps(cap3)).toBe(25);
+  });
+
+  it("resolves configured maxFps when unmeasured (testing 10, 20, 24, and 30 fps)", () => {
+    for (const targetFps of [10, 20, 24, 30]) {
+      const cap = {
+        ...createMockCapabilities(),
+        measuredVideo: undefined,
+        maxFps: targetFps,
+      };
+      expect(resolveCameraSourceFps(cap)).toBe(targetFps);
+    }
+  });
+
+  it("resolves record.fps for C120 when capabilities lack metadata", () => {
+    const cap = {
+      ...createMockCapabilities(),
+      measuredVideo: undefined,
+      maxFps: 0,
+    };
+    const record = {
+      ...createMockRecord(),
+      fps: 15,
+    };
+    expect(resolveCameraSourceFps(cap, record)).toBe(15);
+  });
+
+  it("fails closed when Tapo C120 has neither measured nor configured FPS", () => {
+    const record = {
+      ...createMockRecord(),
+      entityId: "camera.tapo_c120",
+      model: "C120",
+    };
+    const cap = {
+      ...createMockCapabilities(),
+      resolution: { width: 2560, height: 1440 },
+      maxFps: 0,
+      measuredVideo: undefined,
+    };
+    const delegate = new HomeKitCameraRecordingDelegate(
+      mockPlatform,
+      "camera.tapo_c120",
+      record,
+      cap,
+      {
+        sourceType: "rtsp",
+        url: "rtsp://192.168.1.100/c120",
+        supportsPassthrough: true,
+        requiresBridge: false,
+      },
+    );
+    (delegate as any).selectedConfiguration = createMockConfiguration();
+
+    const args = delegate.buildPrebufferArgs("rtsp://192.168.1.100/c120");
+    expect(args).toBeNull();
+    expect(record.hksvState).toBe("not_capable");
+    delegate.destroy();
+  });
+
+  it("applies exact FPS transcoding for Tapo C120 at 10, 20, 24, and 30 fps", () => {
+    for (const fps of [10, 20, 24, 30]) {
+      const record = {
+        ...createMockRecord(),
+        entityId: `camera.c120_${fps}`,
+        model: "C120",
+      };
+      const cap = {
+        ...createMockCapabilities(),
+        resolution: { width: 2560, height: 1440 },
+        maxFps: fps,
+        measuredVideo: undefined,
+      };
+      const delegate = new HomeKitCameraRecordingDelegate(
+        mockPlatform,
+        record.entityId,
+        record,
+        cap,
+        {
+          sourceType: "rtsp",
+          url: "rtsp://192.168.1.100/stream",
+          supportsPassthrough: true,
+          requiresBridge: false,
+        },
+      );
+      (delegate as any).selectedConfiguration = createMockConfiguration();
+
+      const args = delegate.buildPrebufferArgs("rtsp://192.168.1.100/stream")!;
+      expect(args).not.toBeNull();
+      const rIdx = args.indexOf("-r");
+      expect(rIdx).toBeGreaterThan(-1);
+      expect(args[rIdx + 1]).toBe(String(fps));
+
+      const gIdx = args.indexOf("-g");
+      expect(args[gIdx + 1]).toBe(String(fps * 2));
+
+      const keyintIdx = args.indexOf("-keyint_min");
+      expect(args[keyintIdx + 1]).toBe(String(fps));
+
+      delegate.destroy();
+    }
+  });
+
+  it("never injects -r or transcode args into non-C120 cameras even if they have 24 or 30 fps", () => {
+    const record = {
+      ...createMockRecord(),
+      entityId: "camera.reolink_backyard",
+      model: "RLC-810A",
+      name: "Backyard",
+    };
+    const cap = {
+      ...createMockCapabilities(),
+      resolution: { width: 3840, height: 2160 },
+      maxFps: 25,
+      measuredVideo: { fps: 25 },
+    };
+    const delegate = new HomeKitCameraRecordingDelegate(
+      mockPlatform,
+      record.entityId,
+      record,
+      cap,
+      {
+        sourceType: "rtsp",
+        url: "rtsp://192.168.1.120/main",
+        supportsPassthrough: true,
+        requiresBridge: false,
+      },
+    );
+    (delegate as any).selectedConfiguration = createMockConfiguration();
+
+    const args = delegate.buildPrebufferArgs("rtsp://192.168.1.120/main")!;
+    expect(args).not.toBeNull();
+    expect(args).not.toContain("-r");
+    expect(args).not.toContain("libx264");
+    expect(args[args.indexOf("-vcodec") + 1]).toBe("copy");
     delegate.destroy();
   });
 });
