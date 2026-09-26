@@ -485,8 +485,15 @@ export class CameraUiHomeKitBridge {
           detector.pause(platform?.log);
         });
         accessory.delegate?.on("session-end", () => {
+          if (accessory.delegate?.hasActiveSessions()) {
+            platform?.log?.debug?.(
+              `[Camera.UI][${camera.name}] session-end recibido pero aún quedan ${accessory.delegate.activeSessionCount()} sesión(es) activa(s) — manteniendo detector de movimiento pausado`,
+            );
+            return;
+          }
           detector.resume(platform?.log);
         });
+
         detector.start(platform?.log);
         this.activeMotionDetectors.set(camera.id, detector);
       } catch (detErr) {

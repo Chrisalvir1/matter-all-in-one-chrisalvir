@@ -317,6 +317,12 @@ export class HomeKitCameraAccessory {
       this.recordingDelegate?.pausePrebuffer();
     });
     this.delegate.on("session-end", () => {
+      if (this.delegate?.hasActiveSessions()) {
+        this.platform?.log?.debug?.(
+          `[HomeKitCamera][${this.entityId}] session-end recibido pero aún quedan ${this.delegate.activeSessionCount()} sesión(es) activa(s) — manteniendo prebuffer pausado`,
+        );
+        return;
+      }
       this.recordingDelegate?.resumePrebuffer();
     });
 

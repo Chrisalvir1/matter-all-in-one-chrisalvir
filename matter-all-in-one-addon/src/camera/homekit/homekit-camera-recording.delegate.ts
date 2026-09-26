@@ -6,6 +6,7 @@
 
 import { EventEmitter } from "events";
 import { spawn, ChildProcess } from "child_process";
+import os from "node:os";
 import {
   CameraRecordingDelegate,
   CameraRecordingConfiguration,
@@ -21,16 +22,26 @@ import type {
 import { Fmp4Segmenter, Fmp4MediaFragment } from "./fmp4-parser.js";
 import { resolveFfmpegPath, sanitizeUrlCredentials } from "./ffmpeg-helper.js";
 import { CameraSourceResolver } from "../camera-source-resolver.js";
+import { sanitizeDiagnosticText } from "./live-view-telemetry.js";
 
-function recordingSampleRateHz(sampleRate?: AudioRecordingSamplerate): number | undefined {
+function recordingSampleRateHz(
+  sampleRate?: AudioRecordingSamplerate,
+): number | undefined {
   switch (sampleRate) {
-    case AudioRecordingSamplerate.KHZ_8: return 8000;
-    case AudioRecordingSamplerate.KHZ_16: return 16000;
-    case AudioRecordingSamplerate.KHZ_24: return 24000;
-    case AudioRecordingSamplerate.KHZ_32: return 32000;
-    case AudioRecordingSamplerate.KHZ_44_1: return 44100;
-    case AudioRecordingSamplerate.KHZ_48: return 48000;
-    default: return undefined;
+    case AudioRecordingSamplerate.KHZ_8:
+      return 8000;
+    case AudioRecordingSamplerate.KHZ_16:
+      return 16000;
+    case AudioRecordingSamplerate.KHZ_24:
+      return 24000;
+    case AudioRecordingSamplerate.KHZ_32:
+      return 32000;
+    case AudioRecordingSamplerate.KHZ_44_1:
+      return 44100;
+    case AudioRecordingSamplerate.KHZ_48:
+      return 48000;
+    default:
+      return undefined;
   }
 }
 
@@ -107,7 +118,9 @@ export class HomeKitCameraRecordingDelegate
   public updateRecordingActive(active: boolean): void {
     this.recordingActive = active;
     this.record.hksvState = active
-      ? (this.selectedConfiguration ? "ready" : "waiting_hub")
+      ? this.selectedConfiguration
+        ? "ready"
+        : "waiting_hub"
       : this.selectedConfiguration
         ? "configurable"
         : "waiting_hub";
@@ -140,10 +153,21 @@ export class HomeKitCameraRecordingDelegate
    * This releases the camera's single RTSP hardware socket, preventing RTSP contention and stream freezing.
    */
   public pausePrebuffer(): void {
-    if (!this.recordingActive) return;
+    if (!this.recordingActive) {
+      this.platform?.log?.debug?.(
+        `[HKSV][${this.entityId}] pausePrebuffer() omitido: recordingActive=false`,
+      );
+      return;
+    }
+    if (this.isPausedByLiveStream) {
+      this.platform?.log?.debug?.(
+        `[HKSV][${this.entityId}] pausePrebuffer() omitido: ya pausado por Live View`,
+      );
+      return;
+    }
     this.isPausedByLiveStream = true;
     this.platform?.log?.notice?.(
-      `[HKSV][${this.entityId}] Pausing prebuffer to grant full camera bandwidth and RTSP socket to Live View`,
+      `[HKSV][${this.entityId}] STAGE: prebuffer PAUSED — Live View activo, liberando socket RTSP`,
     );
     this.stopPrebufferPipeline();
   }
@@ -152,10 +176,21 @@ export class HomeKitCameraRecordingDelegate
    * Re-activate the HKSV pre-buffer pipeline once all Live View sessions have ended.
    */
   public resumePrebuffer(): void {
-    if (!this.recordingActive || !this.isPausedByLiveStream) return;
+    if (!this.recordingActive) {
+      this.platform?.log?.debug?.(
+        `[HKSV][${this.entityId}] resumePrebuffer() omitido: recordingActive=false`,
+      );
+      return;
+    }
+    if (!this.isPausedByLiveStream) {
+      this.platform?.log?.debug?.(
+        `[HKSV][${this.entityId}] resumePrebuffer() omitido: no estaba pausado por Live View`,
+      );
+      return;
+    }
     this.isPausedByLiveStream = false;
     this.platform?.log?.notice?.(
-      `[HKSV][${this.entityId}] Live View session ended; resuming HKSV pre-buffer pipeline`,
+      `[HKSV][${this.entityId}] STAGE: prebuffer RESUMED — todas las sesiones Live View finalizadas`,
     );
     this.startPrebufferPipeline();
   }
@@ -366,7 +401,8 @@ export class HomeKitCameraRecordingDelegate
     const token =
       this.platform?.ha?.getAccessToken?.() || this.platform?.ha?.wsAccessToken;
 
-    const cameraIdentity = `${this.entityId} ${this.record.name || ""} ${this.record.model || ""}`.toLowerCase();
+    const cameraIdentity =
+      `${this.entityId} ${this.record.name || ""} ${this.record.model || ""}`.toLowerCase();
     // The C402 may reopen its direct RTSP publisher between Live View and the
     // HKSV reader. Its first packets can arrive before SPS/PPS, so a normal
     // low-latency probe drops the parameter sets and the fMP4 reader exits
@@ -375,7 +411,8 @@ export class HomeKitCameraRecordingDelegate
     // Camera.UI sources from these cameras have demonstrated discontinuous
     // audio clocks. Rebuild the audio timeline before AAC encoding while
     // keeping their video stream in strict passthrough.
-    const needsAudioTimestampRepair = /(?:\bc402\b|\bc120\b|\bwyze\b|\bezviz\b)/i.test(cameraIdentity);
+    const needsAudioTimestampRepair =
+      /(?:\bc402\b|\bc120\b|\bwyze\b|\bezviz\b)/i.test(cameraIdentity);
 
     // Build FFmpeg fMP4 args
     const args = ["-hide_banner", "-loglevel", "warning"];
@@ -396,7 +433,11 @@ export class HomeKitCameraRecordingDelegate
         "-probesize",
         isTapoC402 ? "1048576" : needsAudioTimestampRepair ? "524288" : "65536",
         "-analyzeduration",
-        isTapoC402 ? "1000000" : needsAudioTimestampRepair ? "500000" : "100000",
+        isTapoC402
+          ? "1000000"
+          : needsAudioTimestampRepair
+            ? "500000"
+            : "100000",
         "-fflags",
         // Camera.UI/go2rtc can restart an RTSP publisher with DTS values that
         // move backwards. Generate a fresh monotonic timeline for fMP4/HKSV
@@ -439,14 +480,80 @@ export class HomeKitCameraRecordingDelegate
     const isH264 =
       this.capabilities.videoCodec === "h264" &&
       this.streamSource.sourceType !== "ha_proxy";
-    if (isH264) {
-      // Keep H.264 native for HKSV, but normalize the MP4 timing and repeat
-      // parameter sets. This fixes the non-monotonous DTS fragments seen on
-      // Camera.UI restreams without a global video transcode.
+
+    // Structured C120 camera detection:
+    // Check structured camera model, entityId, metadata, name before regex fallback
+    const model = (
+      this.record.model ||
+      this.streamSource.metadata?.model ||
+      ""
+    ).toLowerCase();
+    const entityId = (this.entityId || "").toLowerCase();
+    const name = (
+      this.record.name ||
+      this.streamSource.metadata?.name ||
+      ""
+    ).toLowerCase();
+    const isC120Model =
+      model.includes("c120") || model === "tapo_c120" || model === "c120";
+    const isC120Entity =
+      entityId.includes("c120") || entityId === "camera.tapo_c120";
+    const isC120Name = name.includes("c120");
+    const isC120Regex = /(?:\bc120\b|tapo[-_ ]?c120)/i.test(
+      `${entityId} ${name} ${model} ${sourceUrl}`,
+    );
+    const isTapoC120 = isC120Model || isC120Entity || isC120Name || isC120Regex;
+
+    if (isH264 && isTapoC120) {
+      // Tapo C120 outputs 2560x1440 @ 15fps H.264 High Level 5.0.
+      // Apple Home Hub rejects HKSV recording clips with H.264 Level > 4.0 or > 1080p.
+      // Transcode HKSV prebuffer specifically to 1920x1080 High Level 4.0, preserving
+      // the camera's native source rate only if it really is 15 fps (never assume 15 fps globally).
+      let cameraSourceFps =
+        this.capabilities.measuredVideo?.fps || this.capabilities.maxFps || 15;
+      if (this.capabilities.measuredVideo?.avgFrameRate) {
+        const [num, den] = this.capabilities.measuredVideo.avgFrameRate
+          .split("/")
+          .map(Number);
+        if (num && den && den > 0) cameraSourceFps = Math.round(num / den);
+      }
+      const c120Fps = Math.max(1, Math.min(Math.round(cameraSourceFps), 30));
+      this.platform?.log?.notice?.(
+        `[HKSV][${this.entityId}] Tapo C120 detectada (modelo: "${this.record.model || "C120"}") — transcodificando HKSV prebuffer 2K->1920x1080@${c120Fps}fps High Level 4.0 para compatibilidad Apple Home Hub`,
+      );
       args.push(
-        "-map", "0:v:0",
-        "-vcodec", "copy",
-        "-bsf:v", "dump_extra=freq=keyframe",
+        "-map",
+        "0:v:0",
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        "-profile:v",
+        "high",
+        "-level:v",
+        "4.0",
+        "-vf",
+        "scale=1920:1080:force_original_aspect_ratio=decrease:force_divisible_by=2",
+        "-r",
+        String(c120Fps),
+        "-g",
+        String(Math.max(1, c120Fps * 2)),
+        "-keyint_min",
+        String(Math.max(1, c120Fps)),
+        "-preset",
+        "ultrafast",
+        "-tune",
+        "zerolatency",
+      );
+    } else if (isH264) {
+      // Normal H.264 cameras: zero transcoding overhead, pure passthrough copy
+      args.push(
+        "-map",
+        "0:v:0",
+        "-vcodec",
+        "copy",
+        "-bsf:v",
+        "dump_extra=freq=keyframe",
       );
     } else {
       this.platform?.log?.error?.(
@@ -460,26 +567,24 @@ export class HomeKitCameraRecordingDelegate
     const audioCodecConfig = this.selectedConfiguration?.audioCodec;
     const sourceAudioCodec = (this.capabilities.audioCodec || "").toLowerCase();
     const isAac = sourceAudioCodec === "aac" || sourceAudioCodec === "aac_lc";
-    const requestedSampleRate = recordingSampleRateHz(audioCodecConfig?.samplerate);
+    const requestedSampleRate = recordingSampleRateHz(
+      audioCodecConfig?.samplerate,
+    );
     const requestedChannels = audioCodecConfig?.audioChannels;
     const canCopyAac =
       isAac &&
       !!this.capabilities.audioSampleRate &&
       !!requestedSampleRate &&
       this.capabilities.audioSampleRate === requestedSampleRate &&
-      (!requestedChannels || !this.capabilities.audioChannels ||
+      (!requestedChannels ||
+        !this.capabilities.audioChannels ||
         this.capabilities.audioChannels === requestedChannels);
 
     if (this.capabilities.hasAudio && canCopyAac) {
       this.platform?.log?.notice?.(
         `[HKSV][${this.entityId}] Grabación HKSV: Passthrough de audio AAC nativo activo (-c:a copy)`,
       );
-      args.push(
-        "-map",
-        "0:a:0?",
-        "-c:a",
-        "copy",
-      );
+      args.push("-map", "0:a:0?", "-c:a", "copy");
     } else if (this.capabilities.hasAudio) {
       let samplerateStr = "32k";
       if (audioCodecConfig) {
@@ -552,7 +657,12 @@ export class HomeKitCameraRecordingDelegate
   }
 
   private async startPrebufferPipeline(): Promise<void> {
-    if (this.ffmpegProcess || this.isStartingPipeline || this.isPausedByLiveStream) return;
+    if (
+      this.ffmpegProcess ||
+      this.isStartingPipeline ||
+      this.isPausedByLiveStream
+    )
+      return;
     this.isStartingPipeline = true;
 
     try {
@@ -565,52 +675,68 @@ export class HomeKitCameraRecordingDelegate
         return;
       }
 
-    // Refresh dynamic URL if needed
-    let sourceUrl = this.streamSource.url;
-    if (!sourceUrl || this.streamSource.sourceType === "hls") {
-      const state = this.platform?.ha?.hassStates?.get(this.entityId);
-      if (state) {
-        try {
-          const fresh = await CameraSourceResolver.resolve(
-            this.platform,
-            this.entityId,
-            state,
-          );
-          if (fresh && fresh.url) {
-            this.streamSource = fresh;
-            sourceUrl = fresh.url;
-          }
-        } catch {}
+      // Refresh dynamic URL if needed
+      let sourceUrl = this.streamSource.url;
+      if (!sourceUrl || this.streamSource.sourceType === "hls") {
+        const state = this.platform?.ha?.hassStates?.get(this.entityId);
+        if (state) {
+          try {
+            const fresh = await CameraSourceResolver.resolve(
+              this.platform,
+              this.entityId,
+              state,
+            );
+            if (fresh && fresh.url) {
+              this.streamSource = fresh;
+              sourceUrl = fresh.url;
+            }
+          } catch {}
+        }
       }
-    }
 
-    if (!sourceUrl) {
-      this.platform?.log?.warn?.(
-        `[HKSV][${this.entityId}] Cannot start HKSV pre-buffer: stream URL missing`,
+      if (!sourceUrl) {
+        this.platform?.log?.warn?.(
+          `[HKSV][${this.entityId}] Cannot start HKSV pre-buffer: stream URL missing`,
+        );
+        return;
+      }
+
+      const token =
+        this.platform?.ha?.getAccessToken?.() ||
+        this.platform?.ha?.wsAccessToken;
+      const sanitizedUrl = sanitizeUrlCredentials(sourceUrl);
+      const args = this.buildPrebufferArgs(sourceUrl);
+      if (!args) return;
+
+      this.platform?.log?.notice?.(
+        `[HKSV][${this.entityId}] Spawning HKSV pre-buffer pipeline: ${sanitizedUrl}`,
       );
-      return;
-    }
 
-    const token =
-      this.platform?.ha?.getAccessToken?.() || this.platform?.ha?.wsAccessToken;
-    const sanitizedUrl = sanitizeUrlCredentials(sourceUrl);
-    const args = this.buildPrebufferArgs(sourceUrl);
-    if (!args) return;
+      // Track sanitized telemetry metrics for this prebuffer session
+      const pipelineStartTime = Date.now();
+      const isC120 = /(?:\bc120\b|tapo[-_ ]?c120)/i.test(
+        `${this.entityId} ${this.record.name || ""} ${this.record.model || ""} ${sourceUrl}`,
+      );
+      const inWidth = this.capabilities.resolution?.width ?? 1920;
+      const inHeight = this.capabilities.resolution?.height ?? 1080;
+      const inFps =
+        this.capabilities.measuredVideo?.fps ?? this.capabilities.maxFps ?? 15;
+      const outWidth = isC120 ? 1920 : inWidth;
+      const outHeight = isC120 ? 1080 : inHeight;
+      const outFps = isC120 ? Math.min(inFps, 15) : inFps;
+      let droppedFrames = 0;
+      let encodingErrors = 0;
 
-    this.platform?.log?.notice?.(
-      `[HKSV][${this.entityId}] Spawning HKSV pre-buffer pipeline: ${sanitizedUrl}`,
-    );
-
-    // A restarted RTSP reader begins a new fMP4 timeline. Never send its
-    // fragments with the previous reader's moov/pre-roll: that produces
-    // malformed fMP4 and HomeKit closes the HDS stream with TIMEOUT/BAD_DATA.
-    this.segmenter.reset();
-    this.initializationSegment = null;
-    this.clearPrebuffer();
-    const process = spawn(ffmpegPath, args, {
+      // A restarted RTSP reader begins a new fMP4 timeline. Never send its
+      // fragments with the previous reader's moov/pre-roll: that produces
+      // malformed fMP4 and HomeKit closes the HDS stream with TIMEOUT/BAD_DATA.
+      this.segmenter.reset();
+      this.initializationSegment = null;
+      this.clearPrebuffer();
+      const process = spawn(ffmpegPath, args, {
         stdio: ["ignore", "pipe", "pipe"],
       });
-    this.ffmpegProcess = process;
+      this.ffmpegProcess = process;
 
       process.stdout?.on("data", (chunk: Buffer) => {
         // A killed process can flush after its replacement is assigned. Do not
@@ -621,16 +747,28 @@ export class HomeKitCameraRecordingDelegate
 
       process.stderr?.on("data", (data: Buffer) => {
         if (this.ffmpegProcess !== process) return;
-        const msg = data.toString().trim();
+        const msg = data.toString();
+        // Parse metrics safely
+        const dropMatch = /drop=\s*(\d+)/.exec(msg);
+        if (dropMatch) {
+          droppedFrames = Number(dropMatch[1]);
+        }
+        if (/\[error\]|error while decoding|conversion failed/i.test(msg)) {
+          encodingErrors++;
+        }
+
         const now = Date.now();
         // Repeated RTSP/AAC timestamp warnings can arrive thousands of times
-        // per minute.  Logging every chunk blocks Node's event loop and makes
+        // per minute. Logging every chunk blocks Node's event loop and makes
         // the dashboard and HomeKit accessory appear offline.
-        if (msg && now - this.lastPrebufferStderrAt >= 30000) {
+        if (msg.trim() && now - this.lastPrebufferStderrAt >= 30000) {
           this.lastPrebufferStderrAt = now;
-          this.platform?.log?.warn?.(
-            `[HKSV][${this.entityId}][ffmpeg] ${msg}`,
-          );
+          const safe = sanitizeDiagnosticText(msg.trim());
+          if (safe) {
+            this.platform?.log?.warn?.(
+              `[HKSV][${this.entityId}][ffmpeg] ${safe}`,
+            );
+          }
         }
       });
 
@@ -638,8 +776,10 @@ export class HomeKitCameraRecordingDelegate
         // A stop caused by Live View deliberately clears the current process.
         // Do not race that cleanup by starting a second reader.
         if (this.ffmpegProcess !== process) return;
-        this.platform?.log?.warn?.(
-          `[HKSV][${this.entityId}] HKSV pre-buffer FFmpeg exited with code ${code}`,
+        const durationSec = Math.round((Date.now() - pipelineStartTime) / 1000);
+        const load1m = os.loadavg()[0]?.toFixed(2) ?? "n/a";
+        this.platform?.log?.notice?.(
+          `[HKSV][${this.entityId}] Prebuffer métricas: duración=${durationSec}s, in=${inWidth}x${inHeight}@${inFps}fps, out=${outWidth}x${outHeight}@${outFps}fps, framesPerdidos=${droppedFrames}, errores=${encodingErrors}, cargaSistema1m=${load1m}, exitCode=${code}`,
         );
         this.ffmpegProcess = undefined;
         this.schedulePrebufferRecovery();

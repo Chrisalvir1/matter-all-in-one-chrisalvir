@@ -299,10 +299,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
   public async loadHapAccessoryRecords(): Promise<void> {
     try {
-      const raw = await fs.readFile(
-        "/data/homekit-accessories.json",
-        "utf8",
-      );
+      const raw = await fs.readFile("/data/homekit-accessories.json", "utf8");
       const list = JSON.parse(raw);
       if (Array.isArray(list)) {
         for (const rec of list) {
@@ -315,9 +312,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         `Loaded ${this.hapAccessoryRecords.size} HAP generic accessory configurations.`,
       );
     } catch {
-      this.log.debug(
-        "No homekit-accessories.json found, starting fresh.",
-      );
+      this.log.debug("No homekit-accessories.json found, starting fresh.");
     }
   }
 
@@ -492,13 +487,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       this.log.notice(`Removed HAP generic accessory for ${entityId}`);
       return { success: true };
     } catch (err) {
-      this.log.error(
-        `Failed to unregister HAP entity ${entityId}: ${err}`,
-      );
+      this.log.error(`Failed to unregister HAP entity ${entityId}: ${err}`);
       return { success: false, error: String(err) };
     }
   }
-
 
   private scryptedInitialized = false;
 
@@ -1167,7 +1159,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           ("endpoints" in entity &&
             (entity as any).endpoints !== undefined &&
             (entity as any).endpoints.size > 0))) ||
-      (compDevice && compDevice.endpoints && compDevice.endpoints.has(entityId)),
+      (compDevice &&
+        compDevice.endpoints &&
+        compDevice.endpoints.has(entityId)),
     );
     const isActivelyExported = this.isEntityExported(entityId) && hasEndpoint;
 
@@ -1186,7 +1180,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           if (typeof (compDevice as any).setMemberReachability === "function") {
             void (compDevice as any).setMemberReachability(entityId, false);
           }
-          if (typeof (compDevice as any).setMemberInactiveState === "function") {
+          if (
+            typeof (compDevice as any).setMemberInactiveState === "function"
+          ) {
             void (compDevice as any).setMemberInactiveState(entityId);
           }
           const allUnavailable = compDevice.members?.every((m: any) => {
@@ -3137,7 +3133,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         if (sn && !sn.lifecycle?.isOnline) {
           try {
             await sn.start();
-            this.log.info(`[Startup] Started offline Matter serverNode for ${key}`);
+            this.log.info(
+              `[Startup] Started offline Matter serverNode for ${key}`,
+            );
           } catch (err) {
             this.log.error(
               `[Startup] Failed to start serverNode for ${key}: ${err}`,
@@ -3487,13 +3485,21 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         for (const member of candidate.members) {
           const memberState = this.entities.get(member.entityId)?.state;
           if (memberState && isUnavailable(memberState)) {
-            void (composite as any).setMemberReachability?.(member.entityId, false);
+            void (composite as any).setMemberReachability?.(
+              member.entityId,
+              false,
+            );
             void (composite as any).setMemberInactiveState?.(member.entityId);
           } else if (memberState) {
-            void (composite as any).setMemberReachability?.(member.entityId, true);
+            void (composite as any).setMemberReachability?.(
+              member.entityId,
+              true,
+            );
           }
         }
-        const primaryState = this.entities.get(composite.primaryEntityId)?.state;
+        const primaryState = this.entities.get(
+          composite.primaryEntityId,
+        )?.state;
         if (primaryState && isUnavailable(primaryState)) {
           void (composite as any).setReachability?.(false);
         } else if (primaryState) {
@@ -4838,8 +4844,17 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           );
         const isC402Match = isTapoC402Entity && isTapoC402Cam && isMotionClass;
 
+        const isTapoC120Entity = /tapo[-_ ]?c120|tapo[-_ ]?spot|\bc120\b/i.test(
+          `${entityId} ${entityFriendlyName}`,
+        );
+        const isTapoC120Cam = /tapo[-_ ]?c120|tapo[-_ ]?spot|\bc120\b/i.test(
+          `${cuiId} ${camName}`,
+        );
+        const isC120Match = isTapoC120Entity && isTapoC120Cam && isMotionClass;
+
         const isLinked =
           isC402Match ||
+          isC120Match ||
           linkedId === entityId ||
           (cleanCuiId.length >= 4 && cleanEntityId.includes(cleanCuiId)) ||
           (cleanCamName.length >= 3 && cleanEntityId.includes(cleanCamName)) ||
@@ -5203,7 +5218,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             (this.config as any).mqttUser = user;
             (this.config as any).mqttPassword = data.password || "";
 
-            const persistDir = fsSync.existsSync("/data") ? "/data" : "./persist";
+            const persistDir = fsSync.existsSync("/data")
+              ? "/data"
+              : "./persist";
             const mqttConfigFile = path.join(persistDir, "mqtt-config.json");
             await fs.writeFile(
               mqttConfigFile,

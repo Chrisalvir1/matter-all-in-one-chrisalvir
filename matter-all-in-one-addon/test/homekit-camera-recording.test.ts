@@ -396,17 +396,22 @@ describe("HomeKitCameraRecordingDelegate", () => {
     delegate.destroy();
   });
 
-  it("repairs the C120 AAC clock without changing its H.264 video passthrough", () => {
+  it("repairs the C120 AAC clock and transcodes video to 1080p Level 4.0 for Apple Home Hub", () => {
     const record = {
       ...createMockRecord(),
       entityId: "camera.tapo_c120",
+      model: "C120",
       name: "Tapo C120",
     };
     const delegate = new HomeKitCameraRecordingDelegate(
       mockPlatform,
       "camera.tapo_c120",
       record,
-      createMockCapabilities(),
+      {
+        ...createMockCapabilities(),
+        resolution: { width: 2560, height: 1440 },
+        maxFps: 15,
+      },
       {
         sourceType: "rtsp",
         url: "rtsp://camera.local/c120",
@@ -416,11 +421,188 @@ describe("HomeKitCameraRecordingDelegate", () => {
     );
     (delegate as any).selectedConfiguration = createMockConfiguration();
     const args = delegate.buildPrebufferArgs("rtsp://camera.local/c120");
-    expect(args?.[args.indexOf("-vcodec") + 1]).toBe("copy");
+    // C120 must be transcoded to 1080p High Level 4.0 for HKSV compatibility
+    expect(args).toContain("-c:v");
+    expect(args).toContain("libx264");
+    expect(args).toContain("high");
+    expect(args).toContain("4.0");
+    expect(args).toContain("-r");
+    expect(args).toContain("15");
     expect(args).toContain("+genpts+discardcorrupt");
     expect(args).toContain("-copyts");
     expect(args).toContain("-start_at_zero");
     expect(args).not.toContain("-use_wallclock_as_timestamps");
+    delegate.destroy();
+  });
+
+  it("leaves non-C120 cameras with native H.264 passthrough copy", () => {
+    const record = {
+      ...createMockRecord(),
+      entityId: "camera.c210",
+      model: "C210",
+      name: "Tapo C210",
+    };
+    const delegate = new HomeKitCameraRecordingDelegate(
+      mockPlatform,
+      "camera.c210",
+      record,
+      {
+        ...createMockCapabilities(),
+        resolution: { width: 1920, height: 1080 },
+        maxFps: 25,
+      },
+      {
+        sourceType: "rtsp",
+        url: "rtsp://camera.local/c210",
+        supportsPassthrough: true,
+        requiresBridge: false,
+      },
+    );
+    (delegate as any).selectedConfiguration = createMockConfiguration();
+    const args = delegate.buildPrebufferArgs("rtsp://camera.local/c210");
+    // Non-C120 camera must keep -vcodec copy
+    expect(args?.[args.indexOf("-vcodec") + 1]).toBe("copy");
+    expect(args).not.toContain("libx264");
+    delegate.destroy();
+  });
+
+  it("leaves HEVC cameras untouched without libx264 transcoding", () => {
+    const record = {
+      ...createMockRecord(),
+      entityId: "camera.hevc",
+      model: "Generic HEVC",
+      name: "HEVC Camera",
+    };
+    const delegate = new HomeKitCameraRecordingDelegate(
+      mockPlatform,
+      "camera.hevc",
+      record,
+      {
+        ...createMockCapabilities(),
+        videoCodec: "hevc" as any,
+      },
+      {
+        sourceType: "rtsp",
+        url: "rtsp://camera.local/hevc",
+        supportsPassthrough: false,
+        requiresBridge: false,
+      },
+    );
+    (delegate as any).selectedConfiguration = createMockConfiguration();
+    const args = delegate.buildPrebufferArgs("rtsp://camera.local/hevc");
+    // HEVC camera is rejected for passthrough without libx264
+    expect(args).toBeNull();
+    delegate.destroy();
+  });
+});
+
+describe("HomeKitCameraRecordingDelegate — pause/resume symmetric cycle", () => {
+  it("pausePrebuffer() is a no-op when recordingActive=false", () => {
+    const record = { ...createMockRecord(), hksvEnabled: false };
+    const capabilities = createMockCapabilities();
+    const streamSource = {
+      sourceType: "rtsp" as const,
+      url: "rtsp://camera.local/stream",
+      supportsPassthrough: true,
+      requiresBridge: false,
+    };
+
+    const delegate = new HomeKitCameraRecordingDelegate(
+      mockPlatform,
+      "camera.driveway",
+      record,
+      capabilities,
+      streamSource,
+    );
+    delegate.updateRecordingActive(false);
+    const stopSpy = vi.spyOn(delegate as any, "stopPrebufferPipeline");
+
+    // recordingActive is false
+    delegate.pausePrebuffer();
+    expect(stopSpy).not.toHaveBeenCalled();
+    expect((delegate as any).isPausedByLiveStream).toBe(false);
+
+    delegate.destroy();
+  });
+
+  it("resumePrebuffer() is a no-op when not paused by live view", () => {
+    const record = createMockRecord();
+    const capabilities = createMockCapabilities();
+    const streamSource = {
+      sourceType: "rtsp" as const,
+      url: "rtsp://camera.local/stream",
+      supportsPassthrough: true,
+      requiresBridge: false,
+    };
+
+    const delegate = new HomeKitCameraRecordingDelegate(
+      mockPlatform,
+      "camera.driveway",
+      record,
+      capabilities,
+      streamSource,
+    );
+    vi.spyOn(delegate as any, "startPrebufferPipeline").mockResolvedValue(
+      undefined,
+    );
+    const startSpy = vi.spyOn(delegate as any, "startPrebufferPipeline");
+
+    delegate.updateRecordingActive(true);
+    startSpy.mockClear();
+
+    // isPausedByLiveStream is false
+    delegate.resumePrebuffer();
+    expect(startSpy).not.toHaveBeenCalled();
+
+    delegate.destroy();
+  });
+
+  it("pause and resume forms an idempotent symmetric cycle", () => {
+    const record = createMockRecord();
+    const capabilities = createMockCapabilities();
+    const streamSource = {
+      sourceType: "rtsp" as const,
+      url: "rtsp://camera.local/stream",
+      supportsPassthrough: true,
+      requiresBridge: false,
+    };
+
+    const delegate = new HomeKitCameraRecordingDelegate(
+      mockPlatform,
+      "camera.driveway",
+      record,
+      capabilities,
+      streamSource,
+    );
+    vi.spyOn(delegate as any, "startPrebufferPipeline").mockResolvedValue(
+      undefined,
+    );
+    const stopSpy = vi.spyOn(delegate as any, "stopPrebufferPipeline");
+    const startSpy = vi.spyOn(delegate as any, "startPrebufferPipeline");
+
+    delegate.updateRecordingActive(true);
+    stopSpy.mockClear();
+    startSpy.mockClear();
+
+    // Pause (session-start)
+    delegate.pausePrebuffer();
+    expect((delegate as any).isPausedByLiveStream).toBe(true);
+    expect(stopSpy).toHaveBeenCalledOnce();
+    startSpy.mockClear();
+
+    // Second pause is a no-op (idempotent)
+    delegate.pausePrebuffer();
+    expect(stopSpy).toHaveBeenCalledOnce();
+
+    // Resume (session-end)
+    delegate.resumePrebuffer();
+    expect((delegate as any).isPausedByLiveStream).toBe(false);
+    expect(startSpy).toHaveBeenCalledOnce();
+
+    // Second resume is a no-op (idempotent)
+    delegate.resumePrebuffer();
+    expect(startSpy).toHaveBeenCalledOnce();
+
     delegate.destroy();
   });
 });

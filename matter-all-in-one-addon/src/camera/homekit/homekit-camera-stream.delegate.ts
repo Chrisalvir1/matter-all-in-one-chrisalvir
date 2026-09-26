@@ -193,12 +193,35 @@ export class HomeKitCameraStreamingDelegate
   implements CameraStreamingDelegate
 {
   private readonly activeSessions = new Map<string, HomeKitStreamSession>();
+  /**
+   * Watchdog timers for orphaned prepareStream sessions.
+   * If iOS calls prepareStream but cancels before startStream, the session
+   * would remain in activeSessions forever, preventing activeSessions.size
+   * from ever reaching 0.  This watchdog auto-cleans orphaned sessions after
+   * PREPARE_TIMEOUT_MS and emits "session-end" if no active sessions remain.
+   */
+  private readonly prepareTimeouts = new Map<
+    string,
+    ReturnType<typeof setTimeout>
+  >();
+  public static readonly PREPARE_TIMEOUT_MS = 45_000; // 45 seconds safety window
+
   private readonly recentSessions: LiveViewSessionTelemetry[] = [];
   private static readonly MAX_RECENT_SESSIONS = 8;
   private lastSnapshotBuffer: Buffer = FALLBACK_JPEG_BUFFER;
 
   public get isStreaming(): boolean {
     return this.activeSessions.size > 0;
+  }
+
+  /** Returns true when at least one live-view session is active. */
+  public hasActiveSessions(): boolean {
+    return this.activeSessions.size > 0;
+  }
+
+  /** Current number of active live-view sessions. */
+  public activeSessionCount(): number {
+    return this.activeSessions.size;
   }
 
   private isTakingSnapshot = false;
@@ -651,6 +674,26 @@ export class HomeKitCameraStreamingDelegate
       }
       this.activeSessions.set(request.sessionID, session);
 
+      // Install watchdog timer: if startStream is never called by iOS (e.g. user cancelled
+      // live view before connection established), auto-clean the orphaned session after 45s.
+      const zombieTimer = setTimeout(() => {
+        this.prepareTimeouts.delete(request.sessionID);
+        const s = this.activeSessions.get(request.sessionID);
+        if (s && !s.process) {
+          this.platform?.log?.warn?.(
+            `[HomeKitCamera][${this.entityId}] [Session][${request.sessionID}] session-timeout: prepareStream completed but startStream was not called after ${HomeKitCameraStreamingDelegate.PREPARE_TIMEOUT_MS / 1000}s — clearing orphan session`,
+          );
+          this.activeSessions.delete(request.sessionID);
+          if (this.activeSessions.size === 0) {
+            this.platform?.log?.notice?.(
+              `[HomeKitCamera][${this.entityId}] [Session] session-end (cleared last orphan session)`,
+            );
+            this.emit("session-end");
+          }
+        }
+      }, HomeKitCameraStreamingDelegate.PREPARE_TIMEOUT_MS);
+      this.prepareTimeouts.set(request.sessionID, zombieTimer);
+
       const response: PrepareStreamResponse = {
         video: {
           port: localVideoPort,
@@ -668,7 +711,7 @@ export class HomeKitCameraStreamingDelegate
         };
       }
       this.platform?.log?.notice?.(
-        `[HomeKitCamera][${this.entityId}] HAP SetupEndpoints session=${request.sessionID} remote=${request.targetAddress}:${request.video.port} localVideoRTCP=${localVideoPort} videoSSRC=${session.videoSsrc}${localAudioPort ? ` localAudioRTCP=${localAudioPort} audioSSRC=${session.audioSsrc}` : ""}`,
+        `[HomeKitCamera][${this.entityId}] [Session][${request.sessionID}] session-prepare activeSessions=${this.activeSessions.size} remote=${request.targetAddress}:${request.video.port} localVideoRTCP=${localVideoPort} videoSSRC=${session.videoSsrc}${localAudioPort ? ` localAudioRTCP=${localAudioPort} audioSSRC=${session.audioSsrc}` : ""}`,
       );
       callback(undefined, response);
     } catch (error) {
@@ -789,6 +832,16 @@ export class HomeKitCameraStreamingDelegate
     const videoUrl =
       `srtp://${host}:${session.videoPort}` +
       `?rtcpport=${session.videoPort}&localrtcpport=${session.localVideoPort}&pkt_size=${mtu}&buffer_size=1048576`;
+
+    // Cancel the prepare watchdog timer because stream has legitimately started
+    const timer = this.prepareTimeouts.get(session.sessionId);
+    if (timer !== undefined) {
+      clearTimeout(timer);
+      this.prepareTimeouts.delete(session.sessionId);
+    }
+    this.platform?.log?.notice?.(
+      `[HomeKitCamera][${this.entityId}] [Session][${session.sessionId}] session-start activeSessions=${this.activeSessions.size} ${video.width}x${video.height}@${fps}`,
+    );
 
     this.emit("session-start", session.sessionId);
     // Yield event loop without artificial delay so background listeners handle pause immediately
@@ -1546,6 +1599,14 @@ export class HomeKitCameraStreamingDelegate
   private stopStream(sessionId: string): void {
     const session = this.activeSessions.get(sessionId);
     if (!session) return;
+
+    // Clear prepare watchdog timer if still pending
+    const timer = this.prepareTimeouts.get(sessionId);
+    if (timer !== undefined) {
+      clearTimeout(timer);
+      this.prepareTimeouts.delete(sessionId);
+    }
+
     if (session.pipeController) {
       try {
         session.pipeController.abort();
@@ -1572,9 +1633,12 @@ export class HomeKitCameraStreamingDelegate
     this.finishTelemetry(session, "finished");
     this.activeSessions.delete(sessionId);
     this.platform?.log?.notice?.(
-      `[HomeKitCamera][${this.entityId}] HAP STOP cleanup session=${sessionId}`,
+      `[HomeKitCamera][${this.entityId}] [Session][${sessionId}] session-stop activeSessions=${this.activeSessions.size}`,
     );
     if (this.activeSessions.size === 0) {
+      this.platform?.log?.notice?.(
+        `[HomeKitCamera][${this.entityId}] [Session] session-end (all sessions ended)`,
+      );
       this.emit("session-end");
     }
   }
@@ -1583,6 +1647,12 @@ export class HomeKitCameraStreamingDelegate
     for (const sessionId of [...this.activeSessions.keys()]) {
       this.stopStream(sessionId);
     }
-    this.emit("session-end");
+    for (const [, t] of this.prepareTimeouts) {
+      clearTimeout(t);
+    }
+    this.prepareTimeouts.clear();
+    if (this.activeSessions.size === 0) {
+      this.emit("session-end");
+    }
   }
 }

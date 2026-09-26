@@ -486,3 +486,205 @@ describe("HomeKitCameraStreamingDelegate", () => {
     expect(args).not.toContain("-avioflags");
   });
 });
+
+describe("HomeKitCameraStreamingDelegate — session lifecycle and zombie watchdog", () => {
+  it("hasActiveSessions() returns false before any prepareStream", () => {
+    const delegate = new HomeKitCameraStreamingDelegate(
+      createPlatform(),
+      "scrypted.51",
+      capabilities,
+      rtspSource,
+    );
+    expect(delegate.hasActiveSessions()).toBe(false);
+    expect(delegate.activeSessionCount()).toBe(0);
+  });
+
+  it("hasActiveSessions() returns true after prepareStream and false after cleanupAllSessions", async () => {
+    const delegate = new HomeKitCameraStreamingDelegate(
+      createPlatform(),
+      "scrypted.51",
+      capabilities,
+      rtspSource,
+    );
+
+    await new Promise<void>((resolve, reject) => {
+      delegate.prepareStream(
+        {
+          sessionID: "test-session-1",
+          targetAddress: "192.168.1.50",
+          video: {
+            port: 5000,
+            srtpCryptoSuite: SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
+            srtp_key: Buffer.alloc(16, 1),
+            srtp_salt: Buffer.alloc(14, 2),
+          },
+          addressVersion: "ipv4",
+        },
+        (error) => (error ? reject(error) : resolve()),
+      );
+    });
+
+    expect(delegate.hasActiveSessions()).toBe(true);
+    expect(delegate.activeSessionCount()).toBe(1);
+
+    delegate.cleanupAllSessions();
+    expect(delegate.hasActiveSessions()).toBe(false);
+    expect(delegate.activeSessionCount()).toBe(0);
+  });
+
+  it("emits session-end exactly once when all multiple concurrent sessions end", async () => {
+    const delegate = new HomeKitCameraStreamingDelegate(
+      createPlatform(),
+      "scrypted.51",
+      capabilities,
+      rtspSource,
+    );
+
+    const prepare = (sessionID: string) =>
+      new Promise<void>((resolve, reject) => {
+        delegate.prepareStream(
+          {
+            sessionID,
+            targetAddress: "192.168.1.50",
+            video: {
+              port: 5000,
+              srtpCryptoSuite: SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
+              srtp_key: Buffer.alloc(16, 1),
+              srtp_salt: Buffer.alloc(14, 2),
+            },
+            addressVersion: "ipv4",
+          },
+          (error) => (error ? reject(error) : resolve()),
+        );
+      });
+
+    await prepare("sess-1");
+    await prepare("sess-2");
+
+    const sessionEndEvents: number[] = [];
+    delegate.on("session-end", () => {
+      sessionEndEvents.push(Date.now());
+    });
+
+    // Close session 1 — session 2 is still active
+    delegate.handleStreamRequest(
+      { sessionID: "sess-1", type: StreamRequestTypes.STOP },
+      vi.fn(),
+    );
+    expect(delegate.hasActiveSessions()).toBe(true);
+    expect(delegate.activeSessionCount()).toBe(1);
+    expect(sessionEndEvents.length).toBe(0); // MUST NOT emit session-end while session 2 is active
+
+    // Close session 2 — now activeSessions is 0
+    delegate.handleStreamRequest(
+      { sessionID: "sess-2", type: StreamRequestTypes.STOP },
+      vi.fn(),
+    );
+    expect(delegate.hasActiveSessions()).toBe(false);
+    expect(delegate.activeSessionCount()).toBe(0);
+    expect(sessionEndEvents.length).toBe(1); // Emitted exactly once
+  });
+
+  it("watchdog auto-cleans orphaned prepareStream session after 45s and emits session-end", async () => {
+    vi.useFakeTimers();
+
+    const delegate = new HomeKitCameraStreamingDelegate(
+      createPlatform(),
+      "scrypted.51",
+      capabilities,
+      rtspSource,
+    );
+
+    await new Promise<void>((resolve, reject) => {
+      delegate.prepareStream(
+        {
+          sessionID: "orphan-sess",
+          targetAddress: "192.168.1.50",
+          video: {
+            port: 5000,
+            srtpCryptoSuite: SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
+            srtp_key: Buffer.alloc(16, 1),
+            srtp_salt: Buffer.alloc(14, 2),
+          },
+          addressVersion: "ipv4",
+        },
+        (error) => (error ? reject(error) : resolve()),
+      );
+    });
+
+    expect(delegate.hasActiveSessions()).toBe(true);
+    expect(delegate.activeSessionCount()).toBe(1);
+
+    const sessionEndEvents: number[] = [];
+    delegate.on("session-end", () => {
+      sessionEndEvents.push(Date.now());
+    });
+
+    // Advance 46 seconds (past the 45s PREPARE_TIMEOUT_MS)
+    vi.advanceTimersByTime(46_000);
+
+    expect(delegate.hasActiveSessions()).toBe(false);
+    expect(delegate.activeSessionCount()).toBe(0);
+    expect(sessionEndEvents.length).toBe(1);
+
+    vi.useRealTimers();
+  });
+
+  it("watchdog does NOT clean a session that has a running FFmpeg process", async () => {
+    vi.useFakeTimers();
+
+    const delegate = new HomeKitCameraStreamingDelegate(
+      createPlatform(),
+      "scrypted.51",
+      capabilities,
+      rtspSource,
+    );
+
+    await new Promise<void>((resolve, reject) => {
+      delegate.prepareStream(
+        {
+          sessionID: "active-ffmpeg-sess",
+          targetAddress: "192.168.1.50",
+          video: {
+            port: 5000,
+            srtpCryptoSuite: SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
+            srtp_key: Buffer.alloc(16, 1),
+            srtp_salt: Buffer.alloc(14, 2),
+          },
+          addressVersion: "ipv4",
+        },
+        (error) => (error ? reject(error) : resolve()),
+      );
+    });
+
+    // Simulate active process
+    const sess = (delegate as any).activeSessions.get("active-ffmpeg-sess");
+    sess.process = { killed: false, exitCode: null, kill: vi.fn() } as any;
+
+    const sessionEndEvents: number[] = [];
+    delegate.on("session-end", () => {
+      sessionEndEvents.push(Date.now());
+    });
+
+    vi.advanceTimersByTime(46_000);
+
+    // Process is still active, must not be cleaned up
+    expect(delegate.hasActiveSessions()).toBe(true);
+    expect(delegate.activeSessionCount()).toBe(1);
+    expect(sessionEndEvents.length).toBe(0);
+
+    delegate.cleanupAllSessions();
+    vi.useRealTimers();
+  });
+
+  it("starts clean on add-on restart with 0 persistent sessions", () => {
+    const delegate = new HomeKitCameraStreamingDelegate(
+      createPlatform(),
+      "camera.restarted",
+      capabilities,
+      rtspSource,
+    );
+    expect(delegate.hasActiveSessions()).toBe(false);
+    expect(delegate.activeSessionCount()).toBe(0);
+  });
+});
