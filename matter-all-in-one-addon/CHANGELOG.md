@@ -1,3 +1,25 @@
+## [1.9.4] - 2026-09-26
+
+### Estabilidad de sesiones Live View, Watchdog de movimiento y grabación HKSV 1080p para Tapo C120
+
+- **Watchdog de seguridad de 45 segundos para sesiones huérfanas de Live View:**
+  - Se implementó un temporizador de seguridad de 45 segundos (`PREPARE_TIMEOUT_MS = 45_000`) en `HomeKitCameraStreamingDelegate` que limpia automáticamente las sesiones generadas por `prepareStream` cuando el cliente iOS no procede a invocar `startStream`.
+  - Evita que sesiones zombi queden registradas indefinidamente en `activeSessions`, garantizando que el contador de sesiones activas vuelva siempre a 0.
+- **Ciclo simétrico e idempotente de pausa y reanudación del detector de movimiento y prebuffer:**
+  - Métodos `hasActiveSessions()` y `activeSessionCount()` para proteger la reanudación de `FfmpegMotionDetector` y `resumePrebuffer()`.
+  - El detector de movimiento y el prebuffer solo se reanudan cuando el total de sesiones concurrentes llega estrictamente a cero (`activeSessions.size === 0`), previniendo condiciones de carrera con múltiples visualizadores simultáneos.
+  - Se reforzó la idempotencia en `pausePrebuffer()` y `resumePrebuffer()` para evitar ejecuciones redundantes o reinicios fallidos de pipeline.
+- **Grabación HKSV 1080p High Level 4.0 para Tapo C120:**
+  - Transcodificación específica para prebuffer HKSV de Tapo C120 de 2K ($2560\times 1440$) a $1920\times 1080$ High Level 4.0 para compatibilidad plena con Apple Home Hub (iCloud Secure Video).
+  - Identificación robusta por tokens con límites de palabra (`\bc120\b|tapo[-_ ]?c120\b`), evitando falsos positivos con modelos como C1200 o C210.
+  - Aislamiento total: Live View, capturas instantáneas (snapshots), detector de movimiento y Matter/WebRTC se mantienen en passthrough puro.
+  - Cámaras H.264 estándar continúan con copia directa (`-vcodec copy`, sin transcodificación ni `-r`).
+- **Resolución dinámica y estricta de FPS (`resolveCameraFpsDetails`):**
+  - Prioridad de tasa: FPS medido $\to$ FPS promedio fraccionario $\to$ FPS nominal de contenedor $\to$ FPS configurado.
+  - Eliminación absoluta de cualquier fallback arbitrario de 15 fps.
+  - Comportamiento fail-closed: si la Tapo C120 no dispone de tasa medible ni configurada, se detiene la transcodificación de forma segura con etiqueta `No medido (HKSV no capaz)`.
+  - Clarificación del pipeline clásico de grabación respecto a HEVC (`not_capable`).
+
 ## [1.9.3] - 2026-09-24
 
 ### Corrección de rebote de interruptor Matter, exclusión de switches auxiliares de cerraduras y robustez en endpoints compuestos
@@ -111,7 +133,7 @@
 - **Nuevo módulo `src/hap/hap-generic-accessory.ts`:**
   - Clase `HapGenericAccessory` que publica cualquier entidad de Home Assistant como accesorio HAP nativo de hap-nodejs 2.2.3.
   - Catálogo completo de 35 perfiles: humidificador, deshumidificador, purificador de aire, televisor, altavoz TV, válvulas (irrigación / grifo / ducha), panel de alarma, puerta de garaje, timbre, ventilador HAP, calefactor, termostato HAP, enchufe, interruptor, bombilla, cerradura, persianas, puerta, ventana, sensor de movimiento, contacto, humo, CO, CO₂, fuga, ocupación, temperatura, humedad, luz, calidad de aire, batería, altavoz, sistema de irrigación.
-  - Credenciales HAP deterministas por entityId (PIN, MAC/username, setupId, puerto).  Mismo patrón que cámaras.
+  - Credenciales HAP deterministas por entityId (PIN, MAC/username, setupId, puerto). Mismo patrón que cámaras.
   - `publish()` / `unpublish()` / `isPaired()` / `setupUri` compatibles con el sistema de cámaras.
 
 - **`platform.ts` — Infraestructura HAP genérica:**
@@ -4132,4 +4154,3 @@ All notable changes to this project will be documented in this file.
   - Se registra el clúster `BridgedDeviceBasicInformation` (`0x0039`) en endpoints bridged y compuestos.
   - Al recibir estado `unavailable`/`unknown` de Home Assistant, se limpia el estado activo (`onOff: false`, fan mode `Off`) y se emite `setReachability(false)`.
   - Se sincroniza la disponibilidad de cada miembro en dispositivos compuestos de forma individual.
-
