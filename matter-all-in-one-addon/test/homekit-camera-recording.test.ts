@@ -9,6 +9,7 @@ vi.mock("../src/camera/homekit/ffmpeg-helper.js", () => ({
 import {
   HomeKitCameraRecordingDelegate,
   resolveCameraSourceFps,
+  resolveCameraFpsDetails,
 } from "../src/camera/homekit/homekit-camera-recording.delegate.js";
 import {
   AudioRecordingCodecType,
@@ -713,6 +714,59 @@ describe("HomeKitCameraRecordingDelegate — resolveCameraSourceFps & dynamic fr
 
     const fps = resolveCameraSourceFps(capabilities, record);
     expect(fps).toBeUndefined();
+
+    const details = resolveCameraFpsDetails(capabilities, record);
+    expect(details.origin).toBe("unmeasured");
+    expect(details.isObserved).toBe(false);
+    expect(details.label).toBe("No medido (HKSV no capaz)");
+    expect(details.fps).toBeUndefined();
+  });
+
+  it("distinguishes FPS medido, promedio, nominal y configurado explicitly", () => {
+    // 1. Measured (observed)
+    const capMeasured = {
+      ...createMockCapabilities(),
+      measuredVideo: { fps: 15 },
+    };
+    const detMeasured = resolveCameraFpsDetails(capMeasured);
+    expect(detMeasured.origin).toBe("measured");
+    expect(detMeasured.isObserved).toBe(true);
+    expect(detMeasured.fps).toBe(15);
+    expect(detMeasured.label).toBe("FPS medido: 15 fps");
+
+    // 2. Average (observed)
+    const capAverage = {
+      ...createMockCapabilities(),
+      measuredVideo: { avgFrameRate: "24/1" },
+    };
+    const detAverage = resolveCameraFpsDetails(capAverage);
+    expect(detAverage.origin).toBe("average");
+    expect(detAverage.isObserved).toBe(true);
+    expect(detAverage.fps).toBe(24);
+    expect(detAverage.label).toBe("FPS promedio: 24 fps");
+
+    // 3. Nominal (container timebase — NOT observed rate)
+    const capNominal = {
+      ...createMockCapabilities(),
+      measuredVideo: { rFrameRate: "30/1" },
+    };
+    const detNominal = resolveCameraFpsDetails(capNominal);
+    expect(detNominal.origin).toBe("nominal");
+    expect(detNominal.isObserved).toBe(false); // Must not be confused with observed!
+    expect(detNominal.fps).toBe(30);
+    expect(detNominal.label).toBe("FPS nominal: 30 fps");
+
+    // 4. Configured
+    const capConfigured = {
+      ...createMockCapabilities(),
+      maxFps: 20,
+      measuredVideo: undefined,
+    };
+    const detConfigured = resolveCameraFpsDetails(capConfigured);
+    expect(detConfigured.origin).toBe("configured");
+    expect(detConfigured.isObserved).toBe(false);
+    expect(detConfigured.fps).toBe(20);
+    expect(detConfigured.label).toBe("FPS configurado: 20 fps");
   });
 
   it("returns undefined if measured fps is non-positive or invalid", () => {
@@ -722,6 +776,7 @@ describe("HomeKitCameraRecordingDelegate — resolveCameraSourceFps & dynamic fr
       measuredVideo: { fps: 0, avgFrameRate: "0/0" },
     };
     expect(resolveCameraSourceFps(capabilities)).toBeUndefined();
+    expect(resolveCameraFpsDetails(capabilities).origin).toBe("unmeasured");
   });
 
   it("correctly parses fractional avg_frame_rate (e.g. 24/1, 30000/1001)", () => {

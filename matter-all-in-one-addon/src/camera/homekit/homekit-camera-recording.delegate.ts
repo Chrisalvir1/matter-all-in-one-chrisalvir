@@ -45,27 +45,49 @@ function recordingSampleRateHz(
   }
 }
 
+export type CameraFpsOrigin =
+  "measured" | "average" | "nominal" | "configured" | "unmeasured";
+
+export interface CameraFpsResolution {
+  fps?: number;
+  origin: CameraFpsOrigin;
+  isObserved: boolean;
+  label: string;
+}
+
 /**
- * Resolves camera source FPS using strict priority:
- * 1. Measured real FPS (`measuredVideo.fps`) if valid (> 0 and finite)
- * 2. `avg_frame_rate` (parsed from fractional "num/den") if valid (> 0 and finite)
- * 3. `r_frame_rate` (parsed from fractional "num/den") if valid (> 0 and finite)
- * 4. Configured / max FPS (`capabilities.maxFps` or `record.fps`) if valid (> 0 and finite)
- * 5. Returns `undefined` if no valid FPS can be determined (NEVER fallback to arbitrary 15 fps).
+ * Resolves detailed camera source FPS metadata, strictly distinguishing:
+ * - FPS medido real (ffprobe fps observado directamente)
+ * - FPS promedio (avg_frame_rate observado)
+ * - FPS nominal del contenedor (r_frame_rate, NO confundir con observado)
+ * - FPS configurado explícitamente (capabilities.maxFps o record.fps)
+ * - "No medido (HKSV no capaz)" si no existe información válida (NUNCA fallback arbitrario a 15)
  */
-export function resolveCameraSourceFps(
+export function resolveCameraFpsDetails(
   capabilities?: CameraCapabilitiesInfo,
   record?: HomeKitCameraStorageRecord,
-): number | undefined {
-  if (!capabilities && !record) return undefined;
+): CameraFpsResolution {
+  if (!capabilities && !record) {
+    return {
+      origin: "unmeasured",
+      isObserved: false,
+      label: "No medido (HKSV no capaz)",
+    };
+  }
 
-  // 1. Measured FPS directly from ffprobe
+  // 1. Measured real FPS directly observed from ffprobe
   if (
     typeof capabilities?.measuredVideo?.fps === "number" &&
     Number.isFinite(capabilities.measuredVideo.fps) &&
     capabilities.measuredVideo.fps > 0
   ) {
-    return Math.round(capabilities.measuredVideo.fps);
+    const fps = Math.round(capabilities.measuredVideo.fps);
+    return {
+      fps,
+      origin: "measured",
+      isObserved: true,
+      label: `FPS medido: ${fps} fps`,
+    };
   }
 
   // Helper to parse fractional frame rate string e.g. "15/1", "30000/1001", "24/1"
@@ -89,25 +111,41 @@ export function resolveCameraSourceFps(
     return undefined;
   };
 
-  // 2. avg_frame_rate from ffprobe (handles variable/nominal rate)
+  // 2. avg_frame_rate from ffprobe (observed average rate across samples)
   const avgFps = parseFractionalFps(capabilities?.measuredVideo?.avgFrameRate);
   if (avgFps !== undefined) {
-    return avgFps;
+    return {
+      fps: avgFps,
+      origin: "average",
+      isObserved: true,
+      label: `FPS promedio: ${avgFps} fps`,
+    };
   }
 
-  // 3. r_frame_rate from ffprobe
+  // 3. r_frame_rate from ffprobe (nominal container timebase, NOT observed rate)
   const rFps = parseFractionalFps(capabilities?.measuredVideo?.rFrameRate);
   if (rFps !== undefined) {
-    return rFps;
+    return {
+      fps: rFps,
+      origin: "nominal",
+      isObserved: false,
+      label: `FPS nominal: ${rFps} fps`,
+    };
   }
 
-  // 4. Configured / maxFps validated
+  // 4. Configured / maxFps validated explicitly by user or profile
   if (
     typeof capabilities?.maxFps === "number" &&
     Number.isFinite(capabilities.maxFps) &&
     capabilities.maxFps > 0
   ) {
-    return Math.round(capabilities.maxFps);
+    const fps = Math.round(capabilities.maxFps);
+    return {
+      fps,
+      origin: "configured",
+      isObserved: false,
+      label: `FPS configurado: ${fps} fps`,
+    };
   }
 
   const recordFps = (record as any)?.fps;
@@ -116,10 +154,35 @@ export function resolveCameraSourceFps(
     Number.isFinite(recordFps) &&
     recordFps > 0
   ) {
-    return Math.round(recordFps);
+    const fps = Math.round(recordFps);
+    return {
+      fps,
+      origin: "configured",
+      isObserved: false,
+      label: `FPS configurado: ${fps} fps`,
+    };
   }
 
-  return undefined;
+  return {
+    origin: "unmeasured",
+    isObserved: false,
+    label: "No medido (HKSV no capaz)",
+  };
+}
+
+/**
+ * Resolves camera source FPS using strict priority:
+ * 1. Measured real FPS (`measuredVideo.fps`) if valid (> 0 and finite)
+ * 2. `avg_frame_rate` (parsed from fractional "num/den") if valid (> 0 and finite)
+ * 3. `r_frame_rate` (parsed from fractional "num/den") if valid (> 0 and finite)
+ * 4. Configured / max FPS (`capabilities.maxFps` or `record.fps`) if valid (> 0 and finite)
+ * 5. Returns `undefined` if no valid FPS can be determined (NEVER fallback to arbitrary 15 fps).
+ */
+export function resolveCameraSourceFps(
+  capabilities?: CameraCapabilitiesInfo,
+  record?: HomeKitCameraStorageRecord,
+): number | undefined {
+  return resolveCameraFpsDetails(capabilities, record).fps;
 }
 
 export class HomeKitCameraRecordingDelegate
@@ -581,21 +644,22 @@ export class HomeKitCameraRecordingDelegate
     const isTapoC120 = isC120Model || isC120Entity || isC120Name || isC120Regex;
 
     if (isH264 && isTapoC120) {
-      // Tapo C120 outputs 2560x1440 @ 15fps H.264 High Level 5.0.
-      // Apple Home Hub rejects HKSV recording clips with H.264 Level > 4.0 or > 1080p.
-      // Transcode HKSV prebuffer specifically to 1920x1080 High Level 4.0, preserving
-      // the camera's native source rate strictly when measured or configured (never assume 15 fps globally).
-      const sourceFps = resolveCameraSourceFps(this.capabilities, this.record);
-      if (!sourceFps) {
+      // Tapo C120 outputs 2560x1440 H.264 High Level 5.0.
+      // This classical HKSV pipeline normalizes clips to 1920x1080 High Level 4.0 for Apple Home Hub.
+      const fpsDetails = resolveCameraFpsDetails(
+        this.capabilities,
+        this.record,
+      );
+      if (!fpsDetails.fps) {
         this.platform?.log?.error?.(
-          `[HKSV][${this.entityId}] Tapo C120 detectada pero no tiene FPS medido ni configurado. Transcodificación detenida por seguridad.`,
+          `[HKSV][${this.entityId}] Tapo C120 detectada pero su tasa de cuadros no es válida (${fpsDetails.label}). Transcodificación detenida por seguridad.`,
         );
         this.record.hksvState = "not_capable";
         return null;
       }
-      const c120Fps = Math.max(1, Math.min(sourceFps, 30));
+      const c120Fps = Math.max(1, Math.min(fpsDetails.fps, 30));
       this.platform?.log?.notice?.(
-        `[HKSV][${this.entityId}] Tapo C120 detectada (modelo: "${this.record.model || "C120"}") — transcodificando HKSV prebuffer 2K->1920x1080@${c120Fps}fps High Level 4.0 para compatibilidad Apple Home Hub`,
+        `[HKSV][${this.entityId}] Tapo C120 detectada (modelo: "${this.record.model || "C120"}") — transcodificando HKSV prebuffer 2K->1920x1080@${c120Fps}fps [${fpsDetails.label}] High Level 4.0 para compatibilidad Apple Home Hub`,
       );
       args.push(
         "-map",
@@ -632,8 +696,11 @@ export class HomeKitCameraRecordingDelegate
         "dump_extra=freq=keyframe",
       );
     } else {
+      // HEVC is not implemented in this classical HKSV pipeline.
+      // Cameras delivering non-H.264 (such as pure HEVC) remain marked as "not_capable" in this pipeline.
+      // Native HEVC and 2K/Level 5 research is isolated on experimental/camera-levels-by-fps.
       this.platform?.log?.error?.(
-        `[HKSV][${this.entityId}] Cámara no entrega H.264 nativo (${this.capabilities.videoCodec || "desconocido"}). Transcodificación con libx264 prohibida en modo passthrough.`,
+        `[HKSV][${this.entityId}] Cámara no entrega H.264 nativo (${this.capabilities.videoCodec || "desconocido"}). HEVC no está implementado en este pipeline clásico HKSV (HKSV no capaz).`,
       );
       this.record.hksvState = "not_capable";
       return null;
