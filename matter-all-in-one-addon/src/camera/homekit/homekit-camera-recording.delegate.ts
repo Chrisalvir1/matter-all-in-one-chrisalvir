@@ -494,14 +494,13 @@ export class HomeKitCameraRecordingDelegate
       this.streamSource.metadata?.name ||
       ""
     ).toLowerCase();
+    const isC120Token = (s: string) => /\bc120\b|tapo[-_ ]?c120\b/i.test(s);
     const isC120Model =
-      model.includes("c120") || model === "tapo_c120" || model === "c120";
+      model === "c120" || model === "tapo_c120" || isC120Token(model);
     const isC120Entity =
-      entityId.includes("c120") || entityId === "camera.tapo_c120";
-    const isC120Name = name.includes("c120");
-    const isC120Regex = /(?:\bc120\b|tapo[-_ ]?c120)/i.test(
-      `${entityId} ${name} ${model} ${sourceUrl}`,
-    );
+      entityId === "camera.tapo_c120" || isC120Token(entityId);
+    const isC120Name = isC120Token(name);
+    const isC120Regex = isC120Token(sourceUrl);
     const isTapoC120 = isC120Model || isC120Entity || isC120Name || isC120Regex;
 
     if (isH264 && isTapoC120) {
