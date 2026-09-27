@@ -4354,3 +4354,7 @@ All notable changes to this project will be documented in this file.
   - Se registra el clúster `BridgedDeviceBasicInformation` (`0x0039`) en endpoints bridged y compuestos.
   - Al recibir estado `unavailable`/`unknown` de Home Assistant, se limpia el estado activo (`onOff: false`, fan mode `Off`) y se emite `setReachability(false)`.
   - Se sincroniza la disponibilidad de cada miembro en dispositivos compuestos de forma individual.
+
+## 1.9.15
+
+- Fix Tapo C402 HA source selection when motion entities are returned.
