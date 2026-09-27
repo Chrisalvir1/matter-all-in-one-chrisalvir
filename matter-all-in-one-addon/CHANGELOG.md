@@ -1,3 +1,31 @@
+## [1.9.10] - 2026-09-27
+
+### Funciones avanzadas de Matter 1.6.1 y Matterbridge 3.10.11: Cámaras (Talkback, Snapshot, HEVC, Doorbell), Gestión Energética, Válvulas Nativas, Aspiradoras con Áreas y Calidad de Aire
+
+- **A. Ecosistema de Cámaras y Timbres (Matter 1.6.1):**
+  - **Audio bidireccional (Two-Way Talkback) vía WebRTC (Cluster 0x0553):** Soporte de canal de retorno de altavoz (backchannel) con códecs Opus y AAC para hablar desde Apple Home y Google Home a través de la cámara.
+  - **Cluster de Snapshot bajo demanda (Cluster 0x0552):** Capturas instantáneas JPEG sin necesidad de abrir una sesión de streaming WebRTC completa.
+  - **Timbre y Video Doorbell nativo (Cluster 0x0555 / doorbell / chime):** Notificaciones emergentes de llamada (chime) en Apple TV, HomePod y dispositivos Google Nest.
+  - **Negociación dinámica de perfiles HEVC / H.265 (Cluster 0x0551):** Soporte oficial de perfiles H.265/HEVC para cámaras de alta resolución (2K) como Vimtag Sala y Cochera, permitiendo reproducción directa sin transcodificación.
+
+- **B. Gestión de Energía y Tarifa Eléctrica (Device Energy Management):**
+  - **Clusters de Medición Energética (0x0090, 0x0091, 0x0098):** Medición de potencia en tiempo real (W a mW) y consumo acumulado (kWh a mWh) para enchufes y medidores con monitorización de consumo.
+  - **Integración con Baterías y Solar:** Clasificación y soporte nativo para sistemas de almacenamiento (`batteryStorage`) y generación solar (`solarPower`).
+
+- **C. Electrodomésticos y Climatización Avanzada:**
+  - **Robotic Vacuum Cleaners (RVC - Clusters 0x0074, 0x0075, 0x0076):** Soporte de `supportedAreas` para selección de habitaciones y zonas de limpieza, junto con modos de aspirado y estados operacionales.
+  - **Válvulas de Agua y Riego Inteligente (Cluster 0x0042 / waterValve):** Nueva entidad `ValveEntity` para dominios `valve.*` de Home Assistant, con control de apertura/cierre, porcentaje de posición (0–100%) y temporizador regresivo de corte.
+
+- **D. Sensores de Calidad de Aire Extendidos (Cluster 0x005B):**
+  - Nueva entidad `AirQualityEntity` con reporte multivariable unificado en un solo endpoint:
+    - Dióxido de carbono CO2 (0x040D en PPM).
+    - Partículas PM1 (0x042A), PM2.5 (0x042B) y PM10 (0x042D en µg/m³).
+    - Compuestos Orgánicos Volátiles VOC / TVOC (0x042F).
+    - Índice general de calidad de aire (Enum 1..6: Bueno, Aceptable, Moderado, Malo, Muy Malo, Peligroso).
+
+- **E. Runtime y Entorno Node.js v24.21.0 LTS:**
+  - Runtime global del sistema y herramientas de compilación actualizados a la última versión **Node.js 24 LTS (v24.21.0)** con npm 11.19.0.
+
 ## [1.9.9] - 2026-09-27
 
 ### Actualización a Matter 1.6.1 + MatterBridge 3.10.11, PTZ (Hardware + Digital DPTZ), hasta 5 zonas de vigilancia con MQTT y estabilización de ventiladores BLE

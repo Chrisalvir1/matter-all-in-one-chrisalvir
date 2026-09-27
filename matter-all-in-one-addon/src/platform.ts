@@ -50,6 +50,8 @@ import { HumidifierEntity } from "./entities/humidifier.entity.js";
 import { OvenEntity } from "./entities/oven.entity.js";
 import { CooktopEntity } from "./entities/cooktop.entity.js";
 import { MediaPlayerEntity } from "./entities/media-player.entity.js";
+import { ValveEntity } from "./entities/valve.entity.js";
+import { AirQualityEntity } from "./entities/air_quality.entity.js";
 import {
   CompositeDeviceEntity,
   CompositeMember,
@@ -3314,8 +3316,29 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       entityInstance = new CameraEntity(this, state, deviceType);
     } else if (domain === "sensor" && deviceClass === "moisture") {
       entityInstance = new SoilSensorEntity(this, state, deviceType);
-    } else if (domain === "sensor" && deviceClass === "monetary") {
+    } else if (
+      domain === "sensor" &&
+      (deviceClass === "monetary" || deviceClass === "power" || deviceClass === "energy")
+    ) {
       entityInstance = new EnergyTariffEntity(this, state, deviceType);
+    } else if (domain === "valve" || deviceType.name === "WaterValve") {
+      entityInstance = new ValveEntity(this, state, deviceType);
+    } else if (
+      domain === "air_quality" ||
+      deviceType.name === "AirQualitySensor" ||
+      [
+        "carbon_dioxide",
+        "co2",
+        "pm1",
+        "pm25",
+        "pm10",
+        "volatile_organic_compounds",
+        "voc",
+        "aqi",
+        "air_quality",
+      ].includes(deviceClass ?? "")
+    ) {
+      entityInstance = new AirQualityEntity(this, state, deviceType);
     } else if (
       (domain === "vacuum" ||
         effectiveProfile === "roboticVacuumCleaner" ||

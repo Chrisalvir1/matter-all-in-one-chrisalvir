@@ -24,7 +24,10 @@ import type {
 import { NestCameraAdapter } from "../camera/nest/nest-camera-adapter.js";
 
 export const CameraAvStreamManagementId = 0x0551 as any as ClusterId;
+export const CameraSnapshotManagementId = 0x0552 as any as ClusterId;
 export const WebRtcTransportProviderId = 0x0553 as any as ClusterId;
+export const ChimeClusterId = 0x0554 as any as ClusterId;
+export const DoorbellClusterId = 0x0555 as any as ClusterId;
 
 export class CameraEntity extends BaseEntity {
   public static readonly matterTypeLabel = "Camera";

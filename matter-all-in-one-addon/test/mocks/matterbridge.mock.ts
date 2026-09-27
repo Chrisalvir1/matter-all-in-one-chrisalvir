@@ -344,6 +344,13 @@ vi.mock("matterbridge", () => {
     // In tests, requiredServerClusters is empty because the mock addRequiredClusterServers() is a no-op.
     camera: makeMockDeviceType(0x0510, "camera", []),
     snapshotCamera: makeMockDeviceType(0x0145, "snapshotCamera", []),
+    airQualitySensor: makeMockDeviceType(0x002c, "airQualitySensor", [0x3, 0x5b]),
+    waterValve: makeMockDeviceType(0x0042, "waterValve", [0x3, 0x81]),
+    batteryStorage: makeMockDeviceType(0x0018, "batteryStorage", [0x3]),
+    solarPower: makeMockDeviceType(0x0017, "solarPower", [0x3]),
+    doorbell: makeMockDeviceType(0x0012, "doorbell", [0x3]),
+    audioDoorbell: makeMockDeviceType(0x0012, "audioDoorbell", [0x3]),
+    chime: makeMockDeviceType(0x0554, "chime", [0x3]),
   };
 });
 

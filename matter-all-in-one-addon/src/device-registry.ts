@@ -26,6 +26,11 @@ import {
   oven,
   smokeCoAlarm,
   waterLeakDetector,
+  airQualitySensor,
+  waterValve,
+  batteryStorage,
+  solarPower,
+  doorbell,
 } from "matterbridge";
 
 export const MatterDeviceTypes = {
@@ -47,6 +52,11 @@ export const MatterDeviceTypes = {
   lightSensor,
   smokeCoAlarm,
   waterLeakDetector,
+  airQualitySensor,
+  waterValve,
+  batteryStorage,
+  solarPower,
+  doorbell,
 
   /**
    * Matter 1.6 Camera device type (0x0142 / 0x0510).
@@ -210,6 +220,18 @@ export const DEVICE_REGISTRY: Record<string, DeviceRegistryEntry> = {
     matterType: MatterDeviceTypes.fan,
     homekitSupported: homekitSupported.fan,
   },
+  valve: {
+    matterType: MatterDeviceTypes.waterValve,
+    homekitSupported: homekitSupported.waterValve,
+  },
+  air_quality: {
+    matterType: MatterDeviceTypes.airQualitySensor,
+    homekitSupported: homekitSupported.airQualitySensor,
+  },
+  doorbell: {
+    matterType: MatterDeviceTypes.doorbell,
+    homekitSupported: homekitSupported.doorbell,
+  },
   // Domain-level fallback mapping; specific device_classes logic may still need to be handled if required
   binary_sensor: {
     matterType: MatterDeviceTypes.contactSensor,
@@ -300,6 +322,46 @@ export const DEVICE_CLASS_REGISTRY: Record<
     energy: {
       matterType: MatterDeviceTypes.energyTariff,
       homekitSupported: homekitSupported.energyTariff,
+    },
+    carbon_dioxide: {
+      matterType: MatterDeviceTypes.airQualitySensor,
+      homekitSupported: homekitSupported.airQualitySensor,
+    },
+    co2: {
+      matterType: MatterDeviceTypes.airQualitySensor,
+      homekitSupported: homekitSupported.airQualitySensor,
+    },
+    pm1: {
+      matterType: MatterDeviceTypes.airQualitySensor,
+      homekitSupported: homekitSupported.airQualitySensor,
+    },
+    pm25: {
+      matterType: MatterDeviceTypes.airQualitySensor,
+      homekitSupported: homekitSupported.airQualitySensor,
+    },
+    pm10: {
+      matterType: MatterDeviceTypes.airQualitySensor,
+      homekitSupported: homekitSupported.airQualitySensor,
+    },
+    volatile_organic_compounds: {
+      matterType: MatterDeviceTypes.airQualitySensor,
+      homekitSupported: homekitSupported.airQualitySensor,
+    },
+    voc: {
+      matterType: MatterDeviceTypes.airQualitySensor,
+      homekitSupported: homekitSupported.airQualitySensor,
+    },
+    aqi: {
+      matterType: MatterDeviceTypes.airQualitySensor,
+      homekitSupported: homekitSupported.airQualitySensor,
+    },
+    air_quality: {
+      matterType: MatterDeviceTypes.airQualitySensor,
+      homekitSupported: homekitSupported.airQualitySensor,
+    },
+    battery: {
+      matterType: MatterDeviceTypes.batteryStorage,
+      homekitSupported: homekitSupported.batteryStorage,
     },
   },
 };

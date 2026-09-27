@@ -142,8 +142,17 @@ export class VacuumEntity extends BaseEntity {
         )?.mode ?? 1)
       : 1;
 
+    const rawAreas = this.state.attributes?.rooms || this.state.attributes?.zones || [];
+    const supportedAreas = Array.isArray(rawAreas)
+      ? rawAreas.map((room: string, idx: number) => ({
+          areaId: idx + 1,
+          mapId: 1,
+          areaInfo: { locationInfo: { locationName: String(room) } },
+        }))
+      : [];
+
     this.endpoint = new RoboticVacuumCleaner(uniqueName, serialNumber, {
-      mode: "server",
+      mode: "server" as const,
       currentRunMode: RUN_MODE_ID_IDLE,
       supportedRunModes,
       currentCleanMode: initialCleanMode,
@@ -152,7 +161,7 @@ export class VacuumEntity extends BaseEntity {
       phaseList: null,
       operationalState: 0,
       operationalStateList,
-      supportedAreas: [],
+      supportedAreas: supportedAreas as any,
       selectedAreas: [],
       currentArea: null,
       supportedMaps: [],
