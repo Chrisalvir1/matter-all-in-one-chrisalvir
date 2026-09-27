@@ -467,7 +467,7 @@ export class BaseEntity {
   }
 
   protected async callFanSpeed(percentage: number): Promise<void> {
-    const nextPct = Math.max(0, Math.min(100, Math.round(percentage)));
+    const nextPct = Math.max(0, Math.min(100, Number(percentage.toFixed(2))));
     if (nextPct === 0) {
       this.setCommandLockout("fan_state", false);
       this.setCommandLockout("onOff", false);
@@ -480,19 +480,7 @@ export class BaseEntity {
     this.setCommandLockout("onOff", true);
     this.setCommandLockout("fan_percentage", nextPct);
 
-    try {
-      // Home Assistant core fan component accepts percentage in turn_on,
-      // which wakes sleeping/standby BLE fans and sets the speed in a single step.
-      await this.callHaServiceWithRetry("fan", "turn_on", { percentage: nextPct });
-    } catch (err: any) {
-      this.platform.log.debug(
-        `[${this.entityId}] fan.turn_on with percentage failed, trying set_percentage: ${err?.message ?? err}`,
-      );
-      try {
-        await this.callHaServiceWithRetry("fan", "turn_on");
-      } catch {}
-      await this.callHaServiceWithRetry("fan", "set_percentage", { percentage: nextPct });
-    }
+    await this.callHaServiceWithRetry("fan", "set_percentage", { percentage: nextPct });
   }
 
   protected isFanCommandLocked(

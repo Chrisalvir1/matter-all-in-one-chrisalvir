@@ -268,16 +268,20 @@ export class PtzZonesManager extends EventEmitter {
 
     switch (direction) {
       case "up":
+        if (newH >= 1) newH = 0.8;
         newY = Math.max(0, vp.y - step);
         break;
       case "down":
-        newY = Math.min(1 - vp.height, vp.y + step);
+        if (newH >= 1) newH = 0.8;
+        newY = Math.min(1 - newH, vp.y + step);
         break;
       case "left":
+        if (newW >= 1) newW = 0.8;
         newX = Math.max(0, vp.x - step);
         break;
       case "right":
-        newX = Math.min(1 - vp.width, vp.x + step);
+        if (newW >= 1) newW = 0.8;
+        newX = Math.min(1 - newW, vp.x + step);
         break;
       case "zoom_in":
         newW = Math.max(0.2, vp.width - step);

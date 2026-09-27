@@ -184,13 +184,13 @@ export class CameraEndpointBuilder {
     });
 
     // Register PTZ / DPTZ Command Handlers for controller invocations
-    endpoint.addCommandHandler?.("DPTZSetViewport", async (data: any) => {
+    (endpoint as any).addCommandHandler?.("DPTZSetViewport", async (data: any) => {
       await adapter.handleDptzSetViewport(data?.request ?? data);
     });
-    endpoint.addCommandHandler?.("DPTZRelativeMove", async (data: any) => {
+    (endpoint as any).addCommandHandler?.("DPTZRelativeMove", async (data: any) => {
       await adapter.handleDptzRelativeMove(data?.request ?? data);
     });
-    endpoint.addCommandHandler?.("MPTZMoveToPreset", async (data: any) => {
+    (endpoint as any).addCommandHandler?.("MPTZMoveToPreset", async (data: any) => {
       await adapter.handleMptzMoveToPreset(data?.request ?? data);
     });
 

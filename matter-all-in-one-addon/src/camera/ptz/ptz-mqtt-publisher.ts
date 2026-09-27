@@ -5,7 +5,7 @@
 
 import mqtt from "mqtt";
 import { PtzZonesManager } from "./ptz-zones-manager.js";
-import { CameraPtzInfo } from "./ptz-capabilities.js";
+import { CameraPtzInfo, MAX_PTZ_PRESETS } from "./ptz-capabilities.js";
 
 export interface PtzMqttConfig {
   host?: string;

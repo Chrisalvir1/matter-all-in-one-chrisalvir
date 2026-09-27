@@ -1313,9 +1313,6 @@ export class CompositeDeviceEntity {
         this.platform.log.debug(`[Composite][${entityId}] → HA fan turn_off`);
         await this.platform.ha.callService("fan", "turn_off", entityId);
       });
-        this.platform.log.debug(`[Composite][${entityId}] → HA fan turn_off`);
-        await this.platform.ha.callService("fan", "turn_off", entityId);
-      });
 
       const hasSpeed = hasFanSpeed(member.state);
       if (

@@ -253,14 +253,14 @@ const profilesByDomain: Record<string, DeviceExportProfile[]> = {
       label: "Cámara Matter 1.6.1 (WebRTC Live View)",
       description:
         "Cámara Matter oficial usando clusters Camera AV Stream Management (0x0551) y WebRTC Transport Provider (0x0553).",
-      appleHome: "supported",
+      appleHome: "experimental",
     },
     {
       id: "matterCameraPtz",
       label: "Cámara Matter 1.6.1 + PTZ & Zonas (DPTZ)",
       description:
         "Cámara Matter 1.6.1 con soporte de Digital PTZ (DPTZ), presets y hasta 5 zonas de vigilancia activables.",
-      appleHome: "supported",
+      appleHome: "experimental",
     },
     {
       id: "cameraZoneSwitch",
