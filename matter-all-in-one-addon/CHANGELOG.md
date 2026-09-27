@@ -1,3 +1,21 @@
+## [1.9.8] - 2026-09-26
+
+### Restauración de disponibilidad "En línea" para Tapo C120, reactivación de grabación HKSV y detección de movimiento para Tapo C402 y Tapo C120
+
+- **Restauración de Tapo C120 ("En línea" en Apple Home sin "Sin respuesta"):**
+  - **Escalera completa de resoluciones HAP estándar:** Se reemplazó la respuesta de una única resolución `[[1920, 1080, 15]]` por la escalera completa de resoluciones HAP estándar ([1920x1080, 1280x720, 640x360, 480x270, 320x180]), todas limitadas al tope estable de 15 fps. Esto elimina el rechazo de negociación de Apple HomeKit cuando los hubs (Apple TV, HomePod) o clientes (iOS, iPadOS, watchOS) solicitan vistas previas o miniaturas en resoluciones menores, evitando que la cámara caiga en "Sin respuesta".
+  - **Reconocimiento completo de alias:** Soporte unificado para nombres y alias de la cámara C120 (`TAPO-SPOT`, `spot`, `tapo_spot`) en `isTapoC120()`, delegados de stream, delegados de grabación y vinculación de accesorios.
+  - **Snapshot robusto:** Configuración de `probesize` y `analyzeduration` adecuados en snapshots RTSP para evitar fallos por falta de PPS/SPS en arranques en frío.
+
+- **Reactivación de grabación HKSV y detección de movimiento para Tapo C402:**
+  - **Reconocimiento de alias para C402:** Se amplió la detección de identidad en `isTapoC402()` para incluir `TAPO-FRENTE DE CALLE`, `frente de calle` y `tapo frente` en todos los componentes (`HomeKitCameraAccessory`, `HomeKitCameraRecordingDelegate`, `HomeKitCameraStreamingDelegate`, `CameraUiHomeKitBridge` y `FfmpegMotionDetector`).
+  - **Reparación de línea temporal de audio y probe HKSV:** La Tapo C402 ahora recibe correctamente `needsAudioTimestampRepair` y el probe de 1 MB (`probesize 1048576`, `analyzeduration 1000000`), evitando el descarte de paquetes de audio por `use_wallclock_as_timestamps` y permitiendo la generación ininterrumpida de segmentos fMP4 para Apple Home Hub e iCloud.
+  - **Análisis de movimiento detallado:** Se activa el análisis de movimiento a 320x180 con umbral del 1% de luma en `CameraUiHomeKitBridge` para la Tapo C402 (`frente de calle`), garantizando la detección ante variaciones sutiles de imagen (1–3%).
+
+- **Enrutamiento unificado de sensores de movimiento y clases en `platform.ts`:**
+  - **Soporte extendido de `isMotionClass`:** Detección de clases de dispositivo (`motion`, `occupancy`, `presence`) y tokens de nombre y entidad extendidos (`celda`, `tamper`, `line_crossing`, `persona`, `vehiculo`, `mascota`, etc.).
+  - **Correlación inmediata:** Eventos de sensores HA como `binary_sensor.omni_ai_sensors_mac_mac_persona_tapo_frente_de_calle` y `binary_sensor.omni_ai_sensors_mac_mac_persona_tapo_spot` se despachan directamente al accesorio HomeKit correspondiente, actualizando `Characteristic.MotionDetected` y disparando la grabación HKSV en iCloud.
+
 ## [1.9.7] - 2026-09-26
 
 ### Vinculación y grabación HKSV de Tapo C120, resolución de FPS sin fallbacks ciegos y streaming multi-cámara estable

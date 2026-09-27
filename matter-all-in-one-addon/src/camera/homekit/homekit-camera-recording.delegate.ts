@@ -542,17 +542,28 @@ export class HomeKitCameraRecordingDelegate
       this.platform?.ha?.getAccessToken?.() || this.platform?.ha?.wsAccessToken;
 
     const cameraIdentity =
-      `${this.entityId} ${this.record.name || ""} ${this.record.model || ""}`.toLowerCase();
+      `${this.entityId} ${this.record.name || ""} ${this.record.model || ""} ${sourceUrl || ""}`.toLowerCase();
     // The C402 may reopen its direct RTSP publisher between Live View and the
     // HKSV reader. Its first packets can arrive before SPS/PPS, so a normal
     // low-latency probe drops the parameter sets and the fMP4 reader exits
     // with "non-existing PPS". Give only this source a bounded full probe.
-    const isTapoC402 = /(?:\bc402\b|tapo[-_ ]?c402)/i.test(cameraIdentity);
+    const isTapoC402 =
+      /(?:\bc402\b|tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle|tapo[-_ ]?frente)/i.test(
+        cameraIdentity,
+      );
     // Camera.UI sources from these cameras have demonstrated discontinuous
     // audio clocks. Rebuild the audio timeline before AAC encoding while
     // keeping their video stream in strict passthrough.
+    const isTapoC120Match =
+      /(?:\bc120\b|tapo[-_ ]?c120\b|tapo[-_ ]?spot\b|\bspot\b)/i.test(
+        cameraIdentity,
+      );
     const needsAudioTimestampRepair =
-      /(?:\bc402\b|\bc120\b|\bwyze\b|\bezviz\b)/i.test(cameraIdentity);
+      isTapoC402 ||
+      isTapoC120Match ||
+      /(?:\bc402\b|\bc120\b|\bwyze\b|\bezviz\b|frente[-_ ]?de[-_ ]?calle|tapo[-_ ]?spot)/i.test(
+        cameraIdentity,
+      );
 
     // Build FFmpeg fMP4 args
     const args = ["-hide_banner", "-loglevel", "warning"];
@@ -634,7 +645,8 @@ export class HomeKitCameraRecordingDelegate
       this.streamSource.metadata?.name ||
       ""
     ).toLowerCase();
-    const isC120Token = (s: string) => /\bc120\b|tapo[-_ ]?c120\b/i.test(s);
+    const isC120Token = (s: string) =>
+      /(?:\bc120\b|tapo[-_ ]?c120\b|tapo[-_ ]?spot\b|\bspot\b)/i.test(s);
     const isC120Model =
       model === "c120" || model === "tapo_c120" || isC120Token(model);
     const isC120Entity =

@@ -251,10 +251,7 @@ export class HomeKitCameraAccessory {
     this.record.hksvCapable = isStreamingUsable;
     this.record.hksvState = isStreamingUsable ? "waiting_hub" : "not_capable";
 
-    const isTapoC402 =
-      this.entityId.toLowerCase().includes("c402") ||
-      (this.record.model || "").toLowerCase().includes("c402") ||
-      (this.record.name || "").toLowerCase().includes("c402");
+    const isTapoC402 = this.isTapoC402();
 
     const configuredMode = this.record.exportMode || "auto";
     let effectiveMode: "passthrough_h264" | "passthrough_hevc" | "disabled" =
@@ -516,7 +513,14 @@ export class HomeKitCameraAccessory {
     // El flujo nativo físico (2560x1440) se preserva para grabación HKSV (normalizada a 1080p con techo de 20 fps).
     // NO se anuncia 2K en esta versión estable.
     if (isC120) {
-      return [[1920, 1080, Math.min(sourceFps, 15)]];
+      const c120MaxFps = Math.min(sourceFps, 15);
+      return [
+        [1920, 1080, c120MaxFps],
+        [1280, 720, c120MaxFps],
+        [640, 360, c120MaxFps],
+        [480, 270, c120MaxFps],
+        [320, 180, c120MaxFps],
+      ];
     }
 
     const ladder: [number, number, number][] = [
@@ -564,7 +568,7 @@ export class HomeKitCameraAccessory {
     };
   }
 
-  private isTapoC402(): boolean {
+  public isTapoC402(): boolean {
     const identity = [
       this.record.name,
       this.record.model,
@@ -573,7 +577,9 @@ export class HomeKitCameraAccessory {
     ]
       .filter(Boolean)
       .join(" ");
-    return /(?:\bc402\b|tapo[-_ ]?c402)/i.test(identity);
+    return /(?:\bc402\b|tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle|tapo[-_ ]?frente)/i.test(
+      identity,
+    );
   }
 
   public isTapoC120(): boolean {
@@ -581,7 +587,8 @@ export class HomeKitCameraAccessory {
     const name = (this.record?.name || "").toLowerCase();
     const entityId = this.entityId.toLowerCase();
     const sourceUrl = (this.streamSource?.url || "").toLowerCase();
-    const isC120Token = (s: string) => /\bc120\b|tapo[-_ ]?c120\b/i.test(s);
+    const isC120Token = (s: string) =>
+      /(?:\bc120\b|tapo[-_ ]?c120\b|tapo[-_ ]?spot\b|\bspot\b)/i.test(s);
     return (
       isC120Token(model) ||
       isC120Token(entityId) ||
@@ -662,14 +669,16 @@ export class HomeKitCameraAccessory {
       const fn = state?.attributes?.friendly_name;
 
       const isExplicitModelMatch =
-        (/(?:\bc120\b|tapo[-_ ]?c120\b)/i.test(`${entityId} ${fn || ""}`) &&
-          /(?:\bc120\b|tapo[-_ ]?c120\b)/i.test(
-            `${this.entityId} ${this.record.name || ""}`,
-          )) ||
-        (/(?:\bc402\b|tapo[-_ ]?c402\b|frente[-_ ]?de[-_ ]?calle)/i.test(
+        (/(?:\bc120\b|tapo[-_ ]?c120\b|tapo[-_ ]?spot\b|\bspot\b)/i.test(
           `${entityId} ${fn || ""}`,
         ) &&
-          /(?:\bc402\b|tapo[-_ ]?c402\b|frente[-_ ]?de[-_ ]?calle)/i.test(
+          /(?:\bc120\b|tapo[-_ ]?c120\b|tapo[-_ ]?spot\b|\bspot\b)/i.test(
+            `${this.entityId} ${this.record.name || ""}`,
+          )) ||
+        (/(?:\bc402\b|tapo[-_ ]?c402\b|frente[-_ ]?de[-_ ]?calle|tapo[-_ ]?frente)/i.test(
+          `${entityId} ${fn || ""}`,
+        ) &&
+          /(?:\bc402\b|tapo[-_ ]?c402\b|frente[-_ ]?de[-_ ]?calle|tapo[-_ ]?frente)/i.test(
             `${this.entityId} ${this.record.name || ""}`,
           ));
 
@@ -698,6 +707,7 @@ export class HomeKitCameraAccessory {
         (["motion", "occupancy", "presence"].includes(deviceClass) ||
           entityId.includes("motion") ||
           entityId.includes("movimiento") ||
+          entityId.includes("celda") ||
           entityId.includes("persona") ||
           entityId.includes("person") ||
           entityId.includes("vehiculo") ||
@@ -800,14 +810,18 @@ export class HomeKitCameraAccessory {
           ["motion", "occupancy", "presence"].includes(deviceClass || "") ||
           entityId.includes("motion") ||
           entityId.includes("movimiento") ||
+          entityId.includes("celda") ||
           entityId.includes("person") ||
           entityId.includes("persona") ||
           entityId.includes("detection") ||
+          entityId.includes("deteccion") ||
           entityId.includes("animal") ||
           entityId.includes("pet") ||
+          entityId.includes("mascota") ||
           entityId.includes("vehicle") ||
           entityId.includes("vehiculo") ||
-          entityId.includes("car");
+          entityId.includes("car") ||
+          entityId.includes("auto");
         if (!isMotionClass) continue;
         const cleanEntity = clean(entityId);
         const fn = (state?.attributes?.friendly_name || "").toLowerCase();

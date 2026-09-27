@@ -175,4 +175,83 @@ describe("Tapo C120 Motion Sensor Linking & HKSV Triggering (v1.9.7)", () => {
     );
     expect(spyRecordingMotion).toHaveBeenCalledWith(false);
   });
+
+  it("advertises a complete standard resolution ladder for C120 capped at 15 fps (never just a single resolution)", () => {
+    const platform = createMockPlatform(true);
+    const acc = new HomeKitCameraAccessory(
+      platform as any,
+      "camera.tapo_c120",
+      {
+        entityId: "camera.tapo_c120",
+        name: "Tapo C120",
+        model: "C120",
+      } as any,
+      {
+        hasLiveStream: true,
+        videoCodec: "h264",
+        resolution: { width: 2560, height: 1440 },
+        maxFps: 20,
+      } as any,
+      {
+        sourceType: "rtsp",
+        url: "rtsp://192.168.1.100:554/stream1",
+      } as any,
+    );
+
+    const ladder = acc.buildDeclaredResolutions();
+    expect(ladder.length).toBeGreaterThanOrEqual(4);
+    expect(ladder).toContainEqual([1920, 1080, 15]);
+    expect(ladder).toContainEqual([1280, 720, 15]);
+    expect(ladder).toContainEqual([640, 360, 15]);
+    expect(ladder).toContainEqual([320, 180, 15]);
+    // Ensure all resolutions are capped at max 15 fps
+    for (const [w, h, fps] of ladder) {
+      expect(fps).toBeLessThanOrEqual(15);
+    }
+  });
+
+  it("identifies Tapo C120 with alias TAPO-SPOT and Tapo C402 with alias TAPO-FRENTE DE CALLE", () => {
+    const platform = createMockPlatform(true);
+    const accSpot = new HomeKitCameraAccessory(
+      platform as any,
+      "camera.cameraui_spot",
+      {
+        entityId: "camera.cameraui_spot",
+        name: "TAPO-SPOT",
+        model: "C120",
+      } as any,
+      {
+        hasLiveStream: true,
+        videoCodec: "h264",
+        resolution: { width: 2560, height: 1440 },
+        maxFps: 20,
+      } as any,
+      {
+        sourceType: "rtsp",
+        url: "rtsp://192.168.110.147:8554/tapo_c120",
+      } as any,
+    );
+    expect(accSpot.isTapoC120()).toBe(true);
+
+    const accFrente = new HomeKitCameraAccessory(
+      platform as any,
+      "camera.cameraui_frente",
+      {
+        entityId: "camera.cameraui_frente",
+        name: "TAPO-FRENTE DE CALLE",
+        model: "Tapo C402",
+      } as any,
+      {
+        hasLiveStream: true,
+        videoCodec: "h264",
+        resolution: { width: 2560, height: 1440 },
+        maxFps: 30,
+      } as any,
+      {
+        sourceType: "rtsp",
+        url: "rtsp://192.168.110.147:62291/tapo-c402",
+      } as any,
+    );
+    expect(accFrente.isTapoC402()).toBe(true);
+  });
 });

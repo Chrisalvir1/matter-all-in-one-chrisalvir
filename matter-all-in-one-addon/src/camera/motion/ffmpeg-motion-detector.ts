@@ -153,9 +153,15 @@ export class FfmpegMotionDetector extends EventEmitter {
     const vf = `fps=${analysisFps},scale=${analysisWidth}:${analysisHeight},format=gray,tblend=all_mode=difference,blackframe=amount=${reportAmount}:thresh=${pixelDifferenceThreshold}`;
 
     const isTapoC402 =
-      /(?:\bc402\b|tapo[-_ ]?c402)/i.test(this.opts.cameraName || "") ||
-      /(?:\bc402\b|tapo[-_ ]?c402)/i.test(this.opts.cameraId || "") ||
-      /(?:\bc402\b|tapo[-_ ]?c402)/i.test(this.opts.rtspUrl || "");
+      /(?:\bc402\b|tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle|tapo[-_ ]?frente)/i.test(
+        this.opts.cameraName || "",
+      ) ||
+      /(?:\bc402\b|tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle|tapo[-_ ]?frente)/i.test(
+        this.opts.cameraId || "",
+      ) ||
+      /(?:\bc402\b|tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle|tapo[-_ ]?frente)/i.test(
+        this.opts.rtspUrl || "",
+      );
 
     const probeSize = isTapoC402 ? "2097152" : "524288";
     const analyzeDuration = isTapoC402 ? "3000000" : "500000";

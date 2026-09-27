@@ -151,7 +151,7 @@ export class CameraUiHomeKitBridge {
     // This camera currently delivers 15 fps even though its physical maximum is
     // 20 fps. Advertising a hard-coded 30 fps made Apple Home negotiate a rate
     // that the copied stream cannot satisfy, which appeared as choppy Live View.
-    const isTapoC120Mount = /(?:\bc120\b|tapo[-_ ]?c120)/i.test(
+    const isTapoC120Mount = /(?:\bc120\b|tapo[-_ ]?c120|tapo[-_ ]?spot|\bspot\b)/i.test(
       `${camera.id} ${camera.name || ""}`,
     );
     if (isTapoC120Mount) {
@@ -448,8 +448,14 @@ export class CameraUiHomeKitBridge {
         // a sustained 2% luma change.  This is deliberately not a global
         // change: it preserves Wyze's proven detector and avoids clock-overlay
         // false positives on the remaining Camera.UI cameras.
-        const isTapoC120 = /(?:\bc120\b|tapo[-_ ]?c120)/i.test(cameraIdentity);
-        const isTapoC402 = /(?:\bc402\b|tapo[-_ ]?c402)/i.test(cameraIdentity);
+        const isTapoC120 =
+          /(?:\bc120\b|tapo[-_ ]?c120|tapo[-_ ]?spot|\bspot\b)/i.test(
+            cameraIdentity,
+          );
+        const isTapoC402 =
+          /(?:\bc402\b|tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle|tapo[-_ ]?frente)/i.test(
+            cameraIdentity,
+          );
         const isEzviz = /\bezviz\b|\bh6c\b/i.test(cameraIdentity);
         const needsDetailedMotionAnalysis = isTapoC120 || isTapoC402 || isEzviz;
         const detector = new FfmpegMotionDetector({

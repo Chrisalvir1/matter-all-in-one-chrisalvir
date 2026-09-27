@@ -281,12 +281,32 @@ export class HomeKitCameraStreamingDelegate
       this.streamSource?.metadata?.model || "",
     ).toLowerCase();
     const entityId = this.entityId.toLowerCase();
-    const isC120Token = (s: string) => /\bc120\b|tapo[-_ ]?c120\b/i.test(s);
+    const isC120Token = (s: string) =>
+      /(?:\bc120\b|tapo[-_ ]?c120\b|tapo[-_ ]?spot\b|\bspot\b)/i.test(s);
     return (
       isC120Token(model) ||
       isC120Token(entityId) ||
       isC120Token(name) ||
       isC120Token(sourceUrl)
+    );
+  }
+
+  public isTapoC402(): boolean {
+    const sourceUrl = (this.getCleanSourceUrl() || "").toLowerCase();
+    const name = String(this.streamSource?.metadata?.name || "").toLowerCase();
+    const model = String(
+      this.streamSource?.metadata?.model || "",
+    ).toLowerCase();
+    const entityId = this.entityId.toLowerCase();
+    const isC402Token = (s: string) =>
+      /(?:\bc402\b|tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle|tapo[-_ ]?frente)/i.test(
+        s,
+      );
+    return (
+      isC402Token(model) ||
+      isC402Token(entityId) ||
+      isC402Token(name) ||
+      isC402Token(sourceUrl)
     );
   }
 
@@ -586,11 +606,12 @@ export class HomeKitCameraStreamingDelegate
 
       const args = ["-hide_banner", "-loglevel", "error"];
       if (sourceUrl.startsWith("rtsp://")) {
+        const isTapo = this.isTapoC402() || this.isTapoC120();
         args.push(
           "-probesize",
-          "32768",
+          isTapo ? "524288" : "32768",
           "-analyzeduration",
-          "0",
+          isTapo ? "1000000" : "0",
           "-rtsp_transport",
           "tcp",
           "-fflags",
@@ -942,7 +963,7 @@ export class HomeKitCameraStreamingDelegate
     const mtu = video.mtu || 1378;
 
     const args = this.buildStreamArgs(session, request, forceTranscode);
-    const isTapoC402 = /(?:\bc402\b|tapo[-_ ]?c402)/i.test(sourceUrl || "");
+    const isTapoC402 = this.isTapoC402();
     const isTapoCamera = isTapoC402 || isTapoC120;
 
     this.platform?.log?.notice?.(
@@ -1160,7 +1181,7 @@ export class HomeKitCameraStreamingDelegate
     // A 32 KiB / zero-duration probe then exits with "non-existing PPS" after
     // HAP has already accepted the Live View request.  C402 needs a complete
     // GOP to join reliably; video remains strict H.264 passthrough.
-    const isTapoC402 = /(?:\bc402\b|tapo[-_ ]?c402)/i.test(sourceUrl);
+    const isTapoC402 = this.isTapoC402();
 
     const args: string[] = [
       "-hide_banner",

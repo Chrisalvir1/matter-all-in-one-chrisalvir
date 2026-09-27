@@ -4767,8 +4767,17 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
     if (entityId.startsWith("binary_sensor.")) {
       const isMotionState = newState.state === "on";
-      const entityFriendlyName =
-        this.ha?.hassStates?.get(entityId)?.attributes?.friendly_name || "";
+      const devState = this.ha?.hassStates?.get(entityId);
+      const entityFriendlyName = devState?.attributes?.friendly_name || "";
+      const deviceClass = (
+        devState?.attributes?.device_class || ""
+      ).toLowerCase();
+      const isMotionClass =
+        ["motion", "occupancy", "presence"].includes(deviceClass) ||
+        /motion|movimiento|celda|vehicle|vehiculo|car|auto|person|persona|animal|pet|mascota|detection|deteccion|occupancy|presence|line_crossing|tamper/i.test(
+          `${entityId} ${entityFriendlyName}`,
+        );
+
       for (const cam of this.entities.values()) {
         if (cam instanceof CameraEntity && cam.homekitAccessory) {
           const camFriendlyName = cam.state?.attributes?.friendly_name || "";
@@ -4781,7 +4790,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             /tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle|tapo[-_ ]?frente|\bc402\b/i.test(
               `${cam.entityId} ${camFriendlyName}`,
             );
-          const isC402Match = isTapoC402Entity && isTapoC402Cam;
+          const isC402Match = isTapoC402Entity && isTapoC402Cam && isMotionClass;
 
           const isTapoC120Entity =
             /tapo[-_ ]?c120|tapo[-_ ]?spot|\bc120\b/i.test(
@@ -4790,7 +4799,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           const isTapoC120Cam = /tapo[-_ ]?c120|tapo[-_ ]?spot|\bc120\b/i.test(
             `${cam.entityId} ${camFriendlyName}`,
           );
-          const isC120Match = isTapoC120Entity && isTapoC120Cam;
+          const isC120Match = isTapoC120Entity && isTapoC120Cam && isMotionClass;
 
           if (!cam.homekitAccessory.linkedMotionEntityId) {
             cam.homekitAccessory.linkedMotionEntityId =
@@ -4803,7 +4812,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             cam.homekitAccessory.linkedMotionEntityId === entityId ||
             (this.ha.hassEntities.get(entityId)?.device_id &&
               this.ha.hassEntities.get(entityId)?.device_id ===
-                this.ha.hassEntities.get(cam.entityId)?.device_id);
+                this.ha.hassEntities.get(cam.entityId)?.device_id &&
+              isMotionClass);
           if (isLinked) {
             this.log.notice?.(
               `[HomeKitCamera][${cam.entityId}] Evento de movimiento (${isMotionState ? "DETECTADO" : "REPOSO"}) desde HA (${entityId}) → actualizando HomeKit y HKSV`,
@@ -4826,10 +4836,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         const cleanCuiId = clean(rawCuiId);
         const cleanCamName = clean(camName);
 
-        const entityFriendlyName = (
-          this.ha?.hassStates?.get(entityId)?.attributes?.friendly_name || ""
-        ).toLowerCase();
-        const cleanFriendlyName = clean(entityFriendlyName);
+        const cleanFriendlyName = clean(entityFriendlyName.toLowerCase());
         const nameWords = camName
           .toLowerCase()
           .split(/[^a-z0-9]+/)
@@ -4839,22 +4846,6 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           nameWords.every(
             (w) => cleanEntityId.includes(w) || cleanFriendlyName.includes(w),
           );
-
-        const isMotionClass =
-          entityId.includes("motion") ||
-          entityId.includes("movimiento") ||
-          entityId.includes("vehicle") ||
-          entityId.includes("vehiculo") ||
-          entityId.includes("car") ||
-          entityId.includes("auto") ||
-          entityId.includes("person") ||
-          entityId.includes("persona") ||
-          entityId.includes("animal") ||
-          entityId.includes("pet") ||
-          entityId.includes("mascota") ||
-          entityId.includes("detection") ||
-          entityId.includes("occupancy") ||
-          entityId.includes("presence");
 
         const isTapoC402Entity =
           /tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle|tapo[-_ ]?frente|\bc402\b/i.test(
