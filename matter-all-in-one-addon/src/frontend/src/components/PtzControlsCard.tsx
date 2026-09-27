@@ -92,21 +92,7 @@ export const PtzControlsCard: React.FC<PtzControlsCardProps> = ({
   };
 
   if (!cameras || cameras.length === 0) {
-    return (
-      <section className="card ptz-card" aria-label="Control PTZ y Zonas">
-        <div className="card-header">
-          <div>
-            <h3>Cámaras PTZ y Zonas de Vigilancia (Matter 1.6.1)</h3>
-            <p className="card-subtitle">
-              Soporte Digital PTZ (DPTZ), presets y publicación MQTT para Home Assistant.
-            </p>
-          </div>
-        </div>
-        <div style={{ padding: "1.5rem", color: "var(--text-muted)" }}>
-          No se detectaron cámaras con soporte PTZ activo. Activa el stream de una cámara para habilitar Digital PTZ y zonas de vigilancia.
-        </div>
-      </section>
-    );
+    return null;
   }
 
   return (
@@ -117,9 +103,6 @@ export const PtzControlsCard: React.FC<PtzControlsCardProps> = ({
             <span style={{ fontSize: "1.25rem" }}>📹</span>
             <h3 style={{ margin: 0 }}>Cámaras PTZ y Zonas de Vigilancia (Matter 1.6.1)</h3>
           </div>
-          <p className="card-subtitle" style={{ marginTop: "0.25rem" }}>
-            Control de movimiento, hasta 5 zonas de vigilancia, telemetría MQTT y exportación Matter Single-Switch.
-          </p>
         </div>
 
         <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>

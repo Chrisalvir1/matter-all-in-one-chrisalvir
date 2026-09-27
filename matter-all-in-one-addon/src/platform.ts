@@ -5373,7 +5373,17 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           (pathname === "/api/cameras/ptz-info" ||
             pathname === "/api/custom/cameras/ptz-info")
         ) {
-          const cameras = this.ptzManager.getAllPtzCameras();
+          // If ptzManager has no cameras registered yet, seed from CameraUiStorage and HA entities
+          const registered = this.ptzManager.getAllPtzCameras();
+          if (registered.length === 0) {
+            const cuiStore = CameraUiStorage.getCachedStore();
+            const cuiCameras = (cuiStore?.cameras || {}) as Record<string, any>;
+            for (const [id, cam] of Object.entries(cuiCameras)) {
+              const state = this.ha.hassStates?.get(id);
+              this.ptzManager.registerCamera(id, state, cam?.streamUrl || cam?.source);
+            }
+          }
+          const cameras = this.ptzManager.getAllPtzCameras().filter((c) => c.hasPtz);
           res.writeHead(200, {
             "Content-Type": "application/json; charset=utf-8",
           });
@@ -5406,6 +5416,30 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             } else if (cmd.command === "move") {
               const dir = cmd.direction || "center";
               result = await this.ptzManager.moveDirection(entityId, dir, cmd.step || 0.1);
+
+              // Route physical PTZ command to Home Assistant services if supported
+              const ptzInfo = this.ptzManager.getCameraPtzInfo(entityId);
+              if (ptzInfo?.supportsHardwarePtz && this.ha?.connected) {
+                const lowerId = entityId.toLowerCase();
+                const dirUpper = String(dir).toUpperCase();
+                try {
+                  if (lowerId.includes("ezviz")) {
+                    await this.ha.callService("ezviz", "ptz", entityId, {
+                      direction: dirUpper,
+                      speed: 5,
+                    });
+                  } else if (lowerId.includes("vimtag") || lowerId.includes("onvif")) {
+                    await this.ha.callService("onvif", "ptz", entityId, {
+                      tilt: dir === "up" ? "UP" : dir === "down" ? "DOWN" : "HOME",
+                      pan: dir === "left" ? "LEFT" : dir === "right" ? "RIGHT" : "HOME",
+                      distance: cmd.step || 0.1,
+                      speed: 0.5,
+                    });
+                  }
+                } catch (serviceErr) {
+                  this.log.debug(`[PTZ] Hardware service call note for ${entityId}: ${serviceErr}`);
+                }
+              }
             } else if (cmd.command === "relative_move") {
               const step = Math.abs(cmd.pan || cmd.tilt || 0.1);
               let dir: "up" | "down" | "left" | "right" = "right";
@@ -5414,6 +5448,30 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               else if (cmd.tilt > 0) dir = "up";
               else if (cmd.tilt < 0) dir = "down";
               result = await this.ptzManager.moveDirection(entityId, dir, step);
+
+              // Route physical PTZ command to Home Assistant services if supported
+              const ptzInfo = this.ptzManager.getCameraPtzInfo(entityId);
+              if (ptzInfo?.supportsHardwarePtz && this.ha?.connected) {
+                const lowerId = entityId.toLowerCase();
+                const dirUpper = dir.toUpperCase();
+                try {
+                  if (lowerId.includes("ezviz")) {
+                    await this.ha.callService("ezviz", "ptz", entityId, {
+                      direction: dirUpper,
+                      speed: 5,
+                    });
+                  } else if (lowerId.includes("vimtag") || lowerId.includes("onvif")) {
+                    await this.ha.callService("onvif", "ptz", entityId, {
+                      tilt: dir === "up" ? "UP" : dir === "down" ? "DOWN" : "HOME",
+                      pan: dir === "left" ? "LEFT" : dir === "right" ? "RIGHT" : "HOME",
+                      distance: step,
+                      speed: 0.5,
+                    });
+                  }
+                } catch (serviceErr) {
+                  this.log.debug(`[PTZ] Hardware service call note for ${entityId}: ${serviceErr}`);
+                }
+              }
             }
 
             // Notify MQTT

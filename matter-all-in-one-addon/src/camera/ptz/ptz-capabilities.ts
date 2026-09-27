@@ -124,17 +124,26 @@ export function detectCameraPtzCapabilities(
     modelOrName.includes("ptz") ||
     modelOrName.includes("pan/tilt") ||
     modelOrName.includes("pan-tilt") ||
-    modelOrName.includes("c120") || // Tapo C120/C200/C210/C500 series
+    modelOrName.includes("cam pan") ||
+    modelOrName.includes("pan v2") ||
+    modelOrName.includes("pan v3") ||
+    modelOrName.includes("cs-h6c") ||
+    modelOrName.includes("cs_h6c") ||
+    modelOrName.includes("vimtag") ||
     modelOrName.includes("c200") ||
     modelOrName.includes("c210") ||
     modelOrName.includes("c500") ||
     modelOrName.includes("eufy pan")
   ) {
-    supportsHardwarePtz = true;
+    // Explicitly exclude fixed cameras like Tapo C120 / C402
+    if (!modelOrName.includes("c120") && !modelOrName.includes("c402")) {
+      supportsHardwarePtz = true;
+    }
   }
 
   // 2. Digital PTZ (DPTZ) Detection
-  // Digital PTZ is supported by any valid video stream capable of ROI viewport cropping.
+  // DPTZ is supported when video stream is active and either hardware PTZ is available
+  // or the camera model/configuration is explicitly designated for PTZ / ROI zones.
   const hasStream = Boolean(
     streamSource?.url ||
       (streamSource?.metadata as any)?.directUrl ||
