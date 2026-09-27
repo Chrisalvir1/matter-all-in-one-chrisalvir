@@ -50,6 +50,12 @@ export interface CameraCapabilitiesInfo {
   frontendStreamType?: string;
   /** Raw supported_features bitmask from Home Assistant. */
   supportedFeatures?: number;
+  /** Configurable maximum presets (Matter 1.6 Camera spec, default 5, max 5). */
+  maxPresets?: number;
+  /** Complete PTZ capabilities and surveillance zones info. */
+  ptzInfo?: any;
+  /** Surveillance zones configured for this camera (up to 5). */
+  ptzZones?: any[];
 }
 
 export interface ResolvedStreamSource {

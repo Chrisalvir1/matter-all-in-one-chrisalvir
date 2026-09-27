@@ -13,6 +13,8 @@ export const TopBar: React.FC<TopBarProps> = ({
   onRestartService,
 }) => {
   const isOnline = status?.haStatus === "conectado";
+  const matterVer = status?.matterVersion || "Desconocida";
+  const matterbridgeVer = status?.matterbridgeVersion || "Desconocida";
 
   return (
     <header className="topbar" role="banner" aria-label="Barra superior de servicio">
@@ -25,7 +27,7 @@ export const TopBar: React.FC<TopBarProps> = ({
             aria-hidden="true"
           />
           <div className="topbar-brand-info">
-            <p className="eyebrow">MATTER 1.6 BRIDGE</p>
+            <p className="eyebrow">MATTER {matterVer} BRIDGE</p>
             <h1>Matter All In One Chrisalvir</h1>
           </div>
         </div>
@@ -37,8 +39,23 @@ export const TopBar: React.FC<TopBarProps> = ({
               {status ? (isOnline ? "Conectado a Home Assistant" : "Desconectado") : "Iniciando…"}
             </strong>
           </div>
+          {status?.matterVersion && (
+            <span className="version-pill" id="matter-version" title="Versión oficial del data model Matter">
+              Matter {matterVer}
+            </span>
+          )}
+          {status?.matterbridgeVersion && (
+            <span
+              className="version-pill"
+              id="matterbridge-version"
+              title="Versión del runtime de Matterbridge"
+              style={{ background: "rgba(99, 102, 241, 0.2)", borderColor: "rgba(99, 102, 241, 0.4)" }}
+            >
+              MB {matterbridgeVer}
+            </span>
+          )}
           {status?.version && (
-            <span className="version-pill" id="version">
+            <span className="version-pill" id="version" title="Versión del addon">
               v{status.version}
             </span>
           )}

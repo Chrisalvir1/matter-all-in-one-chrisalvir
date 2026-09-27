@@ -85,6 +85,23 @@ export const MatterDeviceTypes = {
    */
   cameraOnOff: onOffPlugInUnit,
 
+  /**
+   * Matter Single-Switch Zone Controller for Camera DPTZ surveillance zones.
+   */
+  cameraZoneSwitch: onOffPlugInUnit,
+  cameraPtz: {
+    name: "Camera",
+    code: 0x0142,
+    deviceClass: "Simple",
+    category: "Camera",
+    deviceScope: "endpoint",
+    revision: 1,
+    requiredServerClusters: [0x0551, 0x0553],
+    optionalServerClusters: [],
+    requiredClientClusters: [],
+    optionalClientClusters: [],
+  } as unknown as DeviceTypeDefinition,
+
   closure: {
     code: 0x000d,
     name: "Closure",

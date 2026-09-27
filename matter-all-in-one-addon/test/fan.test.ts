@@ -423,3 +423,38 @@ describe("Fan converter — hasFanSpeed (distinguish On/Off switches from speed 
     expect(hasFanSpeed(s)).toBe(false);
   });
 });
+
+describe("Fan converter — BLE Discrete Speed and FanMode Mapping", () => {
+  it("maps discrete speeds 1..6 to correct physical percentage levels", () => {
+    const speedMax = 6;
+    const step = 100 / speedMax;
+
+    // Speed 1: ~16.67%
+    expect(snapToPhysicalLevel(1 * step, speedMax)).toBe(16.67);
+    // Speed 2: ~33.33%
+    expect(snapToPhysicalLevel(2 * step, speedMax)).toBe(33.33);
+    // Speed 3: 50%
+    expect(snapToPhysicalLevel(3 * step, speedMax)).toBe(50);
+    // Speed 4: ~66.67%
+    expect(snapToPhysicalLevel(4 * step, speedMax)).toBe(66.67);
+    // Speed 5: ~83.33%
+    expect(snapToPhysicalLevel(5 * step, speedMax)).toBe(83.33);
+    // Speed 6: 100%
+    expect(snapToPhysicalLevel(6 * step, speedMax)).toBe(100);
+  });
+
+  it("maps FanMode for Low, Medium, and High correctly", () => {
+    expect(haStateToFanMode(makeState("off", { percentage: 50 }))).toBe(
+      FanControl.FanMode.Off,
+    );
+    expect(haStateToFanMode(makeState("on", { percentage: 20 }))).toBe(
+      FanControl.FanMode.Low,
+    );
+    expect(haStateToFanMode(makeState("on", { percentage: 50 }))).toBe(
+      FanControl.FanMode.Medium,
+    );
+    expect(haStateToFanMode(makeState("on", { percentage: 90 }))).toBe(
+      FanControl.FanMode.High,
+    );
+  });
+});

@@ -212,6 +212,59 @@ export class CameraWebRtcAdapter {
     }
   }
 
+  public currentViewport = { x: 0, y: 0, width: 1, height: 1 };
+  public currentPreset = 1;
+
+  public async handleDptzSetViewport(request: any): Promise<void> {
+    const vp = request?.viewport ?? request;
+    if (vp) {
+      const width = this.capabilities.resolution?.width || 1920;
+      const height = this.capabilities.resolution?.height || 1080;
+      const x1 = typeof vp.x1 === "number" ? vp.x1 : 0;
+      const y1 = typeof vp.y1 === "number" ? vp.y1 : 0;
+      const x2 = typeof vp.x2 === "number" ? vp.x2 : width;
+      const y2 = typeof vp.y2 === "number" ? vp.y2 : height;
+      this.currentViewport = {
+        x: Math.max(0, Math.min(1, x1 / width)),
+        y: Math.max(0, Math.min(1, y1 / height)),
+        width: Math.max(0.1, Math.min(1, (x2 - x1) / width)),
+        height: Math.max(0.1, Math.min(1, (y2 - y1) / height)),
+      };
+      this.platform?.log?.info?.(
+        `[MatterCameraWebRtc][${this.entityId}] DPTZSetViewport applied: ${JSON.stringify(this.currentViewport)}`,
+      );
+      for (const s of this.sessionManager.getActiveSessions()) {
+        this.sessionManager.setSessionViewport(s.sessionId, this.currentViewport);
+      }
+    }
+  }
+
+  public async handleDptzRelativeMove(request: any): Promise<void> {
+    const pan = typeof request.pan === "number" ? request.pan : 0;
+    const tilt = typeof request.tilt === "number" ? request.tilt : 0;
+    const zoom = typeof request.zoom === "number" ? request.zoom : 1;
+    this.platform?.log?.info?.(
+      `[MatterCameraWebRtc][${this.entityId}] DPTZRelativeMove: pan=${pan}, tilt=${tilt}, zoom=${zoom}`,
+    );
+    for (const s of this.sessionManager.getActiveSessions()) {
+      this.sessionManager.relativeMoveSession(s.sessionId, { pan, tilt, zoom });
+      if (s.viewport) {
+        this.currentViewport = s.viewport;
+      }
+    }
+  }
+
+  public async handleMptzMoveToPreset(request: any): Promise<void> {
+    const presetId = Number(request?.presetId ?? request?.preset ?? 1);
+    this.currentPreset = presetId;
+    this.platform?.log?.info?.(
+      `[MatterCameraWebRtc][${this.entityId}] MPTZMoveToPreset: ${presetId}`,
+    );
+    for (const s of this.sessionManager.getActiveSessions()) {
+      this.sessionManager.setSessionPreset(s.sessionId, presetId);
+    }
+  }
+
   public async handleEndSession(request: {
     webRtcSessionId: number;
     reason?: number;
@@ -382,11 +435,22 @@ export class CameraWebRtcAdapter {
       rawUrl,
     ];
 
+    const vp = session.viewport || this.currentViewport;
+    const hasDptzCrop =
+      vp &&
+      (vp.width < 0.98 || vp.height < 0.98 || vp.x > 0.02 || vp.y > 0.02);
+
     // Video output parameters
     ffmpegArgs.push("-map", "0:v:0");
-    if (isH264 && !this.capabilities.requiresTranscoding) {
+    if (isH264 && !this.capabilities.requiresTranscoding && !hasDptzCrop) {
       ffmpegArgs.push("-c:v", "copy", "-bsf:v", "dump_extra=freq=keyframe");
     } else {
+      if (hasDptzCrop) {
+        const targetW = this.capabilities.resolution?.width || 1920;
+        const targetH = this.capabilities.resolution?.height || 1080;
+        const cropFilter = `crop=iw*${vp.width}:ih*${vp.height}:iw*${vp.x}:ih*${vp.y},scale=${targetW}:${targetH}`;
+        ffmpegArgs.push("-vf", cropFilter);
+      }
       ffmpegArgs.push(
         "-c:v",
         "libx264",

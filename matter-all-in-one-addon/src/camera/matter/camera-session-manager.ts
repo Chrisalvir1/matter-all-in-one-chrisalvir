@@ -33,6 +33,8 @@ export interface MatterActiveSession {
   inactivityTimer?: NodeJS.Timeout;
 
   metrics: SessionMetrics;
+  viewport?: { x: number; y: number; width: number; height: number };
+  currentPreset?: number;
 }
 
 export class CameraSessionManager {
@@ -171,5 +173,54 @@ export class CameraSessionManager {
     return Array.from(this.sessions.values()).filter(
       (s) => s.state === "active",
     );
+  }
+
+  public setSessionViewport(
+    sessionId: number,
+    viewport: { x: number; y: number; width: number; height: number },
+  ): void {
+    const session = this.sessions.get(sessionId);
+    if (session) {
+      session.viewport = viewport;
+      this.touchSession(sessionId);
+    }
+  }
+
+  public setSessionPreset(sessionId: number, presetId: number): void {
+    const session = this.sessions.get(sessionId);
+    if (session) {
+      session.currentPreset = presetId;
+      this.touchSession(sessionId);
+    }
+  }
+
+  public relativeMoveSession(
+    sessionId: number,
+    delta: { pan?: number; tilt?: number; zoom?: number },
+  ): void {
+    const session = this.sessions.get(sessionId);
+    if (!session) return;
+    const vp = session.viewport || { x: 0, y: 0, width: 1, height: 1 };
+    const pan = delta.pan ?? 0;
+    const tilt = delta.tilt ?? 0;
+    const zoom = delta.zoom ?? 1;
+
+    let newW = vp.width / Math.max(0.1, zoom);
+    let newH = vp.height / Math.max(0.1, zoom);
+    newW = Math.max(0.1, Math.min(1, newW));
+    newH = Math.max(0.1, Math.min(1, newH));
+
+    let newX = vp.x + pan;
+    let newY = vp.y + tilt;
+    newX = Math.max(0, Math.min(1 - newW, newX));
+    newY = Math.max(0, Math.min(1 - newH, newY));
+
+    session.viewport = {
+      x: Math.round(newX * 1000) / 1000,
+      y: Math.round(newY * 1000) / 1000,
+      width: Math.round(newW * 1000) / 1000,
+      height: Math.round(newH * 1000) / 1000,
+    };
+    this.touchSession(sessionId);
   }
 }

@@ -59,6 +59,9 @@ import { ScryptedHomeKitBridge } from "./camera/scrypted/scrypted-homekit-bridge
 import { ScryptedMatterBridge } from "./camera/scrypted/scrypted-matter-bridge.js";
 import { ScryptedStreamValidator } from "./camera/scrypted/scrypted-stream-validator.js";
 import { sanitizeUrlCredentials } from "./camera/homekit/ffmpeg-helper.js";
+import { PtzZonesManager } from "./camera/ptz/ptz-zones-manager.js";
+import { PtzMqttPublisher } from "./camera/ptz/ptz-mqtt-publisher.js";
+import { MatterPtzExporter } from "./camera/ptz/matter-ptz-exporter.js";
 
 export interface HomeAssistantPlatformConfig extends PlatformConfig {
   host?: string; // Optional: auto-detected from network/supervisor if not set
@@ -153,6 +156,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   public deviceGroupingConfigs: CompositeDeviceConfig[] = [];
   public mqttManager?: MqttClientManager;
   public mqttEntities = new Map<string, MqttEntity>();
+  public ptzManager: PtzZonesManager = PtzZonesManager.getInstance();
+  public ptzMqttPublisher: PtzMqttPublisher | null = null;
   private uiServer?: http.Server;
   /** Port the UI HTTP server will bind to. Override in tests with 0 to get an OS-assigned port. */
   protected _uiPort = 8285;
@@ -1517,6 +1522,26 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       });
 
       this.mqttManager.connect();
+    }
+
+    // ── Initialize PTZ Zones Manager & MQTT Publisher ─────────────────────
+    try {
+      await this.ptzManager.init();
+      if ((this.config as any).mqttHost) {
+        this.ptzMqttPublisher = new PtzMqttPublisher(
+          this.ptzManager,
+          {
+            host: (this.config as any).mqttHost,
+            port: Number((this.config as any).mqttPort) || 1883,
+            user: (this.config as any).mqttUser,
+            password: (this.config as any).mqttPassword,
+          },
+          this.log,
+        );
+        this.ptzMqttPublisher.connect();
+      }
+    } catch (err) {
+      this.log.debug(`[PTZ-Manager] Initialization note: ${err}`);
     }
 
     // ── Resolve Home Assistant URL ─────────────────────────────────────────
@@ -3573,8 +3598,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             JSON.stringify({
               status: this.ha.connected ? "operativo" : "reconectando",
               version,
-              matterbridgeVersion: this.matterbridge.matterbridgeVersion,
-              bridgeMode: this.matterbridge.bridgeMode,
+              matterVersion: "1.6.1",
+              matterbridgeVersion:
+                this.matterbridge?.matterbridgeVersion || "3.10.11",
+              bridgeMode: this.matterbridge?.bridgeMode || "bridge",
               qrPairingCode: "",
               manualPairingCode: "",
               commissioned: isCommissioned,
@@ -3588,8 +3615,172 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                 memory: `${(process.memoryUsage().rss / 1024 / 1024).toFixed(0)} MB`,
               },
               haStatus: this.ha.connected ? "conectado" : "desconectado",
+              ptzCamerasCount:
+                this.ptzManager?.getAllPtzCameras()?.filter((c) => c.hasPtz)
+                  ?.length || 0,
             }),
           );
+          return;
+        }
+
+        // GET /api/system-info or /api/custom/system-info
+        if (
+          req.method === "GET" &&
+          (pathname === "/api/system-info" ||
+            pathname === "/api/custom/system-info")
+        ) {
+          res.writeHead(200, {
+            "Content-Type": "application/json; charset=utf-8",
+          });
+          res.end(
+            JSON.stringify({
+              matterVersion: "1.6.1",
+              matterbridgeVersion:
+                this.matterbridge?.matterbridgeVersion || "3.10.11",
+              timestamp: Date.now(),
+            }),
+          );
+          return;
+        }
+
+        // GET /api/cameras/ptz-info or /api/custom/cameras/ptz-info
+        if (
+          req.method === "GET" &&
+          (pathname === "/api/cameras/ptz-info" ||
+            pathname === "/api/custom/cameras/ptz-info")
+        ) {
+          const cameras = this.ptzManager.getAllPtzCameras();
+          res.writeHead(200, {
+            "Content-Type": "application/json; charset=utf-8",
+          });
+          res.end(JSON.stringify(cameras));
+          return;
+        }
+
+        // POST /api/custom/cameras/:id/ptz/command
+        if (
+          req.method === "POST" &&
+          pathname.startsWith("/api/custom/cameras/") &&
+          pathname.endsWith("/ptz/command")
+        ) {
+          const rawId = pathname.slice(
+            "/api/custom/cameras/".length,
+            -"/ptz/command".length,
+          );
+          const entityId = decodeURIComponent(rawId);
+          try {
+            const bodyStr = await this.readRequestBody(req);
+            const cmd = JSON.parse(bodyStr || "{}");
+            this.log.info(
+              `[HTTP] PTZ command for ${entityId}: ${JSON.stringify(cmd)}`,
+            );
+
+            let result: any = { success: true };
+            if (cmd.command === "move_to_preset" || cmd.command === "set_zone_active") {
+              const zoneId = Number(cmd.preset_id || cmd.zone_id || cmd.preset || 1);
+              result = await this.ptzManager.setActiveZone(entityId, zoneId);
+            } else if (cmd.command === "move") {
+              const dir = cmd.direction || "center";
+              result = await this.ptzManager.moveDirection(entityId, dir, cmd.step || 0.1);
+            } else if (cmd.command === "relative_move") {
+              const step = Math.abs(cmd.pan || cmd.tilt || 0.1);
+              let dir: "up" | "down" | "left" | "right" = "right";
+              if (cmd.pan > 0) dir = "right";
+              else if (cmd.pan < 0) dir = "left";
+              else if (cmd.tilt > 0) dir = "up";
+              else if (cmd.tilt < 0) dir = "down";
+              result = await this.ptzManager.moveDirection(entityId, dir, step);
+            }
+
+            // Notify MQTT
+            this.ptzMqttPublisher?.publishCameraState(entityId);
+
+            res.writeHead(200, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ success: true, result }));
+          } catch (err: any) {
+            res.writeHead(500, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ success: false, error: err.message || err }));
+          }
+          return;
+        }
+
+        // GET /api/custom/cameras/:id/ptz/zones
+        if (
+          req.method === "GET" &&
+          pathname.startsWith("/api/custom/cameras/") &&
+          pathname.endsWith("/ptz/zones")
+        ) {
+          const rawId = pathname.slice(
+            "/api/custom/cameras/".length,
+            -"/ptz/zones".length,
+          );
+          const entityId = decodeURIComponent(rawId);
+          const zones = this.ptzManager.getZones(entityId);
+          res.writeHead(200, {
+            "Content-Type": "application/json; charset=utf-8",
+          });
+          res.end(JSON.stringify({ entityId, zones }));
+          return;
+        }
+
+        // POST /api/custom/cameras/:id/ptz/zones
+        if (
+          req.method === "POST" &&
+          pathname.startsWith("/api/custom/cameras/") &&
+          pathname.endsWith("/ptz/zones")
+        ) {
+          const rawId = pathname.slice(
+            "/api/custom/cameras/".length,
+            -"/ptz/zones".length,
+          );
+          const entityId = decodeURIComponent(rawId);
+          try {
+            const bodyStr = await this.readRequestBody(req);
+            const payload = JSON.parse(bodyStr || "{}");
+            if (Array.isArray(payload.zones)) {
+              for (const z of payload.zones) {
+                await this.ptzManager.saveZone(entityId, z);
+              }
+            } else if (payload.zone) {
+              await this.ptzManager.saveZone(entityId, payload.zone);
+            }
+            this.ptzMqttPublisher?.publishCameraState(entityId);
+            const updated = this.ptzManager.getZones(entityId);
+            res.writeHead(200, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ success: true, zones: updated }));
+          } catch (err: any) {
+            res.writeHead(400, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ success: false, error: err.message || err }));
+          }
+          return;
+        }
+
+        // POST /api/custom/cameras/generate-matter-export
+        if (
+          req.method === "POST" &&
+          (pathname === "/api/custom/cameras/generate-matter-export" ||
+            pathname === "/api/cameras/generate-matter-export")
+        ) {
+          try {
+            const exportData = await MatterPtzExporter.exportToFile(this.ptzManager);
+            res.writeHead(200, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ success: true, exportData }));
+          } catch (err: any) {
+            res.writeHead(500, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({ success: false, error: err.message || err }));
+          }
           return;
         }
 

@@ -7,6 +7,7 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({ status }) => {
   const isOnline = status?.haStatus === "conectado";
+  const matterVer = status?.matterVersion || "Desconocida";
 
   return (
     <aside className="sidebar" aria-label="Estado del servicio">
@@ -18,7 +19,7 @@ export const Header: React.FC<HeaderProps> = ({ status }) => {
           aria-hidden="true"
         />
         <div>
-          <p className="eyebrow">MATTER 1.6 BRIDGE</p>
+          <p className="eyebrow">MATTER {matterVer} BRIDGE</p>
           <h1>Matter All In One Chrisalvir</h1>
         </div>
       </div>

@@ -2201,26 +2201,47 @@ export class HomeAssistant extends EventEmitter {
       this.deviceCommandQueues.get(queueKey) ?? Promise.resolve();
 
     const executeCall = async () => {
-      const response = await this.request(
-        {
-          type: "call_service",
-          domain,
-          service,
-          service_data: { ...serviceData },
-          target: { entity_id: entityId },
-        },
-        this._serviceTimeout,
-      );
+      const isBleOrFan =
+        domain === "fan" ||
+        entityId.includes("ble") ||
+        entityId.includes("bluetooth");
+      const maxAttempts = isBleOrFan ? 3 : 1;
 
-      if (!response.success) {
-        throw new Error(
-          response.error?.message ?? `Service ${domain}.${service} failed`,
-        );
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+          const response = await this.request(
+            {
+              type: "call_service",
+              domain,
+              service,
+              service_data: { ...serviceData },
+              target: { entity_id: entityId },
+            },
+            this._serviceTimeout,
+          );
+
+          if (!response.success) {
+            throw new Error(
+              response.error?.message ?? `Service ${domain}.${service} failed`,
+            );
+          }
+          return response.result as unknown as {
+            context: HassContext;
+            response: unknown;
+          };
+        } catch (err: any) {
+          if (attempt < maxAttempts) {
+            const delay = attempt * 800;
+            this.log.debug(
+              `[HA CallService] Retrying ${domain}.${service} on ${entityId} (attempt ${attempt + 1}/${maxAttempts}, delay ${delay}ms) after error: ${err.message || err}`,
+            );
+            await new Promise((resolve) => setTimeout(resolve, delay));
+          } else {
+            throw err;
+          }
+        }
       }
-      return response.result as unknown as {
-        context: HassContext;
-        response: unknown;
-      };
+      throw new Error(`Service ${domain}.${service} failed`);
     };
 
     const nextPromise = prevQueue.catch(() => {}).then(executeCall);
