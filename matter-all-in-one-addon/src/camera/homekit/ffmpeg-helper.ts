@@ -1,5 +1,6 @@
 import { spawn, spawnSync, ChildProcess } from "child_process";
 import fs from "fs";
+import os from "os";
 import { SRTPCryptoSuites } from "@homebridge/hap-nodejs";
 
 export interface ProbeResult {
@@ -1158,4 +1159,33 @@ export function buildFfmpegStreamArgs(config: StreamPipelineConfig): string[] {
   }
 
   return args;
+}
+
+/**
+ * Detects the host's primary physical network interface and IPv4 address,
+ * ignoring Docker, virtual bridge, loopback, and tunnel interfaces.
+ */
+export function detectPrimaryNetworkInterface():
+  { name: string; ip: string } | undefined {
+  try {
+    const ifaces = os.networkInterfaces();
+    const ignoredPatterns =
+      /^(lo|docker|hassio|veth|br-|dummy|tun|tap|tailscale|wg|utun|llw|awdl)/i;
+
+    for (const [name, addrs] of Object.entries(ifaces)) {
+      if (ignoredPatterns.test(name)) continue;
+      for (const addr of addrs || []) {
+        if (addr.internal) continue;
+        if (addr.family === "IPv4" || (addr.family as any) === 4) {
+          if (
+            addr.address.startsWith("172.17.") ||
+            addr.address.startsWith("172.30.")
+          )
+            continue;
+          return { name, ip: addr.address };
+        }
+      }
+    }
+  } catch {}
+  return undefined;
 }

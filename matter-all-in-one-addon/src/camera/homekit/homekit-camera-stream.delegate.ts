@@ -32,6 +32,7 @@ import {
   sanitizeUrlCredentials,
   supportsFdkAac,
   checkAudioPassthroughCompatibility,
+  detectPrimaryNetworkInterface,
 } from "./ffmpeg-helper.js";
 import {
   createSessionTelemetry,
@@ -694,7 +695,9 @@ export class HomeKitCameraStreamingDelegate
       }, HomeKitCameraStreamingDelegate.PREPARE_TIMEOUT_MS);
       this.prepareTimeouts.set(request.sessionID, zombieTimer);
 
+      const primaryIface = detectPrimaryNetworkInterface();
       const response: PrepareStreamResponse = {
+        addressOverride: primaryIface?.ip,
         video: {
           port: localVideoPort,
           ssrc: session.videoSsrc,
@@ -711,7 +714,7 @@ export class HomeKitCameraStreamingDelegate
         };
       }
       this.platform?.log?.notice?.(
-        `[HomeKitCamera][${this.entityId}] [Session][${request.sessionID}] session-prepare activeSessions=${this.activeSessions.size} remote=${request.targetAddress}:${request.video.port} localVideoRTCP=${localVideoPort} videoSSRC=${session.videoSsrc}${localAudioPort ? ` localAudioRTCP=${localAudioPort} audioSSRC=${session.audioSsrc}` : ""}`,
+        `[HomeKitCamera][${this.entityId}] [Session][${request.sessionID}] session-prepare activeSessions=${this.activeSessions.size} remote=${request.targetAddress}:${request.video.port} lanIP=${primaryIface?.ip || "auto"} localVideoRTCP=${localVideoPort} videoSSRC=${session.videoSsrc}${localAudioPort ? ` localAudioRTCP=${localAudioPort} audioSSRC=${session.audioSsrc}` : ""}`,
       );
       callback(undefined, response);
     } catch (error) {
@@ -793,6 +796,22 @@ export class HomeKitCameraStreamingDelegate
     request: StartStreamRequest,
     callback: StreamRequestCallback,
   ): Promise<void> {
+    const video = request.video;
+    if (
+      !video?.fps ||
+      typeof video.fps !== "number" ||
+      !Number.isFinite(video.fps) ||
+      video.fps <= 0
+    ) {
+      this.platform?.log?.error?.(
+        `[HomeKitCamera][${this.entityId}] HAP START rechazado: StartStreamRequest sin FPS válido (${video?.fps}). Rechazo seguro fail-closed.`,
+      );
+      callback(
+        new Error("StartStreamRequest rejected: missing or invalid video FPS"),
+      );
+      return;
+    }
+
     const ffmpegPath = resolveFfmpegPath();
     const sourceUrl = this.getCleanSourceUrl();
     if (!ffmpegPath || !sourceUrl) {
@@ -802,9 +821,7 @@ export class HomeKitCameraStreamingDelegate
       callback(new Error("FFmpeg or RTSP source is unavailable"));
       return;
     }
-
-    const video = request.video;
-    const fps = Math.max(1, Math.min(video.fps || 30, 60));
+    const fps = Math.max(1, Math.min(video.fps, 60));
     // HomeKit on iOS can request default low bitrates (e.g. 299k).
     // Ensure a high-fidelity floor: at least 3500k-5000k for 2K (Tapo/Wyze), 6000k-8000k for 4K.
     const qualityFloor =
@@ -870,7 +887,7 @@ export class HomeKitCameraStreamingDelegate
 
     const args = this.buildStreamArgs(session, request, forceTranscode);
     const isTapoC402 = /(?:\bc402\b|tapo[-_ ]?c402)/i.test(sourceUrl || "");
-    const isTapoC120 = /(?:\bc120\b|tapo[-_ ]?c120)/i.test(
+    const isTapoC120 = /(?:\bc120\b|tapo[-_ ]?c120\b)/i.test(
       `${this.entityId} ${sourceUrl || ""} ${this.streamSource.metadata?.name || ""}`,
     );
     const isTapoCamera = isTapoC402 || isTapoC120;
@@ -944,7 +961,7 @@ export class HomeKitCameraStreamingDelegate
           // C120 now normalizes its H.264 stream for HAP and needs time for the
           // first encoded keyframe before HomeKit accepts the RTP session.
         },
-        isTapoC402 ? 80 : isTapoC120 ? 1200 : 600,
+        isTapoC402 ? 80 : isTapoC120 ? 1200 : 800,
       );
       process.once("error", (error) => {
         clearTimeout(guard);
@@ -1081,7 +1098,7 @@ export class HomeKitCameraStreamingDelegate
     // HAP has already accepted the Live View request.  C402 needs a complete
     // GOP to join reliably; video remains strict H.264 passthrough.
     const isTapoC402 = /(?:\bc402\b|tapo[-_ ]?c402)/i.test(sourceUrl);
-    const isTapoC120 = /(?:\bc120\b|tapo[-_ ]?c120)/i.test(
+    const isTapoC120 = /(?:\bc120\b|tapo[-_ ]?c120\b)/i.test(
       `${this.entityId} ${sourceUrl} ${this.streamSource.metadata?.name || ""}`,
     );
 
@@ -1114,11 +1131,13 @@ export class HomeKitCameraStreamingDelegate
         "10000000",
         // C402 needs 2MB for its long GOP analysis. C120 needs enough data to
         // receive a complete 2K keyframe before the H.264 decoder starts.
-        // everything else (Wyze, EZVIZ) uses the minimal 64KB for fast startup.
+        // Wyze, EZVIZ, and other network RTSP cameras need at least 1MB probesize
+        // and 2.5s analyzeduration so that keyframes and audio tracks are detected
+        // reliably without premature "Invalid data found when processing input" errors.
         "-probesize",
-        isTapoC402 ? "2097152" : isTapoC120 ? "524288" : "65536",
+        isTapoC402 ? "2097152" : isTapoC120 ? "524288" : "1048576",
         "-analyzeduration",
-        isTapoC402 ? "3000000" : isTapoC120 ? "1000000" : "100000",
+        isTapoC402 ? "3000000" : isTapoC120 ? "1000000" : "2500000",
       );
       if (isTapoC402) {
         args.push(
@@ -1135,12 +1154,7 @@ export class HomeKitCameraStreamingDelegate
         // slices and permanently frozen frame seen by Apple Home.
         args.push("-fflags", "+genpts+igndts+discardcorrupt", "-flags", "0");
       } else {
-        args.push(
-          "-fflags",
-          "+nobuffer+flush_packets+genpts+discardcorrupt",
-          "-flags",
-          "low_delay",
-        );
+        args.push("-fflags", "+genpts+igndts+discardcorrupt", "-flags", "0");
       }
       args.push(
         "-thread_queue_size",
@@ -1226,26 +1240,70 @@ export class HomeKitCameraStreamingDelegate
     // negotiated at level 4.0. Copying that bitstream makes iOS decode a few
     // slices, then freeze with green corruption. Normalize this one camera at
     // the HAP boundary; its source, HKSV and motion pipeline are unchanged.
-    const needsC120VideoNormalization = isTapoC120;
+    // C120 2K Passthrough vs 1080p Normalization / Fallback:
+    // If Apple Home negotiates native 2K (2560x1440) and it's not a retry/forceTranscode,
+    // deliver the raw H.264 High Level 5.0 stream via passthrough (-c:v copy).
+    // If Apple Home requests 1080p (or a retry occurs), normalize via libx264 High Level 4.0.
+    const isC120_2K_Requested =
+      isTapoC120 &&
+      video.width === 2560 &&
+      video.height === 1440 &&
+      !forceTranscode &&
+      codec === "h264";
+
+    const needsC120VideoNormalization = isTapoC120 && !isC120_2K_Requested;
     const canPassthrough =
       !forceTranscode &&
-      !needsC120VideoNormalization &&
       !isHaProxyStream &&
       codec === "h264" &&
-      (this.capabilities.strategy === "passthrough_h264" ||
-        this.streamSource.supportsPassthrough ||
-        !this.capabilities.requiresTranscoding);
+      (isC120_2K_Requested ||
+        (!isTapoC120 &&
+          !needsC120VideoNormalization &&
+          (this.capabilities.strategy === "passthrough_h264" ||
+            this.streamSource.supportsPassthrough ||
+            !this.capabilities.requiresTranscoding)));
 
     if (canPassthrough) {
-      this.startTelemetry(
-        session,
-        request,
-        session.retried ? "fallback" : "copy",
-        this.sourceOutputMetadata(),
-        session.retried
-          ? "FFmpeg restarted after an initial stream failure"
-          : undefined,
-      );
+      if (isC120_2K_Requested) {
+        this.platform?.log?.notice?.(
+          `[Stream][${this.entityId}] C120 2K Passthrough: Apple Home solicitó 2560x1440 nativo -> entregando flujo H.264 High L5.0 sin transcodificación (-c:v copy, CPU=0%)`,
+        );
+        const measured = this.capabilities.measuredVideo;
+        this.startTelemetry(
+          session,
+          request,
+          "copy",
+          {
+            codec: measured?.codec || "h264",
+            profile: measured?.profile || "high",
+            level: measured?.level || "5.0",
+            width: 2560,
+            height: 1440,
+            configuredFps: undefined,
+            fps: measured?.fps,
+            nominalFps: measured?.rFrameRate
+              ? Number(measured.rFrameRate.split("/")[0]) /
+                Number(measured.rFrameRate.split("/")[1] || 1)
+              : undefined,
+            averageFps: measured?.avgFrameRate
+              ? Number(measured.avgFrameRate.split("/")[0]) /
+                Number(measured.avgFrameRate.split("/")[1] || 1)
+              : undefined,
+            metadataSource: "effective-command",
+          },
+          "Apple Home negoció stream nativo 2560x1440 H.264 High Level 5.0 en passthrough puro",
+        );
+      } else {
+        this.startTelemetry(
+          session,
+          request,
+          session.retried ? "fallback" : "copy",
+          this.sourceOutputMetadata(),
+          session.retried
+            ? "FFmpeg restarted after an initial stream failure"
+            : undefined,
+        );
+      }
       // Pure passthrough remuxing without transcoding CPU overhead (native 4K, 2K, 1080p, 720p @ max fps)
       // Preserve the native H.264 or HEVC stream negotiated by Apple Home.
       const videoPassArgs: string[] = [
@@ -1308,10 +1366,12 @@ export class HomeKitCameraStreamingDelegate
         },
         session.retried
           ? "FFmpeg restarted after an initial stream failure"
-          : undefined,
+          : isTapoC120 && video.width === 1920
+            ? "Apple Home solicitó 1080p; normalizando flujo 2K C120 a HAP High L4.0"
+            : undefined,
       );
       this.platform?.log?.notice?.(
-        `[Stream][${this.entityId}] Normalizando C120 H.264 High L5.0 a HAP High L4.0 ${targetWidth}x${targetHeight}@${fps}`,
+        `[Stream][${this.entityId}] Normalizando C120 H.264 High L5.0 a HAP High L4.0 ${targetWidth}x${targetHeight}@${fps} (fallback seguro)`,
       );
       args.push(
         "-map",

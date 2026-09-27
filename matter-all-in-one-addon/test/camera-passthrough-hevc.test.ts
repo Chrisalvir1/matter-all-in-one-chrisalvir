@@ -260,7 +260,7 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     expect(args).not.toContain("aresample");
   });
 
-  it("normalizes C120 video to HAP level 4.0 and transcodes its PCMA audio", () => {
+  it("normalizes C120 video to HAP level 4.0 when 1080p is requested and transcodes its PCMA audio", () => {
     const platform = createPlatformMock();
     const capabilities = createCapabilities({
       videoCodec: "h264",
@@ -297,7 +297,7 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
       {
         sessionID: "test-c120-sess",
         type: StreamRequestTypes.START,
-        video: { fps: 30, width: 2560, height: 1440, pt: 99 } as any,
+        video: { fps: 30, width: 1920, height: 1080, pt: 99 } as any,
         audio: {
           codec: 0 as any, // AAC-ELD
           channel: 1,
@@ -309,8 +309,7 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
       } as any,
     );
 
-    // C120 is 2K H.264 High L5.0. HAP only negotiates through L4.0, so Live
-    // View must be normalized to a decodable 1080p stream.
+    // When 1080p is requested or on fallback, C120 is normalized to HAP Level 4.0 via libx264
     expect(args).toContain("-c:v");
     expect(args).toContain("libx264");
     expect(args).not.toContain("libx265");
@@ -328,6 +327,49 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     expect(audioCodecIdx).toBeGreaterThan(-1);
     expect(["libfdk_aac", "aac"]).toContain(args[audioCodecIdx + 1]);
     expect(args).toContain("aresample=async=1:first_pts=0");
+  });
+
+  it("delivers native 2K passthrough when 2560x1440 is requested for C120", () => {
+    const platform = createPlatformMock();
+    const capabilities = createCapabilities({
+      videoCodec: "h264",
+      audioCodec: "pcm_alaw",
+      audioSampleRate: 8000,
+      audioChannels: 1,
+    });
+    const streamSource = createStreamSource({
+      url: "rtsp://192.168.110.147:8554/tapo_c120",
+    });
+
+    const delegate = new HomeKitCameraStreamingDelegate(
+      platform,
+      "camera.cameraui_ec110a11_ed20_44f7_8468_2bd8c7dce18f",
+      capabilities,
+      streamSource,
+    );
+
+    const args = delegate.buildStreamArgs(
+      {
+        sessionId: "test-c120-2k-sess",
+        targetAddress: "192.168.1.50",
+        videoPort: 5000,
+        localVideoPort: 5001,
+        videoCryptoSuite: SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
+        videoKeySalt: Buffer.alloc(30, 1),
+        videoSsrc: 1111,
+      },
+      {
+        sessionID: "test-c120-2k-sess",
+        type: StreamRequestTypes.START,
+        video: { fps: 20, width: 2560, height: 1440, pt: 99 } as any,
+      } as any,
+    );
+
+    // Native 2K passthrough: -c:v copy without libx264 or scaling
+    expect(args).toContain("-c:v");
+    expect(args).toContain("copy");
+    expect(args).not.toContain("libx264");
+    expect(args).not.toContain("-vf");
   });
 
   it("strictly preserves Tapo C402 input and audio parameters untouched", () => {
@@ -615,5 +657,102 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     expect(spy).toHaveBeenCalledWith(true);
     accessory.updateMotionState(false);
     expect(spy).toHaveBeenCalledWith(false);
+  });
+
+  it("configures Wyze and Ezviz RTSP streams with robust 1MB probesize, 2.5s analyzeduration, and clean genpts fflags", () => {
+    const platform = createPlatformMock();
+    const capabilities = createCapabilities({
+      videoCodec: "h264",
+      audioCodec: "aac",
+      audioSampleRate: 16000,
+      audioChannels: 1,
+    });
+    const streamSource = createStreamSource({
+      url: "rtsp://192.168.110.118:554/stream0", // Wyze RTSP URL
+    });
+
+    const delegate = new HomeKitCameraStreamingDelegate(
+      platform,
+      "camera.cameraui_cba17b87_e6c0_4cc9_b6ab_e88b8cbc7cb4",
+      capabilities,
+      streamSource,
+    );
+
+    const args = delegate.buildStreamArgs(
+      {
+        sessionId: "test-wyze-sess",
+        targetAddress: "192.168.110.121",
+        videoPort: 50462,
+        localVideoPort: 34130,
+        videoCryptoSuite: SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
+        videoKeySalt: Buffer.alloc(30, 1),
+        videoSsrc: 13914642,
+        audioPort: 50464,
+        localAudioPort: 50786,
+        audioCryptoSuite: SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
+        audioKeySalt: Buffer.alloc(30, 2),
+        audioSsrc: 11632413,
+      },
+      {
+        sessionID: "test-wyze-sess",
+        type: StreamRequestTypes.START,
+        video: { fps: 20, width: 1920, height: 1080, pt: 99 } as any,
+        audio: {
+          codec: 0 as any,
+          channel: 1,
+          bit_rate: 24,
+          sample_rate: 16,
+          packet_time: 20,
+          pt: 110,
+        } as any,
+      } as any,
+    );
+
+    expect(args).toContain("-probesize");
+    expect(args).toContain("1048576");
+    expect(args).toContain("-analyzeduration");
+    expect(args).toContain("2500000");
+    expect(args).toContain("+genpts+igndts+discardcorrupt");
+    expect(args).toContain("-c:v");
+    expect(args).toContain("copy");
+    expect(args).not.toContain("low_delay");
+  });
+
+  it("includes addressOverride in prepareStream response to ensure LAN IP is sent to iOS", async () => {
+    const platform = createPlatformMock();
+    const capabilities = createCapabilities();
+    const streamSource = createStreamSource();
+
+    const delegate = new HomeKitCameraStreamingDelegate(
+      platform,
+      "camera.cameraui_cba17b87_e6c0_4cc9_b6ab_e88b8cbc7cb4",
+      capabilities,
+      streamSource,
+    );
+
+    const response = await new Promise<any>((resolve, reject) => {
+      delegate.prepareStream(
+        {
+          sessionID: "test-prepare-ip",
+          targetAddress: "192.168.110.121",
+          video: {
+            port: 50462,
+            srtpCryptoSuite: SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
+            srtp_key: Buffer.alloc(16, 1),
+            srtp_salt: Buffer.alloc(14, 2),
+          },
+          addressVersion: "ipv4",
+        },
+        (err, res) => (err ? reject(err) : resolve(res)),
+      );
+    });
+
+    expect(response).toBeDefined();
+    expect(response.video).toBeDefined();
+    // addressOverride is provided whenever a primary IPv4 interface exists
+    if (response.addressOverride) {
+      expect(typeof response.addressOverride).toBe("string");
+      expect(response.addressOverride).not.toMatch(/^172\.(17|30)\./);
+    }
   });
 });

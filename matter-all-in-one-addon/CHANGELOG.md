@@ -1,3 +1,27 @@
+## [1.9.5] - 2026-09-26
+
+### Soporte experimental Live View 2K (2560x1440 @ 20fps H.264 High Level 5.0) para Tapo C120 con fallback seguro a 1080p
+
+- **Soporte experimental 2K Passthrough H.264 Level 5.0 para Tapo C120:**
+  - Anuncio de capacidades 2K nativas ($2560\times 1440$ hasta 20 fps adaptativo) en `SupportedVideoStreamConfiguration` para la Tapo C120.
+  - Anuncio del valor experimental HAP TLV `50` (`0x32`), correspondiente al Sequence Parameter Set real del bitstream de la C120 (`level_idc = 50` / Level 5.0).
+  - Si Apple Home solicita $2560\times 1440$, Live View se entrega en passthrough puro (`-c:v copy -bsf:v dump_extra=freq=keyframe`) sin transcodificación ni escalado (CPU = 0%).
+  - Si Apple Home solicita $1920\times 1080$ o rechaza la capacidad 2K, el pipeline aplica fallback seguro normalizando a 1080p High Level 4.0 con `libx264`.
+- **Aislamiento riguroso por cámara:**
+  - El perfil experimental 2K Level 5.0 se restringe exclusivamente a la Tapo C120 mediante discriminación estricta de tokens con límite de palabra (`\bc120\b|tapo[-_ ]?c120\b`), sin afectar a modelos similares como C1200 o C210.
+  - Todas las demás cámaras conservan sus propios códecs, perfiles, niveles y estrategias individuales (sin fallbacks globales de 15 o 20 fps).
+  - Las cámaras HEVC permanecen sin alteraciones y señalizadas como `not_capable` en el pipeline HAP clásico.
+- **Separación de HKSV y grabación:**
+  - El prebuffer y las grabaciones HKSV de la C120 se mantienen estables e independientes en $1920\times 1080$ High Level 4.0 para compatibilidad absoluta con Apple Home Hub.
+  - El detector de movimiento y el prebuffer continúan protegidos por el ciclo simétrico e idempotente con watchdog de 45 segundos para sesiones huérfanas.
+- **Corrección de Live View para cámaras de red (Wyze, Tapo C402, Ezviz):**
+  - **Inyección de `addressOverride` en `PrepareStreamResponse`:** En entornos Home Assistant OS / Docker, HAP-NodeJS devolvía por defecto la IP interna privada del contenedor (`172.30.32.x`), impidiendo que los dispositivos iOS (`192.168.110.121`) establecieran la conexión RTP/RTCP y cancelando la sesión a los 14 segundos. Se incorpora `detectPrimaryNetworkInterface()` para garantizar el envío de la IP LAN física del host (`192.168.110.147`).
+  - **Buffers y análisis RTSP robustos:** Se elevaron `probesize` a 1 MB (`1048576`) y `analyzeduration` a 2.5s (`2500000`) con `+genpts+igndts+discardcorrupt` para Wyze y Ezviz, eliminando el fallo en 229 ms (`Invalid data found when processing input`) provocado por tiempos de respuesta de 1.9s-3.0s en el handshake RTSP.
+  - **Compatibilidad de audio C402:** Transcodificación transparente de audio `pcm_alaw` (8000 Hz) a AAC-ELD con `aresample=async=1:first_pts=0` manteniendo video en passthrough puro (`-c:v copy`).
+- **Telemetría y observabilidad:**
+  - Registro detallado por sesión de `cameraId`, `sessionId`, códec/perfil/nivel/resolución de origen y salida, FPS nominal, promedio, observado y solicitado, y modo efectivo (`copy`, `normalization`, `fallback`, `reject`).
+  - Sanitización obligatoria de credenciales, claves SRTP y tokens en todos los registros.
+
 ## [1.9.4] - 2026-09-26
 
 ### Estabilidad de sesiones Live View, Watchdog de movimiento y grabación HKSV 1080p para Tapo C120
