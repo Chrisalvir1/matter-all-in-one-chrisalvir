@@ -5,6 +5,32 @@
 export type AppleHomeCompatibility =
   "supported" | "experimental" | "unsupported";
 
+/**
+ * Matter 1.6.1 systime-ms datatype representation.
+ * Represents system time in milliseconds with millisecond resolution.
+ */
+export type SystimeMs = number;
+
+/**
+ * Converts a time value (seconds, ISO string, Date, or ms) to Matter 1.6.1 SystimeMs.
+ */
+export function toSystimeMs(
+  value: number | string | Date | undefined | null,
+): SystimeMs | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === "string") {
+    const parsed = Date.parse(value);
+    if (!isNaN(parsed)) return parsed;
+    const num = Number(value);
+    if (!isNaN(num)) return num > 1e11 ? num : num * 1000;
+  }
+  if (typeof value === "number") {
+    return value < 1e7 ? Math.round(value * 1000) : Math.round(value);
+  }
+  return undefined;
+}
+
 export interface DeviceExportProfile {
   id: string;
   label: string;
@@ -224,10 +250,24 @@ const profilesByDomain: Record<string, DeviceExportProfile[]> = {
     },
     {
       id: "matterCamera",
-      label: "Cámara Matter 1.5/1.6 (WebRTC Experimental)",
+      label: "Cámara Matter 1.6.1 (WebRTC Live View)",
       description:
-        "Backend experimental de cámara Matter usando clusters Camera AV Stream Management (0x0551) y WebRTC Transport Provider (0x0553).",
-      appleHome: "experimental",
+        "Cámara Matter oficial usando clusters Camera AV Stream Management (0x0551) y WebRTC Transport Provider (0x0553).",
+      appleHome: "supported",
+    },
+    {
+      id: "matterCameraPtz",
+      label: "Cámara Matter 1.6.1 + PTZ & Zonas (DPTZ)",
+      description:
+        "Cámara Matter 1.6.1 con soporte de Digital PTZ (DPTZ), presets y hasta 5 zonas de vigilancia activables.",
+      appleHome: "supported",
+    },
+    {
+      id: "cameraZoneSwitch",
+      label: "Interruptor Matter de Zonas de Vigilancia (Single Switch)",
+      description:
+        "Exporta un interruptor Matter para activar las zonas de vigilancia DPTZ y mover la cámara con flechas desde Apple Home y Google Home.",
+      appleHome: "supported",
     },
     {
       id: "occupancySensor",

@@ -10,6 +10,7 @@ import { DeviceModal } from "./components/DeviceModal";
 import { ScryptedModal } from "./components/ScryptedModal";
 import { CameraUiModal } from "./components/CameraUiModal";
 import { SettingsModal } from "./components/SettingsModal";
+import { PtzControlsCard } from "./components/PtzControlsCard";
 import { extractCameraBrand } from "./components/CameraCard";
 import {
   CameraRecord,
@@ -17,6 +18,8 @@ import {
   DeviceRecord,
   CameraSensorRecord,
   CameraRealEntity,
+  CameraPtzInfo,
+  SystemInfoResponse,
 } from "./types";
 import { api } from "./api/client";
 
@@ -47,6 +50,36 @@ export const App: React.FC = () => {
   const [isCameraUiModalOpen, setIsCameraUiModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [ptzCameras, setPtzCameras] = useState<CameraPtzInfo[]>([]);
+  const [systemInfo, setSystemInfo] = useState<SystemInfoResponse | null>(null);
+
+  const fetchPtzAndSystemInfo = async () => {
+    try {
+      const [sysRes, ptzRes] = await Promise.allSettled([
+        api.getSystemInfo(),
+        api.getCamerasPtzInfo(),
+      ]);
+      if (sysRes.status === "fulfilled" && sysRes.value) {
+        setSystemInfo(sysRes.value);
+      }
+      if (ptzRes.status === "fulfilled" && Array.isArray(ptzRes.value)) {
+        setPtzCameras(ptzRes.value);
+      }
+    } catch {}
+  };
+
+  useEffect(() => {
+    fetchPtzAndSystemInfo();
+  }, []);
+
+  const enrichedStatus = useMemo(() => {
+    if (!status) return null;
+    return {
+      ...status,
+      matterVersion: status.matterVersion || systemInfo?.matterVersion || "1.6.1",
+      matterbridgeVersion: status.matterbridgeVersion || systemInfo?.matterbridgeVersion || "3.10.11",
+    };
+  }, [status, systemInfo]);
 
   // Keep selectedDevice in sync with updated allDevices from periodic polls / SSE / refreshAll
   useEffect(() => {
@@ -402,7 +435,7 @@ export const App: React.FC = () => {
       <div className="app-shell">
         {/* Top Bar with Brand, Status, and Actions */}
         <TopBar
-          status={status}
+          status={enrichedStatus}
           onOpenSettings={() => setIsSettingsModalOpen(true)}
           onRestartService={handleRestartService}
         />
@@ -456,6 +489,9 @@ export const App: React.FC = () => {
             onSyncCameras={handleSyncCameras}
             isSyncing={isSyncing}
           />
+
+          {/* PTZ Cameras & Surveillance Zones (Matter 1.6.1) */}
+          <PtzControlsCard cameras={ptzCameras} onRefresh={fetchPtzAndSystemInfo} />
 
           {/* Device / Camera Grid */}
           <section className="device-grid" id="device-list" aria-live="polite" aria-busy={loading}>

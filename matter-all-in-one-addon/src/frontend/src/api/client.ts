@@ -205,4 +205,37 @@ export const api = {
       `/unregister-hap/${encodeURIComponent(entityId)}`,
       { method: "POST" }
     ),
+
+  // ── Matter 1.6.1 & MatterBridge 3.10.11 Dynamic System Info & PTZ ─────────
+  getSystemInfo: () => request<import("../types").SystemInfoResponse>("/system-info"),
+
+  getCamerasPtzInfo: () => request<import("../types").CameraPtzInfo[]>("/cameras/ptz-info"),
+
+  sendPtzCommand: (entityId: string, command: Record<string, any>) =>
+    request<{ success: boolean; result?: any }>(
+      `/cameras/${encodeURIComponent(entityId)}/ptz/command`,
+      {
+        method: "POST",
+        body: JSON.stringify(command),
+      },
+    ),
+
+  getCameraPtzZones: (entityId: string) =>
+    request<{ entityId: string; zones: import("../types").PtzZone[] }>(
+      `/cameras/${encodeURIComponent(entityId)}/ptz/zones`,
+    ),
+
+  saveCameraPtzZones: (entityId: string, payload: { zones?: import("../types").PtzZone[]; zone?: Partial<import("../types").PtzZone> }) =>
+    request<{ success: boolean; zones: import("../types").PtzZone[] }>(
+      `/cameras/${encodeURIComponent(entityId)}/ptz/zones`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+    ),
+
+  generateMatterPtzExport: () =>
+    request<{ success: boolean; exportData: any }>("/cameras/generate-matter-export", {
+      method: "POST",
+    }),
 };

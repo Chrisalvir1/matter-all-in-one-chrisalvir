@@ -1,6 +1,6 @@
 name: "Matter All-in-One (Chrisalvir)"
-description: "All-in-one Matterbridge bridge with persistent storage, web UI, Camera.UI OpenCV integration, and Home Assistant Ingress"
-version: "1.9.8"
+description: "Universal Matter 1.6.1 bridge for Home Assistant with PTZ, surveillance zones, MQTT, Apple Home HAP live view and BLE fan stabilization."
+version: "1.9.9"
 slug: "matter_all_in_one_bridge"
 image: "ghcr.io/chrisalvir1/matter-all-in-one-chrisalvir"
 init: false

@@ -2236,29 +2236,48 @@ export class HomeAssistant extends EventEmitter {
         service_data: { ...serviceData },
         target: { entity_id: entityId },
       };
-      // Send immediately when connected. If the socket is between connections,
-      // the request below will produce the specific disconnect error that
-      // triggers the bounded wait/retry path without delaying normal calls.
-      let response: HassWebSocketResponseResult;
-      try {
-        response = await this.request(payload, this._serviceTimeout);
-      } catch (error) {
-        if (!/not connected to Home Assistant|WebSocket closed/i.test(String(error))) {
-          throw error;
-        }
-        await this.waitForConnection(5000);
-        response = await this.request(payload, this._serviceTimeout);
-      }
 
-      if (!response.success) {
-        throw new Error(
-          response.error?.message ?? `Service ${domain}.${service} failed`,
-        );
+      const isBleOrFan =
+        domain === "fan" ||
+        entityId.includes("ble") ||
+        entityId.includes("bluetooth");
+      const maxAttempts = isBleOrFan ? 3 : 1;
+
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+          let response: HassWebSocketResponseResult;
+          try {
+            response = await this.request(payload, this._serviceTimeout);
+          } catch (error) {
+            if (!/not connected to Home Assistant|WebSocket closed/i.test(String(error))) {
+              throw error;
+            }
+            await this.waitForConnection(5000);
+            response = await this.request(payload, this._serviceTimeout);
+          }
+
+          if (!response.success) {
+            throw new Error(
+              response.error?.message ?? `Service ${domain}.${service} failed`,
+            );
+          }
+          return response.result as unknown as {
+            context: HassContext;
+            response: unknown;
+          };
+        } catch (err: any) {
+          if (attempt < maxAttempts) {
+            const delay = attempt * 800;
+            this.log.debug(
+              `[HA CallService] Retrying ${domain}.${service} on ${entityId} (attempt ${attempt + 1}/${maxAttempts}, delay ${delay}ms) after error: ${err.message || err}`,
+            );
+            await new Promise((resolve) => setTimeout(resolve, delay));
+          } else {
+            throw err;
+          }
+        }
       }
-      return response.result as unknown as {
-        context: HassContext;
-        response: unknown;
-      };
+      throw new Error(`Service ${domain}.${service} failed`);
     };
 
     const nextPromise = prevQueue.catch(() => {}).then(executeCall);

@@ -275,6 +275,9 @@ export interface StatusResponse {
   haStatus: "conectado" | "desconectado" | "error";
   haUrl?: string;
   version?: string;
+  matterVersion?: string;
+  matterbridgeVersion?: string;
+  ptzCamerasCount?: number;
   bridgeName?: string;
   bridgeId?: string;
   homeName?: string;
@@ -383,4 +386,37 @@ export interface CameraUiCameraItem {
     audioSamplerate: number;
   };
   recordingCapabilities?: Array<[number, number, number]>;
+}
+
+export interface PtzViewport {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface PtzZone {
+  id: number;
+  name: string;
+  viewport?: PtzViewport;
+  enabled: boolean;
+}
+
+export interface CameraPtzInfo {
+  entityId: string;
+  name: string;
+  hasPtz: boolean;
+  ptzType: "hardware" | "digital" | "none";
+  maxPresets: number;
+  currentPreset?: number;
+  currentZoneId?: number;
+  zones: PtzZone[];
+  supportsHardwarePtz?: boolean;
+  supportsDigitalPtz?: boolean;
+}
+
+export interface SystemInfoResponse {
+  matterVersion: string;
+  matterbridgeVersion: string;
+  timestamp?: number;
 }

@@ -69,7 +69,7 @@ export class CameraEndpointBuilder {
       model,
     );
 
-    const hasAudio = Boolean(capabilities.hasAudio);
+    const maxPresets = Math.min(5, capabilities.maxPresets || 5);
 
     class CustomCameraAvStreamManagementServer extends CameraAvStreamManagementServer.with(
       CameraAvStreamManagement.Feature.Video,
@@ -94,6 +94,15 @@ export class CameraEndpointBuilder {
       }
       async setStreamPriorities(_request: any) {
         // Accept stream priorities
+      }
+      async dptzSetViewport(request: any) {
+        await adapter.handleDptzSetViewport(request);
+      }
+      async dptzRelativeMove(request: any) {
+        await adapter.handleDptzRelativeMove(request);
+      }
+      async mptzMoveToPreset(request: any) {
+        await adapter.handleMptzMoveToPreset(request);
       }
     }
 
@@ -147,8 +156,15 @@ export class CameraEndpointBuilder {
       maxContentBufferSize: 1024 * 1024,
       maxNetworkBandwidth: 10000000,
       streamUsagePriorities: [3],
+      maxPresets,
+      dptzStreams: [1],
+      mptzPresets: (capabilities.ptzZones || []).map((z: any) => ({
+        id: z.id,
+        name: z.name,
+      })),
     };
 
+    const hasAudio = Boolean(capabilities.hasAudio);
     if (hasAudio) {
       avState.microphoneCapabilities = {
         maxNumberOfChannels: 2,
@@ -165,6 +181,17 @@ export class CameraEndpointBuilder {
     // Mount WebRTC Transport Provider Server (0x0553)
     endpoint.behaviors.require(CustomWebRtcTransportProviderServer, {
       currentSessions: [],
+    });
+
+    // Register PTZ / DPTZ Command Handlers for controller invocations
+    endpoint.addCommandHandler?.("DPTZSetViewport", async (data: any) => {
+      await adapter.handleDptzSetViewport(data?.request ?? data);
+    });
+    endpoint.addCommandHandler?.("DPTZRelativeMove", async (data: any) => {
+      await adapter.handleDptzRelativeMove(data?.request ?? data);
+    });
+    endpoint.addCommandHandler?.("MPTZMoveToPreset", async (data: any) => {
+      await adapter.handleMptzMoveToPreset(data?.request ?? data);
     });
 
     // Provision standard clusters safely
