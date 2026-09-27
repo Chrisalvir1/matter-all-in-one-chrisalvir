@@ -2479,7 +2479,14 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         this.clearEntityProblem(entityId);
       }
       void this.discoverAndSync();
+      // After HA reconnect, force a full Matter attribute push for all entities
+      // so HomeKit (Apple Home) reads the real current state instead of stale
+      // cached values. Fan on/off and speed attributes are particularly critical
+      // because BLE fans can be operated from HA/automations while the bridge
+      // was disconnected. Delay 3 s to allow discoverAndSync() to finish first.
+      setTimeout(() => void this.forceSyncAllEntities(), 3000);
     });
+
 
     this.ha.on("disconnected", (reason) => {
       if (this.syncRetryTimeout) {
@@ -5025,12 +5032,60 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     }
   }
 
+  /**
+   * Force a full Matter attribute push for every exported entity and composite.
+   * Called after HA reconnect to guarantee HomeKit controllers read the real
+   * current state (fan on/off, speed, light level, etc.) and not stale values.
+   */
+  private async forceSyncAllEntities(): Promise<void> {
+    this.log.debug("[forceSyncAllEntities] Starting full Matter attribute resync…");
+    const tasks: Promise<void>[] = [];
+
+    // Sync composite devices (BLE fans, multi-entity combos)
+    for (const composite of this.compositeDevices.values()) {
+      tasks.push(
+        (async () => {
+          try {
+            await composite.syncInitialState();
+          } catch (err) {
+            this.log.debug(
+              `[forceSyncAllEntities] composite ${composite.deviceId}: ${err}`,
+            );
+          }
+        })(),
+      );
+    }
+
+    // Sync individual entities
+    for (const [entityId, entity] of this.entities.entries()) {
+      if (!this.isEntityExported(entityId)) continue;
+      if (this.compositeMembership.has(entityId)) continue; // handled above
+      tasks.push(
+        (async () => {
+          try {
+            await entity.forceSyncStateToMatter?.();
+          } catch (err) {
+            this.log.debug(
+              `[forceSyncAllEntities] entity ${entityId}: ${err}`,
+            );
+          }
+        })(),
+      );
+    }
+
+    await Promise.allSettled(tasks);
+    this.log.notice(
+      `[forceSyncAllEntities] Resync completo: ${tasks.length} entidades/composites actualizados en Matter.`,
+    );
+  }
+
   private queueStateUpdate(entityId: string, state: HassState) {
     this.pendingStateUpdates.set(entityId, state);
     if (this.stateUpdateFlushScheduled || this.stateUpdateFlushInFlight) return;
     this.stateUpdateFlushScheduled = true;
     setImmediate(() => void this.flushStateUpdates());
   }
+
 
   private async flushStateUpdates() {
     if (this.stateUpdateFlushInFlight) return this.stateUpdateFlushInFlight;

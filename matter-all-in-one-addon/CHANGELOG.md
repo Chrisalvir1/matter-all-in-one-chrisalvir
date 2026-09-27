@@ -1,4 +1,22 @@
+## [1.9.12] - 2026-09-27
+
+### Corrección crítica: Tapo C402 sin respuesta, estado real BLE Fan en reconexión de HomeKit y resincronización completa post-reconexión HA
+
+- **Cámara Tapo C402 completamente restaurada:**
+  - Se corrigió el guard en `mountCamera()` que rechazaba montar la C402 porque su `rtspUrl` es `undefined` (el stream se resuelve en tiempo real desde HA vía `camera-source-resolver`). Ahora las cámaras con `sourceProvider: "home_assistant"` omiten el check de `rtspUrl` y montan correctamente.
+  - Se corrigió `hasSource` para ser `true` en cámaras HA-source, habilitando registro de Matter Occupancy Sensor y capacidades HKSV.
+  - Se corrigió `isRtspSource` para ser `true` en cámaras HA-source, habilitando HomeKit Secure Video (HKSV) para la C402.
+
+- **Estado real de ventiladores BLE al reabrir Apple Home:**
+  - Se añadió `forceSyncStateToMatter()` en `base.entity.ts`: empuja todos los atributos (on/off, velocidad, fanMode) desde el estado HA actual al cache Matter, ignorando lockouts de comandos.
+  - Se añadió `forceSyncAllEntities()` en `platform.ts`: itera todos los composites y entidades exportadas y fuerza la resincronización completa.
+  - Al reconectar con Home Assistant, se programa automáticamente una resincronización completa (3 segundos después de `discoverAndSync()`) para que Apple Home siempre lea el estado real de los ventiladores BLE.
+
+- **Resincronización automática general post-reconexión HA:**
+  - Todos los dispositivos exportados (luces, switches, fans, media players, aspiradoras) se resincronizan con su estado real en HA después de cada reconexión, eliminando valores desactualizados en HomeKit tras reinicios del addon o pérdidas de red.
+
 ## [1.9.11] - 2026-09-27
+
 
 ### Corrección de disponibilidad real en HomeKit/Matter, reactivación de ventiladores BLE y eliminación de PTZ/zonas
 

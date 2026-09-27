@@ -107,7 +107,11 @@ export class CameraUiHomeKitBridge {
     camera: CameraUiCameraRecord,
     options: { forceRemount?: boolean } = {},
   ): Promise<HomeKitCameraAccessory | undefined> {
-    if (!camera.homeKitEnabled || !camera.rtspUrl) {
+    // Cameras with sourceProvider "home_assistant" obtain their RTSP URL at
+    // stream-request time from camera-source-resolver. These cameras do NOT
+    // have a static rtspUrl in storage — skip the rtspUrl check for them.
+    const isHaSourceCamera = camera.sourceProvider === "home_assistant";
+    if (!camera.homeKitEnabled || (!camera.rtspUrl && !isHaSourceCamera)) {
       return undefined;
     }
 
@@ -137,13 +141,13 @@ export class CameraUiHomeKitBridge {
       }
     }
 
-    const hasSource = Boolean(camera.rtspUrl);
-    // The C402 stream is served by the Home Assistant Tapo satellite, not
-    // Camera.UI. Measure that exact RTSP endpoint before constructing HAP so
-    // CameraController advertises the real codec, dimensions and frame rate.
-    // The previous seeded 2304x1296/15 metadata did not match its live
-    // 2560x1440/30 stream and HAP was permanently configured with stale values.
+    // HA-source cameras (e.g. C402) resolve the stream URL dynamically from
+    // Home Assistant at stream-request time, so they never have a static
+    // rtspUrl. Treat them as having a valid source so capabilities, HKSV and
+    // Matter Occupancy Sensor are all registered correctly.
     const isHomeAssistantSource = camera.sourceProvider === "home_assistant";
+    const hasSource = Boolean(camera.rtspUrl) || isHomeAssistantSource;
+
 
     // C120 source metadata is measured from RTSP. The existing classic-HAP Live
     // View path can normalize its 2K source to a negotiated 1080p output; do not
@@ -214,9 +218,12 @@ export class CameraUiHomeKitBridge {
     // Todo stream RTSP/RTSPS de Camera.UI (H.264 o H.265/HEVC) es válido para HKSV:
     // el recordingDelegate transcodifica a H.264 vía FFmpeg cuando el origen es H.265,
     // por lo que el códec de origen nunca debe bloquear la capacidad HKSV.
-    const isRtspSource = Boolean(
-      camera.rtspUrl && /^rtsps?:\/\//i.test(camera.rtspUrl),
-    );
+    // HA-source cameras provide an RTSP stream via camera-source-resolver at
+    // stream-request time, so they are RTSP-capable even without a static URL.
+    const isRtspSource =
+      isHomeAssistantSource ||
+      Boolean(camera.rtspUrl && /^rtsps?:\/\//i.test(camera.rtspUrl));
+
     const isHaProxy = false;
     const rawCodec = (camera.videoCodec || "").toLowerCase();
     const isExplicitH264 = rawCodec === "h264" || rawCodec === "avc";

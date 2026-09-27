@@ -988,6 +988,27 @@ export class BaseEntity {
     }
   }
 
+  /**
+   * Force a full attribute push from last-known HA state to the Matter endpoint,
+   * bypassing command lockouts. Called when a Matter controller subscribes or
+   * reconnects (e.g., Apple Home app reopened) to ensure the controller always
+   * reads the real device state and not stale cached values.
+   */
+  public async forceSyncStateToMatter(): Promise<void> {
+    if (!this.endpoint || isUnavailable(this.state)) return;
+    try {
+      // Use isInitialSync=true to bypass command lockouts and always push
+      await this.updateState(this.state, true);
+      this.platform.log?.debug?.(
+        `[${this.entityId}] forceSyncStateToMatter: full attribute push completed`,
+      );
+    } catch (err) {
+      this.platform.log?.debug?.(
+        `[${this.entityId}] forceSyncStateToMatter error: ${err}`,
+      );
+    }
+  }
+
   public async setInactiveState(): Promise<void> {
     if (!this.endpoint) return;
     const [domain] = this.entityId.split(".");
