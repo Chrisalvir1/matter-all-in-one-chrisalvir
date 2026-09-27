@@ -1,3 +1,10 @@
+## [1.9.14] - 2026-09-27
+
+### Correcciones de estabilidad
+
+- Reintento acotado de comandos HA cuando el WebSocket se reconecta.
+- No se generan URLs de camera proxy para entidades `binary_sensor`, evitando 404 en C402.
+
 ## [1.9.13] - 2026-09-27
 
 ### Corrección crítica: Passthrough HEVC original nativo sin transcodificación para cámaras Apple Home y estabilización definitiva de ventiladores BLE

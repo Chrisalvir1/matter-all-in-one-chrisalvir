@@ -2237,15 +2237,24 @@ export class HomeAssistant extends EventEmitter {
         target: { entity_id: entityId },
       };
 
-      let response: HassWebSocketResponseResult;
-      try {
-        response = await this.request(payload, this._serviceTimeout);
-      } catch (error) {
-        if (!/not connected to Home Assistant|WebSocket closed/i.test(String(error))) {
-          throw error;
+      let response: HassWebSocketResponseResult | undefined;
+      let lastError: unknown;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          if (attempt > 0) await this.waitForConnection(15000);
+          response = await this.request(payload, this._serviceTimeout);
+          lastError = undefined;
+          break;
+        } catch (error) {
+          lastError = error;
+          if (!/not connected to Home Assistant|WebSocket closed|WebSocket unavailable/i.test(String(error))) {
+            throw error;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
         }
-        await this.waitForConnection(5000);
-        response = await this.request(payload, this._serviceTimeout);
+      }
+      if (lastError || !response) {
+        throw lastError ?? new Error("Home Assistant service command produced no response");
       }
 
       if (!response.success) {
@@ -2361,6 +2370,10 @@ export class HomeAssistant extends EventEmitter {
    * Returns the official Home Assistant camera proxy stream endpoint URL.
    */
   public getCameraProxyStreamUrl(entityId: string): string {
+    // HA's camera proxy only accepts camera entities. Never construct a
+    // proxy URL for a motion binary_sensor: it returns HTTP 404 and leaves
+    // HomeKit waiting forever for the first video packet.
+    if (!/^camera\./i.test(entityId.trim())) return "";
     const httpBase = this.getHttpBaseUrl();
     return `${httpBase}/api/camera_proxy_stream/${entityId}`;
   }
