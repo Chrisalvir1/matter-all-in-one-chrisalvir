@@ -277,10 +277,21 @@ export class CameraUiHomeKitBridge {
     let resolvedSourceType: ResolvedStreamSource["sourceType"] = "rtsp";
 
     if (isHomeAssistantSource && !resolvedSourceUrl) {
+      // Only a HA camera entity can provide a camera stream. Motion
+      // binary_sensors are linked entities and must never be sent to the
+      // camera proxy (that endpoint returns 404 for them).
       const haEntityId =
-        camera.realEntities?.[0]?.id || "camera.tapo_frente_de_calle";
+        camera.realEntities?.find((entity) => entity.id.startsWith("camera."))?.id ||
+        "camera.tapo_frente_de_calle";
+      // C402 has a stable RTSP endpoint exposed by the HA Tapo satellite.
+      // Prefer it when HA discovery returned only linked motion entities.
+      const isC402 = /(?:c402|frente[-_ ]?de[-_ ]?calle)/i.test(`${camera.id} ${camera.name}`);
+      if (isC402 && !camera.realEntities?.some((entity) => entity.id.startsWith("camera."))) {
+        resolvedSourceUrl = "rtsp://192.168.110.147:62291/tapo-c402";
+        resolvedSourceType = "rtsp";
+      }
       try {
-        if (platform.ha?.requestCameraStream) {
+        if (!resolvedSourceUrl && platform.ha?.requestCameraStream) {
           resolvedSourceUrl = await platform.ha.requestCameraStream(haEntityId);
           if (resolvedSourceUrl) {
             resolvedSourceType = "hls";
