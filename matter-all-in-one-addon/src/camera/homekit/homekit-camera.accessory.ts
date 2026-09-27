@@ -449,20 +449,22 @@ export class HomeKitCameraAccessory {
   }
 
   public buildRecordingResolutions(): [number, number, number][] {
+    const isC120 = this.isTapoC120();
     const source = this.capabilities.resolution || {
       width: 1920,
       height: 1080,
     };
-    const width = source.width || 1920;
-    const height = source.height || 1080;
+    const width = isC120 ? 1920 : source.width || 1920;
+    const height = isC120 ? 1080 : source.height || 1080;
+    const cameraMax = isC120 ? 20 : this.capabilities.maxFps || 30;
     const sourceFps = Math.max(
       15,
-      Math.min(this.capabilities.maxFps || 30, 60),
+      Math.min(this.capabilities.maxFps || cameraMax, isC120 ? 20 : 60),
     );
     const candidates: [number, number, number][] = [
       [width, height, sourceFps],
-      [1920, 1080, Math.min(sourceFps, 30)],
-      [1280, 720, Math.min(sourceFps, 30)],
+      [1920, 1080, Math.min(sourceFps, cameraMax)],
+      [1280, 720, Math.min(sourceFps, cameraMax)],
     ];
     const seen = new Set<string>();
     const res: [number, number, number][] = [];
@@ -489,22 +491,27 @@ export class HomeKitCameraAccessory {
   }
 
   private buildDeclaredResolutions(): [number, number, number][] {
+    const isC120 = this.isTapoC120();
     const source = this.capabilities.resolution || {
       width: 1920,
       height: 1080,
     };
     const width = source.width || 1920;
     const height = source.height || 1080;
+    const cameraMax = isC120 ? 20 : this.capabilities.maxFps || 30;
     const sourceFps = Math.max(
       15,
-      Math.min(this.capabilities.maxFps || 30, 60),
+      Math.min(this.capabilities.maxFps || cameraMax, isC120 ? 20 : 60),
     );
 
-    // HAP only defines H.264 levels up to 4.0. The C120 source is 2K High
-    // level 5.0, which cannot be sent as a valid HAP RTP stream. Its Live
-    // View is normalized to 1080p/15 by the streaming delegate; advertise
-    // exactly that mode while keeping the 2K source for recording.
-    if (this.isTapoC120()) {
+    // DECISIÓN EXPLÍCITA DE ARQUITECTURA (v1.9.6+):
+    // El hardware de la Tapo C120 posee un techo físico de 20 fps en 2K H.264 High Level 5.0.
+    // Sin embargo, Apple HomeKit HAP estándar solo define perfiles H.264 hasta Level 4.0 (máx 1920x1080).
+    // Para garantizar estabilidad total en Live View sin pérdida de paquetes ni rechazo por parte del Hub,
+    // la capacidad HAP anunciada para C120 se fija explícitamente en 1920x1080 @ 15 fps.
+    // El flujo nativo físico (2560x1440) se preserva para grabación HKSV (normalizada a 1080p con techo de 20 fps).
+    // NO se anuncia 2K en esta versión estable.
+    if (isC120) {
       return [[1920, 1080, Math.min(sourceFps, 15)]];
     }
 

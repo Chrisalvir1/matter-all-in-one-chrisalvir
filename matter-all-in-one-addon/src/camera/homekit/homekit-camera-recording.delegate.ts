@@ -657,7 +657,7 @@ export class HomeKitCameraRecordingDelegate
         this.record.hksvState = "not_capable";
         return null;
       }
-      const c120Fps = Math.max(1, Math.min(fpsDetails.fps, 30));
+      const c120Fps = Math.max(1, Math.min(fpsDetails.fps, 20));
       this.platform?.log?.notice?.(
         `[HKSV][${this.entityId}] Tapo C120 detectada (modelo: "${this.record.model || "C120"}") — transcodificando HKSV prebuffer 2K->1920x1080@${c120Fps}fps [${fpsDetails.label}] High Level 4.0 para compatibilidad Apple Home Hub`,
       );

@@ -27,18 +27,41 @@ export interface EntityRecord {
 
 /** HAP profile identifier — matches HapProfile in hap-generic-accessory.ts */
 export type HapProfile =
-  | "humidifier" | "dehumidifier" | "air_purifier"
-  | "television" | "television_speaker"
-  | "valve_irrigation" | "valve_faucet" | "valve_shower"
-  | "security_system" | "garage_door" | "doorbell"
-  | "fan_hap" | "heater_cooler" | "thermostat_hap"
-  | "outlet_hap" | "switch_hap" | "lightbulb_hap" | "lock_hap"
-  | "window_covering_hap" | "door_hap" | "window_hap"
-  | "motion_sensor_hap" | "contact_sensor_hap" | "smoke_sensor_hap"
-  | "carbon_monoxide_sensor_hap" | "carbon_dioxide_sensor_hap"
-  | "leak_sensor_hap" | "occupancy_sensor_hap" | "temperature_sensor_hap"
-  | "humidity_sensor_hap" | "light_sensor_hap" | "air_quality_sensor_hap"
-  | "battery_hap" | "speaker_hap" | "irrigation_system";
+  | "humidifier"
+  | "dehumidifier"
+  | "air_purifier"
+  | "television"
+  | "television_speaker"
+  | "valve_irrigation"
+  | "valve_faucet"
+  | "valve_shower"
+  | "security_system"
+  | "garage_door"
+  | "doorbell"
+  | "fan_hap"
+  | "heater_cooler"
+  | "thermostat_hap"
+  | "outlet_hap"
+  | "switch_hap"
+  | "lightbulb_hap"
+  | "lock_hap"
+  | "window_covering_hap"
+  | "door_hap"
+  | "window_hap"
+  | "motion_sensor_hap"
+  | "contact_sensor_hap"
+  | "smoke_sensor_hap"
+  | "carbon_monoxide_sensor_hap"
+  | "carbon_dioxide_sensor_hap"
+  | "leak_sensor_hap"
+  | "occupancy_sensor_hap"
+  | "temperature_sensor_hap"
+  | "humidity_sensor_hap"
+  | "light_sensor_hap"
+  | "air_quality_sensor_hap"
+  | "battery_hap"
+  | "speaker_hap"
+  | "irrigation_system";
 
 export interface HapAccessoryInfo {
   published: boolean;
@@ -57,7 +80,6 @@ export interface HapProfileOption {
   id: HapProfile;
   label: string;
 }
-
 
 export interface DeviceRecord {
   id: string;
@@ -114,6 +136,10 @@ export interface LiveViewVideoMetadata {
   rFrameRate?: string;
   avgFrameRate?: string;
   fps?: number;
+  declaredFps?: number;
+  requestedFps?: number;
+  measuredFps?: number;
+  effectiveFps?: number;
   bitrateKbps?: number;
   pixFmt?: string;
   metadataSource?: string;

@@ -115,7 +115,11 @@ describe("Integración Estable v1.9.5: Tapo C120 2K Level 5.0 y Aislamiento (20 
     );
 
     const levels = acc.buildDeclaredLevels();
-    expect(levels).toEqual([H264Level.LEVEL3_1, H264Level.LEVEL3_2, H264Level.LEVEL4_0]);
+    expect(levels).toEqual([
+      H264Level.LEVEL3_1,
+      H264Level.LEVEL3_2,
+      H264Level.LEVEL4_0,
+    ]);
   });
 
   // 3. C120 FPS adaptativo
@@ -285,10 +289,49 @@ describe("Integración Estable v1.9.5: Tapo C120 2K Level 5.0 y Aislamiento (20 
     expect(args).toContain("-profile:v");
     expect(args).toContain("high");
     expect(args).toContain("-level:v");
-    expect(args).toContain("4.0");
     expect(args).toContain(
       "scale=1920:1080:force_original_aspect_ratio=decrease:force_divisible_by=2",
     );
+    expect(args).toContain("-r");
+    const rIdx = args.indexOf("-r");
+    expect(args[rIdx + 1]).toBe("20");
+  });
+
+  it("6b. limita el prebuffer HKSV de C120 a un techo de 20 fps incluso si la metadata fuente reporta 30 fps", () => {
+    const platform = createMockPlatform();
+    const recDelegate = new HomeKitCameraRecordingDelegate(
+      platform as any,
+      "camera.tapo_c120",
+      {
+        entityId: "camera.tapo_c120",
+        name: "Tapo C120",
+        model: "C120",
+        port: 51830,
+        pincode: "031-45-154",
+        username: "AA:BB:CC:12:00:01",
+        setupId: "C120",
+      } as any,
+      {
+        hasLiveStream: true,
+        streamSourceType: "rtsp",
+        videoCodec: "h264",
+        hasAudio: true,
+        resolution: { width: 2560, height: 1440 },
+        maxFps: 30, // Fuente errónea o genérica reporta 30
+      } as any,
+      {
+        sourceType: "rtsp",
+        url: "rtsp://192.168.1.50/tapo_c120",
+        supportsPassthrough: true,
+      },
+    );
+
+    const args = (recDelegate as any).buildPrebufferArgs(
+      "rtsp://192.168.1.50/tapo_c120",
+    );
+    expect(args).toContain("-r");
+    const rIdx = args.indexOf("-r");
+    expect(args[rIdx + 1]).toBe("20");
   });
 
   // 7. Cámara 1080p a 15 fps
@@ -511,7 +554,9 @@ describe("Integración Estable v1.9.5: Tapo C120 2K Level 5.0 y Aislamiento (20 
     });
 
     // No debe fallar por "missing or invalid video FPS"
-    expect(errorReceived?.message).not.toContain("missing or invalid video FPS");
+    expect(errorReceived?.message).not.toContain(
+      "missing or invalid video FPS",
+    );
   });
 
   // 14. Resolución no anunciada: normalización o fallback explícito

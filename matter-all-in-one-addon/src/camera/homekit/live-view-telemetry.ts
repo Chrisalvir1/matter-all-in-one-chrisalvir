@@ -33,6 +33,14 @@ export interface VideoStreamMetadata {
   variableFrameRate?: boolean;
   /** FPS configured on the output command, distinct from observed FPS. */
   configuredFps?: number;
+  /** Declared / advertised FPS in HAP resolution ladder. */
+  declaredFps?: number;
+  /** Requested FPS from Apple HomeKit. */
+  requestedFps?: number;
+  /** Measured FPS directly observed from stream ffprobe. */
+  measuredFps?: number;
+  /** Effective negotiated output FPS for FFmpeg / session. */
+  effectiveFps?: number;
   fps?: number;
   bitrateKbps?: number;
   pixFmt?: string;

@@ -877,8 +877,8 @@ describe("HomeKitCameraRecordingDelegate — resolveCameraSourceFps & dynamic fr
     delegate.destroy();
   });
 
-  it("applies exact FPS transcoding for Tapo C120 at 10, 20, 24, and 30 fps", () => {
-    for (const fps of [10, 20, 24, 30]) {
+  it("applies adaptive FPS transcoding for Tapo C120 up to the 20 fps hardware ceiling", () => {
+    for (const fps of [10, 15, 20, 24, 30]) {
       const record = {
         ...createMockRecord(),
         entityId: `camera.c120_${fps}`,
@@ -906,15 +906,16 @@ describe("HomeKitCameraRecordingDelegate — resolveCameraSourceFps & dynamic fr
 
       const args = delegate.buildPrebufferArgs("rtsp://192.168.1.100/stream")!;
       expect(args).not.toBeNull();
+      const expectedFps = Math.min(fps, 20);
       const rIdx = args.indexOf("-r");
       expect(rIdx).toBeGreaterThan(-1);
-      expect(args[rIdx + 1]).toBe(String(fps));
+      expect(args[rIdx + 1]).toBe(String(expectedFps));
 
       const gIdx = args.indexOf("-g");
-      expect(args[gIdx + 1]).toBe(String(fps * 2));
+      expect(args[gIdx + 1]).toBe(String(expectedFps * 2));
 
       const keyintIdx = args.indexOf("-keyint_min");
-      expect(args[keyintIdx + 1]).toBe(String(fps));
+      expect(args[keyintIdx + 1]).toBe(String(expectedFps));
 
       delegate.destroy();
     }

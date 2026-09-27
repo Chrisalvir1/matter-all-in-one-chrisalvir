@@ -189,6 +189,42 @@ function h264Level(level: H264Level): string {
   return "3.1";
 }
 
+/**
+ * Resolves the appropriate frame rate for HomeKit Live View on a per-camera basis.
+ * Priority order:
+ * 1. Requested FPS from Apple HomeKit (if provided and valid > 0), capped by cameraMaxFps
+ * 2. Source measured/probe FPS (if valid > 0), capped by cameraMaxFps
+ * 3. Configured FPS (if valid > 0), capped by cameraMaxFps
+ *
+ * NOTE: cameraMaxFps is strictly a ceiling (upperLimit), NEVER an effective measurement.
+ * If neither requestedFps, sourceFps, nor configuredFps is provided, returns undefined.
+ */
+export function resolveLiveViewFps(
+  requestedFps: number | undefined,
+  sourceFps: number | undefined,
+  configuredFps: number | undefined,
+  cameraMaxFps: number | undefined,
+): number | undefined {
+  const sanitize = (val: number | undefined): number | undefined => {
+    return typeof val === "number" && Number.isFinite(val) && val > 0
+      ? Math.round(val * 100) / 100
+      : undefined;
+  };
+
+  const req = sanitize(requestedFps);
+  const src = sanitize(sourceFps);
+  const cfg = sanitize(configuredFps);
+  const max = sanitize(cameraMaxFps);
+
+  const candidate = req ?? src ?? cfg;
+  if (candidate === undefined) {
+    return undefined;
+  }
+
+  const upperLimit = max !== undefined ? Math.min(max, 60) : 60;
+  return Math.max(1, Math.min(candidate, upperLimit));
+}
+
 export class HomeKitCameraStreamingDelegate
   extends EventEmitter
   implements CameraStreamingDelegate
@@ -236,6 +272,22 @@ export class HomeKitCameraStreamingDelegate
   ) {
     super();
     this.loadPersistedSnapshot();
+  }
+
+  public isTapoC120(): boolean {
+    const sourceUrl = (this.getCleanSourceUrl() || "").toLowerCase();
+    const name = String(this.streamSource?.metadata?.name || "").toLowerCase();
+    const model = String(
+      this.streamSource?.metadata?.model || "",
+    ).toLowerCase();
+    const entityId = this.entityId.toLowerCase();
+    const isC120Token = (s: string) => /\bc120\b|tapo[-_ ]?c120\b/i.test(s);
+    return (
+      isC120Token(model) ||
+      isC120Token(entityId) ||
+      isC120Token(name) ||
+      isC120Token(sourceUrl)
+    );
   }
 
   /** Diagnostics only: never returns URLs, FFmpeg arguments, tokens, or SRTP material. */
@@ -795,11 +847,17 @@ export class HomeKitCameraStreamingDelegate
     callback: StreamRequestCallback,
   ): Promise<void> {
     const video = request.video;
-    const rawFps = video?.fps;
-    const fps =
-      typeof rawFps === "number" && Number.isFinite(rawFps) && rawFps > 0
-        ? Math.max(1, Math.min(rawFps, 60))
-        : 30;
+    const isC120 = this.isTapoC120();
+    const declaredFps = isC120 ? 15 : this.capabilities.maxFps || 30;
+    const requestedFps = video?.fps;
+    const measuredFps = this.capabilities.measuredVideo?.fps;
+    const cameraMaxFps = isC120 ? 20 : this.capabilities.maxFps || 30;
+    const effectiveFps = resolveLiveViewFps(
+      requestedFps,
+      measuredFps,
+      this.capabilities.maxFps,
+      cameraMaxFps,
+    );
 
     const ffmpegPath = resolveFfmpegPath();
     const sourceUrl = this.getCleanSourceUrl();
@@ -845,7 +903,7 @@ export class HomeKitCameraStreamingDelegate
       this.prepareTimeouts.delete(session.sessionId);
     }
     this.platform?.log?.notice?.(
-      `[HomeKitCamera][${this.entityId}] [Session][${session.sessionId}] session-start activeSessions=${this.activeSessions.size} ${video.width}x${video.height}@${fps}`,
+      `[HomeKitCamera][${this.entityId}] [Session][${session.sessionId}] session-start ${video.width}x${video.height} | FPS[declarado=${declaredFps}, solicitado=${requestedFps ?? "omitted"}, medido=${measuredFps ?? "unmeasured"}, efectivo=${effectiveFps ?? "auto"}]`,
     );
 
     this.emit("session-start", session.sessionId);
@@ -870,18 +928,25 @@ export class HomeKitCameraStreamingDelegate
     const ffmpegPath = resolveFfmpegPath() || "ffmpeg";
     const sourceUrl = this.getCleanSourceUrl();
     const video = request.video;
-    const fps = Math.max(1, Math.min(video.fps || 30, 60));
+    const isTapoC120 = this.isTapoC120();
+    const declaredFps = isTapoC120 ? 15 : this.capabilities.maxFps || 30;
+    const requestedFps = video?.fps;
+    const measuredFps = this.capabilities.measuredVideo?.fps;
+    const cameraMaxFps = isTapoC120 ? 20 : this.capabilities.maxFps || 30;
+    const effectiveFps = resolveLiveViewFps(
+      requestedFps,
+      measuredFps,
+      this.capabilities.maxFps,
+      cameraMaxFps,
+    );
     const mtu = video.mtu || 1378;
 
     const args = this.buildStreamArgs(session, request, forceTranscode);
     const isTapoC402 = /(?:\bc402\b|tapo[-_ ]?c402)/i.test(sourceUrl || "");
-    const isTapoC120 = /(?:\bc120\b|tapo[-_ ]?c120\b)/i.test(
-      `${this.entityId} ${sourceUrl || ""} ${this.streamSource.metadata?.name || ""}`,
-    );
     const isTapoCamera = isTapoC402 || isTapoC120;
 
     this.platform?.log?.notice?.(
-      `[HomeKitCamera][${this.entityId}] HAP START ${video.width}x${video.height}@${fps} transcode=${forceTranscode} profile=${h264Profile(video.profile)} level=${h264Level(video.level)} mtu=${mtu} source=${sanitizeUrlCredentials(sourceUrl || "")} ffmpeg=${ffmpegPath} ${getFfmpegVersion(ffmpegPath) || "unknown"}`,
+      `[HomeKitCamera][${this.entityId}] HAP START ${video.width}x${video.height} transcode=${forceTranscode} profile=${h264Profile(video.profile)} level=${h264Level(video.level)} mtu=${mtu} fps[declarado=${declaredFps}, solicitado=${requestedFps ?? "omitted"}, medido=${measuredFps ?? "unmeasured"}, efectivo=${effectiveFps ?? "auto"}] source=${sanitizeUrlCredentials(sourceUrl || "")} ffmpeg=${ffmpegPath} ${getFfmpegVersion(ffmpegPath) || "unknown"}`,
     );
 
     const isHaProxyStream =
@@ -1066,7 +1131,17 @@ export class HomeKitCameraStreamingDelegate
       return [];
     }
     const video = request.video;
-    const fps = Math.max(1, Math.min(video.fps || 30, 60));
+    const isTapoC120 = this.isTapoC120();
+    const declaredFps = isTapoC120 ? 15 : this.capabilities.maxFps || 30;
+    const requestedFps = video.fps;
+    const measuredFps = this.capabilities.measuredVideo?.fps;
+    const cameraMaxFps = isTapoC120 ? 20 : this.capabilities.maxFps || 30;
+    const resolvedFps = resolveLiveViewFps(
+      requestedFps,
+      measuredFps,
+      this.capabilities.maxFps,
+      cameraMaxFps,
+    );
     const mtu = video.mtu || 1378;
     const host = formatHost(session.targetAddress);
     const videoUrl =
@@ -1086,9 +1161,6 @@ export class HomeKitCameraStreamingDelegate
     // HAP has already accepted the Live View request.  C402 needs a complete
     // GOP to join reliably; video remains strict H.264 passthrough.
     const isTapoC402 = /(?:\bc402\b|tapo[-_ ]?c402)/i.test(sourceUrl);
-    const isTapoC120 = /(?:\bc120\b|tapo[-_ ]?c120\b)/i.test(
-      `${this.entityId} ${sourceUrl} ${this.streamSource.metadata?.name || ""}`,
-    );
 
     const args: string[] = [
       "-hide_banner",
@@ -1126,12 +1198,7 @@ export class HomeKitCameraStreamingDelegate
         isTapoC402 ? "3000000" : isTapoC120 ? "1000000" : "100000",
       );
       if (isTapoC402) {
-        args.push(
-          "-fflags",
-          "+genpts+discardcorrupt",
-          "-flags",
-          "low_delay",
-        );
+        args.push("-fflags", "+genpts+discardcorrupt", "-flags", "low_delay");
       } else if (isTapoC120) {
         // Do not drop C120 packets before decoding. This source is 2K H.264
         // High level 5.0; stripping its initial frame data caused the green
@@ -1240,11 +1307,17 @@ export class HomeKitCameraStreamingDelegate
         !this.capabilities.requiresTranscoding);
 
     if (canPassthrough) {
+      const passOutput = this.sourceOutputMetadata();
+      passOutput.declaredFps = declaredFps;
+      passOutput.requestedFps = requestedFps;
+      passOutput.measuredFps = measuredFps;
+      passOutput.effectiveFps = resolvedFps;
+      passOutput.configuredFps = resolvedFps;
       this.startTelemetry(
         session,
         request,
         session.retried ? "fallback" : "copy",
-        this.sourceOutputMetadata(),
+        passOutput,
         session.retried
           ? "FFmpeg restarted after an initial stream failure"
           : undefined,
@@ -1293,7 +1366,8 @@ export class HomeKitCameraStreamingDelegate
         1080,
         Math.max(2, Math.floor((video.height || 1080) / 2) * 2),
       );
-      const keyframeInterval = Math.max(15, fps * 2);
+      const c120Fps = Math.min(resolvedFps ?? 15, 20);
+      const keyframeInterval = Math.max(15, c120Fps * 2);
       this.startTelemetry(
         session,
         request,
@@ -1304,7 +1378,11 @@ export class HomeKitCameraStreamingDelegate
           level: "4.0",
           width: targetWidth,
           height: targetHeight,
-          configuredFps: fps,
+          declaredFps,
+          requestedFps,
+          measuredFps,
+          effectiveFps: c120Fps,
+          configuredFps: c120Fps,
           bitrateKbps: 4500,
           pixFmt: "yuv420p",
           metadataSource: "effective-command",
@@ -1316,7 +1394,7 @@ export class HomeKitCameraStreamingDelegate
             : undefined,
       );
       this.platform?.log?.notice?.(
-        `[Stream][${this.entityId}] Normalizando C120 H.264 High L5.0 a HAP High L4.0 ${targetWidth}x${targetHeight}@${fps} (fallback seguro)`,
+        `[Stream][${this.entityId}] Normalizando C120 H.264 High L5.0 a HAP High L4.0 ${targetWidth}x${targetHeight}@${c120Fps} (declarado=${declaredFps}, solicitado=${requestedFps ?? "omitted"}, medido=${measuredFps ?? "unmeasured"}, efectivo=${c120Fps})`,
       );
       args.push(
         "-map",
@@ -1337,11 +1415,11 @@ export class HomeKitCameraStreamingDelegate
         "-pix_fmt",
         "yuv420p",
         "-r",
-        String(fps),
+        String(c120Fps),
         "-g",
         String(keyframeInterval),
         "-keyint_min",
-        String(fps),
+        String(c120Fps),
         "-sc_threshold",
         "0",
         "-b:v",

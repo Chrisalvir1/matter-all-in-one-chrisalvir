@@ -137,7 +137,12 @@ export function detectCameraCapabilities(
     }
     // Direct RTSP cameras: always treat as having audio unless explicitly disabled.
     // FFmpeg -map 0:a:0? handles streams with no audio track gracefully.
-    if (isDirectRtsp && !hasAudio && attrs.has_audio !== false && rawAudioCodec !== "none") {
+    if (
+      isDirectRtsp &&
+      !hasAudio &&
+      attrs.has_audio !== false &&
+      rawAudioCodec !== "none"
+    ) {
       hasAudio = true;
       audioCodec = "aac_lc";
     }
@@ -148,8 +153,15 @@ export function detectCameraCapabilities(
     probeResult?.width || Number(attrs.video_width || attrs.width || 1920);
   const height =
     probeResult?.height || Number(attrs.video_height || attrs.height || 1080);
-  const maxFps =
-    probeResult?.fps || Number(attrs.fps || attrs.frame_rate || 30);
+  const rawMaxFps = probeResult?.fps || Number(attrs.fps || attrs.frame_rate);
+  const isC120 = /(?:\bc120\b|tapo[-_ ]?c120\b)/i.test(
+    `${state.entity_id || ""} ${resolvedSource?.url || ""} ${attrs.friendly_name || ""}`,
+  );
+  const maxFps = isC120
+    ? Math.min(Number.isFinite(rawMaxFps) && rawMaxFps > 0 ? rawMaxFps : 20, 20)
+    : Number.isFinite(rawMaxFps) && rawMaxFps > 0
+      ? rawMaxFps
+      : 30;
 
   // Strategy Determination
   let strategy: StreamStrategy = "unsupported";

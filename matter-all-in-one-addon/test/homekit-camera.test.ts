@@ -9,7 +9,10 @@ import {
 import { EventEmitter } from "node:events";
 import * as ffmpegHelper from "../src/camera/homekit/ffmpeg-helper.js";
 import { HomeKitCameraAccessory } from "../src/camera/homekit/homekit-camera.accessory.js";
-import { HomeKitCameraStreamingDelegate } from "../src/camera/homekit/homekit-camera-stream.delegate.js";
+import {
+  HomeKitCameraStreamingDelegate,
+  resolveLiveViewFps,
+} from "../src/camera/homekit/homekit-camera-stream.delegate.js";
 
 function createPlatform() {
   return {
@@ -686,5 +689,59 @@ describe("HomeKitCameraStreamingDelegate — session lifecycle and zombie watchd
     );
     expect(delegate.hasActiveSessions()).toBe(false);
     expect(delegate.activeSessionCount()).toBe(0);
+  });
+});
+
+describe("resolveLiveViewFps resolution and per-camera ceilings", () => {
+  it("prioritizes requested FPS when valid and within camera max limit", () => {
+    // Standard 30fps camera, Apple requests 25
+    expect(resolveLiveViewFps(25, 30, 30, 30)).toBe(25);
+    // Tapo C120 with 20fps hardware limit, Apple requests 15
+    expect(resolveLiveViewFps(15, 20, 20, 20)).toBe(15);
+    // Tapo C120 with 20fps hardware limit, Apple requests 20
+    expect(resolveLiveViewFps(20, 20, 20, 20)).toBe(20);
+  });
+
+  it("strictly clamps Apple requested FPS to cameraMaxFps (e.g. C120 ceiling of 20)", () => {
+    // Apple requests 30fps for C120, hardware limit is 20 -> resolves to 20
+    expect(resolveLiveViewFps(30, 20, 20, 20)).toBe(20);
+    // Apple requests 60fps for standard 30fps camera -> resolves to 30
+    expect(resolveLiveViewFps(60, 30, 30, 30)).toBe(30);
+  });
+
+  it("falls back to source measured FPS when Apple omits video.fps", () => {
+    // Apple omits fps, source measured is 20 for C120
+    expect(resolveLiveViewFps(undefined, 20, undefined, 20)).toBe(20);
+    // Apple omits fps, source measured is 25 for 30fps camera
+    expect(resolveLiveViewFps(undefined, 25, 30, 30)).toBe(25);
+    // Apple omits fps, source measured is 30 for C120 -> clamped to 20
+    expect(resolveLiveViewFps(undefined, 30, undefined, 20)).toBe(20);
+  });
+
+  it("falls back to configured FPS when Apple and source FPS are omitted", () => {
+    expect(resolveLiveViewFps(undefined, undefined, 15, 30)).toBe(15);
+    // Configured 25 for C120 -> clamped to 20
+    expect(resolveLiveViewFps(undefined, undefined, 25, 20)).toBe(20);
+  });
+
+  it("returns undefined when only cameraMaxFps is provided without specific inputs (cameraMaxFps is ceiling only)", () => {
+    // cameraMaxFps is strictly a ceiling, never an effective measurement
+    expect(
+      resolveLiveViewFps(undefined, undefined, undefined, 20),
+    ).toBeUndefined();
+    expect(
+      resolveLiveViewFps(undefined, undefined, undefined, 30),
+    ).toBeUndefined();
+  });
+
+  it("returns undefined when no FPS data is available at all", () => {
+    expect(
+      resolveLiveViewFps(undefined, undefined, undefined, undefined),
+    ).toBeUndefined();
+  });
+
+  it("ignores non-finite and non-positive numbers safely and returns undefined without valid inputs", () => {
+    expect(resolveLiveViewFps(0, -10, NaN, 20)).toBeUndefined();
+    expect(resolveLiveViewFps(NaN, Infinity, 0, undefined)).toBeUndefined();
   });
 });
