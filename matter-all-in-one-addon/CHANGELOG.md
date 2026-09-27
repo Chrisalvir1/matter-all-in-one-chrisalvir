@@ -1,3 +1,25 @@
+## [1.9.11] - 2026-09-27
+
+### Corrección de disponibilidad real en HomeKit/Matter, reactivación de ventiladores BLE y eliminación de PTZ/zonas
+
+- **Sincronización real de disponibilidad en Apple Home / HomeKit:**
+  - Se sincroniza el atributo `reachable` de Matter y HomeKit en tiempo real al detectar transiciones a `unavailable` o `unknown` desde Home Assistant.
+  - Se eliminan los falsos positivos que mostraban dispositivos siempre "en línea" cuando estaban desconectados en Home Assistant.
+  - Al recuperar la conexión, la disponibilidad se restaura inmediatamente sin necesidad de recargar.
+
+- **Reactivación y estabilidad de ventiladores BLE (Bluetooth Low Energy):**
+  - Se eliminó el bloqueo por excepción en `assertOnline()` que rechazaba comandos y dejaba a Apple Home en un estado de espera infinito ("rueda girando / esperando").
+  - Los comandos hacia dispositivos BLE ahora se despachan limpiamente a Home Assistant para despertar la conexión Bluetooth y encender el ventilador.
+  - Si el enlace Bluetooth falla, el error se captura y registra sin bloquear ni colgar la interfaz de Apple Home.
+
+- **Cámaras y HomeKit Live View:**
+  - **Tapo C402:** Corregida la resolución de stream para que se consuma directamente desde Home Assistant (`camera/stream` / `camera_proxy_stream`), eliminando la referencia rota al puerto 62291.
+  - **Wyze, EZVIZ y Tapo C120:** Anunciador mDNS (Ciao) configurado para escuchar en todas las interfaces de red simultáneamente (`bind: undefined`), evitando el estado "Sin Respuesta" en redes Wi-Fi / Ethernet.
+  - Eliminada la reescritura que alteraba los sufijos de streams RTSP en Wyze y EZVIZ.
+
+- **Interfaz de usuario:**
+  - Eliminada completamente la tarjeta de Controles PTZ y Zonas de Vigilancia del frontend a petición del usuario.
+
 ## [1.9.10] - 2026-09-27
 
 ### Funciones avanzadas de Matter 1.6.1 y Matterbridge 3.10.11: Cámaras (Talkback, Snapshot, HEVC, Doorbell), Gestión Energética, Válvulas Nativas, Aspiradoras con Áreas y Calidad de Aire

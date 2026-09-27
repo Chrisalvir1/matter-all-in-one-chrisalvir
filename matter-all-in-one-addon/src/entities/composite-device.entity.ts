@@ -558,9 +558,22 @@ export class CompositeDeviceEntity {
     state: HassState,
     initial = false,
   ): Promise<void> {
+    const wasUnavailable = isUnavailable(this.states.get(entityId) as any);
+    const nowUnavailable = isUnavailable(state);
     this.states.set(entityId, state);
     const endpoint = this.endpoints.get(entityId);
     if (!endpoint) return;
+
+    if (nowUnavailable !== wasUnavailable || initial) {
+      await this.setMemberReachability(entityId, !nowUnavailable);
+      if (entityId === this.primaryEntityId) {
+        await this.setReachability(!nowUnavailable);
+      }
+      if (nowUnavailable) {
+        await this.setMemberInactiveState(entityId);
+        return;
+      }
+    }
     const [domain] = entityId.split(".");
     const update = initial ? safeSetAttribute : safeUpdateAttribute;
 

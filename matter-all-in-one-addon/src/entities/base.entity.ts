@@ -364,10 +364,9 @@ export class BaseEntity {
 
   protected assertOnline(): void {
     if (isUnavailable(this.state)) {
-      this.platform.log?.warn?.(
-        `[${this.entityId}] Rejecting Matter command: device is unavailable/offline in Home Assistant.`,
+      this.platform.log?.debug?.(
+        `[${this.entityId}] Device is currently reported unavailable/offline in Home Assistant. Forwarding command to trigger device wake/reconnect...`,
       );
-      throw new Error(`[${this.entityId}] Device is unavailable/offline`);
     }
   }
 
@@ -377,12 +376,6 @@ export class BaseEntity {
     data?: Record<string, any>,
     delayMs = 60,
   ) {
-    if (isUnavailable(this.state)) {
-      this.platform.log?.warn?.(
-        `[${this.entityId}] Ignored debounced ${domain}.${service}: device is unavailable/offline in Home Assistant.`,
-      );
-      return;
-    }
     if (service === "turn_on") {
       this.cancelDebouncedService("turn_off");
     } else if (service === "turn_off") {
@@ -400,12 +393,6 @@ export class BaseEntity {
 
     const timer = setTimeout(() => {
       this.serviceDebounceTimers.delete(key);
-      if (isUnavailable(this.state)) {
-        this.platform.log?.warn?.(
-          `[${this.entityId}] Ignored delayed ${domain}.${service}: device transitioned to unavailable.`,
-        );
-        return;
-      }
       void this.callServiceTracked(domain, service, data);
     }, delayMs);
     this.serviceDebounceTimers.set(key, timer);
@@ -1121,8 +1108,18 @@ export class BaseEntity {
   ): Promise<void> {
     this.haUpdateDepth++;
     try {
+      const wasUnavailable = isUnavailable(this.state);
+      const nowUnavailable = isUnavailable(newState);
       this.state = newState;
       if (!this.endpoint) return;
+
+      if (nowUnavailable !== wasUnavailable || isInitialSync) {
+        await this.setReachability(!nowUnavailable);
+        if (nowUnavailable) {
+          await this.setInactiveState();
+          return;
+        }
+      }
 
       if (isInitialSync && this.isSoftwareUpdateBoot) {
         this.platform.log.notice(
