@@ -4767,25 +4767,47 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
     if (entityId.startsWith("binary_sensor.")) {
       const isMotionState = newState.state === "on";
+      const entityFriendlyName =
+        this.ha?.hassStates?.get(entityId)?.attributes?.friendly_name || "";
       for (const cam of this.entities.values()) {
         if (cam instanceof CameraEntity && cam.homekitAccessory) {
+          const camFriendlyName = cam.state?.attributes?.friendly_name || "";
+
           const isTapoC402Entity =
             /tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle|tapo[-_ ]?frente|\bc402\b/i.test(
-              entityId,
+              `${entityId} ${entityFriendlyName}`,
             );
           const isTapoC402Cam =
             /tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle|tapo[-_ ]?frente|\bc402\b/i.test(
-              `${cam.entityId} ${cam.state?.attributes?.friendly_name || ""}`,
+              `${cam.entityId} ${camFriendlyName}`,
             );
           const isC402Match = isTapoC402Entity && isTapoC402Cam;
 
+          const isTapoC120Entity =
+            /tapo[-_ ]?c120|tapo[-_ ]?spot|\bc120\b/i.test(
+              `${entityId} ${entityFriendlyName}`,
+            );
+          const isTapoC120Cam = /tapo[-_ ]?c120|tapo[-_ ]?spot|\bc120\b/i.test(
+            `${cam.entityId} ${camFriendlyName}`,
+          );
+          const isC120Match = isTapoC120Entity && isTapoC120Cam;
+
+          if (!cam.homekitAccessory.linkedMotionEntityId) {
+            cam.homekitAccessory.linkedMotionEntityId =
+              cam.homekitAccessory.findLinkedMotionEntity();
+          }
+
           const isLinked =
             isC402Match ||
+            isC120Match ||
             cam.homekitAccessory.linkedMotionEntityId === entityId ||
             (this.ha.hassEntities.get(entityId)?.device_id &&
               this.ha.hassEntities.get(entityId)?.device_id ===
                 this.ha.hassEntities.get(cam.entityId)?.device_id);
           if (isLinked) {
+            this.log.notice?.(
+              `[HomeKitCamera][${cam.entityId}] Evento de movimiento (${isMotionState ? "DETECTADO" : "REPOSO"}) desde HA (${entityId}) → actualizando HomeKit y HKSV`,
+            );
             cam.homekitAccessory.updateMotionState(isMotionState);
           }
         }

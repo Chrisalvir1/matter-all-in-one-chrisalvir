@@ -865,7 +865,7 @@ export class HomeKitCameraRecordingDelegate
       const inFps = resolveCameraSourceFps(this.capabilities, this.record) ?? 0;
       const outWidth = isC120 ? 1920 : inWidth;
       const outHeight = isC120 ? 1080 : inHeight;
-      const outFps = isC120 ? (inFps > 0 ? Math.min(inFps, 30) : 0) : inFps;
+      const outFps = isC120 ? (inFps > 0 ? Math.min(inFps, 20) : 0) : inFps;
       let droppedFrames = 0;
       let encodingErrors = 0;
 

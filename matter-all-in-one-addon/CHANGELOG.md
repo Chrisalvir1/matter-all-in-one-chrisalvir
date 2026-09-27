@@ -1,3 +1,19 @@
+## [1.9.7] - 2026-09-26
+
+### Vinculación y grabación HKSV de Tapo C120, resolución de FPS sin fallbacks ciegos y streaming multi-cámara estable
+
+- **Vinculación de sensor de movimiento y activación HKSV para Tapo C120:**
+  - **Enrutamiento explícito en `platform.ts`:** Se incorporó el discriminador `isTapoC120Entity && isTapoC120Cam` para correlacionar eventos de sensores binarios de movimiento de la C120 (`binary_sensor.tapo_c120_motion`, `binary_sensor.tapo_c120_celda_de_movimiento`, etc.) con la entidad de cámara correspondiente en Home Assistant.
+  - **Resolución dinámica de sensor vinculado:** Si `linkedMotionEntityId` no estaba determinado al instanciar el accesorio, se resuelve dinámicamente en tiempo de ejecución.
+  - **Garantía del servicio `Service.MotionSensor`:** Se asegura la presencia del servicio de sensor de movimiento en el accesorio HAP de la C120 (y creación diferida con `ensureMotionService`), permitiendo a Apple Home Hub recibir la señal `Characteristic.MotionDetected` y disparar las grabaciones HKSV hacia iCloud.
+  - **Emparejamiento tolerante a multi-integración:** Se permite la vinculación cruzada de sensores de la integración Tapo con cámaras RTSP/go2rtc aunque difiera el `device_id` de Home Assistant.
+- **Techo físico estricto de 20 fps para Tapo C120 y resolución limpia de FPS:**
+  - **`resolveLiveViewFps`:** No utiliza `cameraMaxFps` como valor de fallback cuando no hay FPS solicitado, medido ni configurado, devolviendo `undefined` de forma segura. `cameraMaxFps` se preserva exclusivamente como techo límite superior, nunca como medición.
+  - **Separación de telemetría:** Registro explícito y diferenciado de `declaredFps`, `requestedFps`, `measuredFps` y `effectiveFps`.
+  - **Capacidad HAP de C120:** Anuncio seguro en escalera HAP a 1080p @ 15 fps (Level 4.0) para máxima estabilidad con Apple Home, con prebuffer HKSV limitado a un techo de 20 fps.
+- **Continuidad de streaming y grabación para Wyze, Ezviz y Tapo C402:**
+  - Se valida el correcto funcionamiento de Live View en passthrough puro (`-c:v copy` sin `-r`), grabación HKSV y detección de movimiento en toda la flota de cámaras.
+
 ## [1.9.6] - 2026-09-26
 
 ### Restauración crítica de Live View para Tapo C120, Tapo C402, Wyze y Ezviz

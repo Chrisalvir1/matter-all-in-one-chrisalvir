@@ -127,11 +127,15 @@ export class HomeKitCameraAccessory {
     const hasIntegratedCameraMotion = Boolean(
       this.streamSource.metadata?.hasCameraMotion,
     );
+    const isC120 = this.isTapoC120();
+    const isC402 = this.isTapoC402();
     if (
       this.linkedMotionEntityId ||
       isScrypted ||
       isCameraUi ||
-      hasIntegratedCameraMotion
+      hasIntegratedCameraMotion ||
+      isC120 ||
+      isC402
     ) {
       try {
         this.motionService =
@@ -657,12 +661,25 @@ export class HomeKitCameraAccessory {
       const isSameDevice = Boolean(deviceId && entry?.device_id === deviceId);
       const fn = state?.attributes?.friendly_name;
 
+      const isExplicitModelMatch =
+        (/(?:\bc120\b|tapo[-_ ]?c120\b)/i.test(`${entityId} ${fn || ""}`) &&
+          /(?:\bc120\b|tapo[-_ ]?c120\b)/i.test(
+            `${this.entityId} ${this.record.name || ""}`,
+          )) ||
+        (/(?:\bc402\b|tapo[-_ ]?c402\b|frente[-_ ]?de[-_ ]?calle)/i.test(
+          `${entityId} ${fn || ""}`,
+        ) &&
+          /(?:\bc402\b|tapo[-_ ]?c402\b|frente[-_ ]?de[-_ ]?calle)/i.test(
+            `${this.entityId} ${this.record.name || ""}`,
+          ));
+
       // CRITICAL: If the camera is a registered HA device (has deviceId), ONLY accept
-      // entities physically belonging to that exact same hardware (entry.device_id === deviceId).
+      // entities physically belonging to that exact same hardware (entry.device_id === deviceId),
+      // EXCEPT when explicit camera model tokens match.
       // Never link room fixtures or ambient household bulbs to the camera!
-      if (deviceId) {
+      if (deviceId && !isExplicitModelMatch) {
         if (!isSameDevice) continue;
-      } else {
+      } else if (!deviceId) {
         // Cameras without a HA device: strictly exclude room fixtures
         const isRoomFixture =
           /ventilador|fan|techo|ceiling|plafon|plafón|arbotante|aplique|lampara|lámpara|tira|strip|hexágono|hexagon|neon|neón|tv|pantalla|mesa|escritorio|buró|buro|noche|velador|veladora|piso|floor|doble_spot|chandelier|segment/i.test(
@@ -812,6 +829,28 @@ export class HomeKitCameraAccessory {
               { id: this.entityId, name: this.record?.name },
               fn,
             ));
+        const isC120Entity = /tapo[-_ ]?c120|tapo[-_ ]?spot|\bc120\b/i.test(
+          `${entityId} ${fn}`,
+        );
+        const isC120Cam = /tapo[-_ ]?c120|tapo[-_ ]?spot|\bc120\b/i.test(
+          `${this.entityId} ${this.record?.name || ""}`,
+        );
+        if (isC120Entity && isC120Cam) {
+          return entityId;
+        }
+
+        const isC402Entity =
+          /tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle|tapo[-_ ]?frente|\bc402\b/i.test(
+            `${entityId} ${fn}`,
+          );
+        const isC402Cam =
+          /tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle|tapo[-_ ]?frente|\bc402\b/i.test(
+            `${this.entityId} ${this.record?.name || ""}`,
+          );
+        if (isC402Entity && isC402Cam) {
+          return entityId;
+        }
+
         if (
           (cleanCam.length >= 3 && cleanEntity.includes(cleanCam)) ||
           (cleanBase.length >= 4 && cleanEntity.includes(cleanBase)) ||
@@ -830,7 +869,30 @@ export class HomeKitCameraAccessory {
     return detectPrimaryNetworkInterface();
   }
 
+  public ensureMotionService(): void {
+    if (!this.motionService) {
+      try {
+        this.motionService =
+          this.accessory.getService(Service.MotionSensor) ||
+          this.accessory.addService(
+            Service.MotionSensor,
+            `${this.record.name || this.entityId} Movimiento`,
+          );
+        this.motionService.setCharacteristic(
+          Characteristic.Name,
+          `${this.record.name || this.entityId} Movimiento`,
+        );
+        this.motionService.setCharacteristic(Characteristic.StatusActive, true);
+      } catch (err) {
+        this.platform?.log?.warn?.(
+          `[HomeKitCamera][${this.entityId}] Error asegurando MotionSensor diferido: ${err}`,
+        );
+      }
+    }
+  }
+
   public updateMotionState(motionDetected: boolean): void {
+    this.ensureMotionService();
     if (this.motionService) {
       this.motionService.updateCharacteristic(
         Characteristic.MotionDetected,
