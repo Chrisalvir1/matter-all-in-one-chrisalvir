@@ -1,3 +1,31 @@
+## [1.9.9] - 2026-09-27
+
+### Actualización a Matter 1.6.1 + MatterBridge 3.10.11, PTZ (Hardware + Digital DPTZ), hasta 5 zonas de vigilancia con MQTT y estabilización de ventiladores BLE
+
+- **Actualización a Matter 1.6.1 y MatterBridge 3.10.11:**
+  - Alineación con el modelo de datos Matter 1.6.1 y dependencias estables oficiales de MatterBridge 3.10.11.
+  - El frontend propio y los endpoints `/api/system-info` y `/api/status` reflejan dinámicamente Matter 1.6.1 y la versión de MatterBridge en tiempo real.
+
+- **Cámara PTZ y Zonas de Vigilancia (Hardware y Digital DPTZ):**
+  - **Detección inteligente:** Clasificación automática de cámaras con PTZ físico (ONVIF/integración HA) o Digital PTZ (DPTZ sobre stream RTSP/WebRTC).
+  - **Hasta 5 zonas de vigilancia por cámara:** Almacenamiento persistente en `/data` de coordenadas ROI (Region of Interest: `x`, `y`, `width`, `height`), nombres personalizados y activación instantánea por preset.
+  - **Movimiento direccional:** Soporte de controles direccionales (arriba, abajo, izquierda, derecha, zoom in, zoom out, centrar) con auto-adaptación de escala.
+  - **Exportación Matter:** Exportador de clústeres DPTZ oficial e interruptor de control de zonas de vigilancia (*Single-Switch Zone Controller*) para activar presets y mover la cámara desde Apple Home y Google Home.
+  - **Interfaz de usuario:** Nueva tarjeta interactiva con D-pad, selector de zonas y editor visual de coordenadas en el frontend.
+
+- **Integración MQTT y Home Assistant Discovery:**
+  - **Telemetría y Estado:** Publicación de estado activo y coordenadas en `matter-all-in-one/camera/<id>/ptz/state` y `zones`.
+  - **Auto-descubrimiento en HA:** Creación automática de entidades en Home Assistant mediante MQTT Discovery:
+    - Entidad `sensor` para la zona de vigilancia activa.
+    - Entidad `select` para alternar entre las 5 zonas de vigilancia.
+    - Entidad `switch` para el modo de vigilancia DPTZ.
+  - **Tópico de comandos:** Control remoto de movimientos y selección de presets vía `matter-all-in-one/camera/<id>/ptz/command`.
+
+- **Estabilización de Ventiladores BLE y Control de Velocidad:**
+  - **Compatibilidad con Home Assistant Core 2026.9.4:** Mapeo de velocidades discretas (1..6) a porcentajes precisos mediante `fan.set_percentage`.
+  - **Ventana de bloqueo contra rebotes (4000 ms):** Supresión de ecos y rebotes de estado causados por la latencia de reconexión Bluetooth/BLE de Home Assistant, eliminando el parpadeo en las tarjetas de Apple Home y HA.
+  - **Doble enlace de clústeres:** Servidor `MatterbridgeOnOffServer` y `MatterbridgeFanControlServer` sincronizados para compatibilidad con asistentes de voz.
+
 ## [1.9.8] - 2026-09-26
 
 ### Restauración de disponibilidad "En línea" para Tapo C120, reactivación de grabación HKSV y detección de movimiento para Tapo C402 y Tapo C120
