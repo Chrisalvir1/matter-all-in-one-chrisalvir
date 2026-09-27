@@ -29,18 +29,60 @@ export class CameraSourceResolver {
     const supportedFeatures = Number(attrs.supported_features || 0);
     const hasStreamSupport = (supportedFeatures & 2) !== 0; // CameraEntityFeature.STREAM = 2
 
+    const canAttemptStream =
+      hasStreamSupport ||
+      attrs.frontend_stream_type === "hls";
+
+    // 0. Tapo C402: stream is served directly from Home Assistant
+    const isTapoC402 = /(?:\bc402\b|tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle|tapo[-_ ]?frente)/i.test(
+      `${entityId} ${attrs.friendly_name || ""}`,
+    );
+    if (isTapoC402) {
+      if (canAttemptStream && platform?.ha?.requestCameraStream) {
+        try {
+          const streamUrl = await platform.ha.requestCameraStream(entityId);
+          if (streamUrl && typeof streamUrl === "string") {
+            platform?.log?.notice?.(
+              `[CameraSourceResolver][${entityId}] Resolved Tapo C402 directly from HA: ${sanitizeUrlCredentials(streamUrl)}`,
+            );
+            return {
+              sourceType: "hls",
+              url: streamUrl,
+              snapshotUrl,
+              supportsPassthrough: true,
+              requiresBridge: true,
+              metadata: { isTapoC402: true, isDirectHa: true },
+            };
+          }
+        } catch (err) {
+          platform?.log?.debug?.(
+            `[CameraSourceResolver][${entityId}] Direct HA stream request note: ${err}`,
+          );
+        }
+      }
+      const proxyUrl = platform?.ha?.getCameraProxyStreamUrl?.(entityId);
+      if (proxyUrl) {
+        platform?.log?.notice?.(
+          `[CameraSourceResolver][${entityId}] Resolved Tapo C402 via HA continuous proxy stream`,
+        );
+        return {
+          sourceType: "ha_proxy",
+          url: proxyUrl,
+          snapshotUrl,
+          supportsPassthrough: false,
+          requiresBridge: true,
+          metadata: { isTapoC402: true, isDirectHa: true },
+        };
+      }
+    }
+
     // 1. Check state.attributes.stream_source
     const streamSourceAttr = attrs.stream_source;
     if (
       typeof streamSourceAttr === "string" &&
       streamSourceAttr.trim().length > 0
     ) {
-      let resolvedUrl = streamSourceAttr;
-      if (/wyze/i.test(entityId) || /wyze/i.test(resolvedUrl)) {
-        if (resolvedUrl.includes("/stream1")) resolvedUrl = resolvedUrl.replace("/stream1", "/stream0");
-      } else if (resolvedUrl.includes("/stream2")) {
-        resolvedUrl = resolvedUrl.replace("/stream2", "/stream1");
-      }
+      const resolvedUrl = streamSourceAttr;
       const sanitized = sanitizeUrlCredentials(resolvedUrl);
       platform?.log?.debug?.(
         `[CameraSourceResolver][${entityId}] Resolved from stream_source: ${sanitized}`,
@@ -68,12 +110,7 @@ export class CameraSourceResolver {
       attrs.rtsp_stream ||
       attrs.rtsp_stream_url;
     if (typeof directRtsp === "string" && directRtsp.startsWith("rtsp")) {
-      let resolvedRtsp = directRtsp;
-      if (/wyze/i.test(entityId) || /wyze/i.test(resolvedRtsp)) {
-        if (resolvedRtsp.includes("/stream1")) resolvedRtsp = resolvedRtsp.replace("/stream1", "/stream0");
-      } else if (resolvedRtsp.includes("/stream2")) {
-        resolvedRtsp = resolvedRtsp.replace("/stream2", "/stream1");
-      }
+      const resolvedRtsp = directRtsp;
       const sanitized = sanitizeUrlCredentials(resolvedRtsp);
       platform?.log?.debug?.(
         `[CameraSourceResolver][${entityId}] Resolved direct RTSP stream source: ${sanitized}`,
@@ -150,9 +187,6 @@ export class CameraSourceResolver {
     }
 
     // 4. HA Native stream via WebSocket (camera/stream)
-    const canAttemptStream =
-      hasStreamSupport ||
-      attrs.frontend_stream_type === "hls";
     if (canAttemptStream && platform?.ha?.requestCameraStream) {
       try {
         const streamUrl = await platform.ha.requestCameraStream(entityId);

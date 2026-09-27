@@ -949,7 +949,6 @@ export class HomeKitCameraAccessory {
       this.notifyPairingStateChanged(false);
     });
 
-    const primaryIface = HomeKitCameraAccessory.detectPrimaryNetworkInterface();
     await this.accessory.publish({
       username: this.record.username,
       pincode: this.record.pincode,
@@ -957,7 +956,7 @@ export class HomeKitCameraAccessory {
       category: Categories.IP_CAMERA,
       setupID: this.record.setupId,
       advertiser: MDNSAdvertiser.CIAO,
-      bind: primaryIface?.name ? [primaryIface.name] : undefined,
+      bind: undefined,
     });
     this.isPublished = true;
     this.platform?.log?.notice?.(

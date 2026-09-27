@@ -10,7 +10,6 @@ import { DeviceModal } from "./components/DeviceModal";
 import { ScryptedModal } from "./components/ScryptedModal";
 import { CameraUiModal } from "./components/CameraUiModal";
 import { SettingsModal } from "./components/SettingsModal";
-import { PtzControlsCard } from "./components/PtzControlsCard";
 import { extractCameraBrand } from "./components/CameraCard";
 import {
   CameraRecord,
@@ -489,9 +488,6 @@ export const App: React.FC = () => {
             onSyncCameras={handleSyncCameras}
             isSyncing={isSyncing}
           />
-
-          {/* PTZ Cameras & Surveillance Zones (Matter 1.6.1) */}
-          <PtzControlsCard cameras={ptzCameras} onRefresh={fetchPtzAndSystemInfo} />
 
           {/* Device / Camera Grid */}
           <section className="device-grid" id="device-list" aria-live="polite" aria-busy={loading}>

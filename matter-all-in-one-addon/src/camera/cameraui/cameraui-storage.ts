@@ -306,11 +306,11 @@ export function repairCameraRecord(cam: CameraUiCameraRecord): {
     cam.videoCodec = "h264";
     cam.strategy = "passthrough_h264";
   }
-  // Tapo C402: 2K QHD 2560x1440@30 H264
+  // Tapo C402: 2K QHD 2560x1440@30 H264 (Direct from Home Assistant)
   else if (url.includes("tapo-c402") || name.includes("c402")) {
-    const targetUrl = "rtsp://192.168.110.147:62291/tapo-c402";
-    if (cam.rtspUrl !== targetUrl) {
-      cam.rtspUrl = targetUrl;
+    cam.sourceProvider = "home_assistant";
+    if (cam.rtspUrl && cam.rtspUrl.includes(":62291")) {
+      cam.rtspUrl = undefined;
       modified = true;
     }
     if (!cam.width || cam.width < 1920) {
@@ -475,17 +475,8 @@ export function repairCameraRecord(cam: CameraUiCameraRecord): {
     /tapo[-_ ]?c402/i.test(cam.name || "") ||
     /tapo-c402/i.test(cam.rtspUrl || "")
   ) {
-    const targetUrl = "rtsp://192.168.110.147:62291/tapo-c402";
-    if (
-      cam.rtspUrl !== targetUrl &&
-      (!cam.rtspUrl ||
-        cam.rtspUrl.includes("192.168.110.46") ||
-        cam.rtspUrl.includes(":2101") ||
-        cam.rtspUrl.includes(".invalid") ||
-        cam.rtspUrl.includes("8554") ||
-        cam.rtspUrl.includes("camera-lan"))
-    ) {
-      cam.rtspUrl = targetUrl;
+    if (cam.rtspUrl && cam.rtspUrl.includes(":62291")) {
+      cam.rtspUrl = undefined;
       modified = true;
     }
     if (cam.sourceProvider !== "home_assistant") {
@@ -1012,8 +1003,8 @@ export const DEFAULT_CAMERAS: CameraUiCameraRecord[] = [
     manufacturer: "Gecko",
     model: "Tapo C402",
     serialNumber: "CUI-5199854C-2694-4D69-BCC4-5CC6651FAD0C",
-    rtspUrl: "rtsp://192.168.110.147:62291/tapo-c402",
-    snapshotUrl: "https://192.168.110.46:3543/api/cameras/TAPO%20C402/snapshot",
+    rtspUrl: undefined,
+    snapshotUrl: "/api/camera_proxy/camera.tapo_frente_de_calle",
     hasAudio: true,
     audioCodec: "aac",
     width: 2560,

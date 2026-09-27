@@ -201,16 +201,14 @@ export class CameraUiHomeKitBridge {
           const safeError = probe.error
             ? sanitizeUrlCredentials(probe.error)
             : "no se detectaron códec, resolución y FPS";
-          platform.log?.error?.(
-            `[Camera.UI][${camera.name}] No se publica HAP con capacidades antiguas: el stream HA no se pudo medir (${safeError})`,
+          platform.log?.warn?.(
+            `[Camera.UI][${camera.name}] Stream HA directo: sonda previa no concluyente (${safeError}), publicando con parámetros seguros para mantener disponibilidad.`,
           );
-          return undefined;
         }
       } catch (error) {
-        platform.log?.error?.(
-          `[Camera.UI][${camera.name}] No se publica HAP: falló la medición previa del stream HA (${String(error)})`,
+        platform.log?.warn?.(
+          `[Camera.UI][${camera.name}] Advertencia en sonda previa del stream HA (${String(error)}), publicando con parámetros seguros para mantener disponibilidad.`,
         );
-        return undefined;
       }
     }
     // Todo stream RTSP/RTSPS de Camera.UI (H.264 o H.265/HEVC) es válido para HKSV:
