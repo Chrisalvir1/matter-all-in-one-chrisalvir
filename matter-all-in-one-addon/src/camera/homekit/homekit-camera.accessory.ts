@@ -500,20 +500,12 @@ export class HomeKitCameraAccessory {
       Math.min(this.capabilities.maxFps || 30, 60),
     );
 
-    // Tapo C120 Hardware: 2560x1440 hasta 20 fps adaptativo según iluminación.
-    // Anuncia escalera 2K nativa (20 fps y adaptativo 15 fps) y 1080p para fallback seguro.
+    // HAP only defines H.264 levels up to 4.0. The C120 source is 2K High
+    // level 5.0, which cannot be sent as a valid HAP RTP stream. Its Live
+    // View is normalized to 1080p/15 by the streaming delegate; advertise
+    // exactly that mode while keeping the 2K source for recording.
     if (this.isTapoC120()) {
-      const resolvedFps = resolveCameraSourceFps(
-        this.capabilities,
-        this.record,
-      );
-      const maxC120Fps = Math.min(resolvedFps ?? 20, 20);
-      return [
-        [2560, 1440, maxC120Fps],
-        [2560, 1440, Math.min(maxC120Fps, 15)],
-        [1920, 1080, maxC120Fps],
-        [1920, 1080, Math.min(maxC120Fps, 15)],
-      ];
+      return [[1920, 1080, Math.min(sourceFps, 15)]];
     }
 
     const ladder: [number, number, number][] = [
@@ -540,18 +532,9 @@ export class HomeKitCameraAccessory {
 
   /**
    * Construye los niveles H.264 declarados en SupportedVideoStreamConfiguration.
-   * Para la C120, se anuncia el valor experimental 50 (0x32 = Level 5.0) junto a los niveles estándar (3.1, 3.2, 4.0).
-   * Para todas las demás cámaras, se declaran estrictamente los niveles estándar HAP R2.
+   * Se declaran estrictamente los niveles estándar HAP R2 (3.1, 3.2, 4.0).
    */
   public buildDeclaredLevels(): H264Level[] {
-    if (this.isTapoC120()) {
-      return [
-        H264Level.LEVEL3_1,
-        H264Level.LEVEL3_2,
-        H264Level.LEVEL4_0,
-        50 as any,
-      ];
-    }
     return [H264Level.LEVEL3_1, H264Level.LEVEL3_2, H264Level.LEVEL4_0];
   }
 
@@ -565,9 +548,7 @@ export class HomeKitCameraAccessory {
     return {
       codec: "h264",
       profiles: ["baseline", "main", "high"],
-      levels: this.isTapoC120()
-        ? ["3.1", "3.2", "4.0", "5.0-experimental"]
-        : ["3.1", "3.2", "4.0"],
+      levels: ["3.1", "3.2", "4.0"],
       resolutions: this.buildDeclaredResolutions(),
     };
   }

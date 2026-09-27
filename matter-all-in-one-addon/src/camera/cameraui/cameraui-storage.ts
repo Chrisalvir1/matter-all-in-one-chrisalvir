@@ -448,6 +448,7 @@ export function repairCameraRecord(cam: CameraUiCameraRecord): {
       (!cam.rtspUrl ||
         cam.rtspUrl.includes(":2101") ||
         cam.rtspUrl.includes("192.168.110.46") ||
+        cam.rtspUrl.includes("192.168.110.118") ||
         cam.rtspUrl.includes(".invalid") ||
         cam.rtspUrl.includes("camera-lan"))
     ) {
@@ -467,6 +468,28 @@ export function repairCameraRecord(cam: CameraUiCameraRecord): {
         cam.rtspUrl.includes(".invalid"))
     ) {
       cam.rtspUrl = targetUrl;
+      modified = true;
+    }
+  } else if (
+    cam.id === "cameraui_5199854c-2694-4d69-bcc4-5cc6651fad0c" ||
+    /tapo[-_ ]?c402/i.test(cam.name || "") ||
+    /tapo-c402/i.test(cam.rtspUrl || "")
+  ) {
+    const targetUrl = "rtsp://192.168.110.147:62291/tapo-c402";
+    if (
+      cam.rtspUrl !== targetUrl &&
+      (!cam.rtspUrl ||
+        cam.rtspUrl.includes("192.168.110.46") ||
+        cam.rtspUrl.includes(":2101") ||
+        cam.rtspUrl.includes(".invalid") ||
+        cam.rtspUrl.includes("8554") ||
+        cam.rtspUrl.includes("camera-lan"))
+    ) {
+      cam.rtspUrl = targetUrl;
+      modified = true;
+    }
+    if (cam.sourceProvider !== "home_assistant") {
+      cam.sourceProvider = "home_assistant";
       modified = true;
     }
   }

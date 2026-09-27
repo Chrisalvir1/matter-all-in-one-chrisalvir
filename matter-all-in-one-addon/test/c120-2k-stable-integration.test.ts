@@ -46,8 +46,8 @@ function createMockPlatform() {
 }
 
 describe("Integración Estable v1.9.5: Tapo C120 2K Level 5.0 y Aislamiento (20 pruebas)", () => {
-  // 1. C120 H.264 2560x1440 @ 20 fps anunciado en escalera
-  it("1. anuncia 2560x1440 @ 20 fps en la escalera de resoluciones para la C120", () => {
+  // 1. C120 resolución segura 1080p anunciado en escalera
+  it("1. anuncia resolución segura 1080p en la escalera de resoluciones para la C120", () => {
     const platform = createMockPlatform();
     const acc = new HomeKitCameraAccessory(
       platform as any,
@@ -79,14 +79,11 @@ describe("Integración Estable v1.9.5: Tapo C120 2K Level 5.0 y Aislamiento (20 
     );
 
     const resolutions = acc.buildDeclaredResolutions();
-    expect(resolutions).toContainEqual([2560, 1440, 20]);
-    expect(resolutions).toContainEqual([2560, 1440, 15]);
-    expect(resolutions).toContainEqual([1920, 1080, 20]);
     expect(resolutions).toContainEqual([1920, 1080, 15]);
   });
 
-  // 2. C120 H.264 2560x1440 @ 15 fps adaptativo
-  it("2. incluye perfil 2560x1440 @ 15 fps para adaptación ante condiciones de baja iluminación", () => {
+  // 2. C120 niveles estándar HAP R2
+  it("2. declara estrictamente niveles HAP estándar (3.1, 3.2, 4.0) sin niveles no soportados por Apple", () => {
     const platform = createMockPlatform();
     const acc = new HomeKitCameraAccessory(
       platform as any,
@@ -118,8 +115,7 @@ describe("Integración Estable v1.9.5: Tapo C120 2K Level 5.0 y Aislamiento (20 
     );
 
     const levels = acc.buildDeclaredLevels();
-    expect(levels).toContain(50); // Level 5.0 experimental
-    expect(levels).toContain(H264Level.LEVEL4_0);
+    expect(levels).toEqual([H264Level.LEVEL3_1, H264Level.LEVEL3_2, H264Level.LEVEL4_0]);
   });
 
   // 3. C120 FPS adaptativo
@@ -137,8 +133,8 @@ describe("Integración Estable v1.9.5: Tapo C120 2K Level 5.0 y Aislamiento (20 
     expect(details.origin).toBe("measured");
   });
 
-  // 4. C120 passthrough 2K sin libx264, scale ni -r
-  it("4. utiliza passthrough (-c:v copy) sin libx264, scale ni -r cuando Apple solicita 2560x1440", () => {
+  // 4. C120 normalización HAP a 1080p
+  it("4. utiliza normalización HAP a 1080p High Level 4.0 para evitar corrupción o congelamiento de C120", () => {
     const platform = createMockPlatform();
     const delegate = new HomeKitCameraStreamingDelegate(
       platform as any,
@@ -162,7 +158,7 @@ describe("Integración Estable v1.9.5: Tapo C120 2K Level 5.0 y Aislamiento (20 
     );
 
     const session = {
-      sessionId: "session-2k-test",
+      sessionId: "session-c120-test",
       targetAddress: "192.168.1.100",
       videoPort: 51000,
       localVideoPort: 51002,
@@ -172,12 +168,12 @@ describe("Integración Estable v1.9.5: Tapo C120 2K Level 5.0 y Aislamiento (20 
     };
 
     const request = {
-      sessionID: "session-2k-test",
+      sessionID: "session-c120-test",
       type: StreamRequestTypes.START,
       video: {
-        fps: 20,
-        width: 2560,
-        height: 1440,
+        fps: 15,
+        width: 1920,
+        height: 1080,
         max_bit_rate: 4000,
         rtp: {
           port: 51000,
@@ -186,12 +182,10 @@ describe("Integración Estable v1.9.5: Tapo C120 2K Level 5.0 y Aislamiento (20 
     };
 
     const args = (delegate as any).buildStreamArgs(session, request, false);
-    expect(args).toContain("-c:v");
-    expect(args).toContain("copy");
-    expect(args).not.toContain("libx264");
-    expect(args).not.toContain("-vf");
-    expect(args).not.toContain("-r");
-    expect(args).toContain("dump_extra=freq=keyframe");
+    expect(args).toContain("libx264");
+    expect(args).toContain("4.0");
+    expect(args).toContain("veryfast");
+    expect(args).toContain("zerolatency");
   });
 
   // 5. C120 fallback 1080p
@@ -471,8 +465,8 @@ describe("Integración Estable v1.9.5: Tapo C120 2K Level 5.0 y Aislamiento (20 
     expect(details.label).toBe("No medido (HKSV no capaz)");
   });
 
-  // 13. StartStreamRequest sin FPS: rechazo seguro
-  it("13. rechaza StartStreamRequest si falta el campo video.fps", async () => {
+  // 13. StartStreamRequest sin FPS: tolerancia resiliente con default seguro
+  it("13. tolera StartStreamRequest si falta el campo video.fps usando valor por defecto resiliente", async () => {
     const platform = createMockPlatform();
     const delegate = new HomeKitCameraStreamingDelegate(
       platform as any,
@@ -491,7 +485,7 @@ describe("Integración Estable v1.9.5: Tapo C120 2K Level 5.0 y Aislamiento (20 
       { entityId: "camera.tapo_c120", name: "Tapo C120", model: "C120" } as any,
     );
 
-    const invalidRequest = {
+    const requestWithoutFps = {
       sessionID: "session-missing-fps",
       type: StreamRequestTypes.START,
       video: {
@@ -512,12 +506,12 @@ describe("Integración Estable v1.9.5: Tapo C120 2K Level 5.0 y Aislamiento (20 
     });
 
     let errorReceived: Error | undefined;
-    await delegate.handleStreamRequest(invalidRequest as any, (err) => {
+    await delegate.handleStreamRequest(requestWithoutFps as any, (err) => {
       errorReceived = err;
     });
 
-    expect(errorReceived).toBeDefined();
-    expect(errorReceived?.message).toContain("missing or invalid video FPS");
+    // No debe fallar por "missing or invalid video FPS"
+    expect(errorReceived?.message).not.toContain("missing or invalid video FPS");
   });
 
   // 14. Resolución no anunciada: normalización o fallback explícito

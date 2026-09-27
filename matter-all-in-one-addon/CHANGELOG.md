@@ -1,3 +1,23 @@
+## [1.9.6] - 2026-09-26
+
+### Restauración crítica de Live View para Tapo C120, Tapo C402, Wyze y Ezviz
+
+- **Restauración inmediata de Tapo C120 en Apple Home ("En línea" y estable):**
+  - Se eliminó el valor no estándar TLV 50 (`0x32`) de `buildDeclaredLevels()` en `HomeKitCameraAccessory`. El parser HAP de Apple iOS rechaza enums desconocidos desconectando el accesorio ("No Responde").
+  - Se declararon estrictamente los niveles estándar HAP R2 (`Level 3.1`, `Level 3.2`, `Level 4.0`).
+  - Se restableció la escalera de resoluciones Live View a 1080p seguro con normalización a HAP High Level 4.0 (`libx264 veryfast zerolatency`). El stream 2K nativo físico se mantiene intacto para HKSV y grabación.
+- **Restauración de Live View para Tapo C402 (Stream directo de Home Assistant):**
+  - Se garantiza el endpoint directo del stream de Home Assistant en `rtsp://192.168.110.147:62291/tapo-c402` con `sourceProvider: "home_assistant"`.
+  - Se restablecieron los parámetros de FFmpeg de baja latencia (`-fflags +genpts+discardcorrupt -flags low_delay`), eliminando flags que causaban retardo en el inicio del flujo.
+- **Restauración de Live View para Wyze y Ezviz:**
+  - **Eliminación de `addressOverride`:** Se removió la sobreescritura estática de IP en `PrepareStreamResponse` que causaba el error fatal `Incoming and outgoing ip address versions must match! Expected ipv6 but got ipv4` en dispositivos Apple que conectan por IPv6. HAP-NodeJS gestiona ahora la dirección de socket de manera nativa y transparente.
+  - **Arranque instantáneo sin buffering:** Se restauró `probesize 65536` (64 KB) y `analyzeduration 100000` (0.1 s) con `-fflags +nobuffer+flush_packets+genpts+discardcorrupt -flags low_delay`. Se eliminó el retardo de 2.5 segundos y el buffer de 1 MB que provocaba timeouts en Apple Home.
+  - **Migración automática a streams go2rtc:** Wyze (`rtsp://192.168.110.147:8554/wyze_patio_trasero`) y Ezviz (`rtsp://192.168.110.147:8554/ezviz_patio_trasero`) migran automáticamente a sus endpoints canónicos, incluso si la base de datos persistente conservaba la IP directa de la cámara.
+- **Tolerancia resiliente de FPS en `StartStreamRequest`:**
+  - El delegado de streaming ya no rechaza solicitudes cuando el cliente omite el campo `video.fps`, adoptando un valor seguro por defecto de 30 fps.
+- **Grabaciones HKSV y detección de movimiento preservadas:**
+  - Toda la arquitectura de grabación HKSV, prebuffer fMP4 y watchdog de movimiento permanece operativa e intacta.
+
 ## [1.9.5] - 2026-09-26
 
 ### Soporte experimental Live View 2K (2560x1440 @ 20fps H.264 High Level 5.0) para Tapo C120 con fallback seguro a 1080p

@@ -482,7 +482,7 @@ describe("HomeKitCameraStreamingDelegate", () => {
     expect(args).toContain("3000000");
     expect(args).toContain("-progress");
     expect(args).toContain("pipe:1");
-    expect(args).toContain("+genpts+igndts+discardcorrupt");
+    expect(args).toContain("+genpts+discardcorrupt");
     expect(args).not.toContain("-avioflags");
   });
 });

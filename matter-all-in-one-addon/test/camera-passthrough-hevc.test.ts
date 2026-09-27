@@ -329,7 +329,7 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     expect(args).toContain("aresample=async=1:first_pts=0");
   });
 
-  it("delivers native 2K passthrough when 2560x1440 is requested for C120", () => {
+  it("normalizes C120 to HAP High Level 4.0 when 2560x1440 is requested to prevent Apple Home freeze", () => {
     const platform = createPlatformMock();
     const capabilities = createCapabilities({
       videoCodec: "h264",
@@ -365,11 +365,11 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
       } as any,
     );
 
-    // Native 2K passthrough: -c:v copy without libx264 or scaling
+    // Normalization to Level 4.0 1080p via libx264 veryfast zerolatency
     expect(args).toContain("-c:v");
-    expect(args).toContain("copy");
-    expect(args).not.toContain("libx264");
-    expect(args).not.toContain("-vf");
+    expect(args).toContain("libx264");
+    expect(args).toContain("4.0");
+    expect(args).toContain("-vf");
   });
 
   it("strictly preserves Tapo C402 input and audio parameters untouched", () => {
@@ -426,10 +426,9 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     expect(args).toContain("2097152");
     expect(args).toContain("-analyzeduration");
     expect(args).toContain("3000000");
-    expect(args).toContain("-fpsprobesize");
-    expect(args).toContain("10");
     expect(args).toContain("-progress");
     expect(args).toContain("pipe:1");
+    expect(args).toContain("+genpts+discardcorrupt");
     // Video remains pure copy
     expect(args).toContain("-c:v");
     expect(args).toContain("copy");
@@ -709,16 +708,16 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     );
 
     expect(args).toContain("-probesize");
-    expect(args).toContain("1048576");
+    expect(args).toContain("65536");
     expect(args).toContain("-analyzeduration");
-    expect(args).toContain("2500000");
-    expect(args).toContain("+genpts+igndts+discardcorrupt");
+    expect(args).toContain("100000");
+    expect(args).toContain("+nobuffer+flush_packets+genpts+discardcorrupt");
     expect(args).toContain("-c:v");
     expect(args).toContain("copy");
-    expect(args).not.toContain("low_delay");
+    expect(args).toContain("low_delay");
   });
 
-  it("includes addressOverride in prepareStream response to ensure LAN IP is sent to iOS", async () => {
+  it("prepares stream response cleanly with video parameters and local RTCP port", async () => {
     const platform = createPlatformMock();
     const capabilities = createCapabilities();
     const streamSource = createStreamSource();
@@ -749,10 +748,7 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
 
     expect(response).toBeDefined();
     expect(response.video).toBeDefined();
-    // addressOverride is provided whenever a primary IPv4 interface exists
-    if (response.addressOverride) {
-      expect(typeof response.addressOverride).toBe("string");
-      expect(response.addressOverride).not.toMatch(/^172\.(17|30)\./);
-    }
+    expect(response.video.port).toBeGreaterThan(0);
+    expect(response.video.ssrc).toBeDefined();
   });
 });
