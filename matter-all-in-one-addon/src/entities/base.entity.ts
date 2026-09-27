@@ -453,8 +453,26 @@ export class BaseEntity {
     }
   }
 
+  private lastFanCommandTime = 0;
+  private lastFanCommandPct?: number;
+
   protected async callFanSpeed(percentage: number): Promise<void> {
     const nextPct = Math.max(0, Math.min(100, Number(percentage.toFixed(2))));
+    const now = Date.now();
+    // Drop rapid duplicate fan speed commands within 150ms to protect BLE bus
+    if (
+      this.lastFanCommandPct !== undefined &&
+      Math.abs(this.lastFanCommandPct - nextPct) < 0.5 &&
+      now - this.lastFanCommandTime < 150
+    ) {
+      this.platform.log.debug(
+        `[${this.entityId}] Dropping duplicate fan speed command ${nextPct}% within ${now - this.lastFanCommandTime}ms`,
+      );
+      return;
+    }
+    this.lastFanCommandTime = now;
+    this.lastFanCommandPct = nextPct;
+
     if (nextPct === 0) {
       this.setCommandLockout("fan_state", false);
       this.setCommandLockout("onOff", false);
@@ -469,6 +487,8 @@ export class BaseEntity {
 
     await this.callHaServiceWithRetry("fan", "set_percentage", { percentage: nextPct });
   }
+
+
 
   protected isFanCommandLocked(
     isOn: boolean,
@@ -544,6 +564,7 @@ export class BaseEntity {
         } else if (domain === "fan") {
           this.setCommandLockout("fan_state", true);
           this.setCommandLockout("onOff", true);
+          if (Date.now() - this.lastFanCommandTime < 150) return;
           await this.callHaServiceWithRetry(domain, "turn_on");
         } else
           await this.platform.ha.callService(domain, "turn_on", this.entityId);
@@ -562,6 +583,8 @@ export class BaseEntity {
           this.cancelDebouncedService("turn_on");
           this.callServiceDebounced(domain, "turn_off", undefined, 0);
         } else if (domain === "fan") {
+          this.lastFanCommandTime = Date.now();
+          this.lastFanCommandPct = 0;
           this.setCommandLockout("fan_state", false);
           this.setCommandLockout("onOff", false);
           this.setCommandLockout("fan_percentage", 0);
@@ -569,6 +592,8 @@ export class BaseEntity {
         } else
           await this.platform.ha.callService(domain, "turn_off", this.entityId);
       });
+
+
 
       if (
         domain === "fan" &&
@@ -1011,12 +1036,13 @@ export class BaseEntity {
 
   public async setInactiveState(): Promise<void> {
     if (!this.endpoint) return;
-    const [domain] = this.entityId.split(".");
+    this.haUpdateDepth++;
     try {
+      const [domain] = this.entityId.split(".");
+      // For lights, switches, media players, vacuums: update onOff to false
       if (
         domain === "light" ||
         domain === "switch" ||
-        domain === "fan" ||
         domain === "media_player" ||
         domain === "vacuum"
       ) {
@@ -1029,37 +1055,24 @@ export class BaseEntity {
             this.platform.log,
           );
         }
-        if (
-          domain === "fan" &&
-          this.endpoint.hasAttributeServer(FanControl.id, "fanMode")
-        ) {
-          await safeUpdateAttribute(
-            this.endpoint,
-            FanControl.id,
-            "fanMode",
-            FanControl.FanMode.Off,
-            this.platform.log,
-          );
-          if (this.endpoint.hasAttributeServer(FanControl.id, "percentCurrent")) {
-            await safeUpdateAttribute(
-              this.endpoint,
-              FanControl.id,
-              "percentCurrent",
-              0,
-              this.platform.log,
-            );
-          }
-        }
         this.platform.log?.debug?.(
           `[${this.entityId}] Applied inactive Matter state (onOff=false) due to HA unavailable/offline status`,
         );
       }
+      // For fans: DO NOT force onOff=false or fanMode=Off when temporarily unavailable!
+      // BLE fans sleep their radio and HA marks them unavailable intermittently.
+      // Setting onOff=false or fanMode=Off deletes the fan's physical speed state and
+      // triggers spurious turn_off command callbacks that turn off the physical fan.
+      // The setReachability(false) call already accurately marks the accessory unavailable.
     } catch (err) {
       this.platform.log?.debug?.(
         `[${this.entityId}] Could not set inactive state on Matter endpoint: ${err}`,
       );
+    } finally {
+      this.haUpdateDepth--;
     }
   }
+
 
   private clampLevel(rawLevel: number, isInitialSync = false): number {
     if (isInitialSync) return Math.min(254, Math.max(1, rawLevel));

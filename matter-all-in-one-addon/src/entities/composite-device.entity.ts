@@ -200,8 +200,29 @@ export class CompositeDeviceEntity {
     });
   }
 
+  private lastFanCommandTimes = new Map<string, number>();
+  private lastFanCommandPcts = new Map<string, number>();
+
   private async callFanSpeed(entityId: string, percentage: number): Promise<void> {
     const nextPct = Math.max(0, Math.min(100, Math.round(percentage)));
+    const now = Date.now();
+    const lastTime = this.lastFanCommandTimes.get(entityId) ?? 0;
+    const lastPct = this.lastFanCommandPcts.get(entityId);
+
+    // Drop rapid duplicate fan speed commands within 150ms to protect BLE bus
+    if (
+      lastPct !== undefined &&
+      Math.abs(lastPct - nextPct) < 0.5 &&
+      now - lastTime < 150
+    ) {
+      this.platform.log.debug(
+        `[Composite][${entityId}] Dropping duplicate fan speed command ${nextPct}% within ${now - lastTime}ms`,
+      );
+      return;
+    }
+    this.lastFanCommandTimes.set(entityId, now);
+    this.lastFanCommandPcts.set(entityId, nextPct);
+
     if (nextPct === 0) {
       this.setCommandLockout(entityId, "fan_state", false);
       this.setCommandLockout(entityId, "onOff", false);
@@ -215,17 +236,13 @@ export class CompositeDeviceEntity {
     this.setCommandLockout(entityId, "fan_percentage", nextPct);
 
     try {
-      await this.platform.ha.callService("fan", "turn_on", entityId, { percentage: nextPct });
-    } catch (err: any) {
-      this.platform.log.debug(
-        `[Composite][${entityId}] fan.turn_on with percentage failed, trying set_percentage: ${err?.message ?? err}`,
-      );
-      try {
-        await this.platform.ha.callService("fan", "turn_on", entityId);
-      } catch {}
       await this.platform.ha.callService("fan", "set_percentage", entityId, { percentage: nextPct });
+    } catch {
+      await this.platform.ha.callService("fan", "turn_on", entityId, { percentage: nextPct });
     }
   }
+
+
 
   private isFanCommandLocked(
     entityId: string,
@@ -375,11 +392,15 @@ export class CompositeDeviceEntity {
     const childEp = this.endpoints.get(memberEntityId) as any;
     if (!childEp) return;
     const [domain] = memberEntityId.split(".");
+    this.haUpdateDepth.set(
+      memberEntityId,
+      (this.haUpdateDepth.get(memberEntityId) ?? 0) + 1,
+    );
     try {
       if (
+
         domain === "light" ||
         domain === "switch" ||
-        domain === "fan" ||
         domain === "media_player" ||
         domain === "vacuum"
       ) {
@@ -392,37 +413,25 @@ export class CompositeDeviceEntity {
             this.platform.log,
           );
         }
-        if (
-          domain === "fan" &&
-          childEp.hasAttributeServer?.(FanControl.id, "fanMode")
-        ) {
-          await safeUpdateAttribute(
-            childEp,
-            FanControl.id,
-            "fanMode",
-            FanControl.FanMode.Off,
-            this.platform.log,
-          );
-          if (childEp.hasAttributeServer?.(FanControl.id, "percentCurrent")) {
-            await safeUpdateAttribute(
-              childEp,
-              FanControl.id,
-              "percentCurrent",
-              0,
-              this.platform.log,
-            );
-          }
-        }
         this.platform.log?.debug?.(
           `[Composite:${this.deviceId}][${memberEntityId}] Applied inactive Matter state (onOff=false) due to HA unavailable/offline status`,
         );
       }
+      // For fans: DO NOT force onOff=false or fanMode=Off when temporarily unavailable.
+      // BLE fans sleep their radio and HA marks them unavailable intermittently.
+      // Preserving state avoids spurious turn_off command loops.
     } catch (err) {
       this.platform.log?.debug?.(
         `[Composite:${this.deviceId}][${memberEntityId}] Could not set inactive state on Matter endpoint: ${err}`,
       );
+    } finally {
+      this.haUpdateDepth.set(
+        memberEntityId,
+        Math.max(0, (this.haUpdateDepth.get(memberEntityId) ?? 1) - 1),
+      );
     }
   }
+
 
   async createEndpoint(): Promise<MatterbridgeEndpoint> {
     const primary = this.members.find(
@@ -1315,17 +1324,23 @@ export class CompositeDeviceEntity {
         this.assertMemberOnline(entityId, member);
         this.setCommandLockout(entityId, "fan_state", true);
         this.setCommandLockout(entityId, "onOff", true);
+        const lastTime = this.lastFanCommandTimes.get(entityId) ?? 0;
+        if (Date.now() - lastTime < 150) return;
         this.platform.log.debug(`[Composite][${entityId}] → HA fan turn_on`);
         await this.platform.ha.callService("fan", "turn_on", entityId);
       });
       endpoint.addCommandHandler("off", async () => {
         this.assertMemberOnline(entityId, member);
+        this.lastFanCommandTimes.set(entityId, Date.now());
+        this.lastFanCommandPcts.set(entityId, 0);
         this.setCommandLockout(entityId, "fan_state", false);
         this.setCommandLockout(entityId, "onOff", false);
         this.setCommandLockout(entityId, "fan_percentage", 0);
         this.platform.log.debug(`[Composite][${entityId}] → HA fan turn_off`);
         await this.platform.ha.callService("fan", "turn_off", entityId);
       });
+
+
 
       const hasSpeed = hasFanSpeed(member.state);
       if (

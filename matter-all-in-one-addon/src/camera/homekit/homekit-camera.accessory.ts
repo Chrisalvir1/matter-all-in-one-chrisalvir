@@ -292,18 +292,17 @@ export class HomeKitCameraAccessory {
     }
 
     if (effectiveMode === "passthrough_hevc") {
-      this.record.activeController = "none";
-      this.record.hksvCapable = false;
-      this.record.hksvEnabled = false;
-      this.record.hksvState = "not_capable";
-      this.platform?.log?.warn?.(
-        `[HomeKitCamera][${this.entityId}] HEVC/HKSV3 aún no disponible; no se exporta sin transcodificación`,
+      this.platform?.log?.notice?.(
+        `[HomeKitCamera][${this.entityId}] HEVC native source detected — configuring pure HEVC passthrough with AAC audio for Apple Home`,
       );
-      return;
+      this.capabilities.videoCodec = "hevc";
+      this.capabilities.requiresTranscoding = false;
+      this.capabilities.strategy = "passthrough_hevc";
     }
 
     this.configureClassicCameraController();
   }
+
 
   private configureClassicCameraController(): void {
     this.record.activeController = "CameraController";

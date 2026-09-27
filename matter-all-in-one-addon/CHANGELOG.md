@@ -1,4 +1,23 @@
+## [1.9.13] - 2026-09-27
+
+### Corrección crítica: Passthrough HEVC original nativo sin transcodificación para cámaras Apple Home y estabilización definitiva de ventiladores BLE
+
+- **Cámaras HEVC en modo passthrough puro nativo (`-c:v copy`) con audio AAC:**
+  - Las cámaras con códec HEVC/H.265 (Vimtag PTZ, etc.) transmiten en su formato HEVC nativo original directo sin transcodificación a H.264, aprovechando el soporte nativo de HEVC en tvOS/iOS.
+  - El audio se preserva en AAC (passthrough directo `-c:a copy` si la fuente ya entrega AAC, o transcodificación exclusivamente del canal de audio a AAC para Apple Home).
+  - Se eliminó el retorno anticipado sin controller que dejaba las cámaras HEVC en estado "Sin Respuesta".
+  - Se eliminó el filtro de bitstream de H.264 (`dump_extra`) en flujos HEVC para evitar errores de FFmpeg.
+
+- **Resolución dinámica directa para Tapo C402 (HA-source):**
+  - Se añadió la resolución del flujo en tiempo real desde Home Assistant (`requestCameraStream` / `camera_proxy_stream`) durante el montaje de la Tapo C402 en Camera.UI HomeKit Bridge, asegurando que `source.url` siempre apunte al endpoint HLS/proxy directo de Home Assistant.
+
+- **Estabilización definitiva de ventiladores BLE y eliminación de comandos erróneos/apagados automáticos:**
+  - **Eliminación del apagado falso en `setInactiveState` y `setMemberInactiveState`:** Cuando un ventilador BLE duerme su radio y Home Assistant marca temporalmente el dispositivo como `unavailable`, el addon ya NO fuerza `fanMode = Off` ni `onOff = false`. La disponibilidad se gestiona exclusivamente con el atributo Matter `reachable = false`. Esto evita que se destruya la velocidad configurada y previene el envío de llamadas espurias `fan.turn_off` hacia Home Assistant.
+  - **Protección de `haUpdateDepth` en estados inactivos:** Se protegió `setInactiveState` y `setMemberInactiveState` con `haUpdateDepth` para garantizar que ningún listener de atributos de Matterbridge reaccione durante actualizaciones de estado interno disparando comandos no deseados a HA.
+  - **Deduplicación y debouncing de comandos de velocidad y encendido (150ms):** Se implementó control de ráfagas para ventiladores tanto en entidades individuales como en dispositivos compuestos (`CompositeDeviceEntity`). Cuando Apple Home emite comandos simultáneos (`on` + `percentSetting` + `speedSetting` + `fanMode`), se descartan las llamadas redundantes dentro de una ventana de 150ms, evitando saturar el adaptador Bluetooth LE de la Raspberry Pi y eliminando los bucles de comandos erróneos.
+
 ## [1.9.12] - 2026-09-27
+
 
 ### Corrección crítica: Tapo C402 sin respuesta, estado real BLE Fan en reconexión de HomeKit y resincronización completa post-reconexión HA
 

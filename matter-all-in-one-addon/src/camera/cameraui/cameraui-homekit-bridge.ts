@@ -273,9 +273,38 @@ export class CameraUiHomeKitBridge {
       hksvCapable: isRtspSource,
     };
 
+    let resolvedSourceUrl = camera.rtspUrl;
+    let resolvedSourceType: ResolvedStreamSource["sourceType"] = "rtsp";
+
+    if (isHomeAssistantSource && !resolvedSourceUrl) {
+      const haEntityId =
+        camera.realEntities?.[0]?.id || "camera.tapo_frente_de_calle";
+      try {
+        if (platform.ha?.requestCameraStream) {
+          resolvedSourceUrl = await platform.ha.requestCameraStream(haEntityId);
+          if (resolvedSourceUrl) {
+            resolvedSourceType = "hls";
+          }
+        }
+      } catch (err) {
+        platform.log?.debug?.(
+          `[CameraUiHomeKitBridge] requestCameraStream note for ${haEntityId}: ${err}`,
+        );
+      }
+      if (!resolvedSourceUrl && platform.ha?.getCameraProxyStreamUrl) {
+        resolvedSourceUrl = platform.ha.getCameraProxyStreamUrl(haEntityId);
+        if (resolvedSourceUrl) {
+          resolvedSourceType = "ha_proxy";
+        }
+      }
+      platform.log?.notice?.(
+        `[CameraUiHomeKitBridge] Resolved HA stream source for ${camera.id} (${haEntityId}): ${resolvedSourceType} -> ${resolvedSourceUrl ? "OK" : "NONE"}`,
+      );
+    }
+
     const source: ResolvedStreamSource = {
-      sourceType: "rtsp",
-      url: camera.rtspUrl,
+      sourceType: resolvedSourceType,
+      url: resolvedSourceUrl,
       snapshotUrl: camera.snapshotUrl,
       supportsPassthrough: true,
       requiresBridge: true,
@@ -289,6 +318,7 @@ export class CameraUiHomeKitBridge {
         model: camera.model || "Camera.UI Stream",
       },
     };
+
 
     // Allocate persistent HomeKit configuration if not assigned
     if (!camera.port) {

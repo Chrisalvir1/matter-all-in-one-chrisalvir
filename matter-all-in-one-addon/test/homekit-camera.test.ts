@@ -416,7 +416,7 @@ describe("HomeKitCameraStreamingDelegate", () => {
     expect(capturedArgs.join(" ")).not.toContain("Authorization: Bearer");
   });
 
-  it("refuses to transcode HEVC in classic H.264 streaming delegate", () => {
+  it("passes HEVC source through natively using -c:v copy in streaming delegate", () => {
     const delegate = new HomeKitCameraStreamingDelegate(
       createPlatform(),
       "camera.hevc",
@@ -428,25 +428,28 @@ describe("HomeKitCameraStreamingDelegate", () => {
       } as any,
       { ...rtspSource, supportsPassthrough: true },
     );
-    expect(() =>
-      delegate.buildStreamArgs(
-        {
-          sessionId: "hevc-session",
-          targetAddress: "192.168.1.50",
-          videoPort: 5000,
-          localVideoPort: 5001,
-          videoCryptoSuite: SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
-          videoKeySalt: Buffer.alloc(30, 1),
-          videoSsrc: 1111,
-        },
-        {
-          sessionID: "hevc-session",
-          type: StreamRequestTypes.START,
-          video: { fps: 30, width: 1920, height: 1080, pt: 99 } as any,
-        } as any,
-      ),
-    ).toThrow("Cámara no entrega H.264 nativo; transcodificación no permitida");
+    const args = delegate.buildStreamArgs(
+      {
+        sessionId: "hevc-session",
+        targetAddress: "192.168.1.50",
+        videoPort: 5000,
+        localVideoPort: 5001,
+        videoCryptoSuite: SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
+        videoKeySalt: Buffer.alloc(30, 1),
+        videoSsrc: 1111,
+      },
+      {
+        sessionID: "hevc-session",
+        type: StreamRequestTypes.START,
+        video: { fps: 30, width: 1920, height: 1080, pt: 99 } as any,
+      } as any,
+    );
+    // HEVC is passed directly without transcoding
+    expect(args).toContain("-c:v");
+    expect(args).toContain("copy");
+    expect(args).not.toContain("libx264");
   });
+
 
   it("builds low-latency RTSP passthrough args for Tapo C402 Live View", () => {
     const delegate = new HomeKitCameraStreamingDelegate(

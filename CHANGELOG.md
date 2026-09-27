@@ -1,4 +1,13 @@
+## [1.9.13] - 2026-09-27
+
+### Corrección crítica: Passthrough HEVC original nativo sin transcodificación para cámaras Apple Home y estabilización definitiva de ventiladores BLE
+
+- **Cámaras HEVC en modo passthrough puro nativo (`-c:v copy`) con audio AAC:** Cámaras HEVC/H.265 (Vimtag PTZ, etc.) transmiten en formato HEVC nativo original directo sin transcodificación a H.264 para Apple Home (tvOS/iOS). Audio en AAC con `-c:a copy` cuando la fuente es AAC o transcodificado exclusivamente el audio. Eliminado el return que dejaba cámaras HEVC en "Sin Respuesta".
+- **Resolución directa para Tapo C402:** Resolución automática del stream HLS/proxy de HA durante el montaje en CameraUI bridge.
+- **Estabilización definitiva de ventiladores BLE:** Eliminado el apagado falso en `setInactiveState` y `setMemberInactiveState`. Protección estricta con `haUpdateDepth` para que los estados inactivos no manden `turn_off` a HA. Deduplicación de comandos (150ms) para evitar colisiones y bucles en el bus Bluetooth LE.
+
 ## [1.9.12] - 2026-09-27
+
 
 ### Corrección crítica: Tapo C402 sin respuesta, estado real BLE Fan en reconexión de HomeKit y resincronización completa post-reconexión HA
 

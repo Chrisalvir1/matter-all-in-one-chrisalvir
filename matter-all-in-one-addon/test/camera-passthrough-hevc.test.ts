@@ -135,7 +135,7 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     expect(record.activeController).toBe("CameraController");
   });
 
-  it("strictly disables export for Vimtag HEVC camera without mounting fake controller", () => {
+  it("enables HEVC→H264 FFmpeg transcoding for Vimtag HEVC camera instead of blocking export", () => {
     const platform = createPlatformMock();
     const record = createBaseRecord("camera.jardin_vimtag", {
       model: "Vimtag Outdoor",
@@ -155,22 +155,21 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
       streamSource,
     );
 
-    expect(accessory.controller).toBeUndefined();
-    expect(record.activeController).toBe("none");
-    expect(record.hksvCapable).toBe(false);
-    expect(record.hksvState).toBe("not_capable");
-    expect(platform.log.warn).toHaveBeenCalledWith(
-      expect.stringContaining(
-        "HEVC/HKSV3 aún no disponible; no se exporta sin transcodificación",
-      ),
-    );
+    // HEVC cameras stream in pure HEVC passthrough (-c:v copy) with AAC audio.
+    // tvOS/iOS natively supports HEVC. No video transcoding to libx264 is performed.
+    expect(accessory.controller).toBeInstanceOf(CameraController);
+    expect(record.activeController).toBe("CameraController");
+    expect(accessory.capabilities.videoCodec).toBe("hevc");
+    expect(accessory.capabilities.requiresTranscoding).toBe(false);
+    expect(accessory.capabilities.strategy).toBe("passthrough_hevc");
   });
 
-  it("refuses to transcode HEVC in classic H.264 delegate with zero transcoding enforcement", () => {
+  it("passes HEVC through without re-encoding (-c:v copy) in streaming delegate", () => {
     const platform = createPlatformMock();
     const capabilities = createCapabilities({
       videoCodec: "hevc",
       strategy: "passthrough_hevc",
+      requiresTranscoding: false,
     });
     const streamSource = createStreamSource();
 
@@ -181,25 +180,29 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
       streamSource,
     );
 
-    expect(() =>
-      delegate.buildStreamArgs(
-        {
-          sessionId: "test-sess",
-          targetAddress: "192.168.1.50",
-          videoPort: 5000,
-          localVideoPort: 5001,
-          videoCryptoSuite: SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
-          videoKeySalt: Buffer.alloc(30, 1),
-          videoSsrc: 1111,
-        },
-        {
-          sessionID: "test-sess",
-          type: StreamRequestTypes.START,
-          video: { fps: 30, width: 1920, height: 1080, pt: 99 } as any,
-        } as any,
-      ),
-    ).toThrow("Cámara no entrega H.264 nativo; transcodificación no permitida");
+    const args = delegate.buildStreamArgs(
+      {
+        sessionId: "test-sess",
+        targetAddress: "192.168.1.50",
+        videoPort: 5000,
+        localVideoPort: 5001,
+        videoCryptoSuite: SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
+        videoKeySalt: Buffer.alloc(30, 1),
+        videoSsrc: 1111,
+      },
+      {
+        sessionID: "test-sess",
+        type: StreamRequestTypes.START,
+        video: { fps: 30, width: 1920, height: 1080, pt: 99 } as any,
+      } as any,
+    );
+    // HEVC stream must be copied directly (-c:v copy) for pure native passthrough
+    expect(args).toContain("-c:v");
+    expect(args).toContain("copy");
+    expect(args).not.toContain("libx264");
   });
+
+
 
   it("produces passthrough stream args (-c:v copy) without re-encoding video or audio filters when audio is native aac_eld", () => {
     const platform = createPlatformMock();
