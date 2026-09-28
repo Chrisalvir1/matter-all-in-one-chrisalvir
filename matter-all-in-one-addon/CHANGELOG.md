@@ -1,3 +1,10 @@
+## [1.9.20] - 2026-09-28
+
+### Ajuste de reconciliación
+
+- La limpieza PTZ ahora tolera plataformas y pruebas donde Matterbridge aún no expone la lista de endpoints, sin interrumpir la conexión de Home Assistant.
+- Se conserva la preparación de zonas antes de que llegue la información de capacidad; esas cámaras siguen ocultas del listado exportable mientras no se confirme PTZ.
+
 ## [1.9.19] - 2026-09-28
 
 ### Correcciones de PTZ y HomeKit HAP

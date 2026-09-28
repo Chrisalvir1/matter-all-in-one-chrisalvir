@@ -2486,7 +2486,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       for (const entityId of this.entities.keys()) {
         this.clearEntityProblem(entityId);
       }
-      void this.discoverAndSync().then(() => this.reconcileLegacyPtzExports());
+      void this.discoverAndSync()
+        .then(() => this.reconcileLegacyPtzExports())
+        .catch((err) => this.log.warn(`[PTZ] Reconciliation after HA connection failed: ${err}`));
       // After HA reconnect, force a full Matter attribute push for all entities
       // so HomeKit (Apple Home) reads the real current state instead of stale
       // cached values. Fan on/off and speed attributes are particularly critical
@@ -2561,7 +2563,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     const activeSafeIds = new Set(
       [...activePtzIds].map((entityId) => entityId.replace(/\./g, "_")),
     );
-    for (const endpoint of this.getDevices()) {
+    const getDevices = (this as any).getDevices;
+    const endpoints: any[] =
+      typeof getDevices === "function" ? getDevices.call(this) : [];
+    for (const endpoint of Array.isArray(endpoints) ? endpoints : []) {
       const uniqueId = String((endpoint as any).uniqueId || "");
       const match = uniqueId.match(/^(.*)_(?:ptz_matter|zone_switch)$/);
       if (!match || activeSafeIds.has(match[1])) continue;

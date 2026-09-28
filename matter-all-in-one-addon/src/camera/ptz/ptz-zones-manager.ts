@@ -154,10 +154,11 @@ export class PtzZonesManager extends EventEmitter {
     entityId: string,
     zone: Partial<PtzZone> & { id: number },
   ): Promise<PtzZone> {
-    const info = this.cameraInfos.get(entityId);
-    if (!info?.hasPtz) {
-      throw new Error(`La cámara ${entityId} no tiene capacidad PTZ confirmada`);
-    }
+    // Zone configuration can be prepared before capability metadata arrives.
+    // Registering without metadata produces hasPtz=false, so it remains hidden
+    // from the PTZ export list until hardware capability is confirmed.
+    let info = this.cameraInfos.get(entityId);
+    if (!info) info = this.registerCamera(entityId);
 
     if (zone.id < 1 || zone.id > MAX_PTZ_PRESETS) {
       throw new Error(`El ID de zona debe estar entre 1 y ${MAX_PTZ_PRESETS}`);
