@@ -9,6 +9,7 @@ import { CameraConfigModal } from "./components/CameraConfigModal";
 import { DeviceModal } from "./components/DeviceModal";
 import { ScryptedModal } from "./components/ScryptedModal";
 import { SettingsModal } from "./components/SettingsModal";
+import { PairedModal } from "./components/PairedModal";
 import { extractCameraBrand } from "./components/CameraCard";
 import { CameraRecord, DeviceRecord } from "./types";
 import { api } from "./api/client";
@@ -35,6 +36,7 @@ export const App: React.FC = () => {
   const [selectedDevice, setSelectedDevice] = useState<DeviceRecord | null>(null);
   const [isScryptedModalOpen, setIsScryptedModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [isPairedModalOpen, setIsPairedModalOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
   // Keep selectedDevice in sync with updated allDevices from periodic polls / SSE / refreshAll
@@ -295,7 +297,13 @@ export const App: React.FC = () => {
           <ControlCenter
             stats={stats}
             activeFilter={activeFilter}
-            onFilterChange={setActiveFilter}
+            onFilterChange={(filter) => {
+              if (filter === "paired") {
+                setIsPairedModalOpen(true);
+              } else {
+                setActiveFilter(filter);
+              }
+            }}
             loading={loading}
             onRefresh={refreshAll}
             filteredCount={totalVisibleCount}
@@ -403,6 +411,31 @@ export const App: React.FC = () => {
         status={status}
         stats={stats}
       />
+
+      {/* Paired Devices Modal */}
+      {isPairedModalOpen && (
+        <PairedModal
+          matterDevices={allDevices.filter(d =>
+            !realHaCameraDevices.some(c => c.id === d.id) &&
+            d.entities.some(e => e.exported && e.commissioned)
+          )}
+          matterCameras={cameras.filter(
+            c => c.bindingState?.matterCommissioned === true
+          )}
+          matterHaCameras={realHaCameraDevices.filter(d =>
+            d.entities.some(e => e.exported && e.commissioned)
+          )}
+          hapCameras={cameras.filter(
+            c => c.identity?.homeKitPairingState === "paired" && !c.bindingState?.matterCommissioned
+          )}
+          hapHaCameras={[]}
+          onClose={() => setIsPairedModalOpen(false)}
+          onOpenDevice={(device) => {
+            setIsPairedModalOpen(false);
+            setSelectedDevice(device);
+          }}
+        />
+      )}
 
       {/* Toast Notification */}
       {toastMessage && (

@@ -1989,7 +1989,19 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   /** Restore persisted legacy entities and grouped physical devices after discovery in parallel batches. */
   private async restoreExportedDevices(): Promise<void> {
     let migratedLegacyEntries = false;
-    const entries = Array.from(this.exportedDevices);
+    const rawEntries = Array.from(this.exportedDevices);
+    // Prioritize already-commissioned devices to reconnect them first
+    const entries = rawEntries.sort((a, b) => {
+      const aCommissioned = Array.from(this.entities.values()).some(
+        e => (e as any).commissioned && (e.entityId === a || a.includes(e.entityId))
+      );
+      const bCommissioned = Array.from(this.entities.values()).some(
+        e => (e as any).commissioned && (e.entityId === b || b.includes(e.entityId))
+      );
+      if (aCommissioned && !bCommissioned) return -1;
+      if (!aCommissioned && bCommissioned) return 1;
+      return 0;
+    });
 
     // Process all exported devices fully in parallel for instant reconnection at startup
     const batchSize = entries.length || 1;
@@ -2154,7 +2166,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         `Matter server node was not created for device ${candidate.deviceId}.`,
       );
     }
-    if (!serverNode.lifecycle?.isOnline) await serverNode.start();
+    if (!serverNode.lifecycle?.isOnline) await Promise.race([
+      serverNode.start(),
+      new Promise<void>((resolve) => setTimeout(resolve, 5000)),
+    ]);
     // Atomic verification: verify that all member endpoints exist and root is online
     for (const member of candidate.members) {
       const ep = composite.endpoints.get(member.entityId);
@@ -2230,6 +2245,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           return;
         }
       }
+      this.broadcastSseMessage("device_update", { entityId, status: "registering" });
       await this.registerDevice(endpoint);
       // Matterbridge creates the ServerNode during registerDevice(), but nodes
       // added dynamically after the initial startup interval are not started
@@ -2240,8 +2256,12 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         throw new Error(`Matter server node was not created for ${entityId}.`);
       }
       if (!serverNode.lifecycle?.isOnline) {
-        await serverNode.start();
+        await Promise.race([
+          serverNode.start(),
+          new Promise<void>((resolve) => setTimeout(resolve, 5000)),
+        ]);
       }
+      this.broadcastSseMessage("device_update", { entityId, status: "registered" });
       this.matterbridgeDevices.set(entityId, endpoint);
       await entity.syncInitialState();
       if (isUnavailable(entity.state)) {
@@ -2286,7 +2306,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         throw new Error(`Matter server node was not created for ${entityId}.`);
       }
       if (!serverNode.lifecycle?.isOnline) {
-        await serverNode.start();
+        await Promise.race([
+          serverNode.start(),
+          new Promise<void>((resolve) => setTimeout(resolve, 5000)),
+        ]);
       }
       this.matterbridgeDevices.set(entityId, endpoint);
       await entity.syncInitialState();
@@ -2411,13 +2434,18 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         const endpoint = this.matterbridgeDevices.get(entityId);
         if (endpoint) {
           const serverNode = (endpoint as any).serverNode;
+          this.broadcastSseMessage("device_update", { entityId, status: "unregistering" });
           if (serverNode?.lifecycle?.isOnline) {
-            await serverNode.close();
+            await Promise.race([
+              serverNode.close(),
+              new Promise<void>((resolve) => setTimeout(resolve, 3000)),
+            ]);
           }
           await this.unregisterDevice(endpoint);
           this.matterbridgeDevices.delete(entityId);
         }
         await this.saveExportedDevices();
+        this.broadcastSseMessage("device_update", { entityId, status: "unregistered" });
         this.log.notice(`Manually unregistered MQTT endpoint ${entityId}`);
         return { success: true };
       }
@@ -2462,13 +2490,18 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         // Server-mode endpoints are not stopped by Matterbridge's dynamic
         // unregister path. Close this node first to avoid stale mDNS records.
         const serverNode = (endpoint as any).serverNode;
+        this.broadcastSseMessage("device_update", { entityId, status: "unregistering" });
         if (serverNode?.lifecycle?.isOnline) {
-          await serverNode.close();
+          await Promise.race([
+            serverNode.close(),
+            new Promise<void>((resolve) => setTimeout(resolve, 3000)),
+          ]);
         }
         await this.unregisterDevice(endpoint);
         this.matterbridgeDevices.delete(entityId);
       }
       await this.saveExportedDevices();
+      this.broadcastSseMessage("device_update", { entityId, status: "unregistered" });
       this.log.notice(`Removed bridged endpoint for ${entityId}`);
       return { success: true };
     } catch (err) {
@@ -2486,7 +2519,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     const key = this.compositeStorageKey(deviceId);
     const endpoint = this.matterbridgeDevices.get(key) as any;
     if (endpoint?.serverNode?.lifecycle?.isOnline)
-      await endpoint.serverNode.close();
+      await Promise.race([
+        endpoint.serverNode.close(),
+        new Promise<void>((resolve) => setTimeout(resolve, 3000)),
+      ]);
     if (endpoint) await this.unregisterDevice(endpoint);
     this.matterbridgeDevices.delete(key);
 
@@ -2547,7 +2583,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       if (compositeDeviceId) {
         await this.disposeCompositeNode(compositeDeviceId);
       } else {
-        if (serverNode.lifecycle?.isOnline) await serverNode.close();
+        if (serverNode.lifecycle?.isOnline) await Promise.race([
+          serverNode.close(),
+          new Promise<void>((resolve) => setTimeout(resolve, 3000)),
+        ]);
         await this.unregisterDevice(endpoint);
         this.matterbridgeDevices.delete(entityId);
       }

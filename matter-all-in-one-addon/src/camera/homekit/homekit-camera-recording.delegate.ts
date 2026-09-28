@@ -49,6 +49,15 @@ export class HomeKitCameraRecordingDelegate
   private streamAbortController?: AbortController;
   private isStartingPipeline = false;
 
+  // Auto-restart tracking
+  private restartTimer: ReturnType<typeof setTimeout> | undefined = undefined;
+  private restartAttempts = 0;
+  private readonly maxRestartAttempts = 10;
+  private heartbeatTimer: ReturnType<typeof setInterval> | undefined = undefined;
+  private lastFrameTime = 0;
+  private readonly heartbeatIntervalMs = 30_000; // 30s heartbeat check
+  private readonly maxFrameSilenceMs = 90_000; // restart if no frame for 90s
+
   constructor(
     private readonly platform: any,
     private readonly entityId: string,
@@ -294,6 +303,7 @@ export class HomeKitCameraRecordingDelegate
   }
 
   private handleNewFragment(fragment: Fmp4MediaFragment): void {
+    this.lastFrameTime = Date.now();
     // Only accept keyframed fragments into prebuffer to prevent decode corruption
     if (fragment.isKeyframe) {
       this.prebuffer.push(fragment);
@@ -381,8 +391,12 @@ export class HomeKitCameraRecordingDelegate
         "0",
         "-rtsp_transport",
         "tcp",
+        "-timeout",
+        "5000000",  // 5s connection timeout (microseconds)
+        "-stimeout",
+        "5000000",  // 5s stream timeout (microseconds)
         "-fflags",
-        "+nobuffer+flush_packets",
+        "+nobuffer+flush_packets+discardcorrupt",
         "-flags",
         "low_delay",
         "-max_delay",
@@ -395,7 +409,7 @@ export class HomeKitCameraRecordingDelegate
         "-analyzeduration",
         "0",
         "-fflags",
-        "+nobuffer+flush_packets",
+        "+nobuffer+flush_packets+discardcorrupt",
         "-flags",
         "low_delay",
       );
@@ -492,6 +506,9 @@ export class HomeKitCameraRecordingDelegate
       `[HKSV][${this.entityId}] Spawning HKSV pre-buffer pipeline: ${sanitizedUrl}`,
     );
 
+    this.restartAttempts = 0;
+    this.lastFrameTime = Date.now();
+
     this.segmenter.reset();
     this.ffmpegProcess = spawn(ffmpegPath, args, {
         stdio: ["ignore", "pipe", "pipe"],
@@ -515,6 +532,7 @@ export class HomeKitCameraRecordingDelegate
           `[HKSV][${this.entityId}] HKSV pre-buffer FFmpeg exited with code ${code}`,
         );
         this.ffmpegProcess = undefined;
+        this.scheduleRestart(code ?? -1);
       });
 
       this.ffmpegProcess.on("error", (err) => {
@@ -522,7 +540,9 @@ export class HomeKitCameraRecordingDelegate
           `[HKSV][${this.entityId}] HKSV pre-buffer FFmpeg error: ${err}`,
         );
         this.ffmpegProcess = undefined;
+        this.scheduleRestart(-1);
       });
+      this.startHeartbeat();
     } catch (err) {
       this.platform?.log?.error?.(
         `[HKSV][${this.entityId}] Failed to spawn HKSV FFmpeg process: ${err}`,
@@ -534,6 +554,12 @@ export class HomeKitCameraRecordingDelegate
   }
 
   private stopPrebufferPipeline(): void {
+    this.stopHeartbeat();
+    if (this.restartTimer) {
+      clearTimeout(this.restartTimer);
+      this.restartTimer = undefined;
+    }
+    this.restartAttempts = 0;
     this.isStartingPipeline = false;
     if (this.ffmpegProcess) {
       try {
@@ -601,7 +627,62 @@ export class HomeKitCameraRecordingDelegate
     });
   }
 
+  /**
+   * Schedule a restart of the pre-buffer pipeline with exponential backoff.
+   * Does nothing if recording is disabled or pipeline was intentionally stopped.
+   */
+  private scheduleRestart(exitCode: number): void {
+    if (!this.recordingActive || this.isPausedByLiveStream) return;
+    if (this.restartAttempts >= this.maxRestartAttempts) {
+      this.platform?.log?.warn?.(
+        `[HKSV][${this.entityId}] Max restart attempts (${this.maxRestartAttempts}) reached. Giving up auto-restart.`,
+      );
+      this.record.hksvState = "error";
+      return;
+    }
+    const delayMs = Math.min(2000 * Math.pow(2, this.restartAttempts), 60_000);
+    this.restartAttempts++;
+    this.platform?.log?.notice?.(
+      `[HKSV][${this.entityId}] Scheduling pre-buffer restart in ${delayMs}ms (attempt ${this.restartAttempts}/${this.maxRestartAttempts}, exit code ${exitCode})`,
+    );
+    this.restartTimer = setTimeout(() => {
+      this.restartTimer = undefined;
+      if (this.recordingActive && !this.isPausedByLiveStream && !this.ffmpegProcess) {
+        this.startPrebufferPipeline();
+      }
+    }, delayMs);
+  }
+
+  /** Start a periodic heartbeat that restarts ffmpeg if no frames arrive in maxFrameSilenceMs. */
+  private startHeartbeat(): void {
+    this.stopHeartbeat();
+    this.heartbeatTimer = setInterval(() => {
+      if (!this.ffmpegProcess || !this.recordingActive) return;
+      const silenceMs = Date.now() - this.lastFrameTime;
+      if (this.lastFrameTime > 0 && silenceMs > this.maxFrameSilenceMs) {
+        this.platform?.log?.warn?.(
+          `[HKSV][${this.entityId}] No frames received for ${(silenceMs / 1000).toFixed(0)}s — restarting pre-buffer pipeline`,
+        );
+        this.stopPrebufferPipeline();
+        this.scheduleRestart(-1);
+      }
+    }, this.heartbeatIntervalMs);
+  }
+
+  /** Stop the heartbeat timer. */
+  private stopHeartbeat(): void {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = undefined;
+    }
+  }
+
   public destroy(): void {
+    this.stopHeartbeat();
+    if (this.restartTimer) {
+      clearTimeout(this.restartTimer);
+      this.restartTimer = undefined;
+    }
     this.stopPrebufferPipeline();
     this.clearPrebuffer();
     this.segmenter.reset();

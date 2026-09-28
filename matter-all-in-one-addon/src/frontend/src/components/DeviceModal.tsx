@@ -259,17 +259,25 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
 
   const handleToggleExport = async (entity: EntityRecord) => {
     const nextState = !entity.exported;
+    // Apply optimistic update immediately to prevent bounce
+    entity.exported = nextState;
+    setIsBusy(true);
     try {
       await api.toggleExport(entity.entityId, nextState);
-      entity.exported = nextState;
       showToast(
         nextState
           ? `✓ ${entity.name || entity.entityId} publicado en Matter`
           : `${entity.name || entity.entityId} retirado de Matter`
       );
-      onRefresh();
+      // Delay refresh to allow backend (Matterbridge) to finish processing
+      // before pulling new state — prevents optimistic state from being overwritten
+      setTimeout(() => onRefresh(), 2000);
     } catch (err: any) {
+      // Revert optimistic update on failure
+      entity.exported = !nextState;
       showToast(err.message || "Error al modificar publicación", true);
+    } finally {
+      setIsBusy(false);
     }
   };
 
@@ -678,8 +686,8 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                         )
                       ) : (
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <label className="toggle">
-                            <input type="checkbox" checked={Boolean(ent.exported)} onChange={() => handleToggleExport(ent)} />
+                          <label className="toggle" style={{ opacity: isBusy ? 0.6 : 1, pointerEvents: isBusy ? "none" : "auto" }}>
+                            <input type="checkbox" checked={Boolean(ent.exported)} onChange={() => handleToggleExport(ent)} disabled={isBusy} />
                             <span />
                           </label>
                           {hapEligible && <select aria-label="Perfil HomeKit HAP" value={hapProfile} onChange={(e) => setHapProfile(e.target.value)} style={{ maxWidth: 105, fontSize: 10 }}>
