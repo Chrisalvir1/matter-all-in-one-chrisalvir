@@ -70,6 +70,7 @@ import {
 } from "../converters/fan.converter.js";
 import { lightConverter } from "../converters/light.converter.js";
 import { cameraConverter } from "../converters/camera.converter.js";
+import { applyMatterFirmware } from "../utils/matter-firmware.js";
 import {
   CameraAvStreamManagementId,
   WebRtcTransportProviderId,
@@ -1105,20 +1106,7 @@ export class CompositeDeviceEntity {
       primaryEntityId,
       type.name,
     );
-    const version = String(
-      (this.platform as any).matterbridge?.matterbridgeVersion ??
-        "Matterbridge",
-    );
-    const [major = 0, minor = 0, patch = 0] = version
-      .split(/[-+.]/)
-      .map((part) => Number.parseInt(part, 10) || 0);
-    endpoint.softwareVersion = Math.min(
-      0xffffffff,
-      major * 1_000_000 + minor * 1_000 + patch,
-    );
-    endpoint.softwareVersionString = version.startsWith("Matterbridge")
-      ? version
-      : `Matterbridge ${version}`;
+    applyMatterFirmware(endpoint, this.platform);
     endpoint.createDefaultBasicInformationClusterServer(
       nodeName,
       endpoint.serialNumber,

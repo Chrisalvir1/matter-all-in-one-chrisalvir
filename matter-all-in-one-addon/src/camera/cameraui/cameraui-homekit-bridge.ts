@@ -3,6 +3,7 @@ import { uuid } from "@homebridge/hap-nodejs";
 import { MatterbridgeEndpoint, occupancySensor } from "matterbridge";
 import { OccupancySensing } from "matterbridge/matter/clusters";
 import { safeSetAttribute } from "../../utils/matter-attributes.js";
+import { applyMatterFirmware } from "../../utils/matter-firmware.js";
 import type {
   CameraCapabilitiesInfo,
   HomeKitCameraStorageRecord,
@@ -436,8 +437,7 @@ export class CameraUiHomeKitBridge {
           camera.manufacturer || "Camera.UI"
         ).substring(0, 32);
         matterEndpoint.productId = 0x8000;
-        matterEndpoint.softwareVersion = 1;
-        matterEndpoint.softwareVersionString = "Matterbridge 1.3.7";
+        applyMatterFirmware(matterEndpoint, platform);
 
         matterEndpoint.createDefaultBasicInformationClusterServer(
           `${safeName.substring(0, 24)} CUI Motion`,

@@ -19,12 +19,7 @@ import {
 } from "@homebridge/hap-nodejs";
 import crypto from "node:crypto";
 import os from "node:os";
-import { createRequire } from "node:module";
-
-const require = createRequire(import.meta.url);
-const HAP_NODE_VERSION = String(
-  require("@homebridge/hap-nodejs/package.json").version || "unknown",
-);
+import { HAP_FIRMWARE_REVISION } from "../utils/hap-firmware.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tipos exportados
@@ -218,7 +213,7 @@ export class HapGenericAccessory {
       )
       .setCharacteristic(
         Characteristic.FirmwareRevision,
-        `HAP-NodeJS ${HAP_NODE_VERSION}`,
+        HAP_FIRMWARE_REVISION,
       );
   }
 

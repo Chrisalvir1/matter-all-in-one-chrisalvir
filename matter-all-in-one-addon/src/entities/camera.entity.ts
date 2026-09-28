@@ -7,6 +7,7 @@
  *                          and WebRTC Transport Provider (0x0553) cluster servers.
  */
 import { BaseEntity } from "./base.entity.js";
+import { applyMatterFirmware } from "../utils/matter-firmware.js";
 import { ClusterId } from "matterbridge/matter/types";
 import { MatterbridgeEndpoint } from "matterbridge";
 import type { HassState } from "../utils/ha-state.js";
@@ -92,6 +93,7 @@ export class CameraEntity extends BaseEntity {
         id: this.entityId.replaceAll(".", "_"),
         mode: "server",
       });
+      applyMatterFirmware(fallbackEndpoint, this.platform);
       fallbackEndpoint.createDefaultBasicInformationClusterServer(
         this.state.attributes.friendly_name || this.entityId,
         this.entityId.replaceAll(".", "_"),

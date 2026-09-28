@@ -13,6 +13,7 @@ import {
   getHaDeviceManufacturer,
   getHaDeviceModel,
 } from "../../utils/matter-device-identity.js";
+import { applyMatterFirmware } from "../../utils/matter-firmware.js";
 import type {
   CameraCapabilitiesInfo,
   ResolvedStreamSource,
@@ -68,6 +69,7 @@ export class CameraEndpointBuilder {
       0x8000,
       model,
     );
+    applyMatterFirmware(endpoint, platform);
 
     const maxPresets = Math.min(5, capabilities.maxPresets || 5);
 

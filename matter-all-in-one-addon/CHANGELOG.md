@@ -1,3 +1,11 @@
+## [1.9.23] - 2026-09-28
+
+### Versiones de firmware Matter y HAP
+
+- Los accesorios Matter muestran la versión de protocolo Matter y la versión instalada de Matterbridge en su firmware.
+- Los accesorios HAP, incluidas las cámaras, muestran la versión instalada de HAP-NodeJS.
+- Se unificó el dato de firmware para endpoints Matter de Home Assistant, MQTT, dispositivos compuestos y Camera.UI.
+
 ## [1.9.22] - 2026-09-28
 
 ### Identidad HAP en Apple Home

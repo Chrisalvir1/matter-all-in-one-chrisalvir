@@ -32,6 +32,7 @@ import {
 import { HomeAssistantPlatform } from "../platform.js";
 import { MqttClientManager, MqttDiscoveryEntry } from "./mqtt-client.js";
 import { safeSetAttribute } from "../utils/matter-attributes.js";
+import { applyMatterFirmware } from "../utils/matter-firmware.js";
 
 export function getMqttDeviceType(
   component: string,
@@ -181,8 +182,7 @@ export class MqttEntity {
     this.endpoint.vendorId = 0xfff1;
     this.endpoint.vendorName = this.manufacturer.substring(0, 32);
     this.endpoint.productId = 0x8000;
-    this.endpoint.softwareVersion = 1;
-    this.endpoint.softwareVersionString = "Matterbridge 1.3.7";
+    applyMatterFirmware(this.endpoint, this.platform);
 
     this.endpoint.createDefaultBasicInformationClusterServer(
       rawName,

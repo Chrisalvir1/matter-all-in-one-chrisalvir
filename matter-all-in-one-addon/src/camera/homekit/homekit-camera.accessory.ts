@@ -33,6 +33,7 @@ import {
 import crypto from "node:crypto";
 import os from "node:os";
 import { ScryptedStorage } from "../scrypted/scrypted-storage.js";
+import { HAP_FIRMWARE_REVISION } from "../../utils/hap-firmware.js";
 import type { CameraRecord } from "../scrypted/scrypted-types.js";
 import { CameraUiStorage } from "../cameraui/cameraui-storage.js";
 import {
@@ -357,7 +358,7 @@ export class HomeKitCameraAccessory {
       )
       ?.setCharacteristic(
         Characteristic.FirmwareRevision,
-        this.platform?.matterbridge?.matterbridgeVersion || "unknown",
+        HAP_FIRMWARE_REVISION,
       );
   }
 
