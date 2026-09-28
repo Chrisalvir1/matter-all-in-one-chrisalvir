@@ -17,7 +17,7 @@ import {
   SRTPCryptoSuites,
   uuid,
   VideoCodecType,
-} from "hap-nodejs";
+} from "@homebridge/hap-nodejs";
 import type {
   CameraCapabilitiesInfo,
   HomeKitCameraStorageRecord,

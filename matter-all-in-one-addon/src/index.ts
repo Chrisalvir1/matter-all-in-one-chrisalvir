@@ -2,7 +2,7 @@
  * Entry point for matter-all-in-one-chrisalvir plugin.
  */
 import fs from "fs";
-import { HAPStorage } from "hap-nodejs";
+import { HAPStorage } from "@homebridge/hap-nodejs";
 import { PlatformMatterbridge } from "matterbridge";
 import { AnsiLogger } from "matterbridge/logger";
 import {

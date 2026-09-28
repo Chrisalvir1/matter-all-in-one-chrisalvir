@@ -1,6 +1,6 @@
 import { spawn, spawnSync, ChildProcess } from "child_process";
 import fs from "fs";
-import { SRTPCryptoSuites } from "hap-nodejs";
+import { SRTPCryptoSuites } from "@homebridge/hap-nodejs";
 
 export interface ProbeResult {
   valid: boolean;

@@ -38,7 +38,9 @@ export const homekitSupported = {
   energyTariff: false,
   roboticVacuumCleaner: true,
   fan: true,
-  humidifier: true,
+  // Apple Home does not expose the HA humidifier entity through Matter in the
+  // target deployment; it is exported through the generic HAP profile instead.
+  humidifier: false,
 } as const;
 
 export type HomeKitSupportedDeviceType = keyof typeof homekitSupported;

@@ -12,7 +12,7 @@ import {
   RecordingPacket,
   HDSProtocolSpecificErrorReason,
   AudioRecordingSamplerate,
-} from "hap-nodejs";
+} from "@homebridge/hap-nodejs";
 import type {
   CameraCapabilitiesInfo,
   ResolvedStreamSource,
