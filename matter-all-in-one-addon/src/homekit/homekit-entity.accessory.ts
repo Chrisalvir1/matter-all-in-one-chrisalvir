@@ -1,7 +1,7 @@
 import { Accessory, Categories, Characteristic, Service, uuid } from "@homebridge/hap-nodejs";
 
 /** Generic HAP bridge for HA entities that Matter/Apple Home do not model yet. */
-export type HapProfile = "humidifier" | "fan" | "switch" | "light" | "lock" | "thermostat";
+export type HapProfile = "humidifier" | "fan" | "switch" | "light" | "lock" | "thermostat" | "plug" | "dimmer" | "vacuum";
 
 export class HomeKitEntityAccessory {
   public readonly accessory: Accessory;

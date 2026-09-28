@@ -360,7 +360,10 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
   };
 
   const currentEntity = selectedEntity || activeEntity;
-  const hapEligible = Boolean(currentEntity && ["humidifier", "soil_sensor", "water_heater", "energy_tariff"].includes(currentEntity.domain));
+  // HAP is an Apple Home compatibility fallback. Matter remains the default,
+  // but HAP must stay selectable even when a Matter mapping exists because
+  // Apple Home may omit or simplify that entity type in a given iOS release.
+  const hapEligible = Boolean(currentEntity && currentEntity.domain !== "camera");
   const entityState = (currentEntity?.state || "").toLowerCase();
   const isEntityUnavailable = entityState === "unavailable" || entityState === "unknown" || entityState === "offline";
   const entityDiagnostics = currentEntity?.diagnostics || [];
@@ -680,7 +683,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                             <span />
                           </label>
                           {hapEligible && <select aria-label="Perfil HomeKit HAP" value={hapProfile} onChange={(e) => setHapProfile(e.target.value)} style={{ maxWidth: 105, fontSize: 10 }}>
-                            <option value="humidifier">HAP Humidificador</option><option value="fan">HAP Ventilador</option><option value="switch">HAP Switch</option><option value="light">HAP Luz</option><option value="lock">HAP Cerradura</option><option value="thermostat">HAP Termostato</option>
+                            <option value="humidifier">HAP Humidificador</option><option value="fan">HAP Ventilador</option><option value="switch">HAP Switch</option><option value="light">HAP Luz</option><option value="plug">HAP Plug</option><option value="dimmer">HAP Dimmer</option><option value="lock">HAP Cerradura</option><option value="thermostat">HAP Termostato</option><option value="vacuum">HAP Vacuum</option>
                           </select>}
                           {hapEligible && <button type="button" className="secondary-button" style={{ fontSize: 10, padding: "4px 7px" }} onClick={() => handleHapExport(ent)}>HAP</button>}
                         </div>

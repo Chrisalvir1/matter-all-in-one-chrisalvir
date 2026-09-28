@@ -2377,9 +2377,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
   public async manualRegisterHap(entityId: string, profile: HapProfile): Promise<{ success: boolean; error?: string; setupUri?: string; pincode?: string; profile?: string }> {
     if (!this.entities.has(entityId)) return { success: false, error: "Device not found in discovery." };
-    if (!(["humidifier", "fan", "switch", "light", "lock", "thermostat"] as string[]).includes(profile)) return { success: false, error: "Perfil HAP no soportado." };
-    const domain = entityId.split(".")[0];
-    if (["light", "switch", "fan", "lock", "climate", "vacuum", "cover"].includes(domain)) return { success: false, error: "Este dispositivo debe exportarse por Matter; HAP solo se usa cuando Apple Home no tiene el perfil Matter." };
+    if (!( ["humidifier", "fan", "switch", "light", "lock", "thermostat", "plug", "dimmer", "vacuum"] as string[]).includes(profile)) return { success: false, error: "Perfil HAP no soportado." };
     try {
       const result = await this.activateHomeKitEntity(entityId, profile);
       this.exportedDevices.add(`hap:${entityId}`);
