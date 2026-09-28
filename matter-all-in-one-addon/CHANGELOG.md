@@ -1,3 +1,11 @@
+## [1.9.21] - 2026-09-28
+
+### Limpieza PTZ y QR HAP
+
+- Se eliminan al iniciar los endpoints PTZ numéricos obsoletos y los anuncios MQTT retenidos que los recreaban, incluso si el WebSocket de Home Assistant está desconectado.
+- El publicador PTZ se crea después de resolver el broker MQTT de Supervisor, así también funciona con descubrimiento automático.
+- El QR HAP usa únicamente el URI real generado por hap-nodejs; no se genera un QR aproximado a partir del PIN.
+
 ## [1.9.20] - 2026-09-28
 
 ### Ajuste de reconciliación

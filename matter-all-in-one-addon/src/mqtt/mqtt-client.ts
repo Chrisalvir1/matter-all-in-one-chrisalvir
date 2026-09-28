@@ -416,6 +416,16 @@ export class MqttClientManager {
     });
   }
 
+  /** Clear a stale retained Home Assistant discovery record from the broker. */
+  public removeDiscoveryConfig(topic: string): void {
+    this.discoveredDevices.delete(topic);
+    if (!this.client?.connected) return;
+    this.client.publish(topic, "", { retain: true, qos: 1 }, (err) => {
+      if (err) this.log.error(`[MQTT] Could not remove discovery config ${topic}: ${err}`);
+      else this.log.notice(`[MQTT] Removed stale discovery config ${topic}`);
+    });
+  }
+
   public disconnect() {
     if (this.client) {
       this.client.end(true);

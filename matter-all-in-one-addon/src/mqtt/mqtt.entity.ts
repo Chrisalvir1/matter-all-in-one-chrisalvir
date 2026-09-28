@@ -90,6 +90,7 @@ export function getMqttDeviceType(
 export class MqttEntity {
   public endpoint!: MatterbridgeEndpoint;
   public entityId: string;
+  public discoveryTopic: string;
   public domain: string;
   public config: any;
   public deviceType: DeviceTypeDefinition;
@@ -111,6 +112,7 @@ export class MqttEntity {
     private entry: MqttDiscoveryEntry,
   ) {
     this.config = entry.config;
+    this.discoveryTopic = entry.topic;
     this.domain = entry.component;
 
     const device = this.config.device || {};

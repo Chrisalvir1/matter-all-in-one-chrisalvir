@@ -84,6 +84,7 @@ import {
 } from "./hap/hap-generic-accessory.js";
 import { PtzZonesManager } from "./camera/ptz/ptz-zones-manager.js";
 import { PtzMqttPublisher } from "./camera/ptz/ptz-mqtt-publisher.js";
+import { isLegacyNumberedPtzDiscovery } from "./camera/ptz/ptz-legacy-discovery.js";
 import { MatterPtzExporter } from "./camera/ptz/matter-ptz-exporter.js";
 
 export interface HomeAssistantPlatformConfig extends PlatformConfig {
@@ -2569,7 +2570,12 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     for (const endpoint of Array.isArray(endpoints) ? endpoints : []) {
       const uniqueId = String((endpoint as any).uniqueId || "");
       const match = uniqueId.match(/^(.*)_(?:ptz_matter|zone_switch)$/);
-      if (!match || activeSafeIds.has(match[1])) continue;
+      if (!match) continue;
+      // Older releases exported placeholder endpoints as "0 PTZ", "1 PTZ",
+      // etc. They have no real camera behind them and can be removed even when
+      // Home Assistant's websocket is offline.
+      const isLegacyNumberedPlaceholder = /^\d+$/.test(match[1]);
+      if (!isLegacyNumberedPlaceholder && activeSafeIds.has(match[1])) continue;
 
       try {
         await this.unregisterDevice(endpoint);
@@ -2624,28 +2630,16 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       fsSync.existsSync("/data") ? "/data" : "./persist",
     );
 
-    // Load & Initialize MQTT Discovery & Management
-    void this.initMqtt();
-
-    // ── Initialize PTZ Zones Manager & MQTT Publisher ─────────────────────
+    // Load the PTZ manager before MQTT. MQTT credentials may be discovered
+    // asynchronously from Supervisor, so its publisher is initialized only
+    // after initMqtt has resolved the broker configuration.
     try {
       await this.ptzManager.init();
-      if ((this.config as any).mqttHost) {
-        this.ptzMqttPublisher = new PtzMqttPublisher(
-          this.ptzManager,
-          {
-            host: (this.config as any).mqttHost,
-            port: Number((this.config as any).mqttPort) || 1883,
-            user: (this.config as any).mqttUser,
-            password: (this.config as any).mqttPassword,
-          },
-          this.log,
-        );
-        this.ptzMqttPublisher.connect();
-      }
+      await this.reconcileLegacyPtzExports();
     } catch (err) {
       this.log.debug(`[PTZ-Manager] Initialization note: ${err}`);
     }
+    await this.initMqtt();
 
     // ── Resolve Home Assistant URL ─────────────────────────────────────────
     // If the user didn’t set config.host we run the network discovery:
@@ -2756,6 +2750,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       this.log.debug(
         "[MQTT] No MQTT broker host configured; MQTT auto-discovery is in standby.",
       );
+      this.ptzMqttPublisher?.disconnect();
+      this.ptzMqttPublisher = null;
       return;
     }
 
@@ -2774,6 +2770,14 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     });
 
     this.mqttManager.onDeviceDiscovered(async (entry) => {
+      if (isLegacyNumberedPtzDiscovery(entry.config)) {
+        this.log.notice(
+          `[PTZ] Removing obsolete numbered MQTT export "${entry.config?.device?.name || entry.config?.name}"`,
+        );
+        this.mqttManager?.removeDiscoveryConfig(entry.topic);
+        return;
+      }
+
       if (entry.component === "camera") {
         this.log.info(
           `[MQTT] Discovered camera component "${entry.config?.name || entry.objectId}". Apple Home requires cameras via HomeKit HAP; skipped Matter bridge.`,
@@ -2805,6 +2809,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     this.mqttManager.onDeviceRemoved((topic) => {
       for (const [entityId, entity] of this.mqttEntities.entries()) {
         if (
+          entity.discoveryTopic === topic ||
           entity.stateTopic === topic ||
           entity.commandTopic === topic ||
           entity.entityId === topic
@@ -3026,6 +3031,25 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     });
 
     this.mqttManager.connect();
+
+    // Supervisor broker discovery and persisted MQTT settings are complete by
+    // this point; constructing the PTZ publisher earlier left it permanently
+    // disabled on installations that use automatic broker discovery.
+    this.ptzMqttPublisher?.disconnect();
+    this.ptzMqttPublisher = null;
+    if ((this.config as any).mqttHost) {
+      this.ptzMqttPublisher = new PtzMqttPublisher(
+        this.ptzManager,
+        {
+          host: (this.config as any).mqttHost,
+          port: Number((this.config as any).mqttPort) || 1883,
+          user: (this.config as any).mqttUser,
+          password: (this.config as any).mqttPassword,
+        },
+        this.log,
+      );
+      this.ptzMqttPublisher.connect();
+    }
   }
 
   /**

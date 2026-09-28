@@ -13,67 +13,6 @@ interface DeviceModalProps {
   showToast: (msg: string, isError?: boolean) => void;
 }
 
-const HAP_CATEGORY_IDS: Record<string, number> = {
-  humidifier: 8,
-  dehumidifier: 8,
-  air_purifier: 19,
-  television: 24,
-  television_speaker: 24,
-  valve_irrigation: 29,
-  valve_faucet: 29,
-  valve_shower: 29,
-  security_system: 11,
-  garage_door: 4,
-  doorbell: 18,
-  fan_hap: 3,
-  heater_cooler: 9,
-  thermostat_hap: 9,
-  outlet_hap: 7,
-  switch_hap: 8,
-  lightbulb_hap: 5,
-  lock_hap: 6,
-  window_covering_hap: 14,
-  door_hap: 12,
-  window_hap: 13,
-  motion_sensor_hap: 10,
-  contact_sensor_hap: 10,
-  smoke_sensor_hap: 10,
-  carbon_monoxide_sensor_hap: 10,
-  carbon_dioxide_sensor_hap: 10,
-  leak_sensor_hap: 10,
-  occupancy_sensor_hap: 10,
-  temperature_sensor_hap: 10,
-  humidity_sensor_hap: 10,
-  light_sensor_hap: 10,
-  air_quality_sensor_hap: 10,
-  battery_hap: 16,
-  speaker_hap: 26,
-  irrigation_system: 28,
-};
-
-function computeHapSetupUri(
-  pincode: string,
-  setupId: string = "HAP1",
-  profile: string = "humidifier",
-): string {
-  try {
-    const cleanPin = parseInt((pincode || "").replace(/-/g, ""), 10);
-    if (isNaN(cleanPin)) return "";
-    const category = HAP_CATEGORY_IDS[profile] || 1;
-    const total = (BigInt(category) << 31n) | (1n << 28n) | BigInt(cleanPin);
-    let encoded = total.toString(36).toUpperCase();
-    while (encoded.length < 9) encoded = "0" + encoded;
-    const cleanSetupId = (setupId || "HAP1")
-      .toUpperCase()
-      .replace(/[^0-9A-Z]/g, "")
-      .slice(0, 4)
-      .padEnd(4, "0");
-    return "X-HM://" + encoded + cleanSetupId;
-  } catch {
-    return "";
-  }
-}
-
 interface HapRecommendation {
   isRecommended: boolean;
   recommendedProfile: HapProfile;
@@ -532,14 +471,11 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     try {
       const res = await api.registerHap(targetId, selectedHapProfile);
       if (res.success) {
+        if (!res.setupUri || !/^X-HM:\/\/[0-9A-Z]{13}$/.test(res.setupUri)) {
+          throw new Error("HAP no devolvió un código de configuración válido.");
+        }
         showToast(`✓ Publicado en HomeKit HAP (PIN: ${res.pincode})`);
-        const setupUri =
-          res.setupUri ||
-          computeHapSetupUri(
-            res.pincode || "",
-            res.setupId || "HAP1",
-            selectedHapProfile
-          );
+        const setupUri = res.setupUri;
         const updatedAcc: HapAccessoryInfo = {
           published: true,
           isPaired: false,
@@ -1858,14 +1794,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                 ) : (
                   <>
                     <QRCodeDisplay
-                      pairingCode={
-                        activeHapAccessory.setupUri ||
-                        computeHapSetupUri(
-                          activeHapAccessory.pincode,
-                          activeHapAccessory.setupId || "HAP1",
-                          activeHapAccessory.hapProfile
-                        )
-                      }
+                      pairingCode={activeHapAccessory.setupUri || ""}
                       manualCode={activeHapAccessory.pincode}
                       pinCode={activeHapAccessory.pincode}
                       variant="hap-homekit"
