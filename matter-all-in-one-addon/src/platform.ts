@@ -59,6 +59,7 @@ import { ScryptedHomeKitBridge } from "./camera/scrypted/scrypted-homekit-bridge
 import { ScryptedMatterBridge } from "./camera/scrypted/scrypted-matter-bridge.js";
 import { ScryptedStreamValidator } from "./camera/scrypted/scrypted-stream-validator.js";
 import { sanitizeUrlCredentials } from "./camera/homekit/ffmpeg-helper.js";
+import { getAppleHomeExportRecommendation } from "./apple-home-export-policy.js";
 import { HomeKitEntityAccessory, type HapProfile } from "./homekit/homekit-entity.accessory.js";
 
 export interface HomeAssistantPlatformConfig extends PlatformConfig {
@@ -211,6 +212,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   >();
   public readonly homekitEntityRecords = new Map<string, any>();
   public readonly homekitEntityAccessories = new Map<string, HomeKitEntityAccessory>();
+  public async saveHomeKitEntityRecords(): Promise<void> { await fs.writeFile("/data/homekit-entities.json", JSON.stringify([...this.homekitEntityRecords.values()], null, 2), "utf8").catch((err) => this.log.debug(`Failed to save HAP entity records: ${err}`)); }
+  public async loadHomeKitEntityRecords(): Promise<void> { try { const list = JSON.parse(await fs.readFile("/data/homekit-entities.json", "utf8")); if (Array.isArray(list)) for (const rec of list) if (rec?.entityId && rec?.profile) this.homekitEntityRecords.set(`${rec.entityId}:${rec.profile}`, rec); } catch { this.log.debug("No generic HAP entity records found, starting fresh."); } }
 
   public async saveHomeKitCameraRecords(): Promise<void> {
     try {
@@ -253,6 +256,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       let port = 51930; while (usedPorts.has(port)) port++;
       record = { entityId, profile, uuid: uuid.generate(`homekit:entity:${key}`), username: `0F:${hash.slice(0,2)}:${hash.slice(2,4)}:${hash.slice(4,6)}:${hash.slice(6,8)}:${hash.slice(8,10)}`.toUpperCase(), pincode: `${100 + (parseInt(hash.slice(10,13),16)%900)}-${10 + (parseInt(hash.slice(13,15),16)%90)}-${100 + (parseInt(hash.slice(15,18),16)%900)}`, setupId: hash.slice(18,22).toUpperCase(), port, published: false, name: this.entities.get(entityId)?.state?.attributes?.friendly_name || entityId };
       this.homekitEntityRecords.set(key, record);
+      void this.saveHomeKitEntityRecords();
     }
     return record;
   }
@@ -267,6 +271,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     }
     await accessory.publish();
     record.published = true;
+    await this.saveHomeKitEntityRecords();
     return { setupUri: (accessory.accessory as any).setupURI, pincode: record.pincode, profile };
   }
 
@@ -1484,6 +1489,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
     // Load persisted camera configurations BEFORE Scrypted fast boot so existing PINs, MACs, and ports are preserved
     await this.loadHomeKitCameraRecords();
+    await this.loadHomeKitEntityRecords();
     void this.initScrypted();
 
     // Load MQTT Config if exists
@@ -3728,6 +3734,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                 getDefaultExportProfileId(domain) ??
                 null,
               profiles: getExportProfiles(domain),
+              appleHomeExport: getAppleHomeExportRecommendation(e.entityId),
+              hapExported: this.exportedDevices.has(`hap:${e.entityId}`),
               pairingCode: connection.pairingCode,
               manualPairingCode: connection.manualPairingCode,
               commissioned: this.isEntityExported(e.entityId) && connection.commissioned,
