@@ -1490,6 +1490,14 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     // Load persisted camera configurations BEFORE Scrypted fast boot so existing PINs, MACs, and ports are preserved
     await this.loadHomeKitCameraRecords();
     await this.loadHomeKitEntityRecords();
+    // Re-publish existing generic HAP accessories with their original UUID,
+    // username, PIN and port. This keeps already-paired Apple Home homes intact.
+    for (const record of this.homekitEntityRecords.values()) {
+      if (!this.entities.has(record.entityId)) continue;
+      void this.activateHomeKitEntity(record.entityId, record.profile as HapProfile).catch((err) =>
+        this.log.warn(`[HomeKitHAP] Failed to restore ${record.entityId}: ${err}`),
+      );
+    }
     void this.initScrypted();
 
     // Load MQTT Config if exists
