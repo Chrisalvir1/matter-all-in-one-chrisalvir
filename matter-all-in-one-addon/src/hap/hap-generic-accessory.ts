@@ -19,6 +19,12 @@ import {
 } from "@homebridge/hap-nodejs";
 import crypto from "node:crypto";
 import os from "node:os";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+const HAP_NODE_VERSION = String(
+  require("@homebridge/hap-nodejs/package.json").version || "unknown",
+);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tipos exportados
@@ -196,7 +202,7 @@ export class HapGenericAccessory {
     info
       .setCharacteristic(
         Characteristic.Manufacturer,
-        this.record.manufacturer || "Home Assistant",
+        this.record.manufacturer || "Matter All-in-One Chrisalvir",
       )
       .setCharacteristic(
         Characteristic.Model,
@@ -210,7 +216,10 @@ export class HapGenericAccessory {
         Characteristic.Name,
         this.record.name || this.entityId,
       )
-      .setCharacteristic(Characteristic.FirmwareRevision, "1.0.0");
+      .setCharacteristic(
+        Characteristic.FirmwareRevision,
+        `HAP-NodeJS ${HAP_NODE_VERSION}`,
+      );
   }
 
   // ──────────────────────────────────────────────

@@ -1,3 +1,10 @@
+## [1.9.22] - 2026-09-28
+
+### Identidad HAP en Apple Home
+
+- Los accesorios HAP muestran el mismo fabricante, modelo y número de serie que Matter; el firmware informa la versión instalada de HAP-NodeJS.
+- Al restaurar accesorios HAP existentes se actualizan esos datos sin cambiar PIN, UUID ni vínculo de HomeKit.
+
 ## [1.9.21] - 2026-09-28
 
 ### Limpieza PTZ y QR HAP

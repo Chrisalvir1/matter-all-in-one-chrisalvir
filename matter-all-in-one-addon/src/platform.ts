@@ -86,6 +86,11 @@ import { PtzZonesManager } from "./camera/ptz/ptz-zones-manager.js";
 import { PtzMqttPublisher } from "./camera/ptz/ptz-mqtt-publisher.js";
 import { isLegacyNumberedPtzDiscovery } from "./camera/ptz/ptz-legacy-discovery.js";
 import { MatterPtzExporter } from "./camera/ptz/matter-ptz-exporter.js";
+import {
+  getMatterSerialNumber,
+  getHaDeviceManufacturer,
+  getHaDeviceModel,
+} from "./utils/matter-device-identity.js";
 
 export interface HomeAssistantPlatformConfig extends PlatformConfig {
   host?: string; // Optional: auto-detected from network/supervisor if not set
@@ -333,12 +338,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     hapProfile: HapProfile,
   ): HapAccessoryRecord {
     let record = this.hapAccessoryRecords.get(entityId);
+    let recordChanged = false;
     if (!record) {
       const rawName =
         this.entities.get(entityId)?.state?.attributes?.friendly_name ||
         entityId;
-      const info = this.getHaRegistryInfo(entityId);
-
       // Collect all used ports from both camera records and generic HAP records
       const usedPorts = new Set<number>([
         ...Array.from(this.homekitCameraRecords.values()).map((r) => r.port),
@@ -361,20 +365,48 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         setupId: creds.setupId,
         uuid: creds.uuid,
         published: false,
-        manufacturer: info.manufacturer || "Home Assistant",
-        model: info.model || HAP_PROFILE_LABELS[hapProfile] || "HAP Device",
-        serialNumber: entityId.replaceAll(".", "_"),
+        manufacturer: getHaDeviceManufacturer(this, entityId),
+        model: getHaDeviceModel(
+          this,
+          entityId,
+          HAP_PROFILE_LABELS[hapProfile] || "HAP Device",
+        ),
+        serialNumber: getMatterSerialNumber(this, entityId),
         lastUpdated: new Date().toISOString(),
       };
       this.hapAccessoryRecords.set(entityId, record);
-      void this.saveHapAccessoryRecords();
+      recordChanged = true;
     } else if (record.hapProfile !== hapProfile) {
       // If the user changed the profile, update it but keep credentials intact
       record.hapProfile = hapProfile;
       record.lastUpdated = new Date().toISOString();
+      recordChanged = true;
+    }
+    if (this.refreshHapAccessoryIdentity(record) || recordChanged) {
       void this.saveHapAccessoryRecords();
     }
     return record;
+  }
+
+  /** Keep HAP accessory metadata in step with Matter Basic Information. */
+  private refreshHapAccessoryIdentity(record: HapAccessoryRecord): boolean {
+    const identity = {
+      manufacturer: getHaDeviceManufacturer(this, record.entityId),
+      model: getHaDeviceModel(
+        this,
+        record.entityId,
+        HAP_PROFILE_LABELS[record.hapProfile] || "HAP Device",
+      ),
+      serialNumber: getMatterSerialNumber(this, record.entityId),
+    };
+    const changed =
+      record.manufacturer !== identity.manufacturer ||
+      record.model !== identity.model ||
+      record.serialNumber !== identity.serialNumber;
+    if (changed) {
+      Object.assign(record, identity, { lastUpdated: new Date().toISOString() });
+    }
+    return changed;
   }
 
   /**
@@ -408,12 +440,15 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       (r) => r.published,
     );
     if (toRestore.length === 0) return;
+    let identityUpdated = false;
     this.log.info(
       `Restoring ${toRestore.length} HAP generic accessor${toRestore.length === 1 ? "y" : "ies"}...`,
     );
     for (const record of toRestore) {
       try {
         if (this.hapAccessories.has(record.entityId)) continue;
+        identityUpdated =
+          this.refreshHapAccessoryIdentity(record) || identityUpdated;
         const acc = new HapGenericAccessory(this, record.entityId, record);
         await acc.publish();
         this.hapAccessories.set(record.entityId, acc);
@@ -426,6 +461,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         );
       }
     }
+    if (identityUpdated) await this.saveHapAccessoryRecords();
   }
 
   /**
