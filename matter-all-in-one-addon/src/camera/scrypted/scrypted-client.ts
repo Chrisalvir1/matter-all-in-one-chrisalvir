@@ -271,11 +271,11 @@ function mapDeviceToCameraRecord(
     else if (n.includes("c225")) resolvedModel = "Tapo C225";
   }
 
+  // PTZ is a hardware capability, not a name/model guess. RTSP camera names
+  // often contain "pan" or "orbit" while exposing no motor controls; those
+  // false positives used to create phantom PTZ exports for every camera.
   const isPtz =
-    allInterfaces.includes("PanTilt") ||
-    allInterfaces.includes("PanTiltZoom") ||
-    /pan|ptz|pantilt|c200|c210|c220|c225|e1 zoom|orbit/i.test(resolvedModel || "") ||
-    /pan|ptz|pantilt/i.test(name || "");
+    allInterfaces.includes("PanTilt") || allInterfaces.includes("PanTiltZoom");
 
   if (isPtz) {
     sensors.push({

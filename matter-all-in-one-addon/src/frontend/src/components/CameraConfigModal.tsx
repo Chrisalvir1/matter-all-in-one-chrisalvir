@@ -154,17 +154,6 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
       if (!camera.identityOverride) camera.identityOverride = {};
       camera.identityOverride.model = modelToSave;
 
-      const isPtz = /pan|ptz|pantilt|c200|c210|c220|c225|e1 zoom|orbit/i.test(modelToSave);
-      if (isPtz && !camera.sensors?.some((s) => s.type === "ptz")) {
-        if (!camera.sensors) camera.sensors = [];
-        camera.sensors.push({
-          sensorId: `${camera.cameraId}_ptz`,
-          type: "ptz",
-          name: `${camera.name} – Control PTZ (Giro)`,
-          enabled: true,
-          state: true,
-        });
-      }
       setModelInput(modelToSave);
       showToast(`✓ Modelo actualizado a «${modelToSave}»`);
       onRefresh();
@@ -240,7 +229,7 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
         : "Scrypted no detecta PTZ en streams RTSP estándar. Pulsa para activarlo si es una cámara Pan.",
       state: hasPtz ? "🟢 Soportado por hardware" : "⚪ Lente Fija (Sin PTZ)",
       available: hasPtz,
-      actionButton: (
+      actionButton: hasPtz ? (
         <button
           className="button button-sm"
           type="button"
@@ -255,7 +244,7 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
         >
           {hasPtz ? "Desactivar PTZ" : "⚡ Activar Giro PTZ"}
         </button>
-      ),
+      ) : undefined,
     },
     ...(hasDoorbell
       ? [

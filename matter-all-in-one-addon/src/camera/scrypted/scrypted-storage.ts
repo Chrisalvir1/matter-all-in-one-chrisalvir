@@ -520,21 +520,11 @@ export class ScryptedStorage {
       cam.serialNumber = override.serialNumber;
     }
 
-    const isPtz =
-      /pan|ptz|pantilt|c200|c210|c220|c225|e1 zoom|orbit/i.test(cam.displayModel || "") ||
-      /pan|ptz|pantilt/i.test(cam.name || "");
-
-    if (isPtz) {
-      if (!Array.isArray(cam.sensors)) cam.sensors = [];
-      if (!cam.sensors.some((s) => s.type === "ptz")) {
-        cam.sensors.push({
-          sensorId: `${cam.cameraId}_ptz`,
-          type: "ptz",
-          name: `${cam.name} – Control PTZ (Giro)`,
-          enabled: true,
-          state: true,
-        });
-      }
+    // Never recreate PTZ from a display name/model. Only Scrypted's actual
+    // PanTilt/PanTiltZoom interfaces may create this sensor during discovery.
+    // Remove stale heuristic records left by older releases.
+    if (Array.isArray(cam.sensors)) {
+      cam.sensors = cam.sensors.filter((sensor) => sensor.type !== "ptz");
     }
 
     await this.save(store);

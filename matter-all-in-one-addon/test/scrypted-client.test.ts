@@ -221,7 +221,7 @@ describe("ScryptedClient — listCameras (mocked session)", () => {
     expect(cameras[0].sensors.some((s) => s.type === "doorbell")).toBe(true);
   });
 
-  it("auto-detects PTZ sensor from device name or model when interfaces lack PanTilt (e.g. Wyze Cam Pan v2)", async () => {
+  it("does not create a PTZ sensor from a name/model without a hardware interface", async () => {
     const fakeSession = {
       sdk: {
         systemManager: {
@@ -244,7 +244,7 @@ describe("ScryptedClient — listCameras (mocked session)", () => {
       username: "admin",
     };
     const cameras = await ScryptedClient.listCameras(fakeSession);
-    expect(cameras[0].sensors.some((s) => s.type === "ptz")).toBe(true);
+    expect(cameras[0].sensors.some((s) => s.type === "ptz")).toBe(false);
     expect(cameras[0].displayModel).toBe("Wyze Cam Pan v2");
   });
 
