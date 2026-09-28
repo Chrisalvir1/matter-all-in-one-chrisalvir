@@ -79,6 +79,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
   const [freshManualCode, setFreshManualCode] = useState<string | null>(null);
   const [resetFabrics, setResetFabrics] = useState<boolean>(false);
   const [hapProfile, setHapProfile] = useState("humidifier");
+  const [showRawLogs, setShowRawLogs] = useState(false);
   // localCompositeExported tracks the toggle state as proper React state so that
   // flipping the master switch immediately re-renders the QR panel without waiting
   // for onRefresh() to complete (mutating device.entities props directly is invisible to React).
@@ -92,6 +93,13 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
           if (a.entityId === targetEntity.entityId) return -1;
           if (b.entityId === targetEntity.entityId) return 1;
         }
+        const aUnavailable = ["unavailable", "unknown", "offline"].includes((a.state || "").toLowerCase());
+        const bUnavailable = ["unavailable", "unknown", "offline"].includes((b.state || "").toLowerCase());
+        const aProblem = (a.hasIssue || aUnavailable) && a.exported;
+        const bProblem = (b.hasIssue || bUnavailable) && b.exported;
+        if (aProblem && !bProblem) return -1;
+        if (!aProblem && bProblem) return 1;
+
         const primaryDelta =
           Number(b.entityId === b.compositePrimaryEntityId) -
           Number(a.entityId === a.compositePrimaryEntityId);
@@ -649,6 +657,21 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                             Auxiliar (Omitido)
                           </span>
                         )}
+                        {ent.exported && (["unavailable", "unknown", "offline"].includes((ent.state || "").toLowerCase()) || ent.hasIssue) && (
+                          <span
+                            className="tag"
+                            style={{
+                              fontSize: "10px",
+                              padding: "1px 6px",
+                              background: "rgba(245, 158, 11, 0.2)",
+                              color: "#fbbf24",
+                              border: "1px solid rgba(245, 158, 11, 0.4)",
+                              fontWeight: 600,
+                            }}
+                          >
+                            ⚠️ Requiere atención
+                          </span>
+                        )}
                       </div>
                     </div>
                     <div
@@ -934,39 +957,173 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                     {isEntityUnavailable || activeEntity?.hasIssue ? "⚠️" : combinedEvents.length > 0 ? "ℹ️" : "✓"}
                   </span>
                   <strong id="diagnostics-heading-text" style={{ fontSize: "13px" }}>
-                    {isEntityUnavailable ? "Estado de Conexión y Diagnóstico" : "Diagnóstico y logs"}
+                    {isEntityUnavailable ? "Estado de Conexión y Diagnóstico" : activeEntity?.hasIssue ? "Incidencia activa detectada" : "Diagnóstico y logs"}
                   </strong>
                 </div>
-                <button
-                  id="copy-diagnostics-button"
-                  className="copy-diagnostics-button"
-                  type="button"
-                  onClick={handleCopyDiagnostics}
-                  title="Copiar diagnóstico y logs al portapapeles"
-                >
-                  📋 Copiar logs
-                </button>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowRawLogs(!showRawLogs)}
+                    title={showRawLogs ? "Ocultar texto sin formato" : "Ver texto completo para copiar"}
+                    style={{
+                      background: showRawLogs ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.05)",
+                      border: "1px solid var(--border)",
+                      borderRadius: "7px",
+                      padding: "5px 9px",
+                      color: "var(--text)",
+                      fontSize: "11px",
+                      cursor: "pointer",
+                      fontWeight: 500,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {showRawLogs ? "👁️ Ocultar texto" : "📄 Ver texto"}
+                  </button>
+                  <button
+                    id="copy-diagnostics-button"
+                    className="copy-diagnostics-button"
+                    type="button"
+                    onClick={handleCopyDiagnostics}
+                    title="Copiar diagnóstico y logs al portapapeles"
+                    style={{
+                      background: "rgba(99,102,241,0.15)",
+                      border: "1px solid rgba(99,102,241,0.4)",
+                      borderRadius: "7px",
+                      padding: "5px 10px",
+                      color: "#a5b4fc",
+                      fontSize: "11px",
+                      cursor: "pointer",
+                      fontWeight: 600,
+                      flexShrink: 0,
+                    }}
+                  >
+                    📋 Copiar logs
+                  </button>
+                </div>
               </div>
+
+              {/* Collapsible raw logs text box for foolproof copying on mobile */}
+              {showRawLogs && (
+                <div style={{ marginBottom: "12px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                    <span style={{ fontSize: "10px", color: "var(--muted)" }}>Texto completo seleccionable:</span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        const target = e.currentTarget.parentElement?.nextElementSibling as HTMLTextAreaElement;
+                        if (target) {
+                          target.select();
+                          target.setSelectionRange(0, 99999);
+                          document.execCommand("copy");
+                          showToast("✓ Todo el texto seleccionado y copiado");
+                        }
+                      }}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        color: "#38bdf8",
+                        fontSize: "10.5px",
+                        cursor: "pointer",
+                        textDecoration: "underline",
+                        padding: 0,
+                      }}
+                    >
+                      Seleccionar todo y copiar
+                    </button>
+                  </div>
+                  <textarea
+                    readOnly
+                    rows={6}
+                    value={[
+                      `=== DIAGNÓSTICO DE ACCESORIO MATTER ===`,
+                      `Entidad: ${activeEntity?.entityId}`,
+                      `Nombre: ${activeEntity?.name || activeEntity?.friendly_name || "Desconocido"}`,
+                      `Dominio: ${activeEntity?.domain}`,
+                      `Estado en Home Assistant: ${activeEntity?.state ? activeEntity.state.toUpperCase() : "N/A"}`,
+                      ...(isEntityUnavailable
+                        ? [`Causa detectada: Dispositivo físico no responde en Home Assistant (apagado, sin batería o sin enlace con la integración)`]
+                        : []),
+                      `Publicado en Matter: ${activeEntity?.exported ? "SÍ" : "NO"}`,
+                      `Emparejado: ${activeEntity?.commissioned ? "SÍ (Vinculado)" : "NO"}`,
+                      `Código de emparejamiento manual: ${activeEntity?.manualPairingCode || "N/A"}`,
+                      `Incidencias activas: ${activeEntity?.hasIssue || isEntityUnavailable ? "SÍ" : "NO"}`,
+                      `\n=== HISTORIAL DE EVENTOS Y DIAGNÓSTICO (${combinedEvents.length}) ===`,
+                      combinedEvents
+                        .map((ev: { text: string; level: string; timestamp?: string }) => {
+                          const timeStr = ev.timestamp ? `[${new Date(ev.timestamp).toLocaleTimeString()}] ` : "";
+                          return `${timeStr}[${ev.level.toUpperCase()}] ${ev.text}`;
+                        })
+                        .join("\n") || "(Sin incidencias ni eventos registrados)",
+                    ].join("\n")}
+                    style={{
+                      width: "100%",
+                      boxSizing: "border-box",
+                      background: "#080f1d",
+                      color: "#94a3b8",
+                      border: "1px solid rgba(255,255,255,0.12)",
+                      borderRadius: "6px",
+                      padding: "8px",
+                      fontSize: "10.5px",
+                      fontFamily: "monospace",
+                      resize: "vertical",
+                      userSelect: "all",
+                    }}
+                  />
+                </div>
+              )}
 
               {isEntityUnavailable && (
                 <div
                   style={{
                     background: "rgba(245, 158, 11, 0.15)",
                     borderLeft: "3px solid #f59e0b",
-                    padding: "8px 10px",
-                    borderRadius: "4px",
-                    fontSize: "11px",
+                    padding: "9px 11px",
+                    borderRadius: "5px",
+                    fontSize: "11.5px",
                     color: "#fbbf24",
                     marginBottom: "8px",
-                    lineHeight: "1.4",
+                    lineHeight: "1.5",
                   }}
                 >
-                  <strong>⚠️ Dispositivo no disponible en Home Assistant (Estado: {entityState.toUpperCase()})</strong>
-                  <div style={{ marginTop: "3px", color: "var(--text)" }}>
-                    Home Assistant perdió comunicación con el dispositivo físico. El puente Matter sigue activo, pero el aparato no responde en su origen (posiblemente apagado, sin batería o sin Wi-Fi).
-                  </div>
+                  <strong style={{ display: "block", marginBottom: 3 }}>⚠️ Causa del problema:</strong>
+                  <span style={{ color: "var(--text)" }}>
+                    Home Assistant informa estado <strong>{entityState.toUpperCase()}</strong>. El dispositivo físico no responde
+                    (posiblemente apagado, sin batería, fuera de rango o la integración origen está caída).
+                    El puente Matter sigue activo pero el aparato no puede recibir comandos.
+                  </span>
                 </div>
               )}
+
+              {/* Root cause banner for non-unavailable issues */}
+              {!isEntityUnavailable && activeEntity?.hasIssue && combinedEvents.length > 0 && (() => {
+                const topEvent = combinedEvents[0];
+                const isErr = topEvent.level === "error";
+                return (
+                  <div
+                    style={{
+                      background: isErr ? "rgba(239,68,68,0.12)" : "rgba(245,158,11,0.12)",
+                      borderLeft: `3px solid ${isErr ? "#ef4444" : "#f59e0b"}`,
+                      padding: "9px 11px",
+                      borderRadius: "5px",
+                      fontSize: "11.5px",
+                      color: isErr ? "#fca5a5" : "#fbbf24",
+                      marginBottom: "8px",
+                      lineHeight: "1.5",
+                      userSelect: "text",
+                    }}
+                  >
+                    <strong style={{ display: "block", marginBottom: 3 }}>
+                      {isErr ? "🔴 Error detectado:" : "⚠️ Causa del problema:"}
+                    </strong>
+                    <span style={{ color: "var(--text)", wordBreak: "break-word" }}>{topEvent.text}</span>
+                    {topEvent.timestamp && (
+                      <span style={{ display: "block", marginTop: 4, fontSize: "10px", opacity: 0.6 }}>
+                        Registrado: {new Date(topEvent.timestamp).toLocaleString()}
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
 
               <p id="diagnostics-summary" style={{ margin: "4px 0", fontSize: "11.5px", color: isEntityUnavailable ? "#fbbf24" : "var(--muted)" }}>
                 {combinedEvents.length === 0 ? (

@@ -2778,15 +2778,25 @@ mark {
     font-size: 10px;
   }
   .modal-layout {
-    grid-template-columns: 1fr;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 16px !important;
+    overflow-y: auto !important;
+  }
+  .qr-panel {
+    order: -1 !important;
+    max-height: none !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+  .entity-list-col {
+    order: 1 !important;
   }
   .entity-list {
     max-height: 220px;
   }
-  .qr-panel {
-    max-height: none;
-  }
   .selection-panel {
+    order: 2 !important;
     min-height: auto;
   }
   .modal {
@@ -4078,21 +4088,36 @@ mark {
     max-height: 92vh !important;
   }
 
-  /* DeviceModal layout: single column stack */
+  /* DeviceModal layout: Mobile First / Single Column Stack */
   .modal-layout {
-    grid-template-columns: 1fr !important;
-    grid-template-rows: auto auto auto !important;
-    gap: 0 !important;
-    overflow-y: auto;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 16px !important;
+    overflow-y: auto !important;
+    padding-bottom: 24px !important;
+  }
+  /* Mobile-first: El código QR y código manual van AL INICIO de la vista móvil */
+  .qr-panel {
+    order: -1 !important;
+    max-height: none !important;
+    height: auto !important;
+    overflow: visible !important;
+    padding-right: 0 !important;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 16px;
+    margin-bottom: 8px;
+  }
+  .entity-list-col {
+    order: 1 !important;
+    height: auto !important;
   }
   .entity-list {
-    max-height: 200px !important;
+    max-height: 240px !important;
   }
   .selection-panel {
+    order: 2 !important;
     padding: 14px 12px !important;
-  }
-  .qr-panel {
-    max-height: none !important;
+    min-height: auto !important;
   }
 
   /* Content padding */
