@@ -17,7 +17,7 @@ import {
   H264Level,
   CameraRecordingConfiguration,
   HDSProtocolSpecificErrorReason,
-} from "hap-nodejs";
+} from "@homebridge/hap-nodejs";
 
 const mockPlatform = {
   log: {
