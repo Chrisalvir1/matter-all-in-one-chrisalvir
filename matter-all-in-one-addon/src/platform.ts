@@ -59,6 +59,7 @@ import { ScryptedHomeKitBridge } from "./camera/scrypted/scrypted-homekit-bridge
 import { ScryptedMatterBridge } from "./camera/scrypted/scrypted-matter-bridge.js";
 import { ScryptedStreamValidator } from "./camera/scrypted/scrypted-stream-validator.js";
 import { sanitizeUrlCredentials } from "./camera/homekit/ffmpeg-helper.js";
+import { HomeKitEntityAccessory, type HapProfile } from "./homekit/homekit-entity.accessory.js";
 
 export interface HomeAssistantPlatformConfig extends PlatformConfig {
   host?: string; // Optional: auto-detected from network/supervisor if not set
@@ -208,6 +209,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     string,
     HomeKitCameraStorageRecord
   >();
+  public readonly homekitEntityRecords = new Map<string, any>();
+  public readonly homekitEntityAccessories = new Map<string, HomeKitEntityAccessory>();
 
   public async saveHomeKitCameraRecords(): Promise<void> {
     try {
@@ -239,6 +242,32 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     } catch {
       this.log.debug("No homekit-cameras.json found, starting fresh.");
     }
+  }
+
+  private getOrCreateHomeKitEntityRecord(entityId: string, profile: HapProfile): any {
+    const key = `${entityId}:${profile}`;
+    let record = this.homekitEntityRecords.get(key);
+    if (!record) {
+      const hash = crypto.createHash("sha256").update(key).digest("hex");
+      const usedPorts = new Set([...this.homekitCameraRecords.values(), ...this.homekitEntityRecords.values()].map((r: any) => r.port));
+      let port = 51930; while (usedPorts.has(port)) port++;
+      record = { entityId, profile, uuid: uuid.generate(`homekit:entity:${key}`), username: `0F:${hash.slice(0,2)}:${hash.slice(2,4)}:${hash.slice(4,6)}:${hash.slice(6,8)}:${hash.slice(8,10)}`.toUpperCase(), pincode: `${100 + (parseInt(hash.slice(10,13),16)%900)}-${10 + (parseInt(hash.slice(13,15),16)%90)}-${100 + (parseInt(hash.slice(15,18),16)%900)}`, setupId: hash.slice(18,22).toUpperCase(), port, published: false, name: this.entities.get(entityId)?.state?.attributes?.friendly_name || entityId };
+      this.homekitEntityRecords.set(key, record);
+    }
+    return record;
+  }
+
+  public async activateHomeKitEntity(entityId: string, profile: HapProfile): Promise<any> {
+    const record = this.getOrCreateHomeKitEntityRecord(entityId, profile);
+    let accessory = this.homekitEntityAccessories.get(entityId);
+    if (!accessory || accessory.profile !== profile) {
+      if (accessory) await accessory.unpublish().catch(() => undefined);
+      accessory = new HomeKitEntityAccessory(this, entityId, profile, record);
+      this.homekitEntityAccessories.set(entityId, accessory);
+    }
+    await accessory.publish();
+    record.published = true;
+    return { setupUri: (accessory.accessory as any).setupURI, pincode: record.pincode, profile };
   }
 
   private scryptedInitialized = false;
@@ -2346,6 +2375,16 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     }
   }
 
+  public async manualRegisterHap(entityId: string, profile: HapProfile): Promise<{ success: boolean; error?: string; setupUri?: string; pincode?: string; profile?: string }> {
+    if (!this.entities.has(entityId)) return { success: false, error: "Device not found in discovery." };
+    if (!(["humidifier", "fan", "switch", "light", "lock", "thermostat"] as string[]).includes(profile)) return { success: false, error: "Perfil HAP no soportado." };
+    try {
+      const result = await this.activateHomeKitEntity(entityId, profile);
+      this.exportedDevices.add(`hap:${entityId}`);
+      return { success: true, setupUri: result.setupUri, pincode: result.pincode, profile };
+    } catch (err) { return { success: false, error: String(err) }; }
+  }
+
   /**
    * Manually unregister an Accessory and save to config.
    */
@@ -3853,6 +3892,18 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         }
 
         // POST /api/custom/register/:entityId
+        if (req.method === "POST" && pathname.startsWith("/api/custom/register-hap/")) {
+          const entityId = decodeURIComponent(pathname.substring("/api/custom/register-hap/".length));
+          let bodyStr = "";
+          for await (const chunk of req) bodyStr += chunk.toString();
+          let profile: HapProfile = "switch";
+          try { const parsed = JSON.parse(bodyStr); if (typeof parsed.profile === "string") profile = parsed.profile as HapProfile; } catch {}
+          const result = await this.manualRegisterHap(entityId, profile);
+          res.writeHead(result.success ? 200 : 400, { "Content-Type": "application/json; charset=utf-8" });
+          res.end(JSON.stringify(result));
+          return;
+        }
+
         if (
           req.method === "POST" &&
           pathname.startsWith("/api/custom/register/")

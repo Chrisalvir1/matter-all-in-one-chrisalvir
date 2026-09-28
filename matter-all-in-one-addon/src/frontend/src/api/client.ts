@@ -92,6 +92,12 @@ export const api = {
       method: "POST",
     }),
 
+  registerHap: (entityId: string, profile: string) =>
+    request(`/register-hap/${encodeURIComponent(entityId)}`, {
+      method: "POST",
+      body: JSON.stringify({ profile }),
+    }),
+
   setDeviceProfile: (entityId: string, profile: string) =>
     request(`/device-profile/${encodeURIComponent(entityId)}`, {
       method: "POST",

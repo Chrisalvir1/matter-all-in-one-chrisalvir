@@ -78,6 +78,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
   const [freshPairingCode, setFreshPairingCode] = useState<string | null>(null);
   const [freshManualCode, setFreshManualCode] = useState<string | null>(null);
   const [resetFabrics, setResetFabrics] = useState<boolean>(false);
+  const [hapProfile, setHapProfile] = useState("humidifier");
   // localCompositeExported tracks the toggle state as proper React state so that
   // flipping the master switch immediately re-renders the QR panel without waiting
   // for onRefresh() to complete (mutating device.entities props directly is invisible to React).
@@ -270,6 +271,15 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     } catch (err: any) {
       showToast(err.message || "Error al modificar publicación", true);
     }
+  };
+
+  const handleHapExport = async (entity: EntityRecord) => {
+    try {
+      const result: any = await api.registerHap(entity.entityId, hapProfile);
+      if (!result?.success) throw new Error(result?.error || "No se pudo publicar HAP");
+      showToast(`✓ ${entity.name || entity.entityId} publicado en HomeKit HAP (${hapProfile})`);
+      onRefresh();
+    } catch (err: any) { showToast(err.message || "Error al publicar HAP", true); }
   };
 
   const handleReconnect = async () => {
@@ -663,14 +673,16 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                           </span>
                         )
                       ) : (
-                        <label className="toggle">
-                          <input
-                            type="checkbox"
-                            checked={Boolean(ent.exported)}
-                            onChange={() => handleToggleExport(ent)}
-                          />
-                          <span />
-                        </label>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <label className="toggle">
+                            <input type="checkbox" checked={Boolean(ent.exported)} onChange={() => handleToggleExport(ent)} />
+                            <span />
+                          </label>
+                          <select aria-label="Perfil HomeKit HAP" value={hapProfile} onChange={(e) => setHapProfile(e.target.value)} style={{ maxWidth: 105, fontSize: 10 }}>
+                            <option value="humidifier">HAP Humidificador</option><option value="fan">HAP Ventilador</option><option value="switch">HAP Switch</option><option value="light">HAP Luz</option><option value="lock">HAP Cerradura</option><option value="thermostat">HAP Termostato</option>
+                          </select>
+                          <button type="button" className="secondary-button" style={{ fontSize: 10, padding: "4px 7px" }} onClick={() => handleHapExport(ent)}>HAP</button>
+                        </div>
                       )}
                     </div>
                   </div>
