@@ -35,7 +35,7 @@ describe("PTZ Capabilities and Detection (Matter 1.6.1)", () => {
     expect(info.ptzType).toBe("hardware");
   });
 
-  it("detects digital PTZ (DPTZ) for standard video stream cameras", () => {
+  it("does not invent PTZ for standard video stream cameras", () => {
     const info = detectCameraPtzCapabilities("camera.front_door", {
       state: "idle",
       attributes: { friendly_name: "Timbre Principal", frontend_stream_type: "hls" },
@@ -43,9 +43,9 @@ describe("PTZ Capabilities and Detection (Matter 1.6.1)", () => {
       url: "rtsp://192.168.1.100:554/live",
     });
 
-    expect(info.hasPtz).toBe(true);
-    expect(info.ptzType).toBe("digital");
-    expect(info.supportsDigitalPtz).toBe(true);
+    expect(info.hasPtz).toBe(false);
+    expect(info.ptzType).toBe("none");
+    expect(info.supportsDigitalPtz).toBe(false);
   });
 
   it("returns exactly 5 default surveillance zones with valid viewports", () => {
@@ -138,7 +138,7 @@ describe("Matter PTZ Exporter (Matter 1.6.1 Format)", () => {
     const tempStore = path.join(os.tmpdir(), `ptz-store-${Date.now()}.json`);
     const tempExport = path.join(os.tmpdir(), `ptz-export-${Date.now()}.json`);
     const manager = new PtzZonesManager(tempStore);
-    manager.registerCamera("camera.living_room");
+    manager.registerCamera("camera.living_room", { attributes: { ptz: true } });
 
     const exportData = await MatterPtzExporter.exportToFile(manager, tempExport);
     expect(exportData.schemaVersion).toBe("1.6.1");
