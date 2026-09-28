@@ -23,6 +23,8 @@ export class PtzMqttPublisher {
   private prefix: string;
   private discoveryPrefix: string;
   private config: PtzMqttConfig;
+  private knownPtzIds = new Set<string>();
+  private ptzReconciliationRequested = false;
 
   constructor(ptzManager: PtzZonesManager, config: PtzMqttConfig, log?: any) {
     this.ptzManager = ptzManager;
@@ -50,6 +52,7 @@ export class PtzMqttPublisher {
       this.log.notice?.(`[PTZ-MQTT] Connected to MQTT broker for PTZ & Zones`);
       this.subscribeToCommands();
       this.publishAllCameraStates();
+      if (this.ptzReconciliationRequested) this.subscribeToLegacyDiscovery();
     });
 
     this.client.on("message", (topic, message) => {
@@ -97,6 +100,11 @@ export class PtzMqttPublisher {
     const info = this.ptzManager.getCameraPtzInfo(entityId);
     if (!info) return;
 
+    if (!info.hasPtz) {
+      this.removeCameraDiscovery(entityId);
+      return;
+    }
+
     const safeId = entityId.replace(/\./g, "_");
     const stateTopic = `${this.prefix}/camera/${safeId}/ptz/state`;
     const zonesTopic = `${this.prefix}/camera/${safeId}/ptz/zones`;
@@ -132,6 +140,80 @@ export class PtzMqttPublisher {
         this.publishCameraState(cam.entityId);
       }
     }
+  }
+
+  /**
+   * Reconcile retained Home Assistant discovery with the current camera inventory.
+   * MQTT discovery is retained by the broker, so stopping publication alone leaves
+   * old PTZ entities visible in Home Assistant after an upgrade.
+   */
+  public reconcileDiscovery(activeEntityIds: string[]): void {
+    this.ptzReconciliationRequested = true;
+    this.knownPtzIds = new Set(activeEntityIds.map((id) => this.toSafeId(id)));
+    this.subscribeToLegacyDiscovery();
+  }
+
+  private toSafeId(entityId: string): string {
+    return entityId.replace(/\./g, "_");
+  }
+
+  private subscribeToLegacyDiscovery(): void {
+    if (!this.client?.connected) return;
+    this.client.subscribe(`${this.discoveryPrefix}/+/+/config`, { qos: 1 }, (err) => {
+      if (err) {
+        this.log.warn?.(`[PTZ-MQTT] Could not reconcile retained discovery: ${err}`);
+      }
+    });
+  }
+
+  private removeCameraDiscovery(entityId: string): void {
+    if (!this.client?.connected) return;
+    const safeId = this.toSafeId(entityId);
+    for (const [domain, objectId] of [
+      ["sensor", `${safeId}_ptz_state`],
+      ["select", `${safeId}_ptz_zone_select`],
+      ["switch", `${safeId}_dptz_mode`],
+    ]) {
+      this.client.publish(
+        `${this.discoveryPrefix}/${domain}/${objectId}/config`,
+        "",
+        { retain: true, qos: 1 },
+      );
+    }
+    this.client.publish(`${this.prefix}/camera/${safeId}/ptz/state`, "", { retain: true, qos: 1 });
+    this.client.publish(`${this.prefix}/camera/${safeId}/ptz/zones`, "", { retain: true, qos: 1 });
+  }
+
+  private clearStaleDiscovery(topic: string, payload: string): void {
+    const topicMatch = topic.match(
+      new RegExp(`^${this.escapeRegExp(this.discoveryPrefix)}/(?:sensor|select|switch)/[^/]+/config$`),
+    );
+    if (!topicMatch || payload.length === 0) return;
+
+    let config: any;
+    try {
+      config = JSON.parse(payload);
+    } catch {
+      return;
+    }
+
+    const uniqueId = typeof config?.unique_id === "string" ? config.unique_id : "";
+    const ownedSuffixes = ["_ptz_zone_sensor", "_ptz_zone_selector", "_dptz_mode_switch"];
+    const suffix = ownedSuffixes.find((candidate) => uniqueId.endsWith(candidate));
+    if (!suffix) return;
+
+    const safeId = uniqueId.slice(0, -suffix.length);
+    if (this.knownPtzIds.has(safeId)) return;
+
+    // Only clear configs bearing this add-on's legacy PTZ unique_id suffixes.
+    this.client?.publish(topic, "", { retain: true, qos: 1 });
+    this.client?.publish(`${this.prefix}/camera/${safeId}/ptz/state`, "", { retain: true, qos: 1 });
+    this.client?.publish(`${this.prefix}/camera/${safeId}/ptz/zones`, "", { retain: true, qos: 1 });
+    this.log.notice?.(`[PTZ-MQTT] Removed stale PTZ discovery ${safeId}`);
+  }
+
+  private escapeRegExp(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
 
   /**
@@ -195,6 +277,7 @@ export class PtzMqttPublisher {
   }
 
   private async handleIncomingMessage(topic: string, payloadStr: string): Promise<void> {
+    this.clearStaleDiscovery(topic, payloadStr);
     try {
       const match = topic.match(new RegExp(`^${this.prefix}/camera/([^/]+)/ptz/command$`));
       if (!match) return;

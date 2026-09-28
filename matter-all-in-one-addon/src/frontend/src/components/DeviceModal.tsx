@@ -291,6 +291,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
 }) => {
   const [selectedEntity, setSelectedEntity] = useState<EntityRecord | null>(null);
   const [isBusy, setIsBusy] = useState(false);
+  const [isHapBusy, setIsHapBusy] = useState(false);
   const [multiAdminOpen, setMultiAdminOpen] = useState(false);
   const [freshPairingCode, setFreshPairingCode] = useState<string | null>(null);
   const [freshManualCode, setFreshManualCode] = useState<string | null>(null);
@@ -526,6 +527,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
   // Direct HAP publish handler with 0ms optimistic UI update
   const handlePublishHapDirect = async () => {
     const targetId = compositePrimary?.entityId || activeEntity?.entityId || device.entities[0].entityId;
+    setIsHapBusy(true);
     setIsBusy(true);
     try {
       const res = await api.registerHap(targetId, selectedHapProfile);
@@ -566,6 +568,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     } catch (err: any) {
       showToast(err.message || "Error al publicar HAP", true);
     } finally {
+      setIsHapBusy(false);
       setIsBusy(false);
     }
   };
@@ -588,22 +591,30 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
 
   // Direct HAP unregister handler with 0ms optimistic UI update
   const handleUnregisterHapDirect = async () => {
-    if (!confirm("¿Retirar este accesorio de HomeKit HAP?")) return;
     const targetId = compositePrimary?.entityId || activeEntity?.entityId || device.entities[0].entityId;
+    const previousAccessory = localHapAccessory;
+    // Reflect the requested action immediately; restore the QR state if the
+    // server cannot stop the accessory.
+    setLocalHapAccessory(null);
+    setHapFreshPin(null);
+    setIsHapBusy(true);
     setIsBusy(true);
     try {
-      await api.unregisterHap(targetId);
+      const res = await api.unregisterHap(targetId);
+      if (res?.success === false) {
+        throw new Error(res.error || "No se pudo retirar el accesorio de HAP");
+      }
       device.entities.forEach((e) => {
         e.hapAccessory = null;
       });
       if (activeEntity) activeEntity.hapAccessory = null;
-      setLocalHapAccessory(null);
-      setHapFreshPin(null);
       showToast("Accesorio retirado de HomeKit HAP");
       void onRefresh();
     } catch (err: any) {
+      setLocalHapAccessory(previousAccessory);
       showToast(err.message || "Error al retirar de HAP", true);
     } finally {
+      setIsHapBusy(false);
       setIsBusy(false);
     }
   };
@@ -1918,7 +1929,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                     onClick={handlePublishHapDirect}
                     disabled={isBusy}
                   >
-                    ⚡ Publicar en HomeKit HAP ahora
+                    {isHapBusy ? "Publicando en HomeKit HAP…" : "⚡ Publicar en HomeKit HAP ahora"}
                   </button>
                 </div>
               )
@@ -2039,7 +2050,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                     title="Retirar accesorio de HomeKit HAP"
                     style={{ padding: "7px 10px", fontSize: 11.5 }}
                   >
-                    Retirar de HomeKit HAP
+                    {isHapBusy ? "Retirando de HomeKit HAP…" : "Retirar de HomeKit HAP"}
                   </button>
                 </div>
               )}

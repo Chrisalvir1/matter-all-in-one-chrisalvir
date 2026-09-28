@@ -1,3 +1,12 @@
+## [1.9.19] - 2026-09-28
+
+### Correcciones de PTZ y HomeKit HAP
+
+- Se corrigió la lectura de cámaras de Camera.UI para usar sus IDs reales, evitando registros PTZ con nombres numéricos como `0 PTZ` y `1 PTZ`.
+- Se retirarán al iniciar los anuncios MQTT retenidos y endpoints Matter PTZ antiguos que ya no correspondan a cámaras con PTZ confirmado.
+- No se pueden guardar zonas PTZ para cámaras sin capacidad PTZ detectada.
+- La publicación HAP ahora valida y devuelve el URI de emparejamiento generado por hap-nodejs; la interfaz retira el QR de inmediato al desactivar y lo restaura si el servidor falla.
+
 ## [1.9.14] - 2026-09-27
 
 ### Correcciones de estabilidad

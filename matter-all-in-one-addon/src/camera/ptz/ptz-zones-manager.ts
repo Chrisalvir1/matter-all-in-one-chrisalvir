@@ -154,9 +154,9 @@ export class PtzZonesManager extends EventEmitter {
     entityId: string,
     zone: Partial<PtzZone> & { id: number },
   ): Promise<PtzZone> {
-    let info = this.cameraInfos.get(entityId);
-    if (!info) {
-      info = this.registerCamera(entityId);
+    const info = this.cameraInfos.get(entityId);
+    if (!info?.hasPtz) {
+      throw new Error(`La cámara ${entityId} no tiene capacidad PTZ confirmada`);
     }
 
     if (zone.id < 1 || zone.id > MAX_PTZ_PRESETS) {

@@ -449,22 +449,30 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       if (this.hapAccessories.has(entityId)) {
         const rec = this.hapAccessoryRecords.get(entityId)!;
         const acc = this.hapAccessories.get(entityId);
+        const setupUri = acc?.setupUri || "";
+        if (!/^X-HM:\/\/[0-9A-Z]{13}$/.test(setupUri)) {
+          throw new Error("El accesorio HAP está publicado, pero no tiene un código QR válido.");
+        }
         return {
           success: true,
           pincode: rec.pincode,
           port: rec.port,
-          setupUri: acc?.setupUri || "",
+          setupUri,
           setupId: rec.setupId,
         };
       }
       await this.activateHapEntity(entityId, hapProfile);
       const rec = this.hapAccessoryRecords.get(entityId)!;
       const acc = this.hapAccessories.get(entityId);
+      const setupUri = acc?.setupUri || "";
+      if (!/^X-HM:\/\/[0-9A-Z]{13}$/.test(setupUri)) {
+        throw new Error("HAP publicó el accesorio, pero hap-nodejs no generó un código QR válido.");
+      }
       return {
         success: true,
         pincode: rec.pincode,
         port: rec.port,
-        setupUri: acc?.setupUri || "",
+        setupUri,
         setupId: rec.setupId,
       };
     } catch (err) {
@@ -2478,7 +2486,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       for (const entityId of this.entities.keys()) {
         this.clearEntityProblem(entityId);
       }
-      void this.discoverAndSync();
+      void this.discoverAndSync().then(() => this.reconcileLegacyPtzExports());
       // After HA reconnect, force a full Matter attribute push for all entities
       // so HomeKit (Apple Home) reads the real current state instead of stale
       // cached values. Fan on/off and speed attributes are particularly critical
@@ -2515,6 +2523,58 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     this.ha.on("registry_changed", () => {
       void this.discoverAndSync();
     });
+  }
+
+  /**
+   * Remove PTZ accessories left by older versions after rebuilding the live
+   * camera inventory. Retained MQTT discovery and Matterbridge endpoints both
+   * survive a software upgrade unless they are explicitly withdrawn.
+   */
+  private async reconcileLegacyPtzExports(): Promise<void> {
+    const activePtzIds = new Set<string>();
+
+    for (const [entityId, state] of this.ha?.hassStates || []) {
+      if (!entityId.startsWith("camera.")) continue;
+      const info = this.ptzManager.registerCamera(entityId, state);
+      if (info.hasPtz) activePtzIds.add(entityId);
+    }
+
+    try {
+      const scryptedStore = await ScryptedStorage.load();
+      for (const camera of scryptedStore.cameras?.cameras || []) {
+        const hasHardwarePtz = camera.sensors?.some((sensor) => sensor.type === "ptz");
+        if (!hasHardwarePtz) continue;
+
+        const friendlyName = camera.name || camera.cameraId;
+        const scryptedEntityId = `scrypted.${camera.cameraId}`;
+        this.ptzManager.registerCamera(scryptedEntityId, {
+          attributes: { friendly_name: friendlyName, ptz: true },
+        });
+        // Previous exporter versions used both camera entity and Scrypted IDs.
+        activePtzIds.add(scryptedEntityId);
+        activePtzIds.add(`camera.${camera.cameraId}`);
+      }
+    } catch (err) {
+      this.log.debug(`[PTZ] Could not read Scrypted camera inventory during cleanup: ${err}`);
+    }
+
+    const activeSafeIds = new Set(
+      [...activePtzIds].map((entityId) => entityId.replace(/\./g, "_")),
+    );
+    for (const endpoint of this.getDevices()) {
+      const uniqueId = String((endpoint as any).uniqueId || "");
+      const match = uniqueId.match(/^(.*)_(?:ptz_matter|zone_switch)$/);
+      if (!match || activeSafeIds.has(match[1])) continue;
+
+      try {
+        await this.unregisterDevice(endpoint);
+        this.log.notice(`[PTZ] Removed stale Matter PTZ endpoint ${uniqueId}`);
+      } catch (err) {
+        this.log.warn(`[PTZ] Could not remove stale Matter PTZ endpoint ${uniqueId}: ${err}`);
+      }
+    }
+
+    this.ptzMqttPublisher?.reconcileDiscovery([...activePtzIds]);
   }
 
   /**
@@ -5451,15 +5511,18 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           (pathname === "/api/cameras/ptz-info" ||
             pathname === "/api/custom/cameras/ptz-info")
         ) {
-          // If ptzManager has no cameras registered yet, seed from CameraUiStorage and HA entities
-          const registered = this.ptzManager.getAllPtzCameras();
-          if (registered.length === 0) {
-            const cuiStore = CameraUiStorage.getCachedStore();
-            const cuiCameras = (cuiStore?.cameras || {}) as Record<string, any>;
-            for (const [id, cam] of Object.entries(cuiCameras)) {
-              const state = this.ha.hassStates?.get(id);
-              this.ptzManager.registerCamera(id, state, cam?.streamUrl || cam?.source);
-            }
+          // Camera.UI stores cameras as an array. Object.entries(array) used to
+          // turn indexes ("0", "1", ...) into camera IDs and expose phantom
+          // numbered PTZ accessories in the UI.
+          const cuiStore = CameraUiStorage.getCachedStore();
+          for (const cam of cuiStore?.cameras || []) {
+            const cameraId = String(cam.id || "").trim();
+            if (!cameraId) continue;
+            const entityId = cameraId.startsWith("camera.")
+              ? cameraId
+              : `camera.cameraui_${cameraId.replace(/^cameraui_/, "")}`;
+            const state = this.ha.hassStates?.get(entityId);
+            this.ptzManager.registerCamera(entityId, state, cam.rtspUrl);
           }
           const cameras = this.ptzManager.getAllPtzCameras().filter((c) => c.hasPtz);
           res.writeHead(200, {
