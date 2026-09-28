@@ -8,6 +8,8 @@ interface ControlCenterProps {
     totalCameras: number;
     pairedTotal: number;
     pairedNodes: number;
+    pairedMatterTotal?: number;
+    pairedHapTotal?: number;
     scryptedTotal: number;
     scryptedPaired: number;
     camerauiTotal?: number;
@@ -26,6 +28,8 @@ interface ControlCenterProps {
   loading: boolean;
   onRefresh: () => void;
   filteredCount?: number;
+  pairedProtocolFilter: "all" | "matter" | "hap";
+  onPairedProtocolFilterChange: (filter: "all" | "matter" | "hap") => void;
 }
 
 export const ControlCenter: React.FC<ControlCenterProps> = ({
@@ -35,6 +39,8 @@ export const ControlCenter: React.FC<ControlCenterProps> = ({
   loading,
   onRefresh,
   filteredCount,
+  pairedProtocolFilter,
+  onPairedProtocolFilterChange,
 }) => {
   const cameraSubtext = [
     stats.camerauiTotal && stats.camerauiTotal > 0 ? `${stats.camerauiTotal} Camera.UI` : null,
@@ -44,7 +50,8 @@ export const ControlCenter: React.FC<ControlCenterProps> = ({
     .filter(Boolean)
     .join(" · ") || "Sin cámaras";
 
-  const totalHap = stats.totalHapPaired ?? (stats.scryptedPaired + stats.haCamsPaired + (stats.camerauiPaired ?? 0));
+  const totalHap = stats.pairedHapTotal ?? stats.totalHapPaired ?? (stats.scryptedPaired + stats.haCamsPaired + (stats.camerauiPaired ?? 0));
+  const totalMatter = stats.pairedMatterTotal ?? stats.pairedNodes;
 
   const cards: Array<{
     id: FilterType;
@@ -83,7 +90,7 @@ export const ControlCenter: React.FC<ControlCenterProps> = ({
       icon: "🍏",
       label: "EMPAREJADOS",
       count: stats.pairedTotal,
-      subtext: `${stats.pairedNodes} Matter · ${totalHap} HAP`,
+      subtext: `${totalMatter} Matter · ${totalHap} HAP`,
       variant: "success",
     },
     {
@@ -202,6 +209,27 @@ export const ControlCenter: React.FC<ControlCenterProps> = ({
           );
         })}
       </div>
+
+      {activeFilter === "paired" && (
+        <div className="paired-protocol-filter" role="tablist" aria-label="Filtrar accesorios emparejados">
+          {([
+            ["all", "Todos", stats.pairedTotal],
+            ["matter", "Matter", totalMatter],
+            ["hap", "HAP", totalHap],
+          ] as const).map(([filter, label, count]) => (
+            <button
+              key={filter}
+              type="button"
+              role="tab"
+              aria-selected={pairedProtocolFilter === filter}
+              className={pairedProtocolFilter === filter ? "active" : ""}
+              onClick={() => onPairedProtocolFilterChange(filter)}
+            >
+              {label}<span>{loading ? "—" : count}</span>
+            </button>
+          ))}
+        </div>
+      )}
     </section>
   );
 };

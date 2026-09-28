@@ -178,6 +178,9 @@ export class HapGenericAccessory {
     public readonly platform: any,
     public readonly entityId: string,
     public record: HapAccessoryRecord,
+    private readonly onLastPairingRemoved?: (
+      accessory: HapGenericAccessory,
+    ) => Promise<void>,
   ) {
     const accUuid =
       record.uuid || uuid.generate(`homekit:generic:${entityId}`);
@@ -185,6 +188,23 @@ export class HapGenericAccessory {
     this.accessory = new Accessory(record.name || entityId, accUuid);
     this.configureAccessoryInformation();
     this.addServiceForProfile(record.hapProfile);
+    this.accessory.on("paired", () => {
+      this.record.isPaired = true;
+      this.record.lastUpdated = new Date().toISOString();
+      void this.platform.saveHapAccessoryRecords?.();
+    });
+    this.accessory.on("unpaired", () => {
+      this.record.isPaired = false;
+      this.record.lastUpdated = new Date().toISOString();
+      // Let hap-nodejs finish its remove-pairing response before restarting.
+      setTimeout(() => {
+        if (this.onLastPairingRemoved) {
+          void this.onLastPairingRemoved(this);
+        } else {
+          void this.platform.saveHapAccessoryRecords?.();
+        }
+      }, 0);
+    });
   }
 
   // ──────────────────────────────────────────────
@@ -784,7 +804,11 @@ export class HapGenericAccessory {
   /** Retorna true si el accesorio tiene al menos un fabric establecido. */
   public isPaired(): boolean {
     try {
-      return (this.accessory as any)._accessoryInfo?.pairedClients?.size > 0;
+      const info = (this.accessory as any)._accessoryInfo;
+      if (typeof info?.paired === "function") return info.paired();
+      const clients = info?.pairedClients;
+      if (clients instanceof Map) return clients.size > 0;
+      return Boolean(clients && Object.keys(clients).length > 0);
     } catch {
       return false;
     }
@@ -901,6 +925,7 @@ export class HapGenericAccessory {
     entityId: string,
     usedPorts: Set<number>,
     startPort = 52000,
+    rotationSeed = "",
   ): {
     username: string;
     pincode: string;
@@ -910,7 +935,7 @@ export class HapGenericAccessory {
   } {
     const hash = crypto
       .createHash("sha256")
-      .update(`hap:generic:${entityId}`)
+      .update(`hap:generic:${entityId}:${rotationSeed}`)
       .digest("hex");
 
     const username =

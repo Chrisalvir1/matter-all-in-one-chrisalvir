@@ -51,6 +51,7 @@ export const App: React.FC = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [ptzCameras, setPtzCameras] = useState<CameraPtzInfo[]>([]);
   const [systemInfo, setSystemInfo] = useState<SystemInfoResponse | null>(null);
+  const [pairedProtocolFilter, setPairedProtocolFilter] = useState<"all" | "matter" | "hap">("all");
 
   const fetchPtzAndSystemInfo = async () => {
     try {
@@ -138,9 +139,20 @@ export const App: React.FC = () => {
       case "cameras":
         return [];
       case "paired":
-        return iotOnlyList.filter((d) =>
-          d.entities.some((e) => e.exported && e.commissioned)
-        );
+        return iotOnlyList
+          .map((device) => {
+            const pairedEntities = device.entities.filter((entity) => {
+              const matterPaired = entity.exported && entity.commissioned;
+              const hapPaired = Boolean(
+                entity.hapAccessory?.published && entity.hapAccessory?.isPaired,
+              );
+              if (pairedProtocolFilter === "matter") return matterPaired;
+              if (pairedProtocolFilter === "hap") return hapPaired;
+              return matterPaired || hapPaired;
+            });
+            return pairedEntities.length ? { ...device, entities: pairedEntities } : null;
+          })
+          .filter((device): device is DeviceRecord => device !== null);
       case "unpaired":
         return iotOnlyList.filter((d) =>
           d.entities.some((e) => e.exported && !e.commissioned)
@@ -168,7 +180,7 @@ export const App: React.FC = () => {
       default:
         return iotOnlyList;
     }
-  }, [allDevices, realHaCameraDevices, searchQuery, activeFilter]);
+  }, [allDevices, realHaCameraDevices, searchQuery, activeFilter, pairedProtocolFilter]);
 
   // Group cameras by brand when relevant to active tab
   const cameraBrandGroups = useMemo(() => {
@@ -183,9 +195,13 @@ export const App: React.FC = () => {
     }
 
     if (activeFilter === "paired") {
-      scryptedList = scryptedList.filter(
-        (c) => c.identity?.homeKitPairingState === "paired" || c.bindingState?.matterCommissioned === true
-      );
+      scryptedList = scryptedList.filter((c) => {
+        const matterPaired = c.bindingState?.matterCommissioned === true;
+        const hapPaired = c.identity?.homeKitPairingState === "paired";
+        if (pairedProtocolFilter === "matter") return matterPaired;
+        if (pairedProtocolFilter === "hap") return hapPaired;
+        return matterPaired || hapPaired;
+      });
     } else if (activeFilter === "unpaired") {
       // Only cameras with active bridge waiting to be paired
       scryptedList = scryptedList.filter(
@@ -229,7 +245,9 @@ export const App: React.FC = () => {
     }
 
     if (activeFilter === "paired") {
-      cuiList = cuiList.filter((c) => c.isPaired === true);
+      cuiList = pairedProtocolFilter === "matter"
+        ? []
+        : cuiList.filter((c) => c.isPaired === true);
     } else if (activeFilter === "unpaired") {
       cuiList = cuiList.filter((c) => c.homeKitEnabled && !c.isPaired);
     } else if (activeFilter === "unactivated") {
@@ -252,7 +270,13 @@ export const App: React.FC = () => {
 
     if (activeFilter === "paired") {
       haList = haList.filter((d) =>
-        d.entities.some((e) => e.homekitCamera?.isPaired || (e.exported && e.commissioned))
+        d.entities.some((e) => {
+          const matterPaired = Boolean(e.exported && e.commissioned);
+          const hapPaired = Boolean(e.homekitCamera?.isPaired);
+          if (pairedProtocolFilter === "matter") return matterPaired;
+          if (pairedProtocolFilter === "hap") return hapPaired;
+          return matterPaired || hapPaired;
+        }),
       );
     } else if (activeFilter === "unpaired") {
       haList = haList.filter((d) =>
@@ -317,7 +341,7 @@ export const App: React.FC = () => {
       ha: map.get(brand)!.ha,
       cui: map.get(brand)!.cui,
     }));
-  }, [activeFilter, cameras, cameraUiCameras, realHaCameraDevices, searchQuery]);
+  }, [activeFilter, cameras, cameraUiCameras, realHaCameraDevices, searchQuery, pairedProtocolFilter]);
 
   const totalVisibleCount = useMemo(() => {
     const cams = cameraBrandGroups.reduce(
@@ -373,9 +397,13 @@ export const App: React.FC = () => {
         matterExported: Boolean(e.exported),
       }));
 
-    const isPaired = dev.entities.some(
-      (e) => e.homekitCamera?.isPaired || (e.exported && e.commissioned)
-    );
+    const isMatterPaired = dev.entities.some((e) => e.exported && e.commissioned);
+    const isHapPaired = dev.entities.some((e) => e.homekitCamera?.isPaired);
+    const isPaired = pairedProtocolFilter === "matter"
+      ? isMatterPaired
+      : pairedProtocolFilter === "hap"
+        ? isHapPaired
+        : isMatterPaired || isHapPaired;
 
     return {
       cameraId: camEnt?.entityId || dev.id,
@@ -475,6 +503,8 @@ export const App: React.FC = () => {
             loading={loading}
             onRefresh={refreshAll}
             filteredCount={totalVisibleCount}
+            pairedProtocolFilter={pairedProtocolFilter}
+            onPairedProtocolFilterChange={setPairedProtocolFilter}
           />
 
           {/* Contextual Scrypted & Camera.UI Bar */}

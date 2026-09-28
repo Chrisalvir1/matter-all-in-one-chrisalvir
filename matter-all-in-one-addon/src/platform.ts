@@ -15,6 +15,7 @@ import fs from "fs/promises";
 import fsSync from "fs";
 import path from "path";
 import { spawn } from "child_process";
+import { randomUUID } from "node:crypto";
 
 const FALLBACK_JPEG_BUFFER = Buffer.from(
   "/9j/4AAQSkZJRgABAgAAAQABAAD//gAPTGF2YzYwLjMuMTAwAP/bAEMACAYGBwYHCAgICAgICQkJCgoKCQkJCQoKCgoKCgwMDAoKCgoKCgoMDAwMDQ4NDQ0MDQ4ODw8PEhIRERUVFRkZH//EAEwAAQEAAAAAAAAAAAAAAAAAAAAHAQEBAAAAAAAAAAAAAAAAAAAAARABAAAAAAAAAAAAAAAAAAAAABEBAAAAAAAAAAAAAAAAAAAAAP/AABEIAPABQAMBIgACEQADEQD/2gAIAwEAAhEDEQA/AI2AoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//9k=",
@@ -296,6 +297,71 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
    * Cleared on startup, repopulated by restoreHapAccessories().
    */
   public readonly hapAccessories = new Map<string, HapGenericAccessory>();
+  private readonly hapPairingRotations = new Set<string>();
+
+  private createHapGenericAccessory(
+    entityId: string,
+    record: HapAccessoryRecord,
+  ): HapGenericAccessory {
+    return new HapGenericAccessory(this, entityId, record, (accessory) =>
+      this.handleHapAccessoryUnpaired(entityId, accessory),
+    );
+  }
+
+  private async handleHapAccessoryUnpaired(
+    entityId: string,
+    previousAccessory: HapGenericAccessory,
+  ): Promise<void> {
+    if (this.hapPairingRotations.has(entityId)) return;
+    const record = this.hapAccessoryRecords.get(entityId);
+    if (
+      !record?.published ||
+      this.hapAccessories.get(entityId) !== previousAccessory ||
+      previousAccessory.isPaired()
+    ) {
+      return;
+    }
+
+    this.hapPairingRotations.add(entityId);
+    try {
+      const newCredentials = HapGenericAccessory.generateCredentials(
+        entityId,
+        new Set<number>(),
+        record.port,
+        randomUUID(),
+      );
+      await previousAccessory.unpublish();
+      this.hapAccessories.delete(entityId);
+
+      // Keep the accessory identity and pairing database, but rotate both
+      // values used to create the next manual code and setup QR.
+      record.pincode = newCredentials.pincode;
+      record.setupId = newCredentials.setupId;
+      record.isPaired = false;
+      record.lastUpdated = new Date().toISOString();
+      await this.saveHapAccessoryRecords();
+
+      const replacement = this.createHapGenericAccessory(entityId, record);
+      await replacement.publish();
+      this.hapAccessories.set(entityId, replacement);
+      record.published = true;
+      record.lastUpdated = new Date().toISOString();
+      await this.saveHapAccessoryRecords();
+      this.log.notice(
+        `HAP accessory ${entityId} was unpaired; published a fresh HomeKit QR and manual code.`,
+      );
+    } catch (err) {
+      this.hapAccessories.delete(entityId);
+      record.published = false;
+      record.isPaired = false;
+      await this.saveHapAccessoryRecords();
+      this.log.error(
+        `Could not regenerate HAP pairing code for ${entityId}: ${String(err)}`,
+      );
+    } finally {
+      this.hapPairingRotations.delete(entityId);
+    }
+  }
 
   public async saveHapAccessoryRecords(): Promise<void> {
     try {
@@ -419,7 +485,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   ): Promise<void> {
     if (this.hapAccessories.has(entityId)) return;
     const record = this.getOrCreateHapAccessoryRecord(entityId, hapProfile);
-    const acc = new HapGenericAccessory(this, entityId, record);
+    const acc = this.createHapGenericAccessory(entityId, record);
     await acc.publish();
     record.published = true;
     record.lastUpdated = new Date().toISOString();
@@ -449,7 +515,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         if (this.hapAccessories.has(record.entityId)) continue;
         identityUpdated =
           this.refreshHapAccessoryIdentity(record) || identityUpdated;
-        const acc = new HapGenericAccessory(this, record.entityId, record);
+        const acc = this.createHapGenericAccessory(record.entityId, record);
         await acc.publish();
         this.hapAccessories.set(record.entityId, acc);
         this.log.info(

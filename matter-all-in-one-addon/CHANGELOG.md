@@ -1,3 +1,11 @@
+## [1.9.24] - 2026-09-28
+
+### Emparejamiento HAP y organización del Centro de control
+
+- Se corrige la detección de emparejamiento HAP para HAP-NodeJS 2.2.3 y el estado de vínculo ahora se refleja en la interfaz.
+- Al eliminar de Apple Home el último vínculo HAP, se publica de nuevo el accesorio con un PIN, código manual y QR nuevos, conservando su identidad y puerto.
+- El filtro Emparejados separa accesorios Matter y HAP, incluidas cámaras y perfiles HAP genéricos, con conteos por protocolo.
+
 ## [1.9.23] - 2026-09-28
 
 ### Versiones de firmware Matter y HAP

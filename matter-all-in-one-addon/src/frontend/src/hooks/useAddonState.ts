@@ -226,16 +226,26 @@ export function useAddonState() {
     const totalCameras = scryptedTotal + haCamsTotal + camerauiTotal;
     const iotDevices = allDevices.filter((d) => !haCameraIds.has(d.id)).length;
 
-    // Paired total includes all active paired accessories (Matter nodes + Scrypted HAP/Matter cameras + Camera.UI HAP + HA cameras)
-    const scryptedPaired = cameras.filter(
-      (c) => c.identity?.homeKitPairingState === "paired" || c.bindingState?.matterCommissioned === true
+    const scryptedMatterPaired = cameras.filter(
+      (c) => c.bindingState?.matterCommissioned === true,
     ).length;
-    const haCamsPaired = realHaCameraDevices.filter((d) =>
-      d.entities.some((e) => e.homekitCamera?.isPaired || (e.exported && e.commissioned))
+    // HA camera entities are already included in pairedNodes above.
+    const pairedMatterTotal = pairedNodes + scryptedMatterPaired;
+
+    // Keep HAP accessories separate from Matter, including non-camera HAP profiles.
+    const genericHapPaired = entities.filter(
+      (e) => e.hapAccessory?.published && e.hapAccessory?.isPaired,
+    ).length;
+    const scryptedHapPaired = cameras.filter(
+      (c) => c.identity?.homeKitPairingState === "paired",
+    ).length;
+    const haCamsHapPaired = realHaCameraDevices.filter((d) =>
+      d.entities.some((e) => e.homekitCamera?.isPaired),
     ).length;
     const camerauiPaired = cameraUiCameras.filter((c) => c.isPaired).length;
-    const totalHapPaired = scryptedPaired + haCamsPaired + camerauiPaired;
-    const pairedTotal = pairedNodes + totalHapPaired;
+    const pairedHapTotal =
+      genericHapPaired + scryptedHapPaired + haCamsHapPaired + camerauiPaired;
+    const pairedTotal = pairedMatterTotal + pairedHapTotal;
 
     // Unpaired total represents accessories actively exported for Matter/HomeKit but waiting to be commissioned
     const haCamsPending = realHaCameraDevices.filter((d) =>
@@ -316,6 +326,8 @@ export function useAddonState() {
       iotDevices,
       exportedNodes,
       pairedNodes,
+      pairedMatterTotal,
+      pairedHapTotal,
       pendingNodes,
       exportedEntities,
       pairedEntities,
@@ -325,12 +337,12 @@ export function useAddonState() {
       issues,
       mqttCount,
       scryptedTotal,
-      scryptedPaired,
+      scryptedPaired: scryptedMatterPaired + scryptedHapPaired,
       camerauiTotal,
       camerauiPaired,
-      totalHapPaired,
+      totalHapPaired: pairedHapTotal,
       haCamsTotal,
-      haCamsPaired,
+      haCamsPaired: haCamsHapPaired,
       totalCameras,
     };
   }, [entities, allDevices, cameras, realHaCameraDevices, cameraUiCameras]);
