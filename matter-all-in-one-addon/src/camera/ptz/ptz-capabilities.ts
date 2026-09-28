@@ -111,47 +111,16 @@ export function detectCameraPtzCapabilities(
     supportsHardwarePtz = true;
   }
 
-  // Check HA camera attributes and features
+  // Check explicit HA camera capability flags only. Names and model strings
+  // are never evidence of PTZ: fixed cameras often contain "pan" or "ptz"
+  // in marketing names and created phantom exports in the dashboard.
   const attrs = state?.attributes || {};
-  const supportedFeatures = Number(attrs.supported_features || 0);
-  const modelOrName = `${entityId} ${friendlyName} ${attrs.model_name || ""} ${attrs.brand || ""}`.toLowerCase();
-
-  // Known PTZ keywords or onvif ptz indicators
-  if (
-    attrs.ptz === true ||
-    attrs.has_ptz === true ||
-    attrs.pan_tilt_zoom === true ||
-    modelOrName.includes("ptz") ||
-    modelOrName.includes("pan/tilt") ||
-    modelOrName.includes("pan-tilt") ||
-    modelOrName.includes("cam pan") ||
-    modelOrName.includes("pan v2") ||
-    modelOrName.includes("pan v3") ||
-    modelOrName.includes("cs-h6c") ||
-    modelOrName.includes("cs_h6c") ||
-    modelOrName.includes("vimtag") ||
-    modelOrName.includes("c200") ||
-    modelOrName.includes("c210") ||
-    modelOrName.includes("c500") ||
-    modelOrName.includes("eufy pan")
-  ) {
-    // Explicitly exclude fixed cameras like Tapo C120 / C402
-    if (!modelOrName.includes("c120") && !modelOrName.includes("c402")) {
-      supportsHardwarePtz = true;
-    }
-  }
+  if (attrs.ptz === true || attrs.has_ptz === true || attrs.pan_tilt_zoom === true) supportsHardwarePtz = true;
 
   // 2. Digital PTZ (DPTZ) Detection
   // DPTZ is supported when video stream is active and either hardware PTZ is available
   // or the camera model/configuration is explicitly designated for PTZ / ROI zones.
-  const hasStream = Boolean(
-    streamSource?.url ||
-      (streamSource?.metadata as any)?.directUrl ||
-      attrs.frontend_stream_type ||
-      state?.state !== "unavailable",
-  );
-
-  const supportsDigitalPtz = hasStream;
+  const supportsDigitalPtz = false;
 
   let ptzType: PtzType = "none";
   if (supportsHardwarePtz) {

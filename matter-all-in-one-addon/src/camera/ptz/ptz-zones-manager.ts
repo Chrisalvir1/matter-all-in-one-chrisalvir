@@ -67,26 +67,9 @@ export class PtzZonesManager extends EventEmitter {
       if (fsSync.existsSync(this.storePath)) {
         const raw = await fs.readFile(this.storePath, "utf-8");
         const data: PtzStoreData = JSON.parse(raw);
-        if (data && data.cameras) {
-          for (const [entityId, entry] of Object.entries(data.cameras)) {
-            const existing = this.cameraInfos.get(entityId) || {
-              entityId,
-              name: entityId,
-              hasPtz: true,
-              ptzType: "digital",
-              maxPresets: MAX_PTZ_PRESETS,
-              currentPreset: entry.currentPreset || 1,
-              currentZoneId: entry.currentZoneId || 1,
-              zones: entry.zones || getDefaultPtzZones(),
-              supportsHardwarePtz: false,
-              supportsDigitalPtz: true,
-            };
-            existing.zones = entry.zones || existing.zones;
-            existing.currentZoneId = entry.currentZoneId || existing.currentZoneId;
-            existing.currentPreset = entry.currentPreset || existing.currentPreset;
-            this.cameraInfos.set(entityId, existing);
-          }
-        }
+        // Persisted records are configuration only; never recreate an exported
+        // PTZ accessory from disk. A camera must be re-registered with an
+        // explicit hardware capability after discovery.
       }
     } catch (err) {
       // Clean fallback if file is empty or corrupted
