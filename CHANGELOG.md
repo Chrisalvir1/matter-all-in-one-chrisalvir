@@ -1,3 +1,12 @@
+## [1.9.32] - 2026-09-28
+
+### Corrección crítica: Live streaming en Apple Home para Tapo C402, Tapo C120, EZVIZ y Wyze
+
+- **AddressOverride para endpoint HAP SetupEndpoints:** Se incluye `addressOverride: request.sourceAddress` en la respuesta `PrepareStreamResponse`. Esto previene que HAP-NodeJS determine la dirección de socket local con la IP interna del contenedor Docker (ej. 172.30.32.1), garantizando que iOS/macOS dirija los paquetes RTCP a la IP LAN real del host (192.168.110.46) y proceda de inmediato al handshake `START` de Live View.
+- **Soporte RTCP bidireccional en FFmpeg (`localrtcpport`):** Se agrega el parámetro `localrtcpport` tanto en la URL SRTP de video como de audio en FFmpeg para asociar los puertos locales reservados (`localVideoPort` y `localAudioPort`), permitiendo a FFmpeg recibir feedback RTCP de iOS y mantener el stream activo sin cortes ni cancelaciones.
+- **Garantía de respuesta de audio en SetupEndpoints:** Si el cliente iOS solicita audio, `response.audio` se suministra invariablemente con fallback al puerto adyacente, evitando excepciones internas en HAP-NodeJS que abortaban la negociación de la sesión.
+- **Normalización del guard de inicio de FFmpeg:** Ajuste del temporizador de confirmación inicial a 500 ms (1000 ms para Tapo C120) y habilitación de recuperación automática por fallback en caso de fallo transitorio para todas las cámaras.
+
 ## [1.9.13] - 2026-09-27
 
 ### Corrección crítica: Passthrough HEVC original nativo sin transcodificación para cámaras Apple Home y estabilización definitiva de ventiladores BLE

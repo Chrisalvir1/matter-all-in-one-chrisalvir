@@ -777,9 +777,10 @@ export class HomeKitCameraStreamingDelegate
           request.video.srtp_salt,
         ]),
       };
-      if (request.audio && localAudioPort) {
+      if (request.audio) {
+        const audioPort = localAudioPort || (localVideoPort + 1);
         session.audioPort = request.audio.port;
-        session.localAudioPort = localAudioPort;
+        session.localAudioPort = audioPort;
         session.audioSsrc = CameraController.generateSynchronisationSource();
         session.audioCryptoSuite = request.audio.srtpCryptoSuite;
         session.audioKeySalt = Buffer.concat([
@@ -810,6 +811,7 @@ export class HomeKitCameraStreamingDelegate
       this.prepareTimeouts.set(request.sessionID, zombieTimer);
 
       const response: PrepareStreamResponse = {
+        addressOverride: request.sourceAddress,
         video: {
           port: localVideoPort,
           ssrc: session.videoSsrc,
@@ -817,16 +819,17 @@ export class HomeKitCameraStreamingDelegate
           srtp_salt: request.video.srtp_salt,
         },
       };
-      if (request.audio && localAudioPort) {
+      if (request.audio) {
+        const audioPort = session.localAudioPort || localAudioPort || (localVideoPort + 1);
         response.audio = {
-          port: localAudioPort,
+          port: audioPort,
           ssrc: session.audioSsrc!,
           srtp_key: request.audio.srtp_key,
           srtp_salt: request.audio.srtp_salt,
         };
       }
       this.platform?.log?.notice?.(
-        `[HomeKitCamera][${this.entityId}] [Session][${request.sessionID}] session-prepare activeSessions=${this.activeSessions.size} remote=${request.targetAddress}:${request.video.port} localVideoRTCP=${localVideoPort} videoSSRC=${session.videoSsrc}${localAudioPort ? ` localAudioRTCP=${localAudioPort} audioSSRC=${session.audioSsrc}` : ""}`,
+        `[HomeKitCamera][${this.entityId}] [Session][${request.sessionID}] session-prepare activeSessions=${this.activeSessions.size} addressOverride=${request.sourceAddress} remote=${request.targetAddress}:${request.video.port} localVideoRTCP=${localVideoPort} videoSSRC=${session.videoSsrc}${session.localAudioPort ? ` localAudioRTCP=${session.localAudioPort} audioSSRC=${session.audioSsrc}` : ""}`,
       );
       callback(undefined, response);
     } catch (error) {
@@ -1017,12 +1020,6 @@ export class HomeKitCameraStreamingDelegate
       qualityFloor,
       Math.min(video.max_bit_rate || 2500, maxBitrateCap),
     );
-    const mtu = video.mtu || 1378;
-    const host = formatHost(session.targetAddress);
-    const videoUrl =
-      `srtp://${host}:${session.videoPort}` +
-      `?rtcpport=${session.videoPort}&localrtcpport=${session.localVideoPort}&pkt_size=${mtu}&buffer_size=1048576`;
-
     // Cancel the prepare watchdog timer because stream has legitimately started
     const timer = this.prepareTimeouts.get(session.sessionId);
     if (timer !== undefined) {
@@ -1141,7 +1138,7 @@ export class HomeKitCameraStreamingDelegate
           // C120 now normalizes its H.264 stream for HAP and needs time for the
           // first encoded keyframe before HomeKit accepts the RTP session.
         },
-        isTapoC402 ? 80 : isTapoC120 ? 1200 : 800,
+        isTapoC120 ? 1000 : 500,
       );
       process.once("error", (error) => {
         clearTimeout(guard);
@@ -1158,7 +1155,6 @@ export class HomeKitCameraStreamingDelegate
         // retry immediately with safe transcoding and/or silent audio fallback
         if (
           code !== 0 &&
-          !isTapoC402 &&
           !session.retried &&
           this.activeSessions.has(session.sessionId)
         ) {
@@ -1273,7 +1269,7 @@ export class HomeKitCameraStreamingDelegate
     const host = formatHost(session.targetAddress);
     const videoUrl =
       `srtp://${host}:${session.videoPort}` +
-      `?rtcpport=${session.videoPort}&pkt_size=${mtu}&buffer_size=1048576`;
+      `?rtcpport=${session.videoPort}&localrtcpport=${session.localVideoPort}&pkt_size=${mtu}&buffer_size=1048576`;
 
     const isHaProxyStream =
       this.streamSource.sourceType === "ha_proxy" ||
@@ -1673,9 +1669,10 @@ export class HomeKitCameraStreamingDelegate
       session.audioSsrc &&
       request.audio
     ) {
+      const localAudioPort = session.localAudioPort || (session.localVideoPort + 1);
       const audioUrl =
         `srtp://${host}:${session.audioPort}` +
-        `?rtcpport=${session.audioPort}&pkt_size=188`;
+        `?rtcpport=${session.audioPort}&localrtcpport=${localAudioPort}&pkt_size=188`;
 
       const isOpus = request.audio.codec === AudioStreamingCodecType.OPUS;
       const targetCodec = isOpus ? "opus" : "aac_eld";

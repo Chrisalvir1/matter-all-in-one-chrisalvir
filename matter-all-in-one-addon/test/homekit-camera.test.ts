@@ -275,6 +275,7 @@ describe("HomeKitCameraStreamingDelegate", () => {
       delegate.prepareStream(
         {
           sessionID: "session-1",
+          sourceAddress: "192.168.1.100",
           targetAddress: "192.168.1.50",
           video: {
             port: 5000,
@@ -287,6 +288,7 @@ describe("HomeKitCameraStreamingDelegate", () => {
         (error, result) => (error ? reject(error) : resolve(result)),
       );
     });
+    expect(response.addressOverride).toBe("192.168.1.100");
     expect(response.video.port).not.toBe(5000);
     expect(response.video.port).toBeGreaterThan(0);
     expect(response.video.ssrc).toBeGreaterThan(0);
@@ -414,6 +416,10 @@ describe("HomeKitCameraStreamingDelegate", () => {
 
     // Verify NO Home Assistant token was leaked to external URL
     expect(capturedArgs.join(" ")).not.toContain("Authorization: Bearer");
+
+    // Verify localrtcpport is present in SRTP endpoints so iOS RTCP feedback reaches FFmpeg
+    expect(capturedArgs.join(" ")).toContain("localrtcpport=5001");
+    expect(capturedArgs.join(" ")).toContain("localrtcpport=5003");
   });
 
   it("passes HEVC source through natively using -c:v copy in streaming delegate", () => {
