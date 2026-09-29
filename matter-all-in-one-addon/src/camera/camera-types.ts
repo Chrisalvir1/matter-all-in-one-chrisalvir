@@ -90,6 +90,8 @@ export interface ResolvedStreamSource {
 
 export interface HomeKitCameraStorageRecord {
   entityId: string;
+  /** Real HA camera backing a Camera.UI managed accessory, if applicable. */
+  sourceCameraEntityId?: string;
   uuid: string;
   username: string;
   pincode: string;

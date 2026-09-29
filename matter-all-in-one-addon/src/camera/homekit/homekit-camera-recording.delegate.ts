@@ -873,10 +873,13 @@ export class HomeKitCameraRecordingDelegate
 
       // Refresh dynamic URL if needed
       let sourceUrl = this.streamSource.url;
-      let haEntityId = this.entityId;
-      if (!haEntityId.startsWith("camera.")) {
+      let haEntityId = this.record.sourceCameraEntityId || this.entityId;
+      if (!/^camera\.[a-z0-9_]+$/.test(haEntityId)) {
         const realCam = this.record.realEntities?.find(
-          (e: any) => typeof e?.id === "string" && e.id.startsWith("camera."),
+          (e: any) =>
+            typeof e?.id === "string" &&
+            /^camera\.[a-z0-9_]+$/.test(e.id) &&
+            this.platform?.ha?.hassStates?.has(e.id),
         )?.id;
         if (realCam) {
           haEntityId = realCam;
@@ -890,15 +893,27 @@ export class HomeKitCameraRecordingDelegate
           } else if (this.platform?.ha?.hassStates?.has("camera.tapo_c402")) {
             haEntityId = "camera.tapo_c402";
           } else {
-            haEntityId = "camera.tapo_frente_de_calle";
+            haEntityId = "";
           }
         }
       }
 
       if (
-        !sourceUrl ||
-        this.streamSource.sourceType === "hls" ||
-        this.streamSource.sourceType === "ha_proxy"
+        haEntityId &&
+        (!/^camera\.[a-z0-9_]+$/.test(haEntityId) ||
+          !this.platform?.ha?.hassStates?.has(haEntityId))
+      ) {
+        haEntityId = "";
+      }
+      if (!haEntityId && this.streamSource.sourceType === "ha_proxy") {
+        sourceUrl = "";
+      }
+
+      if (
+        haEntityId &&
+        (!sourceUrl ||
+          this.streamSource.sourceType === "hls" ||
+          this.streamSource.sourceType === "ha_proxy")
       ) {
         const state = this.platform?.ha?.hassStates?.get(haEntityId);
         if (state) {

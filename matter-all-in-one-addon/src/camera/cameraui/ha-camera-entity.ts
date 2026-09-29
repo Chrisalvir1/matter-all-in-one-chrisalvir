@@ -1,0 +1,60 @@
+import type { CameraUiCameraRecord } from "./cameraui-types.js";
+
+/** Resolve a Camera.UI record to a real Home Assistant camera entity. */
+export function resolveHaCameraEntityId(
+  camera: Pick<
+    CameraUiCameraRecord,
+    "id" | "name" | "snapshotUrl" | "realEntities"
+  >,
+  hassStates?: Map<string, any>,
+): string | undefined {
+  if (!hassStates) return undefined;
+
+  const isValidCameraEntityId = (value: unknown): value is string =>
+    typeof value === "string" && /^camera\.[a-z0-9_]+$/.test(value);
+  const candidates: string[] = [];
+  const snapshotEntity = camera.snapshotUrl?.match(
+    /\/api\/camera_proxy\/(camera\.[a-z0-9_.]+)/i,
+  )?.[1];
+  if (snapshotEntity) candidates.push(snapshotEntity.toLowerCase());
+  for (const entity of camera.realEntities || []) {
+    if (isValidCameraEntityId(entity.id)) candidates.push(entity.id);
+  }
+
+  const cameraName = (camera.name || "").toLowerCase();
+  const isC402 = /(?:\bc402\b|tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle)/i.test(
+    `${camera.id} ${cameraName}`,
+  );
+  if (isC402) {
+    candidates.push("camera.tapo_frente_de_calle", "camera.tapo_c402");
+  }
+  for (const id of candidates) {
+    if (isValidCameraEntityId(id) && hassStates.has(id)) return id;
+  }
+
+  // Match an HA camera by its friendly name when Camera.UI did not retain the
+  // linked entity ID. Never synthesize an entity from Camera.UI's UUID.
+  const normalizedName = cameraName.replace(/[^a-z0-9]+/g, " ").trim();
+  if (normalizedName) {
+    const nameTokens = normalizedName
+      .split(/\s+/)
+      .filter((token) => token.length > 1);
+    for (const [id, state] of hassStates) {
+      if (!isValidCameraEntityId(id)) continue;
+      const friendlyName = String(state?.attributes?.friendly_name || "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, " ")
+        .trim();
+      if (
+        friendlyName &&
+        (friendlyName === normalizedName ||
+          friendlyName.includes(normalizedName) ||
+          normalizedName.includes(friendlyName) ||
+          nameTokens.every((token) => friendlyName.includes(token)))
+      ) {
+        return id;
+      }
+    }
+  }
+  return undefined;
+}
