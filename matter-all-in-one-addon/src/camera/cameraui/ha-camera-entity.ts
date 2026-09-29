@@ -4,21 +4,19 @@ import type { CameraUiCameraRecord } from "./cameraui-types.js";
 export function resolveHaCameraEntityId(
   camera: Pick<
     CameraUiCameraRecord,
-    "id" | "name" | "snapshotUrl" | "realEntities"
+    "id" | "name" | "realEntities"
   >,
   hassStates?: Map<string, any>,
 ): string | undefined {
   if (!hassStates) return undefined;
 
-  const isValidCameraEntityId = (value: unknown): value is string =>
-    typeof value === "string" && /^camera\.[a-z0-9_]+$/.test(value);
+  const isStreamCameraEntityId = (value: unknown): value is string =>
+    typeof value === "string" &&
+    /^camera\.[a-z0-9_]+$/.test(value) &&
+    !/(?:^|_)(?:snapshot|still|image)(?:_|$)/i.test(value);
   const candidates: string[] = [];
-  const snapshotEntity = camera.snapshotUrl?.match(
-    /\/api\/camera_proxy\/(camera\.[a-z0-9_.]+)/i,
-  )?.[1];
-  if (snapshotEntity) candidates.push(snapshotEntity.toLowerCase());
   for (const entity of camera.realEntities || []) {
-    if (isValidCameraEntityId(entity.id)) candidates.push(entity.id);
+    if (isStreamCameraEntityId(entity.id)) candidates.push(entity.id);
   }
 
   const cameraName = (camera.name || "").toLowerCase();
@@ -29,7 +27,7 @@ export function resolveHaCameraEntityId(
     candidates.push("camera.tapo_frente_de_calle", "camera.tapo_c402");
   }
   for (const id of candidates) {
-    if (isValidCameraEntityId(id) && hassStates.has(id)) return id;
+    if (isStreamCameraEntityId(id) && hassStates.has(id)) return id;
   }
 
   // Match an HA camera by its friendly name when Camera.UI did not retain the
@@ -38,13 +36,17 @@ export function resolveHaCameraEntityId(
   if (normalizedName) {
     const nameTokens = normalizedName
       .split(/\s+/)
-      .filter((token) => token.length > 1);
+      .filter(
+        (token) =>
+          token.length > 1 && !["snapshot", "still", "image"].includes(token),
+      );
     for (const [id, state] of hassStates) {
-      if (!isValidCameraEntityId(id)) continue;
+      if (!isStreamCameraEntityId(id)) continue;
       const friendlyName = String(state?.attributes?.friendly_name || "")
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, " ")
         .trim();
+      if (/\b(?:snapshot|still image|image)\b/i.test(friendlyName)) continue;
       if (
         friendlyName &&
         (friendlyName === normalizedName ||

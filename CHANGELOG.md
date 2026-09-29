@@ -6,6 +6,13 @@
 - **UUID de Camera.UI:** Se rechazan IDs con guiones o inexistentes antes de llamar a las API de cámara de Home Assistant. Si no se encuentra la entidad real, el stream queda sin fuente y se registra como tal en vez de reintentar una URL que devuelve 404.
 - **Wyze, EZVIZ y Tapo C120:** Se conserva su fuente Camera.UI/RTSP; la resolución especial de entidades HA se aplica a las cámaras que realmente dependen de Home Assistant.
 
+## [1.9.34] - 2026-09-29
+
+### Corrección crítica de streams HomeKit y fuente de video de C402
+
+- **HomeKit IPv4/IPv6:** Se normaliza la dirección IPv4 mapeada que Node entrega como `::ffff:x.x.x.x` antes de responder Setup Endpoints. Esto evita que HAP-NodeJS rechace la negociación IPv4 con `Expected ipv4 but got ipv6` y deje la cámara en «Sin respuesta».
+- **Tapo C402 desde Home Assistant:** La resolución de fuente ya no toma la entidad de snapshot (`camera.tapo_c402_snapshot`) como stream de video. Solo acepta entidades `camera.*` de video existentes y descarta nombres/IDs de snapshot, still o image, eliminando el proxy 404 que vaciaba el prebuffer y cerraba HKSV.
+
 ## [1.9.32] - 2026-09-28
 
 ### Corrección crítica: Live streaming en Apple Home para Tapo C402, Tapo C120, EZVIZ y Wyze

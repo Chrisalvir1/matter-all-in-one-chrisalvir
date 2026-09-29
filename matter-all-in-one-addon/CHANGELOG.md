@@ -1,3 +1,10 @@
+## [1.9.34] - 2026-09-29
+
+### Corrección crítica de streams HomeKit y fuente de video de C402
+
+- **HomeKit IPv4/IPv6:** Se normaliza la dirección IPv4 mapeada que Node entrega como `::ffff:x.x.x.x` antes de responder Setup Endpoints. Esto evita que HAP-NodeJS rechace la negociación IPv4 con `Expected ipv4 but got ipv6` y deje la cámara en «Sin respuesta».
+- **Tapo C402 desde Home Assistant:** La resolución de fuente ya no toma la entidad de snapshot (`camera.tapo_c402_snapshot`) como stream de video. Solo acepta entidades `camera.*` de video existentes y descarta nombres/IDs de snapshot, still o image, eliminando el proxy 404 que vaciaba el prebuffer y cerraba HKSV.
+
 ## [1.9.33] - 2026-09-29
 
 ### Reparación de cámaras HA y Camera.UI
