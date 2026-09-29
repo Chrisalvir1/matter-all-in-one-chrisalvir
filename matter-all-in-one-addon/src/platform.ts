@@ -1225,8 +1225,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   }
 
   private recordConnectionProblem(message: string) {
-    for (const entityId of this.entities.keys())
-      this.recordEntityDiagnostic(entityId, message, "warning");
+    this.log.warn(`[Connection] ${message}`);
   }
 
   /**
@@ -2598,6 +2597,23 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       for (const entityId of this.entities.keys()) {
         this.clearEntityProblem(entityId);
       }
+      // Purge any stale transient connection warnings from entity diagnostics so they don't linger in "Revisar"
+      for (const [entityId, diags] of this.entityDiagnostics) {
+        const cleaned = diags.filter(
+          (d) => !d.message.includes("Home Assistant desconectado"),
+        );
+        if (cleaned.length !== diags.length) {
+          if (cleaned.length === 0) {
+            this.entityDiagnostics.delete(entityId);
+            this.entityProblems.delete(entityId);
+          } else {
+            this.entityDiagnostics.set(entityId, cleaned);
+            if (!cleaned.some((d) => d.level === "error" || d.level === "warning")) {
+              this.entityProblems.delete(entityId);
+            }
+          }
+        }
+      }
       // Restore reachability for exported entities that may have been marked unreachable
       for (const [entityId, entity] of this.entities) {
         if (!this.isEntityExported(entityId)) continue;
@@ -2629,9 +2645,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       }
       const message = this.describeHomeAssistantConnectionFailure(reason);
       this.log.warn(`Disconnected from Home Assistant: ${message}`);
-      // Grace period of 10s before marking exported devices unreachable.
-      // Transient reconnects (HA reload or brief network jitter) should not trigger
-      // false offline alarms in Apple Home nor flood devices into error review.
+      // Grace period of 20s before marking exported devices unreachable.
+      // Transient reconnects (HA reload, add-on startup, or brief network jitter)
+      // should never trigger false offline alarms in Apple Home nor mark devices in error review.
       if (this.haDisconnectGraceTimer) {
         clearTimeout(this.haDisconnectGraceTimer);
       }
@@ -2643,7 +2659,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         this.markExportedDevicesUnreachable(
           `Home Assistant desconectado: ${message}`,
         );
-      }, 10_000);
+      }, 20_000);
     });
 
     this.ha.on("error", (err) => {

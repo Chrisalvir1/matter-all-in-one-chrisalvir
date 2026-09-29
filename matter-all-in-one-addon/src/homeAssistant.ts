@@ -1220,8 +1220,9 @@ export class HomeAssistant extends EventEmitter {
   private pingTimeout: NodeJS.Timeout | undefined = undefined;
   private reconnectTimeout: NodeJS.Timeout | undefined = undefined;
   private connectionTimeout: NodeJS.Timeout | undefined = undefined;
-  private readonly pingIntervalTime: number = 15000;
-  private readonly pingTimeoutTime: number = 10000;
+  private readonly pingIntervalTime: number = 30000;
+  private readonly pingTimeoutTime: number = 30000;
+  private missedPings = 0;
   private readonly reconnectTimeoutTime: number = 60000; // Reconnect timeout in milliseconds, 0 means no timeout.
   private readonly reconnectRetries: number = 0; // 0 means retry indefinitely.
   private readonly connectionTimeoutTime: number;
@@ -1353,6 +1354,7 @@ export class HomeAssistant extends EventEmitter {
 
   private onPong(data: Buffer) {
     this.log.debug("WebSocket pong received");
+    this.missedPings = 0;
     if (this.pingTimeout) {
       clearTimeout(this.pingTimeout);
       this.pingTimeout = undefined;
@@ -1389,6 +1391,7 @@ export class HomeAssistant extends EventEmitter {
     }
     if (response.type === "pong") {
       this.log.debug(`Home Assistant pong received with id ${response.id}`);
+      this.missedPings = 0;
       // istanbul ignore else
       if (this.pingTimeout) {
         clearTimeout(this.pingTimeout);
@@ -1648,8 +1651,12 @@ export class HomeAssistant extends EventEmitter {
       try {
         this.log.info(`Connecting to Home Assistant on ${this.wsUrl}...`);
 
+        const wsEndpoint = this.wsUrl.endsWith("/api/websocket")
+          ? this.wsUrl
+          : `${this.wsUrl.replace(/\/+$/, "")}/api/websocket`;
+
         if (this.wsUrl.startsWith("ws://")) {
-          this.ws = new WebSocket(this.wsUrl + "/api/websocket");
+          this.ws = new WebSocket(wsEndpoint);
         } else if (this.wsUrl.startsWith("wss://")) {
           let ca:
             | string
@@ -1664,7 +1671,7 @@ export class HomeAssistant extends EventEmitter {
             ca = readFileSync(this.certificatePath); // Load CA certificate from the provided path
             this.log.debug(`CA certificate loaded successfully`);
           }
-          this.ws = new WebSocket(this.wsUrl + "/api/websocket", {
+          this.ws = new WebSocket(wsEndpoint, {
             ca,
             rejectUnauthorized: this.rejectUnauthorized,
           });
@@ -1896,12 +1903,19 @@ export class HomeAssistant extends EventEmitter {
       );
       this.log.debug("Starting ping timeout...");
       this.pingTimeout = setTimeout(() => {
-        this.log.error("Ping timeout. Closing connection...");
         this.pingTimeout = undefined;
-        // A graceful close of an unreachable peer waits for another timeout.
-        // Terminating emits close immediately and lets onClose reconnect.
-        this.closing = false;
-        this.ws?.terminate();
+        this.missedPings++;
+        if (this.missedPings >= 2) {
+          this.log.error(
+            `Ping timeout (${this.missedPings} pings sin respuesta). Forzando reconexión WebSocket con Home Assistant...`,
+          );
+          this.closing = false;
+          this.ws?.terminate();
+        } else {
+          this.log.debug(
+            `Ping sin respuesta (${this.missedPings}/2), otorgando margen antes de desconectar...`,
+          );
+        }
       }, this.pingTimeoutTime).unref();
       this.log.debug("Started ping timeout");
     }, this.pingIntervalTime).unref();
@@ -1913,6 +1927,7 @@ export class HomeAssistant extends EventEmitter {
    */
   private stopPing() {
     this.log.debug("Stopping ping interval...");
+    this.missedPings = 0;
     if (this.pingInterval) {
       clearInterval(this.pingInterval);
       this.pingInterval = undefined;
