@@ -1,45 +1,56 @@
 import React, { useState } from "react";
-import { DeviceRecord, CameraRecord } from "../types";
+import { DeviceRecord, CameraRecord, CameraUiCameraItem } from "../types";
 
 interface PairedModalProps {
   // Matter paired: IoT devices + HA cameras with Matter commissioned
   matterDevices: DeviceRecord[];
   matterCameras: CameraRecord[];
   matterHaCameras: DeviceRecord[];
-  // HAP paired: Scrypted cameras paired with HomeKit
+  // HAP paired: Camera.UI cameras + Scrypted cameras + HA cameras paired with HomeKit
+  cuiCameras?: CameraUiCameraItem[];
   hapCameras: CameraRecord[];
   hapHaCameras: DeviceRecord[];
   onClose: () => void;
   onOpenDevice: (device: DeviceRecord) => void;
+  onOpenCuiCamera?: (cam: CameraUiCameraItem) => void;
 }
 
 export const PairedModal: React.FC<PairedModalProps> = ({
   matterDevices,
   matterCameras,
   matterHaCameras,
+  cuiCameras = [],
   hapCameras,
   hapHaCameras,
   onClose,
   onOpenDevice,
+  onOpenCuiCamera,
 }) => {
   const [activeTab, setActiveTab] = useState<"matter" | "hap">("matter");
 
   const totalMatter = matterDevices.length + matterCameras.length + matterHaCameras.length;
-  const totalHap = hapCameras.length + hapHaCameras.length;
+  const totalHap = cuiCameras.length + hapCameras.length + hapHaCameras.length;
 
   return (
     <div
-      className="modal-backdrop"
+      className="modal-backdrop open"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       style={{
-        position: "fixed", inset: 0, zIndex: 1000,
-        background: "rgba(0,0,0,0.6)", backdropFilter: "blur(8px)",
-        display: "flex", alignItems: "center", justifyContent: "center",
+        position: "fixed",
+        inset: 0,
+        zIndex: 1000,
+        background: "rgba(0,0,0,0.6)",
+        backdropFilter: "blur(8px)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
         padding: "16px",
+        opacity: 1,
+        pointerEvents: "auto",
       }}
     >
       <div
-        className="paired-modal"
+        className="paired-modal modal"
         style={{
           background: "var(--glass)",
           border: "1px solid var(--border)",
@@ -118,7 +129,7 @@ export const PairedModal: React.FC<PairedModalProps> = ({
                 <>
                   {matterDevices.length > 0 && (
                     <>
-                      <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--muted)", letterSpacing: "0.06em", marginBottom: 10 }}>IoT DEVICES ({matterDevices.length})</div>
+                      <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--muted)", letterSpacing: "0.06em", marginBottom: 10 }}>IOT DEVICES ({matterDevices.length})</div>
                       <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
                         {matterDevices.map(d => (
                           <button
@@ -197,6 +208,33 @@ export const PairedModal: React.FC<PairedModalProps> = ({
                 <p style={{ color: "var(--muted)", textAlign: "center", padding: 40 }}>No hay dispositivos emparejados en HAP.</p>
               ) : (
                 <>
+                  {cuiCameras.length > 0 && (
+                    <>
+                      <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--muted)", letterSpacing: "0.06em", marginBottom: 10 }}>CÁMARAS HOMEKIT HAP ({cuiCameras.length})</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
+                        {cuiCameras.map(c => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => onOpenCuiCamera?.(c)}
+                            style={{
+                              display: "flex", alignItems: "center", gap: 12,
+                              background: "rgba(59,130,246,0.07)", border: "1px solid rgba(59,130,246,0.2)",
+                              borderRadius: 10, padding: "10px 14px", cursor: onOpenCuiCamera ? "pointer" : "default",
+                              color: "var(--text)", textAlign: "left", width: "100%",
+                            }}
+                          >
+                            <span style={{ fontSize: 20 }}>📹</span>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontWeight: 600, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</div>
+                              <div style={{ fontSize: 11, color: "var(--muted)" }}>{c.model || "Cámara HAP"} · HomeKit</div>
+                            </div>
+                            <span style={{ color: "#60a5fa", fontSize: 11, fontWeight: 600 }}>✓ HAP</span>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
                   {hapCameras.length > 0 && (
                     <>
                       <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--muted)", letterSpacing: "0.06em", marginBottom: 10 }}>CÁMARAS HAP SCRYPTED ({hapCameras.length})</div>

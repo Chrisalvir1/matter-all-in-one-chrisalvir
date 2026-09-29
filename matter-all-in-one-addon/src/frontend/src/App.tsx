@@ -504,6 +504,7 @@ export const App: React.FC = () => {
             onFilterChange={(filter) => {
               if (filter === "paired") {
                 setIsPairedModalOpen(true);
+                setActiveFilter("paired");
               } else {
                 setActiveFilter(filter);
               }
@@ -639,6 +640,7 @@ export const App: React.FC = () => {
           matterHaCameras={realHaCameraDevices.filter(d =>
             d.entities.some(e => e.exported && e.commissioned)
           )}
+          cuiCameras={cameraUiCameras.filter(c => c.isPaired === true)}
           hapCameras={cameras.filter(
             c => c.identity?.homeKitPairingState === "paired" && !c.bindingState?.matterCommissioned
           )}
@@ -649,6 +651,10 @@ export const App: React.FC = () => {
           onOpenDevice={(device) => {
             setIsPairedModalOpen(false);
             setSelectedDevice(device);
+          }}
+          onOpenCuiCamera={(cam) => {
+            setIsPairedModalOpen(false);
+            setSelectedCameraUiCamera(cam);
           }}
         />
       )}
