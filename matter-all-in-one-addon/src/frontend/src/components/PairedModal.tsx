@@ -260,7 +260,7 @@ export const PairedModal: React.FC<PairedModalProps> = ({
                             <span style={{ fontSize: 20 }}>📹</span>
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ fontWeight: 600, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</div>
-                              <div style={{ fontSize: 11, color: "var(--muted)" }}>{c.model || "Cámara HAP"} · <code>HAP-NodeJS 2.2.3</code></div>
+                              <div style={{ fontSize: 11, color: "var(--muted)" }}>{c.model || "Cámara HAP"} · <code>{c.firmwareRevision || "HAP-NodeJS 2.2.3"}</code></div>
                             </div>
                             <span style={{ color: "#60a5fa", fontSize: 11, fontWeight: 600 }}>✓ HAP</span>
                           </button>
@@ -284,7 +284,7 @@ export const PairedModal: React.FC<PairedModalProps> = ({
                             <span style={{ fontSize: 20 }}>📹</span>
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ fontWeight: 600, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</div>
-                              <div style={{ fontSize: 11, color: "var(--muted)" }}>Scrypted · <code>HAP-NodeJS 2.2.3</code></div>
+                              <div style={{ fontSize: 11, color: "var(--muted)" }}>Scrypted · <code>{c.firmwareRevision || "HAP-NodeJS 2.2.3"}</code></div>
                             </div>
                             <span style={{ color: "#60a5fa", fontSize: 11, fontWeight: 600 }}>✓ HAP</span>
                           </div>

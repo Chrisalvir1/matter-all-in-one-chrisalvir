@@ -186,6 +186,7 @@ export interface CameraRecord {
   displayManufacturer?: string;
   serialNumber?: string;
   displaySerialNumber?: string;
+  firmwareRevision?: string;
   sourceManufacturer?: string;
   sourceModel?: string;
   identityOverride?: {
@@ -339,6 +340,7 @@ export interface CameraUiCameraItem {
   manufacturer?: string;
   model?: string;
   serialNumber?: string;
+  firmwareRevision?: string;
   hasAudio?: boolean;
   width?: number;
   height?: number;

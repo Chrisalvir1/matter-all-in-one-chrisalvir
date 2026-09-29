@@ -394,7 +394,7 @@ export const CameraUiModal: React.FC<CameraUiModalProps> = ({
                       <div>
                         <strong style={{ fontSize: "0.95rem" }}>{cam.name}</strong>
                         <div style={{ fontSize: "0.75rem", color: "var(--dim)", marginTop: 2 }}>
-                          ID: <code>{cam.id}</code> · Puerto HAP: <code>{cam.port || "Pendiente"}</code>
+                          ID: <code>{cam.id}</code> · Puerto HAP: <code>{cam.port || "Pendiente"}</code> · Firmware: <code>{cam.firmwareRevision || "HAP-NodeJS 2.2.3"}</code>
                         </div>
                       </div>
                       <span

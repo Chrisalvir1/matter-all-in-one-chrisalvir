@@ -6095,6 +6095,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                         ffmpegPath:
                           resolveFfmpegPath() || "No instalado en el sistema",
                         ffmpegVersion: getFfmpegVersion() || "N/A",
+                        firmwareRevision: HAP_FIRMWARE_REVISION,
                       };
                     })()
                   : null,
@@ -7205,9 +7206,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                 cam.displaySerialNumber ||
                 cam.serialNumber ||
                 "Serial no disponible",
+              firmwareRevision: HAP_FIRMWARE_REVISION,
               bindingState,
               identity: {
                 ...cam.identity,
+                firmwareRevision: HAP_FIRMWARE_REVISION,
                 matterPairingCode:
                   cam.identity?.matterPairingCode ||
                   matterInfo.pairingCode ||
@@ -8669,6 +8672,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               status: effectiveStatus,
               setupUri: acc?.setupUri || cam.setupUri,
               isPaired: livePaired,
+              firmwareRevision: HAP_FIRMWARE_REVISION,
               port: acc?.record?.port || cam.port,
               pincode: acc?.record?.pincode || cam.pincode || "031-45-154",
               setupId: acc?.record?.setupId || cam.setupId,

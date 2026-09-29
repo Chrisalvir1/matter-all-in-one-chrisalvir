@@ -33,7 +33,10 @@ import {
 import crypto from "node:crypto";
 import os from "node:os";
 import { ScryptedStorage } from "../scrypted/scrypted-storage.js";
-import { HAP_FIRMWARE_REVISION } from "../../utils/hap-firmware.js";
+import {
+  HAP_FIRMWARE_REVISION,
+  HAP_NODEJS_VERSION,
+} from "../../utils/hap-firmware.js";
 import type { CameraRecord } from "../scrypted/scrypted-types.js";
 import { CameraUiStorage } from "../cameraui/cameraui-storage.js";
 import {
@@ -129,6 +132,9 @@ export class HomeKitCameraAccessory {
       this.streamSource.metadata?.hasCameraMotion,
     );
     const isC120 = this.isTapoC120();
+    if (isC120 && (!this.capabilities.maxFps || this.capabilities.maxFps <= 0)) {
+      this.capabilities.maxFps = 15;
+    }
     const isC402 = this.isTapoC402();
     if (
       this.linkedMotionEntityId ||
@@ -342,27 +348,28 @@ export class HomeKitCameraAccessory {
   }
 
   private configureAccessoryInformation(): void {
+    const mfr = this.record.manufacturer
+      ? `${this.record.manufacturer} (HAP-NodeJS)`
+      : "Chrisalvir (HAP-NodeJS)";
+    const model = this.record.model
+      ? `${this.record.model} (HAP-NodeJS ${HAP_NODEJS_VERSION})`
+      : `HAP-NodeJS ${HAP_NODEJS_VERSION} Camera`;
+
     this.accessory
       .getService(Service.AccessoryInformation)
-      ?.setCharacteristic(
-        Characteristic.Manufacturer,
-        this.record.manufacturer || "Matter all in one Chrisalvir",
-      )
-      ?.setCharacteristic(
-        Characteristic.Model,
-        this.record.model || "Modelo no identificado",
-      )
+      ?.setCharacteristic(Characteristic.Manufacturer, mfr)
+      ?.setCharacteristic(Characteristic.Model, model)
       ?.setCharacteristic(
         Characteristic.SerialNumber,
         this.record.serialNumber || this.entityId.toUpperCase(),
       )
       ?.setCharacteristic(
         Characteristic.FirmwareRevision,
-        HAP_FIRMWARE_REVISION,
+        HAP_NODEJS_VERSION,
       )
       ?.setCharacteristic(
         Characteristic.SoftwareRevision,
-        HAP_FIRMWARE_REVISION,
+        HAP_NODEJS_VERSION,
       );
   }
 
@@ -953,7 +960,6 @@ export class HomeKitCameraAccessory {
       this.notifyPairingStateChanged(false);
     });
 
-    const primaryIface = HomeKitCameraAccessory.detectPrimaryNetworkInterface();
     await this.accessory.publish(
       {
         username: this.record.username,
@@ -962,13 +968,13 @@ export class HomeKitCameraAccessory {
         category: Categories.IP_CAMERA,
         setupID: this.record.setupId,
         advertiser: MDNSAdvertiser.CIAO,
-        bind: primaryIface?.name ? [primaryIface.name] : undefined,
+        bind: undefined,
       },
       true,
     );
     this.isPublished = true;
     this.platform?.log?.notice?.(
-      `[HomeKitCamera][${this.entityId}] Published production HAP camera port=${this.record.port} (advertiser=ciao, iface=${primaryIface?.name || "all"}) HKSV=${this.record.hksvEnabled ? "enabled" : "disabled"}`,
+      `[HomeKitCamera][${this.entityId}] Published production HAP camera port=${this.record.port} (advertiser=ciao, iface=all) HKSV=${this.record.hksvEnabled ? "enabled" : "disabled"}`,
     );
 
     // Camera.UI already supplies its RTSP codec/audio metadata.  Probing and

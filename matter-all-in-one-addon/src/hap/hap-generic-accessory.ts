@@ -19,7 +19,10 @@ import {
 } from "@homebridge/hap-nodejs";
 import crypto from "node:crypto";
 import os from "node:os";
-import { HAP_FIRMWARE_REVISION } from "../utils/hap-firmware.js";
+import {
+  HAP_FIRMWARE_REVISION,
+  HAP_NODEJS_VERSION,
+} from "../utils/hap-firmware.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tipos exportados
@@ -214,15 +217,16 @@ export class HapGenericAccessory {
   private configureAccessoryInformation(): void {
     const info = this.accessory.getService(Service.AccessoryInformation);
     if (!info) return;
+    const mfr = this.record.manufacturer
+      ? `${this.record.manufacturer} (HAP-NodeJS)`
+      : "Matter All-in-One (HAP-NodeJS)";
+    const model = this.record.model
+      ? `${this.record.model} (HAP-NodeJS ${HAP_NODEJS_VERSION})`
+      : `HAP-NodeJS ${HAP_NODEJS_VERSION} - ${HAP_PROFILE_LABELS[this.record.hapProfile] || "HAP Device"}`;
+
     info
-      .setCharacteristic(
-        Characteristic.Manufacturer,
-        this.record.manufacturer || "Matter All-in-One Chrisalvir",
-      )
-      .setCharacteristic(
-        Characteristic.Model,
-        this.record.model || HAP_PROFILE_LABELS[this.record.hapProfile] || "HAP Device",
-      )
+      .setCharacteristic(Characteristic.Manufacturer, mfr)
+      .setCharacteristic(Characteristic.Model, model)
       .setCharacteristic(
         Characteristic.SerialNumber,
         this.record.serialNumber || this.entityId.replaceAll(".", "_"),
@@ -233,11 +237,11 @@ export class HapGenericAccessory {
       )
       .setCharacteristic(
         Characteristic.FirmwareRevision,
-        HAP_FIRMWARE_REVISION,
+        HAP_NODEJS_VERSION,
       );
     info.setCharacteristic(
       Characteristic.SoftwareRevision,
-      HAP_FIRMWARE_REVISION,
+      HAP_NODEJS_VERSION,
     );
   }
 
@@ -856,7 +860,6 @@ export class HapGenericAccessory {
 
   public async publish(): Promise<void> {
     const category = HAP_PROFILE_CATEGORIES[this.record.hapProfile] ?? Categories.OTHER;
-    const primaryIface = HapGenericAccessory.detectPrimaryNetworkInterface();
     await this.accessory.publish(
       {
         username: this.record.username,
@@ -865,7 +868,7 @@ export class HapGenericAccessory {
         port: this.record.port,
         category,
         advertiser: MDNSAdvertiser.CIAO,
-        bind: primaryIface?.name ? [primaryIface.name] : undefined,
+        bind: undefined,
       },
       true,
     );

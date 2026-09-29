@@ -93,7 +93,7 @@ export const CameraCard: React.FC<CameraCardProps> = ({
                   fontWeight: 600,
                 }}
               >
-                🍏 Enlazada a Casa
+                🍏 Enlazada a Casa · {camera.firmwareRevision || "HAP-NodeJS 2.2.3"}
               </span>
             ) : (
               <span
@@ -106,7 +106,7 @@ export const CameraCard: React.FC<CameraCardProps> = ({
                   fontWeight: 600,
                 }}
               >
-                ⚠️ No enlazada a Casa
+                ⚠️ No enlazada · {camera.firmwareRevision || "HAP-NodeJS 2.2.3"}
               </span>
             )}
             {isMatterPaired && (
@@ -231,7 +231,7 @@ export const CameraCard: React.FC<CameraCardProps> = ({
                   fontWeight: 600,
                 }}
               >
-                🍏 Enlazada a Casa
+                🍏 Enlazada a Casa · {cameraUiCamera.firmwareRevision || "HAP-NodeJS 2.2.3"}
               </span>
             ) : (
               <span
@@ -244,7 +244,7 @@ export const CameraCard: React.FC<CameraCardProps> = ({
                   fontWeight: 600,
                 }}
               >
-                ⚠️ No enlazada a Casa
+                ⚠️ No enlazada · {cameraUiCamera.firmwareRevision || "HAP-NodeJS 2.2.3"}
               </span>
             )}
             <span
@@ -399,11 +399,11 @@ export const CameraCard: React.FC<CameraCardProps> = ({
                   fontWeight: 600,
                 }}
               >
-                🍏 Enlazada a Casa
+                🍏 Enlazada a Casa · HAP-NodeJS 2.2.3
               </span>
             )}
             {!isPaired && isExported && <span className="tag tag-mqtt">EN MATTER</span>}
-            {!isPaired && !isExported && isHapPublished && <span className="tag tag-mqtt">EN HOMEKIT</span>}
+            {!isPaired && !isExported && isHapPublished && <span className="tag tag-mqtt">EN HOMEKIT · HAP-NodeJS 2.2.3</span>}
             {needsGo2rtc && (
               <span
                 className="tag"
