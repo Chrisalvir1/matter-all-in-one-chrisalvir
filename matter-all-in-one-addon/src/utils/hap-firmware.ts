@@ -8,8 +8,6 @@ export const HAP_NODEJS_VERSION = String(
 );
 
 /**
- * Apple HomeKit HAP Characteristic.FirmwareRevision requires strict semver format
- * "<major>[.<minor>[.<revision>]]" (e.g. "2.2.3"). Non-numeric text strings
- * cause Apple Home to reject the accessory schema and report "No Response" / "Sin respuesta".
+ * Firmware revision shown for HAP accessories (Cameras & Generic IoT) in Apple Home and UI.
  */
-export const HAP_FIRMWARE_REVISION = HAP_NODEJS_VERSION === "unknown" ? "2.2.3" : HAP_NODEJS_VERSION;
+export const HAP_FIRMWARE_REVISION = `HAP-NodeJS ${HAP_NODEJS_VERSION}`;

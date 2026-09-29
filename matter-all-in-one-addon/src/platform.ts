@@ -92,6 +92,7 @@ import {
   getHaDeviceManufacturer,
   getHaDeviceModel,
 } from "./utils/matter-device-identity.js";
+import { HAP_FIRMWARE_REVISION } from "./utils/hap-firmware.js";
 
 export interface HomeAssistantPlatformConfig extends PlatformConfig {
   host?: string; // Optional: auto-detected from network/supervisor if not set
@@ -223,6 +224,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   >();
   private diagnosticSaveTimer?: NodeJS.Timeout;
   private matterConnectionMonitor?: NodeJS.Timeout;
+  private haDisconnectGraceTimer?: NodeJS.Timeout;
   /** Serialize destructive/transport operations for the same Matter node. */
   private readonly matterAccessoryOperations = new Map<
     string,
@@ -1506,6 +1508,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     ) {
       return `No se pudo alcanzar Home Assistant por red/IP (${detail || "sin detalle adicional"}).`;
     }
+    if (/\b1006\b/.test(detail)) {
+      return "Cierre anormal de conexión WebSocket (Code 1006: reinicio de Home Assistant o microcorte temporal de red). Reconectando automáticamente...";
+    }
     if (!detail || /WebSocket connection closed/i.test(detail)) {
       return "La conexión WebSocket con Home Assistant se cerró sin una causa adicional reportada.";
     }
@@ -2581,6 +2586,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   private setupHaListeners() {
     this.ha.on("connected", (version) => {
       this.log.notice(`Connected to Home Assistant ${version}`);
+      if (this.haDisconnectGraceTimer) {
+        clearTimeout(this.haDisconnectGraceTimer);
+        this.haDisconnectGraceTimer = undefined;
+      }
       this.syncRetryAttempt = 0;
       if (this.syncRetryTimeout) {
         clearTimeout(this.syncRetryTimeout);
@@ -2588,6 +2597,18 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       }
       for (const entityId of this.entities.keys()) {
         this.clearEntityProblem(entityId);
+      }
+      // Restore reachability for exported entities that may have been marked unreachable
+      for (const [entityId, entity] of this.entities) {
+        if (!this.isEntityExported(entityId)) continue;
+        if (typeof (entity as any).setReachability === "function") {
+          void (entity as any).setReachability(true);
+        }
+      }
+      for (const composite of this.compositeDevices.values()) {
+        if (typeof (composite as any).setReachability === "function") {
+          void (composite as any).setReachability(true);
+        }
       }
       void this.discoverAndSync()
         .then(() => this.reconcileLegacyPtzExports())
@@ -2608,9 +2629,21 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       }
       const message = this.describeHomeAssistantConnectionFailure(reason);
       this.log.warn(`Disconnected from Home Assistant: ${message}`);
-      this.markExportedDevicesUnreachable(
-        `Home Assistant desconectado: ${message}`,
-      );
+      // Grace period of 10s before marking exported devices unreachable.
+      // Transient reconnects (HA reload or brief network jitter) should not trigger
+      // false offline alarms in Apple Home nor flood devices into error review.
+      if (this.haDisconnectGraceTimer) {
+        clearTimeout(this.haDisconnectGraceTimer);
+      }
+      this.haDisconnectGraceTimer = setTimeout(() => {
+        this.haDisconnectGraceTimer = undefined;
+        this.log.warn(
+          `Home Assistant sigue desconectado tras el periodo de gracia. Marcando dispositivos como no alcanzables.`,
+        );
+        this.markExportedDevicesUnreachable(
+          `Home Assistant desconectado: ${message}`,
+        );
+      }, 10_000);
     });
 
     this.ha.on("error", (err) => {
@@ -6064,6 +6097,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                   username: hapRec.username,
                   setupId: hapRec.setupId,
                   setupUri: hapAcc?.setupUri || "",
+                  firmwareRevision: HAP_FIRMWARE_REVISION,
                   pairingState:
                     hapAcc?.isPaired() || hapRec.isPaired
                       ? "✅ Vinculado a Apple Home (Activo)"

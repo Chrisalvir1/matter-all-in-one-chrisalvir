@@ -1949,6 +1949,9 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                       <div style={{ marginTop: 4 }}>
                         <strong>Puerto HAP:</strong> {activeHapAccessory.port}
                       </div>
+                      <div style={{ marginTop: 4 }}>
+                        <strong>Firmware:</strong> <code>{activeHapAccessory.firmwareRevision || "HAP-NodeJS 2.2.3"}</code>
+                      </div>
                     </div>
                   </div>
                 ) : (

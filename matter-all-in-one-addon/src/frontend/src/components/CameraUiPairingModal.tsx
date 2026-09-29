@@ -98,7 +98,7 @@ export const CameraUiPairingModal: React.FC<CameraUiPairingModalProps> = ({
             </div>
             <h2>{camera.name}</h2>
             <p className="entity-id">
-              {brand} · ID: <code>{camera.id}</code> · Puerto HAP: <code>{camera.port || 51860}</code>
+              {brand} · ID: <code>{camera.id}</code> · Puerto HAP: <code>{camera.port || 51860}</code> · Firmware: <code>HAP-NodeJS 2.2.3</code>
             </p>
           </div>
         </header>

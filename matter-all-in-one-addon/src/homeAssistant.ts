@@ -1220,8 +1220,8 @@ export class HomeAssistant extends EventEmitter {
   private pingTimeout: NodeJS.Timeout | undefined = undefined;
   private reconnectTimeout: NodeJS.Timeout | undefined = undefined;
   private connectionTimeout: NodeJS.Timeout | undefined = undefined;
-  private readonly pingIntervalTime: number = 30000;
-  private readonly pingTimeoutTime: number = 35000;
+  private readonly pingIntervalTime: number = 15000;
+  private readonly pingTimeoutTime: number = 10000;
   private readonly reconnectTimeoutTime: number = 60000; // Reconnect timeout in milliseconds, 0 means no timeout.
   private readonly reconnectRetries: number = 0; // 0 means retry indefinitely.
   private readonly connectionTimeoutTime: number;

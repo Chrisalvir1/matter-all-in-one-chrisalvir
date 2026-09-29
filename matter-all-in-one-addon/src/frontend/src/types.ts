@@ -74,6 +74,7 @@ export interface HapAccessoryInfo {
   setupId?: string;
   setupUri?: string;
   pairingState?: string;
+  firmwareRevision?: string;
 }
 
 export interface HapProfileOption {

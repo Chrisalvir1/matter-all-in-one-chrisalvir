@@ -359,6 +359,10 @@ export class HomeKitCameraAccessory {
       ?.setCharacteristic(
         Characteristic.FirmwareRevision,
         HAP_FIRMWARE_REVISION,
+      )
+      ?.setCharacteristic(
+        Characteristic.SoftwareRevision,
+        HAP_FIRMWARE_REVISION,
       );
   }
 

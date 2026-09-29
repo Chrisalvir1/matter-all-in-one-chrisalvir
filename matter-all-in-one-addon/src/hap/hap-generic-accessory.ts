@@ -235,6 +235,10 @@ export class HapGenericAccessory {
         Characteristic.FirmwareRevision,
         HAP_FIRMWARE_REVISION,
       );
+    info.setCharacteristic(
+      Characteristic.SoftwareRevision,
+      HAP_FIRMWARE_REVISION,
+    );
   }
 
   // ──────────────────────────────────────────────

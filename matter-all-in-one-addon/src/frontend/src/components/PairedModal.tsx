@@ -6,7 +6,8 @@ interface PairedModalProps {
   matterDevices: DeviceRecord[];
   matterCameras: CameraRecord[];
   matterHaCameras: DeviceRecord[];
-  // HAP paired: Camera.UI cameras + Scrypted cameras + HA cameras paired with HomeKit
+  // HAP paired: Generic IoT + Camera.UI cameras + Scrypted cameras + HA cameras paired with HomeKit
+  hapDevices?: DeviceRecord[];
   cuiCameras?: CameraUiCameraItem[];
   hapCameras: CameraRecord[];
   hapHaCameras: DeviceRecord[];
@@ -19,6 +20,7 @@ export const PairedModal: React.FC<PairedModalProps> = ({
   matterDevices,
   matterCameras,
   matterHaCameras,
+  hapDevices = [],
   cuiCameras = [],
   hapCameras,
   hapHaCameras,
@@ -29,7 +31,7 @@ export const PairedModal: React.FC<PairedModalProps> = ({
   const [activeTab, setActiveTab] = useState<"matter" | "hap">("matter");
 
   const totalMatter = matterDevices.length + matterCameras.length + matterHaCameras.length;
-  const totalHap = cuiCameras.length + hapCameras.length + hapHaCameras.length;
+  const totalHap = hapDevices.length + cuiCameras.length + hapCameras.length + hapHaCameras.length;
 
   return (
     <div
@@ -208,6 +210,37 @@ export const PairedModal: React.FC<PairedModalProps> = ({
                 <p style={{ color: "var(--muted)", textAlign: "center", padding: 40 }}>No hay dispositivos emparejados en HAP.</p>
               ) : (
                 <>
+                  {hapDevices.length > 0 && (
+                    <>
+                      <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--muted)", letterSpacing: "0.06em", marginBottom: 10 }}>DISPOSITIVOS IOT HAP ({hapDevices.length})</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
+                        {hapDevices.map(d => {
+                          const hapEnt = d.entities.find(e => e.hapAccessory?.isPaired);
+                          return (
+                            <button
+                              key={d.id} type="button"
+                              onClick={() => onOpenDevice(d)}
+                              style={{
+                                display: "flex", alignItems: "center", gap: 12,
+                                background: "rgba(59,130,246,0.07)", border: "1px solid rgba(59,130,246,0.2)",
+                                borderRadius: 10, padding: "10px 14px", cursor: "pointer",
+                                color: "var(--text)", textAlign: "left", width: "100%",
+                              }}
+                            >
+                              <span style={{ fontSize: 20 }}>🏠</span>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontWeight: 600, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.name}</div>
+                                <div style={{ fontSize: 11, color: "var(--muted)" }}>
+                                  {hapEnt?.hapAccessory?.profileLabel || "Dispositivo HAP"} · <code>{hapEnt?.hapAccessory?.firmwareRevision || "HAP-NodeJS 2.2.3"}</code>
+                                </div>
+                              </div>
+                              <span style={{ color: "#60a5fa", fontSize: 11, fontWeight: 600 }}>✓ HAP</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
                   {cuiCameras.length > 0 && (
                     <>
                       <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--muted)", letterSpacing: "0.06em", marginBottom: 10 }}>CÁMARAS HOMEKIT HAP ({cuiCameras.length})</div>
@@ -227,7 +260,7 @@ export const PairedModal: React.FC<PairedModalProps> = ({
                             <span style={{ fontSize: 20 }}>📹</span>
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ fontWeight: 600, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</div>
-                              <div style={{ fontSize: 11, color: "var(--muted)" }}>{c.model || "Cámara HAP"} · HomeKit</div>
+                              <div style={{ fontSize: 11, color: "var(--muted)" }}>{c.model || "Cámara HAP"} · <code>HAP-NodeJS 2.2.3</code></div>
                             </div>
                             <span style={{ color: "#60a5fa", fontSize: 11, fontWeight: 600 }}>✓ HAP</span>
                           </button>
@@ -251,7 +284,7 @@ export const PairedModal: React.FC<PairedModalProps> = ({
                             <span style={{ fontSize: 20 }}>📹</span>
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ fontWeight: 600, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</div>
-                              <div style={{ fontSize: 11, color: "var(--muted)" }}>Scrypted · HomeKit</div>
+                              <div style={{ fontSize: 11, color: "var(--muted)" }}>Scrypted · <code>HAP-NodeJS 2.2.3</code></div>
                             </div>
                             <span style={{ color: "#60a5fa", fontSize: 11, fontWeight: 600 }}>✓ HAP</span>
                           </div>
@@ -277,7 +310,7 @@ export const PairedModal: React.FC<PairedModalProps> = ({
                             <span style={{ fontSize: 20 }}>📷</span>
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ fontWeight: 600, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.name}</div>
-                              <div style={{ fontSize: 11, color: "var(--muted)" }}>HA Camera · HomeKit</div>
+                              <div style={{ fontSize: 11, color: "var(--muted)" }}>HA Camera · <code>HAP-NodeJS 2.2.3</code></div>
                             </div>
                             <span style={{ color: "#60a5fa", fontSize: 11, fontWeight: 600 }}>✓ HAP</span>
                           </button>

@@ -640,6 +640,10 @@ export const App: React.FC = () => {
           matterHaCameras={realHaCameraDevices.filter(d =>
             d.entities.some(e => e.exported && e.commissioned)
           )}
+          hapDevices={allDevices.filter(d =>
+            !realHaCameraDevices.some(c => c.id === d.id) &&
+            d.entities.some(e => e.hapAccessory?.published && e.hapAccessory?.isPaired)
+          )}
           cuiCameras={cameraUiCameras.filter(c => c.isPaired === true)}
           hapCameras={cameras.filter(
             c => c.identity?.homeKitPairingState === "paired" && !c.bindingState?.matterCommissioned

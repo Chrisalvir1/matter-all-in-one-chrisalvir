@@ -887,6 +887,8 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                   <code>{(camera as CameraUiCameraItem).port}</code>
                 </>
               )}
+              {" "}
+              · Firmware HAP: <code>HAP-NodeJS 2.2.3</code>
             </p>
           </div>
         </header>
