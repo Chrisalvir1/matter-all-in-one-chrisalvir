@@ -31,3 +31,6 @@ matter-all-in-one-addon/node_modules
 matter-all-in-one-addon/data/
 cameraui-config.json
 matter-all-in-one-addon/cameraui-config.json
+ptz-zones-store.json
+matter-all-in-one-addon/ptz-zones-store.json
+

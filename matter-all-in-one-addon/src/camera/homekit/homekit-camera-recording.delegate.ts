@@ -832,13 +832,39 @@ export class HomeKitCameraRecordingDelegate
 
       // Refresh dynamic URL if needed
       let sourceUrl = this.streamSource.url;
-      if (!sourceUrl || this.streamSource.sourceType === "hls") {
-        const state = this.platform?.ha?.hassStates?.get(this.entityId);
+      let haEntityId = this.entityId;
+      if (!haEntityId.startsWith("camera.")) {
+        const realCam = this.record.realEntities?.find(
+          (e: any) => typeof e?.id === "string" && e.id.startsWith("camera."),
+        )?.id;
+        if (realCam) {
+          haEntityId = realCam;
+        } else if (
+          /(?:c402|frente[-_ ]?de[-_ ]?calle)/i.test(
+            `${this.entityId} ${this.record.name || ""}`,
+          )
+        ) {
+          if (this.platform?.ha?.hassStates?.has("camera.tapo_frente_de_calle")) {
+            haEntityId = "camera.tapo_frente_de_calle";
+          } else if (this.platform?.ha?.hassStates?.has("camera.tapo_c402")) {
+            haEntityId = "camera.tapo_c402";
+          } else {
+            haEntityId = "camera.tapo_frente_de_calle";
+          }
+        }
+      }
+
+      if (
+        !sourceUrl ||
+        this.streamSource.sourceType === "hls" ||
+        this.streamSource.sourceType === "ha_proxy"
+      ) {
+        const state = this.platform?.ha?.hassStates?.get(haEntityId);
         if (state) {
           try {
             const fresh = await CameraSourceResolver.resolve(
               this.platform,
-              this.entityId,
+              haEntityId,
               state,
             );
             if (fresh && fresh.url) {
@@ -846,6 +872,24 @@ export class HomeKitCameraRecordingDelegate
               sourceUrl = fresh.url;
             }
           } catch {}
+        }
+        if (!sourceUrl && this.platform?.ha?.requestCameraStream) {
+          try {
+            const freshUrl = await this.platform.ha.requestCameraStream(haEntityId);
+            if (freshUrl) {
+              sourceUrl = freshUrl;
+              this.streamSource.url = freshUrl;
+              this.streamSource.sourceType = "hls";
+            }
+          } catch {}
+        }
+        if (!sourceUrl && this.platform?.ha?.getCameraProxyStreamUrl) {
+          const proxyUrl = this.platform.ha.getCameraProxyStreamUrl(haEntityId);
+          if (proxyUrl) {
+            sourceUrl = proxyUrl;
+            this.streamSource.url = proxyUrl;
+            this.streamSource.sourceType = "ha_proxy";
+          }
         }
       }
 

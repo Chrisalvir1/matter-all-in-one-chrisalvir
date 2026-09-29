@@ -145,8 +145,11 @@ export class CameraUiHomeKitBridge {
     // HA-source cameras (e.g. C402) resolve the stream URL dynamically from
     // Home Assistant at stream-request time, so they never have a static
     // rtspUrl. Treat them as having a valid source so capabilities, HKSV and
-    // Matter Occupancy Sensor are all registered correctly.
-    const isHomeAssistantSource = camera.sourceProvider === "home_assistant";
+    const isC402 = /(?:c402|frente[-_ ]?de[-_ ]?calle)/i.test(
+      `${camera.id} ${camera.name || ""}`,
+    );
+    const isHomeAssistantSource =
+      camera.sourceProvider === "home_assistant" || isC402;
     const hasSource = Boolean(camera.rtspUrl) || isHomeAssistantSource;
 
 
@@ -271,7 +274,7 @@ export class CameraUiHomeKitBridge {
       requiresTranscoding: isHaProxy,
       snapshotSupported: Boolean(camera.snapshotUrl),
       snapshotUrl: camera.snapshotUrl,
-      hksvCapable: isRtspSource,
+      hksvCapable: isRtspSource || isHomeAssistantSource || isC402,
     };
 
     let resolvedSourceUrl = camera.rtspUrl;
@@ -283,14 +286,11 @@ export class CameraUiHomeKitBridge {
       // camera proxy (that endpoint returns 404 for them).
       const haEntityId =
         camera.realEntities?.find((entity) => entity.id.startsWith("camera."))?.id ||
-        "camera.tapo_frente_de_calle";
-      // C402 has a stable RTSP endpoint exposed by the HA Tapo satellite.
-      // Prefer it when HA discovery returned only linked motion entities.
-      const isC402 = /(?:c402|frente[-_ ]?de[-_ ]?calle)/i.test(`${camera.id} ${camera.name}`);
-      if (isC402 && !camera.realEntities?.some((entity) => entity.id.startsWith("camera."))) {
-        resolvedSourceUrl = "rtsp://192.168.110.147:62291/tapo-c402";
-        resolvedSourceType = "rtsp";
-      }
+        (platform.ha?.hassStates?.has("camera.tapo_frente_de_calle")
+          ? "camera.tapo_frente_de_calle"
+          : platform.ha?.hassStates?.has("camera.tapo_c402")
+          ? "camera.tapo_c402"
+          : "camera.tapo_frente_de_calle");
       try {
         if (!resolvedSourceUrl && platform.ha?.requestCameraStream) {
           resolvedSourceUrl = await platform.ha.requestCameraStream(haEntityId);
@@ -375,10 +375,13 @@ export class CameraUiHomeKitBridge {
       serialNumber: camera.serialNumber || `CUI-${camera.id.toUpperCase()}`,
       strategy: chosenStrategy,
       state: "idle",
-      hksvEnabled: isRtspSource,
-      hksvCapable: isRtspSource,
+      hksvEnabled: isRtspSource || isHomeAssistantSource || isC402,
+      hksvCapable: isRtspSource || isHomeAssistantSource || isC402,
       hksvVerified: false,
-      hksvState: isRtspSource ? "waiting_hub" : "not_capable",
+      hksvState:
+        isRtspSource || isHomeAssistantSource || isC402
+          ? "waiting_hub"
+          : "not_capable",
       // Explicit selections win. Otherwise, Camera.UI linked entities become
       // services of this same HAP camera accessory.
       motionEntityId:

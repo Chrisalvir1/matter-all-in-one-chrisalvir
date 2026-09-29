@@ -3203,6 +3203,90 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     }
   }
 
+  public handleMqttBinarySensorState(
+    entityId: string,
+    isOn: boolean,
+    friendlyName?: string,
+    deviceClass?: string,
+  ): void {
+    const isMotionClass =
+      deviceClass === "motion" ||
+      deviceClass === "occupancy" ||
+      /motion|movimiento|occupancy|persona|person|presencia/i.test(
+        `${entityId} ${friendlyName || ""}`,
+      );
+    if (!isMotionClass) return;
+
+    const activeAccessories = CameraUiHomeKitBridge.getAllAccessories();
+    if (!activeAccessories || activeAccessories.size === 0) return;
+
+    const clean = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const cleanEntity = clean(entityId);
+    const cleanName = clean(friendlyName || "");
+
+    for (const [cuiId, acc] of activeAccessories) {
+      const camName = acc.record?.name || "";
+      const cleanCam = clean(camName);
+      const cleanCui = clean(cuiId.replace(/^cameraui_/, ""));
+
+      const isWyzeEntity = /wyze/i.test(`${entityId} ${friendlyName || ""}`);
+      const isWyzeCam = /wyze/i.test(`${cuiId} ${camName}`);
+      const isWyzeMatch = isWyzeEntity && isWyzeCam;
+
+      const isC120Entity = /c120|spot/i.test(`${entityId} ${friendlyName || ""}`);
+      const isC120Cam = /c120|spot/i.test(`${cuiId} ${camName}`);
+      const isC120Match = isC120Entity && isC120Cam;
+
+      const isC402Entity = /c402|frente/i.test(`${entityId} ${friendlyName || ""}`);
+      const isC402Cam = /c402|frente/i.test(`${cuiId} ${camName}`);
+      const isC402Match = isC402Entity && isC402Cam;
+
+      const isEzvizEntity = /ezviz|h6c/i.test(`${entityId} ${friendlyName || ""}`);
+      const isEzvizCam = /ezviz|h6c/i.test(`${cuiId} ${camName}`);
+      const isEzvizMatch = isEzvizEntity && isEzvizCam;
+
+      const matches =
+        isWyzeMatch ||
+        isC120Match ||
+        isC402Match ||
+        isEzvizMatch ||
+        (cleanCam.length >= 3 && cleanEntity.includes(cleanCam)) ||
+        (cleanCam.length >= 3 && cleanName.includes(cleanCam)) ||
+        (cleanCui.length >= 4 && cleanEntity.includes(cleanCui)) ||
+        (acc.record as any)?.realEntities?.some(
+          (re: any) => re.id === entityId || (re.name && clean(re.name) === cleanName),
+        );
+
+      if (matches) {
+        this.log.notice(
+          `[Camera.UI][MQTT] Movimiento (${isOn ? "DETECTADO" : "REPOSO"}) desde MQTT (${entityId}) para cámara "${camName || cuiId}"`,
+        );
+        CameraUiHomeKitBridge.updateMotion(
+          cuiId,
+          isOn,
+          this,
+          `MQTT (${friendlyName || entityId})`,
+        );
+        this.broadcastSseMessage("cameraui_motion", {
+          cameraId: cuiId,
+          motionOn: isOn,
+        });
+        if (isOn && this.cameraAiDetector) {
+          try {
+            this.cameraAiDetector.dispatchDetection(this, cuiId, {
+              cameraId: cuiId,
+              timestamp: Date.now(),
+              targets: ["person"],
+              labels: [`MQTT (${friendlyName || entityId})`],
+              confidence: 0.95,
+              rawDetails: `MQTT motion event: ${entityId}`,
+            });
+          } catch {}
+        }
+      }
+    }
+  }
+
   /**
    * Called when the platform shuts down.
    */

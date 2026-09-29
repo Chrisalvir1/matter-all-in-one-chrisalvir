@@ -253,7 +253,11 @@ export class HomeKitCameraAccessory {
           });
       } catch {}
     }
-    const isStreamingUsable = Boolean(this.streamSource.url);
+    const isStreamingUsable =
+      Boolean(this.streamSource.url) ||
+      this.isTapoC402() ||
+      Boolean(this.streamSource.metadata?.isCameraUi) ||
+      Boolean(this.streamSource.metadata?.isHaProxyStream);
     this.record.hksvEnabled = isStreamingUsable;
     this.record.hksvCapable = isStreamingUsable;
     this.record.hksvState = isStreamingUsable ? "waiting_hub" : "not_capable";
@@ -374,7 +378,11 @@ export class HomeKitCameraAccessory {
   }
 
   private buildControllerOptions(): CameraControllerOptions {
-    const isStreamingUsable = Boolean(this.streamSource.url);
+    const isStreamingUsable =
+      Boolean(this.streamSource.url) ||
+      this.isTapoC402() ||
+      Boolean(this.streamSource.metadata?.isCameraUi) ||
+      Boolean(this.streamSource.metadata?.isHaProxyStream);
     const audioCodecs = [
       {
         type: AudioStreamingCodecType.AAC_ELD,
