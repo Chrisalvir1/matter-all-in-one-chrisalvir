@@ -934,13 +934,17 @@ export class HomeKitCameraStreamingDelegate
       this.streamSource.sourceType === "ha_proxy" ||
       this.isTapoC402()
     ) {
-      let haEntityId = this.entityId;
+      let haEntityId =
+        (this.streamSource.metadata as any)?.sourceCameraEntityId ||
+        this.entityId;
       if (
         this.streamSource.metadata?.isCameraUi ||
         this.entityId.startsWith("cameraui_")
       ) {
         const realCam = (this.streamSource.metadata as any)?.realEntities?.find(
-          (e: any) => e.id?.startsWith("camera."),
+          (e: any) =>
+            /^camera\.[a-z0-9_]+$/.test(e.id || "") &&
+            this.platform?.ha?.hassStates?.has(e.id),
         );
         if (realCam?.id) {
           haEntityId = realCam.id;
@@ -949,11 +953,22 @@ export class HomeKitCameraStreamingDelegate
             ? "camera.tapo_frente_de_calle"
             : this.platform?.ha?.hassStates?.has("camera.tapo_c402")
             ? "camera.tapo_c402"
-            : "camera.tapo_frente_de_calle";
+            : "";
         }
       }
+      if (
+        !/^camera\.[a-z0-9_]+$/.test(haEntityId) ||
+        !this.platform?.ha?.hassStates?.has(haEntityId)
+      ) {
+        haEntityId = "";
+      }
+      if (!haEntityId && this.streamSource.sourceType === "ha_proxy") {
+        sourceUrl = "";
+      }
       if (this.platform?.ha) {
-        const state = this.platform.ha.hassStates?.get(haEntityId);
+        const state = haEntityId
+          ? this.platform.ha.hassStates?.get(haEntityId)
+          : undefined;
         if (state) {
           try {
             const fresh = await CameraSourceResolver.resolve(
@@ -968,6 +983,7 @@ export class HomeKitCameraStreamingDelegate
           } catch {}
         }
         if (
+          haEntityId &&
           (!sourceUrl || this.streamSource.sourceType === "ha_proxy") &&
           this.platform.ha.requestCameraStream
         ) {
@@ -980,7 +996,7 @@ export class HomeKitCameraStreamingDelegate
             }
           } catch {}
         }
-        if (!sourceUrl && this.platform.ha.getCameraProxyStreamUrl) {
+        if (haEntityId && !sourceUrl && this.platform.ha.getCameraProxyStreamUrl) {
           const proxyUrl = this.platform.ha.getCameraProxyStreamUrl(haEntityId);
           if (proxyUrl) {
             this.streamSource.url = proxyUrl;

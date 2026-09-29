@@ -1,3 +1,11 @@
+## [1.9.33] - 2026-09-29
+
+### Reparación de cámaras HA y Camera.UI
+
+- **Tapo C402:** La fuente Home Assistant ahora se enlaza a una entidad `camera.*` existente y válida, usando el ID guardado en el proxy o su nombre amistoso. Live View y HKSV comparten esa entidad real; ya no envían el UUID interno de Camera.UI a `camera/stream` ni generan un proxy para una entidad inexistente.
+- **UUID de Camera.UI:** Se rechazan IDs con guiones o inexistentes antes de llamar a las API de cámara de Home Assistant. Si no se encuentra la entidad real, el stream queda sin fuente y se registra como tal en vez de reintentar una URL que devuelve 404.
+- **Wyze, EZVIZ y Tapo C120:** Se conserva su fuente Camera.UI/RTSP; la resolución especial de entidades HA se aplica a las cámaras que realmente dependen de Home Assistant.
+
 ## [1.9.31] - 2026-09-28
 
 ### Corrección Crítica IoT/MQTT, Estabilidad de Cámaras (Wyze, C402, EZVIZ, C120) y Aceleración de Snapshots

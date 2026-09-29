@@ -16,6 +16,7 @@ import {
 import { FfmpegMotionDetector } from "../motion/ffmpeg-motion-detector.js";
 import type { CameraUiCameraRecord } from "./cameraui-types.js";
 import { CameraUiStorage } from "./cameraui-storage.js";
+import { resolveHaCameraEntityId } from "./ha-camera-entity.js";
 import {
   probeCameraSource,
   sanitizeUrlCredentials,
@@ -279,20 +280,16 @@ export class CameraUiHomeKitBridge {
 
     let resolvedSourceUrl = camera.rtspUrl;
     let resolvedSourceType: ResolvedStreamSource["sourceType"] = "rtsp";
+    const haEntityId = isHomeAssistantSource
+      ? resolveHaCameraEntityId(camera, platform.ha?.hassStates)
+      : undefined;
 
     if (isHomeAssistantSource && !resolvedSourceUrl) {
       // Only a HA camera entity can provide a camera stream. Motion
       // binary_sensors are linked entities and must never be sent to the
       // camera proxy (that endpoint returns 404 for them).
-      const haEntityId =
-        camera.realEntities?.find((entity) => entity.id.startsWith("camera."))?.id ||
-        (platform.ha?.hassStates?.has("camera.tapo_frente_de_calle")
-          ? "camera.tapo_frente_de_calle"
-          : platform.ha?.hassStates?.has("camera.tapo_c402")
-          ? "camera.tapo_c402"
-          : "camera.tapo_frente_de_calle");
       try {
-        if (!resolvedSourceUrl && platform.ha?.requestCameraStream) {
+        if (haEntityId && !resolvedSourceUrl && platform.ha?.requestCameraStream) {
           resolvedSourceUrl = await platform.ha.requestCameraStream(haEntityId);
           if (resolvedSourceUrl) {
             resolvedSourceType = "hls";
@@ -303,14 +300,14 @@ export class CameraUiHomeKitBridge {
           `[CameraUiHomeKitBridge] requestCameraStream note for ${haEntityId}: ${err}`,
         );
       }
-      if (!resolvedSourceUrl && platform.ha?.getCameraProxyStreamUrl) {
+      if (haEntityId && !resolvedSourceUrl && platform.ha?.getCameraProxyStreamUrl) {
         resolvedSourceUrl = platform.ha.getCameraProxyStreamUrl(haEntityId);
         if (resolvedSourceUrl) {
           resolvedSourceType = "ha_proxy";
         }
       }
       platform.log?.notice?.(
-        `[CameraUiHomeKitBridge] Resolved HA stream source for ${camera.id} (${haEntityId}): ${resolvedSourceType} -> ${resolvedSourceUrl ? "OK" : "NONE"}`,
+        `[CameraUiHomeKitBridge] Resolved HA stream source for ${camera.id} (${haEntityId || "no valid HA camera entity"}): ${resolvedSourceType} -> ${resolvedSourceUrl ? "OK" : "NONE"}`,
       );
     }
 
@@ -326,6 +323,7 @@ export class CameraUiHomeKitBridge {
         capabilitiesProbedBeforePublish: isHomeAssistantSource,
         streamProvider: camera.sourceProvider || "camera_ui",
         camerauiCameraId: camera.id,
+        sourceCameraEntityId: haEntityId,
         hasDoorbell: Boolean(camera.doorbellTopic),
         model: camera.model || "Camera.UI Stream",
       },
@@ -362,6 +360,7 @@ export class CameraUiHomeKitBridge {
 
     const record: HomeKitCameraStorageRecord = {
       entityId: `camera.${camera.id}`,
+      sourceCameraEntityId: haEntityId,
       uuid: camera.uuid,
       username: camera.username,
       pincode: camera.pincode,
