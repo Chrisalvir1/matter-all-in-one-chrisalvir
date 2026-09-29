@@ -397,8 +397,12 @@ export class HomeKitCameraRecordingDelegate
 
     // 1. Deliver MEDIA_INITIALIZATION segment (ftyp + moov)
     if (!this.initializationSegment) {
-      // Wait up to 5000ms for FFmpeg to produce the fMP4 moov box
-      await this.waitForInitialization(5000);
+      // Wait for FFmpeg to produce the fMP4 moov box. C402's direct HA
+      // publisher can take longer to provide SPS/PPS after an RTSP reconnect.
+      const isTapoC402 = /(?:\bc402\b|tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle)/i.test(
+        `${this.entityId} ${this.record.name || ""} ${this.record.model || ""} ${this.streamSource.url || ""}`,
+      );
+      await this.waitForInitialization(isTapoC402 ? 10000 : 5000);
     }
 
     if (this.initializationSegment) {
@@ -589,13 +593,13 @@ export class HomeKitCameraRecordingDelegate
         "5000000",
         "-probesize",
         isTapoC402 || isWyzeMatch
-          ? "1048576"
+          ? "2097152"
           : needsAudioTimestampRepair
             ? "524288"
             : "65536",
         "-analyzeduration",
         isTapoC402
-          ? "1000000"
+          ? "3000000"
           : isWyzeMatch
             ? "1500000"
             : needsAudioTimestampRepair
@@ -668,7 +672,45 @@ export class HomeKitCameraRecordingDelegate
     const isC120Regex = isC120Token(sourceUrl);
     const isTapoC120 = isC120Model || isC120Entity || isC120Name || isC120Regex;
 
-    if (isH264 && isTapoC120) {
+    if (isH264 && isTapoC402) {
+      // The C402 source is a 2K/High-Level H.264 feed, while Apple HKSV
+      // consumes a bounded 1080p Level 4 stream. Re-encode at this boundary
+      // so the fMP4 init segment carries SPS/PPS matching the actual output.
+      const fpsDetails = resolveCameraFpsDetails(
+        this.capabilities,
+        this.record,
+      );
+      const c402Fps = Math.max(1, Math.min(fpsDetails.fps || 15, 15));
+      this.platform?.log?.notice?.(
+        `[HKSV][${this.entityId}] Tapo C402: normalizando fuente HA a H.264 High L4.0 1920x1080@${c402Fps} para fMP4/HomeKit`,
+      );
+      args.push(
+        "-map",
+        "0:v:0",
+        "-vf",
+        "scale=1920:1080:force_original_aspect_ratio=decrease:force_divisible_by=2",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "ultrafast",
+        "-tune",
+        "zerolatency",
+        "-pix_fmt",
+        "yuv420p",
+        "-profile:v",
+        "high",
+        "-level:v",
+        "4.0",
+        "-r",
+        String(c402Fps),
+        "-g",
+        String(Math.max(1, c402Fps * 2)),
+        "-keyint_min",
+        String(c402Fps),
+        "-sc_threshold",
+        "0",
+      );
+    } else if (isH264 && isTapoC120) {
       // Tapo C120 outputs 2560x1440 H.264 High Level 5.0.
       // This classical HKSV pipeline normalizes clips to 1920x1080 High Level 4.0 for Apple Home Hub.
       const fpsDetails = resolveCameraFpsDetails(
@@ -978,9 +1020,17 @@ export class HomeKitCameraRecordingDelegate
       const inWidth = this.capabilities.resolution?.width ?? 1920;
       const inHeight = this.capabilities.resolution?.height ?? 1080;
       const inFps = resolveCameraSourceFps(this.capabilities, this.record) ?? 0;
-      const outWidth = isC120 ? 1920 : inWidth;
-      const outHeight = isC120 ? 1080 : inHeight;
-      const outFps = isC120 ? (inFps > 0 ? Math.min(inFps, 20) : 0) : inFps;
+      const isC402 = /(?:\bc402\b|tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle)/i.test(
+        `${this.entityId} ${this.record.name || ""} ${this.record.model || ""} ${sourceUrl}`,
+      );
+      const outWidth = isC120 || isC402 ? 1920 : inWidth;
+      const outHeight = isC120 || isC402 ? 1080 : inHeight;
+      const outFps =
+        isC120 || isC402
+          ? inFps > 0
+            ? Math.min(inFps, isC120 ? 20 : 15)
+            : 0
+          : inFps;
       let droppedFrames = 0;
       let encodingErrors = 0;
 

@@ -1,3 +1,9 @@
+## [1.9.36] - 2026-09-29
+
+- Normalize the direct HA Tapo C402 source to HomeKit-compatible H.264 for Live View and HKSV; wait longer for fMP4 initialization after RTSP reconnects.
+- Advertise AAC-ELD only when FFmpeg supports `libfdk_aac`; otherwise negotiate Opus instead of sending AAC-LC as AAC-ELD.
+- Ensure HAP `Setup Endpoints` advertises an address matching the negotiated IPv4/IPv6 family and cannot call its callback twice.
+
 ## [1.9.35] - 2026-09-29
 
 - Restore the Tapo C402 direct Home Assistant RTSP source at `192.168.110.147:62291/tapo-c402`; its HA snapshot entity does not implement `camera.play_stream`.

@@ -22,6 +22,7 @@ import {
 } from "@homebridge/hap-nodejs";
 import { spawn, type ChildProcess } from "node:child_process";
 import dgram from "node:dgram";
+import { isIPv4, isIPv6 } from "node:net";
 import type {
   CameraCapabilitiesInfo,
   ResolvedStreamSource,
@@ -739,6 +740,7 @@ export class HomeKitCameraStreamingDelegate
     request: PrepareStreamRequest,
     callback: PrepareStreamCallback,
   ): Promise<void> {
+    let callbackCompleted = false;
     try {
       // Purge any zombie sessions (process died but Map entry survived) before
       // setting up a new one — otherwise the old dead entry corrupts cleanup.
@@ -810,17 +812,25 @@ export class HomeKitCameraStreamingDelegate
       }, HomeKitCameraStreamingDelegate.PREPARE_TIMEOUT_MS);
       this.prepareTimeouts.set(request.sessionID, zombieTimer);
 
+      // sourceAddress may be an IPv6 interface address even when HomeKit
+      // negotiated IPv4. Always advertise an address from the negotiated
+      // family; fall back to the host's primary IPv4 if needed, or let HAP
+      // choose the bound interface when no safe override is available.
+      const sourceAddress =
+        typeof request.sourceAddress === "string" &&
+        request.sourceAddress.startsWith("::ffff:")
+          ? request.sourceAddress.slice("::ffff:".length)
+          : request.sourceAddress;
+      const addressOverride =
+        request.addressVersion === "ipv4"
+          ? isIPv4(sourceAddress || "")
+            ? sourceAddress
+            : detectPrimaryNetworkInterface()?.ip
+          : isIPv6(sourceAddress || "")
+            ? sourceAddress
+            : undefined;
       const response: PrepareStreamResponse = {
-        // Node can report an IPv4 peer through the dual-stack IPv6 listener as
-        // an IPv4-mapped address (e.g. ::ffff:192.168.1.20). HAP-NodeJS
-        // validates addressOverride against addressVersion and rejects that
-        // mapped value as IPv6 when HomeKit negotiated IPv4.
-        addressOverride:
-          request.addressVersion === "ipv4" &&
-          typeof request.sourceAddress === "string" &&
-          request.sourceAddress.startsWith("::ffff:")
-            ? request.sourceAddress.slice("::ffff:".length)
-            : request.sourceAddress,
+        ...(addressOverride ? { addressOverride } : {}),
         video: {
           port: localVideoPort,
           ssrc: session.videoSsrc,
@@ -838,14 +848,18 @@ export class HomeKitCameraStreamingDelegate
         };
       }
       this.platform?.log?.notice?.(
-        `[HomeKitCamera][${this.entityId}] [Session][${request.sessionID}] session-prepare activeSessions=${this.activeSessions.size} addressOverride=${response.addressOverride} addressVersion=${request.addressVersion} remote=${request.targetAddress}:${request.video.port} localVideoRTCP=${localVideoPort} videoSSRC=${session.videoSsrc}${session.localAudioPort ? ` localAudioRTCP=${session.localAudioPort} audioSSRC=${session.audioSsrc}` : ""}`,
+        `[HomeKitCamera][${this.entityId}] [Session][${request.sessionID}] session-prepare activeSessions=${this.activeSessions.size} addressOverride=${response.addressOverride || "HAP-default"} addressVersion=${request.addressVersion} sourceAddressFamily=${isIPv4(sourceAddress || "") ? "ipv4" : isIPv6(sourceAddress || "") ? "ipv6" : "unknown"} remote=${request.targetAddress}:${request.video.port} localVideoRTCP=${localVideoPort} videoSSRC=${session.videoSsrc}${session.localAudioPort ? ` localAudioRTCP=${session.localAudioPort} audioSSRC=${session.audioSsrc}` : ""}`,
       );
+      callbackCompleted = true;
       callback(undefined, response);
     } catch (error) {
       this.platform?.log?.warn?.(
         `[HomeKitCamera][${this.entityId}] HAP SetupEndpoints failed: ${String(error)}`,
       );
-      callback(error as Error);
+      if (!callbackCompleted) {
+        callbackCompleted = true;
+        callback(error as Error);
+      }
     }
   }
 
@@ -1095,7 +1109,7 @@ export class HomeKitCameraStreamingDelegate
     const isTapoCamera = isTapoC402 || isTapoC120;
 
     this.platform?.log?.notice?.(
-      `[HomeKitCamera][${this.entityId}] HAP START ${video.width}x${video.height} transcode=${forceTranscode} profile=${h264Profile(video.profile)} level=${h264Level(video.level)} mtu=${mtu} fps[declarado=${declaredFps}, solicitado=${requestedFps ?? "omitted"}, medido=${measuredFps ?? "unmeasured"}, efectivo=${effectiveFps ?? "auto"}] source=${sanitizeUrlCredentials(sourceUrl || "")} ffmpeg=${ffmpegPath} ${getFfmpegVersion(ffmpegPath) || "unknown"}`,
+      `[HomeKitCamera][${this.entityId}] HAP START ${video.width}x${video.height} forceTranscode=${forceTranscode} profile=${h264Profile(video.profile)} level=${h264Level(video.level)} mtu=${mtu} fps[declarado=${declaredFps}, solicitado=${requestedFps ?? "omitted"}, medido=${measuredFps ?? "unmeasured"}, efectivo=${effectiveFps ?? "auto"}] source=${sanitizeUrlCredentials(sourceUrl || "")} ffmpeg=${ffmpegPath} ${getFfmpegVersion(ffmpegPath) || "unknown"}`,
     );
 
     const isHaProxyStream =
@@ -1444,18 +1458,17 @@ export class HomeKitCameraStreamingDelegate
     // receives packets it did not negotiate, ending in "No Response".  HEVC
     // remains native up to this output boundary, then is converted solely for
     // the HAP session (and never changes the Camera.UI source).
-    // The C120's physical RTSP source is H.264 High level 5.0, while HAP is
-    // negotiated at level 4.0. Copying that bitstream makes iOS decode a few
-    // slices, then freeze with green corruption. Normalize this one camera at
-    // the HAP boundary; its source, HKSV and motion pipeline are unchanged.
-    const needsC120VideoNormalization = isTapoC120;
+    // Tapo C120/C402 RTSP sources can be 2K H.264 High Level 5.0, while HAP
+    // negotiates Level 4.0 and often 720p. Normalize only at the HAP output
+    // boundary; the source URLs and Camera.UI/HA paths remain intact.
+    const needsTapoVideoNormalization = isTapoC120 || isTapoC402;
     const isHevc =
       codec === "hevc" ||
       codec === "h265" ||
       this.capabilities.strategy === "passthrough_hevc";
     const canPassthrough =
       !forceTranscode &&
-      !needsC120VideoNormalization &&
+      !needsTapoVideoNormalization &&
       !isHaProxyStream &&
       (isHevc ||
         (codec === "h264" &&
@@ -1514,7 +1527,7 @@ export class HomeKitCameraStreamingDelegate
       );
       args.push(...videoPassArgs);
 
-    } else if (needsC120VideoNormalization) {
+    } else if (needsTapoVideoNormalization) {
       // HAP supports H.264 only through level 4.0, whose maximum frame size
       // is 1920x1080. Clamp a cached 2K request as well, so an existing Home
       // pairing recovers before it receives the refreshed capabilities.
@@ -1526,8 +1539,8 @@ export class HomeKitCameraStreamingDelegate
         1080,
         Math.max(2, Math.floor((video.height || 1080) / 2) * 2),
       );
-      const c120Fps = Math.min(resolvedFps ?? 15, 20);
-      const keyframeInterval = Math.max(15, c120Fps * 2);
+      const tapoFps = Math.min(resolvedFps ?? 15, isTapoC120 ? 20 : 15);
+      const keyframeInterval = Math.max(15, tapoFps * 2);
       this.startTelemetry(
         session,
         request,
@@ -1541,8 +1554,8 @@ export class HomeKitCameraStreamingDelegate
           declaredFps,
           requestedFps,
           measuredFps,
-          effectiveFps: c120Fps,
-          configuredFps: c120Fps,
+          effectiveFps: tapoFps,
+          configuredFps: tapoFps,
           bitrateKbps: 4500,
           pixFmt: "yuv420p",
           metadataSource: "effective-command",
@@ -1554,7 +1567,7 @@ export class HomeKitCameraStreamingDelegate
             : undefined,
       );
       this.platform?.log?.notice?.(
-        `[Stream][${this.entityId}] Normalizando C120 H.264 High L5.0 a HAP High L4.0 ${targetWidth}x${targetHeight}@${c120Fps} (declarado=${declaredFps}, solicitado=${requestedFps ?? "omitted"}, medido=${measuredFps ?? "unmeasured"}, efectivo=${c120Fps})`,
+        `[Stream][${this.entityId}] Normalizando Tapo ${isTapoC402 ? "C402" : "C120"} H.264 a HAP High L4.0 ${targetWidth}x${targetHeight}@${tapoFps} (declarado=${declaredFps}, solicitado=${requestedFps ?? "omitted"}, medido=${measuredFps ?? "unmeasured"}, efectivo=${tapoFps})`,
       );
       args.push(
         "-map",
@@ -1575,11 +1588,11 @@ export class HomeKitCameraStreamingDelegate
         "-pix_fmt",
         "yuv420p",
         "-r",
-        String(c120Fps),
+        String(tapoFps),
         "-g",
         String(keyframeInterval),
         "-keyint_min",
-        String(c120Fps),
+        String(tapoFps),
         "-sc_threshold",
         "0",
         "-b:v",
@@ -1744,11 +1757,10 @@ export class HomeKitCameraStreamingDelegate
           session.audioKeySalt.toString("base64"),
           audioUrl,
         );
-      } else {
+      } else if (isOpus || supportsFdkAac()) {
         this.platform?.log?.notice?.(
-          `[Stream][${this.entityId}] Transcodificando exclusivamente audio fuente (${this.capabilities.audioCodec || "desconocido"}) a AAC para Apple Home (vídeo permanece en passthrough puro)`,
+          `[Stream][${this.entityId}] Transcodificando exclusivamente audio fuente (${this.capabilities.audioCodec || "desconocido"}) a ${isOpus ? "Opus" : "AAC-ELD"} para Apple Home`,
         );
-        const hasFdk = supportsFdkAac();
         const audioBitrate = Math.min(request.audio.max_bit_rate || 24, 24);
 
         if (needsSilentAudio) {
@@ -1768,7 +1780,7 @@ export class HomeKitCameraStreamingDelegate
             "-packet_loss",
             "5",
           );
-        } else if (hasFdk) {
+        } else {
           args.push(
             "-c:a",
             "libfdk_aac",
@@ -1777,8 +1789,6 @@ export class HomeKitCameraStreamingDelegate
             "-flags",
             "+global_header",
           );
-        } else {
-          args.push("-c:a", "aac");
         }
 
         args.push(
@@ -1807,6 +1817,13 @@ export class HomeKitCameraStreamingDelegate
           "-srtp_out_params",
           session.audioKeySalt.toString("base64"),
           audioUrl,
+        );
+      } else {
+        // Never send AAC-LC to a HomeKit session that negotiated AAC-ELD.
+        // The accessory advertises Opus instead when libfdk_aac is missing;
+        // this guard also protects an older pairing with cached capabilities.
+        this.platform?.log?.warn?.(
+          `[Stream][${this.entityId}] Omitiendo audio AAC-ELD: FFmpeg no incluye libfdk_aac; se conserva el video para HomeKit`,
         );
       }
     }

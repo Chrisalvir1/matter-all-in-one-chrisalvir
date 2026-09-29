@@ -381,15 +381,22 @@ export class HomeKitCameraAccessory {
       this.isTapoC402() ||
       Boolean(this.streamSource.metadata?.isCameraUi) ||
       Boolean(this.streamSource.metadata?.isHaProxyStream);
+    // Do not negotiate AAC-ELD unless this exact FFmpeg binary can encode it.
+    // The native FFmpeg `aac` encoder only emits AAC-LC; advertising AAC-ELD
+    // and then sending AAC-LC makes HomeKit reject the audio RTP stream.
     const audioCodecs = [
-      {
-        type: AudioStreamingCodecType.AAC_ELD,
-        samplerate: AudioStreamingSamplerate.KHZ_16,
-      },
-      {
-        type: AudioStreamingCodecType.AAC_ELD,
-        samplerate: AudioStreamingSamplerate.KHZ_24,
-      },
+      ...(supportsFdkAac()
+        ? [
+            {
+              type: AudioStreamingCodecType.AAC_ELD,
+              samplerate: AudioStreamingSamplerate.KHZ_16,
+            },
+            {
+              type: AudioStreamingCodecType.AAC_ELD,
+              samplerate: AudioStreamingSamplerate.KHZ_24,
+            },
+          ]
+        : []),
       {
         type: AudioStreamingCodecType.OPUS,
         samplerate: AudioStreamingSamplerate.KHZ_16,

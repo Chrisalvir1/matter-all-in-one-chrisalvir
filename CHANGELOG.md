@@ -1,3 +1,12 @@
+## [1.9.36] - 2026-09-29
+
+### Estabilización de Live View y HKSV para Tapo C402/C120
+
+- **C402 Live View:** Mantiene la fuente RTSP directa de Home Assistant y normaliza el H.264 2K/High al perfil HAP High L4.0 y resolución negociada.
+- **C402 HKSV:** Aumenta el análisis RTSP y genera H.264 1080p/L4.0 para fMP4; espera más por el segmento de inicialización tras reconectar.
+- **C120 Audio:** Solo anuncia AAC-ELD si FFmpeg tiene `libfdk_aac`; de lo contrario negocia Opus y evita enviar AAC-LC como AAC-ELD.
+- **HAP IPv4/IPv6:** `Setup Endpoints` ahora anuncia una dirección que coincide con la familia negociada. Si HomeKit negocia IPv4 pero la interfaz elegida es IPv6, usa la IPv4 primaria o deja que HAP seleccione la dirección local; el callback queda protegido contra doble llamada.
+
 ## [1.9.35] - 2026-09-29
 
 ### Restauración del stream directo de Tapo C402 desde Home Assistant
