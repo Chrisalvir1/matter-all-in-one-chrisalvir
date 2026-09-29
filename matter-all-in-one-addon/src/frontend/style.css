@@ -2869,15 +2869,25 @@ mark {
     font-size: 10px;
   }
   .modal-layout {
-    grid-template-columns: 1fr;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 16px !important;
+    overflow-y: auto !important;
+  }
+  .qr-panel {
+    order: -1 !important;
+    max-height: none !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+  .entity-list-col {
+    order: 1 !important;
   }
   .entity-list {
     max-height: 220px;
   }
-  .qr-panel {
-    max-height: none;
-  }
   .selection-panel {
+    order: 2 !important;
     min-height: auto;
   }
   .modal {
@@ -4155,4 +4165,247 @@ mark {
 
 .hap-recommended-pulse {
   animation: hap-pulse-glow 1.8s infinite ease-in-out !important;
+}
+
+/* ==========================================================================
+   MOBILE OPTIMIZATIONS — Portrait & Landscape (Mobile First)
+   ========================================================================== */
+
+/* ── Touch friendliness ── */
+@media (hover: none) and (pointer: coarse) {
+  .glass-card-tab,
+  .refresh-glass-button,
+  .button,
+  .secondary-button,
+  .filter-chip {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .toggle input {
+    min-width: 44px;
+    min-height: 44px;
+    cursor: pointer;
+  }
+  .entity-row {
+    padding: 12px 10px;
+  }
+  * {
+    -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+    touch-action: manipulation;
+  }
+}
+
+/* ── Small phones (portrait) ≤ 480px ── */
+@media (max-width: 480px) {
+  /* Control Center: 2 cols */
+  .control-center-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 7px;
+  }
+  .glass-card-tab {
+    padding: 10px 6px;
+  }
+  .tab-card-count {
+    font-size: 1.5rem;
+  }
+  .tab-card-title {
+    font-size: 8.5px;
+    letter-spacing: 0;
+  }
+
+  /* Device grid: 1 col */
+  .device-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  /* Camera cards: full width */
+  .scrypted-camera-card,
+  .ha-camera-card {
+    width: 100%;
+  }
+
+  /* Modals: full screen bottom-sheet */
+  .modal {
+    border-radius: 12px 12px 0 0 !important;
+    margin: 0 !important;
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    max-height: 92vh !important;
+  }
+
+  /* DeviceModal layout: Mobile First / Single Column Stack */
+  .modal-layout {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 16px !important;
+    overflow-y: auto !important;
+    padding-bottom: 24px !important;
+  }
+  /* Mobile-first: El código QR y código manual van AL INICIO de la vista móvil */
+  .qr-panel {
+    order: -1 !important;
+    max-height: none !important;
+    height: auto !important;
+    overflow: visible !important;
+    padding-right: 0 !important;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 16px;
+    margin-bottom: 8px;
+  }
+  .entity-list-col {
+    order: 1 !important;
+    height: auto !important;
+  }
+  .entity-list {
+    max-height: 240px !important;
+  }
+  .selection-panel {
+    order: 2 !important;
+    padding: 14px 12px !important;
+    min-height: auto !important;
+  }
+
+  /* Content padding */
+  .content {
+    padding: 20px 12px 60px;
+  }
+
+  /* Filter bar: horizontal scroll */
+  .filter-bar {
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+  .filter-bar::-webkit-scrollbar {
+    display: none;
+  }
+  .filter-chip {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  /* TopBar compact */
+  .topbar-brand-name {
+    font-size: 13px !important;
+  }
+  .topbar-subtitle {
+    display: none;
+  }
+
+  /* Search bar full width */
+  .content-header {
+    flex-direction: column;
+    gap: 10px;
+  }
+  .search {
+    width: 100%;
+  }
+  .search input {
+    font-size: 15px; /* prevents iOS zoom on focus */
+  }
+}
+
+/* ── Mobile landscape ── */
+@media (max-width: 760px) and (orientation: landscape) {
+  /* Control Center: 4 cols in landscape */
+  .control-center-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+  }
+  .glass-card-tab {
+    padding: 8px 4px;
+  }
+
+  /* Device grid: 2 cols in landscape */
+  .device-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* Modals take 96% width in landscape */
+  .modal {
+    max-height: 95vh !important;
+    max-width: 800px !important;
+    border-radius: 14px !important;
+    position: relative !important;
+    bottom: auto !important;
+  }
+
+  /* DeviceModal: show 2-col layout in landscape */
+  .modal-layout {
+    grid-template-columns: 180px 1fr !important;
+  }
+
+  .content {
+    padding: 16px 16px 40px;
+  }
+}
+
+/* ── Tablets portrait (481–768px) ── */
+@media (min-width: 481px) and (max-width: 768px) {
+  .control-center-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+  .device-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+  .modal-layout {
+    grid-template-columns: 200px 1fr !important;
+  }
+}
+
+/* ── Modal backdrop scroll lock ── */
+.modal-backdrop {
+  overscroll-behavior: contain;
+}
+
+/* ── Paired Modal responsive ── */
+@media (max-width: 600px) {
+  .paired-modal {
+    border-radius: 14px 14px 0 0 !important;
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    max-height: 88vh !important;
+  }
+}
+
+/* ── Improve font sizes on mobile ── */
+@media (max-width: 480px) {
+  body {
+    font-size: 14px;
+  }
+  .tab-card-subtext {
+    font-size: 9px;
+  }
+  .card-label {
+    font-size: 9px;
+  }
+  .device-name {
+    font-size: 13px;
+  }
+}
+
+/* ── Camera grid mobile ── */
+@media (max-width: 600px) {
+  .camera-brand-group {
+    margin-bottom: 16px;
+  }
+  .camera-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+@media (min-width: 601px) and (max-width: 900px) {
+  .camera-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
 }

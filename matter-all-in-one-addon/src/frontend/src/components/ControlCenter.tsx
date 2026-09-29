@@ -146,11 +146,6 @@ export const ControlCenter: React.FC<ControlCenterProps> = ({
                 )}
               </span>
             </div>
-            <strong className="control-center-summary-text">
-              {loading
-                ? "Sincronizando dispositivos y accesorios…"
-                : `${stats.exportedNodes} accesorios activos en Matter · ${stats.pairedTotal} emparejados en el hogar`}
-            </strong>
           </div>
         </div>
 

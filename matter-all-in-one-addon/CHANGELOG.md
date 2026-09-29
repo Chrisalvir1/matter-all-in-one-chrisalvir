@@ -1,3 +1,31 @@
+## [1.9.25] - 2026-09-28
+
+### Centro de Control, Desactivación Inmediata, Estabilidad de Cámaras y Mobile-First
+
+- **Centro de Control Matter & HAP y Modal de Emparejados:**
+  - Se eliminó el texto redundante «31 accesorios activos en Matter · 30 emparejados en el hogar».
+  - El botón «EMPAREJADOS» ahora abre un modal dividido e interactivo con dos pestañas: **⚡ Matter** (dispositivos IoT y cámaras Matter vinculadas) y **🏠 HAP IoT & Cámaras** (cámaras y accesorios vinculados por HomeKit).
+- **Desactivación Inmediata sin Rebote (Anti-Bounce):**
+  - Actualización optimista instantánea en la interfaz al activar/desactivar accesorios Matter.
+  - Bloqueo visual (`isBusy`) de los interruptores durante la transacción para prevenir rebotes y dobles clics accidentales.
+  - Refresh de estado diferido a 2 segundos para dar tiempo a que Matterbridge complete la despublicación antes de refrescar datos.
+  - En el backend (`platform.ts`), `serverNode.close()` y `serverNode.start()` incorporan timeouts seguros (`Promise.race` con 3s y 5s) para evitar bloqueos del event loop.
+  - Emisión de eventos SSE en tiempo real (`registering`, `registered`, `unregistering`, `unregistered`).
+- **Resiliencia y Estabilidad en Streaming de Cámaras (Tapo, Ezviz, Wyze):**
+  - **Auto-restart con backoff exponencial:** Si el subproceso FFmpeg de prebuffer se interrumpe o sale con error, se reinicia automáticamente (2s → 4s → 8s → ... máx 60s).
+  - **Heartbeat / Keepalive:** Chequeo periódico cada 30s que detecta si no se reciben frames de video durante 90s, forzando la reconexión limpia del stream RTSP.
+  - **Timeouts RTSP nativos:** Incorporación de `-timeout 5000000` y `-stimeout 5000000` (5 segundos) y `-fflags +discardcorrupt` para mayor tolerancia a paquetes dañados en streams RTSP Wi-Fi.
+- **Aceleración del Arranque:**
+  - En `restoreExportedDevices()`, los accesorios ya emparejados (`commissioned`) se procesan con prioridad al inicio para reconectar primero en la red.
+- **Diagnósticos y Logs Accesibles para Dispositivos en «Revisar»:**
+  - Banner destacado de causa raíz al inicio del panel de diagnóstico para identificar inmediatamente por qué un dispositivo requiere atención (ej. desconexión física en Home Assistant).
+  - La lista de endpoints pre-selecciona automáticamente la entidad con problemas y la resalta con una etiqueta clara.
+  - Nuevo botón «📄 Ver texto» con cuadro de texto seleccionable y acción directa de 1 clic para copiar todo el reporte de diagnóstico de manera 100% confiable en teléfonos móviles y dentro del Ingress de Home Assistant.
+- **Experiencia Mobile-First (Vertical y Horizontal):**
+  - En pantallas móviles (`≤ 760px` y `≤ 480px`), la tarjeta con el **Código QR y Código Manual de Matter** se posiciona automáticamente al inicio (`order: -1`).
+  - Adaptación completa de grids (Control Center a 2 columnas en vertical y 4 en horizontal, modales en bottom-sheet a pantalla completa, barra de filtros con scroll horizontal suave).
+  - Objetivos táctiles mínimos de 44px (estándar de accesibilidad) e inputs con `font-size: 15px` para evitar zoom indeseado en Safari iOS.
+
 ## [1.9.24] - 2026-09-28
 
 ### Emparejamiento HAP y organización del Centro de control

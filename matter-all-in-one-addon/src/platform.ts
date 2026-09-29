@@ -4069,7 +4069,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         if (endpoint) {
           const serverNode = (endpoint as any).serverNode;
           if (serverNode?.lifecycle?.isOnline) {
-            await serverNode.close();
+            await Promise.race([
+              serverNode.close(),
+              new Promise<void>((resolve) => setTimeout(resolve, 3000)),
+            ]);
           }
           await this.unregisterDevice(endpoint);
           this.matterbridgeDevices.delete(entityId);
@@ -4120,7 +4123,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         // unregister path. Close this node first to avoid stale mDNS records.
         const serverNode = (endpoint as any).serverNode;
         if (serverNode?.lifecycle?.isOnline) {
-          await serverNode.close();
+          await Promise.race([
+            serverNode.close(),
+            new Promise<void>((resolve) => setTimeout(resolve, 3000)),
+          ]);
         }
         await this.unregisterDevice(endpoint);
         this.matterbridgeDevices.delete(entityId);
@@ -4142,8 +4148,12 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   private async disposeCompositeNode(deviceId: string): Promise<void> {
     const key = this.compositeStorageKey(deviceId);
     const endpoint = this.matterbridgeDevices.get(key) as any;
-    if (endpoint?.serverNode?.lifecycle?.isOnline)
-      await endpoint.serverNode.close();
+    if (endpoint?.serverNode?.lifecycle?.isOnline) {
+      await Promise.race([
+        endpoint.serverNode.close(),
+        new Promise<void>((resolve) => setTimeout(resolve, 3000)),
+      ]);
+    }
     if (endpoint) await this.unregisterDevice(endpoint);
     this.matterbridgeDevices.delete(key);
 
