@@ -634,8 +634,6 @@ export class HomeKitCameraStreamingDelegate
           "tcp",
           "-timeout",
           "5000000",
-          "-stimeout",
-          "5000000",
           "-fflags",
           "+nobuffer+flush_packets",
           "-flags",
@@ -986,8 +984,6 @@ export class HomeKitCameraStreamingDelegate
 
     const args = this.buildStreamArgs(session, request, forceTranscode);
     const isTapoC402 = this.isTapoC402();
-    const isEzviz = this.isEzviz();
-    const isWyze = this.isWyze();
     const isTapoCamera = isTapoC402 || isTapoC120;
 
     this.platform?.log?.notice?.(
@@ -1059,7 +1055,7 @@ export class HomeKitCameraStreamingDelegate
           // C120 now normalizes its H.264 stream for HAP and needs time for the
           // first encoded keyframe before HomeKit accepts the RTP session.
         },
-        isTapoC402 ? 80 : isTapoC120 ? 1200 : (isEzviz || isWyze) ? 150 : 800,
+        isTapoC402 ? 80 : isTapoC120 ? 1200 : 800,
       );
       process.once("error", (error) => {
         clearTimeout(guard);
@@ -1206,8 +1202,6 @@ export class HomeKitCameraStreamingDelegate
     // HAP has already accepted the Live View request.  C402 needs a complete
     // GOP to join reliably; video remains strict H.264 passthrough.
     const isTapoC402 = this.isTapoC402();
-    const isEzviz = this.isEzviz();
-    const isWyze = this.isWyze();
 
     const args: string[] = [
       "-hide_banner",
@@ -1236,15 +1230,13 @@ export class HomeKitCameraStreamingDelegate
         "tcp",
         "-timeout",
         "10000000",
-        "-stimeout",
-        "10000000",
         // C402 needs 2MB for its long GOP analysis. C120 needs enough data to
         // receive a complete 2K keyframe before the H.264 decoder starts.
-        // Wyze, EZVIZ, and other network RTSP cameras use fast startup parameters.
+        // Wyze, EZVIZ, and other network RTSP cameras use 64KB for fast startup.
         "-probesize",
-        isTapoC402 ? "2097152" : isTapoC120 ? "524288" : (isEzviz || isWyze) ? "262144" : "65536",
+        isTapoC402 ? "2097152" : isTapoC120 ? "524288" : "65536",
         "-analyzeduration",
-        isTapoC402 ? "3000000" : isTapoC120 ? "1000000" : (isEzviz || isWyze) ? "500000" : "100000",
+        isTapoC402 ? "3000000" : isTapoC120 ? "1000000" : "100000",
       );
       if (isTapoC402) {
         args.push("-fflags", "+genpts+discardcorrupt", "-flags", "low_delay");

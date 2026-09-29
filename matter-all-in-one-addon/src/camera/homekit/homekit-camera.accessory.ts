@@ -960,18 +960,15 @@ export class HomeKitCameraAccessory {
       this.notifyPairingStateChanged(false);
     });
 
-    await this.accessory.publish(
-      {
-        username: this.record.username,
-        pincode: this.record.pincode,
-        port: this.record.port,
-        category: Categories.IP_CAMERA,
-        setupID: this.record.setupId,
-        advertiser: MDNSAdvertiser.CIAO,
-        bind: undefined,
-      },
-      true,
-    );
+    await this.accessory.publish({
+      username: this.record.username,
+      pincode: this.record.pincode,
+      port: this.record.port,
+      category: Categories.IP_CAMERA,
+      setupID: this.record.setupId,
+      advertiser: MDNSAdvertiser.CIAO,
+      bind: undefined,
+    });
     this.isPublished = true;
     this.platform?.log?.notice?.(
       `[HomeKitCamera][${this.entityId}] Published production HAP camera port=${this.record.port} (advertiser=ciao, iface=all) HKSV=${this.record.hksvEnabled ? "enabled" : "disabled"}`,

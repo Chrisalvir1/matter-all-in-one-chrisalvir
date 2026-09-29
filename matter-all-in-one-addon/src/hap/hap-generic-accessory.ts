@@ -860,18 +860,15 @@ export class HapGenericAccessory {
 
   public async publish(): Promise<void> {
     const category = HAP_PROFILE_CATEGORIES[this.record.hapProfile] ?? Categories.OTHER;
-    await this.accessory.publish(
-      {
-        username: this.record.username,
-        pincode: this.record.pincode,
-        setupID: this.record.setupId,
-        port: this.record.port,
-        category,
-        advertiser: MDNSAdvertiser.CIAO,
-        bind: undefined,
-      },
-      true,
-    );
+    await this.accessory.publish({
+      username: this.record.username,
+      pincode: this.record.pincode,
+      setupID: this.record.setupId,
+      port: this.record.port,
+      category,
+      advertiser: MDNSAdvertiser.CIAO,
+      bind: undefined,
+    });
     this.isPublished = true;
     try {
       this.accessory.setupURI();
