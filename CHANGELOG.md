@@ -1,3 +1,9 @@
+## [1.9.35] - 2026-09-29
+
+### Restauración del stream directo de Tapo C402 desde Home Assistant
+
+- Se vuelve a usar la ruta RTSP de HA `192.168.110.147:62291/tapo-c402`, que responde y entrega H264. La entidad HA `camera.tapo_c402_snapshot` solo es snapshot y no puede servir `camera.play_stream`.
+
 ## [1.9.33] - 2026-09-29
 
 ### Reparación de cámaras HA y Camera.UI
@@ -3791,6 +3797,10 @@ Todas las dependencias actualizadas a su versión estable más reciente. Se elim
 - Fix: Forzar agrupación de dispositivos composite ignorando el estado de 'group_by_device_id' en la configuración para evitar deshabilitación accidental.
 
 # Changelog
+
+## [1.9.35] - 2026-09-29
+
+- Restore the Tapo C402 direct Home Assistant RTSP source at `192.168.110.147:62291/tapo-c402`; its HA snapshot entity does not implement `camera.play_stream`.
 
 All notable changes to this project will be documented in this file.
 
