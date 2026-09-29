@@ -26,6 +26,7 @@ import type {
   CameraCapabilitiesInfo,
   ResolvedStreamSource,
 } from "../camera-types.js";
+import { CameraSourceResolver } from "../camera-source-resolver.js";
 import {
   getFfmpegVersion,
   resolveFfmpegPath,
@@ -268,7 +269,7 @@ export class HomeKitCameraStreamingDelegate
     private readonly platform: any,
     private readonly entityId: string,
     private readonly capabilities: CameraCapabilitiesInfo,
-    private readonly streamSource: ResolvedStreamSource,
+    private streamSource: ResolvedStreamSource,
   ) {
     super();
     this.loadPersistedSnapshot();
@@ -317,7 +318,7 @@ export class HomeKitCameraStreamingDelegate
     const entityId = this.entityId.toLowerCase();
     const fullText = `${model} ${entityId} ${name} ${sourceUrl}`;
     if (/wyze/i.test(fullText)) return false;
-    const isEzvizToken = (s: string) => /(?:\bezviz\b|\bh6c\b|ezviz[-_ ]?patio)/i.test(s);
+    const isEzvizToken = (s: string) => /(?:\bezviz\b|\bh6c\b|patio[-_ ]?trasero|ezviz[-_ ]?patio)/i.test(s);
     return isEzvizToken(model) || isEzvizToken(entityId) || isEzvizToken(name) || isEzvizToken(sourceUrl);
   }
 
@@ -903,7 +904,69 @@ export class HomeKitCameraStreamingDelegate
     );
 
     const ffmpegPath = resolveFfmpegPath();
-    const sourceUrl = this.getCleanSourceUrl();
+    let sourceUrl = this.getCleanSourceUrl();
+
+    // Dynamically refresh ephemeral HA stream URLs (e.g. C402 HLS tokens or missing URLs)
+    if (
+      !sourceUrl ||
+      this.streamSource.sourceType === "hls" ||
+      this.streamSource.sourceType === "ha_proxy" ||
+      this.isTapoC402()
+    ) {
+      let haEntityId = this.entityId;
+      if (
+        this.streamSource.metadata?.isCameraUi ||
+        this.entityId.startsWith("cameraui_")
+      ) {
+        const realCam = (this.streamSource.metadata as any)?.realEntities?.find(
+          (e: any) => e.id?.startsWith("camera."),
+        );
+        if (realCam?.id) {
+          haEntityId = realCam.id;
+        } else if (this.isTapoC402()) {
+          haEntityId = this.platform?.ha?.hassStates?.has("camera.tapo_frente_de_calle")
+            ? "camera.tapo_frente_de_calle"
+            : this.platform?.ha?.hassStates?.has("camera.tapo_c402")
+            ? "camera.tapo_c402"
+            : "camera.tapo_frente_de_calle";
+        }
+      }
+      if (this.platform?.ha) {
+        const state = this.platform.ha.hassStates?.get(haEntityId);
+        if (state) {
+          try {
+            const fresh = await CameraSourceResolver.resolve(
+              this.platform,
+              haEntityId,
+              state,
+            );
+            if (fresh && fresh.url) {
+              this.streamSource = fresh;
+              sourceUrl = this.getCleanSourceUrl();
+            }
+          } catch {}
+        }
+        if (!sourceUrl && this.platform.ha.requestCameraStream) {
+          try {
+            const freshUrl = await this.platform.ha.requestCameraStream(haEntityId);
+            if (freshUrl) {
+              this.streamSource.url = freshUrl;
+              this.streamSource.sourceType = "hls";
+              sourceUrl = this.getCleanSourceUrl();
+            }
+          } catch {}
+        }
+        if (!sourceUrl && this.platform.ha.getCameraProxyStreamUrl) {
+          const proxyUrl = this.platform.ha.getCameraProxyStreamUrl(haEntityId);
+          if (proxyUrl) {
+            this.streamSource.url = proxyUrl;
+            this.streamSource.sourceType = "ha_proxy";
+            sourceUrl = this.getCleanSourceUrl();
+          }
+        }
+      }
+    }
+
     if (!ffmpegPath || !sourceUrl) {
       this.platform?.log?.warn?.(
         `[HomeKitCamera][${this.entityId}] HAP START rejected: ${!ffmpegPath ? "FFmpeg unavailable" : "stream source unavailable"}`,
@@ -1234,12 +1297,12 @@ export class HomeKitCameraStreamingDelegate
         "10000000",
         // C402 needs 2MB for its long GOP analysis. C120 needs enough data to
         // receive a complete 2K keyframe before the H.264 decoder starts.
-        // EZVIZ 1080p needs 256KB to fit the complete initial I-frame immediately.
-        // Wyze and other network RTSP cameras use 128KB-256KB for fast startup.
+        // EZVIZ 1080p uses 128KB and 200ms analyze duration for instant startup without waiting.
+        // Wyze and other network RTSP cameras use 64KB-128KB for fast startup.
         "-probesize",
-        isTapoC402 ? "2097152" : isTapoC120 ? "524288" : this.isEzviz() ? "262144" : "65536",
+        isTapoC402 ? "2097152" : isTapoC120 ? "524288" : this.isEzviz() ? "131072" : "65536",
         "-analyzeduration",
-        isTapoC402 ? "3000000" : isTapoC120 ? "1000000" : this.isEzviz() ? "1000000" : "100000",
+        isTapoC402 ? "3000000" : isTapoC120 ? "1000000" : this.isEzviz() ? "200000" : "100000",
       );
       if (isTapoC402) {
         args.push("-fflags", "+genpts+discardcorrupt", "-flags", "low_delay");
@@ -1312,13 +1375,11 @@ export class HomeKitCameraStreamingDelegate
       session.audioSsrc &&
       session.audioKeySalt,
     );
-    const isWyze = this.isWyze();
     const needsSilentAudio =
       hasAudioRequested &&
       (isHaProxyStream ||
         this.capabilities.hasAudio === false ||
-        this.capabilities.audioCodec === "none" ||
-        isWyze);
+        this.capabilities.audioCodec === "none");
 
     const sampleRate =
       request.audio?.sample_rate === AudioStreamingSamplerate.KHZ_24
@@ -1327,6 +1388,7 @@ export class HomeKitCameraStreamingDelegate
 
     if (needsSilentAudio) {
       args.push(
+        "-re",
         "-f",
         "lavfi",
         "-i",
@@ -1597,19 +1659,14 @@ export class HomeKitCameraStreamingDelegate
       const isOpus = request.audio.codec === AudioStreamingCodecType.OPUS;
       const targetCodec = isOpus ? "opus" : "aac_eld";
 
-      // Tapo C402 and EZVIZ send standard AAC (AAC-LC) from RTSP and can use direct passthrough (-c:a copy).
-      // Tapo C120 sends PCMA (pcm_alaw at 8000 Hz) from RTSP (go2rtc), which MUST be transcoded to AAC-ELD/AAC
-      // with aresample=async=1:first_pts=0 so Apple Home receives valid audio and the AV clock runs smoothly without freezing.
-      const srcAudioCodec = (this.capabilities.audioCodec || "").toLowerCase();
-      const isNativeAac = srcAudioCodec === "aac" || srcAudioCodec === "aac_lc";
-      const isAudioPassthroughEligible = isTapoC402 || this.isEzviz() || isNativeAac;
-      const targetReq = isAudioPassthroughEligible
-        ? undefined
-        : {
-            expectedCodec: targetCodec,
-            allowedSampleRates: [sampleRate],
-            expectedChannels: 1,
-          };
+      // Apple HomeKit RTP Live View expects AAC-ELD (or Opus) audio packets.
+      // RTSP cameras provide AAC-LC, PCMA, or PCMU, which must be transcoded to AAC-ELD/AAC mono
+      // with aresample=async=1:first_pts=0 so iOS/macOS audio decoder receives valid packets and audio clock is smooth.
+      const targetReq = {
+        expectedCodec: targetCodec,
+        allowedSampleRates: [sampleRate],
+        expectedChannels: 1,
+      };
 
       const audioCompat = checkAudioPassthroughCompatibility(
         this.capabilities.audioCodec,

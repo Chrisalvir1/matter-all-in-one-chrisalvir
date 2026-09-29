@@ -60,8 +60,12 @@ export function useAddonState() {
       if (statusRes.status === "fulfilled") setStatus(statusRes.value);
       if (devicesRes.status === "fulfilled") {
         const raw = devicesRes.value;
-        const list = Array.isArray(raw) ? raw : (raw as any)?.entities || [];
-        setEntities(list);
+        const list = Array.isArray(raw)
+          ? raw
+          : Array.isArray((raw as any)?.entities)
+            ? (raw as any).entities
+            : [];
+        setEntities((prev) => (list.length > 0 || prev.length === 0 ? list : prev));
       }
       if (camerasRes.status === "fulfilled") {
         const raw = camerasRes.value;
@@ -107,8 +111,6 @@ export function useAddonState() {
               data.type === "scrypted_status" ||
               data.type === "camera_pairing_updated" ||
               data.type === "cameraui_updated" ||
-              data.type === "cameraui_motion" ||
-              data.type === "camera_ai_detection" ||
               data.type === "entity_state_changed"
             ) {
               refreshAll();

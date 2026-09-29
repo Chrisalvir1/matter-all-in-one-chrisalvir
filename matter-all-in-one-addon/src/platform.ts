@@ -2142,6 +2142,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
   /** Refresh the panel catalogue from the latest HA state cache on demand. */
   private async refreshDiscoveryCatalog(): Promise<void> {
+    if (!this.ha?.hassStates) return;
     if (this.entities.size === this.ha.hassStates.size) return;
     for (const state of this.ha.hassStates.values()) {
       if (!this.entities.has(state.entity_id)) {
@@ -3465,22 +3466,24 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         this.deviceGroupingConfigs = [];
       }
 
-      const states = Array.from(this.ha.hassStates.values());
+      const states = Array.from(this.ha?.hassStates?.values() || []);
       this.log.info(
         `Fetched ${states.length} entity states. Registering matching devices...`,
       );
 
-      for (const hassState of states) await this.registerHAEntity(hassState);
-      const currentEntityIds = new Set(states.map((state) => state.entity_id));
-      for (const entityId of [...this.entities.keys()]) {
-        if (currentEntityIds.has(entityId)) continue;
-        if (this.isEntityExported(entityId)) {
-          const message =
-            "Home Assistant ya no incluye esta entidad en su snapshot; se conserva el último estado Matter.";
-          this.log.warn(`[Home Assistant] ${entityId}: ${message}`);
-          this.recordEntityDiagnostic(entityId, message, "warning");
-        } else {
-          this.entities.delete(entityId);
+      if (states.length > 0) {
+        for (const hassState of states) await this.registerHAEntity(hassState);
+        const currentEntityIds = new Set(states.map((state) => state.entity_id));
+        for (const entityId of [...this.entities.keys()]) {
+          if (currentEntityIds.has(entityId)) continue;
+          if (this.isEntityExported(entityId)) {
+            const message =
+              "Home Assistant ya no incluye esta entidad en su snapshot; se conserva el último estado Matter.";
+            this.log.warn(`[Home Assistant] ${entityId}: ${message}`);
+            this.recordEntityDiagnostic(entityId, message, "warning");
+          } else {
+            this.entities.delete(entityId);
+          }
         }
       }
       await this.restoreHapAccessories();
@@ -5254,9 +5257,19 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         );
         const isC120Match = isTapoC120Entity && isTapoC120Cam && isMotionClass;
 
+        const isWyzeEntity = /wyze/i.test(`${entityId} ${entityFriendlyName}`);
+        const isWyzeCam = /wyze/i.test(`${cuiId} ${camName}`);
+        const isWyzeMatch = isWyzeEntity && isWyzeCam && isMotionClass;
+
+        const isEzvizEntity = /ezviz|h6c|patio[-_ ]?trasero/i.test(`${entityId} ${entityFriendlyName}`);
+        const isEzvizCam = /ezviz|h6c|patio[-_ ]?trasero/i.test(`${cuiId} ${camName}`);
+        const isEzvizMatch = isEzvizEntity && isEzvizCam && isMotionClass;
+
         const isLinked =
           isC402Match ||
           isC120Match ||
+          isWyzeMatch ||
+          isEzvizMatch ||
           linkedId === entityId ||
           (cleanCuiId.length >= 4 && cleanEntityId.includes(cleanCuiId)) ||
           (cleanCamName.length >= 3 && cleanEntityId.includes(cleanCamName)) ||
@@ -5982,7 +5995,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         }
 
         if (req.method === "GET" && pathname === "/api/custom/devices") {
-          await this.refreshDiscoveryCatalog();
+          try {
+            await this.refreshDiscoveryCatalog();
           const errorPattern =
             /\b(error|warn|warning|failed|failure|exception|unable|timeout)\b/i;
           const allErrorLogs = getLogs().filter((line) =>
@@ -6269,6 +6283,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             "Content-Type": "application/json; charset=utf-8",
           });
           res.end(JSON.stringify([...result, ...mqttResults]));
+          } catch (err: any) {
+            this.log.error(`Error in /api/custom/devices: ${err?.message || err}`);
+            res.writeHead(200, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify([]));
+          }
           return;
         }
 
