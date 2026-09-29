@@ -6262,7 +6262,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                 fabricCount: connection.fabricCount,
                 matterFabrics: connection.fabrics,
                 hasIssue: (() => {
-                  const stateStr = (m.getStateString() || "").toLowerCase();
+                  const stateStr = String(m.getStateString() ?? "").toLowerCase();
                   const isMqttDown =
                     stateStr === "offline" ||
                     stateStr === "unavailable" ||

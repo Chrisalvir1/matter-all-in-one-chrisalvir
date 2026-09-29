@@ -163,7 +163,7 @@ export class MqttEntity {
   }
 
   public getStateString(): string {
-    return this.currentState;
+    return String(this.currentState ?? "unknown");
   }
 
   public async createEndpoint(): Promise<MatterbridgeEndpoint> {
@@ -346,21 +346,27 @@ export class MqttEntity {
     }
   }
 
-  public handleStateUpdate(payload: string) {
-    this.currentState = payload;
+  public handleStateUpdate(payload: any) {
+    const rawPayload =
+      typeof payload === "string"
+        ? payload
+        : payload !== null && payload !== undefined
+          ? String(payload)
+          : "";
+    this.currentState = rawPayload;
 
     try {
       let parsed: any = null;
       try {
-        if (payload.startsWith("{") && payload.endsWith("}")) {
-          parsed = JSON.parse(payload);
+        if (rawPayload.startsWith("{") && rawPayload.endsWith("}")) {
+          parsed = JSON.parse(rawPayload);
         }
       } catch {
         /* plain string */
       }
 
       // Check availability payloads
-      const stateStr = payload.trim().toLowerCase();
+      const stateStr = rawPayload.trim().toLowerCase();
       if (
         stateStr === "offline" ||
         stateStr === "unavailable" ||

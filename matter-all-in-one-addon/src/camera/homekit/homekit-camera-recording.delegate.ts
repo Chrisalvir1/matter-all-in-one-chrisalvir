@@ -551,6 +551,10 @@ export class HomeKitCameraRecordingDelegate
       /(?:\bc402\b|tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle|tapo[-_ ]?frente)/i.test(
         cameraIdentity,
       );
+    const isWyzeMatch =
+      /(?:\bwyze\b|cba17b87)/i.test(cameraIdentity);
+    const isEzvizMatch =
+      /(?:\bezviz\b|\bh6c\b|4661fae4|patio[-_ ]?trasero)/i.test(cameraIdentity);
     // Camera.UI sources from these cameras have demonstrated discontinuous
     // audio clocks. Rebuild the audio timeline before AAC encoding while
     // keeping their video stream in strict passthrough.
@@ -561,6 +565,8 @@ export class HomeKitCameraRecordingDelegate
     const needsAudioTimestampRepair =
       isTapoC402 ||
       isTapoC120Match ||
+      isWyzeMatch ||
+      isEzvizMatch ||
       /(?:\bc402\b|\bc120\b|\bwyze\b|\bezviz\b|frente[-_ ]?de[-_ ]?calle|tapo[-_ ]?spot)/i.test(
         cameraIdentity,
       );
@@ -582,13 +588,19 @@ export class HomeKitCameraRecordingDelegate
         "-timeout",
         "5000000",
         "-probesize",
-        isTapoC402 ? "1048576" : needsAudioTimestampRepair ? "524288" : "65536",
+        isTapoC402 || isWyzeMatch
+          ? "1048576"
+          : needsAudioTimestampRepair
+            ? "524288"
+            : "65536",
         "-analyzeduration",
         isTapoC402
           ? "1000000"
-          : needsAudioTimestampRepair
-            ? "500000"
-            : "100000",
+          : isWyzeMatch
+            ? "1500000"
+            : needsAudioTimestampRepair
+              ? "500000"
+              : "100000",
         "-fflags",
         // Camera.UI/go2rtc can restart an RTSP publisher with DTS values that
         // move backwards. Generate a fresh monotonic timeline for fMP4/HKSV
@@ -631,6 +643,7 @@ export class HomeKitCameraRecordingDelegate
     const isH264 =
       this.capabilities.videoCodec === "h264" &&
       this.streamSource.sourceType !== "ha_proxy";
+    const isHaProxy = this.streamSource.sourceType === "ha_proxy";
 
     // Structured C120 camera detection:
     // Check structured camera model, entityId, metadata, name before regex fallback
@@ -706,6 +719,34 @@ export class HomeKitCameraRecordingDelegate
         "copy",
         "-bsf:v",
         "dump_extra=freq=keyframe",
+      );
+    } else if (isHaProxy) {
+      this.platform?.log?.notice?.(
+        `[HKSV][${this.entityId}] Fuente ha_proxy MJPEG detectada — transcodificando a H.264 1080p para grabación HKSV`,
+      );
+      args.push(
+        "-map",
+        "0:v:0",
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        "-profile:v",
+        "high",
+        "-level:v",
+        "4.0",
+        "-vf",
+        "scale=1920:1080:force_original_aspect_ratio=decrease:force_divisible_by=2",
+        "-r",
+        "15",
+        "-g",
+        "30",
+        "-keyint_min",
+        "15",
+        "-preset",
+        "ultrafast",
+        "-tune",
+        "zerolatency",
       );
     } else {
       // HEVC is not implemented in this classical HKSV pipeline.
@@ -873,7 +914,10 @@ export class HomeKitCameraRecordingDelegate
             }
           } catch {}
         }
-        if (!sourceUrl && this.platform?.ha?.requestCameraStream) {
+        if (
+          (!sourceUrl || this.streamSource.sourceType === "ha_proxy") &&
+          this.platform?.ha?.requestCameraStream
+        ) {
           try {
             const freshUrl = await this.platform.ha.requestCameraStream(haEntityId);
             if (freshUrl) {

@@ -427,6 +427,19 @@ export class CameraUiHomeKitBridge {
           .substring(0, 32)
           .trim();
         const uniqueId = `cameraui_${camera.id}_occupancy`;
+        const existingEndpoint = this.activeMatterEndpoints.get(camera.id);
+        if (existingEndpoint) {
+          const oldServer = (existingEndpoint as any).serverNode;
+          if (oldServer?.lifecycle?.isOnline) {
+            await Promise.race([
+              oldServer.close(),
+              new Promise((r) => setTimeout(r, 2000)),
+            ]).catch(() => {});
+          }
+          await platform.unregisterDevice(existingEndpoint).catch(() => {});
+          this.activeMatterEndpoints.delete(camera.id);
+        }
+
         const matterEndpoint = new MatterbridgeEndpoint([occupancySensor], {
           id: uniqueId,
           mode: "server",
@@ -456,7 +469,10 @@ export class CameraUiHomeKitBridge {
         await platform.registerDevice(matterEndpoint);
         const serverNode = (matterEndpoint as any).serverNode;
         if (serverNode && !serverNode.lifecycle?.isOnline) {
-          await serverNode.start();
+          await Promise.race([
+            serverNode.start(),
+            new Promise((r) => setTimeout(r, 5000)),
+          ]);
         }
         this.activeMatterEndpoints.set(camera.id, matterEndpoint);
         platform.log?.notice?.(

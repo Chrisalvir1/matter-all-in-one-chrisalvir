@@ -165,5 +165,15 @@ describe("MQTT Auto-Discovery and Entity Mapping", () => {
     // Test availability handling
     entity.handleStateUpdate("offline");
     expect(entity.getStateString()).toBe("unavailable");
+
+    // Test non-string payloads do not break .toLowerCase() in UI queries
+    (entity as any).handleStateUpdate(true);
+    expect(typeof entity.getStateString().toLowerCase()).toBe("string");
+    (entity as any).handleStateUpdate(false);
+    expect(typeof entity.getStateString().toLowerCase()).toBe("string");
+    (entity as any).handleStateUpdate(123);
+    expect(typeof entity.getStateString().toLowerCase()).toBe("string");
+    (entity as any).handleStateUpdate(null);
+    expect(typeof entity.getStateString().toLowerCase()).toBe("string");
   });
 });

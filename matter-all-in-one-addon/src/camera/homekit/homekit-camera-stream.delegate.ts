@@ -318,7 +318,7 @@ export class HomeKitCameraStreamingDelegate
     const entityId = this.entityId.toLowerCase();
     const fullText = `${model} ${entityId} ${name} ${sourceUrl}`;
     if (/wyze/i.test(fullText)) return false;
-    const isEzvizToken = (s: string) => /(?:\bezviz\b|\bh6c\b|patio[-_ ]?trasero|ezviz[-_ ]?patio)/i.test(s);
+    const isEzvizToken = (s: string) => /(?:\bezviz\b|\bh6c\b|4661fae4|patio[-_ ]?trasero|ezviz[-_ ]?patio)/i.test(s);
     return isEzvizToken(model) || isEzvizToken(entityId) || isEzvizToken(name) || isEzvizToken(sourceUrl);
   }
 
@@ -327,7 +327,7 @@ export class HomeKitCameraStreamingDelegate
     const name = String(this.streamSource?.metadata?.name || "").toLowerCase();
     const model = String(this.streamSource?.metadata?.model || "").toLowerCase();
     const entityId = this.entityId.toLowerCase();
-    const isWyzeToken = (s: string) => /(?:\bwyze\b)/i.test(s);
+    const isWyzeToken = (s: string) => /(?:\bwyze\b|cba17b87)/i.test(s);
     return isWyzeToken(model) || isWyzeToken(entityId) || isWyzeToken(name) || isWyzeToken(sourceUrl);
   }
 
@@ -477,7 +477,12 @@ export class HomeKitCameraStreamingDelegate
   ): Promise<void> {
     const started = Date.now();
     let completed = false;
+    let safetyTimer: ReturnType<typeof setTimeout> | undefined = undefined;
     const finish = (source: string, buffer: Buffer): void => {
+      if (safetyTimer) {
+        clearTimeout(safetyTimer);
+        safetyTimer = undefined;
+      }
       this.isTakingSnapshot = false;
       if (completed) return;
       completed = true;
@@ -517,13 +522,22 @@ export class HomeKitCameraStreamingDelegate
     if (
       this.lastSnapshotBuffer &&
       this.lastSnapshotBuffer !== FALLBACK_JPEG_BUFFER &&
-      (this.isTakingSnapshot || now - this.lastSnapshotTime < 5000)
+      (this.isTakingSnapshot || now - this.lastSnapshotTime < 8000)
     ) {
       finish("cached-session-guard", this.lastSnapshotBuffer);
       return;
     }
 
     this.isTakingSnapshot = true;
+    safetyTimer = setTimeout(() => {
+      if (
+        !completed &&
+        this.lastSnapshotBuffer &&
+        this.lastSnapshotBuffer !== FALLBACK_JPEG_BUFFER
+      ) {
+        finish("safety-cached-fallback", this.lastSnapshotBuffer);
+      }
+    }, 1800);
 
     try {
       let haEntityToQuery: string | undefined = this.entityId.startsWith(
@@ -592,7 +606,7 @@ export class HomeKitCameraStreamingDelegate
           }
           const response = await fetch(snapshotUrl, {
             headers,
-            signal: AbortSignal.timeout(2500),
+            signal: AbortSignal.timeout(1500),
           });
           if (response.ok) {
             const buffer = Buffer.from(await response.arrayBuffer());
@@ -627,16 +641,20 @@ export class HomeKitCameraStreamingDelegate
 
       const args = ["-hide_banner", "-loglevel", "error"];
       if (sourceUrl.startsWith("rtsp://")) {
-        const isTapo = this.isTapoC402() || this.isTapoC120();
+        const isDemandingCam =
+          this.isTapoC402() ||
+          this.isTapoC120() ||
+          this.isWyze() ||
+          this.isEzviz();
         args.push(
           "-probesize",
-          isTapo ? "524288" : "32768",
+          isDemandingCam ? "1048576" : "65536",
           "-analyzeduration",
-          isTapo ? "1000000" : "0",
+          isDemandingCam ? "1000000" : "0",
           "-rtsp_transport",
           "tcp",
           "-timeout",
-          "5000000",
+          "3000000",
           "-fflags",
           "+nobuffer+flush_packets",
           "-flags",
@@ -686,7 +704,7 @@ export class HomeKitCameraStreamingDelegate
           process.kill("SIGKILL");
         } catch {}
         finish("fallback-timeout", this.lastSnapshotBuffer);
-      }, 3000);
+      }, 2000);
       process.stdout.on("data", (chunk: Buffer) => chunks.push(chunk));
       process.once("error", () => {
         clearTimeout(timer);
@@ -946,7 +964,10 @@ export class HomeKitCameraStreamingDelegate
             }
           } catch {}
         }
-        if (!sourceUrl && this.platform.ha.requestCameraStream) {
+        if (
+          (!sourceUrl || this.streamSource.sourceType === "ha_proxy") &&
+          this.platform.ha.requestCameraStream
+        ) {
           try {
             const freshUrl = await this.platform.ha.requestCameraStream(haEntityId);
             if (freshUrl) {

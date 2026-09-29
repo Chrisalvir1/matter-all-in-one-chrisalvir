@@ -1,4 +1,21 @@
-## [1.9.25] - 2026-09-28
+## [1.9.31] - 2026-09-28
+
+### Corrección Crítica IoT/MQTT, Estabilidad de Cámaras (Wyze, C402, EZVIZ, C120) y Aceleración de Snapshots
+
+- **Descubrimiento y Sincronización de Dispositivos IoT / MQTT:**
+  - Se resolvió la excepción `TypeError: (m.getStateString(...) || "").toLowerCase is not a function` en `platform.ts` mediante la conversión defensiva `String(m.getStateString() ?? "").toLowerCase()`.
+  - Se blindó `MqttEntity.getStateString()` y `MqttEntity.handleStateUpdate()` para manejar de forma robusta cualquier tipo de payload (booleanos, números, buffers, objetos o nulos) sin interrumpir `/api/custom/devices`, restaurando la visualización inmediata de todos los dispositivos IoT de Home Assistant y MQTT en el panel.
+- **Corrección de Parámetros de Códec y Dimensiones de Wyze:**
+  - Se ajustó el analizador HKSV en `HomeKitCameraRecordingDelegate` para la cámara Wyze Patio Trasero (`cba17b87`), aumentando `probesize` a 1MB y `analyzeduration` a 1.5s. Esto elimina el fallo de FFmpeg `unspecified size / dimensions not set` que impedía inicializar la grabación y stream de la cámara Wyze.
+- **Estabilidad de Tapo C402 y Prevención de Conflicto de Puerto:**
+  - Se habilitó la elevación automática de fuentes `ha_proxy` (MJPEG) a `hls` / RTSP dinámico en `HomeKitCameraStreamingDelegate` y `HomeKitCameraRecordingDelegate`.
+  - Se añadió transcodificación compatible H.264 para fuentes `ha_proxy` en HKSV prebuffer en lugar de abortar con `HKSV no capaz`.
+  - Se previene el error `listen EADDRINUSE :::5580` en `CameraUiHomeKitBridge` desregistrando y cerrando de forma limpia cualquier instancia previa del sensor de ocupación Matter antes de crear uno nuevo.
+- **Aceleración de Snapshots y Eliminación de Latencia:**
+  - En `HomeKitCameraStreamingDelegate`, se introdujo un temporizador de seguridad de 1800ms que responde inmediatamente con el último cuadro válido en caché (`safety-cached-fallback`) si la consulta a la cámara toma más tiempo.
+  - Se amplió la ventana de reutilización de caché a 8s y se redujeron los tiempos de espera HTTP a 1500ms y FFmpeg a 2000ms, eliminando los avisos `The image snapshot handler is slow to respond` en Apple Home.
+
+## [1.9.30] - 2026-09-28
 
 ### Centro de Control, Desactivación Inmediata, Estabilidad de Cámaras y Mobile-First
 
