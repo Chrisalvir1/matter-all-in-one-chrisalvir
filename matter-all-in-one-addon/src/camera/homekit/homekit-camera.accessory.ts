@@ -352,12 +352,10 @@ export class HomeKitCameraAccessory {
   }
 
   private configureAccessoryInformation(): void {
-    const mfr = this.record.manufacturer
-      ? `${this.record.manufacturer} (HAP-NodeJS)`
-      : "Chrisalvir (HAP-NodeJS)";
-    const model = this.record.model
-      ? `${this.record.model} (HAP-NodeJS ${HAP_NODEJS_VERSION})`
-      : `HAP-NodeJS ${HAP_NODEJS_VERSION} Camera`;
+    const mfr = "Matter All-In-One Chrisalvir";
+    const model = (this.record.model || "Network Camera")
+      .replace(/\s*\(HAP-NodeJS[^)]*\)/gi, "")
+      .trim();
 
     this.accessory
       .getService(Service.AccessoryInformation)
@@ -369,11 +367,11 @@ export class HomeKitCameraAccessory {
       )
       ?.setCharacteristic(
         Characteristic.FirmwareRevision,
-        HAP_NODEJS_VERSION,
+        HAP_FIRMWARE_REVISION,
       )
       ?.setCharacteristic(
         Characteristic.SoftwareRevision,
-        HAP_NODEJS_VERSION,
+        HAP_FIRMWARE_REVISION,
       );
   }
 

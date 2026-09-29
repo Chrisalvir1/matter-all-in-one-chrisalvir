@@ -217,12 +217,10 @@ export class HapGenericAccessory {
   private configureAccessoryInformation(): void {
     const info = this.accessory.getService(Service.AccessoryInformation);
     if (!info) return;
-    const mfr = this.record.manufacturer
-      ? `${this.record.manufacturer} (HAP-NodeJS)`
-      : "Matter All-in-One (HAP-NodeJS)";
-    const model = this.record.model
-      ? `${this.record.model} (HAP-NodeJS ${HAP_NODEJS_VERSION})`
-      : `HAP-NodeJS ${HAP_NODEJS_VERSION} - ${HAP_PROFILE_LABELS[this.record.hapProfile] || "HAP Device"}`;
+    const mfr = "Matter All-In-One Chrisalvir";
+    const model = (this.record.model || HAP_PROFILE_LABELS[this.record.hapProfile] || "HAP Device")
+      .replace(/\s*\(HAP-NodeJS[^)]*\)/gi, "")
+      .trim();
 
     info
       .setCharacteristic(Characteristic.Manufacturer, mfr)
@@ -237,11 +235,11 @@ export class HapGenericAccessory {
       )
       .setCharacteristic(
         Characteristic.FirmwareRevision,
-        HAP_NODEJS_VERSION,
+        HAP_FIRMWARE_REVISION,
       );
     info.setCharacteristic(
       Characteristic.SoftwareRevision,
-      HAP_NODEJS_VERSION,
+      HAP_FIRMWARE_REVISION,
     );
   }
 
