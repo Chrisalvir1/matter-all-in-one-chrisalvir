@@ -614,6 +614,10 @@ export class HomeKitCameraStreamingDelegate
           isTapo ? "1000000" : "0",
           "-rtsp_transport",
           "tcp",
+          "-timeout",
+          "5000000",
+          "-stimeout",
+          "5000000",
           "-fflags",
           "+nobuffer+flush_packets",
           "-flags",
@@ -1209,6 +1213,8 @@ export class HomeKitCameraStreamingDelegate
         "-rtsp_transport",
         "tcp",
         "-timeout",
+        "10000000",
+        "-stimeout",
         "10000000",
         // C402 needs 2MB for its long GOP analysis. C120 needs enough data to
         // receive a complete 2K keyframe before the H.264 decoder starts.

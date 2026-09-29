@@ -216,6 +216,12 @@ export class HomeKitCameraRecordingDelegate
   private prebufferRestartTimer?: NodeJS.Timeout;
   private consecutivePrebufferFailures = 0;
 
+  // Watchdog de silencio / keepalive
+  private heartbeatTimer?: NodeJS.Timeout;
+  private lastFrameTime = 0;
+  private readonly heartbeatIntervalMs = 30_000;
+  private readonly maxFrameSilenceMs = 90_000;
+
   constructor(
     private readonly platform: any,
     private readonly entityId: string,
@@ -512,6 +518,7 @@ export class HomeKitCameraRecordingDelegate
   }
 
   private handleNewFragment(fragment: Fmp4MediaFragment): void {
+    this.lastFrameTime = Date.now();
     // Only accept keyframed fragments into prebuffer to prevent decode corruption
     if (fragment.isKeyframe) {
       this.prebuffer.push(fragment);
@@ -580,6 +587,8 @@ export class HomeKitCameraRecordingDelegate
         "-rtsp_transport",
         "tcp",
         "-timeout",
+        "5000000",
+        "-stimeout",
         "5000000",
         "-probesize",
         isTapoC402 ? "1048576" : needsAudioTimestampRepair ? "524288" : "65536",
@@ -887,6 +896,8 @@ export class HomeKitCameraRecordingDelegate
       this.segmenter.reset();
       this.initializationSegment = null;
       this.clearPrebuffer();
+      this.lastFrameTime = Date.now();
+      this.startHeartbeat();
       const process = spawn(ffmpegPath, args, {
         stdio: ["ignore", "pipe", "pipe"],
       });
@@ -958,6 +969,7 @@ export class HomeKitCameraRecordingDelegate
   }
 
   private stopPrebufferPipeline(): void {
+    this.stopHeartbeat();
     this.isStartingPipeline = false;
     if (this.prebufferRestartTimer) {
       clearTimeout(this.prebufferRestartTimer);
@@ -1057,7 +1069,36 @@ export class HomeKitCameraRecordingDelegate
     });
   }
 
+  /**
+   * Heartbeat watchdog: periodically checks if the prebuffer FFmpeg process is alive
+   * but has stopped receiving video frames (e.g. Wi-Fi camera packet drop without TCP RST).
+   * Restarts the prebuffer pipeline if silence exceeds maxFrameSilenceMs.
+   */
+  private startHeartbeat(): void {
+    this.stopHeartbeat();
+    this.heartbeatTimer = setInterval(() => {
+      if (!this.ffmpegProcess || !this.recordingActive || this.isPausedByLiveStream) return;
+      const silenceMs = Date.now() - this.lastFrameTime;
+      if (this.lastFrameTime > 0 && silenceMs > this.maxFrameSilenceMs) {
+        this.platform?.log?.warn?.(
+          `[HKSV][${this.entityId}] No se recibieron frames de video durante ${(silenceMs / 1000).toFixed(0)}s — reiniciando prebuffer por inactividad`,
+        );
+        this.stopPrebufferPipeline();
+        this.schedulePrebufferRecovery();
+      }
+    }, this.heartbeatIntervalMs);
+    this.heartbeatTimer.unref?.();
+  }
+
+  private stopHeartbeat(): void {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = undefined;
+    }
+  }
+
   public destroy(): void {
+    this.stopHeartbeat();
     this.stopPrebufferPipeline();
     this.clearPrebuffer();
     this.segmenter.reset();
