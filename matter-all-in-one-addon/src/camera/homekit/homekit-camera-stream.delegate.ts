@@ -811,7 +811,16 @@ export class HomeKitCameraStreamingDelegate
       this.prepareTimeouts.set(request.sessionID, zombieTimer);
 
       const response: PrepareStreamResponse = {
-        addressOverride: request.sourceAddress,
+        // Node can report an IPv4 peer through the dual-stack IPv6 listener as
+        // an IPv4-mapped address (e.g. ::ffff:192.168.1.20). HAP-NodeJS
+        // validates addressOverride against addressVersion and rejects that
+        // mapped value as IPv6 when HomeKit negotiated IPv4.
+        addressOverride:
+          request.addressVersion === "ipv4" &&
+          typeof request.sourceAddress === "string" &&
+          request.sourceAddress.startsWith("::ffff:")
+            ? request.sourceAddress.slice("::ffff:".length)
+            : request.sourceAddress,
         video: {
           port: localVideoPort,
           ssrc: session.videoSsrc,
@@ -829,7 +838,7 @@ export class HomeKitCameraStreamingDelegate
         };
       }
       this.platform?.log?.notice?.(
-        `[HomeKitCamera][${this.entityId}] [Session][${request.sessionID}] session-prepare activeSessions=${this.activeSessions.size} addressOverride=${request.sourceAddress} remote=${request.targetAddress}:${request.video.port} localVideoRTCP=${localVideoPort} videoSSRC=${session.videoSsrc}${session.localAudioPort ? ` localAudioRTCP=${session.localAudioPort} audioSSRC=${session.audioSsrc}` : ""}`,
+        `[HomeKitCamera][${this.entityId}] [Session][${request.sessionID}] session-prepare activeSessions=${this.activeSessions.size} addressOverride=${response.addressOverride} addressVersion=${request.addressVersion} remote=${request.targetAddress}:${request.video.port} localVideoRTCP=${localVideoPort} videoSSRC=${session.videoSsrc}${session.localAudioPort ? ` localAudioRTCP=${session.localAudioPort} audioSSRC=${session.audioSsrc}` : ""}`,
       );
       callback(undefined, response);
     } catch (error) {
