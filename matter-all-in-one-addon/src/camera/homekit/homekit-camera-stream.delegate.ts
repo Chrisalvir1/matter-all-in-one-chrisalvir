@@ -817,6 +817,7 @@ export class HomeKitCameraStreamingDelegate
         // mapped value as IPv6 when HomeKit negotiated IPv4.
         addressOverride:
           request.addressVersion === "ipv4" &&
+          typeof request.sourceAddress === "string" &&
           request.sourceAddress.startsWith("::ffff:")
             ? request.sourceAddress.slice("::ffff:".length)
             : request.sourceAddress,
