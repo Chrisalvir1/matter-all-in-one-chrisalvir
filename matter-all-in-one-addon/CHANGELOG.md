@@ -1,3 +1,7 @@
+## [1.9.35] - 2026-09-29
+
+- Restore the Tapo C402 direct Home Assistant RTSP source at `192.168.110.147:62291/tapo-c402`; its HA snapshot entity does not implement `camera.play_stream`.
+
 ## [1.9.34] - 2026-09-29
 
 ### Corrección crítica de streams HomeKit y fuente de video de C402
