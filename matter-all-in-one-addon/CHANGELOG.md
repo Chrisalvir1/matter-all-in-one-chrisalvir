@@ -1,3 +1,8 @@
+## [1.9.38] - 2026-09-29
+
+### CI
+- Make the test fixture use the add-on FFmpeg capability (AAC-ELD via libfdk_aac), independently of the GitHub runner binary.
+
 ## [1.9.37] - 2026-09-29
 
 - Preserve the last valid HKSV recording configuration selected by the Apple Home Hub, so a Camera.UI camera can recover recording after an add-on restart without being paired again.
