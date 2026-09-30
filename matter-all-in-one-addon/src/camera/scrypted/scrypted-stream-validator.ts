@@ -404,18 +404,8 @@ export class ScryptedStreamValidator {
       if (probe.valid) {
         const effectiveElapsed = Math.max(1, elapsedMs);
         metrics.timeToDescribeMs = {
-          value: Math.max(1, Math.round(effectiveElapsed * 0.4)),
-          source: probe.probeMethod || "ffprobe",
-          confidence: "high",
-          measuredAt: now,
-        };
-        metrics.timeToFirstPacketMs = {
-          value: Math.max(1, Math.round(effectiveElapsed * 0.6)),
-          source: probe.probeMethod || "ffprobe",
-          confidence: "medium",
-          measuredAt: now,
-        };
-        metrics.timeToFirstFrameMs = {
+          // ffprobe reports one end-to-end probe duration. It does not expose
+          // separate DESCRIBE, first-packet, or first-decoded-frame timings.
           value: effectiveElapsed,
           source: probe.probeMethod || "ffprobe",
           confidence: "high",

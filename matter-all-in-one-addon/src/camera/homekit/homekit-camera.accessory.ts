@@ -1049,7 +1049,7 @@ export class HomeKitCameraAccessory {
         );
 
         if (this.entityId.includes("cameraui")) {
-          const cuiId = this.entityId
+          const cuiId = this.record.cameraUiCameraId || this.entityId
             .replace(/^camera\.cameraui_/, "")
             .replace(/^camera\./, "");
           void CameraUiStorage.updateCamera(cuiId, (cam) => {
@@ -1084,7 +1084,7 @@ export class HomeKitCameraAccessory {
       }
 
       // Update Camera.UI storage if applicable
-      const cuiId = this.entityId
+      const cuiId = this.record.cameraUiCameraId || this.entityId
         .replace(/^camera\.cameraui_/, "")
         .replace(/^camera\./, "");
       void CameraUiStorage.updateCamera(cuiId, (cam) => {

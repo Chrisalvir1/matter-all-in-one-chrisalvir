@@ -83,6 +83,8 @@ export class CameraUiHomeKitBridge {
     string,
     FfmpegMotionDetector
   >();
+  /** Last state prevents duplicate HA/MQTT/FFmpeg paths from retriggering HKSV. */
+  private static motionStates = new Map<string, boolean>();
 
   public static getAccessory(
     cameraId: string,
@@ -359,7 +361,10 @@ export class CameraUiHomeKitBridge {
     }
 
     const record: HomeKitCameraStorageRecord = {
-      entityId: `camera.${camera.id}`,
+      // Camera.UI IDs are UUIDs, and their hyphens make an invalid HA entity_id.
+      // Keep the original ID separately for Camera.UI storage and HAP lookups.
+      entityId: `camera.${camera.id.replace(/[^a-z0-9_]/gi, "_").toLowerCase()}`,
+      cameraUiCameraId: camera.id,
       sourceCameraEntityId: haEntityId,
       uuid: camera.uuid,
       username: camera.username,
@@ -407,6 +412,7 @@ export class CameraUiHomeKitBridge {
     camera.setupUri = accessory.setupUri;
     camera.isPaired = accessory.isPaired();
     this.activeAccessories.set(camera.id, accessory);
+    this.motionStates.set(camera.id, false);
 
     platform.log?.notice?.(
       `[Camera.UI][${camera.name}] Published to HomeKit HAP on port ${camera.port} (code: ${camera.pincode}, codec: ${chosenCodec}, strategy: ${chosenStrategy})`,
@@ -501,26 +507,71 @@ export class CameraUiHomeKitBridge {
       // restart; otherwise C402/EZVIZ/Wyze never regain their detector.
       if (!confirmedByHomeHub && !accessory.isPaired() && !camera.isPaired)
         return;
+      const configuredMotionEntityId = camera.motionEntityId;
+      const hasConfiguredHaMotion = Boolean(
+        configuredMotionEntityId &&
+          configuredMotionEntityId !== "none" &&
+          configuredMotionEntityId !== "auto" &&
+          platform?.ha?.hassStates?.has(configuredMotionEntityId),
+      );
+      const hasLinkedHaMotion = Boolean(
+        camera.realEntities?.some(
+          (entity) =>
+            entity.type === "motion" &&
+            platform?.ha?.hassStates?.has(entity.id),
+        ),
+      );
+      const isC402Camera = /(?:c402|frente[-_ ]?de[-_ ]?calle)/i.test(
+        `${camera.id} ${camera.name || ""}`,
+      );
+      const cameraIdentity =
+        `${camera.name || ""} ${camera.model || ""}`.toLowerCase();
+      const isTapoC120 =
+        /(?:\bc120\b|tapo[-_ ]?c120|tapo[-_ ]?spot|\bspot\b)/i.test(
+          cameraIdentity,
+        );
+      const isEzviz = /\bezviz\b|\bh6c\b/i.test(cameraIdentity);
+      const cameraUiMqttMotionId = `mqtt.${camera.id
+        .replace(/[^a-z0-9_]/gi, "_")
+        .toLowerCase()}_motion`;
+      const hasCameraUiMqttMotion = Boolean(
+        platform?.ha?.hassStates?.has(cameraUiMqttMotionId),
+      );
+      const hasC402NativeMotion = Boolean(
+        isC402Camera &&
+          platform?.ha?.hassStates?.has("binary_sensor.tapo_c402_motion"),
+      );
+
+      // Prefer native HA/Camera.UI motion for C120 and EZVIZ. Running FFmpeg
+      // beside MQTT and HA callbacks duplicates HKSV events and consumes a
+      // second RTSP reader. Keep FFmpeg as a fallback only when no native
+      // motion path exists. C402 follows the same rule for its direct HA feed.
+      if (
+        (isHaSourceCamera &&
+          (hasConfiguredHaMotion || hasLinkedHaMotion || hasC402NativeMotion)) ||
+        ((isTapoC120 || isEzviz) &&
+          (hasConfiguredHaMotion || hasLinkedHaMotion || hasCameraUiMqttMotion))
+      ) {
+        platform?.log?.notice?.(
+          `[Camera.UI][${camera.name}] Motion detection uses its native Home Assistant/Camera.UI sensor; skipping the competing RTSP reader`,
+        );
+        return;
+      }
       if (!camera.rtspUrl || this.activeMotionDetectors.has(camera.id)) return;
       try {
-        const cameraIdentity =
-          `${camera.name || ""} ${camera.model || ""}`.toLowerCase();
         // The C120, C402 and EZVIZ feeds routinely report only 1–3% changed
         // pixels at the generic 160x90 analysis size.  That made their motion
         // service remain idle while Wyze (whose feed changes more pixels per
         // frame) worked.  Analyse only those feeds at 320x180 and trigger from
-        // a sustained 2% luma change.  This is deliberately not a global
+        // a sustained 2% luma change. A 1% threshold fires on the first
+        // decoder reference frame (pblack=99) and creates a false HKSV event
+        // before real movement occurs. This is deliberately not a global
         // change: it preserves Wyze's proven detector and avoids clock-overlay
         // false positives on the remaining Camera.UI cameras.
-        const isTapoC120 =
-          /(?:\bc120\b|tapo[-_ ]?c120|tapo[-_ ]?spot|\bspot\b)/i.test(
-            cameraIdentity,
-          );
         const isTapoC402 =
           /(?:\bc402\b|tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle|tapo[-_ ]?frente)/i.test(
             cameraIdentity,
           );
-        const isEzviz = /\bezviz\b|\bh6c\b/i.test(cameraIdentity);
         const needsDetailedMotionAnalysis = isTapoC120 || isTapoC402 || isEzviz;
         const detector = new FfmpegMotionDetector({
           cameraId: camera.id,
@@ -530,7 +581,7 @@ export class CameraUiHomeKitBridge {
           // route no longer exists; that made the detector silently retry and
           // left HomeKit without MotionDetected even though Live View worked.
           rtspUrl: camera.rtspUrl,
-          changeThresholdPercent: needsDetailedMotionAnalysis ? 1 : 4,
+          changeThresholdPercent: needsDetailedMotionAnalysis ? 2 : 4,
           cooldownMs: 2500,
           resetMs: 15000,
           ...(needsDetailedMotionAnalysis
@@ -644,6 +695,7 @@ export class CameraUiHomeKitBridge {
       await accessory.unpublish();
       this.activeAccessories.delete(cameraId);
     }
+    this.motionStates.delete(cameraId);
     const matterEndpoint = this.activeMatterEndpoints.get(cameraId);
     if (matterEndpoint) {
       try {
@@ -655,23 +707,31 @@ export class CameraUiHomeKitBridge {
     }
   }
 
-  public static pauseMotionDetector(cameraId: string, log?: any): void {
+  public static pauseMotionDetector(
+    cameraId: string,
+    log?: any,
+    reason?: string,
+  ): void {
     const detector =
       this.activeMotionDetectors.get(cameraId) ||
       this.activeMotionDetectors.get(`cameraui_${cameraId}`) ||
       this.activeMotionDetectors.get(cameraId.replace(/^cameraui_/, ""));
     if (detector) {
-      detector.pause(log);
+      detector.pause(log, reason);
     }
   }
 
-  public static resumeMotionDetector(cameraId: string, log?: any): void {
+  public static resumeMotionDetector(
+    cameraId: string,
+    log?: any,
+    reason?: string,
+  ): void {
     const detector =
       this.activeMotionDetectors.get(cameraId) ||
       this.activeMotionDetectors.get(`cameraui_${cameraId}`) ||
       this.activeMotionDetectors.get(cameraId.replace(/^cameraui_/, ""));
     if (detector) {
-      detector.resume(log);
+      detector.resume(log, reason);
     }
   }
 
@@ -694,6 +754,9 @@ export class CameraUiHomeKitBridge {
     const camName = accessory?.record?.name || cameraId;
 
     if (accessory) {
+      const stateKey = accessory.record.cameraUiCameraId || cameraId;
+      if (this.motionStates.get(stateKey) === active) return true;
+      this.motionStates.set(stateKey, active);
       accessory.updateMotionState(active);
       platform?.log?.notice?.(
         `[Detección][${camName}] 🎯 ${active ? `MOVIMIENTO CONFIRMADO${triggerSource ? ` [Origen: ${triggerSource}]` : ""}` : "MOVIMIENTO FINALIZADO"} → Disparando HomeKit MotionDetected, HKSV iCloud y Matter Occupancy (active=${active})`,

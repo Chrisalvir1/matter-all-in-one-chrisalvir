@@ -45,6 +45,33 @@ function recordingSampleRateHz(
   }
 }
 
+/**
+ * HKSV selection is ordinary structured data, but only restore a complete
+ * configuration. A malformed cache must never be allowed to start FFmpeg.
+ */
+function restoreRecordingConfiguration(
+  value: unknown,
+): CameraRecordingConfiguration | undefined {
+  const config = value as any;
+  if (
+    !config ||
+    !Number.isFinite(config.prebufferLength) ||
+    !config.mediaContainerConfiguration ||
+    !config.videoCodec ||
+    !Array.isArray(config.videoCodec.resolution) ||
+    config.videoCodec.resolution.length !== 3 ||
+    !config.videoCodec.parameters ||
+    !config.audioCodec
+  ) {
+    return undefined;
+  }
+  try {
+    return JSON.parse(JSON.stringify(config)) as CameraRecordingConfiguration;
+  } catch {
+    return undefined;
+  }
+}
+
 export type CameraFpsOrigin =
   "measured" | "average" | "nominal" | "configured" | "unmeasured";
 
@@ -225,6 +252,16 @@ export class HomeKitCameraRecordingDelegate
   ) {
     super();
 
+    const persistedConfiguration = restoreRecordingConfiguration(
+      this.record.hksvRecordingConfiguration,
+    );
+    if (persistedConfiguration) {
+      this.selectedConfiguration = persistedConfiguration;
+      this.platform?.log?.notice?.(
+        `[HKSV][${this.entityId}] Restored persisted Home Hub recording configuration after restart`,
+      );
+    }
+
     this.segmenter.on("initialization", (initSeg: Buffer) => {
       this.initializationSegment = initSeg;
       // A valid fMP4 init segment proves that the recovered reader is healthy;
@@ -343,6 +380,12 @@ export class HomeKitCameraRecordingDelegate
   ): void {
     this.selectedConfiguration = configuration;
     if (configuration) {
+      try {
+        this.record.hksvRecordingConfiguration = JSON.parse(
+          JSON.stringify(configuration),
+        ) as Record<string, unknown>;
+        void this.platform?.saveHomeKitCameraRecords?.();
+      } catch {}
       this.record.hksvState = this.recordingActive ? "ready" : "configurable";
       const res = configuration.videoCodec.resolution;
       const fragLen =
@@ -357,6 +400,7 @@ export class HomeKitCameraRecordingDelegate
       }
       this.emit("recording-configured");
     } else {
+      delete this.record.hksvRecordingConfiguration;
       this.record.hksvState = "waiting_hub";
       this.stopPrebufferPipeline();
       this.clearPrebuffer();

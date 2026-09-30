@@ -1,3 +1,12 @@
+## [1.9.37] - 2026-09-29
+
+- Preserve the last valid HKSV recording configuration selected by the Apple Home Hub, so a Camera.UI camera can recover recording after an add-on restart without being paired again.
+- Keep Tapo C120 and EZVIZ on their native Home Assistant/Camera.UI motion sensor when available, preventing a competing FFmpeg RTSP reader, duplicate HKSV events, and excess load. The FFmpeg detector remains the fallback.
+- Remove the shared-location match that could route EZVIZ Patio Trasero motion to Wyze; deduplicate Camera.UI motion state before sending it to HKSV, HAP, and Matter.
+- Keep Tapo C402 on its direct Home Assistant RTSP source and skip its competing local motion reader when the native HA motion sensor is active.
+- Propagate Home Assistant `unavailable` and recovery transitions to exported generic HAP accessories using `StatusActive` and `StatusFault`.
+- Sanitize Camera.UI UUIDs when an HA entity ID is needed while retaining the original Camera.UI identifier for stored camera and HAP records.
+
 ## [1.9.36] - 2026-09-29
 
 - Normalize the direct HA Tapo C402 source to HomeKit-compatible H.264 for Live View and HKSV; wait longer for fMP4 initialization after RTSP reconnects.

@@ -661,7 +661,7 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
     }
     setIsDiagnosing(true);
     setStreamResult({
-      text: "Diagnosticando stream en tiempo real (DESCRIBE, 1er frame, GOP, FPS)...",
+      text: "Midiendo conexión RTSP y analizando codec, FPS y GOP...",
     });
     try {
       const res = await api.diagnoseCameraStream(
@@ -670,8 +670,7 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
         transport,
       );
       if (res.success && res.metrics) {
-        const describeMs = res.metrics.timeToDescribeMs?.value ?? "—";
-        const frameMs = res.metrics.timeToFirstFrameMs?.value ?? "—";
+        const probeMs = res.metrics.timeToDescribeMs?.value ?? "—";
         const fpsVal = res.metrics.observedFps?.value ?? "—";
         const gop = res.metrics.observedGopSeconds?.value
           ? `${res.metrics.observedGopSeconds.value}s`
@@ -680,7 +679,7 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
           res.metrics.selectedTransport?.value || transport
         ).toUpperCase();
         setStreamResult({
-          text: `✓ Diagnóstico completado: ⚡ Inicio: ${describeMs}ms · 1er Frame: ${frameMs}ms · FPS: ${fpsVal} · GOP: ${gop} · Transporte: ${trans}`,
+          text: `✓ Diagnóstico completado: Probe RTSP total: ${probeMs}ms · 1er frame: no medido · FPS: ${fpsVal} · GOP: ${gop} · Transporte: ${trans}`,
         });
       } else {
         setStreamResult({

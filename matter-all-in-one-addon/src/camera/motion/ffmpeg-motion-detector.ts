@@ -64,20 +64,20 @@ export class FfmpegMotionDetector extends EventEmitter {
 
   private paused = false;
 
-  public pause(log?: any): void {
+  public pause(log?: any, reason = "Live View"): void {
     if (!this.running || this.paused) return;
     this.paused = true;
     log?.notice?.(
-      `[MotionDetector][${this.opts.cameraName}] Pausing motion detector to yield RTSP socket to Live View`,
+      `[MotionDetector][${this.opts.cameraName}] Pausing motion detector to yield RTSP socket to ${reason}`,
     );
     this.killProcess();
   }
 
-  public resume(log?: any): void {
+  public resume(log?: any, reason = "Live View ended"): void {
     if (!this.running || !this.paused) return;
     this.paused = false;
     log?.notice?.(
-      `[MotionDetector][${this.opts.cameraName}] Resuming motion detector after Live View ended`,
+      `[MotionDetector][${this.opts.cameraName}] Resuming motion detector after ${reason}`,
     );
     this.spawnProcess(log);
   }

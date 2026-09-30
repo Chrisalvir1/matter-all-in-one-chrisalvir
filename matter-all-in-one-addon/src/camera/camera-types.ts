@@ -90,6 +90,8 @@ export interface ResolvedStreamSource {
 
 export interface HomeKitCameraStorageRecord {
   entityId: string;
+  /** Original Camera.UI record ID; entityId is a Home Assistant-safe slug. */
+  cameraUiCameraId?: string;
   /** Real HA camera backing a Camera.UI managed accessory, if applicable. */
   sourceCameraEntityId?: string;
   uuid: string;
@@ -114,6 +116,8 @@ export interface HomeKitCameraStorageRecord {
   hksvCapable?: boolean;
   hksvEnabled?: boolean;
   hksvVerified?: boolean;
+  /** Last Home Hub HKSV selection, persisted to survive add-on restarts. */
+  hksvRecordingConfiguration?: Record<string, unknown>;
   hksvState?:
     | "not_capable"
     | "configurable"

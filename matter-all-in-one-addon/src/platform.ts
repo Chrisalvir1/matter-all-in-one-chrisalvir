@@ -1244,6 +1244,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         void (entity as any).setInactiveState();
       }
     }
+    for (const accessory of this.hapAccessories.values()) {
+      accessory.setReachability(false);
+    }
     for (const composite of this.compositeDevices.values()) {
       if (typeof (composite as any).setReachability === "function") {
         void (composite as any).setReachability(false);
@@ -1282,10 +1285,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         compDevice.endpoints &&
         compDevice.endpoints.has(entityId)),
     );
-    const isActivelyExported = this.isEntityExported(entityId) && hasEndpoint;
+    const hapAccessory = this.hapAccessories.get(entityId);
+    const isActivelyExported =
+      (this.isEntityExported(entityId) && hasEndpoint) || Boolean(hapAccessory);
 
     if (isUnavailable(state)) {
       if (isActivelyExported) {
+        hapAccessory?.setReachability(false);
         if (entity && typeof (entity as any).setReachability === "function") {
           void (entity as any).setReachability(false);
         }
@@ -1331,6 +1337,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     }
     if (previous && ["unavailable", "unknown"].includes(previous)) {
       if (isActivelyExported) {
+        hapAccessory?.setReachability(true);
         this.log.info(
           `\u001b[32m[Home Assistant] ${entityId}: la entidad se recuperó y volvió a "${state.state}".\u001b[0m`,
         );
@@ -4594,14 +4601,20 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         entityId.startsWith("cameraui.") ||
         entityId.startsWith("camera.cameraui_")
       ) {
-        const cameraId = entityId.startsWith("cameraui.")
+        let cameraId = entityId.startsWith("cameraui.")
           ? entityId.substring("cameraui.".length)
           : entityId.substring("camera.".length);
         let acc = CameraUiHomeKitBridge.getAccessory(cameraId);
         if (!acc) {
           const store = await CameraUiStorage.load();
-          const cam = store.cameras.find((c) => c.id === cameraId);
+          const cam = store.cameras.find(
+            (c) =>
+              c.id === cameraId ||
+              c.id.replace(/[^a-z0-9_]/gi, "_").toLowerCase() ===
+                cameraId.toLowerCase(),
+          );
           if (cam) {
+            cameraId = cam.id;
             await CameraUiHomeKitBridge.mountCamera(this, cam);
             acc = CameraUiHomeKitBridge.getAccessory(cameraId);
           }
@@ -5261,36 +5274,42 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         const isWyzeCam = /wyze/i.test(`${cuiId} ${camName}`);
         const isWyzeMatch = isWyzeEntity && isWyzeCam && isMotionClass;
 
-        const isEzvizEntity = /ezviz|h6c|patio[-_ ]?trasero/i.test(`${entityId} ${entityFriendlyName}`);
-        const isEzvizCam = /ezviz|h6c|patio[-_ ]?trasero/i.test(`${cuiId} ${camName}`);
+        // Location labels (e.g. "Patio trasero") are shared by different
+        // cameras and must never be used as a brand identity. This previously
+        // routed the EZVIZ motion sensor to the Wyze camera in the same area.
+        const isEzvizEntity = /ezviz|h6c/i.test(`${entityId} ${entityFriendlyName}`);
+        const isEzvizCam = /ezviz|h6c/i.test(`${cuiId} ${camName}`);
         const isEzvizMatch = isEzvizEntity && isEzvizCam && isMotionClass;
 
+        const configuredMotionEntity =
+          linkedId === entityId ||
+          (accessory.record as any)?.realEntities?.some(
+            (re: any) => re.type === "motion" && re.id === entityId,
+          ) ||
+          CameraUiStorage.getCachedStore()
+            ?.cameras?.find((c) => c.id === cuiId)
+            ?.realEntities?.some(
+              (re) => re.type === "motion" && re.id === entityId,
+            );
+        const sensorDeviceId = this.ha.hassEntities.get(entityId)?.device_id;
+        const sourceCameraEntityId = accessory.record?.sourceCameraEntityId;
+        const cameraDeviceId = sourceCameraEntityId
+          ? this.ha.hassEntities.get(sourceCameraEntityId)?.device_id
+          : undefined;
+        const sameDevice = Boolean(
+          sensorDeviceId && cameraDeviceId && sensorDeviceId === cameraDeviceId,
+        );
+
         const isLinked =
+          configuredMotionEntity ||
+          sameDevice ||
           isC402Match ||
           isC120Match ||
           isWyzeMatch ||
           isEzvizMatch ||
-          linkedId === entityId ||
-          (cleanCuiId.length >= 4 && cleanEntityId.includes(cleanCuiId)) ||
-          (cleanCamName.length >= 3 && cleanEntityId.includes(cleanCamName)) ||
-          allWordsMatch ||
-          this.matchCameraIdentifier({ id: cuiId, name: camName }, entityId) ||
-          this.matchCameraIdentifier(
-            { id: cuiId, name: camName },
-            entityFriendlyName,
-          ) ||
-          (accessory.record as any)?.realEntities?.some(
-            (re: any) => re.id === entityId,
-          ) ||
-          Boolean(
-            CameraUiStorage.getCachedStore()
-              ?.cameras?.find((c) => c.id === cuiId)
-              ?.realEntities?.some((re) => re.id === entityId),
-          ) ||
-          (allCuiAccessories.size === 1 && isMotionClass) ||
-          (this.ha.hassEntities.get(entityId)?.device_id &&
-            this.ha.hassEntities.get(entityId)?.device_id ===
-              this.ha.hassEntities.get(`camera.${cuiId}`)?.device_id);
+          (allWordsMatch && isMotionClass) ||
+          (cleanCuiId.length >= 8 && cleanEntityId.includes(cleanCuiId)) ||
+          (cleanCamName.length >= 8 && cleanEntityId.includes(cleanCamName));
 
         if (isLinked) {
           let detectedLabel = "HA Sensor";
@@ -7860,7 +7879,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           const transport = parsed.transport === "udp" ? "udp" : "tcp";
           const timeoutMs = parsed.timeoutMs ? Number(parsed.timeoutMs) : 15000;
           ScryptedStreamValidator.clearCache();
-          CameraUiHomeKitBridge.pauseMotionDetector(cameraId, this.log);
+          CameraUiHomeKitBridge.pauseMotionDetector(
+            cameraId,
+            this.log,
+            "stream diagnosis",
+          );
           let metrics;
           try {
             metrics = await ScryptedStreamValidator.diagnoseStreamUrl(
@@ -7870,7 +7893,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               transport,
             );
           } finally {
-            CameraUiHomeKitBridge.resumeMotionDetector(cameraId, this.log);
+            CameraUiHomeKitBridge.resumeMotionDetector(
+              cameraId,
+              this.log,
+              "stream diagnosis ended",
+            );
           }
 
           if (scryptedCam) {
@@ -7914,7 +7941,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           }
 
           this.log.notice(
-            `[DiagnoseStream][${cameraId}] Diagnóstico completado con éxito: describe=${metrics.timeToDescribeMs.value}ms 1erFrame=${metrics.timeToFirstFrameMs?.value ?? "N/A"}ms target=${sanitizedUrl}`,
+            `[DiagnoseStream][${cameraId}] Diagnóstico completado con éxito: probeRTSP=${metrics.timeToDescribeMs.value}ms 1erFrame=no medido target=${sanitizedUrl}`,
           );
           res.writeHead(200, {
             "Content-Type": "application/json; charset=utf-8",

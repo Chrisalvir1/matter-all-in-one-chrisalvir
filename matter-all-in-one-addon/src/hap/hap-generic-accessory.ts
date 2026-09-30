@@ -884,6 +884,9 @@ export class HapGenericAccessory {
 
   public updateFromHassState(state: any): void {
     try {
+      this.setReachability(
+        state?.state !== "unavailable" && state?.state !== "unknown",
+      );
       if (
         this.record.hapProfile === "humidifier" ||
         this.record.hapProfile === "dehumidifier"
@@ -913,6 +916,31 @@ export class HapGenericAccessory {
         }
       }
     } catch {}
+  }
+
+  /**
+   * HomeKit accessories are independently reachable from the Matter bridge.
+   * Mirror Home Assistant availability here so Casa does not leave a paired
+   * HAP accessory looking healthy after its backing entity disappears.
+   */
+  public setReachability(reachable: boolean): void {
+    for (const service of this.accessory.services) {
+      try {
+        if (!service.testCharacteristic(Characteristic.StatusActive)) {
+          service.addOptionalCharacteristic(Characteristic.StatusActive);
+        }
+        service.updateCharacteristic(Characteristic.StatusActive, reachable);
+      } catch {}
+      try {
+        if (!service.testCharacteristic(Characteristic.StatusFault)) {
+          service.addOptionalCharacteristic(Characteristic.StatusFault);
+        }
+        service.updateCharacteristic(
+          Characteristic.StatusFault,
+          reachable ? 0 : 1,
+        );
+      } catch {}
+    }
   }
 
   // ──────────────────────────────────────────────
