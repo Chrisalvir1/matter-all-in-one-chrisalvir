@@ -1,3 +1,8 @@
+## [1.9.39] - 2026-09-29
+
+### HAP
+- Select `Bombilla (HAP)` by default for devices that contain a Home Assistant light entity, including Govee RGB/color lights.
+
 ## [1.9.38] - 2026-09-29
 
 ### CI

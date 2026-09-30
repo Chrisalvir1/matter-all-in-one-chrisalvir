@@ -272,6 +272,9 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
   const [hapProfiles, setHapProfiles] = useState<Array<{ id: string; label: string }>>([]);
   const [selectedHapProfile, setSelectedHapProfile] = useState<HapProfile>(() => {
     if (activeHapFromProps?.hapProfile) return activeHapFromProps.hapProfile;
+    if (device?.entities.some((entity) => entity.domain === "light")) {
+      return "lightbulb_hap";
+    }
     if (hapRecDetails.isRecommended) return hapRecDetails.recommendedProfile;
     return "humidifier";
   });
