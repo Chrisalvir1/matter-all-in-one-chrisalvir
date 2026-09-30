@@ -771,6 +771,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         if (camera.homeKitEnabled) {
           try {
             await CameraUiHomeKitBridge.mountCamera(this, camera);
+            // HAP publishes mDNS state and initializes HKSV delegates while
+            // mounting.  Give each camera a short, isolated startup window so
+            // a Camera.UI restart never opens every RTSP/HAP pipeline at once.
+            await new Promise<void>((resolve) => setTimeout(resolve, 750));
           } catch (err) {
             this.log.warn(
               `[Camera.UI] Failed to mount HomeKit for ${camera.id}: ${err}`,
@@ -3720,11 +3724,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   private async restoreExportedDevices(): Promise<void> {
     let migratedLegacyEntries = false;
     const entries = Array.from(this.exportedDevices);
+    const cameraEntries = entries.filter((entry) => entry.startsWith("camera."));
+    const nonCameraEntries = entries.filter((entry) => !entry.startsWith("camera."));
 
     // Process in batches of 4 to prevent I/O stampede while maintaining fast startup
     const batchSize = 4;
-    for (let i = 0; i < entries.length; i += batchSize) {
-      const batch = entries.slice(i, i + batchSize);
+    for (let i = 0; i < nonCameraEntries.length; i += batchSize) {
+      const batch = nonCameraEntries.slice(i, i + batchSize);
       await Promise.all(
         batch.map(async (exportedId) => {
           try {
@@ -3781,6 +3787,19 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           }
         }),
       );
+    }
+    // Standalone HA cameras are HAP servers, unlike ordinary Matter endpoints.
+    // Publishing them in the generic parallel batches produced startup races
+    // with Camera.UI mounts and left Apple Home showing every camera offline.
+    for (const exportedId of cameraEntries) {
+      try {
+        if (!this.entities.has(exportedId)) continue;
+        if (this.hapAccessoryRecords.get(exportedId)?.published) continue;
+        await this.activateEntity(exportedId);
+        await new Promise<void>((resolve) => setTimeout(resolve, 750));
+      } catch (err) {
+        this.log.error(`Failed to restore HAP camera ${exportedId}: ${err}`);
+      }
     }
     if (migratedLegacyEntries) await this.saveExportedDevices();
   }

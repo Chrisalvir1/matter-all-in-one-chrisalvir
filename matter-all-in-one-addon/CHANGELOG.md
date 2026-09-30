@@ -1,3 +1,8 @@
+## [1.9.40] - 2026-09-29
+
+### Stability
+- Restore HAP cameras sequentially after an add-on restart, preventing Camera.UI and the direct Home Assistant camera from publishing and opening streams concurrently.
+
 ## [1.9.39] - 2026-09-29
 
 ### HAP
