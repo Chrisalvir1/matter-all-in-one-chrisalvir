@@ -75,6 +75,7 @@ export interface HapAccessoryInfo {
   setupUri?: string;
   pairingState?: string;
   firmwareRevision?: string;
+  alarmCodeConfigured?: boolean;
 }
 
 export interface HapProfileOption {

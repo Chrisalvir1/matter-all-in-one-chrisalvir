@@ -101,7 +101,7 @@ function createMockConfiguration(): CameraRecordingConfiguration {
 }
 
 describe("HomeKitCameraRecordingDelegate", () => {
-  it("keeps the HKSV prebuffer ready while applying Home Hub configuration", () => {
+  it("waits for Home Hub recording activation before starting the HKSV prebuffer", () => {
     const record = createMockRecord();
     const capabilities = createMockCapabilities();
     const streamSource = {
@@ -127,9 +127,8 @@ describe("HomeKitCameraRecordingDelegate", () => {
     // Home Hub selects configuration
     const config = createMockConfiguration();
     delegate.updateRecordingConfiguration(config);
-    // The rolling prebuffer is already active, so applying the Home Hub
-    // configuration keeps the delegate immediately recordable.
-    expect(record.hksvState).toBe("ready");
+    // Configuration means HKSV is set up, not that Apple Home enabled it.
+    expect(record.hksvState).toBe("configurable");
 
     // User enables recording in Apple Home
     delegate.updateRecordingActive(true);

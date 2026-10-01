@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { DeviceRecord, EntityRecord, HapProfile, HapAccessoryInfo } from "../types";
 import { api } from "../api/client";
 import { QRCodeDisplay, AppleHomeModernIcon } from "./QRCodeDisplay";
@@ -231,14 +231,14 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
   const [selectedEntity, setSelectedEntity] = useState<EntityRecord | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const [isHapBusy, setIsHapBusy] = useState(false);
+  const [alarmCodeInput, setAlarmCodeInput] = useState("");
+  const [isAlarmCodeSaving, setIsAlarmCodeSaving] = useState(false);
   const [multiAdminOpen, setMultiAdminOpen] = useState(false);
   const [freshPairingCode, setFreshPairingCode] = useState<string | null>(null);
   const [freshManualCode, setFreshManualCode] = useState<string | null>(null);
   const [resetFabrics, setResetFabrics] = useState<boolean>(false);
   /** Entidad seleccionada para exportar como HAP — abre el modal HAP */
   const [hapExportTarget, setHapExportTarget] = useState<EntityRecord | null>(null);
-  /** Resultado de un export HAP reciente para mostrar QR/PIN */
-  const [hapFreshPin, setHapFreshPin] = useState<{ pincode: string; port: number } | null>(null);
   const [showRawLogs, setShowRawLogs] = useState(false);
 
   // Recommendations calculated once based on device properties
@@ -261,11 +261,8 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
 
   const isDeviceHapPublished = Boolean(localHapAccessory?.published);
   const activeHapAccessory = localHapAccessory;
-  const isHapRecommended = hapRecDetails.isRecommended;
-
   const [selectedProtocol, setSelectedProtocol] = useState<"matter" | "hap">(() => {
     if (activeHapFromProps?.published) return "hap";
-    if (hapRecDetails.isRecommended && !device?.entities.some((e) => e.exported)) return "hap";
     return "matter";
   });
 
@@ -509,7 +506,6 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
           activeEntity.hapAccessory = updatedAcc as any;
         }
         setLocalHapAccessory(updatedAcc);
-        setHapFreshPin({ pincode: res.pincode || "", port: res.port || 0 });
         void onRefresh();
       } else {
         showToast(res.error || "Error al publicar HAP", true);
@@ -522,22 +518,6 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     }
   };
 
-  const hasAutoActivatedHap = useRef(false);
-
-  useEffect(() => {
-    // If device is recommended for HAP and is not yet published in either protocol,
-    // auto-activate HAP by default as requested in v1.9.0 so HAP QR is ready immediately.
-    if (
-      hapRecDetails.isRecommended &&
-      !isDeviceHapPublished &&
-      !isExported &&
-      !hasAutoActivatedHap.current
-    ) {
-      hasAutoActivatedHap.current = true;
-      void handlePublishHapDirect();
-    }
-  }, [hapRecDetails.isRecommended, isDeviceHapPublished, isExported]);
-
   // Direct HAP unregister handler with 0ms optimistic UI update
   const handleUnregisterHapDirect = async () => {
     const targetId = compositePrimary?.entityId || activeEntity?.entityId || device.entities[0].entityId;
@@ -545,7 +525,6 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     // Reflect the requested action immediately; restore the QR state if the
     // server cannot stop the accessory.
     setLocalHapAccessory(null);
-    setHapFreshPin(null);
     setIsHapBusy(true);
     setIsBusy(true);
     try {
@@ -565,6 +544,29 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     } finally {
       setIsHapBusy(false);
       setIsBusy(false);
+    }
+  };
+
+  const handleSaveAlarmCode = async (alarmCode = alarmCodeInput) => {
+    const targetId = activeHapAccessory?.hapProfile === "security_system"
+      ? device?.entities.find((entity) => entity.hapAccessory?.published)?.entityId
+      : undefined;
+    if (!targetId) return;
+    setIsAlarmCodeSaving(true);
+    try {
+      const result = await api.setHapAlarmCode(targetId, alarmCode);
+      if (!result.success) throw new Error(result.error || "No se pudo guardar el PIN de alarma.");
+      setLocalHapAccessory((current) => current
+        ? { ...current, alarmCodeConfigured: Boolean(result.configured) }
+        : current);
+      setAlarmCodeInput("");
+      showToast(result.configured
+        ? "PIN de alarma guardado. No se muestra ni se registra en logs."
+        : "PIN de alarma eliminado.");
+    } catch (err: any) {
+      showToast(err.message || "No se pudo guardar el PIN de alarma.", true);
+    } finally {
+      setIsAlarmCodeSaving(false);
     }
   };
 
@@ -804,6 +806,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
 
         {/* ── Protocol Selector Bar ── */}
         <div
+          className="device-modal-protocol-selector"
           style={{
             display: "flex",
             alignItems: "center",
@@ -2131,6 +2134,47 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
               )}
               {selectedProtocol === "hap" && isDeviceHapPublished && (
                 <div className="hap-actions" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {activeHapAccessory?.hapProfile === "security_system" && (
+                    <div className="qr-liquid-glass-card" style={{ padding: 12, display: "grid", gap: 8 }}>
+                      <strong>PIN de la alarma de Home Assistant</strong>
+                      <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>
+                        Es independiente del PIN de emparejamiento HAP. Se envía a Home Assistant sólo si la entidad requiere código.
+                        {activeHapAccessory.alarmCodeConfigured ? " Hay un PIN guardado." : " No hay un PIN guardado."}
+                      </span>
+                      <input
+                        aria-label="PIN de alarma de Home Assistant"
+                        autoComplete="new-password"
+                        type="password"
+                        inputMode="numeric"
+                        value={alarmCodeInput}
+                        onChange={(event) => setAlarmCodeInput(event.target.value)}
+                        placeholder={activeHapAccessory.alarmCodeConfigured ? "Introduce para reemplazar el PIN" : "Introduce el PIN de Home Assistant"}
+                      />
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button
+                          className="button button-secondary action-btn"
+                          type="button"
+                          disabled={isAlarmCodeSaving || !alarmCodeInput}
+                          onClick={() => void handleSaveAlarmCode()}
+                        >
+                          {isAlarmCodeSaving ? "Guardando…" : "Guardar PIN"}
+                        </button>
+                        {activeHapAccessory.alarmCodeConfigured && (
+                          <button
+                            className="button button-secondary action-btn"
+                            type="button"
+                            disabled={isAlarmCodeSaving}
+                            onClick={() => {
+                              setAlarmCodeInput("");
+                              void handleSaveAlarmCode("");
+                            }}
+                          >
+                            Borrar PIN
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
                   <button
                     className="button button-danger action-btn"
                     id="unregister-hap-button"
@@ -2167,7 +2211,6 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
               };
             }
             setHapExportTarget(null);
-            setHapFreshPin({ pincode, port });
             onRefresh();
           }}
           showToast={showToast}

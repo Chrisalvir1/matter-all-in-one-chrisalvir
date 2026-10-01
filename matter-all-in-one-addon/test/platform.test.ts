@@ -572,6 +572,29 @@ describe("HomeAssistantPlatform", () => {
     expect(lightEntity!.state.state).toBe("off");
   });
 
+  it("forwards primary state and attribute changes to a HAP-only alarm export", () => {
+    const entityId = "alarm_control_panel.argus_test";
+    const entity: any = { state: { state: "arming", attributes: {} } };
+    const updateFromHassState = vi.fn();
+    platform.entities.set(entityId, entity);
+    platform.hapAccessories.set(entityId, { entityId, updateFromHassState } as any);
+    vi.spyOn(platform as any, "observeHomeAssistantAvailability").mockReturnValue(false);
+    vi.spyOn(platform as any, "isEntityExported").mockReturnValue(false);
+
+    const state = {
+      entity_id: entityId,
+      state: "arming",
+      attributes: {
+        argus_arming_transition: true,
+        arming_target: "armed_away",
+        arming_waiting_for_sensors: true,
+      },
+    };
+    (platform as any).handleEntityStateChange(entityId, state);
+
+    expect(updateFromHassState).toHaveBeenCalledWith(state, entityId);
+  });
+
   it("preserves the last valid Matter state while a HA entity is unavailable", async (ctx) => {
     if (!networkAvailable) {
       ctx.skip();

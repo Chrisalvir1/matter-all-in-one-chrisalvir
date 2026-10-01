@@ -1,3 +1,12 @@
+## [1.9.53] - 2026-10-01
+
+### HAP Argus, cámaras y experiencia móvil
+- **Alarmas HAP / Argus:** sincroniza el armado pendiente desde `argus_arming_transition` y `arming_target`, incluidos cambios de atributos mientras HA mantiene `arming`. Mantiene el último estado confirmado hasta que HA confirme el modo final y enruta directamente a HAP los eventos de accesorios HAP-only.
+- **Modos y PIN de alarma:** mapea sólo Desarmado, En casa, Ausente y Noche cuando HAP la admite. El PIN de Home Assistant es independiente del PIN de emparejamiento HAP; si HA exige un PIN no configurado, rechaza el comando en vez de omitirlo.
+- **Carga de cámaras:** evita lectores FFmpeg duplicados de movimiento para relés Camera.UI y no inicia el prebuffer HKSV hasta que HomeKit active/grabe. Reduce trabajo en reposo y conserva el estado de grabación pendiente de HomeKit.
+- **Publicación HAP explícita:** abrir un dispositivo recomendado ya no publica HAP ni genera un QR automáticamente.
+- **Vista móvil:** limita el ancho de la página y de los modales, evita desplazamiento horizontal y adapta selector de protocolo, tarjetas y QR a pantallas estrechas.
+
 ## [1.9.52] - 2026-10-01
 
 ### Estabilidad, seguridad y experiencia de uso

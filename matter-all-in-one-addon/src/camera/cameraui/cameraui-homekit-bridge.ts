@@ -13,7 +13,6 @@ import {
   generateFreshHomeKitPin,
   HomeKitCameraAccessory,
 } from "../homekit/homekit-camera.accessory.js";
-import { FfmpegMotionDetector } from "../motion/ffmpeg-motion-detector.js";
 import type { CameraUiCameraRecord } from "./cameraui-types.js";
 import { CameraUiStorage } from "./cameraui-storage.js";
 import { resolveHaCameraEntityId } from "./ha-camera-entity.js";
@@ -78,12 +77,7 @@ export class CameraUiHomeKitBridge {
     string,
     MatterbridgeEndpoint
   >();
-  /** One FFmpeg motion detector per mounted camera, keyed by camera.id */
-  private static activeMotionDetectors = new Map<
-    string,
-    FfmpegMotionDetector
-  >();
-  /** Last state prevents duplicate HA/MQTT/FFmpeg paths from retriggering HKSV. */
+  /** Last state prevents duplicate HA/MQTT paths from retriggering HKSV. */
   private static motionStates = new Map<string, boolean>();
 
   public static getAccessory(
@@ -151,30 +145,17 @@ export class CameraUiHomeKitBridge {
       return undefined;
     }
 
-    // `AccessoryInfo` is not always available during the first few moments
-    // after the add-on starts. Keep this only as a short-lived recovery hint:
-    // it lets an already-paired camera restore motion detection while HAP is
-    // bringing its persistent pairing database online. It is never written
-    // back as the authoritative pairing state.
-    const wasMarkedPairedBeforePublish = camera.isPaired === true;
-
     const existing = this.activeAccessories.get(camera.id);
     if (existing && (existing.isStreaming || !options.forceRemount)) {
       // A Camera.UI refresh is not a configuration change. Re-publishing an
       // already paired HAP accessory tears down its mDNS/HAP listener and
       // interrupts the next Live View. Keep the live accessory, its pairing,
-      // recording delegate and motion detector until an explicit edit asks for
-      // a remount.
+      // and recording delegate until an explicit edit asks for a remount.
       return existing;
     }
     if (existing) {
       await existing.unpublish();
       this.activeAccessories.delete(camera.id);
-      const oldDet = this.activeMotionDetectors.get(camera.id);
-      if (oldDet) {
-        oldDet.stop(platform?.log);
-        this.activeMotionDetectors.delete(camera.id);
-      }
     }
 
     // HA-source cameras (e.g. C402) resolve the stream URL dynamically from
@@ -535,184 +516,9 @@ export class CameraUiHomeKitBridge {
       await CameraUiStorage.save(store);
     }
 
-    const startLocalMotionFallback = (confirmedByHomeHub = false) => {
-      // HKSV fallback is meaningful only for an accessory that Apple Home has
-      // actually paired. Do not consume an RTSP reader for a QR waiting to be
-      // scanned or for a camera intentionally not exported.
-      // A recording-active/configured callback can only come from a Home Hub.
-      // Trust it even when the persisted paired flag is stale after an add-on
-      // restart; otherwise C402/EZVIZ/Wyze never regain their detector.
-      if (!confirmedByHomeHub && !accessory.isPaired() && !camera.isPaired)
-        return;
-      const configuredMotionEntityId = camera.motionEntityId;
-      const hasConfiguredHaMotion = Boolean(
-        configuredMotionEntityId &&
-          configuredMotionEntityId !== "none" &&
-          configuredMotionEntityId !== "auto" &&
-          this.hasUsableMotionEntity(platform, configuredMotionEntityId),
-      );
-      const hasLinkedHaMotion = Boolean(
-        camera.realEntities?.some(
-          (entity) =>
-            entity.type === "motion" &&
-            this.hasUsableMotionEntity(platform, entity.id),
-        ),
-      );
-      const isC402Camera = /(?:c402|frente[-_ ]?de[-_ ]?calle)/i.test(
-        `${camera.id} ${camera.name || ""}`,
-      );
-      const cameraIdentity =
-        `${camera.name || ""} ${camera.model || ""}`.toLowerCase();
-      const isTapoC120 =
-        /(?:\bc120\b|tapo[-_ ]?c120|tapo[-_ ]?spot|\bspot\b)/i.test(
-          cameraIdentity,
-        );
-      const isEzviz = /\bezviz\b|\bh6c\b/i.test(cameraIdentity);
-      const nativeMotionEntityId = this.findNativeMotionEntityId(camera, platform);
-      const hasCameraUiNativeMotion = Boolean(nativeMotionEntityId);
-      if (nativeMotionEntityId && !accessory.linkedMotionEntityId) {
-        accessory.linkedMotionEntityId = nativeMotionEntityId;
-      }
-      const hasC402NativeMotion = Boolean(
-        isC402Camera &&
-          this.hasUsableMotionEntity(platform, "binary_sensor.tapo_c402_motion"),
-      );
-
-      // Prefer native HA/Camera.UI motion for C120 and EZVIZ. Running FFmpeg
-      // beside MQTT and HA callbacks duplicates HKSV events and consumes a
-      // second RTSP reader. Keep FFmpeg as a fallback only when no native
-      // motion path exists. C402 follows the same rule for its direct HA feed.
-      if (
-        (isHaSourceCamera &&
-          (hasConfiguredHaMotion || hasLinkedHaMotion || hasC402NativeMotion)) ||
-        ((isTapoC120 || isEzviz) &&
-          (hasConfiguredHaMotion || hasLinkedHaMotion || hasCameraUiNativeMotion))
-      ) {
-        platform?.log?.notice?.(
-          `[Camera.UI][${camera.name}] Motion detection uses its native Home Assistant/Camera.UI sensor; skipping the competing RTSP reader`,
-        );
-        return;
-      }
-      if (!camera.rtspUrl || this.activeMotionDetectors.has(camera.id)) return;
-      try {
-        // The C120, C402 and EZVIZ feeds routinely report only 1–3% changed
-        // pixels at the generic 160x90 analysis size.  That made their motion
-        // service remain idle while Wyze (whose feed changes more pixels per
-        // frame) worked.  Analyse only those feeds at 320x180 and trigger from
-        // a sustained 2% luma change. A 1% threshold fires on the first
-        // decoder reference frame (pblack=99) and creates a false HKSV event
-        // before real movement occurs. This is deliberately not a global
-        // change: it preserves Wyze's proven detector and avoids clock-overlay
-        // false positives on the remaining Camera.UI cameras.
-        const isTapoC402 =
-          /(?:\bc402\b|tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle|tapo[-_ ]?frente)/i.test(
-            cameraIdentity,
-          );
-        const needsDetailedMotionAnalysis = isTapoC120 || isTapoC402 || isEzviz;
-        const detector = new FfmpegMotionDetector({
-          cameraId: camera.id,
-          cameraName: camera.name || `Cámara ${camera.id}`,
-          // Use the same verified primary source advertised to HAP. Camera.UI
-          // sub-stream aliases can survive a server restart while their RTSP
-          // route no longer exists; that made the detector silently retry and
-          // left HomeKit without MotionDetected even though Live View worked.
-          rtspUrl: camera.rtspUrl,
-          changeThresholdPercent: needsDetailedMotionAnalysis ? 2 : 4,
-          cooldownMs: 2500,
-          resetMs: 15000,
-          ...(needsDetailedMotionAnalysis
-            ? {
-                analysisWidth: 320,
-                analysisHeight: 180,
-                pixelDifferenceThreshold: 8,
-                fps: 2,
-                reportAllFrameChanges: true,
-              }
-            : {}),
-        });
-        detector.on("motion", (active: boolean) => {
-          CameraUiHomeKitBridge.updateMotion(
-            camera.id,
-            active,
-            platform,
-            "FFmpeg Video",
-          );
-        });
-        accessory.delegate?.on("session-start", () => {
-          detector.pause(platform?.log);
-        });
-        accessory.delegate?.on("session-end", () => {
-          if (accessory.delegate?.hasActiveSessions()) {
-            platform?.log?.debug?.(
-              `[Camera.UI][${camera.name}] session-end recibido pero aún quedan ${accessory.delegate.activeSessionCount()} sesión(es) activa(s) — manteniendo detector de movimiento pausado`,
-            );
-            return;
-          }
-          detector.resume(platform?.log);
-        });
-
-        detector.start(platform?.log);
-        this.activeMotionDetectors.set(camera.id, detector);
-      } catch (detErr) {
-        platform?.log?.warn?.(
-          `[Camera.UI][${camera.name}] No se pudo iniciar el detector de movimiento FFmpeg local: ${detErr}`,
-        );
-      }
-    };
-
-    // Prefer Camera.UI MQTT events when they arrive, but do not leave HKSV
-    // blind when that optional event path is unavailable.  The RTSP fallback
-    // starts only after Apple Home has enabled/configured HKSV, never for all
-    // cameras during add-on startup.  This restores MotionDetected and clip
-    // recording without reintroducing the cold-start RTSP saturation.
-    accessory.recordingDelegate?.on("recording-active", (active: boolean) => {
-      if (active) startLocalMotionFallback(true);
-    });
-    accessory.recordingDelegate?.on("recording-configured", () => {
-      startLocalMotionFallback(true);
-    });
-
-    try {
-      accessory.accessory?.on?.("paired", () => {
-        platform?.log?.notice?.(
-          `[Camera.UI][${camera.name}] Cámara emparejada en Apple Home; iniciando detector de movimiento FFmpeg local`,
-        );
-        camera.isPaired = true;
-        startLocalMotionFallback(true);
-      });
-    } catch {}
-
-    // Apple Home may not re-send recording-active after an add-on restart. In
-    // that case HAP's pairing lookup can also be briefly unavailable even for
-    // an already paired accessory. Restore only a *previously marked* paired
-    // camera (or one HAP confirms as paired now). The delay prevents a
-    // cold-start surge of RTSP readers. C120 is included here: its assumed
-    // native event path is absent in this installation, while the detector
-    // pauses whenever Live View starts so its working stream is not changed.
-    if (
-      (wasMarkedPairedBeforePublish ||
-        accessory.isPaired() ||
-        camera.isPaired) &&
-      camera.rtspUrl &&
-      isRtspSource
-    ) {
-      const pairedFallbackTimer = setTimeout(() => {
-        if (!this.activeMotionDetectors.has(camera.id)) {
-          platform?.log?.notice?.(
-            `[Camera.UI][${camera.name}] Recuperando detector de movimiento FFmpeg para cámara ya pareada`,
-          );
-          startLocalMotionFallback(true);
-        }
-      }, 8_000);
-      // Clean up the timer if the accessory is unpublished before it fires
-      try {
-        accessory.accessory?.once?.("unpublish", () =>
-          clearTimeout(pairedFallbackTimer),
-        );
-      } catch {
-        /* HAP accessory may not support once on 'unpublish' */
-      }
-    }
+    platform?.log?.debug?.(
+      `[Camera.UI][${camera.name}] HAP uses Camera.UI/HA motion events; no local FFmpeg motion analysis or recording is started for this relay.`,
+    );
 
     return accessory;
   }
@@ -721,11 +527,6 @@ export class CameraUiHomeKitBridge {
     cameraId: string,
     platform?: any,
   ): Promise<void> {
-    const detector = this.activeMotionDetectors.get(cameraId);
-    if (detector) {
-      detector.stop(platform?.log);
-      this.activeMotionDetectors.delete(cameraId);
-    }
     const accessory = this.activeAccessories.get(cameraId);
     if (accessory) {
       await accessory.unpublish();
@@ -740,34 +541,6 @@ export class CameraUiHomeKitBridge {
         }
       } catch {}
       this.activeMatterEndpoints.delete(cameraId);
-    }
-  }
-
-  public static pauseMotionDetector(
-    cameraId: string,
-    log?: any,
-    reason?: string,
-  ): void {
-    const detector =
-      this.activeMotionDetectors.get(cameraId) ||
-      this.activeMotionDetectors.get(`cameraui_${cameraId}`) ||
-      this.activeMotionDetectors.get(cameraId.replace(/^cameraui_/, ""));
-    if (detector) {
-      detector.pause(log, reason);
-    }
-  }
-
-  public static resumeMotionDetector(
-    cameraId: string,
-    log?: any,
-    reason?: string,
-  ): void {
-    const detector =
-      this.activeMotionDetectors.get(cameraId) ||
-      this.activeMotionDetectors.get(`cameraui_${cameraId}`) ||
-      this.activeMotionDetectors.get(cameraId.replace(/^cameraui_/, ""));
-    if (detector) {
-      detector.resume(log, reason);
     }
   }
 
@@ -840,32 +613,6 @@ export class CameraUiHomeKitBridge {
       motionActive: active,
       timestamp: Date.now(),
     });
-
-    // Forward to CameraAiDetector so UI "🧠 IA & Fauna" tab lights up in real time
-    if (active && platform?.cameraAiDetector) {
-      try {
-        const detectorOwnsMotion = /\bc402\b|\bc120\b|\bezviz\b|\bh6c\b/i.test(
-          `${camName} ${accessory?.record?.model || ""}`,
-        );
-        platform.cameraAiDetector.dispatchDetection(
-          platform,
-          cameraId,
-          {
-            cameraId,
-            timestamp: Date.now(),
-            targets: detectorOwnsMotion ? [] : ["person", "vehicle", "dog"],
-            labels: [
-              detectorOwnsMotion
-                ? "Movimiento detectado"
-                : "Movimiento Detectado (Persona / Vehículo / Animal)",
-            ],
-            confidence: 0.95,
-            rawDetails: `Detector Local FFmpeg: movimiento confirmado en ${camName}`,
-          },
-          { updateHomeKitMotion: !detectorOwnsMotion },
-        );
-      } catch {}
-    }
 
     return Boolean(accessory || matterEndpoint);
   }

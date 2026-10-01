@@ -53,10 +53,12 @@ export class HevcRecordingDelegate extends EventEmitter implements CameraRecordi
       this.handleNewFragment(fragment);
     });
 
-    if (this.record.hksvEnabled !== false && Boolean(this.streamSource.url)) {
-      this.recordingActive = true;
-      this.record.hksvState = "waiting_hub";
-    }
+    // Capability and an RTSP URL do not mean Apple Home enabled recording.
+    // Keep the HEVC reader stopped until HomeKit activates recording or asks
+    // for a recording stream, matching the classic H.264 delegate.
+    this.recordingActive = false;
+    this.record.hksvState =
+      this.record.hksvEnabled === false ? "not_capable" : "waiting_hub";
   }
 
   public updateRecordingActive(active: boolean): void {

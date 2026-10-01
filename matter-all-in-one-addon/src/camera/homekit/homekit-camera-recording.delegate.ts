@@ -278,15 +278,14 @@ export class HomeKitCameraRecordingDelegate
       this.handleNewFragment(fragment);
     });
 
-    // Do not open an RTSP/FFmpeg reader for every exported camera at startup.
-    // Camera.UI and several physical cameras permit only a small number of
-    // simultaneous readers; eager HKSV prebuffers starved Live View and even
-    // made the add-on HTTP API unresponsive.  HAP starts this pipeline once a
-    // Home Hub enables/configures recording (or requests a recording stream).
-    if (this.record.hksvEnabled !== false && Boolean(this.streamSource.url)) {
-      this.recordingActive = true;
-      this.record.hksvState = "waiting_hub";
-    }
+    // A capable/configured camera is not the same as active HKSV recording.
+    // HomeKit's persisted Active characteristic or an explicit recording
+    // stream request starts the prebuffer. Never infer Active from capability:
+    // that leaves FFmpeg readers (and C120 software transcodes) running while
+    // recording is disabled in Apple Home.
+    this.recordingActive = false;
+    this.record.hksvState =
+      this.record.hksvEnabled === false ? "not_capable" : "waiting_hub";
   }
 
   /**

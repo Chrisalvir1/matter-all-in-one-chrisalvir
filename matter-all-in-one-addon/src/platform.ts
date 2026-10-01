@@ -612,6 +612,28 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     }
   }
 
+  public async setHapAlarmCode(
+    entityId: string,
+    alarmCode: unknown,
+  ): Promise<{ success: boolean; configured?: boolean; error?: string }> {
+    const record = this.hapAccessoryRecords.get(entityId);
+    if (!record || record.hapProfile !== "security_system") {
+      return { success: false, error: "This HAP accessory is not an alarm panel." };
+    }
+    if (typeof alarmCode !== "string" || alarmCode.length > 64) {
+      return { success: false, error: "Alarm PIN must be a text value of at most 64 characters." };
+    }
+    const normalized = alarmCode.trim();
+    if (normalized && /[\u0000-\u001f\u007f]/.test(normalized)) {
+      return { success: false, error: "Alarm PIN cannot contain control characters." };
+    }
+    if (normalized) record.alarmCode = normalized;
+    else delete record.alarmCode;
+    record.lastUpdated = new Date().toISOString();
+    await this.saveHapAccessoryRecords();
+    return { success: true, configured: Boolean(record.alarmCode) };
+  }
+
   private scryptedInitialized = false;
 
   public async initScrypted(): Promise<void> {
@@ -5237,6 +5259,14 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       return;
     }
     entity.state = newState;
+    // HAP accessories are served independently from Matter. Synchronize their
+    // primary HA entity immediately, including HAP-only exports and availability
+    // changes (which intentionally return before the Matter update path).
+    for (const hapAcc of this.hapAccessories.values()) {
+      if (hapAcc.entityId === entityId) {
+        hapAcc.updateFromHassState(newState, entityId);
+      }
+    }
     if (this.observeHomeAssistantAvailability(entityId, newState)) {
       // `unavailable` is not a real off/unlocked/closed reading. Keep the last
       // valid Matter value so one failed integration cannot falsify an entire
@@ -5559,7 +5589,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             // only its primary entity. Forward changes from every discovered
             // member so its real sensors stay current in Apple Home.
             for (const hapAcc of this.hapAccessories.values()) {
-              if (hapAcc.handlesEntityId(entityId)) {
+              if (hapAcc.entityId !== entityId && hapAcc.handlesEntityId(entityId)) {
                 hapAcc.updateFromHassState(state, entityId);
               }
             }
@@ -6310,6 +6340,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                   published: hapRec.published ?? false,
                   isPaired: hapAcc?.isPaired() ?? hapRec.isPaired ?? false,
                   hapProfile: hapRec.hapProfile,
+                  alarmCodeConfigured: Boolean(hapRec.alarmCode),
                   profileLabel:
                     HAP_PROFILE_LABELS[hapRec.hapProfile] || hapRec.hapProfile,
                   pincode: hapRec.pincode,
@@ -6461,6 +6492,27 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             pathname.substring("/api/custom/unregister-hap/".length),
           );
           const result = await this.manualUnregisterHap(entityId);
+          res.writeHead(result.success ? 200 : 400, {
+            "Content-Type": "application/json; charset=utf-8",
+          });
+          res.end(JSON.stringify(result));
+          return;
+        }
+
+        // Save or clear the Home Assistant alarm PIN for a generic HAP panel.
+        if (
+          req.method === "POST" &&
+          pathname.startsWith("/api/custom/hap-alarm-code/")
+        ) {
+          const entityId = decodeURIComponent(
+            pathname.substring("/api/custom/hap-alarm-code/".length),
+          );
+          let alarmCode: unknown = "";
+          try {
+            const body = await this.readRequestBody(req);
+            alarmCode = JSON.parse(body).alarmCode;
+          } catch {}
+          const result = await this.setHapAlarmCode(entityId, alarmCode);
           res.writeHead(result.success ? 200 : 400, {
             "Content-Type": "application/json; charset=utf-8",
           });
@@ -7965,26 +8017,12 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           const transport = parsed.transport === "udp" ? "udp" : "tcp";
           const timeoutMs = parsed.timeoutMs ? Number(parsed.timeoutMs) : 15000;
           ScryptedStreamValidator.clearCache();
-          CameraUiHomeKitBridge.pauseMotionDetector(
+          const metrics = await ScryptedStreamValidator.diagnoseStreamUrl(
+            targetUrl,
             cameraId,
-            this.log,
-            "stream diagnosis",
+            timeoutMs,
+            transport,
           );
-          let metrics;
-          try {
-            metrics = await ScryptedStreamValidator.diagnoseStreamUrl(
-              targetUrl,
-              cameraId,
-              timeoutMs,
-              transport,
-            );
-          } finally {
-            CameraUiHomeKitBridge.resumeMotionDetector(
-              cameraId,
-              this.log,
-              "stream diagnosis ended",
-            );
-          }
 
           if (scryptedCam) {
             scryptedCam.capabilities.latencyMetrics = metrics;

@@ -43,6 +43,8 @@ export interface HapAccessoryRecord {
   model?: string;
   serialNumber?: string;
   lastUpdated?: string;
+  /** Home Assistant alarm code. Never reused as the HAP pairing PIN. */
+  alarmCode?: string;
 }
 
 /**
@@ -180,6 +182,7 @@ export class HapGenericAccessory {
     string,
     { service: any; characteristic: any; read: (state: any) => unknown }
   >();
+  private pendingAlarmTarget: number | undefined;
 
   constructor(
     public readonly platform: any,
@@ -689,12 +692,14 @@ export class HapGenericAccessory {
           Service.SecuritySystem,
           this.record.name,
         );
-        svc
-          .getCharacteristic(Characteristic.SecuritySystemCurrentState)
-          .setValue(Characteristic.SecuritySystemCurrentState.DISARMED);
-        svc
-          .getCharacteristic(Characteristic.SecuritySystemTargetState)
-          .setValue(Characteristic.SecuritySystemTargetState.DISARM);
+        const current = svc.getCharacteristic(Characteristic.SecuritySystemCurrentState);
+        const target = svc.getCharacteristic(Characteristic.SecuritySystemTargetState);
+        current.setValue(Characteristic.SecuritySystemCurrentState.DISARMED);
+        target.setValue(Characteristic.SecuritySystemTargetState.DISARM);
+        target.onGet(() => this.getAlarmTargetState());
+        current.onGet(() => this.getAlarmCurrentState());
+        target.onSet(async (value: any) => this.setAlarmTargetState(Number(value)));
+        this.syncAlarmState(this.getHomeAssistantState(this.entityId));
         break;
       }
 
@@ -1155,6 +1160,10 @@ export class HapGenericAccessory {
       this.setReachability(
         state?.state !== "unavailable" && state?.state !== "unknown",
       );
+      if (this.record.hapProfile === "security_system") {
+        this.syncAlarmState(state);
+        return;
+      }
       const on = state?.state === "on";
       switch (this.record.hapProfile) {
         case "switch_hap": this.accessory.getService(Service.Switch)?.updateCharacteristic(Characteristic.On, on); break;
@@ -1218,6 +1227,157 @@ export class HapGenericAccessory {
         }
       }
     } catch {}
+  }
+
+  private getSecuritySystemService(): any {
+    return this.accessory.getService(Service.SecuritySystem);
+  }
+
+  private supportsAlarmNight(): boolean {
+    const night = Characteristic.SecuritySystemTargetState.NIGHT_ARM;
+    const characteristic = this.getSecuritySystemService()?.getCharacteristic(
+      Characteristic.SecuritySystemTargetState,
+    );
+    return Number.isInteger(night) &&
+      Array.isArray(characteristic?.props?.validValues) &&
+      characteristic.props.validValues.includes(night);
+  }
+
+  private mapAlarmMode(value: unknown): number | undefined {
+    switch (value) {
+      case "disarmed": return Characteristic.SecuritySystemCurrentState.DISARMED;
+      case "armed_home": return Characteristic.SecuritySystemCurrentState.STAY_ARM;
+      case "armed_away": return Characteristic.SecuritySystemCurrentState.AWAY_ARM;
+      case "armed_night":
+        return this.supportsAlarmNight()
+          ? Characteristic.SecuritySystemCurrentState.NIGHT_ARM
+          : undefined;
+      default: return undefined;
+    }
+  }
+
+  private mapAlarmTarget(value: unknown): number | undefined {
+    switch (value) {
+      case "disarmed": return Characteristic.SecuritySystemTargetState.DISARM;
+      case "armed_home": return Characteristic.SecuritySystemTargetState.STAY_ARM;
+      case "armed_away": return Characteristic.SecuritySystemTargetState.AWAY_ARM;
+      case "armed_night":
+        return this.supportsAlarmNight()
+          ? Characteristic.SecuritySystemTargetState.NIGHT_ARM
+          : undefined;
+      default: return undefined;
+    }
+  }
+
+  private getAlarmCurrentState(): number {
+    const state = this.getSecuritySystemService()?.getCharacteristic(
+      Characteristic.SecuritySystemCurrentState,
+    ).value;
+    return Number.isInteger(state)
+      ? Number(state)
+      : Characteristic.SecuritySystemCurrentState.DISARMED;
+  }
+
+  private getAlarmTargetState(): number {
+    if (this.pendingAlarmTarget !== undefined) return this.pendingAlarmTarget;
+    const state = this.getSecuritySystemService()?.getCharacteristic(
+      Characteristic.SecuritySystemTargetState,
+    ).value;
+    return Number.isInteger(state)
+      ? Number(state)
+      : Characteristic.SecuritySystemTargetState.DISARM;
+  }
+
+  private syncAlarmState(state: any): void {
+    const service = this.getSecuritySystemService();
+    if (!service) return;
+    const status = String(state?.state || "").toLowerCase();
+    const attrs = state?.attributes || {};
+    if (status === "unavailable" || status === "unknown" || !status) {
+      this.setReachability(false);
+      return;
+    }
+    this.setReachability(true);
+
+    // Argus exposes meaningful progress through attributes while its state
+    // remains `arming`. HAP has no CurrentState=ARMING value, so retain the
+    // last HA-confirmed CurrentState and expose only the pending TargetState.
+    if (status === "arming" && attrs.argus_arming_transition === true) {
+      const target = this.mapAlarmTarget(attrs.arming_target);
+      if (target !== undefined) {
+        this.pendingAlarmTarget = target;
+        service.updateCharacteristic(Characteristic.SecuritySystemTargetState, target);
+      } else {
+        // Keep the previously confirmed mode; an incomplete/unrecognized
+        // target must never be converted into a final armed state.
+        this.platform.log?.warn?.(
+          `[HAP][${this.entityId}] Argus arming transition has an unsupported or missing target.`,
+        );
+      }
+      return;
+    }
+
+    const current = this.mapAlarmMode(status);
+    if (status === "triggered" || status === "alarm_triggered") {
+      service.updateCharacteristic(
+        Characteristic.SecuritySystemCurrentState,
+        Characteristic.SecuritySystemCurrentState.ALARM_TRIGGERED,
+      );
+      return;
+    }
+    if (current === undefined) return;
+
+    this.pendingAlarmTarget = undefined;
+    service.updateCharacteristic(Characteristic.SecuritySystemCurrentState, current);
+    const target = status === "armed_night"
+      ? Characteristic.SecuritySystemTargetState.NIGHT_ARM
+      : status === "armed_away"
+        ? Characteristic.SecuritySystemTargetState.AWAY_ARM
+        : status === "armed_home"
+          ? Characteristic.SecuritySystemTargetState.STAY_ARM
+          : Characteristic.SecuritySystemTargetState.DISARM;
+    service.updateCharacteristic(Characteristic.SecuritySystemTargetState, target);
+  }
+
+  private async setAlarmTargetState(target: number): Promise<void> {
+    const services = new Map<number, string>([
+      [Characteristic.SecuritySystemTargetState.DISARM, "alarm_disarm"],
+      [Characteristic.SecuritySystemTargetState.STAY_ARM, "alarm_arm_home"],
+      [Characteristic.SecuritySystemTargetState.AWAY_ARM, "alarm_arm_away"],
+    ]);
+    if (this.supportsAlarmNight()) {
+      services.set(Characteristic.SecuritySystemTargetState.NIGHT_ARM, "alarm_arm_night");
+    }
+    const service = services.get(target);
+    if (!service) throw -70410; // HAP INVALID_VALUE_IN_REQUEST
+
+    const attrs = this.getHomeAssistantState(this.entityId)?.attributes || {};
+    const armAction = service !== "alarm_disarm";
+    const codeRequired = armAction
+      ? attrs.code_arm_required === true
+      : attrs.code_disarm_required === true;
+    const code = this.record.alarmCode?.trim();
+    if (codeRequired && !code) {
+      const message = `Home Assistant requires an alarm PIN to run ${service} for ${this.entityId}; configure the alarm PIN in this add-on first.`;
+      this.platform.log?.warn?.(`[HAP][${this.entityId}] ${message}`);
+      throw -70411; // HAP INSUFFICIENT_AUTHORIZATION
+    }
+
+    try {
+      await this.platform.ha?.callService(
+        "alarm_control_panel",
+        service,
+        this.entityId,
+        code ? { code } : undefined,
+      );
+      // Do not alter CurrentState here. Home Assistant is authoritative and
+      // its state_changed event confirms disarm/arm completion.
+    } catch (error) {
+      this.platform.log?.warn?.(
+        `[HAP][${this.entityId}] ${service} failed; retaining Home Assistant's confirmed state: ${String(error)}`,
+      );
+      throw error;
+    }
   }
 
   /**

@@ -206,6 +206,12 @@ export const api = {
       { method: "POST" }
     ),
 
+  setHapAlarmCode: (entityId: string, alarmCode: string) =>
+    request<{ success: boolean; configured?: boolean; error?: string }>(
+      `/hap-alarm-code/${encodeURIComponent(entityId)}`,
+      { method: "POST", body: JSON.stringify({ alarmCode }) },
+    ),
+
   // ── Matter 1.6.1 & MatterBridge 3.10.11 Dynamic System Info & PTZ ─────────
   getSystemInfo: () => request<import("../types").SystemInfoResponse>("/system-info"),
 
