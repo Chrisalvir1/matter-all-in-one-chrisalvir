@@ -1,3 +1,8 @@
+## [1.9.49] - 2026-09-30
+
+### HAP difusores Govee
+- Los difusores sin sensor ambiental conservan su nivel real de vapor: el valor `humidity` de Home Assistant se presenta como velocidad de vapor y se sincroniza con `humidifier.set_humidity`.
+
 ## [1.9.48] - 2026-09-30
 
 ### HAP difusores sin medición
