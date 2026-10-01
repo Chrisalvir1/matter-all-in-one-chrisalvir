@@ -331,6 +331,30 @@ export class HapGenericAccessory {
     }
   }
 
+  private getCurrentHumidity(): number | undefined {
+    const primary = Number(
+      this.platform.entities.get(this.entityId)?.state?.attributes?.current_humidity,
+    );
+    if (Number.isFinite(primary) && primary >= 0 && primary <= 100) return primary;
+    const sensor = this.getDeviceMembers().find((member: any) => {
+      const state = this.platform.entities.get(member.entityId)?.state;
+      return member.entityId.startsWith("sensor.") && state?.attributes?.device_class === "humidity";
+    });
+    const value = Number(sensor && this.platform.entities.get(sensor.entityId)?.state?.state);
+    return Number.isFinite(value) && value >= 0 && value <= 100 ? value : undefined;
+  }
+
+  private callHaOptimistically(
+    domain: string,
+    service: string,
+    data?: Record<string, unknown>,
+  ): void {
+    void this.platform.ha?.callService(domain, service, this.entityId, data)
+      ?.catch((error: unknown) => this.platform.log?.warn?.(
+        `[HAP][${this.entityId}] ${service} failed: ${String(error)}`,
+      ));
+  }
+
   private bindPrimaryHomeAssistantEntity(): void {
     const [domain] = this.entityId.split(".");
     const state = () => this.platform.entities.get(this.entityId)?.state;
@@ -403,10 +427,15 @@ export class HapGenericAccessory {
             const ent = this.platform.entities.get(this.entityId);
             return ent?.state?.state === "on" ? 1 : 0;
           })
-          .onSet(async (value) => {
+          .onSet((value) => {
             const [domain] = this.entityId.split(".");
-            const service = value === 1 ? "turn_on" : "turn_off";
-            await this.platform.ha?.callService(domain, service, this.entityId);
+            const active = value === 1;
+            svc.updateCharacteristic(Characteristic.Active, active ? 1 : 0);
+            svc.updateCharacteristic(
+              Characteristic.CurrentHumidifierDehumidifierState,
+              active ? (profile === "humidifier" ? 2 : 3) : 1,
+            );
+            this.callHaOptimistically(domain, active ? "turn_on" : "turn_off");
           });
 
         svc.getCharacteristic(Characteristic.CurrentHumidifierDehumidifierState)
@@ -422,22 +451,20 @@ export class HapGenericAccessory {
 
         svc.getCharacteristic(Characteristic.CurrentRelativeHumidity)
           .onGet(() => {
-            const ent = this.platform.entities.get(this.entityId);
-            const val = Number(ent?.state?.attributes?.current_humidity);
-            return !isNaN(val) && val >= 0 && val <= 100 ? val : 50;
+            // Never claim a made-up 50%. Prefer the humidifier attribute, then
+            // a real humidity sensor belonging to the same HA device.
+            return this.getCurrentHumidity() ?? 0;
           });
 
         svc.getCharacteristic(Characteristic.RelativeHumidityHumidifierThreshold)
           .onGet(() => {
-            const ent = this.platform.entities.get(this.entityId);
-            const val = Number(ent?.state?.attributes?.humidity);
-            return !isNaN(val) && val >= 0 && val <= 100 ? val : 50;
+            const value = Number(this.platform.entities.get(this.entityId)?.state?.attributes?.humidity);
+            return Number.isFinite(value) && value >= 0 && value <= 100 ? value : 0;
           })
-          .onSet(async (value) => {
+          .onSet((value) => {
             const [domain] = this.entityId.split(".");
-            await this.platform.ha?.callService(domain, "set_humidity", this.entityId, {
-              humidity: Number(value),
-            });
+            svc.updateCharacteristic(Characteristic.RelativeHumidityHumidifierThreshold, Number(value));
+            this.callHaOptimistically(domain, "set_humidity", { humidity: Number(value) });
           });
 
         // Detect linked light if part of a composite device (e.g. Govee Diffuser)
@@ -1065,6 +1092,18 @@ export class HapGenericAccessory {
   public updateFromHassState(state: any, sourceEntityId = this.entityId): void {
     try {
       if (sourceEntityId !== this.entityId) {
+        if (
+          (this.record.hapProfile === "humidifier" || this.record.hapProfile === "dehumidifier") &&
+          state?.attributes?.device_class === "humidity"
+        ) {
+          const humidity = Number(state?.state);
+          if (Number.isFinite(humidity) && humidity >= 0 && humidity <= 100) {
+            this.accessory.getService(Service.HumidifierDehumidifier)?.updateCharacteristic(
+              Characteristic.CurrentRelativeHumidity,
+              humidity,
+            );
+          }
+        }
         const binding = this.discoveredSensorBindings.get(sourceEntityId);
         if (binding) {
           binding.service.updateCharacteristic(

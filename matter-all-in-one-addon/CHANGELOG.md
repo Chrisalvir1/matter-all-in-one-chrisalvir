@@ -1,3 +1,9 @@
+## [1.9.46] - 2026-09-30
+
+### HAP difusor
+- Elimina el 50 % ficticio: la humedad actual procede de `current_humidity` o del sensor de humedad real del mismo dispositivo.
+- La meta de humedad procede exclusivamente de `humidity`; los controles de encendido y ajuste responden de inmediato y se confirman después con Home Assistant.
+
 ## [1.9.45] - 2026-09-30
 
 ### HomeKit HAP — controles de accesorio
