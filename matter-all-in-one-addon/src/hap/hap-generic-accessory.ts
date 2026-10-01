@@ -438,19 +438,6 @@ export class HapGenericAccessory {
               control.updateCharacteristic(Characteristic.Active, active ? 1 : 0);
               this.callHaOptimistically(domain, active ? "turn_on" : "turn_off");
             });
-          // Govee H7141 exposes its mist target as `humidity`. It is not an
-          // ambient reading, so represent it as fan speed in Apple Home.
-          control.getCharacteristic(Characteristic.RotationSpeed)
-            .onGet(() => {
-              const value = Number(this.getHomeAssistantState(this.entityId)?.attributes?.humidity);
-              return Number.isFinite(value) && value >= 0 && value <= 100 ? value : 0;
-            })
-            .onSet((value) => {
-              const [domain] = this.entityId.split(".");
-              const level = Math.max(0, Math.min(100, Number(value)));
-              control.updateCharacteristic(Characteristic.RotationSpeed, level);
-              this.callHaOptimistically(domain, "set_humidity", { humidity: level });
-            });
           break;
         }
 
@@ -1186,12 +1173,10 @@ export class HapGenericAccessory {
       ) {
         const svc = this.accessory.getService(Service.HumidifierDehumidifier);
         if (!svc) {
-          const control = this.accessory.getService(Service.Fanv2);
-          control?.updateCharacteristic(Characteristic.Active, on ? 1 : 0);
-          const mistLevel = Number(state?.attributes?.humidity);
-          if (Number.isFinite(mistLevel) && mistLevel >= 0 && mistLevel <= 100) {
-            control?.updateCharacteristic(Characteristic.RotationSpeed, mistLevel);
-          }
+          this.accessory.getService(Service.Fanv2)?.updateCharacteristic(
+            Characteristic.Active,
+            on ? 1 : 0,
+          );
         } else {
           const isOn = state?.state === "on";
           svc.updateCharacteristic(Characteristic.Active, isOn ? 1 : 0);

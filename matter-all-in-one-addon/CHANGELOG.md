@@ -1,3 +1,8 @@
+## [1.9.50] - 2026-09-30
+
+### HAP difusores Govee
+- No convierte el umbral ambiental `humidity` en potencia de vapor. El nivel de vapor sólo se publica cuando Home Assistant entregue una entidad distinta y real para esa capacidad.
+
 ## [1.9.49] - 2026-09-30
 
 ### HAP difusores Govee
