@@ -4282,11 +4282,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         candidate?.members.forEach((member) =>
           this.exportedDevices.delete(member.entityId),
         );
-        // A reconnect can reuse a Matterbridge-owned node before this process
-        // has a CompositeDeviceEntity wrapper for it. It still needs the same
-        // teardown path; otherwise an old node remains advertised forever.
-        await this.disposeCompositeNode(compositeDeviceId);
+        // Persist the requested state before waiting for Matterbridge teardown.
+        // A stale controller session must not leave the UI permanently active.
         await this.saveExportedDevices();
+        // A reconnect can reuse a Matterbridge-owned node before this process
+        // has a CompositeDeviceEntity wrapper for it. It still needs teardown,
+        // but disposal is bounded so the toggle can recover.
+        await this.disposeCompositeNode(compositeDeviceId);
         return { success: true };
       }
       this.exportedDevices.delete(entityId);
@@ -4317,6 +4319,28 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     }
   }
 
+  /**
+   * Matterbridge can leave unregisterDevice pending while a controller has just
+   * removed its fabric. Do not leave the UI toggle blocked behind that cleanup.
+   */
+  private async unregisterDeviceBounded(endpoint: any, context: string): Promise<void> {
+    let completed = false;
+    const operation = this.unregisterDevice(endpoint)
+      .catch((error) => {
+        this.log.warn(`[Matter] ${context}: unregister failed: ${error}`);
+      })
+      .finally(() => {
+        completed = true;
+      });
+    await Promise.race([
+      operation,
+      new Promise<void>((resolve) => setTimeout(resolve, 5000)),
+    ]);
+    if (!completed) {
+      this.log.warn(`[Matter] ${context}: unregister is still cleaning up; export state was removed.`);
+    }
+  }
+
   /** Stop and unregister a composite node while keeping its export selection. */
   private async disposeCompositeNode(deviceId: string): Promise<void> {
     const key = this.compositeStorageKey(deviceId);
@@ -4327,7 +4351,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         new Promise<void>((resolve) => setTimeout(resolve, 3000)),
       ]);
     }
-    if (endpoint) await this.unregisterDevice(endpoint);
+    if (endpoint) await this.unregisterDeviceBounded(endpoint, `composite ${deviceId}`);
     this.matterbridgeDevices.delete(key);
 
     const members =

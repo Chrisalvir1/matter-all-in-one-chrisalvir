@@ -1,3 +1,8 @@
+## [1.9.42] - 2026-09-30
+
+### Matter
+- La retirada de un accesorio Matter compuesto persiste inmediatamente y limita la espera de cierre de Matterbridge, evitando que el interruptor de publicación quede bloqueado después de desvincular una casa.
+
 ## [1.9.41] - 2026-09-30
 
 ### C120 HKSV
