@@ -195,6 +195,7 @@ export class HapGenericAccessory {
     this.accessory = new Accessory(record.name || entityId, accUuid);
     this.configureAccessoryInformation();
     this.addServiceForProfile(record.hapProfile);
+    this.bindPrimaryHomeAssistantEntity();
     this.addDiscoveredSensorServices();
     this.accessory.on("paired", () => {
       this.record.isPaired = true;
@@ -327,6 +328,59 @@ export class HapGenericAccessory {
     for (const [deviceClass, serviceType, characteristic, suffix, read] of binaryMappings) {
       const member = find("binary_sensor", deviceClass);
       if (member) this.bindDiscoveredSensor(member.entityId, serviceType, characteristic, suffix, read);
+    }
+  }
+
+  private bindPrimaryHomeAssistantEntity(): void {
+    const [domain] = this.entityId.split(".");
+    const state = () => this.platform.entities.get(this.entityId)?.state;
+    const bindPower = (service: any, characteristic: any) => {
+      service.getCharacteristic(characteristic)
+        .onGet(() => state()?.state === "on" ? 1 : 0)
+        .onSet(async (value: any) => {
+          await this.platform.ha?.callService(
+            domain,
+            value ? "turn_on" : "turn_off",
+            this.entityId,
+          );
+        });
+    };
+    switch (this.record.hapProfile) {
+      case "switch_hap": bindPower(this.accessory.getService(Service.Switch), Characteristic.On); break;
+      case "outlet_hap": bindPower(this.accessory.getService(Service.Outlet), Characteristic.On); break;
+      case "lightbulb_hap": {
+        const service = this.accessory.getService(Service.Lightbulb);
+        if (service) {
+          bindPower(service, Characteristic.On);
+          service.getCharacteristic(Characteristic.Brightness)
+            .onGet(() => Math.round((Number(state()?.attributes?.brightness) || 0) * 100 / 255))
+            .onSet(async (value: any) => this.platform.ha?.callService("light", "turn_on", this.entityId, { brightness_pct: Number(value) }));
+          const color = () => state()?.attributes?.hs_color;
+          if (Array.isArray(color())) {
+            service.getCharacteristic(Characteristic.Hue).onGet(() => Number(color()?.[0]) || 0);
+            service.getCharacteristic(Characteristic.Saturation).onGet(() => Number(color()?.[1]) || 0);
+            const setColor = async () => this.platform.ha?.callService("light", "turn_on", this.entityId, {
+              hs_color: [Number(service.getCharacteristic(Characteristic.Hue).value || 0), Number(service.getCharacteristic(Characteristic.Saturation).value || 0)],
+            });
+            service.getCharacteristic(Characteristic.Hue).onSet(setColor);
+            service.getCharacteristic(Characteristic.Saturation).onSet(setColor);
+          }
+        }
+        break;
+      }
+      case "fan_hap": {
+        const service = this.accessory.getService(Service.Fanv2);
+        if (service) {
+          bindPower(service, Characteristic.Active);
+          service.getCharacteristic(Characteristic.RotationSpeed)
+            .onGet(() => Number(state()?.attributes?.percentage) || 0)
+            .onSet(async (value: any) => this.platform.ha?.callService(domain, "set_percentage", this.entityId, { percentage: Number(value) }));
+        }
+        break;
+      }
+      case "valve_irrigation":
+      case "valve_faucet":
+      case "valve_shower": bindPower(this.accessory.getService(Service.Valve), Characteristic.Active); break;
     }
   }
 
@@ -487,45 +541,45 @@ export class HapGenericAccessory {
 
       // ── Televisor ─────────────────────────────────────────────────────────
       case "television": {
-        const tv = this.accessory.addService(
-          Service.Television,
-          this.record.name,
-        );
+        const tv = this.accessory.addService(Service.Television, this.record.name);
+        const mediaState = () => this.platform.entities.get(this.entityId)?.state;
         tv.setCharacteristic(Characteristic.ConfiguredName, this.record.name);
-        tv.setCharacteristic(
-          Characteristic.SleepDiscoveryMode,
-          Characteristic.SleepDiscoveryMode.ALWAYS_DISCOVERABLE,
-        );
-        tv.getCharacteristic(Characteristic.Active).setValue(
-          Characteristic.Active.INACTIVE,
-        );
-        tv.getCharacteristic(Characteristic.ActiveIdentifier).setValue(1);
-        // Agregar speaker vinculado al TV
-        const speaker = this.accessory.addService(
-          Service.TelevisionSpeaker,
-        );
-        speaker.setCharacteristic(
-          Characteristic.VolumeControlType,
-          Characteristic.VolumeControlType.ABSOLUTE,
-        );
+        tv.setCharacteristic(Characteristic.SleepDiscoveryMode, Characteristic.SleepDiscoveryMode.ALWAYS_DISCOVERABLE);
+        tv.getCharacteristic(Characteristic.Active)
+          .onGet(() => mediaState()?.state === "off" ? 0 : 1)
+          .onSet(async (value: any) => this.platform.ha?.callService(
+            "media_player", value ? "turn_on" : "turn_off", this.entityId,
+          ));
+
+        const sources = Array.isArray(mediaState()?.attributes?.source_list)
+          ? mediaState().attributes.source_list as string[]
+          : [];
+        const activeSource = () => String(mediaState()?.attributes?.source || "");
+        tv.getCharacteristic(Characteristic.ActiveIdentifier)
+          .onGet(() => Math.max(1, sources.indexOf(activeSource()) + 1))
+          .onSet(async (value: any) => {
+            const source = sources[Number(value) - 1];
+            if (source) await this.platform.ha?.callService("media_player", "select_source", this.entityId, { source });
+          });
+
+        const speaker = this.accessory.addService(Service.TelevisionSpeaker, `${this.record.name} Audio`);
+        speaker.setCharacteristic(Characteristic.VolumeControlType, Characteristic.VolumeControlType.ABSOLUTE);
+        speaker.getCharacteristic(Characteristic.Mute)
+          .onGet(() => Boolean(mediaState()?.attributes?.is_volume_muted))
+          .onSet(async (value: any) => this.platform.ha?.callService("media_player", "volume_mute", this.entityId, { is_volume_muted: Boolean(value) }));
+        speaker.getCharacteristic(Characteristic.Volume)
+          .onGet(() => Math.round((Number(mediaState()?.attributes?.volume_level) || 0) * 100))
+          .onSet(async (value: any) => this.platform.ha?.callService("media_player", "volume_set", this.entityId, { volume_level: Number(value) / 100 }));
         tv.addLinkedService(speaker);
-        // Fuente de entrada por defecto
-        const input = this.accessory.addService(
-          Service.InputSource,
-          "HDMI 1",
-          "hdmi1",
-        );
-        input.setCharacteristic(Characteristic.Identifier, 1);
-        input.setCharacteristic(Characteristic.ConfiguredName, "HDMI 1");
-        input.setCharacteristic(
-          Characteristic.IsConfigured,
-          Characteristic.IsConfigured.CONFIGURED,
-        );
-        input.setCharacteristic(
-          Characteristic.InputSourceType,
-          Characteristic.InputSourceType.HDMI,
-        );
-        tv.addLinkedService(input);
+
+        sources.forEach((source, index) => {
+          const input = this.accessory.addService(Service.InputSource, source, `input:${index + 1}`);
+          input.setCharacteristic(Characteristic.Identifier, index + 1);
+          input.setCharacteristic(Characteristic.ConfiguredName, source);
+          input.setCharacteristic(Characteristic.IsConfigured, Characteristic.IsConfigured.CONFIGURED);
+          input.setCharacteristic(Characteristic.InputSourceType, Characteristic.InputSourceType.HDMI);
+          tv.addLinkedService(input);
+        });
         break;
       }
 
@@ -1023,6 +1077,33 @@ export class HapGenericAccessory {
       this.setReachability(
         state?.state !== "unavailable" && state?.state !== "unknown",
       );
+      const on = state?.state === "on";
+      switch (this.record.hapProfile) {
+        case "switch_hap": this.accessory.getService(Service.Switch)?.updateCharacteristic(Characteristic.On, on); break;
+        case "outlet_hap": this.accessory.getService(Service.Outlet)?.updateCharacteristic(Characteristic.On, on); break;
+        case "lightbulb_hap": {
+          const light = this.accessory.getService(Service.Lightbulb);
+          light?.updateCharacteristic(Characteristic.On, on);
+          if (state?.attributes?.brightness !== undefined) light?.updateCharacteristic(Characteristic.Brightness, Math.round(Number(state.attributes.brightness) * 100 / 255));
+          if (Array.isArray(state?.attributes?.hs_color)) {
+            light?.updateCharacteristic(Characteristic.Hue, Number(state.attributes.hs_color[0]) || 0);
+            light?.updateCharacteristic(Characteristic.Saturation, Number(state.attributes.hs_color[1]) || 0);
+          }
+          break;
+        }
+        case "fan_hap": {
+          const fan = this.accessory.getService(Service.Fanv2);
+          fan?.updateCharacteristic(Characteristic.Active, on ? 1 : 0);
+          if (state?.attributes?.percentage !== undefined) fan?.updateCharacteristic(Characteristic.RotationSpeed, Number(state.attributes.percentage) || 0);
+          break;
+        }
+        case "television": {
+          this.accessory.getService(Service.Television)?.updateCharacteristic(Characteristic.Active, state?.state === "off" ? 0 : 1);
+          this.accessory.getService(Service.TelevisionSpeaker)?.updateCharacteristic(Characteristic.Mute, Boolean(state?.attributes?.is_volume_muted));
+          if (state?.attributes?.volume_level !== undefined) this.accessory.getService(Service.TelevisionSpeaker)?.updateCharacteristic(Characteristic.Volume, Math.round(Number(state.attributes.volume_level) * 100));
+          break;
+        }
+      }
       if (
         this.record.hapProfile === "humidifier" ||
         this.record.hapProfile === "dehumidifier"
