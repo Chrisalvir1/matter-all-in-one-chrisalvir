@@ -1,3 +1,9 @@
+## [1.9.45] - 2026-09-30
+
+### HomeKit HAP — controles de accesorio
+- El perfil Televisor se enlaza a `media_player`: encendido, volumen, silencio y fuentes reales.
+- Los perfiles de luz, interruptor, enchufe, ventilador y válvula leen, actualizan y controlan su entidad real de Home Assistant.
+
 ## [1.9.44] - 2026-09-30
 
 ### HomeKit HAP — descubrimiento completo de dispositivo
