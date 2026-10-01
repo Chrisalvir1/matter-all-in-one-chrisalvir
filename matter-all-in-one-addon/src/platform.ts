@@ -1279,7 +1279,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       ? this.compositeDevices.get(compositeDeviceId)
       : undefined;
 
-    const hasEndpoint = Boolean(
+    const hasMatterEndpoint = Boolean(
       (entity &&
         (("endpoint" in entity && entity.endpoint !== undefined) ||
           ("endpoints" in entity &&
@@ -1290,12 +1290,17 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         compDevice.endpoints.has(entityId)),
     );
     const hapAccessory = this.hapAccessories.get(entityId);
-    const isActivelyExported =
-      (this.isEntityExported(entityId) && hasEndpoint) || Boolean(hapAccessory);
+    const hasMatterExport = this.isEntityExported(entityId) && hasMatterEndpoint;
+    const hasHapExport = Boolean(hapAccessory);
+    const isActivelyExported = hasMatterExport || hasHapExport;
 
     if (isUnavailable(state)) {
-      if (isActivelyExported) {
-        hapAccessory?.setReachability(false);
+      // Matter and direct HAP are separate paired transports.
+      if (hasHapExport) {
+        hapAccessory!.setReachability(false);
+        this.log.debug(`[Availability][HAP] ${entityId}: StatusActive=false, StatusFault=1`);
+      }
+      if (hasMatterExport) {
         if (entity && typeof (entity as any).setReachability === "function") {
           void (entity as any).setReachability(false);
         }
@@ -1322,6 +1327,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             void (compDevice as any).setReachability(false);
           }
         }
+        this.log.debug(`[Availability][Matter] ${entityId}: reachable=false`);
       }
 
       if (previous === state.state) return true;
@@ -1341,7 +1347,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     }
     if (previous && ["unavailable", "unknown"].includes(previous)) {
       if (isActivelyExported) {
-        hapAccessory?.setReachability(true);
+        if (hasHapExport) {
+          hapAccessory!.setReachability(true);
+          this.log.debug(`[Availability][HAP] ${entityId}: StatusActive=true, StatusFault=0`);
+        }
         this.log.info(
           `\u001b[32m[Home Assistant] ${entityId}: la entidad se recuperó y volvió a "${state.state}".\u001b[0m`,
         );
@@ -1350,10 +1359,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           `Conexión restaurada con Home Assistant (estado: ${state.state})`,
           "info",
         );
-        if (entity && typeof (entity as any).setReachability === "function") {
+        if (hasMatterExport && entity && typeof (entity as any).setReachability === "function") {
           void (entity as any).setReachability(true);
         }
         if (
+          hasMatterExport &&
           compDevice &&
           typeof (compDevice as any).setReachability === "function"
         ) {
@@ -1362,6 +1372,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           }
           void (compDevice as any).setReachability(true);
         }
+        if (hasMatterExport) this.log.debug(`[Availability][Matter] ${entityId}: reachable=true`);
       } else {
         this.log.debug(
           `[Home Assistant] ${entityId}: la entidad se recuperó y volvió a "${state.state}". (no exportado o no soportado)`,
@@ -5169,10 +5180,25 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     }
   }
 
+  /** Forward an explicitly linked Camera.UI sensor to its independent HAP camera. */
+  private syncLinkedCameraUiMotion(entityId: string, state: HassState): void {
+    if (!entityId.startsWith("binary_sensor.")) return;
+    const isActive = state.state === "on";
+    for (const [cameraId, accessory] of CameraUiHomeKitBridge.getAllAccessories()) {
+      if (accessory?.linkedMotionEntityId !== entityId) continue;
+      this.log.notice(
+        `[Camera.UI][HAP] Movimiento (${isActive ? "DETECTADO" : "REPOSO"}) desde ${entityId} para ${accessory.record?.name || cameraId}`,
+      );
+      CameraUiHomeKitBridge.updateMotion(cameraId, isActive, this, `HA sensor vinculado (${entityId})`);
+    }
+  }
+
   /**
    * Real-time state synchronization from HA to Matter.
    */
   private handleEntityStateChange(entityId: string, newState: HassState) {
+    // This sensor need not be exported to Matter to drive HAP/HKSV.
+    this.syncLinkedCameraUiMotion(entityId, newState);
     const entity = this.entities.get(entityId);
     if (!entity) {
       // An entity may become available after HA's initial snapshot.

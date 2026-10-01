@@ -1,3 +1,11 @@
+## [1.9.41] - 2026-09-30
+
+### C120 HKSV
+- Vincula la detección de movimiento de Camera.UI mediante su `binary_sensor` derivado del ID único de la cámara. El sensor puede activar HAP/HKSV aunque no se exporte como endpoint Matter, evitando el segundo lector RTSP.
+
+### Disponibilidad
+- Matter y HAP notifican de manera independiente la disponibilidad que informa Home Assistant. Los endpoints Matter compuestos actualizan también el estado `reachable` de su raíz y sus miembros sin cambiar el emparejamiento existente.
+
 ## [1.9.40] - 2026-09-29
 
 ### Stability

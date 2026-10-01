@@ -106,6 +106,28 @@ export class CameraUiHomeKitBridge {
     return this.activeMatterEndpoints;
   }
 
+  /** Resolve the deterministic Camera.UI binary_sensor for this camera ID. */
+  private static findNativeMotionEntityId(
+    camera: CameraUiCameraRecord,
+    platform: any,
+  ): string | undefined {
+    const normalized = camera.id.replace(/[^a-z0-9_]/gi, "_").toLowerCase();
+    const bare = normalized.replace(/^cameraui_/, "");
+    const candidates = [
+      camera.motionEntityId,
+      ...(camera.realEntities
+        ?.filter((entity) => entity.type === "motion")
+        .map((entity) => entity.id) ?? []),
+      `binary_sensor.${normalized}_motion`,
+      `binary_sensor.cameraui_${bare}_motion`,
+    ].filter(
+      (id): id is string => Boolean(id) && id !== "none" && id !== "auto",
+    );
+    return candidates.find((entityId) =>
+      platform?.ha?.hassStates?.has(entityId),
+    );
+  }
+
   public static async mountCamera(
     platform: any,
     camera: CameraUiCameraRecord,
@@ -360,6 +382,10 @@ export class CameraUiHomeKitBridge {
       camera.uuid = uuid.generate(`cameraui:camera:${camera.id}`);
     }
 
+    // Link the native Camera.UI sensor before HAP services are created. This
+    // leaves C120 HKSV event-driven and avoids a competing RTSP reader.
+    const nativeMotionEntityId = this.findNativeMotionEntityId(camera, platform);
+
     const record: HomeKitCameraStorageRecord = {
       // Camera.UI IDs are UUIDs, and their hyphens make an invalid HA entity_id.
       // Keep the original ID separately for Camera.UI storage and HAP lookups.
@@ -390,7 +416,8 @@ export class CameraUiHomeKitBridge {
       // services of this same HAP camera accessory.
       motionEntityId:
         camera.motionEntityId ||
-        camera.realEntities?.find((entity) => entity.type === "motion")?.id,
+        camera.realEntities?.find((entity) => entity.type === "motion")?.id ||
+        nativeMotionEntityId,
       lightEntityId:
         camera.lightEntityId ||
         camera.realEntities?.find((entity) => entity.type === "light")?.id,
@@ -531,12 +558,11 @@ export class CameraUiHomeKitBridge {
           cameraIdentity,
         );
       const isEzviz = /\bezviz\b|\bh6c\b/i.test(cameraIdentity);
-      const cameraUiMqttMotionId = `mqtt.${camera.id
-        .replace(/[^a-z0-9_]/gi, "_")
-        .toLowerCase()}_motion`;
-      const hasCameraUiMqttMotion = Boolean(
-        platform?.ha?.hassStates?.has(cameraUiMqttMotionId),
-      );
+      const nativeMotionEntityId = this.findNativeMotionEntityId(camera, platform);
+      const hasCameraUiNativeMotion = Boolean(nativeMotionEntityId);
+      if (nativeMotionEntityId && !accessory.linkedMotionEntityId) {
+        accessory.linkedMotionEntityId = nativeMotionEntityId;
+      }
       const hasC402NativeMotion = Boolean(
         isC402Camera &&
           platform?.ha?.hassStates?.has("binary_sensor.tapo_c402_motion"),
@@ -550,7 +576,7 @@ export class CameraUiHomeKitBridge {
         (isHaSourceCamera &&
           (hasConfiguredHaMotion || hasLinkedHaMotion || hasC402NativeMotion)) ||
         ((isTapoC120 || isEzviz) &&
-          (hasConfiguredHaMotion || hasLinkedHaMotion || hasCameraUiMqttMotion))
+          (hasConfiguredHaMotion || hasLinkedHaMotion || hasCameraUiNativeMotion))
       ) {
         platform?.log?.notice?.(
           `[Camera.UI][${camera.name}] Motion detection uses its native Home Assistant/Camera.UI sensor; skipping the competing RTSP reader`,

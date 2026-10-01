@@ -331,6 +331,12 @@ export class CompositeDeviceEntity {
           await serverNode.setStateOf(BasicInformationServer, { reachable });
         } catch {}
       }
+      // Report root reachability too when the bridged-info cluster is present.
+      if (typeof ep.setStateOf === "function") {
+        try {
+          await ep.setStateOf(BridgedDeviceBasicInformationServer, { reachable });
+        } catch {}
+      }
       if (typeof ep.setAttribute === "function") {
         if (ep.hasAttributeServer?.(0x0028, "reachable")) {
           await ep.setAttribute(0x0028, "reachable", reachable, this.platform.log);
