@@ -1,3 +1,8 @@
+## [1.9.48] - 2026-09-30
+
+### HAP difusores sin medición
+- Un difusor o humidificador sin `current_humidity` ni sensor de humedad real se expone como control de difusor con encendido/apagado. Apple Home ya no muestra humedad `0 %` ni una meta de humedad que no puede medir.
+
 ## [1.9.47] - 2026-09-30
 
 ### HomeKit HAP — lecturas reales por dispositivo

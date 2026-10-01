@@ -425,6 +425,22 @@ export class HapGenericAccessory {
       // ── Humidificador / Deshumidificador ──────────────────────────────────
       case "humidifier":
       case "dehumidifier": {
+        // HAP's humidifier service always exposes CurrentRelativeHumidity.
+        // When Home Assistant has no real reading, use a control-only fan
+        // service so Apple Home never presents an invented 0% measurement.
+        if (this.getCurrentHumidity() === undefined) {
+          const control = this.accessory.addService(Service.Fanv2, this.record.name);
+          control.getCharacteristic(Characteristic.Active)
+            .onGet(() => this.getHomeAssistantState(this.entityId)?.state === "on" ? 1 : 0)
+            .onSet((value) => {
+              const [domain] = this.entityId.split(".");
+              const active = value === 1;
+              control.updateCharacteristic(Characteristic.Active, active ? 1 : 0);
+              this.callHaOptimistically(domain, active ? "turn_on" : "turn_off");
+            });
+          break;
+        }
+
         const svc = this.accessory.addService(
           Service.HumidifierDehumidifier,
           this.record.name,
@@ -1156,7 +1172,12 @@ export class HapGenericAccessory {
         this.record.hapProfile === "dehumidifier"
       ) {
         const svc = this.accessory.getService(Service.HumidifierDehumidifier);
-        if (svc) {
+        if (!svc) {
+          this.accessory.getService(Service.Fanv2)?.updateCharacteristic(
+            Characteristic.Active,
+            on ? 1 : 0,
+          );
+        } else {
           const isOn = state?.state === "on";
           svc.updateCharacteristic(Characteristic.Active, isOn ? 1 : 0);
           svc.updateCharacteristic(
