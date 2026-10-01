@@ -7,7 +7,6 @@ import { CameraBrandGroup } from "./components/CameraBrandGroup";
 import { DeviceCard } from "./components/DeviceCard";
 import { CameraConfigModal } from "./components/CameraConfigModal";
 import { DeviceModal } from "./components/DeviceModal";
-import { PairedModal } from "./components/PairedModal";
 import { ScryptedModal } from "./components/ScryptedModal";
 import { CameraUiModal } from "./components/CameraUiModal";
 import { SettingsModal } from "./components/SettingsModal";
@@ -49,7 +48,6 @@ export const App: React.FC = () => {
   const [isScryptedModalOpen, setIsScryptedModalOpen] = useState(false);
   const [isCameraUiModalOpen, setIsCameraUiModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
-  const [isPairedModalOpen, setIsPairedModalOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [ptzCameras, setPtzCameras] = useState<CameraPtzInfo[]>([]);
   const [systemInfo, setSystemInfo] = useState<SystemInfoResponse | null>(null);
@@ -502,12 +500,7 @@ export const App: React.FC = () => {
             stats={stats}
             activeFilter={activeFilter}
             onFilterChange={(filter) => {
-              if (filter === "paired") {
-                setIsPairedModalOpen(true);
-                setActiveFilter("paired");
-              } else {
-                setActiveFilter(filter);
-              }
+              setActiveFilter(filter);
             }}
             loading={loading}
             onRefresh={refreshAll}
@@ -624,42 +617,6 @@ export const App: React.FC = () => {
           onClose={() => setIsCameraUiModalOpen(false)}
           onRefresh={refreshAll}
           showToast={showToast}
-        />
-      )}
-
-      {/* Paired Devices Modal (Split Panel / Mobile Friendly) */}
-      {isPairedModalOpen && (
-        <PairedModal
-          matterDevices={allDevices.filter(d =>
-            !realHaCameraDevices.some(c => c.id === d.id) &&
-            d.entities.some(e => e.exported && e.commissioned)
-          )}
-          matterCameras={cameras.filter(
-            c => c.bindingState?.matterCommissioned === true
-          )}
-          matterHaCameras={realHaCameraDevices.filter(d =>
-            d.entities.some(e => e.exported && e.commissioned)
-          )}
-          hapDevices={allDevices.filter(d =>
-            !realHaCameraDevices.some(c => c.id === d.id) &&
-            d.entities.some(e => e.hapAccessory?.published && e.hapAccessory?.isPaired)
-          )}
-          cuiCameras={cameraUiCameras.filter(c => c.isPaired === true)}
-          hapCameras={cameras.filter(
-            c => c.identity?.homeKitPairingState === "paired" && !c.bindingState?.matterCommissioned
-          )}
-          hapHaCameras={realHaCameraDevices.filter(d =>
-            d.entities.some(e => e.homekitCamera?.isPaired)
-          )}
-          onClose={() => setIsPairedModalOpen(false)}
-          onOpenDevice={(device) => {
-            setIsPairedModalOpen(false);
-            setSelectedDevice(device);
-          }}
-          onOpenCuiCamera={(cam) => {
-            setIsPairedModalOpen(false);
-            setSelectedCameraUiCamera(cam);
-          }}
         />
       )}
 

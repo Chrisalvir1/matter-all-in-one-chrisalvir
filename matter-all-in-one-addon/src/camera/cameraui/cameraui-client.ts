@@ -1,6 +1,11 @@
 import net from "node:net";
+import { Agent } from "undici";
 import type { CameraUiCameraRecord, CameraUiConfig } from "./cameraui-types.js";
 import { sanitizeUrlCredentials } from "../homekit/ffmpeg-helper.js";
+
+const cameraUiSelfSignedTlsAgent = new Agent({
+  connect: { rejectUnauthorized: false },
+});
 
 /**
  * Fast TCP socket check to verify if a camera's RTSP or HTTP stream port is reachable.
@@ -112,10 +117,19 @@ export class CameraUiClient {
   private resolvedBaseUrl?: string;
   private loginError?: string;
 
-  constructor(private readonly config: CameraUiConfig) {
-    if (this.config.allowSelfSignedCertificate !== false) {
-      process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+  constructor(private readonly config: CameraUiConfig) {}
+
+  private request(url: string, init: RequestInit = {}): Promise<Response> {
+    if (
+      this.config.allowSelfSignedCertificate === false ||
+      !url.startsWith("https:")
+    ) {
+      return fetch(url, init);
     }
+    return fetch(url, {
+      ...init,
+      dispatcher: cameraUiSelfSignedTlsAgent,
+    } as RequestInit);
   }
 
   private getBaseUrl(): string {
@@ -149,9 +163,6 @@ export class CameraUiClient {
     // Common Home Assistant add-on and local network locations
     candidates.push("http://127.0.0.1:8181");
     candidates.push("http://localhost:8181");
-    candidates.push("https://192.168.110.46:3543");
-    candidates.push("http://192.168.110.46:3543");
-    candidates.push("http://192.168.110.46:8181");
     candidates.push("https://127.0.0.1:3543");
     candidates.push("http://127.0.0.1:3543");
     candidates.push("https://localhost:3543");
@@ -192,28 +203,12 @@ export class CameraUiClient {
       return { ok: false, message: "URL del servidor Camera.UI no configurada" };
     }
 
-    if (this.config.allowSelfSignedCertificate !== false) {
-      process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
-    }
-
     const authEndpoints = ["/api/auth/login", "/api/login", "/auth/login"];
-    const basePwd = this.config.password || "Anubis2026.";
-    const passwordCandidates = Array.from(
-      new Set(
-        [
-          basePwd,
-          basePwd.endsWith(".") ? basePwd.slice(0, -1) : `${basePwd}.`,
-          "Anubis2026.",
-          "Anubis2026",
-        ].filter(Boolean),
-      ),
-    );
-
-    for (const pwd of passwordCandidates) {
-      for (const ep of authEndpoints) {
+    const pwd = this.config.password;
+    for (const ep of authEndpoints) {
         try {
           const creds = Buffer.from(
-            `${this.config.username || "Admin"}:${pwd}`,
+            `${this.config.username}:${pwd}`,
           ).toString("base64");
           const headers: Record<string, string> = {
             "Content-Type": "application/json",
@@ -224,11 +219,11 @@ export class CameraUiClient {
             headers["Authorization"] = `Bearer ${this.accessToken}`;
           }
 
-          const res = await fetch(`${baseUrl}${ep}`, {
+          const res = await this.request(`${baseUrl}${ep}`, {
             method: "POST",
             headers,
             body: JSON.stringify({
-              username: this.config.username || "Admin",
+              username: this.config.username,
               password: pwd,
               kind: "web",
               persistent: true,
@@ -248,8 +243,6 @@ export class CameraUiClient {
             if (token) {
               this.accessToken = String(token);
               this.loginError = undefined;
-              this.config.password = pwd;
-              this.config.rtspPassword = pwd;
               return { ok: true };
             }
           }
@@ -258,7 +251,6 @@ export class CameraUiClient {
             this.loginError = `Credenciales incorrectas: usuario o contraseña rechazados por Camera.UI en ${baseUrl} (HTTP ${res.status}).`;
           }
         } catch {}
-      }
     }
 
     return { ok: true, skipped: true };
@@ -271,10 +263,6 @@ export class CameraUiClient {
     const candidates = this.getCandidateUrls();
     if (candidates.length === 0) {
       return { ok: false, message: "URL del servidor Camera.UI no configurada" };
-    }
-
-    if (this.config.allowSelfSignedCertificate !== false) {
-      process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
     }
 
     let lastError = "";
@@ -301,7 +289,7 @@ export class CameraUiClient {
 
       for (const endpoint of testEndpoints) {
         try {
-          const res = await fetch(`${baseUrl}${endpoint}`, {
+          const res = await this.request(`${baseUrl}${endpoint}`, {
             method: "GET",
             headers: this.getHeaders(),
             signal: AbortSignal.timeout(4000),
@@ -368,10 +356,6 @@ export class CameraUiClient {
     const candidates = this.getCandidateUrls();
     if (candidates.length === 0) return [];
 
-    if (this.config.allowSelfSignedCertificate !== false) {
-      process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
-    }
-
     let rawList: any[] = [];
     let successfulBaseUrl = "";
 
@@ -391,7 +375,7 @@ export class CameraUiClient {
 
       for (const ep of endpointsToTry) {
         try {
-          let res = await fetch(`${baseUrl}${ep}`, {
+          let res = await this.request(`${baseUrl}${ep}`, {
             headers: this.getHeaders(),
             signal: AbortSignal.timeout(6000),
           });
@@ -400,7 +384,7 @@ export class CameraUiClient {
           if (res.status === 401 && this.config.username && this.config.password) {
             const loginRes = await this.login(baseUrl);
             if (loginRes.ok) {
-              res = await fetch(`${baseUrl}${ep}`, {
+              res = await this.request(`${baseUrl}${ep}`, {
                 headers: this.getHeaders(),
                 signal: AbortSignal.timeout(6000),
               });
@@ -747,7 +731,7 @@ export class CameraUiClient {
     for (const baseUrl of candidates) {
       for (const ep of endpoints) {
         try {
-          let res = await fetch(`${baseUrl}${ep}`, {
+          let res = await this.request(`${baseUrl}${ep}`, {
             headers: this.getHeaders(),
             signal: AbortSignal.timeout(2500),
           });
@@ -756,7 +740,7 @@ export class CameraUiClient {
           if (res.status === 401 && this.config.username && this.config.password) {
             const loginRes = await this.login(baseUrl);
             if (loginRes.ok) {
-              res = await fetch(`${baseUrl}${ep}`, {
+              res = await this.request(`${baseUrl}${ep}`, {
                 headers: this.getHeaders(),
                 signal: AbortSignal.timeout(2500),
               });

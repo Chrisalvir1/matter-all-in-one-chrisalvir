@@ -5764,7 +5764,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               port: (this.config as any).mqttPort || 1883,
               user,
               username: user,
-              password: (this.config as any).mqttPassword || "",
+              hasPassword: Boolean((this.config as any).mqttPassword),
             }),
           );
           return;
@@ -5775,10 +5775,16 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             const body = await this.readRequestBody(req);
             const data = JSON.parse(body);
             const user = data.user || data.username || "";
+            const savedPassword = (this.config as any).mqttPassword || "";
+            const password = data.clearPassword === true
+              ? ""
+              : typeof data.password === "string" && data.password.length > 0
+                ? data.password
+                : savedPassword;
             (this.config as any).mqttHost = data.host;
             (this.config as any).mqttPort = Number(data.port) || 1883;
             (this.config as any).mqttUser = user;
-            (this.config as any).mqttPassword = data.password || "";
+            (this.config as any).mqttPassword = password;
 
             const persistDir = fsSync.existsSync("/data")
               ? "/data"
@@ -5792,7 +5798,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                   port: Number(data.port) || 1883,
                   user,
                   username: user,
-                  password: data.password || "",
+                  password,
                 },
                 null,
                 2,
@@ -8411,7 +8417,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             res.writeHead(200, {
               "Content-Type": "application/json; charset=utf-8",
             });
-            res.end(JSON.stringify({ success: true, config: store.config }));
+            // Never echo stored Camera.UI credentials to the browser.
+            res.end(JSON.stringify({ success: true }));
 
             // Respond before touching HAP. Previously each persisted camera was
             // remounted serially here, leaving the UI stuck on “Guardando”.
@@ -8672,7 +8679,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                 JSON.stringify({
                   ok: false,
                   message:
-                    "URL del servidor Camera.UI no configurada. Por favor ingresa la URL completa (ej. https://192.168.110.46:3543).",
+                    "URL del servidor Camera.UI no configurada. Ingresa la URL completa, por ejemplo http://192.168.1.100:8181.",
                 }),
               );
               return;

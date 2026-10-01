@@ -124,7 +124,17 @@ export class CameraUiHomeKitBridge {
       (id): id is string => Boolean(id) && id !== "none" && id !== "auto",
     );
     return candidates.find((entityId) =>
-      platform?.ha?.hassStates?.has(entityId),
+      this.hasUsableMotionEntity(platform, entityId),
+    );
+  }
+
+  /** A stale HA entity must not suppress the local RTSP motion fallback. */
+  private static hasUsableMotionEntity(platform: any, entityId?: string): boolean {
+    if (!entityId || entityId === "none" || entityId === "auto") return false;
+    const state = platform?.ha?.hassStates?.get(entityId);
+    if (typeof state?.state !== "string") return false;
+    return !["unavailable", "unknown", "none"].includes(
+      state.state.trim().toLowerCase(),
     );
   }
 
@@ -539,13 +549,13 @@ export class CameraUiHomeKitBridge {
         configuredMotionEntityId &&
           configuredMotionEntityId !== "none" &&
           configuredMotionEntityId !== "auto" &&
-          platform?.ha?.hassStates?.has(configuredMotionEntityId),
+          this.hasUsableMotionEntity(platform, configuredMotionEntityId),
       );
       const hasLinkedHaMotion = Boolean(
         camera.realEntities?.some(
           (entity) =>
             entity.type === "motion" &&
-            platform?.ha?.hassStates?.has(entity.id),
+            this.hasUsableMotionEntity(platform, entity.id),
         ),
       );
       const isC402Camera = /(?:c402|frente[-_ ]?de[-_ ]?calle)/i.test(
@@ -565,7 +575,7 @@ export class CameraUiHomeKitBridge {
       }
       const hasC402NativeMotion = Boolean(
         isC402Camera &&
-          platform?.ha?.hassStates?.has("binary_sensor.tapo_c402_motion"),
+          this.hasUsableMotionEntity(platform, "binary_sensor.tapo_c402_motion"),
       );
 
       // Prefer native HA/Camera.UI motion for C120 and EZVIZ. Running FFmpeg

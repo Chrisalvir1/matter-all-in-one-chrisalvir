@@ -19,16 +19,18 @@ LABEL io.hass.type="app" \
   org.opencontainers.image.source="https://github.com/Chrisalvir1/matter-all-in-one-chrisalvir" \
   org.opencontainers.image.licenses="Apache-2.0"
 
-RUN apk add --no-cache curl jq ffmpeg \
-  && ARCH=$(uname -m) \
-  && case "${ARCH}" in \
-       x86_64|aarch64) \
-         curl -Lf# "https://github.com/homebridge/ffmpeg-for-homebridge/releases/latest/download/ffmpeg-alpine-${ARCH}.tar.gz" | tar xzf - -C / --no-same-owner || true ;; \
-       armv7l) \
-         curl -Lf# "https://github.com/homebridge/ffmpeg-for-homebridge/releases/latest/download/ffmpeg-alpine-arm32v7.tar.gz" | tar xzf - -C / --no-same-owner || true ;; \
-     esac \
-  && chmod 0755 /usr/local/bin/ffmpeg 2>/dev/null || true \
-  && npm install -g matterbridge@3.10.11 --omit=dev --no-fund --no-audit
+RUN set -eu; apk add --no-cache curl jq ffmpeg; ARCH=$(uname -m); \
+     case "${ARCH}" in \
+       x86_64) FFMPEG_ASSET=ffmpeg-alpine-x86_64.tar.gz; FFMPEG_SHA256=b29b9d64111410a322e5e5558d1c4f968864ca44630329dc6cd31295997999a3 ;; \
+       aarch64) FFMPEG_ASSET=ffmpeg-alpine-aarch64.tar.gz; FFMPEG_SHA256=3ed1724533921b6b54d1fd35802af62abd29e8672e0afb94bb2f8c18158323a3 ;; \
+       armv7l) FFMPEG_ASSET=ffmpeg-alpine-arm32v7.tar.gz; FFMPEG_SHA256=7ca3a11389c3f1f06d620a3a1949a5ecfdc16112dd88ba2e7e9cdc8ec278d3af ;; \
+       *) echo "Unsupported FFmpeg architecture: ${ARCH}" >&2; exit 1 ;; \
+     esac; \
+     curl -fL --retry 3 "https://github.com/homebridge/ffmpeg-for-homebridge/releases/download/v2.2.2/${FFMPEG_ASSET}" -o /tmp/ffmpeg-homebridge.tar.gz; \
+     echo "${FFMPEG_SHA256}  /tmp/ffmpeg-homebridge.tar.gz" | sha256sum -c -; \
+     tar xzf /tmp/ffmpeg-homebridge.tar.gz -C / --no-same-owner; \
+     rm /tmp/ffmpeg-homebridge.tar.gz; chmod 0755 /usr/local/bin/ffmpeg; \
+     npm install -g matterbridge@3.10.11 --omit=dev --no-fund --no-audit
 
 WORKDIR /app
 COPY package.json package-lock.json ./

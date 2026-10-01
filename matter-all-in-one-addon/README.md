@@ -1,11 +1,11 @@
-# Matter All-in-One for Home Assistant — v1.9.30
+# Matter All-in-One for Home Assistant — v1.9.52
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/chrisalvir1/matter-all-in-one-chrisalvir/main/matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
 </div>
 
 > Puente Matter 1.6 para Home Assistant con código QR independiente para apagadores dobles/triples, perfiles conservadores para Apple Home y modelo/marca real en el campo Model.
-> **Base:** `matterbridge@3.10.10` · **Node.js:** `24.21.0-alpine3.24` · **TypeScript:** `7.0.2` · **Spec:** Matter 1.6 (CSA, 17 Jun 2026)
+> **Base:** `matterbridge@3.10.11` · **Node.js:** `24.21.0-alpine3.24` · **TypeScript:** `7.0.2` · **Spec:** Matter 1.6 (CSA, 17 Jun 2026)
 
 ---
 
@@ -15,11 +15,11 @@ This file is intentionally structured for both humans and AI agents.
 
 ```yaml
 project: matter-all-in-one-chrisalvir
-version: "1.9.26"
+version: "1.9.52"
 spec: "Matter 1.6"
 engine: matterbridge
-engine_version: "3.10.10"
-node_image: "node:26.8.1-alpine3.24"
+engine_version: "3.10.11"
+node_image: "node:24.21.0-alpine3.24"
 bridge_mode: server       # Each HA device = ServerNode; standalone entities keep their own QR
 plugin_mode: dynamic      # MatterbridgeDynamicPlatform
 ha_integration: websocket # WebSocket to HA supervisor API
@@ -110,7 +110,7 @@ Matter 1.6 Network (mDNS + BLE commissioning)
 | `src/entities/composite-device.entity.ts` | Fan+Light grouped by HA device_id or explicit include list |
 | `src/converters/vacuum.converter.ts` | HA vacuum state → Matter RVC attributes |
 | `run.sh` | Startup: mDNS interface detection, plugin registration, proxy |
-| `Dockerfile` | Imagen multi-stage reproducible con `node:24.21.0-alpine3.24` y `matterbridge@3.10.10` |
+| `Dockerfile` | Imagen multi-stage reproducible con `node:24.21.0-alpine3.24` y `matterbridge@3.10.11` |
 
 ---
 

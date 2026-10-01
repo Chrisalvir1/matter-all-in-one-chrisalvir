@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { api } from "../api/client";
 import {
   CameraRecord,
@@ -31,6 +31,7 @@ export function useAddonState() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<FilterType>("all");
   const [toastMessage, setToastMessage] = useState<{ text: string; isError?: boolean } | null>(null);
+  const refreshInFlight = useRef(false);
 
   const showToast = useCallback((text: string, isError = false) => {
     setToastMessage({ text, isError });
@@ -40,6 +41,8 @@ export function useAddonState() {
   }, []);
 
   const refreshAll = useCallback(async () => {
+    if (refreshInFlight.current) return;
+    refreshInFlight.current = true;
     try {
       const [
         statusRes,
@@ -81,25 +84,29 @@ export function useAddonState() {
     } catch (err: any) {
       console.error("Error refreshing addon state:", err);
     } finally {
+      refreshInFlight.current = false;
       setLoading(false);
     }
   }, []);
 
-  // Initial load and periodic polling
-  useEffect(() => {
-    refreshAll();
-    const interval = setInterval(refreshAll, 10000);
-    return () => clearInterval(interval);
-  }, [refreshAll]);
-
-  // Server-Sent Events (SSE) listener
+  // Prefer server-pushed state; use a quiet one-minute poll only while SSE is down.
   useEffect(() => {
     let es: EventSource | null = null;
     let timer: any = null;
+    let debounceTimer: any = null;
+    let sseConnected = false;
+
+    refreshAll();
+    const fallbackPoll = setInterval(() => {
+      if (!sseConnected) refreshAll();
+    }, 60000);
 
     const connectSSE = () => {
       try {
         es = new EventSource("./api/custom/events");
+        es.onopen = () => {
+          sseConnected = true;
+        };
         es.onmessage = (event) => {
           if (!event.data || event.data.startsWith(":")) return;
           try {
@@ -113,11 +120,13 @@ export function useAddonState() {
               data.type === "cameraui_updated" ||
               data.type === "entity_state_changed"
             ) {
-              refreshAll();
+              clearTimeout(debounceTimer);
+              debounceTimer = setTimeout(refreshAll, 120);
             }
           } catch {}
         };
         es.onerror = () => {
+          sseConnected = false;
           es?.close();
           timer = setTimeout(connectSSE, 5000);
         };
@@ -129,6 +138,8 @@ export function useAddonState() {
     connectSSE();
     return () => {
       if (timer) clearTimeout(timer);
+      clearInterval(fallbackPoll);
+      clearTimeout(debounceTimer);
       es?.close();
     };
   }, [refreshAll]);

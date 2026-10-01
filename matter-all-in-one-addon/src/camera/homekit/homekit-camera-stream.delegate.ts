@@ -1209,39 +1209,10 @@ export class HomeKitCameraStreamingDelegate
             stderr.includes("Unauthorized") ||
             stderr.includes("Authentication failed");
 
-          // Only swap credentials on 401 if the URL actually has credentials embedded.
-          // Camera routes at 192.168.110.147:8554 (go2rtc) have no credentials so
-          // a credential-swap retry would be a no-op and just delays the error.
-          if (is401 && this.streamSource.url) {
-            try {
-              const currentUrl = new URL(this.streamSource.url);
-              const user = decodeURIComponent(currentUrl.username || "").trim();
-              const pass = decodeURIComponent(currentUrl.password || "").trim();
-              if (user && pass) {
-                let newPass = "Anubis2026.";
-                if (pass === "Anubis2026.") {
-                  newPass = "Anubis2026";
-                } else if (pass === "Anubis2026") {
-                  newPass = "Anubis2026.";
-                } else if (pass.endsWith(".")) {
-                  newPass = pass.slice(0, -1);
-                } else {
-                  newPass = `${pass}.`;
-                }
-                currentUrl.username = encodeURIComponent(user);
-                currentUrl.password = encodeURIComponent(newPass);
-                this.streamSource.url = currentUrl.toString();
-                this.platform?.log?.notice?.(
-                  `[HomeKitCamera][${this.entityId}] 401 Unauthorized. Reintentando con credencial alternativa ${user}:***`,
-                );
-                this.spawnFfmpegProcess(session, request, settle, false);
-                return;
-              }
-              // No credentials in URL — 401 is not a credential issue; fall through to normal retry
-              this.platform?.log?.warn?.(
-                `[HomeKitCamera][${this.entityId}] 401 Unauthorized pero la URL RTSP no tiene credenciales. Verifica la configuración del servidor RTSP.`,
-              );
-            } catch {}
+          if (is401) {
+            this.platform?.log?.warn?.(
+              `[HomeKitCamera][${this.entityId}] RTSP authentication failed; keeping the configured URL and credentials unchanged.`,
+            );
           }
 
           const isAudioFailure =

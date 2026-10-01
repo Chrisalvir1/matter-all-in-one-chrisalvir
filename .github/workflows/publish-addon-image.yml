@@ -1,12 +1,6 @@
 name: Publish Home Assistant add-on image
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - "matter-all-in-one-addon/**"
-      - ".github/workflows/publish-addon-image.yml"
   release:
     types: [created]
   workflow_dispatch:

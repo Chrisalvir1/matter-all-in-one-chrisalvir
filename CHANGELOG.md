@@ -1,3 +1,18 @@
+## [1.9.52] - 2026-10-01
+
+### Fiabilidad, seguridad y UI
+
+- **C120 motion/HKSV:** Un sensor HA `unknown`/`unavailable` ya no bloquea el detector RTSP local; solo un sensor con estado utilizable suprime el fallback.
+- **Camera.UI:** Las cámaras conservan sus URLs RTSP guardadas durante carga/guardado; se eliminan credenciales predeterminadas y reintentos que alteraban contraseñas. El origen C402 sigue siendo Home Assistant y no se cambia su URL guardada.
+- **TLS:** La aceptación de certificados autofirmados queda limitada a las solicitudes HTTPS de Camera.UI, sin desactivar TLS globalmente para el proceso.
+- **Secretos MQTT:** La API ya no devuelve la contraseña; guardar otros campos conserva la contraseña actual y ahora existe una acción explícita para borrarla.
+- **Modal móvil:** El detalle de dispositivos ocupa el alto disponible, respeta áreas seguras y presenta sus paneles en una sola columna desplazable.
+- **UI en vivo:** Los eventos SSE se agrupan y el sondeo de respaldo pasa a 60 s; evita sondeos repetidos mientras SSE está conectado.
+- **Vista de emparejados:** Matter y HAP ahora se filtran directamente en la página principal y usan las tarjetas habituales; se elimina la ventana flotante duplicada.
+- **Build:** FFmpeg Homebridge queda fijado a v2.2.2 con SHA-256 por arquitectura y el build falla si la descarga/verificación falla. CI compila la imagen en PR/push y evita duplicar la publicación del addon en cada push a `main`.
+- **Dependencias:** Vite actualizado a 8.3.2; runtime y tipos siguen en Node 24, que permanece en LTS.
+- **Documentación:** README, configuración y versión del addon se sincronizan en 1.9.52.
+
 ## [1.9.36] - 2026-09-29
 
 ### Estabilización de Live View y HKSV para Tapo C402/C120

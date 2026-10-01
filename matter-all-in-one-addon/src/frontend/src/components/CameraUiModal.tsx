@@ -57,7 +57,7 @@ export const CameraUiModal: React.FC<CameraUiModalProps> = ({
   const handleTest = async () => {
     const effectiveUrl = serverUrl.trim() || config?.serverUrl || "http://127.0.0.1:8181";
     if (!effectiveUrl) {
-      showToast("Ingresa la URL del servidor Camera.UI (ej. https://192.168.110.46:3543)", true);
+      showToast("Ingresa la URL del servidor Camera.UI (ej. http://192.168.1.100:8181)", true);
       return;
     }
     setIsTesting(true);
@@ -84,7 +84,7 @@ export const CameraUiModal: React.FC<CameraUiModalProps> = ({
   const handleSync = async () => {
     const effectiveUrl = serverUrl.trim() || config?.serverUrl || "http://127.0.0.1:8181";
     if (!effectiveUrl) {
-      showToast("Ingresa la URL del servidor Camera.UI (ej. https://192.168.110.46:3543)", true);
+      showToast("Ingresa la URL del servidor Camera.UI (ej. http://192.168.1.100:8181)", true);
       return;
     }
     setIsSyncing(true);
@@ -220,7 +220,7 @@ export const CameraUiModal: React.FC<CameraUiModalProps> = ({
                 type="url"
                 value={serverUrl}
                 onChange={(e) => setServerUrl(e.target.value)}
-                placeholder="https://192.168.110.46:3543 o http://192.168.1.100:8181"
+                placeholder="http://192.168.1.100:8181 o https://camera-ui.example"
                 required
                 style={{ width: "100%", padding: "8px 12px", borderRadius: 8, background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff" }}
               />

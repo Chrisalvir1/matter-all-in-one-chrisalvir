@@ -764,7 +764,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
 
   return (
     <div
-      className="modal-backdrop open"
+      className="modal-backdrop device-modal-backdrop open"
       id="device-modal"
       role="dialog"
       aria-modal="true"
@@ -773,13 +773,8 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
       <section
         className="modal modal-wide modal-fullscreen"
         style={{
-          width: "min(98vw, 1720px)",
-          maxWidth: "98vw",
-          height: "min(96vh, 960px)",
-          maxHeight: "96vh",
           display: "flex",
           flexDirection: "column",
-          padding: "24px 32px",
         }}
       >
         <button

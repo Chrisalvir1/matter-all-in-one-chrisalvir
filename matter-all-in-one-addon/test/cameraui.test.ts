@@ -214,13 +214,11 @@ describe("Camera.UI Client and Storage Integration", () => {
     expect(camera.rtspUrl).toBeUndefined();
   });
 
-  it("identifies old bridge routes while preserving the approved C402 endpoint", () => {
-    expect(isLegacyBridgeStreamUrl("rtsp://192.168.110.147:8554/jardin")).toBe(
-      true,
-    );
+  it("preserves configured go2rtc streams and identifies only obsolete local aliases", () => {
+    expect(isLegacyBridgeStreamUrl("rtsp://192.168.110.147:8554/jardin")).toBe(false);
     expect(
       isLegacyBridgeStreamUrl("rtsp://192.168.110.46:8554/tapo_c120"),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       isLegacyBridgeStreamUrl(
         "rtsp://127.0.0.1:2101/cui_ezviz_patio_trasero_stream_1",
@@ -264,6 +262,7 @@ describe("Camera.UI Client and Storage Integration", () => {
 
     global.fetch = fetchMock;
 
+    const tlsSettingBefore = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
     const client = new CameraUiClient({
       enabled: true,
       serverUrl: "https://192.168.110.46:3543",
@@ -276,7 +275,7 @@ describe("Camera.UI Client and Storage Integration", () => {
     expect(res.ok).toBe(true);
     expect(res.message).toContain("Conexión exitosa");
     expect(res.message).toContain("1 cámara detectada");
-    expect(process.env.NODE_TLS_REJECT_UNAUTHORIZED).toBe("0");
+    expect(process.env.NODE_TLS_REJECT_UNAUTHORIZED).toBe(tlsSettingBefore);
   });
 
   it("handles authentication failure when credentials are wrong", async () => {
@@ -416,12 +415,12 @@ describe("Camera.UI Client and Storage Integration", () => {
     expect(merged.pincode).toBe("031-45-154");
     expect(merged.setupId).toBe("WXYZ");
     expect(merged.isPaired).toBe(true);
-    // Updated stream URL
-    expect(merged.rtspUrl).toBe("rtsp://192.168.1.121:554/stream1_hq");
+    // Routine discovery must not change a paired accessory's stream source.
+    expect(merged.rtspUrl).toBe("rtsp://192.168.1.121:554/stream1");
     expect(saveSpy).toHaveBeenCalled();
   });
 
-  it("uses the go2rtc restream for the known Wyze camera instead of its fragile physical RTSP URL", async () => {
+  it("does not rewrite a discovered Wyze RTSP URL based on its name", async () => {
     const store = {
       config: {
         enabled: true,
@@ -443,9 +442,7 @@ describe("Camera.UI Client and Storage Integration", () => {
       },
     ]);
 
-    expect(result.cameras[0].rtspUrl).toContain(
-      "192.168.110.147:8554/wyze_patio_trasero",
-    );
+    expect(result.cameras[0].rtspUrl).toBe("rtsp://camera-lan.invalid:554/stream0");
   });
 
   it("keeps an exported paired camera when a Camera.UI sync is partial", async () => {
@@ -735,7 +732,7 @@ describe("Camera.UI Client and Storage Integration", () => {
     const candidates = client.getCandidateUrls();
     expect(candidates).toContain("http://localhost:8181");
     expect(candidates).toContain("http://127.0.0.1:8181");
-    expect(candidates).toContain("https://192.168.110.46:3543");
+    expect(candidates).not.toContain("https://192.168.110.46:3543");
     expect(candidates).toContain("http://a0d7b954-camera-ui:8181");
     expect(candidates).toContain("http://homeassistant:8181");
   });

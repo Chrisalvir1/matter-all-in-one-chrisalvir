@@ -37,6 +37,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [mqttPort, setMqttPort] = useState(1883);
   const [mqttUser, setMqttUser] = useState("");
   const [mqttPass, setMqttPass] = useState("");
+  const [hasMqttPassword, setHasMqttPassword] = useState(false);
+  const [clearMqttPassword, setClearMqttPassword] = useState(false);
   const [isSavingMqtt, setIsSavingMqtt] = useState(false);
 
   const [systemLogs, setSystemLogs] = useState<string[]>([]);
@@ -70,7 +72,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           setMqttHost(cfg.host || "");
           setMqttPort(cfg.port || 1883);
           setMqttUser(cfg.username || cfg.user || "");
-          setMqttPass(cfg.password || "");
+          setHasMqttPassword(Boolean(cfg.hasPassword));
+          setMqttPass("");
+          setClearMqttPassword(false);
         }
       })
       .catch(() => {});
@@ -124,7 +128,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         user: mqttUser,
         username: mqttUser,
         password: mqttPass,
+        clearPassword: clearMqttPassword,
       });
+      if (clearMqttPassword) {
+        setHasMqttPassword(false);
+        setClearMqttPassword(false);
+      } else if (mqttPass) {
+        setHasMqttPassword(true);
+        setMqttPass("");
+      }
       showToast("✓ Configuración MQTT guardada");
       if (onRefresh) onRefresh();
     } catch (err: any) {
@@ -313,11 +325,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   />
                 </div>
                 <div className="input-group">
-                  <label htmlFor="mqtt-pass">Contraseña (opcional)</label>
+                  <label htmlFor="mqtt-pass">Nueva contraseña (opcional)</label>
                   <input
                     type="password"
                     id="mqtt-pass"
-                    placeholder="Contraseña"
+                    placeholder={hasMqttPassword ? "Guardada; vacío conserva la actual" : "Contraseña"}
                     aria-label="MQTT Password"
                     className="form-input"
                     value={mqttPass}
@@ -325,6 +337,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   />
                 </div>
               </div>
+              {hasMqttPassword && (
+                <label className="checkbox-row" htmlFor="mqtt-clear-password">
+                  <input
+                    id="mqtt-clear-password"
+                    type="checkbox"
+                    checked={clearMqttPassword}
+                    onChange={(event) => setClearMqttPassword(event.target.checked)}
+                  />
+                  Eliminar la contraseña guardada
+                </label>
+              )}
               <button
                 className="button button-primary button-full"
                 id="mqtt-save-button"
