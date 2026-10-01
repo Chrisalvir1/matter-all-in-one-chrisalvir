@@ -1,3 +1,13 @@
+## [1.9.52] - 2026-10-01
+
+### Estabilidad, seguridad y experiencia de uso
+- **Vista de emparejados:** Matter y HAP se filtran dentro de la página principal y usan las tarjetas habituales; se elimina la ventana flotante duplicada.
+- **C120 movimiento/HKSV:** un sensor de Home Assistant `unknown` o `unavailable` ya no bloquea el detector RTSP local; un sensor utilizable sí evita iniciar el detector adicional.
+- **Camera.UI y C402:** conserva las URLs RTSP guardadas y elimina credenciales por defecto y reintentos que podían alterar la contraseña. La C402 conserva Home Assistant como origen.
+- **TLS y MQTT:** los certificados autofirmados solo se aceptan en solicitudes HTTPS de Camera.UI; la API MQTT deja de devolver la contraseña y permite conservarla al guardar otros campos o borrarla explícitamente.
+- **Interfaz móvil y actualización de estado:** mejora la disposición móvil del detalle de dispositivos, agrupa eventos SSE y usa sondeo de respaldo cada 60 segundos cuando no hay SSE.
+- **Construcción y dependencias:** FFmpeg Homebridge v2.2.2 se verifica con SHA-256 por arquitectura; runtime Node.js 24.21.0 LTS y Vite 8.3.2.
+
 ## [1.9.51] - 2026-09-30
 
 ### HAP difusores Govee
