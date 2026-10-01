@@ -21,7 +21,7 @@ import crypto from "node:crypto";
 import os from "node:os";
 import {
   HAP_FIRMWARE_REVISION,
-  HAP_NODEJS_VERSION,
+  HAP_SOFTWARE_REVISION,
 } from "../utils/hap-firmware.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -191,6 +191,7 @@ export class HapGenericAccessory {
     this.accessory = new Accessory(record.name || entityId, accUuid);
     this.configureAccessoryInformation();
     this.addServiceForProfile(record.hapProfile);
+    this.addDiscoveredSensorServices();
     this.accessory.on("paired", () => {
       this.record.isPaired = true;
       this.record.lastUpdated = new Date().toISOString();
@@ -239,8 +240,57 @@ export class HapGenericAccessory {
       );
     info.setCharacteristic(
       Characteristic.SoftwareRevision,
-      HAP_FIRMWARE_REVISION,
+      HAP_SOFTWARE_REVISION,
     );
+  }
+
+  // ──────────────────────────────────────────────
+  // Sensores reales del mismo dispositivo de Home Assistant
+  // ──────────────────────────────────────────────
+
+  private getDeviceMembers(): any[] {
+    const candidate = this.platform.getCompositeCandidate?.(this.entityId);
+    return Array.isArray(candidate?.members) ? candidate.members : [];
+  }
+
+  private addDiscoveredSensorServices(): void {
+    const members = this.getDeviceMembers();
+    const addNumeric = (
+      deviceClass: string,
+      serviceType: any,
+      characteristic: any,
+      suffix: string,
+    ) => {
+      const member = members.find((item: any) => {
+        const state = this.platform.entities.get(item.entityId)?.state;
+        return item.entityId.startsWith("sensor.") && state?.attributes?.device_class === deviceClass;
+      });
+      if (!member) return;
+      const service = this.accessory.addService(serviceType, `${this.record.name} ${suffix}`, `sensor:${member.entityId}`);
+      service.getCharacteristic(characteristic).onGet(() => {
+        const value = Number(this.platform.entities.get(member.entityId)?.state?.state);
+        return Number.isFinite(value) ? value : 0;
+      });
+    };
+
+    // These services are only added when HA exposes a real sensor from the
+    // same physical device; they are never synthesized from the accessory name.
+    addNumeric("temperature", Service.TemperatureSensor, Characteristic.CurrentTemperature, "Temperatura");
+    if (this.record.hapProfile !== "humidifier" && this.record.hapProfile !== "dehumidifier") {
+      addNumeric("humidity", Service.HumiditySensor, Characteristic.CurrentRelativeHumidity, "Humedad");
+    }
+    addNumeric("illuminance", Service.LightSensor, Characteristic.CurrentAmbientLightLevel, "Iluminación");
+
+    const motion = members.find((item: any) => {
+      const state = this.platform.entities.get(item.entityId)?.state;
+      return item.entityId.startsWith("binary_sensor.") && state?.attributes?.device_class === "motion";
+    });
+    if (motion) {
+      const service = this.accessory.addService(Service.MotionSensor, `${this.record.name} Movimiento`, `sensor:${motion.entityId}`);
+      service.getCharacteristic(Characteristic.MotionDetected).onGet(() =>
+        this.platform.entities.get(motion.entityId)?.state?.state === "on",
+      );
+    }
   }
 
   // ──────────────────────────────────────────────
@@ -344,6 +394,39 @@ export class HapGenericAccessory {
                 { brightness_pct: Number(val) },
               );
             });
+
+          // Publish color only when the linked Home Assistant light advertises it.
+          const supportsColor = () => {
+            const attrs = this.platform.entities.get(lightMember.entityId)?.state
+              ?.attributes;
+            return Array.isArray(attrs?.hs_color) ||
+              (Array.isArray(attrs?.supported_color_modes) &&
+                attrs.supported_color_modes.some((mode: string) =>
+                  ["hs", "xy", "rgb"].includes(String(mode).toLowerCase()),
+                ));
+          };
+          if (supportsColor()) {
+            lightSvc
+              .getCharacteristic(Characteristic.Hue)
+              .onGet(() => Number(this.platform.entities.get(lightMember.entityId)
+                ?.state?.attributes?.hs_color?.[0]) || 0);
+            lightSvc
+              .getCharacteristic(Characteristic.Saturation)
+              .onGet(() => Number(this.platform.entities.get(lightMember.entityId)
+                ?.state?.attributes?.hs_color?.[1]) || 0);
+            const setColor = async () => {
+              const attrs = this.platform.entities.get(lightMember.entityId)?.state
+                ?.attributes;
+              const current = Array.isArray(attrs?.hs_color) ? attrs.hs_color : [0, 0];
+              const hue = Number(lightSvc.getCharacteristic(Characteristic.Hue).value ?? current[0]);
+              const saturation = Number(lightSvc.getCharacteristic(Characteristic.Saturation).value ?? current[1]);
+              await this.platform.ha?.callService("light", "turn_on", lightMember.entityId, {
+                hs_color: [hue, saturation],
+              });
+            };
+            lightSvc.getCharacteristic(Characteristic.Hue).onSet(setColor);
+            lightSvc.getCharacteristic(Characteristic.Saturation).onSet(setColor);
+          }
           svc.addLinkedService(lightSvc);
         }
         break;
@@ -882,8 +965,42 @@ export class HapGenericAccessory {
     this.isPublished = false;
   }
 
-  public updateFromHassState(state: any): void {
+  public handlesEntityId(entityId: string): boolean {
+    return entityId === this.entityId || this.getDeviceMembers().some(
+      (member: any) => member.entityId === entityId,
+    );
+  }
+
+  public updateFromHassState(state: any, sourceEntityId = this.entityId): void {
     try {
+      if (sourceEntityId !== this.entityId) {
+        const subtype = `sensor:${sourceEntityId}`;
+        const service = (this.accessory as any).getServiceById?.(
+          Service.TemperatureSensor,
+          subtype,
+        ) || (this.accessory as any).getServiceById?.(
+          Service.HumiditySensor,
+          subtype,
+        ) || (this.accessory as any).getServiceById?.(
+          Service.LightSensor,
+          subtype,
+        ) || (this.accessory as any).getServiceById?.(
+          Service.MotionSensor,
+          subtype,
+        );
+        if (!service) return;
+        const deviceClass = state?.attributes?.device_class;
+        if (deviceClass === "temperature") {
+          service.updateCharacteristic(Characteristic.CurrentTemperature, Number(state?.state) || 0);
+        } else if (deviceClass === "humidity") {
+          service.updateCharacteristic(Characteristic.CurrentRelativeHumidity, Number(state?.state) || 0);
+        } else if (deviceClass === "illuminance") {
+          service.updateCharacteristic(Characteristic.CurrentAmbientLightLevel, Math.max(0.0001, Number(state?.state) || 0.0001));
+        } else if (deviceClass === "motion") {
+          service.updateCharacteristic(Characteristic.MotionDetected, state?.state === "on");
+        }
+        return;
+      }
       this.setReachability(
         state?.state !== "unavailable" && state?.state !== "unknown",
       );

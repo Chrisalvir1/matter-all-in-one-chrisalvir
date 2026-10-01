@@ -35,7 +35,7 @@ import os from "node:os";
 import { ScryptedStorage } from "../scrypted/scrypted-storage.js";
 import {
   HAP_FIRMWARE_REVISION,
-  HAP_NODEJS_VERSION,
+  HAP_SOFTWARE_REVISION,
 } from "../../utils/hap-firmware.js";
 import type { CameraRecord } from "../scrypted/scrypted-types.js";
 import { CameraUiStorage } from "../cameraui/cameraui-storage.js";
@@ -371,7 +371,7 @@ export class HomeKitCameraAccessory {
       )
       ?.setCharacteristic(
         Characteristic.SoftwareRevision,
-        HAP_FIRMWARE_REVISION,
+        HAP_SOFTWARE_REVISION,
       );
   }
 

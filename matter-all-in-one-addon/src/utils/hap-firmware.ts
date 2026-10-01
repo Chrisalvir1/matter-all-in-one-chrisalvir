@@ -8,6 +8,10 @@ export const HAP_NODEJS_VERSION = String(
 );
 
 /**
- * Firmware revision shown for HAP accessories (Cameras & Generic IoT) in Apple Home and UI.
+ * HAP FirmwareRevision must be a plain version string for Apple Casa to expose
+ * it in accessory settings. The descriptive runtime is published separately as
+ * SoftwareRevision and retained for the add-on UI.
  */
-export const HAP_FIRMWARE_REVISION = `HAP-NodeJS ${HAP_NODEJS_VERSION}`;
+export const HAP_FIRMWARE_REVISION = HAP_NODEJS_VERSION;
+export const HAP_SOFTWARE_REVISION = `HAP-NodeJS ${HAP_NODEJS_VERSION}`;
+export const HAP_FIRMWARE_DISPLAY = HAP_SOFTWARE_REVISION;

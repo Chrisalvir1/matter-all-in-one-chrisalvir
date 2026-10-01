@@ -92,7 +92,7 @@ import {
   getHaDeviceManufacturer,
   getHaDeviceModel,
 } from "./utils/matter-device-identity.js";
-import { HAP_FIRMWARE_REVISION } from "./utils/hap-firmware.js";
+import { HAP_FIRMWARE_DISPLAY } from "./utils/hap-firmware.js";
 
 export interface HomeAssistantPlatformConfig extends PlatformConfig {
   host?: string; // Optional: auto-detected from network/supervisor if not set
@@ -5548,9 +5548,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               await entity.updateState(state);
               if (!isUnavailable(state)) this.clearEntityProblem(entityId);
             }
-            const hapAcc = this.hapAccessories.get(entityId);
-            if (hapAcc) {
-              hapAcc.updateFromHassState(state);
+            // A native HAP accessory represents a Home Assistant device, not
+            // only its primary entity. Forward changes from every discovered
+            // member so its real sensors stay current in Apple Home.
+            for (const hapAcc of this.hapAccessories.values()) {
+              if (hapAcc.handlesEntityId(entityId)) {
+                hapAcc.updateFromHassState(state, entityId);
+              }
             }
           }),
         );
@@ -6281,7 +6285,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                         ffmpegPath:
                           resolveFfmpegPath() || "No instalado en el sistema",
                         ffmpegVersion: getFfmpegVersion() || "N/A",
-                        firmwareRevision: HAP_FIRMWARE_REVISION,
+                        firmwareRevision: HAP_FIRMWARE_DISPLAY,
                       };
                     })()
                   : null,
@@ -6300,7 +6304,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                   username: hapRec.username,
                   setupId: hapRec.setupId,
                   setupUri: hapAcc?.setupUri || "",
-                  firmwareRevision: HAP_FIRMWARE_REVISION,
+                  firmwareRevision: HAP_FIRMWARE_DISPLAY,
                   pairingState:
                     hapAcc?.isPaired() || hapRec.isPaired
                       ? "✅ Vinculado a Apple Home (Activo)"
@@ -7399,11 +7403,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                 cam.displaySerialNumber ||
                 cam.serialNumber ||
                 "Serial no disponible",
-              firmwareRevision: HAP_FIRMWARE_REVISION,
+              firmwareRevision: HAP_FIRMWARE_DISPLAY,
               bindingState,
               identity: {
                 ...cam.identity,
-                firmwareRevision: HAP_FIRMWARE_REVISION,
+                firmwareRevision: HAP_FIRMWARE_DISPLAY,
                 matterPairingCode:
                   cam.identity?.matterPairingCode ||
                   matterInfo.pairingCode ||
@@ -8873,7 +8877,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               status: effectiveStatus,
               setupUri: acc?.setupUri || cam.setupUri,
               isPaired: livePaired,
-              firmwareRevision: HAP_FIRMWARE_REVISION,
+              firmwareRevision: HAP_FIRMWARE_DISPLAY,
               port: acc?.record?.port || cam.port,
               pincode: acc?.record?.pincode || cam.pincode || "031-45-154",
               setupId: acc?.record?.setupId || cam.setupId,

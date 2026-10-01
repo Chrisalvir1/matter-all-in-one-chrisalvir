@@ -1,3 +1,9 @@
+## [1.9.43] - 2026-09-30
+
+### HomeKit HAP
+- Publica `FirmwareRevision` como `2.2.3`, formato que Apple Casa muestra en los detalles del accesorio, y conserva `HAP-NodeJS 2.2.3` como revisión de software y en la interfaz del add-on.
+- Los difusores HAP publican color de la luz vinculada cuando Home Assistant expone `hs_color` o un modo de color compatible.
+
 ## [1.9.42] - 2026-09-30
 
 ### Matter
