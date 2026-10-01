@@ -438,6 +438,21 @@ export class HapGenericAccessory {
               control.updateCharacteristic(Characteristic.Active, active ? 1 : 0);
               this.callHaOptimistically(domain, active ? "turn_on" : "turn_off");
             });
+          // Home Assistant exposes `humidity` as the real target threshold.
+          // It is intentionally labelled in the accessory name, and is never
+          // treated as a measured humidity or mist-power reading.
+          control.setCharacteristic(Characteristic.Name, `${this.record.name} Meta de humedad`);
+          control.getCharacteristic(Characteristic.RotationSpeed)
+            .onGet(() => {
+              const target = Number(this.getHomeAssistantState(this.entityId)?.attributes?.humidity);
+              return Number.isFinite(target) && target >= 0 && target <= 100 ? target : 0;
+            })
+            .onSet((value) => {
+              const [domain] = this.entityId.split(".");
+              const target = Math.max(0, Math.min(100, Number(value)));
+              control.updateCharacteristic(Characteristic.RotationSpeed, target);
+              this.callHaOptimistically(domain, "set_humidity", { humidity: target });
+            });
           break;
         }
 
@@ -1173,10 +1188,12 @@ export class HapGenericAccessory {
       ) {
         const svc = this.accessory.getService(Service.HumidifierDehumidifier);
         if (!svc) {
-          this.accessory.getService(Service.Fanv2)?.updateCharacteristic(
-            Characteristic.Active,
-            on ? 1 : 0,
-          );
+          const control = this.accessory.getService(Service.Fanv2);
+          control?.updateCharacteristic(Characteristic.Active, on ? 1 : 0);
+          const target = Number(state?.attributes?.humidity);
+          if (Number.isFinite(target) && target >= 0 && target <= 100) {
+            control?.updateCharacteristic(Characteristic.RotationSpeed, target);
+          }
         } else {
           const isOn = state?.state === "on";
           svc.updateCharacteristic(Characteristic.Active, isOn ? 1 : 0);

@@ -1,3 +1,8 @@
+## [1.9.51] - 2026-09-30
+
+### HAP difusores Govee
+- Restaura el control de `humidity` de Home Assistant en Apple Casa como meta de humedad; no se presenta como medición ni como potencia de vapor.
+
 ## [1.9.50] - 2026-09-30
 
 ### HAP difusores Govee
