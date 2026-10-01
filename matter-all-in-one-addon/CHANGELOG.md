@@ -1,3 +1,9 @@
+## [1.9.44] - 2026-09-30
+
+### HomeKit HAP — descubrimiento completo de dispositivo
+- Cada accesorio HAP usa el `device_id` de Home Assistant para descubrir entidades reales del mismo equipo, sin depender de un perfil concreto.
+- Exporta sensores HAP compatibles: temperatura, humedad, iluminación, batería, movimiento, puerta, ventana, fuga y humo; sus cambios se sincronizan en Apple Home.
+
 ## [1.9.43] - 2026-09-30
 
 ### HomeKit HAP

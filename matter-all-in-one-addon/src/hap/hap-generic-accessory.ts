@@ -176,6 +176,10 @@ const HAP_PROFILE_CATEGORIES: Record<HapProfile, Categories> = {
 export class HapGenericAccessory {
   public accessory: Accessory;
   public isPublished = false;
+  private readonly discoveredSensorBindings = new Map<
+    string,
+    { service: any; characteristic: any; read: (state: any) => unknown }
+  >();
 
   constructor(
     public readonly platform: any,
@@ -249,47 +253,80 @@ export class HapGenericAccessory {
   // ──────────────────────────────────────────────
 
   private getDeviceMembers(): any[] {
+    const own = { entityId: this.entityId };
+    const deviceId = this.platform.ha?.hassEntities?.get(this.entityId)?.device_id;
+    if (deviceId) {
+      const members = Array.from(this.platform.entities.values()).filter(
+        (entity: any) =>
+          this.platform.ha?.hassEntities?.get(entity.entityId)?.device_id === deviceId,
+      );
+      return members.length ? members : [own];
+    }
     const candidate = this.platform.getCompositeCandidate?.(this.entityId);
-    return Array.isArray(candidate?.members) ? candidate.members : [];
+    return Array.isArray(candidate?.members) && candidate.members.length
+      ? candidate.members
+      : [own];
+  }
+
+  private bindDiscoveredSensor(
+    entityId: string,
+    serviceType: any,
+    characteristic: any,
+    suffix: string,
+    read: (state: any) => unknown,
+  ): void {
+    const service = this.accessory.addService(
+      serviceType,
+      `${this.record.name} ${suffix}`,
+      `sensor:${entityId}`,
+    );
+    service.getCharacteristic(characteristic).onGet(() =>
+      read(this.platform.entities.get(entityId)?.state) as any,
+    );
+    this.discoveredSensorBindings.set(entityId, { service, characteristic, read });
   }
 
   private addDiscoveredSensorServices(): void {
     const members = this.getDeviceMembers();
-    const addNumeric = (
+    const find = (domain: string, deviceClass: string) =>
+      members.find((item: any) => {
+        const state = this.platform.entities.get(item.entityId)?.state;
+        return item.entityId.startsWith(`${domain}.`) && state?.attributes?.device_class === deviceClass;
+      });
+    const numeric = (
       deviceClass: string,
       serviceType: any,
       characteristic: any,
       suffix: string,
+      minimum = 0,
     ) => {
-      const member = members.find((item: any) => {
-        const state = this.platform.entities.get(item.entityId)?.state;
-        return item.entityId.startsWith("sensor.") && state?.attributes?.device_class === deviceClass;
-      });
+      const member = find("sensor", deviceClass);
       if (!member) return;
-      const service = this.accessory.addService(serviceType, `${this.record.name} ${suffix}`, `sensor:${member.entityId}`);
-      service.getCharacteristic(characteristic).onGet(() => {
-        const value = Number(this.platform.entities.get(member.entityId)?.state?.state);
-        return Number.isFinite(value) ? value : 0;
+      this.bindDiscoveredSensor(member.entityId, serviceType, characteristic, suffix, (state) => {
+        const value = Number(state?.state);
+        return Number.isFinite(value) ? Math.max(minimum, value) : minimum;
       });
     };
 
-    // These services are only added when HA exposes a real sensor from the
-    // same physical device; they are never synthesized from the accessory name.
-    addNumeric("temperature", Service.TemperatureSensor, Characteristic.CurrentTemperature, "Temperatura");
+    // Only device members reported by HA are exported. No guessed sensor names,
+    // values, or entities are created for HAP.
+    numeric("temperature", Service.TemperatureSensor, Characteristic.CurrentTemperature, "Temperatura");
     if (this.record.hapProfile !== "humidifier" && this.record.hapProfile !== "dehumidifier") {
-      addNumeric("humidity", Service.HumiditySensor, Characteristic.CurrentRelativeHumidity, "Humedad");
+      numeric("humidity", Service.HumiditySensor, Characteristic.CurrentRelativeHumidity, "Humedad");
     }
-    addNumeric("illuminance", Service.LightSensor, Characteristic.CurrentAmbientLightLevel, "Iluminación");
+    numeric("illuminance", Service.LightSensor, Characteristic.CurrentAmbientLightLevel, "Iluminación", 0.0001);
+    numeric("battery", Service.Battery, Characteristic.BatteryLevel, "Batería");
 
-    const motion = members.find((item: any) => {
-      const state = this.platform.entities.get(item.entityId)?.state;
-      return item.entityId.startsWith("binary_sensor.") && state?.attributes?.device_class === "motion";
-    });
-    if (motion) {
-      const service = this.accessory.addService(Service.MotionSensor, `${this.record.name} Movimiento`, `sensor:${motion.entityId}`);
-      service.getCharacteristic(Characteristic.MotionDetected).onGet(() =>
-        this.platform.entities.get(motion.entityId)?.state?.state === "on",
-      );
+    const binaryMappings: Array<[string, any, any, string, (state: any) => unknown]> = [
+      ["motion", Service.MotionSensor, Characteristic.MotionDetected, "Movimiento", (state) => state?.state === "on"],
+      ["door", Service.ContactSensor, Characteristic.ContactSensorState, "Puerta", (state) => state?.state === "on" ? Characteristic.ContactSensorState.CONTACT_NOT_DETECTED : Characteristic.ContactSensorState.CONTACT_DETECTED],
+      ["window", Service.ContactSensor, Characteristic.ContactSensorState, "Ventana", (state) => state?.state === "on" ? Characteristic.ContactSensorState.CONTACT_NOT_DETECTED : Characteristic.ContactSensorState.CONTACT_DETECTED],
+      ["moisture", Service.LeakSensor, Characteristic.LeakDetected, "Fuga", (state) => state?.state === "on" ? Characteristic.LeakDetected.LEAK_DETECTED : Characteristic.LeakDetected.LEAK_NOT_DETECTED],
+      ["smoke", Service.SmokeSensor, Characteristic.SmokeDetected, "Humo", (state) => state?.state === "on" ? Characteristic.SmokeDetected.SMOKE_DETECTED : Characteristic.SmokeDetected.SMOKE_NOT_DETECTED],
+    ];
+    for (const [deviceClass, serviceType, characteristic, suffix, read] of binaryMappings) {
+      const member = find("binary_sensor", deviceClass);
+      if (member) this.bindDiscoveredSensor(member.entityId, serviceType, characteristic, suffix, read);
     }
   }
 
@@ -974,30 +1011,12 @@ export class HapGenericAccessory {
   public updateFromHassState(state: any, sourceEntityId = this.entityId): void {
     try {
       if (sourceEntityId !== this.entityId) {
-        const subtype = `sensor:${sourceEntityId}`;
-        const service = (this.accessory as any).getServiceById?.(
-          Service.TemperatureSensor,
-          subtype,
-        ) || (this.accessory as any).getServiceById?.(
-          Service.HumiditySensor,
-          subtype,
-        ) || (this.accessory as any).getServiceById?.(
-          Service.LightSensor,
-          subtype,
-        ) || (this.accessory as any).getServiceById?.(
-          Service.MotionSensor,
-          subtype,
-        );
-        if (!service) return;
-        const deviceClass = state?.attributes?.device_class;
-        if (deviceClass === "temperature") {
-          service.updateCharacteristic(Characteristic.CurrentTemperature, Number(state?.state) || 0);
-        } else if (deviceClass === "humidity") {
-          service.updateCharacteristic(Characteristic.CurrentRelativeHumidity, Number(state?.state) || 0);
-        } else if (deviceClass === "illuminance") {
-          service.updateCharacteristic(Characteristic.CurrentAmbientLightLevel, Math.max(0.0001, Number(state?.state) || 0.0001));
-        } else if (deviceClass === "motion") {
-          service.updateCharacteristic(Characteristic.MotionDetected, state?.state === "on");
+        const binding = this.discoveredSensorBindings.get(sourceEntityId);
+        if (binding) {
+          binding.service.updateCharacteristic(
+            binding.characteristic,
+            binding.read(state),
+          );
         }
         return;
       }
