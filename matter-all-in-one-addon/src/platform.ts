@@ -5225,6 +5225,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     this.syncLinkedCameraUiMotion(entityId, newState);
     const entity = this.entities.get(entityId);
     if (!entity) {
+      // Sensor-only HA entities are not necessarily Matter entities, but they
+      // can be a live capability of a HAP accessory for the same device.
+      for (const hapAcc of this.hapAccessories.values()) {
+        if (hapAcc.handlesEntityId(entityId)) {
+          hapAcc.updateFromHassState(newState, entityId);
+        }
+      }
       // An entity may become available after HA's initial snapshot.
       void this.registerHAEntity(newState);
       return;

@@ -253,14 +253,22 @@ export class HapGenericAccessory {
   // Sensores reales del mismo dispositivo de Home Assistant
   // ──────────────────────────────────────────────
 
+  private getHomeAssistantState(entityId: string): any {
+    return this.platform.ha?.hassStates?.get(entityId) ??
+      this.platform.entities.get(entityId)?.state;
+  }
+
   private getDeviceMembers(): any[] {
     const own = { entityId: this.entityId };
     const deviceId = this.platform.ha?.hassEntities?.get(this.entityId)?.device_id;
     if (deviceId) {
-      const members = Array.from(this.platform.entities.values()).filter(
-        (entity: any) =>
-          this.platform.ha?.hassEntities?.get(entity.entityId)?.device_id === deviceId,
-      );
+      // The registry contains every HA entity for the physical device. The
+      // bridge entity map only contains entities it exports, which can omit a
+      // real humidity/temperature sensor required by this HAP accessory.
+      const members = Array.from(this.platform.ha?.hassEntities?.values() ?? [])
+        .filter((entity: any) => entity.device_id === deviceId)
+        .filter((entity: any) => this.platform.ha?.hassStates?.has(entity.entity_id))
+        .map((entity: any) => ({ entityId: entity.entity_id }));
       return members.length ? members : [own];
     }
     const candidate = this.platform.getCompositeCandidate?.(this.entityId);
@@ -282,7 +290,7 @@ export class HapGenericAccessory {
       `sensor:${entityId}`,
     );
     service.getCharacteristic(characteristic).onGet(() =>
-      read(this.platform.entities.get(entityId)?.state) as any,
+      read(this.getHomeAssistantState(entityId)) as any,
     );
     this.discoveredSensorBindings.set(entityId, { service, characteristic, read });
   }
@@ -291,7 +299,7 @@ export class HapGenericAccessory {
     const members = this.getDeviceMembers();
     const find = (domain: string, deviceClass: string) =>
       members.find((item: any) => {
-        const state = this.platform.entities.get(item.entityId)?.state;
+        const state = this.getHomeAssistantState(item.entityId);
         return item.entityId.startsWith(`${domain}.`) && state?.attributes?.device_class === deviceClass;
       });
     const numeric = (
@@ -333,14 +341,14 @@ export class HapGenericAccessory {
 
   private getCurrentHumidity(): number | undefined {
     const primary = Number(
-      this.platform.entities.get(this.entityId)?.state?.attributes?.current_humidity,
+      this.getHomeAssistantState(this.entityId)?.attributes?.current_humidity,
     );
     if (Number.isFinite(primary) && primary >= 0 && primary <= 100) return primary;
     const sensor = this.getDeviceMembers().find((member: any) => {
-      const state = this.platform.entities.get(member.entityId)?.state;
+      const state = this.getHomeAssistantState(member.entityId);
       return member.entityId.startsWith("sensor.") && state?.attributes?.device_class === "humidity";
     });
-    const value = Number(sensor && this.platform.entities.get(sensor.entityId)?.state?.state);
+    const value = Number(sensor && this.getHomeAssistantState(sensor.entityId)?.state);
     return Number.isFinite(value) && value >= 0 && value <= 100 ? value : undefined;
   }
 

@@ -1,3 +1,9 @@
+## [1.9.47] - 2026-09-30
+
+### HomeKit HAP — lecturas reales por dispositivo
+- El descubrimiento HAP consulta el registro y los estados completos de Home Assistant para cada `device_id`, incluidos sensores que no son endpoints Matter.
+- Los cambios de sensores asociados se entregan de inmediato al accesorio HAP, para actualizar humedad, temperatura, batería, movimiento y demás capacidades reales sin valores inventados.
+
 ## [1.9.46] - 2026-09-30
 
 ### HAP difusor
