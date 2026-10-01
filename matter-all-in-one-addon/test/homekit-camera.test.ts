@@ -343,7 +343,7 @@ describe("HomeKitCameraStreamingDelegate", () => {
     expect(callback).toHaveBeenCalledOnce();
   });
 
-  it("builds stream args with H.264 passthrough copy, 24k audio, and without HA token for external streams", () => {
+  it("builds H.264 video passthrough with AAC-ELD audio and without HA token for external streams", () => {
     const delegate = new HomeKitCameraStreamingDelegate(
       createPlatform(),
       "scrypted.51",
@@ -401,13 +401,12 @@ describe("HomeKitCameraStreamingDelegate", () => {
     expect(capturedArgs).toContain("copy");
     expect(capturedArgs).toContain("dump_extra=freq=keyframe");
 
-    // Audio must NEVER be re-encoded: either -c:a copy or omitted (-an).
-    // Absolutely no libopus, libfdk_aac, 24k bitrate or aresample filters.
+    // The source AAC is normalized to the AAC-ELD profile negotiated by HAP.
     expect(capturedArgs).toContain("-c:a");
-    expect(capturedArgs).toContain("copy");
+    expect(capturedArgs).toContain("libfdk_aac");
+    expect(capturedArgs).toContain("aac_eld");
+    expect(capturedArgs).toContain("aresample=async=1:first_pts=0");
     expect(capturedArgs).not.toContain("libopus");
-    expect(capturedArgs).not.toContain("libfdk_aac");
-    expect(capturedArgs).not.toContain("aresample");
 
     // Verify HTTP/HTTPS robust flags
     expect(capturedArgs).toContain("-reconnect");
@@ -456,7 +455,6 @@ describe("HomeKitCameraStreamingDelegate", () => {
     expect(args).not.toContain("libx264");
   });
 
-
   it("builds low-latency RTSP passthrough args for Tapo C402 Live View", () => {
     const delegate = new HomeKitCameraStreamingDelegate(
       createPlatform(),
@@ -484,12 +482,12 @@ describe("HomeKitCameraStreamingDelegate", () => {
         video: { fps: 30, width: 1920, height: 1080, pt: 99 } as any,
       } as any,
     );
-    // HomeKit may request a smaller RTP session, but the video payload remains
-    // the camera's original maximum-quality H.264 stream (no scale/re-encode).
+    // Tapo C402 is normalized only at the HAP RTP boundary to H.264 High L4.0.
     expect(args).toContain("-c:v");
-    expect(args).toContain("copy");
-    expect(args).not.toContain("libx264");
-    expect(args).not.toContain("-vf");
+    expect(args).toContain("libx264");
+    expect(args).toContain("-level:v");
+    expect(args).toContain("4.0");
+    expect(args).toContain("-vf");
     expect(args).toContain("2097152");
     expect(args).toContain("3000000");
     expect(args).toContain("-progress");

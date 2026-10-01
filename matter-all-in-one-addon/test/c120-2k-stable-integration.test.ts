@@ -485,13 +485,12 @@ describe("Integración Estable v1.9.5: Tapo C120 2K Level 5.0 y Aislamiento (20 
       },
     };
 
-    // HEVC camera streams in native HEVC passthrough (-c:v copy) for Apple Home
+    // HAP advertises H.264 only, so an HEVC source is normalized at its RTP boundary.
     const args = (delegate as any).buildStreamArgs(session, request, false);
     expect(args).toContain("-c:v");
-    expect(args).toContain("copy");
-    expect(args).not.toContain("libx264");
+    expect(args).toContain("libx264");
+    expect(args).toContain("4.0");
   });
-
 
   // 12. FPS ausente: rechazo seguro
   it("12. rechaza de forma segura cuando no hay FPS medible ni configurado (fail-closed)", () => {

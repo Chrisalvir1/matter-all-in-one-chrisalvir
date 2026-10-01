@@ -355,8 +355,8 @@ describe("HomeKitCameraRecordingDelegate", () => {
     (delegate as any).selectedConfiguration = selected;
 
     const args = delegate.buildPrebufferArgs("rtsp://camera.local/c402");
-    expect(args).toContain("1048576");
-    expect(args).toContain("1000000");
+    expect(args).toContain("2097152");
+    expect(args).toContain("3000000");
     expect(args).toContain("+genpts+discardcorrupt");
     expect(args).not.toContain("+nobuffer+flush_packets+genpts+igndts");
     expect(args).toContain(
@@ -365,9 +365,9 @@ describe("HomeKitCameraRecordingDelegate", () => {
     expect(args).toContain("-copyts");
     expect(args).toContain("-start_at_zero");
     expect(args).not.toContain("-use_wallclock_as_timestamps");
-    expect(args?.[args.indexOf("-vcodec") + 1]).toBe("copy");
-    expect(args).not.toContain("libx264");
-    expect(args).not.toContain("-vf");
+    expect(args?.[args.indexOf("-c:v") + 1]).toBe("libx264");
+    expect(args).toContain("4.0");
+    expect(args).toContain("-vf");
     delegate.destroy();
   });
 

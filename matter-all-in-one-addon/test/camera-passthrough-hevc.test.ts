@@ -202,8 +202,6 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     expect(args).not.toContain("libx264");
   });
 
-
-
   it("produces passthrough stream args (-c:v copy) without re-encoding video or audio filters when audio is native aac_eld", () => {
     const platform = createPlatformMock();
     const capabilities = createCapabilities({
@@ -432,9 +430,10 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     expect(args).toContain("-progress");
     expect(args).toContain("pipe:1");
     expect(args).toContain("+genpts+discardcorrupt");
-    // Video remains pure copy
+    // Tapo is normalized only at the HAP RTP boundary for Apple Home.
     expect(args).toContain("-c:v");
-    expect(args).toContain("copy");
+    expect(args).toContain("libx264");
+    expect(args).toContain("4.0");
   });
 
   it("SFrame frame encryption protects and validates frames correctly", () => {
@@ -601,7 +600,7 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     expect(args).not.toContain("-an");
   });
 
-  it("uses -c:a copy for AAC cameras in HKSV prebuffer pipeline", () => {
+  it("uses H.264 video output and AAC passthrough for compatible HKSV audio", () => {
     const platform = createPlatformMock();
     const record = createBaseRecord("camera.tapo_c402");
     const capabilities = createCapabilities({
@@ -629,7 +628,7 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
 
     const args = delegate.buildPrebufferArgs("rtsp://192.168.1.100:554/live");
     expect(args).not.toBeNull();
-    expect(args).toContain("-vcodec");
+    expect(args).toContain("-c:v");
     expect(args).toContain("copy");
     expect(args).toContain("-c:a");
     expect(args).toContain("copy");

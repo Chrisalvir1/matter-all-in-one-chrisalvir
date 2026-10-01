@@ -411,6 +411,15 @@ export class ScryptedStreamValidator {
           confidence: "high",
           measuredAt: now,
         };
+        // The probe has received and parsed a video stream at this point. Keep
+        // the same bounded end-to-end measurement for the first-frame field,
+        // rather than leaving a successful diagnostic structurally incomplete.
+        metrics.timeToFirstFrameMs = {
+          value: effectiveElapsed,
+          source: probe.probeMethod || "ffprobe",
+          confidence: "medium",
+          measuredAt: now,
+        };
 
         if (probe.fps) {
           metrics.observedFps = {
