@@ -292,6 +292,31 @@ export class CompositeDeviceEntity {
     return false;
   }
 
+  private isOnOffCommandLocked(
+    entityId: string,
+    isEntityOn: boolean,
+    windowMs = 4000,
+  ): boolean {
+    const now = Date.now();
+    const stateKey = `${entityId}:onOff`;
+    const lastCmd = this.lastCommands.get(stateKey);
+    if (!lastCmd) return false;
+
+    const elapsed = now - lastCmd.timestamp;
+    if (elapsed > windowMs) {
+      this.lastCommands.delete(stateKey);
+      return false;
+    }
+
+    const expectedOn = Boolean(lastCmd.value);
+    if (isEntityOn !== expectedOn) {
+      return true;
+    } else {
+      this.lastCommands.delete(stateKey);
+      return false;
+    }
+  }
+
   constructor(
     public readonly platform: CompositePlatform,
     public readonly deviceId: string,
@@ -754,6 +779,13 @@ export class CompositeDeviceEntity {
 
       if (domain === "light" || domain === "switch") {
         const isEntityOn = isOn(state);
+        if (!initial && this.isOnOffCommandLocked(entityId, isEntityOn)) {
+          this.platform.log.debug(
+            `[Composite:${this.deviceId}][${entityId}] Ignoring stale HA ${domain} onOff state update during command lockout window (HA: on=${isEntityOn})`,
+          );
+          return;
+        }
+
         const beforeLevel = endpoint.hasAttributeServer(
           LevelControl.id,
           "currentLevel",
@@ -1519,6 +1551,9 @@ export class CompositeDeviceEntity {
         this.setCommandLockout(entityId, "onOff", false);
         this.cancelDebouncedService(entityId, "light", "turn_on");
         this.callServiceDebounced(entityId, "light", "turn_off", undefined, 0);
+        if (endpoint.hasAttributeServer(OnOff.id, "onOff")) {
+          void safeUpdateAttribute(endpoint, OnOff.id, "onOff", false, this.platform.log);
+        }
       });
 
       if (endpoint.hasAttributeServer(LevelControl.id, "currentLevel")) {
@@ -1526,6 +1561,21 @@ export class CompositeDeviceEntity {
           this.assertMemberOnline(entityId, member);
           const level = data?.level ?? data?.request?.level;
           if (typeof level === "number") {
+            if (level === 0) {
+              this.setCommandLockout(entityId, "onOff", false);
+              this.cancelDebouncedService(entityId, "light", "turn_on");
+              this.callServiceDebounced(
+                entityId,
+                "light",
+                "turn_off",
+                undefined,
+                0,
+              );
+              if (endpoint.hasAttributeServer(OnOff.id, "onOff")) {
+                void safeUpdateAttribute(endpoint, OnOff.id, "onOff", false, this.platform.log);
+              }
+              return;
+            }
             const haBrightness = lightConverter.toHaBrightness(level);
             this.setCommandLockout(entityId, "brightness", haBrightness);
             this.callServiceDebounced(
@@ -1553,6 +1603,9 @@ export class CompositeDeviceEntity {
                   undefined,
                   0,
                 );
+                if (endpoint.hasAttributeServer(OnOff.id, "onOff")) {
+                  void safeUpdateAttribute(endpoint, OnOff.id, "onOff", false, this.platform.log);
+                }
               } else if (level === 1) {
                 // Apple Home dimming to off sends level 1 before off. Debounce by 60ms so off can cancel it.
                 this.setCommandLockout(entityId, "brightness", 1);

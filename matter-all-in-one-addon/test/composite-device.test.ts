@@ -115,6 +115,38 @@ describe("CompositeDeviceEntity", () => {
     }
   });
 
+  it("ignores stale HA light on state update after Apple Home off command during lockout window", async () => {
+    const composite = new CompositeDeviceEntity(
+      platform,
+      "fan-device",
+      "Ventilador Sala",
+      [
+        { entityId: "fan.sala", state: state("fan.sala", "on") },
+        {
+          entityId: "light.sala",
+          state: state("light.sala", "on", {
+            brightness: 120,
+            supported_color_modes: ["brightness"],
+          }),
+        },
+      ],
+    );
+    await composite.createEndpoint();
+    const light = composite.endpoints.get("light.sala") as any;
+
+    // Apple Home turns off the light
+    await light.invokeCommand("off");
+
+    // Stale intermediate HA event arrives with state "on" while physical device is acknowledging
+    await composite.updateEntity(
+      "light.sala",
+      state("light.sala", "on", { brightness: 120 }),
+    );
+
+    // Matter onOff attribute must remain false (lockout active, not bounced back to true)
+    expect(light.getAttribute(6, "onOff")).toBe(false);
+  });
+
   it("publishes warm/cold fan lights as ColorTemperatureLight and sends modern HA kelvin commands", async () => {
     const composite = new CompositeDeviceEntity(
       platform,

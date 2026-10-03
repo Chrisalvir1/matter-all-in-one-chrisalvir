@@ -531,6 +531,30 @@ export class BaseEntity {
     return false;
   }
 
+  protected isOnOffCommandLocked(
+    isOn: boolean,
+    windowMs = 4000,
+  ): boolean {
+    const now = Date.now();
+    const stateKey = `${this.entityId}:onOff`;
+    const lastCmd = this.lastCommands.get(stateKey);
+    if (!lastCmd) return false;
+
+    const elapsed = now - lastCmd.timestamp;
+    if (elapsed > windowMs) {
+      this.lastCommands.delete(stateKey);
+      return false;
+    }
+
+    const expectedOn = Boolean(lastCmd.value);
+    if (isOn !== expectedOn) {
+      return true;
+    } else {
+      this.lastCommands.delete(stateKey);
+      return false;
+    }
+  }
+
   protected registerCommandHandlers(_endpoint?: MatterbridgeEndpoint) {
     const [domain] = this.entityId.split(".");
 
@@ -570,6 +594,9 @@ export class BaseEntity {
           this.setCommandLockout("onOff", false);
           this.cancelDebouncedService("turn_on");
           this.callServiceDebounced(domain, "turn_off", undefined, 0);
+          if (this.endpoint.hasAttributeServer(OnOff.id, "onOff")) {
+            void safeUpdateAttribute(this.endpoint, OnOff.id, "onOff", false, this.platform.log);
+          }
         } else if (domain === "fan") {
           this.lastFanCommandTime = Date.now();
           this.lastFanCommandPct = 0;
@@ -1178,6 +1205,12 @@ export class BaseEntity {
         )
           ? this.endpoint.getAttribute(OnOff.id, "onOff")
           : undefined;
+        if ((domain === "light" || domain === "switch") && !isInitialSync && this.isOnOffCommandLocked(isOn)) {
+          this.platform.log.debug(
+            `[${this.entityId}] Ignoring stale HA ${domain} onOff state update during command lockout window (HA: on=${isOn})`,
+          );
+          return;
+        }
 
         if (domain === "light" && isOn) {
           if (newState.attributes.brightness !== undefined) {

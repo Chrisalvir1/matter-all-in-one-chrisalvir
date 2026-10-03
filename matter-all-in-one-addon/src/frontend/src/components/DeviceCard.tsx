@@ -37,10 +37,20 @@ function getDomainIcon(domain: string): string {
 }
 
 export const DeviceCard: React.FC<DeviceCardProps> = ({ device, searchQuery, onConfigure }) => {
+  const switches = device.entities.filter(
+    (e) => (e.domain === "switch" || e.domain === "light") && !e.auxiliary,
+  );
+  const isMultiSwitch =
+    switches.length >= 2 ||
+    /apagador|interruptor|switch|gang|canal|channel|plug|enchufe|regleta|toma|socket|outlet|strip/i.test(
+      device.name || "",
+    );
+
   const isComposite =
-    device.entities.some((e) => e.composite || e.isComposite || e.compositeDeviceId) ||
-    (device.entities.some((e) => e.domain === "fan") &&
-     device.entities.some((e) => e.domain === "light"));
+    !isMultiSwitch &&
+    (device.entities.some((e) => (e.composite || e.isComposite || e.compositeDeviceId) && !e.auxiliary) ||
+      (device.entities.some((e) => e.domain === "fan" && !e.auxiliary) &&
+       device.entities.some((e) => e.domain === "light" && !e.auxiliary)));
 
   const compositeExported =
     isComposite && device.entities.some((e) => e.exported && !e.auxiliary);
@@ -210,7 +220,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({ device, searchQuery, onC
           {isComposite
             ? `1 accesorio · ${device.entities.length} entidad${device.entities.length === 1 ? "" : "es"}`
             : isMultiGang
-            ? `${device.entities.length} botones (${exported} en Matter)`
+            ? `${device.entities.length} ${/plug|enchufe|regleta|toma|socket|outlet/i.test(device.name || "") ? "enchufes" : "botones"} (${exported} en Matter)`
             : `${device.entities.length} entidad${device.entities.length === 1 ? "" : "es"}`}
         </span>
         <button

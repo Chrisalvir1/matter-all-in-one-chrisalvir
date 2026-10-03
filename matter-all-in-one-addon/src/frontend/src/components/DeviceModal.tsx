@@ -221,6 +221,40 @@ function getControllerBadge(
   return { icon: "📱", name };
 }
 
+function getButtonBadge(
+  ent: EntityRecord,
+  index: number,
+  isMulti: boolean,
+  isPlug: boolean,
+): { badge: string; isMaster: boolean } | null {
+  if (!isMulti && ent.domain !== "switch" && ent.domain !== "light") return null;
+
+  const idLower = ent.entityId.toLowerCase();
+  const nameLower = (ent.name || ent.attributes?.friendly_name || "").toLowerCase();
+
+  const isMaster =
+    /master|general|todos?|all/i.test(nameLower) ||
+    /master|general|all/i.test(idLower);
+
+  if (isMaster) {
+    return { badge: "⚡ Maestro (Todos)", isMaster: true };
+  }
+
+  // Extract explicit number from entity ID or name: e.g. canal_1, canal 1, gang 1, _1, etc.
+  const match =
+    idLower.match(/(?:canal|channel|gang|btn|boton|botón|switch|plug|enchufe|socket|relay|_)?_?(\d+)$/i) ||
+    nameLower.match(/(?:canal|channel|gang|btn|boton|botón|switch|plug|enchufe|socket|relay)\s*(\d+)/i) ||
+    nameLower.match(/(\d+)$/);
+
+  const num = match ? parseInt(match[1], 10) : index + 1;
+  const unit = isPlug ? "Enchufe" : "Botón";
+
+  return {
+    badge: isPlug ? `🔌 ${unit} ${num}` : `🔘 ${unit} ${num}`,
+    isMaster: false,
+  };
+}
+
 export const DeviceModal: React.FC<DeviceModalProps> = ({
   device,
   targetEntity,
@@ -306,7 +340,11 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
         return (
           primaryDelta ||
           Number(b.exported) - Number(a.exported) ||
-          (a.name || a.entityId).localeCompare(b.name || b.entityId)
+          (a.name || a.attributes?.friendly_name || a.entityId).localeCompare(
+            b.name || b.attributes?.friendly_name || b.entityId,
+            undefined,
+            { numeric: true },
+          )
         );
       })
     : [];
@@ -344,8 +382,31 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
 
   const hasFan = device.entities.some((e) => e.domain === "fan" && !e.auxiliary);
   const hasLight = device.entities.some((e) => e.domain === "light" && !e.auxiliary);
+  const switches = device.entities.filter(
+    (e) => (e.domain === "switch" || e.domain === "light") && !e.auxiliary,
+  );
+  const isMultiSwitch =
+    switches.length >= 2 ||
+    /apagador|interruptor|switch|gang|canal|channel|plug|enchufe|regleta|toma|socket|outlet|strip/i.test(
+      device.name || "",
+    );
+  const isPlugDevice =
+    /plug|enchufe|regleta|toma|socket|outlet/i.test(device.name || "") ||
+    device.entities.every(
+      (e) =>
+        e.domain === "switch" ||
+        e.domain === "sensor" ||
+        e.domain === "binary_sensor",
+    );
+
   const isComposite =
-    device.entities.some((e) => e.composite) || (hasFan && hasLight);
+    !isMultiSwitch &&
+    (device.entities.some(
+      (e) =>
+        (e.composite || e.isComposite || e.compositeDeviceId) && !e.auxiliary,
+    ) ||
+      (hasFan && hasLight));
+
   const compositePrimary =
     device.entities.find((e) => e.entityId === e.compositePrimaryEntityId) ||
     device.entities.find((e) => e.domain === "fan") ||
@@ -356,13 +417,15 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
   // Pairing code: fresh code from reset, primary entity's code, or selected entity's code
   const pairingCode =
     freshPairingCode ||
-    (isComposite ? compositePrimary?.pairingCode : activeEntity?.pairingCode) ||
-    device.entities.find((e) => e.exported && e.pairingCode)?.pairingCode ||
+    (isComposite
+      ? compositePrimary?.pairingCode
+      : (activeEntity?.pairingCode || device.entities.find((e) => e.exported && e.pairingCode)?.pairingCode)) ||
     "";
   const manualCode =
     freshManualCode ||
-    (isComposite ? compositePrimary?.manualPairingCode : activeEntity?.manualPairingCode) ||
-    device.entities.find((e) => e.exported && e.manualPairingCode)?.manualPairingCode ||
+    (isComposite
+      ? compositePrimary?.manualPairingCode
+      : (activeEntity?.manualPairingCode || device.entities.find((e) => e.exported && e.manualPairingCode)?.manualPairingCode)) ||
     "";
 
   const matterFabrics = resetFabrics
@@ -442,6 +505,8 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     if (!nextState) {
       setFreshPairingCode(null);
       setFreshManualCode(null);
+      entity.pairingCode = undefined;
+      entity.manualPairingCode = undefined;
     }
     try {
       const res: any = await api.toggleExport(entity.entityId, nextState);
@@ -450,9 +515,19 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
       }
       if (nextState && res?.pairingCode) {
         setFreshPairingCode(res.pairingCode);
+        entity.pairingCode = res.pairingCode;
       }
       if (nextState && res?.manualPairingCode) {
         setFreshManualCode(res.manualPairingCode);
+        entity.manualPairingCode = res.manualPairingCode;
+      }
+      if (activeEntity?.entityId === entity.entityId) {
+        setSelectedEntity({
+          ...activeEntity,
+          exported: nextState,
+          pairingCode: nextState ? (res?.pairingCode || entity.pairingCode) : undefined,
+          manualPairingCode: nextState ? (res?.manualPairingCode || entity.manualPairingCode) : undefined,
+        });
       }
       showToast(
         nextState
@@ -1065,7 +1140,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                   <span />
                 </label>
               </div>
-            ) : (
+            ) : isComposite ? (
               <div
                 style={{
                   display: "flex",
@@ -1126,16 +1201,49 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                     type="checkbox"
                     checked={Boolean(isExported)}
                     onChange={() => {
-                      if (isComposite) {
-                        void handleToggleCompositeExport();
-                      } else if (activeEntity) {
-                        void handleToggleExport(activeEntity);
-                      }
+                      void handleToggleCompositeExport();
                     }}
                     disabled={isBusy}
                   />
                   <span />
                 </label>
+              </div>
+            ) : (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "10px 14px",
+                  background: "rgba(255, 255, 255, 0.03)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "10px",
+                  marginBottom: "12px",
+                  flexShrink: 0,
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: "12.5px", fontWeight: 700, color: "var(--text)" }}>
+                    {isPlugDevice ? "Enchufes / Plugs Independientes" : "Botones / Canales Independientes"}
+                  </div>
+                  <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "2px" }}>
+                    Exporta y empareja cada {isPlugDevice ? "enchufe" : "botón"} por separado con su propio código QR
+                  </div>
+                </div>
+                <span
+                  className="badge"
+                  style={{
+                    fontSize: "11px",
+                    padding: "3px 8px",
+                    borderRadius: "6px",
+                    background: "rgba(59, 130, 246, 0.15)",
+                    color: "#60a5fa",
+                    border: "1px solid rgba(59, 130, 246, 0.3)",
+                    fontWeight: 600,
+                  }}
+                >
+                  {device.entities.filter((e) => e.exported).length} / {device.entities.length} activos
+                </span>
               </div>
             )}
 
@@ -1149,7 +1257,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                 overflowY: "auto",
               }}
             >
-              {sortedEntities.map((ent) => {
+              {sortedEntities.map((ent, idx) => {
                 const isSelected = activeEntity?.entityId === ent.entityId;
                 const isPrimaryEndpoint =
                   ent.entityId === ent.compositePrimaryEntityId ||
@@ -1159,6 +1267,9 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                   (ent.domain === "fan" || ent.domain === "light") &&
                   !ent.auxiliary;
                 const isExcludedAuxiliary = isComposite && ent.auxiliary;
+                const buttonBadge = !isComposite
+                  ? getButtonBadge(ent, idx, isMultiSwitch, isPlugDevice)
+                  : null;
 
                 return (
                   <div
@@ -1171,7 +1282,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                     </span>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div className="entity-row-name">
-                        {ent.name || ent.entityId}
+                        {ent.name || ent.attributes?.friendly_name || ent.entityId}
                       </div>
                       <div className="entity-row-id">{ent.entityId}</div>
                       <div
@@ -1188,6 +1299,27 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                         >
                           {ent.state || "desconocido"}
                         </span>
+                        {buttonBadge && (
+                          <span
+                            className="tag"
+                            style={{
+                              fontSize: "10px",
+                              padding: "1px 6px",
+                              background: buttonBadge.isMaster
+                                ? "rgba(245, 158, 11, 0.15)"
+                                : "rgba(59, 130, 246, 0.15)",
+                              color: buttonBadge.isMaster ? "#fcd34d" : "#60a5fa",
+                              border: `1px solid ${
+                                buttonBadge.isMaster
+                                  ? "rgba(245, 158, 11, 0.3)"
+                                  : "rgba(59, 130, 246, 0.3)"
+                              }`,
+                              fontWeight: 600,
+                            }}
+                          >
+                            {buttonBadge.badge}
+                          </span>
+                        )}
                         {isComposite && isPrimaryEndpoint && (
                           <span
                             className="tag"
@@ -1476,6 +1608,10 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                       : isExported
                       ? "Este canal forma parte del accesorio unificado y está activo en Matter bajo el mismo código QR."
                       : "Activa el interruptor general arriba para publicar el accesorio (ventilador y luz juntos en 1 QR)."
+                    : isMultiSwitch
+                    ? isExported
+                      ? `Este ${isPlugDevice ? "enchufe" : "botón"} está activo y publicado en Matter con su propio código QR independiente.`
+                      : `Activa el interruptor para publicar este ${isPlugDevice ? "enchufe" : "botón"} en Matter con su propio QR.`
                     : isExported
                     ? "Esta entidad está activa y expuesta a través de Matter."
                     : "Activa el interruptor para publicar este canal en Matter."}
@@ -1886,7 +2022,11 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
             }}
           >
             <p className="card-label" style={{ margin: "0 0 2px 0", flexShrink: 0 }}>
-              {selectedProtocol === "hap" ? "CÓDIGO HOMEKIT HAP" : "CÓDIGO MATTER"}
+              {selectedProtocol === "hap"
+                ? "CÓDIGO HOMEKIT HAP"
+                : isMultiSwitch
+                ? `CÓDIGO MATTER · ${activeEntity?.name || activeEntity?.attributes?.friendly_name || "BOTÓN"}`
+                : "CÓDIGO MATTER"}
             </p>
             <div
               className={`qr-status-label${
@@ -2070,7 +2210,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                     entityName={
                       isComposite
                         ? compositePrimary?.name || device.name
-                        : activeEntity?.name || device.name
+                        : activeEntity?.name || activeEntity?.attributes?.friendly_name || device.name
                     }
                     elementId="device-qr-code"
                     variant={multiAdminOpen ? "multi-admin-glass" : "matter-badge"}
@@ -2089,6 +2229,8 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
               >
                 {isComposite
                   ? "Activa el interruptor general del accesorio para generar el código QR de Matter."
+                  : isMultiSwitch
+                  ? `Activa este ${isPlugDevice ? "enchufe" : "botón"} para generar su código QR independiente de Matter.`
                   : "Activa la entidad para generar el código QR de Matter."}
               </div>
             )}

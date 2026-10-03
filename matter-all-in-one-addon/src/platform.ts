@@ -2235,18 +2235,56 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       (e) => e.entityId.startsWith("fan.") && isNonGeneric(e),
     );
 
-    // Ceiling fans with integrated light: ALWAYS keep together as a composite Matter accessory (1 QR code)
-    if (fans.length >= 1 && lights.length >= 1) {
+    // If device contains appliance entities (lock, humidifier, camera, vacuum, climate), it is NOT a multi-switch wall switch/plug
+    if (
+      allMembers.some((e) =>
+        ["camera", "humidifier", "lock", "climate", "vacuum"].includes(
+          e.entityId.split(".")[0],
+        ),
+      )
+    ) {
       return false;
     }
 
-    // 1. Any device with 2 or more switch entities is a multi-gang switch/controller
-    if (switches.length >= 2) return true;
+    const devInfo = allMembers[0]
+      ? this.getHaRegistryInfo(allMembers[0].entityId)
+      : null;
+    const devName = (devInfo?.device_name || "").toLowerCase();
+    const devModel = (devInfo?.model || "").toLowerCase();
 
-    // 2. Any device with 2 or more fan entities (e.g. 2-gang fan controller)
+    const isSwitchOrPlugDevice =
+      /\b(apagador|interruptor|switch|gang|canal|channel|plug|enchufe|regleta|toma|socket|outlet|strip)\b/i.test(
+        devName,
+      ) ||
+      /\b(apagador|interruptor|switch|gang|plug|socket|outlet|strip)\b/i.test(
+        devModel,
+      );
+
+    // If device is explicitly an apagador / switch / plug with 2+ channels or has 2+ real switches, it is ALWAYS a multi-switch device!
+    if (
+      switches.length >= 2 ||
+      (isSwitchOrPlugDevice && switches.length + lights.length + fans.length >= 2)
+    ) {
+      return true;
+    }
+
+    const isFanDevice =
+      /ventilador|fan|ceiling|techo|plafon|breeze/i.test(devName) ||
+      /ventilador|fan|ceiling/i.test(devModel);
+
+    // Ceiling fans with integrated light (and not a multi-gang switch): keep together as a composite Matter accessory (1 QR code)
+    if (
+      fans.length >= 1 &&
+      lights.length >= 1 &&
+      (isFanDevice || switches.length === 0)
+    ) {
+      return false;
+    }
+
+    // 1. Any device with 2 or more fan entities (e.g. 2-gang fan controller)
     if (fans.length >= 2) return true;
 
-    // 3. Any device with a mix of switches and fans (e.g. 1 fan switch + 1 or more switches, like Tuya double switch)
+    // 2. Any device with a mix of switches and fans (e.g. 1 fan switch + 1 or more switches, like Tuya double switch)
     if (fans.length >= 1 && switches.length >= 1) {
       // Exclude secondary buzzer/beeper switches
       const realSwitches = switches.filter((m) => {
@@ -2258,7 +2296,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       if (realSwitches.length >= 1) return true;
     }
 
-    // 4. Any device with 2 or more switch/light entities without appliance domains (camera, humidifier, lock, climate, vacuum)
+    // 3. Any device with 2 or more switch/light entities without appliance domains (camera, humidifier, lock, climate, vacuum)
     if (
       switches.length + lights.length >= 2 &&
       !allMembers.some((e) =>
@@ -3784,6 +3822,14 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           try {
             if (exportedId.startsWith("device:")) {
               const deviceId = exportedId.substring("device:".length);
+              if (this.isMultiSwitchDevice(deviceId)) {
+                this.log.notice(
+                  `[MultiSwitch] Disbanding legacy composite for multi-switch device ${deviceId} to allow independent button export.`,
+                );
+                this.exportedDevices.delete(exportedId);
+                migratedLegacyEntries = true;
+                return;
+              }
               const entityId = Array.from(this.entities.keys()).find(
                 (id) => this.ha.hassEntities.get(id)?.device_id === deviceId,
               );
@@ -4212,6 +4258,17 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     // Multi-switch: each canal is registered as an independent Matter accessory.
     // Skip the composite path entirely so every switch gets its own QR code.
     const isMultiSwitch = deviceId ? this.isMultiSwitchDevice(deviceId) : false;
+
+    if (isMultiSwitch && deviceId) {
+      const compKey = this.compositeStorageKey(deviceId);
+      if (this.exportedDevices.has(compKey)) {
+        this.log.notice(
+          `[MultiSwitch] Migrating device ${deviceId} from composite to independent export for ${entityId}`,
+        );
+        this.exportedDevices.delete(compKey);
+        await this.disposeCompositeNode(deviceId);
+      }
+    }
 
     try {
       const composite = isMultiSwitch
@@ -6227,11 +6284,18 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               e.deviceType.name ||
               "Generic";
 
+            const friendlyName =
+              e.state.attributes?.friendly_name ||
+              (this.ha as any).hassEntities?.get(e.entityId)?.name ||
+              (this.ha as any).hassEntities?.get(e.entityId)?.original_name ||
+              e.entityId;
+
             return {
               entityId: e.entityId,
+              name: friendlyName,
               domain: domain,
               state: e.state.state,
-              attributes: { friendly_name: e.state.attributes?.friendly_name },
+              attributes: { friendly_name: friendlyName, ...e.state.attributes },
               deviceTypeLabel: typeLabel,
               matterType:
                 domain === "fan"
