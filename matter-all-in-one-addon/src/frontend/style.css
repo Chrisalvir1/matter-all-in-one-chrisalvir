@@ -3196,14 +3196,31 @@ mark {
 
 @media (max-width: 860px) {
   .camera-modal-layout {
-    grid-template-columns: 1fr;
-    gap: 16px;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 16px !important;
+    width: 100% !important;
+    min-width: 0 !important;
   }
-  .camera-modal-layout .qr-panel,
+  .camera-modal-layout .qr-panel {
+    order: 1 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding-right: 0 !important;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 16px;
+    margin-bottom: 8px;
+  }
   .camera-modal-layout .selection-panel {
-    max-height: none;
-    overflow: visible;
-    padding-right: 0;
+    order: 2 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding-right: 0 !important;
+    min-height: auto !important;
   }
 }
 
@@ -4373,6 +4390,29 @@ mark {
   /* DeviceModal: show 2-col layout in landscape */
   .modal-layout {
     grid-template-columns: 180px 1fr !important;
+  }
+
+  /* CameraModal: responsive 2-column or fluid layout in landscape */
+  .camera-modal-layout {
+    display: grid !important;
+    grid-template-columns: minmax(280px, 320px) minmax(0, 1fr) !important;
+    gap: 16px !important;
+    align-items: start !important;
+  }
+  .camera-modal-layout .qr-panel {
+    order: 0 !important;
+    border-bottom: none !important;
+    padding-bottom: 0 !important;
+    margin-bottom: 0 !important;
+    max-height: calc(95vh - 80px) !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+  .camera-modal-layout .selection-panel {
+    order: 0 !important;
+    max-height: calc(95vh - 80px) !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
   }
 
   .content {

@@ -1587,85 +1587,7 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                       cuando desees vincularla en Apple Home.
                     </p>
                   </div>
-                ) : isHevcCamera ? (
-                  isPaired ? (
-                <div
-                  className="paired-success-glass-card"
-                  id="paired-camera-card"
-                  style={{
-                    border: "1px solid rgba(245, 158, 11, 0.4)",
-                    background: "rgba(245, 158, 11, 0.08)",
-                  }}
-                >
-                  <div style={{ fontSize: "2rem", marginBottom: 6 }}>⚠️</div>
-                  <h4
-                    className="paired-card-title"
-                    style={{ color: "#fcd34d" }}
-                  >
-                    Migración requerida para cámara HEVC
-                  </h4>
-                  <p className="paired-card-desc" style={{ color: "#fef08a" }}>
-                    Esta cámara entrega vídeo en <strong>HEVC / H.265</strong> y
-                    tiene un emparejamiento HAP existente. Siguiendo el
-                    principio de cero transcodificación y dado que HKSV3 nativo
-                    aún no está disponible en HAP sin recodificar, se requiere
-                    restablecer el emparejamiento para no interferir con las
-                    demás cámaras.
-                  </p>
-                  <button
-                    className="button button-danger-outline button-sm"
-                    type="button"
-                    onClick={handleResetPairing}
-                    disabled={isResetting}
-                    style={{ marginTop: 10 }}
-                  >
-                    {isResetting
-                      ? "Restableciendo..."
-                      : "🔄 Restablecer emparejamiento HAP"}
-                  </button>
-                </div>
-              ) : (
-                <div
-                  style={{
-                    padding: "20px 16px",
-                    background: "rgba(239, 68, 68, 0.1)",
-                    border: "1px solid rgba(239, 68, 68, 0.3)",
-                    borderRadius: 8,
-                    textAlign: "center",
-                  }}
-                >
-                  <div style={{ fontSize: "2rem", marginBottom: 8 }}>⛔</div>
-                  <strong
-                    style={{
-                      color: "#fca5a5",
-                      fontSize: "0.92rem",
-                      display: "block",
-                      marginBottom: 6,
-                    }}
-                  >
-                    HEVC/HKSV3 aún no disponible; no se exporta sin
-                    transcodificación
-                  </strong>
-                  <p
-                    style={{
-                      color: "#fecaca",
-                      fontSize: "0.78rem",
-                      lineHeight: 1.4,
-                      margin: 0,
-                      textAlign: "left",
-                    }}
-                  >
-                    Esta cámara entrega flujo de vídeo en{" "}
-                    <strong>HEVC / H.265</strong>. La transcodificación con
-                    libx264 está estrictamente prohibida para mantener la
-                    calidad nativa sin consumir recursos de CPU, y Apple HomeKit
-                    HAP aún no soporta HKSV3/HEVC de forma nativa. La
-                    exportación HAP permanece desactivada para evitar errores en
-                    Apple Home.
-                  </p>
-                </div>
-              )
-            ) : isPaired ? (
+                ) : isPaired ? (
               <div
                 className="paired-success-glass-card"
                 id="paired-camera-card"
@@ -1678,7 +1600,7 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                 </h4>
                 <p className="paired-card-desc">
                   Esta cámara ya está configurada en Apple Home para Live View
-                  HAP. El código QR se oculta para proteger la sesión activa.
+                  HAP{isHevcCamera ? " (HEVC / HKSV3 Nativo)" : ""}. El código QR se oculta para proteger la sesión activa.
                 </p>
                 <div
                   style={{
@@ -1727,12 +1649,16 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                   }
                   entityName={cameraName}
                   elementId="cam-modal-qr-code"
-                  noteText="Escanea con la app Casa de Apple para Live View HAP"
+                  noteText={
+                    isHevcCamera
+                      ? "Escanea con la app Casa de Apple para HAP HEVC / HKSV3"
+                      : "Escanea con la app Casa de Apple para Live View HAP"
+                  }
                   videoCodec={
                     (camera as any)?.videoCodec ||
                     (camera as any)?.capabilities?.observed?.videoCodec
                   }
-                  isHevc={false}
+                  isHevc={isHevcCamera}
                 />
                 <div
                   style={{
@@ -1948,7 +1874,7 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                 <div>
                   <strong>🍏 HAP:</strong>{" "}
                   {isHevcCamera
-                    ? "No exportable por HAP clásico sin transcodificar"
+                    ? "Passthrough HEVC / HKSV3 Nativo (sin transcodificación)"
                     : "Passthrough H.264 (sin transcodificación de vídeo)"}
                 </div>
               </div>
@@ -2586,15 +2512,14 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                     <div
                       style={{
                         fontSize: "0.76rem",
-                        color: "#f87171",
+                        color: "#c084fc",
                         padding: "6px 8px",
-                        background: "rgba(239, 68, 68, 0.1)",
+                        background: "rgba(168, 85, 247, 0.1)",
+                        border: "1px solid rgba(168, 85, 247, 0.25)",
                         borderRadius: 4,
                       }}
                     >
-                      🔒 Exportación desactivada: La cámara transmite en
-                      HEVC/H.265 y la transcodificación de vídeo a H.264 está
-                      prohibida. Pendiente de soporte HKSV3 real.
+                      💜 <strong>HEVC / HKSV3 Nativo:</strong> Vídeo passthrough puro (-c:v copy). Audio remuestreado a AAC-LC/ELD. Cumple con iOS 27 y Apple HomeKit.
                     </div>
                   ) : (
                     <>
