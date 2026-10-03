@@ -399,7 +399,7 @@ describe("HomeKitCameraRecordingDelegate", () => {
     delegate.destroy();
   });
 
-  it("repairs the C120 AAC clock and transcodes video to 1080p Level 4.0 for Apple Home Hub", () => {
+  it("repairs the C120 AAC clock and keeps video in passthrough copy", () => {
     const record = {
       ...createMockRecord(),
       entityId: "camera.tapo_c120",
@@ -424,13 +424,9 @@ describe("HomeKitCameraRecordingDelegate", () => {
     );
     (delegate as any).selectedConfiguration = createMockConfiguration();
     const args = delegate.buildPrebufferArgs("rtsp://camera.local/c120");
-    // C120 must be transcoded to 1080p High Level 4.0 for HKSV compatibility
-    expect(args).toContain("-c:v");
-    expect(args).toContain("libx264");
-    expect(args).toContain("high");
-    expect(args).toContain("4.0");
-    expect(args).toContain("-r");
-    expect(args).toContain("15");
+    // C120 keeps -vcodec copy with zero CPU transcoding
+    expect(args?.[args.indexOf("-vcodec") + 1]).toBe("copy");
+    expect(args).not.toContain("libx264");
     expect(args).toContain("+genpts+discardcorrupt");
     expect(args).toContain("-copyts");
     expect(args).toContain("-start_at_zero");
@@ -634,9 +630,9 @@ describe("HomeKitCameraRecordingDelegate — structured C120 identification & fa
     );
     (delegate as any).selectedConfiguration = createMockConfiguration();
     const args = delegate.buildPrebufferArgs("rtsp://192.168.1.100/stream1");
-    expect(args).toContain("-c:v");
-    expect(args).toContain("libx264");
-    expect(args).toContain("4.0");
+    expect(args?.[args.indexOf("-vcodec") + 1]).toBe("copy");
+    expect(args).not.toContain("libx264");
+    expect(args).toContain("524288");
     delegate.destroy();
   });
 
@@ -666,9 +662,9 @@ describe("HomeKitCameraRecordingDelegate — structured C120 identification & fa
     );
     (delegate as any).selectedConfiguration = createMockConfiguration();
     const args = delegate.buildPrebufferArgs("rtsp://192.168.1.100/stream1");
-    expect(args).toContain("-c:v");
-    expect(args).toContain("libx264");
-    expect(args).toContain("4.0");
+    expect(args?.[args.indexOf("-vcodec") + 1]).toBe("copy");
+    expect(args).not.toContain("libx264");
+    expect(args).toContain("524288");
     delegate.destroy();
   });
 
@@ -844,7 +840,7 @@ describe("HomeKitCameraRecordingDelegate — resolveCameraSourceFps & dynamic fr
     expect(resolveCameraSourceFps(cap, record)).toBe(15);
   });
 
-  it("fails closed when Tapo C120 has neither measured nor configured FPS", () => {
+  it("keeps Tapo C120 in copy passthrough even without measured FPS", () => {
     const record = {
       ...createMockRecord(),
       entityId: "camera.tapo_c120",
@@ -871,12 +867,12 @@ describe("HomeKitCameraRecordingDelegate — resolveCameraSourceFps & dynamic fr
     (delegate as any).selectedConfiguration = createMockConfiguration();
 
     const args = delegate.buildPrebufferArgs("rtsp://192.168.1.100/c120");
-    expect(args).toBeNull();
-    expect(record.hksvState).toBe("not_capable");
+    expect(args?.[args.indexOf("-vcodec") + 1]).toBe("copy");
+    expect(args).not.toContain("libx264");
     delegate.destroy();
   });
 
-  it("applies adaptive FPS transcoding for Tapo C120 up to the 20 fps hardware ceiling", () => {
+  it("applies copy passthrough for Tapo C120 across all frame rates", () => {
     for (const fps of [10, 15, 20, 24, 30]) {
       const record = {
         ...createMockRecord(),
@@ -905,17 +901,8 @@ describe("HomeKitCameraRecordingDelegate — resolveCameraSourceFps & dynamic fr
 
       const args = delegate.buildPrebufferArgs("rtsp://192.168.1.100/stream")!;
       expect(args).not.toBeNull();
-      const expectedFps = Math.min(fps, 20);
-      const rIdx = args.indexOf("-r");
-      expect(rIdx).toBeGreaterThan(-1);
-      expect(args[rIdx + 1]).toBe(String(expectedFps));
-
-      const gIdx = args.indexOf("-g");
-      expect(args[gIdx + 1]).toBe(String(expectedFps * 2));
-
-      const keyintIdx = args.indexOf("-keyint_min");
-      expect(args[keyintIdx + 1]).toBe(String(expectedFps));
-
+      expect(args?.[args.indexOf("-vcodec") + 1]).toBe("copy");
+      expect(args).not.toContain("libx264");
       delegate.destroy();
     }
   });

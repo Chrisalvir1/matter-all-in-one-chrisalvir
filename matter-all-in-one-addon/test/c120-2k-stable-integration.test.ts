@@ -79,7 +79,8 @@ describe("Integración Estable v1.9.5: Tapo C120 2K Level 5.0 y Aislamiento (20 
     );
 
     const resolutions = acc.buildDeclaredResolutions();
-    expect(resolutions).toContainEqual([1920, 1080, 15]);
+    expect(resolutions).toContainEqual([2560, 1440, 20]);
+    expect(resolutions).toContainEqual([1920, 1080, 20]);
   });
 
   // 2. C120 niveles estándar HAP R2
@@ -186,14 +187,13 @@ describe("Integración Estable v1.9.5: Tapo C120 2K Level 5.0 y Aislamiento (20 
     };
 
     const args = (delegate as any).buildStreamArgs(session, request, false);
-    expect(args).toContain("libx264");
-    expect(args).toContain("4.0");
-    expect(args).toContain("veryfast");
-    expect(args).toContain("zerolatency");
+    expect(args).toContain("-c:v");
+    expect(args).toContain("copy");
+    expect(args).not.toContain("libx264");
   });
 
   // 5. C120 fallback 1080p
-  it("5. utiliza fallback seguro normalizado a 1080p High Level 4.0 cuando Apple solicita 1920x1080", () => {
+  it("5. utiliza fallback seguro con copy passthrough cuando Apple solicita 1920x1080", () => {
     const platform = createMockPlatform();
     const delegate = new HomeKitCameraStreamingDelegate(
       platform as any,
@@ -242,17 +242,12 @@ describe("Integración Estable v1.9.5: Tapo C120 2K Level 5.0 y Aislamiento (20 
 
     const args = (delegate as any).buildStreamArgs(session, request, false);
     expect(args).toContain("-c:v");
-    expect(args).toContain("libx264");
-    expect(args).toContain("-vf");
-    expect(args).toContain("scale=1920:1080:flags=fast_bilinear");
-    expect(args).toContain("-profile:v");
-    expect(args).toContain("high");
-    expect(args).toContain("-level:v");
-    expect(args).toContain("4.0");
+    expect(args).toContain("copy");
+    expect(args).not.toContain("libx264");
   });
 
-  // 6. C120 HKSV 1080p Level 4.0
-  it("6. genera prebuffer HKSV de C120 exclusivamente en 1080p High Level 4.0", () => {
+  // 6. C120 HKSV passthrough copy
+  it("6. genera prebuffer HKSV de C120 con copy passthrough puro sin libx264", () => {
     const platform = createMockPlatform();
     const recDelegate = new HomeKitCameraRecordingDelegate(
       platform as any,
@@ -284,20 +279,11 @@ describe("Integración Estable v1.9.5: Tapo C120 2K Level 5.0 y Aislamiento (20 
     const args = (recDelegate as any).buildPrebufferArgs(
       "rtsp://192.168.1.50/tapo_c120",
     );
-    expect(args).toContain("-c:v");
-    expect(args).toContain("libx264");
-    expect(args).toContain("-profile:v");
-    expect(args).toContain("high");
-    expect(args).toContain("-level:v");
-    expect(args).toContain(
-      "scale=1920:1080:force_original_aspect_ratio=decrease:force_divisible_by=2",
-    );
-    expect(args).toContain("-r");
-    const rIdx = args.indexOf("-r");
-    expect(args[rIdx + 1]).toBe("20");
+    expect(args?.[args.indexOf("-vcodec") + 1]).toBe("copy");
+    expect(args).not.toContain("libx264");
   });
 
-  it("6b. limita el prebuffer HKSV de C120 a un techo de 20 fps incluso si la metadata fuente reporta 30 fps", () => {
+  it("6b. mantiene el prebuffer HKSV de C120 con copy passthrough sin transcodificación de CPU", () => {
     const platform = createMockPlatform();
     const recDelegate = new HomeKitCameraRecordingDelegate(
       platform as any,
@@ -329,9 +315,8 @@ describe("Integración Estable v1.9.5: Tapo C120 2K Level 5.0 y Aislamiento (20 
     const args = (recDelegate as any).buildPrebufferArgs(
       "rtsp://192.168.1.50/tapo_c120",
     );
-    expect(args).toContain("-r");
-    const rIdx = args.indexOf("-r");
-    expect(args[rIdx + 1]).toBe("20");
+    expect(args?.[args.indexOf("-vcodec") + 1]).toBe("copy");
+    expect(args).not.toContain("libx264");
   });
 
   // 7. Cámara 1080p a 15 fps
@@ -607,7 +592,8 @@ describe("Integración Estable v1.9.5: Tapo C120 2K Level 5.0 y Aislamiento (20 
 
     const args = (delegate as any).buildStreamArgs(session, request, false);
     expect(args).toContain("-c:v");
-    expect(args).toContain("libx264"); // normaliza limpiamente
+    expect(args).toContain("copy");
+    expect(args).not.toContain("libx264");
   });
 
   // 15. C1200 y C210 no identificadas como C120

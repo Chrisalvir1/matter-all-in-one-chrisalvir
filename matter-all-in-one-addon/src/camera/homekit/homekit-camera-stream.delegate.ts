@@ -1428,11 +1428,10 @@ export class HomeKitCameraStreamingDelegate
     // HEVC into that RTP session makes FFmpeg appear healthy while Apple Home
     // receives packets it did not negotiate, ending in "No Response".  HEVC
     // remains native up to this output boundary, then is converted solely for
-    // the HAP session (and never changes the Camera.UI source).
-    // Tapo C120/C402 RTSP sources can be 2K H.264 High Level 5.0, while HAP
-    // negotiates Level 4.0 and often 720p. Normalize only at the HAP output
-    // boundary; the source URLs and Camera.UI/HA paths remain intact.
-    const needsTapoVideoNormalization = isTapoC120 || isTapoC402;
+    // Tapo C402 RTSP source is a 2K H.264 stream requiring normalization to HAP Level 4.0;
+    // this logic is strictly maintained intact for C402.
+    // Tapo C120 uses pure copy passthrough matching Camera.UI bridge with zero CPU overhead.
+    const needsTapoVideoNormalization = isTapoC402;
     const isHevc =
       codec === "hevc" ||
       codec === "h265" ||

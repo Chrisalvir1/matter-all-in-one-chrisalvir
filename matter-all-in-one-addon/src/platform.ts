@@ -9022,35 +9022,93 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         const cuiToggleMatch = pathname.match(
           /\/api\/(?:custom\/)?cameraui\/cameras\/([^/]+)\/toggle-homekit$/,
         );
-        if (req.method === "POST" && cuiToggleMatch) {
-          const cameraId = decodeURIComponent(cuiToggleMatch[1]);
+        const camToggleMatch = pathname.match(
+          /\/api\/(?:custom\/)?cameras\/([^/]+)\/toggle-homekit$/,
+        );
+        if (req.method === "POST" && (cuiToggleMatch || camToggleMatch)) {
+          const rawId = (cuiToggleMatch || camToggleMatch)![1];
+          const cameraId = decodeURIComponent(rawId);
+
+          // 1. Try CameraUiStorage first
           const store = await CameraUiStorage.load();
           const cam = store.cameras.find((c) => c.id === cameraId);
-          if (!cam) {
-            res.writeHead(404, {
+          if (cam) {
+            cam.homeKitEnabled = !cam.homeKitEnabled;
+            if (cam.homeKitEnabled) {
+              await CameraUiHomeKitBridge.mountCamera(this, cam);
+            } else {
+              await CameraUiHomeKitBridge.unmountCamera(cameraId);
+            }
+            await CameraUiStorage.save(store);
+            res.writeHead(200, {
               "Content-Type": "application/json; charset=utf-8",
             });
             res.end(
-              JSON.stringify({ success: false, error: "Cámara no encontrada" }),
+              JSON.stringify({
+                success: true,
+                homeKitEnabled: cam.homeKitEnabled,
+                camera: cam,
+              }),
             );
             return;
           }
-          cam.homeKitEnabled = !cam.homeKitEnabled;
-          if (cam.homeKitEnabled) {
-            await CameraUiHomeKitBridge.mountCamera(this, cam);
-          } else {
-            await CameraUiHomeKitBridge.unmountCamera(cameraId);
+
+          // 2. Try ScryptedStorage
+          const scryptedStore = await ScryptedStorage.load();
+          const scryptedCam = scryptedStore.cameras.cameras.find(
+            (c) => c.cameraId === cameraId,
+          );
+          if (scryptedCam) {
+            const nextState = !scryptedCam.exportConfig.homeKitEnabled;
+            scryptedCam.exportConfig.homeKitEnabled = nextState;
+            if (nextState) {
+              await ScryptedHomeKitBridge.mountCamera(this, scryptedCam);
+            } else {
+              await ScryptedHomeKitBridge.unmountCamera(cameraId);
+            }
+            await ScryptedStorage.save(scryptedStore);
+            res.writeHead(200, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(
+              JSON.stringify({
+                success: true,
+                homeKitEnabled: nextState,
+                camera: scryptedCam,
+              }),
+            );
+            return;
           }
-          await CameraUiStorage.save(store);
-          res.writeHead(200, {
+
+          // 3. Try Home Assistant camera entities (e.g. camera.tapo_c120, etc.)
+          if (cameraId.startsWith("camera.") || this.entities.has(cameraId)) {
+            const isCurrentlyExported =
+              this.exportedDevices.has(cameraId) ||
+              Boolean(this.homekitCameraRecords.get(cameraId)?.published);
+            if (isCurrentlyExported) {
+              await this.manualUnregister(cameraId);
+            } else {
+              await this.manualRegister(cameraId);
+            }
+            const record = this.homekitCameraRecords.get(cameraId);
+            res.writeHead(200, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(
+              JSON.stringify({
+                success: true,
+                homeKitEnabled: !isCurrentlyExported,
+                record,
+              }),
+            );
+            return;
+          }
+
+          res.writeHead(404, {
             "Content-Type": "application/json; charset=utf-8",
           });
           res.end(
-            JSON.stringify({
-              success: true,
-              homeKitEnabled: cam.homeKitEnabled,
-              camera: cam,
-            }),
+            JSON.stringify({ success: false, error: "Cámara no encontrada" }),
           );
           return;
         }

@@ -261,7 +261,7 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     expect(args).not.toContain("aresample");
   });
 
-  it("normalizes C120 video to HAP level 4.0 when 1080p is requested and transcodes its PCMA audio", () => {
+  it("streams C120 video with pure passthrough copy and transcodes its PCMA audio to AAC", () => {
     const platform = createPlatformMock();
     const capabilities = createCapabilities({
       videoCodec: "h264",
@@ -310,18 +310,16 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
       } as any,
     );
 
-    // When 1080p is requested or on fallback, C120 is normalized to HAP Level 4.0 via libx264
+    // C120 uses pure copy passthrough without CPU transcoding
     expect(args).toContain("-c:v");
-    expect(args).toContain("libx264");
+    expect(args).toContain("copy");
+    expect(args).not.toContain("libx264");
     expect(args).not.toContain("libx265");
-    expect(args).toContain("scale=1920:1080:flags=fast_bilinear");
-    expect(args).toContain("4.0");
     // C120 retains enough input analysis to start from a complete 2K keyframe.
     expect(args).toContain("-probesize");
     expect(args).toContain("524288");
     expect(args).toContain("-analyzeduration");
     expect(args).toContain("1000000");
-    expect(args).toContain("+genpts+igndts+discardcorrupt");
     // Audio is transcoded to AAC/AAC-ELD to prevent CoreAudio clock stall
     expect(args).toContain("-c:a");
     const audioCodecIdx = args.indexOf("-c:a");
@@ -330,7 +328,7 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     expect(args).toContain("aresample=async=1:first_pts=0");
   });
 
-  it("normalizes C120 to HAP High Level 4.0 when 2560x1440 is requested to prevent Apple Home freeze", () => {
+  it("streams C120 native 2K 2560x1440 with pure copy passthrough", () => {
     const platform = createPlatformMock();
     const capabilities = createCapabilities({
       videoCodec: "h264",
@@ -366,11 +364,10 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
       } as any,
     );
 
-    // Normalization to Level 4.0 1080p via libx264 veryfast zerolatency
+    // Native 2K passthrough via copy with zero CPU transcoding
     expect(args).toContain("-c:v");
-    expect(args).toContain("libx264");
-    expect(args).toContain("4.0");
-    expect(args).toContain("-vf");
+    expect(args).toContain("copy");
+    expect(args).not.toContain("libx264");
   });
 
   it("strictly preserves Tapo C402 input and audio parameters untouched", () => {

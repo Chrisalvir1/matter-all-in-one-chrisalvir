@@ -529,16 +529,14 @@ export class HomeKitCameraAccessory {
       Math.min(this.capabilities.maxFps || cameraMax, isC120 ? 20 : 60),
     );
 
-    // DECISIÓN EXPLÍCITA DE ARQUITECTURA (v1.9.6+):
-    // El hardware de la Tapo C120 posee un techo físico de 20 fps en 2K H.264 High Level 5.0.
-    // Sin embargo, Apple HomeKit HAP estándar solo define perfiles H.264 hasta Level 4.0 (máx 1920x1080).
-    // Para garantizar estabilidad total en Live View sin pérdida de paquetes ni rechazo por parte del Hub,
-    // la capacidad HAP anunciada para C120 se fija explícitamente en 1920x1080 @ 15 fps.
-    // El flujo nativo físico (2560x1440) se preserva para grabación HKSV (normalizada a 1080p con techo de 20 fps).
-    // NO se anuncia 2K en esta versión estable.
+    // Tapo C120: Native 2K H.264 High Level 5.0 (2560x1440).
+    // Anunciar 2K nativo (2560x1440) al frente de la escala para que Apple HomeKit
+    // negocie Live View 2K con remuxing passthrough puro (-c:v copy), idéntico al
+    // comportamiento de Camera.UI, con cero transcodificación y cero consumo de CPU.
     if (isC120) {
-      const c120MaxFps = Math.min(sourceFps, 15);
+      const c120MaxFps = Math.min(sourceFps, 20);
       return [
+        [2560, 1440, c120MaxFps],
         [1920, 1080, c120MaxFps],
         [1280, 720, c120MaxFps],
         [640, 360, c120MaxFps],
@@ -969,6 +967,8 @@ export class HomeKitCameraAccessory {
       this.platform?.log?.notice?.(
         `[HomeKitCamera][${this.entityId}] Camera un-paired from Apple Home`,
       );
+      this.recordingDelegate?.updateRecordingActive(false);
+      this.delegate?.cleanupAllSessions();
       void this.platform?.saveHomeKitCameraRecords?.();
       this.notifyPairingStateChanged(false);
     });

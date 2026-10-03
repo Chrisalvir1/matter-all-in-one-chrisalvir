@@ -589,7 +589,7 @@ export class HomeKitCameraRecordingDelegate
       this.platform?.ha?.getAccessToken?.() || this.platform?.ha?.wsAccessToken;
 
     const cameraIdentity =
-      `${this.entityId} ${this.record.name || ""} ${this.record.model || ""} ${sourceUrl || ""}`.toLowerCase();
+      `${this.entityId} ${this.record.name || ""} ${this.record.model || ""} ${this.streamSource.metadata?.model || ""} ${sourceUrl || ""}`.toLowerCase();
     // The C402 may reopen its direct RTSP publisher between Live View and the
     // HKSV reader. Its first packets can arrive before SPS/PPS, so a normal
     // low-latency probe drops the parameter sets and the fMP4 reader exits
@@ -753,50 +753,8 @@ export class HomeKitCameraRecordingDelegate
         "-sc_threshold",
         "0",
       );
-    } else if (isH264 && isTapoC120) {
-      // Tapo C120 outputs 2560x1440 H.264 High Level 5.0.
-      // This classical HKSV pipeline normalizes clips to 1920x1080 High Level 4.0 for Apple Home Hub.
-      const fpsDetails = resolveCameraFpsDetails(
-        this.capabilities,
-        this.record,
-      );
-      if (!fpsDetails.fps) {
-        this.platform?.log?.error?.(
-          `[HKSV][${this.entityId}] Tapo C120 detectada pero su tasa de cuadros no es válida (${fpsDetails.label}). Transcodificación detenida por seguridad.`,
-        );
-        this.record.hksvState = "not_capable";
-        return null;
-      }
-      const c120Fps = Math.max(1, Math.min(fpsDetails.fps, 20));
-      this.platform?.log?.notice?.(
-        `[HKSV][${this.entityId}] Tapo C120 detectada (modelo: "${this.record.model || "C120"}") — transcodificando HKSV prebuffer 2K->1920x1080@${c120Fps}fps [${fpsDetails.label}] High Level 4.0 para compatibilidad Apple Home Hub`,
-      );
-      args.push(
-        "-map",
-        "0:v:0",
-        "-c:v",
-        "libx264",
-        "-pix_fmt",
-        "yuv420p",
-        "-profile:v",
-        "high",
-        "-level:v",
-        "4.0",
-        "-vf",
-        "scale=1920:1080:force_original_aspect_ratio=decrease:force_divisible_by=2",
-        "-r",
-        String(c120Fps),
-        "-g",
-        String(Math.max(1, c120Fps * 2)),
-        "-keyint_min",
-        String(Math.max(1, c120Fps)),
-        "-preset",
-        "ultrafast",
-        "-tune",
-        "zerolatency",
-      );
     } else if (isH264) {
-      // Normal H.264 cameras: zero transcoding overhead, pure passthrough copy
+      // Normal H.264 cameras (including C120, Ezviz, Wyze): zero transcoding overhead, pure passthrough copy
       args.push(
         "-map",
         "0:v:0",

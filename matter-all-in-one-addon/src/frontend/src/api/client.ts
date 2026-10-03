@@ -57,6 +57,11 @@ export const api = {
   getCameraUiCameras: () => request<CameraUiCameraItem[]>("/cameraui/cameras"),
   toggleCameraUiHomeKit: (cameraId: string) =>
     request(`/cameraui/cameras/${encodeURIComponent(cameraId)}/toggle-homekit`, { method: "POST" }),
+  toggleCameraHomeKit: (cameraId: string) =>
+    request<{ success: boolean; homeKitEnabled?: boolean; error?: string }>(
+      `/cameras/${encodeURIComponent(cameraId)}/toggle-homekit`,
+      { method: "POST" },
+    ),
   resetCameraUiPairing: (cameraId: string) =>
     request<{ success: boolean }>(`/cameraui/cameras/${encodeURIComponent(cameraId)}/reset-pairing`, {
       method: "POST",

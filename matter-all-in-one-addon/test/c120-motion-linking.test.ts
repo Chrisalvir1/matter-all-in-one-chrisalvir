@@ -176,7 +176,7 @@ describe("Tapo C120 Motion Sensor Linking & HKSV Triggering (v1.9.7)", () => {
     expect(spyRecordingMotion).toHaveBeenCalledWith(false);
   });
 
-  it("advertises a complete standard resolution ladder for C120 capped at 15 fps (never just a single resolution)", () => {
+  it("advertises a complete standard resolution ladder for C120 including 2K 2560x1440 capped at 20 fps", () => {
     const platform = createMockPlatform(true);
     const acc = new HomeKitCameraAccessory(
       platform as any,
@@ -200,13 +200,14 @@ describe("Tapo C120 Motion Sensor Linking & HKSV Triggering (v1.9.7)", () => {
 
     const ladder = acc.buildDeclaredResolutions();
     expect(ladder.length).toBeGreaterThanOrEqual(4);
-    expect(ladder).toContainEqual([1920, 1080, 15]);
-    expect(ladder).toContainEqual([1280, 720, 15]);
-    expect(ladder).toContainEqual([640, 360, 15]);
-    expect(ladder).toContainEqual([320, 180, 15]);
-    // Ensure all resolutions are capped at max 15 fps
+    expect(ladder).toContainEqual([2560, 1440, 20]);
+    expect(ladder).toContainEqual([1920, 1080, 20]);
+    expect(ladder).toContainEqual([1280, 720, 20]);
+    expect(ladder).toContainEqual([640, 360, 20]);
+    expect(ladder).toContainEqual([320, 180, 20]);
+    // Ensure all resolutions are capped at max 20 fps (physical hardware ceiling)
     for (const [w, h, fps] of ladder) {
-      expect(fps).toBeLessThanOrEqual(15);
+      expect(fps).toBeLessThanOrEqual(20);
     }
   });
 

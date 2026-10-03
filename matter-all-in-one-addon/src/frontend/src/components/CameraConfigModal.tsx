@@ -91,6 +91,7 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
   const [selectedSirenId, setSelectedSirenId] = useState<string>("auto");
   const [selectedMotionId, setSelectedMotionId] = useState<string>("auto");
   const [exportMode, setExportMode] = useState<string>("auto");
+  const [isTogglingHap, setIsTogglingHap] = useState(false);
 
   const isCameraUi = Boolean(
     camera && "id" in camera && !("cameraId" in camera),
@@ -254,6 +255,42 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
   const isPaired = isCameraUi
     ? Boolean((camera as CameraUiCameraItem).isPaired)
     : (camera as CameraRecord)?.identity?.homeKitPairingState === "paired";
+
+  const isCameraHapActive = isCameraUi
+    ? (camera as CameraUiCameraItem).homeKitEnabled !== false
+    : (camera as CameraRecord)?.exportConfig?.homeKitEnabled !== false &&
+      (camera as CameraRecord)?.exportConfig?.exportMode !== "disabled";
+
+  const handleToggleCameraHap = async () => {
+    if (isTogglingHap) return;
+    setIsTogglingHap(true);
+    const nextState = !isCameraHapActive;
+    try {
+      if (isCameraUi) {
+        await api.toggleCameraUiHomeKit(cameraId);
+        (camera as CameraUiCameraItem).homeKitEnabled = nextState;
+      } else {
+        await api.toggleCameraHomeKit(cameraId);
+        if (!(camera as CameraRecord).exportConfig) {
+          (camera as CameraRecord).exportConfig = {};
+        }
+        (camera as CameraRecord).exportConfig!.homeKitEnabled = nextState;
+        (camera as CameraRecord).exportConfig!.exportMode = nextState
+          ? "auto"
+          : "disabled";
+      }
+      showToast(
+        nextState
+          ? `✓ ${cameraName} activada para Apple Home`
+          : `${cameraName} desactivada de Apple Home`,
+      );
+      onRefresh();
+    } catch (err: any) {
+      showToast(err.message || "Error al modificar estado de HomeKit", true);
+    } finally {
+      setIsTogglingHap(false);
+    }
+  };
 
   // Detect Google Nest cameras — show go2rtc setup guide tab
   const isNestCamera =
@@ -909,7 +946,7 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                 type="button"
                 onClick={() => setActiveTab("homekit")}
               >
-                Apple Home (HAP)
+                Apple Home (HAP) {isCameraHapActive ? (isPaired ? "✓" : "") : "⚪"}
               </button>
               <button
                 className={`button button-sm ${activeTab === "matter" ? "button-primary" : "button-secondary"}`}
@@ -1459,8 +1496,99 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                   </button>
                 </div>
               )
-            ) : activeTab === "homekit" && isHevcCamera ? (
-              isPaired ? (
+            ) : activeTab === "homekit" ? (
+              <>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "12px 14px",
+                    background: isCameraHapActive
+                      ? "rgba(245, 158, 11, 0.12)"
+                      : "rgba(255, 255, 255, 0.03)",
+                    border: `1px solid ${
+                      isCameraHapActive
+                        ? "rgba(245, 158, 11, 0.4)"
+                        : "var(--border)"
+                    }`,
+                    borderRadius: 8,
+                    marginBottom: 14,
+                  }}
+                >
+                  <div>
+                    <div
+                      style={{
+                        fontWeight: 600,
+                        fontSize: "0.95rem",
+                        color: isCameraHapActive ? "#fcd34d" : "var(--text)",
+                      }}
+                    >
+                      Activar HomeKit HAP (Apple Home)
+                    </div>
+                    <div
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "var(--muted)",
+                        marginTop: 2,
+                      }}
+                    >
+                      {isCameraHapActive
+                        ? isPaired
+                          ? "✓ Cámara activa y vinculada en Apple Home"
+                          : "✓ Accesorio activo en HomeKit HAP (código QR y PIN listos)"
+                        : "Apagado (activa el switch para exportar y generar código QR en Apple Casa)"}
+                    </div>
+                  </div>
+                  <label className="toggle" style={{ margin: 0 }}>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(isCameraHapActive)}
+                      onChange={handleToggleCameraHap}
+                      disabled={isTogglingHap}
+                    />
+                    <span />
+                  </label>
+                </div>
+
+                {!isCameraHapActive ? (
+                  <div
+                    style={{
+                      padding: "24px 16px",
+                      background: "rgba(255, 255, 255, 0.02)",
+                      border: "1px dashed var(--border)",
+                      borderRadius: 8,
+                      textAlign: "center",
+                    }}
+                  >
+                    <div style={{ fontSize: "2rem", marginBottom: 8 }}>⏸️</div>
+                    <strong
+                      style={{
+                        color: "var(--text)",
+                        fontSize: "0.95rem",
+                        display: "block",
+                        marginBottom: 6,
+                      }}
+                    >
+                      Exportación a Apple Home desactivada
+                    </strong>
+                    <p
+                      style={{
+                        color: "var(--muted)",
+                        fontSize: "0.82rem",
+                        margin: "0 auto",
+                        maxWidth: 420,
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      Esta cámara no está exportada a HomeKit HAP. Los procesos de
+                      streaming, prebuffer de grabación y puertos mDNS están
+                      apagados para ahorrar CPU. Activa el interruptor superior
+                      cuando desees vincularla en Apple Home.
+                    </p>
+                  </div>
+                ) : isHevcCamera ? (
+                  isPaired ? (
                 <div
                   className="paired-success-glass-card"
                   id="paired-camera-card"
@@ -1643,6 +1771,8 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                 </div>
               </>
             )}
+            </>
+          ) : null}
 
             <div
               className="qr-actions"
@@ -1653,7 +1783,7 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                 marginTop: 12,
               }}
             >
-              {activeTab === "homekit" && (
+              {activeTab === "homekit" && isCameraHapActive && (
                 <button
                   className="button button-danger-outline button-sm"
                   type="button"
