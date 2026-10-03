@@ -12,6 +12,7 @@ import { HomeKitCameraRecordingDelegate } from "../src/camera/homekit/homekit-ca
 import {
   prependProducerReferenceTime,
   SecureVideoSFrame,
+  HevcRecordingDelegate,
 } from "../src/camera/homekit/hevc/index.js";
 import type {
   CameraCapabilitiesInfo,
@@ -162,6 +163,7 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     expect(accessory.capabilities.videoCodec).toBe("hevc");
     expect(accessory.capabilities.requiresTranscoding).toBe(false);
     expect(accessory.capabilities.strategy).toBe("passthrough_hevc");
+    expect(accessory.recordingDelegate).toBeInstanceOf(HevcRecordingDelegate);
   });
 
   it("passes HEVC through without re-encoding (-c:v copy) in streaming delegate", () => {
@@ -748,5 +750,67 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     expect(response.video).toBeDefined();
     expect(response.video.port).toBeGreaterThan(0);
     expect(response.video.ssrc).toBeDefined();
+  });
+
+  it("buildRecordingResolutions uses dynamic FPS and does NOT assume 30fps for 20fps or 25fps cameras", () => {
+    const platform = createPlatformMock();
+    const record = createBaseRecord("camera.vimtag_4k");
+    const capabilities = createCapabilities({
+      resolution: { width: 3840, height: 2160 },
+      maxFps: 20,
+      videoCodec: "hevc",
+      strategy: "passthrough_hevc",
+    });
+    const streamSource = createStreamSource();
+
+    const accessory = new HomeKitCameraAccessory(
+      platform,
+      "camera.vimtag_4k",
+      record,
+      capabilities,
+      streamSource,
+    );
+
+    const resolutions = accessory.buildRecordingResolutions();
+    expect(resolutions).toContainEqual([3840, 2160, 20]);
+    expect(resolutions).toContainEqual([2560, 1440, 20]);
+    expect(resolutions).toContainEqual([1920, 1080, 20]);
+    expect(resolutions).toContainEqual([1280, 720, 20]);
+    // Verifies none of them incorrectly hardcoded 30 fps
+    for (const [_, __, fps] of resolutions) {
+      expect(fps).toBe(20);
+    }
+  });
+
+  it("links Vimtag motion binary sensor automatically via findLinkedMotionEntity", () => {
+    const platform = createPlatformMock();
+    platform.ha.hassStates.set("binary_sensor.vimtag_motion", {
+      state: "off",
+      attributes: {
+        friendly_name: "Vimtag Movimiento",
+        device_class: "motion",
+      },
+    });
+
+    const record = createBaseRecord("camera.vimtag_recamara", {
+      name: "Vimtag Recamara",
+      model: "Vimtag P3",
+    });
+    const capabilities = createCapabilities({
+      videoCodec: "hevc",
+      strategy: "passthrough_hevc",
+    });
+    const streamSource = createStreamSource();
+
+    const accessory = new HomeKitCameraAccessory(
+      platform,
+      "camera.vimtag_recamara",
+      record,
+      capabilities,
+      streamSource,
+    );
+
+    const linked = accessory.findLinkedMotionEntity();
+    expect(linked).toBe("binary_sensor.vimtag_motion");
   });
 });

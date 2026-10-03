@@ -17,7 +17,7 @@ import type {
 
 export class HevcRecordingDelegate extends EventEmitter implements CameraRecordingDelegate {
   private recordingActive = false;
-  private selectedConfiguration?: CameraRecordingConfiguration;
+  public selectedConfiguration?: CameraRecordingConfiguration;
   private prebuffer: Fmp4MediaFragment[] = [];
   private initializationSegment: Buffer | null = null;
   private ffmpegProcess?: ChildProcess;
@@ -269,7 +269,9 @@ export class HevcRecordingDelegate extends EventEmitter implements CameraRecordi
 
     try {
       const ffmpegPath = resolveFfmpegPath();
-      const sourceUrl = this.streamSource.url;
+      let sourceUrl = (this.streamSource.url || "")
+        .replace("://localhost:", "://127.0.0.1:")
+        .replace("://localhost/", "://127.0.0.1/");
       if (!ffmpegPath || !sourceUrl) {
         this.record.hksvState = "not_capable";
         return;
@@ -309,20 +311,34 @@ export class HevcRecordingDelegate extends EventEmitter implements CameraRecordi
         "-tag:v", "hvc1",
       );
 
-      // Audio: STRICT AAC copy if compatible, otherwise -an
+      // Audio: AAC passthrough copy if already AAC, otherwise adapt to AAC-LC 16kHz mono for iCloud
+      const hasAudioSource =
+        this.capabilities.hasAudio !== false &&
+        this.capabilities.audioCodec !== "none";
       const audioCodec = this.capabilities.audioCodec?.toLowerCase();
-      if (audioCodec === "aac") {
-        this.platform?.log?.notice?.(
-          `[HKSV3][${this.entityId}] Grabación HKSV3: preservando audio AAC de fuente con passthrough (-c:a copy)`,
-        );
-        args.push(
-          "-map", "0:a:0?",
-          "-c:a", "copy",
-        );
+
+      if (hasAudioSource) {
+        if (audioCodec === "aac") {
+          this.platform?.log?.notice?.(
+            `[HKSV3][${this.entityId}] Grabación HKSV3: preservando audio AAC de fuente con passthrough (-c:a copy)`,
+          );
+          args.push(
+            "-map", "0:a:0?",
+            "-c:a", "copy",
+          );
+        } else {
+          this.platform?.log?.notice?.(
+            `[HKSV3][${this.entityId}] Grabación HKSV3: adaptando audio fuente (${audioCodec || "desconocido"}) a AAC-LC 16kHz mono para iCloud`,
+          );
+          args.push(
+            "-map", "0:a:0?",
+            "-c:a", "aac",
+            "-b:a", "32k",
+            "-ar", "16000",
+            "-ac", "1",
+          );
+        }
       } else {
-        this.platform?.log?.notice?.(
-          `[HKSV3][${this.entityId}] Audio fuente (${audioCodec || "none"}) no es AAC: omitiendo pista de audio en grabación para evitar transcodificación`,
-        );
         args.push("-an");
       }
 

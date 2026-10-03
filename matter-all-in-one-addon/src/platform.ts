@@ -875,6 +875,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       aliases.push("ring_gym", "gym");
     }
 
+    if (raw.includes("vimtag")) {
+      aliases.push("vimtag");
+    }
+
     return aliases;
   }
 
@@ -5323,6 +5327,12 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           );
           const isC120Match = isTapoC120Entity && isTapoC120Cam && isMotionClass;
 
+          const isVimtagEntity = /vimtag/i.test(`${entityId} ${entityFriendlyName}`);
+          const isVimtagCam = /vimtag/i.test(
+            `${cam.entityId} ${camFriendlyName} ${cam.homekitAccessory?.record?.name || ""} ${cam.homekitAccessory?.record?.model || ""}`,
+          );
+          const isVimtagMatch = isVimtagEntity && isVimtagCam && isMotionClass;
+
           if (!cam.homekitAccessory.linkedMotionEntityId) {
             cam.homekitAccessory.linkedMotionEntityId =
               cam.homekitAccessory.findLinkedMotionEntity();
@@ -5331,6 +5341,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           const isLinked =
             isC402Match ||
             isC120Match ||
+            isVimtagMatch ||
             cam.homekitAccessory.linkedMotionEntityId === entityId ||
             (this.ha.hassEntities.get(entityId)?.device_id &&
               this.ha.hassEntities.get(entityId)?.device_id ===
@@ -5398,6 +5409,12 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         const isEzvizCam = /ezviz|h6c/i.test(`${cuiId} ${camName}`);
         const isEzvizMatch = isEzvizEntity && isEzvizCam && isMotionClass;
 
+        const isVimtagEntity = /vimtag/i.test(`${entityId} ${entityFriendlyName}`);
+        const isVimtagCam = /vimtag/i.test(
+          `${cuiId} ${camName} ${accessory.record?.name || ""} ${accessory.record?.model || ""}`,
+        );
+        const isVimtagMatch = isVimtagEntity && isVimtagCam && isMotionClass;
+
         const configuredMotionEntity =
           linkedId === entityId ||
           (accessory.record as any)?.realEntities?.some(
@@ -5424,6 +5441,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           isC120Match ||
           isWyzeMatch ||
           isEzvizMatch ||
+          isVimtagMatch ||
           (allWordsMatch && isMotionClass) ||
           (cleanCuiId.length >= 8 && cleanEntityId.includes(cleanCuiId)) ||
           (cleanCamName.length >= 8 && cleanEntityId.includes(cleanCamName));

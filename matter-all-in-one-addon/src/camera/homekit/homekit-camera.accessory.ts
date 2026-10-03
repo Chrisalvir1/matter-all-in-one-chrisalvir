@@ -30,6 +30,7 @@ import {
   HomeKitCameraRecordingDelegate,
   resolveCameraSourceFps,
 } from "./homekit-camera-recording.delegate.js";
+import { HevcRecordingDelegate } from "./hevc/hevc-recording.js";
 import crypto from "node:crypto";
 import os from "node:os";
 import { ScryptedStorage } from "../scrypted/scrypted-storage.js";
@@ -71,7 +72,9 @@ export class HomeKitCameraAccessory {
   public accessory: Accessory;
   public controller?: CameraController;
   public delegate?: HomeKitCameraStreamingDelegate;
-  public recordingDelegate?: HomeKitCameraRecordingDelegate;
+  public recordingDelegate?:
+    | HomeKitCameraRecordingDelegate
+    | HevcRecordingDelegate;
   public motionService?: Service;
   public lightService?: Service;
   public sirenService?: Service;
@@ -323,13 +326,32 @@ export class HomeKitCameraAccessory {
       this.capabilities,
       this.streamSource,
     );
-    this.recordingDelegate = new HomeKitCameraRecordingDelegate(
-      this.platform,
-      this.entityId,
-      this.record,
-      this.capabilities,
-      this.streamSource,
-    );
+
+    const isHevc =
+      this.capabilities.videoCodec === "hevc" ||
+      this.capabilities.videoCodec === "h265" ||
+      this.capabilities.strategy === "passthrough_hevc";
+
+    if (isHevc) {
+      this.platform?.log?.notice?.(
+        `[HomeKitCamera][${this.entityId}] Configurando HevcRecordingDelegate nativo para HKSV3 / HEVC (-c:v copy)`,
+      );
+      this.recordingDelegate = new HevcRecordingDelegate(
+        this.platform,
+        this.entityId,
+        this.record,
+        this.capabilities,
+        this.streamSource,
+      );
+    } else {
+      this.recordingDelegate = new HomeKitCameraRecordingDelegate(
+        this.platform,
+        this.entityId,
+        this.record,
+        this.capabilities,
+        this.streamSource,
+      );
+    }
 
     this.delegate.on("session-start", () => {
       this.recordingDelegate?.pausePrebuffer();
@@ -347,7 +369,7 @@ export class HomeKitCameraAccessory {
     this.controller = new CameraController(this.buildControllerOptions());
     this.accessory.configureController(this.controller);
     this.platform?.log?.notice?.(
-      `[HomeKitCamera][${this.entityId}] Configured classic CameraController (H.264 passthrough)`,
+      `[HomeKitCamera][${this.entityId}] Configured classic CameraController (${isHevc ? "HEVC/HKSV3 passthrough" : "H.264 passthrough"})`,
     );
   }
 
@@ -486,10 +508,13 @@ export class HomeKitCameraAccessory {
       15,
       Math.min(this.capabilities.maxFps || cameraMax, isC120 ? 20 : 60),
     );
+    const dynamicFps = Math.min(sourceFps, cameraMax);
     const candidates: [number, number, number][] = [
-      [width, height, sourceFps],
-      [1920, 1080, Math.min(sourceFps, cameraMax)],
-      [1280, 720, Math.min(sourceFps, cameraMax)],
+      [width, height, dynamicFps],
+      ...(width >= 3840 ? ([[2560, 1440, dynamicFps]] as [number, number, number][]) : []),
+      ...(width > 1920 && width < 3840 ? ([[2560, 1440, dynamicFps]] as [number, number, number][]) : []),
+      [1920, 1080, dynamicFps],
+      [1280, 720, dynamicFps],
     ];
     const seen = new Set<string>();
     const res: [number, number, number][] = [];
@@ -528,6 +553,7 @@ export class HomeKitCameraAccessory {
       15,
       Math.min(this.capabilities.maxFps || cameraMax, isC120 ? 20 : 60),
     );
+    const dynamicFps = Math.min(sourceFps, cameraMax);
 
     // Tapo C120: Configured to 1080p Full HD (1920x1080) in Tapo app.
     // Advertises native 1080p ladder matching Apple HAP Level 4.0 specification
@@ -549,13 +575,13 @@ export class HomeKitCameraAccessory {
     }
 
     const ladder: [number, number, number][] = [
-      [width, height, sourceFps],
-      ...(width > 1920 ? ([[2560, 1440, Math.min(sourceFps, 30)]] as [number, number, number][]) : []),
-      [1920, 1080, Math.min(sourceFps, 30)],
-      [1280, 720, Math.min(sourceFps, 30)],
-      [640, 360, 30],
-      [480, 270, 30],
-      [320, 180, 30],
+      [width, height, dynamicFps],
+      ...(width > 1920 ? ([[2560, 1440, dynamicFps]] as [number, number, number][]) : []),
+      [1920, 1080, dynamicFps],
+      [1280, 720, dynamicFps],
+      [640, 360, Math.min(dynamicFps, 30)],
+      [480, 270, Math.min(dynamicFps, 30)],
+      [320, 180, Math.min(dynamicFps, 30)],
     ];
 
     const seen = new Set<string>();
@@ -887,6 +913,14 @@ export class HomeKitCameraAccessory {
             `${this.entityId} ${this.record?.name || ""}`,
           );
         if (isC402Entity && isC402Cam) {
+          return entityId;
+        }
+
+        const isVimtagEntity = /vimtag/i.test(`${entityId} ${fn}`);
+        const isVimtagCam = /vimtag/i.test(
+          `${this.entityId} ${this.record?.name || ""} ${this.record?.model || ""}`,
+        );
+        if (isVimtagEntity && isVimtagCam) {
           return entityId;
         }
 
