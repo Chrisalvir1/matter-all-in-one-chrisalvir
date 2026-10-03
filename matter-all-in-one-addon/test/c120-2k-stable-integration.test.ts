@@ -470,11 +470,11 @@ describe("Integración Estable v1.9.5: Tapo C120 2K Level 5.0 y Aislamiento (20 
       },
     };
 
-    // HAP advertises H.264 only, so an HEVC source is normalized at its RTP boundary.
+    // HEVC camera with passthrough strategy passes through natively
     const args = (delegate as any).buildStreamArgs(session, request, false);
     expect(args).toContain("-c:v");
-    expect(args).toContain("libx264");
-    expect(args).toContain("4.0");
+    expect(args).toContain("copy");
+    expect(args).not.toContain("libx264");
   });
 
   // 12. FPS ausente: rechazo seguro

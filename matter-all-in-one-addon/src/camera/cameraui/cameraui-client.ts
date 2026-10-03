@@ -603,7 +603,7 @@ export class CameraUiClient {
         if (/4k|uhd|8mp/i.test(combinedTitleAndModel)) {
           width = 3840;
           height = 2160;
-        } else if (/2k|qhd|c402|c420|c425|c520|c325|tc72|3mp|4mp|5mp/i.test(combinedTitleAndModel)) {
+        } else if (/2k|qhd|c420|c425|c520|c325|tc72|3mp|4mp|5mp/i.test(combinedTitleAndModel)) {
           width = 2560;
           height = 1440;
         } else {

@@ -179,8 +179,8 @@ export class CameraUiHomeKitBridge {
       `${camera.id} ${camera.name || ""}`,
     );
     if (isTapoC120Mount) {
-      camera.width = 2560;
-      camera.height = 1440;
+      camera.width = 1920;
+      camera.height = 1080;
       camera.fps = 15;
       camera.videoCodec = "h264";
       camera.strategy = "passthrough_h264";
@@ -201,12 +201,12 @@ export class CameraUiHomeKitBridge {
             );
           } else {
             platform.log?.notice?.(
-              `[Camera.UI][${camera.name}] C120 RTSP no reportó FPS; usando 2560x1440@15fps medidos como valor seguro`,
+              `[Camera.UI][${camera.name}] C120 RTSP no reportó FPS; usando 1920x1080@15fps como valor seguro`,
             );
           }
         } catch {
           platform.log?.notice?.(
-            `[Camera.UI][${camera.name}] C120 RTSP no se pudo medir; usando 2560x1440@15fps medidos como valor seguro`,
+            `[Camera.UI][${camera.name}] C120 RTSP no se pudo medir; usando 1920x1080@15fps como valor seguro`,
           );
         }
       }

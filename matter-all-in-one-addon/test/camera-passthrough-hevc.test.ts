@@ -427,10 +427,10 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     expect(args).toContain("-progress");
     expect(args).toContain("pipe:1");
     expect(args).toContain("+genpts+discardcorrupt");
-    // Tapo is normalized only at the HAP RTP boundary for Apple Home.
+    // Tapo C402 is native 1080p H.264, passed through with pure -c:v copy without software transcoding
     expect(args).toContain("-c:v");
-    expect(args).toContain("libx264");
-    expect(args).toContain("4.0");
+    expect(args).toContain("copy");
+    expect(args).not.toContain("libx264");
   });
 
   it("SFrame frame encryption protects and validates frames correctly", () => {
@@ -624,8 +624,7 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     };
 
     const args = delegate.buildPrebufferArgs("rtsp://192.168.1.100:554/live");
-    expect(args).not.toBeNull();
-    expect(args).toContain("-c:v");
+    expect(args.includes("-c:v") || args.includes("-vcodec")).toBe(true);
     expect(args).toContain("copy");
     expect(args).toContain("-c:a");
     expect(args).toContain("copy");

@@ -834,7 +834,16 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
     // Tapo C120 / Tapo Spot
     if (raw.includes("c120") || raw.includes("spot")) {
-      aliases.push("tapo_spot", "spot");
+      aliases.push(
+        "tapo_c120",
+        "c120",
+        "tapo-c120",
+        "tapo c120",
+        "tapoc120",
+        "tapo_spot",
+        "spot",
+        "tapo-spot",
+      );
     }
 
     // EZVIZ Patio Trasero / CS-H6c
@@ -5310,7 +5319,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               `${entityId} ${entityFriendlyName}`,
             );
           const isTapoC120Cam = /tapo[-_ ]?c120|tapo[-_ ]?spot|\bc120\b/i.test(
-            `${cam.entityId} ${camFriendlyName}`,
+            `${cam.entityId} ${camFriendlyName} ${cam.homekitAccessory?.record?.name || ""} ${cam.homekitAccessory?.record?.model || ""}`,
           );
           const isC120Match = isTapoC120Entity && isTapoC120Cam && isMotionClass;
 
@@ -5374,7 +5383,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           `${entityId} ${entityFriendlyName}`,
         );
         const isTapoC120Cam = /tapo[-_ ]?c120|tapo[-_ ]?spot|\bc120\b/i.test(
-          `${cuiId} ${camName}`,
+          `${cuiId} ${camName} ${accessory.record?.name || ""} ${accessory.record?.model || ""}`,
         );
         const isC120Match = isTapoC120Entity && isTapoC120Cam && isMotionClass;
 

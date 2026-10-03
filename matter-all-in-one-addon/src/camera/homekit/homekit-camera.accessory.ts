@@ -529,25 +529,28 @@ export class HomeKitCameraAccessory {
       Math.min(this.capabilities.maxFps || cameraMax, isC120 ? 20 : 60),
     );
 
-    // Tapo C120: Native 2K H.264 High Level 5.0 (2560x1440).
-    // Anunciar 2K nativo (2560x1440) al frente de la escala para que Apple HomeKit
-    // negocie Live View 2K con remuxing passthrough puro (-c:v copy), idéntico al
-    // comportamiento de Camera.UI, con cero transcodificación y cero consumo de CPU.
+    // Tapo C120: Configured to 1080p Full HD (1920x1080) in Tapo app.
+    // Advertises native 1080p ladder matching Apple HAP Level 4.0 specification
+    // for pure copy passthrough (-c:v copy) with zero CPU transcoding.
     if (isC120) {
       const c120MaxFps = Math.min(sourceFps, 20);
-      return [
-        [2560, 1440, c120MaxFps],
+      const resList: [number, number, number][] = [];
+      if (width > 1920) {
+        resList.push([2560, 1440, c120MaxFps]);
+      }
+      resList.push(
         [1920, 1080, c120MaxFps],
         [1280, 720, c120MaxFps],
         [640, 360, c120MaxFps],
         [480, 270, c120MaxFps],
         [320, 180, c120MaxFps],
-      ];
+      );
+      return resList;
     }
 
     const ladder: [number, number, number][] = [
       [width, height, sourceFps],
-      [2560, 1440, Math.min(sourceFps, 30)],
+      ...(width > 1920 ? ([[2560, 1440, Math.min(sourceFps, 30)]] as [number, number, number][]) : []),
       [1920, 1080, Math.min(sourceFps, 30)],
       [1280, 720, Math.min(sourceFps, 30)],
       [640, 360, 30],
@@ -869,7 +872,7 @@ export class HomeKitCameraAccessory {
           `${entityId} ${fn}`,
         );
         const isC120Cam = /tapo[-_ ]?c120|tapo[-_ ]?spot|\bc120\b/i.test(
-          `${this.entityId} ${this.record?.name || ""}`,
+          `${this.entityId} ${this.record?.name || ""} ${this.record?.model || ""}`,
         );
         if (isC120Entity && isC120Cam) {
           return entityId;

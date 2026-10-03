@@ -364,9 +364,9 @@ describe("HomeKitCameraRecordingDelegate", () => {
     expect(args).toContain("-copyts");
     expect(args).toContain("-start_at_zero");
     expect(args).not.toContain("-use_wallclock_as_timestamps");
-    expect(args?.[args.indexOf("-c:v") + 1]).toBe("libx264");
-    expect(args).toContain("4.0");
-    expect(args).toContain("-vf");
+    expect(args).toContain("-vcodec");
+    expect(args).toContain("copy");
+    expect(args).not.toContain("libx264");
     delegate.destroy();
   });
 

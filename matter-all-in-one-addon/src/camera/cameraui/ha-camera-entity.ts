@@ -26,6 +26,18 @@ export function resolveHaCameraEntityId(
   if (isC402) {
     candidates.push("camera.tapo_frente_de_calle", "camera.tapo_c402");
   }
+  const isC120 = /(?:\bc120\b|tapo[-_ ]?c120|tapo[-_ ]?spot|\bspot\b)/i.test(
+    `${camera.id} ${cameraName}`,
+  );
+  if (isC120) {
+    candidates.push(
+      "camera.tapo_c120",
+      "camera.tapo_spot",
+      "camera.c120",
+      "camera.tapo_c120_hd",
+      "camera.tapo_c120_sd",
+    );
+  }
   for (const id of candidates) {
     if (isStreamCameraEntityId(id) && hassStates.has(id)) return id;
   }

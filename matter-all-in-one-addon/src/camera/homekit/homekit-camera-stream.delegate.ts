@@ -977,6 +977,16 @@ export class HomeKitCameraStreamingDelegate
             : this.platform?.ha?.hassStates?.has("camera.tapo_c402")
             ? "camera.tapo_c402"
             : "";
+        } else if (this.isTapoC120()) {
+          haEntityId = this.platform?.ha?.hassStates?.has("camera.tapo_c120")
+            ? "camera.tapo_c120"
+            : this.platform?.ha?.hassStates?.has("camera.tapo_spot")
+            ? "camera.tapo_spot"
+            : this.platform?.ha?.hassStates?.has("camera.c120")
+            ? "camera.c120"
+            : this.platform?.ha?.hassStates?.has("camera.tapo_c120_hd")
+            ? "camera.tapo_c120_hd"
+            : "";
         }
       }
       if (
@@ -1428,10 +1438,9 @@ export class HomeKitCameraStreamingDelegate
     // HEVC into that RTP session makes FFmpeg appear healthy while Apple Home
     // receives packets it did not negotiate, ending in "No Response".  HEVC
     // remains native up to this output boundary, then is converted solely for
-    // Tapo C402 RTSP source is a 2K H.264 stream requiring normalization to HAP Level 4.0;
-    // this logic is strictly maintained intact for C402.
-    // Tapo C120 uses pure copy passthrough matching Camera.UI bridge with zero CPU overhead.
-    const needsTapoVideoNormalization = isTapoC402;
+    // Both Tapo C402 and C120 are native 1080p H.264 streams; they use pure copy passthrough
+    // (-c:v copy) with zero software transcoding and zero CPU load.
+    const needsTapoVideoNormalization = false;
     const isHevc =
       codec === "hevc" ||
       codec === "h265" ||

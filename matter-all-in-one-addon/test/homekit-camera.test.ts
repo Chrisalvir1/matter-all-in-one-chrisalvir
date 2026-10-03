@@ -482,12 +482,10 @@ describe("HomeKitCameraStreamingDelegate", () => {
         video: { fps: 30, width: 1920, height: 1080, pt: 99 } as any,
       } as any,
     );
-    // Tapo C402 is normalized only at the HAP RTP boundary to H.264 High L4.0.
+    // Tapo C402 is native 1080p H.264, passed through with pure -c:v copy without software transcoding
     expect(args).toContain("-c:v");
-    expect(args).toContain("libx264");
-    expect(args).toContain("-level:v");
-    expect(args).toContain("4.0");
-    expect(args).toContain("-vf");
+    expect(args).toContain("copy");
+    expect(args).not.toContain("libx264");
     expect(args).toContain("2097152");
     expect(args).toContain("3000000");
     expect(args).toContain("-progress");

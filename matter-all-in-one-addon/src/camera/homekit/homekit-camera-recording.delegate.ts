@@ -715,46 +715,8 @@ export class HomeKitCameraRecordingDelegate
     const isC120Regex = isC120Token(sourceUrl);
     const isTapoC120 = isC120Model || isC120Entity || isC120Name || isC120Regex;
 
-    if (isH264 && isTapoC402) {
-      // The C402 source is a 2K/High-Level H.264 feed, while Apple HKSV
-      // consumes a bounded 1080p Level 4 stream. Re-encode at this boundary
-      // so the fMP4 init segment carries SPS/PPS matching the actual output.
-      const fpsDetails = resolveCameraFpsDetails(
-        this.capabilities,
-        this.record,
-      );
-      const c402Fps = Math.max(1, Math.min(fpsDetails.fps || 15, 15));
-      this.platform?.log?.notice?.(
-        `[HKSV][${this.entityId}] Tapo C402: normalizando fuente HA a H.264 High L4.0 1920x1080@${c402Fps} para fMP4/HomeKit`,
-      );
-      args.push(
-        "-map",
-        "0:v:0",
-        "-vf",
-        "scale=1920:1080:force_original_aspect_ratio=decrease:force_divisible_by=2",
-        "-c:v",
-        "libx264",
-        "-preset",
-        "ultrafast",
-        "-tune",
-        "zerolatency",
-        "-pix_fmt",
-        "yuv420p",
-        "-profile:v",
-        "high",
-        "-level:v",
-        "4.0",
-        "-r",
-        String(c402Fps),
-        "-g",
-        String(Math.max(1, c402Fps * 2)),
-        "-keyint_min",
-        String(c402Fps),
-        "-sc_threshold",
-        "0",
-      );
-    } else if (isH264) {
-      // Normal H.264 cameras (including C120, Ezviz, Wyze): zero transcoding overhead, pure passthrough copy
+    if (isH264) {
+      // Native H.264 1080p cameras (including C402, C120, Ezviz, Wyze): zero transcoding overhead, pure passthrough copy
       args.push(
         "-map",
         "0:v:0",
@@ -935,6 +897,20 @@ export class HomeKitCameraRecordingDelegate
             haEntityId = "camera.tapo_frente_de_calle";
           } else if (this.platform?.ha?.hassStates?.has("camera.tapo_c402")) {
             haEntityId = "camera.tapo_c402";
+          } else {
+            haEntityId = "";
+          }
+        } else if (
+          /(?:c120|spot)/i.test(`${this.entityId} ${this.record.name || ""}`)
+        ) {
+          if (this.platform?.ha?.hassStates?.has("camera.tapo_c120")) {
+            haEntityId = "camera.tapo_c120";
+          } else if (this.platform?.ha?.hassStates?.has("camera.tapo_spot")) {
+            haEntityId = "camera.tapo_spot";
+          } else if (this.platform?.ha?.hassStates?.has("camera.c120")) {
+            haEntityId = "camera.c120";
+          } else if (this.platform?.ha?.hassStates?.has("camera.tapo_c120_hd")) {
+            haEntityId = "camera.tapo_c120_hd";
           } else {
             haEntityId = "";
           }
