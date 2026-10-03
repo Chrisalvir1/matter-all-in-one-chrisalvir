@@ -428,37 +428,6 @@ export class HapGenericAccessory {
       // ── Humidificador / Deshumidificador ──────────────────────────────────
       case "humidifier":
       case "dehumidifier": {
-        // HAP's humidifier service always exposes CurrentRelativeHumidity.
-        // When Home Assistant has no real reading, use a control-only fan
-        // service so Apple Home never presents an invented 0% measurement.
-        if (this.getCurrentHumidity() === undefined) {
-          const control = this.accessory.addService(Service.Fanv2, this.record.name);
-          control.getCharacteristic(Characteristic.Active)
-            .onGet(() => this.getHomeAssistantState(this.entityId)?.state === "on" ? 1 : 0)
-            .onSet((value) => {
-              const [domain] = this.entityId.split(".");
-              const active = value === 1;
-              control.updateCharacteristic(Characteristic.Active, active ? 1 : 0);
-              this.callHaOptimistically(domain, active ? "turn_on" : "turn_off");
-            });
-          // Home Assistant exposes `humidity` as the real target threshold.
-          // It is intentionally labelled in the accessory name, and is never
-          // treated as a measured humidity or mist-power reading.
-          control.setCharacteristic(Characteristic.Name, `${this.record.name} Meta de humedad`);
-          control.getCharacteristic(Characteristic.RotationSpeed)
-            .onGet(() => {
-              const target = Number(this.getHomeAssistantState(this.entityId)?.attributes?.humidity);
-              return Number.isFinite(target) && target >= 0 && target <= 100 ? target : 0;
-            })
-            .onSet((value) => {
-              const [domain] = this.entityId.split(".");
-              const target = Math.max(0, Math.min(100, Number(value)));
-              control.updateCharacteristic(Characteristic.RotationSpeed, target);
-              this.callHaOptimistically(domain, "set_humidity", { humidity: target });
-            });
-          break;
-        }
-
         const svc = this.accessory.addService(
           Service.HumidifierDehumidifier,
           this.record.name,
@@ -493,9 +462,10 @@ export class HapGenericAccessory {
 
         svc.getCharacteristic(Characteristic.CurrentRelativeHumidity)
           .onGet(() => {
-            // Never claim a made-up 50%. Prefer the humidifier attribute, then
-            // a real humidity sensor belonging to the same HA device.
-            return this.getCurrentHumidity() ?? 0;
+            const current = this.getCurrentHumidity();
+            if (current !== undefined) return current;
+            const target = Number(this.getHomeAssistantState(this.entityId)?.attributes?.humidity);
+            return Number.isFinite(target) && target >= 0 && target <= 100 ? target : 0;
           });
 
         svc.getCharacteristic(Characteristic.RelativeHumidityHumidifierThreshold)
@@ -509,86 +479,6 @@ export class HapGenericAccessory {
             this.callHaOptimistically(domain, "set_humidity", { humidity: Number(value) });
           });
 
-        // Detect linked light if part of a composite device (e.g. Govee Diffuser)
-        const candidate = this.platform.getCompositeCandidate?.(this.entityId);
-        const lightMember = candidate?.members.find((m: any) =>
-          m.entityId.startsWith("light."),
-        );
-        if (lightMember) {
-          const lightEnt = this.platform.entities.get(lightMember.entityId);
-          const lightName =
-            lightEnt?.state?.attributes?.friendly_name || `${this.record.name} Luz`;
-          const lightSvc = this.accessory.addService(
-            Service.Lightbulb,
-            lightName,
-            "light",
-          );
-          lightSvc
-            .getCharacteristic(Characteristic.On)
-            .onGet(() => {
-              const ent = this.platform.entities.get(lightMember.entityId);
-              return ent?.state?.state === "on";
-            })
-            .onSet(async (val) => {
-              await this.platform.ha?.callService(
-                "light",
-                val ? "turn_on" : "turn_off",
-                lightMember.entityId,
-              );
-            });
-
-          lightSvc
-            .getCharacteristic(Characteristic.Brightness)
-            .onGet(() => {
-              const ent = this.platform.entities.get(lightMember.entityId);
-              const bri = ent?.state?.attributes?.brightness;
-              return bri !== undefined
-                ? Math.round((Number(bri) / 255) * 100)
-                : 100;
-            })
-            .onSet(async (val) => {
-              await this.platform.ha?.callService(
-                "light",
-                "turn_on",
-                lightMember.entityId,
-                { brightness_pct: Number(val) },
-              );
-            });
-
-          // Publish color only when the linked Home Assistant light advertises it.
-          const supportsColor = () => {
-            const attrs = this.platform.entities.get(lightMember.entityId)?.state
-              ?.attributes;
-            return Array.isArray(attrs?.hs_color) ||
-              (Array.isArray(attrs?.supported_color_modes) &&
-                attrs.supported_color_modes.some((mode: string) =>
-                  ["hs", "xy", "rgb"].includes(String(mode).toLowerCase()),
-                ));
-          };
-          if (supportsColor()) {
-            lightSvc
-              .getCharacteristic(Characteristic.Hue)
-              .onGet(() => Number(this.platform.entities.get(lightMember.entityId)
-                ?.state?.attributes?.hs_color?.[0]) || 0);
-            lightSvc
-              .getCharacteristic(Characteristic.Saturation)
-              .onGet(() => Number(this.platform.entities.get(lightMember.entityId)
-                ?.state?.attributes?.hs_color?.[1]) || 0);
-            const setColor = async () => {
-              const attrs = this.platform.entities.get(lightMember.entityId)?.state
-                ?.attributes;
-              const current = Array.isArray(attrs?.hs_color) ? attrs.hs_color : [0, 0];
-              const hue = Number(lightSvc.getCharacteristic(Characteristic.Hue).value ?? current[0]);
-              const saturation = Number(lightSvc.getCharacteristic(Characteristic.Saturation).value ?? current[1]);
-              await this.platform.ha?.callService("light", "turn_on", lightMember.entityId, {
-                hs_color: [hue, saturation],
-              });
-            };
-            lightSvc.getCharacteristic(Characteristic.Hue).onSet(setColor);
-            lightSvc.getCharacteristic(Characteristic.Saturation).onSet(setColor);
-          }
-          svc.addLinkedService(lightSvc);
-        }
         break;
       }
 
@@ -1196,14 +1086,7 @@ export class HapGenericAccessory {
         this.record.hapProfile === "dehumidifier"
       ) {
         const svc = this.accessory.getService(Service.HumidifierDehumidifier);
-        if (!svc) {
-          const control = this.accessory.getService(Service.Fanv2);
-          control?.updateCharacteristic(Characteristic.Active, on ? 1 : 0);
-          const target = Number(state?.attributes?.humidity);
-          if (Number.isFinite(target) && target >= 0 && target <= 100) {
-            control?.updateCharacteristic(Characteristic.RotationSpeed, target);
-          }
-        } else {
+        if (svc) {
           const isOn = state?.state === "on";
           svc.updateCharacteristic(Characteristic.Active, isOn ? 1 : 0);
           svc.updateCharacteristic(

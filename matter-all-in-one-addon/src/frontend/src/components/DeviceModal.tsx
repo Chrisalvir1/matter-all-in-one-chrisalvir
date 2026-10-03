@@ -1199,7 +1199,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                               border: "1px solid rgba(59, 130, 246, 0.3)",
                             }}
                           >
-                            Endpoint 1 · Ventilador
+                            Endpoint 1 · {ent.domain === "humidifier" ? "Difusor / Humidificador" : ent.domain === "fan" ? "Ventilador" : ent.domain === "light" ? "Luz" : ent.deviceTypeLabel || ent.domain}
                           </span>
                         )}
                         {isComposite && !isPrimaryEndpoint && isIntegratedEndpoint && (
@@ -1213,7 +1213,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                               border: "1px solid rgba(16, 185, 129, 0.3)",
                             }}
                           >
-                            Endpoint 2 · Luz (Dimmer + Kelvin)
+                            Endpoint 2 · {ent.domain === "light" ? "Luz (Dimmer + Kelvin)" : ent.domain === "switch" ? "Interruptor" : ent.domain === "fan" ? "Ventilador" : ent.deviceTypeLabel || ent.domain}
                           </span>
                         )}
                         {isExcludedAuxiliary && (

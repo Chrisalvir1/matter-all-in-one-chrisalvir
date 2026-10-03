@@ -2341,12 +2341,14 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       }
     }
 
-    // If the composite group is a diffuser (humidifier), exclude auxiliary switches (beeper, buzzer, power duplicates)
+    // If the composite group is a diffuser (humidifier), exclude auxiliary switches and lights unless explicitly included
     if (
       members.some((m) => m.entityId.startsWith("humidifier.")) &&
       !explicitlyIncluded?.length
     ) {
-      members = members.filter((m) => !m.entityId.startsWith("switch."));
+      members = members.filter(
+        (m) => !m.entityId.startsWith("switch.") && !m.entityId.startsWith("light."),
+      );
     }
 
     // If the composite group is a fan, exclude auxiliary beeper/sound switches or all switches if there is a light
