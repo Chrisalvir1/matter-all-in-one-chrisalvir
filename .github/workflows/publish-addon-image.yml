@@ -3,6 +3,9 @@ name: Publish Home Assistant add-on image
 on:
   release:
     types: [created]
+  push:
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 concurrency:
