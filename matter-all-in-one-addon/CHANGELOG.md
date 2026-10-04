@@ -1,3 +1,11 @@
+## [1.9.75] - 2026-10-04
+
+### Disponibilidad real Govee/Tuya y detección C402
+- Dispositivos `unavailable` en HA ya no se fuerzan a `onOff=false` (HomeKit los mostraba "apagados/conectados"); ahora solo `reachable=false` ("Sin respuesta") conservando el último estado.
+- Al reconectar HA, la alcanzabilidad se restaura según el estado real de cada entidad en lugar de marcar todo como alcanzable.
+- C402: la vinculación de movimiento usa también la identidad del accesorio HomeKit (`isTapoC402()`).
+
+
 ## [1.9.74] - 2026-10-04
 
 ### Soporte Nativo Matterbridge 3.10.12, Controladores Tuya y Luces Govee

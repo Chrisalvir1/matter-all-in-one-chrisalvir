@@ -221,7 +221,7 @@ describe("BaseEntity fan devices (On/Off vs MultiSpeed)", () => {
     await light.setInactiveState();
     await light.setReachability(false);
 
-    expect(endpoint.getAttribute(0x0006, "onOff")).toBe(false);
+    expect(endpoint.getAttribute(0x0006, "onOff")).toBe(true);
   });
 
   it("syncInitialState sets reachability to false and clears onOff when initialized unavailable", async () => {
@@ -243,7 +243,7 @@ describe("BaseEntity fan devices (On/Off vs MultiSpeed)", () => {
 
     await light.syncInitialState();
 
-    expect(endpoint.getAttribute(0x0006, "onOff")).toBe(false);
+    expect(endpoint.getAttribute(0x0006, "onOff")).toBe(true);
   });
 
   it("adoptEndpoint updates softwareVersionString to current Matterbridge version and registers command handlers", async () => {

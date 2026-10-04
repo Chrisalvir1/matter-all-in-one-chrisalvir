@@ -1135,27 +1135,12 @@ export class BaseEntity {
     if (!this.endpoint) return;
     this.haUpdateDepth++;
     try {
-      const [domain] = this.entityId.split(".");
-      // For lights, switches, media players, vacuums: update onOff to false
-      if (
-        domain === "light" ||
-        domain === "switch" ||
-        domain === "media_player" ||
-        domain === "vacuum"
-      ) {
-        if (this.endpoint.hasAttributeServer(OnOff.id, "onOff")) {
-          await safeUpdateAttribute(
-            this.endpoint,
-            OnOff.id,
-            "onOff",
-            false,
-            this.platform.log,
-          );
-        }
-        this.platform.log?.debug?.(
-          `[${this.entityId}] Applied inactive Matter state (onOff=false) due to HA unavailable/offline status`,
-        );
-      }
+      // Do NOT force onOff=false when HA reports unavailable/offline: Apple Home
+      // would show the accessory as connected-and-off instead of "No Response".
+      // setReachability(false) already marks it unreachable; keep the last state.
+      this.platform.log?.debug?.(
+        `[${this.entityId}] Unavailable in HA: preserving last Matter state, reachable=false only`,
+      );
       // For fans: DO NOT force onOff=false or fanMode=Off when temporarily unavailable!
       // BLE fans sleep their radio and HA marks them unavailable intermittently.
       // Setting onOff=false or fanMode=Off deletes the fan's physical speed state and

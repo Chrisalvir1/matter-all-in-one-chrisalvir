@@ -2717,12 +2717,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       for (const [entityId, entity] of this.entities) {
         if (!this.isEntityExported(entityId)) continue;
         if (typeof (entity as any).setReachability === "function") {
-          void (entity as any).setReachability(true);
+          void (entity as any).setReachability(!isUnavailable(entity.state));
         }
       }
       for (const composite of this.compositeDevices.values()) {
         if (typeof (composite as any).setReachability === "function") {
-          void (composite as any).setReachability(true);
+          const st = this.entities.get(composite.primaryEntityId)?.state;
+          void (composite as any).setReachability(!st || !isUnavailable(st));
         }
       }
       void this.discoverAndSync()
@@ -5395,6 +5396,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               `${entityId} ${entityFriendlyName}`,
             );
           const isTapoC402Cam =
+            Boolean(cam.homekitAccessory.isTapoC402?.()) ||
             /tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle|tapo[-_ ]?frente|\bc402\b/i.test(
               `${cam.entityId} ${camFriendlyName}`,
             );

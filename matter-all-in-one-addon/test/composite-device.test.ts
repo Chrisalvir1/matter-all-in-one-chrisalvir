@@ -280,7 +280,7 @@ describe("CompositeDeviceEntity", () => {
 
     await composite.syncInitialState();
 
-    expect(lightChild.getAttribute(0x0006, "onOff")).toBe(false);
+    expect(lightChild.getAttribute(0x0006, "onOff")).toBe(true);
   });
 
   it("creates a lock-rooted composite device and syncs attributes safely", async () => {

@@ -435,26 +435,11 @@ export class CompositeDeviceEntity {
       (this.haUpdateDepth.get(memberEntityId) ?? 0) + 1,
     );
     try {
-      if (
-
-        domain === "light" ||
-        domain === "switch" ||
-        domain === "media_player" ||
-        domain === "vacuum"
-      ) {
-        if (childEp.hasAttributeServer?.(OnOff.id, "onOff")) {
-          await safeUpdateAttribute(
-            childEp,
-            OnOff.id,
-            "onOff",
-            false,
-            this.platform.log,
-          );
-        }
-        this.platform.log?.debug?.(
-          `[Composite:${this.deviceId}][${memberEntityId}] Applied inactive Matter state (onOff=false) due to HA unavailable/offline status`,
-        );
-      }
+      // Keep last state; reachable=false alone makes Apple Home show "No Response".
+      void domain;
+      this.platform.log?.debug?.(
+        `[Composite:${this.deviceId}][${memberEntityId}] Unavailable in HA: preserving last Matter state`,
+      );
       // For fans: DO NOT force onOff=false or fanMode=Off when temporarily unavailable.
       // BLE fans sleep their radio and HA marks them unavailable intermittently.
       // Preserving state avoids spurious turn_off command loops.
