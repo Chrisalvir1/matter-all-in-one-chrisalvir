@@ -1,3 +1,112 @@
+## [1.9.72] - 2026-10-04
+
+### Actualización Matterbridge 3.10.12
+- **Core Matterbridge 3.10.12:** actualización de la librería base oficial (`matterbridge@^3.10.12`).
+- **Fix mDNS `isFirstOnPort()`:** previene colisiones y fallos en la resolución de servicios mDNS al anunciar múltiples endpoints o bridges en el mismo puerto de red.
+- **Resiliencia en puerto 5540:** timeout optimizado de 30 segundos ante desconexión abrupta de controladores Matter (Apple Home, Google Home).
+- **RVC (Robotic Vacuum Cleaner):** corrección en comando `SkipArea` con parámetros nulos y estabilidad en modo de carga/base.
+- **Servidores FanControl:** mayor robustez en tipado y clústeres de ventilación.
+
+## [1.9.71] - 2026-10-04
+
+### Restauración C402, diseño móvil fluido y credenciales RTSP
+- **Tapo C402 (Frente de calle):** restaurada al 100% la vinculación de eventos de movimiento y disparadores de grabación HKSV. Se integra llamada directa a `isTapoC402()`, coincidencia de sensores en español (`movimiento`, `celda_de_movimiento`, `deteccion_de_personas`, `event.*`) y escaneo dinámico en Home Assistant sin depender de nombres rígidos.
+- **Diseño móvil (Vertical y Horizontal):** corregido el modal de configuración de cámara en móviles. Se elimina el recorte del panel QR que ocultaba el interruptor "Activar HomeKit HAP", y se rediseña la vista horizontal a una columna única fluida con desplazamiento vertical nativo (`overflow-y: auto`), eliminando solapamientos de columnas en pantallas compactas.
+- **Sticker QR responsivo:** el código QR y el sticker iOS 27 se adaptan al ancho real del dispositivo (`width: min(250px, 100%)`) garantizando legibilidad perfecta del PIN manual y del código de emparejamiento.
+- **Normalización de credenciales RTSP:** auto-codificación de caracteres especiales (como `@` en contraseñas) para evitar errores sintácticos en ffprobe y FFmpeg.
+- **Rutas nativas Vimtag:** `/verify-stream` normaliza automáticamente URLs hacia `/live/ch0` y prueba rutas alternativas (`/onvif1`, `/ch0`, `/live/ch1`).
+- **Etiqueta dinámica de códec:** la interfaz muestra `(HEVC / H.265)` en el campo de stream para cámaras H.265.
+
+## [1.9.70] - 2026-10-04
+
+### Adaptación de audio Opus y HEVC universal
+- **Audio Opus en HKSV3:** adaptación de audio a Opus 48 kHz mono 20 ms para flujos HEVC según la especificación preliminar HKSV3 de Apple.
+- **Compatibilidad de resolución HEVC:** soporte nativo de passthrough HEVC para resoluciones 1080p, 2K y 4K sin transcodificación.
+
+## [1.9.69] - 2026-10-04
+
+### Passthrough puro HEVC / HKSV3 (-c:v copy, tag hvc1)
+- **Cero transcodificación de vídeo:** eliminación total de `libx264` para cámaras HEVC; el stream se emite en passthrough puro con contenedor MP4 y etiqueta `-tag:v hvc1`.
+- **Aislamiento de audio:** normalización de audio independiente sin forzar re-codificación de la pista de vídeo.
+
+## [1.9.68] - 2026-10-03
+
+### Rutas RTSP Vimtag y optimización de sensores C120
+- **Normalización Vimtag:** corrección de URLs genéricas hacia `/live/ch0` en Camera.UI y validadores de stream.
+- **Detección C120:** optimización de la vinculación dinámica de entidades de movimiento de Home Assistant para Tapo C120.
+
+## [1.9.67] - 2026-10-03
+
+### Detección y grabación Tapo C120
+- **Disparadores de grabación HKSV:** corrección del paso de eventos de movimiento hacia HomeKit para disparar grabaciones en iCloud en la cámara Tapo C120.
+
+## [1.9.66] - 2026-10-03
+
+### Sincronización de stream y timestamps
+- **Timestamps wallclock:** eliminación del jitter y saltos de tiempo en stream RTSP de la Tapo C120 alineándolo con el pipeline estable de la C402.
+
+## [1.9.65] - 2026-10-03
+
+### Inicio rápido y prebuffer de cámara
+- **Latencia de inicio:** confirmación de primer frame y flags `low_delay` para inicio instantáneo de Live View en Apple Home.
+
+## [1.9.64] - 2026-10-03
+
+### FPS dinámico
+- **Sondeo real de tasa de cuadros:** configuración dinámica de FPS (15 a 30 fps) basada en el sondeo directo de la fuente de la cámara.
+
+## [1.9.63] - 2026-10-02
+
+### Latencia ultra baja Tapo C120
+- **Live Stream instantáneo:** reducción de latencia por debajo de 200 ms en red local y vinculación directa del sensor de movimiento.
+
+## [1.9.62] - 2026-10-02
+
+### Dispositivos compuestos ventilador + luz
+- **Guardas de interruptores múltiples:** protección contra endpoints huérfanos y mejora en la separación lógica de luz y ventilador.
+
+## [1.9.61] - 2026-10-02
+
+### Servidores Matter independientes para botones y enchufes múltiples
+- **Identificadores independientes:** generación de `ServerNode` dedicados para botones y enchufes múltiples, corrigiendo la numeración de badges.
+
+## [1.9.60] - 2026-10-02
+
+### Exportación individual Matter y corrección de rebote de luz
+- **Control de conmutación:** prevención de estados rebotados al encender/apagar luces de ventiladores y exportación individualizada de interruptores.
+
+## [1.9.59] - 2026-10-02
+
+### Interfaz móvil y automatización CI
+- **Modal responsive:** optimizaciones en el selector de protocolos y switch HAP en resoluciones móviles.
+- **Pipeline CI:** despliegue automático de imágenes Docker ante etiquetas de versión `v*`.
+
+## [1.9.58] - 2026-10-02
+
+### Grabación HKSV3 HEVC passthrough
+- **Soporte inicial HKSV3:** passthrough de grabación en formato HEVC con audio AAC adaptado para cámaras Vimtag.
+
+## [1.9.57] - 2026-10-02
+
+### Optimización C402 y vinculación C120
+- **Passthrough 1080p C402:** transmisión sin recodificación para Tapo C402 y vinculación de sensores de movimiento C120.
+
+## [1.9.56] - 2026-10-02
+
+### Switch de exportación HomeKit y passthrough 2K C120
+- **Interruptor Activar HomeKit HAP:** control explícito de encendido/apagado de la exportación HAP en el modal de configuración de cámara.
+- **Limpieza de desvinculación:** terminación limpia de procesos huérfanos de FFmpeg y mDNS al desvincular o reiniciar cámaras.
+
+## [1.9.55] - 2026-10-01
+
+### Corrección de categoría HAP para humidificadores
+- **HumidifierDehumidifier:** mantenimiento del tipo sin fallback a Fanv2 y eliminación de controles de luz no deseados.
+
+## [1.9.54] - 2026-10-01
+
+### Categoría HAP AIR_HUMIDIFIER y CI
+- **Especificación Apple Home:** asignación formal de categoría `AIR_HUMIDIFIER` para humidificadores HAP.
+
 ## [1.9.53] - 2026-10-01
 
 ### HAP Argus, cámaras y experiencia móvil
