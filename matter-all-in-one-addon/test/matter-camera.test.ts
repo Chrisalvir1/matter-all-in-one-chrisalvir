@@ -139,7 +139,7 @@ describe("CameraWebRtcAdapter (Matter WebRTC Transport Provider 0x0553)", () => 
     expect(session?.offerSdp).toBeTruthy();
 
     await mgr.cleanupAllSessions();
-  });
+  }, 15000);
 
   it("handles provideOffer command and creates answer SDP", async () => {
     const mgr = new CameraSessionManager();

@@ -245,5 +245,81 @@ describe("BaseEntity fan devices (On/Off vs MultiSpeed)", () => {
 
     expect(endpoint.getAttribute(0x0006, "onOff")).toBe(false);
   });
+
+  it("adoptEndpoint updates softwareVersionString to current Matterbridge version and registers command handlers", async () => {
+    const platformWithNewVersion = {
+      ...platform,
+      matterbridge: { matterbridgeVersion: "3.10.12" },
+    };
+    const entity = new BaseEntity(
+      platformWithNewVersion as any,
+      state({ supported_color_modes: ["hs"] }),
+      MatterDeviceTypes.extendedColorLight,
+    );
+    const endpoint = (await entity.createEndpoint()) as any;
+    // Simulate stale retained endpoint from version 3.10.11
+    endpoint.softwareVersionString = "Matter 1.6.1 · Matterbridge 3.10.11";
+
+    entity.adoptEndpoint(endpoint);
+
+    expect(endpoint.softwareVersionString).toBe("Matter 1.6.1 · Matterbridge 3.10.12");
+
+    // Verify toggle handler is available and functions
+    await endpoint.invokeCommand("toggle");
+    expect(platform.ha.callService).toHaveBeenCalledWith(
+      "light",
+      "turn_off",
+      "light.govee_test",
+    );
+  });
+
+  it("handles enhancedMoveToHueAndSaturation command and sends converted HS color to HA", async () => {
+    const entity = new BaseEntity(
+      platform as any,
+      state({
+        color_mode: "hs",
+        supported_color_modes: ["hs"],
+      }),
+      MatterDeviceTypes.extendedColorLight,
+    );
+    const endpoint = (await entity.createEndpoint()) as any;
+
+    await endpoint.invokeCommand("enhancedMoveToHueAndSaturation", {
+      enhancedHue: 32768, // 180 degrees
+      saturation: 254, // 100%
+    });
+
+    expect(platform.ha.callService).toHaveBeenCalledWith(
+      "light",
+      "turn_on",
+      "light.govee_test",
+      { hs_color: [180, 100] },
+    );
+  });
+
+  it("handles color temperature commands for RGB-only Govee lights by synthesizing RGB/HS", async () => {
+    const entity = new BaseEntity(
+      platform as any,
+      state({
+        color_mode: "rgb",
+        supported_color_modes: ["rgb"], // RGB only, no color_temp in modes!
+      }),
+      MatterDeviceTypes.extendedColorLight,
+    );
+    const endpoint = (await entity.createEndpoint()) as any;
+
+    await endpoint.invokeCommand("moveToColorTemperature", {
+      colorTemperatureMireds: 370, // ~2700K warm white
+    });
+
+    expect(platform.ha.callService).toHaveBeenCalledWith(
+      "light",
+      "turn_on",
+      "light.govee_test",
+      expect.objectContaining({
+        rgb_color: expect.arrayContaining([expect.any(Number), expect.any(Number), expect.any(Number)]),
+      }),
+    );
+  });
 });
 

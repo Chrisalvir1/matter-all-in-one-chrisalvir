@@ -1,3 +1,17 @@
+## [1.9.74] - 2026-10-04
+
+### Soporte Nativo Matterbridge 3.10.12, Controladores Tuya y Luces Govee
+- **Matterbridge 3.10.12 Oficial:** actualización definitiva de la dependencia base a `matterbridge@3.10.12` (en `package.json`, `package-lock.json` y `Dockerfile`), incorporando todas las mejoras de mDNS (`isFirstOnPort()`), resiliencia ante desconexiones en puerto 5540, RVC `SkipArea` y clústeres de ventiladores.
+- **Solución a Controladores Tuya Colgados:**
+  - Al adoptar endpoints persistidos en caché (`adoptEndpoint`), el add-on ahora actualiza dinámicamente los atributos `softwareVersion` y `softwareVersionString` en los clústeres `BridgedDeviceBasicInformationServer` y `BasicInformationServer`, eliminando versiones desactualizadas retenidas en Apple Home.
+  - Se corrigió el método `setReachability`: se eliminó el intento de mutar `BasicInformationServer.reachable` (inválido según la especificación Matter y causante de excepciones al reconectar con Home Assistant) y se emite de manera segura el evento `reachableChanged` en el endpoint mediante `ep.act()`.
+  - Se añadió el comando estándar `"toggle"` tanto en dispositivos base como compuestos para responder inmediatamente a órdenes de alternancia desde HomeKit y Home Assistant.
+- **Solución a Luces Govee:**
+  - Se implementó síntesis matemática de temperatura de color a RGB (algoritmo Tanner Helland) en `lightColor.buildColorPayload` y soporte bidireccional `rgbToHs`/`xyToHs`, permitiendo que tiras y luces Govee de modo estrictamente RGB procesen sin errores comandos de Mireds o Kelvin procedentes de Matter y Apple Home.
+  - Corrección de atributos no conformes en `ColorControlServer`: reemplazo de atributos ilegales por `coupleColorTempToLevelMinMireds` con guardias `hasAttributeServer()`.
+  - Soporte explícito del comando `enhancedMoveToHueAndSaturation` en endpoints de iluminación.
+- **Persistencia de Detección HKSV C402/C120 y UI Mobile:** se mantienen plenamente operativas todas las mejoras de detección inmediata de eventos y la interfaz responsive mobile-first para orientación vertical y horizontal.
+
 ## [1.9.73] - 2026-10-04
 
 ### Estabilización Crítica: Detección C402/C120, Mobile First y Rollback Matterbridge

@@ -5696,6 +5696,21 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       tasks.push(
         (async () => {
           try {
+            const primaryState = this.entities.get(
+              composite.primaryEntityId,
+            )?.state;
+            if (primaryState && !isUnavailable(primaryState)) {
+              await (composite as any).setReachability?.(true);
+            }
+            for (const member of composite.members) {
+              const memberState = this.entities.get(member.entityId)?.state;
+              if (memberState && !isUnavailable(memberState)) {
+                await (composite as any).setMemberReachability?.(
+                  member.entityId,
+                  true,
+                );
+              }
+            }
             await composite.syncInitialState();
           } catch (err) {
             this.log.debug(
@@ -5713,6 +5728,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       tasks.push(
         (async () => {
           try {
+            if (!isUnavailable(entity.state)) {
+              await (entity as any).setReachability?.(true);
+            }
             await entity.forceSyncStateToMatter?.();
           } catch (err) {
             this.log.debug(

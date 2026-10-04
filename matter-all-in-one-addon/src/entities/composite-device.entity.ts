@@ -350,22 +350,22 @@ export class CompositeDeviceEntity {
     const ep = this.endpoint as any;
     if (!ep) return;
     try {
-      const serverNode = ep.serverNode;
-      if (serverNode && typeof serverNode.setStateOf === "function") {
-        try {
-          await serverNode.setStateOf(BasicInformationServer, { reachable });
-        } catch {}
-      }
       // Report root reachability too when the bridged-info cluster is present.
-      if (typeof ep.setStateOf === "function") {
+      if (
+        typeof ep.setStateOf === "function" &&
+        ep.hasClusterServer?.(BridgedDeviceBasicInformationServer)
+      ) {
         try {
           await ep.setStateOf(BridgedDeviceBasicInformationServer, { reachable });
+          ep.act?.((agent: any) =>
+            ep.eventsOf?.(BridgedDeviceBasicInformationServer)?.reachableChanged?.emit?.(
+              { reachableNewValue: reachable },
+              agent.context,
+            ),
+          );
         } catch {}
       }
       if (typeof ep.setAttribute === "function") {
-        if (ep.hasAttributeServer?.(0x0028, "reachable")) {
-          await ep.setAttribute(0x0028, "reachable", reachable, this.platform.log);
-        }
         if (ep.hasAttributeServer?.(0x0039, "reachable")) {
           await ep.setAttribute(0x0039, "reachable", reachable, this.platform.log);
         }
@@ -373,9 +373,6 @@ export class CompositeDeviceEntity {
       if (typeof ep.updateAttribute === "function") {
         if (ep.hasAttributeServer?.(0x0039, "reachable")) {
           await ep.updateAttribute(0x0039, "reachable", reachable, this.platform.log);
-        }
-        if (ep.hasAttributeServer?.(0x0028, "reachable")) {
-          await ep.updateAttribute(0x0028, "reachable", reachable, this.platform.log);
         }
       }
       for (const memberEntityId of this.endpoints.keys()) {
@@ -395,9 +392,18 @@ export class CompositeDeviceEntity {
     const childEp = this.endpoints.get(memberEntityId) as any;
     if (!childEp) return;
     try {
-      if (typeof childEp.setStateOf === "function") {
+      if (
+        typeof childEp.setStateOf === "function" &&
+        childEp.hasClusterServer?.(BridgedDeviceBasicInformationServer)
+      ) {
         try {
           await childEp.setStateOf(BridgedDeviceBasicInformationServer, { reachable });
+          childEp.act?.((agent: any) =>
+            childEp.eventsOf?.(BridgedDeviceBasicInformationServer)?.reachableChanged?.emit?.(
+              { reachableNewValue: reachable },
+              agent.context,
+            ),
+          );
         } catch {}
       }
       if (typeof childEp.setAttribute === "function") {
@@ -553,6 +559,28 @@ export class CompositeDeviceEntity {
 
   adoptEndpoint(endpoint: MatterbridgeEndpoint): void {
     this.endpoint = endpoint;
+    applyMatterFirmware(endpoint, this.platform);
+    if (
+      typeof (endpoint as any).setStateOf === "function" &&
+      endpoint.hasClusterServer(BridgedDeviceBasicInformationServer)
+    ) {
+      void (endpoint as any)
+        .setStateOf(BridgedDeviceBasicInformationServer, {
+          softwareVersion: endpoint.softwareVersion,
+          softwareVersionString: endpoint.softwareVersionString,
+        })
+        .catch(() => undefined);
+    }
+    const serverNode = (endpoint as any).serverNode;
+    if (serverNode && typeof serverNode.setStateOf === "function") {
+      void serverNode
+        .setStateOf(BasicInformationServer, {
+          softwareVersion: endpoint.softwareVersion,
+          softwareVersionString: endpoint.softwareVersionString,
+        })
+        .catch(() => undefined);
+    }
+
     this.endpoints.clear();
     for (const member of this.members) {
       const memberEndpoint =
@@ -567,12 +595,19 @@ export class CompositeDeviceEntity {
         continue;
       }
       this.endpoints.set(member.entityId, memberEndpoint);
+      applyMatterFirmware(memberEndpoint, this.platform);
       if (
-        memberEndpoint.commandHandler &&
-        (memberEndpoint.commandHandler as any).handler?.length === 0
+        typeof (memberEndpoint as any).setStateOf === "function" &&
+        memberEndpoint.hasClusterServer(BridgedDeviceBasicInformationServer)
       ) {
-        this.addCommandHandlers(memberEndpoint, member);
+        void (memberEndpoint as any)
+          .setStateOf(BridgedDeviceBasicInformationServer, {
+            softwareVersion: memberEndpoint.softwareVersion,
+            softwareVersionString: memberEndpoint.softwareVersionString,
+          })
+          .catch(() => undefined);
       }
+      this.addCommandHandlers(memberEndpoint, member);
     }
   }
 
@@ -824,34 +859,48 @@ export class CompositeDeviceEntity {
           const colorMode = attrs.color_mode;
 
           const range = lightColor.getMiredsRange(attrs);
-          await update(
-            endpoint,
-            ColorControl.id,
-            "colorTempPhysicalMinMireds",
-            range.minMireds,
-            this.platform.log,
-          );
-          await update(
-            endpoint,
-            ColorControl.id,
-            "colorTempPhysicalMaxMireds",
-            range.maxMireds,
-            this.platform.log,
-          );
-          await update(
-            endpoint,
-            ColorControl.id,
-            "coupleColorTempMinMireds",
-            range.minMireds,
-            this.platform.log,
-          );
-          await update(
-            endpoint,
-            ColorControl.id,
-            "coupleColorTempMaxMireds",
-            range.maxMireds,
-            this.platform.log,
-          );
+          if (
+            endpoint.hasAttributeServer(
+              ColorControl.id,
+              "colorTempPhysicalMinMireds",
+            )
+          ) {
+            await update(
+              endpoint,
+              ColorControl.id,
+              "colorTempPhysicalMinMireds",
+              range.minMireds,
+              this.platform.log,
+            );
+          }
+          if (
+            endpoint.hasAttributeServer(
+              ColorControl.id,
+              "colorTempPhysicalMaxMireds",
+            )
+          ) {
+            await update(
+              endpoint,
+              ColorControl.id,
+              "colorTempPhysicalMaxMireds",
+              range.maxMireds,
+              this.platform.log,
+            );
+          }
+          if (
+            endpoint.hasAttributeServer(
+              ColorControl.id,
+              "coupleColorTempToLevelMinMireds",
+            )
+          ) {
+            await update(
+              endpoint,
+              ColorControl.id,
+              "coupleColorTempToLevelMinMireds",
+              range.minMireds,
+              this.platform.log,
+            );
+          }
 
           const minPhys =
             (endpoint as any).state?.colorControl?.colorTempPhysicalMinMireds ??
@@ -1555,6 +1604,12 @@ export class CompositeDeviceEntity {
           void safeUpdateAttribute(endpoint, OnOff.id, "onOff", false, this.platform.log);
         }
       });
+      endpoint.addCommandHandler("toggle", async () => {
+        this.assertMemberOnline(entityId, member);
+        const isOn = this.states.get(entityId)?.state === "on";
+        this.setCommandLockout(entityId, "onOff", !isOn);
+        this.callServiceDebounced(entityId, "light", isOn ? "turn_off" : "turn_on", undefined, 0);
+      });
 
       if (endpoint.hasAttributeServer(LevelControl.id, "currentLevel")) {
         endpoint.addCommandHandler("moveToLevel", async (data: any) => {
@@ -1656,12 +1711,13 @@ export class CompositeDeviceEntity {
                 { mireds },
               );
               const usesKelvin =
-                state.attributes.color_temp_kelvin !== undefined ||
-                state.attributes.min_color_temp_kelvin !== undefined ||
-                state.attributes.max_color_temp_kelvin !== undefined;
+                (state.attributes.color_temp_kelvin !== undefined ||
+                  state.attributes.min_color_temp_kelvin !== undefined ||
+                  state.attributes.max_color_temp_kelvin !== undefined) &&
+                payload.color_temp_kelvin !== undefined;
               if (usesKelvin) {
                 const kelvin = lightColor.clampKelvin(
-                  lightColor.miredsToKelvin(mireds),
+                  payload.color_temp_kelvin ?? lightColor.miredsToKelvin(mireds),
                   state.attributes,
                 );
                 this.setCommandLockout(entityId, "color_temp", mireds);
@@ -1689,6 +1745,29 @@ export class CompositeDeviceEntity {
               const state = this.states.get(entityId)!;
               const hs: [number, number] = [
                 lightColor.matterHueToHa(req.hue),
+                lightColor.matterSatToHa(req.saturation),
+              ];
+              const payload = lightColor.buildColorPayload(
+                state.attributes.supported_color_modes ?? [],
+                state.attributes.color_mode,
+                { hs },
+              );
+              await sendColor(payload);
+            }
+          },
+        );
+
+        endpoint.addCommandHandler(
+          "enhancedMoveToHueAndSaturation",
+          async (data: any) => {
+            const req = data?.request ?? data;
+            if (
+              typeof req?.enhancedHue === "number" &&
+              typeof req?.saturation === "number"
+            ) {
+              const state = this.states.get(entityId)!;
+              const hs: [number, number] = [
+                lightColor.matterEnhancedHueToHa(req.enhancedHue),
                 lightColor.matterSatToHa(req.saturation),
               ];
               const payload = lightColor.buildColorPayload(
@@ -1842,6 +1921,9 @@ export class CompositeDeviceEntity {
       });
       endpoint.addCommandHandler("off", async () => {
         await this.platform.ha.callService("switch", "turn_off", entityId);
+      });
+      endpoint.addCommandHandler("toggle", async () => {
+        await this.platform.ha.callService("switch", "toggle", entityId);
       });
     }
   }

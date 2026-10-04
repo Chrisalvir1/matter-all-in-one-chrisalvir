@@ -166,51 +166,159 @@ export const lightColor = {
     );
   },
 
-  /** Convert RGB to HS */
+  /** Convert RGB (0..255) to HS (H in 0..360, S in 0..100) */
   rgbToHs(r: number, g: number, b: number): [number, number] {
-    const red = Math.max(0, Math.min(255, r)) / 255;
-    const green = Math.max(0, Math.min(255, g)) / 255;
-    const blue = Math.max(0, Math.min(255, b)) / 255;
-    const max = Math.max(red, green, blue);
-    const min = Math.min(red, green, blue);
+    const rNorm = Math.max(0, Math.min(255, r)) / 255;
+    const gNorm = Math.max(0, Math.min(255, g)) / 255;
+    const bNorm = Math.max(0, Math.min(255, b)) / 255;
+    const max = Math.max(rNorm, gNorm, bNorm);
+    const min = Math.min(rNorm, gNorm, bNorm);
     const delta = max - min;
 
-    if (delta === 0) return [0, 0];
+    let h = 0;
+    if (delta !== 0) {
+      if (max === rNorm) {
+        h = ((gNorm - bNorm) / delta) % 6;
+      } else if (max === gNorm) {
+        h = (bNorm - rNorm) / delta + 2;
+      } else {
+        h = (rNorm - gNorm) / delta + 4;
+      }
+      h = Math.round(h * 60);
+      if (h < 0) h += 360;
+    }
 
-    let hue = 0;
-    if (max === red) hue = 60 * (((green - blue) / delta) % 6);
-    else if (max === green) hue = 60 * ((blue - red) / delta + 2);
-    else hue = 60 * ((red - green) / delta + 4);
-
-    return [this.normalizeHue(hue), Math.round((delta / max) * 100)];
+    const s = max === 0 ? 0 : Math.round((delta / max) * 100);
+    return [this.normalizeHue(h), Math.max(0, Math.min(100, s))];
   },
 
-  /** Convert XY to HS using sRGB / D65 approximation */
+  /** Convert CIE 1931 XY to HS (H in 0..360, S in 0..100) */
   xyToHs(x: number, y: number): [number, number] {
-    // Prevent division by zero
-    if (y === 0) return [0, 0];
+    const rgb = this.xyToRgb(x, y);
+    return this.rgbToHs(rgb[0], rgb[1], rgb[2]);
+  },
 
+  /** Convert HS (H in 0..360, S in 0..100) to RGB (0..255) */
+  hsToRgb(h: number, s: number): [number, number, number] {
+    const normH = this.normalizeHue(h);
+    const normS = Math.max(0, Math.min(100, s)) / 100;
+    const v = 1;
+    const c = v * normS;
+    const x = c * (1 - Math.abs(((normH / 60) % 2) - 1));
+    const m = v - c;
+
+    let r1 = 0;
+    let g1 = 0;
+    let b1 = 0;
+    if (normH < 60) {
+      r1 = c;
+      g1 = x;
+      b1 = 0;
+    } else if (normH < 120) {
+      r1 = x;
+      g1 = c;
+      b1 = 0;
+    } else if (normH < 180) {
+      r1 = 0;
+      g1 = c;
+      b1 = x;
+    } else if (normH < 240) {
+      r1 = 0;
+      g1 = x;
+      b1 = c;
+    } else if (normH < 300) {
+      r1 = x;
+      g1 = 0;
+      b1 = c;
+    } else {
+      r1 = c;
+      g1 = 0;
+      b1 = x;
+    }
+
+    return [
+      Math.round((r1 + m) * 255),
+      Math.round((g1 + m) * 255),
+      Math.round((b1 + m) * 255),
+    ];
+  },
+
+  /** Convert Kelvin color temperature (1000..40000K) to RGB using Tanner Helland algorithm */
+  kelvinToRgb(kelvin: number): [number, number, number] {
+    const temp = Math.max(1000, Math.min(40000, kelvin)) / 100;
+    let red = 0;
+    let green = 0;
+    let blue = 0;
+
+    if (temp <= 66) {
+      red = 255;
+    } else {
+      red = temp - 60;
+      red = 329.698727446 * Math.pow(red, -0.1332047592);
+      red = Math.max(0, Math.min(255, red));
+    }
+
+    if (temp <= 66) {
+      green = temp;
+      green = 99.4708025861 * Math.log(green) - 161.1195681661;
+      green = Math.max(0, Math.min(255, green));
+    } else {
+      green = temp - 60;
+      green = 288.1221695283 * Math.pow(green, -0.0755148492);
+      green = Math.max(0, Math.min(255, green));
+    }
+
+    if (temp >= 66) {
+      blue = 255;
+    } else if (temp <= 19) {
+      blue = 0;
+    } else {
+      blue = temp - 10;
+      blue = 138.5177312231 * Math.log(blue) - 305.0447927307;
+      blue = Math.max(0, Math.min(255, blue));
+    }
+
+    return [Math.round(red), Math.round(green), Math.round(blue)];
+  },
+
+  /** Convert RGB (0..255) to CIE 1931 XY coordinates (0..1) */
+  rgbToXy(r: number, g: number, b: number): [number, number] {
+    let red = r / 255;
+    let green = g / 255;
+    let blue = b / 255;
+    red = red > 0.04045 ? Math.pow((red + 0.055) / 1.055, 2.4) : red / 12.92;
+    green =
+      green > 0.04045 ? Math.pow((green + 0.055) / 1.055, 2.4) : green / 12.92;
+    blue = blue > 0.04045 ? Math.pow((blue + 0.055) / 1.055, 2.4) : blue / 12.92;
+    const X = red * 0.4124 + green * 0.3576 + blue * 0.1805;
+    const Y = red * 0.2126 + green * 0.7152 + blue * 0.0722;
+    const Z = red * 0.0193 + green * 0.1192 + blue * 0.9505;
+    const sum = X + Y + Z;
+    if (sum === 0) return [0, 0];
+    return [
+      Number((X / sum).toFixed(4)),
+      Number((Y / sum).toFixed(4)),
+    ];
+  },
+
+  /** Convert XY coordinates (0..1) to RGB (0..255) */
+  xyToRgb(x: number, y: number): [number, number, number] {
+    if (y === 0) return [0, 0, 0];
     const z = 1.0 - x - y;
-    const Y = 1.0; // Assume max brightness
+    const Y = 1.0;
     const X = (Y / y) * x;
     const Z = (Y / y) * z;
-
-    // Convert XYZ to RGB (sRGB D65)
     let r = X * 3.2406 - Y * 1.5372 - Z * 0.4986;
     let g = -X * 0.9689 + Y * 1.8758 + Z * 0.0415;
     let b = X * 0.0557 - Y * 0.204 + Z * 1.057;
-
-    // Apply gamma correction
     r = r <= 0.0031308 ? 12.92 * r : 1.055 * Math.pow(r, 1.0 / 2.4) - 0.055;
     g = g <= 0.0031308 ? 12.92 * g : 1.055 * Math.pow(g, 1.0 / 2.4) - 0.055;
     b = b <= 0.0031308 ? 12.92 * b : 1.055 * Math.pow(b, 1.0 / 2.4) - 0.055;
-
-    // Clamp and convert to 0-255
-    r = Math.max(0, Math.min(255, Math.round(r * 255)));
-    g = Math.max(0, Math.min(255, Math.round(g * 255)));
-    b = Math.max(0, Math.min(255, Math.round(b * 255)));
-
-    return this.rgbToHs(r, g, b);
+    return [
+      Math.max(0, Math.min(255, Math.round(r * 255))),
+      Math.max(0, Math.min(255, Math.round(g * 255))),
+      Math.max(0, Math.min(255, Math.round(b * 255))),
+    ];
   },
 
   /** Select best HA payload based on supported modes */
@@ -227,9 +335,32 @@ export const lightColor = {
     const payload: Record<string, any> = {};
 
     if (colorReq.mireds !== undefined) {
-      // If a temperature was requested, it takes precedence if supported
-      if (modes.includes("color_temp")) {
+      if (
+        modes.includes("color_temp") ||
+        haMode === "color_temp" ||
+        modes.length === 0
+      ) {
         payload.color_temp = colorReq.mireds;
+        payload.color_temp_kelvin = this.miredsToKelvin(colorReq.mireds);
+        return payload;
+      }
+      // Light is RGB-only (e.g. Govee RGB strip): synthesize color from Kelvin
+      const kelvin = this.miredsToKelvin(colorReq.mireds);
+      const rgb = this.kelvinToRgb(kelvin);
+      if (
+        modes.includes("rgb") ||
+        modes.includes("rgbw") ||
+        modes.includes("rgbww")
+      ) {
+        payload.rgb_color = rgb;
+        return payload;
+      }
+      if (modes.includes("hs")) {
+        payload.hs_color = this.rgbToHs(rgb[0], rgb[1], rgb[2]);
+        return payload;
+      }
+      if (modes.includes("xy")) {
+        payload.xy_color = this.rgbToXy(rgb[0], rgb[1], rgb[2]);
         return payload;
       }
     }
@@ -240,32 +371,40 @@ export const lightColor = {
         return payload;
       }
       if (
-        modes.includes("hs") ||
         modes.includes("rgb") ||
         modes.includes("rgbw") ||
         modes.includes("rgbww")
       ) {
-        const hs = this.xyToHs(colorReq.xy[0], colorReq.xy[1]);
-        payload.hs_color = hs;
+        payload.rgb_color = this.xyToRgb(colorReq.xy[0], colorReq.xy[1]);
+        return payload;
+      }
+      if (modes.includes("hs")) {
+        payload.hs_color = this.xyToHs(colorReq.xy[0], colorReq.xy[1]);
         return payload;
       }
     }
 
     if (colorReq.hs) {
+      if (modes.includes("hs")) {
+        payload.hs_color = colorReq.hs;
+        return payload;
+      }
       if (
-        modes.includes("hs") ||
         modes.includes("rgb") ||
         modes.includes("rgbw") ||
         modes.includes("rgbww")
       ) {
-        payload.hs_color = colorReq.hs;
+        payload.rgb_color = this.hsToRgb(colorReq.hs[0], colorReq.hs[1]);
         return payload;
       }
-      // If only XY is supported
       if (modes.includes("xy")) {
-        payload.hs_color = colorReq.hs;
+        const rgb = this.hsToRgb(colorReq.hs[0], colorReq.hs[1]);
+        payload.xy_color = this.rgbToXy(rgb[0], rgb[1], rgb[2]);
         return payload;
       }
+      // If none matched, fallback to hs_color
+      payload.hs_color = colorReq.hs;
+      return payload;
     }
 
     return payload;

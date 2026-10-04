@@ -344,10 +344,28 @@ export class BaseEntity {
 
   public adoptEndpoint(endpoint: MatterbridgeEndpoint): void {
     this.endpoint = endpoint;
+    this.applyMatterbridgeFirmware(endpoint);
     if (
-      endpoint.commandHandler &&
-      (endpoint.commandHandler as any).handler?.length === 0
+      typeof (endpoint as any).setStateOf === "function" &&
+      endpoint.hasClusterServer(BridgedDeviceBasicInformationServer)
     ) {
+      void (endpoint as any)
+        .setStateOf(BridgedDeviceBasicInformationServer, {
+          softwareVersion: endpoint.softwareVersion,
+          softwareVersionString: endpoint.softwareVersionString,
+        })
+        .catch(() => undefined);
+    }
+    const serverNode = (endpoint as any).serverNode;
+    if (serverNode && typeof serverNode.setStateOf === "function") {
+      void serverNode
+        .setStateOf(BasicInformationServer, {
+          softwareVersion: endpoint.softwareVersion,
+          softwareVersionString: endpoint.softwareVersionString,
+        })
+        .catch(() => undefined);
+    }
+    if (typeof (endpoint as any).addCommandHandler === "function") {
       this.registerCommandHandlers(endpoint);
     }
   }
@@ -625,6 +643,30 @@ export class BaseEntity {
           await this.platform.ha.callService(domain, "turn_off", this.entityId);
       });
 
+      this.endpoint.addCommandHandler("toggle", async () => {
+        this.assertOnline();
+        if (domain === "vacuum") {
+          const isCleaning = this.state.state === "cleaning";
+          await this.platform.ha.callService(
+            domain,
+            isCleaning ? "return_to_base" : "start",
+            this.entityId,
+          );
+        } else {
+          const isOn = this.state.state === "on";
+          if (domain === "light") {
+            this.setCommandLockout("onOff", !isOn);
+            this.callServiceDebounced(domain, isOn ? "turn_off" : "turn_on", undefined, 0);
+          } else {
+            await this.platform.ha.callService(
+              domain,
+              isOn ? "turn_off" : "turn_on",
+              this.entityId,
+            );
+          }
+        }
+      });
+
 
 
       if (
@@ -852,6 +894,28 @@ export class BaseEntity {
           },
         );
 
+        this.endpoint.addCommandHandler(
+          "enhancedMoveToHueAndSaturation",
+          async (data: any) => {
+            const req = data?.request ?? data;
+            if (
+              typeof req?.enhancedHue === "number" &&
+              typeof req?.saturation === "number"
+            ) {
+              const hs: [number, number] = [
+                lightColor.matterEnhancedHueToHa(req.enhancedHue),
+                lightColor.matterSatToHa(req.saturation),
+              ];
+              const payload = lightColor.buildColorPayload(
+                this.state.attributes.supported_color_modes ?? [],
+                this.state.attributes.color_mode,
+                { hs },
+              );
+              await sendColor(payload);
+            }
+          },
+        );
+
         this.endpoint.addCommandHandler("moveToHue", async (data: any) => {
           const req = data?.request ?? data;
           if (typeof req?.hue === "number") {
@@ -1012,12 +1076,13 @@ export class BaseEntity {
                 { mireds },
               );
               const usesKelvin =
-                this.state.attributes.color_temp_kelvin !== undefined ||
-                this.state.attributes.min_color_temp_kelvin !== undefined ||
-                this.state.attributes.max_color_temp_kelvin !== undefined;
+                (this.state.attributes.color_temp_kelvin !== undefined ||
+                  this.state.attributes.min_color_temp_kelvin !== undefined ||
+                  this.state.attributes.max_color_temp_kelvin !== undefined) &&
+                payload.color_temp_kelvin !== undefined;
               if (usesKelvin) {
                 const kelvin = lightColor.clampKelvin(
-                  lightColor.miredsToKelvin(mireds),
+                  payload.color_temp_kelvin ?? lightColor.miredsToKelvin(mireds),
                   this.state.attributes,
                 );
                 this.setCommandLockout("color_temp", mireds);
@@ -1126,36 +1191,33 @@ export class BaseEntity {
     const ep = this.endpoint as any;
     if (!ep) return;
     try {
-      // 1. ServerNode reachability (individual accessory in mode: 'server')
-      const serverNode = ep.serverNode;
-      if (serverNode && typeof serverNode.setStateOf === "function") {
-        await serverNode.setStateOf(BasicInformationServer, { reachable });
-      }
-
-      // 2. Bridged / child endpoint reachability
-      if (typeof ep.setStateOf === "function") {
+      // 1. Bridged / child endpoint reachability in BridgedDeviceBasicInformationServer
+      if (
+        typeof ep.setStateOf === "function" &&
+        ep.hasClusterServer?.(BridgedDeviceBasicInformationServer)
+      ) {
         try {
           await ep.setStateOf(BridgedDeviceBasicInformationServer, { reachable });
+          ep.act?.((agent: any) =>
+            ep.eventsOf?.(BridgedDeviceBasicInformationServer)?.reachableChanged?.emit?.(
+              { reachableNewValue: reachable },
+              agent.context,
+            ),
+          );
         } catch {}
       }
 
-      // 3. Update reachable attribute on cluster servers if present
+      // 2. Update reachable attribute on cluster servers if present
       if (typeof ep.setAttribute === "function") {
-        if (ep.hasAttributeServer?.(0x0028, "reachable")) {
-          await ep.setAttribute(0x0028, "reachable", reachable, this.platform.log);
-        }
         if (ep.hasAttributeServer?.(0x0039, "reachable")) {
           await ep.setAttribute(0x0039, "reachable", reachable, this.platform.log);
         }
       }
 
-      // 4. Actively emit Matter subscription updates to controllers (Apple Home)
+      // 3. Actively emit Matter subscription updates to controllers (Apple Home)
       if (typeof ep.updateAttribute === "function") {
         if (ep.hasAttributeServer?.(0x0039, "reachable")) {
           await ep.updateAttribute(0x0039, "reachable", reachable, this.platform.log);
-        }
-        if (ep.hasAttributeServer?.(0x0028, "reachable")) {
-          await ep.updateAttribute(0x0028, "reachable", reachable, this.platform.log);
         }
       }
       this.platform.log?.debug?.(
@@ -1261,34 +1323,48 @@ export class BaseEntity {
             const colorMode = attrs.color_mode;
 
             const range = lightColor.getMiredsRange(attrs);
-            await updateFn(
-              this.endpoint,
-              ColorControl.id,
-              "colorTempPhysicalMinMireds",
-              range.minMireds,
-              this.platform.log,
-            );
-            await updateFn(
-              this.endpoint,
-              ColorControl.id,
-              "colorTempPhysicalMaxMireds",
-              range.maxMireds,
-              this.platform.log,
-            );
-            await updateFn(
-              this.endpoint,
-              ColorControl.id,
-              "coupleColorTempMinMireds",
-              range.minMireds,
-              this.platform.log,
-            );
-            await updateFn(
-              this.endpoint,
-              ColorControl.id,
-              "coupleColorTempMaxMireds",
-              range.maxMireds,
-              this.platform.log,
-            );
+            if (
+              this.endpoint.hasAttributeServer(
+                ColorControl.id,
+                "colorTempPhysicalMinMireds",
+              )
+            ) {
+              await updateFn(
+                this.endpoint,
+                ColorControl.id,
+                "colorTempPhysicalMinMireds",
+                range.minMireds,
+                this.platform.log,
+              );
+            }
+            if (
+              this.endpoint.hasAttributeServer(
+                ColorControl.id,
+                "colorTempPhysicalMaxMireds",
+              )
+            ) {
+              await updateFn(
+                this.endpoint,
+                ColorControl.id,
+                "colorTempPhysicalMaxMireds",
+                range.maxMireds,
+                this.platform.log,
+              );
+            }
+            if (
+              this.endpoint.hasAttributeServer(
+                ColorControl.id,
+                "coupleColorTempToLevelMinMireds",
+              )
+            ) {
+              await updateFn(
+                this.endpoint,
+                ColorControl.id,
+                "coupleColorTempToLevelMinMireds",
+                range.minMireds,
+                this.platform.log,
+              );
+            }
 
             const minPhys =
               (this.endpoint as any).state?.colorControl
