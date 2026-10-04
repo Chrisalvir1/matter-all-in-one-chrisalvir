@@ -1,3 +1,10 @@
+## [1.9.73] - 2026-10-04
+
+### Estabilización Crítica: Detección C402/C120, Mobile First y Rollback Matterbridge
+- **Detección y Grabación C402 y C120 en HKSV:** corregido el pipeline de eventos de Home Assistant en `platform.ts`. El despacho de eventos de movimiento (`binary_sensor.*` y `event.*`) ahora se procesa inmediatamente antes de cualquier validación de entidades Matter. Las cámaras Tapo C402 ("Frente de calle") y Tapo C120 vinculan de forma instantánea sus estados de detección a Apple Home HAP y disparan las grabaciones en iCloud (HKSV).
+- **Interfaz Móvil (Mobile First en Vertical y Horizontal):** el panel de emparejamiento (`qr-panel`), los tabs de protocolo y el interruptor **"Activar HomeKit HAP"** ahora se posicionan de manera prioritaria (`order: -1 !important`) al inicio de la pantalla tanto en formato vertical como en orientación horizontal móvil, asegurando visibilidad total del toggle, códigos QR y PIN manual sin requerir desplazamientos complejos ni superposiciones.
+- **Estabilidad de Ecosistema Tuya y Luces Govee:** rollback oficial de la dependencia base de Matterbridge a la versión `3.10.11` (tanto en `package.json` como en `Dockerfile`), solucionando bloqueos de controladores Tuya y dispositivos de iluminación Govee experimentados tras el reinicio en 3.10.12.
+
 ## [1.9.72] - 2026-10-04
 
 ### Actualización Matterbridge 3.10.12

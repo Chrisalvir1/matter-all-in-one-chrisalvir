@@ -3203,7 +3203,7 @@ mark {
     min-width: 0 !important;
   }
   .camera-modal-layout .qr-panel {
-    order: 1 !important;
+    order: -1 !important;
     width: 100% !important;
     max-width: 100% !important;
     max-height: none !important;
@@ -3214,7 +3214,7 @@ mark {
     margin-bottom: 8px;
   }
   .camera-modal-layout .selection-panel {
-    order: 2 !important;
+    order: 1 !important;
     width: 100% !important;
     max-width: 100% !important;
     max-height: none !important;
@@ -4288,16 +4288,18 @@ mark {
     max-height: 92vh !important;
   }
 
-  /* DeviceModal layout: Mobile First / Single Column Stack */
-  .modal-layout {
+  /* DeviceModal and CameraModal layout: Mobile First / Single Column Stack */
+  .modal-layout,
+  .camera-modal-layout {
     display: flex !important;
     flex-direction: column !important;
     gap: 16px !important;
     overflow-y: auto !important;
     padding-bottom: 24px !important;
   }
-  /* Mobile-first: El código QR y código manual van AL INICIO de la vista móvil */
-  .modal-layout .qr-panel {
+  /* Mobile-first: El código QR, tabs y controles HAP/Matter van AL INICIO de la vista móvil */
+  .modal-layout .qr-panel,
+  .camera-modal-layout .qr-panel {
     order: -1 !important;
     max-height: none !important;
     height: auto !important;
@@ -4306,6 +4308,13 @@ mark {
     border-bottom: 1px solid var(--border);
     padding-bottom: 16px;
     margin-bottom: 8px;
+  }
+  .camera-modal-layout .selection-panel {
+    order: 1 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+    padding-right: 0 !important;
   }
   .entity-list-col {
     order: 1 !important;
@@ -4401,7 +4410,7 @@ mark {
     min-width: 0 !important;
   }
   .camera-modal-layout .qr-panel {
-    order: 1 !important;
+    order: -1 !important;
     width: 100% !important;
     max-width: 100% !important;
     border-bottom: 1px solid var(--border) !important;
@@ -4411,7 +4420,7 @@ mark {
     overflow: visible !important;
   }
   .camera-modal-layout .selection-panel {
-    order: 2 !important;
+    order: 1 !important;
     width: 100% !important;
     max-width: 100% !important;
     max-height: none !important;

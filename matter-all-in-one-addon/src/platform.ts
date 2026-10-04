@@ -5363,36 +5363,6 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   private handleEntityStateChange(entityId: string, newState: HassState) {
     // This sensor need not be exported to Matter to drive HAP/HKSV.
     this.syncLinkedCameraUiMotion(entityId, newState);
-    const entity = this.entities.get(entityId);
-    if (!entity) {
-      // Sensor-only HA entities are not necessarily Matter entities, but they
-      // can be a live capability of a HAP accessory for the same device.
-      for (const hapAcc of this.hapAccessories.values()) {
-        if (hapAcc.handlesEntityId(entityId)) {
-          hapAcc.updateFromHassState(newState, entityId);
-        }
-      }
-      // An entity may become available after HA's initial snapshot.
-      void this.registerHAEntity(newState);
-      return;
-    }
-    entity.state = newState;
-    // HAP accessories are served independently from Matter. Synchronize their
-    // primary HA entity immediately, including HAP-only exports and availability
-    // changes (which intentionally return before the Matter update path).
-    for (const hapAcc of this.hapAccessories.values()) {
-      if (hapAcc.entityId === entityId) {
-        hapAcc.updateFromHassState(newState, entityId);
-      }
-    }
-    if (this.observeHomeAssistantAvailability(entityId, newState)) {
-      // `unavailable` is not a real off/unlocked/closed reading. Keep the last
-      // valid Matter value so one failed integration cannot falsify an entire
-      // composite device or make it appear to have shut down.
-      return;
-    }
-    if (this.isEntityExported(entityId))
-      this.queueStateUpdate(entityId, newState);
 
     if (
       entityId.startsWith("binary_sensor.") ||
@@ -5660,6 +5630,37 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         }
       }
     }
+
+    const entity = this.entities.get(entityId);
+    if (!entity) {
+      // Sensor-only HA entities are not necessarily Matter entities, but they
+      // can be a live capability of a HAP accessory for the same device.
+      for (const hapAcc of this.hapAccessories.values()) {
+        if (hapAcc.handlesEntityId(entityId)) {
+          hapAcc.updateFromHassState(newState, entityId);
+        }
+      }
+      // An entity may become available after HA's initial snapshot.
+      void this.registerHAEntity(newState);
+      return;
+    }
+    entity.state = newState;
+    // HAP accessories are served independently from Matter. Synchronize their
+    // primary HA entity immediately, including HAP-only exports and availability
+    // changes (which intentionally return before the Matter update path).
+    for (const hapAcc of this.hapAccessories.values()) {
+      if (hapAcc.entityId === entityId) {
+        hapAcc.updateFromHassState(newState, entityId);
+      }
+    }
+    if (this.observeHomeAssistantAvailability(entityId, newState)) {
+      // `unavailable` is not a real off/unlocked/closed reading. Keep the last
+      // valid Matter value so one failed integration cannot falsify an entire
+      // composite device or make it appear to have shut down.
+      return;
+    }
+    if (this.isEntityExported(entityId))
+      this.queueStateUpdate(entityId, newState);
 
     if (entityId.startsWith("select.")) {
       const deviceId = this.ha.hassEntities.get(entityId)?.device_id;
