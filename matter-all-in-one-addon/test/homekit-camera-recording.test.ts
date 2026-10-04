@@ -465,7 +465,7 @@ describe("HomeKitCameraRecordingDelegate", () => {
     delegate.destroy();
   });
 
-  it("transcodes HEVC cameras to libx264 ultrafast for HKSV recording clips", () => {
+  it("packages HEVC cameras in pure passthrough (-c:v copy, tag: hvc1) without libx264 transcoding", () => {
     const record = {
       ...createMockRecord(),
       entityId: "camera.hevc",
@@ -483,16 +483,17 @@ describe("HomeKitCameraRecordingDelegate", () => {
       {
         sourceType: "rtsp",
         url: "rtsp://camera.local/hevc",
-        supportsPassthrough: false,
+        supportsPassthrough: true,
         requiresBridge: false,
       },
     );
     (delegate as any).selectedConfiguration = createMockConfiguration();
     const args = delegate.buildPrebufferArgs("rtsp://camera.local/hevc");
-    // HEVC camera is transcoded to libx264 ultrafast for HKSV compatibility
+    // HEVC camera is packaged with strict passthrough and Apple-compliant hvc1 tag
     expect(args).not.toBeNull();
-    expect(args).toContain("libx264");
-    expect(args).toContain("ultrafast");
+    expect(args).toContain("copy");
+    expect(args).toContain("hvc1");
+    expect(args).not.toContain("libx264");
     delegate.destroy();
   });
 });

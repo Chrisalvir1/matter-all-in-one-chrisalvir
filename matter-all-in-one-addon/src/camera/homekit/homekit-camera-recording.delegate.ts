@@ -757,35 +757,19 @@ export class HomeKitCameraRecordingDelegate
         "zerolatency",
       );
     } else {
-      // HEVC / H.265 / non-H.264 RTSP sources (e.g. Vimtag, 4K cameras):
-      // Apple HomeKit Secure Video strictly requires H.264 inside fMP4 for iCloud recording.
-      // Transcode HEVC video to H.264 1080p using ultrafast FFmpeg encoding so HKSV recording succeeds.
+      // HEVC / H.265 / 4K / 2K sources (Vimtag and all HKSV3 / HEVC cameras):
+      // Strict passthrough copy with Apple-compliant hvc1 tag for pure HKSV3 / Open Source compatibility.
+      // Video is 100% passthrough (-c:v copy). Audio is normalized separately if needed. Zero video transcoding.
       this.platform?.log?.notice?.(
-        `[HKSV][${this.entityId}] Fuente ${this.capabilities.videoCodec || "HEVC"} detectada — transcodificando a H.264 1080p para compatibilidad con grabación iCloud HKSV`,
+        `[HKSV][${this.entityId}] Fuente HEVC/H.265 detectada: empaquetando grabación HKSV en passthrough puro (-c:v copy, tag: hvc1)`,
       );
       args.push(
         "-map",
         "0:v:0",
         "-c:v",
-        "libx264",
-        "-pix_fmt",
-        "yuv420p",
-        "-profile:v",
-        "high",
-        "-level:v",
-        "4.0",
-        "-vf",
-        "scale=1920:1080:force_original_aspect_ratio=decrease:force_divisible_by=2",
-        "-r",
-        "15",
-        "-g",
-        "30",
-        "-keyint_min",
-        "15",
-        "-preset",
-        "ultrafast",
-        "-tune",
-        "zerolatency",
+        "copy",
+        "-tag:v",
+        "hvc1",
       );
     }
 
