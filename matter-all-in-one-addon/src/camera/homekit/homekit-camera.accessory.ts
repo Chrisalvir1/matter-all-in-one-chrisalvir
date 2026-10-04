@@ -921,69 +921,16 @@ export class HomeKitCameraAccessory {
       }
     }
 
-    // Direct check for Tapo C402 known sensor candidates and full dynamic scan
+    // Direct check for Tapo C402 known sensor candidates
     if (this.isTapoC402() && states) {
       const c402Candidates = [
         "binary_sensor.tapo_frente_de_calle_motion",
-        "binary_sensor.tapo_frente_de_calle_movimiento",
-        "binary_sensor.tapo_frente_de_calle_celda_de_movimiento",
-        "binary_sensor.tapo_frente_de_calle_person",
-        "binary_sensor.tapo_frente_de_calle_persona",
         "binary_sensor.tapo_c402_motion",
-        "binary_sensor.tapo_c402_movimiento",
-        "binary_sensor.tapo_c402_celda_de_movimiento",
-        "binary_sensor.tapo_c402_person",
-        "binary_sensor.tapo_c402_persona",
-        "binary_sensor.tapo_c402_deteccion_de_personas",
-        "binary_sensor.tapo_c402_deteccion_de_movimiento",
         "binary_sensor.c402_motion",
-        "binary_sensor.c402_movimiento",
-        "binary_sensor.c402_person",
-        "binary_sensor.c402_celda_de_movimiento",
         "binary_sensor.frente_de_calle_motion",
-        "binary_sensor.frente_de_calle_movimiento",
-        "binary_sensor.frente_de_calle_celda_de_movimiento",
-        "binary_sensor.frente_de_calle_person",
-        "event.tapo_frente_de_calle_motion",
-        "event.tapo_frente_de_calle_movimiento",
-        "event.tapo_frente_de_calle_person",
-        "event.tapo_c402_motion",
-        "event.tapo_c402_movimiento",
-        "event.tapo_c402_person",
-        "event.c402_motion",
-        "event.c402_movimiento",
-        "event.c402_person",
-        "event.frente_de_calle_motion",
-        "event.frente_de_calle_movimiento",
       ];
       for (const cand of c402Candidates) {
         if (states.has(cand)) return cand;
-      }
-      for (const [candId, candState] of states.entries()) {
-        if (!candId.startsWith("binary_sensor.") && !candId.startsWith("event.")) continue;
-        const fn = (candState?.attributes?.friendly_name || "").toLowerCase();
-        const candIdLower = candId.toLowerCase();
-        const hasC402Token =
-          candIdLower.includes("c402") ||
-          candIdLower.includes("frente") ||
-          fn.includes("c402") ||
-          fn.includes("frente");
-        const hasMotionToken =
-          candIdLower.includes("motion") ||
-          candIdLower.includes("movimiento") ||
-          candIdLower.includes("person") ||
-          candIdLower.includes("persona") ||
-          candIdLower.includes("celda") ||
-          candIdLower.includes("detect") ||
-          fn.includes("motion") ||
-          fn.includes("movimiento") ||
-          fn.includes("person") ||
-          fn.includes("persona") ||
-          fn.includes("celda") ||
-          fn.includes("detect");
-        if (hasC402Token && hasMotionToken) {
-          return candId;
-        }
       }
     }
 
@@ -1085,9 +1032,8 @@ export class HomeKitCameraAccessory {
             `${entityId} ${fn}`,
           );
         const isC402Cam =
-          this.isTapoC402() ||
           /tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle|tapo[-_ ]?frente|\bc402\b/i.test(
-            `${this.entityId} ${this.record?.name || ""} ${this.record?.model || ""} ${this.streamSource?.url || ""}`,
+            `${this.entityId} ${this.record?.name || ""}`,
           );
         if (isC402Entity && isC402Cam) {
           return entityId;

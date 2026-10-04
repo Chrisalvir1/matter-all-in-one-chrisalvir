@@ -1,3 +1,9 @@
+## [1.9.76] - 2026-10-04
+
+### Restauración C402 al comportamiento de v1.9.70
+- Revertidos los cambios de vinculación de movimiento introducidos después de v1.9.70 (11:01) que coincidieron con la pérdida de detección/grabación de la C402: escaneo dinámico de sensores en `homekit-camera.accessory.ts` y el despacho de movimiento adelantado en `handleEntityStateChange`, que podía aceptar sensores AI (Omni) y enviar estados contradictorios.
+
+
 ## [1.9.75] - 2026-10-04
 
 ### Disponibilidad real Govee/Tuya y detección C402
