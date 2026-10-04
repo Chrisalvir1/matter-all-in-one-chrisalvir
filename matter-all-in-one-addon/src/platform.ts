@@ -3939,6 +3939,96 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     );
   }
 
+  /**
+   * Ensure that an endpoint about to be registered with Matterbridge has no
+   * stale, conflicting or duplicate endpoints in MatterbridgePlatform's registry.
+   * If another distinct device already claims the same friendly name, disambiguate it.
+   */
+  private async prepareEndpointForRegistration(
+    endpoint: any,
+    identifier: string,
+  ): Promise<void> {
+    try {
+      // 1. Gather all existing devices registered in MatterbridgePlatform
+      const registeredDevices = (typeof (this as any).getDevices === "function"
+        ? (this as any).getDevices()
+        : []) as any[];
+
+      // Find any devices matching uniqueId, deviceName, or serialNumber
+      const matchingDevices = registeredDevices.filter(
+        (d: any) =>
+          d !== endpoint &&
+          (d.uniqueId === endpoint.uniqueId ||
+            d.deviceName === endpoint.deviceName ||
+            (endpoint.serialNumber && d.serialNumber === endpoint.serialNumber)),
+      );
+
+      for (const stale of matchingDevices) {
+        this.log.notice(
+          `[Cleanup] Unregistering stale or conflicting Matter endpoint "${stale.deviceName}" (${stale.uniqueId}) before registering ${identifier}`,
+        );
+        const serverNode = stale.serverNode;
+        if (serverNode?.lifecycle?.isOnline) {
+          try {
+            await Promise.race([
+              serverNode.close(),
+              new Promise<void>((r) => setTimeout(r, 2000)),
+            ]);
+          } catch (closeErr) {
+            this.log.debug(`[Cleanup] Error closing stale serverNode for ${identifier}: ${closeErr}`);
+          }
+        }
+        await this.unregisterDeviceBounded(stale, `stale endpoint for ${identifier}`);
+      }
+
+      // Also clean up from matterbridgeDevices map if an old reference lingered
+      const inMemoryOld = this.matterbridgeDevices.get(identifier);
+      if (inMemoryOld && inMemoryOld !== endpoint) {
+        const oldServer = (inMemoryOld as any).serverNode;
+        if (oldServer?.lifecycle?.isOnline) {
+          try {
+            await Promise.race([
+              oldServer.close(),
+              new Promise<void>((r) => setTimeout(r, 2000)),
+            ]);
+          } catch {}
+        }
+        await this.unregisterDeviceBounded(inMemoryOld, `inMemoryOld for ${identifier}`);
+        this.matterbridgeDevices.delete(identifier);
+      }
+
+      // 2. Disambiguate endpoint.deviceName if another DIFFERENT device in HA legitimately holds this name
+      const baseName = endpoint.deviceName || identifier;
+      let counter = 1;
+      while (this.hasDeviceName(endpoint.deviceName)) {
+        const existing = this.getDeviceByName(endpoint.deviceName);
+        if (existing) {
+          if (existing.uniqueId === endpoint.uniqueId) {
+            await this.unregisterDeviceBounded(existing, `lingering name for ${identifier}`);
+            if (!this.hasDeviceName(endpoint.deviceName)) break;
+          }
+        }
+        const suffix = ` (${counter++})`;
+        const maxLen = 32 - suffix.length;
+        const newName = `${baseName.slice(0, maxLen).trim()}${suffix}`;
+        this.log.notice(
+          `Disambiguating duplicate Matter deviceName for ${identifier}: '${endpoint.deviceName}' -> '${newName}'`,
+        );
+        endpoint.deviceName = newName;
+      }
+
+      // 3. Ensure uniqueId is not duplicated
+      if (this.hasDeviceUniqueId(endpoint.uniqueId)) {
+        const existing = this.getDeviceByUniqueId(endpoint.uniqueId);
+        if (existing && existing !== endpoint) {
+          await this.unregisterDeviceBounded(existing, `lingering uniqueId for ${identifier}`);
+        }
+      }
+    } catch (err) {
+      this.log.warn(`[prepareEndpointForRegistration] Non-fatal error during pre-registration cleanup for ${identifier}: ${err}`);
+    }
+  }
+
   private async activateComposite(
     entityId: string,
     forceRecreate = false,
@@ -4025,22 +4115,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       candidate.config?.primary_entity,
     );
     const endpoint = await composite.createEndpoint();
-    // Clean up any stale endpoint registered under the same name that has no
-    // active ServerNode. Matterbridge's registerDevice() silently skips when
-    // hasDeviceName() returns true, leaving endpoint.serverNode undefined.
-    const staleByName = this.getDeviceByName(nodeName);
-    if (staleByName && !staleByName.serverNode) {
-      this.log.warn(
-        `[Matter] Removing stale nameless endpoint for composite ${nodeName} before re-registering.`,
-      );
-      await this.unregisterDeviceBounded(staleByName, `stale composite ${candidate.deviceId}`);
-    }
-    // Also clean up by uniqueId in case it was registered under a different name.
-    const compositeUniqueId = `device_${candidate.deviceId}`;
-    const staleByUid = this.getDeviceByUniqueId(compositeUniqueId);
-    if (staleByUid && staleByUid !== staleByName && !staleByUid.serverNode) {
-      await this.unregisterDeviceBounded(staleByUid, `stale uid composite ${candidate.deviceId}`);
-    }
+    await this.prepareEndpointForRegistration(endpoint, candidate.deviceId);
     await this.registerDevice(endpoint);
     const serverNode = (endpoint as any).serverNode;
     if (!serverNode) {
@@ -4144,31 +4219,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         return;
       }
 
-      // If a previous endpoint with this uniqueId or deviceName already exists in Matterbridge
-      // but lacks a valid serverNode (e.g. was a child endpoint of an old composite node,
-      // or forceRecreate is requested), we MUST unregister the stale endpoint from Matterbridge first.
-      // Otherwise Matterbridge's registerDevice() checks hasDeviceName / hasDeviceUniqueId and returns early,
-      // preventing the creation of the ServerNode!
-      const staleEndpoint =
-        (endpoint.uniqueId ? this.getDeviceByUniqueId(endpoint.uniqueId) : undefined) ||
-        (endpoint.deviceName ? this.getDeviceByName(endpoint.deviceName) : undefined);
-      if (staleEndpoint) {
-        this.log.notice(
-          `Unregistering stale Matterbridge endpoint "${staleEndpoint.deviceName}" (${staleEndpoint.uniqueId}) before creating standalone ServerNode for ${entityId}`,
-        );
-        try {
-          if ((staleEndpoint as any).serverNode?.lifecycle?.isOnline) {
-            await Promise.race([
-              (staleEndpoint as any).serverNode.close(),
-              new Promise<void>((res) => setTimeout(res, 2000)),
-            ]);
-          }
-          await this.unregisterDevice(staleEndpoint);
-        } catch (unregErr) {
-          this.log.warn(`Could not unregister stale endpoint: ${unregErr}`);
-        }
-      }
-
+      await this.prepareEndpointForRegistration(endpoint, entityId);
       await this.registerDevice(endpoint);
       // Matterbridge creates the ServerNode during registerDevice(), but nodes
       // added dynamically after the initial startup interval are not started
@@ -4176,6 +4227,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       // mDNS record (_matterc._udp) is present before showing its QR code.
       const serverNode = (endpoint as any).serverNode;
       if (!serverNode) {
+        this.log.error(
+          `Matter server node was not created for ${entityId} (deviceName: "${endpoint.deviceName}", uniqueId: "${endpoint.uniqueId}", mode: "${endpoint.mode}").`,
+        );
         throw new Error(`Matter server node was not created for ${entityId}.`);
       }
       if (!serverNode.lifecycle?.isOnline) {
@@ -4229,9 +4283,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         );
         return;
       }
+      await this.prepareEndpointForRegistration(endpoint, entityId);
       await this.registerDevice(endpoint);
       const serverNode = (endpoint as any).serverNode;
       if (!serverNode) {
+        this.log.error(
+          `Matter server node was not created for MQTT ${entityId} (deviceName: "${endpoint.deviceName}", uniqueId: "${endpoint.uniqueId}", mode: "${endpoint.mode}").`,
+        );
         throw new Error(`Matter server node was not created for ${entityId}.`);
       }
       if (!serverNode.lifecycle?.isOnline) {
@@ -4521,21 +4579,39 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     const compositeDeviceId =
       this.compositeMembership.get(entityId) ??
       this.getCompositeCandidate(entityId)?.deviceId;
-    const endpoint = this.getMatterEndpointForEntity(
+    let endpoint = this.getMatterEndpointForEntity(
       entityId,
       compositeDeviceId,
     );
+    if (!endpoint) {
+      endpoint =
+        (typeof this.getDeviceByUniqueId === "function"
+          ? (this.getDeviceByUniqueId(entityId.replaceAll(".", "_")) as any)
+          : undefined) ||
+        (this.entities.get(entityId)?.state?.attributes?.friendly_name &&
+        typeof this.getDeviceByName === "function"
+          ? (this.getDeviceByName(
+              String(this.entities.get(entityId)!.state.attributes.friendly_name),
+            ) as any)
+          : undefined);
+    }
     const serverNode = endpoint?.serverNode;
-    if (!endpoint || !serverNode) {
+    const entity = this.entities.get(entityId);
+    if (!endpoint && !entity && !compositeDeviceId) {
       return {
         success: false,
         error:
-          "El accesorio Matter no está activo o su nodo aún no está listo.",
+          "El accesorio Matter no está activo ni se encontró en las entidades descubiertas.",
       };
     }
 
     try {
-      const storeId = String(endpoint.deviceName ?? "").replace(/[ .]/g, "");
+      const friendlyName =
+        entity?.state?.attributes?.friendly_name ?? entityId;
+      const storeId = String(endpoint?.deviceName ?? friendlyName).replace(
+        /[ .]/g,
+        "",
+      );
 
       // 1. In-memory cleanup before stopping the node
       if (serverNode) {
@@ -4552,8 +4628,19 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       if (compositeDeviceId) {
         await this.disposeCompositeNode(compositeDeviceId);
       } else {
-        if (serverNode.lifecycle?.isOnline) await serverNode.close();
-        await this.unregisterDevice(endpoint);
+        if (serverNode?.lifecycle?.isOnline) {
+          try {
+            await Promise.race([
+              serverNode.close(),
+              new Promise<void>((res) => setTimeout(res, 2500)),
+            ]);
+          } catch (e) {
+            this.log.debug(`[Reset] Error closing serverNode: ${e}`);
+          }
+        }
+        if (endpoint) {
+          await this.unregisterDeviceBounded(endpoint, `reset ${entityId}`);
+        }
         this.matterbridgeDevices.delete(entityId);
       }
 
@@ -4569,10 +4656,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       const possibleIds = new Set<string>(
         [
           storeId,
-          String(endpoint.deviceName ?? "").replace(/[ .]/g, ""),
-          String((endpoint as any).name ?? "").replace(/[ .]/g, ""),
-          String(endpoint.id ?? "").replace(/[ .]/g, ""),
-          (serverNode as any).id,
+          String(endpoint?.deviceName ?? "").replace(/[ .]/g, ""),
+          String((endpoint as any)?.name ?? "").replace(/[ .]/g, ""),
+          String(endpoint?.id ?? "").replace(/[ .]/g, ""),
+          String(friendlyName).replace(/[ .]/g, ""),
+          entityId.replace(/[ .]/g, ""),
+          entityId.replaceAll(".", "_"),
+          (serverNode as any)?.id,
         ].filter(Boolean),
       );
 
@@ -4611,16 +4701,26 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         bridgeRuntime.serverNodeStorageManagers?.get?.(storeId);
       const storageService = bridgeRuntime.matterStorageService;
       const storageManager =
-        managedStorage ?? (await storageService?.open?.(storeId));
-      try {
-        await storageManager?.createContext?.("persist")?.clearAll?.();
-        await storageManager?.createContext?.("fabrics")?.clearAll?.();
-        await storageManager?.createContext?.("commissioning")?.clearAll?.();
-        await storageManager
-          ?.createContext?.("operationalCredentials")
-          ?.clearAll?.();
-      } finally {
-        if (!managedStorage) await storageManager?.close?.();
+        managedStorage ??
+        (await storageService?.open?.(storeId).catch(() => undefined));
+      if (storageManager) {
+        try {
+          await storageManager.createContext?.("persist")?.clearAll?.();
+          await storageManager.createContext?.("fabrics")?.clearAll?.();
+          await storageManager.createContext?.("commissioning")?.clearAll?.();
+          await storageManager
+            .createContext?.("operationalCredentials")
+            ?.clearAll?.();
+        } catch (e) {
+          this.log.debug(
+            `[Reset] Storage context clear error for ${storeId}: ${e}`,
+          );
+        } finally {
+          try {
+            await storageManager.close?.();
+          } catch {}
+          bridgeRuntime.serverNodeStorageManagers?.delete?.(storeId);
+        }
       }
 
       if (compositeDeviceId) {

@@ -973,4 +973,76 @@ describe("HomeAssistantPlatform", () => {
     expect(eraseFn).not.toHaveBeenCalled();
     expect(closeFn).toHaveBeenCalled();
   });
+
+  it("recovers and resets an accessory even if serverNode was not initialized or offline", async () => {
+    const entityId = "switch.apagador_oficina_canal_1";
+    (platform as any).entities.set(entityId, {
+      entityId,
+      state: { attributes: { friendly_name: "VENTILADOR OFICINA" } },
+    });
+
+    // Stale endpoint without serverNode (e.g. after being unpaired in HomeKit)
+    const deadEndpoint = {
+      deviceName: "VENTILADOR OFICINA",
+      uniqueId: "switch_apagador_oficina_canal_1",
+      serverNode: undefined,
+    };
+    (platform as any).matterbridgeDevices.set(entityId, deadEndpoint);
+
+    vi.spyOn(platform as any, "unregisterDevice").mockResolvedValue(undefined);
+    vi.spyOn(platform as any, "activateEntity").mockImplementation(async () => {
+      const regeneratedEndpoint = {
+        deviceName: "VENTILADOR OFICINA",
+        uniqueId: "switch_apagador_oficina_canal_1",
+        serverNode: {
+          lifecycle: { isOnline: true },
+          state: {
+            commissioning: {
+              pairingCodes: {
+                qrPairingCode: "MT:Y.REGEN001",
+                manualPairingCode: "34567890123",
+              },
+              fabrics: [],
+            },
+          },
+        },
+      };
+      (platform as any).matterbridgeDevices.set(entityId, regeneratedEndpoint);
+    });
+
+    const result = await platform.resetMatterAccessory(entityId);
+    expect(result.success).toBe(true);
+    expect(result.pairingCode).toBe("MT:Y.REGEN001");
+    expect(result.manualPairingCode).toBe("34567890123");
+  });
+
+  it("prepareEndpointForRegistration unregisters stale matching endpoints and disambiguates names", async () => {
+    const staleDevice = {
+      deviceName: "PASILLO",
+      uniqueId: "switch_apagador_pasillo_old",
+      serverNode: {
+        lifecycle: { isOnline: true },
+        close: vi.fn().mockResolvedValue(undefined),
+      },
+    };
+    const unregSpy = vi.spyOn(platform as any, "unregisterDevice").mockResolvedValue(undefined);
+    (platform as any).getDevices = vi.fn().mockReturnValue([staleDevice]);
+    (platform as any).hasDeviceName = vi.fn().mockImplementation((name: string) => name === "PASILLO");
+    (platform as any).hasDeviceUniqueId = vi.fn().mockReturnValue(false);
+    (platform as any).getDeviceByName = vi.fn().mockReturnValue(staleDevice);
+
+    const newEndpoint = {
+      deviceName: "PASILLO",
+      uniqueId: "switch_apagador_pasillo_new",
+      serialNumber: "SN12345",
+    };
+
+    await (platform as any).prepareEndpointForRegistration(newEndpoint, "switch.apagador_pasillo_new");
+
+    expect(staleDevice.serverNode.close).toHaveBeenCalled();
+    expect(unregSpy).toHaveBeenCalledWith(staleDevice);
+    // Name disambiguation should have adjusted the duplicate name
+    expect(newEndpoint.deviceName).not.toBe("PASILLO");
+    expect(newEndpoint.deviceName).toContain("PASILLO");
+  });
 });
