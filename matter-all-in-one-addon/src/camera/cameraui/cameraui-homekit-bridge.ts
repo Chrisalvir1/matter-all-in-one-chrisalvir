@@ -109,7 +109,7 @@ export class CameraUiHomeKitBridge {
     const states = platform?.ha?.hassStates;
     const registry = platform?.ha?.hassEntities;
 
-    // Direct check for Tapo C120 known sensor candidates
+    // Direct check for Tapo C120 known sensor candidates and full dynamic scan
     const isC120 = /(?:\bc120\b|tapo[-_ ]?c120|tapo[-_ ]?spot|\bspot\b)/i.test(
       `${camera.id} ${camera.name || ""}`,
     );
@@ -119,14 +119,49 @@ export class CameraUiHomeKitBridge {
         "binary_sensor.tapo_c120_person",
         "binary_sensor.tapo_c120_person_detection",
         "binary_sensor.tapo_c120_celda_de_movimiento",
+        "binary_sensor.tapo_c120_movimiento",
+        "binary_sensor.tapo_c120_deteccion_de_personas",
+        "binary_sensor.tapo_c120_deteccion_de_movimiento",
         "binary_sensor.tapo_spot_motion",
         "binary_sensor.c120_motion",
         "binary_sensor.c120_person",
+        "binary_sensor.c120_movimiento",
+        "binary_sensor.c120_celda_de_movimiento",
+        "binary_sensor.camara_c120_motion",
+        "binary_sensor.camara_c120_movimiento",
         "event.tapo_c120_motion",
         "event.tapo_c120_person",
+        "event.c120_motion",
+        "event.c120_person",
       ];
       for (const cand of c120Candidates) {
         if (this.hasUsableMotionEntity(platform, cand)) return cand;
+      }
+      for (const [candId, candState] of states.entries()) {
+        if (!candId.startsWith("binary_sensor.") && !candId.startsWith("event.")) continue;
+        const fn = (candState?.attributes?.friendly_name || "").toLowerCase();
+        const candIdLower = candId.toLowerCase();
+        const hasC120Token =
+          candIdLower.includes("c120") ||
+          candIdLower.includes("spot") ||
+          fn.includes("c120") ||
+          fn.includes("spot");
+        const hasMotionToken =
+          candIdLower.includes("motion") ||
+          candIdLower.includes("movimiento") ||
+          candIdLower.includes("person") ||
+          candIdLower.includes("persona") ||
+          candIdLower.includes("celda") ||
+          candIdLower.includes("detect") ||
+          fn.includes("motion") ||
+          fn.includes("movimiento") ||
+          fn.includes("person") ||
+          fn.includes("persona") ||
+          fn.includes("celda") ||
+          fn.includes("detect");
+        if (hasC120Token && hasMotionToken && this.hasUsableMotionEntity(platform, candId)) {
+          return candId;
+        }
       }
     }
 

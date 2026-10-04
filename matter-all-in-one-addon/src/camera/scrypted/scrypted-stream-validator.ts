@@ -394,8 +394,34 @@ export class ScryptedStreamValidator {
       ffmpegRestartCount: 0,
     };
 
+    let effectiveUrl = trimmed;
+    const isVimtag = /vimtag/i.test(`${cameraId} ${trimmed}`);
+    if (isVimtag && effectiveUrl.startsWith("rtsp://")) {
+      if (effectiveUrl.includes("/stream1") || effectiveUrl.includes("/stream2")) {
+        effectiveUrl = effectiveUrl.replace(/\/stream[12]/, "/live/ch0");
+      } else if (/:\d+\/?$/.test(effectiveUrl) || !effectiveUrl.split("://")[1]?.includes("/")) {
+        effectiveUrl = effectiveUrl.replace(/\/?$/, "/live/ch0");
+      }
+    }
+
     try {
-      const probe = await probeCameraSource(trimmed, { timeoutMs, transport });
+      let probe = await probeCameraSource(effectiveUrl, { timeoutMs, transport });
+      if (!probe.valid && isVimtag && effectiveUrl.startsWith("rtsp://")) {
+        const altPaths = ["/live/ch0", "/onvif1", "/ch0", "/live/ch1", "/onvif2"];
+        for (const altPath of altPaths) {
+          const candidateUrl = effectiveUrl.replace(/\/[^/]*$/, altPath);
+          if (candidateUrl === effectiveUrl) continue;
+          const altProbe = await probeCameraSource(candidateUrl, {
+            timeoutMs: 3500,
+            transport,
+          });
+          if (altProbe.valid) {
+            probe = altProbe;
+            effectiveUrl = candidateUrl;
+            break;
+          }
+        }
+      }
       if (probe.selectedTransport) {
         metrics.selectedTransport.value = probe.selectedTransport;
       }

@@ -5513,9 +5513,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         const isTapoC120Entity = /tapo[-_ ]?c120|tapo[-_ ]?spot|\bc120\b/i.test(
           `${entityId} ${entityFriendlyName}`,
         );
-        const isTapoC120Cam = /tapo[-_ ]?c120|tapo[-_ ]?spot|\bc120\b/i.test(
-          `${cuiId} ${camName} ${accessory.record?.name || ""} ${accessory.record?.model || ""}`,
-        );
+        const isTapoC120Cam =
+          (accessory as any).isTapoC120?.() ||
+          /tapo[-_ ]?c120|tapo[-_ ]?spot|\bc120\b/i.test(
+            `${cuiId} ${camName} ${accessory.record?.name || ""} ${accessory.record?.model || ""}`,
+          );
         const isC120Match = isTapoC120Entity && isTapoC120Cam && isMotionClass;
 
         const isWyzeEntity = /wyze/i.test(`${entityId} ${entityFriendlyName}`);
@@ -5531,7 +5533,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
         const isVimtagEntity = /vimtag/i.test(`${entityId} ${entityFriendlyName}`);
         const isVimtagCam = /vimtag/i.test(
-          `${cuiId} ${camName} ${accessory.record?.name || ""} ${accessory.record?.model || ""}`,
+          `${cuiId} ${camName} ${accessory.record?.name || ""} ${accessory.record?.model || ""} ${(accessory as any).streamSource?.url || ""}`,
         );
         const isVimtagMatch = isVimtagEntity && isVimtagCam && isMotionClass;
 
@@ -5569,7 +5571,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           (sameDevice && isMotionClass) ||
           isC402Match ||
           isC120Match ||
-          (isTapoC120Cam && sameDevice) ||
+          (isTapoC120Cam && (isTapoC120Entity || sameDevice || linkedId === entityId) && isMotionClass) ||
           isWyzeMatch ||
           isEzvizMatch ||
           isVimtagMatch ||
@@ -8173,6 +8175,40 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               }
             }
           } catch {}
+
+          if (!targetUrl && haState) {
+            try {
+              if (this.ha?.requestCameraStream) {
+                targetUrl = (await this.ha.requestCameraStream(cameraId)) || "";
+              }
+            } catch {}
+            if (!targetUrl && this.ha?.getCameraProxyStreamUrl) {
+              targetUrl = this.ha.getCameraProxyStreamUrl(cameraId);
+            }
+          }
+
+          const isVimtag =
+            /vimtag/i.test(cameraId) ||
+            /vimtag/i.test(String(cuiCam?.name || "")) ||
+            /vimtag/i.test(String(scryptedCam?.name || "")) ||
+            /vimtag/i.test(String(haState?.attributes?.friendly_name || "")) ||
+            /vimtag/i.test(targetUrl);
+
+          if (isVimtag && targetUrl.startsWith("rtsp://")) {
+            try {
+              const u = new URL(targetUrl);
+              if (!u.pathname || u.pathname === "/" || u.pathname === "/stream1" || u.pathname === "/stream2") {
+                u.pathname = "/live/ch0";
+                targetUrl = u.toString();
+              }
+            } catch {
+              if (targetUrl.endsWith(":554") || targetUrl.endsWith(":554/")) {
+                targetUrl = targetUrl.replace(/\/?$/, "/live/ch0");
+              } else if (targetUrl.includes("/stream1")) {
+                targetUrl = targetUrl.replace("/stream1", "/live/ch0");
+              }
+            }
+          }
 
           if (!targetUrl) {
             res.writeHead(400, {

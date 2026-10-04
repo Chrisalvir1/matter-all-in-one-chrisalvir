@@ -757,14 +757,36 @@ export class HomeKitCameraRecordingDelegate
         "zerolatency",
       );
     } else {
-      // HEVC is not implemented in this classical HKSV pipeline.
-      // Cameras delivering non-H.264 (such as pure HEVC) remain marked as "not_capable" in this pipeline.
-      // Native HEVC and 2K/Level 5 research is isolated on experimental/camera-levels-by-fps.
-      this.platform?.log?.error?.(
-        `[HKSV][${this.entityId}] Cámara no entrega H.264 nativo (${this.capabilities.videoCodec || "desconocido"}). HEVC no está implementado en este pipeline clásico HKSV (HKSV no capaz).`,
+      // HEVC / H.265 / non-H.264 RTSP sources (e.g. Vimtag, 4K cameras):
+      // Apple HomeKit Secure Video strictly requires H.264 inside fMP4 for iCloud recording.
+      // Transcode HEVC video to H.264 1080p using ultrafast FFmpeg encoding so HKSV recording succeeds.
+      this.platform?.log?.notice?.(
+        `[HKSV][${this.entityId}] Fuente ${this.capabilities.videoCodec || "HEVC"} detectada — transcodificando a H.264 1080p para compatibilidad con grabación iCloud HKSV`,
       );
-      this.record.hksvState = "not_capable";
-      return null;
+      args.push(
+        "-map",
+        "0:v:0",
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        "-profile:v",
+        "high",
+        "-level:v",
+        "4.0",
+        "-vf",
+        "scale=1920:1080:force_original_aspect_ratio=decrease:force_divisible_by=2",
+        "-r",
+        "15",
+        "-g",
+        "30",
+        "-keyint_min",
+        "15",
+        "-preset",
+        "ultrafast",
+        "-tune",
+        "zerolatency",
+      );
     }
 
     // Audio pipeline: strict passthrough (-c:a copy) if source is AAC; otherwise transcode ONLY audio to AAC

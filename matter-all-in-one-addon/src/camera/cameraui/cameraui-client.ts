@@ -516,6 +516,11 @@ export class CameraUiClient {
           /wyze/i.test(videoConfig.source || "") ||
           /wyze/i.test(rtspUrl);
 
+        const isVimtag =
+          /vimtag/i.test(name) ||
+          /vimtag/i.test(videoConfig.source || "") ||
+          /vimtag/i.test(rtspUrl);
+
         if (isWyze) {
           // Wyze cameras: /stream0 is 1080p/2K High Quality, /stream1 is 360p low-res
           if (rtspUrl.includes("/stream1")) {
@@ -525,6 +530,23 @@ export class CameraUiClient {
             const temp = rtspUrl;
             rtspUrl = subRtspUrl;
             subRtspUrl = temp;
+          }
+        } else if (isVimtag) {
+          // Vimtag cameras: /live/ch0, /onvif1 or /ch0 is High Quality main stream; /live/ch1, /onvif2 or /ch1 is sub
+          if (
+            (rtspUrl.includes("/live/ch1") || rtspUrl.includes("/ch1") || rtspUrl.includes("/onvif2")) &&
+            subRtspUrl &&
+            (subRtspUrl.includes("/live/ch0") || subRtspUrl.includes("/ch0") || subRtspUrl.includes("/onvif1"))
+          ) {
+            const temp = rtspUrl;
+            rtspUrl = subRtspUrl;
+            subRtspUrl = temp;
+          } else if (rtspUrl.includes("/stream1") || rtspUrl.includes("/stream2")) {
+            // Replace invalid generic /stream1 or /stream2 with Vimtag native /live/ch0
+            rtspUrl = rtspUrl.replace(/\/stream[12]/, "/live/ch0");
+          } else if (/:\d+\/?$/.test(rtspUrl) || !rtspUrl.split("://")[1]?.includes("/")) {
+            // No path specified for Vimtag: append default /live/ch0
+            rtspUrl = rtspUrl.replace(/\/?$/, "/live/ch0");
           }
         } else {
           // Standard cameras (Tapo, ONVIF, Reolink): /stream1, /main, /ch0 is High Quality, /stream2 or /sub is 360p
@@ -689,6 +711,18 @@ export class CameraUiClient {
         return `rtsp://${afterProto}:554/stream1`;
       } else if (!afterProto.includes("/")) {
         return `rtsp://${afterProto}/stream1`;
+      }
+      return `rtsp://${afterProto}`;
+    }
+
+    // Support vimtag:// custom scheme
+    // e.g. vimtag://user:password@192.168.1.100 -> rtsp://user:password@192.168.1.100:554/live/ch0
+    if (trimmed.startsWith("vimtag://")) {
+      const afterProto = trimmed.substring(9);
+      if (!afterProto.includes(":554") && !afterProto.includes("/")) {
+        return `rtsp://${afterProto}:554/live/ch0`;
+      } else if (!afterProto.includes("/")) {
+        return `rtsp://${afterProto}/live/ch0`;
       }
       return `rtsp://${afterProto}`;
     }
