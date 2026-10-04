@@ -22,9 +22,9 @@ export function repairCameraRecord(cam: CameraUiCameraRecord): {
 } {
   let modified = false;
 
-  // C402 uses Home Assistant's stream resolver, while retaining its saved HAP
-  // identity and URL. Do not synthesize sensors or rewrite it to a Camera.UI URL.
-  if (/tapo[-_ ]?c402/i.test(`${cam.id} ${cam.name || ""} ${cam.rtspUrl || ""}`)) {
+  // C402 and C120 use Home Assistant's stream resolver, while retaining their saved HAP
+  // identity and URL. Do not synthesize sensors or rewrite them to a Camera.UI URL.
+  if (/(?:tapo[-_ ]?c402|tapo[-_ ]?c120|tapo[-_ ]?spot)/i.test(`${cam.id} ${cam.name || ""} ${cam.rtspUrl || ""}`)) {
     if (cam.sourceProvider !== "home_assistant") {
       cam.sourceProvider = "home_assistant";
       modified = true;

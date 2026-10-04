@@ -33,17 +33,20 @@ export class CameraSourceResolver {
       hasStreamSupport ||
       attrs.frontend_stream_type === "hls";
 
-    // 0. Tapo C402: stream is served directly from Home Assistant
+    // 0. Tapo C402 & C120: stream is served directly from Home Assistant
     const isTapoC402 = /(?:\bc402\b|tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle|tapo[-_ ]?frente)/i.test(
       `${entityId} ${attrs.friendly_name || ""}`,
     );
-    if (isTapoC402) {
+    const isTapoC120 = /(?:\bc120\b|tapo[-_ ]?c120|tapo[-_ ]?spot|\bspot\b)/i.test(
+      `${entityId} ${attrs.friendly_name || ""}`,
+    );
+    if (isTapoC402 || isTapoC120) {
       if (canAttemptStream && platform?.ha?.requestCameraStream) {
         try {
           const streamUrl = await platform.ha.requestCameraStream(entityId);
           if (streamUrl && typeof streamUrl === "string") {
             platform?.log?.notice?.(
-              `[CameraSourceResolver][${entityId}] Resolved Tapo C402 directly from HA: ${sanitizeUrlCredentials(streamUrl)}`,
+              `[CameraSourceResolver][${entityId}] Resolved Tapo ${isTapoC402 ? "C402" : "C120"} directly from HA: ${sanitizeUrlCredentials(streamUrl)}`,
             );
             return {
               sourceType: "hls",
@@ -51,7 +54,7 @@ export class CameraSourceResolver {
               snapshotUrl,
               supportsPassthrough: true,
               requiresBridge: true,
-              metadata: { isTapoC402: true, isDirectHa: true },
+              metadata: { isTapoC402, isTapoC120, isDirectHa: true },
             };
           }
         } catch (err) {
@@ -63,7 +66,7 @@ export class CameraSourceResolver {
       const proxyUrl = platform?.ha?.getCameraProxyStreamUrl?.(entityId);
       if (proxyUrl) {
         platform?.log?.notice?.(
-          `[CameraSourceResolver][${entityId}] Resolved Tapo C402 via HA continuous proxy stream`,
+          `[CameraSourceResolver][${entityId}] Resolved Tapo ${isTapoC402 ? "C402" : "C120"} via HA continuous proxy stream`,
         );
         return {
           sourceType: "ha_proxy",
@@ -71,7 +74,7 @@ export class CameraSourceResolver {
           snapshotUrl,
           supportsPassthrough: false,
           requiresBridge: true,
-          metadata: { isTapoC402: true, isDirectHa: true },
+          metadata: { isTapoC402, isTapoC120, isDirectHa: true },
         };
       }
     }

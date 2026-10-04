@@ -445,7 +445,10 @@ export class HomeKitCameraRecordingDelegate
       const isTapoC402 = /(?:\bc402\b|tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle)/i.test(
         `${this.entityId} ${this.record.name || ""} ${this.record.model || ""} ${this.streamSource.url || ""}`,
       );
-      await this.waitForInitialization(isTapoC402 ? 10000 : 5000);
+      const isTapoC120 = /(?:\bc120\b|tapo[-_ ]?c120|tapo[-_ ]?spot|\bspot\b)/i.test(
+        `${this.entityId} ${this.record.name || ""} ${this.record.model || ""} ${this.streamSource.url || ""}`,
+      );
+      await this.waitForInitialization((isTapoC402 || isTapoC120) ? 10000 : 5000);
     }
 
     if (this.initializationSegment) {

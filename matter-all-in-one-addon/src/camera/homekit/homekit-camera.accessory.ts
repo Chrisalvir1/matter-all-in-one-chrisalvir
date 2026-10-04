@@ -259,6 +259,7 @@ export class HomeKitCameraAccessory {
     const isStreamingUsable =
       Boolean(this.streamSource.url) ||
       this.isTapoC402() ||
+      this.isTapoC120() ||
       Boolean(this.streamSource.metadata?.isCameraUi) ||
       Boolean(this.streamSource.metadata?.isHaProxyStream);
     this.record.hksvEnabled = isStreamingUsable;
@@ -401,6 +402,7 @@ export class HomeKitCameraAccessory {
     const isStreamingUsable =
       Boolean(this.streamSource.url) ||
       this.isTapoC402() ||
+      this.isTapoC120() ||
       Boolean(this.streamSource.metadata?.isCameraUi) ||
       Boolean(this.streamSource.metadata?.isHaProxyStream);
     // Do not negotiate AAC-ELD unless this exact FFmpeg binary can encode it.

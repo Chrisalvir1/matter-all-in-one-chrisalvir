@@ -958,7 +958,8 @@ export class HomeKitCameraStreamingDelegate
       !sourceUrl ||
       this.streamSource.sourceType === "hls" ||
       this.streamSource.sourceType === "ha_proxy" ||
-      this.isTapoC402()
+      this.isTapoC402() ||
+      this.isTapoC120()
     ) {
       let haEntityId =
         (this.streamSource.metadata as any)?.sourceCameraEntityId ||
@@ -1183,23 +1184,35 @@ export class HomeKitCameraStreamingDelegate
       });
       const guard = setTimeout(
         () => {
-          if (process.exitCode === null && !process.killed) {
+          if (!isTapoC402 && !isTapoC120 && process.exitCode === null && !process.killed) {
             this.platform?.log?.notice?.(
               `[HomeKitCamera][${this.entityId}] HAP START callback success; FFmpeg active session=${session.sessionId}`,
             );
             settle();
-          } else {
+          } else if (!isTapoC402 && !isTapoC120) {
             settle(new Error("FFmpeg exited during HAP startup"));
           }
         },
         400,
       );
+      if (isTapoC402 || isTapoC120) {
+        clearTimeout(guard);
+        startupTimer = setTimeout(() => {
+          if (startupConfirmed) return;
+          this.platform?.log?.warn?.(
+            `[HomeKitCamera][${this.entityId}] ${isTapoC402 ? "C402" : "C120"} timeout waiting for first video frame (6s); settling callback`,
+          );
+          settle();
+        }, 6000);
+      }
       process.once("error", (error) => {
         clearTimeout(guard);
+        if (startupTimer) clearTimeout(startupTimer);
         settle(error);
       });
       process.once("close", (code) => {
         clearTimeout(guard);
+        if (startupTimer) clearTimeout(startupTimer);
         session.process = undefined;
         this.platform?.log?.warn?.(
           `[HomeKitCamera][${this.entityId}] FFmpeg closed code=${code} ${stderr.trim()}`,
@@ -1353,10 +1366,12 @@ export class HomeKitCameraStreamingDelegate
       if (isTapoC402) {
         args.push("-fflags", "+genpts+discardcorrupt", "-flags", "low_delay");
       } else if (isTapoC120) {
-        // C120 1080p pure copy passthrough: reliable genpts and low_delay without dropping timeline
+        // C120: Wallclock timestamping to eliminate RTP jitter buffer drops and 3-10s jumping
         args.push(
+          "-use_wallclock_as_timestamps",
+          "1",
           "-fflags",
-          "+genpts+discardcorrupt",
+          "+nobuffer+flush_packets+genpts+discardcorrupt",
           "-flags",
           "low_delay",
         );

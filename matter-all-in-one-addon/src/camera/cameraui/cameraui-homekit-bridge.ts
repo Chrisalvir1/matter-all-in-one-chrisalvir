@@ -164,8 +164,11 @@ export class CameraUiHomeKitBridge {
     const isC402 = /(?:c402|frente[-_ ]?de[-_ ]?calle)/i.test(
       `${camera.id} ${camera.name || ""}`,
     );
+    const isC120 = /(?:\bc120\b|tapo[-_ ]?c120|tapo[-_ ]?spot|\bspot\b)/i.test(
+      `${camera.id} ${camera.name || ""}`,
+    );
     const isHomeAssistantSource =
-      camera.sourceProvider === "home_assistant" || isC402;
+      camera.sourceProvider === "home_assistant" || isC402 || isC120;
     const hasSource = Boolean(camera.rtspUrl) || isHomeAssistantSource;
 
 
