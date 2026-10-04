@@ -46,6 +46,7 @@ import {
   supportsFdkAac,
 } from "./ffmpeg-helper.js";
 import { NestCameraAdapter } from "../nest/nest-camera-adapter.js";
+import { resolveHaCameraEntityId } from "../cameraui/ha-camera-entity.js";
 
 /** Generate a fresh, HAP-valid setup PIN for an explicit pairing reset. */
 export function generateFreshHomeKitPin(previous?: string): string {
@@ -721,7 +722,23 @@ export class HomeKitCameraAccessory {
       return matchingWords.length >= Math.min(2, words.length);
     };
 
-    const deviceId = registry?.get(this.entityId)?.device_id;
+    const haCameraEntityId =
+      (this.record as any).sourceCameraEntityId ||
+      resolveHaCameraEntityId(
+        {
+          id: this.entityId,
+          name: this.record.name,
+          realEntities: (this.record as any).realEntities,
+        },
+        states,
+      );
+    const targetEntityId =
+      haCameraEntityId && registry?.has(haCameraEntityId)
+        ? haCameraEntityId
+        : this.entityId;
+    const deviceId =
+      registry?.get(targetEntityId)?.device_id ||
+      registry?.get(this.entityId)?.device_id;
 
     for (const [entityId, state] of states.entries()) {
       const entry = registry?.get(entityId);
@@ -763,7 +780,7 @@ export class HomeKitCameraAccessory {
 
       if (
         !result.motion &&
-        domain === "binary_sensor" &&
+        (domain === "binary_sensor" || domain === "event") &&
         (["motion", "occupancy", "presence"].includes(deviceClass) ||
           entityId.includes("motion") ||
           entityId.includes("movimiento") ||
@@ -839,7 +856,53 @@ export class HomeKitCameraAccessory {
     }
     const registry = this.platform?.ha?.hassEntities;
     const states = this.platform?.ha?.hassStates;
-    const deviceId = registry?.get(this.entityId)?.device_id;
+
+    // Direct check for Tapo C120 known sensor candidates
+    if (this.isTapoC120() && states) {
+      const c120Candidates = [
+        "binary_sensor.tapo_c120_motion",
+        "binary_sensor.tapo_c120_person",
+        "binary_sensor.tapo_c120_person_detection",
+        "binary_sensor.tapo_c120_celda_de_movimiento",
+        "binary_sensor.tapo_spot_motion",
+        "binary_sensor.c120_motion",
+        "binary_sensor.c120_person",
+      ];
+      for (const cand of c120Candidates) {
+        if (states.has(cand)) return cand;
+      }
+    }
+
+    // Direct check for Tapo C402 known sensor candidates
+    if (this.isTapoC402() && states) {
+      const c402Candidates = [
+        "binary_sensor.tapo_frente_de_calle_motion",
+        "binary_sensor.tapo_c402_motion",
+        "binary_sensor.c402_motion",
+        "binary_sensor.frente_de_calle_motion",
+      ];
+      for (const cand of c402Candidates) {
+        if (states.has(cand)) return cand;
+      }
+    }
+
+    const haCameraEntityId =
+      (this.record as any).sourceCameraEntityId ||
+      resolveHaCameraEntityId(
+        {
+          id: this.entityId,
+          name: this.record.name,
+          realEntities: (this.record as any).realEntities,
+        },
+        states,
+      );
+    const targetEntityId =
+      haCameraEntityId && registry?.has(haCameraEntityId)
+        ? haCameraEntityId
+        : this.entityId;
+    const deviceId =
+      registry?.get(targetEntityId)?.device_id ||
+      registry?.get(this.entityId)?.device_id;
     const cameraBase = this.entityId.split(".")[1] || this.entityId;
     if (deviceId && registry) {
       for (const [entityId, entry] of registry.entries()) {
@@ -853,7 +916,10 @@ export class HomeKitCameraAccessory {
         if (
           ["motion", "occupancy", "presence"].includes(deviceClass) ||
           entityId.includes("motion") ||
-          entityId.includes("movimiento")
+          entityId.includes("movimiento") ||
+          entityId.includes("person") ||
+          entityId.includes("persona") ||
+          entityId.includes("celda")
         ) {
           return entityId;
         }

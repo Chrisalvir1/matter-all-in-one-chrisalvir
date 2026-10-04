@@ -74,6 +74,7 @@ import { ScryptedStreamValidator } from "./camera/scrypted/scrypted-stream-valid
 import { CameraUiStorage } from "./camera/cameraui/cameraui-storage.js";
 import { CameraUiClient } from "./camera/cameraui/cameraui-client.js";
 import { CameraUiHomeKitBridge } from "./camera/cameraui/cameraui-homekit-bridge.js";
+import { resolveHaCameraEntityId } from "./camera/cameraui/ha-camera-entity.js";
 import type { CameraRealEntity } from "./camera/cameraui/cameraui-types.js";
 import { sanitizeUrlCredentials } from "./camera/homekit/ffmpeg-helper.js";
 import { CameraAiDetector } from "./camera/ai/camera-ai-detector.js";
@@ -5393,14 +5394,23 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     if (this.isEntityExported(entityId))
       this.queueStateUpdate(entityId, newState);
 
-    if (entityId.startsWith("binary_sensor.")) {
-      const isMotionState = newState.state === "on";
+    if (
+      entityId.startsWith("binary_sensor.") ||
+      entityId.startsWith("event.")
+    ) {
+      const isEvent = entityId.startsWith("event.");
+      const isMotionState = isEvent
+        ? !["unavailable", "unknown", ""].includes(
+            String(newState.state || "").trim().toLowerCase(),
+          )
+        : newState.state === "on";
       const devState = this.ha?.hassStates?.get(entityId);
       const entityFriendlyName = devState?.attributes?.friendly_name || "";
       const deviceClass = (
         devState?.attributes?.device_class || ""
       ).toLowerCase();
       const isMotionClass =
+        isEvent ||
         ["motion", "occupancy", "presence"].includes(deviceClass) ||
         /motion|movimiento|celda|vehicle|vehiculo|car|auto|person|persona|animal|pet|mascota|detection|deteccion|occupancy|presence|line_crossing|tamper/i.test(
           `${entityId} ${entityFriendlyName}`,
@@ -5454,6 +5464,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               `[HomeKitCamera][${cam.entityId}] Evento de movimiento (${isMotionState ? "DETECTADO" : "REPOSO"}) desde HA (${entityId}) → actualizando HomeKit y HKSV`,
             );
             cam.homekitAccessory.updateMotionState(isMotionState);
+            if (isEvent && isMotionState) {
+              setTimeout(() => {
+                cam.homekitAccessory?.updateMotionState(false);
+              }, 10000);
+            }
           }
         }
       }
@@ -5465,6 +5480,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
       for (const [cuiId, accessory] of allCuiAccessories) {
         if (!accessory) continue;
+        if (!accessory.linkedMotionEntityId) {
+          accessory.linkedMotionEntityId = accessory.findLinkedMotionEntity();
+        }
         const linkedId = accessory.linkedMotionEntityId;
         const camName = accessory.record?.name || "";
         const rawCuiId = cuiId.replace(/^cameraui_/, "");
@@ -5528,19 +5546,30 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               (re) => re.type === "motion" && re.id === entityId,
             );
         const sensorDeviceId = this.ha.hassEntities.get(entityId)?.device_id;
-        const sourceCameraEntityId = accessory.record?.sourceCameraEntityId;
+        let sourceCameraEntityId = accessory.record?.sourceCameraEntityId;
+        if (!sourceCameraEntityId) {
+          sourceCameraEntityId = resolveHaCameraEntityId(
+            {
+              id: cuiId,
+              name: accessory.record?.name,
+              realEntities: (accessory.record as any)?.realEntities,
+            },
+            this.ha?.hassStates,
+          );
+        }
         const cameraDeviceId = sourceCameraEntityId
           ? this.ha.hassEntities.get(sourceCameraEntityId)?.device_id
-          : undefined;
+          : this.ha.hassEntities.get(cuiId)?.device_id;
         const sameDevice = Boolean(
           sensorDeviceId && cameraDeviceId && sensorDeviceId === cameraDeviceId,
         );
 
         const isLinked =
           configuredMotionEntity ||
-          sameDevice ||
+          (sameDevice && isMotionClass) ||
           isC402Match ||
           isC120Match ||
+          (isTapoC120Cam && sameDevice) ||
           isWyzeMatch ||
           isEzvizMatch ||
           isVimtagMatch ||
@@ -5583,6 +5612,19 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             this,
             `${detectedLabel} (${entityFriendlyName || entityId})`,
           );
+          if (isEvent && isMotionState) {
+            setTimeout(() => {
+              this.log.notice(
+                `[Camera.UI] Restableciendo reposo tras evento para cámara "${accessory.record?.name || cuiId}"`,
+              );
+              CameraUiHomeKitBridge.updateMotion(
+                cuiId,
+                false,
+                this,
+                `${detectedLabel} Auto-reset`,
+              );
+            }, 10000);
+          }
         }
       }
     }

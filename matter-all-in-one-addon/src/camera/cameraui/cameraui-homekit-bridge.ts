@@ -104,7 +104,48 @@ export class CameraUiHomeKitBridge {
   private static findNativeMotionEntityId(
     camera: CameraUiCameraRecord,
     platform: any,
+    haCameraEntityId?: string,
   ): string | undefined {
+    const states = platform?.ha?.hassStates;
+    const registry = platform?.ha?.hassEntities;
+
+    // Direct check for Tapo C120 known sensor candidates
+    const isC120 = /(?:\bc120\b|tapo[-_ ]?c120|tapo[-_ ]?spot|\bspot\b)/i.test(
+      `${camera.id} ${camera.name || ""}`,
+    );
+    if (isC120 && states) {
+      const c120Candidates = [
+        "binary_sensor.tapo_c120_motion",
+        "binary_sensor.tapo_c120_person",
+        "binary_sensor.tapo_c120_person_detection",
+        "binary_sensor.tapo_c120_celda_de_movimiento",
+        "binary_sensor.tapo_spot_motion",
+        "binary_sensor.c120_motion",
+        "binary_sensor.c120_person",
+        "event.tapo_c120_motion",
+        "event.tapo_c120_person",
+      ];
+      for (const cand of c120Candidates) {
+        if (this.hasUsableMotionEntity(platform, cand)) return cand;
+      }
+    }
+
+    // Direct check for Tapo C402 known sensor candidates
+    const isC402 = /(?:\bc402\b|tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle)/i.test(
+      `${camera.id} ${camera.name || ""}`,
+    );
+    if (isC402 && states) {
+      const c402Candidates = [
+        "binary_sensor.tapo_frente_de_calle_motion",
+        "binary_sensor.tapo_c402_motion",
+        "binary_sensor.c402_motion",
+        "binary_sensor.frente_de_calle_motion",
+      ];
+      for (const cand of c402Candidates) {
+        if (this.hasUsableMotionEntity(platform, cand)) return cand;
+      }
+    }
+
     const normalized = camera.id.replace(/[^a-z0-9_]/gi, "_").toLowerCase();
     const bare = normalized.replace(/^cameraui_/, "");
     const candidates = [
@@ -117,9 +158,48 @@ export class CameraUiHomeKitBridge {
     ].filter(
       (id): id is string => Boolean(id) && id !== "none" && id !== "auto",
     );
-    return candidates.find((entityId) =>
+    const found = candidates.find((entityId) =>
       this.hasUsableMotionEntity(platform, entityId),
     );
+    if (found) return found;
+
+    // Device registry lookup via resolved HA camera entity ID
+    const targetHaId =
+      haCameraEntityId ||
+      (camera as any).sourceCameraEntityId ||
+      resolveHaCameraEntityId(camera, states);
+    const deviceId =
+      (targetHaId && registry?.get(targetHaId)?.device_id) ||
+      registry?.get(camera.id)?.device_id;
+    if (deviceId && registry) {
+      for (const [entityId, entry] of registry.entries()) {
+        if (
+          !entityId.startsWith("binary_sensor.") &&
+          !entityId.startsWith("event.")
+        )
+          continue;
+        if (entry.device_id !== deviceId) continue;
+        const deviceClass = (
+          entry.device_class ||
+          entry.original_device_class ||
+          ""
+        ).toLowerCase();
+        if (
+          ["motion", "occupancy", "presence"].includes(deviceClass) ||
+          entityId.includes("motion") ||
+          entityId.includes("movimiento") ||
+          entityId.includes("person") ||
+          entityId.includes("persona") ||
+          entityId.includes("celda")
+        ) {
+          if (this.hasUsableMotionEntity(platform, entityId)) {
+            return entityId;
+          }
+        }
+      }
+    }
+
+    return undefined;
   }
 
   /** A stale HA entity must not suppress the local RTSP motion fallback. */
@@ -378,7 +458,11 @@ export class CameraUiHomeKitBridge {
 
     // Link the native Camera.UI sensor before HAP services are created. This
     // leaves C120 HKSV event-driven and avoids a competing RTSP reader.
-    const nativeMotionEntityId = this.findNativeMotionEntityId(camera, platform);
+    const nativeMotionEntityId = this.findNativeMotionEntityId(
+      camera,
+      platform,
+      haEntityId,
+    );
 
     const record: HomeKitCameraStorageRecord = {
       // Camera.UI IDs are UUIDs, and their hyphens make an invalid HA entity_id.
