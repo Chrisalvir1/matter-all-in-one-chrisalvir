@@ -503,12 +503,14 @@ export class HomeKitCameraAccessory {
     };
     const width = isC120 ? 1920 : source.width || 1920;
     const height = isC120 ? 1080 : source.height || 1080;
-    const cameraMax = isC120 ? 20 : this.capabilities.maxFps || 30;
-    const sourceFps = Math.max(
-      15,
-      Math.min(this.capabilities.maxFps || cameraMax, isC120 ? 20 : 60),
-    );
-    const dynamicFps = Math.min(sourceFps, cameraMax);
+    const measured = this.capabilities.measuredVideo?.fps;
+    const detectedFps =
+      (measured && measured > 0 ? Math.round(measured) : undefined) ??
+      this.capabilities.maxFps ??
+      (this.record as any)?.fps ??
+      (isC120 ? 15 : 30);
+    const cameraMax = Math.max(10, Math.min(detectedFps, 60));
+    const dynamicFps = cameraMax;
     const candidates: [number, number, number][] = [
       [width, height, dynamicFps],
       ...(width >= 3840 ? ([[2560, 1440, dynamicFps]] as [number, number, number][]) : []),
@@ -555,21 +557,26 @@ export class HomeKitCameraAccessory {
     );
     const dynamicFps = Math.min(sourceFps, cameraMax);
 
-    // Tapo C120: Configured to 1080p Full HD (1920x1080) in Tapo app.
-    // Advertises native 1080p ladder matching Apple HAP Level 4.0 specification
-    // for pure copy passthrough (-c:v copy) with zero CPU transcoding.
+    // Tapo C120: Advertises native ladder matching stream capabilities.
+    // Uses real measured/configured FPS dynamically (typically 15-20fps).
     if (isC120) {
-      const c120MaxFps = Math.min(sourceFps, 20);
+      const measured = this.capabilities.measuredVideo?.fps;
+      const detectedFps =
+        (measured && measured > 0 ? Math.round(measured) : undefined) ??
+        this.capabilities.maxFps ??
+        (this.record as any)?.fps ??
+        15;
+      const dynamicC120Fps = Math.max(10, Math.min(detectedFps, 30));
       const resList: [number, number, number][] = [];
       if (width > 1920) {
-        resList.push([2560, 1440, c120MaxFps]);
+        resList.push([2560, 1440, dynamicC120Fps]);
       }
       resList.push(
-        [1920, 1080, c120MaxFps],
-        [1280, 720, c120MaxFps],
-        [640, 360, c120MaxFps],
-        [480, 270, c120MaxFps],
-        [320, 180, c120MaxFps],
+        [1920, 1080, dynamicC120Fps],
+        [1280, 720, dynamicC120Fps],
+        [640, 360, dynamicC120Fps],
+        [480, 270, dynamicC120Fps],
+        [320, 180, dynamicC120Fps],
       );
       return resList;
     }

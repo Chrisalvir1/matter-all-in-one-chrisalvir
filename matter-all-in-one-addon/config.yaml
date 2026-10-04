@@ -1,6 +1,6 @@
 name: "Matter All-in-One (Chrisalvir)"
 description: "Universal Matter 1.6.1 bridge for Home Assistant with Apple Home HAP live view, MQTT and BLE fan stabilization."
-version: "1.9.63"
+version: "1.9.64"
 slug: "matter_all_in_one_bridge"
 
 image: "ghcr.io/chrisalvir1/matter-all-in-one-chrisalvir"

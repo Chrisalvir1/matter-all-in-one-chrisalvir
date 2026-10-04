@@ -935,10 +935,14 @@ export class HomeKitCameraStreamingDelegate
   ): Promise<void> {
     const video = request.video;
     const isC120 = this.isTapoC120();
-    const declaredFps = isC120 ? 15 : this.capabilities.maxFps || 30;
-    const requestedFps = video?.fps;
     const measuredFps = this.capabilities.measuredVideo?.fps;
-    const cameraMaxFps = isC120 ? 20 : this.capabilities.maxFps || 30;
+    const declaredFps =
+      this.capabilities.maxFps ||
+      (measuredFps && measuredFps > 0 ? Math.round(measuredFps) : isC120 ? 15 : 30);
+    const requestedFps = video?.fps;
+    const cameraMaxFps =
+      this.capabilities.maxFps ||
+      (measuredFps && measuredFps > 0 ? Math.max(15, Math.round(measuredFps)) : isC120 ? 20 : 30);
     const effectiveFps = resolveLiveViewFps(
       requestedFps,
       measuredFps,
@@ -1101,10 +1105,14 @@ export class HomeKitCameraStreamingDelegate
     const sourceUrl = this.getCleanSourceUrl();
     const video = request.video;
     const isTapoC120 = this.isTapoC120();
-    const declaredFps = isTapoC120 ? 15 : this.capabilities.maxFps || 30;
-    const requestedFps = video?.fps;
     const measuredFps = this.capabilities.measuredVideo?.fps;
-    const cameraMaxFps = isTapoC120 ? 20 : this.capabilities.maxFps || 30;
+    const declaredFps =
+      this.capabilities.maxFps ||
+      (measuredFps && measuredFps > 0 ? Math.round(measuredFps) : isTapoC120 ? 15 : 30);
+    const requestedFps = video?.fps;
+    const cameraMaxFps =
+      this.capabilities.maxFps ||
+      (measuredFps && measuredFps > 0 ? Math.max(15, Math.round(measuredFps)) : isTapoC120 ? 20 : 30);
     const effectiveFps = resolveLiveViewFps(
       requestedFps,
       measuredFps,
@@ -1272,10 +1280,14 @@ export class HomeKitCameraStreamingDelegate
     }
     const video = request.video;
     const isTapoC120 = this.isTapoC120();
-    const declaredFps = isTapoC120 ? 15 : this.capabilities.maxFps || 30;
-    const requestedFps = video.fps;
     const measuredFps = this.capabilities.measuredVideo?.fps;
-    const cameraMaxFps = isTapoC120 ? 20 : this.capabilities.maxFps || 30;
+    const declaredFps =
+      this.capabilities.maxFps ||
+      (measuredFps && measuredFps > 0 ? Math.round(measuredFps) : isTapoC120 ? 15 : 30);
+    const requestedFps = video.fps;
+    const cameraMaxFps =
+      this.capabilities.maxFps ||
+      (measuredFps && measuredFps > 0 ? Math.max(15, Math.round(measuredFps)) : isTapoC120 ? 20 : 30);
     const resolvedFps = resolveLiveViewFps(
       requestedFps,
       measuredFps,
