@@ -175,33 +175,51 @@ export class MultiTierRtpDelegate implements MultiTierRTPStreamingDelegate {
       videoUrl,
     );
 
-    // Audio stream validation: strict check for AAC passthrough
+    // Audio stream: Apple HKSV3 Open Source Guide mandates Opus (48kHz mono 20ms)
     const audioCodec = this.capabilities.audioCodec?.toLowerCase();
-    const isAac = audioCodec === "aac";
+    const isOpus = audioCodec === "opus";
 
-    if (isAac && session.controllerAudioPort > 0) {
+    if (session.controllerAudioPort > 0 && this.capabilities.hasAudio !== false && audioCodec !== "none") {
       const audioOutParams = Buffer.concat([session.targetAudioKey, session.targetAudioSalt]).toString("base64");
       const audioUrl = `srtp://${targetAddress}:${session.controllerAudioPort}?rtcpport=${session.controllerAudioPort}&pkt_size=188`;
 
-      this.platform?.log?.notice?.(
-        `[Multi-RTP][${this.entityId}] Audio fuente es AAC compatible: transmitiendo con passthrough (-c:a copy)`,
-      );
-
-      args.push(
-        "-map", "0:a:0?",
-        "-vn",
-        "-c:a", "copy",
-        "-f", "rtp",
-        "-payload_type", String(this.config.audioPayloadType || 110),
-        "-ssrc", String(session.audioSsrc),
-        "-srtp_out_suite", "AES_CM_128_HMAC_SHA1_80",
-        "-srtp_out_params", audioOutParams,
-        audioUrl,
-      );
-    } else {
-      this.platform?.log?.notice?.(
-        `[Multi-RTP][${this.entityId}] Audio fuente (${audioCodec || "desconocido"}) no es AAC compatible sin transcodificación. Transmitiendo solo vídeo en passthrough.`,
-      );
+      if (isOpus) {
+        this.platform?.log?.notice?.(
+          `[Multi-RTP][${this.entityId}] Audio fuente es Opus nativo: transmitiendo con passthrough (-c:a copy)`,
+        );
+        args.push(
+          "-map", "0:a:0?",
+          "-vn",
+          "-c:a", "copy",
+          "-f", "rtp",
+          "-payload_type", String(this.config.audioPayloadType || 110),
+          "-ssrc", String(session.audioSsrc),
+          "-srtp_out_suite", "AES_CM_128_HMAC_SHA1_80",
+          "-srtp_out_params", audioOutParams,
+          audioUrl,
+        );
+      } else {
+        this.platform?.log?.notice?.(
+          `[Multi-RTP][${this.entityId}] Adaptando exclusivamente audio fuente (${audioCodec || "desconocido"}) a Opus 48kHz mono (20ms) conforme a especificación Apple HKSV3`,
+        );
+        args.push(
+          "-map", "0:a:0?",
+          "-vn",
+          "-c:a", "libopus",
+          "-application", "lowdelay",
+          "-frame_duration", "20",
+          "-packet_loss", "5",
+          "-ar", "48000",
+          "-ac", "1",
+          "-b:a", "32k",
+          "-f", "rtp",
+          "-payload_type", String(this.config.audioPayloadType || 110),
+          "-ssrc", String(session.audioSsrc),
+          "-srtp_out_suite", "AES_CM_128_HMAC_SHA1_80",
+          "-srtp_out_params", audioOutParams,
+          audioUrl,
+        );
+      }
     }
 
     const sanitizedUrl = sanitizeUrlCredentials(sourceUrl);
