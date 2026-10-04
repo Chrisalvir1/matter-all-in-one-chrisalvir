@@ -317,11 +317,11 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     expect(args).toContain("copy");
     expect(args).not.toContain("libx264");
     expect(args).not.toContain("libx265");
-    // C120 retains enough input analysis to start from a complete 2K keyframe.
+    // C120 uses optimized 128KB probesize and 200ms analyze duration for instant low-latency startup
     expect(args).toContain("-probesize");
-    expect(args).toContain("524288");
+    expect(args).toContain("131072");
     expect(args).toContain("-analyzeduration");
-    expect(args).toContain("1000000");
+    expect(args).toContain("200000");
     // Audio is transcoded to AAC/AAC-ELD to prevent CoreAudio clock stall
     expect(args).toContain("-c:a");
     const audioCodecIdx = args.indexOf("-c:a");

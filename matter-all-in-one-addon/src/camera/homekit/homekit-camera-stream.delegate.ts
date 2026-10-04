@@ -644,12 +644,11 @@ export class HomeKitCameraStreamingDelegate
       if (sourceUrl.startsWith("rtsp://")) {
         const isDemandingCam =
           this.isTapoC402() ||
-          this.isTapoC120() ||
           this.isWyze() ||
           this.isEzviz();
         args.push(
           "-probesize",
-          isDemandingCam ? "1048576" : "65536",
+          isDemandingCam ? "1048576" : this.isTapoC120() ? "131072" : "65536",
           "-analyzeduration",
           isDemandingCam ? "1000000" : "0",
           "-rtsp_transport",
@@ -1184,10 +1183,8 @@ export class HomeKitCameraStreamingDelegate
           } else {
             settle(new Error("FFmpeg exited during HAP startup"));
           }
-          // C120 now normalizes its H.264 stream for HAP and needs time for the
-          // first encoded keyframe before HomeKit accepts the RTP session.
         },
-        isTapoC120 ? 1000 : 500,
+        400,
       );
       process.once("error", (error) => {
         clearTimeout(guard);
@@ -1332,22 +1329,25 @@ export class HomeKitCameraStreamingDelegate
         "tcp",
         "-timeout",
         "10000000",
-        // C402 needs 2MB for its long GOP analysis. C120 needs enough data to
-        // receive a complete 2K keyframe before the H.264 decoder starts.
+        // C402 needs 2MB for its long GOP analysis.
+        // C120 at 1080p passthrough uses 128KB and 200ms for instant start.
         // EZVIZ 1080p uses 128KB and 200ms analyze duration for instant startup without waiting.
         // Wyze and other network RTSP cameras use 64KB-128KB for fast startup.
         "-probesize",
-        isTapoC402 ? "2097152" : isTapoC120 ? "524288" : this.isEzviz() ? "131072" : "65536",
+        isTapoC402 ? "2097152" : (isTapoC120 || this.isEzviz()) ? "131072" : "65536",
         "-analyzeduration",
-        isTapoC402 ? "3000000" : isTapoC120 ? "1000000" : this.isEzviz() ? "200000" : "100000",
+        isTapoC402 ? "3000000" : (isTapoC120 || this.isEzviz()) ? "200000" : "100000",
       );
       if (isTapoC402) {
         args.push("-fflags", "+genpts+discardcorrupt", "-flags", "low_delay");
       } else if (isTapoC120) {
-        // Do not drop C120 packets before decoding. This source is 2K H.264
-        // High level 5.0; stripping its initial frame data caused the green
-        // slices and permanently frozen frame seen by Apple Home.
-        args.push("-fflags", "+genpts+igndts+discardcorrupt", "-flags", "0");
+        // C120 1080p pure copy passthrough: enable low_delay and nobuffer for zero lag
+        args.push(
+          "-fflags",
+          "+nobuffer+flush_packets+genpts+igndts+discardcorrupt",
+          "-flags",
+          "low_delay",
+        );
       } else {
         args.push(
           "-fflags",
