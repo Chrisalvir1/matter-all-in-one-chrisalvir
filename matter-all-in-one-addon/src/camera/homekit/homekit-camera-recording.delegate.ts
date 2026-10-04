@@ -656,7 +656,7 @@ export class HomeKitCameraRecordingDelegate
           ? "+genpts+discardcorrupt"
           : "+nobuffer+flush_packets+genpts+igndts",
         "-flags",
-        needsAudioTimestampRepair ? "0" : "low_delay",
+        isTapoC120Match ? "low_delay" : needsAudioTimestampRepair ? "0" : "low_delay",
       );
       // Camera.UI AAC streams can restart with discontinuous DTS.  Replacing
       // them with wall-clock timestamps makes FFmpeg drop audio packets before

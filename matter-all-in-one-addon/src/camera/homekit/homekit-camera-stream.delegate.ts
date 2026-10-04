@@ -1141,7 +1141,7 @@ export class HomeKitCameraStreamingDelegate
       const process = spawn(ffmpegPath, args, {
         stdio: [
           isHaProxyStream ? "pipe" : "ignore",
-          isTapoC402 ? "pipe" : "ignore",
+          (isTapoC402 || isTapoC120) ? "pipe" : "ignore",
           "pipe",
         ],
       });
@@ -1157,14 +1157,14 @@ export class HomeKitCameraStreamingDelegate
         for (const line of chunk.toString().split(/\r?\n/)) {
           this.recordFfmpegProgress(session, line);
         }
-        if (!isTapoC402 || startupConfirmed) return;
+        if ((!isTapoC402 && !isTapoC120) || startupConfirmed) return;
         progress = `${progress}${chunk.toString()}`.slice(-2048);
         for (const match of progress.matchAll(/(?:^|\n)frame=\s*(\d+)/g)) {
           if (Number(match[1]) > 0) {
             startupConfirmed = true;
             if (startupTimer) clearTimeout(startupTimer);
             this.platform?.log?.notice?.(
-              `[HomeKitCamera][${this.entityId}] C402 HAP startup confirmed by first video frame`,
+              `[HomeKitCamera][${this.entityId}] ${isTapoC402 ? "C402" : "C120"} HAP startup confirmed by first video frame`,
             );
             settle();
             break;
@@ -1323,7 +1323,7 @@ export class HomeKitCameraStreamingDelegate
       "-protocol_whitelist",
       "pipe,udp,rtp,file,crypto,srtp,tcp,tls,http,https,lavfi,rtsp,rtsps",
     ];
-    if (isTapoC402) {
+    if (isTapoC402 || isTapoC120) {
       args.push("-progress", "pipe:1", "-stats_period", "0.25");
     } else {
       // Progress is diagnostics only. It does not alter RTP/SRTP, codecs, or media flow.
@@ -1353,10 +1353,10 @@ export class HomeKitCameraStreamingDelegate
       if (isTapoC402) {
         args.push("-fflags", "+genpts+discardcorrupt", "-flags", "low_delay");
       } else if (isTapoC120) {
-        // C120 1080p pure copy passthrough: enable low_delay and nobuffer for zero lag
+        // C120 1080p pure copy passthrough: reliable genpts and low_delay without dropping timeline
         args.push(
           "-fflags",
-          "+nobuffer+flush_packets+genpts+igndts+discardcorrupt",
+          "+genpts+discardcorrupt",
           "-flags",
           "low_delay",
         );
