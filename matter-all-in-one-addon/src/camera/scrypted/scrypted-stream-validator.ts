@@ -149,8 +149,18 @@ export class ScryptedStreamValidator {
           }
 
           const startTime = Date.now();
+          let effectiveUrl = trimmedUrl;
+          const isVimtag = /vimtag/i.test(`${cameraId || ""} ${trimmedUrl}`);
+          if (isVimtag && effectiveUrl.startsWith("rtsp://")) {
+            if (effectiveUrl.includes("/stream1") || effectiveUrl.includes("/stream2")) {
+              effectiveUrl = effectiveUrl.replace(/\/stream[12]/, "/live/ch0");
+            } else if (/:\d+\/?$/.test(effectiveUrl) || !effectiveUrl.split("://")[1]?.includes("/")) {
+              effectiveUrl = effectiveUrl.replace(/\/?$/, "/live/ch0");
+            }
+          }
+
           try {
-            const probe: ProbeResult = await probeCameraSource(trimmedUrl, {
+            let probe: ProbeResult = await probeCameraSource(effectiveUrl, {
               timeoutMs,
               transport,
               // ffprobe is sufficient for the fast UI check.  A second
@@ -158,6 +168,24 @@ export class ScryptedStreamValidator {
               // "Verificando" behind other cameras.
               allowFallback: false,
             });
+
+            if (!probe.valid && isVimtag && effectiveUrl.startsWith("rtsp://")) {
+              const altPaths = ["/live/ch0", "/onvif1", "/ch0", "/live/ch1", "/onvif2"];
+              for (const altPath of altPaths) {
+                const candidateUrl = effectiveUrl.replace(/\/[^/]*$/, altPath);
+                if (candidateUrl === effectiveUrl) continue;
+                const altProbe = await probeCameraSource(candidateUrl, {
+                  timeoutMs: Math.min(timeoutMs, 3500),
+                  transport,
+                  allowFallback: false,
+                });
+                if (altProbe.valid) {
+                  probe = altProbe;
+                  effectiveUrl = candidateUrl;
+                  break;
+                }
+              }
+            }
 
             const elapsedMs = Date.now() - startTime;
 

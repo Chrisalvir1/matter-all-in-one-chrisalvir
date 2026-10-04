@@ -2801,7 +2801,7 @@ mark {
     grid-template-columns: 200px 1fr;
     grid-template-rows: auto auto;
   }
-  .qr-panel {
+  .modal-layout .qr-panel {
     grid-column: 1 / -1;
     max-height: none;
     flex-direction: row;
@@ -2874,7 +2874,7 @@ mark {
     gap: 16px !important;
     overflow-y: auto !important;
   }
-  .qr-panel {
+  .modal-layout .qr-panel {
     order: -1 !important;
     max-height: none !important;
     height: auto !important;
@@ -4297,7 +4297,7 @@ mark {
     padding-bottom: 24px !important;
   }
   /* Mobile-first: El código QR y código manual van AL INICIO de la vista móvil */
-  .qr-panel {
+  .modal-layout .qr-panel {
     order: -1 !important;
     max-height: none !important;
     height: auto !important;
@@ -4392,27 +4392,30 @@ mark {
     grid-template-columns: 180px 1fr !important;
   }
 
-  /* CameraModal: responsive 2-column or fluid layout in landscape */
+  /* CameraModal: responsive single-column fluid layout in landscape mobile */
   .camera-modal-layout {
-    display: grid !important;
-    grid-template-columns: minmax(280px, 320px) minmax(0, 1fr) !important;
+    display: flex !important;
+    flex-direction: column !important;
     gap: 16px !important;
-    align-items: start !important;
+    width: 100% !important;
+    min-width: 0 !important;
   }
   .camera-modal-layout .qr-panel {
-    order: 0 !important;
-    border-bottom: none !important;
-    padding-bottom: 0 !important;
-    margin-bottom: 0 !important;
-    max-height: calc(95vh - 80px) !important;
-    overflow-y: auto !important;
-    -webkit-overflow-scrolling: touch !important;
+    order: 1 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    border-bottom: 1px solid var(--border) !important;
+    padding-bottom: 16px !important;
+    margin-bottom: 8px !important;
+    max-height: none !important;
+    overflow: visible !important;
   }
   .camera-modal-layout .selection-panel {
-    order: 0 !important;
-    max-height: calc(95vh - 80px) !important;
-    overflow-y: auto !important;
-    -webkit-overflow-scrolling: touch !important;
+    order: 2 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: none !important;
+    overflow: visible !important;
   }
 
   .content {
@@ -4654,29 +4657,33 @@ mark {
   }
 
   .device-modal-backdrop .qr-display-container,
+  .camera-modal-layout .qr-display-container,
   .device-modal-backdrop .qr-card-actions,
-  .device-modal-backdrop .button-download-qr {
+  .camera-modal-layout .qr-card-actions,
+  .device-modal-backdrop .button-download-qr,
+  .camera-modal-layout .button-download-qr {
     box-sizing: border-box;
     width: 100%;
     max-width: 100%;
     min-width: 0;
   }
 
-  .device-modal-backdrop .qr-display-container {
+  .device-modal-backdrop .qr-display-container,
+  .camera-modal-layout .qr-display-container {
     display: flex !important;
     flex-direction: column;
     align-items: center;
   }
 
-  .device-modal-backdrop .ios27-glass-sticker {
-    width: min(250px, 100%);
-    max-width: 100%;
-    margin-inline: auto;
+  .ios27-glass-sticker {
+    width: min(250px, 100%) !important;
+    max-width: 100% !important;
+    margin-inline: auto !important;
   }
 
-  .device-modal-backdrop .sticker-qr-canvas-wrapper {
-    width: min(176px, 100%);
-    height: auto;
-    aspect-ratio: 1;
+  .sticker-qr-canvas-wrapper {
+    width: min(176px, 100%) !important;
+    height: auto !important;
+    aspect-ratio: 1 !important;
   }
 }

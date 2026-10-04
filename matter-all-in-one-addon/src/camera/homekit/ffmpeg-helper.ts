@@ -68,7 +68,49 @@ export function sanitizeUrlCredentials(url: string): string {
 
   return sanitized;
 }
+/**
+ * Normalizes RTSP URLs by encoding credentials (e.g. passwords containing '@' or ':')
+ * so that standard URL parsers, FFmpeg, and ffprobe interpret userinfo correctly.
+ */
+export function normalizeRtspCredentials(url: string): string {
+  if (!url || typeof url !== "string") return "";
+  const trimmed = url.trim();
+  const protoMatch = trimmed.match(/^([a-zA-Z0-9_+.-]+:\/\/)/);
+  if (!protoMatch) return trimmed;
 
+  const proto = protoMatch[1];
+  const rest = trimmed.substring(proto.length);
+  const slashIdx = rest.indexOf("/");
+  const questionIdx = rest.indexOf("?");
+  const pathStart =
+    slashIdx !== -1
+      ? slashIdx
+      : questionIdx !== -1
+        ? questionIdx
+        : rest.length;
+  const authority = rest.substring(0, pathStart);
+  const pathAndQuery = rest.substring(pathStart);
+
+  const atIdx = authority.lastIndexOf("@");
+  if (atIdx === -1) return trimmed;
+
+  const userInfo = authority.substring(0, atIdx);
+  const hostPort = authority.substring(atIdx + 1);
+
+  // If userInfo has user:pass, encode any rogue '@' or special chars in pass
+  const colonIdx = userInfo.indexOf(":");
+  if (colonIdx === -1) {
+    const safeUser = encodeURIComponent(decodeURIComponent(userInfo));
+    return `${proto}${safeUser}@${hostPort}${pathAndQuery}`;
+  }
+
+  const user = userInfo.substring(0, colonIdx);
+  const pass = userInfo.substring(colonIdx + 1);
+  const safeUser = encodeURIComponent(decodeURIComponent(user));
+  const safePass = encodeURIComponent(decodeURIComponent(pass));
+
+  return `${proto}${safeUser}:${safePass}@${hostPort}${pathAndQuery}`;
+}
 /**
  * Resolves the FFmpeg binary path in priority order:
  * 1. process.env.FFMPEG_PATH
@@ -236,7 +278,8 @@ export async function probeCameraSource(
     allowFallback?: boolean;
   } = {},
 ): Promise<ProbeResult> {
-  const cleanUrl = sourceUrl ? sourceUrl.trim() : "";
+  const rawUrl = sourceUrl ? sourceUrl.trim() : "";
+  const cleanUrl = normalizeRtspCredentials(rawUrl);
   if (
     cleanUrl.includes("/api/cameraui/motion") ||
     cleanUrl.includes("/api/motion") ||
@@ -258,7 +301,7 @@ export async function probeCameraSource(
     try {
       const result = await probeWithFfprobe(
         ffprobePath,
-        sourceUrl,
+        cleanUrl,
         timeoutMs,
         options.httpBearerToken,
         options.transport,
@@ -269,10 +312,10 @@ export async function probeCameraSource(
       lastError = result.error;
 
       // If RTSP failed with TCP and user didn't explicitly force TCP, try UDP fallback
-      if (sourceUrl.startsWith("rtsp://") && !options.transport) {
+      if (cleanUrl.startsWith("rtsp://") && !options.transport) {
         const udpResult = await probeWithFfprobe(
           ffprobePath,
-          sourceUrl,
+          cleanUrl,
           Math.min(timeoutMs, 4000),
           options.httpBearerToken,
           "udp",
@@ -302,7 +345,7 @@ export async function probeCameraSource(
     try {
       const result = await probeWithFfmpeg(
         ffmpegPath,
-        sourceUrl,
+        cleanUrl,
         timeoutMs,
         options.httpBearerToken,
         options.transport,
@@ -314,10 +357,10 @@ export async function probeCameraSource(
       lastError = result.error;
 
       // If RTSP failed with TCP and user didn't explicitly force TCP, try UDP fallback with ffmpeg
-      if (sourceUrl.startsWith("rtsp://") && !options.transport) {
+      if (cleanUrl.startsWith("rtsp://") && !options.transport) {
         const udpResult = await probeWithFfmpeg(
           ffmpegPath,
-          sourceUrl,
+          cleanUrl,
           Math.min(timeoutMs, 4000),
           options.httpBearerToken,
           "udp",

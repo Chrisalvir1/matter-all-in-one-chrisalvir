@@ -27,6 +27,47 @@ function computeHapSetupUri(pincode: string, setupId: string): string {
   }
 }
 
+/** Safely normalizes RTSP credentials, encoding special chars like '@' in user/pass. */
+export function normalizeRtspUrlInput(url: string): string {
+  if (!url || typeof url !== "string") return "";
+  const trimmed = url.trim();
+  const protoMatch = trimmed.match(/^([a-zA-Z0-9_+.-]+:\/\/)/);
+  if (!protoMatch) return trimmed;
+
+  const proto = protoMatch[1];
+  const rest = trimmed.substring(proto.length);
+  const slashIdx = rest.indexOf("/");
+  const questionIdx = rest.indexOf("?");
+  const pathStart =
+    slashIdx !== -1
+      ? slashIdx
+      : questionIdx !== -1
+        ? questionIdx
+        : rest.length;
+  const authority = rest.substring(0, pathStart);
+  const pathAndQuery = rest.substring(pathStart);
+
+  const atIdx = authority.lastIndexOf("@");
+  if (atIdx === -1) return trimmed;
+
+  const userInfo = authority.substring(0, atIdx);
+  const hostPort = authority.substring(atIdx + 1);
+
+  const colonIdx = userInfo.indexOf(":");
+  if (colonIdx === -1) {
+    const safeUser = encodeURIComponent(decodeURIComponent(userInfo));
+    return `${proto}${safeUser}@${hostPort}${pathAndQuery}`;
+  }
+
+  const user = userInfo.substring(0, colonIdx);
+  const pass = userInfo.substring(colonIdx + 1);
+  const safeUser = encodeURIComponent(decodeURIComponent(user));
+  const safePass = encodeURIComponent(decodeURIComponent(pass));
+
+  return `${proto}${safeUser}:${safePass}@${hostPort}${pathAndQuery}`;
+}
+
+
 export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
   camera,
   onClose,
@@ -632,10 +673,12 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
   };
 
   const handleVerifyStream = async () => {
-    if (!rtspUrl.trim()) {
+    const target = normalizeRtspUrlInput(rtspUrl);
+    if (!target) {
       showToast("Ingresa una URL RTSP para verificar", true);
       return;
     }
+    if (target !== rtspUrl) setRtspUrl(target);
     setIsVerifying(true);
     setStreamResult({
       text: "Verificando stream RTSP/HTTP (ffprobe en vivo)...",
@@ -643,12 +686,12 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
     try {
       const res = await api.verifyCameraStream(
         cameraId,
-        rtspUrl.trim(),
+        target,
         transport,
       );
       if (res.ok && res.status === "verified") {
         setStreamVerified(true);
-        setLatestProbe({ ...res.validation, sourceUrl: rtspUrl.trim() });
+        setLatestProbe({ ...res.validation, sourceUrl: target });
         if (res.validation) {
           if (!isCameraUi) {
             const sc = camera as CameraRecord;
@@ -692,10 +735,12 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
   };
 
   const handleDiagnoseStream = async () => {
-    if (!rtspUrl.trim()) {
+    const target = normalizeRtspUrlInput(rtspUrl);
+    if (!target) {
       showToast("Ingresa una URL RTSP para diagnosticar", true);
       return;
     }
+    if (target !== rtspUrl) setRtspUrl(target);
     setIsDiagnosing(true);
     setStreamResult({
       text: "Midiendo conexión RTSP y analizando codec, FPS y GOP...",
@@ -703,7 +748,7 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
     try {
       const res = await api.diagnoseCameraStream(
         cameraId,
-        rtspUrl.trim(),
+        target,
         transport,
       );
       if (res.success && res.metrics) {
@@ -735,9 +780,11 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
   };
 
   const handleSaveStream = async () => {
-    if (!rtspUrl.trim()) return;
+    const target = normalizeRtspUrlInput(rtspUrl);
+    if (!target) return;
+    if (target !== rtspUrl) setRtspUrl(target);
     try {
-      await api.saveCameraStreamUrl(cameraId, rtspUrl.trim());
+      await api.saveCameraStreamUrl(cameraId, target);
       showToast("✓ URL de stream guardada");
       onRefresh();
     } catch (err: any) {
@@ -1894,13 +1941,13 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                 style={{
                   fontSize: "0.74rem",
                   fontWeight: 700,
-                  color: "var(--dim)",
+                  color: isHevcCamera ? "#c084fc" : "var(--dim)",
                   textTransform: "uppercase",
                   display: "block",
                   marginBottom: 6,
                 }}
               >
-                URL DIRECTA DEL STREAM RTSP (H.264)
+                URL DIRECTA DEL STREAM RTSP {isHevcCamera ? "(HEVC / H.265)" : "(H.264)"}
               </span>
               <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
                 <input

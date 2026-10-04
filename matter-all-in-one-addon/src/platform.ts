@@ -5505,8 +5505,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             `${entityId} ${entityFriendlyName}`,
           );
         const isTapoC402Cam =
+          (accessory as any).isTapoC402?.() ||
           /tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle|tapo[-_ ]?frente|\bc402\b/i.test(
-            `${cuiId} ${camName}`,
+            `${cuiId} ${camName} ${accessory.record?.name || ""} ${accessory.record?.model || ""}`,
           );
         const isC402Match = isTapoC402Entity && isTapoC402Cam && isMotionClass;
 
@@ -5570,6 +5571,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           configuredMotionEntity ||
           (sameDevice && isMotionClass) ||
           isC402Match ||
+          (isTapoC402Cam && (isTapoC402Entity || sameDevice || linkedId === entityId) && isMotionClass) ||
           isC120Match ||
           (isTapoC120Cam && (isTapoC120Entity || sameDevice || linkedId === entityId) && isMotionClass) ||
           isWyzeMatch ||
@@ -7953,6 +7955,40 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             cuiCam?.rtspUrl ||
             (haState?.attributes as any)?.stream_source ||
             "";
+
+          if (!targetUrl && haState) {
+            try {
+              if (this.ha?.requestCameraStream) {
+                targetUrl = (await this.ha.requestCameraStream(cameraId)) || "";
+              }
+            } catch {}
+            if (!targetUrl && this.ha?.getCameraProxyStreamUrl) {
+              targetUrl = this.ha.getCameraProxyStreamUrl(cameraId);
+            }
+          }
+
+          const isVimtag =
+            /vimtag/i.test(cameraId) ||
+            /vimtag/i.test(String(cuiCam?.name || "")) ||
+            /vimtag/i.test(String(scryptedCam?.name || "")) ||
+            /vimtag/i.test(String(haState?.attributes?.friendly_name || "")) ||
+            /vimtag/i.test(targetUrl);
+
+          if (isVimtag && targetUrl.startsWith("rtsp://")) {
+            try {
+              const u = new URL(targetUrl);
+              if (!u.pathname || u.pathname === "/" || u.pathname === "/stream1" || u.pathname === "/stream2") {
+                u.pathname = "/live/ch0";
+                targetUrl = u.toString();
+              }
+            } catch {
+              if (targetUrl.endsWith(":554") || targetUrl.endsWith(":554/")) {
+                targetUrl = targetUrl.replace(/\/?$/, "/live/ch0");
+              } else if (targetUrl.includes("/stream1")) {
+                targetUrl = targetUrl.replace("/stream1", "/live/ch0");
+              }
+            }
+          }
 
           if (!targetUrl) {
             res.writeHead(400, {
