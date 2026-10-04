@@ -106,7 +106,31 @@ if [ -n "$MDNSINTERFACE" ]; then
     echo "[Info] Using manually configured network interface for mDNS: $MDNSINTERFACE"
     set -- "$@" -mdnsinterface "$MDNSINTERFACE"
 else
-    echo "[Info] mDNS will use all available interfaces so route changes do not strand Matter devices."
+    # In Home Assistant with host_network: true, binding mDNS to all interfaces can broadcast
+    # across Docker bridge/hassio virtual interfaces, causing multicast collisions with other
+    # native Matter devices on the LAN. Detect the primary LAN interface automatically.
+    DETECTED_IFACE=$(node -e '
+      import("matterbridge/utils").then(u => {
+        const os = require("node:os");
+        const ifaces = os.networkInterfaces();
+        const virtualPattern = /(tailscale|wireguard|openvpn|zerotier|hamachi|\bwg\d+\b|\btun\d+\b|\btap\d+\b|\butun\d+\b|docker|podman|\bveth[a-z0-9]*\b|\bbr-[a-z0-9]+\b|cni|kube|flannel|calico|virbr\d*\b|vmware|vmnet\d*\b|virtualbox|vboxnet\d*\b|teredo|isatap|hassio|dummy|lo)/i;
+        for (const [name, details] of Object.entries(ifaces)) {
+          if (virtualPattern.test(name)) continue;
+          const hasIp = details.some(d => !d.internal && (d.family === "IPv4" || d.family === "IPv6"));
+          if (hasIp) {
+            console.log(name);
+            process.exit(0);
+          }
+        }
+      }).catch(() => {});
+    ' 2>/dev/null || true)
+
+    if [ -n "$DETECTED_IFACE" ]; then
+        echo "[Info] Auto-detected primary physical LAN network interface for mDNS: $DETECTED_IFACE"
+        set -- "$@" -mdnsinterface "$DETECTED_IFACE"
+    else
+        echo "[Info] mDNS will use all available interfaces so route changes do not strand Matter devices."
+    fi
 fi
 
 # Matter uses IPv6 link-local addresses on the LAN. This is independent from

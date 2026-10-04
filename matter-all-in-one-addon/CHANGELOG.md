@@ -1,3 +1,8 @@
+## [1.9.77] - 2026-10-04
+
+### Estabilización mDNS LAN y aislamiento de colisiones Matterbridge 3.10.12
+- **Detección automática de interfaz LAN mDNS física:** En `run.sh`, cuando no se especifica manualmente `mdnsinterface`, el script ahora detecta automáticamente la interfaz de red física LAN principal (filtrando interfaces virtuales como `docker`, `hassio`, `veth`, `tailscale`, etc.) y la pasa a Matterbridge como `-mdnsinterface <iface>`. Esto evita que en modo `host_network: true` los sockets mDNS multicast inunden las interfaces de puente de Docker y causen colisiones con dispositivos Matter WiFi puros en la misma red local.
+
 ## [1.9.76] - 2026-10-04
 
 ### Restauración C402 al comportamiento de v1.9.70
