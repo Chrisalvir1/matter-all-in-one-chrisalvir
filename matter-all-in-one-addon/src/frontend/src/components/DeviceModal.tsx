@@ -356,10 +356,11 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     (e) => (e.domain === "switch" || e.domain === "light") && !e.auxiliary,
   );
   const isMultiSwitch =
-    switches.length >= 2 ||
-    /apagador|interruptor|switch|gang|canal|channel|plug|enchufe|regleta|toma|socket|outlet|strip/i.test(
-      device?.name || "",
-    );
+    !hasFan &&
+    (switches.length >= 2 ||
+      /apagador|interruptor|switch|gang|canal|channel|plug|enchufe|regleta|toma|socket|outlet|strip/i.test(
+        device?.name || "",
+      ));
   const isPlugDevice =
     !/apagador|interruptor|switch|gang|pulsador/i.test(
       (device?.name || "") + " " + (device?.model || ""),

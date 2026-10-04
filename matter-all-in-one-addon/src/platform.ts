@@ -4023,6 +4023,22 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       candidate.config?.primary_entity,
     );
     const endpoint = await composite.createEndpoint();
+    // Clean up any stale endpoint registered under the same name that has no
+    // active ServerNode. Matterbridge's registerDevice() silently skips when
+    // hasDeviceName() returns true, leaving endpoint.serverNode undefined.
+    const staleByName = this.getDeviceByName(nodeName);
+    if (staleByName && !staleByName.serverNode) {
+      this.log.warn(
+        `[Matter] Removing stale nameless endpoint for composite ${nodeName} before re-registering.`,
+      );
+      await this.unregisterDeviceBounded(staleByName, `stale composite ${candidate.deviceId}`);
+    }
+    // Also clean up by uniqueId in case it was registered under a different name.
+    const compositeUniqueId = `device_${candidate.deviceId}`;
+    const staleByUid = this.getDeviceByUniqueId(compositeUniqueId);
+    if (staleByUid && staleByUid !== staleByName && !staleByUid.serverNode) {
+      await this.unregisterDeviceBounded(staleByUid, `stale uid composite ${candidate.deviceId}`);
+    }
     await this.registerDevice(endpoint);
     const serverNode = (endpoint as any).serverNode;
     if (!serverNode) {
