@@ -207,8 +207,25 @@ export class BaseEntity {
   }
 
   public async createEndpoint(): Promise<MatterbridgeEndpoint> {
-    const rawName = this.state.attributes.friendly_name ?? this.entityId;
-    const uniqueName = rawName.substring(0, 32).trim();
+    const hassEntry = (this.platform.ha as any)?.hassEntities?.get(this.entityId);
+    const rawName =
+      this.state?.attributes?.friendly_name ||
+      hassEntry?.name ||
+      hassEntry?.original_name ||
+      this.entityId;
+    let uniqueName = rawName.substring(0, 32).trim();
+
+    // If another device with this exact deviceName already exists in Matterbridge,
+    // disambiguate to prevent Matterbridge from rejecting registration.
+    const existingNamedDevice = this.platform.getDeviceByName?.(uniqueName);
+    if (
+      existingNamedDevice &&
+      existingNamedDevice.uniqueId !== this.entityId.replaceAll(".", "_")
+    ) {
+      const suffix = this.entityId.split(".").pop()?.replace(/.*_/, "") || "";
+      const disambiguated = suffix ? `${uniqueName} ${suffix}` : `${uniqueName} (${this.entityId.split(".").pop()})`;
+      uniqueName = disambiguated.substring(0, 32).trim();
+    }
 
     this.endpoint = new MatterbridgeEndpoint([this.deviceType], {
       id: this.entityId.replaceAll(".", "_"),

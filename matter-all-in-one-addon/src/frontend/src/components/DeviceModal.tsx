@@ -221,38 +221,67 @@ function getControllerBadge(
   return { icon: "📱", name };
 }
 
-function getButtonBadge(
-  ent: EntityRecord,
-  index: number,
+function computeButtonBadges(
+  entities: EntityRecord[],
   isMulti: boolean,
   isPlug: boolean,
-): { badge: string; isMaster: boolean } | null {
-  if (!isMulti && ent.domain !== "switch" && ent.domain !== "light") return null;
+): Map<string, { badge: string; isMaster: boolean }> {
+  const result = new Map<string, { badge: string; isMaster: boolean }>();
+  if (!isMulti) return result;
 
-  const idLower = ent.entityId.toLowerCase();
-  const nameLower = (ent.name || ent.attributes?.friendly_name || "").toLowerCase();
+  const relevant = entities.filter(
+    (e) => (e.domain === "switch" || e.domain === "light") && !e.auxiliary,
+  );
+  const unit = isPlug ? "Enchufe" : "Botón";
+  const icon = isPlug ? "🔌" : "🔘";
 
-  const isMaster =
-    /master|general|todos?|all/i.test(nameLower) ||
-    /master|general|all/i.test(idLower);
+  const explicitNum = new Map<string, number>();
+  const unnumbered: string[] = [];
 
-  if (isMaster) {
-    return { badge: "⚡ Maestro (Todos)", isMaster: true };
+  for (const ent of relevant) {
+    const idLower = ent.entityId.toLowerCase();
+    const nameLower = (ent.name || ent.attributes?.friendly_name || "").toLowerCase();
+
+    const isMaster =
+      /master|general|todos?|all/i.test(nameLower) ||
+      /master|general|all/i.test(idLower);
+
+    if (isMaster) {
+      result.set(ent.entityId, { badge: "⚡ Maestro (Todos)", isMaster: true });
+      continue;
+    }
+
+    const match =
+      idLower.match(/(?:canal|channel|gang|btn|boton|botón|switch|plug|enchufe|socket|relay|_)?_?(\d+)$/i) ||
+      nameLower.match(/(?:canal|channel|gang|btn|boton|botón|switch|plug|enchufe|socket|relay)\s*(\d+)/i) ||
+      nameLower.match(/(\d+)$/);
+
+    if (match) {
+      explicitNum.set(ent.entityId, parseInt(match[1], 10));
+    } else {
+      unnumbered.push(ent.entityId);
+    }
   }
 
-  // Extract explicit number from entity ID or name: e.g. canal_1, canal 1, gang 1, _1, etc.
-  const match =
-    idLower.match(/(?:canal|channel|gang|btn|boton|botón|switch|plug|enchufe|socket|relay|_)?_?(\d+)$/i) ||
-    nameLower.match(/(?:canal|channel|gang|btn|boton|botón|switch|plug|enchufe|socket|relay)\s*(\d+)/i) ||
-    nameLower.match(/(\d+)$/);
+  const usedNumbers = new Set(explicitNum.values());
+  let nextAvailable = 1;
 
-  const num = match ? parseInt(match[1], 10) : index + 1;
-  const unit = isPlug ? "Enchufe" : "Botón";
+  for (const entId of unnumbered) {
+    while (usedNumbers.has(nextAvailable)) {
+      nextAvailable++;
+    }
+    explicitNum.set(entId, nextAvailable);
+    usedNumbers.add(nextAvailable);
+  }
 
-  return {
-    badge: isPlug ? `🔌 ${unit} ${num}` : `🔘 ${unit} ${num}`,
-    isMaster: false,
-  };
+  for (const [entId, num] of explicitNum.entries()) {
+    result.set(entId, {
+      badge: `${icon} ${unit} ${num}`,
+      isMaster: false,
+    });
+  }
+
+  return result;
 }
 
 export const DeviceModal: React.FC<DeviceModalProps> = ({
@@ -321,6 +350,36 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
       .catch(() => {});
   }, []);
 
+  const hasFan = Boolean(device?.entities.some((e) => e.domain === "fan" && !e.auxiliary));
+  const hasLight = Boolean(device?.entities.some((e) => e.domain === "light" && !e.auxiliary));
+  const switches = (device?.entities || []).filter(
+    (e) => (e.domain === "switch" || e.domain === "light") && !e.auxiliary,
+  );
+  const isMultiSwitch =
+    switches.length >= 2 ||
+    /apagador|interruptor|switch|gang|canal|channel|plug|enchufe|regleta|toma|socket|outlet|strip/i.test(
+      device?.name || "",
+    );
+  const isPlugDevice =
+    !/apagador|interruptor|switch|gang|pulsador/i.test(
+      (device?.name || "") + " " + (device?.model || ""),
+    ) &&
+    (/plug|enchufe|regleta|toma|socket|outlet|strip/i.test(
+      (device?.name || "") + " " + (device?.model || ""),
+    ) ||
+      Boolean(
+        device?.entities.some((e) =>
+          /plug|enchufe|outlet|socket/i.test(
+            e.entityId + " " + (e.name || ""),
+          ),
+        ),
+      ));
+
+  const buttonBadgesMap = useMemo(
+    () => computeButtonBadges(device?.entities || [], isMultiSwitch, isPlugDevice),
+    [device, isMultiSwitch, isPlugDevice],
+  );
+
   const sortedEntities = device
     ? [...device.entities].sort((a, b) => {
         if (targetEntity) {
@@ -333,6 +392,14 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
         const bProblem = (b.hasIssue || bUnavailable) && b.exported;
         if (aProblem && !bProblem) return -1;
         if (!aProblem && bProblem) return 1;
+
+        if (isMultiSwitch) {
+          const badgeA = buttonBadgesMap.get(a.entityId)?.badge || "";
+          const badgeB = buttonBadgesMap.get(b.entityId)?.badge || "";
+          if (badgeA && badgeB) {
+            return badgeA.localeCompare(badgeB, undefined, { numeric: true });
+          }
+        }
 
         const primaryDelta =
           Number(b.entityId === b.compositePrimaryEntityId) -
@@ -379,25 +446,6 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
   if (!device) return null;
 
   const activeEntity = selectedEntity || sortedEntities[0] || null;
-
-  const hasFan = device.entities.some((e) => e.domain === "fan" && !e.auxiliary);
-  const hasLight = device.entities.some((e) => e.domain === "light" && !e.auxiliary);
-  const switches = device.entities.filter(
-    (e) => (e.domain === "switch" || e.domain === "light") && !e.auxiliary,
-  );
-  const isMultiSwitch =
-    switches.length >= 2 ||
-    /apagador|interruptor|switch|gang|canal|channel|plug|enchufe|regleta|toma|socket|outlet|strip/i.test(
-      device.name || "",
-    );
-  const isPlugDevice =
-    /plug|enchufe|regleta|toma|socket|outlet/i.test(device.name || "") ||
-    device.entities.every(
-      (e) =>
-        e.domain === "switch" ||
-        e.domain === "sensor" ||
-        e.domain === "binary_sensor",
-    );
 
   const isComposite =
     !isMultiSwitch &&
@@ -1268,7 +1316,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                   !ent.auxiliary;
                 const isExcludedAuxiliary = isComposite && ent.auxiliary;
                 const buttonBadge = !isComposite
-                  ? getButtonBadge(ent, idx, isMultiSwitch, isPlugDevice)
+                  ? buttonBadgesMap.get(ent.entityId) ?? null
                   : null;
 
                 return (

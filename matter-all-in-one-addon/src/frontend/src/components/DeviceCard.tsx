@@ -37,14 +37,19 @@ function getDomainIcon(domain: string): string {
 }
 
 export const DeviceCard: React.FC<DeviceCardProps> = ({ device, searchQuery, onConfigure }) => {
+  const isAppliance = device.entities.some((e) =>
+    ["camera", "humidifier", "lock", "climate", "vacuum"].includes(e.domain),
+  );
   const switches = device.entities.filter(
     (e) => (e.domain === "switch" || e.domain === "light") && !e.auxiliary,
   );
   const isMultiSwitch =
-    switches.length >= 2 ||
-    /apagador|interruptor|switch|gang|canal|channel|plug|enchufe|regleta|toma|socket|outlet|strip/i.test(
-      device.name || "",
-    );
+    !isAppliance &&
+    (switches.length >= 2 ||
+      (/apagador|interruptor|switch|gang|canal|channel|plug|enchufe|regleta|toma|socket|outlet|strip/i.test(
+        device.name || "",
+      ) &&
+        device.entities.length >= 2));
 
   const isComposite =
     !isMultiSwitch &&

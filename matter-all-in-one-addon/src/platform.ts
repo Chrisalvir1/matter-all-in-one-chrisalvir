@@ -3827,6 +3827,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                   `[MultiSwitch] Disbanding legacy composite for multi-switch device ${deviceId} to allow independent button export.`,
                 );
                 this.exportedDevices.delete(exportedId);
+                await this.disposeCompositeNode(deviceId);
                 migratedLegacyEntries = true;
                 return;
               }
@@ -4094,37 +4095,62 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
     try {
       const endpoint = await entity.createEndpoint();
-      if (!forceRecreate) {
-        const existingEndpoint = endpoint.uniqueId
-          ? this.getDeviceByUniqueId(endpoint.uniqueId)
-          : endpoint.deviceName
-            ? this.getDeviceByName(endpoint.deviceName)
-            : undefined;
-        if (existingEndpoint?.serverNode) {
-          entity.adoptEndpoint(existingEndpoint);
-          this.matterbridgeDevices.set(entityId, existingEndpoint);
-          if (!existingEndpoint.serverNode.lifecycle?.isOnline) {
-            try {
-              await existingEndpoint.serverNode.start();
-            } catch (err) {
-              this.log.error(
-                `Failed to start adopted serverNode for ${entityId}: ${err}`,
-              );
-            }
+      const existingEndpoint = endpoint.uniqueId
+        ? this.getDeviceByUniqueId(endpoint.uniqueId)
+        : endpoint.deviceName
+          ? this.getDeviceByName(endpoint.deviceName)
+          : undefined;
+
+      if (!forceRecreate && existingEndpoint?.serverNode) {
+        entity.adoptEndpoint(existingEndpoint);
+        this.matterbridgeDevices.set(entityId, existingEndpoint);
+        if (!existingEndpoint.serverNode.lifecycle?.isOnline) {
+          try {
+            await existingEndpoint.serverNode.start();
+          } catch (err) {
+            this.log.error(
+              `Failed to start adopted serverNode for ${entityId}: ${err}`,
+            );
           }
-          await entity.syncInitialState();
-          if (isUnavailable(entity.state)) {
-            void (entity as any).setReachability?.(false);
-            void (entity as any).setInactiveState?.();
-          } else {
-            void (entity as any).setReachability?.(true);
+        }
+        await entity.syncInitialState();
+        if (isUnavailable(entity.state)) {
+          void (entity as any).setReachability?.(false);
+          void (entity as any).setInactiveState?.();
+        } else {
+          void (entity as any).setReachability?.(true);
+        }
+        this.log.notice(
+          `Reused existing Matter endpoint ${idn}${entityId}${rs}; it remains paired and was not recreated.`,
+        );
+        return;
+      }
+
+      // If a previous endpoint with this uniqueId or deviceName already exists in Matterbridge
+      // but lacks a valid serverNode (e.g. was a child endpoint of an old composite node,
+      // or forceRecreate is requested), we MUST unregister the stale endpoint from Matterbridge first.
+      // Otherwise Matterbridge's registerDevice() checks hasDeviceName / hasDeviceUniqueId and returns early,
+      // preventing the creation of the ServerNode!
+      const staleEndpoint =
+        (endpoint.uniqueId ? this.getDeviceByUniqueId(endpoint.uniqueId) : undefined) ||
+        (endpoint.deviceName ? this.getDeviceByName(endpoint.deviceName) : undefined);
+      if (staleEndpoint) {
+        this.log.notice(
+          `Unregistering stale Matterbridge endpoint "${staleEndpoint.deviceName}" (${staleEndpoint.uniqueId}) before creating standalone ServerNode for ${entityId}`,
+        );
+        try {
+          if ((staleEndpoint as any).serverNode?.lifecycle?.isOnline) {
+            await Promise.race([
+              (staleEndpoint as any).serverNode.close(),
+              new Promise<void>((res) => setTimeout(res, 2000)),
+            ]);
           }
-          this.log.notice(
-            `Reused existing Matter endpoint ${idn}${entityId}${rs}; it remains paired and was not recreated.`,
-          );
-          return;
+          await this.unregisterDevice(staleEndpoint);
+        } catch (unregErr) {
+          this.log.warn(`Could not unregister stale endpoint: ${unregErr}`);
         }
       }
+
       await this.registerDevice(endpoint);
       // Matterbridge creates the ServerNode during registerDevice(), but nodes
       // added dynamically after the initial startup interval are not started
@@ -4266,8 +4292,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           `[MultiSwitch] Migrating device ${deviceId} from composite to independent export for ${entityId}`,
         );
         this.exportedDevices.delete(compKey);
-        await this.disposeCompositeNode(deviceId);
       }
+      await this.disposeCompositeNode(deviceId);
     }
 
     try {
@@ -4438,7 +4464,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   /** Stop and unregister a composite node while keeping its export selection. */
   private async disposeCompositeNode(deviceId: string): Promise<void> {
     const key = this.compositeStorageKey(deviceId);
-    const endpoint = this.matterbridgeDevices.get(key) as any;
+    const endpoint =
+      (this.matterbridgeDevices.get(key) as any) ||
+      this.getDeviceByUniqueId(`device_${deviceId}`) ||
+      this.getDeviceById(`device_${deviceId}`);
     if (endpoint?.serverNode?.lifecycle?.isOnline) {
       await Promise.race([
         endpoint.serverNode.close(),
