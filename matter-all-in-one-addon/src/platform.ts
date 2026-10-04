@@ -2253,18 +2253,31 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     const devName = (devInfo?.device_name || "").toLowerCase();
     const devModel = (devInfo?.model || "").toLowerCase();
 
-    const isSwitchOrPlugDevice =
-      /\b(apagador|interruptor|switch|gang|canal|channel|plug|enchufe|regleta|toma|socket|outlet|strip)\b/i.test(
+    const isLightingDevice =
+      /\b(light|lamp|tira|neon|foco|bombilla|bulb|rgb|rgbic|led)\b/i.test(
         devName,
       ) ||
-      /\b(apagador|interruptor|switch|gang|plug|socket|outlet|strip)\b/i.test(
+      /\b(light|lamp|tira|neon|foco|bulb|rgb|rgbic|led|h61\w*)\b/i.test(
         devModel,
       );
+
+    const isSwitchOrPlugDevice =
+      /\b(apagador|interruptor|switch|gang|canal|channel|plug|enchufe|regleta|toma|socket|outlet|power\s*strip)\b/i.test(
+        devName,
+      ) ||
+      /\b(apagador|interruptor|switch|gang|plug|socket|outlet|power\s*strip)\b/i.test(
+        devModel,
+      );
+
+    // If device is explicitly a lighting device with NO switches, it is a single light, NOT a multi-switch device!
+    if (isLightingDevice && switches.length === 0) {
+      return false;
+    }
 
     // If device is explicitly an apagador / switch / plug with 2+ channels or has 2+ real switches, it is ALWAYS a multi-switch device!
     if (
       switches.length >= 2 ||
-      (isSwitchOrPlugDevice && switches.length + lights.length + fans.length >= 2)
+      (isSwitchOrPlugDevice && !isLightingDevice && switches.length + lights.length + fans.length >= 2)
     ) {
       return true;
     }
@@ -2297,9 +2310,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       if (realSwitches.length >= 1) return true;
     }
 
-    // 3. Any device with 2 or more switch/light entities without appliance domains (camera, humidifier, lock, climate, vacuum)
+    // 3. Any device with 2 or more switch entities without appliance domains (camera, humidifier, lock, climate, vacuum)
+    // NOTE: Devices with 0 switches and multiple light entities (e.g. light strips with segments) are NOT multi-switch devices!
     if (
-      switches.length + lights.length >= 2 &&
+      switches.length >= 2 &&
       !allMembers.some((e) =>
         ["camera", "humidifier", "lock", "climate", "vacuum"].includes(
           e.entityId.split(".")[0],
@@ -2647,6 +2661,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   }
 
   private isAuxiliaryEntity(entityId: string): boolean {
+    // RGBIC light segments (e.g. light.tira_larga_navidad_2_segment_1) are auxiliary sub-entities of the main light strip
+    if (/_segment_\d+$/i.test(entityId) || /_segment_/i.test(entityId)) {
+      return true;
+    }
     const [domain] = entityId.split(".");
     if (domain !== "button") return false;
     const primary = this.getPrimaryEntityId(entityId);
@@ -5495,6 +5513,23 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     if (this.isEntityExported(entityId))
       this.queueStateUpdate(entityId, newState);
 
+    if (/_segment_\d+$/i.test(entityId) || /_segment_/i.test(entityId)) {
+      const deviceId = (this.ha as any)?.hassEntities?.get(entityId)?.device_id;
+      for (const [id, ent] of this.entities) {
+        if (id === entityId) continue;
+        if (!id.startsWith("light.")) continue;
+        if (/_segment_\d+$/i.test(id) || /_segment_/i.test(id)) continue;
+        const matchesPrefix =
+          entityId.startsWith(id + "_segment_") || entityId.startsWith(id + "_");
+        const sameDevice =
+          deviceId &&
+          (this.ha as any)?.hassEntities?.get(id)?.device_id === deviceId;
+        if ((matchesPrefix || sameDevice) && this.isEntityExported(id)) {
+          this.queueStateUpdate(id, ent.state);
+        }
+      }
+    }
+
     if (
       entityId.startsWith("binary_sensor.") ||
       entityId.startsWith("event.")
@@ -6500,11 +6535,20 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               (this.ha as any).hassEntities?.get(e.entityId)?.original_name ||
               e.entityId;
 
+            let effectiveState = e.state.state;
+            if (
+              domain === "light" &&
+              effectiveState !== "on" &&
+              (e as any).hasActiveSegments?.()
+            ) {
+              effectiveState = "on";
+            }
+
             return {
               entityId: e.entityId,
               name: friendlyName,
               domain: domain,
-              state: e.state.state,
+              state: effectiveState,
               attributes: { friendly_name: friendlyName, ...e.state.attributes },
               deviceTypeLabel: typeLabel,
               matterType:

@@ -794,6 +794,54 @@ describe("HomeAssistantPlatform", () => {
     expect(memberIds[1]).toBe("light.ventilador_de_sala_light");
   });
 
+  it("classifies RGBIC light strip segments as auxiliary and excludes light strips from multi-switch", async (ctx) => {
+    if (!networkAvailable) return;
+    await platform.onStart();
+
+    platform.ha.hassDevices.set("device-govee-strip", {
+      id: "device-govee-strip",
+      name: "Tira larga navidad 2",
+      model: "H619C",
+      manufacturer: "Govee",
+    });
+
+    platform.ha.hassEntities.set("light.tira_larga_navidad_2", {
+      id: "entity-main",
+      entity_id: "light.tira_larga_navidad_2",
+      device_id: "device-govee-strip",
+      original_name: "Tira larga navidad 2",
+    });
+
+    await (platform as any).registerHAEntity({
+      entity_id: "light.tira_larga_navidad_2",
+      state: "off",
+      attributes: { friendly_name: "Tira larga navidad 2" },
+    });
+
+    for (let i = 1; i <= 16; i++) {
+      const segId = `light.tira_larga_navidad_2_segment_${i}`;
+      platform.ha.hassEntities.set(segId, {
+        id: `entity-seg-${i}`,
+        entity_id: segId,
+        device_id: "device-govee-strip",
+        original_name: `Segment ${i}`,
+      });
+      await (platform as any).registerHAEntity({
+        entity_id: segId,
+        state: "on",
+        attributes: { friendly_name: `Segment ${i}` },
+      });
+    }
+
+    // Segments must be classified as auxiliary
+    expect((platform as any).isAuxiliaryEntity("light.tira_larga_navidad_2_segment_1")).toBe(true);
+    expect((platform as any).isAuxiliaryEntity("light.tira_larga_navidad_2_segment_16")).toBe(true);
+    expect((platform as any).isAuxiliaryEntity("light.tira_larga_navidad_2")).toBe(false);
+
+    // Light strip must NOT be treated as a multi-switch device
+    expect(platform.isMultiSwitchDevice("device-govee-strip")).toBe(false);
+  });
+
   it("allows setting profile override on entities", async (ctx) => {
     if (!networkAvailable) return;
     await platform.onStart();

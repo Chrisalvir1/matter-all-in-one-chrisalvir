@@ -531,4 +531,59 @@ describe("Light Entity Comprehensive Audit (18 Requirements)", () => {
       },
     );
   });
+
+  it("19. RGBIC light strip reports ON in Matter if any segment is ON even if master entity reports OFF", async () => {
+    platform.entities = new Map();
+    const segmentEntity = {
+      entityId: "light.tira_larga_segment_1",
+      state: {
+        entity_id: "light.tira_larga_segment_1",
+        state: "on",
+        attributes: {},
+        last_changed: "",
+        last_updated: "",
+      },
+    };
+    platform.entities.set("light.tira_larga_segment_1", segmentEntity);
+    platform.ha.hassEntities.set("light.tira_larga_segment_1", { device_id: "device-strip" });
+    platform.ha.hassEntities.set("light.tira_larga", { device_id: "device-strip" });
+
+    const mainEntity = new BaseEntity(
+      platform,
+      {
+        entity_id: "light.tira_larga",
+        state: "off",
+        attributes: { friendly_name: "Tira Larga" },
+        last_changed: "",
+        last_updated: "",
+      },
+      MatterDeviceTypes.colorTemperatureLight,
+    );
+    platform.entities.set("light.tira_larga", mainEntity);
+
+    const ep = (await mainEntity.createEndpoint()) as any;
+    mainEntity.endpoint = ep;
+
+    await mainEntity.updateState({
+      entity_id: "light.tira_larga",
+      state: "off",
+      attributes: { friendly_name: "Tira Larga" },
+      last_changed: "",
+      last_updated: "",
+    });
+
+    expect(ep.getAttribute(OnOff.id, "onOff")).toBe(true);
+
+    // Now turn off the segment
+    segmentEntity.state.state = "off";
+    await mainEntity.updateState({
+      entity_id: "light.tira_larga",
+      state: "off",
+      attributes: { friendly_name: "Tira Larga" },
+      last_changed: "",
+      last_updated: "",
+    });
+
+    expect(ep.getAttribute(OnOff.id, "onOff")).toBe(false);
+  });
 });

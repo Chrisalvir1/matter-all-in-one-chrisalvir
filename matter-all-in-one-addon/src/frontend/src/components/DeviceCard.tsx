@@ -40,16 +40,20 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({ device, searchQuery, onC
   const isAppliance = device.entities.some((e) =>
     ["camera", "humidifier", "lock", "climate", "vacuum"].includes(e.domain),
   );
+  const isLightingDevice =
+    /\b(light|lamp|tira|neon|foco|bombilla|bulb|rgb|rgbic|led)\b/i.test(device.name || "") ||
+    /\b(light|lamp|tira|neon|foco|bulb|rgb|rgbic|led|h61\w*)\b/i.test(device.model || "");
   const switches = device.entities.filter(
-    (e) => (e.domain === "switch" || e.domain === "light") && !e.auxiliary,
+    (e) => e.domain === "switch" && !e.auxiliary,
   );
   const isMultiSwitch =
     !isAppliance &&
+    !isLightingDevice &&
     (switches.length >= 2 ||
-      (/apagador|interruptor|switch|gang|canal|channel|plug|enchufe|regleta|toma|socket|outlet|strip/i.test(
+      (/apagador|interruptor|switch|gang|canal|channel|plug|enchufe|regleta|toma|socket|outlet|power\s*strip/i.test(
         device.name || "",
       ) &&
-        device.entities.length >= 2));
+        switches.length >= 1));
 
   const isComposite =
     !isMultiSwitch &&
@@ -85,7 +89,8 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({ device, searchQuery, onC
     : (device.entities[0]?.domain || "switch");
 
   const domains = [...new Set(device.entities.map((e) => e.domain))].slice(0, 3);
-  const isMultiGang = device.entities.length > 1;
+  const primaryEntities = device.entities.filter((e) => !e.auxiliary);
+  const isMultiGang = isMultiSwitch && primaryEntities.length > 1;
 
   const brandInfo = device.manufacturer
     ? `${device.manufacturer}${device.model ? ` (${device.model})` : ""}`
@@ -121,8 +126,8 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({ device, searchQuery, onC
               ? "1/1 Matter"
               : "0/1 Matter"
             : isMultiGang
-            ? `${exported}/${device.entities.length} activos`
-            : `${exported}/${device.entities.length}`}
+            ? `${exported}/${primaryEntities.length} activos`
+            : `${exported}/${primaryEntities.length}`}
         </span>
       </div>
       <h3 title={device.name}>{device.name}</h3>
@@ -158,7 +163,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({ device, searchQuery, onC
               fontWeight: 600,
             }}
           >
-            🍏 Matter Vinculado {isMultiGang ? `(${commissioned}/${device.entities.length} botones)` : ""}
+            🍏 Matter Vinculado {isMultiGang ? `(${commissioned}/${primaryEntities.length} botones)` : ""}
           </span>
         )}
         {isComposite && (

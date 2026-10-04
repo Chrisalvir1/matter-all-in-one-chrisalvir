@@ -350,22 +350,29 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
       .catch(() => {});
   }, []);
 
+  const isLightingDevice =
+    /\b(light|lamp|tira|neon|foco|bombilla|bulb|rgb|rgbic|led)\b/i.test(device?.name || "") ||
+    /\b(light|lamp|tira|neon|foco|bulb|rgb|rgbic|led|h61\w*)\b/i.test(device?.model || "");
   const hasFan = Boolean(device?.entities.some((e) => e.domain === "fan" && !e.auxiliary));
   const hasLight = Boolean(device?.entities.some((e) => e.domain === "light" && !e.auxiliary));
   const switches = (device?.entities || []).filter(
     (e) => (e.domain === "switch" || e.domain === "light") && !e.auxiliary,
   );
+  const realSwitches = (device?.entities || []).filter(
+    (e) => e.domain === "switch" && !e.auxiliary,
+  );
   const isMultiSwitch =
     !hasFan &&
-    (switches.length >= 2 ||
-      /apagador|interruptor|switch|gang|canal|channel|plug|enchufe|regleta|toma|socket|outlet|strip/i.test(
+    !isLightingDevice &&
+    (realSwitches.length >= 2 ||
+      (/apagador|interruptor|switch|gang|canal|channel|plug|enchufe|regleta|toma|socket|outlet|power\s*strip/i.test(
         device?.name || "",
-      ));
+      ) && realSwitches.length >= 1));
   const isPlugDevice =
     !/apagador|interruptor|switch|gang|pulsador/i.test(
       (device?.name || "") + " " + (device?.model || ""),
     ) &&
-    (/plug|enchufe|regleta|toma|socket|outlet|strip/i.test(
+    (/plug|enchufe|regleta|toma|socket|outlet|power\s*strip/i.test(
       (device?.name || "") + " " + (device?.model || ""),
     ) ||
       Boolean(
@@ -1114,7 +1121,11 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                       : "Publica y gestiona el accesorio desde el panel derecho"
                     : isComposite
                     ? "1 accesorio Matter unificado (1 solo código QR)"
-                    : `0/${device.entities.length} publicadas`}
+                    : isMultiSwitch
+                    ? `${device.entities.filter((e) => e.exported).length}/${device.entities.filter((e) => !e.auxiliary).length} publicadas`
+                    : device.entities.some((e) => e.exported)
+                    ? "✓ 1 accesorio activo en Matter"
+                    : "0 accesorios en Matter"}
                 </p>
               </div>
               <span id="modal-export-count">
@@ -1127,8 +1138,10 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                     ? "✓ 1 accesorio activo en Matter"
                     : "0 accesorios en Matter"
                   : activeNodesCount
-                  ? `${activeNodesCount} accesorio Matter · ${device.entities.filter((e) => e.exported).length}/${device.entities.length} endpoints`
-                  : `0/${device.entities.length} publicadas`}
+                  ? isMultiSwitch
+                    ? `${activeNodesCount} accesorio Matter · ${device.entities.filter((e) => e.exported).length}/${device.entities.filter((e) => !e.auxiliary).length} endpoints`
+                    : `${activeNodesCount} accesorio Matter (1 QR)`
+                  : `0/${device.entities.filter((e) => !e.auxiliary).length} publicadas`}
               </span>
             </div>
 
@@ -1257,7 +1270,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                   <span />
                 </label>
               </div>
-            ) : (
+            ) : isMultiSwitch ? (
               <div
                 style={{
                   display: "flex",
@@ -1291,10 +1304,10 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                     fontWeight: 600,
                   }}
                 >
-                  {device.entities.filter((e) => e.exported).length} / {device.entities.length} activos
+                  {device.entities.filter((e) => e.exported).length} / {device.entities.filter((e) => !e.auxiliary).length} activos
                 </span>
               </div>
-            )}
+            ) : null}
 
             <div
               className="entity-list"
@@ -1478,6 +1491,16 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                             {ent.exported ? "✓ En Matter" : "Inactivo"}
                           </span>
                         )
+                      ) : ent.auxiliary ? (
+                        <span
+                          style={{
+                            fontSize: "11px",
+                            color: "var(--muted)",
+                            fontStyle: "italic",
+                          }}
+                        >
+                          Auxiliar
+                        </span>
                       ) : (
                         <label className="toggle" style={{ opacity: isBusy ? 0.6 : 1, pointerEvents: isBusy ? "none" : "auto" }}>
                           <input
@@ -1657,13 +1680,15 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                       : isExported
                       ? "Este canal forma parte del accesorio unificado y está activo en Matter bajo el mismo código QR."
                       : "Activa el interruptor general arriba para publicar el accesorio (ventilador y luz juntos en 1 QR)."
+                    : activeEntity?.auxiliary
+                    ? "Esta entidad es auxiliar (ej. segmento RGBIC) y se controla automáticamente a través de la luz principal."
                     : isMultiSwitch
                     ? isExported
                       ? `Este ${isPlugDevice ? "enchufe" : "botón"} está activo y publicado en Matter con su propio código QR independiente.`
                       : `Activa el interruptor para publicar este ${isPlugDevice ? "enchufe" : "botón"} en Matter con su propio QR.`
                     : isExported
                     ? "Esta entidad está activa y expuesta a través de Matter."
-                    : "Activa el interruptor para publicar este canal en Matter."}
+                    : "Activa el interruptor para publicar esta entidad en Matter."}
                 </p>
 
                 {/* Matter Profile Selector */}

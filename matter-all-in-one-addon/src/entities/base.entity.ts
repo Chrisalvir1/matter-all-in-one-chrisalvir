@@ -1215,6 +1215,33 @@ export class BaseEntity {
     }
   }
 
+  public hasActiveSegments(): boolean {
+    if (
+      !this.platform?.entities ||
+      typeof (this.platform.entities as any)[Symbol.iterator] !== "function"
+    ) {
+      return false;
+    }
+    const myDeviceId = (this.platform.ha as any)?.hassEntities?.get(this.entityId)?.device_id;
+    for (const [id, entity] of this.platform.entities) {
+      if (id === this.entityId) continue;
+      if (!id.startsWith("light.")) continue;
+      if (!(/_segment_\d+$/i.test(id) || /_segment_/i.test(id))) continue;
+
+      const matchesPrefix =
+        id.startsWith(this.entityId + "_segment_") ||
+        id.startsWith(this.entityId + "_");
+      const sameDevice =
+        myDeviceId &&
+        (this.platform.ha as any)?.hassEntities?.get(id)?.device_id === myDeviceId;
+
+      if ((matchesPrefix || sameDevice) && entity.state?.state === "on") {
+        return true;
+      }
+    }
+    return false;
+  }
+
   public async updateState(
     newState: HassState,
     isInitialSync = false,
@@ -1250,12 +1277,16 @@ export class BaseEntity {
         domain === "media_player" ||
         domain === "vacuum"
       ) {
-        const isOn =
+        let isOn =
           domain === "vacuum"
             ? newState.state === "cleaning"
             : domain === "fan"
               ? isFanOn(newState)
               : newState.state === "on";
+
+        if (domain === "light" && !isOn && this.hasActiveSegments()) {
+          isOn = true;
+        }
 
         const beforeLevel = this.endpoint?.hasAttributeServer?.(
           LevelControl.id,
