@@ -3,6 +3,7 @@
  */
 import "./utils/log-buffer.js";
 import { getLogs, clearLogs } from "./utils/log-buffer.js";
+import { NodeIdentityStore } from "./utils/node-identity.js";
 import {
   MatterbridgeDynamicPlatform,
   MatterbridgeEndpoint,
@@ -172,6 +173,21 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
   /** Set of entity IDs that the user has explicitly requested to export as accessories */
   public exportedDevices: Set<string> = new Set();
+  /**
+   * Immutable per-node names. Matter storage is keyed by name, so a node must
+   * keep the exact name it was first paired with (see node-identity.ts).
+   */
+  public readonly nodeIdentities = new NodeIdentityStore(
+    undefined,
+    () =>
+      [
+        (this as any).matterbridge?.matterbridgeDirectory,
+        "/data/.matterbridge",
+        path.join(process.env.HOME || "/root", ".matterbridge"),
+      ].filter(Boolean) as string[],
+  );
+  /** Exported keys whose HA entities were absent at restore time (late integrations). */
+  private readonly pendingRestore = new Set<string>();
   /**
    * HA can emit several state_changed events for the same entity in a single
    * tick.  Coalescing those events keeps Matter attribute transactions from
@@ -1098,7 +1114,17 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     }
     // Multi-switch devices (≥2 switch/light entities under one HA device) publish
     // each canal as an independent Matter accessory with its own QR code.
-    if (this.isMultiSwitchDevice(deviceId)) {
+    // The export mode is decided once (at the user's export time, when all
+    // sibling entities are loaded) and pinned. Recomputing it at every boot
+    // flips identities when a slow integration only exposes part of a device.
+    const pinnedMode = this.nodeIdentities.get(`mode:${deviceId}`);
+    const multi =
+      pinnedMode === "multi"
+        ? true
+        : pinnedMode === "composite"
+          ? false
+          : this.isMultiSwitchDevice(deviceId);
+    if (multi) {
       this.log.debug(
         `[Composite] ${entityId}: multi-switch device ${deviceId} — composite grouping bypassed, each entity gets its own QR`,
       );
@@ -1490,14 +1516,6 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     // Load persisted camera configurations BEFORE Scrypted fast boot so existing PINs, MACs, and ports are preserved
     await this.loadHomeKitCameraRecords();
     await this.loadHomeKitEntityRecords();
-    // Re-publish existing generic HAP accessories with their original UUID,
-    // username, PIN and port. This keeps already-paired Apple Home homes intact.
-    for (const record of this.homekitEntityRecords.values()) {
-      if (!this.entities.has(record.entityId)) continue;
-      void this.activateHomeKitEntity(record.entityId, record.profile as HapProfile).catch((err) =>
-        this.log.warn(`[HomeKitHAP] Failed to restore ${record.entityId}: ${err}`),
-      );
-    }
     void this.initScrypted();
 
     // Load MQTT Config if exists
@@ -1809,6 +1827,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         }
       }
       await this.restoreExportedDevices();
+      await this.restoreHomeKitEntities();
       // Do not announce recovery while the HA snapshot is still merely queued
       // for Matter. Await it so every available accessory is current.
       if (this.pendingStateUpdates.size) await this.flushStateUpdates();
@@ -2003,6 +2022,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               const entityId = Array.from(this.entities.keys()).find(
                 (id) => this.ha.hassEntities.get(id)?.device_id === deviceId,
               );
+              if (!entityId) {
+                this.deferRestore(exportedId);
+                return;
+              }
+              this.pendingRestore.delete(exportedId);
               if (entityId) {
                 try {
                   await this.activateComposite(entityId);
@@ -2020,7 +2044,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               }
               return;
             }
-            if (!this.entities.has(exportedId)) return;
+            if (!this.entities.has(exportedId)) {
+              this.deferRestore(exportedId);
+              return;
+            }
+            this.pendingRestore.delete(exportedId);
             const composite = this.getCompositeCandidate(exportedId);
             if (composite) {
               try {
@@ -2052,6 +2080,53 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       );
     }
     if (migratedLegacyEntries) await this.saveExportedDevices();
+  }
+
+  /**
+   * An exported accessory whose HA entity is not loaded yet (slow integration
+   * after a power outage). Its identity stays reserved; it is activated as soon
+   * as the entity shows up (see handleEntityStateChange).
+   */
+  private deferRestore(exportedId: string): void {
+    if (!this.pendingRestore.has(exportedId)) {
+      this.log.warn(
+        `[Restore] ${exportedId} aún no está disponible en Home Assistant; se reactivará automáticamente cuando aparezca (su vinculación Matter se conserva).`,
+      );
+    }
+    this.pendingRestore.add(exportedId);
+  }
+
+  private pendingRestoreTimer?: NodeJS.Timeout;
+  private schedulePendingRestore(): void {
+    if (!this.pendingRestore.size || this.pendingRestoreTimer) return;
+    this.pendingRestoreTimer = setTimeout(() => {
+      this.pendingRestoreTimer = undefined;
+      if (this.pendingRestore.size && this.ha?.connected)
+        void this.discoverAndSync();
+    }, 5_000);
+    this.pendingRestoreTimer.unref?.();
+  }
+
+  /** Re-publish generic HAP accessories (same UUID/MAC/PIN/port) once HA entities exist. */
+  private async restoreHomeKitEntities(): Promise<void> {
+    for (const record of this.homekitEntityRecords.values()) {
+      if (!this.entities.has(record.entityId)) {
+        this.log.warn(
+          `[HomeKitHAP] ${record.entityId} aún no existe en HA; se restaurará en la siguiente sincronización.`,
+        );
+        continue;
+      }
+      // Already published in this process: never advertise twice (duplicates in Home).
+      if (this.homekitEntityAccessories.has(record.entityId)) continue;
+      try {
+        await this.activateHomeKitEntity(
+          record.entityId,
+          record.profile as HapProfile,
+        );
+      } catch (err) {
+        this.log.warn(`[HomeKitHAP] Failed to restore ${record.entityId}: ${err}`);
+      }
+    }
   }
 
   private isCompositeNodeCreationFailure(error: unknown): boolean {
@@ -2101,12 +2176,21 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     if (this.compositeDevices.has(candidate.deviceId) && !forceRecreate) return;
 
     const info = this.getHaRegistryInfo(entityId);
-    const nodeName =
+    const proposedNodeName =
       candidate.config?.friendly_name ||
       candidate.config?.name ||
       info.device_name ||
       this.entities.get(entityId)?.state.attributes.friendly_name ||
       entityId;
+    // Immutable identity (see node-identity.ts): adopt the name already paired.
+    const nodeName = this.nodeIdentities.pin(
+      this.compositeStorageKey(candidate.deviceId),
+      String(proposedNodeName),
+      [
+        String(this.entities.get(entityId)?.state.attributes.friendly_name ?? ""),
+        String(info.device_name ?? ""),
+      ],
+    );
     // Discovery can run again after a Home Assistant reconnect. Matterbridge
     // retains the already commissioned ServerNode, so registering another
     // endpoint with the same name is rejected. Reuse that live node instead,
@@ -2342,6 +2426,12 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     // Multi-switch: each canal is registered as an independent Matter accessory.
     // Skip the composite path entirely so every switch gets its own QR code.
     const isMultiSwitch = deviceId ? this.isMultiSwitchDevice(deviceId) : false;
+    // Pin the mode while every sibling entity is loaded (user-driven export).
+    if (deviceId)
+      this.nodeIdentities.pin(
+        `mode:${deviceId}`,
+        isMultiSwitch ? "multi" : "composite",
+      );
     try {
       const composite = isMultiSwitch
         ? undefined
@@ -3293,7 +3383,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     const entity = this.entities.get(entityId);
     if (!entity) {
       // An entity may become available after HA's initial snapshot.
-      void this.registerHAEntity(newState);
+      void this.registerHAEntity(newState).then(() =>
+        this.schedulePendingRestore(),
+      );
       return;
     }
     entity.state = newState;
@@ -3756,6 +3848,30 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                 this.isEntityExported(e.entityId) &&
                 (this.entityProblems.has(e.entityId) || isUnavailable(e.state)),
               diagnostics: this.entityDiagnostics.get(e.entityId) ?? [],
+              nodeDiagnostics: {
+                pinnedName:
+                  this.nodeIdentities.get(
+                    compositeDeviceId
+                      ? this.compositeStorageKey(compositeDeviceId)
+                      : e.entityId,
+                  ) ?? null,
+                announcedName: (endpoint as any)?.deviceName ?? null,
+                storeId: String((endpoint as any)?.deviceName ?? "").replace(
+                  /[ .]/g,
+                  "",
+                ) || null,
+                pendingRestore:
+                  this.pendingRestore.has(e.entityId) ||
+                  (compositeDeviceId
+                    ? this.pendingRestore.has(
+                        this.compositeStorageKey(compositeDeviceId),
+                      )
+                    : false),
+                nodeOnline:
+                  (endpoint as any)?.serverNode?.lifecycle?.isOnline ?? false,
+                fabricCount: connection.fabricCount,
+                mdnsInterface: process.env.MATTER_AIO_MDNS_IFACE ?? "auto",
+              },
               logs:
                 this.isEntityExported(e.entityId)
                   ? this.getEntityErrorLogs(e.entityId, endpoint, allErrorLogs)

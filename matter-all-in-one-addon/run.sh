@@ -98,8 +98,49 @@ if [ -n "$MDNSINTERFACE" ]; then
     esac
     echo "[Info] Using manually configured network interface for mDNS: $MDNSINTERFACE"
     set -- "$@" -mdnsinterface "$MDNSINTERFACE"
+    export MATTER_AIO_MDNS_IFACE="$MDNSINTERFACE"
 else
-    echo "[Info] mDNS will use all available interfaces so route changes do not strand Matter devices."
+    # Auto-detect the real physical LAN interface (eth0/end0/enpXsY/wlan0).
+    # Matterbridge's own web-UI announcements (_matterbridge._tcp / _http._tcp
+    # with the mDNS FLUSH bit) are useless inside this add-on (the UI is served
+    # only through Ingress on 8283) and, when multicast leaks through virtual
+    # interfaces (docker/hassio/veth/tailscale/...), they invalidate records of
+    # unrelated pure-Matter Wi-Fi devices. Pin mDNS to the physical LAN only.
+    is_virtual_iface() {
+        case "$1" in
+          lo|docker*|hassio*|veth*|br-*|br_*|virbr*|tailscale*|ts[0-9]*|tun*|tap*|wg*|zt*|cali*|flannel*|cni*|kube*|dummy*|vmnet*|vboxnet*|ifb*|bond*|sit*|gre*|ip6tnl*|vlan*.*|macvtap*|podman*) return 0 ;;
+        esac
+        return 1
+    }
+    is_up_iface() {
+        [ -r "/sys/class/net/$1/operstate" ] || return 1
+        case "$(cat "/sys/class/net/$1/operstate" 2>/dev/null)" in up|unknown) return 0 ;; esac
+        return 1
+    }
+    DETECTED_IFACE=""
+    # 1) Interface used by the default route, if it is physical.
+    ROUTE_IFACE=$(ip -4 route show default 2>/dev/null | awk '{for(i=1;i<NF;i++) if($i=="dev"){print $(i+1); exit}}')
+    if [ -n "$ROUTE_IFACE" ] && ! is_virtual_iface "$ROUTE_IFACE" && [ -e "/sys/class/net/$ROUTE_IFACE/device" ]; then
+        DETECTED_IFACE="$ROUTE_IFACE"
+    fi
+    # 2) Otherwise the first up, non-virtual interface backed by real hardware.
+    if [ -z "$DETECTED_IFACE" ]; then
+        for path in /sys/class/net/*; do
+            name=$(basename "$path")
+            is_virtual_iface "$name" && continue
+            [ -e "$path/device" ] || continue
+            is_up_iface "$name" || continue
+            DETECTED_IFACE="$name"
+            break
+        done
+    fi
+    if [ -n "$DETECTED_IFACE" ]; then
+        echo "[Info] Auto-detected physical LAN interface for mDNS: $DETECTED_IFACE"
+        set -- "$@" -mdnsinterface "$DETECTED_IFACE"
+        export MATTER_AIO_MDNS_IFACE="$DETECTED_IFACE"
+    else
+        echo "[Warning] No physical LAN interface detected; mDNS falls back to all interfaces. Set 'mdnsinterface' in the add-on options to pin it."
+    fi
 fi
 
 # Matter uses IPv6 link-local addresses on the LAN. This is independent from

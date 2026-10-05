@@ -220,7 +220,18 @@ export class BaseEntity {
 
   public async createEndpoint(): Promise<MatterbridgeEndpoint> {
     const rawName = this.state.attributes.friendly_name ?? this.entityId;
-    const uniqueName = rawName.substring(0, 32).trim();
+    // Immutable identity: Matter storage is keyed by this name. Adopt the name
+    // already paired on disk (entity name or HA device name) and never change it.
+    const haDeviceName = (
+      this.platform as any
+    ).getHaRegistryInfo?.(this.entityId)?.device_name;
+    const proposedName = rawName.substring(0, 32).trim();
+    const uniqueName =
+      this.platform.nodeIdentities?.pin(
+        this.entityId,
+        proposedName,
+        haDeviceName ? [String(haDeviceName)] : [],
+      ) ?? proposedName;
 
     this.endpoint = new MatterbridgeEndpoint([this.deviceType], {
       id: this.entityId.replaceAll(".", "_"),

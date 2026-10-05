@@ -443,16 +443,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
       aria-labelledby="device-modal-name"
     >
       <section
-        className="modal modal-wide modal-fullscreen"
-        style={{
-          width: "min(98vw, 1720px)",
-          maxWidth: "98vw",
-          height: "min(96vh, 960px)",
-          maxHeight: "96vh",
-          display: "flex",
-          flexDirection: "column",
-          padding: "24px 32px",
-        }}
+        className="modal modal-wide modal-fullscreen device-modal-shell"
       >
         <button
           className="icon-button"
@@ -480,16 +471,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
         </header>
 
         <div
-          className="modal-layout"
-          style={{
-            display: "grid",
-            gridTemplateColumns: "310px minmax(0, 1fr) 370px",
-            gap: 16,
-            flex: 1,
-            minHeight: 0,
-            overflow: "hidden",
-            alignItems: "stretch",
-          }}
+          className="modal-layout device-modal-layout"
         >
           {/* Column 1: Entity List */}
           <div className="entity-list-col" style={{ display: "flex", flexDirection: "column", minHeight: 0, height: "100%" }}>

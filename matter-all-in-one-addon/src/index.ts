@@ -29,14 +29,18 @@ export default function initializePlugin(
   log: AnsiLogger,
   config: HomeAssistantPlatformConfig,
 ): HomeAssistantPlatform {
-  // Prevent Matter.js or Node.js internal unhandled rejections from crashing the Addon
-  process.on("unhandledRejection", (reason, promise) => {
-    log.error(
-      `[Anti-Crash] Unhandled Rejection at: ${promise} reason: ${reason}`,
-    );
+  // Failures must be visible, never swallowed. Rejections are logged with the
+  // full stack. An uncaught exception leaves the process in an undefined state
+  // (half-created Matter nodes, stale mDNS records), so exit and let the
+  // Supervisor restart the add-on from the persisted, stable identities.
+  process.on("unhandledRejection", (reason) => {
+    const detail =
+      reason instanceof Error ? (reason.stack ?? reason.message) : String(reason);
+    log.error(`[Runtime] Unhandled rejection: ${detail}`);
   });
   process.on("uncaughtException", (error) => {
-    log.error(`[Anti-Crash] Uncaught Exception: ${error.message}`);
+    log.error(`[Runtime] Uncaught exception, restarting: ${error.stack ?? error.message}`);
+    setTimeout(() => process.exit(1), 500).unref();
   });
 
   return new HomeAssistantPlatform(matterbridge, log, config);
