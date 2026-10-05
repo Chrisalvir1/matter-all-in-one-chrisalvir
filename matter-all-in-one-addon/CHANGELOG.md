@@ -1,3 +1,13 @@
+## [1.9.80] - 2026-10-05
+
+### Persistencia de Identidad Matter, Aislamiento mDNS y Responsividad Móvil
+- **Identidad Inmutable (`NodeIdentityStore`):** Fijación persistente del identificador y nombre original de los nodos en `/data/node-identities.json`. Evita que cambios temporales de nombre tras cortes eléctricos o desconexiones de red hagan que Apple HomeKit y Matter pierdan el emparejamiento.
+- **Modo Multi-Switch Fijo:** Preservación persistente de la asignación de accesorios multi-botón independientes vs dispositivos compuestos para evitar que arranques lentos de integraciones dividan o agrupen nodos erróneamente.
+- **Restauración Diferida de Entidades:** Las entidades que demoren en reportarse en Home Assistant tras un apagón mantienen su identidad Matter reservada y se reactivan automáticamente al reconectarse sin requerir re-emparejamiento.
+- **Aislamiento mDNS de Red:** Exportación de `MATTER_AIO_MDNS_IFACE` y confinamiento estricto del tráfico mDNS a la interfaz LAN física para evitar colisiones y pérdida de visibilidad con dispositivos Matter puros.
+- **Responsividad Completa en HA Mobile:** Corrección de estilos fijos en el modal de dispositivos (`DeviceModal.tsx`) trasladando el diseño a CSS flexible con adaptación completa a pantallas de teléfonos móviles, touch targets de 44px y compatibilidad con notch / safe areas.
+- **Tratamiento Robusto de Errores en Runtime:** Manejo visible de excepciones no capturadas con registro detallado de pila para prevenir estados inconsistentes del servicio.
+
 ## [1.9.77] - 2026-10-04
 
 ### Estabilización mDNS LAN y aislamiento de colisiones Matterbridge 3.10.12

@@ -904,11 +904,8 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
       aria-labelledby="device-modal-name"
     >
       <section
-        className="modal modal-wide modal-fullscreen"
-        style={{
-          display: "flex",
-          flexDirection: "column",
-        }}
+        className="modal modal-wide modal-fullscreen device-modal-shell"
+        
       >
         <button
           className="icon-button"
@@ -1092,16 +1089,8 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
         )}
 
         <div
-          className="modal-layout"
-          style={{
-            display: "grid",
-            gridTemplateColumns: "310px minmax(0, 1fr) 370px",
-            gap: 16,
-            flex: 1,
-            minHeight: 0,
-            overflow: "hidden",
-            alignItems: "stretch",
-          }}
+          className="modal-layout device-modal-layout"
+          
         >
           {/* Column 1: Entity List / HAP Action */}
           <div className="entity-list-col" style={{ display: "flex", flexDirection: "column", minHeight: 0, height: "100%" }}>

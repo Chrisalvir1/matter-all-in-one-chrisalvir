@@ -105,6 +105,7 @@ if [ -n "$MDNSINTERFACE" ]; then
     esac
     echo "[Info] Using manually configured network interface for mDNS: $MDNSINTERFACE"
     set -- "$@" -mdnsinterface "$MDNSINTERFACE"
+    export MATTER_AIO_MDNS_IFACE="$MDNSINTERFACE"
 else
     # In Home Assistant with host_network: true, binding mDNS to all interfaces can broadcast
     # across Docker bridge/hassio virtual interfaces, causing multicast collisions with other
@@ -128,6 +129,7 @@ else
     if [ -n "$DETECTED_IFACE" ]; then
         echo "[Info] Auto-detected primary physical LAN network interface for mDNS: $DETECTED_IFACE"
         set -- "$@" -mdnsinterface "$DETECTED_IFACE"
+        export MATTER_AIO_MDNS_IFACE="$DETECTED_IFACE"
     else
         echo "[Info] mDNS will use all available interfaces so route changes do not strand Matter devices."
     fi
