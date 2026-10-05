@@ -5720,9 +5720,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             `${entityId} ${entityFriendlyName}`,
           );
         const isTapoC402Cam =
-          (accessory as any).isTapoC402?.() ||
           /tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle|tapo[-_ ]?frente|\bc402\b/i.test(
-            `${cuiId} ${camName} ${accessory.record?.name || ""} ${accessory.record?.model || ""}`,
+            `${cuiId} ${camName}`,
           );
         const isC402Match = isTapoC402Entity && isTapoC402Cam && isMotionClass;
 
@@ -5786,7 +5785,6 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           configuredMotionEntity ||
           (sameDevice && isMotionClass) ||
           isC402Match ||
-          (isTapoC402Cam && (isTapoC402Entity || sameDevice || linkedId === entityId) && isMotionClass) ||
           isC120Match ||
           (isTapoC120Cam && (isTapoC120Entity || sameDevice || linkedId === entityId) && isMotionClass) ||
           isWyzeMatch ||

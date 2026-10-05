@@ -439,17 +439,21 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
       return targetEntity || sortedEntities[0] || device.entities[0] || null;
     });
     setMultiAdminOpen(false);
-    const newDevicePairingCode =
-      device.entities.find((e) => e.exported && e.pairingCode)?.pairingCode ?? null;
-    if (newDevicePairingCode) {
+    // In multi-switch, only clear fresh codes if THIS active entity has its own code
+    const activeExportedCode = isMultiSwitch
+      ? selectedEntity?.pairingCode
+      : device.entities.find((e) => e.exported && e.pairingCode)?.pairingCode;
+    if (activeExportedCode) {
       setFreshPairingCode(null);
       setFreshManualCode(null);
     }
-    const stillCommissioned = device.entities.some((e) => e.commissioned);
+    const stillCommissioned = isMultiSwitch
+      ? Boolean(selectedEntity?.commissioned)
+      : device.entities.some((e) => e.commissioned);
     if (!stillCommissioned) {
       setResetFabrics(false);
     }
-  }, [device, targetEntity, activeHapFromProps]);
+  }, [device, targetEntity, activeHapFromProps, isMultiSwitch, selectedEntity?.entityId]);
 
   if (!device) return null;
 
@@ -475,12 +479,16 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     freshPairingCode ||
     (isComposite
       ? compositePrimary?.pairingCode
+      : isMultiSwitch
+      ? activeEntity?.pairingCode
       : (activeEntity?.pairingCode || device.entities.find((e) => e.exported && e.pairingCode)?.pairingCode)) ||
     "";
   const manualCode =
     freshManualCode ||
     (isComposite
       ? compositePrimary?.manualPairingCode
+      : isMultiSwitch
+      ? activeEntity?.manualPairingCode
       : (activeEntity?.manualPairingCode || device.entities.find((e) => e.exported && e.manualPairingCode)?.manualPairingCode)) ||
     "";
 
@@ -488,6 +496,8 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     ? []
     : Array.isArray(activeEntity?.matterFabrics) && activeEntity.matterFabrics.length > 0
     ? activeEntity.matterFabrics
+    : isMultiSwitch
+    ? []
     : Array.isArray(compositePrimary?.matterFabrics) && compositePrimary.matterFabrics.length > 0
     ? compositePrimary.matterFabrics
     : Array.isArray(device.entities.find((e) => e.matterFabrics?.length)?.matterFabrics)
@@ -502,6 +512,8 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     (isComposite
       ? Boolean(compositePrimary?.commissioned) ||
         device.entities.some((e) => e.composite && e.commissioned)
+      : isMultiSwitch
+      ? Boolean(activeEntity?.commissioned)
       : Boolean(activeEntity?.commissioned));
 
   // Optimistic, instantaneous toggle for Composite Matter
@@ -716,10 +728,12 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
         if (res?.manualPairingCode) setFreshManualCode(res.manualPairingCode);
         activeEntity.commissioned = false;
         activeEntity.matterFabrics = [];
-        device.entities.forEach((e) => {
-          e.commissioned = false;
-          e.matterFabrics = [];
-        });
+        if (!isMultiSwitch) {
+          device.entities.forEach((e) => {
+            e.commissioned = false;
+            e.matterFabrics = [];
+          });
+        }
       } else {
         if (activeEntity.matterFabrics) {
           activeEntity.matterFabrics = activeEntity.matterFabrics.filter(
@@ -728,15 +742,17 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
               String(f.fabricId) !== String(fabricIndex)
           );
         }
-        device.entities.forEach((e) => {
-          if (e.matterFabrics) {
-            e.matterFabrics = e.matterFabrics.filter(
-              (f: any) =>
-                String(f.fabricIndex) !== String(fabricIndex) &&
-                String(f.fabricId) !== String(fabricIndex)
-            );
-          }
-        });
+        if (!isMultiSwitch) {
+          device.entities.forEach((e) => {
+            if (e.matterFabrics) {
+              e.matterFabrics = e.matterFabrics.filter(
+                (f: any) =>
+                  String(f.fabricIndex) !== String(fabricIndex) &&
+                  String(f.fabricId) !== String(fabricIndex)
+              );
+            }
+          });
+        }
       }
       showToast("✓ Fabric desconectado de este accesorio");
       void onRefresh();
@@ -808,12 +824,14 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
         activeEntity.manualPairingCode = res.manualPairingCode || activeEntity.manualPairingCode;
         activeEntity.commissioned = false;
         activeEntity.matterFabrics = [];
-        device.entities.forEach((e) => {
-          e.commissioned = false;
-          e.matterFabrics = [];
-          if (res?.pairingCode) e.pairingCode = res.pairingCode;
-          if (res?.manualPairingCode) e.manualPairingCode = res.manualPairingCode;
-        });
+        if (!isMultiSwitch) {
+          device.entities.forEach((e) => {
+            e.commissioned = false;
+            e.matterFabrics = [];
+            if (res?.pairingCode) e.pairingCode = res.pairingCode;
+            if (res?.manualPairingCode) e.manualPairingCode = res.manualPairingCode;
+          });
+        }
       }
       showToast("✓ Accesorio desvinculado y nuevo QR generado");
       onRefresh();
@@ -1326,7 +1344,14 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                   <div
                     key={ent.entityId}
                     className={`entity-row${ent.exported ? "" : " dimmed"}${isSelected ? " selected" : ""}`}
-                    onClick={() => setSelectedEntity(ent)}
+                    onClick={() => {
+                      if (activeEntity?.entityId !== ent.entityId) {
+                        setFreshPairingCode(null);
+                        setFreshManualCode(null);
+                        setResetFabrics(false);
+                      }
+                      setSelectedEntity(ent);
+                    }}
                   >
                     <span className="entity-row-icon">
                       {getDomainIcon(ent.domain)}

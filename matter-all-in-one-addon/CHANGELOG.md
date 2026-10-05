@@ -1,3 +1,10 @@
+## [1.9.81] - 2026-10-05
+
+### Aislamiento de Botones Multi-Switch y Restauración Tapo C402 a v1.9.70
+- **Aislamiento Estricto por Botón en Multi-Switch:** En `DeviceModal.tsx`, la selección de código QR, códigos manuales y lista de fabrics ahora se aíslan por cada entidad individual cuando el dispositivo es multi-botón (`isMultiSwitch`). El botón de reseteo (`handleResetAccessory`) y desconexión de fabrics (`handleRemoveFabric`) ya no contaminan ni borran el estado de los botones hermanos en memoria.
+- **Restauración Tapo C402 a v1.9.70:** Restaurado el matching de movimiento, audio y streaming de la Tapo C402 al comportamiento exacto y verificado de la versión `v1.9.70`, garantizando detección inmediata y grabación en HomeKit.
+- **Limpieza de Códigos en Cambio de Fila:** Al hacer clic entre diferentes botones de un controlador, se reinician los códigos temporales para que cada botón muestre su estado real sin solapamientos.
+
 ## [1.9.80] - 2026-10-05
 
 ### Persistencia de Identidad Matter, Aislamiento mDNS y Responsividad Móvil
