@@ -350,7 +350,21 @@ export class CompositeDeviceEntity {
     const ep = this.endpoint as any;
     if (!ep) return;
     try {
-      // Report root reachability too when the bridged-info cluster is present.
+      // 1. Root / ServerNode reachability
+      const serverNode = ep.serverNode || (this.platform as any)?.matterbridge?.serverNode;
+      if (serverNode && typeof serverNode.setStateOf === "function") {
+        try {
+          await serverNode.setStateOf(BasicInformationServer, { reachable });
+          serverNode.act?.((agent: any) =>
+            serverNode.eventsOf?.(BasicInformationServer)?.reachableChanged?.emit?.(
+              { reachableNewValue: reachable },
+              agent.context,
+            ),
+          );
+        } catch {}
+      }
+
+      // 2. Report root reachability too when the bridged-info cluster is present.
       if (
         typeof ep.setStateOf === "function" &&
         ep.hasClusterServer?.(BridgedDeviceBasicInformationServer)
@@ -366,11 +380,17 @@ export class CompositeDeviceEntity {
         } catch {}
       }
       if (typeof ep.setAttribute === "function") {
+        if (ep.hasAttributeServer?.(0x0028, "reachable")) {
+          await ep.setAttribute(0x0028, "reachable", reachable, this.platform.log);
+        }
         if (ep.hasAttributeServer?.(0x0039, "reachable")) {
           await ep.setAttribute(0x0039, "reachable", reachable, this.platform.log);
         }
       }
       if (typeof ep.updateAttribute === "function") {
+        if (ep.hasAttributeServer?.(0x0028, "reachable")) {
+          await ep.updateAttribute(0x0028, "reachable", reachable, this.platform.log);
+        }
         if (ep.hasAttributeServer?.(0x0039, "reachable")) {
           await ep.updateAttribute(0x0039, "reachable", reachable, this.platform.log);
         }

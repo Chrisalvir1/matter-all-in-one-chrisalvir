@@ -1189,7 +1189,21 @@ export class BaseEntity {
     const ep = this.endpoint as any;
     if (!ep) return;
     try {
-      // 1. Bridged / child endpoint reachability in BridgedDeviceBasicInformationServer
+      // 1. Root / ServerNode reachability (Standalone accessory in server mode)
+      const serverNode = ep.serverNode || (this.platform.matterbridge as any)?.serverNode;
+      if (serverNode && typeof serverNode.setStateOf === "function") {
+        try {
+          await serverNode.setStateOf(BasicInformationServer, { reachable });
+          serverNode.act?.((agent: any) =>
+            serverNode.eventsOf?.(BasicInformationServer)?.reachableChanged?.emit?.(
+              { reachableNewValue: reachable },
+              agent.context,
+            ),
+          );
+        } catch {}
+      }
+
+      // 2. Bridged / child endpoint reachability in BridgedDeviceBasicInformationServer
       if (
         typeof ep.setStateOf === "function" &&
         ep.hasClusterServer?.(BridgedDeviceBasicInformationServer)
@@ -1205,15 +1219,21 @@ export class BaseEntity {
         } catch {}
       }
 
-      // 2. Update reachable attribute on cluster servers if present
+      // 3. Update reachable attribute on cluster servers if present (BasicInfo 0x0028 or BridgedBasicInfo 0x0039)
       if (typeof ep.setAttribute === "function") {
+        if (ep.hasAttributeServer?.(0x0028, "reachable")) {
+          await ep.setAttribute(0x0028, "reachable", reachable, this.platform.log);
+        }
         if (ep.hasAttributeServer?.(0x0039, "reachable")) {
           await ep.setAttribute(0x0039, "reachable", reachable, this.platform.log);
         }
       }
 
-      // 3. Actively emit Matter subscription updates to controllers (Apple Home)
+      // 4. Actively emit Matter subscription updates to controllers (Apple Home)
       if (typeof ep.updateAttribute === "function") {
+        if (ep.hasAttributeServer?.(0x0028, "reachable")) {
+          await ep.updateAttribute(0x0028, "reachable", reachable, this.platform.log);
+        }
         if (ep.hasAttributeServer?.(0x0039, "reachable")) {
           await ep.updateAttribute(0x0039, "reachable", reachable, this.platform.log);
         }

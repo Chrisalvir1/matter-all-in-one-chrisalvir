@@ -1,3 +1,8 @@
+## [1.9.82] - 2026-10-05
+
+### Corrección de Estado Desconectado ("Sin respuesta") para Luces Govee y Dispositivos Matter
+- **Emisión Dual de Reachability a Apple Home / Matter:** Los accesorios Matter independientes (`mode: server`) reportan su estado de alcanzabilidad en el cluster `BasicInformationServer` (0x0028) a nivel de `ServerNode`, mientras que los puentes compuestos usan `BridgedDeviceBasicInformationServer` (0x0039). Ahora `setReachability(false)` emite el evento de alcanzabilidad en ambos niveles simultáneamente y dispara la notificación de subscripción activa a Apple Home. Cuando una luz (como Govee) se desconecta de la corriente y Home Assistant pasa su estado a `unavailable` u `offline`, Apple HomeKit actualiza inmediatamente su estado a "Sin respuesta" en lugar de mantenerla falsamente en línea.
+
 ## [1.9.81] - 2026-10-05
 
 ### Aislamiento de Botones Multi-Switch y Restauración Tapo C402 a v1.9.70
