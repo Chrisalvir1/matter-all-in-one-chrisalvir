@@ -355,19 +355,24 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     /\b(light|lamp|tira|neon|foco|bulb|rgb|rgbic|led|h61\w*)\b/i.test(device?.model || "");
   const hasFan = Boolean(device?.entities.some((e) => e.domain === "fan" && !e.auxiliary));
   const hasLight = Boolean(device?.entities.some((e) => e.domain === "light" && !e.auxiliary));
-  const switches = (device?.entities || []).filter(
+  const primaryButtons = (device?.entities || []).filter(
     (e) => (e.domain === "switch" || e.domain === "light") && !e.auxiliary,
   );
   const realSwitches = (device?.entities || []).filter(
     (e) => e.domain === "switch" && !e.auxiliary,
   );
+  const realLights = (device?.entities || []).filter(
+    (e) => e.domain === "light" && !e.auxiliary,
+  );
   const isMultiSwitch =
     !hasFan &&
-    !isLightingDevice &&
-    (realSwitches.length >= 2 ||
-      (/apagador|interruptor|switch|gang|canal|channel|plug|enchufe|regleta|toma|socket|outlet|power\s*strip/i.test(
+    (primaryButtons.length >= 2 ||
+      realSwitches.length >= 2 ||
+      realLights.length >= 2 ||
+      (/apagador|interruptor|switch|gang|canal|channel|plug|enchufe|regleta|toma|socket|outlet|power\s*strip|controlador|botonera|mando|panel|teclado|conmutador|pulsador|dimmer/i.test(
         device?.name || "",
-      ) && realSwitches.length >= 1));
+      ) &&
+        primaryButtons.length >= 1));
   const isPlugDevice =
     !/apagador|interruptor|switch|gang|pulsador/i.test(
       (device?.name || "") + " " + (device?.model || ""),
@@ -915,6 +920,19 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
       showToast("✓ Diagnóstico y logs copiados al portapapeles");
     } else {
       showToast("⚠️ No se pudo acceder al portapapeles, intenta seleccionar el texto manualmente", true);
+    }
+  };
+
+  const handleClearDiagnostics = async () => {
+    if (!activeEntity) return;
+    try {
+      await api.clearEntityDiagnostics(activeEntity.entityId);
+      if (activeEntity.diagnostics) activeEntity.diagnostics = [];
+      activeEntity.hasIssue = false;
+      showToast("✓ Historial de diagnósticos borrado");
+      onRefresh?.();
+    } catch {
+      showToast("⚠️ No se pudo limpiar el historial", true);
     }
   };
 
@@ -1953,6 +1971,25 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                   >
                     📋 Copiar logs
                   </button>
+                  <button
+                    id="clear-diagnostics-button"
+                    type="button"
+                    onClick={handleClearDiagnostics}
+                    title="Limpiar registro y borrar errores pasados de este accesorio"
+                    style={{
+                      background: "rgba(239,68,68,0.12)",
+                      border: "1px solid rgba(239,68,68,0.35)",
+                      borderRadius: "7px",
+                      padding: "5px 9px",
+                      color: "#fca5a5",
+                      fontSize: "11px",
+                      cursor: "pointer",
+                      fontWeight: 600,
+                      flexShrink: 0,
+                    }}
+                  >
+                    🧹 Limpiar
+                  </button>
                 </div>
               </div>
 
@@ -2051,6 +2088,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
               {/* Root cause banner for non-unavailable issues */}
               {!isEntityUnavailable && activeEntity?.hasIssue && combinedEvents.length > 0 && (() => {
                 const topEvent = combinedEvents[0];
+                if (topEvent.level === "info") return null;
                 const isErr = topEvent.level === "error";
                 return (
                   <div
@@ -2078,6 +2116,29 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                   </div>
                 );
               })()}
+
+              {/* Positive real-time healthy banner */}
+              {!isEntityUnavailable && !activeEntity?.hasIssue && (
+                <div
+                  style={{
+                    background: "rgba(16, 185, 129, 0.08)",
+                    borderLeft: "3px solid #10b981",
+                    padding: "8px 11px",
+                    borderRadius: "5px",
+                    fontSize: "11.5px",
+                    color: "#6ee7b7",
+                    marginBottom: "8px",
+                    lineHeight: "1.4",
+                  }}
+                >
+                  <strong style={{ display: "block", marginBottom: 2 }}>
+                    ✓ Dispositivo activo y comunicado
+                  </strong>
+                  <span style={{ color: "var(--text)" }}>
+                    Conectado con Home Assistant (estado: <strong>{entityState.toUpperCase()}</strong>). Sin incidencias activas.
+                  </span>
+                </div>
+              )}
 
               <p id="diagnostics-summary" style={{ margin: "4px 0", fontSize: "11.5px", color: isEntityUnavailable ? "#fbbf24" : "var(--muted)" }}>
                 {combinedEvents.length === 0 ? (

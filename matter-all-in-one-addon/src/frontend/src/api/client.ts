@@ -169,6 +169,11 @@ export const api = {
   resetAccessory: (entityId: string) =>
     request(`/reset-accessory/${encodeURIComponent(entityId)}`, { method: "POST" }),
 
+  clearEntityDiagnostics: (entityId: string) =>
+    request<{ success: boolean }>(`/diagnostics/${encodeURIComponent(entityId)}`, {
+      method: "DELETE",
+    }),
+
   getMqttConfig: () => request<any>("/mqtt-config"),
 
   saveMqttConfig: (data: any) =>

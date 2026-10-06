@@ -43,17 +43,26 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({ device, searchQuery, onC
   const isLightingDevice =
     /\b(light|lamp|tira|neon|foco|bombilla|bulb|rgb|rgbic|led)\b/i.test(device.name || "") ||
     /\b(light|lamp|tira|neon|foco|bulb|rgb|rgbic|led|h61\w*)\b/i.test(device.model || "");
+  const primaryButtons = device.entities.filter(
+    (e) => (e.domain === "switch" || e.domain === "light") && !e.auxiliary,
+  );
   const switches = device.entities.filter(
     (e) => e.domain === "switch" && !e.auxiliary,
   );
+  const lights = device.entities.filter(
+    (e) => e.domain === "light" && !e.auxiliary,
+  );
+  const hasFan = device.entities.some((e) => e.domain === "fan" && !e.auxiliary);
   const isMultiSwitch =
     !isAppliance &&
-    !isLightingDevice &&
-    (switches.length >= 2 ||
-      (/apagador|interruptor|switch|gang|canal|channel|plug|enchufe|regleta|toma|socket|outlet|power\s*strip/i.test(
+    !hasFan &&
+    (primaryButtons.length >= 2 ||
+      switches.length >= 2 ||
+      lights.length >= 2 ||
+      (/apagador|interruptor|switch|gang|canal|channel|plug|enchufe|regleta|toma|socket|outlet|power\s*strip|controlador|botonera|mando|panel|teclado|conmutador|pulsador|dimmer/i.test(
         device.name || "",
       ) &&
-        switches.length >= 1));
+        primaryButtons.length >= 1));
 
   const isComposite =
     !isMultiSwitch &&
@@ -126,7 +135,9 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({ device, searchQuery, onC
               ? "1/1 Matter"
               : "0/1 Matter"
             : isMultiGang
-            ? `${exported}/${primaryEntities.length} activos`
+            ? commissioned > 0
+              ? `${commissioned}/${primaryEntities.length} vinculados`
+              : `${exported}/${primaryEntities.length} en Matter`
             : `${exported}/${primaryEntities.length}`}
         </span>
       </div>

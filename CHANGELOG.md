@@ -1,3 +1,80 @@
+## [1.9.84] - 2026-10-06
+
+### Detección Fiable de Desconexión, Estabilidad Multi-Switch y Limpieza de Diagnósticos
+- **Detección Fiable de Estado "Sin respuesta" (Offline / Desconectado):** Ampliada la función `isUnavailable()` en `ha-state.ts` para capturar estados `"offline"`, `"none"`, `"disconnected"`, así como atributos booleanos `available: false`, `online: false`, `connected: false` (frecuentes en integraciones como Govee o Tuya). `assertOnline()` en `base.entity.ts` rechaza comandos inmediatamente con error ante estados desconectados, devolviendo `Status.Failure` a Apple HomeKit para mostrar "Sin respuesta" de inmediato en lugar de simular falsamente que el dispositivo responde cuando está desenchufado.
+- **Inmunidad de Controladores Multi-Botón tras Reinicios/Cortes:** Detección extendida en `isMultiSwitchDevice()` para reconocer controladores de pared, teclados, botoneras, dimmers y combinaciones mixtas de canales luz + interruptor. En `restoreExportedDevices()`, se bloquea de forma estricta la conversión automática de botones individuales a accesorios compuestos (`device:...`) si el dispositivo es multi-canal o tiene modo fijado `multi`. Esto garantiza que botones exportados individualmente (como "Candelabro") preserven intacta su identidad ServerNode, fabrics y puerto, eliminando el fallo recurrente de "Sin respuesta" y la reaparición no deseada de códigos QR compuestos tras caídas de tensión o reinicios.
+- **Preservación de Ventiladores Compuestos y Nombres de Dispositivo:** Se garantiza que ventiladores de techo con luz integrada continúen agrupándose como accesorios compuestos únicos sin romper su enlace. En `prepareEndpointForRegistration()`, se respeta el nombre original fijado en almacenamiento persistente evitando la adición de sufijos numéricos espurios como `(1)`.
+- **Limpieza en Tiempo Real de Diagnósticos y Salud del Sistema:** Al restaurarse la comunicación en Home Assistant, `observeHomeAssistantAvailability()` y `handleEntityStateChange()` limpian automáticamente los errores activos de `entityProblems` y emiten eventos de confirmación positiva.
+- **Herramienta de Purga y Estado Visual en UI:** Nuevos endpoints API (`POST /api/custom/clear-diagnostics/:entityId` y `DELETE /api/custom/diagnostics/:entityId`) y botón `🧹 Limpiar` en el modal de diagnóstico para purgar registros históricos obsoletos. El modal ahora muestra un banner de salud en verde (`✓ Dispositivo activo y comunicado`) cuando la entidad está en línea y operativa, y en la tarjeta se aclara el conteo real de entidades vinculadas en lugar de estados ambiguos.
+
+## [1.9.83] - 2026-10-05
+
+### Corrección Integral para Desconectar y Generar Nuevo Código QR en Accesorios y Multi-Switch
+- **Desconexión Limpia y Evicción Total de Instancias Antiguas:** Al pulsar "Desconectar todo y nuevo QR", `resetMatterAccessory` ahora inspecciona y desvincula rigurosamente todas las instancias coincidentes por `uniqueId`, `deviceName`, `serialNumber` o identificador de entidad registradas previamente en `@matterbridge/core`. Evita el error `Matter server node was not created` provocado por colisión de nombres o registros retenidos en memoria al recrear el nodo.
+- **Aislamiento Estricto de Entidad Objetivo en Multi-Switch:** En `DeviceModal.tsx`, se corrigió el cálculo de `targetEntityId` en `handleResetAccessory`, `handleRemoveFabric`, `handleReconnect` y `handleOpenCommissioning` para que en dispositivos multi-botón (`isMultiSwitch`) apunte estrictamente a `activeEntity.entityId` y no se mezcle con la entidad primaria de un grupo compuesto.
+- **Purga de Nombre y Prevención de Renombrado Fantasma:** Antes de la reactivación, se verifica que ningún endpoint residual retenga el `deviceName` asignado, eliminando sufijos espurios y garantizando que el nuevo `ServerNode` se cree con su identidad fijada (`NodeIdentityStore`) y devuelva un nuevo código QR y código de vinculación manual listos al instante.
+- **Actualización Inmediata de la UI:** Al completar la desvinculación, el modal de Home Assistant actualiza inmediatamente los estados `commissioned: false`, limpia los `matterFabrics` y muestra los nuevos códigos QR sin requerir recargar la página.
+
+## [1.9.82] - 2026-10-05
+
+### Corrección de Estado Desconectado ("Sin respuesta") para Luces Govee y Dispositivos Matter
+- **Emisión Dual de Reachability a Apple Home / Matter:** Los accesorios Matter independientes (`mode: server`) reportan su estado de alcanzabilidad en el cluster `BasicInformationServer` (0x0028) a nivel de `ServerNode`, mientras que los puentes compuestos usan `BridgedDeviceBasicInformationServer` (0x0039). Ahora `setReachability(false)` emite el evento de alcanzabilidad en ambos niveles simultáneamente y dispara la notificación de subscripción activa a Apple Home. Cuando una luz (como Govee) se desconecta de la corriente y Home Assistant pasa su estado a `unavailable` u `offline`, Apple HomeKit actualiza inmediatamente su estado a "Sin respuesta" en lugar de mantenerla falsamente en línea.
+
+## [1.9.81] - 2026-10-05
+
+### Aislamiento de Botones Multi-Switch y Restauración Tapo C402 a v1.9.70
+- **Aislamiento Estricto por Botón en Multi-Switch:** En `DeviceModal.tsx`, la selección de código QR, códigos manuales y lista de fabrics ahora se aíslan por cada entidad individual cuando el dispositivo es multi-botón (`isMultiSwitch`). El botón de reseteo (`handleResetAccessory`) y desconexión de fabrics (`handleRemoveFabric`) ya no contaminan ni borran el estado de los botones hermanos en memoria.
+- **Restauración Tapo C402 a v1.9.70:** Restaurado el matching de movimiento, audio y streaming de la Tapo C402 al comportamiento exacto y verificado de la versión `v1.9.70`, garantizando detección inmediata y grabación en HomeKit.
+- **Limpieza de Códigos en Cambio de Fila:** Al hacer clic entre diferentes botones de un controlador, se reinician los códigos temporales para que cada botón muestre su estado real sin solapamientos.
+
+## [1.9.80] - 2026-10-05
+
+### Persistencia de Identidad Matter, Aislamiento mDNS y Responsividad Móvil
+- **Identidad Inmutable (`NodeIdentityStore`):** Fijación persistente del identificador y nombre original de los nodos en `/data/node-identities.json`. Evita que cambios temporales de nombre tras cortes eléctricos o desconexiones de red hagan que Apple HomeKit y Matter pierdan el emparejamiento.
+- **Modo Multi-Switch Fijo:** Preservación persistente de la asignación de accesorios multi-botón independientes vs dispositivos compuestos para evitar que arranques lentos de integraciones dividan o agrupen nodos erróneamente.
+- **Restauración Diferida de Entidades:** Las entidades que demoren en reportarse en Home Assistant tras un apagón mantienen su identidad Matter reservada y se reactivan automáticamente al reconectarse sin requerir re-emparejamiento.
+- **Aislamiento mDNS de Red:** Exportación de `MATTER_AIO_MDNS_IFACE` y confinamiento estricto del tráfico mDNS a la interfaz LAN física para evitar colisiones y pérdida de visibilidad con dispositivos Matter puros.
+- **Responsividad Completa en HA Mobile:** Corrección de estilos fijos en el modal de dispositivos (`DeviceModal.tsx`) trasladando el diseño a CSS flexible con adaptación completa a pantallas de teléfonos móviles, touch targets de 44px y compatibilidad con notch / safe areas.
+- **Tratamiento Robusto de Errores en Runtime:** Manejo visible de excepciones no capturadas con registro detallado de pila para prevenir estados inconsistentes del servicio.
+
+## [1.9.77] - 2026-10-04
+
+### Estabilización mDNS LAN y aislamiento de colisiones Matterbridge 3.10.12
+- **Detección automática de interfaz LAN mDNS física:** En `run.sh`, cuando no se especifica manualmente `mdnsinterface`, el script ahora detecta automáticamente la interfaz de red física LAN principal (filtrando interfaces virtuales como `docker`, `hassio`, `veth`, `tailscale`, etc.) y la pasa a Matterbridge como `-mdnsinterface <iface>`. Esto evita que en modo `host_network: true` los sockets mDNS multicast inunden las interfaces de puente de Docker y causen colisiones con dispositivos Matter WiFi puros en la misma red local.
+
+## [1.9.76] - 2026-10-04
+
+### Restauración C402 al comportamiento de v1.9.70
+- Revertidos los cambios de vinculación de movimiento introducidos después de v1.9.70 (11:01) que coincidieron con la pérdida de detección/grabación de la C402: escaneo dinámico de sensores en `homekit-camera.accessory.ts` y el despacho de movimiento adelantado en `handleEntityStateChange`, que podía aceptar sensores AI (Omni) y enviar estados contradictorios.
+
+## [1.9.75] - 2026-10-04
+
+### Disponibilidad real Govee/Tuya y detección C402
+- Dispositivos `unavailable` en HA ya no se fuerzan a `onOff=false` (HomeKit los mostraba "apagados/conectados"); ahora solo `reachable=false` ("Sin respuesta") conservando el último estado.
+- Al reconectar HA, la alcanzabilidad se restaura según el estado real de cada entidad en lugar de marcar todo como alcanzable.
+- C402: la vinculación de movimiento usa también la identidad del accesorio HomeKit (`isTapoC402()`).
+
+## [1.9.74] - 2026-10-04
+
+### Soporte Nativo Matterbridge 3.10.12, Controladores Tuya y Luces Govee
+- **Matterbridge 3.10.12 Oficial:** actualización definitiva de la dependencia base a `matterbridge@3.10.12` (en `package.json`, `package-lock.json` y `Dockerfile`), incorporando todas las mejoras de mDNS (`isFirstOnPort()`), resiliencia ante desconexiones en puerto 5540, RVC `SkipArea` y clústeres de ventiladores.
+- **Solución a Controladores Tuya Colgados:**
+  - Al adoptar endpoints persistidos en caché (`adoptEndpoint`), el add-on ahora actualiza dinámicamente los atributos `softwareVersion` y `softwareVersionString` en los clústeres `BridgedDeviceBasicInformationServer` y `BasicInformationServer`, eliminando versiones desactualizadas retenidas en Apple Home.
+  - Se corrigió el método `setReachability`: se eliminó el intento de mutar `BasicInformationServer.reachable` (inválido según la especificación Matter y causante de excepciones al reconectar con Home Assistant) y se emite de manera segura el evento `reachableChanged` en el endpoint mediante `ep.act()`.
+  - Se añadió el comando estándar `"toggle"` tanto en dispositivos base como compuestos para responder inmediatamente a órdenes de alternancia desde HomeKit y Home Assistant.
+- **Solución a Luces Govee:**
+  - Se implementó síntesis matemática de temperatura de color a RGB (algoritmo Tanner Helland) en `lightColor.buildColorPayload` y soporte bidireccional `rgbToHs`/`xyToHs`, permitiendo que tiras y luces Govee de modo estrictamente RGB procesen sin errores comandos de Mireds o Kelvin procedentes de Matter y Apple Home.
+  - Corrección de atributos no conformes en `ColorControlServer`: reemplazo de atributos ilegales por `coupleColorTempToLevelMinMireds` con guardias `hasAttributeServer()`.
+  - Soporte explícito del comando `enhancedMoveToHueAndSaturation` en endpoints de iluminación.
+- **Persistencia de Detección HKSV C402/C120 y UI Mobile:** se mantienen plenamente operativas todas las mejoras de detección inmediata de eventos y la interfaz responsive mobile-first para orientación vertical y horizontal.
+
+## [1.9.73] - 2026-10-04
+
+### Estabilización Crítica: Detección C402/C120, Mobile First y Rollback Matterbridge
+- **Detección y Grabación C402 y C120 en HKSV:** corregido el pipeline de eventos de Home Assistant en `platform.ts`. El despacho de eventos de movimiento (`binary_sensor.*` y `event.*`) ahora se procesa inmediatamente antes de cualquier validación de entidades Matter. Las cámaras Tapo C402 ("Frente de calle") y Tapo C120 vinculan de forma instantánea sus estados de detección a Apple Home HAP y disparan las grabaciones en iCloud (HKSV).
+- **Interfaz Móvil (Mobile First en Vertical y Horizontal):** el panel de emparejamiento (`qr-panel`), los tabs de protocolo y el interruptor **"Activar HomeKit HAP"** ahora se posicionan de manera prioritaria (`order: -1 !important`) al inicio de la pantalla tanto en formato vertical como en orientación horizontal móvil, asegurando visibilidad total del toggle, códigos QR y PIN manual sin requerir desplazamientos complejos ni superposiciones.
+- **Estabilidad de Ecosistema Tuya y Luces Govee:** rollback oficial de la dependencia base de Matterbridge a la versión `3.10.11` (tanto en `package.json` como en `Dockerfile`), solucionando bloqueos de controladores Tuya y dispositivos de iluminación Govee experimentados tras el reinicio en 3.10.12.
+
 ## [1.9.72] - 2026-10-04
 
 ### Actualización Matterbridge 3.10.12

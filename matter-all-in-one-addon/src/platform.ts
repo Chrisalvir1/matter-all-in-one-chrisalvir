@@ -1397,7 +1397,12 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     if (this.entityProblems.has(entityId)) {
       this.clearEntityProblem(entityId);
     }
-    if (previous && ["unavailable", "unknown"].includes(previous)) {
+    const previousWasUnavailable =
+      !previous ||
+      ["unavailable", "unknown", "offline", "none", "disconnected"].includes(
+        String(previous).toLowerCase(),
+      );
+    if (previousWasUnavailable) {
       if (isActivelyExported) {
         if (hasHapExport) {
           hapAccessory!.setReachability(true);
@@ -2278,24 +2283,16 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       );
 
     const isSwitchOrPlugDevice =
-      /\b(apagador|interruptor|switch|gang|canal|channel|plug|enchufe|regleta|toma|socket|outlet|power\s*strip)\b/i.test(
+      /\b(apagador|interruptor|switch|gang|canal|channel|plug|enchufe|regleta|toma|socket|outlet|power\s*strip|controlador|botonera|mando|panel|teclado|conmutador|pulsador|dimmer)\b/i.test(
         devName,
       ) ||
-      /\b(apagador|interruptor|switch|gang|plug|socket|outlet|power\s*strip)\b/i.test(
+      /\b(apagador|interruptor|switch|gang|plug|socket|outlet|power\s*strip|controlador|botonera|mando|panel|teclado|conmutador|pulsador|dimmer)\b/i.test(
         devModel,
       );
 
-    // If device is explicitly a lighting device with NO switches, it is a single light, NOT a multi-switch device!
-    if (isLightingDevice && switches.length === 0) {
+    // If device is explicitly a lighting device with NO switches and only 1 light, it is a single light, NOT a multi-switch device!
+    if (isLightingDevice && switches.length === 0 && lights.length <= 1) {
       return false;
-    }
-
-    // If device is explicitly an apagador / switch / plug with 2+ channels or has 2+ real switches, it is ALWAYS a multi-switch device!
-    if (
-      switches.length >= 2 ||
-      (isSwitchOrPlugDevice && !isLightingDevice && switches.length + lights.length + fans.length >= 2)
-    ) {
-      return true;
     }
 
     const isFanDevice =
@@ -2309,6 +2306,16 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       (isFanDevice || switches.length === 0)
     ) {
       return false;
+    }
+
+    // If device has 2+ real switches, 2+ real lights, 2+ switch/light buttons, or matches controller/switch keywords with 2+ channels:
+    if (
+      switches.length >= 2 ||
+      lights.length >= 2 ||
+      (switches.length + lights.length >= 2 && (!isLightingDevice || isSwitchOrPlugDevice)) ||
+      (isSwitchOrPlugDevice && switches.length + lights.length + fans.length >= 2)
+    ) {
+      return true;
     }
 
     // 1. Any device with 2 or more fan entities (e.g. 2-gang fan controller)
@@ -3911,7 +3918,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             this.pendingRestore.delete(exportedId);
             if (this.hapAccessoryRecords.get(exportedId)?.published) return;
             const composite = this.getCompositeCandidate(exportedId);
-            if (composite) {
+            const isMulti = composite?.deviceId ? this.isMultiSwitchDevice(composite.deviceId) : false;
+            const pinnedMulti = composite?.deviceId ? this.nodeIdentities.get(`mode:${composite.deviceId}`) === "multi" : false;
+            if (composite && !isMulti && !pinnedMulti) {
               try {
                 await this.activateComposite(exportedId);
                 this.exportedDevices.add(
@@ -4077,29 +4086,40 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         this.matterbridgeDevices.delete(identifier);
       }
 
-      // 2. Disambiguate endpoint.deviceName if another DIFFERENT device in HA legitimately holds this name
-      const baseName = endpoint.deviceName || identifier;
-      let counter = 1;
-      while (this.hasDeviceName(endpoint.deviceName)) {
-        const existing = this.getDeviceByName(endpoint.deviceName);
-        if (existing) {
-          if (
-            existing === endpoint ||
-            existing.uniqueId === endpoint.uniqueId ||
-            (endpoint.serialNumber && existing.serialNumber === endpoint.serialNumber) ||
-            existing.id === endpoint.id
-          ) {
-            await this.unregisterDeviceBounded(existing, `lingering name for ${identifier}`);
-            if (!this.hasDeviceName(endpoint.deviceName)) break;
+      // 2. Preserve pinned identity or disambiguate endpoint.deviceName
+      const pinnedName = this.nodeIdentities.get(identifier);
+      if (pinnedName) {
+        endpoint.deviceName = pinnedName;
+        if (this.hasDeviceName(pinnedName)) {
+          const existing = this.getDeviceByName(pinnedName);
+          if (existing && existing !== endpoint) {
+            await this.unregisterDeviceBounded(existing, `lingering pinned name for ${identifier}`);
           }
         }
-        const suffix = ` (${counter++})`;
-        const maxLen = 32 - suffix.length;
-        const newName = `${baseName.slice(0, maxLen).trim()}${suffix}`;
-        this.log.notice(
-          `Disambiguating duplicate Matter deviceName for ${identifier}: '${endpoint.deviceName}' -> '${newName}'`,
-        );
-        endpoint.deviceName = newName;
+      } else {
+        const baseName = endpoint.deviceName || identifier;
+        let counter = 1;
+        while (this.hasDeviceName(endpoint.deviceName)) {
+          const existing = this.getDeviceByName(endpoint.deviceName);
+          if (existing) {
+            if (
+              existing === endpoint ||
+              existing.uniqueId === endpoint.uniqueId ||
+              (endpoint.serialNumber && existing.serialNumber === endpoint.serialNumber) ||
+              existing.id === endpoint.id
+            ) {
+              await this.unregisterDeviceBounded(existing, `lingering name for ${identifier}`);
+              if (!this.hasDeviceName(endpoint.deviceName)) break;
+            }
+          }
+          const suffix = ` (${counter++})`;
+          const maxLen = 32 - suffix.length;
+          const newName = `${baseName.slice(0, maxLen).trim()}${suffix}`;
+          this.log.notice(
+            `Disambiguating duplicate Matter deviceName for ${identifier}: '${endpoint.deviceName}' -> '${newName}'`,
+          );
+          endpoint.deviceName = newName;
+        }
       }
 
       // 3. Ensure uniqueId is not duplicated
@@ -5636,6 +5656,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       // composite device or make it appear to have shut down.
       return;
     }
+    if (this.entityProblems.has(entityId)) {
+      this.clearEntityProblem(entityId);
+    }
     if (this.isEntityExported(entityId))
       this.queueStateUpdate(entityId, newState);
 
@@ -7042,6 +7065,37 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             "Content-Type": "application/json; charset=utf-8",
           });
           res.end(JSON.stringify(result));
+          return;
+        }
+
+        // DELETE /api/custom/diagnostics/:entityId OR POST /api/custom/clear-diagnostics/:entityId
+        if (
+          (req.method === "DELETE" && pathname.startsWith("/api/custom/diagnostics/")) ||
+          (req.method === "POST" && pathname.startsWith("/api/custom/clear-diagnostics/")) ||
+          ((req.method === "DELETE" || req.method === "POST") && /^\/api\/custom\/devices\/[^/]+\/diagnostics$/.test(pathname))
+        ) {
+          let entityId = "";
+          if (pathname.startsWith("/api/custom/diagnostics/")) {
+            entityId = decodeURIComponent(pathname.substring("/api/custom/diagnostics/".length));
+          } else if (pathname.startsWith("/api/custom/clear-diagnostics/")) {
+            entityId = decodeURIComponent(pathname.substring("/api/custom/clear-diagnostics/".length));
+          } else {
+            const m = pathname.match(/^\/api\/custom\/devices\/([^/]+)\/diagnostics$/);
+            entityId = m ? decodeURIComponent(m[1]) : "";
+          }
+
+          if (entityId) {
+            this.entityDiagnostics.delete(entityId);
+            this.clearEntityProblem(entityId);
+            this.scheduleDiagnosticsSave();
+            this.pushEntityUpdate(entityId);
+            this.broadcastSseMessage("device_update", { entityId });
+            this.log.notice(`[Diagnostics] Cleared diagnostics and active error log for ${entityId}`);
+          }
+          res.writeHead(200, {
+            "Content-Type": "application/json; charset=utf-8",
+          });
+          res.end(JSON.stringify({ success: true }));
           return;
         }
 

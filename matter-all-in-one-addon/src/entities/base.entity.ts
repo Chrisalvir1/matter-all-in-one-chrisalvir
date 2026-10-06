@@ -400,8 +400,12 @@ export class BaseEntity {
 
   protected assertOnline(): void {
     if (isUnavailable(this.state)) {
-      this.platform.log?.debug?.(
-        `[${this.entityId}] Device is currently reported unavailable/offline in Home Assistant. Forwarding command to trigger device wake/reconnect...`,
+      const stateStr = this.state?.state ?? "unavailable";
+      this.platform.log?.warn?.(
+        `[${this.entityId}] Rejecting Matter command: device is unavailable/offline in Home Assistant (state: "${stateStr}").`,
+      );
+      throw new Error(
+        `Device ${this.entityId} is unavailable/offline in Home Assistant (state: "${stateStr}").`,
       );
     }
   }
