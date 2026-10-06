@@ -497,7 +497,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     : Array.isArray(activeEntity?.matterFabrics) && activeEntity.matterFabrics.length > 0
     ? activeEntity.matterFabrics
     : isMultiSwitch
-    ? []
+    ? (Array.isArray(activeEntity?.matterFabrics) ? activeEntity.matterFabrics : [])
     : Array.isArray(compositePrimary?.matterFabrics) && compositePrimary.matterFabrics.length > 0
     ? compositePrimary.matterFabrics
     : Array.isArray(device.entities.find((e) => e.matterFabrics?.length)?.matterFabrics)
@@ -717,7 +717,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     if (!activeEntity) return;
     if (!confirm("¿Desconectar este accesorio de este controlador Matter?")) return;
     setIsBusy(true);
-    const targetEntityId = isComposite
+    const targetEntityId = (!isMultiSwitch && isComposite)
       ? (compositePrimary?.entityId || activeEntity.entityId)
       : activeEntity.entityId;
     try {
@@ -767,12 +767,12 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     if (!activeEntity) return;
     setIsBusy(true);
     showToast("Reconectando accesorio Matter...");
-    const targetEntityId = isComposite
+    const targetEntityId = (!isMultiSwitch && isComposite)
       ? (compositePrimary?.entityId || activeEntity.entityId)
       : activeEntity.entityId;
     try {
       await api.reconnectAccessory(
-        activeEntity.compositeDeviceId || targetEntityId
+        (!isMultiSwitch && activeEntity.compositeDeviceId) ? activeEntity.compositeDeviceId : targetEntityId
       );
       showToast("✓ Accesorio reconectado");
       onRefresh();
@@ -786,7 +786,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
   const handleOpenCommissioning = async () => {
     if (!activeEntity) return;
     setIsBusy(true);
-    const targetEntityId = isComposite
+    const targetEntityId = (!isMultiSwitch && isComposite)
       ? (compositePrimary?.entityId || activeEntity.entityId)
       : activeEntity.entityId;
     try {
@@ -811,19 +811,28 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     )
       return;
     setIsBusy(true);
-    const targetEntityId = isComposite
+    const targetEntityId = (!isMultiSwitch && isComposite)
       ? (compositePrimary?.entityId || activeEntity.entityId)
       : activeEntity.entityId;
     try {
       const res: any = await api.resetAccessory(targetEntityId);
       if (res?.pairingCode || res?.manualPairingCode) {
-        setFreshPairingCode(res.pairingCode || null);
-        setFreshManualCode(res.manualPairingCode || null);
+        const newPairingCode = res?.pairingCode || activeEntity.pairingCode || null;
+        const newManualCode = res?.manualPairingCode || activeEntity.manualPairingCode || null;
+        setFreshPairingCode(newPairingCode);
+        setFreshManualCode(newManualCode);
         setResetFabrics(true);
-        activeEntity.pairingCode = res.pairingCode || activeEntity.pairingCode;
-        activeEntity.manualPairingCode = res.manualPairingCode || activeEntity.manualPairingCode;
+        activeEntity.pairingCode = newPairingCode || undefined;
+        activeEntity.manualPairingCode = newManualCode || undefined;
         activeEntity.commissioned = false;
         activeEntity.matterFabrics = [];
+        setSelectedEntity({
+          ...activeEntity,
+          pairingCode: newPairingCode || undefined,
+          manualPairingCode: newManualCode || undefined,
+          commissioned: false,
+          matterFabrics: [],
+        });
         if (!isMultiSwitch) {
           device.entities.forEach((e) => {
             e.commissioned = false;
@@ -834,7 +843,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
         }
       }
       showToast("✓ Accesorio desvinculado y nuevo QR generado");
-      onRefresh();
+      void onRefresh();
     } catch (err: any) {
       showToast(err.message || "Error al desvincular", true);
     } finally {

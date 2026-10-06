@@ -1,3 +1,11 @@
+## [1.9.83] - 2026-10-05
+
+### Corrección Integral para Desconectar y Generar Nuevo Código QR en Accesorios y Multi-Switch
+- **Desconexión Limpia y Evicción Total de Instancias Antiguas:** Al pulsar "Desconectar todo y nuevo QR", `resetMatterAccessory` ahora inspecciona y desvincula rigurosamente todas las instancias coincidentes por `uniqueId`, `deviceName`, `serialNumber` o identificador de entidad registradas previamente en `@matterbridge/core`. Evita el error `Matter server node was not created` provocado por colisión de nombres o registros retenidos en memoria al recrear el nodo.
+- **Aislamiento Estricto de Entidad Objetivo en Multi-Switch:** En `DeviceModal.tsx`, se corrigió el cálculo de `targetEntityId` en `handleResetAccessory`, `handleRemoveFabric`, `handleReconnect` y `handleOpenCommissioning` para que en dispositivos multi-botón (`isMultiSwitch`) apunte estrictamente a `activeEntity.entityId` y no se mezcle con la entidad primaria de un grupo compuesto.
+- **Purga de Nombre y Prevención de Renombrado Fantasma:** Antes de la reactivación, se verifica que ningún endpoint residual retenga el `deviceName` asignado, eliminando sufijos espurios y garantizando que el nuevo `ServerNode` se cree con su identidad fijada (`NodeIdentityStore`) y devuelva un nuevo código QR y código de vinculación manual listos al instante.
+- **Actualización Inmediata de la UI:** Al completar la desvinculación, el modal de Home Assistant actualiza inmediatamente los estados `commissioned: false`, limpia los `matterFabrics` y muestra los nuevos códigos QR sin requerir recargar la página.
+
 ## [1.9.82] - 2026-10-05
 
 ### Corrección de Estado Desconectado ("Sin respuesta") para Luces Govee y Dispositivos Matter

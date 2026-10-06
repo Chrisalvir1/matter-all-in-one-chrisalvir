@@ -4083,7 +4083,12 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       while (this.hasDeviceName(endpoint.deviceName)) {
         const existing = this.getDeviceByName(endpoint.deviceName);
         if (existing) {
-          if (existing.uniqueId === endpoint.uniqueId) {
+          if (
+            existing === endpoint ||
+            existing.uniqueId === endpoint.uniqueId ||
+            (endpoint.serialNumber && existing.serialNumber === endpoint.serialNumber) ||
+            existing.id === endpoint.id
+          ) {
             await this.unregisterDeviceBounded(existing, `lingering name for ${identifier}`);
             if (!this.hasDeviceName(endpoint.deviceName)) break;
           }
@@ -4719,22 +4724,52 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         }
       }
 
-      // 2. Shut down and unregister the old endpoint
+      // 2. Shut down and unregister all matching old endpoints across all registries
       if (compositeDeviceId) {
         await this.disposeCompositeNode(compositeDeviceId);
       } else {
-        if (serverNode?.lifecycle?.isOnline) {
-          try {
-            await Promise.race([
-              serverNode.close(),
-              new Promise<void>((res) => setTimeout(res, 2500)),
-            ]);
-          } catch (e) {
-            this.log.debug(`[Reset] Error closing serverNode: ${e}`);
+        const uniqueId = entityId.replaceAll(".", "_");
+        const endpointsToUnregister = new Set<any>();
+        if (endpoint) endpointsToUnregister.add(endpoint);
+        const inMem = this.matterbridgeDevices.get(entityId);
+        if (inMem) endpointsToUnregister.add(inMem);
+
+        if (typeof (this as any).getDevices === "function") {
+          for (const d of (this as any).getDevices()) {
+            if (
+              d.uniqueId === uniqueId ||
+              d.deviceName === endpoint?.deviceName ||
+              d.deviceName === friendlyName ||
+              d.id === uniqueId
+            ) {
+              endpointsToUnregister.add(d);
+            }
           }
         }
-        if (endpoint) {
-          await this.unregisterDeviceBounded(endpoint, `reset ${entityId}`);
+        if (typeof this.getDeviceByUniqueId === "function") {
+          const byUid = this.getDeviceByUniqueId(uniqueId);
+          if (byUid) endpointsToUnregister.add(byUid);
+        }
+        if (typeof this.getDeviceByName === "function") {
+          const byNm1 = endpoint?.deviceName ? this.getDeviceByName(endpoint.deviceName) : undefined;
+          if (byNm1) endpointsToUnregister.add(byNm1);
+          const byNm2 = friendlyName ? this.getDeviceByName(friendlyName) : undefined;
+          if (byNm2) endpointsToUnregister.add(byNm2);
+        }
+
+        for (const ep of endpointsToUnregister) {
+          const node = ep?.serverNode;
+          if (node?.lifecycle?.isOnline) {
+            try {
+              await Promise.race([
+                node.close(),
+                new Promise<void>((res) => setTimeout(res, 2000)),
+              ]);
+            } catch (e) {
+              this.log.debug(`[Reset] Error closing serverNode: ${e}`);
+            }
+          }
+          await this.unregisterDeviceBounded(ep, `reset ${entityId}`);
         }
         this.matterbridgeDevices.delete(entityId);
       }
@@ -4815,6 +4850,18 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             await storageManager.close?.();
           } catch {}
           bridgeRuntime.serverNodeStorageManagers?.delete?.(storeId);
+        }
+      }
+
+      // Guarantee that any remaining device with the same name/uniqueId in MatterbridgePlatform is evicted before recreate
+      if (typeof this.hasDeviceName === "function") {
+        for (const nameCandidate of [endpoint?.deviceName, friendlyName].filter(Boolean) as string[]) {
+          if (this.hasDeviceName(nameCandidate)) {
+            const lingering = this.getDeviceByName(nameCandidate);
+            if (lingering) {
+              await this.unregisterDeviceBounded(lingering, `purge lingering name ${nameCandidate}`);
+            }
+          }
         }
       }
 

@@ -1089,8 +1089,57 @@ describe("HomeAssistantPlatform", () => {
 
     expect(staleDevice.serverNode.close).toHaveBeenCalled();
     expect(unregSpy).toHaveBeenCalledWith(staleDevice);
-    // Name disambiguation should have adjusted the duplicate name
     expect(newEndpoint.deviceName).not.toBe("PASILLO");
     expect(newEndpoint.deviceName).toContain("PASILLO");
+  });
+
+  it("resets multi-switch button cleanly evicting all matching instances and returning new QR code", async () => {
+    const entityId = "switch.controlador_sala_controlador_sala";
+    platform.entities.set(entityId, {
+      entityId,
+      state: {
+        entity_id: entityId,
+        state: "on",
+        attributes: { friendly_name: "Controlador Sala L1" },
+      },
+    } as any);
+
+    const staleDevice = {
+      deviceName: "Controlador Sala L1",
+      uniqueId: "switch_controlador_sala_controlador_sala",
+      serverNode: {
+        lifecycle: { isOnline: true },
+        close: vi.fn().mockResolvedValue(undefined),
+        resetStorage: vi.fn().mockResolvedValue(undefined),
+      },
+    };
+    (platform as any).matterbridgeDevices.set(entityId, staleDevice);
+    const unregSpy = vi.spyOn(platform as any, "unregisterDevice").mockResolvedValue(undefined);
+
+    vi.spyOn(platform as any, "activateEntity").mockImplementation(async () => {
+      const freshEndpoint = {
+        deviceName: "Controlador Sala L1",
+        uniqueId: "switch_controlador_sala_controlador_sala",
+        serverNode: {
+          lifecycle: { isOnline: true },
+          state: {
+            commissioning: {
+              pairingCodes: {
+                qrPairingCode: "MT:Y.FRESH002",
+                manualPairingCode: "98765432101",
+              },
+              fabrics: [],
+            },
+          },
+        },
+      };
+      (platform as any).matterbridgeDevices.set(entityId, freshEndpoint);
+    });
+
+    const result = await platform.resetMatterAccessory(entityId);
+    expect(result.success).toBe(true);
+    expect(result.pairingCode).toBe("MT:Y.FRESH002");
+    expect(result.manualPairingCode).toBe("98765432101");
+    expect(unregSpy).toHaveBeenCalledWith(staleDevice);
   });
 });
