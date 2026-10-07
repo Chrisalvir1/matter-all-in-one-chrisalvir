@@ -8,6 +8,13 @@ type CommandOutcome =
 
 export interface MatterCommandResponsePolicy {
   timeoutMs?: number;
+  onCommandStart?: (command: string) => void;
+  onCommandOutcome?: (
+    command: string,
+    durationMs: number,
+    outcome: "completed" | "failed" | "handler_returned_pending",
+    late?: boolean,
+  ) => void;
   onFailure?: (command: string, error: unknown, late: boolean) => void | Promise<void>;
   onSlowCompletion?: (command: string, durationMs: number) => void;
 }
@@ -43,6 +50,7 @@ export function installMatterCommandResponsePolicy(
 
   commandHandler.executeHandler = async (command: string, ...args: unknown[]) => {
     const startedAt = Date.now();
+    installedPolicy.policy.onCommandStart?.(command);
     const operation: Promise<CommandOutcome> = Promise.resolve()
       .then(() => originalExecuteHandler(command, ...args))
       .then(
@@ -59,8 +67,19 @@ export function installMatterCommandResponsePolicy(
     ]);
 
     if (outcome.kind === "timeout") {
+      installedPolicy.policy.onCommandOutcome?.(
+        command,
+        Date.now() - startedAt,
+        "handler_returned_pending",
+      );
       void operation.then(async (lateOutcome) => {
         const durationMs = Date.now() - startedAt;
+        installedPolicy.policy.onCommandOutcome?.(
+          command,
+          durationMs,
+          lateOutcome.kind === "error" ? "failed" : "completed",
+          true,
+        );
         if (lateOutcome.kind === "error") {
           try {
             await installedPolicy.policy.onFailure?.(command, lateOutcome.error, true);
@@ -76,11 +95,22 @@ export function installMatterCommandResponsePolicy(
 
     if (timer) clearTimeout(timer);
     if (outcome.kind === "error") {
+      installedPolicy.policy.onCommandOutcome?.(
+        command,
+        Date.now() - startedAt,
+        "failed",
+      );
       void Promise.resolve(installedPolicy.policy.onFailure?.(command, outcome.error, false)).catch(
         () => undefined,
       );
       throw outcome.error;
     }
+
+    installedPolicy.policy.onCommandOutcome?.(
+      command,
+      Date.now() - startedAt,
+      "completed",
+    );
 
     return outcome.result;
   };

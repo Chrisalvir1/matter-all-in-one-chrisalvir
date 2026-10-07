@@ -13,26 +13,45 @@ describe("Matter command response policy", () => {
 
   it("preserves fast results", async () => {
     const endpoint = makeEndpoint(async () => "done");
-    installMatterCommandResponsePolicy(endpoint, { timeoutMs: 50 });
+    const onCommandStart = vi.fn();
+    const onCommandOutcome = vi.fn();
+    installMatterCommandResponsePolicy(endpoint, {
+      timeoutMs: 50,
+      onCommandStart,
+      onCommandOutcome,
+    });
 
     await expect(
       endpoint.commandHandler.executeHandler("OnOff.on"),
     ).resolves.toBe("done");
+    expect(onCommandStart).toHaveBeenCalledWith("OnOff.on");
+    expect(onCommandOutcome).toHaveBeenCalledWith(
+      "OnOff.on",
+      expect.any(Number),
+      "completed",
+    );
   });
 
   it("keeps slow Home Assistant work running after the Matter ACK budget", async () => {
     vi.useFakeTimers();
     let finish!: (value: string) => void;
+    const onCommandOutcome = vi.fn();
     const endpoint = makeEndpoint(
       () => new Promise<string>((resolve) => (finish = resolve)),
     );
     installMatterCommandResponsePolicy(endpoint, {
       timeoutMs: MATTER_COMMAND_ACK_BUDGET_MS,
+      onCommandOutcome,
     });
 
     const response = endpoint.commandHandler.executeHandler("OnOff.on");
     await vi.advanceTimersByTimeAsync(MATTER_COMMAND_ACK_BUDGET_MS);
     await expect(response).resolves.toBeUndefined();
+    expect(onCommandOutcome).toHaveBeenCalledWith(
+      "OnOff.on",
+      MATTER_COMMAND_ACK_BUDGET_MS,
+      "handler_returned_pending",
+    );
     finish("HA completed");
     await Promise.resolve();
   });

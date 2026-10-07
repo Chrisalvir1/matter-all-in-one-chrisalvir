@@ -1,3 +1,9 @@
+## [2.0.1] - 2026-10-06
+
+### Diagnóstico de latencia de comandos Matter
+- Añadidas trazas seguras por comando para registrar inicio, tiempo hasta devolver el control al servidor Matter y finalización tardía de la operación Home Assistant.
+- Las trazas permiten distinguir una espera dentro del handler del complemento de una demora posterior en Matter, Apple Home o la red. No incluyen tokens ni datos de autenticación.
+
 ## [2.0.0] - 2026-10-07
 
 ### Release mayor: estabilidad, sincronización y respuesta rápida en Siri/HomeKit

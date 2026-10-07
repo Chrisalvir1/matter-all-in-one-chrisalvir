@@ -1288,6 +1288,17 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     composite?: CompositeDeviceEntity,
   ): void {
     installMatterCommandResponsePolicy(endpoint, {
+      onCommandStart: (command) => {
+        this.log.info(
+          `[MatterCommandTrace][${entityId}] start command=${command}`,
+        );
+      },
+      onCommandOutcome: (command, durationMs, outcome, late) => {
+        const stage = late ? "ha_operation_finished_after_handler_return" : "handler_returned";
+        this.log.info(
+          `[MatterCommandTrace][${entityId}] ${stage} command=${command} elapsed_ms=${durationMs} outcome=${outcome}`,
+        );
+      },
       onFailure: async (command, error, late) => {
         const entity = (this.entities.get(entityId) ??
           this.mqttEntities.get(entityId)) as any;
