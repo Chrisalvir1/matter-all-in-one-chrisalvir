@@ -194,6 +194,7 @@ export class OvenEntity extends BaseEntity {
           this.platform.log?.error?.(
             `[OvenEntity] Failed to set target temperature to HA: ${err}`,
           );
+          throw err;
         }
       },
     );

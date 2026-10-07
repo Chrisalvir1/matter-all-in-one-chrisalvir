@@ -84,6 +84,77 @@ describe("HomeAssistantPlatform", () => {
     expect(platform.entities.has("sensor.garden_moisture")).toBe(true);
   });
 
+  it("refreshes the HA snapshot and Matter endpoints from the UI action", async () => {
+    (platform as any).ha = { connected: true, close: vi.fn() };
+    const discover = vi
+      .spyOn(platform as any, "discoverAndSync")
+      .mockResolvedValue(true);
+    const forceSync = vi
+      .spyOn(platform as any, "forceSyncAllEntities")
+      .mockResolvedValue(undefined);
+    vi.spyOn(platform as any, "broadcastSseMessage").mockImplementation(() => {});
+
+    const result = await platform.refreshHomeAssistantDevices();
+
+    expect(discover).toHaveBeenCalledOnce();
+    expect(forceSync).toHaveBeenCalledOnce();
+    expect(result).toEqual({ success: true, entities: 0 });
+  });
+
+  it("returns a clear error when a device refresh is requested while HA is disconnected", async () => {
+    (platform as any).ha = { connected: false, close: vi.fn() };
+    const discover = vi.spyOn(platform as any, "discoverAndSync");
+
+    await expect(platform.refreshHomeAssistantDevices()).rejects.toThrow(
+      "Home Assistant is not connected",
+    );
+    expect(discover).not.toHaveBeenCalled();
+  });
+
+  it("marks an accessory unreachable and records a Matter command failure", async () => {
+    const entityId = "switch.command_failure";
+    const setReachability = vi.fn().mockResolvedValue(undefined);
+    platform.entities.set(entityId, { setReachability } as any);
+    const recordFailure = vi.spyOn(platform, "recordEntityCommandFailure");
+    const endpoint = {
+      commandHandler: {
+        executeHandler: vi.fn().mockRejectedValue(new Error("HA rejected command")),
+      },
+    };
+    (platform as any).installMatterCommandResponsePolicy(endpoint, entityId);
+
+    await expect(
+      endpoint.commandHandler.executeHandler("OnOff.off"),
+    ).rejects.toThrow("HA rejected command");
+    await Promise.resolve();
+
+    expect(setReachability).toHaveBeenCalledWith(false);
+    expect(recordFailure).toHaveBeenCalledWith(
+      entityId,
+      expect.stringContaining("HA rejected command"),
+    );
+  });
+
+  it("exposes the full device refresh through the UI API", async (ctx) => {
+    if (!networkAvailable) {
+      ctx.skip();
+      return;
+    }
+    const refresh = vi
+      .spyOn(platform, "refreshHomeAssistantDevices")
+      .mockResolvedValue({ success: true, entities: 42 });
+    await (platform as any).startUiServer();
+
+    const response = await fetch(
+      `http://127.0.0.1:${platform.uiServerPort}/api/custom/sync-devices`,
+      { method: "POST" },
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ success: true, entities: 42 });
+    expect(refresh).toHaveBeenCalledOnce();
+  });
+
   it.each(["unknown", "unavailable"])(
     "keeps a standalone Broadlink switch discoverable when its initial state is %s",
     async (initialState) => {

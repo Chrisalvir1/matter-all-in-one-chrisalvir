@@ -1,3 +1,29 @@
+## [2.0.0] - 2026-10-07
+
+### Release mayor: estabilidad, sincronización y respuesta rápida en Siri/HomeKit
+- El botón **Actualizar** obtiene el estado más reciente de Home Assistant, descubre entidades nuevas, reconcilia los accesorios Matter existentes y actualiza la UI sin reiniciar el add-on.
+- Actualizadas dependencias compatibles, incluidas Undici 8.11.2 y Werift 0.25.0. Node se mantiene sin cambios en la línea LTS 24.x.
+- Los comandos Matter esperan hasta 750 ms la respuesta de Home Assistant. Si tarda más, Matter responde mientras la operación continúa; los fallos tardíos se registran y marcan el accesorio como no disponible.
+- Mejorado el manejo de fallos de comandos en luces, ventiladores, humidificadores, hornos, aspiradoras y alimentadores.
+- Conservada la disponibilidad real de Govee/Tuya y los estados explícitos de Home Assistant para evitar estados encendidos falsos.
+
+## [1.9.86] - 2026-10-06
+
+### Sincronización manual de dispositivos y actualización de dependencias
+- El botón **Actualizar** ahora solicita un snapshot reciente de Home Assistant, descubre entidades nuevas, reconcilia los accesorios Matter exportados y recarga los datos de la UI; los fallos de conexión se muestran en la interfaz.
+- Dependencias compatibles actualizadas: `@types/node`, `@types/ws`, `@vitejs/plugin-react`, `@vitest/coverage-v8`, `lucide-react`, `vite`, `vitest` y `ws`.
+- Actualizados `undici` a 8.11.2 para peticiones HTTP de Camera.UI y `werift` a 0.25.0 para sesiones WebRTC de cámaras Matter/HomeKit.
+- Node.js mínimo del paquete alineado con la imagen LTS Node 24.21.0 usada por Docker y build.yaml.
+- Las órdenes Matter esperan hasta 750 ms la confirmación de Home Assistant; si tarda más, Matter responde y la operación sigue en segundo plano. Los fallos tardíos se registran y marcan el accesorio sin respuesta; los fallos rápidos continúan devolviendo error a Matter.
+
+## [1.9.85] - 2026-10-06
+
+### Corrección de estado y disponibilidad de luces Govee exportadas por Matter
+- El estado `off` explícito de la entidad principal de Home Assistant prevalece sobre segmentos RGBIC que conserven un `on` antiguo, también en el catálogo de entidades.
+- Los comandos directos de encendido, apagado, alternancia, nivel y color esperan la respuesta de Home Assistant. Ante un fallo, Matter informa el error, el accesorio pasa a "Sin respuesta" y el diagnóstico se conserva hasta que HA confirme recuperación.
+- La disponibilidad reconoce estados vacíos, `unavailable`, `unknown`, `offline`, `none` y `disconnected`, además de atributos `available`, `online`, `connected` e `is_online` con valor `false`.
+- Corregida una aserción de integración de cámara que fallaba al validar el caso esperado sin error.
+
 ## [1.9.84] - 2026-10-06
 
 ### Detección Fiable de Desconexión, Estabilidad Multi-Switch y Limpieza de Diagnósticos

@@ -38,6 +38,8 @@ export async function request<T = any>(endpoint: string, options: RequestInit = 
 export const api = {
   getStatus: () => request<StatusResponse>("/status"),
   getDevices: () => request<EntityRecord[]>("/devices"),
+  syncDevices: () =>
+    request<{ success: boolean; entities: number }>("/sync-devices", { method: "POST" }),
   getCameras: () => request<CameraRecord[]>("/cameras"),
   getScryptedConfig: () => request<ScryptedConfigResponse>("/scrypted/config"),
   saveScryptedConfig: (data: any) => request("/scrypted/config", { method: "POST", body: JSON.stringify(data) }),

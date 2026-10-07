@@ -318,12 +318,7 @@ export class VacuumEntity extends BaseEntity {
     if (!endpoint) endpoint = this.endpoint as unknown as MatterbridgeEndpoint;
 
     endpoint.addCommandHandler("RvcRunMode.changeToMode", async (data: any) => {
-      if (isUnavailable(this.state)) {
-        this.platform.log?.warn?.(
-          `[VacuumEntity] Ignored RvcRunMode.changeToMode: ${this.entityId} is unavailable in Home Assistant.`,
-        );
-        return;
-      }
+      this.assertOnline();
       this.lastCommandTime = Date.now();
       this.platform.log?.info?.(
         `[VacuumEntity] changeToMode commanded: ${JSON.stringify(data)}`,
@@ -367,12 +362,7 @@ export class VacuumEntity extends BaseEntity {
     endpoint.addCommandHandler(
       "RvcCleanMode.changeToMode",
       async (data: any) => {
-        if (isUnavailable(this.state)) {
-          this.platform.log?.warn?.(
-            `[VacuumEntity] Ignored RvcCleanMode.changeToMode: ${this.entityId} is unavailable in Home Assistant.`,
-          );
-          return;
-        }
+        this.assertOnline();
         this.platform.log?.info?.(
           `[VacuumEntity] RvcCleanMode.changeToMode commanded: ${JSON.stringify(data)}`,
         );
@@ -396,12 +386,7 @@ export class VacuumEntity extends BaseEntity {
     );
 
     endpoint.addCommandHandler("RvcOperationalState.resume", async () => {
-      if (isUnavailable(this.state)) {
-        this.platform.log?.warn?.(
-          `[VacuumEntity] Ignored RvcOperationalState.resume: ${this.entityId} is unavailable in Home Assistant.`,
-        );
-        return;
-      }
+      this.assertOnline();
       this.lastCommandTime = Date.now();
       safeSetAttribute(
         endpoint as any,
@@ -421,12 +406,7 @@ export class VacuumEntity extends BaseEntity {
     });
 
     endpoint.addCommandHandler("RvcOperationalState.pause", async () => {
-      if (isUnavailable(this.state)) {
-        this.platform.log?.warn?.(
-          `[VacuumEntity] Ignored RvcOperationalState.pause: ${this.entityId} is unavailable in Home Assistant.`,
-        );
-        return;
-      }
+      this.assertOnline();
       this.lastCommandTime = Date.now();
       safeSetAttribute(
         endpoint as any,
@@ -448,12 +428,7 @@ export class VacuumEntity extends BaseEntity {
     });
 
     endpoint.addCommandHandler("RvcOperationalState.goHome", async () => {
-      if (isUnavailable(this.state)) {
-        this.platform.log?.warn?.(
-          `[VacuumEntity] Ignored RvcOperationalState.goHome: ${this.entityId} is unavailable in Home Assistant.`,
-        );
-        return;
-      }
+      this.assertOnline();
       this.lastCommandTime = Date.now();
       safeSetAttribute(
         endpoint as any,
@@ -473,12 +448,7 @@ export class VacuumEntity extends BaseEntity {
     });
 
     endpoint.addCommandHandler("goHome", async () => {
-      if (isUnavailable(this.state)) {
-        this.platform.log?.warn?.(
-          `[VacuumEntity] Ignored goHome: ${this.entityId} is unavailable in Home Assistant.`,
-        );
-        return;
-      }
+      this.assertOnline();
       this.lastCommandTime = Date.now();
       safeSetAttribute(
         endpoint as any,
@@ -573,6 +543,7 @@ export class VacuumEntity extends BaseEntity {
       this.platform.log?.error?.(
         `[VacuumEntity] Failed to call ${service}: ${err}`,
       );
+      throw err instanceof Error ? err : new Error(String(err));
     }
   }
 

@@ -163,11 +163,13 @@ describe("VacuumEntity Apple Home topology and identity", () => {
     expect(endpoint.attributes.get("rvcOperationalState:operationalState")).toBe(0);
     expect(endpoint.attributes.get("rvcRunMode:currentMode")).toBe(1); // Idle
 
-    // Commands must be ignored when state is unavailable
+    // Commands must return a failure when Home Assistant already reports unavailable
     vacuum.state = { ...state, state: "unavailable" } as any;
-    await endpoint.invokeCommand("RvcRunMode.changeToMode", {
-      request: { newMode: 2 },
-    });
+    await expect(
+      endpoint.invokeCommand("RvcRunMode.changeToMode", {
+        request: { newMode: 2 },
+      }),
+    ).rejects.toThrow("unavailable/offline");
     // HA service should NOT be called
     expect(platform.ha.callService).not.toHaveBeenCalled();
 

@@ -538,9 +538,7 @@ describe("Integración Estable v1.9.5: Tapo C120 2K Level 5.0 y Aislamiento (20 
     });
 
     // No debe fallar por "missing or invalid video FPS"
-    expect(errorReceived?.message).not.toContain(
-      "missing or invalid video FPS",
-    );
+    expect(errorReceived).toBeUndefined();
   });
 
   // 14. Resolución no anunciada: normalización o fallback explícito

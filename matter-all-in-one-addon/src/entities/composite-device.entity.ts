@@ -86,6 +86,8 @@ type CompositePlatform = {
       data?: Record<string, any>,
     ): Promise<unknown>;
   };
+  recordEntityCommandFailure?(entityId: string, message: string): void;
+  clearEntityCommandFailure?(entityId: string): void;
 };
 
 export interface CompositeMember {
@@ -140,6 +142,11 @@ export class CompositeDeviceEntity {
   public readonly endpoints = new Map<string, MatterbridgeEndpoint>();
   public readonly states = new Map<string, HassState>();
   private lastCommands = new Map<string, { value: any; timestamp: number }>();
+  private serviceFailures = new Map<string, {
+    stateAtFailure: string;
+    desiredState?: "on" | "off";
+    sawUnavailable: boolean;
+  }>();
   private lastSyncedFan = new Map<string, { on: boolean; pct: number }>();
 
   private isDifferent(attribute: string, requested: any, actual: any): boolean {
@@ -199,6 +206,53 @@ export class CompositeDeviceEntity {
       value,
       timestamp: Date.now(),
     });
+  }
+
+  public hasCommandCommunicationFailure(entityId?: string): boolean {
+    return entityId
+      ? this.serviceFailures.has(entityId)
+      : this.serviceFailures.size > 0;
+  }
+
+  public noteHomeAssistantUnavailable(entityId: string): void {
+    const failure = this.serviceFailures.get(entityId);
+    if (failure) failure.sawUnavailable = true;
+  }
+
+  private async callServiceTracked(
+    entityId: string,
+    domain: string,
+    service: string,
+    data?: Record<string, any>,
+  ): Promise<void> {
+    try {
+      if (data === undefined) await this.platform.ha.callService(domain, service, entityId);
+      else await this.platform.ha.callService(domain, service, entityId, data);
+      this.serviceFailures.delete(entityId);
+      this.platform.clearEntityCommandFailure?.(entityId);
+      if (!isUnavailable(this.states.get(entityId) as any)) {
+        await this.setMemberReachability(entityId, true);
+      }
+    } catch (error) {
+      this.serviceFailures.set(entityId, {
+        stateAtFailure: this.states.get(entityId)?.state ?? "",
+        desiredState:
+          service === "turn_on" || service === "turn_off"
+            ? service === "turn_on" ? "on" : "off"
+            : undefined,
+        sawUnavailable: false,
+      });
+      this.lastCommands.delete(`${entityId}:onOff`);
+      await this.setMemberReachability(entityId, false);
+      this.platform.recordEntityCommandFailure?.(
+        entityId,
+        `Matter command ${domain}.${service} failed in Home Assistant: ${String(error)}`,
+      );
+      if (entityId === this.primaryEntityId) {
+        await this.setReachability(false);
+      }
+      throw error instanceof Error ? error : new Error(String(error));
+    }
   }
 
   private lastFanCommandTimes = new Map<string, number>();
@@ -396,7 +450,10 @@ export class CompositeDeviceEntity {
         }
       }
       for (const memberEntityId of this.endpoints.keys()) {
-        await this.setMemberReachability(memberEntityId, reachable);
+        await this.setMemberReachability(
+          memberEntityId,
+          reachable && !this.serviceFailures.has(memberEntityId),
+        );
       }
       this.platform.log?.debug?.(
         `[Composite:${this.deviceId}] Updated Matter reachability to ${reachable}`,
@@ -644,6 +701,22 @@ export class CompositeDeviceEntity {
     this.states.set(entityId, state);
     const endpoint = this.endpoints.get(entityId);
     if (!endpoint) return;
+
+    const failure = this.serviceFailures.get(entityId);
+    if (failure) {
+      const stateConfirmsCommand =
+        failure.desiredState !== undefined &&
+        failure.stateAtFailure !== failure.desiredState &&
+        state.state === failure.desiredState;
+      if (nowUnavailable) {
+        failure.sawUnavailable = true;
+      } else if (failure.sawUnavailable || stateConfirmsCommand) {
+        this.serviceFailures.delete(entityId);
+      } else {
+        await this.setMemberReachability(entityId, false);
+        return;
+      }
+    }
 
     if (nowUnavailable !== wasUnavailable || initial) {
       await this.setMemberReachability(entityId, !nowUnavailable);
@@ -1329,7 +1402,7 @@ export class CompositeDeviceEntity {
     service: string,
     data?: Record<string, any>,
     delayMs = 60,
-  ) {
+  ): Promise<void> | undefined {
     const currentSt = this.states.get(entityId);
     if (isUnavailable(currentSt)) {
       this.platform.log.warn(
@@ -1349,11 +1422,10 @@ export class CompositeDeviceEntity {
     if (delayMs <= 0) {
       this.serviceDebounceTimers.delete(key);
       if (data !== undefined) {
-        void this.platform.ha.callService(domain, service, entityId, data);
+        return this.callServiceTracked(entityId, domain, service, data);
       } else {
-        void this.platform.ha.callService(domain, service, entityId);
+        return this.callServiceTracked(entityId, domain, service);
       }
-      return;
     }
 
     const timer = setTimeout(() => {
@@ -1366,9 +1438,9 @@ export class CompositeDeviceEntity {
         return;
       }
       if (data !== undefined) {
-        void this.platform.ha.callService(domain, service, entityId, data);
+        void this.callServiceTracked(entityId, domain, service, data).catch(() => undefined);
       } else {
-        void this.platform.ha.callService(domain, service, entityId);
+        void this.callServiceTracked(entityId, domain, service).catch(() => undefined);
       }
     }, delayMs);
     this.serviceDebounceTimers.set(key, timer);
@@ -1583,12 +1655,7 @@ export class CompositeDeviceEntity {
           this.setCommandLockout(entityId, "xy_color", payload.xy_color);
         if (payload.color_temp)
           this.setCommandLockout(entityId, "color_temp", payload.color_temp);
-        await this.platform.ha.callService(
-          "light",
-          "turn_on",
-          entityId,
-          payload,
-        );
+        await this.callServiceTracked(entityId, "light", "turn_on", payload);
       };
 
       const currentHs = () =>
@@ -1598,13 +1665,13 @@ export class CompositeDeviceEntity {
         this.assertMemberOnline(entityId, member);
         this.setCommandLockout(entityId, "onOff", true);
         this.cancelDebouncedService(entityId, "light", "turn_off");
-        this.callServiceDebounced(entityId, "light", "turn_on", undefined, 0);
+        await this.callServiceDebounced(entityId, "light", "turn_on", undefined, 0);
       });
       endpoint.addCommandHandler("off", async () => {
         this.assertMemberOnline(entityId, member);
         this.setCommandLockout(entityId, "onOff", false);
         this.cancelDebouncedService(entityId, "light", "turn_on");
-        this.callServiceDebounced(entityId, "light", "turn_off", undefined, 0);
+        await this.callServiceDebounced(entityId, "light", "turn_off", undefined, 0);
         if (endpoint.hasAttributeServer(OnOff.id, "onOff")) {
           void safeUpdateAttribute(endpoint, OnOff.id, "onOff", false, this.platform.log);
         }
@@ -1613,7 +1680,7 @@ export class CompositeDeviceEntity {
         this.assertMemberOnline(entityId, member);
         const isOn = this.states.get(entityId)?.state === "on";
         this.setCommandLockout(entityId, "onOff", !isOn);
-        this.callServiceDebounced(entityId, "light", isOn ? "turn_off" : "turn_on", undefined, 0);
+        await this.callServiceDebounced(entityId, "light", isOn ? "turn_off" : "turn_on", undefined, 0);
       });
 
       if (endpoint.hasAttributeServer(LevelControl.id, "currentLevel")) {
@@ -1624,7 +1691,7 @@ export class CompositeDeviceEntity {
             if (level === 0) {
               this.setCommandLockout(entityId, "onOff", false);
               this.cancelDebouncedService(entityId, "light", "turn_on");
-              this.callServiceDebounced(
+              await this.callServiceDebounced(
                 entityId,
                 "light",
                 "turn_off",
@@ -1638,7 +1705,7 @@ export class CompositeDeviceEntity {
             }
             const haBrightness = lightConverter.toHaBrightness(level);
             this.setCommandLockout(entityId, "brightness", haBrightness);
-            this.callServiceDebounced(
+              await this.callServiceDebounced(
               entityId,
               "light",
               "turn_on",
@@ -1656,7 +1723,7 @@ export class CompositeDeviceEntity {
               if (level === 0) {
                 this.setCommandLockout(entityId, "onOff", false);
                 this.cancelDebouncedService(entityId, "light", "turn_on");
-                this.callServiceDebounced(
+                await this.callServiceDebounced(
                   entityId,
                   "light",
                   "turn_off",
@@ -1669,7 +1736,7 @@ export class CompositeDeviceEntity {
               } else if (level === 1) {
                 // Apple Home dimming to off sends level 1 before off. Debounce by 60ms so off can cancel it.
                 this.setCommandLockout(entityId, "brightness", 1);
-                this.callServiceDebounced(
+                await this.callServiceDebounced(
                   entityId,
                   "light",
                   "turn_on",
@@ -1726,10 +1793,10 @@ export class CompositeDeviceEntity {
                   state.attributes,
                 );
                 this.setCommandLockout(entityId, "color_temp", mireds);
-                await this.platform.ha.callService(
+                await this.callServiceTracked(
+                  entityId,
                   "light",
                   "turn_on",
-                  entityId,
                   { color_temp_kelvin: kelvin },
                 );
               } else {

@@ -144,7 +144,7 @@ describe("PetFeederEntity", () => {
   it("triggers button.press when on command is sent for button entity", async () => {
     const state = {
       entity_id: "button.feeder_feed",
-      state: "unknown",
+      state: "off",
       attributes: { friendly_name: "Pet Feeder Dispense" },
       last_changed: "",
       last_updated: "",

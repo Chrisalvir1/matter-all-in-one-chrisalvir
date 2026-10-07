@@ -46,27 +46,17 @@ export class HumidifierEntity extends BaseEntity {
     const [domain] = this.entityId.split(".");
 
     const turnOn = () => {
+      this.assertOnline();
       this.platform.log.debug(`Matter On commanded for ${this.entityId}`);
       this.setCommandLockout("onOff", true);
-      void this.platform.ha
-        .callService(domain, "turn_on", this.entityId)
-        .catch((err: any) => {
-          this.platform.log.warn(
-            `[${this.entityId}] Error turning on humidifier: ${err?.message ?? err}`,
-          );
-        });
+      void this.callServiceTracked(domain, "turn_on").catch(() => undefined);
     };
 
     const turnOff = () => {
+      this.assertOnline();
       this.platform.log.debug(`Matter Off commanded for ${this.entityId}`);
       this.setCommandLockout("onOff", false);
-      void this.platform.ha
-        .callService(domain, "turn_off", this.entityId)
-        .catch((err: any) => {
-          this.platform.log.warn(
-            `[${this.entityId}] Error turning off humidifier: ${err?.message ?? err}`,
-          );
-        });
+      void this.callServiceTracked(domain, "turn_off").catch(() => undefined);
     };
 
     const toggle = () => {

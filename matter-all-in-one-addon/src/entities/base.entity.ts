@@ -64,6 +64,11 @@ export class BaseEntity {
 
   private binarySensorLatchTimeout?: NodeJS.Timeout;
   private lastCommands = new Map<string, { value: any; timestamp: number }>();
+  private serviceFailure?: {
+    stateAtFailure: string;
+    desiredState?: "on" | "off";
+    sawUnavailable: boolean;
+  };
   public deviceType: DeviceTypeDefinition;
 
   private isDifferent(attribute: string, requested: any, actual: any): boolean {
@@ -415,7 +420,7 @@ export class BaseEntity {
     service: string,
     data?: Record<string, any>,
     delayMs = 60,
-  ) {
+  ): Promise<void> | undefined {
     if (service === "turn_on") {
       this.cancelDebouncedService("turn_off");
     } else if (service === "turn_off") {
@@ -427,19 +432,18 @@ export class BaseEntity {
 
     if (delayMs <= 0) {
       this.serviceDebounceTimers.delete(key);
-      void this.callServiceTracked(domain, service, data);
-      return;
+      return this.callServiceTracked(domain, service, data);
     }
 
     const timer = setTimeout(() => {
       this.serviceDebounceTimers.delete(key);
-      void this.callServiceTracked(domain, service, data);
+      void this.callServiceTracked(domain, service, data).catch(() => undefined);
     }, delayMs);
     this.serviceDebounceTimers.set(key, timer);
   }
 
   /** Keep BLE/service failures observable instead of creating unhandled promises. */
-  private callServiceTracked(
+  protected callServiceTracked(
     domain: string,
     service: string,
     data?: Record<string, any>,
@@ -447,13 +451,39 @@ export class BaseEntity {
     const request = data === undefined
       ? this.platform.ha.callService(domain, service, this.entityId)
       : this.platform.ha.callService(domain, service, this.entityId, data);
-    return request
-      .then(() => undefined)
-      .catch((error) => {
+    return request.then(() => {
+      this.serviceFailure = undefined;
+      (this.platform as any).clearEntityCommandFailure?.(this.entityId);
+      if (!isUnavailable(this.state)) void this.setReachability(true);
+    }).catch(async (error) => {
+        this.serviceFailure = {
+          stateAtFailure: this.state.state,
+          desiredState:
+            service === "turn_on" || service === "turn_off"
+              ? service === "turn_on" ? "on" : "off"
+              : undefined,
+          sawUnavailable: false,
+        };
+        this.lastCommands.delete(`${this.entityId}:onOff`);
+        if (data?.brightness !== undefined) {
+          this.lastCommands.delete(`${this.entityId}:brightness`);
+        }
+        await this.setReachability(false);
+        const message = `Matter command ${domain}.${service} failed in Home Assistant: ${String(error)}`;
+        (this.platform as any).recordEntityCommandFailure?.(this.entityId, message);
         this.platform.log?.warn?.(
           `[${this.entityId}] Home Assistant ${domain}.${service} failed (BLE/fan included): ${String(error)}`,
         );
+        throw error instanceof Error ? error : new Error(String(error));
       });
+  }
+
+  public get hasCommandCommunicationFailure(): boolean {
+    return this.serviceFailure !== undefined;
+  }
+
+  public noteHomeAssistantUnavailable(): void {
+    if (this.serviceFailure) this.serviceFailure.sawUnavailable = true;
   }
 
   public get isSoftwareUpdateBoot(): boolean {
@@ -477,6 +507,9 @@ export class BaseEntity {
         } else {
           await this.platform.ha.callService(domain, service, this.entityId);
         }
+        this.serviceFailure = undefined;
+        (this.platform as any).clearEntityCommandFailure?.(this.entityId);
+        if (!isUnavailable(this.state)) void this.setReachability(true);
         return;
       } catch (err: any) {
         if (attempt === maxRetries) {
@@ -489,8 +522,25 @@ export class BaseEntity {
           );
           await new Promise((r) => setTimeout(r, 600));
         }
+        if (attempt === maxRetries) {
+          this.serviceFailure = {
+            stateAtFailure: this.state.state,
+            desiredState:
+              service === "turn_on" || service === "turn_off"
+                ? service === "turn_on" ? "on" : "off"
+                : undefined,
+            sawUnavailable: false,
+          };
+          this.lastCommands.delete(`${this.entityId}:onOff`);
+          await this.setReachability(false);
+          const message = `Matter command ${domain}.${service} failed in Home Assistant after ${attempt} attempts: ${String(err)}`;
+          (this.platform as any).recordEntityCommandFailure?.(this.entityId, message);
+          throw err instanceof Error ? err : new Error(String(err));
+        }
       }
     }
+
+    throw new Error(`Home Assistant ${domain}.${service} failed without an error response`);
   }
 
   private lastFanCommandTime = 0;
@@ -624,7 +674,7 @@ export class BaseEntity {
         else if (domain === "light") {
           this.setCommandLockout("onOff", true);
           this.cancelDebouncedService("turn_off");
-          this.callServiceDebounced(domain, "turn_on", undefined, 0);
+          await this.callServiceDebounced(domain, "turn_on", undefined, 0);
         } else if (domain === "fan") {
           this.setCommandLockout("fan_state", true);
           this.setCommandLockout("onOff", true);
@@ -645,7 +695,7 @@ export class BaseEntity {
         else if (domain === "light") {
           this.setCommandLockout("onOff", false);
           this.cancelDebouncedService("turn_on");
-          this.callServiceDebounced(domain, "turn_off", undefined, 0);
+          await this.callServiceDebounced(domain, "turn_off", undefined, 0);
           if (this.endpoint.hasAttributeServer(OnOff.id, "onOff")) {
             void safeUpdateAttribute(this.endpoint, OnOff.id, "onOff", false, this.platform.log);
           }
@@ -673,7 +723,7 @@ export class BaseEntity {
           const isOn = this.state.state === "on";
           if (domain === "light") {
             this.setCommandLockout("onOff", !isOn);
-            this.callServiceDebounced(domain, isOn ? "turn_off" : "turn_on", undefined, 0);
+            await this.callServiceDebounced(domain, isOn ? "turn_off" : "turn_on", undefined, 0);
           } else {
             await this.platform.ha.callService(
               domain,
@@ -827,7 +877,7 @@ export class BaseEntity {
           if (typeof level === "number") {
             const haBrightness = lightConverter.toHaBrightness(level);
             this.setCommandLockout("brightness", haBrightness);
-            this.callServiceDebounced(
+            await this.callServiceDebounced(
               domain,
               "turn_on",
               { brightness: haBrightness },
@@ -845,11 +895,11 @@ export class BaseEntity {
               if (level === 0) {
                 this.setCommandLockout("onOff", false);
                 this.cancelDebouncedService("turn_on");
-                this.callServiceDebounced(domain, "turn_off", undefined, 0);
+                await this.callServiceDebounced(domain, "turn_off", undefined, 0);
               } else if (level === 1) {
                 // Apple Home dimming to off sends level 1 before off. Debounce by 60ms so off can cancel it.
                 this.setCommandLockout("brightness", 1);
-                this.callServiceDebounced(
+                await this.callServiceDebounced(
                   domain,
                   "turn_on",
                   { brightness: 1 },
@@ -858,7 +908,7 @@ export class BaseEntity {
               } else {
                 const haBrightness = lightConverter.toHaBrightness(level);
                 this.setCommandLockout("brightness", haBrightness);
-                this.callServiceDebounced(
+                await this.callServiceDebounced(
                   domain,
                   "turn_on",
                   { brightness: haBrightness },
@@ -879,12 +929,7 @@ export class BaseEntity {
             this.setCommandLockout("xy_color", payload.xy_color);
           if (payload.color_temp)
             this.setCommandLockout("color_temp", payload.color_temp);
-          await this.platform.ha.callService(
-            "light",
-            "turn_on",
-            this.entityId,
-            payload,
-          );
+          await this.callServiceTracked("light", "turn_on", payload);
         };
 
         const currentHs = () => lightColor.getHsColor(this.state) ?? [0, 100];
@@ -1290,6 +1335,22 @@ export class BaseEntity {
       this.state = newState;
       if (!this.endpoint) return;
 
+      if (this.serviceFailure) {
+        const failure = this.serviceFailure;
+        const stateConfirmsCommand =
+          failure.desiredState !== undefined &&
+          failure.stateAtFailure !== failure.desiredState &&
+          newState.state === failure.desiredState;
+        if (nowUnavailable) {
+          failure.sawUnavailable = true;
+        } else if (failure.sawUnavailable || stateConfirmsCommand) {
+          this.serviceFailure = undefined;
+        } else {
+          await this.setReachability(false);
+          return;
+        }
+      }
+
       if (nowUnavailable !== wasUnavailable || isInitialSync) {
         await this.setReachability(!nowUnavailable);
         if (nowUnavailable) {
@@ -1321,7 +1382,12 @@ export class BaseEntity {
               ? isFanOn(newState)
               : newState.state === "on";
 
-        if (domain === "light" && !isOn && this.hasActiveSegments()) {
+        if (
+          domain === "light" &&
+          newState.state !== "off" &&
+          !isOn &&
+          this.hasActiveSegments()
+        ) {
           isOn = true;
         }
 

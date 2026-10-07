@@ -39,6 +39,8 @@ describe("Light Entity Comprehensive Audit (18 Requirements)", () => {
         notice: vi.fn(),
         warn: vi.fn(),
       },
+      recordEntityCommandFailure: vi.fn(),
+      clearEntityCommandFailure: vi.fn(),
       ha: {
         callService: vi.fn().mockResolvedValue(undefined),
         hassEntities: new Map([
@@ -532,7 +534,7 @@ describe("Light Entity Comprehensive Audit (18 Requirements)", () => {
     );
   });
 
-  it("19. RGBIC light strip reports ON in Matter if any segment is ON even if master entity reports OFF", async () => {
+  it("19. Explicit OFF from the primary light remains authoritative when a stale segment reports ON", async () => {
     platform.entities = new Map();
     const segmentEntity = {
       entityId: "light.tira_larga_segment_1",
@@ -572,9 +574,9 @@ describe("Light Entity Comprehensive Audit (18 Requirements)", () => {
       last_updated: "",
     });
 
-    expect(ep.getAttribute(OnOff.id, "onOff")).toBe(true);
+    expect(ep.getAttribute(OnOff.id, "onOff")).toBe(false);
 
-    // Now turn off the segment
+    // The primary entity remains authoritative even while a cached segment is on.
     segmentEntity.state.state = "off";
     await mainEntity.updateState({
       entity_id: "light.tira_larga",
@@ -585,5 +587,50 @@ describe("Light Entity Comprehensive Audit (18 Requirements)", () => {
     });
 
     expect(ep.getAttribute(OnOff.id, "onOff")).toBe(false);
+  });
+
+  it("reports a failed HA power command and keeps the Matter endpoint unreachable until recovery", async () => {
+    const entity = await createLightEntity(
+      {
+        entity_id: "light.govee_rgb",
+        state: "on",
+        attributes: { brightness: 180, supported_color_modes: ["brightness"] },
+      },
+      MatterDeviceTypes.dimmableLight,
+    );
+    const setReachability = vi.spyOn(entity, "setReachability");
+    platform.ha.callService.mockRejectedValueOnce(
+      new Error("Govee device is offline"),
+    );
+
+    await expect(endpoint.invokeCommand("off")).rejects.toThrow(
+      "Govee device is offline",
+    );
+    expect(setReachability).toHaveBeenCalledWith(false);
+    expect(platform.recordEntityCommandFailure).toHaveBeenCalledWith(
+      "light.govee_rgb",
+      expect.stringContaining("light.turn_off failed"),
+    );
+    expect(entity.hasCommandCommunicationFailure).toBe(true);
+
+    await entity.updateState({
+      entity_id: "light.govee_rgb",
+      state: "on",
+      attributes: { brightness: 180, supported_color_modes: ["brightness"] },
+    });
+    expect(entity.hasCommandCommunicationFailure).toBe(true);
+
+    await entity.updateState({
+      entity_id: "light.govee_rgb",
+      state: "unavailable",
+      attributes: { friendly_name: "Govee" },
+    });
+    await entity.updateState({
+      entity_id: "light.govee_rgb",
+      state: "on",
+      attributes: { brightness: 180, supported_color_modes: ["brightness"] },
+    });
+    expect(entity.hasCommandCommunicationFailure).toBe(false);
+    expect(setReachability).toHaveBeenLastCalledWith(true);
   });
 });

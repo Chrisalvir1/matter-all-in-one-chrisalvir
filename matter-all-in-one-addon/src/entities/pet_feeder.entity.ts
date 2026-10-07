@@ -59,6 +59,7 @@ export class PetFeederEntity extends BaseEntity {
     const [domain] = this.entityId.split(".");
 
     endpoint.addCommandHandler("on", async () => {
+      this.assertOnline();
       try {
         if (domain === "button") {
           await this.platform.ha?.callService("button", "press", this.entityId);
@@ -76,10 +77,12 @@ export class PetFeederEntity extends BaseEntity {
         this.platform.log?.error?.(
           `[PetFeederEntity] Failed to trigger feed: ${err}`,
         );
+        throw err instanceof Error ? err : new Error(String(err));
       }
     });
 
     endpoint.addCommandHandler("off", async () => {
+      this.assertOnline();
       try {
         if (domain === "switch") {
           await this.platform.ha?.callService(
@@ -95,6 +98,7 @@ export class PetFeederEntity extends BaseEntity {
         this.platform.log?.error?.(
           `[PetFeederEntity] Failed off command: ${err}`,
         );
+        throw err instanceof Error ? err : new Error(String(err));
       }
     });
   }

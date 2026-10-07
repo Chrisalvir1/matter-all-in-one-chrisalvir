@@ -47,8 +47,9 @@ export interface HassEvent {
  */
 export function isUnavailable(state: HassState | null | undefined): boolean {
   if (!state) return true;
-  const s = String(state.state || "").trim().toLowerCase();
+  const s = String(state.state ?? "").trim().toLowerCase();
   if (
+    s === "" ||
     s === "unavailable" ||
     s === "unknown" ||
     s === "offline" ||
@@ -61,7 +62,8 @@ export function isUnavailable(state: HassState | null | undefined): boolean {
     if (
       state.attributes.available === false ||
       state.attributes.online === false ||
-      state.attributes.connected === false
+      state.attributes.connected === false ||
+      state.attributes.is_online === false
     ) {
       return true;
     }

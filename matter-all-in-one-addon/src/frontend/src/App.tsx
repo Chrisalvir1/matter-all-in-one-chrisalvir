@@ -49,6 +49,7 @@ export const App: React.FC = () => {
   const [isCameraUiModalOpen, setIsCameraUiModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isRefreshingDevices, setIsRefreshingDevices] = useState(false);
   const [ptzCameras, setPtzCameras] = useState<CameraPtzInfo[]>([]);
   const [systemInfo, setSystemInfo] = useState<SystemInfoResponse | null>(null);
   const [pairedProtocolFilter, setPairedProtocolFilter] = useState<"all" | "matter" | "hap">("all");
@@ -444,6 +445,19 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleRefreshDevices = async () => {
+    setIsRefreshingDevices(true);
+    try {
+      const result = await api.syncDevices();
+      await refreshAll();
+      showToast(`Actualización completada: ${result.entities} entidades de Home Assistant.`);
+    } catch (err: any) {
+      showToast(err.message || "No se pudieron actualizar los dispositivos de Home Assistant.", true);
+    } finally {
+      setIsRefreshingDevices(false);
+    }
+  };
+
   const handleRestartService = async () => {
     if (!confirm("¿Deseas reiniciar el servicio de Matter All-in-One?")) return;
     try {
@@ -502,8 +516,8 @@ export const App: React.FC = () => {
             onFilterChange={(filter) => {
               setActiveFilter(filter);
             }}
-            loading={loading}
-            onRefresh={refreshAll}
+            loading={loading || isRefreshingDevices}
+            onRefresh={handleRefreshDevices}
             filteredCount={totalVisibleCount}
             pairedProtocolFilter={pairedProtocolFilter}
             onPairedProtocolFilterChange={setPairedProtocolFilter}

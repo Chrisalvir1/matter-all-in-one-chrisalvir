@@ -95,6 +95,7 @@ import {
   getHaDeviceModel,
 } from "./utils/matter-device-identity.js";
 import { HAP_FIRMWARE_DISPLAY } from "./utils/hap-firmware.js";
+import { installMatterCommandResponsePolicy } from "./utils/matter-command-response.js";
 
 export interface HomeAssistantPlatformConfig extends PlatformConfig {
   host?: string; // Optional: auto-detected from network/supervisor if not set
@@ -249,7 +250,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   >();
   private stateUpdateFlushScheduled = false;
   private stateUpdateFlushInFlight?: Promise<void>;
-  private syncInFlight?: Promise<void>;
+  private syncInFlight?: Promise<boolean>;
   /** A connection event received during discovery requires a fresh snapshot. */
   private syncRequested = false;
   private syncRetryTimeout?: NodeJS.Timeout;
@@ -1276,6 +1277,53 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     }
   }
 
+  /** Record a failed device command and make the Matter endpoint report no response. */
+  public recordEntityCommandFailure(entityId: string, message: string): void {
+    this.recordEntityDiagnostic(entityId, message, "warning");
+  }
+
+  private installMatterCommandResponsePolicy(
+    endpoint: any,
+    entityId: string,
+    composite?: CompositeDeviceEntity,
+  ): void {
+    installMatterCommandResponsePolicy(endpoint, {
+      onFailure: async (command, error, late) => {
+        const entity = (this.entities.get(entityId) ??
+          this.mqttEntities.get(entityId)) as any;
+        const trackedFailure =
+          Boolean(entity?.hasCommandCommunicationFailure) ||
+          Boolean(composite?.hasCommandCommunicationFailure?.(entityId));
+        if (!trackedFailure) {
+          if (composite) {
+            await composite.setMemberReachability(entityId, false);
+            if (composite.primaryEntityId === entityId) {
+              await composite.setReachability(false);
+            }
+          } else {
+            await entity?.setReachability?.(false);
+          }
+          this.recordEntityCommandFailure(
+            entityId,
+            `Matter ${command} failed in Home Assistant${late ? " after Matter acknowledged it" : ""}: ${String(error)}`,
+          );
+        }
+        this.log.warn(
+          `[MatterCommand][${entityId}] ${command} failed${late ? " after the Matter acknowledgement" : ""}: ${String(error)}`,
+        );
+      },
+      onSlowCompletion: (command, durationMs) => {
+        this.log.debug(
+          `[MatterCommand][${entityId}] ${command} completed in Home Assistant after ${durationMs}ms; Matter was acknowledged within its response budget.`,
+        );
+      },
+    });
+  }
+
+  public clearEntityCommandFailure(entityId: string): void {
+    this.clearEntityProblem(entityId);
+  }
+
   private clearEntityProblem(entityId: string) {
     this.entityProblems.delete(entityId);
   }
@@ -1353,6 +1401,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         this.log.debug(`[Availability][HAP] ${entityId}: StatusActive=false, StatusFault=1`);
       }
       if (hasMatterExport) {
+        (entity as any)?.noteHomeAssistantUnavailable?.();
         if (entity && typeof (entity as any).setReachability === "function") {
           void (entity as any).setReachability(false);
         }
@@ -1363,6 +1412,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           compDevice &&
           typeof (compDevice as any).setReachability === "function"
         ) {
+          (compDevice as any).noteHomeAssistantUnavailable?.(entityId);
           if (typeof (compDevice as any).setMemberReachability === "function") {
             void (compDevice as any).setMemberReachability(entityId, false);
           }
@@ -1394,7 +1444,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       }
       return true;
     }
-    if (this.entityProblems.has(entityId)) {
+    const commandFailed =
+      Boolean(entity?.hasCommandCommunicationFailure) ||
+      Boolean((compDevice as any)?.hasCommandCommunicationFailure?.(entityId));
+    if (this.entityProblems.has(entityId) && !commandFailed) {
       this.clearEntityProblem(entityId);
     }
     const previousWasUnavailable =
@@ -1416,12 +1469,18 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           `Conexión restaurada con Home Assistant (estado: ${state.state})`,
           "info",
         );
-        if (hasMatterExport && entity && typeof (entity as any).setReachability === "function") {
+        if (
+          hasMatterExport &&
+          entity &&
+          !entity.hasCommandCommunicationFailure &&
+          typeof (entity as any).setReachability === "function"
+        ) {
           void (entity as any).setReachability(true);
         }
         if (
           hasMatterExport &&
           compDevice &&
+          !(compDevice as any).hasCommandCommunicationFailure?.(entityId) &&
           typeof (compDevice as any).setReachability === "function"
         ) {
           if (typeof (compDevice as any).setMemberReachability === "function") {
@@ -2769,12 +2828,18 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       // Restore reachability for exported entities that may have been marked unreachable
       for (const [entityId, entity] of this.entities) {
         if (!this.isEntityExported(entityId)) continue;
-        if (typeof (entity as any).setReachability === "function") {
+        if (
+          !(entity as any).hasCommandCommunicationFailure &&
+          typeof (entity as any).setReachability === "function"
+        ) {
           void (entity as any).setReachability(!isUnavailable(entity.state));
         }
       }
       for (const composite of this.compositeDevices.values()) {
-        if (typeof (composite as any).setReachability === "function") {
+        if (
+          !(composite as any).hasCommandCommunicationFailure?.() &&
+          typeof (composite as any).setReachability === "function"
+        ) {
           const st = this.entities.get(composite.primaryEntityId)?.state;
           void (composite as any).setReachability(!st || !isUnavailable(st));
         }
@@ -3521,23 +3586,46 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   /**
    * Discover entities from Home Assistant and sync them to Matter.
    */
-  private async discoverAndSync() {
+  private async discoverAndSync(): Promise<boolean> {
     this.syncRequested = true;
     if (this.syncInFlight) return this.syncInFlight;
 
     this.syncInFlight = (async () => {
+      let syncSucceeded = false;
       while (this.syncRequested && this.ha.connected) {
         this.syncRequested = false;
-        const recovered = await this.performDiscoverAndSync();
-        if (!recovered && this.ha.connected) {
+        syncSucceeded = await this.performDiscoverAndSync();
+        if (!syncSucceeded && this.ha.connected) {
           this.scheduleSyncRetry();
           break;
         }
       }
+      return syncSucceeded;
     })().finally(() => {
       this.syncInFlight = undefined;
     });
     return this.syncInFlight;
+  }
+
+  /** Fetch a fresh HA snapshot, discover new entities, and sync exported Matter endpoints. */
+  public async refreshHomeAssistantDevices(): Promise<{ success: true; entities: number }> {
+    if (!this.ha?.connected) {
+      throw new Error("Home Assistant is not connected; device discovery could not run.");
+    }
+
+    if (this.syncRetryTimeout) {
+      clearTimeout(this.syncRetryTimeout);
+      this.syncRetryTimeout = undefined;
+    }
+
+    const synced = await this.discoverAndSync();
+    if (!synced) {
+      throw new Error("Home Assistant did not return a complete device snapshot.");
+    }
+
+    await this.forceSyncAllEntities();
+    this.broadcastSseMessage("device_update", { origin: "manual_ha_sync" });
+    return { success: true, entities: this.entities.size };
   }
 
   private scheduleSyncRetry() {
@@ -4173,6 +4261,16 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           candidate.config?.primary_entity,
         );
         composite.adoptEndpoint(existingEndpoint);
+        for (const member of candidate.members) {
+          const memberEndpoint = composite.endpoints.get(member.entityId);
+          if (memberEndpoint) {
+            this.installMatterCommandResponsePolicy(
+              memberEndpoint,
+              member.entityId,
+              composite,
+            );
+          }
+        }
         this.compositeDevices.set(candidate.deviceId, composite);
         this.matterbridgeDevices.set(
           this.compositeStorageKey(candidate.deviceId),
@@ -4229,6 +4327,16 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       candidate.config?.primary_entity,
     );
     const endpoint = await composite.createEndpoint();
+    for (const member of candidate.members) {
+      const memberEndpoint = composite.endpoints.get(member.entityId);
+      if (memberEndpoint) {
+        this.installMatterCommandResponsePolicy(
+          memberEndpoint,
+          member.entityId,
+          composite,
+        );
+      }
+    }
     await this.prepareEndpointForRegistration(endpoint, candidate.deviceId);
     await this.registerDevice(endpoint);
     const serverNode = (endpoint as any).serverNode;
@@ -4302,6 +4410,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
     try {
       const endpoint = await entity.createEndpoint();
+      this.installMatterCommandResponsePolicy(endpoint, entityId);
       const existingEndpoint = endpoint.uniqueId
         ? this.getDeviceByUniqueId(endpoint.uniqueId)
         : endpoint.deviceName
@@ -4310,6 +4419,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
       if (!forceRecreate && existingEndpoint?.serverNode) {
         entity.adoptEndpoint(existingEndpoint);
+        this.installMatterCommandResponsePolicy(existingEndpoint, entityId);
         this.matterbridgeDevices.set(entityId, existingEndpoint);
         if (!existingEndpoint.serverNode.lifecycle?.isOnline) {
           try {
@@ -4374,6 +4484,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
     try {
       const endpoint = await entity.createEndpoint();
+      this.installMatterCommandResponsePolicy(endpoint, entityId);
       const existingEndpoint = endpoint.uniqueId
         ? this.getDeviceByUniqueId(endpoint.uniqueId)
         : endpoint.deviceName
@@ -4381,6 +4492,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           : undefined;
       if (existingEndpoint?.serverNode) {
         entity.adoptEndpoint(existingEndpoint);
+        this.installMatterCommandResponsePolicy(existingEndpoint, entityId);
         this.matterbridgeDevices.set(entityId, existingEndpoint);
         if (!existingEndpoint.serverNode.lifecycle?.isOnline) {
           try {
@@ -5981,15 +6093,20 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             const primaryState = this.entities.get(
               composite.primaryEntityId,
             )?.state;
-            if (primaryState && !isUnavailable(primaryState)) {
+            if (
+              primaryState &&
+              !isUnavailable(primaryState) &&
+              !(composite as any).hasCommandCommunicationFailure?.(composite.primaryEntityId)
+            ) {
               await (composite as any).setReachability?.(true);
             }
             for (const member of composite.members) {
               const memberState = this.entities.get(member.entityId)?.state;
-              if (memberState && !isUnavailable(memberState)) {
+              if (memberState) {
                 await (composite as any).setMemberReachability?.(
                   member.entityId,
-                  true,
+                  !isUnavailable(memberState) &&
+                    !(composite as any).hasCommandCommunicationFailure?.(member.entityId),
                 );
               }
             }
@@ -6010,7 +6127,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       tasks.push(
         (async () => {
           try {
-            if (!isUnavailable(entity.state)) {
+            if (
+              !isUnavailable(entity.state) &&
+              !entity.hasCommandCommunicationFailure
+            ) {
               await (entity as any).setReachability?.(true);
             }
             await entity.forceSyncStateToMatter?.();
@@ -6054,14 +6174,19 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                   `Composite runtime ${compositeDeviceId} is not attached.`,
                 );
               await composite.updateEntity(entityId, state);
-              if (!isUnavailable(state))
+              if (
+                !isUnavailable(state) &&
+                !composite.hasCommandCommunicationFailure(entityId)
+              )
                 this.clearMatterAccessoryProblems(entityId, compositeDeviceId);
               return;
             }
             const entity = this.entities.get(entityId);
             if (entity && this.isEntityExported(entityId)) {
               await entity.updateState(state);
-              if (!isUnavailable(state)) this.clearEntityProblem(entityId);
+              if (!isUnavailable(state) && !entity.hasCommandCommunicationFailure) {
+                this.clearEntityProblem(entityId);
+              }
             }
             // A native HAP accessory represents a Home Assistant device, not
             // only its primary entity. Forward changes from every discovered
@@ -6607,6 +6732,25 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           return;
         }
 
+        if (req.method === "POST" && pathname === "/api/custom/sync-devices") {
+          try {
+            const result = await this.refreshHomeAssistantDevices();
+            res.writeHead(200, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify(result));
+          } catch (err: any) {
+            res.writeHead(503, {
+              "Content-Type": "application/json; charset=utf-8",
+            });
+            res.end(JSON.stringify({
+              success: false,
+              error: err?.message || String(err),
+            }));
+          }
+          return;
+        }
+
         if (req.method === "GET" && pathname === "/api/custom/devices") {
           try {
             await this.refreshDiscoveryCatalog();
@@ -6682,20 +6826,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               (this.ha as any).hassEntities?.get(e.entityId)?.original_name ||
               e.entityId;
 
-            let effectiveState = e.state.state;
-            if (
-              domain === "light" &&
-              effectiveState !== "on" &&
-              (e as any).hasActiveSegments?.()
-            ) {
-              effectiveState = "on";
-            }
-
             return {
               entityId: e.entityId,
               name: friendlyName,
               domain: domain,
-              state: effectiveState,
+              state: e.state.state,
               attributes: { friendly_name: friendlyName, ...e.state.attributes },
               deviceTypeLabel: typeLabel,
               matterType:
