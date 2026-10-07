@@ -78,7 +78,7 @@ export const App: React.FC = () => {
     return {
       ...status,
       matterVersion: status.matterVersion || systemInfo?.matterVersion || "1.6.1",
-      matterbridgeVersion: status.matterbridgeVersion || systemInfo?.matterbridgeVersion || "3.10.11",
+      matterbridgeVersion: status.matterbridgeVersion || systemInfo?.matterbridgeVersion || "Desconocida",
     };
   }, [status, systemInfo]);
 

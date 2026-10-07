@@ -1785,7 +1785,16 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
   private startMatterConnectionMonitor() {
     if (this.matterConnectionMonitor) return;
+    let previousTick = performance.now();
     this.matterConnectionMonitor = setInterval(() => {
+      const now = performance.now();
+      const delayedByMs = now - previousTick - 4_000;
+      previousTick = now;
+      if (delayedByMs >= 500) {
+        this.log.warn(
+          `[RuntimeLatency] event_loop_delay_ms=${Math.round(delayedByMs)}; Matter and HAP responses may be delayed.`,
+        );
+      }
       this.ensureHaConnected();
       this.monitorMatterConnections();
     }, 4_000);
@@ -3579,6 +3588,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     } catch {}
 
     // 6. Stop intervals and close connections
+    if (this.pendingRestoreTimer) clearTimeout(this.pendingRestoreTimer);
+    this.pendingRestoreTimer = undefined;
     if (this.syncRetryTimeout) clearTimeout(this.syncRetryTimeout);
     if (this.matterConnectionMonitor)
       clearInterval(this.matterConnectionMonitor);
@@ -3590,7 +3601,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       ScryptedReconnectManager.getInstance().stop();
     } catch {}
     this.scryptedInitialized = false;
-    await this.ha?.close();
+    await this.ha?.close(
+      1000,
+      reason ? `Matterbridge shutdown: ${reason}` : "Platform shutdown",
+    );
     this.log.info("Shutdown completed cleanly.");
   }
 
@@ -4079,12 +4093,18 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   }
 
   private pendingRestoreTimer?: NodeJS.Timeout;
-  private schedulePendingRestore(): void {
+  private schedulePendingRestore(entityId: string): void {
+    if (!this.entities.has(entityId)) return;
+    const deviceId = this.ha.hassEntities.get(entityId)?.device_id;
+    if (!this.pendingRestore.has(entityId) &&
+        !(deviceId && this.pendingRestore.has(`device:${deviceId}`))) return;
     if (!this.pendingRestore.size || this.pendingRestoreTimer) return;
     this.pendingRestoreTimer = setTimeout(() => {
       this.pendingRestoreTimer = undefined;
       if (this.pendingRestore.size && this.ha?.connected)
-        void this.discoverAndSync();
+        void this.restoreExportedDevices().catch((error) =>
+          this.log.warn(`[Restore] Late accessory restore failed: ${String(error)}`),
+        );
     }, 5_000);
     this.pendingRestoreTimer.unref?.();
   }
@@ -5760,7 +5780,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       }
       // An entity may become available after HA's initial snapshot.
       void this.registerHAEntity(newState).then(() =>
-        this.schedulePendingRestore(),
+        this.schedulePendingRestore(entityId),
       );
       return;
     }
@@ -6498,7 +6518,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               version,
               matterVersion: "1.6.1",
               matterbridgeVersion:
-                this.matterbridge?.matterbridgeVersion || "3.10.11",
+                this.matterbridge?.matterbridgeVersion || "unknown",
               bridgeMode: this.matterbridge?.bridgeMode || "bridge",
               qrPairingCode: "",
               manualPairingCode: "",
@@ -6534,7 +6554,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             JSON.stringify({
               matterVersion: "1.6.1",
               matterbridgeVersion:
-                this.matterbridge?.matterbridgeVersion || "3.10.11",
+                this.matterbridge?.matterbridgeVersion || "unknown",
               timestamp: Date.now(),
             }),
           );

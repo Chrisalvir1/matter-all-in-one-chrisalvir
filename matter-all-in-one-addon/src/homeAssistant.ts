@@ -23,6 +23,7 @@
 
 import { EventEmitter } from "node:events";
 import { readFileSync } from "node:fs";
+import { isDeepStrictEqual } from "node:util";
 
 import {
   AnsiLogger,
@@ -1561,13 +1562,34 @@ export class HomeAssistant extends EventEmitter {
     });
   }
 
+  private hasRegistryChanged<T>(
+    current: Map<string, T>,
+    incoming: T[],
+    getId: (value: T) => string,
+  ): boolean {
+    if (current.size !== incoming.length) return true;
+    return incoming.some((value) => {
+      const previous = current.get(getId(value));
+      return previous === undefined || !isDeepStrictEqual(previous, value);
+    });
+  }
+
   private async onFetchTimeout() {
     this.fetchTimeout = undefined;
     this.log.debug(
       `Fetch timeout reached, processing fetch queue of ${this.fetchQueue.size} fetch id(s)...`,
     );
     let registryChanged = false;
+    let entityRegistryChanged = false;
     for (const fetchId of [...this.fetchQueue]) {
+      // entity_registry_updated used to enqueue get_states every time HA sent
+      // that event, even when the registry snapshot was identical. Large HA
+      // installations then fetched thousands of states repeatedly and caused
+      // a full Matter/HAP discovery cycle for no actual registry change.
+      if (fetchId === "get_states" && !entityRegistryChanged) {
+        this.fetchQueue.delete(fetchId);
+        continue;
+      }
       this.log.debug(`Fetching ${CYAN}${fetchId}${db}...`);
       try {
         const data = await this.fetch(fetchId);
@@ -1582,19 +1604,20 @@ export class HomeAssistant extends EventEmitter {
         } else if (fetchId === "config/device_registry/list") {
           const devices = data as HassDevice[];
           this.log.debug(`Received ${devices.length} devices.`);
-          this.hassDevices.clear();
-          devices.forEach((device) => this.hassDevices.set(device.id, device));
+          if (this.hasRegistryChanged(this.hassDevices, devices, (device) => device.id)) {
+            this.hassDevices = new Map(devices.map((device) => [device.id, device]));
+            registryChanged = true;
+          }
           this.emit("devices", devices);
-          registryChanged = true;
         } else if (fetchId === "config/entity_registry/list") {
           const entities = data as HassEntity[];
           this.log.debug(`Received ${entities.length} entities.`);
-          this.hassEntities.clear();
-          entities.forEach((entity) =>
-            this.hassEntities.set(entity.entity_id, entity),
-          );
+          if (this.hasRegistryChanged(this.hassEntities, entities, (entity) => entity.entity_id)) {
+            this.hassEntities = new Map(entities.map((entity) => [entity.entity_id, entity]));
+            registryChanged = true;
+            entityRegistryChanged = true;
+          }
           this.emit("entities", entities);
-          registryChanged = true;
         } else if (fetchId === "get_states") {
           const states = data as HassState[];
           this.hassStates.clear();
@@ -1602,21 +1625,22 @@ export class HomeAssistant extends EventEmitter {
             this.hassStates.set(state.entity_id, state),
           );
           this.emit("states", states);
-          registryChanged = true;
         } else if (fetchId === "config/area_registry/list") {
           const areas = data as HassArea[];
           this.log.debug(`Received ${areas.length} areas.`);
-          this.hassAreas.clear();
-          areas.forEach((area) => this.hassAreas.set(area.area_id, area));
+          if (this.hasRegistryChanged(this.hassAreas, areas, (area) => area.area_id)) {
+            this.hassAreas = new Map(areas.map((area) => [area.area_id, area]));
+            registryChanged = true;
+          }
           this.emit("areas", areas);
-          registryChanged = true;
         } else if (fetchId === "config/label_registry/list") {
           const labels = data as HassLabel[];
           this.log.debug(`Received ${labels.length} labels.`);
-          this.hassLabels.clear();
-          labels.forEach((label) => this.hassLabels.set(label.label_id, label));
+          if (this.hasRegistryChanged(this.hassLabels, labels, (label) => label.label_id)) {
+            this.hassLabels = new Map(labels.map((label) => [label.label_id, label]));
+            registryChanged = true;
+          }
           this.emit("labels", labels);
-          registryChanged = true;
         }
       } catch (error) {
         this.log.error(`Error fetching ${CYAN}${fetchId}${er}: ${error}`);
@@ -2016,7 +2040,7 @@ export class HomeAssistant extends EventEmitter {
         this.rejectPendingRequests(
           new Error("Home Assistant connection closed"),
         );
-        this.emit("disconnected", "WebSocket connection closed");
+        this.emit("disconnected", `Code: ${code} Reason: ${reason}`);
         this.log.info("Home Assistant connection closed");
       };
 
@@ -2238,12 +2262,15 @@ export class HomeAssistant extends EventEmitter {
     entityId: string,
     serviceData: Record<string, HomeAssistantPrimitive> = {},
   ): Promise<{ context: HassContext; response: unknown }> {
+    const queuedAt = Date.now();
+    this.log.info(`[HACommandTrace][${entityId}] queued service=${domain}.${service}`);
     const deviceId = this.hassEntities?.get(entityId)?.device_id;
     const queueKey = deviceId ? `dev:${deviceId}` : `ent:${entityId}`;
     const prevQueue =
       this.deviceCommandQueues.get(queueKey) ?? Promise.resolve();
 
     const executeCall = async () => {
+      this.log.info(`[HACommandTrace][${entityId}] dispatch service=${domain}.${service} queue_ms=${Date.now() - queuedAt}`);
       const payload = {
         type: "call_service",
         domain,
@@ -2290,6 +2317,10 @@ export class HomeAssistant extends EventEmitter {
     // visible with BLE devices: a service timeout is handled by the caller,
     // but an unhandled cleanup promise can still terminate the bridge.
     void nextPromise
+      .then(
+        () => this.log.info(`[HACommandTrace][${entityId}] completed service=${domain}.${service} total_ms=${Date.now() - queuedAt}`),
+        () => this.log.warn(`[HACommandTrace][${entityId}] failed service=${domain}.${service} total_ms=${Date.now() - queuedAt}`),
+      )
       .finally(() => {
         if (this.deviceCommandQueues.get(queueKey) === nextPromise) {
           this.deviceCommandQueues.delete(queueKey);

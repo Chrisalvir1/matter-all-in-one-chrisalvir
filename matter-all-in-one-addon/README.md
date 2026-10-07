@@ -1,11 +1,11 @@
-# Matter All-in-One for Home Assistant — v1.9.53
+# Matter All-in-One for Home Assistant — v2.0.2
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/chrisalvir1/matter-all-in-one-chrisalvir/main/matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
 </div>
 
 > Puente Matter 1.6 para Home Assistant con código QR independiente para apagadores dobles/triples, perfiles conservadores para Apple Home y modelo/marca real en el campo Model.
-> **Base:** `matterbridge@3.10.11` · **Node.js:** `24.21.0-alpine3.24` · **TypeScript:** `7.0.2` · **Spec:** Matter 1.6 (CSA, 17 Jun 2026)
+> **Base:** `matterbridge@3.10.12` · **Node.js:** `24.21.0-alpine3.24` · **TypeScript:** `7.0.2` · **Spec:** Matter 1.6.1
 
 ---
 
@@ -15,10 +15,10 @@ This file is intentionally structured for both humans and AI agents.
 
 ```yaml
 project: matter-all-in-one-chrisalvir
-version: "1.9.53"
-spec: "Matter 1.6"
+version: "2.0.2"
+spec: "Matter 1.6.1"
 engine: matterbridge
-engine_version: "3.10.11"
+engine_version: "3.10.12"
 node_image: "node:24.21.0-alpine3.24"
 bridge_mode: server       # Each HA device = ServerNode; standalone entities keep their own QR
 plugin_mode: dynamic      # MatterbridgeDynamicPlatform
@@ -54,7 +54,7 @@ remounted only after an explicit stream-source edit or live verification.
 ## Minimum Requirements
 
 - **Apple Home:** HomePod mini / Apple TV 4K (Matter hub); Thread router only needed for Thread accessories.
-- **Matterbridge:** `>= 3.10.6`
+- **Matterbridge:** `>= 3.10.8` (runtime image uses `3.10.12`)
 - **Home Assistant:** `>= 2025.1`
 
 ---
@@ -87,7 +87,7 @@ HomeAssistantPlatform (MatterbridgeDynamicPlatform)
         └── CompositeDeviceEntity → Fan+Light grouped (ServerNode, own QR)
         │
         ▼
-matterbridge@3.10.2 (Matter SDK: @matter/node)
+matterbridge@3.10.12 (Matter SDK: @matter/node)
         │
         ▼
 Matter 1.6 Network (mDNS + BLE commissioning)
@@ -110,7 +110,7 @@ Matter 1.6 Network (mDNS + BLE commissioning)
 | `src/entities/composite-device.entity.ts` | Fan+Light grouped by HA device_id or explicit include list |
 | `src/converters/vacuum.converter.ts` | HA vacuum state → Matter RVC attributes |
 | `run.sh` | Startup: mDNS interface detection, plugin registration, proxy |
-| `Dockerfile` | Imagen multi-stage reproducible con `node:24.21.0-alpine3.24` y `matterbridge@3.10.11` |
+| `Dockerfile` | Imagen multi-stage reproducible con `node:24.21.0-alpine3.24` y `matterbridge@3.10.12` |
 
 ---
 
@@ -120,10 +120,10 @@ Matter 1.6 Network (mDNS + BLE commissioning)
 
 ```bash
 # 1. Instalar Matterbridge (última versión requerida)
-npm install -g matterbridge@3.10.10
+npm install -g matterbridge@3.10.12
 
 # 2. Instalar el plugin
-npm install -g matter-all-in-one-chrisalvir@1.4.64
+npm install -g matter-all-in-one-chrisalvir@2.0.2
 ```
 
 En Home Assistant, el add-on usa `ghcr.io/chrisalvir1/matter-all-in-one-chrisalvir` con un manifiesto multi-arquitectura para `amd64` y `aarch64`. Una actualización solo descarga la imagen precompilada desde GHCR — no recompila dependencias en el host.
@@ -138,6 +138,19 @@ npm update -g matter-all-in-one-chrisalvir
 ---
 
 ## Changelog Summary (latest)
+
+### v2.0.2 (2026-10-06) — respuestas HAP/Matter y sincronización
+
+- Limita a 750 ms la espera de los comandos HAP a Home Assistant y registra fallos inmediatos y tardíos.
+- Evita nuevos snapshots completos al restaurar dispositivos pendientes por eventos de otras entidades.
+- Añade trazas HAP/HA, avisos de demora del proceso y conserva las trazas Matter para localizar latencia.
+
+### v2.0.0 (2026-10-07) — estabilidad, sincronización y respuesta Siri/HomeKit
+
+- El botón **Actualizar** obtiene el estado de Home Assistant, descubre entidades nuevas y sincroniza los accesorios exportados sin reiniciar el addon.
+- Actualiza dependencias compatibles y mantiene Node.js en la línea LTS 24.
+- Mejora la respuesta de comandos Matter y registra fallos tardíos de Home Assistant.
+- Conserva estados explícitos y disponibilidad Govee/Tuya para evitar falsos estados encendidos.
 
 ### v1.8.37 (2026-09-20) — detección HKSV bajo demanda
 

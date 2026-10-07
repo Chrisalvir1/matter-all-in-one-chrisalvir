@@ -1,3 +1,13 @@
+## [2.0.2] - 2026-10-06
+
+### Respuestas HAP y carga compartida con Matter
+- Los comandos HAP de potencia, brillo, color, ventilador, humidificador, televisión y alarma esperan como máximo 750 ms a Home Assistant. Los errores inmediatos devuelven fallo HAP y los posteriores registran diagnóstico y pérdida de disponibilidad.
+- El humidificador conserva el estado de funcionamiento confirmado por Home Assistant durante un comando pendiente.
+- La aparición de una entidad pendiente restaura accesorios con el inventario recibido. Los eventos de entidades ajenas ya no disparan descargas y sincronizaciones completas por exportaciones ausentes.
+- Añadidas trazas HAP/HA y avisos de retraso del proceso para correlacionar las respuestas con las trazas Matter existentes.
+- Los registros idénticos de Home Assistant no vuelven a disparar descubrimiento completo; se conserva el motivo de cierre del WebSocket.
+- Actualizada la información del addon y eliminados valores de versión antiguos usados como fallback.
+
 ## [2.0.1] - 2026-10-06
 
 ### Diagnóstico de latencia de comandos Matter

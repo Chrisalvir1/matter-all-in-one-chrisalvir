@@ -200,6 +200,11 @@ export class HapGenericAccessory {
     this.addServiceForProfile(record.hapProfile);
     this.bindPrimaryHomeAssistantEntity();
     this.addDiscoveredSensorServices();
+    this.accessory.on("characteristic-warning", (warning) => {
+      this.platform.log?.warn?.(
+        `[HAPCommandTrace][${this.entityId}] warning=${warning.type} characteristic=${warning.characteristic.displayName}`,
+      );
+    });
     this.accessory.on("paired", () => {
       this.record.isPaired = true;
       this.record.lastUpdated = new Date().toISOString();
@@ -355,15 +360,45 @@ export class HapGenericAccessory {
     return Number.isFinite(value) && value >= 0 && value <= 100 ? value : undefined;
   }
 
-  private callHaOptimistically(
+  private async callHaWithResponseBudget(
     domain: string,
     service: string,
     data?: Record<string, unknown>,
-  ): void {
-    void this.platform.ha?.callService(domain, service, this.entityId, data)
-      ?.catch((error: unknown) => this.platform.log?.warn?.(
-        `[HAP][${this.entityId}] ${service} failed: ${String(error)}`,
-      ));
+  ): Promise<void> {
+    const startedAt = Date.now();
+    const command = `${domain}.${service}`;
+    this.platform.log?.info?.(`[HAPCommandTrace][${this.entityId}] start service=${command}`);
+    if (!this.platform.ha?.callService || this.platform.ha.connected === false) {
+      throw -70402; // HAP SERVICE_COMMUNICATION_FAILURE
+    }
+    const operation = Promise.resolve()
+      .then(() => this.platform.ha.callService(domain, service, this.entityId, data))
+      .then(
+        () => ({ failed: false as const }),
+        (error: unknown) => ({ failed: true as const, error }),
+      );
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const outcome = await Promise.race([
+      operation,
+      new Promise<undefined>((resolve) => {
+        timer = setTimeout(() => resolve(undefined), 750);
+      }),
+    ]);
+    if (timer) clearTimeout(timer);
+    const report = (failed: boolean, late: boolean) => {
+      this.platform.log?.info?.(`[HAPCommandTrace][${this.entityId}] ${late ? "ha_finished_after_handler" : "handler_returned"} service=${command} elapsed_ms=${Date.now() - startedAt} outcome=${failed ? "failed" : "completed"}`);
+      if (failed) {
+        this.setReachability(false);
+        this.platform.recordEntityCommandFailure?.(this.entityId, `HAP: Home Assistant failed to execute ${command}.`);
+      }
+    };
+    if (outcome === undefined) {
+      this.platform.log?.info?.(`[HAPCommandTrace][${this.entityId}] handler_returned_pending service=${command} elapsed_ms=${Date.now() - startedAt}`);
+      void operation.then((result) => report(result.failed, true)).catch(() => undefined);
+      return;
+    }
+    report(outcome.failed, false);
+    if (outcome.failed) throw -70402;
   }
 
   private bindPrimaryHomeAssistantEntity(): void {
@@ -373,11 +408,7 @@ export class HapGenericAccessory {
       service.getCharacteristic(characteristic)
         .onGet(() => state()?.state === "on" ? 1 : 0)
         .onSet(async (value: any) => {
-          await this.platform.ha?.callService(
-            domain,
-            value ? "turn_on" : "turn_off",
-            this.entityId,
-          );
+          await this.callHaWithResponseBudget(domain, value ? "turn_on" : "turn_off");
         });
     };
     switch (this.record.hapProfile) {
@@ -389,12 +420,12 @@ export class HapGenericAccessory {
           bindPower(service, Characteristic.On);
           service.getCharacteristic(Characteristic.Brightness)
             .onGet(() => Math.round((Number(state()?.attributes?.brightness) || 0) * 100 / 255))
-            .onSet(async (value: any) => this.platform.ha?.callService("light", "turn_on", this.entityId, { brightness_pct: Number(value) }));
+            .onSet(async (value: any) => this.callHaWithResponseBudget("light", "turn_on", { brightness_pct: Number(value) }));
           const color = () => state()?.attributes?.hs_color;
           if (Array.isArray(color())) {
             service.getCharacteristic(Characteristic.Hue).onGet(() => Number(color()?.[0]) || 0);
             service.getCharacteristic(Characteristic.Saturation).onGet(() => Number(color()?.[1]) || 0);
-            const setColor = async () => this.platform.ha?.callService("light", "turn_on", this.entityId, {
+            const setColor = async () => this.callHaWithResponseBudget("light", "turn_on", {
               hs_color: [Number(service.getCharacteristic(Characteristic.Hue).value || 0), Number(service.getCharacteristic(Characteristic.Saturation).value || 0)],
             });
             service.getCharacteristic(Characteristic.Hue).onSet(setColor);
@@ -409,7 +440,7 @@ export class HapGenericAccessory {
           bindPower(service, Characteristic.Active);
           service.getCharacteristic(Characteristic.RotationSpeed)
             .onGet(() => Number(state()?.attributes?.percentage) || 0)
-            .onSet(async (value: any) => this.platform.ha?.callService(domain, "set_percentage", this.entityId, { percentage: Number(value) }));
+            .onSet(async (value: any) => this.callHaWithResponseBudget(domain, "set_percentage", { percentage: Number(value) }));
         }
         break;
       }
@@ -436,17 +467,15 @@ export class HapGenericAccessory {
         svc.getCharacteristic(Characteristic.Active)
           .onGet(() => {
             const ent = this.platform.entities.get(this.entityId);
+            this.platform.log?.info?.(
+              `[HAPCommandTrace][${this.entityId}] read characteristic=Active ha_state=${ent?.state?.state ?? "missing"}`,
+            );
             return ent?.state?.state === "on" ? 1 : 0;
           })
-          .onSet((value) => {
+          .onSet(async (value) => {
             const [domain] = this.entityId.split(".");
             const active = value === 1;
-            svc.updateCharacteristic(Characteristic.Active, active ? 1 : 0);
-            svc.updateCharacteristic(
-              Characteristic.CurrentHumidifierDehumidifierState,
-              active ? (profile === "humidifier" ? 2 : 3) : 1,
-            );
-            this.callHaOptimistically(domain, active ? "turn_on" : "turn_off");
+            await this.callHaWithResponseBudget(domain, active ? "turn_on" : "turn_off");
           });
 
         svc.getCharacteristic(Characteristic.CurrentHumidifierDehumidifierState)
@@ -473,10 +502,10 @@ export class HapGenericAccessory {
             const value = Number(this.platform.entities.get(this.entityId)?.state?.attributes?.humidity);
             return Number.isFinite(value) && value >= 0 && value <= 100 ? value : 0;
           })
-          .onSet((value) => {
+          .onSet(async (value) => {
             const [domain] = this.entityId.split(".");
             svc.updateCharacteristic(Characteristic.RelativeHumidityHumidifierThreshold, Number(value));
-            this.callHaOptimistically(domain, "set_humidity", { humidity: Number(value) });
+            await this.callHaWithResponseBudget(domain, "set_humidity", { humidity: Number(value) });
           });
 
         break;
@@ -506,9 +535,7 @@ export class HapGenericAccessory {
         tv.setCharacteristic(Characteristic.SleepDiscoveryMode, Characteristic.SleepDiscoveryMode.ALWAYS_DISCOVERABLE);
         tv.getCharacteristic(Characteristic.Active)
           .onGet(() => mediaState()?.state === "off" ? 0 : 1)
-          .onSet(async (value: any) => this.platform.ha?.callService(
-            "media_player", value ? "turn_on" : "turn_off", this.entityId,
-          ));
+          .onSet(async (value: any) => this.callHaWithResponseBudget("media_player", value ? "turn_on" : "turn_off"));
 
         const sources = Array.isArray(mediaState()?.attributes?.source_list)
           ? mediaState().attributes.source_list as string[]
@@ -518,17 +545,17 @@ export class HapGenericAccessory {
           .onGet(() => Math.max(1, sources.indexOf(activeSource()) + 1))
           .onSet(async (value: any) => {
             const source = sources[Number(value) - 1];
-            if (source) await this.platform.ha?.callService("media_player", "select_source", this.entityId, { source });
+            if (source) await this.callHaWithResponseBudget("media_player", "select_source", { source });
           });
 
         const speaker = this.accessory.addService(Service.TelevisionSpeaker, `${this.record.name} Audio`);
         speaker.setCharacteristic(Characteristic.VolumeControlType, Characteristic.VolumeControlType.ABSOLUTE);
         speaker.getCharacteristic(Characteristic.Mute)
           .onGet(() => Boolean(mediaState()?.attributes?.is_volume_muted))
-          .onSet(async (value: any) => this.platform.ha?.callService("media_player", "volume_mute", this.entityId, { is_volume_muted: Boolean(value) }));
+          .onSet(async (value: any) => this.callHaWithResponseBudget("media_player", "volume_mute", { is_volume_muted: Boolean(value) }));
         speaker.getCharacteristic(Characteristic.Volume)
           .onGet(() => Math.round((Number(mediaState()?.attributes?.volume_level) || 0) * 100))
-          .onSet(async (value: any) => this.platform.ha?.callService("media_player", "volume_set", this.entityId, { volume_level: Number(value) / 100 }));
+          .onSet(async (value: any) => this.callHaWithResponseBudget("media_player", "volume_set", { volume_level: Number(value) / 100 }));
         tv.addLinkedService(speaker);
 
         sources.forEach((source, index) => {
@@ -1247,10 +1274,9 @@ export class HapGenericAccessory {
     }
 
     try {
-      await this.platform.ha?.callService(
+      await this.callHaWithResponseBudget(
         "alarm_control_panel",
         service,
-        this.entityId,
         code ? { code } : undefined,
       );
       // Do not alter CurrentState here. Home Assistant is authoritative and

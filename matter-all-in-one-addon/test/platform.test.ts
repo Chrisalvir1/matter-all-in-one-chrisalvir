@@ -1214,3 +1214,36 @@ describe("HomeAssistantPlatform", () => {
     expect(unregSpy).toHaveBeenCalledWith(staleDevice);
   });
 });
+
+describe("Late accessory restoration does not restart discovery", () => {
+  afterEach(() => vi.useRealTimers());
+
+  function restorationFixture() {
+    return {
+      entities: new Map([["switch.missing", {}], ["sensor.unrelated", {}]]),
+      pendingRestore: new Set(["switch.missing"]),
+      ha: { connected: true, hassEntities: new Map() },
+      restoreExportedDevices: vi.fn().mockResolvedValue(undefined),
+      discoverAndSync: vi.fn(),
+      log: { warn: vi.fn() },
+    } as any;
+  }
+
+  it("ignores unrelated state events while an accessory is missing", async () => {
+    vi.useFakeTimers();
+    const p = restorationFixture();
+    (HomeAssistantPlatform.prototype as any).schedulePendingRestore.call(p, "sensor.unrelated");
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(p.restoreExportedDevices).not.toHaveBeenCalled();
+    expect(p.discoverAndSync).not.toHaveBeenCalled();
+  });
+
+  it("restores a late accessory from the received inventory without fetching a full snapshot", async () => {
+    vi.useFakeTimers();
+    const p = restorationFixture();
+    (HomeAssistantPlatform.prototype as any).schedulePendingRestore.call(p, "switch.missing");
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(p.restoreExportedDevices).toHaveBeenCalledOnce();
+    expect(p.discoverAndSync).not.toHaveBeenCalled();
+  });
+});
