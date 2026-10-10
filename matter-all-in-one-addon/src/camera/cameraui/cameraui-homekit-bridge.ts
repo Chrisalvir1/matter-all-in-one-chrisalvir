@@ -463,6 +463,34 @@ export class CameraUiHomeKitBridge {
     };
 
 
+    const cameraEntityId = `camera.${camera.id.replace(/[^a-z0-9_]/gi, "_").toLowerCase()}`;
+    const savedHomeKitRecord = platform?.homekitCameraRecords
+      ? (Array.from(
+          platform.homekitCameraRecords.values(),
+        ) as HomeKitCameraStorageRecord[])
+          .filter(
+            (saved) =>
+              saved.entityId === cameraEntityId ||
+              saved.cameraUiCameraId === camera.id ||
+              Boolean(haEntityId && saved.sourceCameraEntityId === haEntityId),
+          )
+          .sort((a, b) => Number(Boolean(b.isPaired)) - Number(Boolean(a.isPaired)))[0]
+      : undefined;
+
+    // Camera.UI can temporarily lose its inventory while its service restarts.
+    // Recover the original HAP identity from the add-on's independent durable
+    // HomeKit registry before generating any identity for this camera. HAP's
+    // pairing database is keyed to this identity, so changing it would force a
+    // re-pair even if HomeKit still has the old accessory saved.
+    if (savedHomeKitRecord) {
+      camera.uuid = savedHomeKitRecord.uuid;
+      camera.username = savedHomeKitRecord.username;
+      camera.pincode = savedHomeKitRecord.pincode;
+      camera.setupId = savedHomeKitRecord.setupId;
+      camera.port = savedHomeKitRecord.port;
+      camera.isPaired = savedHomeKitRecord.isPaired ?? camera.isPaired;
+    }
+
     // Allocate persistent HomeKit configuration if not assigned
     if (!camera.port) {
       camera.port = this.allocateNextPort(platform);
@@ -502,7 +530,7 @@ export class CameraUiHomeKitBridge {
     const record: HomeKitCameraStorageRecord = {
       // Camera.UI IDs are UUIDs, and their hyphens make an invalid HA entity_id.
       // Keep the original ID separately for Camera.UI storage and HAP lookups.
-      entityId: `camera.${camera.id.replace(/[^a-z0-9_]/gi, "_").toLowerCase()}`,
+      entityId: cameraEntityId,
       cameraUiCameraId: camera.id,
       sourceCameraEntityId: haEntityId,
       uuid: camera.uuid,
@@ -539,6 +567,34 @@ export class CameraUiHomeKitBridge {
         camera.realEntities?.find((entity) => entity.type === "siren")?.id,
       realEntities: camera.realEntities,
     };
+    if (savedHomeKitRecord) {
+      // Preserve Home Hub recording choices and other durable HomeKit state,
+      // while keeping the refreshed source metadata and recovered identity.
+      Object.assign(record, savedHomeKitRecord, {
+        entityId: cameraEntityId,
+        cameraUiCameraId: camera.id,
+        sourceCameraEntityId:
+          haEntityId || savedHomeKitRecord.sourceCameraEntityId,
+        uuid: camera.uuid,
+        username: camera.username,
+        pincode: camera.pincode,
+        setupId: camera.setupId,
+        port: camera.port,
+        name: camera.name,
+        published: false,
+        isPaired: camera.isPaired ?? false,
+        strategy: chosenStrategy,
+        state: "idle",
+        motionEntityId: record.motionEntityId,
+        lightEntityId: record.lightEntityId,
+        sirenEntityId: record.sirenEntityId,
+        realEntities: camera.realEntities,
+      });
+    }
+
+    // Register before publish: HAP pairing/unpairing events persist through
+    // this map, including during an immediate controller reconnect.
+    platform?.homekitCameraRecords?.set(record.entityId, record);
 
     const accessory = new HomeKitCameraAccessory(
       platform,
@@ -551,6 +607,9 @@ export class CameraUiHomeKitBridge {
     await accessory.publish();
     camera.setupUri = accessory.setupUri;
     camera.isPaired = accessory.isPaired();
+    record.published = true;
+    record.isPaired = camera.isPaired;
+    await platform?.saveHomeKitCameraRecords?.();
     this.activeAccessories.set(camera.id, accessory);
     this.motionStates.set(camera.id, false);
 

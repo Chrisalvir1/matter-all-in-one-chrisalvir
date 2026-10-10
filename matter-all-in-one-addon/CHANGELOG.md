@@ -1,3 +1,10 @@
+## [2.0.4] - 2026-10-10
+
+### Corregido
+- Camera.UI ahora reintenta el descubrimiento si Home Assistant inicia antes que el servicio de cámaras o este aún no devuelve cámaras.
+- Al recuperar la lista, el complemento restaura automáticamente los accesorios HAP de cámara sin requerir reiniciar Matter All-in-One.
+- Recupera UUID, identidad HAP, puerto y estado de emparejamiento guardados para que Casa reconozca las cámaras ya enlazadas.
+
 ## [2.0.3] - 2026-10-10
 
 ### Recuperación del video de Tapo C402 en HomeKit

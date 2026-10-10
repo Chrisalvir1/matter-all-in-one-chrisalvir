@@ -759,6 +759,71 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   }
 
   private cameraUiInitialized = false;
+  private cameraUiRetryTimer?: NodeJS.Timeout;
+  private cameraUiRetryAttempt = 0;
+  private cameraUiRetryInFlight = false;
+
+  private scheduleCameraUiRecoveryRetry(): void {
+    if (this.cameraUiRetryTimer) return;
+
+    const delayMs = Math.min(15_000 * 2 ** this.cameraUiRetryAttempt, 60_000);
+    this.cameraUiRetryAttempt++;
+    this.log.info(
+      `[Camera.UI] Camera discovery returned no cameras; retrying in ${Math.round(delayMs / 1000)}s.`,
+    );
+    this.cameraUiRetryTimer = setTimeout(() => {
+      this.cameraUiRetryTimer = undefined;
+      void this.retryCameraUiRecovery();
+    }, delayMs);
+    this.cameraUiRetryTimer.unref();
+  }
+
+  private async retryCameraUiRecovery(): Promise<void> {
+    if (this.cameraUiRetryInFlight) return;
+    this.cameraUiRetryInFlight = true;
+
+    try {
+      const store = await CameraUiStorage.load();
+      if (!store.config.enabled) return;
+
+      const client = new CameraUiClient(store.config);
+      const discovered = await client.fetchCameras();
+      if (discovered.length === 0) {
+        this.scheduleCameraUiRecoveryRetry();
+        return;
+      }
+
+      const previousSources = new Map(
+        store.cameras.map((camera) => [camera.id, camera.rtspUrl]),
+      );
+      const updatedStore = await CameraUiStorage.mergeDiscoveredCameras(discovered);
+      let mountedCount = 0;
+
+      for (const camera of updatedStore.cameras) {
+        if (!camera.homeKitEnabled) continue;
+        const previousSource = previousSources.get(camera.id);
+        const accessory = await CameraUiHomeKitBridge.mountCamera(this, camera, {
+          forceRemount:
+            previousSources.has(camera.id) && previousSource !== camera.rtspUrl,
+        });
+        if (accessory) mountedCount++;
+      }
+
+      this.cameraUiRetryAttempt = 0;
+      this.log.notice(
+        `[Camera.UI] Recovery succeeded: discovered ${discovered.length} camera(s) and mounted ${mountedCount} HomeKit camera(s).`,
+      );
+      this.broadcastSseMessage("cameraui_updated", {
+        cameras: updatedStore.cameras,
+        connectionStatus: "connected",
+      });
+    } catch (err) {
+      this.log.warn(`[Camera.UI] Recovery discovery failed: ${err}`);
+      this.scheduleCameraUiRecoveryRetry();
+    } finally {
+      this.cameraUiRetryInFlight = false;
+    }
+  }
 
   public async ensureGo2rtcStreamsRegistered(): Promise<void> {
     // This bridge must not seed go2rtc with guessed or historical camera URLs.
@@ -799,9 +864,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           this.log.warn(
             "[Camera.UI] Live source refresh returned no cameras; paired identities were kept and no legacy RTSP route will be mounted.",
           );
+          this.scheduleCameraUiRecoveryRetry();
         }
       } catch (err) {
         this.log.warn(`[Camera.UI] Live source refresh failed: ${err}`);
+        this.scheduleCameraUiRecoveryRetry();
       }
       this.log.info(
         `[Camera.UI] Fast Boot: ${store.cameras.length} camera records found. Initializing endpoints...`,
