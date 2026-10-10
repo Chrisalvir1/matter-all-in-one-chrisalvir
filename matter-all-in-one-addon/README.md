@@ -134,8 +134,8 @@ Matter 1.6 Network (mDNS + BLE commissioning)
 # 1. Instalar Matterbridge (última versión requerida)
 npm install -g matterbridge@3.10.13
 
-# 2. Instalar el plugin
-npm install -g matter-all-in-one-chrisalvir@2.1.0
+# 2. Instalar el plugin NPM independiente (su versión es distinta a la del add-on de HA)
+npm install -g matter-all-in-one-chrisalvir
 ```
 
 En Home Assistant, el add-on usa `ghcr.io/chrisalvir1/matter-all-in-one-chrisalvir` con un manifiesto multi-arquitectura para `amd64` y `aarch64`. Una actualización solo descarga la imagen precompilada desde GHCR — no recompila dependencias en el host.

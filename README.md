@@ -48,6 +48,8 @@ En Home Assistant, agrega este repositorio como repositorio de aplicaciones/add-
 
 La primera publicación de la imagen requiere que el paquete `ghcr.io/chrisalvir1/matter-all-in-one-chrisalvir` tenga visibilidad **Public** en GitHub Packages. El workflow comprueba el acceso anónimo y falla con una instrucción clara si todavía está privado.
 
+El número 2.1.0 corresponde al add-on de Home Assistant y su imagen GHCR. El plugin NPM independiente mantiene una versión separada.
+
 Para una instalación independiente de Matterbridge:
 
 ```bash
