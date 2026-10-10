@@ -275,3 +275,9 @@ npm update -g matter-all-in-one-chrisalvir
 - Entidades `light.*` RGB/HS/XY publican `ExtendedColorLight` con `ColorControl`. Govee RGBIC exportado correctamente.
 
 See [CHANGELOG.md](CHANGELOG.md) for full history.
+
+### Validación Raspberry Pi 5 / ARM64
+
+El complemento declara `aarch64` y `amd64`. `.github/workflows/arm64-validation.yml` construye la imagen en `ubuntu-24.04-arm`, comprueba Node.js 24.21.0, Matterbridge 3.10.13, los imports HAP/WebRTC/Scrypted y la ejecución de FFmpeg/ffprobe. Este workflow no publica imágenes ni conecta con Home Assistant o monta datos persistentes.
+
+Para reproducir el build en un equipo ARM64 de pruebas, desde `matter-all-in-one-addon/`, ejecutar `docker build --platform linux/arm64 --build-arg BUILD_ARCH=aarch64 --build-arg BUILD_VERSION=ci -t matter-arm64:ci .`. En x86_64 hace falta emulación ARM64 para ejecutar los stages. Un análisis estático del Dockerfile o tests x86_64 no validan el runtime ARM64, la Raspberry Pi, las cámaras ni los emparejamientos físicos. Antes de actualizar HA OS, conservar un backup completo descargado fuera del SSD y todo `/data` del complemento, incluyendo `.matterbridge`, `hap-persist` y los registros HAP.
