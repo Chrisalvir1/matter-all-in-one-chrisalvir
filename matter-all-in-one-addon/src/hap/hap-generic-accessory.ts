@@ -192,6 +192,7 @@ export class HapGenericAccessory {
   private valveDeadlineMs: number | undefined;
   private valveDurationTimer: ReturnType<typeof setInterval> | undefined;
   private valveClosePending = false;
+  private valveCloseCallStarted = false;
 
   constructor(
     public readonly platform: any,
@@ -1251,10 +1252,10 @@ export class HapGenericAccessory {
     if (active && this.valveSetDurationSeconds > 0) {
       await this.persistValveDeadline(Date.now() + this.valveSetDurationSeconds * 1000);
     } else if (!active) {
-      const scheduledCloseInProgress = this.valveClosePending;
+      const scheduledCloseCallInFlight = this.valveClosePending && this.valveCloseCallStarted;
       this.clearValveDurationTimer(false);
       await this.platform.saveHapAccessoryRecords?.();
-      if (scheduledCloseInProgress) return;
+      if (scheduledCloseCallInFlight) return;
     }
     try {
       await this.callHaWithResponseBudget(domain, service);
@@ -1367,7 +1368,13 @@ export class HapGenericAccessory {
         if (!this.platform.ha?.callService) throw new Error("Home Assistant service client is unavailable");
         this.record.valveCloseAttempts = attempts + 1;
         await this.platform.saveHapAccessoryRecords?.();
-        await this.platform.ha.callService(domain, serviceName, this.entityId);
+        if (!this.valveClosePending) return;
+        this.valveCloseCallStarted = true;
+        try {
+          await this.platform.ha.callService(domain, serviceName, this.entityId);
+        } finally {
+          this.valveCloseCallStarted = false;
+        }
         if (!this.valveClosePending) return;
         delete this.record.valveDeadlineAt;
         delete this.record.valveCloseAttempts;
@@ -1383,6 +1390,7 @@ export class HapGenericAccessory {
     }
 
     this.valveClosePending = false;
+    this.valveCloseCallStarted = false;
     this.valveDeadlineMs = Number(this.record.valveDeadlineAt) || Date.now();
     if (attempts >= 3) this.record.valveCloseAttempts = 3;
     await this.platform.saveHapAccessoryRecords?.();
