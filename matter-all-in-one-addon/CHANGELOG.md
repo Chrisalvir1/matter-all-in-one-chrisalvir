@@ -1,3 +1,10 @@
+## [2.0.3] - 2026-10-10
+
+### Recuperación del video de Tapo C402 en HomeKit
+- Se solicita un stream HLS nuevo a Home Assistant para Tapo C402/C120 aunque la entidad no anuncie la capacidad `STREAM`; el proxy continuo de Home Assistant sigue como alternativa.
+- Se corrige la decodificación del proxy de cámara: Home Assistant entrega imágenes JPEG y FFmpeg ahora usa el decodificador MJPEG.
+- Se adjunta el token de Home Assistant a las solicitudes HTTP/HLS protegidas realizadas por FFmpeg.
+
 ## [2.0.2] - 2026-10-06
 
 ### Respuestas HAP y carga compartida con Matter

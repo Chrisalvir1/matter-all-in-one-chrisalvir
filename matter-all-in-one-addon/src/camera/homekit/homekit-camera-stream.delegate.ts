@@ -1344,7 +1344,10 @@ export class HomeKitCameraStreamingDelegate
     }
 
     if (isHaProxyStream) {
-      args.push("-f", "image2pipe", "-c:v", "png", "-r", "15", "-i", "pipe:0");
+      // Home Assistant's continuous camera proxy emits multipart JPEG frames.
+      // The old PNG decoder rejected those frames, so HAP published but never
+      // received video when the C402 fell back from HLS to camera_proxy_stream.
+      args.push("-f", "image2pipe", "-c:v", "mjpeg", "-r", "15", "-i", "pipe:0");
     } else if (
       sourceUrl.startsWith("rtsp://") ||
       sourceUrl.startsWith("rtsps://")
@@ -1425,6 +1428,19 @@ export class HomeKitCameraStreamingDelegate
             "-headers",
             `Authorization: ${sToken.startsWith("Bearer ") ? sToken : `Bearer ${sToken}`}\r\n`,
           );
+        }
+      } else if (
+        this.entityId.startsWith("camera.") ||
+        this.streamSource.metadata?.sourceCameraEntityId ||
+        this.streamSource.metadata?.isDirectHa
+      ) {
+        // HA's camera/stream URLs are protected by the HA API token. Refreshing
+        // the URL per HomeKit session is insufficient if FFmpeg omits auth.
+        const token =
+          this.platform?.ha?.getAccessToken?.() ||
+          this.platform?.ha?.wsAccessToken;
+        if (token) {
+          args.push("-headers", `Authorization: Bearer ${token}\r\n`);
         }
       }
       args.push("-i", sourceUrl);

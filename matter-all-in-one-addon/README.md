@@ -1,4 +1,4 @@
-# Matter All-in-One for Home Assistant — v2.0.2
+# Matter All-in-One for Home Assistant — v2.0.3
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/chrisalvir1/matter-all-in-one-chrisalvir/main/matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
@@ -15,7 +15,7 @@ This file is intentionally structured for both humans and AI agents.
 
 ```yaml
 project: matter-all-in-one-chrisalvir
-version: "2.0.2"
+version: "2.0.3"
 spec: "Matter 1.6.1"
 engine: matterbridge
 engine_version: "3.10.12"
@@ -123,7 +123,7 @@ Matter 1.6 Network (mDNS + BLE commissioning)
 npm install -g matterbridge@3.10.12
 
 # 2. Instalar el plugin
-npm install -g matter-all-in-one-chrisalvir@2.0.2
+npm install -g matter-all-in-one-chrisalvir@2.0.3
 ```
 
 En Home Assistant, el add-on usa `ghcr.io/chrisalvir1/matter-all-in-one-chrisalvir` con un manifiesto multi-arquitectura para `amd64` y `aarch64`. Una actualización solo descarga la imagen precompilada desde GHCR — no recompila dependencias en el host.
@@ -138,6 +138,11 @@ npm update -g matter-all-in-one-chrisalvir
 ---
 
 ## Changelog Summary (latest)
+
+### v2.0.3 (2026-10-10) — recuperación del video de Tapo C402
+
+- Renueva la fuente HLS de Home Assistant y autentica los streams protegidos.
+- Corrige la lectura del proxy continuo JPEG con el decodificador MJPEG de FFmpeg.
 
 ### v2.0.2 (2026-10-06) — respuestas HAP/Matter y sincronización
 

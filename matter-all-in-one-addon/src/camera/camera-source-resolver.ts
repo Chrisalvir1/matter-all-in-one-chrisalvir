@@ -29,10 +29,6 @@ export class CameraSourceResolver {
     const supportedFeatures = Number(attrs.supported_features || 0);
     const hasStreamSupport = (supportedFeatures & 2) !== 0; // CameraEntityFeature.STREAM = 2
 
-    const canAttemptStream =
-      hasStreamSupport ||
-      attrs.frontend_stream_type === "hls";
-
     // 0. Tapo C402 & C120: stream is served directly from Home Assistant
     const isTapoC402 = /(?:\bc402\b|tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle|tapo[-_ ]?frente)/i.test(
       `${entityId} ${attrs.friendly_name || ""}`,
@@ -41,7 +37,11 @@ export class CameraSourceResolver {
       `${entityId} ${attrs.friendly_name || ""}`,
     );
     if (isTapoC402 || isTapoC120) {
-      if (canAttemptStream && platform?.ha?.requestCameraStream) {
+      // Some camera integrations omit CameraEntityFeature.STREAM even though
+      // Home Assistant's camera/stream handler can still create a usable HLS
+      // stream. Try it after startup/reconnect instead of trusting a possibly
+      // stale feature bit; the authenticated camera proxy remains the fallback.
+      if (platform?.ha?.requestCameraStream) {
         try {
           const streamUrl = await platform.ha.requestCameraStream(entityId);
           if (streamUrl && typeof streamUrl === "string") {
@@ -78,6 +78,10 @@ export class CameraSourceResolver {
         };
       }
     }
+
+    const canAttemptStream =
+      hasStreamSupport ||
+      attrs.frontend_stream_type === "hls";
 
     // 1. Check state.attributes.stream_source
     const streamSourceAttr = attrs.stream_source;
