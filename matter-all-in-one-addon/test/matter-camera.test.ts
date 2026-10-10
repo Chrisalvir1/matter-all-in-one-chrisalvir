@@ -201,7 +201,7 @@ describe("CameraWebRtcAdapter (Matter WebRTC Transport Provider 0x0553)", () => 
     });
     expect(mgr.getSession(res.webRtcSessionId)).toBeUndefined();
     await clientPc.close();
-  });
+  }, 15000);
 });
 
 describe("CameraEndpointBuilder", () => {

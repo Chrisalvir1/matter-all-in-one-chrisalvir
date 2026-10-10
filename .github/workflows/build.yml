@@ -48,6 +48,32 @@ jobs:
       - name: Run unit tests
         run: npm run test
 
+      - name: Verify Matterbridge and WebRTC dependency versions
+        run: npm ls --depth=0 matterbridge werift @homebridge/hap-nodejs
+
       - name: Build add-on container
         if: matrix.os == 'ubuntu-latest'
         run: docker build --tag matter-all-in-one:test .
+
+  home-assistant-core-compatibility:
+    name: Home Assistant Core 2026.10.0 websocket contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: home-assistant/core
+          ref: 2026.10.0
+          path: home-assistant-core
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14.2'
+      - name: Install Home Assistant Core 2026.10.0 test dependencies
+        run: |
+          python -m pip install uv==0.12.19
+          cd home-assistant-core
+          uv pip install --system -r requirements.txt -r requirements_test.txt
+          uv pip install --system -e . --no-deps
+      - name: Verify websocket API contract
+        run: python -m pytest -q tests_core
