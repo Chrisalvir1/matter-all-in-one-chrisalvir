@@ -45,6 +45,11 @@ export interface HapAccessoryRecord {
   lastUpdated?: string;
   /** Home Assistant alarm code. Never reused as the HAP pairing PIN. */
   alarmCode?: string;
+  /** Persisted valve duration and absolute close deadline (Unix milliseconds). */
+  valveSetDurationSeconds?: number;
+  valveDeadlineAt?: number;
+  /** Number of persisted background close attempts for the current deadline. */
+  valveCloseAttempts?: number;
 }
 
 /**
@@ -183,6 +188,11 @@ export class HapGenericAccessory {
     { service: any; characteristic: any; read: (state: any) => unknown }
   >();
   private pendingAlarmTarget: number | undefined;
+  private valveSetDurationSeconds: number;
+  private valveDeadlineMs: number | undefined;
+  private valveDurationTimer: ReturnType<typeof setInterval> | undefined;
+  private valveClosePending = false;
+  private valveCloseCallStarted = false;
 
   constructor(
     public readonly platform: any,
@@ -195,6 +205,9 @@ export class HapGenericAccessory {
     const accUuid =
       record.uuid || uuid.generate(`homekit:generic:${entityId}`);
     this.record.uuid = accUuid;
+    this.valveSetDurationSeconds = this.isValidValveDuration(record.valveSetDurationSeconds)
+      ? record.valveSetDurationSeconds!
+      : 0;
     this.accessory = new Accessory(record.name || entityId, accUuid);
     this.configureAccessoryInformation();
     this.addServiceForProfile(record.hapProfile);
@@ -222,6 +235,7 @@ export class HapGenericAccessory {
         }
       }, 0);
     });
+    this.restoreValveDurationTimer();
   }
 
   // ──────────────────────────────────────────────
@@ -446,7 +460,39 @@ export class HapGenericAccessory {
       }
       case "valve_irrigation":
       case "valve_faucet":
-      case "valve_shower": bindPower(this.accessory.getService(Service.Valve), Characteristic.Active); break;
+      case "valve_shower": {
+        const service = this.accessory.getService(Service.Valve);
+        if (!service) break;
+        const active = () => this.isValveActive(state());
+        service.getCharacteristic(Characteristic.Active)
+          .onGet(() => active() ? 1 : 0)
+          .onSet(async (value: any) => this.setValveActive(value === 1));
+        service.getCharacteristic(Characteristic.InUse)
+          .onGet(() => active() ? 1 : 0);
+        service.getCharacteristic(Characteristic.SetDuration)
+          .onGet(() => this.valveSetDurationSeconds)
+          .onSet(async (value: any) => {
+            const raw = Number(value);
+            const seconds = Math.floor(raw);
+            const maximum = Number(service.getCharacteristic(Characteristic.SetDuration).props?.maxValue ?? 86_400);
+            if (!Number.isFinite(raw) || seconds < 0 || seconds > maximum) throw -70410;
+            this.valveSetDurationSeconds = seconds;
+            this.record.valveSetDurationSeconds = seconds;
+            if (active() && seconds > 0) {
+              await this.persistValveDeadline(Date.now() + seconds * 1000);
+              this.armValveDurationTicker(this.record.valveDeadlineAt!);
+            } else {
+              this.stopValveDurationTicker();
+              delete this.record.valveDeadlineAt;
+              delete this.record.valveCloseAttempts;
+              await this.platform.saveHapAccessoryRecords?.();
+              service.updateCharacteristic(Characteristic.RemainingDuration, 0);
+            }
+          });
+        service.getCharacteristic(Characteristic.RemainingDuration)
+          .onGet(() => this.getValveRemainingDuration());
+        break;
+      }
     }
   }
 
@@ -597,8 +643,10 @@ export class HapGenericAccessory {
           Service.Valve,
           this.record.name,
         );
-        svc.getCharacteristic(Characteristic.Active).setValue(0);
-        svc.getCharacteristic(Characteristic.InUse).setValue(0);
+        const initialState = this.getHomeAssistantState(this.entityId);
+        const initialActive = this.isValveActive(initialState);
+        svc.getCharacteristic(Characteristic.Active).setValue(initialActive ? 1 : 0);
+        svc.getCharacteristic(Characteristic.InUse).setValue(initialActive ? 1 : 0);
         svc.setCharacteristic(Characteristic.ValveType, valveType);
         break;
       }
@@ -1036,6 +1084,7 @@ export class HapGenericAccessory {
   }
 
   public async unpublish(): Promise<void> {
+    this.stopValveDurationTicker();
     try {
       await this.accessory.unpublish();
     } catch {
@@ -1079,6 +1128,10 @@ export class HapGenericAccessory {
       );
       if (this.record.hapProfile === "security_system") {
         this.syncAlarmState(state);
+        return;
+      }
+      if (this.isValveProfile()) {
+        this.syncValveState(state);
         return;
       }
       const on = state?.state === "on";
@@ -1137,6 +1190,218 @@ export class HapGenericAccessory {
         }
       }
     } catch {}
+  }
+
+  private isValveProfile(): boolean {
+    return this.record.hapProfile === "valve_irrigation" ||
+      this.record.hapProfile === "valve_faucet" ||
+      this.record.hapProfile === "valve_shower";
+  }
+
+  private isValveActive(state: any): boolean {
+    const value = String(state?.state ?? "").toLowerCase();
+    return value === "open" || value === "opening" || value === "closing" || value === "on";
+  }
+
+  private syncValveState(state: any): void {
+    const service = this.accessory.getService(Service.Valve);
+    if (!service) return;
+    const value = String(state?.state ?? "").toLowerCase();
+    if (value === "unavailable" || value === "unknown" || !value) {
+      this.setReachability(false);
+      return;
+    }
+    this.setReachability(true);
+    const active = this.isValveActive(state);
+    service.updateCharacteristic(Characteristic.Active, active ? 1 : 0);
+    service.updateCharacteristic(Characteristic.InUse, active ? 1 : 0);
+    if (active && Number.isFinite(this.record.valveDeadlineAt)) {
+      if (Number(this.record.valveCloseAttempts || 0) < 3) {
+        this.armValveDurationTicker(Number(this.record.valveDeadlineAt));
+      }
+    } else if (active && this.valveSetDurationSeconds > 0 && this.valveDeadlineMs === undefined) {
+      // A configured HAP duration also applies when the valve is opened outside
+      // HomeKit. Persist it before starting the close countdown.
+      const deadline = Date.now() + this.valveSetDurationSeconds * 1000;
+      this.valveDeadlineMs = deadline;
+      service.updateCharacteristic(Characteristic.RemainingDuration, this.getValveRemainingDuration());
+      void this.persistValveDeadline(deadline).then(() => {
+        if (
+          this.record.valveDeadlineAt === deadline &&
+          this.isValveActive(this.getHomeAssistantState(this.entityId))
+        ) {
+          this.armValveDurationTicker(deadline);
+        }
+      });
+    } else if (!active) {
+      this.clearValveDurationTimer();
+      service.updateCharacteristic(Characteristic.RemainingDuration, 0);
+    }
+  }
+
+  private async setValveActive(active: boolean): Promise<void> {
+    if (active && this.valveClosePending) {
+      // A close service is already in flight. Refuse to reopen until the
+      // reported state settles so the scheduled close cannot immediately win.
+      throw -70402;
+    }
+    const domain = this.entityId.split(".")[0];
+    const service = domain === "valve"
+      ? (active ? "open_valve" : "close_valve")
+      : (active ? "turn_on" : "turn_off");
+    if (active && this.valveSetDurationSeconds > 0) {
+      await this.persistValveDeadline(Date.now() + this.valveSetDurationSeconds * 1000);
+    } else if (!active) {
+      const scheduledCloseCallInFlight = this.valveClosePending && this.valveCloseCallStarted;
+      this.clearValveDurationTimer(false);
+      await this.platform.saveHapAccessoryRecords?.();
+      if (scheduledCloseCallInFlight) return;
+    }
+    try {
+      await this.callHaWithResponseBudget(domain, service);
+      if (active && Number.isFinite(this.record.valveDeadlineAt)) {
+        this.armValveDurationTicker(Number(this.record.valveDeadlineAt));
+      }
+    } catch (error) {
+      if (active) {
+        this.stopValveDurationTicker();
+        delete this.record.valveDeadlineAt;
+        await this.platform.saveHapAccessoryRecords?.();
+      }
+      throw error;
+    }
+  }
+
+  private getValveRemainingDuration(): number {
+    if (this.valveDeadlineMs === undefined) return 0;
+    return Math.max(0, Math.ceil((this.valveDeadlineMs - Date.now()) / 1000));
+  }
+
+  private isValidValveDuration(value: unknown): value is number {
+    return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 86_400;
+  }
+
+  private restoreValveDurationTimer(): void {
+    if (!this.isValveProfile()) return;
+    const deadline = this.record.valveDeadlineAt;
+    if (!Number.isFinite(deadline) || Number(deadline) <= 0) return;
+    const state = this.getHomeAssistantState(this.entityId);
+    const value = String(state?.state ?? "").toLowerCase();
+    if (value === "unavailable" || value === "unknown" || !value) return;
+    if (this.isValveActive(state)) {
+      if (Number(this.record.valveCloseAttempts || 0) < 3) {
+        this.armValveDurationTicker(Number(deadline));
+      }
+    } else {
+      this.clearValveDurationTimer();
+    }
+  }
+
+  private async persistValveDeadline(deadline: number): Promise<void> {
+    this.record.valveSetDurationSeconds = this.valveSetDurationSeconds;
+    this.record.valveDeadlineAt = deadline;
+    delete this.record.valveCloseAttempts;
+    await this.platform.saveHapAccessoryRecords?.();
+  }
+
+  private stopValveDurationTicker(): void {
+    if (this.valveDurationTimer) clearInterval(this.valveDurationTimer);
+    this.valveDurationTimer = undefined;
+    this.valveDeadlineMs = undefined;
+  }
+
+  private clearValveDurationTimer(persist = true): void {
+    this.stopValveDurationTicker();
+    this.valveClosePending = false;
+    const hadDeadline = this.record.valveDeadlineAt !== undefined || this.record.valveCloseAttempts !== undefined;
+    delete this.record.valveDeadlineAt;
+    delete this.record.valveCloseAttempts;
+    if (persist && hadDeadline) void this.platform.saveHapAccessoryRecords?.();
+  }
+
+  private armValveDurationTicker(deadline: number): void {
+    this.stopValveDurationTicker();
+    if (!Number.isFinite(deadline) || deadline <= 0) return;
+    this.valveDeadlineMs = deadline;
+    const service = this.accessory.getService(Service.Valve);
+    const tick = () => {
+      const remaining = this.getValveRemainingDuration();
+      service?.updateCharacteristic(Characteristic.RemainingDuration, remaining);
+      if (remaining > 0 || this.valveClosePending) return;
+      this.valveClosePending = true;
+      this.stopValveDurationTicker();
+      void this.closeValveAfterDuration();
+    };
+    this.valveDurationTimer = setInterval(tick, 1000);
+    tick();
+  }
+
+  private async closeValveAfterDuration(): Promise<void> {
+    const domain = this.entityId.split(".")[0];
+    const serviceName = domain === "valve" ? "close_valve" : "turn_off";
+    const currentState = this.getHomeAssistantState(this.entityId);
+    const currentValue = String(currentState?.state ?? "").toLowerCase();
+    if (["closed", "off", "idle", "closing"].includes(currentValue)) {
+      this.clearValveDurationTimer();
+      this.accessory.getService(Service.Valve)?.updateCharacteristic(Characteristic.RemainingDuration, 0);
+      return;
+    }
+
+    let lastError: unknown;
+    let attempts = Math.max(0, Math.min(3, Number(this.record.valveCloseAttempts) || 0));
+    for (; attempts < 3; attempts++) {
+      if (!this.valveClosePending) return;
+      try {
+        const state = this.getHomeAssistantState(this.entityId);
+        const value = String(state?.state ?? "").toLowerCase();
+        if (value === "unavailable" || value === "unknown" || !value || this.platform.ha?.connected === false) {
+          lastError = new Error("Home Assistant valve state is unavailable");
+          break;
+        }
+        if (["closed", "off", "idle", "closing"].includes(value)) {
+          this.clearValveDurationTimer();
+          this.accessory.getService(Service.Valve)?.updateCharacteristic(Characteristic.RemainingDuration, 0);
+          return;
+        }
+        if (!this.isValveActive(state)) throw new Error("Home Assistant valve state is not active");
+        if (!this.valveClosePending) return;
+        if (!this.platform.ha?.callService) throw new Error("Home Assistant service client is unavailable");
+        this.record.valveCloseAttempts = attempts + 1;
+        await this.platform.saveHapAccessoryRecords?.();
+        if (!this.valveClosePending) return;
+        this.valveCloseCallStarted = true;
+        try {
+          await this.platform.ha.callService(domain, serviceName, this.entityId);
+        } finally {
+          this.valveCloseCallStarted = false;
+        }
+        if (!this.valveClosePending) return;
+        delete this.record.valveDeadlineAt;
+        delete this.record.valveCloseAttempts;
+        this.valveClosePending = false;
+        this.valveDeadlineMs = undefined;
+        await this.platform.saveHapAccessoryRecords?.();
+        this.accessory.getService(Service.Valve)?.updateCharacteristic(Characteristic.RemainingDuration, 0);
+        return;
+      } catch (error) {
+        lastError = error;
+        if (attempts < 2) await new Promise((resolve) => setTimeout(resolve, 500 * (attempts + 1)));
+      }
+    }
+
+    this.valveClosePending = false;
+    this.valveCloseCallStarted = false;
+    this.valveDeadlineMs = Number(this.record.valveDeadlineAt) || Date.now();
+    if (attempts >= 3) this.record.valveCloseAttempts = 3;
+    await this.platform.saveHapAccessoryRecords?.();
+    this.setReachability(false);
+    this.platform.recordEntityCommandFailure?.(
+      this.entityId,
+      "HAP scheduled valve close failed after three attempts; it will not retry again for this timer. Verify the valve physically.",
+    );
+    this.platform.log?.warn?.(
+      `[HAP][${this.entityId}] scheduled close failed after 3 attempts (${lastError instanceof Error ? lastError.name : "unknown error"}).`,
+    );
   }
 
   private getSecuritySystemService(): any {

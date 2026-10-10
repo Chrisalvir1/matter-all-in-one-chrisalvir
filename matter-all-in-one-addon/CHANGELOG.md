@@ -5,6 +5,14 @@
 - Reintenta descubrir cámaras Camera.UI emparejadas que todavía no han reaparecido en el inventario después del arranque.
 - Permite montar cámaras Tapo sin una URL RTSP estática aunque el registro no incluya el indicador `sourceProvider`.
 
+## Próximo cambio (PR #23, sin publicar)
+
+### Válvulas HAP
+- Persisten la duración configurada y la fecha límite de cierre para recuperar temporizadores pendientes después de reiniciar el complemento.
+- El cierre programado comprueba el estado actual, evita comandos repetidos durante una operación pendiente y limita a tres los reintentos ante errores explícitos de Home Assistant.
+- La persistencia de los registros HAP ahora usa escritura atómica y permisos `0600`; se conservan UUID, credenciales e identidades existentes.
+- Si el estado no está disponible, el temporizador queda pendiente y se diagnostican los fallos de cierre. La solicitud a HA no garantiza un cierre físico.
+
 ## [2.0.4] - 2026-10-10
 
 ### Corregido
