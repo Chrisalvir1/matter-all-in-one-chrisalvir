@@ -4270,32 +4270,15 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         this.log.notice(
           `[Cleanup] Unregistering stale or conflicting Matter endpoint "${stale.deviceName}" (${stale.uniqueId}) before registering ${identifier}`,
         );
-        const serverNode = stale.serverNode;
-        if (serverNode?.lifecycle?.isOnline) {
-          try {
-            await Promise.race([
-              serverNode.close(),
-              new Promise<void>((r) => setTimeout(r, 2000)),
-            ]);
-          } catch (closeErr) {
-            this.log.debug(`[Cleanup] Error closing stale serverNode for ${identifier}: ${closeErr}`);
-          }
-        }
+        // Matterbridge 3.10.13 owns shutdown/destruction of dependent server
+        // nodes in unregisterDevice(). Calling serverNode.close() first races
+        // that lifecycle and can leave the old MatterNode registered.
         await this.unregisterDeviceBounded(stale, `stale endpoint for ${identifier}`);
       }
 
       // Also clean up from matterbridgeDevices map if an old reference lingered
       const inMemoryOld = this.matterbridgeDevices.get(identifier);
       if (inMemoryOld && inMemoryOld !== endpoint) {
-        const oldServer = (inMemoryOld as any).serverNode;
-        if (oldServer?.lifecycle?.isOnline) {
-          try {
-            await Promise.race([
-              oldServer.close(),
-              new Promise<void>((r) => setTimeout(r, 2000)),
-            ]);
-          } catch {}
-        }
         await this.unregisterDeviceBounded(inMemoryOld, `inMemoryOld for ${identifier}`);
         this.matterbridgeDevices.delete(identifier);
       }
@@ -4794,14 +4777,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         this.exportedDevices.delete(entityId);
         const endpoint = this.matterbridgeDevices.get(entityId);
         if (endpoint) {
-          const serverNode = (endpoint as any).serverNode;
-          if (serverNode?.lifecycle?.isOnline) {
-            await Promise.race([
-              serverNode.close(),
-              new Promise<void>((resolve) => setTimeout(resolve, 3000)),
-            ]);
-          }
-          await this.unregisterDevice(endpoint);
+          await this.unregisterDeviceBounded(endpoint, `manual MQTT unregister ${entityId}`);
           this.matterbridgeDevices.delete(entityId);
         }
         await this.saveExportedDevices();
@@ -4848,16 +4824,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       this.exportedDevices.delete(entityId);
       const endpoint = this.matterbridgeDevices.get(entityId);
       if (endpoint) {
-        // Server-mode endpoints are not stopped by Matterbridge's dynamic
-        // unregister path. Close this node first to avoid stale mDNS records.
-        const serverNode = (endpoint as any).serverNode;
-        if (serverNode?.lifecycle?.isOnline) {
-          await Promise.race([
-            serverNode.close(),
-            new Promise<void>((resolve) => setTimeout(resolve, 3000)),
-          ]);
-        }
-        await this.unregisterDevice(endpoint);
+        // Matterbridge 3.10.13 stops and destroys the dependent MatterNode as
+        // part of unregisterDevice(); don't close its ServerNode separately.
+        await this.unregisterDeviceBounded(endpoint, `manual unregister ${entityId}`);
         this.matterbridgeDevices.delete(entityId);
       }
       await this.saveExportedDevices();
@@ -4902,12 +4871,6 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       (this.matterbridgeDevices.get(key) as any) ||
       this.getDeviceByUniqueId(`device_${deviceId}`) ||
       this.getDeviceById(`device_${deviceId}`);
-    if (endpoint?.serverNode?.lifecycle?.isOnline) {
-      await Promise.race([
-        endpoint.serverNode.close(),
-        new Promise<void>((resolve) => setTimeout(resolve, 3000)),
-      ]);
-    }
     if (endpoint) await this.unregisterDeviceBounded(endpoint, `composite ${deviceId}`);
     this.matterbridgeDevices.delete(key);
 

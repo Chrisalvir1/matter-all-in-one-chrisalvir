@@ -249,7 +249,7 @@ describe("BaseEntity fan devices (On/Off vs MultiSpeed)", () => {
   it("adoptEndpoint updates softwareVersionString to current Matterbridge version and registers command handlers", async () => {
     const platformWithNewVersion = {
       ...platform,
-      matterbridge: { matterbridgeVersion: "3.10.12" },
+      matterbridge: { matterbridgeVersion: "3.10.13" },
     };
     const entity = new BaseEntity(
       platformWithNewVersion as any,
@@ -262,7 +262,7 @@ describe("BaseEntity fan devices (On/Off vs MultiSpeed)", () => {
 
     entity.adoptEndpoint(endpoint);
 
-    expect(endpoint.softwareVersionString).toBe("Matter 1.6.1 · Matterbridge 3.10.12");
+    expect(endpoint.softwareVersionString).toBe("Matter 1.6.1 · Matterbridge 3.10.13");
 
     // Verify toggle handler is available and functions
     await endpoint.invokeCommand("toggle");
