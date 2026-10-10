@@ -5,9 +5,11 @@ import { HapGenericAccessory, type HapAccessoryRecord } from "../src/hap/hap-gen
 function fixture(entityId = "valve.garden") {
   const state = { entity_id: entityId, state: "closed", attributes: {} };
   const callService = vi.fn().mockResolvedValue(undefined);
+  const saveHapAccessoryRecords = vi.fn().mockResolvedValue(undefined);
   const platform: any = {
     entities: new Map([[entityId, { state }]]),
     ha: { connected: true, hassStates: new Map([[entityId, state]]), hassEntities: new Map(), callService },
+    saveHapAccessoryRecords,
     log: { info: vi.fn(), warn: vi.fn() },
     recordEntityCommandFailure: vi.fn(),
   };
@@ -19,7 +21,13 @@ function fixture(entityId = "valve.garden") {
   } as HapAccessoryRecord;
   const accessory = new HapGenericAccessory(platform, entityId, record);
   const service = accessory.accessory.getService(Service.Valve)!;
-  return { accessory, callService, entityId, platform, record, service };
+  const updateState = (value: string) => {
+    const next = { entity_id: entityId, state: value, attributes: {} };
+    platform.ha.hassStates.set(entityId, next);
+    platform.entities.set(entityId, { state: next });
+    accessory.updateFromHassState(next);
+  };
+  return { accessory, callService, entityId, platform, record, service, updateState };
 }
 
 describe("HAP valve duration", () => {
@@ -32,20 +40,21 @@ describe("HAP valve duration", () => {
     await f.service.getCharacteristic(Characteristic.Active).handleSetRequest(1);
     expect(f.callService).toHaveBeenLastCalledWith("valve", "open_valve", f.entityId, undefined);
 
-    f.accessory.updateFromHassState({ entity_id: f.entityId, state: "open", attributes: {} });
+    f.updateState("open");
     expect(f.service.getCharacteristic(Characteristic.Active).value).toBe(1);
     expect(f.service.getCharacteristic(Characteristic.InUse).value).toBe(1);
     await vi.advanceTimersByTimeAsync(1000);
     expect(f.service.getCharacteristic(Characteristic.RemainingDuration).value).toBe(1);
     await vi.advanceTimersByTimeAsync(1000);
-    expect(f.callService).toHaveBeenLastCalledWith("valve", "close_valve", f.entityId, undefined);
+    expect(f.callService).toHaveBeenLastCalledWith("valve", "close_valve", f.entityId);
+    expect(f.record.valveDeadlineAt).toBeUndefined();
   });
 
   it("uses turn services for non-valve Home Assistant domains and cancels on manual close", async () => {
     vi.useFakeTimers();
     const f = fixture("switch.garden_valve");
     await f.service.getCharacteristic(Characteristic.SetDuration).handleSetRequest(1);
-    f.accessory.updateFromHassState({ entity_id: f.entityId, state: "on", attributes: {} });
+    f.updateState("on");
     await f.service.getCharacteristic(Characteristic.Active).handleSetRequest(0);
     expect(f.callService).toHaveBeenLastCalledWith("switch", "turn_off", f.entityId, undefined);
     await vi.advanceTimersByTimeAsync(2000);
@@ -56,9 +65,9 @@ describe("HAP valve duration", () => {
     vi.useFakeTimers();
     const f = fixture();
     await f.service.getCharacteristic(Characteristic.SetDuration).handleSetRequest(30);
-    f.accessory.updateFromHassState({ entity_id: f.entityId, state: "open", attributes: {} });
+    f.updateState("open");
     expect(f.service.getCharacteristic(Characteristic.RemainingDuration).value).toBe(30);
-    f.accessory.updateFromHassState({ entity_id: f.entityId, state: "closed", attributes: {} });
+    f.updateState("closed");
     expect(f.service.getCharacteristic(Characteristic.RemainingDuration).value).toBe(0);
     await vi.advanceTimersByTimeAsync(31000);
     expect(f.callService).not.toHaveBeenCalled();
@@ -71,4 +80,79 @@ describe("HAP valve duration", () => {
     expect(f.service.getCharacteristic(Characteristic.Active).value).toBe(0);
     expect(f.platform.ha.connected).toBe(true);
   });
+
+  it("persists the deadline and restores the pending close after a restart", async () => {
+    vi.useFakeTimers();
+    const first = fixture();
+    await first.service.getCharacteristic(Characteristic.SetDuration).handleSetRequest(2);
+    await first.service.getCharacteristic(Characteristic.Active).handleSetRequest(1);
+    first.updateState("open");
+    const persisted = JSON.parse(JSON.stringify(first.record)) as HapAccessoryRecord;
+    expect(persisted.valveSetDurationSeconds).toBe(2);
+    expect(persisted.valveDeadlineAt).toBeGreaterThan(Date.now());
+
+    const recovered = fixtureWithRecord(first.entityId, persisted, "open");
+    await vi.advanceTimersByTimeAsync(2000);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(recovered.callService).toHaveBeenCalledWith("valve", "close_valve", first.entityId);
+    expect(recovered.record.uuid).toBe(persisted.uuid);
+  });
+
+  it("keeps an expired timer through an unavailable state and closes after recovery", async () => {
+    vi.useFakeTimers();
+    const f = fixture();
+    await f.service.getCharacteristic(Characteristic.SetDuration).handleSetRequest(1);
+    await f.service.getCharacteristic(Characteristic.Active).handleSetRequest(1);
+    f.updateState("open");
+    f.updateState("unavailable");
+    await vi.advanceTimersByTimeAsync(1000);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.callService).toHaveBeenCalledTimes(1); // the opening command only
+    expect(f.record.valveDeadlineAt).toBeDefined();
+
+    f.platform.ha.connected = true;
+    f.updateState("open");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.callService).toHaveBeenLastCalledWith("valve", "close_valve", f.entityId);
+  });
+
+  it("retries a failed scheduled close at most three times and records a diagnostic", async () => {
+    vi.useFakeTimers();
+    const f = fixture();
+    f.callService.mockResolvedValueOnce(undefined);
+    f.callService.mockRejectedValue(new Error("offline"));
+    await f.service.getCharacteristic(Characteristic.SetDuration).handleSetRequest(1);
+    await f.service.getCharacteristic(Characteristic.Active).handleSetRequest(1);
+    f.updateState("open");
+    await vi.advanceTimersByTimeAsync(1000);
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(f.callService).toHaveBeenCalledTimes(4);
+    expect(f.record.valveCloseAttempts).toBe(3);
+    expect(f.platform.recordEntityCommandFailure).toHaveBeenCalledWith(
+      f.entityId,
+      expect.stringContaining("failed after three attempts"),
+    );
+    f.updateState("open");
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(f.callService).toHaveBeenCalledTimes(4);
+  });
 });
+
+function fixtureWithRecord(entityId: string, record: HapAccessoryRecord, initialState: string) {
+  const state = { entity_id: entityId, state: initialState, attributes: {} };
+  const callService = vi.fn().mockResolvedValue(undefined);
+  const platform: any = {
+    entities: new Map([[entityId, { state }]]),
+    ha: { connected: true, hassStates: new Map([[entityId, state]]), hassEntities: new Map(), callService },
+    log: { info: vi.fn(), warn: vi.fn() },
+    recordEntityCommandFailure: vi.fn(),
+    saveHapAccessoryRecords: vi.fn().mockResolvedValue(undefined),
+  };
+  const accessory = new HapGenericAccessory(platform, entityId, record);
+  return {
+    accessory,
+    callService,
+    record,
+    service: accessory.accessory.getService(Service.Valve)!,
+  };
+}

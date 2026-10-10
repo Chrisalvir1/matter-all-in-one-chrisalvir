@@ -85,6 +85,7 @@ import {
   type HapProfile,
   HAP_PROFILE_LABELS,
 } from "./hap/hap-generic-accessory.js";
+import { writeHapAccessoryRecords } from "./hap/hap-record-store.js";
 import { PtzZonesManager } from "./camera/ptz/ptz-zones-manager.js";
 import { PtzMqttPublisher } from "./camera/ptz/ptz-mqtt-publisher.js";
 import { isLegacyNumberedPtzDiscovery } from "./camera/ptz/ptz-legacy-discovery.js";
@@ -311,6 +312,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
    * desde este mapa — los dos subsistemas son independientes.
    */
   public readonly hapAccessoryRecords = new Map<string, HapAccessoryRecord>();
+  private hapAccessorySaveQueue: Promise<void> = Promise.resolve();
 
   /**
    * Runtime accessories currently published.  Keyed by entityId.
@@ -384,16 +386,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   }
 
   public async saveHapAccessoryRecords(): Promise<void> {
-    try {
+    this.hapAccessorySaveQueue = this.hapAccessorySaveQueue.then(async () => {
       const list = Array.from(this.hapAccessoryRecords.values());
-      await fs.writeFile(
-        "/data/homekit-accessories.json",
-        JSON.stringify(list, null, 2),
-        "utf8",
-      );
-    } catch (err) {
-      this.log.debug(`Failed to save homekit-accessories.json: ${err}`);
-    }
+      await writeHapAccessoryRecords("/data/homekit-accessories.json", list);
+    }).catch((err) => {
+      this.log.debug(`Failed to save homekit-accessories.json: ${err instanceof Error ? err.name : "unknown error"}`);
+    });
+    await this.hapAccessorySaveQueue;
   }
 
   public async loadHapAccessoryRecords(): Promise<void> {

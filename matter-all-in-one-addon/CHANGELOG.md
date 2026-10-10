@@ -8,6 +8,14 @@
 - Matterbridge 3.10.12 cambió el comportamiento anunciado del comando RVC `SkipArea`. Como la API genérica de Home Assistant no ofrece una acción portable para omitir áreas, el add-on ahora rechaza explícitamente ese comando en vez de dejar que se confirme sin efecto.
 - La validación física de Apple Casa, reinicio del add-on y accesorios Matter queda pendiente en Home Assistant.
 
+## Próximo cambio (PR #23, sin publicar)
+
+### Válvulas HAP
+- Persisten la duración configurada y la fecha límite de cierre para recuperar temporizadores pendientes después de reiniciar el complemento.
+- El cierre programado comprueba el estado actual, evita comandos repetidos durante una operación pendiente y limita a tres los reintentos ante errores explícitos de Home Assistant.
+- La persistencia de los registros HAP ahora usa escritura atómica y permisos `0600`; se conservan UUID, credenciales e identidades existentes.
+- Si el estado no está disponible, el temporizador queda pendiente y se diagnostican los fallos de cierre. La solicitud a HA no garantiza un cierre físico.
+
 ## [2.0.5] - 2026-10-09
 
 ### Corregido

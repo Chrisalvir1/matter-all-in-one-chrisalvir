@@ -39,6 +39,12 @@ matterbridge_ui_port: 8284
 | Thermostat Suggestions | Supported via Matterbridge 3.10.6 (`Thermostat.Feature.ThermostatSuggestions`). |
 | Security Sensor Event History | Not yet mapped — pending HA event_log integration. |
 
+### Válvulas HAP con duración
+
+Los perfiles HAP de válvula conservan `SetDuration` y `RemainingDuration` en el registro persistente ya usado por el accesorio. La fecha límite se escribe de forma atómica y con permisos de archivo privados; al reiniciar, el complemento reanuda el temporizador si Home Assistant informa que la válvula sigue abierta. Un cierre manual o un estado confirmado como cerrado cancela la fecha límite. Ante un error explícito de Home Assistant se intentan hasta tres llamadas de cierre y se registra un diagnóstico. Si la válvula está desconectada, el temporizador queda pendiente y se reanuda al recibir un estado disponible.
+
+El temporizador solo solicita a Home Assistant el servicio de cierre. No puede confirmar que una válvula física haya cerrado ni sustituye un controlador o mecanismo de seguridad certificado; verifica el estado físico y conserva protecciones independientes para agua/riego. Las identidades, UUID y datos de emparejamiento HAP existentes no cambian.
+
 ### Camera.UI / HomeKit stability
 
 Each camera uses its configured live-stream origin. Camera.UI cameras use the
