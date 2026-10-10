@@ -907,7 +907,7 @@ export class HomeKitCameraRecordingDelegate
           } else if (this.platform?.ha?.hassStates?.has("camera.tapo_c402")) {
             haEntityId = "camera.tapo_c402";
           } else {
-            haEntityId = "";
+            haEntityId = this.record.sourceCameraEntityId || "";
           }
         } else if (
           /(?:c120|spot)/i.test(`${this.entityId} ${this.record.name || ""}`)
@@ -921,7 +921,7 @@ export class HomeKitCameraRecordingDelegate
           } else if (this.platform?.ha?.hassStates?.has("camera.tapo_c120_hd")) {
             haEntityId = "camera.tapo_c120_hd";
           } else {
-            haEntityId = "";
+            haEntityId = this.record.sourceCameraEntityId || "";
           }
         }
       }
@@ -952,7 +952,15 @@ export class HomeKitCameraRecordingDelegate
               state,
             );
             if (fresh && fresh.url) {
-              this.streamSource = fresh;
+              this.streamSource = {
+                ...fresh,
+                metadata: {
+                  ...this.streamSource.metadata,
+                  ...fresh.metadata,
+                  sourceCameraEntityId:
+                    (fresh.metadata as any)?.sourceCameraEntityId || haEntityId,
+                },
+              };
               sourceUrl = fresh.url;
             }
           } catch {}

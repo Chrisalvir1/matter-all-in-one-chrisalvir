@@ -252,10 +252,17 @@ export class CameraUiHomeKitBridge {
     camera: CameraUiCameraRecord,
     options: { forceRemount?: boolean } = {},
   ): Promise<HomeKitCameraAccessory | undefined> {
-    // Cameras with sourceProvider "home_assistant" obtain their RTSP URL at
-    // stream-request time from camera-source-resolver. These cameras do NOT
-    // have a static rtspUrl in storage — skip the rtspUrl check for them.
-    const isHaSourceCamera = camera.sourceProvider === "home_assistant";
+    // HA-backed cameras (including Tapo models) resolve their source when
+    // HomeKit requests video and may not have a static RTSP URL in storage.
+    const cameraIdentity = `${camera.id} ${camera.name || ""}`;
+    const isC402 = /(?:\bc402\b|tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle)/i.test(
+      cameraIdentity,
+    );
+    const isC120 = /(?:\bc120\b|tapo[-_ ]?c120|tapo[-_ ]?spot|\bspot\b)/i.test(
+      cameraIdentity,
+    );
+    const isHaSourceCamera =
+      camera.sourceProvider === "home_assistant" || isC402 || isC120;
     if (!camera.homeKitEnabled || (!camera.rtspUrl && !isHaSourceCamera)) {
       return undefined;
     }
@@ -276,14 +283,7 @@ export class CameraUiHomeKitBridge {
     // HA-source cameras (e.g. C402) resolve the stream URL dynamically from
     // Home Assistant at stream-request time, so they never have a static
     // rtspUrl. Treat them as having a valid source so capabilities, HKSV and
-    const isC402 = /(?:c402|frente[-_ ]?de[-_ ]?calle)/i.test(
-      `${camera.id} ${camera.name || ""}`,
-    );
-    const isC120 = /(?:\bc120\b|tapo[-_ ]?c120|tapo[-_ ]?spot|\bspot\b)/i.test(
-      `${camera.id} ${camera.name || ""}`,
-    );
-    const isHomeAssistantSource =
-      camera.sourceProvider === "home_assistant" || isC402 || isC120;
+    const isHomeAssistantSource = isHaSourceCamera;
     const hasSource = Boolean(camera.rtspUrl) || isHomeAssistantSource;
 
 
@@ -457,6 +457,7 @@ export class CameraUiHomeKitBridge {
         streamProvider: camera.sourceProvider || "camera_ui",
         camerauiCameraId: camera.id,
         sourceCameraEntityId: haEntityId,
+        realEntities: camera.realEntities,
         hasDoorbell: Boolean(camera.doorbellTopic),
         model: camera.model || "Camera.UI Stream",
       },

@@ -118,6 +118,35 @@ describe("CameraSourceResolver", () => {
     expect(res.url).toBe(
       "http://127.0.0.1:8123/api/hls/test-stream/master.m3u8",
     );
+    expect(res.metadata?.sourceCameraEntityId).toBe(
+      "camera.playroom_camara_de_playroom",
+    );
+  });
+
+  it("requests Tapo HLS even when the integration omits the STREAM feature bit", async () => {
+    const mockPlatform = {
+      ha: {
+        requestCameraStream: vi
+          .fn()
+          .mockResolvedValue("http://127.0.0.1:8123/api/hls/c402/master.m3u8"),
+        getCameraProxyStreamUrl: vi.fn(),
+      },
+    };
+    const state = makeState({
+      friendly_name: "Tapo C402",
+      supported_features: 0,
+    });
+    const res = await CameraSourceResolver.resolve(
+      mockPlatform,
+      "camera.tapo_c402",
+      state,
+    );
+
+    expect(mockPlatform.ha.requestCameraStream).toHaveBeenCalledWith(
+      "camera.tapo_c402",
+    );
+    expect(res.sourceType).toBe("hls");
+    expect(res.metadata?.sourceCameraEntityId).toBe("camera.tapo_c402");
   });
 
   it("returns unknown when no stream endpoint can be resolved", async () => {

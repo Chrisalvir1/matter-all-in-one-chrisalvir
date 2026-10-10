@@ -763,13 +763,15 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   private cameraUiRetryAttempt = 0;
   private cameraUiRetryInFlight = false;
 
-  private scheduleCameraUiRecoveryRetry(): void {
+  private scheduleCameraUiRecoveryRetry(
+    reason = "Camera discovery returned no cameras",
+  ): void {
     if (this.cameraUiRetryTimer) return;
 
     const delayMs = Math.min(15_000 * 2 ** this.cameraUiRetryAttempt, 60_000);
     this.cameraUiRetryAttempt++;
     this.log.info(
-      `[Camera.UI] Camera discovery returned no cameras; retrying in ${Math.round(delayMs / 1000)}s.`,
+      `[Camera.UI] ${reason}; retrying in ${Math.round(delayMs / 1000)}s.`,
     );
     this.cameraUiRetryTimer = setTimeout(() => {
       this.cameraUiRetryTimer = undefined;
@@ -809,10 +811,36 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         if (accessory) mountedCount++;
       }
 
-      this.cameraUiRetryAttempt = 0;
-      this.log.notice(
-        `[Camera.UI] Recovery succeeded: discovered ${discovered.length} camera(s) and mounted ${mountedCount} HomeKit camera(s).`,
+      const activeCameraIds = new Set(
+        CameraUiHomeKitBridge.getAllAccessories().keys(),
       );
+      const pendingPairedCameras = Array.from(
+        this.homekitCameraRecords.values(),
+      ).filter(
+        (record) =>
+          Boolean(record.isPaired) &&
+          Boolean(record.cameraUiCameraId) &&
+          !activeCameraIds.has(record.cameraUiCameraId!),
+      );
+
+      if (pendingPairedCameras.length > 0) {
+        this.log.info(
+          `[Camera.UI] ${pendingPairedCameras.length} paired camera(s) are still missing from the live inventory; discovery will retry.`,
+        );
+        this.scheduleCameraUiRecoveryRetry(
+          `${pendingPairedCameras.length} paired camera(s) are still missing from the live inventory`,
+        );
+      } else {
+        this.cameraUiRetryAttempt = 0;
+      }
+
+      const recoveryMessage =
+        `[Camera.UI] Discovered ${discovered.length} camera(s) and mounted ${mountedCount} HomeKit camera(s).`;
+      if (pendingPairedCameras.length > 0) {
+        this.log.info(`${recoveryMessage} Recovery is partial; retries remain active.`);
+      } else {
+        this.log.notice(`${recoveryMessage} Recovery succeeded.`);
+      }
       this.broadcastSseMessage("cameraui_updated", {
         cameras: updatedStore.cameras,
         connectionStatus: "connected",

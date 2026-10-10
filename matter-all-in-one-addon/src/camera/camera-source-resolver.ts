@@ -54,7 +54,12 @@ export class CameraSourceResolver {
               snapshotUrl,
               supportsPassthrough: true,
               requiresBridge: true,
-              metadata: { isTapoC402, isTapoC120, isDirectHa: true },
+              metadata: {
+                isTapoC402,
+                isTapoC120,
+                isDirectHa: true,
+                sourceCameraEntityId: entityId,
+              },
             };
           }
         } catch (err) {
@@ -74,7 +79,12 @@ export class CameraSourceResolver {
           snapshotUrl,
           supportsPassthrough: false,
           requiresBridge: true,
-          metadata: { isTapoC402, isTapoC120, isDirectHa: true },
+          metadata: {
+            isTapoC402,
+            isTapoC120,
+            isDirectHa: true,
+            sourceCameraEntityId: entityId,
+          },
         };
       }
     }
@@ -220,6 +230,7 @@ export class CameraSourceResolver {
             snapshotUrl,
             supportsPassthrough: isH264,
             requiresBridge: true,
+            metadata: { sourceCameraEntityId: entityId },
           };
         }
       } catch (err) {

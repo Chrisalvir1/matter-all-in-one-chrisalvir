@@ -980,7 +980,7 @@ export class HomeKitCameraStreamingDelegate
             ? "camera.tapo_frente_de_calle"
             : this.platform?.ha?.hassStates?.has("camera.tapo_c402")
             ? "camera.tapo_c402"
-            : "";
+            : haEntityId;
         } else if (this.isTapoC120()) {
           haEntityId = this.platform?.ha?.hassStates?.has("camera.tapo_c120")
             ? "camera.tapo_c120"
@@ -990,7 +990,7 @@ export class HomeKitCameraStreamingDelegate
             ? "camera.c120"
             : this.platform?.ha?.hassStates?.has("camera.tapo_c120_hd")
             ? "camera.tapo_c120_hd"
-            : "";
+            : haEntityId;
         }
       }
       if (
@@ -1014,7 +1014,18 @@ export class HomeKitCameraStreamingDelegate
               state,
             );
             if (fresh && fresh.url) {
-              this.streamSource = fresh;
+              // Keep the Camera.UI/HAP linkage while replacing an expiring HA
+              // stream URL. Dropping these fields makes later sessions try the
+              // synthetic HAP entity_id instead of the real HA camera entity.
+              this.streamSource = {
+                ...fresh,
+                metadata: {
+                  ...this.streamSource.metadata,
+                  ...fresh.metadata,
+                  sourceCameraEntityId:
+                    (fresh.metadata as any)?.sourceCameraEntityId || haEntityId,
+                },
+              };
               sourceUrl = this.getCleanSourceUrl();
             }
           } catch {}

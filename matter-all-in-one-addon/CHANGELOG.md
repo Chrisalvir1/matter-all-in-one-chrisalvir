@@ -1,3 +1,10 @@
+## [2.0.5] - 2026-10-09
+
+### Corregido
+- Conserva la entidad real de Home Assistant al renovar URLs HLS de cámaras Camera.UI, para que los enlaces temporales no se pierdan entre sesiones de HomeKit o HKSV.
+- Reintenta descubrir cámaras Camera.UI emparejadas que todavía no han reaparecido en el inventario después del arranque.
+- Permite montar cámaras Tapo sin una URL RTSP estática aunque el registro no incluya el indicador `sourceProvider`.
+
 ## [2.0.4] - 2026-10-10
 
 ### Corregido
