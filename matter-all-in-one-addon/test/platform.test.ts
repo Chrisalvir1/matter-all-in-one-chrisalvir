@@ -111,6 +111,30 @@ describe("HomeAssistantPlatform", () => {
     expect(discover).not.toHaveBeenCalled();
   });
 
+  it("delegates standalone Matter node teardown to Matterbridge during manual unregister", async () => {
+    const endpoint = {
+      uniqueId: "light_lifecycle_test",
+      deviceName: "Lifecycle Test",
+      serverNode: {
+        close: vi.fn().mockResolvedValue(undefined),
+        lifecycle: { isOnline: true },
+      },
+    };
+    (platform as any).matterbridgeDevices.set("light.lifecycle_test", endpoint);
+    const unregister = vi
+      .spyOn(platform as any, "unregisterDevice")
+      .mockResolvedValue(undefined);
+    vi.spyOn(platform as any, "saveExportedDevices").mockResolvedValue(undefined);
+
+    await expect(platform.manualUnregister("light.lifecycle_test")).resolves.toEqual({
+      success: true,
+    });
+
+    expect(unregister).toHaveBeenCalledWith(endpoint);
+    expect(endpoint.serverNode.close).not.toHaveBeenCalled();
+    expect((platform as any).matterbridgeDevices.has("light.lifecycle_test")).toBe(false);
+  });
+
   it("marks an accessory unreachable and records a Matter command failure", async () => {
     const entityId = "switch.command_failure";
     const setReachability = vi.fn().mockResolvedValue(undefined);
@@ -1090,6 +1114,7 @@ describe("HomeAssistantPlatform", () => {
     expect(json.manualPairingCode).toBe("12345678901");
     // Verify serverNode.erase() was NOT called (to avoid double node creation race)
     expect(eraseFn).not.toHaveBeenCalled();
+    // Factory reset closes the old node before deliberately clearing its pairing data.
     expect(closeFn).toHaveBeenCalled();
   });
 
@@ -1158,7 +1183,8 @@ describe("HomeAssistantPlatform", () => {
 
     await (platform as any).prepareEndpointForRegistration(newEndpoint, "switch.apagador_pasillo_new");
 
-    expect(staleDevice.serverNode.close).toHaveBeenCalled();
+    // unregisterDevice() now stops/destroys the dependent MatterNode itself.
+    expect(staleDevice.serverNode.close).not.toHaveBeenCalled();
     expect(unregSpy).toHaveBeenCalledWith(staleDevice);
     expect(newEndpoint.deviceName).not.toBe("PASILLO");
     expect(newEndpoint.deviceName).toContain("PASILLO");

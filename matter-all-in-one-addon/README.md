@@ -5,7 +5,7 @@
 </div>
 
 > Puente Matter 1.6 para Home Assistant con código QR independiente para apagadores dobles/triples, perfiles conservadores para Apple Home y modelo/marca real en el campo Model.
-> **Base:** `matterbridge@3.10.12` · **Node.js:** `24.21.0-alpine3.24` · **TypeScript:** `7.0.2` · **Spec:** Matter 1.6.1
+> **Base:** `matterbridge@3.10.13` · **Node.js:** `24.21.0-alpine3.24` · **TypeScript:** `7.0.2` · **Spec:** Matter 1.6.1
 
 ---
 
@@ -18,7 +18,7 @@ project: matter-all-in-one-chrisalvir
 version: "2.0.5"
 spec: "Matter 1.6.1"
 engine: matterbridge
-engine_version: "3.10.12"
+engine_version: "3.10.13"
 node_image: "node:24.21.0-alpine3.24"
 bridge_mode: server       # Each HA device = ServerNode; standalone entities keep their own QR
 plugin_mode: dynamic      # MatterbridgeDynamicPlatform
@@ -54,7 +54,7 @@ remounted only after an explicit stream-source edit or live verification.
 ## Minimum Requirements
 
 - **Apple Home:** HomePod mini / Apple TV 4K (Matter hub); Thread router only needed for Thread accessories.
-- **Matterbridge:** `>= 3.10.8` (runtime image uses `3.10.12`)
+- **Matterbridge:** `>= 3.10.8` (runtime image uses `3.10.13`)
 - **Home Assistant:** `>= 2025.1`
 
 ---
@@ -87,7 +87,7 @@ HomeAssistantPlatform (MatterbridgeDynamicPlatform)
         └── CompositeDeviceEntity → Fan+Light grouped (ServerNode, own QR)
         │
         ▼
-matterbridge@3.10.12 (Matter SDK: @matter/node)
+matterbridge@3.10.13 (Matter SDK: @matter/node)
         │
         ▼
 Matter 1.6 Network (mDNS + BLE commissioning)
@@ -110,7 +110,7 @@ Matter 1.6 Network (mDNS + BLE commissioning)
 | `src/entities/composite-device.entity.ts` | Fan+Light grouped by HA device_id or explicit include list |
 | `src/converters/vacuum.converter.ts` | HA vacuum state → Matter RVC attributes |
 | `run.sh` | Startup: mDNS interface detection, plugin registration, proxy |
-| `Dockerfile` | Imagen multi-stage reproducible con `node:24.21.0-alpine3.24` y `matterbridge@3.10.12` |
+| `Dockerfile` | Imagen multi-stage reproducible con `node:24.21.0-alpine3.24` y `matterbridge@3.10.13` |
 
 ---
 
@@ -120,7 +120,7 @@ Matter 1.6 Network (mDNS + BLE commissioning)
 
 ```bash
 # 1. Instalar Matterbridge (última versión requerida)
-npm install -g matterbridge@3.10.12
+npm install -g matterbridge@3.10.13
 
 # 2. Instalar el plugin
 npm install -g matter-all-in-one-chrisalvir@2.0.5

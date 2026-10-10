@@ -42,7 +42,7 @@
     "@types/ws": "^8.18.2",
     "@vitejs/plugin-react": "^6.1.2",
     "@vitest/coverage-v8": "^5.0.3",
-    "matterbridge": "^3.10.12",
+    "matterbridge": "3.10.13",
     "prettier": "^3.9.9",
     "qrcode": "^1.5.4",
     "typescript": "^7.0.2",

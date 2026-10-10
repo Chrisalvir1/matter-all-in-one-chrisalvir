@@ -385,6 +385,17 @@ export class VacuumEntity extends BaseEntity {
       },
     );
 
+    // Matterbridge 3.10.12+ advertises ServiceArea.SkipArea for every RVC.
+    // Home Assistant's generic vacuum API has no portable skip-area service,
+    // so reject this command explicitly instead of allowing Matterbridge to
+    // acknowledge it while the vacuum continues cleaning the selected area.
+    endpoint.addCommandHandler("ServiceArea.skipArea", async () => {
+      this.assertOnline();
+      throw new Error(
+        "SkipArea is not supported by the configured Home Assistant vacuum entity",
+      );
+    });
+
     endpoint.addCommandHandler("RvcOperationalState.resume", async () => {
       this.assertOnline();
       this.lastCommandTime = Date.now();
