@@ -179,6 +179,40 @@ describe("VacuumEntity Apple Home topology and identity", () => {
     expect(endpoint.attributes.get("rvcOperationalState:operationalState")).toBe(0x42); // Docked
   });
 
+  it("rejects Matterbridge's advertised SkipArea command when HA has no portable skip-area service", async () => {
+    const entityId = "vacuum.sala_tv_robotina_rvc";
+    const platform = {
+      matterbridge: { matterbridgeVersion: "3.10.13" },
+      log: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), notice: vi.fn(), warn: vi.fn() },
+      ha: {
+        callService: vi.fn().mockResolvedValue(undefined),
+        hassEntities: new Map(),
+        hassDevices: new Map(),
+        hassStates: new Map(),
+      },
+    };
+    const state = {
+      entity_id: entityId,
+      state: "cleaning",
+      attributes: { friendly_name: "ROBOTINA", battery_level: 80 },
+      last_changed: "",
+      last_updated: "",
+    };
+    const vacuum = new VacuumEntity(
+      platform as any,
+      state as any,
+      MatterDeviceTypes.roboticVacuumCleaner,
+    );
+    const endpoint = (await vacuum.createEndpoint()) as any;
+
+    await expect(
+      endpoint.invokeCommand("ServiceArea.skipArea", {
+        request: { skippedArea: 1 },
+      }),
+    ).rejects.toThrow("SkipArea is not supported");
+    expect(platform.ha.callService).not.toHaveBeenCalled();
+  });
+
   it("only reports operationalState 3 (Error) when Home Assistant explicitly reports state 'error'", async () => {
     const entityId = "vacuum.sala_tv_robotina_rvc";
     const platform = {

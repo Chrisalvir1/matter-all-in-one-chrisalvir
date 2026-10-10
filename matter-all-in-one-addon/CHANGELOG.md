@@ -1,3 +1,14 @@
+## Próxima versión
+
+### Matterbridge 3.10.13
+- Fijada la dependencia de desarrollo y de la imagen de producción en `matterbridge@3.10.13`; Node.js continúa en `24.21.0`.
+- Actualizada la versión que publica el accesorio en `softwareVersionString` y la documentación del runtime.
+- Matterbridge 3.10.13 consulta el estado de disponibilidad del nodo servidor propietario en modo childbridge y corrige la retirada de endpoints server. El add-on ya tiene rutas propias para actualizar reachability y cerrar nodos al retirarlos; se valida su interacción con la nueva versión.
+- Se conserva la capa FFmpeg propia del add-on: las utilidades FFmpeg exportadas por Matterbridge no sustituyen ni se integran porque no aportan una ruta necesaria al pipeline actual de HAP/HKSV.
+- Matterbridge 3.10.12 cambió el comportamiento anunciado del comando RVC `SkipArea`. Como la API genérica de Home Assistant no ofrece una acción portable para omitir áreas, el add-on ahora rechaza explícitamente ese comando en vez de dejar que se confirme sin efecto.
+- La validación física de Apple Casa, reinicio del add-on y accesorios Matter queda pendiente en Home Assistant.
+- Añadido un workflow de build y comprobación de runtime ARM64 nativo, sin publicación de imágenes; verifica Node 24.21.0, Matterbridge 3.10.13, imports HAP/WebRTC/Scrypted y ejecución de FFmpeg.
+
 ## [2.0.5] - 2026-10-09
 
 ### Corregido
