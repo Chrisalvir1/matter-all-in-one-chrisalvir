@@ -1,3 +1,7 @@
+## Unreleased
+
+- Añadir `SetDuration` y `RemainingDuration` al perfil HAP Valve. La cuenta atrás usa un plazo monotónico de ejecución, se cancela cuando Home Assistant confirma el cierre y envía el cierre automático mediante el dominio real de la entidad. `Active` e `InUse` reflejan estados confirmados de Home Assistant. Se conserva el UUID registrado; no se cambia almacenamiento ni emparejamiento.
+
 ## [1.9.84] - 2026-10-06
 
 ### Detección Fiable de Desconexión, Estabilidad Multi-Switch y Limpieza de Diagnósticos
