@@ -136,6 +136,28 @@ describe("HAP valve duration", () => {
     await vi.advanceTimersByTimeAsync(5000);
     expect(f.callService).toHaveBeenCalledTimes(4);
   });
+
+  it("does not duplicate a scheduled close when the user closes during the request", async () => {
+    vi.useFakeTimers();
+    const f = fixture();
+    let completeScheduledClose!: () => void;
+    f.callService.mockResolvedValueOnce(undefined);
+    f.callService.mockImplementationOnce(() => new Promise<void>((resolve) => {
+      completeScheduledClose = resolve;
+    }));
+    await f.service.getCharacteristic(Characteristic.SetDuration).handleSetRequest(1);
+    await f.service.getCharacteristic(Characteristic.Active).handleSetRequest(1);
+    f.updateState("open");
+
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(f.callService).toHaveBeenCalledTimes(2);
+    await f.service.getCharacteristic(Characteristic.Active).handleSetRequest(0);
+    expect(f.callService).toHaveBeenCalledTimes(2);
+
+    completeScheduledClose();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.callService).toHaveBeenCalledTimes(2);
+  });
 });
 
 function fixtureWithRecord(entityId: string, record: HapAccessoryRecord, initialState: string) {
