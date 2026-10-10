@@ -1,0 +1,49 @@
+name: ARM64 add-on validation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'matter-all-in-one-addon/**'
+      - '.github/workflows/arm64-validation.yml'
+  push:
+    branches: ['codex/matterbridge-3.10.13']
+    paths:
+      - 'matter-all-in-one-addon/**'
+      - '.github/workflows/arm64-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  arm64-container:
+    name: Native ARM64 build and runtime smoke test
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Verify native runner
+        run: test "$(uname -m)" = aarch64
+      - name: Build without publishing
+        working-directory: matter-all-in-one-addon
+        run: |
+          docker build --platform linux/arm64 \
+            --build-arg BUILD_ARCH=aarch64 --build-arg BUILD_VERSION=ci \
+            --tag matter-arm64:ci .
+          test "$(docker image inspect matter-arm64:ci --format '{{.Architecture}}')" = arm64
+      - name: Verify pinned runtime and native imports
+        run: |
+          docker run --rm --network none --entrypoint node matter-arm64:ci \
+            --input-type=module -e '
+              import assert from "node:assert/strict";
+              import fs from "node:fs";
+              assert.equal(process.arch, "arm64");
+              assert.equal(process.version, "v24.21.0");
+              const bridge = JSON.parse(fs.readFileSync("/usr/local/lib/node_modules/matterbridge/package.json", "utf8"));
+              assert.equal(bridge.version, "3.10.13");
+              for (const name of ["matterbridge", "@homebridge/hap-nodejs", "werift", "@scrypted/client"]) await import(name);
+              console.log("ARM64 runtime and imports verified");
+            '
+          docker run --rm --network none --entrypoint /usr/local/bin/ffmpeg matter-arm64:ci -version
+          docker run --rm --network none --entrypoint ffprobe matter-arm64:ci -version

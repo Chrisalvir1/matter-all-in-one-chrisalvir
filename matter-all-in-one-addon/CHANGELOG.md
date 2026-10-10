@@ -7,6 +7,7 @@
 - Se conserva la capa FFmpeg propia del add-on: las utilidades FFmpeg exportadas por Matterbridge no sustituyen ni se integran porque no aportan una ruta necesaria al pipeline actual de HAP/HKSV.
 - Matterbridge 3.10.12 cambió el comportamiento anunciado del comando RVC `SkipArea`. Como la API genérica de Home Assistant no ofrece una acción portable para omitir áreas, el add-on ahora rechaza explícitamente ese comando en vez de dejar que se confirme sin efecto.
 - La validación física de Apple Casa, reinicio del add-on y accesorios Matter queda pendiente en Home Assistant.
+- Añadido un workflow de build y comprobación de runtime ARM64 nativo, sin publicación de imágenes; verifica Node 24.21.0, Matterbridge 3.10.13, imports HAP/WebRTC/Scrypted y ejecución de FFmpeg.
 
 ## [2.0.5] - 2026-10-09
 
