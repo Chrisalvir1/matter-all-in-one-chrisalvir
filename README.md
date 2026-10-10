@@ -4,11 +4,17 @@
   <img src="matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
 </div>
 
-> **Matter All-in-One for Home Assistant (v1.9.53)**
+> **Matter All-in-One for Home Assistant (v2.1.0)**
 > Expone entidades verificadas de Home Assistant como accesorios Matter 1.6 estables, cámaras Scrypted passthrough con HKSV y cámaras HomeKit con Live View en Apple Home.
-> **Base:** `matterbridge@3.10.11` · **Node.js:** `24.21.0-alpine3.24` · **TypeScript:** `7.0.2` · **Vitest:** `5.0.1` · **Vite:** `8.3.2` · **Spec:** Matter 1.6 (CSA, 17 Jun 2026)
+> **Base:** `matterbridge@3.10.13` · **Node.js:** `24.21.0-alpine3.24` · **TypeScript:** `7.0.2` · **Vitest:** `5.0.3` · **Vite:** `8.3.3` · **Spec:** Matter 1.6.1
 
 ---
+
+### Novedades de la versión 2.1.0
+
+- Actualiza Matterbridge a 3.10.13 sobre Node.js 24.21.0 y la imagen ARM64.
+- Añade duración y cuenta atrás HAP para válvulas, con recuperación de plazos y conservación de identidades existentes.
+- Valida los contratos de Home Assistant Core 2026.10 y los cambios de disponibilidad de Matterbridge.
 
 ## 🌟 Key Features
 

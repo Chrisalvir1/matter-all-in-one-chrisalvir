@@ -1,4 +1,4 @@
-## Próxima versión
+## [2.1.0] - 2026-10-10
 
 ### Matterbridge 3.10.13
 - Fijada la dependencia de desarrollo y de la imagen de producción en `matterbridge@3.10.13`; Node.js continúa en `24.21.0`.
@@ -8,6 +8,7 @@
 - Matterbridge 3.10.12 cambió el comportamiento anunciado del comando RVC `SkipArea`. Como la API genérica de Home Assistant no ofrece una acción portable para omitir áreas, el add-on ahora rechaza explícitamente ese comando en vez de dejar que se confirme sin efecto.
 - La validación física de Apple Casa, reinicio del add-on y accesorios Matter queda pendiente en Home Assistant.
 - Añadido un workflow de build y comprobación de runtime ARM64 nativo, sin publicación de imágenes; verifica Node 24.21.0, Matterbridge 3.10.13, imports HAP/WebRTC/Scrypted y ejecución de FFmpeg.
+- HAP Valve implementa `SetDuration` y `RemainingDuration`; conserva UUID y emparejamientos, restaura plazos tras reinicio, cancela al cerrar manualmente y reintenta de forma limitada ante fallos. El cierre depende de Home Assistant y no garantiza el estado físico de la válvula.
 
 ## [2.0.5] - 2026-10-09
 

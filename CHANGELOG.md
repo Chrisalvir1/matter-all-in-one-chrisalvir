@@ -1,5 +1,7 @@
-## Unreleased
+## [2.1.0] - 2026-10-10
 
+- Actualizar la base de producción a Matterbridge 3.10.13 y mantener Node.js 24.21.0. Se incluyen las correcciones de disponibilidad childbridge y retirada de endpoints de esa versión.
+- Mantener el rechazo explícito de `SkipArea`, que no tiene una acción portable de Home Assistant.
 - Añadir `SetDuration` y `RemainingDuration` al perfil HAP Valve. La cuenta atrás usa un plazo monotónico de ejecución, se cancela cuando Home Assistant confirma el cierre y envía el cierre automático mediante el dominio real de la entidad. `Active` e `InUse` reflejan estados confirmados de Home Assistant. Se conserva el UUID registrado; no se cambia almacenamiento ni emparejamiento.
 
 ## [1.9.84] - 2026-10-06

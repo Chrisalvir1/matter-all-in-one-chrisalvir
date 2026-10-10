@@ -1,4 +1,4 @@
-# Matter All-in-One for Home Assistant — v2.0.5
+# Matter All-in-One for Home Assistant — v2.1.0
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/chrisalvir1/matter-all-in-one-chrisalvir/main/matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
@@ -9,13 +9,19 @@
 
 ---
 
+## Release 2.1.0 (2026-10-10)
+
+- Matterbridge 3.10.13; Node.js 24.21.0; multi-architecture image targets `amd64` and `aarch64`.
+- HAP valves support duration and remaining time, restore timers after restart, and retain existing UUIDs and pairings.
+- Physical valve closure and Apple Home/Matter interoperability still require validation on the user’s Home Assistant instance.
+
 ## AI Agent Context (machine-readable)
 
 This file is intentionally structured for both humans and AI agents.
 
 ```yaml
 project: matter-all-in-one-chrisalvir
-version: "2.0.5"
+version: "2.1.0"
 spec: "Matter 1.6.1"
 engine: matterbridge
 engine_version: "3.10.13"
@@ -129,7 +135,7 @@ Matter 1.6 Network (mDNS + BLE commissioning)
 npm install -g matterbridge@3.10.13
 
 # 2. Instalar el plugin
-npm install -g matter-all-in-one-chrisalvir@2.0.5
+npm install -g matter-all-in-one-chrisalvir@2.1.0
 ```
 
 En Home Assistant, el add-on usa `ghcr.io/chrisalvir1/matter-all-in-one-chrisalvir` con un manifiesto multi-arquitectura para `amd64` y `aarch64`. Una actualización solo descarga la imagen precompilada desde GHCR — no recompila dependencias en el host.
