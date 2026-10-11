@@ -93,4 +93,8 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           NOTES="docs/RELEASE_NOTES_${VERSION}.md"
           test -f "$NOTES"
-          gh release create "$GITHUB_REF_NAME" --title "Matter All-in-One $GITHUB_REF_NAME" --notes-file "$NOTES"
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "Release $GITHUB_REF_NAME already exists; keeping its existing notes."
+          else
+            gh release create "$GITHUB_REF_NAME" --title "Matter All-in-One $GITHUB_REF_NAME" --notes-file "$NOTES"
+          fi
