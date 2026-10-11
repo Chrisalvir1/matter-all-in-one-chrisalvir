@@ -13,6 +13,66 @@ function makeState(attrs: Record<string, any> = {}) {
 }
 
 describe("CameraSourceResolver", () => {
+  it("resolves Omni Tuya camera from a fresh signed RTSP URL", async () => {
+    const streamUrl = "rtsps://tuya.example/session?token=ephemeral";
+    const mockPlatform = {
+      ha: {
+        hassEntities: new Map([
+          ["camera.feeder", { platform: "omni_tuya_local" }],
+        ]),
+        requestOmniTuyaCameraStream: vi.fn().mockResolvedValue(streamUrl),
+        requestCameraStream: vi.fn(),
+      },
+    };
+
+    const res = await CameraSourceResolver.resolve(
+      mockPlatform,
+      "camera.feeder",
+      makeState({ supported_features: 2 }),
+    );
+
+    expect(mockPlatform.ha.requestOmniTuyaCameraStream).toHaveBeenCalledWith(
+      "camera.feeder",
+    );
+    expect(mockPlatform.ha.requestCameraStream).not.toHaveBeenCalled();
+    expect(res).toMatchObject({
+      sourceType: "rtsp",
+      url: streamUrl,
+      supportsPassthrough: true,
+      requiresBridge: false,
+      metadata: {
+        isOmniTuyaDirect: true,
+        sourceCameraEntityId: "camera.feeder",
+      },
+    });
+  });
+
+  it("only requests a direct Tuya URL for cameras registered by Omni Tuya Local", async () => {
+    const requestOmniTuyaCameraStream = vi.fn();
+    const mockPlatform = {
+      ha: {
+        hassEntities: new Map([
+          ["camera.generic", { platform: "generic" }],
+        ]),
+        requestOmniTuyaCameraStream,
+        requestCameraStream: vi
+          .fn()
+          .mockResolvedValue("http://ha.local/api/hls/generic/master.m3u8"),
+        getAccessToken: vi.fn(),
+      },
+    };
+
+    const res = await CameraSourceResolver.resolve(
+      mockPlatform,
+      "camera.generic",
+      makeState({ supported_features: 2 }),
+    );
+
+    expect(requestOmniTuyaCameraStream).not.toHaveBeenCalled();
+    expect(res.sourceType).toBe("hls");
+    expect(res.metadata?.isOmniTuyaDirect).toBeUndefined();
+  });
+
   it("resolves direct RTSP URL from stream_source attribute", async () => {
     const state = makeState({
       stream_source: "rtsp://admin:secret123@192.168.1.100:554/ch0",
