@@ -2389,6 +2389,28 @@ export class HomeAssistant extends EventEmitter {
   }
 
   /**
+   * Requests a fresh one-session Tuya RTSP URL from Omni Tuya Local.
+   * The URL is a credential and must never be logged or persisted.
+   */
+  public async requestOmniTuyaCameraStream(entityId: string): Promise<string | null> {
+    try {
+      const response = await this.request({
+        type: "omni_tuya_local/camera_stream",
+        entity_id: entityId,
+      });
+      const url =
+        response.success && response.result && typeof response.result === "object"
+          ? (response.result as any).url
+          : undefined;
+      if (typeof url === "string" && /^rtsps?:\/\//i.test(url)) return url;
+    } catch {
+      // Non-Omni cameras do not implement this command. Avoid logging a response
+      // that could contain a signed stream URL.
+    }
+    return null;
+  }
+
+  /**
    * Fetches a raw JPEG image snapshot from Home Assistant `/api/camera_proxy/{entity_id}`.
    */
   public async fetchSnapshot(entityId: string): Promise<Buffer | null> {
