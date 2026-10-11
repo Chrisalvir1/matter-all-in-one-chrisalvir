@@ -2374,7 +2374,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     if (!entry) return false;
     const friendly: string = entry.name ?? entry.original_name ?? "";
     const original: string = entry.original_name ?? "";
-    return /^DPS\\b/i.test(friendly) || /\\bDPS\\b/i.test(original);
+    return /^DPS\b/i.test(friendly) || /\bDPS\b/i.test(original);
   }
 
   /**
