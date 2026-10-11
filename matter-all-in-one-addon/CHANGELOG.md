@@ -1,3 +1,10 @@
+## [2.1.2] - 2026-10-11
+
+### Cámara Omni Tuya en el catálogo HAP
+- Conserva las entidades `camera.*` aunque su nombre empiece por “DPS”, para que la cámara del comedero aparezca en el catálogo HAP.
+- Los datapoints genéricos DPS que no son cámaras siguen excluidos.
+- Requiere Omni Tuya Local 1.11.4 o posterior para renovar la URL RTSP firmada al iniciar cada sesión HAP.
+
 ## [2.1.1] - 2026-10-11
 
 ### Renovación RTSP Tuya en sesiones HAP
