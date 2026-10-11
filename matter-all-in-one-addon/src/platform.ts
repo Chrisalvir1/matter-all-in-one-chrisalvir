@@ -2361,17 +2361,20 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   }
 
   /**
-   * Returns true when the entity's friendly_name starts with "DPS" (case-insensitive)
-   * or its original_name in the HA entity registry contains "DPS". These are generic
-   * Tuya datapoint sensors that have not been given a meaningful name and should be
-   * excluded from the Matter panel and from the multi-switch switch-count.
+   * Returns true when a non-camera entity's friendly_name starts with "DPS"
+   * (case-insensitive) or its original_name in the HA entity registry contains
+   * "DPS". These are generic Tuya datapoint entities without a meaningful name.
+   * Camera entities are first-class exportable devices, even when Omni names the
+   * stream entity "DPS camera"; hiding it also removes it from the HAP camera list.
    */
   public isDpsGenericEntity(entityId: string): boolean {
+    // A camera is a real device, not a generic DPS datapoint.
+    if (entityId.startsWith("camera.")) return false;
     const entry = (this.ha as any).hassEntities?.get(entityId);
     if (!entry) return false;
     const friendly: string = entry.name ?? entry.original_name ?? "";
     const original: string = entry.original_name ?? "";
-    return /^DPS\b/i.test(friendly) || /\bDPS\b/i.test(original);
+    return /^DPS\\b/i.test(friendly) || /\\bDPS\\b/i.test(original);
   }
 
   /**
