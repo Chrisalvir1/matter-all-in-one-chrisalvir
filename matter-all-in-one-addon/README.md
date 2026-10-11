@@ -14,7 +14,7 @@
 - La ruta HAP solicita una URL RTSP firmada nueva a Omni Tuya Local al comenzar cada sesión Camera.UI.
 - Requiere Omni Tuya Local 1.11.4, permiso Tuya IoT Video Live Stream y conectividad con Tuya. La reproducción física requiere verificación en Home Assistant.
 
-## Release 2.1.1 (2026-10-10)
+## Release 2.1.0 (2026-10-10)
 
 - Matterbridge 3.10.13; Node.js 24.21.0; multi-architecture image targets `amd64` and `aarch64`.
 - HAP valves support duration and remaining time, restore timers after restart, and retain existing UUIDs and pairings.
