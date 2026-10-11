@@ -4,7 +4,7 @@
 - Si Tuya no entrega una asignación nueva, no se reutiliza deliberadamente la URL firmada previa. La URL no se registra ni persiste, y el token HA no se envía al RTSP.
 - Requiere actualizar Omni Tuya Local a 1.11.4, permiso IoT Video Live Stream y conectividad con Tuya. El stream real se debe validar en la instalación de Home Assistant.
 
-## [2.1.1] - 2026-10-10
+## [2.1.0] - 2026-10-10
 
 - Actualizar la base de producción a Matterbridge 3.10.13 y mantener Node.js 24.21.0. Se incluyen las correcciones de disponibilidad childbridge y retirada de endpoints de esa versión.
 - Mantener el rechazo explícito de `SkipArea`, que no tiene una acción portable de Home Assistant.
