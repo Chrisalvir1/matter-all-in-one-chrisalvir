@@ -86,6 +86,7 @@ describe("HomeAssistantPlatform", () => {
 
   it("keeps a DPS-named Home Assistant camera exportable", () => {
     (platform as any).ha = {
+      close: vi.fn(),
       hassEntities: new Map([
         [
           "camera.area_de_michi_comedero_michi_dps_camera",
