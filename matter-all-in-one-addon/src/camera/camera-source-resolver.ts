@@ -29,6 +29,40 @@ export class CameraSourceResolver {
     const supportedFeatures = Number(attrs.supported_features || 0);
     const hasStreamSupport = (supportedFeatures & 2) !== 0; // CameraEntityFeature.STREAM = 2
 
+    // Omni Tuya streams are signed, short-lived RTSP credentials. Ask Omni
+    // for a fresh URL when resolving the source, and mark it so the HAP
+    // streaming delegate requests another URL for every HomeKit session.
+    const registryEntry = platform?.ha?.hassEntities?.get?.(entityId);
+    if (
+      entityId.startsWith("camera.") &&
+      registryEntry?.platform === "omni_tuya_local" &&
+      platform?.ha?.requestOmniTuyaCameraStream
+    ) {
+      try {
+        const streamUrl =
+          await platform.ha.requestOmniTuyaCameraStream(entityId);
+        if (
+          typeof streamUrl === "string" &&
+          /^rtsps?:\\/\\//i.test(streamUrl)
+        ) {
+          return {
+            sourceType: "rtsp",
+            url: streamUrl,
+            snapshotUrl,
+            supportsPassthrough: true,
+            requiresBridge: false,
+            metadata: {
+              isOmniTuyaDirect: true,
+              sourceCameraEntityId: entityId,
+            },
+          };
+        }
+      } catch {
+        // Fall through to Home Assistant's camera/stream endpoint. Never log
+        // the signed Tuya URL or exception contents.
+      }
+    }
+
     // 0. Tapo C402 & C120: stream is served directly from Home Assistant
     const isTapoC402 = /(?:\bc402\b|tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle|tapo[-_ ]?frente)/i.test(
       `${entityId} ${attrs.friendly_name || ""}`,
