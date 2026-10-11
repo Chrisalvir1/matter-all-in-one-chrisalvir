@@ -994,9 +994,13 @@ export class HomeKitCameraStreamingDelegate
             : haEntityId;
         }
       }
+      const hasKnownHaCamera = Boolean(
+        (this.streamSource.metadata as any)?.sourceCameraEntityId ||
+          this.streamSource.metadata?.isOmniTuyaDirect === true,
+      );
       if (
         !/^camera\.[a-z0-9_]+$/.test(haEntityId) ||
-        !this.platform?.ha?.hassStates?.has(haEntityId)
+        (!this.platform?.ha?.hassStates?.has(haEntityId) && !hasKnownHaCamera)
       ) {
         haEntityId = "";
       }
