@@ -84,6 +84,31 @@ describe("HomeAssistantPlatform", () => {
     expect(platform.entities.has("sensor.garden_moisture")).toBe(true);
   });
 
+  it("keeps a DPS-named Home Assistant camera exportable", () => {
+    (platform as any).ha = {
+      close: vi.fn(),
+      hassEntities: new Map([
+        [
+          "camera.area_de_michi_comedero_michi_dps_camera",
+          { name: "DPS camera", original_name: "DPS camera" },
+        ],
+        [
+          "sensor.area_de_michi_dps_battery",
+          { name: "DPS 101", original_name: "DPS 101" },
+        ],
+      ]),
+    };
+
+    expect(
+      platform.isDpsGenericEntity(
+        "camera.area_de_michi_comedero_michi_dps_camera",
+      ),
+    ).toBe(false);
+    expect(
+      platform.isDpsGenericEntity("sensor.area_de_michi_dps_battery"),
+    ).toBe(true);
+  });
+
   it("refreshes the HA snapshot and Matter endpoints from the UI action", async () => {
     (platform as any).ha = { connected: true, close: vi.fn() };
     const discover = vi

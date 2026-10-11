@@ -1,4 +1,4 @@
-# Matter All-in-One for Home Assistant — v2.1.1
+# Matter All-in-One for Home Assistant — v2.1.2
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/chrisalvir1/matter-all-in-one-chrisalvir/main/matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
@@ -8,6 +8,12 @@
 > **Base:** `matterbridge@3.10.13` · **Node.js:** `24.21.0-alpine3.24` · **TypeScript:** `7.0.2` · **Spec:** Matter 1.6.1
 
 ---
+
+## Release 2.1.2 (2026-10-11)
+
+- La cámara del comedero Omni Tuya, nombrada “DPS camera”, ya no se filtra como datapoint genérico y queda disponible para exportación HAP.
+- Los datapoints DPS que no sean cámaras siguen ocultos.
+- Requiere Omni Tuya Local 1.11.4 o posterior para renovar la URL RTSP firmada por sesión.
 
 ## Release 2.1.1 (2026-10-11)
 
