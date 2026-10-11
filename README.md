@@ -4,11 +4,17 @@
   <img src="matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
 </div>
 
-> **Matter All-in-One for Home Assistant (v2.1.2)**
+> **Matter All-in-One for Home Assistant (v2.1.3)**
 > Expone entidades verificadas de Home Assistant como accesorios Matter 1.6 estables, cámaras Scrypted passthrough con HKSV y cámaras HomeKit con Live View en Apple Home.
 > **Base:** `matterbridge@3.10.13` · **Node.js:** `24.21.0-alpine3.24` · **TypeScript:** `7.0.2` · **Vitest:** `5.0.3` · **Vite:** `8.3.3` · **Spec:** Matter 1.6.1
 
 ---
+
+### Novedades de la versión 2.1.3
+
+- Conecta las cámaras de Omni Tuya Local con el Live View de HomeKit HAP mediante RTSP firmado.
+- Solicita una URL RTSP nueva por sesión HAP y evita guardar o registrar credenciales efímeras.
+- Requiere Omni Tuya Local 1.11.6 o posterior y permiso Tuya IoT Video Live Stream.
 
 ### Novedades de la versión 2.1.2
 
