@@ -958,6 +958,7 @@ export class HomeKitCameraStreamingDelegate
       !sourceUrl ||
       this.streamSource.sourceType === "hls" ||
       this.streamSource.sourceType === "ha_proxy" ||
+      this.streamSource.metadata?.isOmniTuyaDirect === true ||
       this.isTapoC402() ||
       this.isTapoC120()
     ) {
@@ -1006,7 +1007,36 @@ export class HomeKitCameraStreamingDelegate
         const state = haEntityId
           ? this.platform.ha.hassStates?.get(haEntityId)
           : undefined;
-        if (state) {
+        const wasOmniTuyaSource =
+          this.streamSource.metadata?.isOmniTuyaDirect === true;
+        let renewedOmniSource = false;
+        if (haEntityId && this.platform.ha.requestOmniTuyaCameraStream) {
+          try {
+            const freshTuyaUrl =
+              await this.platform.ha.requestOmniTuyaCameraStream(haEntityId);
+            if (freshTuyaUrl) {
+              this.streamSource = {
+                ...this.streamSource,
+                sourceType: "rtsp",
+                url: freshTuyaUrl,
+                metadata: {
+                  ...this.streamSource.metadata,
+                  sourceCameraEntityId: haEntityId,
+                  isOmniTuyaDirect: true,
+                },
+              };
+              sourceUrl = this.getCleanSourceUrl();
+              renewedOmniSource = true;
+            }
+          } catch {
+            // The signed Tuya URL must not enter Home Assistant or add-on logs.
+          }
+        }
+        if (wasOmniTuyaSource && !renewedOmniSource) {
+          // Never retry an expired signed URL. A failed renewal leaves HAP to
+          // report an unavailable source; the next HomeKit open will request again.
+          sourceUrl = "";
+        } else if (!renewedOmniSource && state) {
           try {
             const fresh = await CameraSourceResolver.resolve(
               this.platform,
@@ -1014,9 +1044,6 @@ export class HomeKitCameraStreamingDelegate
               state,
             );
             if (fresh && fresh.url) {
-              // Keep the Camera.UI/HAP linkage while replacing an expiring HA
-              // stream URL. Dropping these fields makes later sessions try the
-              // synthetic HAP entity_id instead of the real HA camera entity.
               this.streamSource = {
                 ...fresh,
                 metadata: {
@@ -1031,6 +1058,7 @@ export class HomeKitCameraStreamingDelegate
           } catch {}
         }
         if (
+          !wasOmniTuyaSource &&
           haEntityId &&
           (!sourceUrl || this.streamSource.sourceType === "ha_proxy") &&
           this.platform.ha.requestCameraStream
@@ -1044,7 +1072,12 @@ export class HomeKitCameraStreamingDelegate
             }
           } catch {}
         }
-        if (haEntityId && !sourceUrl && this.platform.ha.getCameraProxyStreamUrl) {
+        if (
+          !wasOmniTuyaSource &&
+          haEntityId &&
+          !sourceUrl &&
+          this.platform.ha.getCameraProxyStreamUrl
+        ) {
           const proxyUrl = this.platform.ha.getCameraProxyStreamUrl(haEntityId);
           if (proxyUrl) {
             this.streamSource.url = proxyUrl;
