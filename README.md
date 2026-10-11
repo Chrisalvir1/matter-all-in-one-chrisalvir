@@ -4,11 +4,17 @@
   <img src="matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
 </div>
 
-> **Matter All-in-One for Home Assistant (v2.1.1)**
+> **Matter All-in-One for Home Assistant (v2.1.2)**
 > Expone entidades verificadas de Home Assistant como accesorios Matter 1.6 estables, cámaras Scrypted passthrough con HKSV y cámaras HomeKit con Live View en Apple Home.
 > **Base:** `matterbridge@3.10.13` · **Node.js:** `24.21.0-alpine3.24` · **TypeScript:** `7.0.2` · **Vitest:** `5.0.3` · **Vite:** `8.3.3` · **Spec:** Matter 1.6.1
 
 ---
+
+### Novedades de la versión 2.1.2
+
+- La cámara de Omni Tuya “DPS camera” aparece en la lista de cámaras HAP y puede publicarse como cámara independiente.
+- Los sensores/datapoints genéricos DPS no se muestran como accesorios.
+- Requiere Omni Tuya Local 1.11.4 o posterior para la renovación RTSP por sesión.
 
 ### Novedades de la versión 2.1.1
 
