@@ -43,7 +43,7 @@ export class CameraSourceResolver {
           await platform.ha.requestOmniTuyaCameraStream(entityId);
         if (
           typeof streamUrl === "string" &&
-          /^rtsps?:\\/\\//i.test(streamUrl)
+          (streamUrl.startsWith("rtsp://") || streamUrl.startsWith("rtsps://"))
         ) {
           return {
             sourceType: "rtsp",
