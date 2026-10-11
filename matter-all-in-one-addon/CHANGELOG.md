@@ -1,3 +1,11 @@
+## [2.1.3] - 2026-10-11
+
+### Live View HAP de Omni Tuya
+- CameraSourceResolver solicita la URL RTSP firmada de Omni Tuya Local para las entidades registradas por esa integración.
+- La sesión HomeKit obtiene una URL fresca al iniciar; el stream firmado no se almacena ni se escribe en registros.
+- Si Omni no puede asignar un stream, se conserva el fallback de Home Assistant.
+- Requiere Omni Tuya Local 1.11.6 o posterior y permiso Tuya IoT Video Live Stream.
+
 ## [2.1.2] - 2026-10-11
 
 ### Cámara Omni Tuya en el catálogo HAP
