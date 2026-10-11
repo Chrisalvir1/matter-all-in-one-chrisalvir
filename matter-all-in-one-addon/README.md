@@ -1,4 +1,4 @@
-# Matter All-in-One for Home Assistant — v2.1.0
+# Matter All-in-One for Home Assistant — v2.1.1
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/chrisalvir1/matter-all-in-one-chrisalvir/main/matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
@@ -9,7 +9,12 @@
 
 ---
 
-## Release 2.1.0 (2026-10-10)
+## Release 2.1.1 (2026-10-11)
+
+- La ruta HAP solicita una URL RTSP firmada nueva a Omni Tuya Local al comenzar cada sesión Camera.UI.
+- Requiere Omni Tuya Local 1.11.4, permiso Tuya IoT Video Live Stream y conectividad con Tuya. La reproducción física requiere verificación en Home Assistant.
+
+## Release 2.1.1 (2026-10-10)
 
 - Matterbridge 3.10.13; Node.js 24.21.0; multi-architecture image targets `amd64` and `aarch64`.
 - HAP valves support duration and remaining time, restore timers after restart, and retain existing UUIDs and pairings.
@@ -21,7 +26,7 @@ This file is intentionally structured for both humans and AI agents.
 
 ```yaml
 project: matter-all-in-one-chrisalvir
-version: "2.1.0"
+version: "2.1.1"
 spec: "Matter 1.6.1"
 engine: matterbridge
 engine_version: "3.10.13"
