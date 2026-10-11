@@ -55,9 +55,15 @@ El temporizador solo solicita a Home Assistant el servicio de cierre. No puede c
 
 Each camera uses its configured live-stream origin. Camera.UI cameras use the
 Camera.UI RTSP feed; the Tapo C402 uses the direct Home Assistant add-on RTSP
-feed. The C402 remains a single camera card in the project UI, but its source
-is labeled Home Assistant RTSP. A
-Camera.UI refresh preserves existing HAP UUIDs, ports, pairings, motion
+feed. For an Omni Tuya Local camera, each new HAP live-view session requests a
+fresh signed RTSP URL from Omni through Home Assistant's authenticated WebSocket
+API instead of reusing HA's cached stream-worker URL. The signed URL stays in
+memory and the HA bearer token is not sent to Tuya's RTSP server. After an HA
+restart, the next HAP session requests a fresh URL. This path requires matching
+Omni and Matter All-in-One versions and active Tuya IoT Video Live Stream access;
+upstream Tuya or network outages can still prevent playback. The C402 remains a
+single camera card in the project UI, but its source is labeled Home Assistant
+RTSP. A Camera.UI refresh preserves existing HAP UUIDs, ports, pairings, motion
 detectors, HKSV pre-buffering, and Live View listeners. A paired camera is
 remounted only after an explicit stream-source edit or live verification.
 
