@@ -4,14 +4,15 @@
   <img src="matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
 </div>
 
-> **Matter All-in-One for Home Assistant (v2.1.0)**
+> **Matter All-in-One for Home Assistant (v2.1.1)**
 > Expone entidades verificadas de Home Assistant como accesorios Matter 1.6 estables, cámaras Scrypted passthrough con HKSV y cámaras HomeKit con Live View en Apple Home.
 > **Base:** `matterbridge@3.10.13` · **Node.js:** `24.21.0-alpine3.24` · **TypeScript:** `7.0.2` · **Vitest:** `5.0.3` · **Vite:** `8.3.3` · **Spec:** Matter 1.6.1
 
 ---
 
-### Novedades de la versión 2.1.0
+### Novedades de la versión 2.1.1
 
+- Solicita una URL RTSP Tuya firmada nueva a Omni 1.11.4 al inicio de cada sesión de cámara HAP. Requiere el permiso IoT Video Live Stream y conectividad con Tuya; el stream real debe validarse en Home Assistant.
 - Actualiza Matterbridge a 3.10.13 sobre Node.js 24.21.0 y la imagen ARM64.
 - Añade duración y cuenta atrás HAP para válvulas, con recuperación de plazos y conservación de identidades existentes.
 - Valida los contratos de Home Assistant Core 2026.10 y los cambios de disponibilidad de Matterbridge.
@@ -48,7 +49,7 @@ En Home Assistant, agrega este repositorio como repositorio de aplicaciones/add-
 
 La primera publicación de la imagen requiere que el paquete `ghcr.io/chrisalvir1/matter-all-in-one-chrisalvir` tenga visibilidad **Public** en GitHub Packages. El workflow comprueba el acceso anónimo y falla con una instrucción clara si todavía está privado.
 
-El número 2.1.0 corresponde al add-on de Home Assistant y su imagen GHCR. El plugin NPM independiente mantiene una versión separada.
+El número 2.1.1 corresponde al add-on de Home Assistant y su imagen GHCR. El plugin NPM independiente mantiene una versión separada.
 
 Para una instalación independiente de Matterbridge:
 

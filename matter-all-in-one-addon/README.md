@@ -1,4 +1,4 @@
-# Matter All-in-One for Home Assistant — v2.1.0
+# Matter All-in-One for Home Assistant — v2.1.1
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/chrisalvir1/matter-all-in-one-chrisalvir/main/matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
@@ -8,6 +8,11 @@
 > **Base:** `matterbridge@3.10.13` · **Node.js:** `24.21.0-alpine3.24` · **TypeScript:** `7.0.2` · **Spec:** Matter 1.6.1
 
 ---
+
+## Release 2.1.1 (2026-10-11)
+
+- La ruta HAP solicita una URL RTSP firmada nueva a Omni Tuya Local al comenzar cada sesión Camera.UI.
+- Requiere Omni Tuya Local 1.11.4, permiso Tuya IoT Video Live Stream y conectividad con Tuya. La reproducción física requiere verificación en Home Assistant.
 
 ## Release 2.1.0 (2026-10-10)
 
@@ -21,7 +26,7 @@ This file is intentionally structured for both humans and AI agents.
 
 ```yaml
 project: matter-all-in-one-chrisalvir
-version: "2.1.0"
+version: "2.1.1"
 spec: "Matter 1.6.1"
 engine: matterbridge
 engine_version: "3.10.13"
@@ -55,9 +60,15 @@ El temporizador solo solicita a Home Assistant el servicio de cierre. No puede c
 
 Each camera uses its configured live-stream origin. Camera.UI cameras use the
 Camera.UI RTSP feed; the Tapo C402 uses the direct Home Assistant add-on RTSP
-feed. The C402 remains a single camera card in the project UI, but its source
-is labeled Home Assistant RTSP. A
-Camera.UI refresh preserves existing HAP UUIDs, ports, pairings, motion
+feed. For an Omni Tuya Local camera, each new HAP live-view session requests a
+fresh signed RTSP URL from Omni through Home Assistant's authenticated WebSocket
+API instead of reusing HA's cached stream-worker URL. The signed URL stays in
+memory and the HA bearer token is not sent to Tuya's RTSP server. After an HA
+restart, the next HAP session requests a fresh URL. This path requires matching
+Omni and Matter All-in-One versions and active Tuya IoT Video Live Stream access;
+upstream Tuya or network outages can still prevent playback. The C402 remains a
+single camera card in the project UI, but its source is labeled Home Assistant
+RTSP. A Camera.UI refresh preserves existing HAP UUIDs, ports, pairings, motion
 detectors, HKSV pre-buffering, and Live View listeners. A paired camera is
 remounted only after an explicit stream-source edit or live verification.
 

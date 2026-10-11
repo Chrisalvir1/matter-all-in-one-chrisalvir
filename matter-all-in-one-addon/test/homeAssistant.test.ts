@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import net, { type Server, type Socket } from "node:net";
 import { HomeAssistant } from "../src/homeAssistant.js";
 
@@ -162,4 +162,37 @@ describe("HomeAssistant connection recovery", () => {
       "http://supervisor/core/api/camera_proxy_stream/camera.playroom",
     );
   });
+
+  it("requests a fresh signed Omni Tuya RTSP URL for a HAP session", async () => {
+    const ha = new HomeAssistant("ws://homeassistant:8123", "test-token", 0, 0);
+    const request = vi.fn(async (message: any) => {
+      expect(message).toEqual({
+        type: "omni_tuya_local/camera_stream",
+        entity_id: "camera.comedero_michi",
+      });
+      return {
+        success: true,
+        result: { url: "rtsps://tuya.invalid/live?token=one-session" },
+      };
+    });
+    (ha as any).request = request;
+
+    await expect(
+      ha.requestOmniTuyaCameraStream("camera.comedero_michi"),
+    ).resolves.toBe("rtsps://tuya.invalid/live?token=one-session");
+    expect(request).toHaveBeenCalledOnce();
+  });
+
+  it("rejects non-RTSP values from the Omni stream command", async () => {
+    const ha = new HomeAssistant("ws://homeassistant:8123", "test-token", 0, 0);
+    (ha as any).request = async () => ({
+      success: true,
+      result: { url: "https://example.invalid/not-rtsp" },
+    });
+
+    await expect(
+      ha.requestOmniTuyaCameraStream("camera.comedero_michi"),
+    ).resolves.toBeNull();
+  });
+
 });

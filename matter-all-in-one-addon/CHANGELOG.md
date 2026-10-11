@@ -1,3 +1,11 @@
+## [2.1.1] - 2026-10-11
+
+### Renovación RTSP Tuya en sesiones HAP
+- Matter All-in-One solicita a Omni Tuya Local una URL RTSP firmada nueva al iniciar cada sesión HAP Camera.UI.
+- Si la asignación falla, la cámara Omni no vuelve deliberadamente a usar la URL firmada anterior. Los sensores y la detección configurados en Home Assistant siguen dependiendo de sus entidades fuente.
+- No se registra ni persiste la URL firmada, y el token de Home Assistant no se envía al servidor RTSP de Tuya.
+- Requiere Omni Tuya Local 1.11.4, permiso Tuya IoT Video Live Stream y conectividad con Tuya. La validación física del stream debe hacerse en Home Assistant.
+
 ## [2.1.0] - 2026-10-10
 
 ### Matterbridge 3.10.13
