@@ -914,6 +914,7 @@ export function checkAudioPassthroughCompatibility(
 export async function measureStreamGop(
   sourceUrl: string,
   timeoutMs: number = 3000,
+  httpBearerToken?: string,
 ): Promise<number | undefined> {
   const ffprobePath = resolveFfprobePath();
   if (!ffprobePath) return undefined;
@@ -938,6 +939,9 @@ export async function measureStreamGop(
       sourceUrl.startsWith("http://") ||
       sourceUrl.startsWith("https://")
     ) {
+      if (httpBearerToken) {
+        args.push("-headers", `Authorization: Bearer ${httpBearerToken}\r\n`);
+      }
       args.push("-rw_timeout", String(timeoutMs * 1000));
       if (sourceUrl.startsWith("https://")) {
         args.push("-tls_verify", "0");

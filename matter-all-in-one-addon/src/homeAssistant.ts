@@ -2396,7 +2396,7 @@ export class HomeAssistant extends EventEmitter {
     // Tuya issues a short-lived, one-session URL. A reconnect can briefly race
     // its allocation, so retry the allocation before considering another source.
     // Never include the response in logs because it contains stream credentials.
-    for (const delayMs of [0, 300, 900]) {
+    for (const [attempt, delayMs] of [0, 300, 900].entries()) {
       if (delayMs) await new Promise((resolve) => setTimeout(resolve, delayMs));
       try {
         const response = await this.request({
@@ -2411,6 +2411,9 @@ export class HomeAssistant extends EventEmitter {
       } catch {
         // Non-Omni cameras do not implement this command. Avoid logging a response
         // that could contain a signed stream URL.
+        this.log.debug(
+          `[HomeAssistant] Omni camera stream allocation unavailable for ${entityId} (attempt ${attempt + 1}/3)`,
+        );
       }
     }
     return null;

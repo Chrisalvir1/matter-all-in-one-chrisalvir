@@ -371,6 +371,7 @@ export class ScryptedStreamValidator {
     cameraId: string,
     timeoutMs: number = 15000,
     transport?: "tcp" | "udp",
+    httpBearerToken?: string,
   ): Promise<StreamLatencyMetrics> {
     const trimmed = (rawUrl || "").trim();
     const now = new Date().toISOString();
@@ -433,7 +434,11 @@ export class ScryptedStreamValidator {
     }
 
     try {
-      let probe = await probeCameraSource(effectiveUrl, { timeoutMs, transport });
+      let probe = await probeCameraSource(effectiveUrl, {
+        timeoutMs,
+        transport,
+        httpBearerToken,
+      });
       if (!probe.valid && isVimtag && effectiveUrl.startsWith("rtsp://")) {
         const altPaths = ["/live/ch0", "/onvif1", "/ch0", "/live/ch1", "/onvif2"];
         for (const altPath of altPaths) {
@@ -442,6 +447,7 @@ export class ScryptedStreamValidator {
           const altProbe = await probeCameraSource(candidateUrl, {
             timeoutMs: 3500,
             transport,
+            httpBearerToken,
           });
           if (altProbe.valid) {
             probe = altProbe;
@@ -498,6 +504,7 @@ export class ScryptedStreamValidator {
           const gop = await measureStreamGop(
             trimmed,
             Math.min(3000, timeoutMs),
+            httpBearerToken,
           );
           if (gop !== undefined && gop > 0) {
             metrics.observedGopSeconds = {

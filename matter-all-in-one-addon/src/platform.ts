@@ -8892,12 +8892,22 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
           const transport = parsed.transport === "udp" ? "udp" : "tcp";
           const timeoutMs = parsed.timeoutMs ? Number(parsed.timeoutMs) : 15000;
+          // HLS URLs returned by Home Assistant's camera/stream websocket are
+          // protected endpoints. The diagnostic must use the same HA token as
+          // the HAP and HKSV FFmpeg pipelines, otherwise it produces a false
+          // 401 even when the freshly-created HLS stream is usable.
+          const httpBearerToken =
+            /^https?:\/\//i.test(targetUrl) &&
+            /\/api\/hls\//i.test(targetUrl)
+              ? this.ha?.getAccessToken?.() || this.ha?.wsAccessToken
+              : undefined;
           ScryptedStreamValidator.clearCache();
           const metrics = await ScryptedStreamValidator.diagnoseStreamUrl(
             targetUrl,
             cameraId,
             timeoutMs,
             transport,
+            httpBearerToken,
           );
 
           if (scryptedCam) {
