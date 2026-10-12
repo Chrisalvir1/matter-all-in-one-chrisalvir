@@ -8550,19 +8550,34 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             this.ha?.hassStates?.get(`camera.${cleanId}`);
 
           const requestedUrl = String(parsed.streamUrl || "").trim();
-          let targetUrl =
-            requestedUrl ||
-            scryptedCam?.source.streamReference?.directUrl ||
-            cuiCam?.rtspUrl ||
-            "";
+          const haEntityId = this.ha?.hassEntities?.has(cameraId)
+            ? cameraId
+            : `camera.${cleanId}`;
+          const isOmniTuyaCamera =
+            haState &&
+            this.ha?.hassEntities?.get(haEntityId)?.platform ===
+              "omni_tuya_local";
+          let usesEphemeralOmniUrl = false;
+          let targetUrl = "";
 
-          // HA's stream_source may be a temporary HLS proxy URL for an Omni
-          // camera. Ask Omni first so diagnostics test the same fresh signed
-          // RTSP source the HomeKit session should consume.
-          if (!requestedUrl && !scryptedCam && !cuiCam && haState && this.ha?.hassEntities?.get(cameraId)?.platform === "omni_tuya_local") {
+          // A Camera.UI record can contain an old go2rtc URL entered during
+          // setup. It must not override Omni's short-lived, single-session
+          // RTSP credential. Allocate a new URL for every verification just
+          // as the HAP delegate does; never persist that URL below.
+          if (isOmniTuyaCamera && this.ha?.requestOmniTuyaCameraStream) {
             try {
-              targetUrl = (await this.ha.requestOmniTuyaCameraStream(cameraId)) || "";
+              targetUrl =
+                (await this.ha.requestOmniTuyaCameraStream(haEntityId)) || "";
+              usesEphemeralOmniUrl = Boolean(targetUrl);
             } catch {}
+          }
+
+          if (!targetUrl) {
+            targetUrl =
+              requestedUrl ||
+              scryptedCam?.source.streamReference?.directUrl ||
+              cuiCam?.rtspUrl ||
+              "";
           }
 
           if (!targetUrl) {
@@ -8692,7 +8707,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
           if (cuiCam) {
             await CameraUiStorage.updateCamera(cuiCam.id, (cam) => {
-              cam.rtspUrl = targetUrl;
+              // Tuya RTSP URLs are credentials with a one-session lifetime.
+              // Persisting one makes the next HA/add-on restart reuse an
+              // expired stream and is the root of intermittent 401/404 live
+              // view failures. Keep the configured URL untouched for Omni.
+              if (!usesEphemeralOmniUrl) cam.rtspUrl = targetUrl;
               if (validation.status === "verified") {
                 cam.status = "online";
                 cam.videoCodecSource = "ffprobe";
@@ -8798,18 +8817,29 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           }
 
           const requestedUrl = String(parsed.streamUrl || "").trim();
-          let targetUrl =
-            requestedUrl ||
-            scryptedCam?.source.streamReference?.directUrl ||
-            cuiCam?.rtspUrl ||
-            "";
+          const haEntityId = this.ha?.hassEntities?.has(cameraId)
+            ? cameraId
+            : `camera.${cleanId}`;
+          const isOmniTuyaCamera =
+            haState &&
+            this.ha?.hassEntities?.get(haEntityId)?.platform ===
+              "omni_tuya_local";
+          let targetUrl = "";
 
-          // Prefer Omni's newly allocated Tuya RTSP URL over HA's expiring
-          // HLS stream_source for cameras registered by Omni Tuya Local.
-          if (!requestedUrl && !scryptedCam && !cuiCam && haState && this.ha?.hassEntities?.get(cameraId)?.platform === "omni_tuya_local") {
+          // Diagnostics must exercise the exact renewable source that HAP
+          // uses. This deliberately wins over Camera.UI's saved go2rtc URL.
+          if (isOmniTuyaCamera && this.ha?.requestOmniTuyaCameraStream) {
             try {
-              targetUrl = (await this.ha.requestOmniTuyaCameraStream(cameraId)) || "";
+              targetUrl =
+                (await this.ha.requestOmniTuyaCameraStream(haEntityId)) || "";
             } catch {}
+          }
+          if (!targetUrl) {
+            targetUrl =
+              requestedUrl ||
+              scryptedCam?.source.streamReference?.directUrl ||
+              cuiCam?.rtspUrl ||
+              "";
           }
           if (!targetUrl) {
             targetUrl = (haState?.attributes as any)?.stream_source || "";

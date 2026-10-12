@@ -1,5 +1,11 @@
 ## [Unreleased]
 
+## [2.1.9] - 2026-10-12
+
+- Corrige la ruta que usa **Verificar Stream** y **Diagnosticar Stream** para cámaras Camera.UI de Omni Tuya Local: ambas solicitan primero un RTSP firmado nuevo a Omni, incluso si existe una URL fija de go2rtc configurada.
+- Un RTSP firmado de Tuya nunca se guarda tras verificar. Evita que un reinicio de Home Assistant o del add-on reutilice una credencial vencida y termine en 401/404 o sin Live View en Apple Casa.
+- Las notas de esta versión se incluyen también en el changelog del add-on, que es el que muestra Home Assistant.
+
 ## [2.1.8] - 2026-10-12
 
 - Corrige el diagnóstico de streams HLS de Home Assistant: FFprobe y la medición GOP reciben el token Bearer del add-on, eliminando el falso HTTP 401.

@@ -4888,3 +4888,7 @@ All notable changes to this project will be documented in this file.
 ## 1.9.15
 
 - Fix Tapo C402 HA source selection when motion entities are returned.
+## [2.1.9] - 2026-10-12
+
+- Corrige la ruta de **Verificar Stream** y **Diagnosticar Stream** para cámaras Omni Tuya Local registradas en Camera.UI. Solicita primero un RTSP firmado nuevo de Omni, en vez de usar una URL fija de go2rtc o un proxy HLS de Home Assistant.
+- Las URLs RTSP firmadas de Tuya no se persisten después de comprobar el stream. Tras un reinicio se asigna una credencial nueva, evitando fallos 401/404 y Live View sin vídeo en Apple Casa.
