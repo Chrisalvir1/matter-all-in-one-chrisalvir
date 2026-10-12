@@ -1293,6 +1293,45 @@ export class HomeKitCameraStreamingDelegate
             stderr || `FFmpeg exited with code ${code}`,
           );
 
+          const isOmniStreamNotFound =
+            this.streamSource.metadata?.isOmniTuyaDirect === true &&
+            /(?:DESCRIBE failed:\s*404|404\s+Stream Not Found)/i.test(stderr);
+          if (isOmniStreamNotFound) {
+            const sourceEntityId =
+              this.streamSource.metadata?.sourceCameraEntityId || this.entityId;
+            void (async () => {
+              const state = this.platform?.ha?.hassStates?.get(sourceEntityId);
+              const fallback = await CameraSourceResolver.resolveOmniTuyaFallback(
+                this.platform,
+                sourceEntityId,
+                state,
+              );
+              if (fallback?.url) {
+                this.streamSource = fallback;
+                this.platform?.log?.warn?.(
+                  `[HomeKitCamera][${this.entityId}] Omni RTSP returned 404 Stream Not Found; retrying Live View through Home Assistant's stream/proxy route.`,
+                );
+                this.spawnFfmpegProcess(session, request, settle, false);
+                return;
+              }
+
+              this.platform?.log?.error?.(
+                `[HomeKitCamera][${this.entityId}] Omni RTSP returned 404 and Home Assistant could not provide a fallback stream.`,
+              );
+              settle(new Error("Omni RTSP stream not found; HA fallback unavailable"));
+              this.activeSessions.delete(session.sessionId);
+              if (this.activeSessions.size === 0) this.emit("session-end");
+            })().catch((error) => {
+              this.platform?.log?.warn?.(
+                `[HomeKitCamera][${this.entityId}] Could not switch Omni Live View to Home Assistant fallback: ${error instanceof Error ? error.message : "unknown error"}`,
+              );
+              settle(new Error("Omni RTSP fallback failed"));
+              this.activeSessions.delete(session.sessionId);
+              if (this.activeSessions.size === 0) this.emit("session-end");
+            });
+            return;
+          }
+
           const is401 =
             stderr.includes("401") ||
             stderr.includes("Unauthorized") ||

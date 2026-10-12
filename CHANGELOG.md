@@ -1,3 +1,9 @@
+## [Unreleased]
+
+- Si el RTSP firmado de Omni devuelve `404 Stream Not Found`, Live View cambia a un stream nuevo de Home Assistant o a su proxy autenticado, cuando estén disponibles.
+- HKSV solicita una URL RTSP nueva de Omni en cada recuperación del pre-buffer; después de un `404` usa la ruta de Home Assistant en los reintentos en lugar de reciclar la URL fallida.
+- Esta corrección no instala ni depende de Scryvex AI Detector. Audio real, detección positiva, clasificación de objetos y clips HKSV aún requieren verificación con una fuente funcional en Home Assistant.
+
 ## [2.1.3] - 2026-10-11
 
 - Conecta Omni Tuya Local con HomeKit HAP Live View usando RTSP firmado de corta duración.

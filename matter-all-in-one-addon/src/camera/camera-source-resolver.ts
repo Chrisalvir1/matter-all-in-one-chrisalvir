@@ -8,6 +8,42 @@ import { isCameraStreamReachable } from "./cameraui/cameraui-client.js";
 
 export class CameraSourceResolver {
   /**
+   * Resolve a source for the HKSV reader. Omni RTSP URLs are single-session
+   * credentials, so every reader restart must ask Omni again. Once the direct
+   * endpoint has returned a real RTSP 404, prefer HA's stream/proxy route
+   * instead of repeatedly reopening a URL that cannot describe a stream.
+   */
+  public static async resolveOmniTuyaRecordingSource(
+    platform: any,
+    entityId: string,
+    state: HassState | undefined,
+    preferHomeAssistant: boolean,
+  ): Promise<ResolvedStreamSource> {
+    if (!preferHomeAssistant && platform?.ha?.requestOmniTuyaCameraStream) {
+      try {
+        const url = await platform.ha.requestOmniTuyaCameraStream(entityId);
+        if (typeof url === "string" && /^rtsps?:\/\//i.test(url)) {
+          return {
+            sourceType: "rtsp",
+            url,
+            snapshotUrl: `/api/camera_proxy/${entityId}`,
+            supportsPassthrough: true,
+            requiresBridge: false,
+            metadata: {
+              isOmniTuyaDirect: true,
+              sourceCameraEntityId: entityId,
+            },
+          };
+        }
+      } catch {
+        // Never log the signed Tuya URL or its credentials.
+      }
+    }
+
+    return this.resolveOmniTuyaFallback(platform, entityId, state);
+  }
+
+  /**
    * Resolve a renewable Home Assistant fallback after Omni Tuya cannot issue
    * a fresh signed URL. Prefer a newly-created HA stream (which lets HA use
    * its configured go2rtc/source pipeline), then the authenticated camera
@@ -16,7 +52,7 @@ export class CameraSourceResolver {
   public static async resolveOmniTuyaFallback(
     platform: any,
     entityId: string,
-    state: HassState,
+    state?: HassState,
   ): Promise<ResolvedStreamSource> {
     const attrs = state?.attributes || {};
     const httpBase = platform?.ha?.getHttpBaseUrl?.() || "";

@@ -63,6 +63,66 @@ describe("CameraSourceResolver", () => {
     });
   });
 
+  it("renews Omni RTSP for every HKSV reader restart", async () => {
+    const requestOmniTuyaCameraStream = vi
+      .fn()
+      .mockResolvedValueOnce("rtsps://tuya.example/session?token=one")
+      .mockResolvedValueOnce("rtsps://tuya.example/session?token=two");
+    const platform = {
+      ha: {
+        requestOmniTuyaCameraStream,
+        requestCameraStream: vi.fn(),
+        getCameraProxyStreamUrl: vi.fn(),
+      },
+    };
+
+    const first = await CameraSourceResolver.resolveOmniTuyaRecordingSource(
+      platform,
+      "camera.feeder",
+      makeState(),
+      false,
+    );
+    const second = await CameraSourceResolver.resolveOmniTuyaRecordingSource(
+      platform,
+      "camera.feeder",
+      makeState(),
+      false,
+    );
+
+    expect(first.url).toBe("rtsps://tuya.example/session?token=one");
+    expect(second.url).toBe("rtsps://tuya.example/session?token=two");
+    expect(requestOmniTuyaCameraStream).toHaveBeenCalledTimes(2);
+  });
+
+  it("uses HA instead of reopening Omni RTSP after the direct source returns 404", async () => {
+    const requestOmniTuyaCameraStream = vi.fn();
+    const requestCameraStream = vi
+      .fn()
+      .mockResolvedValue("http://ha.local/api/hls/renewed/master.m3u8");
+    const platform = {
+      ha: {
+        requestOmniTuyaCameraStream,
+        requestCameraStream,
+        getCameraProxyStreamUrl: vi.fn(),
+      },
+    };
+
+    const source = await CameraSourceResolver.resolveOmniTuyaRecordingSource(
+      platform,
+      "camera.feeder",
+      makeState(),
+      true,
+    );
+
+    expect(requestOmniTuyaCameraStream).not.toHaveBeenCalled();
+    expect(requestCameraStream).toHaveBeenCalledWith("camera.feeder");
+    expect(source).toMatchObject({
+      sourceType: "hls",
+      url: "http://ha.local/api/hls/renewed/master.m3u8",
+      metadata: { isOmniTuyaFallback: true },
+    });
+  });
+
   it("resolves Omni Tuya camera from a fresh signed RTSP URL", async () => {
     const streamUrl = "rtsps://tuya.example/session?token=ephemeral";
     const mockPlatform = {
