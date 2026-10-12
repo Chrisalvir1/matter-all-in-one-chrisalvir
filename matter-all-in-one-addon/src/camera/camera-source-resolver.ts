@@ -53,6 +53,7 @@ export class CameraSourceResolver {
     platform: any,
     entityId: string,
     state?: HassState,
+    options: { allowCameraProxy?: boolean } = {},
   ): Promise<ResolvedStreamSource> {
     const attrs = state?.attributes || {};
     const httpBase = platform?.ha?.getHttpBaseUrl?.() || "";
@@ -84,7 +85,9 @@ export class CameraSourceResolver {
       }
     }
 
-    const proxyUrl = platform?.ha?.getCameraProxyStreamUrl?.(entityId);
+    const proxyUrl = options.allowCameraProxy === false
+      ? undefined
+      : platform?.ha?.getCameraProxyStreamUrl?.(entityId);
     if (typeof proxyUrl === "string" && proxyUrl.length > 0) {
       platform?.log?.warn?.(
         `[CameraSourceResolver][${entityId}] Omni renewal failed; using Home Assistant camera proxy fallback`,

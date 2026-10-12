@@ -1061,6 +1061,7 @@ export class HomeKitCameraStreamingDelegate
                 this.platform,
                 haEntityId,
                 state,
+                { allowCameraProxy: false },
               )
             : undefined;
           if (fallback?.url) {
@@ -1343,6 +1344,7 @@ export class HomeKitCameraStreamingDelegate
                 this.platform,
                 sourceEntityId,
                 state,
+                { allowCameraProxy: false },
               );
               if (fallback?.url) {
                 this.streamSource = fallback;

@@ -1,5 +1,11 @@
 ## [Unreleased]
 
+## [2.1.7] - 2026-10-11
+
+- Live View de cámaras Omni Tuya renueva la URL RTSP firmada hasta tres veces antes de aceptar una alternativa. Esto cubre la ventana breve en que Tuya aún está asignando la sesión después de reiniciar Home Assistant.
+- El accesorio HAP de Omni no vuelve a usar `camera_proxy_stream` para Live View. Esa ruta puede rechazar el token HTTP del add-on con 401 y producía una imagen congelada. Solo acepta un RTSP renovado por Omni o un stream HLS recién emitido por Home Assistant.
+- Las URLs firmadas y sus credenciales continúan sin guardarse ni registrarse.
+
 ## [2.1.4] - 2026-10-11
 
 - Para cámaras Omni Tuya, MIAO vuelve a medir la pista de audio en la URL RTSP firmada recién emitida antes de iniciar cada sesión HAP. Apple Casa recibe la pista real convertida a AAC-ELD u Opus según su negociación.

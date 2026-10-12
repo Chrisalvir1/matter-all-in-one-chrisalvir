@@ -63,6 +63,29 @@ describe("CameraSourceResolver", () => {
     });
   });
 
+  it("does not use the HTTP camera proxy when Live View requires an Omni renewal", async () => {
+    const getCameraProxyStreamUrl = vi.fn().mockReturnValue(
+      "http://ha.local/api/camera_proxy_stream/camera.feeder",
+    );
+    const fallback = await CameraSourceResolver.resolveOmniTuyaFallback(
+      {
+        ha: {
+          requestCameraStream: vi.fn().mockResolvedValue(null),
+          getCameraProxyStreamUrl,
+        },
+      },
+      "camera.feeder",
+      makeState(),
+      { allowCameraProxy: false },
+    );
+
+    expect(getCameraProxyStreamUrl).not.toHaveBeenCalled();
+    expect(fallback).toMatchObject({
+      sourceType: "unknown",
+      metadata: { fallbackUnavailable: true },
+    });
+  });
+
   it("renews Omni RTSP for every HKSV reader restart", async () => {
     const requestOmniTuyaCameraStream = vi
       .fn()

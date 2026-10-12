@@ -2393,19 +2393,25 @@ export class HomeAssistant extends EventEmitter {
    * The URL is a credential and must never be logged or persisted.
    */
   public async requestOmniTuyaCameraStream(entityId: string): Promise<string | null> {
-    try {
-      const response = await this.request({
-        type: "omni_tuya_local/camera_stream",
-        entity_id: entityId,
-      });
-      const url =
-        response.success && response.result && typeof response.result === "object"
-          ? (response.result as any).url
-          : undefined;
-      if (typeof url === "string" && /^rtsps?:\/\//i.test(url)) return url;
-    } catch {
-      // Non-Omni cameras do not implement this command. Avoid logging a response
-      // that could contain a signed stream URL.
+    // Tuya issues a short-lived, one-session URL. A reconnect can briefly race
+    // its allocation, so retry the allocation before considering another source.
+    // Never include the response in logs because it contains stream credentials.
+    for (const delayMs of [0, 300, 900]) {
+      if (delayMs) await new Promise((resolve) => setTimeout(resolve, delayMs));
+      try {
+        const response = await this.request({
+          type: "omni_tuya_local/camera_stream",
+          entity_id: entityId,
+        });
+        const url =
+          response.success && response.result && typeof response.result === "object"
+            ? (response.result as any).url
+            : undefined;
+        if (typeof url === "string" && /^rtsps?:\/\//i.test(url)) return url;
+      } catch {
+        // Non-Omni cameras do not implement this command. Avoid logging a response
+        // that could contain a signed stream URL.
+      }
     }
     return null;
   }
