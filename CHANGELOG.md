@@ -1,5 +1,12 @@
 ## [Unreleased]
 
+## [2.1.4] - 2026-10-11
+
+- Para cámaras Omni Tuya, MIAO vuelve a medir la pista de audio en la URL RTSP firmada recién emitida antes de iniciar cada sesión HAP. Apple Casa recibe la pista real convertida a AAC-ELD u Opus según su negociación.
+- Se elimina por completo la cadena de consulta de URLs de cámara de los logs; firmas y tokens de Tuya no se registran.
+- Se conecta la detección local por diferencias de fotogramas de FFmpeg a las cámaras Omni sin `binary_sensor` propio. Renueva la URL al reconectar, pausa durante Live View y publica el evento para HomeKit/HKSV.
+- Las entidades `number` se pueden publicar en HAP como control deslizante estándar. Permite elegir "Porciones por comida"; "Alimentar ahora" se publica como interruptor independiente.
+
 - Si el RTSP firmado de Omni devuelve `404 Stream Not Found`, Live View cambia a un stream nuevo de Home Assistant o a su proxy autenticado, cuando estén disponibles.
 - HKSV solicita una URL RTSP nueva de Omni en cada recuperación del pre-buffer; después de un `404` usa la ruta de Home Assistant en los reintentos en lugar de reciclar la URL fallida.
 - Esta corrección no instala ni depende de Scryvex AI Detector. Audio real, detección positiva, clasificación de objetos y clips HKSV aún requieren verificación con una fuente funcional en Home Assistant.
