@@ -179,6 +179,8 @@ export interface LiveViewCapabilities {
 }
 
 export interface CameraRecord {
+  provider?: "home_assistant";
+
   cameraId: string;
   name: string;
   model?: string;

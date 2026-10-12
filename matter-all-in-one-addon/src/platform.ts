@@ -7027,7 +7027,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                       }
 
                       return {
-                        published: rec?.published ?? false,
+                        published: (e as CameraEntity).homekitAccessory?.isPublished ?? false,
+                        setupId: rec?.setupId,
+                        liveViewCapabilities: (e as CameraEntity).homekitAccessory?.getLiveViewCapabilitiesDiagnostic(),
+                        liveViewTelemetry: (e as CameraEntity).homekitAccessory?.delegate?.getLiveViewTelemetry(),
                         isPaired:
                           (e as CameraEntity).homekitAccessory?.isPaired() ??
                           rec?.isPaired ??
@@ -7037,7 +7040,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                         hksvVerified,
                         hksvState,
                         port: rec?.port ?? 51830,
-                        pincode: rec?.pincode ?? "031-45-154",
+                        pincode: rec?.pincode,
                         username: rec?.username,
                         setupUri:
                           (e as CameraEntity).homekitAccessory?.setupUri || "",
@@ -8547,6 +8550,12 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             (haState?.attributes as any)?.stream_source ||
             "";
 
+          if (!targetUrl && haState && this.ha?.hassEntities?.get(cameraId)?.platform === "omni_tuya_local") {
+            try {
+              targetUrl = (await this.ha.requestOmniTuyaCameraStream(cameraId)) || "";
+            } catch {}
+          }
+
           if (!targetUrl && haState) {
             try {
               if (this.ha?.requestCameraStream) {
@@ -8802,6 +8811,12 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               }
             }
           } catch {}
+
+          if (!targetUrl && haState && this.ha?.hassEntities?.get(cameraId)?.platform === "omni_tuya_local") {
+            try {
+              targetUrl = (await this.ha.requestOmniTuyaCameraStream(cameraId)) || "";
+            } catch {}
+          }
 
           if (!targetUrl && haState) {
             try {
@@ -9929,7 +9944,12 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             if (isCurrentlyExported) {
               await this.manualUnregister(cameraId);
             } else {
-              await this.manualRegister(cameraId);
+              const result = await this.manualRegister(cameraId);
+              if (!result.success) {
+                res.writeHead(409, { "Content-Type": "application/json; charset=utf-8" });
+                res.end(JSON.stringify(result));
+                return;
+              }
             }
             const record = this.homekitCameraRecords.get(cameraId);
             res.writeHead(200, {
