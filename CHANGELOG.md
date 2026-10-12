@@ -1,5 +1,10 @@
 ## [Unreleased]
 
+## [2.1.10] - 2026-10-12
+
+- Corrige el formato y la posición del changelog del add-on para que Home Assistant muestre primero las mejoras de la versión que ofrece instalar.
+- Añade una comprobación de publicación que bloquea releases cuyo changelog del add-on no comience con la versión declarada en `config.yaml`.
+
 ## [2.1.9] - 2026-10-12
 
 - Corrige la ruta que usa **Verificar Stream** y **Diagnosticar Stream** para cámaras Camera.UI de Omni Tuya Local: ambas solicitan primero un RTSP firmado nuevo a Omni, incluso si existe una URL fija de go2rtc configurada.

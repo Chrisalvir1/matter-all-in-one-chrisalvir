@@ -31,6 +31,10 @@ jobs:
           test -n "$version"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
+      - name: Verify Home Assistant changelog matches published version
+        working-directory: matter-all-in-one-addon
+        run: node scripts/verify-ha-changelog.mjs
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@288220e341e5c445ddb6d73e19a57a9012ceca88
 

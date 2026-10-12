@@ -1,3 +1,10 @@
+## [2.1.10] - 2026-10-12
+
+### Corrección de actualización y Live View Omni
+- **Verificar Stream** y **Diagnosticar Stream** solicitan primero a Omni Tuya Local una URL RTSP firmada nueva. Una URL fija de go2rtc o una ruta HLS/proxy de Home Assistant no puede sustituir esa credencial temporal.
+- La URL RTSP firmada nunca se persiste tras la comprobación. Al reiniciar Home Assistant o el add-on se asigna una nueva, evitando reutilizar una sesión vencida y los errores 401/404 en Apple Casa.
+- Este archivo comienza obligatoriamente con la versión publicada. Home Assistant mostrará estas mejoras en el diálogo de actualización, no un bloque histórico anterior.
+
 ## [2.1.6] - 2026-10-11
 
 ### Live View Omni para accesorios HAP ya emparejados
@@ -4888,7 +4895,3 @@ All notable changes to this project will be documented in this file.
 ## 1.9.15
 
 - Fix Tapo C402 HA source selection when motion entities are returned.
-## [2.1.9] - 2026-10-12
-
-- Corrige la ruta de **Verificar Stream** y **Diagnosticar Stream** para cámaras Omni Tuya Local registradas en Camera.UI. Solicita primero un RTSP firmado nuevo de Omni, en vez de usar una URL fija de go2rtc o un proxy HLS de Home Assistant.
-- Las URLs RTSP firmadas de Tuya no se persisten después de comprobar el stream. Tras un reinicio se asigna una credencial nueva, evitando fallos 401/404 y Live View sin vídeo en Apple Casa.
