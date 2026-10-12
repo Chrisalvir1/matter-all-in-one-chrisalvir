@@ -531,6 +531,8 @@ describe("HomeKitCameraStreamingDelegate", () => {
     expect(args).toContain("pipe:3");
     expect(args).toContain("0:a:0?");
     expect(args).toContain("aac");
+    expect(args).toContain("-frag_duration");
+    expect(args[args.indexOf("-frag_duration") + 1]).toBe("4000000");
     expect(args).toContain(
       "frag_keyframe+empty_moov+default_base_moof+skip_sidx+skip_trailer",
     );

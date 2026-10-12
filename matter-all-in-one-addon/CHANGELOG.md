@@ -1,3 +1,8 @@
+## [2.1.13] - 2026-10-12
+
+- Durante Live View, fMP4 de HKSV ahora genera fragmentos al intervalo negociado con Apple Home, aunque el RTSP Omni use un GOP largo. Esto evita depender exclusivamente del siguiente fotograma clave para mantener la grabación.
+- Los registros muestran el número de fragmentos enviados y cada fragmento fMP4 recibido durante Live View, para identificar con precisión sesiones HKSV incompletas.
+
 ## [2.1.12] - 2026-10-12
 
 - MIAO analiza diferencias de fotogramas en la misma conexión RTSP que Casa ya usa durante Live View. El detector ya no se pausa sin reemplazo y evita abrir una segunda sesión al comedero Omni.

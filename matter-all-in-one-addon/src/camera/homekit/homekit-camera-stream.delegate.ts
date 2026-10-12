@@ -2088,6 +2088,24 @@ export class HomeKitCameraStreamingDelegate
         "0",
         "-muxpreload",
         "0",
+        // Some Omni firmwares use a long GOP. If we fragment only on source
+        // keyframes, HKSV can receive the initial fragment and then wait past
+        // Apple's recording window even though Live View video is flowing.
+        // Also cut at the Home Hub's negotiated interval so recording keeps
+        // receiving timestamped fMP4 media during the same RTSP session.
+        "-frag_duration",
+        String(
+          Math.max(
+            1000,
+            Math.min(
+              10000,
+              Number(
+                (this.record as any)?.hksvRecordingConfiguration
+                  ?.mediaContainerConfiguration?.fragmentLength,
+              ) || 4000,
+            ),
+          ) * 1000,
+        ),
         "-f",
         "mp4",
         "-movflags",

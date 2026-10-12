@@ -547,7 +547,7 @@ export class HomeKitCameraRecordingDelegate
   ): void {
     const isNormal = reason === HDSProtocolSpecificErrorReason.NORMAL;
     this.platform?.log?.notice?.(
-      `[HKSV][${this.entityId}] Recording stream closed for streamId ${streamId} (reason: ${reason ?? "connection closed"}, normal: ${isNormal})`,
+      `[HKSV][${this.entityId}] Recording stream closed for streamId ${streamId} (reason: ${reason ?? "connection closed"}, normal: ${isNormal}, initSent=${this.deliveredInitInSession}, fragmentsSent=${this.deliveredFragmentsInSession})`,
     );
 
     if (reason && !isNormal) {
@@ -583,6 +583,12 @@ export class HomeKitCameraRecordingDelegate
   }
 
   private handleNewFragment(fragment: Fmp4MediaFragment): void {
+    if (this.isPausedByLiveStream && this.recordingActive) {
+      this.platform?.log?.notice?.(
+        `[HKSV][${this.entityId}] Live View fMP4 fragment seq=${fragment.sequenceNumber ?? "?"} keyframe=${fragment.isKeyframe} bytes=${fragment.data.length}`,
+      );
+    }
+
     // Only accept keyframed fragments into prebuffer to prevent decode corruption
     if (fragment.isKeyframe) {
       this.prebuffer.push(fragment);
