@@ -4,11 +4,17 @@
   <img src="matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
 </div>
 
-> **Matter All-in-One for Home Assistant (v2.1.3)**
+> **Matter All-in-One for Home Assistant (v2.1.5)**
 > Expone entidades verificadas de Home Assistant como accesorios Matter 1.6 estables, cámaras Scrypted passthrough con HKSV y cámaras HomeKit con Live View en Apple Home.
 > **Base:** `matterbridge@3.10.13` · **Node.js:** `24.21.0-alpine3.24` · **TypeScript:** `7.0.2` · **Vitest:** `5.0.3` · **Vite:** `8.3.3` · **Spec:** Matter 1.6.1
 
 ---
+
+### Novedades de la versión 2.1.5
+
+- Las cámaras Omni Tuya descubiertas mediante Camera.UI ya no dependen de una URL RTSP fija guardada. El complemento identifica su entidad `camera.*` real de Home Assistant y solicita una URL firmada nueva para cada Live View, reinicio y reconexión.
+- La renovación de audio y detección local usa la entidad real de Home Assistant, evitando que un ID interno de HAP impida renovar el stream.
+- go2rtc sigue siendo la ruta estable para cámaras IP con URL permanente. Los streams firmados de Tuya se renuevan desde Omni, ya que su autorización caduca.
 
 ### Novedades de la versión 2.1.3
 
