@@ -16,6 +16,7 @@ import {
 import type { CameraUiCameraRecord } from "./cameraui-types.js";
 import { CameraUiStorage } from "./cameraui-storage.js";
 import { resolveHaCameraEntityId } from "./ha-camera-entity.js";
+import { CameraSourceResolver } from "../camera-source-resolver.js";
 import {
   probeCameraSource,
   sanitizeUrlCredentials,
@@ -261,8 +262,24 @@ export class CameraUiHomeKitBridge {
     const isC120 = /(?:\bc120\b|tapo[-_ ]?c120|tapo[-_ ]?spot|\bspot\b)/i.test(
       cameraIdentity,
     );
+    // Camera.UI keeps the original Tuya source as a static RTSP URL.  That is
+    // unsafe for Omni because its URLs are signed and expire.  Resolve the HA
+    // entity before deciding on a source so an Omni camera always goes through
+    // CameraSourceResolver and receives a fresh URL for every HAP session.
+    const discoveredHaEntityId = resolveHaCameraEntityId(
+      camera,
+      platform.ha?.hassStates,
+    );
+    const isOmniTuyaCamera = Boolean(
+      discoveredHaEntityId &&
+        platform.ha?.hassEntities?.get?.(discoveredHaEntityId)?.platform ===
+          "omni_tuya_local",
+    );
     const isHaSourceCamera =
-      camera.sourceProvider === "home_assistant" || isC402 || isC120;
+      camera.sourceProvider === "home_assistant" ||
+      isC402 ||
+      isC120 ||
+      isOmniTuyaCamera;
     if (!camera.homeKitEnabled || (!camera.rtspUrl && !isHaSourceCamera)) {
       return undefined;
     }
@@ -411,11 +428,25 @@ export class CameraUiHomeKitBridge {
       hksvCapable: isRtspSource || isHomeAssistantSource || isC402,
     };
 
-    let resolvedSourceUrl = camera.rtspUrl;
+    // A saved Camera.UI URL is never a valid source of truth for Omni.  Keep
+    // it for the UI only; HAP uses the renewable source below.
+    let resolvedSourceUrl = isOmniTuyaCamera ? undefined : camera.rtspUrl;
     let resolvedSourceType: ResolvedStreamSource["sourceType"] = "rtsp";
-    const haEntityId = isHomeAssistantSource
-      ? resolveHaCameraEntityId(camera, platform.ha?.hassStates)
-      : undefined;
+    const haEntityId = isHomeAssistantSource ? discoveredHaEntityId : undefined;
+
+    if (isOmniTuyaCamera && haEntityId) {
+      const state = platform.ha?.hassStates?.get(haEntityId);
+      const resolved = await CameraSourceResolver.resolve(
+        platform,
+        haEntityId,
+        state,
+      );
+      resolvedSourceUrl = resolved.url;
+      resolvedSourceType = resolved.sourceType;
+      platform.log?.notice?.(
+        `[Camera.UI][${camera.name}] Omni source resolved from Home Assistant (${resolvedSourceUrl ? "renewable" : "unavailable"})`,
+      );
+    }
 
     if (isHomeAssistantSource && !resolvedSourceUrl) {
       // Only a HA camera entity can provide a camera stream. Motion
@@ -452,6 +483,7 @@ export class CameraUiHomeKitBridge {
       requiresBridge: true,
       metadata: {
         isCameraUi: true,
+        isOmniTuyaDirect: isOmniTuyaCamera,
         hasCameraMotion: true,
         capabilitiesProbedBeforePublish: isHomeAssistantSource,
         streamProvider: camera.sourceProvider || "camera_ui",

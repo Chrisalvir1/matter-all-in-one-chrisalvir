@@ -1,3 +1,10 @@
+## [2.1.5] - 2026-10-11
+
+### Recuperación de Omni Tuya después de reinicios
+- Las cámaras Omni descubiertas a través de Camera.UI dejan de usar la URL RTSP fija almacenada. MIAO identifica la entidad real de Home Assistant y pide una URL firmada nueva a Omni para cada conexión HAP.
+- La detección local, la medición de audio y la renovación de Live View usan la entidad `camera.*` real de Home Assistant, nunca el ID interno del accesorio HAP.
+- Una URL fija de go2rtc sigue disponible para cámaras IP permanentes, pero no se usa como fuente de un stream firmado de Tuya porque no puede renovar su autorización.
+
 ## [2.1.3] - 2026-10-11
 
 ### Live View HAP de Omni Tuya

@@ -1191,13 +1191,15 @@ export class HomeKitCameraAccessory {
       !this.platform?.ha?.requestOmniTuyaCameraStream
     ) return;
 
+    const sourceCameraEntityId =
+      this.streamSource.metadata?.sourceCameraEntityId || this.entityId;
     this.localMotionDetector = new FfmpegMotionDetector({
       cameraId: this.entityId,
       cameraName: this.record.name || this.entityId,
       rtspUrl: this.streamSource.url || "",
       fps: 1,
       resolveRtspUrl: async () =>
-        await this.platform.ha.requestOmniTuyaCameraStream(this.entityId),
+        await this.platform.ha.requestOmniTuyaCameraStream(sourceCameraEntityId),
     });
     this.localMotionDetector.on("motion", (detected: boolean) => {
       this.updateMotionState(detected);
@@ -1213,8 +1215,10 @@ export class HomeKitCameraAccessory {
     try {
       // Omni Tuya URLs are single-session signed RTSP credentials. Probe a
       // freshly allocated URL instead of the resolver's expired startup URL.
+      const sourceCameraEntityId =
+        this.streamSource.metadata?.sourceCameraEntityId || this.entityId;
       const probeUrl = this.streamSource.metadata?.isOmniTuyaDirect
-        ? await this.platform?.ha?.requestOmniTuyaCameraStream?.(this.entityId)
+        ? await this.platform?.ha?.requestOmniTuyaCameraStream?.(sourceCameraEntityId)
         : this.streamSource.url;
       if (!probeUrl) return;
       const probe = await probeCameraSource(probeUrl, {
