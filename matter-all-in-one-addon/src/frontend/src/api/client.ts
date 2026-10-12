@@ -74,7 +74,7 @@ export const api = {
       `/cameras/${encodeURIComponent(cameraId)}/verify-stream`,
       {
         method: "POST",
-        body: JSON.stringify({ streamUrl, transport }),
+        body: JSON.stringify({ streamUrl, transport, timeoutMs: 5000 }),
       }
     ),
 
