@@ -493,6 +493,48 @@ describe("HomeKitCameraStreamingDelegate", () => {
     expect(args).toContain("+genpts+discardcorrupt");
     expect(args).not.toContain("-avioflags");
   });
+
+  it("analyzes Omni motion from the existing HomeKit RTSP input", () => {
+    const delegate = new HomeKitCameraStreamingDelegate(
+      createPlatform(),
+      "camera.omni_feeder",
+      { ...capabilities, strategy: "passthrough_h264", requiresTranscoding: false },
+      {
+        ...rtspSource,
+        url: "rtsps://tuya.example/signed",
+        supportsPassthrough: true,
+        metadata: { isOmniTuyaDirect: true },
+      },
+    );
+    const args = delegate.buildStreamArgs(
+      {
+        sessionId: "omni-session",
+        targetAddress: "192.168.1.50",
+        videoPort: 5000,
+        localVideoPort: 5001,
+        videoCryptoSuite: SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
+        videoKeySalt: Buffer.alloc(30, 1),
+        videoSsrc: 1111,
+      },
+      {
+        sessionID: "omni-session",
+        type: StreamRequestTypes.START,
+        video: { fps: 30, width: 640, height: 360, pt: 99 } as any,
+      } as any,
+    );
+
+    expect(args.filter((arg) => arg === "-i")).toHaveLength(1);
+    expect(args).toContain("-map");
+    expect(args).toContain(
+      "fps=1,scale=160:90,format=gray,tblend=all_mode=difference,blackframe=amount=0:thresh=12",
+    );
+    expect(args).toContain("pipe:3");
+    expect(args).toContain("0:a:0?");
+    expect(args).toContain("aac");
+    expect(args).toContain(
+      "frag_keyframe+empty_moov+default_base_moof+skip_sidx+skip_trailer",
+    );
+  });
 });
 
 describe("HomeKitCameraStreamingDelegate — session lifecycle and zombie watchdog", () => {

@@ -58,6 +58,10 @@ export class FfmpegMotionDetector extends EventEmitter {
     return this.running;
   }
 
+  public get isPaused(): boolean {
+    return this.paused;
+  }
+
   public start(log?: any): void {
     if (this.running) return;
     this.running = true;
@@ -77,6 +81,22 @@ export class FfmpegMotionDetector extends EventEmitter {
       `[MotionDetector][${this.opts.cameraName}] Pausing motion detector to yield RTSP socket to ${reason}`,
     );
     this.killProcess();
+    if (this.motionActive) {
+      this.motionActive = false;
+      this.emit("motion", false);
+    }
+  }
+
+  /** Consume the same blackframe measurements when Live View already owns the RTSP reader. */
+  public observeLiveStreamLine(line: string, log?: any): void {
+    if (!this.running || !this.paused || !/pblack:\d+/.test(line)) return;
+    const sensitivity = this.opts.sensitivity;
+    const minChangedPercent =
+      this.opts.changeThresholdPercent ??
+      (typeof sensitivity === "number" && sensitivity > 0 && sensitivity < 100
+        ? Math.max(1, Math.round(10 - (sensitivity / 100) * 8))
+        : 4);
+    this.parseLine(line, 100 - minChangedPercent, log);
   }
 
   public resume(log?: any, reason = "Live View ended"): void {
@@ -122,6 +142,13 @@ export class FfmpegMotionDetector extends EventEmitter {
       (url) => {
         this.spawning = false;
         if (!this.running || this.paused) return;
+        if (!url && this.opts.resolveRtspUrl) {
+          log?.debug?.(
+            `[MotionDetector][${this.opts.cameraName}] source renewal returned no URL; retrying without reusing a stale stream`,
+          );
+          this.scheduleRestart(log);
+          return;
+        }
         this.spawnProcessForUrl(url || this.opts.rtspUrl, log);
       },
       (err) => {
@@ -174,8 +201,8 @@ export class FfmpegMotionDetector extends EventEmitter {
       1,
       Math.min(this.opts.pixelDifferenceThreshold ?? 12, 255),
     );
-    // amount=95 suppresses reports when more than 5% of pixels change,
-    // exactly the frames a motion detector needs. amount=0 reports every frame.
+    // Cameras that opt in report every difference frame so large nearby
+    // subjects are not filtered before the motion threshold can evaluate them.
     const reportAmount = this.opts.reportAllFrameChanges ? 0 : 95;
     const analysisFps = Math.max(1, Math.min(this.opts.fps ?? 1, 5));
     const vf = `fps=${analysisFps},scale=${analysisWidth}:${analysisHeight},format=gray,tblend=all_mode=difference,blackframe=amount=${reportAmount}:thresh=${pixelDifferenceThreshold}`;

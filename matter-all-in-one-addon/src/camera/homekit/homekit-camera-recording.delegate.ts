@@ -348,6 +348,25 @@ export class HomeKitCameraRecordingDelegate
       `[HKSV][${this.entityId}] STAGE: prebuffer PAUSED — Live View activo, liberando socket RTSP`,
     );
     this.stopPrebufferPipeline();
+    if (this.streamSource.metadata?.isOmniTuyaDirect === true) {
+      // Omni direct RTSP only permits one reader. Live View will supply a fresh
+      // fMP4 output from its existing reader; never mix fragments from the old
+      // prebuffer timeline with the new live-stream timeline.
+      this.segmenter.reset();
+      this.initializationSegment = null;
+      this.clearPrebuffer();
+    }
+  }
+
+  /** Feed fMP4 bytes from the active HomeKit RTSP reader while Live View owns Omni's socket. */
+  public ingestLiveViewRecordingChunk(chunk: Buffer): void {
+    if (
+      this.streamSource.metadata?.isOmniTuyaDirect !== true ||
+      !this.isPausedByLiveStream ||
+      !this.recordingActive ||
+      !chunk?.length
+    ) return;
+    this.segmenter.push(chunk);
   }
 
   /**

@@ -45,6 +45,94 @@ describe("motion reporting", () => {
     detector.stop();
   });
 
+  it("continues reporting motion from Live View frames while its RTSP reader is paused", () => {
+    vi.useFakeTimers();
+    const process = Object.assign(new EventEmitter(), { stderr: new EventEmitter(), kill: vi.fn() });
+    vi.mocked(spawn).mockReturnValue(process as any);
+    const detector = new FfmpegMotionDetector({
+      cameraId: "omni-feeder",
+      cameraName: "Omni Feeder",
+      rtspUrl: "rtsp://example/live",
+      changeThresholdPercent: 4,
+    });
+    const motion = vi.fn();
+    detector.on("motion", motion);
+    detector.start();
+    detector.pause();
+
+    // A nearby subject can change well over 5% of pixels; the inline filter
+    // must still deliver that frame to the shared motion threshold.
+    detector.observeLiveStreamLine("frame:1 pblack:80 pts:1");
+
+    expect(motion).toHaveBeenCalledWith(true);
+    vi.advanceTimersByTime(15_000);
+    expect(motion).toHaveBeenLastCalledWith(false);
+    detector.stop();
+  });
+
+  it("requests a fresh signed Omni URL after Live View releases the socket", async () => {
+    const process = Object.assign(new EventEmitter(), { stderr: new EventEmitter(), kill: vi.fn() });
+    vi.mocked(spawn).mockReturnValue(process as any);
+    const resolveRtspUrl = vi
+      .fn()
+      .mockResolvedValueOnce("rtsps://tuya.example/session?signature=first")
+      .mockResolvedValueOnce("rtsps://tuya.example/session?signature=renewed");
+    const detector = new FfmpegMotionDetector({
+      cameraId: "omni-feeder",
+      cameraName: "Omni Feeder",
+      rtspUrl: "rtsps://tuya.example/stale",
+      resolveRtspUrl,
+    });
+
+    detector.start();
+    await Promise.resolve();
+    await Promise.resolve();
+    detector.pause();
+    detector.resume();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(resolveRtspUrl).toHaveBeenCalledTimes(2);
+    const firstArgs = vi.mocked(spawn).mock.calls[0][1] as string[];
+    const resumedArgs = vi.mocked(spawn).mock.calls[1][1] as string[];
+    expect(firstArgs[firstArgs.indexOf("-i") + 1]).toBe(
+      "rtsps://tuya.example/session?signature=first",
+    );
+    expect(resumedArgs[resumedArgs.indexOf("-i") + 1]).toBe(
+      "rtsps://tuya.example/session?signature=renewed",
+    );
+    detector.stop();
+  });
+
+  it("never falls back to the persisted Omni URL when renewal fails after restart", async () => {
+    vi.useFakeTimers();
+    const process = Object.assign(new EventEmitter(), { stderr: new EventEmitter(), kill: vi.fn() });
+    vi.mocked(spawn).mockReturnValue(process as any);
+    const resolveRtspUrl = vi
+      .fn()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce("rtsps://tuya.example/session?signature=fresh");
+    const detector = new FfmpegMotionDetector({
+      cameraId: "omni-feeder",
+      cameraName: "Omni Feeder",
+      rtspUrl: "rtsps://tuya.example/session?signature=stale",
+      resolveRtspUrl,
+    });
+
+    detector.start();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(spawn).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(3_000);
+    expect(spawn).toHaveBeenCalledTimes(1);
+    const args = vi.mocked(spawn).mock.calls[0][1] as string[];
+    expect(args[args.indexOf("-i") + 1]).toBe(
+      "rtsps://tuya.example/session?signature=fresh",
+    );
+    detector.stop();
+  });
+
   it("detects subtle vehicle motion with fps=2 and changeThresholdPercent=1", () => {
     const process = Object.assign(new EventEmitter(), { stderr: new EventEmitter(), kill: vi.fn() });
     vi.mocked(spawn).mockReturnValue(process as any);

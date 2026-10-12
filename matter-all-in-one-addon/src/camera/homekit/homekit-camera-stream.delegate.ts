@@ -4,6 +4,7 @@ import fsSync from "node:fs";
 import {
   AudioStreamingCodecType,
   AudioStreamingSamplerate,
+  AudioRecordingSamplerate,
   CameraController,
   CameraStreamingDelegate,
   H264Level,
@@ -1264,9 +1265,19 @@ export class HomeKitCameraStreamingDelegate
           isHaProxyStream ? "pipe" : "ignore",
           (isTapoC402 || isTapoC120) ? "pipe" : "ignore",
           "pipe",
+          this.streamSource.metadata?.isOmniTuyaDirect === true &&
+          /^rtsps?:\/\//i.test(sourceUrl || "")
+            ? "pipe"
+            : "ignore",
         ],
       });
       session.process = process;
+      const recordingPipe = process.stdio[3];
+      if (recordingPipe && typeof recordingPipe !== "string") {
+        recordingPipe.on("data", (chunk: Buffer) => {
+          this.emit("recording-analysis-data", chunk);
+        });
+      }
       if (isHaProxyStream && sourceUrl) {
         this.startHaCameraProxyPipe(session, process, sourceUrl);
       }
@@ -1296,6 +1307,9 @@ export class HomeKitCameraStreamingDelegate
         const text = chunk.toString();
         for (const line of text.split(/\r?\n/)) {
           this.recordFfmpegProgress(session, line);
+          if (/pblack:\d+/.test(line)) {
+            this.emit("motion-analysis-line", line);
+          }
         }
         // Keep a short, pre-sanitized failure summary only. Raw FFmpeg stderr
         // can contain source URLs or HTTP authorization headers.
@@ -2008,6 +2022,78 @@ export class HomeKitCameraStreamingDelegate
           `[Stream][${this.entityId}] Omitiendo audio AAC-ELD: FFmpeg no incluye libfdk_aac; se conserva el video para HomeKit`,
         );
       }
+    }
+
+    // Omni Tuya feeders allow one signed RTSP reader. Reuse this live FFmpeg
+    // input for low-rate frame-difference motion analysis while Casa is open.
+    // The detector's separate RTSP reader is paused during Live View.
+    if (
+      this.streamSource.metadata?.isOmniTuyaDirect === true &&
+      /^rtsps?:\/\//i.test(sourceUrl)
+    ) {
+      args.push(
+        "-map",
+        "0:v:0",
+        "-vf",
+        "fps=1,scale=160:90,format=gray,tblend=all_mode=difference,blackframe=amount=0:thresh=12",
+        "-an",
+        "-f",
+        "null",
+        "-",
+      );
+      // Keep HKSV alive during Live View without asking Omni for a second
+      // signed RTSP session. The accessory feeds this fMP4 pipe into the
+      // recording delegate while its normal prebuffer reader is paused.
+      args.push(
+        "-map",
+        "0:v:0",
+        "-c:v",
+        "copy",
+        "-bsf:v",
+        "dump_extra=freq=keyframe",
+      );
+      if (this.capabilities.hasAudio) {
+        const recordingAudio = (this.record as any)?.hksvRecordingConfiguration?.audioCodec;
+        const requestedSampleRate = recordingAudio?.samplerate;
+        const sampleRate =
+          requestedSampleRate === AudioRecordingSamplerate.KHZ_8 ? 8000 :
+          requestedSampleRate === AudioRecordingSamplerate.KHZ_16 ? 16000 :
+          requestedSampleRate === AudioRecordingSamplerate.KHZ_24 ? 24000 :
+          requestedSampleRate === AudioRecordingSamplerate.KHZ_44_1 ? 44100 :
+          requestedSampleRate === AudioRecordingSamplerate.KHZ_48 ? 48000 : 32000;
+        const channels = Math.max(1, Math.min(2, Number(recordingAudio?.audioChannels) || 1));
+        args.push(
+          "-map",
+          "0:a:0?",
+          "-c:a",
+          "aac",
+          "-af",
+          "aresample=async=1:first_pts=0",
+          "-ar",
+          String(sampleRate),
+          "-ac",
+          String(channels),
+          "-b:a",
+          `${Math.max(16, Math.min(64, Number(recordingAudio?.bitrate) || 32))}k`,
+        );
+      } else {
+        args.push("-an");
+      }
+      args.push(
+        "-avoid_negative_ts",
+        "make_zero",
+        "-max_interleave_delta",
+        "0",
+        "-muxdelay",
+        "0",
+        "-muxpreload",
+        "0",
+        "-f",
+        "mp4",
+        "-movflags",
+        "frag_keyframe+empty_moov+default_base_moof+skip_sidx+skip_trailer",
+        "pipe:3",
+      );
     }
 
     return args;

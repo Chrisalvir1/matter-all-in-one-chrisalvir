@@ -1,4 +1,11 @@
-## [Unreleased]
+## [2.1.12] - 2026-10-12
+
+- Mantiene la detección de movimiento mientras Apple Casa muestra Live View, analizando una rama de baja resolución del mismo FFmpeg/RTSP para no competir por la conexión del comedero Omni.
+- Entrega también los fragmentos fMP4 de HKSV desde el mismo lector durante Live View, para que Apple no cierre la sesión por `TIMEOUT` al faltar video.
+- Mantiene audio en las grabaciones compartidas al convertirlo a AAC-LC; conserva la identidad HAP tras reinicios y solicita URLs RTSP nuevas al abrir o reanudar la cámara.
+- Si Omni aún no responde tras un reinicio, MIAO reintenta obtener el RTSP firmado y no usa la URL vencida guardada.
+- Evita que el filtro suprima fotogramas con cambios grandes, como un gato cruzando cerca de la cámara.
+- Amplía a cinco segundos el tiempo de la verificación de streams Tuya RTSPS y documenta que la clasificación de animales requiere una fuente de eventos IA externa.
 
 ## [2.1.11] - 2026-10-12
 

@@ -4,9 +4,21 @@
   <img src="matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
 </div>
 
-> **Matter All-in-One for Home Assistant (v2.1.8)**
+> **Matter All-in-One for Home Assistant (v2.1.12)**
 > Expone entidades verificadas de Home Assistant como accesorios Matter 1.6 estables, cámaras Scrypted passthrough con HKSV y cámaras HomeKit con Live View en Apple Home.
 > **Base:** `matterbridge@3.10.13` · **Node.js:** `24.21.0-alpine3.24` · **TypeScript:** `7.0.2` · **Vitest:** `5.0.3` · **Vite:** `8.3.3` · **Spec:** Matter 1.6.1
+
+---
+
+### Novedades de la versión 2.1.12
+
+- Mantiene detección y entrega de video fMP4 a HKSV durante Live View de Apple Casa usando el mismo lector RTSP activo, sin abrir otra sesión al comedero Omni.
+- Evita que HKSV quede sin fragmentos durante Live View y que la sesión de grabación cierre por `TIMEOUT`.
+- Conserva el audio AAC-LC en los clips y el emparejamiento HAP tras reinicios; cada nueva sesión renueva la URL RTSP firmada de Omni.
+- Si Omni aún no respondió después de reiniciar, el detector vuelve a intentarlo sin reutilizar una credencial caducada.
+- Ajusta el análisis para conservar cambios grandes de imagen, como el paso cercano de una mascota.
+- Las casillas de gato/perro filtran eventos clasificados por una integración externa; MIAO no ejecuta por sí solo un modelo de reconocimiento de animales.
+- Verificar Stream espera hasta cinco segundos para medir un RTSP Tuya firmado por RTSPS.
 
 ---
 

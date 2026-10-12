@@ -500,6 +500,30 @@ describe("HomeKitCameraRecordingDelegate", () => {
 });
 
 describe("HomeKitCameraRecordingDelegate — pause/resume symmetric cycle", () => {
+  it("uses the active Live View reader for HKSV while Omni's prebuffer is paused", () => {
+    const delegate = new HomeKitCameraRecordingDelegate(
+      mockPlatform,
+      "camera.driveway",
+      createMockRecord() as any,
+      { videoCodec: "h264", hasAudio: false } as any,
+      {
+        sourceType: "rtsp",
+        url: "rtsps://example.invalid/signed",
+        metadata: { isOmniTuyaDirect: true },
+      } as any,
+    );
+    (delegate as any).recordingActive = true;
+    const pushSpy = vi.spyOn((delegate as any).segmenter, "push");
+
+    delegate.pausePrebuffer();
+    delegate.ingestLiveViewRecordingChunk(Buffer.from("shared-live-fmp4"));
+
+    expect(pushSpy).toHaveBeenCalledWith(Buffer.from("shared-live-fmp4"));
+    expect((delegate as any).initializationSegment).toBeNull();
+    expect((delegate as any).prebuffer).toHaveLength(0);
+    delegate.destroy();
+  });
+
   it("does not spawn a reader when Live View pauses during Omni allocation", async () => {
     let finishAllocation!: (source: any) => void;
     const allocation = new Promise<any>((resolve) => { finishAllocation = resolve; });

@@ -373,6 +373,18 @@ export class HomeKitCameraAccessory {
       this.recordingDelegate?.pausePrebuffer();
       this.localMotionDetector?.pause(this.platform?.log, "Apple Home Live View");
     });
+    this.delegate.on("motion-analysis-line", (line: string) => {
+      this.localMotionDetector?.observeLiveStreamLine(line, this.platform?.log);
+    });
+    this.delegate.on("recording-analysis-data", (chunk: Buffer) => {
+      const recordingDelegate = this.recordingDelegate;
+      if (
+        recordingDelegate &&
+        "ingestLiveViewRecordingChunk" in recordingDelegate
+      ) {
+        recordingDelegate.ingestLiveViewRecordingChunk(chunk);
+      }
+    });
     this.delegate.on("session-end", () => {
       if (this.delegate?.hasActiveSessions()) {
         this.platform?.log?.debug?.(
@@ -1199,6 +1211,7 @@ export class HomeKitCameraAccessory {
       cameraName: this.record.name || this.entityId,
       rtspUrl: this.streamSource.url || "",
       fps: 1,
+      reportAllFrameChanges: true,
       resolveRtspUrl: async () =>
         await this.platform.ha.requestOmniTuyaCameraStream(sourceCameraEntityId),
     });

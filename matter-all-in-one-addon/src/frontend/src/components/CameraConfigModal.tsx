@@ -1253,9 +1253,11 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                     marginBottom: 14,
                   }}
                 >
-                  MIAO no ejecuta OpenCV ni reconoce objetos en los fotogramas.
-                  Recibe eventos clasificados por Camera.UI o entidades de Home
-                  Assistant, y estas casillas filtran qué clases aceptar.
+                  Estas opciones no activan visión artificial ni identifican
+                  gatos o perros. MIAO detecta movimiento por cambios de imagen;
+                  para clasificar animales necesita eventos ya etiquetados por
+                  Camera.UI u otra entidad de Home Assistant. Estas casillas
+                  solo filtran esas etiquetas externas.
                 </p>
 
                 {activeAiDetection && (

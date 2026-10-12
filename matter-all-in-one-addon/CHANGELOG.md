@@ -1,3 +1,14 @@
+## [2.1.12] - 2026-10-12
+
+- MIAO analiza diferencias de fotogramas en la misma conexión RTSP que Casa ya usa durante Live View. El detector ya no se pausa sin reemplazo y evita abrir una segunda sesión al comedero Omni.
+- Cuando Casa tiene Live View abierto, MIAO también entrega el video fMP4 al flujo HKSV desde esa misma conexión. Así la grabación no depende de abrir un segundo RTSP ni queda sin fragmentos hasta cerrar con `TIMEOUT`.
+- La salida HKSV compartida conserva audio y lo convierte a AAC-LC con la frecuencia solicitada por Casa.
+- Los reinicios conservan la identidad y el emparejamiento HAP, y cada nueva sesión vuelve a pedir credenciales RTSP temporales a Omni.
+- Si Omni aún no ha vuelto tras un reinicio, el detector reintenta la renovación en vez de abrir la URL firmada antigua.
+- La rama de análisis procesa cada fotograma de baja resolución, incluidas diferencias grandes, antes de aplicar el umbral de movimiento; el filtro anterior podía ocultar el paso cercano de un animal.
+- Verificar Stream concede cinco segundos a la medición de streams Tuya firmados por RTSPS.
+- Aclara en la interfaz que MIAO enruta eventos clasificados externos; las casillas de gato/perro no son un modelo visual que identifique animales por sí solo.
+
 ## [2.1.11] - 2026-10-12
 
 - Pausa HKSV y detección local antes de solicitar RTSP para Live View. Impide que una asignación de prebuffer pendiente arranque después de la pausa e invalide el stream con 404.
