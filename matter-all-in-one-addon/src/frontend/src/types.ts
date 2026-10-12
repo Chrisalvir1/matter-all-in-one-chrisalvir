@@ -44,6 +44,7 @@ export type HapProfile =
   | "outlet_hap"
   | "switch_hap"
   | "lightbulb_hap"
+  | "number_hap"
   | "lock_hap"
   | "window_covering_hap"
   | "door_hap"

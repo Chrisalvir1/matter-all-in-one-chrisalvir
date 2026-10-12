@@ -67,13 +67,13 @@ export const HapExportModal: React.FC<HapExportModalProps> = ({
           input_select: "switch_hap",
           remote: "television",
           water_heater: "heater_cooler",
-          number: "switch_hap",
+          number: "number_hap",
           select: "switch_hap",
           button: "switch_hap",
           scene: "switch_hap",
           script: "switch_hap",
           automation: "switch_hap",
-          input_number: "switch_hap",
+          input_number: "number_hap",
         };
         if (defaultMap[domain]) setSelectedProfile(defaultMap[domain]!);
       })

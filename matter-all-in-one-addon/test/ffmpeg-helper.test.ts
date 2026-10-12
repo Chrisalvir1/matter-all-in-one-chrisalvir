@@ -23,7 +23,15 @@ describe("FFmpeg Helper", () => {
       "http://192.168.1.10:8123/api/camera_proxy_stream/camera.front?token=SECRET_JWT_TOKEN_12345";
     const clean = sanitizeUrlCredentials(raw);
     expect(clean).not.toContain("SECRET_JWT_TOKEN_12345");
-    expect(clean).toContain("token=***");
+    expect(clean).toContain("?***");
+  });
+
+  it("removes vendor-signed camera query strings from logs", () => {
+    const raw = "rtsps://echo:secret@stream.example/v1/camera?signInfo=SIGNED_TUYA_VALUE&device=private";
+    const clean = sanitizeUrlCredentials(raw);
+    expect(clean).toBe("rtsps://echo:***@stream.example/v1/camera?***");
+    expect(clean).not.toContain("SIGNED_TUYA_VALUE");
+    expect(clean).not.toContain("private");
   });
 
   it("resolves ffmpeg path or returns null gracefully if missing", () => {

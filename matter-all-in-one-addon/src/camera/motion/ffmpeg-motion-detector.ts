@@ -16,6 +16,11 @@ export interface FfmpegMotionDetectorOptions {
   cameraId: string;
   cameraName: string;
   rtspUrl: string;
+  /**
+   * Optional renewable source for cameras that issue short-lived RTSP URLs
+   * (for example Omni Tuya). It is requested before every FFmpeg start.
+   */
+  resolveRtspUrl?: () => Promise<string | undefined>;
   /** Percentage of changed pixels required to trigger motion (default: 4, meaning pblack <= 96 triggers). */
   changeThresholdPercent?: number;
   /** Sensitivity 1–99 (alternative). Higher = triggers on smaller movement. Default: 75. */
@@ -43,6 +48,7 @@ export class FfmpegMotionDetector extends EventEmitter {
   private resetTimer?: NodeJS.Timeout;
   private restartTimer?: NodeJS.Timeout;
   private consecutiveErrors = 0;
+  private spawning = false;
 
   constructor(private readonly opts: FfmpegMotionDetectorOptions) {
     super();
@@ -106,12 +112,34 @@ export class FfmpegMotionDetector extends EventEmitter {
   }
 
   private spawnProcess(log?: any): void {
+    if (!this.running || this.paused || this.spawning) return;
+    if (!this.opts.resolveRtspUrl) {
+      this.spawnProcessForUrl(this.opts.rtspUrl, log);
+      return;
+    }
+    this.spawning = true;
+    void this.opts.resolveRtspUrl().then(
+      (url) => {
+        this.spawning = false;
+        if (!this.running || this.paused) return;
+        this.spawnProcessForUrl(url || this.opts.rtspUrl, log);
+      },
+      (err) => {
+        this.spawning = false;
+        log?.debug?.(`[MotionDetector][${this.opts.cameraName}] source renewal failed: ${err instanceof Error ? err.message : String(err)}`);
+        this.scheduleRestart(log);
+      },
+    );
+  }
+
+  private spawnProcessForUrl(sourceUrl: string, log?: any): void {
     if (!this.running || this.paused) return;
+    try {
     const ffmpegPath = resolveFfmpegPath();
     if (!ffmpegPath) return;
 
     // Normalize URL for FFmpeg compatibility
-    let url = (this.opts.rtspUrl || "")
+    let url = (sourceUrl || "")
       .replace(/^(rtsps?):\/\/localhost(?=[:/])/i, "$1://127.0.0.1");
     const hashIdx = url.indexOf("#");
     if (hashIdx !== -1) url = url.substring(0, hashIdx);
@@ -208,6 +236,10 @@ export class FfmpegMotionDetector extends EventEmitter {
         this.scheduleRestart(log);
       }
     });
+    } catch (err) {
+      log?.debug?.(`[MotionDetector][${this.opts.cameraName}] source renewal failed: ${err instanceof Error ? err.message : String(err)}`);
+      this.scheduleRestart(log);
+    }
   }
 
   private lastHeartbeatAt = 0;

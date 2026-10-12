@@ -35,6 +35,7 @@ import {
   supportsFdkAac,
   checkAudioPassthroughCompatibility,
   detectPrimaryNetworkInterface,
+  probeCameraSource,
 } from "./ffmpeg-helper.js";
 import {
   createSessionTelemetry,
@@ -1111,6 +1112,28 @@ export class HomeKitCameraStreamingDelegate
       );
       callback(new Error("FFmpeg or RTSP source is unavailable"));
       return;
+    }
+    // Omni issues a new single-session RTSP URL for each HomeKit open. The
+    // startup probe can therefore describe an older URL and incorrectly mark
+    // its audio as absent. Probe the exact URL about to be sent to FFmpeg.
+    if (this.streamSource.metadata?.isOmniTuyaDirect === true) {
+      try {
+        const probe = await probeCameraSource(sourceUrl, { timeoutMs: 4000 });
+        if (probe.valid) {
+          this.capabilities.hasAudio = probe.hasAudio;
+          this.capabilities.audioCodec = probe.hasAudio
+            ? (probe.audioCodec || "incompatible") as any
+            : "none";
+          this.capabilities.audioSampleRate = probe.audioSampleRate;
+          this.capabilities.audioChannels = probe.audioChannels;
+          this.platform?.log?.notice?.(
+            `[HomeKitCamera][${this.entityId}] Fresh Omni stream probe: audio=${probe.hasAudio ? `${probe.audioCodec || "present"}/${probe.audioSampleRate || "unknown"}Hz` : "absent"}`,
+          );
+        }
+      } catch {
+        // The stream start remains available; the existing capability record
+        // decides whether Apple receives an audio RTP branch.
+      }
     }
     // HomeKit on iOS can request default low bitrates (e.g. 299k).
     // Ensure a high-fidelity floor: at least 3500k-5000k for 2K (Tapo/Wyze), 6000k-8000k for 4K.

@@ -60,11 +60,17 @@ export function sanitizeUrlCredentials(url: string): string {
     }
   }
 
-  // Mask sensitive query parameters (token, auth, secret, api_key, access_token)
+  // Mask known sensitive query parameters first.
   sanitized = sanitized.replace(
-    /([?&](?:token|auth|secret|api_key|access_token|key)=)([^&]+)/gi,
+    /([?&](?:token|auth|secret|api_key|access_token|key|signinfo|signature|sig|expires|timestamp)=)([^&]+)/gi,
     "$1***",
   );
+
+  // Signed camera URLs use vendor-defined parameter names (for example
+  // Tuya's signInfo). A log never needs their query string, so remove every
+  // remaining query value instead of maintaining a vendor-specific denylist.
+  const queryIndex = sanitized.indexOf("?");
+  if (queryIndex !== -1) sanitized = `${sanitized.slice(0, queryIndex)}?***`;
 
   return sanitized;
 }
