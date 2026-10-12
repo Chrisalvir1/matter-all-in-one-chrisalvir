@@ -2127,23 +2127,29 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               const isPerson = /person|persona|humano|human|face|cara/i.test(
                 allText,
               );
-              const isPet =
-                /dog|perro|cat|gato|pet|animal|mascota|bird|ave/i.test(allText);
+              const isDog = /dog|perro/i.test(allText);
+              const isCat = /cat|gato/i.test(allText);
+              const isBird = /bird|ave|pajaro|pájaro/i.test(allText);
               const targets: import("./camera/camera-types.js").CameraAiTarget[] =
                 [];
               if (isVehicle) targets.push("vehicle");
               if (isPerson) targets.push("person");
-              if (isPet) targets.push("dog");
-              if (targets.length === 0) targets.push("person");
-
-              this.cameraAiDetector.dispatchDetection(this, matchedCuiId, {
-                cameraId: matchedCuiId,
-                timestamp: Date.now(),
-                targets,
-                labels: [String(triggerInfo)],
-                confidence: 0.95,
-                rawDetails: `Camera.UI OpenCV: ${triggerInfo}`,
-              });
+              if (isDog) targets.push("dog");
+              if (isCat) targets.push("cat");
+              if (isBird) targets.push("bird");
+              // A generic motion webhook is not evidence of a person. Keep
+              // motion reporting above, but only publish object detections
+              // when the source explicitly identifies a supported class.
+              if (targets.length > 0) {
+                this.cameraAiDetector.dispatchDetection(this, matchedCuiId, {
+                  cameraId: matchedCuiId,
+                  timestamp: Date.now(),
+                  targets,
+                  labels: [String(triggerInfo)],
+                  confidence: 0.95,
+                  rawDetails: `Camera.UI event: ${triggerInfo}`,
+                });
+              }
             }
 
             const existingTimer =
@@ -8543,17 +8549,24 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             this.ha?.hassStates?.get(cameraId) ||
             this.ha?.hassStates?.get(`camera.${cleanId}`);
 
+          const requestedUrl = String(parsed.streamUrl || "").trim();
           let targetUrl =
-            String(parsed.streamUrl || "").trim() ||
+            requestedUrl ||
             scryptedCam?.source.streamReference?.directUrl ||
             cuiCam?.rtspUrl ||
-            (haState?.attributes as any)?.stream_source ||
             "";
 
-          if (!targetUrl && haState && this.ha?.hassEntities?.get(cameraId)?.platform === "omni_tuya_local") {
+          // HA's stream_source may be a temporary HLS proxy URL for an Omni
+          // camera. Ask Omni first so diagnostics test the same fresh signed
+          // RTSP source the HomeKit session should consume.
+          if (!requestedUrl && !scryptedCam && !cuiCam && haState && this.ha?.hassEntities?.get(cameraId)?.platform === "omni_tuya_local") {
             try {
               targetUrl = (await this.ha.requestOmniTuyaCameraStream(cameraId)) || "";
             } catch {}
+          }
+
+          if (!targetUrl) {
+            targetUrl = (haState?.attributes as any)?.stream_source || "";
           }
 
           if (!targetUrl && haState) {
@@ -8784,12 +8797,23 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             return;
           }
 
+          const requestedUrl = String(parsed.streamUrl || "").trim();
           let targetUrl =
-            String(parsed.streamUrl || "").trim() ||
+            requestedUrl ||
             scryptedCam?.source.streamReference?.directUrl ||
             cuiCam?.rtspUrl ||
-            (haState?.attributes as any)?.stream_source ||
             "";
+
+          // Prefer Omni's newly allocated Tuya RTSP URL over HA's expiring
+          // HLS stream_source for cameras registered by Omni Tuya Local.
+          if (!requestedUrl && !scryptedCam && !cuiCam && haState && this.ha?.hassEntities?.get(cameraId)?.platform === "omni_tuya_local") {
+            try {
+              targetUrl = (await this.ha.requestOmniTuyaCameraStream(cameraId)) || "";
+            } catch {}
+          }
+          if (!targetUrl) {
+            targetUrl = (haState?.attributes as any)?.stream_source || "";
+          }
 
           try {
             if (
@@ -8811,12 +8835,6 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               }
             }
           } catch {}
-
-          if (!targetUrl && haState && this.ha?.hassEntities?.get(cameraId)?.platform === "omni_tuya_local") {
-            try {
-              targetUrl = (await this.ha.requestOmniTuyaCameraStream(cameraId)) || "";
-            } catch {}
-          }
 
           if (!targetUrl && haState) {
             try {
@@ -9500,25 +9518,26 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
                     );
                   const isPerson =
                     /person|persona|humano|human|face|cara/i.test(allText);
-                  const isPet =
-                    /dog|perro|cat|gato|pet|animal|mascota|bird|ave/i.test(
-                      allText,
-                    );
+                  const isDog = /dog|perro/i.test(allText);
+                  const isCat = /cat|gato/i.test(allText);
+                  const isBird = /bird|ave|pajaro|pájaro/i.test(allText);
                   const targets: import("./camera/camera-types.js").CameraAiTarget[] =
                     [];
                   if (isVehicle) targets.push("vehicle");
                   if (isPerson) targets.push("person");
-                  if (isPet) targets.push("dog");
-                  if (targets.length === 0) targets.push("person");
-
-                  this.cameraAiDetector.dispatchDetection(this, cuiId, {
-                    cameraId: cuiId,
-                    timestamp: Date.now(),
-                    targets,
-                    labels: [String(triggerInfo)],
-                    confidence: 0.95,
-                    rawDetails: `Camera.UI Webhook: ${triggerInfo}`,
-                  });
+                  if (isDog) targets.push("dog");
+                  if (isCat) targets.push("cat");
+                  if (isBird) targets.push("bird");
+                  if (targets.length > 0) {
+                    this.cameraAiDetector.dispatchDetection(this, cuiId, {
+                      cameraId: cuiId,
+                      timestamp: Date.now(),
+                      targets,
+                      labels: [String(triggerInfo)],
+                      confidence: 0.95,
+                      rawDetails: `Camera.UI webhook: ${triggerInfo}`,
+                    });
+                  }
 
                   // Auto-reset motion after 10 seconds if Camera.UI only pushes active events
                   const existingTimer =

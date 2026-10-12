@@ -459,9 +459,14 @@ export class HomeKitCameraAccessory {
           },
           resolutions: this.buildDeclaredResolutions(),
         },
-        audio: {
-          codecs: audioCodecs,
-        },
+        // Only advertise a microphone when the source probe confirmed an
+        // audio track. Guessing here made HomeKit request audio and the
+        // delegate send synthetic silence for Omni Tuya cameras.
+        audio: this.capabilities.hasAudio
+          ? {
+              codecs: audioCodecs,
+            }
+          : undefined,
       },
       sensors: this.motionService ? { motion: this.motionService } : undefined,
     };
@@ -1169,7 +1174,13 @@ export class HomeKitCameraAccessory {
   public async probeAndAdaptCapabilities(): Promise<void> {
     if (!this.streamSource.url) return;
     try {
-      const probe = await probeCameraSource(this.streamSource.url, {
+      // Omni Tuya URLs are single-session signed RTSP credentials. Probe a
+      // freshly allocated URL instead of the resolver's expired startup URL.
+      const probeUrl = this.streamSource.metadata?.isOmniTuyaDirect
+        ? await this.platform?.ha?.requestOmniTuyaCameraStream?.(this.entityId)
+        : this.streamSource.url;
+      if (!probeUrl) return;
+      const probe = await probeCameraSource(probeUrl, {
         timeoutMs: 4000,
       });
       if (probe.valid && probe.videoCodec) {
@@ -1182,6 +1193,20 @@ export class HomeKitCameraAccessory {
           : "passthrough_h264";
         if (probe.hasAudio !== undefined) {
           this.capabilities.hasAudio = probe.hasAudio;
+        }
+        if (probe.hasAudio && probe.audioCodec) {
+          const audioCodec = probe.audioCodec.toLowerCase();
+          this.capabilities.audioCodec = audioCodec.includes("aac")
+            ? "aac_lc"
+            : audioCodec.includes("opus")
+              ? "opus"
+              : "pcm";
+          this.capabilities.audioSampleRate = probe.audioSampleRate;
+          this.capabilities.audioChannels = probe.audioChannels;
+        } else if (probe.hasAudio === false) {
+          this.capabilities.audioCodec = "none";
+          this.capabilities.audioSampleRate = undefined;
+          this.capabilities.audioChannels = undefined;
         }
         if (probe.width && probe.height) {
           this.capabilities.resolution = {

@@ -1037,9 +1037,22 @@ export class HomeKitCameraStreamingDelegate
           }
         }
         if (wasOmniTuyaSource && !renewedOmniSource) {
-          // Never retry an expired signed URL. A failed renewal leaves HAP to
-          // report an unavailable source; the next HomeKit open will request again.
-          sourceUrl = "";
+          // Never reuse an expired signed URL. Ask HA for a fresh camera
+          // stream (which may be backed by go2rtc), then fall back to HA's
+          // authenticated camera proxy. A later HomeKit open tries Omni again.
+          const fallback = state
+            ? await CameraSourceResolver.resolveOmniTuyaFallback(
+                this.platform,
+                haEntityId,
+                state,
+              )
+            : undefined;
+          if (fallback?.url) {
+            this.streamSource = fallback;
+            sourceUrl = this.getCleanSourceUrl();
+          } else {
+            sourceUrl = "";
+          }
         } else if (!renewedOmniSource && state) {
           try {
             const fresh = await CameraSourceResolver.resolve(

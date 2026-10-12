@@ -1253,9 +1253,9 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                     marginBottom: 14,
                   }}
                 >
-                  Integración y enrutamiento en tiempo real de detecciones
-                  OpenCV (vehículos, personas y fauna) desde Camera.UI y Home
-                  Assistant hacia Apple HomeKit.
+                  MIAO no ejecuta OpenCV ni reconoce objetos en los fotogramas.
+                  Recibe eventos clasificados por Camera.UI o entidades de Home
+                  Assistant, y estas casillas filtran qué clases aceptar.
                 </p>
 
                 {activeAiDetection && (

@@ -529,7 +529,10 @@ function probeWithFfprobe(
       ) {
         friendly = `Conexión rechazada (Connection refused en puerto ${portStr}). Verifica la IP y que el servicio RTSP esté activo en ese puerto.`;
       } else if (raw.includes("401") || raw.includes("Unauthorized")) {
-        friendly = `Autenticación requerida (401 Unauthorized). El stream RTSP requiere usuario y contraseña (rtsp://usuario:clave@ip:${portStr}/...).`;
+        const isHttp = /^https?:\/\//i.test(sourceUrl);
+        friendly = isHttp
+          ? "Home Assistant rechazó la solicitud del stream HTTP (401). Verifica el token del proxy de cámara."
+          : `Autenticación requerida (401 Unauthorized). El stream RTSP requiere usuario y contraseña (rtsp://usuario:clave@ip:${portStr}/...).`;
       } else if (raw.includes("404") || raw.includes("Not Found")) {
         friendly =
           "Ruta no encontrada (404 Not Found). La ruta RTSP no existe en este dispositivo.";
@@ -723,7 +726,10 @@ function probeWithFfmpeg(
         ) {
           friendly = `Conexión rechazada (Connection refused en puerto ${portStr}). Verifica la IP y que el servicio RTSP esté activo en ese puerto.`;
         } else if (raw.includes("401") || raw.includes("Unauthorized")) {
-          friendly = `Autenticación requerida (401 Unauthorized). El stream RTSP requiere credenciales (rtsp://usuario:clave@ip:${portStr}/...).`;
+          const isHttp = /^https?:\/\//i.test(sourceUrl);
+          friendly = isHttp
+            ? "Home Assistant rechazó la solicitud del stream HTTP (401). Verifica el token del proxy de cámara."
+            : `Autenticación requerida (401 Unauthorized). El stream RTSP requiere credenciales (rtsp://usuario:clave@ip:${portStr}/...).`;
         } else if (raw.includes("404") || raw.includes("Not Found")) {
           friendly = "Ruta de stream no encontrada (404 Not Found).";
         } else if (raw.includes("timed out") || raw.includes("ETIMEDOUT")) {
