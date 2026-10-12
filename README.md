@@ -4,11 +4,16 @@
   <img src="matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
 </div>
 
-> **Matter All-in-One for Home Assistant (v2.1.7)**
+> **Matter All-in-One for Home Assistant (v2.1.8)**
 > Expone entidades verificadas de Home Assistant como accesorios Matter 1.6 estables, cámaras Scrypted passthrough con HKSV y cámaras HomeKit con Live View en Apple Home.
 > **Base:** `matterbridge@3.10.13` · **Node.js:** `24.21.0-alpine3.24` · **TypeScript:** `7.0.2` · **Vitest:** `5.0.3` · **Vite:** `8.3.3` · **Spec:** Matter 1.6.1
 
 ---
+
+### Novedades de la versión 2.1.8
+
+- El diagnóstico de streams HLS emitidos por Home Assistant usa el token Bearer del add-on, evitando falsos errores 401.
+- Cuando Omni no puede asignar un RTSP firmado, el registro indica el intento de asignación sin exponer URL ni credenciales.
 
 ### Novedades de la versión 2.1.7
 

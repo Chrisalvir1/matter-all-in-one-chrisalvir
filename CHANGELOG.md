@@ -1,5 +1,10 @@
 ## [Unreleased]
 
+## [2.1.8] - 2026-10-12
+
+- Corrige el diagnóstico de streams HLS de Home Assistant: FFprobe y la medición GOP reciben el token Bearer del add-on, eliminando el falso HTTP 401.
+- Registra de forma segura los intentos fallidos de asignación RTSP desde Omni Tuya Local, sin guardar ni imprimir URLs firmadas.
+
 ## [2.1.7] - 2026-10-11
 
 - Live View de cámaras Omni Tuya renueva la URL RTSP firmada hasta tres veces antes de aceptar una alternativa. Esto cubre la ventana breve en que Tuya aún está asignando la sesión después de reiniciar Home Assistant.
