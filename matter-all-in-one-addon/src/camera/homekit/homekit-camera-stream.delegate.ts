@@ -954,6 +954,10 @@ export class HomeKitCameraStreamingDelegate
     );
 
     const ffmpegPath = resolveFfmpegPath();
+    // Pause recording/motion readers BEFORE allocating an Omni session.
+    // Tuya allocation by a competing reader can invalidate the live URL.
+    this.emit("session-start", session.sessionId);
+    await new Promise((resolve) => setImmediate(resolve));
     let sourceUrl = this.getCleanSourceUrl();
     // An already-paired HAP camera may have been created before Omni metadata
     // was persisted. Its durable record still contains the real HA camera
@@ -1127,6 +1131,7 @@ export class HomeKitCameraStreamingDelegate
         `[HomeKitCamera][${this.entityId}] HAP START rejected: ${!ffmpegPath ? "FFmpeg unavailable" : "stream source unavailable"}`,
       );
       callback(new Error("FFmpeg or RTSP source is unavailable"));
+      this.emit("session-end", session.sessionId);
       return;
     }
     // Omni issues a new single-session RTSP URL for each HomeKit open. The
@@ -1134,7 +1139,11 @@ export class HomeKitCameraStreamingDelegate
     // its audio as absent. Probe the exact URL about to be sent to FFmpeg.
     if (this.streamSource.metadata?.isOmniTuyaDirect === true) {
       try {
-        const probe = await probeCameraSource(sourceUrl, { timeoutMs: 4000 });
+        const probe = await probeCameraSource(sourceUrl, {
+          timeoutMs: 4000,
+          transport: "tcp",
+          allowFallback: false,
+        });
         if (probe.valid) {
           this.capabilities.hasAudio = probe.hasAudio;
           this.capabilities.audioCodec = probe.hasAudio
@@ -1150,6 +1159,18 @@ export class HomeKitCameraStreamingDelegate
         // The stream start remains available; the existing capability record
         // decides whether Apple receives an audio RTP branch.
       }
+      // Metadata probing is a separate RTSP reader. Allocate another signed
+      // URL for the actual live process instead of reopening the probe URL.
+      const freshUrl = await this.platform?.ha?.requestOmniTuyaCameraStream?.(
+        this.streamSource.metadata?.sourceCameraEntityId || this.entityId,
+      );
+      if (!freshUrl) {
+        callback(new Error("Omni could not renew the live stream after probing"));
+        this.emit("session-end", session.sessionId);
+        return;
+      }
+      this.streamSource.url = freshUrl;
+      sourceUrl = this.getCleanSourceUrl();
     }
     // HomeKit on iOS can request default low bitrates (e.g. 299k).
     // Ensure a high-fidelity floor: at least 3500k-5000k for 2K (Tapo/Wyze), 6000k-8000k for 4K.
@@ -1183,7 +1204,6 @@ export class HomeKitCameraStreamingDelegate
       `[HomeKitCamera][${this.entityId}] [Session][${session.sessionId}] session-start ${video.width}x${video.height} | FPS[declarado=${declaredFps}, solicitado=${requestedFps ?? "omitted"}, medido=${measuredFps ?? "unmeasured"}, efectivo=${effectiveFps ?? "auto"}]`,
     );
 
-    this.emit("session-start", session.sessionId);
     // Yield event loop without artificial delay so background listeners handle pause immediately
     await new Promise((resolve) => setImmediate(resolve));
 

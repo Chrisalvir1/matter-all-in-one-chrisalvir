@@ -1,3 +1,10 @@
+## [2.1.11] - 2026-10-12
+
+- Pausa HKSV y detección local antes de solicitar RTSP para Live View. Impide que una asignación de prebuffer pendiente arranque después de la pausa e invalide el stream con 404.
+- Mide RTSPS usando TCP para detectar la pista real de audio PCM μ-law y convertirla a Opus/AAC-ELD en Casa, en lugar de usar datos viejos de audio ausente.
+- Renueva el RTSP de Live View después de la medición, sin reutilizar la credencial abierta por FFprobe.
+- Requiere Omni Tuya Local 1.11.10: corrige los dos errores del controlador WebSocket que impedían obtener el stream. Se conserva el emparejamiento y el prebuffer se reanuda al cerrar Live View.
+
 ## [2.1.10] - 2026-10-12
 
 ### Corrección de actualización y Live View Omni

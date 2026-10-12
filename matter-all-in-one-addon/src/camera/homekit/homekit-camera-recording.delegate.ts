@@ -1007,6 +1007,10 @@ export class HomeKitCameraRecordingDelegate
         }
       }
 
+      // Source allocation awaits the Cloud API. Live View may have paused
+      // recording while that request was in flight; never spawn afterward.
+      if (this.isPausedByLiveStream) return;
+
       if (!sourceUrl) {
         this.platform?.log?.warn?.(
           `[HKSV][${this.entityId}] Cannot start HKSV pre-buffer: stream URL missing`,

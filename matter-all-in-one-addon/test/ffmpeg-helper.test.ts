@@ -10,6 +10,18 @@ import {
 import { SRTPCryptoSuites } from "@homebridge/hap-nodejs";
 
 describe("FFmpeg Helper", () => {
+  it("uses TCP for signed RTSPS input and does not send the HA token", () => {
+    const args = buildFfmpegStreamArgs({
+      sourceUrl: "rtsps://example.invalid/live?signature=private",
+      targetAddress: "127.0.0.1", videoPort: 5000, videoSsrc: 1,
+      videoPayloadType: 99, videoCryptoSuite: SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
+      videoKeySaltBase64: Buffer.alloc(30).toString("base64"),
+      strategy: "passthrough_h264", httpBearerToken: "HA_SECRET",
+    });
+    expect(args[args.indexOf("-rtsp_transport") + 1]).toBe("tcp");
+    expect(args).not.toContain("-headers");
+    expect(args.join(" ")).not.toContain("HA_SECRET");
+  });
   it("sanitizes username:password in RTSP URLs", () => {
     const raw =
       "rtsp://admin:P@ssw0rd123!@192.168.1.50:554/h264Preview_01_main";

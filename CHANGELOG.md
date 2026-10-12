@@ -1,5 +1,11 @@
 ## [Unreleased]
 
+## [2.1.11] - 2026-10-12
+
+- Corrige la competencia HKSV/Live View al renovar RTSP de Omni: pausa antes de la asignación y cancela el arranque de lectores pendientes durante Live View.
+- FFprobe y las utilidades de stream reconocen RTSPS como RTSP sobre TLS y usan TCP. La medición real permite convertir PCM μ-law a Opus/AAC-ELD para Casa.
+- Asigna una nueva URL de Live View después de medir la fuente. Requiere Omni 1.11.10 para el contrato WebSocket y la autorización de HA.
+
 ## [2.1.10] - 2026-10-12
 
 - Corrige el formato y la posición del changelog del add-on para que Home Assistant muestre primero las mejoras de la versión que ofrece instalar.

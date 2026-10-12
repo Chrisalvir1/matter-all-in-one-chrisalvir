@@ -436,7 +436,7 @@ function probeWithFfprobe(
       args.push("-headers", `Authorization: Bearer ${httpBearerToken}\r\n`);
     }
 
-    if (sourceUrl.startsWith("rtsp://")) {
+    if (/^rtsps?:\/\//i.test(sourceUrl)) {
       const rtspTransport = transport || "tcp";
       args.push(
         "-rtsp_transport",
@@ -602,7 +602,7 @@ function probeWithFfmpeg(
       args.push("-headers", `Authorization: Bearer ${httpBearerToken}\r\n`);
     }
 
-    if (sourceUrl.startsWith("rtsp://")) {
+    if (/^rtsps?:\/\//i.test(sourceUrl)) {
       const rtspTransport = transport || "tcp";
       args.push("-rtsp_transport", rtspTransport, "-timeout", "10000000");
     } else if (
@@ -933,7 +933,7 @@ export async function measureStreamGop(
       "json",
     ];
 
-    if (sourceUrl.startsWith("rtsp://")) {
+    if (/^rtsps?:\/\//i.test(sourceUrl)) {
       args.push("-rtsp_transport", "tcp");
     } else if (
       sourceUrl.startsWith("http://") ||
@@ -1087,7 +1087,7 @@ export function buildFfmpegStreamArgs(config: StreamPipelineConfig): string[] {
     );
   }
 
-  if (config.sourceUrl.startsWith("rtsp://")) {
+  if (/^rtsps?:\/\//i.test(config.sourceUrl)) {
     const transport = config.transport || "tcp";
     if (transport !== "auto") {
       inputArgs.push("-rtsp_transport", transport);
