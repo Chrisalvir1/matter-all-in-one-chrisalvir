@@ -242,6 +242,8 @@ export class HomeKitCameraRecordingDelegate
   /** A transient RTSP/go2rtc interruption must not permanently disable HKSV. */
   private prebufferRestartTimer?: NodeJS.Timeout;
   private consecutivePrebufferFailures = 0;
+  /** A direct Omni RTSP 404 means future HKSV readers should use HA's route. */
+  private preferOmniTuyaHaFallback = false;
 
   constructor(
     private readonly platform: any,
@@ -887,7 +889,10 @@ export class HomeKitCameraRecordingDelegate
 
       // Refresh dynamic URL if needed
       let sourceUrl = this.streamSource.url;
-      let haEntityId = this.record.sourceCameraEntityId || this.entityId;
+      let haEntityId =
+        this.record.sourceCameraEntityId ||
+        this.streamSource.metadata?.sourceCameraEntityId ||
+        this.entityId;
       if (!/^camera\.[a-z0-9_]+$/.test(haEntityId)) {
         const realCam = this.record.realEntities?.find(
           (e: any) =>
@@ -937,7 +942,21 @@ export class HomeKitCameraRecordingDelegate
         sourceUrl = "";
       }
 
-      if (
+      const isOmniSource =
+        this.streamSource.metadata?.isOmniTuyaDirect === true ||
+        this.streamSource.metadata?.isOmniTuyaFallback === true;
+      if (isOmniSource && haEntityId) {
+        const state = this.platform?.ha?.hassStates?.get(haEntityId);
+        const refreshed = await CameraSourceResolver.resolveOmniTuyaRecordingSource(
+          this.platform,
+          haEntityId,
+          state,
+          this.preferOmniTuyaHaFallback ||
+            this.streamSource.metadata?.isOmniTuyaFallback === true,
+        );
+        this.streamSource = refreshed;
+        sourceUrl = refreshed.url || "";
+      } else if (
         haEntityId &&
         (!sourceUrl ||
           this.streamSource.sourceType === "hls" ||
@@ -1049,6 +1068,15 @@ export class HomeKitCameraRecordingDelegate
       process.stderr?.on("data", (data: Buffer) => {
         if (this.ffmpegProcess !== process) return;
         const msg = data.toString();
+        if (
+          this.streamSource.metadata?.isOmniTuyaDirect === true &&
+          /(?:DESCRIBE failed:\s*404|404\s+Stream Not Found)/i.test(msg)
+        ) {
+          this.preferOmniTuyaHaFallback = true;
+          this.platform?.log?.warn?.(
+            `[HKSV][${this.entityId}] Omni RTSP returned 404 Stream Not Found; the next reader will use Home Assistant's stream/proxy route.`,
+          );
+        }
         // Parse metrics safely
         const dropMatch = /drop=\s*(\d+)/.exec(msg);
         if (dropMatch) {

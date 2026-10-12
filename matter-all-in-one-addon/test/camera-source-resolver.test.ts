@@ -13,6 +13,116 @@ function makeState(attrs: Record<string, any> = {}) {
 }
 
 describe("CameraSourceResolver", () => {
+  it("uses a fresh HA stream when Omni Tuya cannot renew its signed URL", async () => {
+    const requestCameraStream = vi
+      .fn()
+      .mockResolvedValue("http://ha.local/api/hls/fresh/master.m3u8");
+    const platform = {
+      ha: {
+        requestCameraStream,
+        getCameraProxyStreamUrl: vi.fn(),
+      },
+    };
+
+    const fallback = await CameraSourceResolver.resolveOmniTuyaFallback(
+      platform,
+      "camera.feeder",
+      makeState(),
+    );
+
+    expect(requestCameraStream).toHaveBeenCalledWith("camera.feeder");
+    expect(fallback).toMatchObject({
+      sourceType: "hls",
+      url: "http://ha.local/api/hls/fresh/master.m3u8",
+      requiresBridge: true,
+      metadata: { isOmniTuyaFallback: true },
+    });
+  });
+
+  it("uses the HA camera proxy if the fresh HA stream cannot be created", async () => {
+    const platform = {
+      ha: {
+        requestCameraStream: vi.fn().mockResolvedValue(null),
+        getCameraProxyStreamUrl: vi
+          .fn()
+          .mockReturnValue("http://ha.local/api/camera_proxy_stream/camera.feeder"),
+      },
+    };
+
+    const fallback = await CameraSourceResolver.resolveOmniTuyaFallback(
+      platform,
+      "camera.feeder",
+      makeState(),
+    );
+
+    expect(fallback).toMatchObject({
+      sourceType: "ha_proxy",
+      url: "http://ha.local/api/camera_proxy_stream/camera.feeder",
+      requiresBridge: true,
+      metadata: { isOmniTuyaFallback: true },
+    });
+  });
+
+  it("renews Omni RTSP for every HKSV reader restart", async () => {
+    const requestOmniTuyaCameraStream = vi
+      .fn()
+      .mockResolvedValueOnce("rtsps://tuya.example/session?token=one")
+      .mockResolvedValueOnce("rtsps://tuya.example/session?token=two");
+    const platform = {
+      ha: {
+        requestOmniTuyaCameraStream,
+        requestCameraStream: vi.fn(),
+        getCameraProxyStreamUrl: vi.fn(),
+      },
+    };
+
+    const first = await CameraSourceResolver.resolveOmniTuyaRecordingSource(
+      platform,
+      "camera.feeder",
+      makeState(),
+      false,
+    );
+    const second = await CameraSourceResolver.resolveOmniTuyaRecordingSource(
+      platform,
+      "camera.feeder",
+      makeState(),
+      false,
+    );
+
+    expect(first.url).toBe("rtsps://tuya.example/session?token=one");
+    expect(second.url).toBe("rtsps://tuya.example/session?token=two");
+    expect(requestOmniTuyaCameraStream).toHaveBeenCalledTimes(2);
+  });
+
+  it("uses HA instead of reopening Omni RTSP after the direct source returns 404", async () => {
+    const requestOmniTuyaCameraStream = vi.fn();
+    const requestCameraStream = vi
+      .fn()
+      .mockResolvedValue("http://ha.local/api/hls/renewed/master.m3u8");
+    const platform = {
+      ha: {
+        requestOmniTuyaCameraStream,
+        requestCameraStream,
+        getCameraProxyStreamUrl: vi.fn(),
+      },
+    };
+
+    const source = await CameraSourceResolver.resolveOmniTuyaRecordingSource(
+      platform,
+      "camera.feeder",
+      makeState(),
+      true,
+    );
+
+    expect(requestOmniTuyaCameraStream).not.toHaveBeenCalled();
+    expect(requestCameraStream).toHaveBeenCalledWith("camera.feeder");
+    expect(source).toMatchObject({
+      sourceType: "hls",
+      url: "http://ha.local/api/hls/renewed/master.m3u8",
+      metadata: { isOmniTuyaFallback: true },
+    });
+  });
+
   it("resolves Omni Tuya camera from a fresh signed RTSP URL", async () => {
     const streamUrl = "rtsps://tuya.example/session?token=ephemeral";
     const mockPlatform = {
@@ -28,7 +138,10 @@ describe("CameraSourceResolver", () => {
     const res = await CameraSourceResolver.resolve(
       mockPlatform,
       "camera.feeder",
-      makeState({ supported_features: 2 }),
+      makeState({
+        supported_features: 2,
+        stream_source: "http://ha.local/api/hls/stale-token/master_playlist.m3u8",
+      }),
     );
 
     expect(mockPlatform.ha.requestOmniTuyaCameraStream).toHaveBeenCalledWith(
@@ -45,6 +158,32 @@ describe("CameraSourceResolver", () => {
         sourceCameraEntityId: "camera.feeder",
       },
     });
+  });
+
+  it("prefers Omni's fresh RTSP URL over HA's short-lived HLS worker", async () => {
+    const streamUrl = "rtsps://tuya.example/session?token=renewed";
+    const requestOmniTuyaCameraStream = vi.fn().mockResolvedValue(streamUrl);
+    const mockPlatform = {
+      ha: {
+        hassEntities: new Map([
+          ["camera.feeder", { platform: "omni_tuya_local" }],
+        ]),
+        requestOmniTuyaCameraStream,
+      },
+    };
+
+    const res = await CameraSourceResolver.resolve(
+      mockPlatform,
+      "camera.feeder",
+      makeState({
+        supported_features: 2,
+        stream_source: "http://ha.local/api/hls/expired/master_playlist.m3u8",
+      }),
+    );
+
+    expect(requestOmniTuyaCameraStream).toHaveBeenCalledWith("camera.feeder");
+    expect(res.sourceType).toBe("rtsp");
+    expect(res.url).toBe(streamUrl);
   });
 
   it("only requests a direct Tuya URL for cameras registered by Omni Tuya Local", async () => {

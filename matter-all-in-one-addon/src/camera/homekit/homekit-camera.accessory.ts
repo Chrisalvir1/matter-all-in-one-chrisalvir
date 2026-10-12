@@ -47,6 +47,7 @@ import {
 } from "./ffmpeg-helper.js";
 import { NestCameraAdapter } from "../nest/nest-camera-adapter.js";
 import { resolveHaCameraEntityId } from "../cameraui/ha-camera-entity.js";
+import { FfmpegMotionDetector } from "../motion/ffmpeg-motion-detector.js";
 
 /** Generate a fresh, HAP-valid setup PIN for an explicit pairing reset. */
 export function generateFreshHomeKitPin(previous?: string): string {
@@ -83,6 +84,7 @@ export class HomeKitCameraAccessory {
   public linkedLightEntityId?: string;
   public linkedSirenEntityId?: string;
   public linkedDoorbellEntityId?: string;
+  private localMotionDetector?: FfmpegMotionDetector;
   public isPublished = false;
 
   constructor(
@@ -368,6 +370,7 @@ export class HomeKitCameraAccessory {
 
     this.delegate.on("session-start", () => {
       this.recordingDelegate?.pausePrebuffer();
+      this.localMotionDetector?.pause(this.platform?.log, "Apple Home Live View");
     });
     this.delegate.on("session-end", () => {
       if (this.delegate?.hasActiveSessions()) {
@@ -377,6 +380,7 @@ export class HomeKitCameraAccessory {
         return;
       }
       this.recordingDelegate?.resumePrebuffer();
+      this.localMotionDetector?.resume(this.platform?.log, "Apple Home Live View ended");
     });
 
     this.controller = new CameraController(this.buildControllerOptions());
@@ -459,9 +463,15 @@ export class HomeKitCameraAccessory {
           },
           resolutions: this.buildDeclaredResolutions(),
         },
-        audio: {
-          codecs: audioCodecs,
-        },
+        // Omni renews its signed RTSP URL on every HomeKit session, so the
+        // startup URL may have expired before its audio SDP can be measured.
+        // Offer the standard audio codecs for Omni and validate the fresh URL
+        // immediately before spawning FFmpeg in the streaming delegate.
+        audio: (this.capabilities.hasAudio || this.streamSource.metadata?.isOmniTuyaDirect)
+          ? {
+              codecs: audioCodecs,
+            }
+          : undefined,
       },
       sensors: this.motionService ? { motion: this.motionService } : undefined,
     };
@@ -1146,6 +1156,7 @@ export class HomeKitCameraAccessory {
     this.platform?.log?.notice?.(
       `[HomeKitCamera][${this.entityId}] Published production HAP camera port=${this.record.port} (advertiser=ciao, iface=all) HKSV=${this.record.hksvEnabled ? "enabled" : "disabled"}`,
     );
+    this.startRenewableOmniMotionDetection();
 
     // Camera.UI already supplies its RTSP codec/audio metadata.  Probing and
     // warming every Camera.UI source after a restart opened dozens of extra
@@ -1166,10 +1177,47 @@ export class HomeKitCameraAccessory {
     }
   }
 
+  /**
+   * Omni's camera entity has no motion binary_sensor. For its renewable,
+   * signed RTSP feed we run an inexpensive 1 FPS frame-difference detector.
+   * It uses a fresh URL whenever FFmpeg reconnects and pauses during a live
+   * HomeKit session so the camera never has competing readers.
+   */
+  private startRenewableOmniMotionDetection(): void {
+    if (
+      this.localMotionDetector ||
+      this.linkedMotionEntityId ||
+      !this.streamSource.metadata?.isOmniTuyaDirect ||
+      !this.platform?.ha?.requestOmniTuyaCameraStream
+    ) return;
+
+    this.localMotionDetector = new FfmpegMotionDetector({
+      cameraId: this.entityId,
+      cameraName: this.record.name || this.entityId,
+      rtspUrl: this.streamSource.url || "",
+      fps: 1,
+      resolveRtspUrl: async () =>
+        await this.platform.ha.requestOmniTuyaCameraStream(this.entityId),
+    });
+    this.localMotionDetector.on("motion", (detected: boolean) => {
+      this.updateMotionState(detected);
+      this.platform?.log?.notice?.(
+        `[HomeKitCamera][${this.entityId}] Local FFmpeg motion=${detected ? "detected" : "cleared"} → HomeKit/HKSV`,
+      );
+    });
+    this.localMotionDetector.start(this.platform?.log);
+  }
+
   public async probeAndAdaptCapabilities(): Promise<void> {
     if (!this.streamSource.url) return;
     try {
-      const probe = await probeCameraSource(this.streamSource.url, {
+      // Omni Tuya URLs are single-session signed RTSP credentials. Probe a
+      // freshly allocated URL instead of the resolver's expired startup URL.
+      const probeUrl = this.streamSource.metadata?.isOmniTuyaDirect
+        ? await this.platform?.ha?.requestOmniTuyaCameraStream?.(this.entityId)
+        : this.streamSource.url;
+      if (!probeUrl) return;
+      const probe = await probeCameraSource(probeUrl, {
         timeoutMs: 4000,
       });
       if (probe.valid && probe.videoCodec) {
@@ -1182,6 +1230,20 @@ export class HomeKitCameraAccessory {
           : "passthrough_h264";
         if (probe.hasAudio !== undefined) {
           this.capabilities.hasAudio = probe.hasAudio;
+        }
+        if (probe.hasAudio && probe.audioCodec) {
+          const audioCodec = probe.audioCodec.toLowerCase();
+          this.capabilities.audioCodec = audioCodec.includes("aac")
+            ? "aac_lc"
+            : audioCodec.includes("opus")
+              ? "opus"
+              : "pcm";
+          this.capabilities.audioSampleRate = probe.audioSampleRate;
+          this.capabilities.audioChannels = probe.audioChannels;
+        } else if (probe.hasAudio === false) {
+          this.capabilities.audioCodec = "none";
+          this.capabilities.audioSampleRate = undefined;
+          this.capabilities.audioChannels = undefined;
         }
         if (probe.width && probe.height) {
           this.capabilities.resolution = {
@@ -1316,6 +1378,8 @@ export class HomeKitCameraAccessory {
   public async unpublish(): Promise<void> {
     this.delegate?.cleanupAllSessions();
     this.recordingDelegate?.updateRecordingActive(false);
+    this.localMotionDetector?.stop(this.platform?.log);
+    this.localMotionDetector = undefined;
     if (!this.isPublished) return;
     try {
       await this.accessory.unpublish();

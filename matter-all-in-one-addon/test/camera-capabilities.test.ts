@@ -60,6 +60,48 @@ describe("detectCameraCapabilities", () => {
     expect(cap.requiresTranscoding).toBe(false);
   });
 
+  it("does not invent audio for Omni's RTSP source before a probe confirms a track", () => {
+    const state = makeState("idle", {
+      friendly_name: "COMEDERO MICHI",
+      supported_features: 0,
+    });
+    const cap = detectCameraCapabilities(state, {
+      sourceType: "rtsp",
+      url: "rtsps://signed-tuya-stream.example/live",
+      snapshotUrl: "/api/camera_proxy/camera.test_camera",
+      supportsPassthrough: true,
+      requiresBridge: false,
+      metadata: { isOmniTuyaDirect: true },
+    });
+
+    expect(cap.hasAudio).toBe(false);
+    expect(cap.audioCodec).toBe("none");
+  });
+
+  it("uses the measured audio track from Omni's signed RTSP stream", () => {
+    const state = makeState("idle", { friendly_name: "COMEDERO MICHI" });
+    const cap = detectCameraCapabilities(
+      state,
+      {
+        sourceType: "rtsp",
+        url: "rtsps://signed-tuya-stream.example/live",
+        snapshotUrl: "/api/camera_proxy/camera.test_camera",
+        supportsPassthrough: true,
+        requiresBridge: false,
+        metadata: { isOmniTuyaDirect: true },
+      },
+      {
+        valid: true,
+        hasAudio: true,
+        audioCodec: "aac",
+        videoCodec: "h264",
+      },
+    );
+
+    expect(cap.hasAudio).toBe(true);
+    expect(cap.audioCodec).toBe("aac_lc");
+  });
+
   it("detects H.265 / HEVC stream and marks passthrough_hevc with zero transcoding", () => {
     const state = makeState("streaming", {
       stream_source: "rtsp://camera.local/hevc",

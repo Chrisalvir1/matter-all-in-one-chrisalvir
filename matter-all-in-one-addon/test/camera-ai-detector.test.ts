@@ -49,6 +49,35 @@ describe("CameraAiDetector", () => {
     expect(TARGET_LABELS_ES.spider).toBe("Araña");
   });
 
+  it("applies selected target checkboxes to externally supplied detections", () => {
+    const events: any[] = [];
+    detector.on("detection", (event) => events.push(event));
+    detector.setConfig("camera.feeder", {
+      enabled: true,
+      targets: ["cat"],
+      publishMqtt: false,
+    });
+
+    detector.dispatchDetection({ log: { notice: vi.fn() } }, "camera.feeder", {
+      cameraId: "camera.feeder",
+      timestamp: Date.now(),
+      targets: ["person"],
+      labels: ["Persona"],
+      confidence: 0.95,
+    });
+    detector.dispatchDetection({ log: { notice: vi.fn() } }, "camera.feeder", {
+      cameraId: "camera.feeder",
+      timestamp: Date.now(),
+      targets: ["cat", "person"],
+      labels: ["Gato", "Persona"],
+      confidence: 0.95,
+    });
+
+    expect(events).toHaveLength(1);
+    expect(events[0].targets).toEqual(["cat"]);
+    expect(events[0].labels).toEqual(["Gato"]);
+  });
+
   it("handles incoming HA state changes for person detection and triggers HomeKit + MQTT", () => {
     const mockPlatform = {
       log: { notice: vi.fn() },

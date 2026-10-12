@@ -1,5 +1,5 @@
 /**
- * CameraAiDetector — Ultra-lightweight Local AI Vision and Event Detection Engine.
+ * CameraAiDetector — Event router for externally classified camera detections.
  *
  * Targets:
  * - Persona: "person"
@@ -11,9 +11,9 @@
  *   - "snake" (serpiente)
  *   - "spider" (araña)
  *
- * Designed for zero native C++ compilation: operates via Home Assistant real-time
- * entity/event ingestion and lightweight frame analysis, ensuring Docker install
- * times stay under 2 minutes.
+ * This component does not inspect video frames or run OpenCV/ML models. It
+ * consumes semantically named Home Assistant entities and classified events
+ * from integrations such as Camera.UI, then applies the user's target filter.
  */
 
 import { EventEmitter } from "node:events";
@@ -292,6 +292,27 @@ export class CameraAiDetector extends EventEmitter {
   ): void {
     const config = this.getConfig(cameraId);
     if (!config.enabled) return;
+
+    // Apply the user's target selection to every source, including Camera.UI
+    // webhooks. HA state ingestion already filters targets, but the webhook
+    // path previously bypassed these checkboxes and could report disabled
+    // classes. Generic motion events have no object class and remain valid.
+    if (event.targets.length > 0) {
+      const selectedIndices = event.targets
+        .map((target, index) => (config.targets.includes(target) ? index : -1))
+        .filter((index) => index >= 0);
+      if (selectedIndices.length === 0) return;
+      if (selectedIndices.length !== event.targets.length) {
+        event = {
+          ...event,
+          targets: selectedIndices.map((index) => event.targets[index]),
+          labels:
+            event.labels.length === event.targets.length
+              ? selectedIndices.map((index) => event.labels[index])
+              : event.labels,
+        };
+      }
+    }
 
     this.activeDetections.set(cameraId, event);
     this.emit("detection", event);

@@ -242,8 +242,10 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
       } else {
         setStreamVerified(false);
         setStreamResult({
-          text: "ℹ️ Sin URL de stream configurada. Ingresa una URL RTSP directa para activar Live View.",
-          isError: true,
+          text: sc.provider === "home_assistant"
+            ? "Pulsa Verificar Stream para obtener y probar automáticamente la fuente de Home Assistant / Omni."
+            : "ℹ️ Sin URL de stream configurada. Ingresa una URL RTSP directa para activar Live View.",
+          isError: sc.provider !== "home_assistant",
         });
       }
     }
@@ -363,6 +365,9 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
       return computeHapSetupUri(pinCode, setupId);
     }
     const sc = camera as CameraRecord;
+    if (sc.provider === "home_assistant") {
+      return sc.exportConfig?.homeKitEnabled === true ? sc.identity?.homeKitSetupUri || "" : "";
+    }
     if (sc.identity?.homeKitSetupUri) return sc.identity.homeKitSetupUri;
     return computeHapSetupUri(pinCode, setupId);
   };
@@ -674,7 +679,7 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
 
   const handleVerifyStream = async () => {
     const target = normalizeRtspUrlInput(rtspUrl);
-    if (!target) {
+    if (!target && (camera as CameraRecord)?.provider !== "home_assistant") {
       showToast("Ingresa una URL RTSP para verificar", true);
       return;
     }
@@ -736,7 +741,7 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
 
   const handleDiagnoseStream = async () => {
     const target = normalizeRtspUrlInput(rtspUrl);
-    if (!target) {
+    if (!target && (camera as CameraRecord)?.provider !== "home_assistant") {
       showToast("Ingresa una URL RTSP para diagnosticar", true);
       return;
     }
@@ -1248,9 +1253,9 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                     marginBottom: 14,
                   }}
                 >
-                  Integración y enrutamiento en tiempo real de detecciones
-                  OpenCV (vehículos, personas y fauna) desde Camera.UI y Home
-                  Assistant hacia Apple HomeKit.
+                  MIAO no ejecuta OpenCV ni reconoce objetos en los fotogramas.
+                  Recibe eventos clasificados por Camera.UI o entidades de Home
+                  Assistant, y estas casillas filtran qué clases aceptar.
                 </p>
 
                 {activeAiDetection && (

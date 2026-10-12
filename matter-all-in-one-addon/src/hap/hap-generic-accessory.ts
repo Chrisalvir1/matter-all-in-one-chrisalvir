@@ -79,6 +79,8 @@ export type HapProfile =
   | "outlet_hap"
   | "switch_hap"
   | "lightbulb_hap"
+  /** A HomeKit brightness slider backed by a Home Assistant number entity. */
+  | "number_hap"
   | "lock_hap"
   | "window_covering_hap"
   | "door_hap"
@@ -117,6 +119,7 @@ export const HAP_PROFILE_LABELS: Record<HapProfile, string> = {
   outlet_hap: "Enchufe (HAP)",
   switch_hap: "Interruptor (HAP)",
   lightbulb_hap: "Bombilla (HAP)",
+  number_hap: "Control numérico (HAP)",
   lock_hap: "Cerradura (HAP)",
   window_covering_hap: "Persiana / Cubierta (HAP)",
   door_hap: "Puerta (HAP)",
@@ -156,6 +159,7 @@ const HAP_PROFILE_CATEGORIES: Record<HapProfile, Categories> = {
   outlet_hap: Categories.OUTLET,
   switch_hap: Categories.SWITCH,
   lightbulb_hap: Categories.LIGHTBULB,
+  number_hap: Categories.LIGHTBULB,
   lock_hap: Categories.DOOR_LOCK,
   window_covering_hap: Categories.WINDOW_COVERING,
   door_hap: Categories.DOOR,
@@ -446,6 +450,35 @@ export class HapGenericAccessory {
             service.getCharacteristic(Characteristic.Saturation).onSet(setColor);
           }
         }
+        break;
+      }
+      case "number_hap": {
+        // HAP has no generic numeric service. A Lightbulb brightness control
+        // is the only standard Apple Home control that exposes a live slider.
+        const service = this.accessory.getService(Service.Lightbulb);
+        const range = () => {
+          const attrs = state()?.attributes || {};
+          const min = Number(attrs.min ?? 0);
+          const max = Number(attrs.max ?? 100);
+          const step = Number(attrs.step ?? 1);
+          return { min, max: max > min ? max : min + 1, step: step > 0 ? step : 1 };
+        };
+        const percentForValue = () => {
+          const { min, max } = range();
+          const value = Number(state()?.state);
+          return Math.max(0, Math.min(100, Math.round(((Number.isFinite(value) ? value : min) - min) * 100 / (max - min))));
+        };
+        service?.getCharacteristic(Characteristic.On)
+          .onGet(() => 1)
+          .onSet(async () => undefined);
+        service?.getCharacteristic(Characteristic.Brightness)
+          .onGet(percentForValue)
+          .onSet(async (percent: any) => {
+            const { min, max, step } = range();
+            const raw = min + (Math.max(0, Math.min(100, Number(percent) || 0)) / 100) * (max - min);
+            const value = Math.max(min, Math.min(max, Math.round((raw - min) / step) * step + min));
+            await this.callHaWithResponseBudget(domain, "set_value", { value });
+          });
         break;
       }
       case "fan_hap": {
@@ -765,6 +798,12 @@ export class HapGenericAccessory {
           this.record.name,
         );
         svc.getCharacteristic(Characteristic.On).setValue(false);
+        break;
+      }
+      case "number_hap": {
+        const svc = this.accessory.addService(Service.Lightbulb, this.record.name);
+        svc.getCharacteristic(Characteristic.On).setValue(true);
+        svc.getCharacteristic(Characteristic.Brightness).setValue(0);
         break;
       }
 
@@ -1146,6 +1185,19 @@ export class HapGenericAccessory {
             light?.updateCharacteristic(Characteristic.Hue, Number(state.attributes.hs_color[0]) || 0);
             light?.updateCharacteristic(Characteristic.Saturation, Number(state.attributes.hs_color[1]) || 0);
           }
+          break;
+        }
+        case "number_hap": {
+          const light = this.accessory.getService(Service.Lightbulb);
+          const attrs = state?.attributes || {};
+          const min = Number(attrs.min ?? 0);
+          const max = Number(attrs.max ?? 100);
+          const value = Number(state?.state);
+          const percent = max > min && Number.isFinite(value)
+            ? Math.max(0, Math.min(100, Math.round((value - min) * 100 / (max - min))))
+            : 0;
+          light?.updateCharacteristic(Characteristic.On, true);
+          light?.updateCharacteristic(Characteristic.Brightness, percent);
           break;
         }
         case "fan_hap": {

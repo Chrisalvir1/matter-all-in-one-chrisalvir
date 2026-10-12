@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { adaptHaDeviceToCameraRecord } from "./utils/ha-camera-record";
+import React, { useState, useEffect, useMemo } from "react";
 import { useAddonState, FilterType } from "./hooks/useAddonState";
 import { TopBar } from "./components/TopBar";
 import { ControlCenter } from "./components/ControlCenter";
@@ -15,8 +16,6 @@ import {
   CameraRecord,
   CameraUiCameraItem,
   DeviceRecord,
-  CameraSensorRecord,
-  CameraRealEntity,
   CameraPtzInfo,
   SystemInfoResponse,
 } from "./types";
@@ -97,8 +96,11 @@ export const App: React.FC = () => {
     const updated = cameras.find((c) => c.cameraId === selectedCamera.cameraId);
     if (updated) {
       setSelectedCamera(updated);
+    } else {
+      const device = allDevices.find((d) => d.entities.some((e) => e.domain === "camera" && e.entityId === selectedCamera.cameraId));
+      if (device) setSelectedCamera(adaptHaDeviceToCameraRecord(device));
     }
-  }, [cameras]);
+  }, [cameras, allDevices]);
 
   // Keep selectedCameraUiCamera in sync with updated cameraUiCameras
   useEffect(() => {
@@ -352,84 +354,6 @@ export const App: React.FC = () => {
     return filteredDevices.length + cams;
   }, [cameraBrandGroups, filteredDevices]);
 
-  const adaptHaDeviceToCameraRecord = useCallback((dev: DeviceRecord): CameraRecord => {
-    const camEnt = dev.entities.find((e) => e.domain === "camera");
-    const isNest =
-      (dev.manufacturer || "").toLowerCase().includes("google") ||
-      (dev.manufacturer || "").toLowerCase().includes("nest") ||
-      (dev.name || "").toLowerCase().includes("nest") ||
-      Boolean(camEnt?.entityId.toLowerCase().includes("nest"));
-
-    const realSensors: CameraSensorRecord[] = dev.entities
-      .filter((e) => e.domain === "binary_sensor")
-      .map((e) => ({
-        name: e.name || e.entityId,
-        sensorId: e.entityId,
-        type: (e.entityId.includes("doorbell") || e.name?.toLowerCase().includes("timbre")
-          ? "doorbell"
-          : "motion") as "motion" | "doorbell",
-        enabled: true,
-        state: e.state === "on",
-      }));
-
-    const realEntities: CameraRealEntity[] = dev.entities
-      .filter(
-        (e) =>
-          e.domain === "binary_sensor" ||
-          e.domain === "light" ||
-          e.domain === "siren" ||
-          e.domain === "switch" ||
-          e.domain === "event"
-      )
-      .map((e) => ({
-        id: e.entityId,
-        domain: e.domain as "binary_sensor" | "light" | "siren" | "switch" | "event",
-        name: e.name || e.entityId,
-        type: (e.entityId.includes("doorbell") || e.name?.toLowerCase().includes("timbre")
-          ? "doorbell"
-          : e.domain === "light"
-          ? "light"
-          : e.domain === "siren"
-          ? "siren"
-          : e.domain === "switch"
-          ? "switch"
-          : "motion") as "motion" | "light" | "siren" | "doorbell" | "switch",
-        state: e.state === "on",
-        matterExported: Boolean(e.exported),
-      }));
-
-    const isMatterPaired = dev.entities.some((e) => e.exported && e.commissioned);
-    const isHapPaired = dev.entities.some((e) => e.homekitCamera?.isPaired);
-    const isPaired = pairedProtocolFilter === "matter"
-      ? isMatterPaired
-      : pairedProtocolFilter === "hap"
-        ? isHapPaired
-        : isMatterPaired || isHapPaired;
-
-    return {
-      cameraId: camEnt?.entityId || dev.id,
-      name: dev.name,
-      manufacturer: dev.manufacturer || (isNest ? "Google" : "Home Assistant"),
-      model: dev.model || (isNest ? "Nest Cam" : "Cámara IP"),
-      serialNumber: dev.id,
-      status: {
-        connection: "online",
-        isOnline: true,
-      },
-      sensors: realSensors,
-      realEntities,
-      identity: {
-        homeKitPairingState: isPaired ? "paired" : "not_paired",
-        homeKitSetupId: "HA01",
-        homeKitPincode: "031-45-154",
-      },
-      source: {
-        streamReference: {
-          directUrl: (camEnt as any)?.stream_source || "",
-        },
-      },
-    };
-  }, []);
 
   const handleSyncCameras = async () => {
     setIsSyncing(true);

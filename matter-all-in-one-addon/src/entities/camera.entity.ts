@@ -13,6 +13,10 @@ import { MatterbridgeEndpoint } from "matterbridge";
 import type { HassState } from "../utils/ha-state.js";
 import { detectCameraCapabilities } from "../camera/camera-capabilities.js";
 import { CameraSourceResolver } from "../camera/camera-source-resolver.js";
+import {
+  probeCameraSource,
+  type ProbeResult,
+} from "../camera/homekit/ffmpeg-helper.js";
 import { CameraSessionManager } from "../camera/matter/camera-session-manager.js";
 import { CameraWebRtcAdapter } from "../camera/matter/camera-webrtc-adapter.js";
 import { CameraEndpointBuilder } from "../camera/matter/camera-endpoint.builder.js";
@@ -38,6 +42,8 @@ export class CameraEntity extends BaseEntity {
   public readonly sessionManager = new CameraSessionManager();
   public webrtcAdapter?: CameraWebRtcAdapter;
   public homekitAccessory?: HomeKitCameraAccessory;
+  private omniTuyaProbeResult?: ProbeResult;
+  private omniTuyaProbeAt = 0;
 
   /**
    * Initializes or updates detected capabilities and resolved stream source.
@@ -51,7 +57,51 @@ export class CameraEntity extends BaseEntity {
       this.entityId,
       this.state,
     );
-    this.capabilities = detectCameraCapabilities(this.state, this.streamSource);
+    let probeResult: ProbeResult | undefined;
+    if (
+      this.streamSource.metadata?.isOmniTuyaDirect === true &&
+      this.streamSource.url
+    ) {
+      // Probe Omni's actual short-lived RTSP stream before constructing the
+      // HAP controller. Otherwise the controller advertises guessed audio
+      // codecs and sends synthetic silence when the Tuya SDP has no audio.
+      if (
+        this.omniTuyaProbeResult &&
+        Date.now() - this.omniTuyaProbeAt < 5 * 60_000
+      ) {
+        probeResult = this.omniTuyaProbeResult;
+        this.streamSource.metadata = {
+          ...this.streamSource.metadata,
+          capabilitiesProbedBeforePublish: true,
+        };
+      } else {
+        try {
+          const measured = await probeCameraSource(this.streamSource.url, {
+            timeoutMs: 4000,
+          });
+          if (measured.valid) {
+            this.omniTuyaProbeResult = measured;
+            this.omniTuyaProbeAt = Date.now();
+            probeResult = measured;
+            this.streamSource.metadata = {
+              ...this.streamSource.metadata,
+              capabilitiesProbedBeforePublish: true,
+            };
+            this.platform?.log?.notice?.(
+              `[CameraEntity][${this.entityId}] Measured Omni Tuya stream before HAP setup: video=${measured.videoCodec || "unknown"}, audio=${measured.hasAudio ? measured.audioCodec || "present" : "no audio track"}`,
+            );
+          }
+        } catch {
+          // Fail closed for unmeasured Omni audio below. The HAP controller
+          // must not invent an audio stream when probing the Tuya source fails.
+        }
+      }
+    }
+    this.capabilities = detectCameraCapabilities(
+      this.state,
+      this.streamSource,
+      probeResult,
+    );
     this.webrtcAdapter = new CameraWebRtcAdapter(
       this.platform,
       this.entityId,

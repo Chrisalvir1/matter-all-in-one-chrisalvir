@@ -35,6 +35,7 @@ import {
   supportsFdkAac,
   checkAudioPassthroughCompatibility,
   detectPrimaryNetworkInterface,
+  probeCameraSource,
 } from "./ffmpeg-helper.js";
 import {
   createSessionTelemetry,
@@ -1037,9 +1038,22 @@ export class HomeKitCameraStreamingDelegate
           }
         }
         if (wasOmniTuyaSource && !renewedOmniSource) {
-          // Never retry an expired signed URL. A failed renewal leaves HAP to
-          // report an unavailable source; the next HomeKit open will request again.
-          sourceUrl = "";
+          // Never reuse an expired signed URL. Ask HA for a fresh camera
+          // stream (which may be backed by go2rtc), then fall back to HA's
+          // authenticated camera proxy. A later HomeKit open tries Omni again.
+          const fallback = state
+            ? await CameraSourceResolver.resolveOmniTuyaFallback(
+                this.platform,
+                haEntityId,
+                state,
+              )
+            : undefined;
+          if (fallback?.url) {
+            this.streamSource = fallback;
+            sourceUrl = this.getCleanSourceUrl();
+          } else {
+            sourceUrl = "";
+          }
         } else if (!renewedOmniSource && state) {
           try {
             const fresh = await CameraSourceResolver.resolve(
@@ -1098,6 +1112,28 @@ export class HomeKitCameraStreamingDelegate
       );
       callback(new Error("FFmpeg or RTSP source is unavailable"));
       return;
+    }
+    // Omni issues a new single-session RTSP URL for each HomeKit open. The
+    // startup probe can therefore describe an older URL and incorrectly mark
+    // its audio as absent. Probe the exact URL about to be sent to FFmpeg.
+    if (this.streamSource.metadata?.isOmniTuyaDirect === true) {
+      try {
+        const probe = await probeCameraSource(sourceUrl, { timeoutMs: 4000 });
+        if (probe.valid) {
+          this.capabilities.hasAudio = probe.hasAudio;
+          this.capabilities.audioCodec = probe.hasAudio
+            ? (probe.audioCodec || "incompatible") as any
+            : "none";
+          this.capabilities.audioSampleRate = probe.audioSampleRate;
+          this.capabilities.audioChannels = probe.audioChannels;
+          this.platform?.log?.notice?.(
+            `[HomeKitCamera][${this.entityId}] Fresh Omni stream probe: audio=${probe.hasAudio ? `${probe.audioCodec || "present"}/${probe.audioSampleRate || "unknown"}Hz` : "absent"}`,
+          );
+        }
+      } catch {
+        // The stream start remains available; the existing capability record
+        // decides whether Apple receives an audio RTP branch.
+      }
     }
     // HomeKit on iOS can request default low bitrates (e.g. 299k).
     // Ensure a high-fidelity floor: at least 3500k-5000k for 2K (Tapo/Wyze), 6000k-8000k for 4K.
@@ -1279,6 +1315,45 @@ export class HomeKitCameraStreamingDelegate
             "failed",
             stderr || `FFmpeg exited with code ${code}`,
           );
+
+          const isOmniStreamNotFound =
+            this.streamSource.metadata?.isOmniTuyaDirect === true &&
+            /(?:DESCRIBE failed:\s*404|404\s+Stream Not Found)/i.test(stderr);
+          if (isOmniStreamNotFound) {
+            const sourceEntityId =
+              this.streamSource.metadata?.sourceCameraEntityId || this.entityId;
+            void (async () => {
+              const state = this.platform?.ha?.hassStates?.get(sourceEntityId);
+              const fallback = await CameraSourceResolver.resolveOmniTuyaFallback(
+                this.platform,
+                sourceEntityId,
+                state,
+              );
+              if (fallback?.url) {
+                this.streamSource = fallback;
+                this.platform?.log?.warn?.(
+                  `[HomeKitCamera][${this.entityId}] Omni RTSP returned 404 Stream Not Found; retrying Live View through Home Assistant's stream/proxy route.`,
+                );
+                this.spawnFfmpegProcess(session, request, settle, false);
+                return;
+              }
+
+              this.platform?.log?.error?.(
+                `[HomeKitCamera][${this.entityId}] Omni RTSP returned 404 and Home Assistant could not provide a fallback stream.`,
+              );
+              settle(new Error("Omni RTSP stream not found; HA fallback unavailable"));
+              this.activeSessions.delete(session.sessionId);
+              if (this.activeSessions.size === 0) this.emit("session-end");
+            })().catch((error) => {
+              this.platform?.log?.warn?.(
+                `[HomeKitCamera][${this.entityId}] Could not switch Omni Live View to Home Assistant fallback: ${error instanceof Error ? error.message : "unknown error"}`,
+              );
+              settle(new Error("Omni RTSP fallback failed"));
+              this.activeSessions.delete(session.sessionId);
+              if (this.activeSessions.size === 0) this.emit("session-end");
+            });
+            return;
+          }
 
           const is401 =
             stderr.includes("401") ||

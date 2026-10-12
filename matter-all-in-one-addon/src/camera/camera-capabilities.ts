@@ -100,18 +100,19 @@ export function detectCameraCapabilities(
     }
   } else {
     const rawAudioCodec = (attrs.audio_codec || "").toLowerCase();
-    // For RTSP cameras without an explicit audio_codec attribute, assume audio is present
-    // (AAC-LC is the safest default). FFmpeg will use `-map 0:a:0?` which silently
-    // skips the audio track if the stream truly has none. This prevents silent-audio
-    // forced mode on cameras that actually do have audio but don't advertise it in HA.
+    // For ordinary RTSP cameras without an audio attribute, keep the historic
+    // optimistic default. Omni's temporary Tuya URL is probed separately;
+    // never advertise audio for it based on protocol alone.
     const isDirectRtsp =
       streamSourceType === "rtsp" ||
       (resolvedSource?.sourceType === "rtsp" &&
         !resolvedSource?.url?.includes("/api/camera_proxy"));
+    const isOmniTuyaDirect =
+      resolvedSource?.metadata?.isOmniTuyaDirect === true;
     hasAudio =
       attrs.has_audio !== false &&
       rawAudioCodec !== "none" &&
-      (isDirectRtsp || rawAudioCodec !== "");
+      ((isDirectRtsp && !isOmniTuyaDirect) || rawAudioCodec !== "");
     if (hasAudio) {
       if (rawAudioCodec.includes("aac") || rawAudioCodec.includes("mp4a")) {
         audioCodec = "aac_lc";
@@ -131,7 +132,7 @@ export function detectCameraCapabilities(
         audioCodec = "incompatible";
         hasAudio = false;
       } else {
-        // Empty audio_codec on RTSP → assume AAC (transcoded to AAC-ELD by delegate)
+        // Empty audio_codec on ordinary RTSP → assume AAC (transcoded to AAC-ELD).
         audioCodec = "aac_lc";
       }
     }
@@ -139,6 +140,7 @@ export function detectCameraCapabilities(
     // FFmpeg -map 0:a:0? handles streams with no audio track gracefully.
     if (
       isDirectRtsp &&
+      !isOmniTuyaDirect &&
       !hasAudio &&
       attrs.has_audio !== false &&
       rawAudioCodec !== "none"
