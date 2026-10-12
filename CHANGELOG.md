@@ -1,3 +1,9 @@
+## [2.1.3] - 2026-10-11
+
+- Conecta Omni Tuya Local con HomeKit HAP Live View usando RTSP firmado de corta duración.
+- Renueva la URL firmada por sesión; no la persiste ni la registra.
+- Mantiene el fallback de Home Assistant y requiere Omni Tuya Local 1.11.6 o posterior, permiso Tuya IoT Video Live Stream y acceso al servicio de video de Tuya.
+
 ## [2.1.1] - 2026-10-11
 
 - Matter All-in-One solicita una URL RTSP firmada nueva a Omni Tuya Local en cada inicio de sesión HAP Camera.UI.
