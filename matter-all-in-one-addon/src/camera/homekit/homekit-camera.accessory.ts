@@ -340,6 +340,7 @@ export class HomeKitCameraAccessory {
       this.entityId,
       this.capabilities,
       this.streamSource,
+      this.record,
     );
 
     const isHevc =

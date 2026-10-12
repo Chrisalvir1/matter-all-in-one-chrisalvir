@@ -1,3 +1,9 @@
+## [2.1.6] - 2026-10-11
+
+### Live View Omni para accesorios HAP ya emparejados
+- El delegado HAP recibe el registro persistente de la cámara y su `sourceCameraEntityId`. Una cámara Tuya ya emparejada solicita una URL firmada nueva antes de abrir Live View y no reutiliza la URL RTSP fija caducada.
+- Si Omni no puede emitir una URL nueva, la sesión utiliza la ruta de fallback de Home Assistant en vez de mostrar una captura antigua mientras queda cargando.
+
 ## [2.1.5] - 2026-10-11
 
 ### Recuperación de Omni Tuya después de reinicios

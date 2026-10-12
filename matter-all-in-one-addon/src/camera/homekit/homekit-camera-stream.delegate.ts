@@ -25,6 +25,7 @@ import dgram from "node:dgram";
 import { isIPv4, isIPv6 } from "node:net";
 import type {
   CameraCapabilitiesInfo,
+  HomeKitCameraStorageRecord,
   ResolvedStreamSource,
 } from "../camera-types.js";
 import { CameraSourceResolver } from "../camera-source-resolver.js";
@@ -272,6 +273,7 @@ export class HomeKitCameraStreamingDelegate
     private readonly entityId: string,
     private readonly capabilities: CameraCapabilitiesInfo,
     private streamSource: ResolvedStreamSource,
+    private readonly record?: HomeKitCameraStorageRecord,
   ) {
     super();
     this.loadPersistedSnapshot();
@@ -953,6 +955,18 @@ export class HomeKitCameraStreamingDelegate
 
     const ffmpegPath = resolveFfmpegPath();
     let sourceUrl = this.getCleanSourceUrl();
+    // An already-paired HAP camera may have been created before Omni metadata
+    // was persisted. Its durable record still contains the real HA camera
+    // entity. Treat a Tuya record with that entity as renewable; a saved RTSP
+    // URL is only a stale diagnostic value and must never decide Live View.
+    const recordedHaCameraEntityId = (this.record as any)?.sourceCameraEntityId;
+    const isRecordedTuyaCamera = /tuya/i.test(
+      `${this.record?.manufacturer || ""} ${this.record?.model || ""} ${this.record?.name || ""}`,
+    );
+    const isRenewableOmniCandidate = Boolean(
+      this.streamSource.metadata?.isOmniTuyaDirect === true ||
+        (isRecordedTuyaCamera && /^camera\.[a-z0-9_]+$/.test(recordedHaCameraEntityId || "")),
+    );
 
     // Dynamically refresh ephemeral HA stream URLs (e.g. C402 HLS tokens or missing URLs)
     if (
@@ -960,11 +974,13 @@ export class HomeKitCameraStreamingDelegate
       this.streamSource.sourceType === "hls" ||
       this.streamSource.sourceType === "ha_proxy" ||
       this.streamSource.metadata?.isOmniTuyaDirect === true ||
+      isRenewableOmniCandidate ||
       this.isTapoC402() ||
       this.isTapoC120()
     ) {
       let haEntityId =
         (this.streamSource.metadata as any)?.sourceCameraEntityId ||
+        recordedHaCameraEntityId ||
         this.entityId;
       if (
         this.streamSource.metadata?.isCameraUi ||
@@ -1012,8 +1028,7 @@ export class HomeKitCameraStreamingDelegate
         const state = haEntityId
           ? this.platform.ha.hassStates?.get(haEntityId)
           : undefined;
-        const wasOmniTuyaSource =
-          this.streamSource.metadata?.isOmniTuyaDirect === true;
+        const wasOmniTuyaSource = isRenewableOmniCandidate;
         let renewedOmniSource = false;
         if (haEntityId && this.platform.ha.requestOmniTuyaCameraStream) {
           try {
