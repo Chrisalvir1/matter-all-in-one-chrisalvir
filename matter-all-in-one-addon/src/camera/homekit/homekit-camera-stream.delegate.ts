@@ -459,7 +459,9 @@ export class HomeKitCameraStreamingDelegate
         const buf = fsSync.readFileSync(snapPath);
         if (isJpeg(buf) && buf.length > 2048) {
           this.lastSnapshotBuffer = buf;
-          this.lastSnapshotTime = Date.now();
+          // A persisted snapshot can survive an add-on restart. Preserve its
+          // actual age instead of treating load time as capture time.
+          this.lastSnapshotTime = fsSync.statSync(snapPath).mtimeMs;
         }
       }
     } catch {}
@@ -497,8 +499,18 @@ export class HomeKitCameraStreamingDelegate
           : this.lastSnapshotBuffer;
       if (isJpeg(selected) && selected !== FALLBACK_JPEG_BUFFER) {
         this.lastSnapshotBuffer = selected;
-        this.lastSnapshotTime = Date.now();
-        void this.persistSnapshotToDisk(selected);
+        // Cached/error fallbacks keep HomeKit responsive, but must not make
+        // old bytes appear newly captured or replace a newer disk snapshot.
+        if (
+          source === "ha-fetch-snapshot" ||
+          source === "ha-fetch-png-converted" ||
+          source === "http-snapshot" ||
+          source === "http-png-converted" ||
+          source === "ffmpeg"
+        ) {
+          this.lastSnapshotTime = Date.now();
+          void this.persistSnapshotToDisk(selected);
+        }
       }
       this.platform?.log?.notice?.(
         `[HomeKitCamera][${this.entityId}] Snapshot source=${source} bytes=${selected.length} duration=${Date.now() - started}ms validJpeg=${isJpeg(selected)}`,
@@ -1139,39 +1151,48 @@ export class HomeKitCameraStreamingDelegate
     // startup probe can therefore describe an older URL and incorrectly mark
     // its audio as absent. Probe the exact URL about to be sent to FFmpeg.
     if (this.streamSource.metadata?.isOmniTuyaDirect === true) {
-      try {
-        const probe = await probeCameraSource(sourceUrl, {
-          timeoutMs: 4000,
-          transport: "tcp",
-          allowFallback: false,
-        });
-        if (probe.valid) {
-          this.capabilities.hasAudio = probe.hasAudio;
-          this.capabilities.audioCodec = probe.hasAudio
-            ? (probe.audioCodec || "incompatible") as any
-            : "none";
-          this.capabilities.audioSampleRate = probe.audioSampleRate;
-          this.capabilities.audioChannels = probe.audioChannels;
-          this.platform?.log?.notice?.(
-            `[HomeKitCamera][${this.entityId}] Fresh Omni stream probe: audio=${probe.hasAudio ? `${probe.audioCodec || "present"}/${probe.audioSampleRate || "unknown"}Hz` : "absent"}`,
-          );
+      const audioFormatKnown =
+        this.capabilities.hasAudio &&
+        this.capabilities.audioCodec !== "none" &&
+        Number.isFinite(this.capabilities.audioSampleRate) &&
+        (this.capabilities.audioSampleRate || 0) > 0;
+      if (!audioFormatKnown) {
+        try {
+          const probe = await probeCameraSource(sourceUrl, {
+            timeoutMs: 4000,
+            transport: "tcp",
+            allowFallback: false,
+          });
+          if (probe.valid) {
+            this.capabilities.hasAudio = probe.hasAudio;
+            this.capabilities.audioCodec = probe.hasAudio
+              ? (probe.audioCodec || "incompatible") as any
+              : "none";
+            this.capabilities.audioSampleRate = probe.audioSampleRate;
+            this.capabilities.audioChannels = probe.audioChannels;
+            this.platform?.log?.notice?.(
+              `[HomeKitCamera][${this.entityId}] Fresh Omni stream probe: audio=${probe.hasAudio ? `${probe.audioCodec || "present"}/${probe.audioSampleRate || "unknown"}Hz` : "absent"}`,
+            );
+          }
+        } catch {
+          // The stream start remains available; the existing capability record
+          // decides whether Apple receives an audio RTP branch.
         }
-      } catch {
-        // The stream start remains available; the existing capability record
-        // decides whether Apple receives an audio RTP branch.
       }
       // Metadata probing is a separate RTSP reader. Allocate another signed
       // URL for the actual live process instead of reopening the probe URL.
-      const freshUrl = await this.platform?.ha?.requestOmniTuyaCameraStream?.(
-        this.streamSource.metadata?.sourceCameraEntityId || this.entityId,
-      );
-      if (!freshUrl) {
-        callback(new Error("Omni could not renew the live stream after probing"));
-        this.emit("session-end", session.sessionId);
-        return;
+      if (!audioFormatKnown) {
+        const freshUrl = await this.platform?.ha?.requestOmniTuyaCameraStream?.(
+          this.streamSource.metadata?.sourceCameraEntityId || this.entityId,
+        );
+        if (!freshUrl) {
+          callback(new Error("Omni could not renew the live stream after probing"));
+          this.emit("session-end", session.sessionId);
+          return;
+        }
+        this.streamSource.url = freshUrl;
+        sourceUrl = this.getCleanSourceUrl();
       }
-      this.streamSource.url = freshUrl;
-      sourceUrl = this.getCleanSourceUrl();
     }
     // HomeKit on iOS can request default low bitrates (e.g. 299k).
     // Ensure a high-fidelity floor: at least 3500k-5000k for 2K (Tapo/Wyze), 6000k-8000k for 4K.

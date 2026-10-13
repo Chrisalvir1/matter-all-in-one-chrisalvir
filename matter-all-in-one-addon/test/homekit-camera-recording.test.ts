@@ -102,6 +102,35 @@ function createMockConfiguration(): CameraRecordingConfiguration {
 }
 
 describe("HomeKitCameraRecordingDelegate", () => {
+  it("uses bounded SPS/PPS probing and regular fragments for Omni feeder HKSV", () => {
+    const record = {
+      ...createMockRecord(),
+      entityId: "camera.comedero_michi",
+      name: "COMEDERO MICHI DPS camera",
+      manufacturer: "Tuya",
+    };
+    const delegate = new HomeKitCameraRecordingDelegate(
+      mockPlatform,
+      record.entityId,
+      record as any,
+      { ...createMockCapabilities(), resolution: { width: 640, height: 360 } },
+      {
+        sourceType: "rtsp",
+        url: "rtsp://camera.local/stream",
+        supportsPassthrough: true,
+        requiresBridge: false,
+        metadata: { isOmniTuyaDirect: true },
+      },
+    );
+    delegate.updateRecordingConfiguration(createMockConfiguration());
+    const args = delegate.buildPrebufferArgs("rtsp://camera.local/stream");
+    expect(args).toContain("2097152");
+    expect(args).toContain("3000000");
+    expect(args).toContain("-frag_duration");
+    expect(args[args.indexOf("-frag_duration") + 1]).toBe("4000000");
+    delegate.destroy();
+  });
+
   it("waits for Home Hub recording activation before starting the HKSV prebuffer", () => {
     const record = createMockRecord();
     const capabilities = createMockCapabilities();

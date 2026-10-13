@@ -242,6 +242,33 @@ describe("HomeKitCameraAccessory production HAP graph", () => {
 });
 
 describe("HomeKitCameraStreamingDelegate", () => {
+  it("does not refresh the age of a cached snapshot when protecting an active stream", async () => {
+    const delegate = new HomeKitCameraStreamingDelegate(
+      createPlatform(),
+      "camera.backyard",
+      capabilities,
+      rtspSource,
+    );
+    const cached = Buffer.concat([
+      Buffer.from([0xff, 0xd8]),
+      Buffer.alloc(3000, 1),
+      Buffer.from([0xff, 0xd9]),
+    ]);
+    (delegate as any).lastSnapshotBuffer = cached;
+    (delegate as any).lastSnapshotTime = 123;
+    (delegate as any).activeSessions.set("active", {});
+
+    const result = await new Promise<Buffer>((resolve, reject) => {
+      void delegate.handleSnapshotRequest(
+        { width: 320, height: 240, reason: 0 },
+        (error, buffer) => (error ? reject(error) : resolve(buffer!)),
+      );
+    });
+
+    expect(result).toBe(cached);
+    expect((delegate as any).lastSnapshotTime).toBe(123);
+  });
+
   it("always returns a decodable JPEG fallback when no snapshot source exists", async () => {
     const delegate = new HomeKitCameraStreamingDelegate(
       createPlatform(),

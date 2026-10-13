@@ -632,6 +632,9 @@ export class HomeKitCameraRecordingDelegate
       /(?:\bwyze\b|cba17b87)/i.test(cameraIdentity);
     const isEzvizMatch =
       /(?:\bezviz\b|\bh6c\b|4661fae4|patio[-_ ]?trasero)/i.test(cameraIdentity);
+    const isOmniTuyaDirect =
+      this.streamSource.metadata?.isOmniTuyaDirect === true ||
+      /(?:\bomni\b|\btuya\b|comedero|feeder)/i.test(cameraIdentity);
     // Camera.UI sources from these cameras have demonstrated discontinuous
     // audio clocks. Rebuild the audio timeline before AAC encoding while
     // keeping their video stream in strict passthrough.
@@ -665,13 +668,13 @@ export class HomeKitCameraRecordingDelegate
         "-timeout",
         "5000000",
         "-probesize",
-        isTapoC402 || isWyzeMatch
+        isTapoC402 || isWyzeMatch || isOmniTuyaDirect
           ? "2097152"
           : needsAudioTimestampRepair
             ? "524288"
             : "65536",
         "-analyzeduration",
-        isTapoC402
+        isTapoC402 || isOmniTuyaDirect
           ? "3000000"
           : isWyzeMatch
             ? "1500000"
@@ -887,6 +890,16 @@ export class HomeKitCameraRecordingDelegate
       "mp4",
       "-movflags",
       "frag_keyframe+empty_moov+default_base_moof+skip_sidx+skip_trailer",
+      "-frag_duration",
+      String(
+        Math.max(
+          1000,
+          Math.min(
+            10000,
+            Number(this.selectedConfiguration?.mediaContainerConfiguration?.fragmentLength) || 4000,
+          ),
+        ) * 1000,
+      ),
       "pipe:1",
     );
 

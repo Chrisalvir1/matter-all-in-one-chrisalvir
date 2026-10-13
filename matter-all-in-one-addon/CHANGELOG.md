@@ -1,3 +1,9 @@
+## [2.1.14] - 2026-10-12
+
+- HKSV para cámaras Omni amplía el análisis H.264 para recibir SPS/PPS al reabrir la fuente y corta fragmentos fMP4 de forma periódica según el intervalo negociado por Casa.
+- Live View reutiliza el formato de audio Omni ya medido y evita probar una URL RTSP firmada de un solo uso antes de pedir otra para reproducir, reduciendo una asignación de cámara y hasta cuatro segundos de espera.
+- Los snapshots reutilizados conservan su antigüedad real y no sobrescriben la copia persistente con una imagen antigua.
+
 ## [2.1.13] - 2026-10-12
 
 - Durante Live View, fMP4 de HKSV ahora genera fragmentos al intervalo negociado con Apple Home, aunque el RTSP Omni use un GOP largo. Esto evita depender exclusivamente del siguiente fotograma clave para mantener la grabación.
