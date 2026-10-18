@@ -1,3 +1,19 @@
+## [2.1.15] - 2026-10-18
+
+### Actualización Matterbridge 3.10.14 y Optimización de Dependencias
+- **Matterbridge 3.10.14 Oficial:** Actualización de la dependencia base (`matterbridge@3.10.14` en desarrollo, producción y Dockerfile), manteniendo Node.js 24.21.0 sobre Alpine 3.24.
+- **Normalización de Memoria en Docker (cgroups):** Detección de memoria limitada en contenedor (`constrainedMemory`), evitando lecturas imprecisas de memoria total en Home Assistant OS y previniendo saturación de recursos.
+- **Optimización de Persistencia MatterNode:** Se omiten escrituras redundantes en disco al inicializar contextos de almacenamiento si los valores no han cambiado, reduciendo el desgaste de almacenamiento flash y acelerando el arranque tras reinicios.
+- **Conformidad Matter 1.6.1:** Soporte de atributos requeridos para fuentes de energía por batería (`batCapacity`, `batTimeToFullCharge`, `batChargingCurrent`, `activeBatChargeFaults`) y asignación conforme de `TiltOnlyInteriorBlind` en persianas sin motor de elevación.
+- **Estabilidad WebRTC y RTSP:** Fija salida a 30 FPS constante en flujos WebRTC con `werift@0.25.1`, eliminando picos anómalos de bitrate y mejorando la fluidez del streaming en vivo.
+- **Actualización de Dependencias:** `undici@^8.12.2`, `mqtt@^5.16.1`, `react@^19.3.1`, `react-dom@^19.3.1`, `lucide-react@^1.59.0`, `vite@^8.3.4`, `vitest@^5.0.5` y `prettier@^3.9.10`.
+
+## [2.1.14] - 2026-10-12
+
+- HKSV para cámaras Omni amplía el análisis H.264 para recibir SPS/PPS al reabrir la fuente y corta fragmentos fMP4 de forma periódica según el intervalo negociado por Casa.
+- Live View reutiliza el formato de audio Omni ya medido y evita probar una URL RTSP firmada de un solo uso antes de pedir otra para reproducir, reduciendo una asignación de cámara y hasta cuatro segundos de espera.
+- Los snapshots reutilizados conservan su antigüedad real y no sobrescriben la copia persistente con una imagen antigua.
+
 ## [2.1.13] - 2026-10-12
 
 - Durante Live View, fMP4 de HKSV ahora genera fragmentos al intervalo negociado con Apple Home, aunque el RTSP Omni use un GOP largo. Esto evita depender exclusivamente del siguiente fotograma clave para mantener la grabación.

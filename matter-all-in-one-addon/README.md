@@ -1,13 +1,21 @@
-# Matter All-in-One for Home Assistant — v2.1.2
+# Matter All-in-One for Home Assistant — v2.1.15
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/chrisalvir1/matter-all-in-one-chrisalvir/main/matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
 </div>
 
 > Puente Matter 1.6 para Home Assistant con código QR independiente para apagadores dobles/triples, perfiles conservadores para Apple Home y modelo/marca real en el campo Model.
-> **Base:** `matterbridge@3.10.13` · **Node.js:** `24.21.0-alpine3.24` · **TypeScript:** `7.0.2` · **Spec:** Matter 1.6.1
+> **Base:** `matterbridge@3.10.14` · **Node.js:** `24.21.0-alpine3.24` · **TypeScript:** `7.0.2` · **Spec:** Matter 1.6.1
 
 ---
+
+## Release 2.1.15 (2026-10-18)
+
+- Actualiza la base oficial de ejecución a **Matterbridge 3.10.14** sobre Node.js 24.21.0 y Alpine 3.24.
+- Normaliza los límites de memoria bajo Docker (`constrainedMemory`) en Home Assistant OS para evitar lecturas infladas de la máquina host.
+- Optimiza los contextos de almacenamiento de MatterNode omitiendo escrituras duplicadas en disco, acelerando los arranques y protegiendo el almacenamiento flash.
+- Incorpora atributos de batería de Matter 1.6.1 (`batCapacity`, `batTimeToFullCharge`, etc.) y tipo `TiltOnlyInteriorBlind` conforme para persianas.
+- Actualiza dependencias estables: `werift@0.25.1`, `undici@8.12.2`, `mqtt@5.16.1`, `react@19.3.1`, `vite@8.3.4`, `vitest@5.0.5` y `lucide-react@1.59.0`.
 
 ## Release 2.1.2 (2026-10-11)
 
@@ -32,10 +40,10 @@ This file is intentionally structured for both humans and AI agents.
 
 ```yaml
 project: matter-all-in-one-chrisalvir
-version: "2.1.1"
+version: "2.1.15"
 spec: "Matter 1.6.1"
 engine: matterbridge
-engine_version: "3.10.13"
+engine_version: "3.10.14"
 node_image: "node:24.21.0-alpine3.24"
 bridge_mode: server       # Each HA device = ServerNode; standalone entities keep their own QR
 plugin_mode: dynamic      # MatterbridgeDynamicPlatform
@@ -85,7 +93,7 @@ remounted only after an explicit stream-source edit or live verification.
 ## Minimum Requirements
 
 - **Apple Home:** HomePod mini / Apple TV 4K (Matter hub); Thread router only needed for Thread accessories.
-- **Matterbridge:** `>= 3.10.8` (runtime image uses `3.10.13`)
+- **Matterbridge:** `>= 3.10.8` (runtime image uses `3.10.14`)
 - **Home Assistant:** `>= 2025.1`
 
 ---
@@ -118,7 +126,7 @@ HomeAssistantPlatform (MatterbridgeDynamicPlatform)
         └── CompositeDeviceEntity → Fan+Light grouped (ServerNode, own QR)
         │
         ▼
-matterbridge@3.10.13 (Matter SDK: @matter/node)
+matterbridge@3.10.14 (Matter SDK: @matter/node)
         │
         ▼
 Matter 1.6 Network (mDNS + BLE commissioning)
@@ -141,7 +149,7 @@ Matter 1.6 Network (mDNS + BLE commissioning)
 | `src/entities/composite-device.entity.ts` | Fan+Light grouped by HA device_id or explicit include list |
 | `src/converters/vacuum.converter.ts` | HA vacuum state → Matter RVC attributes |
 | `run.sh` | Startup: mDNS interface detection, plugin registration, proxy |
-| `Dockerfile` | Imagen multi-stage reproducible con `node:24.21.0-alpine3.24` y `matterbridge@3.10.13` |
+| `Dockerfile` | Imagen multi-stage reproducible con `node:24.21.0-alpine3.24` y `matterbridge@3.10.14` |
 
 ---
 
@@ -151,7 +159,7 @@ Matter 1.6 Network (mDNS + BLE commissioning)
 
 ```bash
 # 1. Instalar Matterbridge (última versión requerida)
-npm install -g matterbridge@3.10.13
+npm install -g matterbridge@3.10.14
 
 # 2. Instalar el plugin NPM independiente (su versión es distinta a la del add-on de HA)
 npm install -g matter-all-in-one-chrisalvir
@@ -303,6 +311,6 @@ See [CHANGELOG.md](CHANGELOG.md) for full history.
 
 ### Validación Raspberry Pi 5 / ARM64
 
-El complemento declara `aarch64` y `amd64`. `.github/workflows/arm64-validation.yml` construye la imagen en `ubuntu-24.04-arm`, comprueba Node.js 24.21.0, Matterbridge 3.10.13, los imports HAP/WebRTC/Scrypted y la ejecución de FFmpeg/ffprobe. Este workflow no publica imágenes ni conecta con Home Assistant o monta datos persistentes.
+El complemento declara `aarch64` y `amd64`. `.github/workflows/arm64-validation.yml` construye la imagen en `ubuntu-24.04-arm`, comprueba Node.js 24.21.0, Matterbridge 3.10.14, los imports HAP/WebRTC/Scrypted y la ejecución de FFmpeg/ffprobe. Este workflow no publica imágenes ni conecta con Home Assistant o monta datos persistentes.
 
 Para reproducir el build en un equipo ARM64 de pruebas, desde `matter-all-in-one-addon/`, ejecutar `docker build --platform linux/arm64 --build-arg BUILD_ARCH=aarch64 --build-arg BUILD_VERSION=ci -t matter-arm64:ci .`. En x86_64 hace falta emulación ARM64 para ejecutar los stages. Un análisis estático del Dockerfile o tests x86_64 no validan el runtime ARM64, la Raspberry Pi, las cámaras ni los emparejamientos físicos. Antes de actualizar HA OS, conservar un backup completo descargado fuera del SSD y todo `/data` del complemento, incluyendo `.matterbridge`, `hap-persist` y los registros HAP.

@@ -4278,7 +4278,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         this.log.notice(
           `[Cleanup] Unregistering stale or conflicting Matter endpoint "${stale.deviceName}" (${stale.uniqueId}) before registering ${identifier}`,
         );
-        // Matterbridge 3.10.13 owns shutdown/destruction of dependent server
+        // Matterbridge 3.10.14 owns shutdown/destruction of dependent server
         // nodes in unregisterDevice(). Calling serverNode.close() first races
         // that lifecycle and can leave the old MatterNode registered.
         await this.unregisterDeviceBounded(stale, `stale endpoint for ${identifier}`);
@@ -4832,7 +4832,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       this.exportedDevices.delete(entityId);
       const endpoint = this.matterbridgeDevices.get(entityId);
       if (endpoint) {
-        // Matterbridge 3.10.13 stops and destroys the dependent MatterNode as
+        // Matterbridge 3.10.14 stops and destroys the dependent MatterNode as
         // part of unregisterDevice(); don't close its ServerNode separately.
         await this.unregisterDeviceBounded(endpoint, `manual unregister ${entityId}`);
         this.matterbridgeDevices.delete(entityId);

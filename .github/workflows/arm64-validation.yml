@@ -41,7 +41,7 @@ jobs:
               assert.equal(process.arch, "arm64");
               assert.equal(process.version, "v24.21.0");
               const bridge = JSON.parse(fs.readFileSync("/usr/local/lib/node_modules/matterbridge/package.json", "utf8"));
-              assert.equal(bridge.version, "3.10.13");
+              assert.equal(bridge.version, "3.10.14");
               for (const name of ["matterbridge", "@homebridge/hap-nodejs", "werift", "@scrypted/client"]) await import(name);
               console.log("ARM64 runtime and imports verified");
             '

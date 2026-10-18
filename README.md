@@ -4,11 +4,19 @@
   <img src="matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
 </div>
 
-> **Matter All-in-One for Home Assistant (v2.1.13)**
+> **Matter All-in-One for Home Assistant (v2.1.15)**
 > Expone entidades verificadas de Home Assistant como accesorios Matter 1.6 estables, cámaras Scrypted passthrough con HKSV y cámaras HomeKit con Live View en Apple Home.
-> **Base:** `matterbridge@3.10.13` · **Node.js:** `24.21.0-alpine3.24` · **TypeScript:** `7.0.2` · **Vitest:** `5.0.3` · **Vite:** `8.3.3` · **Spec:** Matter 1.6.1
+> **Base:** `matterbridge@3.10.14` · **Node.js:** `24.21.0-alpine3.24` · **TypeScript:** `7.0.2` · **Vitest:** `5.0.5` · **Vite:** `8.3.4` · **Spec:** Matter 1.6.1
 
 ---
+
+### Novedades de la versión 2.1.15
+
+- Actualiza la base oficial de ejecución a **Matterbridge 3.10.14** sobre Node.js 24.21.0 y Alpine 3.24.
+- Normaliza los límites de memoria bajo Docker (`constrainedMemory`) en Home Assistant OS para evitar lecturas infladas de la máquina host.
+- Optimiza los contextos de almacenamiento de MatterNode omitiendo escrituras duplicadas en disco, acelerando los arranques y protegiendo el almacenamiento flash.
+- Incorpora atributos de batería de Matter 1.6.1 (`batCapacity`, `batTimeToFullCharge`, etc.) y tipo `TiltOnlyInteriorBlind` conforme para persianas.
+- Actualiza dependencias estables: `werift@0.25.1`, `undici@8.12.2`, `mqtt@5.16.1`, `react@19.3.1`, `vite@8.3.4`, `vitest@5.0.5` y `lucide-react@1.59.0`.
 
 ### Novedades de la versión 2.1.13
 

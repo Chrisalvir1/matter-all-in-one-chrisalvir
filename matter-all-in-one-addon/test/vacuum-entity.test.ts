@@ -182,7 +182,7 @@ describe("VacuumEntity Apple Home topology and identity", () => {
   it("rejects Matterbridge's advertised SkipArea command when HA has no portable skip-area service", async () => {
     const entityId = "vacuum.sala_tv_robotina_rvc";
     const platform = {
-      matterbridge: { matterbridgeVersion: "3.10.13" },
+      matterbridge: { matterbridgeVersion: "3.10.14" },
       log: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), notice: vi.fn(), warn: vi.fn() },
       ha: {
         callService: vi.fn().mockResolvedValue(undefined),

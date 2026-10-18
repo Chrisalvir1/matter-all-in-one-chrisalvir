@@ -8,7 +8,7 @@ MESSAGE=${1:-"release: $TAG"}
 sed -i '' "s/^version:.*/version: \"$VERSION\"/" ./matter-all-in-one-addon/config.yaml
 
 git diff --quiet && git diff --cached --quiet && { echo "No hay cambios para publicar."; exit 1; }
-git add README.md push_update.sh matter-all-in-one-addon .github/workflows repository.yaml repository.json
+git add README.md push_update.sh matter-all-in-one-addon .github/workflows repository.yaml repository.json CHANGELOG.md docs
 git commit -m "$MESSAGE"
 git tag -a "$TAG" -m "$TAG"
 git push origin HEAD
