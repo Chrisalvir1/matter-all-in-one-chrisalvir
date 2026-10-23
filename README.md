@@ -4,11 +4,19 @@
   <img src="matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
 </div>
 
-> **Matter All-in-One for Home Assistant (v2.1.15)**
+> **Matter All-in-One for Home Assistant (v2.1.16)**
 > Expone entidades verificadas de Home Assistant como accesorios Matter 1.6 estables, cámaras Scrypted passthrough con HKSV y cámaras HomeKit con Live View en Apple Home.
-> **Base:** `matterbridge@3.10.14` · **Node.js:** `24.21.0-alpine3.24` · **TypeScript:** `7.0.2` · **Vitest:** `5.0.5` · **Vite:** `8.3.4` · **Spec:** Matter 1.6.1
+> **Base:** `matterbridge@3.11.0` · **Node.js:** `24.22.1-alpine3.24` · **TypeScript:** `7.0.2` · **Vitest:** `5.0.5` · **Vite:** `8.3.5` · **Spec:** Matter 1.6.1
 
 ---
+
+### Novedades de la versión 2.1.16
+
+- Actualiza Matterbridge a 3.11.0 con Matter 1.6.1 y matter.js 0.18.0; revisa la conformidad de los dispositivos y conserva la configuración persistente del puente.
+- Corrige la función Lighting obligatoria de On/Off en enchufes Matter, incluidos los dispositivos compuestos, y añade pruebas con endpoints reales en modo estricto.
+- Actualiza Node.js a 24.22.1 y corrige las dependencias transitivas vulnerables follow-redirects e ip-address.
+- Actualiza MQTT, Undici, Werift, React y herramientas de construcción y pruebas; alinea las comprobaciones ARM64 con las versiones del contenedor.
+- Esta actualización no acredita la resolución de Live View ni la persistencia de clips HKSV: requieren verificación física en Apple Casa.
 
 ### Novedades de la versión 2.1.15
 

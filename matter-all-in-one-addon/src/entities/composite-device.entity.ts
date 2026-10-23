@@ -1359,7 +1359,9 @@ export class CompositeDeviceEntity {
     }
 
     if (domain === "light" || domain === "switch") {
-      const isLighting = domain === "light";
+      const type = this.typeFor(member);
+      const isLighting =
+        domain === "light" || type.code === 0x010a || type.code === 0x010b;
       endpoint.behaviors.require(
         isLighting
           ? MatterbridgeOnOffServer.with(OnOff.Feature.Lighting)

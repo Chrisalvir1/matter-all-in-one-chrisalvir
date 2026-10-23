@@ -7,7 +7,7 @@ on:
       - 'matter-all-in-one-addon/**'
       - '.github/workflows/arm64-validation.yml'
   push:
-    branches: ['codex/matterbridge-3.10.13']
+    branches: ['codex/matterbridge-3.11.0']
     paths:
       - 'matter-all-in-one-addon/**'
       - '.github/workflows/arm64-validation.yml'
@@ -39,9 +39,9 @@ jobs:
               import assert from "node:assert/strict";
               import fs from "node:fs";
               assert.equal(process.arch, "arm64");
-              assert.equal(process.version, "v24.21.0");
+              assert.equal(process.version, "v24.22.1");
               const bridge = JSON.parse(fs.readFileSync("/usr/local/lib/node_modules/matterbridge/package.json", "utf8"));
-              assert.equal(bridge.version, "3.10.14");
+              assert.equal(bridge.version, "3.11.0");
               for (const name of ["matterbridge", "@homebridge/hap-nodejs", "werift", "@scrypted/client"]) await import(name);
               console.log("ARM64 runtime and imports verified");
             '
