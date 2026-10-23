@@ -1,4 +1,4 @@
-ARG BUILD_FROM=node:24.21.0-alpine3.24
+ARG BUILD_FROM=node:24.22.1-alpine3.24
 FROM ${BUILD_FROM} AS builder
 
 WORKDIR /app
@@ -30,7 +30,7 @@ RUN set -eu; apk add --no-cache curl jq ffmpeg; ARCH=$(uname -m); \
      echo "${FFMPEG_SHA256}  /tmp/ffmpeg-homebridge.tar.gz" | sha256sum -c -; \
      tar xzf /tmp/ffmpeg-homebridge.tar.gz -C / --no-same-owner; \
      rm /tmp/ffmpeg-homebridge.tar.gz; chmod 0755 /usr/local/bin/ffmpeg; \
-     npm install -g matterbridge@3.10.14 --omit=dev --no-fund --no-audit
+     npm install -g matterbridge@3.11.0 --omit=dev --no-fund --no-audit
 
 WORKDIR /app
 COPY package.json package-lock.json ./

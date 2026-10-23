@@ -339,7 +339,9 @@ export class BaseEntity {
     ) {
       const isLighting =
         domain === "light" ||
-        this.deviceType.name.toLowerCase().includes("light");
+        this.deviceType.name.toLowerCase().includes("light") ||
+        this.deviceType.code === 0x010a ||
+        this.deviceType.code === 0x010b;
       this.endpoint.behaviors.require(
         isLighting
           ? MatterbridgeOnOffServer.with(OnOff.Feature.Lighting)

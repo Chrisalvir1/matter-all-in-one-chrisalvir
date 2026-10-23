@@ -1,3 +1,11 @@
+## [2.1.16] - 2026-10-23
+
+- Actualiza Matterbridge a 3.11.0 con Matter 1.6.1 y matter.js 0.18.0; revisa la conformidad de los dispositivos y conserva la configuración persistente del puente.
+- Corrige la función Lighting obligatoria de On/Off en enchufes Matter, incluidos los dispositivos compuestos, y añade pruebas con endpoints reales en modo estricto.
+- Actualiza Node.js a 24.22.1 y corrige las dependencias transitivas vulnerables follow-redirects e ip-address.
+- Actualiza MQTT, Undici, Werift, React y herramientas de construcción y pruebas; alinea las comprobaciones ARM64 con las versiones del contenedor.
+- Esta actualización no acredita la resolución de Live View ni la persistencia de clips HKSV: requieren verificación física en Apple Casa.
+
 ## [2.1.15] - 2026-10-18
 
 ### Actualización Matterbridge 3.10.14 y Optimización de Dependencias
