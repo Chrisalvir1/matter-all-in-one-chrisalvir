@@ -19,4 +19,5 @@ La auditoría de la cámara Matter experimental detectó requisitos preexistente
 - npm audit del lockfile completo: 0 vulnerabilidades conocidas.
 - Instalación independiente de matterbridge@3.11.0 (equivalente al paquete global del runtime): npm audit --omit=dev sin vulnerabilidades conocidas.
 - Changelog de HA, config.yaml y ambas versiones package.json alineados en 2.1.16.
-- La construcción y ejecución Linux ARM64 deben verificarse en GitHub Actions; no hay Docker local en este equipo.
+- GitHub Actions Build and Test #850: correcto; construcción Linux AMD64 y contrato WebSocket de Home Assistant Core 2026.10.0 verificados.
+- GitHub Actions ARM64 add-on validation #41: correcto; construcción y ejecución Linux ARM64 nativas, versiones de Node/Matterbridge, imports HAP/WebRTC/Scrypted y FFmpeg/ffprobe verificados.
