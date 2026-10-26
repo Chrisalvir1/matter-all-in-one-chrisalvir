@@ -15,6 +15,8 @@ it("inspect and initialize actual RVC implementation under strict validation", a
   await createTestEnvironment("strict");
   try {
     const [server] = await createServerNode(5591, 0x0074 as any);
+    const selectorId = "select.audit_modo_de_limpieza";
+    const entityId = "vacuum.audit";
     const p: any = {
       matterbridge: { matterbridgeVersion: "3.11.0" },
       nodeIdentities: {
@@ -26,15 +28,35 @@ it("inspect and initialize actual RVC implementation under strict validation", a
       ),
       ha: {
         callService: async () => {},
-        hassEntities: new Map(),
+        hassEntities: new Map([
+          [entityId, { id: "vacuum-entry", device_id: "robotina-device" }],
+          [selectorId, { id: "select-entry", device_id: "robotina-device" }],
+        ]),
         hassDevices: new Map(),
-        hassStates: new Map(),
+        hassStates: new Map([
+          [
+            selectorId,
+            {
+              entity_id: selectorId,
+              state: "chargego",
+              attributes: {
+                options: [
+                  "standby",
+                  "random",
+                  "wall_follow",
+                  "spiral",
+                  "chargego",
+                ],
+              },
+            },
+          ],
+        ]),
       },
     };
     const v = new VacuumEntity(
       p,
       {
-        entity_id: "vacuum.audit",
+        entity_id: entityId,
         state: "docked",
         attributes: { friendly_name: "AuditRvc", battery_level: 70 },
       } as any,
@@ -62,7 +84,10 @@ it("inspect and initialize actual RVC implementation under strict validation", a
     expect(
       ep.behaviors.optionsFor(ep.behaviors.supported.rvcCleanMode)
         .supportedModes,
-    ).toHaveLength(2);
+    ).toHaveLength(3);
+    expect(
+      ep.behaviors.optionsFor(ep.behaviors.supported.rvcCleanMode).currentMode,
+    ).toBe(2);
     expect(ep.state.descriptor.serverList).toContain(0x002f);
     process.stdout.write(
       "AUDIT_RVC_REAL " +

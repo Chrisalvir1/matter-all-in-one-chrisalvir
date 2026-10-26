@@ -4544,6 +4544,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
       await this.prepareEndpointForRegistration(endpoint, entityId);
       await this.registerDevice(endpoint);
+      if (endpoint.lifecycle?.isGone || endpoint.lifecycle?.isReady === false) {
+        throw new Error(
+          `Matter endpoint initialization failed for ${entityId}; refusing to publish a destroyed or unready endpoint.`,
+        );
+      }
       // Matterbridge creates the ServerNode during registerDevice(), but nodes
       // added dynamically after the initial startup interval are not started
       // by that interval. Start this node explicitly so its commissionable

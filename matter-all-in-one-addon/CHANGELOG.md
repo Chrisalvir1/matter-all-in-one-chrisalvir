@@ -1,3 +1,9 @@
+## [2.2.4] - 2026-10-26
+
+- Corrige la inicialización Matter RVC de Robotina cuando el selector está en `chargego` o `standby`: `currentMode` ahora siempre coincide con un modo de limpieza anunciado y compatible.
+- Evita registrar o anunciar como exportado un endpoint Matter que Matterbridge haya dejado destruido o sin inicializar.
+- Añade una prueba de integración con los estados y opciones reales del selector de Robotina y verifica que el endpoint RVC se inicializa; la prueba no requiere borrar ni volver a emparejar la fabric existente.
+
 ## [2.2.3] - 2026-10-26
 
 - Corrige la carga del plugin RVC: `DescriptorServer` y `BasicInformationServer` ahora se importan desde la API pública `matterbridge/matter/behaviors`, evitando dependencias directas de `@matter/node` que Matterbridge rechaza al cargar el plugin.

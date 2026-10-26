@@ -345,8 +345,10 @@ export class VacuumEntity extends BaseEntity {
     const initialCleanMode = cleanSelector?.state
       ? (cleanModeDefs.find(
           (d) => d.option.toLowerCase() === cleanSelector.state?.toLowerCase(),
-        )?.mode ?? 1)
-      : 1;
+        )?.mode ??
+        supportedCleanModes[0]?.mode ??
+        1)
+      : (supportedCleanModes[0]?.mode ?? 1);
 
     const rawAreas =
       this.state.attributes?.rooms || this.state.attributes?.zones || [];

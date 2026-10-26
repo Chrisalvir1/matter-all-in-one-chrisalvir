@@ -538,6 +538,37 @@ describe("HomeAssistantPlatform", () => {
     expect((platform as any).matterbridgeDevices.get(id)).toBe(fresh);
   });
 
+  it("does not report a Matter endpoint as exported when registration destroys it", async () => {
+    const id = "vacuum.robotina";
+    const endpoint: any = {
+      uniqueId: "vacuum_robotina",
+      deviceName: "ROBOTINA",
+      lifecycle: { isGone: false, isReady: true },
+    };
+    const entity: any = {
+      entityId: id,
+      state: { state: "docked", attributes: {} },
+      createEndpoint: vi.fn().mockResolvedValue(endpoint),
+      syncInitialState: vi.fn().mockResolvedValue(undefined),
+      setReachability: vi.fn(),
+    };
+    platform.entities.set(id, entity);
+    (platform as any).getDeviceByUniqueId = vi.fn().mockReturnValue(undefined);
+    (platform as any).getDeviceByName = vi.fn().mockReturnValue(undefined);
+    (platform as any).getDevices = vi.fn().mockReturnValue([]);
+    (platform as any).hasDeviceName = vi.fn().mockReturnValue(false);
+    vi.spyOn(platform as any, "unregisterDevice").mockResolvedValue(undefined);
+    vi.spyOn(platform as any, "registerDevice").mockImplementation(async () => {
+      endpoint.lifecycle.isGone = true;
+    });
+
+    await expect((platform as any).activateEntity(id)).rejects.toThrow(
+      "initialization failed",
+    );
+    expect((platform as any).matterbridgeDevices.has(id)).toBe(false);
+    expect(entity.syncInitialState).not.toHaveBeenCalled();
+  });
+
   it("marks fan and light sharing a device_id as one composite before either is activated", async (ctx) => {
     if (!networkAvailable) {
       ctx.skip();
