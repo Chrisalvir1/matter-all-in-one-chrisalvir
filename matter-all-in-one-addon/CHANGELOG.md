@@ -1,4 +1,4 @@
-## En preparación
+## [2.1.17] - 2026-10-25
 
 - Evita recomendar HAP como televisor cuando un accesorio incluye una entidad `vacuum`; la aspiradora conserva su perfil Matter RVC y su emparejamiento existente.
 - Para nuevas exportaciones, vincula el sensor de batería y el selector de modo de limpieza al RVC del mismo dispositivo HA para que la batería se informe dentro del accesorio y el modo se controle desde RVC, sin crear tiles separados para esos auxiliares.
