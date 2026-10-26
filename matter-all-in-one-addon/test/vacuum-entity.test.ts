@@ -4,6 +4,47 @@ import { VacuumEntity } from "../src/entities/vacuum.entity.js";
 import { MatterDeviceTypes } from "../src/device-registry.js";
 
 describe("VacuumEntity Apple Home topology and identity", () => {
+  it("includes Omni's linked battery sensor on the single RVC accessory", async () => {
+    const entityId = "vacuum.robotina";
+    const batteryId = "sensor.robotina_battery";
+    const platform = {
+      matterbridge: { matterbridgeVersion: "3.11.0" },
+      log: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), notice: vi.fn(), warn: vi.fn() },
+      ha: {
+        callService: vi.fn().mockResolvedValue(undefined),
+        hassEntities: new Map([
+          [entityId, { id: "vacuum-entry", device_id: "robotina-device" }],
+          [batteryId, { id: "battery-entry", device_id: "robotina-device" }],
+        ]),
+        hassDevices: new Map(),
+        hassStates: new Map([
+          [batteryId, {
+            entity_id: batteryId,
+            state: "73",
+            attributes: { device_class: "battery", unit_of_measurement: "%" },
+          }],
+        ]),
+      },
+    };
+    const state = {
+      entity_id: entityId,
+      state: "docked",
+      attributes: { friendly_name: "ROBOTINA" },
+      last_changed: "",
+      last_updated: "",
+    };
+    const vacuum = new VacuumEntity(
+      platform as any,
+      state as any,
+      MatterDeviceTypes.roboticVacuumCleaner,
+    );
+    const endpoint = (await vacuum.createEndpoint()) as any;
+    await vacuum.updateState(state as any, true);
+
+    expect(endpoint.deviceType).toBe(0x0074);
+    expect(endpoint.attributes.get("powerSource:batPercentRemaining")).toBe(146);
+  });
+
   it("publishes one standalone RVC with the requested model and physical HA serial", async () => {
     const entityId = "vacuum.sala_tv_robotina_rvc";
     const selectId = "select.robotina_modo_de_limpieza";

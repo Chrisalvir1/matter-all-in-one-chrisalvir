@@ -1,3 +1,10 @@
+## [2.1.19] - 2026-10-26
+
+- Publica las aspiradoras como accesorio Matter RVC independiente aunque compartan `device_id` con sensores de potencia/telemetría. Evita que un sensor se convierta en la raíz del QR y que Apple Home muestre un accesorio eléctrico en lugar del vacuum.
+- Conserva un solo QR RVC por aspiradora; sus comandos, modos de limpieza y batería vinculada siguen integrados en el accesorio cuando Home Assistant expone esas entidades.
+- Añade regresión para un robot con entidad `vacuum` y sensores hermanos, garantizando que no se genere un compuesto con raíz de sensor.
+- La potencia/corriente no se transforma en entidades RVC ficticias; Apple Home solo mostrará atributos que el tipo Matter y su app admitan.
+
 ## [2.1.18] - 2026-10-25
 
 - Restablece Matter en el `ServerNode` existente mediante el factory reset nativo de Matter.js, conserva `storedId` y el perfil Matter seleccionado, y vuelve a generar el QR sin reconstruir un nodo con almacenamiento incompleto.

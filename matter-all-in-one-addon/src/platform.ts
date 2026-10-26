@@ -2574,6 +2574,24 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       return undefined;
     }
     const compositeDeviceId = config?.device_id ?? deviceId;
+    // Matter RVC must be the root accessory. A generic composite rooted at a
+    // power/telemetry sensor is exposed to Apple Home as that sensor (often a
+    // lightning/electrical icon), even if the UI selected an RVC profile.
+    // Keep vacuum entities on their dedicated roboticVacuumCleaner publisher;
+    // VacuumEntity already attaches linked battery and clean-mode capabilities.
+    const hasVacuumEntity = Array.from(this.entities.values()).some((entity) => {
+      const hassEntry = this.ha.hassEntities.get(entity.entityId);
+      return (
+        entity.entityId.startsWith("vacuum.") &&
+        hassEntry?.device_id === compositeDeviceId
+      );
+    });
+    if (hasVacuumEntity) {
+      this.log.debug(
+        `[Composite] ${entityId}: device ${compositeDeviceId} has a vacuum entity — keeping the RVC accessory standalone`,
+      );
+      return undefined;
+    }
     const excluded = new Set(config?.exclude_entities ?? []);
     const explicitlyIncluded = config?.include_entities;
     const supported = new Set([

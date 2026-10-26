@@ -56,6 +56,24 @@ describe("HomeAssistantPlatform", () => {
     await platform.onShutdown("test-teardown");
   });
 
+  it("keeps vacuum plus linked telemetry out of a sensor-rooted composite", () => {
+    const deviceId = "robotina-tuya-device";
+    (platform as any).ha = {
+      close: vi.fn(),
+      hassEntities: new Map([
+        ["vacuum.robotina", { entity_id: "vacuum.robotina", device_id: deviceId }],
+        ["sensor.robotina_power", { entity_id: "sensor.robotina_power", device_id: deviceId }],
+        ["sensor.robotina_battery", { entity_id: "sensor.robotina_battery", device_id: deviceId }],
+      ]),
+    };
+    platform.entities.set("vacuum.robotina", { entityId: "vacuum.robotina" } as any);
+    platform.entities.set("sensor.robotina_power", { entityId: "sensor.robotina_power" } as any);
+    platform.entities.set("sensor.robotina_battery", { entityId: "sensor.robotina_battery" } as any);
+
+    expect((platform as any).getCompositeCandidate("sensor.robotina_power")).toBeUndefined();
+    expect((platform as any).getCompositeCandidate("vacuum.robotina")).toBeUndefined();
+  });
+
   it("should initialize and connect to Home Assistant", async (ctx) => {
     if (!networkAvailable) {
       ctx.skip();
