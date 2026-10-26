@@ -1,3 +1,9 @@
+## [2.1.21] - 2026-10-26
+
+- Retira Electrical Power Measurement del endpoint RVC: no forma parte de los clústeres declarados para Robotic Vacuum Cleaner y es el principal cambio sospechoso tras observar «Incompatible» en Apple Casa.
+- Mantiene el RVC como nodo Matter independiente con batería, estado, modos y controles compatibles; la lectura de potencia permanece en Home Assistant y se identifica claramente como no exportable dentro del perfil RVC.
+- Requiere restablecer y volver a emparejar el nodo de la aspiradora para que Apple Casa lea la composición Matter corregida.
+
 ## [2.1.20] - 2026-10-26
 
 - Integra `sensor.*` de potencia vinculado al mismo dispositivo HA dentro del endpoint RVC, con el cluster Matter Electrical Power Measurement y el mismo QR de la aspiradora.

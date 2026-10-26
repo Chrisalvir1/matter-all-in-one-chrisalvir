@@ -1,3 +1,9 @@
+## [2.1.21] - 2026-10-26
+
+- Retira del vacuum el clúster eléctrico no declarado por el tipo Matter RVC, que es el principal cambio sospechoso de la ficha «Incompatible» observada en Apple Casa.
+- Conserva batería, modos y controles del vacuum en un único nodo Matter RVC. La potencia sigue en Home Assistant, pero no se anuncia como capacidad del vacuum.
+- Es necesario restablecer el nodo Robotina y emparejar de nuevo el QR una vez instalada esta versión.
+
 ## [2.1.20] - 2026-10-26
 
 - Integra el sensor de potencia de Robotina en el mismo endpoint RVC y QR, en vez de ofrecerlo para exportarlo por separado.
