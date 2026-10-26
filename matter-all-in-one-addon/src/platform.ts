@@ -4348,33 +4348,33 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         if (this.hasDeviceName(pinnedName)) {
           const existing = this.getDeviceByName(pinnedName);
           if (existing && existing !== endpoint) {
-            await this.unregisterDeviceBounded(existing, `lingering pinned name for ${identifier}`);
+            await this.unregisterDeviceBounded(existing, `lingering pinned name for ${identifier}`, 5000);
           }
         }
-      } else {
-        const baseName = endpoint.deviceName || identifier;
-        let counter = 1;
-        while (this.hasDeviceName(endpoint.deviceName)) {
-          const existing = this.getDeviceByName(endpoint.deviceName);
-          if (existing) {
-            if (
-              existing === endpoint ||
-              existing.uniqueId === endpoint.uniqueId ||
-              (endpoint.serialNumber && existing.serialNumber === endpoint.serialNumber) ||
-              existing.id === endpoint.id
-            ) {
-              await this.unregisterDeviceBounded(existing, `lingering name for ${identifier}`);
-              if (!this.hasDeviceName(endpoint.deviceName)) break;
-            }
+      }
+
+      const baseName = endpoint.deviceName || identifier;
+      let counter = 1;
+      while (this.hasDeviceName(endpoint.deviceName)) {
+        const existing = this.getDeviceByName(endpoint.deviceName);
+        if (existing) {
+          if (
+            existing === endpoint ||
+            existing.uniqueId === endpoint.uniqueId ||
+            (endpoint.serialNumber && existing.serialNumber === endpoint.serialNumber) ||
+            existing.id === endpoint.id
+          ) {
+            await this.unregisterDeviceBounded(existing, `lingering name for ${identifier}`, 5000);
+            if (!this.hasDeviceName(endpoint.deviceName)) break;
           }
-          const suffix = ` (${counter++})`;
-          const maxLen = 32 - suffix.length;
-          const newName = `${baseName.slice(0, maxLen).trim()}${suffix}`;
-          this.log.notice(
-            `Disambiguating duplicate Matter deviceName for ${identifier}: '${endpoint.deviceName}' -> '${newName}'`,
-          );
-          endpoint.deviceName = newName;
         }
+        const suffix = ` (${counter++})`;
+        const maxLen = 32 - suffix.length;
+        const newName = `${baseName.slice(0, maxLen).trim()}${suffix}`;
+        this.log.notice(
+          `Disambiguating duplicate Matter deviceName for ${identifier}: '${endpoint.deviceName}' -> '${newName}'`,
+        );
+        endpoint.deviceName = newName;
       }
 
       // 3. Ensure uniqueId is not duplicated
@@ -4616,7 +4616,16 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       // added dynamically after the initial startup interval are not started
       // by that interval. Start this node explicitly so its commissionable
       // mDNS record (_matterc._udp) is present before showing its QR code.
-      const serverNode = (endpoint as any).serverNode;
+      let serverNode = (endpoint as any).serverNode;
+      if (!serverNode) {
+        const registered =
+          (endpoint.uniqueId && (this.getDeviceByUniqueId?.(endpoint.uniqueId) as any)) ||
+          (endpoint.deviceName && (this.getDeviceByName?.(endpoint.deviceName) as any));
+        if (registered?.serverNode) {
+          serverNode = registered.serverNode;
+          (endpoint as any).serverNode = serverNode;
+        }
+      }
       if (!serverNode) {
         this.log.error(
           `Matter server node was not created for ${entityId} (deviceName: "${endpoint.deviceName}", uniqueId: "${endpoint.uniqueId}", mode: "${endpoint.mode}").`,
@@ -4907,7 +4916,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   private async unregisterDeviceBounded(
     endpoint: any,
     context: string,
-    timeoutMs = 2000,
+    timeoutMs = 5000,
   ): Promise<void> {
     let completed = false;
     const operation = this.unregisterDevice(endpoint)
@@ -5152,7 +5161,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               await this.unregisterDeviceBounded(
                 lingering,
                 `purge lingering name ${nameCandidate}`,
-                1500,
+                5000,
               );
             }
           }

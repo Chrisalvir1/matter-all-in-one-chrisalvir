@@ -52,6 +52,25 @@ function detectHapRecommendation(
 
   const domains = new Set(device.entities.map((e) => e.domain));
 
+  // 0. Robotic Vacuum Cleaners are natively supported in Matter RVC (Apple Home iOS 18+)
+  // They must NEVER be recommended as HomeKit HAP (and never matched as a television).
+  if (
+    domains.has("vacuum") ||
+    device.entities.some((e) => e.domain === "vacuum") ||
+    /\b(vacuum|aspiradora|robotina|rvc|roborock|roomba|deebot|dreame)\b/i.test(
+      `${device.name || ""} ${device.model || ""}`,
+    )
+  ) {
+    return {
+      isRecommended: false,
+      recommendedProfile: "humidifier",
+      categoryName: "",
+      badgeText: "",
+      reason: "",
+      appleAdvantage: "",
+    };
+  }
+
   // 1. Panel de Alarma / Security System
   if (
     domains.has("alarm_control_panel") ||
@@ -107,7 +126,7 @@ function detectHapRecommendation(
   // 4. Televisión / Reproductor Multimedia
   if (
     domains.has("media_player") ||
-    /televisi[oó]n|tv|media_player|roku|appletv|apple_tv|chromecast|soundbar|kodi/i.test(
+    /\b(televisi[oó]n|tv|media_player|roku|appletv|apple_tv|chromecast|soundbar|kodi)\b/i.test(
       allStrings,
     )
   ) {
@@ -329,6 +348,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
   const isDeviceHapPublished = Boolean(localHapAccessory?.published);
   const activeHapAccessory = localHapAccessory;
   const [selectedProtocol, setSelectedProtocol] = useState<"matter" | "hap">(() => {
+    if (device?.entities.some((e) => e.domain === "vacuum")) return "matter";
     if (activeHapFromProps?.published) return "hap";
     return "matter";
   });

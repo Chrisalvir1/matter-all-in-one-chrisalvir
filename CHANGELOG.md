@@ -1,3 +1,13 @@
+## [2.1.23] - 2026-10-26
+
+- Corrección definitiva de exportación Matter RVC (Robotic Vacuum Cleaner):
+  - Resuelto el error `Matter server node was not created for vacuum.*` garantizando la desvinculación completa de nodos previos en Matterbridge, asignación explícita de `id` y rescate de `serverNode` registrado.
+  - Se elimina el comportamiento donde Matterbridge omitía la creación de `serverNode` por colisión de nombres (`hasDeviceName`) mediante desregistro sincronizado y desambiguación dinámica.
+  - Elimina el clúster opcional `ServiceArea` mediante `behaviors.drop("serviceArea")` cuando la aspiradora no tiene áreas ni mapas en Home Assistant, impidiendo que Apple Home rechace el accesorio o asigne habitaciones ficticias.
+- Corrección de interfaz web:
+  - Las aspiradoras (RVC) nunca se recomiendan como accesorios HomeKit HAP ni como Televisor / Reproductor Multimedia (se corrigió la coincidencia de texto que confundía "sala_tv_robotina" con una televisión).
+  - Selección por defecto en pestaña Matter para aspiradoras.
+
 ## [2.1.22] - 2026-10-26
 
 - Corrige la exportación Matter RVC (Robotic Vacuum Cleaner `0x0074`) para Apple Home e iOS 27:

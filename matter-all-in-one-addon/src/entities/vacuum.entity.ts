@@ -270,7 +270,14 @@ export class VacuumEntity extends BaseEntity {
 
   public override async createEndpoint(): Promise<MatterbridgeEndpoint> {
     const rawName = this.state.attributes.friendly_name ?? this.entityId;
-    const uniqueName = rawName.substring(0, 32).trim();
+    const proposedName = rawName.substring(0, 32).trim();
+    const haDeviceName = (this.platform as any)?.getHaRegistryInfo?.(this.entityId)?.device_name;
+    const uniqueName =
+      (this.platform as any)?.nodeIdentities?.pin(
+        this.entityId,
+        proposedName,
+        haDeviceName ? [String(haDeviceName)] : [],
+      ) ?? proposedName;
     const stableId = this.entityId.replaceAll(".", "_");
     const serialNumber = this.getMatterSerialNumber();
 
@@ -351,6 +358,7 @@ export class VacuumEntity extends BaseEntity {
         : RUN_MODE_ID_IDLE;
 
     this.endpoint = new RoboticVacuumCleaner(uniqueName, serialNumber, {
+      id: stableId,
       mode: "server" as const,
       currentRunMode: initialRunMode,
       supportedRunModes,
@@ -365,6 +373,16 @@ export class VacuumEntity extends BaseEntity {
       currentArea: null,
       supportedMaps: [],
     });
+
+    if (!supportedAreas || supportedAreas.length === 0) {
+      if ((this.endpoint as any).behaviors?.has?.("serviceArea")) {
+        try {
+          (this.endpoint as any).behaviors.drop("serviceArea");
+        } catch {
+          /* ignore */
+        }
+      }
+    }
 
     this.endpoint.deviceType = this.deviceType.code;
     this.endpoint.deviceName = uniqueName;
