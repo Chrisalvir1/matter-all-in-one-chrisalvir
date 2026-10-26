@@ -5850,7 +5850,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     // This sensor need not be exported to Matter to drive HAP/HKSV.
     this.syncLinkedCameraUiMotion(entityId, newState);
     const entity = this.entities.get(entityId);
-    const entityRegistry = this.ha.hassEntities?.get(entityId);
+    const entityRegistry = this.ha?.hassEntities?.get(entityId);
     const isLinkedBattery =
       entityId.startsWith("sensor.") &&
       newState.attributes?.device_class === "battery";
@@ -5858,7 +5858,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     if ((isLinkedBattery || isLinkedMode) && entityRegistry?.device_id) {
       const vacuumId = Array.from(this.entities.keys()).find((candidateId) =>
         candidateId.startsWith("vacuum.") &&
-        this.ha.hassEntities?.get(candidateId)?.device_id ===
+        this.ha?.hassEntities?.get(candidateId)?.device_id ===
           entityRegistry.device_id,
       );
       const vacuum = vacuumId ? this.entities.get(vacuumId) : undefined;
