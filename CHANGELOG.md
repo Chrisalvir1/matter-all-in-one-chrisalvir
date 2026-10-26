@@ -1,3 +1,9 @@
+## [2.2.1] - 2026-10-26
+
+- Corrige el descriptor Matter de la aspiradora RVC: conserva el clúster y telemetría de batería, pero anuncia a Apple Casa solo el tipo `RoboticVacuumCleaner` (`0x0074`) para evitar que aparezca como accesorio compuesto genérico.
+- Conserva el clúster RVC Clean Mode en identidades Matter ya fijadas y garantiza la lista mínima válida de modos requerida por Matter.js; las nuevas aspiradoras sin modos compatibles siguen omitiendo el clúster opcional.
+- Prueba un endpoint Matterbridge real con validación estricta: dispositivo RVC único, PowerSource presente y endpoint inicializado con una identidad guardada.
+
 ## [2.2.0] - 2026-10-26
 
 - Protege las identidades Matter al registrar, restablecer o retirar accesorios; las operaciones tardías conservan la selección y programan su recuperación.

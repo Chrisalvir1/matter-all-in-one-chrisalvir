@@ -11,6 +11,7 @@
 
 import { MatterbridgeEndpoint, DeviceTypeDefinition } from "matterbridge";
 import { RoboticVacuumCleaner } from "matterbridge/devices";
+import { DescriptorServer } from "@matter/node/behaviors/descriptor";
 import { BaseEntity } from "./base.entity.js";
 import { type HassState, isUnavailable } from "../utils/ha-state.js";
 import {
@@ -37,6 +38,7 @@ const ROPVOCNIC_MODEL = "Ropvocnic Tuya Vacuum";
 export class VacuumEntity extends BaseEntity {
   declare public endpoint: RoboticVacuumCleaner;
   private lastCommandTime = 0;
+  private syntheticCleanMode?: { mode: number; option: string };
 
   constructor(
     platform: any,
@@ -271,8 +273,12 @@ export class VacuumEntity extends BaseEntity {
   public override async createEndpoint(): Promise<MatterbridgeEndpoint> {
     const rawName = this.state.attributes.friendly_name ?? this.entityId;
     const proposedName = rawName.substring(0, 32).trim();
-    const haDeviceName = (this.platform as any)?.getHaRegistryInfo?.(this.entityId)?.device_name;
-    const existingPinnedIdentity = Boolean((this.platform as any)?.nodeIdentities?.get?.(this.entityId));
+    const haDeviceName = (this.platform as any)?.getHaRegistryInfo?.(
+      this.entityId,
+    )?.device_name;
+    const existingPinnedIdentity = Boolean(
+      (this.platform as any)?.nodeIdentities?.get?.(this.entityId),
+    );
     const uniqueName =
       (this.platform as any)?.nodeIdentities?.pin(
         this.entityId,
@@ -316,6 +322,26 @@ export class VacuumEntity extends BaseEntity {
             modeTags: [{ value: 16385 }, { value: def.modeTag }],
           }))
         : [{ label: "Vacuum", mode: 1, modeTags: [{ value: 16385 }] }];
+    this.syntheticCleanMode = undefined;
+    if (existingPinnedIdentity && cleanModeDefs.length < 2) {
+      const syntheticModeId =
+        Math.max(0, ...supportedCleanModes.map((mode) => mode.mode)) + 1;
+      const syntheticOption = cleanModeDefs[0]?.option;
+      supportedCleanModes.push({
+        label:
+          cleanModeDefs.length === 0
+            ? "Limpieza profunda"
+            : "Limpieza adicional",
+        mode: syntheticModeId,
+        modeTags: [{ value: 16385 }, { value: 16384 }],
+      });
+      if (syntheticOption) {
+        this.syntheticCleanMode = {
+          mode: syntheticModeId,
+          option: syntheticOption,
+        };
+      }
+    }
     const initialCleanMode = cleanSelector?.state
       ? (cleanModeDefs.find(
           (d) => d.option.toLowerCase() === cleanSelector.state?.toLowerCase(),
@@ -341,8 +367,7 @@ export class VacuumEntity extends BaseEntity {
         : undefined;
 
     const initialUpdate = buildVacuumUpdate(this.state);
-    const isSelectorDocked =
-      cleanSelector?.state?.toLowerCase() === "chargego";
+    const isSelectorDocked = cleanSelector?.state?.toLowerCase() === "chargego";
     const initialOperationalState = this.isManualChargeOnly()
       ? initialUpdate.onOff
         ? 1
@@ -385,13 +410,39 @@ export class VacuumEntity extends BaseEntity {
       }
     }
 
-    // PowerSourceServer adds its required device type during initialization.
-    // Keep that standards-compliant association; removing it from constructor
-    // options cannot change the final descriptor and risks breaking battery data.
-    // Clean Mode is optional for RVC. For a new accessory with fewer than two
-    // supported modes, omit the cluster instead of publishing an invalid list.
-    // Preserve the cluster on an existing pinned identity across HA reconnects.
-    if (!existingPinnedIdentity && cleanModeDefs.length < 2 && (this.endpoint as any).behaviors?.has?.("rvcCleanMode")) {
+    // Keep PowerSource telemetry but remove its auxiliary device type after its
+    // initialization hook adds it to Descriptor. Apple Home otherwise treats
+    // the RVC as a composite accessory instead of a native vacuum tile.
+    const endpointBehaviors = (this.endpoint as any).behaviors;
+    const powerSourceBehavior = endpointBehaviors?.supported
+      ? (Object.values(endpointBehaviors.supported).find(
+          (behavior: any) => behavior.cluster?.id === 0x002f,
+        ) as any)
+      : undefined;
+    if (powerSourceBehavior) {
+      const options = endpointBehaviors.optionsFor(powerSourceBehavior);
+      const BasePowerSourceBehavior = powerSourceBehavior;
+      const AppleHomeRvcPowerSourceBehavior = class extends BasePowerSourceBehavior {
+        async initialize(): Promise<void> {
+          await super.initialize();
+          const descriptor = await this.agent.load(DescriptorServer);
+          descriptor.state.deviceTypeList =
+            descriptor.state.deviceTypeList.filter(
+              ({ deviceType }: { deviceType: number }) => deviceType !== 0x0011,
+            );
+        }
+      };
+      endpointBehaviors.inject(AppleHomeRvcPowerSourceBehavior, options, false);
+    }
+
+    // Clean Mode is optional for a new accessory when HA exposes fewer than
+    // two modes. Existing paired identities retain the cluster with a valid
+    // two-mode list so their stored Matter composition remains initializable.
+    if (
+      !existingPinnedIdentity &&
+      cleanModeDefs.length < 2 &&
+      (this.endpoint as any).behaviors?.has?.("rvcCleanMode")
+    ) {
       (this.endpoint as any).behaviors.drop?.("rvcCleanMode");
     }
 
@@ -461,8 +512,7 @@ export class VacuumEntity extends BaseEntity {
   ): Promise<void> {
     const update = buildVacuumUpdate(state as any);
     const cleanSelector = this.getLinkedCleanModeSelector();
-    const isSelectorDocked =
-      cleanSelector?.state?.toLowerCase() === "chargego";
+    const isSelectorDocked = cleanSelector?.state?.toLowerCase() === "chargego";
     const isChargingOrDocked = update.isChargingOrDocked || isSelectorDocked;
     const effectiveOperationalState = isSelectorDocked
       ? 66 // Docked
@@ -512,8 +562,7 @@ export class VacuumEntity extends BaseEntity {
         }
       }
 
-      const batteryLevel =
-        update.batteryLevel ?? this.getLinkedBatteryLevel();
+      const batteryLevel = update.batteryLevel ?? this.getLinkedBatteryLevel();
       if (batteryLevel !== null) {
         await syncFunc(
           endpoint as any,
@@ -528,9 +577,7 @@ export class VacuumEntity extends BaseEntity {
         endpoint as any,
         "powerSource" as any,
         "batChargeState",
-        isChargingOrDocked || state.state.toLowerCase() === "docked"
-          ? 1
-          : 3,
+        isChargingOrDocked || state.state.toLowerCase() === "docked" ? 1 : 3,
         this.platform.log,
       );
     } catch (err) {
@@ -610,7 +657,11 @@ export class VacuumEntity extends BaseEntity {
         const cleanSelector = this.getLinkedCleanModeSelector();
         if (cleanSelector && typeof newMode === "number") {
           const defs = getSupportedVacuumCleanModes(cleanSelector.options);
-          const match = defs.find((d) => d.mode === newMode);
+          const match =
+            defs.find((d) => d.mode === newMode) ??
+            (this.syntheticCleanMode?.mode === newMode
+              ? defs.find((d) => d.option === this.syntheticCleanMode?.option)
+              : undefined);
           if (match) {
             this.lastCommandTime = Date.now();
             await this.platform.ha?.callService(
