@@ -35,7 +35,10 @@ export const homekitSupported = {
   temperatureSensor: true,
   humiditySensor: true,
   illuminanceSensor: true,
-  energyTariff: true,
+  // Apple Home's documented Matter sensor categories do not include the
+  // Electrical Sensor utility type, so do not promise a native Home tile.
+  electricalSensor: false,
+  energyTariff: false,
   roboticVacuumCleaner: true,
   fan: true,
   humidifier: true,

@@ -64,6 +64,12 @@ export class VacuumEntity extends BaseEntity {
     const deviceId = entityRegistry?.device_id;
 
     if (deviceId) {
+      const selectors: Array<{
+        entityId: string;
+        options: string[];
+        state?: string;
+        name: string;
+      }> = [];
       for (const [id, reg] of this.platform.ha?.hassEntities?.entries() ?? []) {
         if (reg.device_id === deviceId && id.startsWith("select.")) {
           const stateObj = this.platform.ha?.hassStates?.get(id);
@@ -71,9 +77,26 @@ export class VacuumEntity extends BaseEntity {
             ? stateObj.attributes.options
             : [];
           if (options.length > 0) {
-            return { entityId: id, options, state: stateObj?.state };
+            selectors.push({
+              entityId: id,
+              options,
+              state: stateObj?.state,
+              name: `${id} ${stateObj?.attributes?.friendly_name ?? reg.name ?? ""}`.toLowerCase(),
+            });
           }
         }
+      }
+      const namedMode = selectors.find((selector) =>
+        /mode|modo|clean|limp|aspir/i.test(selector.name),
+      );
+      const selected =
+        namedMode ?? (selectors.length === 1 ? selectors[0] : undefined);
+      if (selected) {
+        return {
+          entityId: selected.entityId,
+          options: selected.options,
+          state: selected.state,
+        };
       }
     }
 
@@ -94,6 +117,83 @@ export class VacuumEntity extends BaseEntity {
     }
 
     return undefined;
+  }
+
+  public isLinkedCleanModeSelector(entityId: string): boolean {
+    return this.getLinkedCleanModeSelector()?.entityId === entityId;
+  }
+
+  private getBatteryLevel(state: HassState): number | null {
+    const rawAttributeLevel = state.attributes?.battery_level;
+    if (
+      rawAttributeLevel !== undefined &&
+      rawAttributeLevel !== null &&
+      rawAttributeLevel !== ""
+    ) {
+      const attributeLevel = Number(rawAttributeLevel);
+      if (
+        Number.isFinite(attributeLevel) &&
+        attributeLevel >= 0 &&
+        attributeLevel <= 100
+      ) {
+        return attributeLevel;
+      }
+    }
+
+    const deviceId = this.platform.ha?.hassEntities?.get(this.entityId)?.device_id;
+    if (!deviceId) return null;
+    for (const [entityId, registryEntry] of this.platform.ha?.hassEntities?.entries() ?? []) {
+      if (
+        registryEntry.device_id !== deviceId ||
+        !entityId.startsWith("sensor.")
+      ) continue;
+      const sensor = this.platform.ha?.hassStates?.get(entityId);
+      if (sensor?.attributes?.device_class !== "battery") continue;
+      if (
+        sensor.state === undefined ||
+        sensor.state === null ||
+        sensor.state === ""
+      ) continue;
+      const level = Number(sensor.state);
+      if (Number.isFinite(level) && level >= 0 && level <= 100) return level;
+    }
+    return null;
+  }
+
+  public async updateLinkedBatteryLevel(value: unknown): Promise<void> {
+    if (
+      !this.endpoint ||
+      value === undefined ||
+      value === null ||
+      value === ""
+    ) return;
+    const level = Number(value);
+    if (!Number.isFinite(level) || level < 0 || level > 100) return;
+    await safeUpdateAttribute(
+      this.endpoint as any,
+      "powerSource" as any,
+      "batPercentRemaining",
+      Math.round(level * 2),
+      this.platform.log,
+    );
+  }
+
+  public async updateLinkedCleanMode(entityId: string, state: string): Promise<void> {
+    if (!this.endpoint || !this.isLinkedCleanModeSelector(entityId)) return;
+    const selector = this.getLinkedCleanModeSelector();
+    const selected =
+      selector &&
+      getSupportedVacuumCleanModes(selector.options).find(
+        (mode) => mode.option.toLowerCase() === String(state).toLowerCase(),
+      );
+    if (!selected) return;
+    await safeUpdateAttribute(
+      this.endpoint as any,
+      "rvcCleanMode" as any,
+      "currentMode",
+      selected.mode,
+      this.platform.log,
+    );
   }
 
   public override async createEndpoint(): Promise<MatterbridgeEndpoint> {
@@ -274,12 +374,13 @@ export class VacuumEntity extends BaseEntity {
         }
       }
 
-      if (update.batteryLevel !== null) {
+      const batteryLevel = this.getBatteryLevel(state);
+      if (batteryLevel !== null) {
         await syncFunc(
           endpoint as any,
           "powerSource" as any,
           "batPercentRemaining",
-          Math.round(update.batteryLevel * 2),
+          Math.round(batteryLevel * 2),
           this.platform.log,
         );
       }

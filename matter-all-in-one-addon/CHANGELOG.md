@@ -1,3 +1,10 @@
+## En preparación
+
+- Evita recomendar HAP como televisor cuando un accesorio incluye una entidad `vacuum`; la aspiradora conserva su perfil Matter RVC y su emparejamiento existente.
+- Para nuevas exportaciones, vincula el sensor de batería y el selector de modo de limpieza al RVC del mismo dispositivo HA para que la batería se informe dentro del accesorio y el modo se controle desde RVC, sin crear tiles separados para esos auxiliares.
+- Clasifica sensores `power`, `energy` y `voltage` como Matter Electrical Sensor 0x0510 con sus clusters de medición y unidades Matter. Se marca como no compatible con Apple Casa porque no figura entre las categorías Matter de sensor documentadas por Apple.
+- Corrige el selector de perfil para que un sensor eléctrico no aparezca como sensor de temperatura ni permita elegir perfiles ajenos a su clase.
+
 ## [2.1.16] - 2026-10-23
 
 - Actualiza Matterbridge a 3.11.0 con Matter 1.6.1 y matter.js 0.18.0; revisa la conformidad de los dispositivos y conserva la configuración persistente del puente.
