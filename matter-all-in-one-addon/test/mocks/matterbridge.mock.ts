@@ -324,6 +324,7 @@ vi.mock("matterbridge", () => {
     pressureSensor: makeMockDeviceType(0x0305, "pressureSensor", [0x3, 0x403]),
     flowSensor: makeMockDeviceType(0x0306, "flowSensor", [0x3, 0x404]),
     lightSensor: makeMockDeviceType(0x0106, "lightSensor", [0x3, 0x400]),
+    electricalSensor: makeMockDeviceType(0x0510, "electricalSensor", [0x3, 0x009c]),
     roboticVacuumCleaner: makeMockDeviceType(
       0x0074,
       "roboticVacuumCleaner",

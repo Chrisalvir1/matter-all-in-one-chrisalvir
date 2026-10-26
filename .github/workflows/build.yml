@@ -22,7 +22,7 @@ jobs:
       fail-fast: false
       matrix:
         node-version: [24.22.1]
-        os: [ubuntu-latest]
+        os: [ubuntu-24.04]
 
     steps:
       - name: Checkout repository
@@ -52,12 +52,12 @@ jobs:
         run: npm ls --depth=0 matterbridge werift @homebridge/hap-nodejs
 
       - name: Build add-on container
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-24.04'
         run: docker build --tag matter-all-in-one:test .
 
   home-assistant-core-compatibility:
     name: Home Assistant Core 2026.10.0 websocket contract
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
