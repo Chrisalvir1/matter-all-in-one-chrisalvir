@@ -1,3 +1,10 @@
+## [2.1.20] - 2026-10-26
+
+- Integra `sensor.*` de potencia vinculado al mismo dispositivo HA dentro del endpoint RVC, con el cluster Matter Electrical Power Measurement y el mismo QR de la aspiradora.
+- Marca Robotina Power como «Incluido en RVC» en el panel y quita su interruptor de exportación independiente.
+- Mantiene la lectura en Home Assistant; Apple Home puede no mostrar el consumo en la ficha RVC aunque el valor se publique en Matter.
+- Añade pruebas para la conversión de W a mW, sincronización en vivo y asociación al vacuum principal.
+
 ## [2.1.19] - 2026-10-26
 
 - Publica las aspiradoras como accesorio Matter RVC independiente aunque compartan `device_id` con sensores de potencia/telemetría. Evita que un sensor se convierta en la raíz del QR y que Apple Home muestre un accesorio eléctrico en lugar del vacuum.

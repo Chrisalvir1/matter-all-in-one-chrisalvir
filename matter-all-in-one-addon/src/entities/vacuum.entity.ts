@@ -11,6 +11,7 @@
 
 import { MatterbridgeEndpoint, DeviceTypeDefinition } from "matterbridge";
 import { RoboticVacuumCleaner } from "matterbridge/devices";
+import { ClusterId } from "matterbridge/matter/types";
 import { BaseEntity } from "./base.entity.js";
 import { type HassState, isUnavailable } from "../utils/ha-state.js";
 import {
@@ -33,6 +34,7 @@ export { buildVacuumMatterMeta };
 const RUN_MODE_ID_IDLE = 1;
 const RUN_MODE_ID_CLEANING = 2;
 const ROPVOCNIC_MODEL = "Ropvocnic Tuya Vacuum";
+const ELECTRICAL_POWER_MEASUREMENT_ID = 0x0090 as ClusterId;
 
 export class VacuumEntity extends BaseEntity {
   declare public endpoint: RoboticVacuumCleaner;
@@ -178,6 +180,54 @@ export class VacuumEntity extends BaseEntity {
     );
   }
 
+  /** A same-device power sensor is an optional Matter capability of this RVC. */
+  public getLinkedPowerSensor(): HassState | undefined {
+    const deviceId = this.platform.ha?.hassEntities?.get(
+      this.entityId,
+    )?.device_id;
+    if (!deviceId) return undefined;
+    for (const [entityId, registryEntry] of this.platform.ha?.hassEntities?.entries() ?? []) {
+      if (
+        !entityId.startsWith("sensor.") ||
+        registryEntry.device_id !== deviceId
+      ) continue;
+      const sensor = this.platform.ha?.hassStates?.get(entityId);
+      if (sensor?.attributes?.device_class === "power") return sensor;
+    }
+    return undefined;
+  }
+
+  private powerToMilliwatts(state: HassState): number | null {
+    const value = Number(state.state);
+    if (!Number.isFinite(value)) return null;
+    const unit = String(state.attributes?.unit_of_measurement ?? "W").trim();
+    const multipliers: Record<string, number> = {
+      mW: 1,
+      W: 1_000,
+      kW: 1_000_000,
+      MW: 1_000_000_000,
+      GW: 1_000_000_000_000,
+    };
+    const multiplier = multipliers[unit] ?? 1_000;
+    const milliWatts = Math.round(value * multiplier);
+    return Number.isSafeInteger(milliWatts) ? milliWatts : null;
+  }
+
+  public async updateLinkedPowerSensor(state: HassState): Promise<void> {
+    if (!this.endpoint || state.attributes?.device_class !== "power") return;
+    const linked = this.getLinkedPowerSensor();
+    if (linked?.entity_id !== state.entity_id) return;
+    const milliWatts = this.powerToMilliwatts(state);
+    if (milliWatts === null) return;
+    await safeUpdateAttribute(
+      this.endpoint as any,
+      ELECTRICAL_POWER_MEASUREMENT_ID,
+      "activePower",
+      milliWatts,
+      this.platform.log,
+    );
+  }
+
   public async updateLinkedCleanMode(entityId: string, state: string): Promise<void> {
     if (!this.endpoint || !this.isLinkedCleanModeSelector(entityId)) return;
     const selector = this.getLinkedCleanModeSelector();
@@ -266,6 +316,9 @@ export class VacuumEntity extends BaseEntity {
       currentArea: null,
       supportedMaps: [],
     });
+    // Keep the linked power measurement on the same RVC endpoint and QR.
+    // Apple Home may not render this optional reading in its vacuum UI.
+    this.endpoint.addClusterServers([ELECTRICAL_POWER_MEASUREMENT_ID]);
 
     this.endpoint.deviceType = this.deviceType.code;
     this.endpoint.deviceName = uniqueName;
@@ -381,6 +434,20 @@ export class VacuumEntity extends BaseEntity {
           "powerSource" as any,
           "batPercentRemaining",
           Math.round(batteryLevel * 2),
+          this.platform.log,
+        );
+      }
+
+      const linkedPower = this.getLinkedPowerSensor();
+      const powerMilliWatts = linkedPower
+        ? this.powerToMilliwatts(linkedPower)
+        : null;
+      if (powerMilliWatts !== null) {
+        await syncFunc(
+          endpoint as any,
+          ELECTRICAL_POWER_MEASUREMENT_ID,
+          "activePower",
+          powerMilliWatts,
           this.platform.log,
         );
       }

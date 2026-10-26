@@ -65,6 +65,10 @@ describe("HomeAssistantPlatform", () => {
         ["sensor.robotina_power", { entity_id: "sensor.robotina_power", device_id: deviceId }],
         ["sensor.robotina_battery", { entity_id: "sensor.robotina_battery", device_id: deviceId }],
       ]),
+      hassStates: new Map([
+        ["sensor.robotina_power", { entity_id: "sensor.robotina_power", state: "0.1", attributes: { device_class: "power", unit_of_measurement: "W" } }],
+        ["sensor.robotina_battery", { entity_id: "sensor.robotina_battery", state: "73", attributes: { device_class: "battery" } }],
+      ]),
     };
     platform.entities.set("vacuum.robotina", { entityId: "vacuum.robotina" } as any);
     platform.entities.set("sensor.robotina_power", { entityId: "sensor.robotina_power" } as any);
@@ -72,6 +76,8 @@ describe("HomeAssistantPlatform", () => {
 
     expect((platform as any).getCompositeCandidate("sensor.robotina_power")).toBeUndefined();
     expect((platform as any).getCompositeCandidate("vacuum.robotina")).toBeUndefined();
+    expect((platform as any).isAuxiliaryEntity("sensor.robotina_power")).toBe(true);
+    expect((platform as any).getPrimaryEntityId("sensor.robotina_power")).toBe("vacuum.robotina");
   });
 
   it("should initialize and connect to Home Assistant", async (ctx) => {

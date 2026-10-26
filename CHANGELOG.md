@@ -1,3 +1,8 @@
+## [2.1.20] - 2026-10-26
+
+- Integra el sensor de potencia de Robotina en el mismo endpoint RVC y QR, en vez de ofrecerlo para exportarlo por separado.
+- Publica su valor con Electrical Power Measurement; Apple Home puede no representar esa lectura en la ficha de aspiradora.
+
 ## [2.1.19] - 2026-10-26
 
 - Publica las aspiradoras como accesorio Matter RVC independiente aunque compartan `device_id` con sensores de potencia/telemetría. Evita que un sensor se convierta en la raíz del QR y que Apple Home muestre un accesorio eléctrico en lugar del vacuum.
