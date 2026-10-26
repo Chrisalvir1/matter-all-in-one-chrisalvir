@@ -1,3 +1,9 @@
+## [2.1.18] - 2026-10-25
+
+- Restablece Matter en el `ServerNode` existente mediante el factory reset nativo de Matter.js, conserva `storedId` y el perfil Matter seleccionado, y vuelve a generar el QR sin reconstruir un nodo con almacenamiento incompleto.
+- Comprueba que las fabrics hayan quedado eliminadas y que exista un nuevo código de emparejamiento antes de informar éxito a la interfaz.
+- Corrige el error de ejecución `No value found for key storedId in context persist` observado al regenerar el QR de Robotina.
+
 ## [2.1.17] - 2026-10-25
 
 - Evita recomendar HAP como televisor cuando un accesorio incluye una entidad `vacuum`; la aspiradora conserva su perfil Matter RVC y su emparejamiento existente.

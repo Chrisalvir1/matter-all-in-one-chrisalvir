@@ -1,4 +1,4 @@
-# Matter All-in-One for Home Assistant — v2.1.17
+# Matter All-in-One for Home Assistant — v2.1.18
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/chrisalvir1/matter-all-in-one-chrisalvir/main/matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
@@ -8,6 +8,12 @@
 > **Base:** `matterbridge@3.11.0` · **Node.js:** `24.22.1-alpine3.24` · **TypeScript:** `7.0.2` · **Spec:** Matter 1.6.1
 
 ---
+
+## Release 2.1.18 (2026-10-25)
+
+- Restablece el accesorio Matter en el mismo `ServerNode`, borra los fabrics y vuelve a abrir commissioning sin eliminar el `storedId` ni alterar el perfil Matter elegido.
+- Corrige el error `No value found for key storedId in context persist` que impedía generar el nuevo QR de Robotina.
+- Solo confirma el reinicio cuando Matter ya no informa fabrics y hay un QR o código manual nuevo disponible.
 
 ## Release 2.1.17 (2026-10-25)
 
