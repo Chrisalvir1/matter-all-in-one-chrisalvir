@@ -11,7 +11,7 @@
 
 import { MatterbridgeEndpoint, DeviceTypeDefinition } from "matterbridge";
 import { RoboticVacuumCleaner } from "matterbridge/devices";
-import { DescriptorServer } from "@matter/node/behaviors/descriptor";
+import { DescriptorServer } from "matterbridge/matter/behaviors";
 import { BaseEntity } from "./base.entity.js";
 import { type HassState, isUnavailable } from "../utils/ha-state.js";
 import {

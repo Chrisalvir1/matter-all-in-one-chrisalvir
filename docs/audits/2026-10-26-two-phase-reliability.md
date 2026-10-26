@@ -32,3 +32,8 @@ La pantalla de Ingress mostró inicialmente v2.1.24 y tras actualizar indicó v2
 - Medir tiempos reales en Pi 5 y probar acceso Ingress con la nueva versión.
 - Completar tratamiento de errores en las rutas de persistencia restantes, cierre integral y la política Camera.UI desactivada. La rama corrige los casos encontrados en las áreas modificadas, pero no cierra todavía los 27 hallazgos de la auditoría.
 - Verificar Live View real y clip HKSV en Casa siguiendo los criterios de AGENTS.md; ni un build ni eventos o fragmentos simulados demuestran reproducción o clip guardado.
+
+
+## Seguimiento de Robotina posterior a 2.2.2
+
+La instalación de 2.2.2 tampoco arrancó el plugin: al corregir una clave persistida antigua del plugin, el log de Matterbridge reveló que rechaza `@matter/node` como dependencia directa inválida. El paquete existe como dependencia interna de Matterbridge, pero no debe declararse en el manifiesto del plugin. La corrección preparada para 2.2.3 sustituye tanto `DescriptorServer` como los dos imports dinámicos de `BasicInformationServer` por el export público `matterbridge/matter/behaviors`, retira `@matter/node` de dependencias y valida ambos exports en la imagen final. La clave actual del plugin se habilitó en el archivo persistente conservando la anterior y el resto de configuración; no se borró fabric ni se retiró ningún dispositivo. Pendiente: CI/publicación/instalación, arranque Matterbridge sin errores, restauración de inventario y confirmación de Robotina como aspiradora con controles funcionales en Apple Casa.

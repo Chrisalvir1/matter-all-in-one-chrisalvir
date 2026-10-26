@@ -4570,7 +4570,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       if (serverNode && typeof (serverNode as any).setStateOf === "function") {
         try {
           const { BasicInformationServer } = await import(
-            "@matter/node/behaviors/basic-information"
+            "matterbridge/matter/behaviors"
           );
           await (serverNode as any).setStateOf(BasicInformationServer, {
             nodeLabel: endpoint.deviceName,
@@ -4647,7 +4647,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       if (serverNode && typeof (serverNode as any).setStateOf === "function") {
         try {
           const { BasicInformationServer } = await import(
-            "@matter/node/behaviors/basic-information"
+            "matterbridge/matter/behaviors"
           );
           await (serverNode as any).setStateOf(BasicInformationServer, {
             nodeLabel: endpoint.deviceName,

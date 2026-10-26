@@ -1,3 +1,9 @@
+## [2.2.3] - 2026-10-26
+
+- Corrige la carga del plugin RVC: `DescriptorServer` y `BasicInformationServer` ahora se importan desde la API pública `matterbridge/matter/behaviors`, evitando dependencias directas de `@matter/node` que Matterbridge rechaza al cargar el plugin.
+- La imagen valida el export `DescriptorServer` desde el mismo punto público después de enlazar Matterbridge en el runtime.
+- Conserva el descriptor RVC, batería y modos de limpieza de 2.2.1 y no reinicia ni modifica fabrics emparejadas.
+
 ## [2.2.2] - 2026-10-26
 
 - Corrige el empaquetado de la corrección RVC: `@matter/node` ahora es dependencia de producción porque `vacuum.entity` importa `DescriptorServer` directamente. En 2.2.1 faltaba en la imagen final, Matterbridge rechazó cargar el plugin y detuvo el puente para proteger los dispositivos registrados.

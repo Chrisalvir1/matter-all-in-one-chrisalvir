@@ -35,8 +35,8 @@ RUN set -eu; apk add --no-cache curl jq ffmpeg; ARCH=$(uname -m); \
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --omit=peer --legacy-peer-deps --no-fund --no-audit \
-  && node --input-type=module -e "await import('@matter/node/behaviors/descriptor')" \
-  && { test -e /app/node_modules/matterbridge || ln -s /usr/local/lib/node_modules/matterbridge /app/node_modules/matterbridge; }
+  && { test -e /app/node_modules/matterbridge || ln -s /usr/local/lib/node_modules/matterbridge /app/node_modules/matterbridge; } \
+  && node --input-type=module -e "const { DescriptorServer } = await import('matterbridge/matter/behaviors'); if (!DescriptorServer || !('BasicInformationServer' in await import('matterbridge/matter/behaviors'))) throw new Error('Matter behavior exports missing')"
 RUN jq 'del(.devDependencies, .peerDependencies)' package.json > package.json.tmp \
   && mv package.json.tmp package.json
 
