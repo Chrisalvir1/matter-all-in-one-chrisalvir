@@ -856,14 +856,14 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
   const handleResetAccessory = async () => {
     if (!activeEntity || isBusy) return;
     setIsBusy(true);
-    showToast("Desconectando fabrics y generando nuevo código QR...");
+    showToast("Desconectando fabrics y preparando el código de vinculación...");
     const targetEntityId = (!isMultiSwitch && isComposite)
       ? (compositePrimary?.entityId || activeEntity.entityId)
       : activeEntity.entityId;
     try {
       const res: any = await api.resetAccessory(targetEntityId);
-      const newPairingCode = res?.pairingCode || activeEntity.pairingCode || null;
-      const newManualCode = res?.manualPairingCode || activeEntity.manualPairingCode || null;
+      const newPairingCode = res?.pairingCode || null;
+      const newManualCode = res?.manualPairingCode || null;
       setFreshPairingCode(newPairingCode);
       setFreshManualCode(newManualCode);
       setResetFabrics(true);
@@ -887,7 +887,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
           if (newManualCode) e.manualPairingCode = newManualCode;
         });
       }
-      showToast("✓ Accesorio desvinculado y nuevo QR generado");
+      showToast("✓ Accesorio desvinculado; código de emparejamiento disponible");
       void onRefresh();
     } catch (err: any) {
       showToast(err.message || "Error al desvincular", true);
@@ -2487,10 +2487,10 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                     type="button"
                     onClick={handleResetAccessory}
                     disabled={isBusy}
-                    title="Desconectar de todas las casas y generar un nuevo código QR"
+                    title="Desconectar de todas las casas y mostrar el código de vinculación"
                     style={{ padding: "7px 10px", fontSize: 11.5 }}
                   >
-                    Desconectar todo y nuevo QR
+                    Desconectar todo y mostrar QR
                   </button>
                 </div>
               )}

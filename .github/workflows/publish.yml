@@ -45,7 +45,7 @@ jobs:
       - name: Publish to NPM
         run: |
           CURRENT_VERSION=$(node -p "require('./package.json').version")
-          PUBLISHED_VERSION=$(npm view matter-all-in-one-chrisalvir version 2>/dev/null || echo "")
+          PUBLISHED_VERSION=$(npm view matter-all-in-one-addon version 2>/dev/null || echo "")
           if [ "$CURRENT_VERSION" = "$PUBLISHED_VERSION" ]; then
             echo "Version $CURRENT_VERSION is already published to npm. Skipping."
           else

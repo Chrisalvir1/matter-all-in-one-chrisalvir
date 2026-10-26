@@ -15,7 +15,25 @@ permissions:
   packages: write
 
 jobs:
+  validate-tag:
+    name: Validate exact release source
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: matter-all-in-one-addon
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af
+        with:
+          node-version: '24.22.1'
+      - run: npm ci --legacy-peer-deps --no-fund --no-audit
+      - run: node scripts/verify-ha-changelog.mjs
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npm test
+
   build-and-publish:
+    needs: validate-tag
     name: Build multi-arch image and publish to GHCR
     runs-on: ubuntu-latest
     outputs:
@@ -53,6 +71,8 @@ jobs:
         with:
           context: ./matter-all-in-one-addon
           platforms: linux/amd64,linux/arm64
+          build-args: |
+            BUILD_VERSION=${{ steps.metadata.outputs.version }}
           push: true
           tags: |
             ghcr.io/chrisalvir1/matter-all-in-one-chrisalvir:${{ steps.metadata.outputs.version }}

@@ -15,6 +15,7 @@ export async function request<T = any>(endpoint: string, options: RequestInit = 
   const url = `${API_BASE}${cleanEndpoint}`;
   const res = await fetch(url, {
     ...options,
+    signal: options.signal ?? ((!options.method || options.method === "GET") ? AbortSignal.timeout(15000) : undefined),
     headers: {
       "Content-Type": "application/json",
       ...(options.headers || {}),

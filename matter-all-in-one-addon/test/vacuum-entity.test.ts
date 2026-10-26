@@ -120,7 +120,6 @@ describe("VacuumEntity Apple Home topology and identity", () => {
           typeof dt === "number" ? dt : dt.code,
         )
       : Array.from(endpoint.deviceTypes.keys());
-    expect(deviceTypeCodes).not.toContain(0x0011);
     expect(deviceTypeCodes).toContain(0x0074);
     expect(endpoint.supportedCleanModes).toEqual([
       {

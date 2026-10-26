@@ -11,4 +11,13 @@ if (!version || !firstVersion || firstVersion !== version) {
   );
 }
 
-console.log(`Home Assistant changelog starts with ${version}.`);
+const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+const lock = JSON.parse(fs.readFileSync("package-lock.json", "utf8"));
+const versions = [pkg.version, pkg.matterbridge?.version, lock.version, lock.packages?.[""]?.version];
+if (versions.some((value) => value !== version)) {
+  throw new Error(`Package and lock versions must match config.yaml ${version}: ${versions.join(", ")}`);
+}
+if (process.env.GITHUB_REF_TYPE === "tag" && process.env.GITHUB_REF_NAME !== `v${version}`) {
+  throw new Error(`Git tag must match v${version}, found ${process.env.GITHUB_REF_NAME}`);
+}
+console.log(`Home Assistant changelog and package metadata match ${version}.`);

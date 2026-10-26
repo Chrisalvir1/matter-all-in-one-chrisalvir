@@ -205,9 +205,12 @@ export function resolveFfprobePath(): string | null {
 /**
  * Returns the version string of the selected FFmpeg binary.
  */
+const ffmpegVersionCache = new Map<string, string | null>();
+
 export function getFfmpegVersion(customPath?: string): string | null {
   const ffmpegPath = customPath || resolveFfmpegPath();
   if (!ffmpegPath) return null;
+  if (ffmpegVersionCache.has(ffmpegPath)) return ffmpegVersionCache.get(ffmpegPath) ?? null;
 
   try {
     const res = spawnSync(ffmpegPath, ["-version"], {
@@ -218,7 +221,9 @@ export function getFfmpegVersion(customPath?: string): string | null {
 
     if (res.stdout) {
       const match = res.stdout.match(/ffmpeg\s+version\s+([^\s]+)/i);
-      return match ? match[1] : res.stdout.split("\n")[0].trim();
+      const version = match ? match[1] : res.stdout.split("\n")[0].trim();
+      ffmpegVersionCache.set(ffmpegPath, version);
+      return version;
     }
   } catch {
     // Ignore error

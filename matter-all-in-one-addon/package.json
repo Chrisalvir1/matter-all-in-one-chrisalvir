@@ -1,6 +1,6 @@
 {
   "name": "matter-all-in-one-addon",
-  "version": "2.1.24",
+  "version": "2.2.0",
   "description": "Matterbridge all-in-one addon with local storage, web UI and Home Assistant Ingress support with complete Scrypted, BLE, Smart Dimmers, Vacuum, AC, Climate, Lock and Multi-Platform ecosystem compatibility",
   "author": "chrisalvir",
   "license": "Apache-2.0",
@@ -28,7 +28,7 @@
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "undici": "^8.12.3",
-    "werift": "^0.25.1",
+    "werift": "^0.25.2",
     "ws": "^8.22.0"
   },
   "peerDependencies": {
@@ -76,13 +76,14 @@
   ],
   "matterbridge": {
     "name": "matter-all-in-one-chrisalvir",
-    "version": "2.1.21",
+    "version": "2.2.0",
     "author": "chrisalvir",
     "description": "Standards-based Matter 1.6.1 bridge for Home Assistant"
   },
   "overrides": {
     "brace-expansion": "5.0.12",
     "ip-address": "10.7.4",
-    "follow-redirects": "1.16.1"
+    "follow-redirects": "1.16.1",
+    "multer": "^2.5.0"
   }
 }

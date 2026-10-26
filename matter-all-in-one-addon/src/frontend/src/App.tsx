@@ -31,6 +31,7 @@ export const App: React.FC = () => {
     scryptedConfig,
     cameraUiConfig,
     loading,
+    loadError,
     searchQuery,
     setSearchQuery,
     activeFilter,
@@ -459,6 +460,7 @@ export const App: React.FC = () => {
             isSyncing={isSyncing}
           />
 
+          {loadError && <p role="alert" className="error-message">{loadError}</p>}
           {/* Device / Camera Grid */}
           <section className="device-grid" id="device-list" aria-live="polite" aria-busy={loading}>
             {loading ? (

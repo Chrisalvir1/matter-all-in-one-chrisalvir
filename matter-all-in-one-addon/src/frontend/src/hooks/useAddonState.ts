@@ -32,6 +32,9 @@ export function useAddonState() {
   const [activeFilter, setActiveFilter] = useState<FilterType>("all");
   const [toastMessage, setToastMessage] = useState<{ text: string; isError?: boolean } | null>(null);
   const refreshInFlight = useRef(false);
+  const refreshRequested = useRef(false);
+  const realtimeUpdates = useRef(new Map<string, { state: string; attributes: Record<string, unknown> }>());
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const showToast = useCallback((text: string, isError = false) => {
     setToastMessage({ text, isError });
@@ -41,107 +44,67 @@ export function useAddonState() {
   }, []);
 
   const refreshAll = useCallback(async () => {
-    if (refreshInFlight.current) return;
+    if (refreshInFlight.current) { refreshRequested.current = true; return; }
     refreshInFlight.current = true;
     try {
-      const [
-        statusRes,
-        devicesRes,
-        camerasRes,
-        scryptedRes,
-        cameraUiRes,
-        cameraUiCamsRes,
-      ] = await Promise.allSettled([
-        api.getStatus(),
-        api.getDevices(),
-        api.getCameras(),
-        api.getScryptedConfig(),
-        api.getCameraUiConfig(),
-        api.getCameraUiCameras(),
-      ]);
-
-      if (statusRes.status === "fulfilled") setStatus(statusRes.value);
-      if (devicesRes.status === "fulfilled") {
-        const raw = devicesRes.value;
-        const list = Array.isArray(raw)
-          ? raw
-          : Array.isArray((raw as any)?.entities)
-            ? (raw as any).entities
-            : [];
-        setEntities((prev) => (list.length > 0 || prev.length === 0 ? list : prev));
-      }
-      if (camerasRes.status === "fulfilled") {
-        const raw = camerasRes.value;
-        const list = Array.isArray(raw) ? raw : (raw as any)?.cameras || [];
-        setCameras(list);
-      }
-      if (cameraUiCamsRes.status === "fulfilled") {
-        const raw = cameraUiCamsRes.value;
-        setCameraUiCameras(Array.isArray(raw) ? raw : []);
-      }
-      if (scryptedRes.status === "fulfilled") setScryptedConfig(scryptedRes.value);
-      if (cameraUiRes.status === "fulfilled") setCameraUiConfig(cameraUiRes.value);
-    } catch (err: any) {
-      console.error("Error refreshing addon state:", err);
-    } finally {
-      refreshInFlight.current = false;
-      setLoading(false);
-    }
+      do {
+        refreshRequested.current = false;
+        realtimeUpdates.current.clear();
+        const jobs = [
+          api.getStatus().then(setStatus),
+          api.getDevices().then((raw) => {
+            const list = Array.isArray(raw) ? raw : Array.isArray((raw as any)?.entities) ? (raw as any).entities : [];
+            setEntities(list.map((item: EntityRecord) => {
+              const update = realtimeUpdates.current.get(item.entityId);
+              return update ? { ...item, state: update.state, attributes: { ...item.attributes, ...update.attributes } } : item;
+            }));
+            setLoadError(null);
+          }).catch((error) => setLoadError(`No se pudieron cargar los dispositivos: ${error.message || error}`)).finally(() => setLoading(false)),
+          api.getCameras().then((raw) => setCameras(Array.isArray(raw) ? raw : (raw as any)?.cameras || [])),
+          api.getScryptedConfig().then(setScryptedConfig),
+          api.getCameraUiConfig().then(setCameraUiConfig),
+          api.getCameraUiCameras().then((raw) => setCameraUiCameras(Array.isArray(raw) ? raw : [])),
+        ];
+        await Promise.allSettled(jobs);
+      } while (refreshRequested.current);
+    } finally { refreshInFlight.current = false; setLoading(false); }
   }, []);
 
-  // Prefer server-pushed state; use a quiet one-minute poll only while SSE is down.
   useEffect(() => {
     let es: EventSource | null = null;
-    let timer: any = null;
-    let debounceTimer: any = null;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let refreshTimer: ReturnType<typeof setTimeout> | undefined;
     let sseConnected = false;
-
-    refreshAll();
-    const fallbackPoll = setInterval(() => {
-      if (!sseConnected) refreshAll();
-    }, 60000);
-
+    let everConnected = false;
+    let disposed = false;
+    const scheduleRefresh = () => {
+      if (!refreshTimer) refreshTimer = setTimeout(() => { refreshTimer = undefined; void refreshAll(); }, 1000);
+    };
+    void refreshAll();
+    const fallbackPoll = setInterval(() => { if (!sseConnected) void refreshAll(); }, 60000);
     const connectSSE = () => {
+      if (disposed) return;
       try {
         es = new EventSource("./api/custom/events");
-        es.onopen = () => {
-          sseConnected = true;
-        };
+        es.onopen = () => { sseConnected = true; if (everConnected) scheduleRefresh(); everConnected = true; };
         es.onmessage = (event) => {
-          if (!event.data || event.data.startsWith(":")) return;
           try {
             const data = JSON.parse(event.data);
-            if (
-              data.type === "device_update" ||
-              data.type === "camera_update" ||
-              data.type === "state_change" ||
-              data.type === "scrypted_status" ||
-              data.type === "camera_pairing_updated" ||
-              data.type === "cameraui_updated" ||
-              data.type === "entity_state_changed"
-            ) {
-              clearTimeout(debounceTimer);
-              debounceTimer = setTimeout(refreshAll, 120);
+            if (data.type === "state_changed" && data.entityId) {
+              if (refreshInFlight.current) realtimeUpdates.current.set(data.entityId, { state: data.state, attributes: data.attributes || {} });
+              setEntities((previous) => previous.map((item) => item.entityId === data.entityId
+                ? { ...item, state: data.state, attributes: { ...item.attributes, ...data.attributes } }
+                : item));
+            } else if (["device_update", "camera_update", "cameras_updated", "state_change", "scrypted_status", "camera_pairing_updated", "cameraui_updated", "entity_state_changed"].includes(data.type)) {
+              scheduleRefresh();
             }
-          } catch {}
+          } catch { /* malformed event; next refresh reconciles state */ }
         };
-        es.onerror = () => {
-          sseConnected = false;
-          es?.close();
-          timer = setTimeout(connectSSE, 5000);
-        };
-      } catch {
-        timer = setTimeout(connectSSE, 5000);
-      }
+        es.onerror = () => { sseConnected = false; es?.close(); timer = setTimeout(connectSSE, 5000); };
+      } catch { timer = setTimeout(connectSSE, 5000); }
     };
-
     connectSSE();
-    return () => {
-      if (timer) clearTimeout(timer);
-      clearInterval(fallbackPoll);
-      clearTimeout(debounceTimer);
-      es?.close();
-    };
+    return () => { disposed = true; if (timer) clearTimeout(timer); if (refreshTimer) clearTimeout(refreshTimer); clearInterval(fallbackPoll); es?.close(); };
   }, [refreshAll]);
 
   // Group entities into physical devices
@@ -370,6 +333,7 @@ export function useAddonState() {
     scryptedConfig,
     cameraUiConfig,
     loading,
+    loadError,
     searchQuery,
     setSearchQuery,
     activeFilter,

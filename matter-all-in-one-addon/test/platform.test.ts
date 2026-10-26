@@ -184,6 +184,26 @@ describe("HomeAssistantPlatform", () => {
     expect((platform as any).matterbridgeDevices.has("light.lifecycle_test")).toBe(false);
   });
 
+  it("preserves and queues an accessory when unregister finishes after its timeout", async () => {
+    let finish!: () => void;
+    const endpoint = { uniqueId: "light_late_cleanup" };
+    const entityId = "light.late_cleanup";
+    (platform as any).matterbridgeDevices.set(entityId, endpoint);
+    (platform as any).exportedDevices.add(entityId);
+    vi.spyOn(platform as any, "unregisterDevice").mockImplementation(() =>
+      new Promise<void>((resolve) => { finish = resolve; }),
+    );
+
+    await expect((platform as any).unregisterDeviceBounded(endpoint, "test", 1))
+      .rejects.toThrow("cleanup is still running");
+    finish();
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect((platform as any).matterbridgeDevices.has(entityId)).toBe(false);
+    expect((platform as any).exportedDevices.has(entityId)).toBe(true);
+    expect((platform as any).pendingRestore.has(entityId)).toBe(true);
+  });
+
   it("marks an accessory unreachable and records a Matter command failure", async () => {
     const entityId = "switch.command_failure";
     const setReachability = vi.fn().mockResolvedValue(undefined);
@@ -485,7 +505,7 @@ describe("HomeAssistantPlatform", () => {
     const existingEndpoint = {
       uniqueId: "light_living_room",
       deviceName: "Living Room Lamp",
-      serverNode: { state: { commissioning: { commissioned: true } } },
+      serverNode: { lifecycle: { isOnline: true }, state: { commissioning: { commissioned: true } } },
     };
     (platform as any).getDeviceByUniqueId = vi
       .fn()
@@ -499,6 +519,23 @@ describe("HomeAssistantPlatform", () => {
       existingEndpoint,
     );
     expect(initialSync).toHaveBeenCalledOnce();
+  });
+
+  it("does not reuse a destroyed Matter endpoint", async () => {
+    const id = "light.dead";
+    const dead = { uniqueId: "light_dead", deviceName: "Dead", lifecycle: { isGone: true }, serverNode: { lifecycle: { isGone: true } } };
+    const fresh: any = { uniqueId: "light_dead", deviceName: "Dead", serverNode: { lifecycle: { isOnline: true } } };
+    const entity: any = { entityId: id, state: { state: "off", attributes: {} }, createEndpoint: vi.fn().mockResolvedValue(fresh), adoptEndpoint: vi.fn(), syncInitialState: vi.fn().mockResolvedValue(undefined), setReachability: vi.fn() };
+    platform.entities.set(id, entity);
+    (platform as any).matterbridgeDevices.set(id, dead);
+    (platform as any).getDeviceByUniqueId = vi.fn().mockReturnValue(dead);
+    (platform as any).getDevices = vi.fn().mockReturnValue([dead]);
+    (platform as any).hasDeviceName = vi.fn().mockReturnValue(false);
+    vi.spyOn(platform as any, "unregisterDevice").mockResolvedValue(undefined);
+    vi.spyOn(platform as any, "registerDevice").mockResolvedValue(undefined);
+    await (platform as any).activateEntity(id);
+    expect(entity.adoptEndpoint).not.toHaveBeenCalled();
+    expect((platform as any).matterbridgeDevices.get(id)).toBe(fresh);
   });
 
   it("marks fan and light sharing a device_id as one composite before either is activated", async (ctx) => {
@@ -1003,6 +1040,7 @@ describe("HomeAssistantPlatform", () => {
       state: "off",
       attributes: { friendly_name: "Fan Switch" },
     });
+    vi.spyOn(platform as any, "saveDeviceOverrides").mockResolvedValue(undefined);
 
     const result = await platform.setDeviceProfile(
       "switch.living_room_fan_switch",
@@ -1106,187 +1144,98 @@ describe("HomeAssistantPlatform", () => {
     expect(json.pairingCode).toBe("MT:Y.K9042C00KA0648G00");
   });
 
-  it("handles POST /api/custom/reset-accessory/:entityId HTTP endpoint cleanly without calling serverNode.erase()", async (ctx) => {
-    if (!networkAvailable) {
-      ctx.skip();
-      return;
-    }
+  it("resets only the requested live node and returns verified commissioning codes", async (ctx) => {
+    if (!networkAvailable) { ctx.skip(); return; }
     await platform.onStart();
-    await new Promise((resolve) => setTimeout(resolve, 100));
-
-    const eraseFn = vi.fn().mockResolvedValue(undefined);
-    const closeFn = vi.fn().mockResolvedValue(undefined);
-    const startFn = vi.fn().mockResolvedValue(undefined);
-
-    const mockEndpoint = {
-      deviceName: "test_fan",
-      serverNode: {
-        erase: eraseFn,
-        close: closeFn,
-        lifecycle: { isOnline: true },
-      },
-    };
-    (platform as any).matterbridgeDevices.set("fan.test_fan", mockEndpoint);
-
-    // Mock unregisterDevice and activateEntity
-    vi.spyOn(platform as any, "unregisterDevice").mockResolvedValue(undefined);
-    vi.spyOn(platform as any, "activateEntity").mockImplementation(async () => {
-      const regeneratedEndpoint = {
-        deviceName: "test_fan",
-        serverNode: {
-          lifecycle: { isOnline: true },
-          state: {
-            commissioning: {
-              pairingCodes: {
-                qrPairingCode: "MT:Y.K90TEST001",
-                manualPairingCode: "12345678901",
-              },
-              fabrics: [],
-            },
-          },
-        },
-      };
-      (platform as any).matterbridgeDevices.set(
-        "fan.test_fan",
-        regeneratedEndpoint,
-      );
-    });
-
-    const res = await fetch(
-      `http://127.0.0.1:${platform.uiServerPort}/api/custom/reset-accessory/fan.test_fan`,
-      { method: "POST" },
-    );
+    const erase = vi.fn().mockResolvedValue(undefined);
+    const endpoint = { deviceName: "test_fan", serverNode: { erase, lifecycle: { isOnline: true }, state: { commissioning: { fabrics: [], pairingCodes: { qrPairingCode: "MT:Y.K90TEST001", manualPairingCode: "12345678901" } } } } };
+    (platform as any).matterbridgeDevices.set("fan.test_fan", endpoint);
+    const unregister = vi.spyOn(platform as any, "unregisterDevice");
+    const res = await fetch(`http://127.0.0.1:${platform.uiServerPort}/api/custom/reset-accessory/fan.test_fan`, { method: "POST" });
     expect(res.status).toBe(200);
-    const json = (await res.json()) as any;
-    expect(json.success).toBe(true);
-    expect(json.pairingCode).toBe("MT:Y.K90TEST001");
-    expect(json.manualPairingCode).toBe("12345678901");
-    // Verify serverNode.erase() was NOT called (to avoid double node creation race)
-    expect(eraseFn).not.toHaveBeenCalled();
-    // Factory reset closes the old node before deliberately clearing its pairing data.
-    expect(closeFn).toHaveBeenCalled();
+    expect(await res.json()).toMatchObject({ success: true, pairingCode: "MT:Y.K90TEST001" });
+    expect(erase).toHaveBeenCalledOnce();
+    expect(unregister).not.toHaveBeenCalled();
   });
 
-  it("recovers and resets an accessory even if serverNode was not initialized or offline", async () => {
-    const entityId = "switch.apagador_oficina_canal_1";
-    (platform as any).entities.set(entityId, {
-      entityId,
-      state: { attributes: { friendly_name: "VENTILADOR OFICINA" } },
-    });
-
-    // Stale endpoint without serverNode (e.g. after being unpaired in HomeKit)
-    const deadEndpoint = {
-      deviceName: "VENTILADOR OFICINA",
-      uniqueId: "switch_apagador_oficina_canal_1",
-      serverNode: undefined,
-    };
-    (platform as any).matterbridgeDevices.set(entityId, deadEndpoint);
-
-    vi.spyOn(platform as any, "unregisterDevice").mockResolvedValue(undefined);
-    vi.spyOn(platform as any, "activateEntity").mockImplementation(async () => {
-      const regeneratedEndpoint = {
-        deviceName: "VENTILADOR OFICINA",
-        uniqueId: "switch_apagador_oficina_canal_1",
-        serverNode: {
-          lifecycle: { isOnline: true },
-          state: {
-            commissioning: {
-              pairingCodes: {
-                qrPairingCode: "MT:Y.REGEN001",
-                manualPairingCode: "34567890123",
-              },
-              fabrics: [],
-            },
-          },
-        },
-      };
-      (platform as any).matterbridgeDevices.set(entityId, regeneratedEndpoint);
-    });
-
-    const result = await platform.resetMatterAccessory(entityId);
-    expect(result.success).toBe(true);
-    expect(result.pairingCode).toBe("MT:Y.REGEN001");
-    expect(result.manualPairingCode).toBe("34567890123");
+  it("refuses to erase storage for an unavailable node", async () => {
+    const id = "switch.unavailable";
+    platform.entities.set(id, { entityId: id, state: { attributes: { friendly_name: "Same name" } } } as any);
+    const unregister = vi.spyOn(platform as any, "unregisterDevice");
+    const result = await platform.resetMatterAccessory(id);
+    expect(result.success).toBe(false);
+    expect(unregister).not.toHaveBeenCalled();
   });
 
-  it("prepareEndpointForRegistration unregisters stale matching endpoints and disambiguates names", async () => {
-    const staleDevice = {
-      deviceName: "PASILLO",
-      uniqueId: "switch_apagador_pasillo_old",
-      serverNode: {
-        lifecycle: { isOnline: true },
-        close: vi.fn().mockResolvedValue(undefined),
-      },
-    };
-    const unregSpy = vi.spyOn(platform as any, "unregisterDevice").mockResolvedValue(undefined);
-    (platform as any).getDevices = vi.fn().mockReturnValue([staleDevice]);
+  it("preserves other nodes when names or physical serial numbers match", async () => {
+    const existing = { deviceName: "PASILLO", uniqueId: "switch.old", serialNumber: "SHARED" };
+    const unregister = vi.spyOn(platform as any, "unregisterDevice").mockResolvedValue(undefined);
+    (platform as any).getDevices = vi.fn().mockReturnValue([existing]);
     (platform as any).hasDeviceName = vi.fn().mockImplementation((name: string) => name === "PASILLO");
-    (platform as any).hasDeviceUniqueId = vi.fn().mockReturnValue(false);
-    (platform as any).getDeviceByName = vi.fn().mockReturnValue(staleDevice);
-
-    const newEndpoint = {
-      deviceName: "PASILLO",
-      uniqueId: "switch_apagador_pasillo_new",
-      serialNumber: "SN12345",
-    };
-
-    await (platform as any).prepareEndpointForRegistration(newEndpoint, "switch.apagador_pasillo_new");
-
-    // unregisterDevice() now stops/destroys the dependent MatterNode itself.
-    expect(staleDevice.serverNode.close).not.toHaveBeenCalled();
-    expect(unregSpy).toHaveBeenCalledWith(staleDevice);
-    expect(newEndpoint.deviceName).not.toBe("PASILLO");
-    expect(newEndpoint.deviceName).toContain("PASILLO");
+    const next = { deviceName: "PASILLO", uniqueId: "switch.new", serialNumber: "SHARED" };
+    await (platform as any).prepareEndpointForRegistration(next, "switch.new");
+    expect(unregister).not.toHaveBeenCalled();
+    expect(next.deviceName).not.toBe("PASILLO");
   });
 
-  it("resets multi-switch button cleanly evicting all matching instances and returning new QR code", async () => {
-    const entityId = "switch.controlador_sala_controlador_sala";
-    platform.entities.set(entityId, {
-      entityId,
-      state: {
-        entity_id: entityId,
-        state: "on",
-        attributes: { friendly_name: "Controlador Sala L1" },
-      },
-    } as any);
+  it("does not return success when the reset node provides no commissioning codes", async () => {
+    vi.useFakeTimers();
+    const node = { erase: vi.fn().mockResolvedValue(undefined), lifecycle: { isOnline: true }, state: { commissioning: { fabrics: [] } } };
+    (platform as any).matterbridgeDevices.set("switch.test", { serverNode: node });
+    const result = platform.resetMatterAccessory("switch.test");
+    await vi.advanceTimersByTimeAsync(6100);
+    expect((await result).success).toBe(false);
+    vi.useRealTimers();
+  });
 
-    const staleDevice = {
-      deviceName: "Controlador Sala L1",
-      uniqueId: "switch_controlador_sala_controlador_sala",
-      serverNode: {
-        lifecycle: { isOnline: true },
-        close: vi.fn().mockResolvedValue(undefined),
-        resetStorage: vi.fn().mockResolvedValue(undefined),
-      },
-    };
-    (platform as any).matterbridgeDevices.set(entityId, staleDevice);
-    const unregSpy = vi.spyOn(platform as any, "unregisterDevice").mockResolvedValue(undefined);
+  it("never resets other fabrics when the requested fabric is absent", async () => {
+    const erase = vi.fn();
+    (platform as any).matterbridgeDevices.set("switch.test", { serverNode: { erase, state: { operationalCredentials: { fabrics: [{ fabricIndex: 1 }, { fabricIndex: 2 }] } } } });
+    const result = await platform.removeMatterFabric("switch.test", "99");
+    expect(result.success).toBe(false);
+    expect(erase).not.toHaveBeenCalled();
+  });
 
-    vi.spyOn(platform as any, "activateEntity").mockImplementation(async () => {
-      const freshEndpoint = {
-        deviceName: "Controlador Sala L1",
-        uniqueId: "switch_controlador_sala_controlador_sala",
-        serverNode: {
-          lifecycle: { isOnline: true },
-          state: {
-            commissioning: {
-              pairingCodes: {
-                qrPairingCode: "MT:Y.FRESH002",
-                manualPairingCode: "98765432101",
-              },
-              fabrics: [],
-            },
-          },
-        },
-      };
-      (platform as any).matterbridgeDevices.set(entityId, freshEndpoint);
-    });
+  it("keeps a previously exported composite when a multi-channel device is registered", async () => {
+    const id = "switch.channel";
+    platform.entities.set(id, { entityId: id } as any);
+    (platform as any).ha = { hassEntities: new Map([[id, { device_id: "shared" }]]), close: vi.fn() };
+    (platform as any).exportedDevices.add("device:shared");
+    vi.spyOn(platform as any, "isMultiSwitchDevice").mockReturnValue(true);
+    vi.spyOn(platform as any, "isAuxiliaryEntity").mockReturnValue(false);
+    const dispose = vi.spyOn(platform as any, "disposeCompositeNode");
+    const result = await platform.manualRegister(id);
+    expect(result.success).toBe(false);
+    expect((platform as any).exportedDevices.has("device:shared")).toBe(true);
+    expect(dispose).not.toHaveBeenCalled();
+  });
 
-    const result = await platform.resetMatterAccessory(entityId);
-    expect(result.success).toBe(true);
-    expect(result.pairingCode).toBe("MT:Y.FRESH002");
-    expect(result.manualPairingCode).toBe("98765432101");
-    expect(unregSpy).toHaveBeenCalledWith(staleDevice);
+  it("restores a previously exported multi-channel composite without deleting it", async () => {
+    const id = "switch.channel";
+    platform.entities.set(id, { entityId: id, state: { attributes: {} }, deviceType: { name: "Switch" } } as any);
+    (platform as any).ha = { hassEntities: new Map([[id, { device_id: "shared" }]]), close: vi.fn() };
+    (platform as any).exportedDevices.add("device:shared");
+    vi.spyOn(platform as any, "isMultiSwitchDevice").mockReturnValue(true);
+    vi.spyOn(platform as any, "getCompositeCandidate").mockReturnValue({ deviceId: "shared", members: [{ entityId: id }] });
+    const activate = vi.spyOn(platform as any, "activateComposite").mockResolvedValue(undefined);
+    const dispose = vi.spyOn(platform as any, "disposeCompositeNode");
+    await (platform as any).restoreExportedDevices();
+    expect(activate).toHaveBeenCalledWith(id);
+    expect(dispose).not.toHaveBeenCalled();
+    expect((platform as any).exportedDevices.has("device:shared")).toBe(true);
+  });
+
+  it("refuses to recreate the same identity while its timed-out cleanup is running", async () => {
+    vi.useFakeTimers();
+    let finish!: () => void;
+    vi.spyOn(platform as any, "unregisterDevice").mockReturnValue(new Promise<void>((resolve) => { finish = resolve; }));
+    const old = { uniqueId: "switch.test" };
+    const cleaning = (platform as any).unregisterDeviceBounded(old, "test", 10);
+    const timedOut = expect(cleaning).rejects.toThrow("still running");
+    await vi.advanceTimersByTimeAsync(10); await timedOut;
+    await expect((platform as any).prepareEndpointForRegistration({ uniqueId: "switch.test", deviceName: "test" }, "switch.test")).rejects.toThrow("still running");
+    finish(); await Promise.resolve(); await Promise.resolve();
+    vi.useRealTimers();
   });
 
   it("discovers all vacuum companion entities (select, button, battery/duration sensors, binary_sensor) as auxiliary RVC entities while excluding generic DPS sensors", async () => {

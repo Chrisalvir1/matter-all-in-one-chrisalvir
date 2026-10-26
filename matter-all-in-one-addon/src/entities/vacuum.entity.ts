@@ -272,6 +272,7 @@ export class VacuumEntity extends BaseEntity {
     const rawName = this.state.attributes.friendly_name ?? this.entityId;
     const proposedName = rawName.substring(0, 32).trim();
     const haDeviceName = (this.platform as any)?.getHaRegistryInfo?.(this.entityId)?.device_name;
+    const existingPinnedIdentity = Boolean((this.platform as any)?.nodeIdentities?.get?.(this.entityId));
     const uniqueName =
       (this.platform as any)?.nodeIdentities?.pin(
         this.entityId,
@@ -384,29 +385,14 @@ export class VacuumEntity extends BaseEntity {
       }
     }
 
-    // Ensure the endpoint advertises ONLY the pure RoboticVacuumCleaner device type (0x0074).
-    // Matterbridge's RoboticVacuumCleaner constructor registers [roboticVacuumCleaner, powerSource],
-    // exposing device type 0x0011 (PowerSource) in descriptor.deviceTypeList alongside 0x0074.
-    // In Apple Home (iOS 18+), advertising both device types causes HomeKit to treat the accessory
-    // as a composite multi-device container ("Connected Services: 2") showing a generic orange house icon
-    // named "Matter Accessory", rather than the native Robotic Vacuum Cleaner tile.
-    // We preserve the powerSource cluster behavior (0x002f) for live battery/charging telemetry,
-    // but remove device type 0x0011 from the descriptor deviceTypeList and deviceTypes map.
-    const descBehavior = (this.endpoint as any).behaviors?.supported?.descriptor;
-    if (descBehavior) {
-      const opts = (this.endpoint as any).behaviors.optionsFor?.(descBehavior);
-      if (opts?.deviceTypeList) {
-        opts.deviceTypeList = opts.deviceTypeList.filter(
-          (d: any) => d.deviceType === 0x0074 || d.deviceType === this.deviceType.code,
-        );
-      }
-    }
-    if (typeof (this.endpoint as any).deviceTypes?.delete === "function") {
-      (this.endpoint as any).deviceTypes.delete(0x0011);
-    } else if (Array.isArray((this.endpoint as any).deviceTypes)) {
-      (this.endpoint as any).deviceTypes = (this.endpoint as any).deviceTypes.filter(
-        (dt: any) => (typeof dt === "number" ? dt : dt?.code) !== 0x0011,
-      );
+    // PowerSourceServer adds its required device type during initialization.
+    // Keep that standards-compliant association; removing it from constructor
+    // options cannot change the final descriptor and risks breaking battery data.
+    // Clean Mode is optional for RVC. For a new accessory with fewer than two
+    // supported modes, omit the cluster instead of publishing an invalid list.
+    // Preserve the cluster on an existing pinned identity across HA reconnects.
+    if (!existingPinnedIdentity && cleanModeDefs.length < 2 && (this.endpoint as any).behaviors?.has?.("rvcCleanMode")) {
+      (this.endpoint as any).behaviors.drop?.("rvcCleanMode");
     }
 
     this.endpoint.deviceType = this.deviceType.code;

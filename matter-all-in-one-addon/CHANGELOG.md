@@ -1,3 +1,26 @@
+## [2.2.0] - 2026-10-26
+
+- Protege las identidades Matter al registrar, restablecer o retirar accesorios; las operaciones tardías conservan la selección y programan su recuperación.
+- Conserva las selecciones individuales y compuestas existentes para evitar migraciones automáticas que puedan afectar accesorios ya vinculados.
+- Reduce el trabajo repetido al cargar el inventario y vigilar conexiones; la interfaz presenta resultados progresivamente y reconcilia los cambios en vivo.
+- Mejora el manejo de errores de perfil y persistencia con escrituras atómicas para registros seleccionados.
+- Corrige la inicialización Matter de aspiradoras nuevas cuando no anuncian suficientes modos de limpieza.
+- Limita los endpoints administrativos de escritura al proxy local de Home Assistant y corrige la validación de etiquetas `false` en `run.sh`.
+- Actualiza `werift` a 0.25.2 y fija `multer` en 2.5.x; `npm audit` no reporta vulnerabilidades conocidas.
+- React, Vite, Vitest y el motor QR Canvas existente se conservan; no se añadió una segunda pila de interfaz ni un motor QR sin evidencia de necesidad.
+- Verificación de desarrollo: 76 archivos de prueba y 686 pruebas pasan; typecheck y build pasan. Pruebas de rendimiento con datos sintéticos en Mac no sustituyen la medición en Raspberry Pi.
+- La imagen v2.2.0 se construye y verifica por CI antes de su publicación. Tras instalarla, quedan pendientes la medición de carga en Pi y pruebas físicas en Apple Casa de Robotina, Live View y un clip HKSV guardado; no se declara verificado el vídeo ni HKSV en esta versión.
+
+## [2.1.25] - 2026-10-26
+
+- Protege accesorios Matter existentes: desregistro por identidad propia y reset del nodo activo sin borrar carpetas por coincidencias de nombre; verifica fabrics y código antes de informar éxito.
+- Limita la API administrativa al proxy de Ingress y comprueba métodos de modificación.
+- Acelera la carga del inventario mediante índices, muestra dispositivos al llegar, aplica eventos de estado en vivo y recupera actualizaciones pendientes.
+- Alinea las versiones del paquete y metadatos y evita repetir el análisis de versión de FFmpeg.
+- Actualiza `werift` a 0.25.2 y fija `multer` en la versión corregida 2.5.x; el análisis npm audit queda sin vulnerabilidades conocidas.
+- Elimina el bloqueo al retirar un accesorio si la operación de Matterbridge excede el timeout: la selección se conserva y la restauración queda programada al concluir la baja.
+- Las aspiradoras nuevas sin suficientes modos pueden arrancar sin el clúster opcional de modos; se mantiene la asociación PowerSource exigida por Matter. El enlace físico de Robotina, Live View y clips HKSV requieren verificación adicional en Apple Casa.
+
 ## [2.1.24] - 2026-10-26
 
 - Reconocimiento nativo como Aspiradora Robótica (RVC `0x0074`) en Apple Home (iOS 18+):

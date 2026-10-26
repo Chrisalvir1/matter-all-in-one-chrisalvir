@@ -647,7 +647,7 @@ export class CameraUiHomeKitBridge {
     this.motionStates.set(camera.id, false);
 
     platform.log?.notice?.(
-      `[Camera.UI][${camera.name}] Published to HomeKit HAP on port ${camera.port} (code: ${camera.pincode}, codec: ${chosenCodec}, strategy: ${chosenStrategy})`,
+      `[Camera.UI][${camera.name}] Published to HomeKit HAP on port ${camera.port} (codec: ${chosenCodec}, strategy: ${chosenStrategy})`,
     );
 
     // Register Matter Occupancy Sensing endpoint automatically for every mounted

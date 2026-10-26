@@ -9,7 +9,7 @@ OPTIONS_FILE="/data/options.json"
 HOST=$(jq -r '.host // empty' "$OPTIONS_FILE")
 TOKEN=$(jq -r '.token // empty' "$OPTIONS_FILE")
 MDNSINTERFACE=$(jq -r '.mdnsinterface // empty' "$OPTIONS_FILE")
-GROUP_BY_DEVICE_ID=$(jq -r '.group_by_device_id // true' "$OPTIONS_FILE")
+GROUP_BY_DEVICE_ID=$(jq -r 'if .group_by_device_id == null then true else .group_by_device_id end' "$OPTIONS_FILE")
 
 # Fallback to supervisor API if defaults are used
 if [ -z "$HOST" ] || [ "$HOST" = "http://supervisor/core" ]; then
