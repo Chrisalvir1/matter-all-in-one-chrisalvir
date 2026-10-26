@@ -181,9 +181,10 @@ export class VacuumEntity extends BaseEntity {
             stateObj?.attributes?.device_class ?? "",
           ).toLowerCase();
           const unit = String(stateObj?.attributes?.unit_of_measurement ?? "");
+          const label = `${id} ${stateObj?.attributes?.friendly_name ?? ""}`;
           if (
             dc === "battery" ||
-            (/(battery|bateria)/i.test(id) && unit === "%")
+            (/(battery|bateria|electricity[_ ]left)/i.test(label) && unit === "%")
           ) {
             const level = parseLevel(stateObj);
             if (level !== null) return level;
@@ -214,6 +215,7 @@ export class VacuumEntity extends BaseEntity {
       for (const [id, reg] of this.platform.ha?.hassEntities?.entries() ?? []) {
         if (reg.device_id === deviceId && id.startsWith("button.")) {
           const stateObj = this.platform.ha?.hassStates?.get(id);
+          if (!stateObj || stateObj.state?.toLowerCase() === "unavailable") continue;
           const label = `${id} ${stateObj?.attributes?.friendly_name ?? ""}`;
           if (
             /(volver_a_base|return_to_base|chargego|dock|home|cargar|base)/i.test(
@@ -232,12 +234,32 @@ export class VacuumEntity extends BaseEntity {
       `button.${objectId}_volver_a_base`,
       `button.${objectId}_return_to_base`,
     ]) {
-      if (this.platform.ha?.hassStates?.has(candidate)) {
+      const stateObj = this.platform.ha?.hassStates?.get(candidate);
+      if (stateObj && stateObj.state?.toLowerCase() !== "unavailable") {
         return candidate;
       }
     }
 
     return undefined;
+  }
+
+  private getBatteryChargeState(state: HassState): number {
+    const deviceId = this.platform.ha?.hassEntities?.get(this.entityId)?.device_id;
+    const signals = [state.state, state.attributes?.status, state.attributes?.battery_status];
+    if (deviceId) {
+      for (const [id, reg] of this.platform.ha?.hassEntities?.entries() ?? []) {
+        if (reg.device_id !== deviceId || !id.startsWith("sensor.")) continue;
+        const linked = this.platform.ha?.hassStates?.get(id);
+        if (!linked || isUnavailable(linked)) continue;
+        const label = `${id} ${linked.attributes?.friendly_name ?? ""}`;
+        if (/(?:status|charging|charge_state)/i.test(label)) signals.push(linked.state);
+      }
+    }
+    const values = signals.map((s) => String(s ?? "").trim().toLowerCase());
+    if (values.some((s) => ["charge_done", "charging_completed", "fully_charged"].includes(s))) return 2;
+    if (values.some((s) => ["charging", "on_charge", "in_charge"].includes(s))) return 1;
+    if (values.some((s) => ["cleaning", "returning", "paused"].includes(s))) return 3;
+    return 0;
   }
 
   /** Locate linked start cleaning button entity sharing the same HA device_id or entity name. */
@@ -579,7 +601,7 @@ export class VacuumEntity extends BaseEntity {
         endpoint as any,
         "powerSource" as any,
         "batChargeState",
-        isChargingOrDocked || state.state.toLowerCase() === "docked" ? 1 : 3,
+        this.getBatteryChargeState(state),
         this.platform.log,
       );
     } catch (err) {
@@ -609,10 +631,10 @@ export class VacuumEntity extends BaseEntity {
     endpoint.addCommandHandler("RvcRunMode.changeToMode", async (data: any) => {
       this.assertOnline();
       this.lastCommandTime = Date.now();
-      this.platform.log?.info?.(
-        `[VacuumEntity] changeToMode commanded: ${JSON.stringify(data)}`,
-      );
       const { request } = data;
+      this.platform.log?.info?.(
+        `[VacuumEntity] changeToMode commanded: ${String(request?.newMode)}`,
+      );
       if (request?.newMode === RUN_MODE_ID_CLEANING) {
         safeSetAttribute(
           endpoint as any,
@@ -652,10 +674,10 @@ export class VacuumEntity extends BaseEntity {
       "RvcCleanMode.changeToMode",
       async (data: any) => {
         this.assertOnline();
-        this.platform.log?.info?.(
-          `[VacuumEntity] RvcCleanMode.changeToMode commanded: ${JSON.stringify(data)}`,
-        );
         const newMode = data?.request?.newMode;
+        this.platform.log?.info?.(
+          `[VacuumEntity] RvcCleanMode.changeToMode commanded: ${String(newMode)}`,
+        );
         const cleanSelector = this.getLinkedCleanModeSelector();
         if (cleanSelector && typeof newMode === "number") {
           const defs = getSupportedVacuumCleanModes(cleanSelector.options);

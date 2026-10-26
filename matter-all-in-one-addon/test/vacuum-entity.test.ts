@@ -306,7 +306,8 @@ describe("VacuumEntity Apple Home topology and identity", () => {
     const manualSelectId = "select.sala_tv_robotina_control_manual";
     const cleanSelectId = "select.sala_tv_robotina_modo_de_limpieza";
     const dockButtonId = "button.sala_tv_robotina_volver_a_base";
-    const batterySensorId = "sensor.sala_tv_robotina_battery";
+    const batterySensorId = "sensor.sala_tv_robotina_dps_6";
+    const statusSensorId = "sensor.sala_tv_robotina_dps_5";
 
     const platform = {
       matterbridge: { matterbridgeVersion: "3.10.14" },
@@ -319,6 +320,7 @@ describe("VacuumEntity Apple Home topology and identity", () => {
           [cleanSelectId, { id: "reg-clean", device_id: "robotina-device" }],
           [dockButtonId, { id: "reg-dock", device_id: "robotina-device" }],
           [batterySensorId, { id: "reg-bat", device_id: "robotina-device" }],
+          [statusSensorId, { id: "reg-status", device_id: "robotina-device" }],
         ]),
         hassDevices: new Map([
           ["robotina-device", { serial_number: "bf4ae2b69ab212b227zupl" }],
@@ -350,7 +352,7 @@ describe("VacuumEntity Apple Home topology and identity", () => {
             dockButtonId,
             {
               entity_id: dockButtonId,
-              state: "unknown",
+              state: "unavailable",
               attributes: { friendly_name: "ROBOTINA Volver a base" },
             },
           ],
@@ -360,12 +362,12 @@ describe("VacuumEntity Apple Home topology and identity", () => {
               entity_id: batterySensorId,
               state: "100",
               attributes: {
-                friendly_name: "ROBOTINA Battery",
-                device_class: "battery",
+                friendly_name: "ROBOTINA Electricity Left",
                 unit_of_measurement: "%",
               },
             },
           ],
+          [statusSensorId, { entity_id: statusSensorId, state: "charge_done", attributes: { friendly_name: "ROBOTINA Status" } }],
         ]),
       },
     };
@@ -397,15 +399,18 @@ describe("VacuumEntity Apple Home topology and identity", () => {
     // Sync state and verify battery sensor fallback (100% -> 200 in Matter) and Docked state (66)
     await vacuum.updateState(state as any, true);
     expect(endpoint.attributes.get("powerSource:batPercentRemaining")).toBe(200);
+    expect(endpoint.attributes.get("powerSource:batChargeState")).toBe(2);
     expect(endpoint.attributes.get("rvcOperationalState:operationalState")).toBe(66);
 
-    // Verify goHome command uses linked dock button on same device_id
+    // An unavailable button must not hide the usable chargego selector.
     await endpoint.invokeCommand("RvcOperationalState.goHome", {});
     expect(platform.ha.callService).toHaveBeenCalledWith(
-      "button",
-      "press",
-      dockButtonId,
-      {},
+      "select",
+      "select_option",
+      cleanSelectId,
+      { option: "chargego" },
     );
+    await endpoint.invokeCommand("RvcRunMode.changeToMode", { request: { newMode: 2 }, context: { sessionId: 123n } });
+    expect(platform.ha.callService).toHaveBeenLastCalledWith("vacuum", "start", entityId, {});
   });
 });

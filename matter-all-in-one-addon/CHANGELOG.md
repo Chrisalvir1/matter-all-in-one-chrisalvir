@@ -1,3 +1,10 @@
+## [2.2.5] - 2026-10-26
+
+- Corrige el inicio y cambio de modo RVC: el registro ya no serializa el contexto Matter que contiene `BigInt` y permite enviar el comando a Home Assistant.
+- Evita enviar el regreso a base a un botón no disponible y usa el selector `chargego` cuando está disponible.
+- Reconoce el sensor de batería `Electricity Left` y distingue carga completa de carga activa cuando Home Assistant publica ese estado.
+- El sonido de localización sigue dependiendo de una función real compatible en Home Assistant; la entidad de Robotina inspeccionada no admite `vacuum.locate`.
+
 ## [2.2.4] - 2026-10-26
 
 - Corrige la inicialización Matter RVC de Robotina cuando el selector está en `chargego` o `standby`: `currentMode` ahora siempre coincide con un modo de limpieza anunciado y compatible.
