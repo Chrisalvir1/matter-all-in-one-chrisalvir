@@ -56,6 +56,26 @@ describe("HomeAssistantPlatform", () => {
     await platform.onShutdown("test-teardown");
   });
 
+  it("refreshes an exported vacuum when its linked battery sensor changes", async () => {
+    const robot = { entity_id: "vacuum.robotina", state: "docked", attributes: {} };
+    const battery = { entity_id: "sensor.robotina_battery", state: "73", attributes: {} };
+    const updateState = vi.fn().mockResolvedValue(undefined);
+    (platform as any).ha = {
+      close: vi.fn(),
+      hassEntities: new Map([
+        [robot.entity_id, { device_id: "robot" }],
+        [battery.entity_id, { device_id: "robot" }],
+      ]),
+      hassStates: new Map([[robot.entity_id, robot], [battery.entity_id, battery]]),
+    };
+    (platform as any).entities.set(robot.entity_id, { state: robot, updateState });
+    vi.spyOn(platform as any, "isEntityExported").mockReturnValue(true);
+    vi.spyOn(platform as any, "clearEntityProblem").mockImplementation(() => {});
+    (platform as any).pendingStateUpdates.set(battery.entity_id, battery);
+    await (platform as any).flushStateUpdates();
+    expect(updateState).toHaveBeenCalledWith(robot);
+  });
+
   it("keeps vacuum plus linked telemetry out of a sensor-rooted composite", () => {
     const deviceId = "robotina-tuya-device";
     (platform as any).ha = {

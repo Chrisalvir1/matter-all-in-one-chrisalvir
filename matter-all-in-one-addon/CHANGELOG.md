@@ -1,3 +1,8 @@
+## [2.2.7] - 2026-10-26
+
+- Sincroniza el estado Matter de la aspiradora cuando cambian los sensores vinculados de batería y carga del mismo dispositivo de Home Assistant.
+- Conserva las correcciones de mandos y estados de 2.2.5 y 2.2.6 y los emparejamientos existentes.
+
 ## [2.2.6] - 2026-10-26
 
 - Distingue el regreso a la base de la llegada y reconoce el estado real de carga `charge` de Robotina.

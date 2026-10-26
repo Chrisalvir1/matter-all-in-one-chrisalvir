@@ -6121,6 +6121,23 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         this.pendingStateUpdates.clear();
         const results = await Promise.allSettled(
           updates.map(async ([entityId, state]) => {
+            // A vacuum's battery and charging status can be separate HA entities.
+            // Refresh the RVC endpoint when a sensor on the same device changes.
+            if (entityId.startsWith("sensor.")) {
+              const deviceId = this.ha?.hassEntities?.get(entityId)?.device_id;
+              if (deviceId) {
+                for (const [vacuumId, vacuum] of this.entities) {
+                  if (
+                    vacuumId.startsWith("vacuum.") &&
+                    this.isEntityExported(vacuumId) &&
+                    this.ha?.hassEntities?.get(vacuumId)?.device_id === deviceId
+                  ) {
+                    const current = this.ha?.hassStates?.get(vacuumId) ?? vacuum.state;
+                    if (current) this.queueStateUpdate(vacuumId, current);
+                  }
+                }
+              }
+            }
             const compositeDeviceId = this.compositeMembership.get(entityId);
             if (compositeDeviceId) {
               const composite = this.compositeDevices.get(compositeDeviceId);
