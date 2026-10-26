@@ -7,7 +7,6 @@ describe("VacuumEntity Apple Home topology and identity", () => {
   it("includes Omni's linked battery sensor on the single RVC accessory", async () => {
     const entityId = "vacuum.robotina";
     const batteryId = "sensor.robotina_battery";
-    const powerId = "sensor.robotina_power";
     const platform = {
       matterbridge: { matterbridgeVersion: "3.11.0" },
       log: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), notice: vi.fn(), warn: vi.fn() },
@@ -16,7 +15,6 @@ describe("VacuumEntity Apple Home topology and identity", () => {
         hassEntities: new Map([
           [entityId, { id: "vacuum-entry", device_id: "robotina-device" }],
           [batteryId, { id: "battery-entry", device_id: "robotina-device" }],
-          [powerId, { id: "power-entry", device_id: "robotina-device" }],
         ]),
         hassDevices: new Map(),
         hassStates: new Map([
@@ -24,11 +22,6 @@ describe("VacuumEntity Apple Home topology and identity", () => {
             entity_id: batteryId,
             state: "73",
             attributes: { device_class: "battery", unit_of_measurement: "%" },
-          }],
-          [powerId, {
-            entity_id: powerId,
-            state: "0.1",
-            attributes: { device_class: "power", unit_of_measurement: "W" },
           }],
         ]),
       },
@@ -50,13 +43,7 @@ describe("VacuumEntity Apple Home topology and identity", () => {
 
     expect(endpoint.deviceType).toBe(0x0074);
     expect(endpoint.attributes.get("powerSource:batPercentRemaining")).toBe(146);
-    expect(endpoint.clusterServers.has(0x0090)).toBe(true);
-    expect(endpoint.attributes.get("144:activePower")).toBe(100);
-
-    const updatedPower = platform.ha.hassStates.get(powerId) as any;
-    updatedPower.state = "0.25";
-    await vacuum.updateLinkedPowerSensor(updatedPower);
-    expect(endpoint.attributes.get("144:activePower")).toBe(250);
+    expect(endpoint.clusterServers.has(0x0090)).toBe(false);
   });
 
   it("publishes one standalone RVC with the requested model and physical HA serial", async () => {

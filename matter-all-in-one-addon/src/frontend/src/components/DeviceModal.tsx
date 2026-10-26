@@ -1557,7 +1557,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                             {ent.domain === "sensor" &&
                             ent.attributes?.device_class === "power" &&
                             ent.primaryEntityId?.startsWith("vacuum.")
-                              ? "Incluido en RVC"
+                              ? "Solo en HA (RVC Matter no admite potencia)"
                               : "Auxiliar"}
                         </span>
                       ) : (
@@ -1743,7 +1743,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                     ? activeEntity.domain === "sensor" &&
                       activeEntity.attributes?.device_class === "power" &&
                       activeEntity.primaryEntityId?.startsWith("vacuum.")
-                      ? "La medición de potencia se sincroniza en el mismo accesorio RVC y QR. Apple Home puede no mostrar esta lectura en la ficha de la aspiradora."
+                      ? "La lectura sigue disponible en Home Assistant. El perfil Matter RVC no define potencia eléctrica como clúster y no se exporta dentro del QR de la aspiradora para mantener compatibilidad con Apple Home."
                       : "Esta entidad es auxiliar (ej. segmento RGBIC) y se controla automáticamente a través de la luz principal."
                     : isMultiSwitch
                     ? isExported
