@@ -1,3 +1,9 @@
+## [2.2.2] - 2026-10-26
+
+- Corrige el empaquetado de la corrección RVC: `@matter/node` ahora es dependencia de producción porque `vacuum.entity` importa `DescriptorServer` directamente. En 2.2.1 faltaba en la imagen final, Matterbridge rechazó cargar el plugin y detuvo el puente para proteger los dispositivos registrados.
+- La compilación de la imagen verifica que el import de producción `@matter/node/behaviors/descriptor` se resuelva dentro del runtime antes de publicar.
+- Conserva el anuncio Matter RVC único, el clúster de batería y los modos compatibles introducidos en 2.2.1; no cambia ni borra fabrics existentes.
+
 ## [2.2.1] - 2026-10-26
 
 - Corrige el descriptor Matter de la aspiradora RVC: conserva el clúster y telemetría de batería, pero anuncia a Apple Casa solo el tipo `RoboticVacuumCleaner` (`0x0074`) para evitar que aparezca como accesorio compuesto genérico.
