@@ -239,6 +239,13 @@ const profilesByDomain: Record<string, DeviceExportProfile[]> = {
       description: "Medición de iluminancia (lux).",
       appleHome: "supported",
     },
+    {
+      id: "electricalSensor",
+      label: "Sensor eléctrico Matter",
+      description:
+        "Potencia, energía o voltaje con clusters Matter de medición. Apple Home no documenta este tipo como sensor compatible.",
+      appleHome: "unsupported",
+    },
   ],
   camera: [
     {
@@ -291,20 +298,43 @@ const defaultProfileByDomain: Record<string, string> = {
   humidifier: "fan",
   button: "onOffPlugInUnit",
   binary_sensor: "contactSensor",
-  sensor: "temperatureSensor",
 };
 
-export function getExportProfiles(domain: string): DeviceExportProfile[] {
-  return profilesByDomain[domain] ?? [];
+const sensorProfileByDeviceClass: Record<string, string> = {
+  temperature: "temperatureSensor",
+  humidity: "humiditySensor",
+  illuminance: "lightSensor",
+  power: "electricalSensor",
+  energy: "electricalSensor",
+  voltage: "electricalSensor",
+};
+
+export function getExportProfiles(
+  domain: string,
+  deviceClass?: string,
+): DeviceExportProfile[] {
+  const profiles = profilesByDomain[domain] ?? [];
+  if (domain !== "sensor") return profiles;
+  const profileId = sensorProfileByDeviceClass[deviceClass ?? ""];
+  return profileId ? profiles.filter((profile) => profile.id === profileId) : [];
 }
 
 export function getExportProfile(
   domain: string,
   profileId?: string,
+  deviceClass?: string,
 ): DeviceExportProfile | undefined {
-  return getExportProfiles(domain).find((profile) => profile.id === profileId);
+  const canonicalId =
+    profileId === "energyTariff" ? "electricalSensor" : profileId;
+  return getExportProfiles(domain, deviceClass).find(
+    (profile) => profile.id === canonicalId,
+  );
 }
 
-export function getDefaultExportProfileId(domain: string): string | undefined {
+export function getDefaultExportProfileId(
+  domain: string,
+  deviceClass?: string,
+): string | undefined {
+  if (domain === "sensor") return sensorProfileByDeviceClass[deviceClass ?? ""];
   return defaultProfileByDomain[domain];
 }

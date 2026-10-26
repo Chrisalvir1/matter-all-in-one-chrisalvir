@@ -52,6 +52,20 @@ function detectHapRecommendation(
 
   const domains = new Set(device.entities.map((e) => e.domain));
 
+  // A native Matter RVC is already the correct Apple Home accessory type.
+  // Do not recommend a generic HAP profile because an auxiliary entity or a
+  // room name happens to contain a media-player keyword (for example sala_tv).
+  if (domains.has("vacuum")) {
+    return {
+      isRecommended: false,
+      recommendedProfile: "humidifier",
+      categoryName: "",
+      badgeText: "",
+      reason: "",
+      appleAdvantage: "",
+    };
+  }
+
   // 1. Panel de Alarma / Security System
   if (
     domains.has("alarm_control_panel") ||
@@ -107,7 +121,7 @@ function detectHapRecommendation(
   // 4. Televisión / Reproductor Multimedia
   if (
     domains.has("media_player") ||
-    /televisi[oó]n|tv|media_player|roku|appletv|apple_tv|chromecast|soundbar|kodi/i.test(
+    /televisi[oó]n|\btv\b|media_player|roku|appletv|apple_tv|chromecast|soundbar|kodi/i.test(
       allStrings,
     )
   ) {

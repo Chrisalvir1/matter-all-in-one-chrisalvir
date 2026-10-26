@@ -4,11 +4,18 @@
   <img src="matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
 </div>
 
-> **Matter All-in-One for Home Assistant (v2.1.16)**
+> **Matter All-in-One for Home Assistant (v2.1.17)**
 > Expone entidades verificadas de Home Assistant como accesorios Matter 1.6 estables, cámaras Scrypted passthrough con HKSV y cámaras HomeKit con Live View en Apple Home.
 > **Base:** `matterbridge@3.11.0` · **Node.js:** `24.22.1-alpine3.24` · **TypeScript:** `7.0.2` · **Vitest:** `5.0.5` · **Vite:** `8.3.5` · **Spec:** Matter 1.6.1
 
 ---
+
+### Novedades de la versión 2.1.17
+
+- Conserva las aspiradoras como Matter RVC nativo y evita sugerir HAP como televisor por nombres de entidades que contienen `tv`.
+- Vincula al accesorio RVC la batería y el selector de modo del mismo dispositivo de Home Assistant cuando esas entidades están disponibles.
+- Publica sensores de potencia, energía y voltaje con el perfil Matter Electrical Sensor y evita clasificarlos como temperatura.
+- Apple Casa solo mostrará controles y valores compatibles con el perfil RVC y con lo que Home Assistant realmente expone; los sensores eléctricos requieren un cliente que admita ese tipo Matter.
 
 ### Novedades de la versión 2.1.16
 

@@ -21,6 +21,7 @@ import {
   lightSensor,
   roboticVacuumCleaner,
   basicVideoPlayer,
+  electricalSensor,
   fan,
   cooktop,
   oven,
@@ -138,6 +139,10 @@ export const MatterDeviceTypes = {
     optionalClientClusters: [],
   } as unknown as DeviceTypeDefinition,
 
+  // Matter Electrical Sensor (0x0510) is the standard device type for
+  // electrical power/energy measurements. Retain the legacy monetary profile
+  // separately so a price sensor is never relabeled as an electrical sensor.
+  electricalSensor,
   energyTariff: {
     code: 0x000e,
     name: "EnergyTariff",
@@ -316,11 +321,15 @@ export const DEVICE_CLASS_REGISTRY: Record<
       homekitSupported: homekitSupported.energyTariff,
     },
     power: {
-      matterType: MatterDeviceTypes.energyTariff,
+      matterType: MatterDeviceTypes.electricalSensor,
+      homekitSupported: homekitSupported.energyTariff,
+    },
+    voltage: {
+      matterType: MatterDeviceTypes.electricalSensor,
       homekitSupported: homekitSupported.energyTariff,
     },
     energy: {
-      matterType: MatterDeviceTypes.energyTariff,
+      matterType: MatterDeviceTypes.electricalSensor,
       homekitSupported: homekitSupported.energyTariff,
     },
     carbon_dioxide: {

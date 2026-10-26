@@ -1,4 +1,4 @@
-# Matter All-in-One for Home Assistant — v2.1.16
+# Matter All-in-One for Home Assistant — v2.1.17
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/chrisalvir1/matter-all-in-one-chrisalvir/main/matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
@@ -8,6 +8,13 @@
 > **Base:** `matterbridge@3.11.0` · **Node.js:** `24.22.1-alpine3.24` · **TypeScript:** `7.0.2` · **Spec:** Matter 1.6.1
 
 ---
+
+## Release 2.1.17 (2026-10-25)
+
+- Conserva las aspiradoras como Matter RVC nativo y evita sugerir HAP como televisor por nombres de entidades que contienen `tv`.
+- Vincula al accesorio RVC la batería y el selector de modo del mismo dispositivo de Home Assistant cuando esas entidades están disponibles.
+- Publica sensores de potencia, energía y voltaje con el perfil Matter Electrical Sensor y evita clasificarlos como temperatura.
+- Apple Casa solo mostrará controles y valores compatibles con el perfil RVC y con lo que Home Assistant realmente expone; los sensores eléctricos requieren un cliente que admita ese tipo Matter.
 
 ## Release 2.1.16 (2026-10-23)
 
@@ -48,7 +55,7 @@ This file is intentionally structured for both humans and AI agents.
 
 ```yaml
 project: matter-all-in-one-chrisalvir
-version: "2.1.16"
+version: "2.1.17"
 spec: "Matter 1.6.1"
 engine: matterbridge
 engine_version: "3.11.0"

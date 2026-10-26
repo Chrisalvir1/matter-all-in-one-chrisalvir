@@ -2883,9 +2883,21 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       return true;
     }
     const [domain] = entityId.split(".");
-    if (domain !== "button") return false;
     const primary = this.getPrimaryEntityId(entityId);
-    return primary !== undefined && primary !== entityId;
+    if (!primary || primary === entityId || !primary.startsWith("vacuum.")) {
+      return domain === "button" && primary !== undefined && primary !== entityId;
+    }
+    if (domain === "button") return true;
+    const state =
+      this.ha.hassStates?.get(entityId) ?? this.entities.get(entityId)?.state;
+    if (domain === "sensor" && state?.attributes?.device_class === "battery") {
+      return true;
+    }
+    if (domain === "select") {
+      const vacuum = this.entities.get(primary);
+      return vacuum instanceof VacuumEntity && vacuum.isLinkedCleanModeSelector(entityId);
+    }
+    return false;
   }
 
   constructor(
@@ -5777,8 +5789,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     if (!entity)
       return { success: false, error: "Device not found in discovery." };
     const [domain] = entityId.split(".");
+    const deviceClass = entity.state.attributes?.device_class;
     if (
-      !getExportProfile(domain, profileId) ||
+      !getExportProfile(domain, profileId, deviceClass) ||
       !(MatterDeviceTypes as any)[profileId]
     ) {
       return {
@@ -5797,7 +5810,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       const wasExported = this.exportedDevices.has(entityId);
       const state = entity.state;
       if (wasExported) await this.manualUnregister(entityId);
-      this.deviceOverrides[entityId] = profileId;
+      this.deviceOverrides[entityId] =
+        profileId === "energyTariff" ? "electricalSensor" : profileId;
       await this.saveDeviceOverrides();
       this.entities.delete(entityId);
       this.matterbridgeDevices.delete(entityId);
@@ -5836,6 +5850,29 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     // This sensor need not be exported to Matter to drive HAP/HKSV.
     this.syncLinkedCameraUiMotion(entityId, newState);
     const entity = this.entities.get(entityId);
+    const entityRegistry = this.ha?.hassEntities?.get(entityId);
+    const isLinkedBattery =
+      entityId.startsWith("sensor.") &&
+      newState.attributes?.device_class === "battery";
+    const isLinkedMode = entityId.startsWith("select.");
+    if ((isLinkedBattery || isLinkedMode) && entityRegistry?.device_id) {
+      const vacuumId = Array.from(this.entities.keys()).find((candidateId) =>
+        candidateId.startsWith("vacuum.") &&
+        this.ha?.hassEntities?.get(candidateId)?.device_id ===
+          entityRegistry.device_id,
+      );
+      const vacuum = vacuumId ? this.entities.get(vacuumId) : undefined;
+      if (vacuum instanceof VacuumEntity) {
+        const update = isLinkedBattery
+          ? vacuum.updateLinkedBatteryLevel(newState.state)
+          : vacuum.updateLinkedCleanMode(entityId, newState.state);
+        void update.catch((error) =>
+          this.log.debug(
+            `[VacuumEntity] Linked capability update failed for ${vacuumId}: ${String(error)}`,
+          ),
+        );
+      }
+    }
     if (!entity) {
       // Sensor-only HA entities are not necessarily Matter entities, but they
       // can be a live capability of a HAP accessory for the same device.
@@ -6931,7 +6968,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               attributes: { friendly_name: friendlyName, ...e.state.attributes },
               deviceTypeLabel: typeLabel,
               matterType:
-                domain === "fan"
+                domain === "sensor"
+                  ? e.deviceType.name
+                  : domain === "fan"
                   ? "fan"
                   : domain === "humidifier"
                     ? "humidifier"
@@ -6947,11 +6986,25 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               auxiliary: this.isAuxiliaryEntity(e.entityId),
               primaryEntityId: this.getPrimaryEntityId(e.entityId) ?? null,
               profileId:
-                this.deviceOverrides[e.entityId] ??
+                (getExportProfile(
+                  domain,
+                  this.deviceOverrides[e.entityId],
+                  e.state.attributes?.device_class,
+                )
+                  ? this.deviceOverrides[e.entityId] === "energyTariff"
+                    ? "electricalSensor"
+                    : this.deviceOverrides[e.entityId]
+                  : undefined) ??
                 this.getAutomaticProfile(e.entityId, e.state) ??
-                getDefaultExportProfileId(domain) ??
+                getDefaultExportProfileId(
+                  domain,
+                  e.state.attributes?.device_class,
+                ) ??
                 null,
-              profiles: getExportProfiles(domain),
+              profiles: getExportProfiles(
+                domain,
+                e.state.attributes?.device_class,
+              ),
               pairingCode: connection.pairingCode,
               manualPairingCode: connection.manualPairingCode,
               commissioned:

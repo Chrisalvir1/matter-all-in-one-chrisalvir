@@ -7,15 +7,22 @@ import {
 } from "../utils/matter-attributes.js";
 import { energyTariffConverter } from "../converters/energy_tariff.converter.js";
 
-const ElectricalGridConditionsId = 0x00a0 as any as ClusterId;
+const PowerTopologyId = 0x009c as any as ClusterId;
 const ElectricalPowerMeasurementId = 0x0090 as any as ClusterId;
 const ElectricalEnergyMeasurementId = 0x0091 as any as ClusterId;
 
 export class EnergyTariffEntity extends BaseEntity {
   protected override getRequiredClusterIds(): ClusterId[] {
     const clusters = super.getRequiredClusterIds();
-    clusters.push(ElectricalGridConditionsId);
-    return clusters;
+    const deviceClass = this.state.attributes?.device_class;
+    clusters.push(PowerTopologyId);
+    if (deviceClass === "power" || deviceClass === "voltage") {
+      clusters.push(ElectricalPowerMeasurementId);
+    }
+    if (deviceClass === "energy") {
+      clusters.push(ElectricalEnergyMeasurementId);
+    }
+    return [...new Set(clusters)];
   }
 
   public override async updateState(
@@ -28,9 +35,10 @@ export class EnergyTariffEntity extends BaseEntity {
     if (value === null || !this.endpoint) return;
 
     const deviceClass = state.attributes?.device_class;
+    const unit = String(state.attributes?.unit_of_measurement ?? "").toLowerCase();
     if (deviceClass === "power") {
-      // Active power in milliwatts for Matter ElectricalPowerMeasurement
-      const milliWatts = Math.round(value * 1000);
+      const multiplier = unit === "kw" ? 1_000_000 : unit === "mw" ? 1 : 1000;
+      const milliWatts = Math.round(value * multiplier);
       await updateFn(
         this.endpoint,
         ElectricalPowerMeasurementId,
@@ -38,14 +46,24 @@ export class EnergyTariffEntity extends BaseEntity {
         milliWatts,
         this.platform.log,
       );
+    } else if (deviceClass === "voltage") {
+      // ElectricalPowerMeasurement voltage is represented in millivolts.
+      const milliVolts = Math.round(value * (unit === "mv" ? 1 : 1000));
+      await updateFn(
+        this.endpoint,
+        ElectricalPowerMeasurementId,
+        "voltage",
+        milliVolts,
+        this.platform.log,
+      );
     } else if (deviceClass === "energy") {
-      // Cumulative energy in milliwatt-hours for Matter ElectricalEnergyMeasurement
-      const mWh = Math.round(value * 1000000);
+      const multiplier = unit === "wh" ? 1000 : unit === "mwh" ? 1 : 1_000_000;
+      const mWh = Math.round(value * multiplier);
       await updateFn(
         this.endpoint,
         ElectricalEnergyMeasurementId,
         "cumulativeEnergyImported",
-        mWh,
+        { energy: mWh },
         this.platform.log,
       );
     }
