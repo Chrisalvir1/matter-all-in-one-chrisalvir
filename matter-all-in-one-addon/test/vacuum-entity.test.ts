@@ -401,6 +401,14 @@ describe("VacuumEntity Apple Home topology and identity", () => {
     expect(endpoint.attributes.get("powerSource:batPercentRemaining")).toBe(200);
     expect(endpoint.attributes.get("powerSource:batChargeState")).toBe(2);
     expect(endpoint.attributes.get("rvcOperationalState:operationalState")).toBe(66);
+    (platform.ha.hassStates.get(statusSensorId) as any).state = "goto_charge";
+    await vacuum.updateState({ ...state, state: "returning" } as any, true);
+    expect(endpoint.attributes.get("rvcOperationalState:operationalState")).toBe(64);
+    expect(endpoint.attributes.get("powerSource:batChargeState")).toBe(3);
+    (platform.ha.hassStates.get(statusSensorId) as any).state = "charging";
+    await vacuum.updateState({ ...state, state: "docked" } as any, true);
+    expect(endpoint.attributes.get("rvcOperationalState:operationalState")).toBe(65);
+    expect(endpoint.attributes.get("powerSource:batChargeState")).toBe(1);
 
     // An unavailable button must not hide the usable chargego selector.
     await endpoint.invokeCommand("RvcOperationalState.goHome", {});

@@ -257,7 +257,7 @@ export class VacuumEntity extends BaseEntity {
     }
     const values = signals.map((s) => String(s ?? "").trim().toLowerCase());
     if (values.some((s) => ["charge_done", "charging_completed", "fully_charged"].includes(s))) return 2;
-    if (values.some((s) => ["charging", "on_charge", "in_charge"].includes(s))) return 1;
+    if (values.some((s) => ["charge", "charging", "on_charge", "in_charge"].includes(s))) return 1;
     if (values.some((s) => ["cleaning", "returning", "paused"].includes(s))) return 3;
     return 0;
   }
@@ -396,8 +396,14 @@ export class VacuumEntity extends BaseEntity {
       ? initialUpdate.onOff
         ? 1
         : 0
-      : isSelectorDocked
-        ? 66 // Docked
+      : this.getBatteryChargeState(this.state) === 1
+        ? 65 // Charging
+        : this.state.state.toLowerCase() === "returning"
+          ? 64 // SeekingCharger
+          : isSelectorDocked && this.state.state.toLowerCase() !== "docked" && this.getBatteryChargeState(this.state) !== 2
+            ? 64 // A return command does not prove the robot is docked.
+            : isSelectorDocked
+              ? 66 // Docked
         : initialUpdate.operationalState === 0 &&
             this.state.state.toLowerCase() === "docked"
           ? 66
@@ -538,9 +544,16 @@ export class VacuumEntity extends BaseEntity {
     const cleanSelector = this.getLinkedCleanModeSelector();
     const isSelectorDocked = cleanSelector?.state?.toLowerCase() === "chargego";
     const isChargingOrDocked = update.isChargingOrDocked || isSelectorDocked;
-    const effectiveOperationalState = isSelectorDocked
-      ? 66 // Docked
-      : update.operationalState;
+    const chargeState = this.getBatteryChargeState(state);
+    const effectiveOperationalState = chargeState === 1
+      ? 65
+      : state.state.toLowerCase() === "returning"
+        ? 64
+        : isSelectorDocked && state.state.toLowerCase() !== "docked" && chargeState !== 2
+          ? 64
+          : isSelectorDocked
+            ? 66
+            : update.operationalState;
     const effectiveOnOff = !isSelectorDocked && update.onOff;
     const syncFunc = isInitialSync ? safeSetAttribute : safeUpdateAttribute;
 
@@ -601,7 +614,7 @@ export class VacuumEntity extends BaseEntity {
         endpoint as any,
         "powerSource" as any,
         "batChargeState",
-        this.getBatteryChargeState(state),
+        chargeState,
         this.platform.log,
       );
     } catch (err) {

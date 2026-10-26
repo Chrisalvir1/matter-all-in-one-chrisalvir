@@ -1,3 +1,8 @@
+## [2.2.6] - 2026-10-26
+
+- Distingue el regreso a la base de la llegada y reconoce el estado real de carga `charge` de Robotina.
+- Conserva las correcciones de controles y batería de 2.2.5 sin modificar los emparejamientos.
+
 ## [2.2.5] - 2026-10-26
 
 - Corrige el inicio y cambio de modo RVC: el registro ya no serializa el contexto Matter que contiene `BigInt` y permite enviar el comando a Home Assistant.
