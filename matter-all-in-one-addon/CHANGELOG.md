@@ -1,3 +1,14 @@
+## [2.1.24] - 2026-10-26
+
+- Reconocimiento nativo como Aspiradora Robótica (RVC `0x0074`) en Apple Home (iOS 18+):
+  - Se elimina el tipo de dispositivo auxiliar `powerSource` (`0x0011`) del descriptor `deviceTypeList` y del mapa `deviceTypes` del endpoint RVC. Anteriormente, la clase base `RoboticVacuumCleaner` de Matterbridge registraba `[roboticVacuumCleaner, powerSource]`, lo que hacía que Apple Home detectara 2 servicios independientes ("Connected Services: 2") y agrupara el dispositivo en un contenedor genérico con icono de casa naranja denominado "Matter Accessory".
+  - Se preserva el comportamiento del clúster `PowerSource` (`0x002f`) en el endpoint para que la telemetría de porcentaje de batería y estado de carga continúe reportándose en tiempo real sin clasificar el endpoint como accesorio compuesto.
+  - Sincronización explícita de `BasicInformationServer` (`nodeLabel` y `productLabel`) en el `ServerNode` (Endpoint 0) durante el arranque y activación para que Apple Home muestre directamente el nombre de la entidad (ej. "ROBOTINA").
+- Fluidez y optimización en desconexión de fabrics y nuevo código QR:
+  - En la interfaz web (`DeviceModal`), se asegura que `pairingCode`, `manualPairingCode` y `matterFabrics` de aspiradoras no se mezclen ni hereden información de otras entidades secundarias del mismo dispositivo.
+  - Al presionar «Desconectar fabric» o «Desconectar todo y nuevo QR», la interfaz actualiza inmediatamente el estado de todas las entidades asociadas a `commissioned: false`, eliminando retrasos, pantallas congeladas o estados residuales.
+  - Mayor tolerancia de tiempo (timeout) en el apagado y desregistro del ServerNode en el backend para evitar bloqueos del bucle de eventos.
+
 ## [2.1.23] - 2026-10-26
 
 - Corrección definitiva de exportación Matter RVC (Robotic Vacuum Cleaner):

@@ -384,6 +384,31 @@ export class VacuumEntity extends BaseEntity {
       }
     }
 
+    // Ensure the endpoint advertises ONLY the pure RoboticVacuumCleaner device type (0x0074).
+    // Matterbridge's RoboticVacuumCleaner constructor registers [roboticVacuumCleaner, powerSource],
+    // exposing device type 0x0011 (PowerSource) in descriptor.deviceTypeList alongside 0x0074.
+    // In Apple Home (iOS 18+), advertising both device types causes HomeKit to treat the accessory
+    // as a composite multi-device container ("Connected Services: 2") showing a generic orange house icon
+    // named "Matter Accessory", rather than the native Robotic Vacuum Cleaner tile.
+    // We preserve the powerSource cluster behavior (0x002f) for live battery/charging telemetry,
+    // but remove device type 0x0011 from the descriptor deviceTypeList and deviceTypes map.
+    const descBehavior = (this.endpoint as any).behaviors?.supported?.descriptor;
+    if (descBehavior) {
+      const opts = (this.endpoint as any).behaviors.optionsFor?.(descBehavior);
+      if (opts?.deviceTypeList) {
+        opts.deviceTypeList = opts.deviceTypeList.filter(
+          (d: any) => d.deviceType === 0x0074 || d.deviceType === this.deviceType.code,
+        );
+      }
+    }
+    if (typeof (this.endpoint as any).deviceTypes?.delete === "function") {
+      (this.endpoint as any).deviceTypes.delete(0x0011);
+    } else if (Array.isArray((this.endpoint as any).deviceTypes)) {
+      (this.endpoint as any).deviceTypes = (this.endpoint as any).deviceTypes.filter(
+        (dt: any) => (typeof dt === "number" ? dt : dt?.code) !== 0x0011,
+      );
+    }
+
     this.endpoint.deviceType = this.deviceType.code;
     this.endpoint.deviceName = uniqueName;
     this.endpoint.uniqueId = stableId;
@@ -391,6 +416,7 @@ export class VacuumEntity extends BaseEntity {
     this.endpoint.vendorId = MATTER_BRIDGE_VENDOR_ID;
     this.endpoint.vendorName = MATTER_BRIDGE_VENDOR_NAME;
     this.endpoint.productId = 0x8000;
+    this.endpoint.productLabel = uniqueName;
     // These properties populate the standalone ServerNode Basic Information
     // cluster that Apple Home reads. Setting only the endpoint cluster below is
     // insufficient because Matterbridge creates the node before attaching it.

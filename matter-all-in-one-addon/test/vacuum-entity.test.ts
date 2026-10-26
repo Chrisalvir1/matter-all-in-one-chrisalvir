@@ -111,8 +111,17 @@ describe("VacuumEntity Apple Home topology and identity", () => {
     expect(endpoint.options.mode).toBe("server");
     expect(endpoint.deviceType).toBe(0x0074);
     expect(endpoint.deviceName).toBe("ROBOTINA");
+    expect(endpoint.productLabel).toBe("ROBOTINA");
     expect(endpoint.productName).toBe("Ropvocnic Tuya Vacuum");
     expect(endpoint.serialNumber).toBe("bf4ae2b69ab212b227zupl");
+
+    const deviceTypeCodes = Array.isArray(endpoint.deviceTypes)
+      ? endpoint.deviceTypes.map((dt: any) =>
+          typeof dt === "number" ? dt : dt.code,
+        )
+      : Array.from(endpoint.deviceTypes.keys());
+    expect(deviceTypeCodes).not.toContain(0x0011);
+    expect(deviceTypeCodes).toContain(0x0074);
     expect(endpoint.supportedCleanModes).toEqual([
       {
         label: "Automático",

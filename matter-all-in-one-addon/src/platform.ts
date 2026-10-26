@@ -4635,6 +4635,21 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       if (!serverNode.lifecycle?.isOnline) {
         await serverNode.start();
       }
+      if (serverNode && typeof (serverNode as any).setStateOf === "function") {
+        try {
+          const { BasicInformationServer } = await import(
+            "@matter/node/behaviors/basic-information"
+          );
+          await (serverNode as any).setStateOf(BasicInformationServer, {
+            nodeLabel: endpoint.deviceName,
+            productLabel: (endpoint as any).productLabel ?? endpoint.deviceName,
+          });
+        } catch (e) {
+          this.log.debug(
+            `Failed to update basicInformation on serverNode for ${entityId}: ${e}`,
+          );
+        }
+      }
       this.matterbridgeDevices.set(entityId, endpoint);
       await entity.syncInitialState();
       if (isUnavailable(entity.state)) {
@@ -4696,6 +4711,21 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       }
       if (!serverNode.lifecycle?.isOnline) {
         await serverNode.start();
+      }
+      if (serverNode && typeof (serverNode as any).setStateOf === "function") {
+        try {
+          const { BasicInformationServer } = await import(
+            "@matter/node/behaviors/basic-information"
+          );
+          await (serverNode as any).setStateOf(BasicInformationServer, {
+            nodeLabel: endpoint.deviceName,
+            productLabel: (endpoint as any).productLabel ?? endpoint.deviceName,
+          });
+        } catch (e) {
+          this.log.debug(
+            `Failed to update basicInformation on serverNode for ${entityId}: ${e}`,
+          );
+        }
       }
       this.matterbridgeDevices.set(entityId, endpoint);
       await entity.syncInitialState();
@@ -5063,13 +5093,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             try {
               await Promise.race([
                 node.close(),
-                new Promise<void>((res) => setTimeout(res, 1500)),
+                new Promise<void>((res) => setTimeout(res, 3000)),
               ]);
             } catch (e) {
               this.log.debug(`[Reset] Error closing serverNode: ${e}`);
             }
           }
-          await this.unregisterDeviceBounded(ep, `reset ${entityId}`, 1500);
+          await this.unregisterDeviceBounded(ep, `reset ${entityId}`, 4000);
         }
         this.matterbridgeDevices.delete(entityId);
       }

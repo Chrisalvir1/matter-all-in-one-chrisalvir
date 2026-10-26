@@ -508,10 +508,14 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     device.entities[0];
   const isCompositeExported = localCompositeExported;
 
+  const isVacuum = activeEntity?.domain === "vacuum";
+
   // Pairing code: fresh code from reset, primary entity's code, or selected entity's code
   const pairingCode =
     freshPairingCode ||
-    (isComposite
+    (isVacuum
+      ? activeEntity?.pairingCode
+      : isComposite
       ? compositePrimary?.pairingCode
       : isMultiSwitch
       ? activeEntity?.pairingCode
@@ -519,7 +523,9 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     "";
   const manualCode =
     freshManualCode ||
-    (isComposite
+    (isVacuum
+      ? activeEntity?.manualPairingCode
+      : isComposite
       ? compositePrimary?.manualPairingCode
       : isMultiSwitch
       ? activeEntity?.manualPairingCode
@@ -530,7 +536,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     ? []
     : Array.isArray(activeEntity?.matterFabrics) && activeEntity.matterFabrics.length > 0
     ? activeEntity.matterFabrics
-    : isMultiSwitch
+    : isMultiSwitch || isVacuum
     ? (Array.isArray(activeEntity?.matterFabrics) ? activeEntity.matterFabrics : [])
     : Array.isArray(compositePrimary?.matterFabrics) && compositePrimary.matterFabrics.length > 0
     ? compositePrimary.matterFabrics
@@ -877,8 +883,8 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
         device.entities.forEach((e) => {
           e.commissioned = false;
           e.matterFabrics = [];
-          if (res?.pairingCode) e.pairingCode = res.pairingCode;
-          if (res?.manualPairingCode) e.manualPairingCode = res.manualPairingCode;
+          if (newPairingCode) e.pairingCode = newPairingCode;
+          if (newManualCode) e.manualPairingCode = newManualCode;
         });
       }
       showToast("✓ Accesorio desvinculado y nuevo QR generado");
