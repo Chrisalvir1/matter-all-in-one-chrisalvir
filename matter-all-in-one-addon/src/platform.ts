@@ -2911,6 +2911,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     if (domain === "sensor" && state?.attributes?.device_class === "battery") {
       return true;
     }
+    if (domain === "sensor" && state?.attributes?.device_class === "power") {
+      return true;
+    }
     if (domain === "select") {
       const vacuum = this.entities.get(primary);
       return vacuum instanceof VacuumEntity && vacuum.isLinkedCleanModeSelector(entityId);
@@ -5925,8 +5928,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     const isLinkedBattery =
       entityId.startsWith("sensor.") &&
       newState.attributes?.device_class === "battery";
+    const isLinkedPower =
+      entityId.startsWith("sensor.") &&
+      newState.attributes?.device_class === "power";
     const isLinkedMode = entityId.startsWith("select.");
-    if ((isLinkedBattery || isLinkedMode) && entityRegistry?.device_id) {
+    if ((isLinkedBattery || isLinkedPower || isLinkedMode) && entityRegistry?.device_id) {
       const vacuumId = Array.from(this.entities.keys()).find((candidateId) =>
         candidateId.startsWith("vacuum.") &&
         this.ha?.hassEntities?.get(candidateId)?.device_id ===
@@ -5936,7 +5942,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       if (vacuum instanceof VacuumEntity) {
         const update = isLinkedBattery
           ? vacuum.updateLinkedBatteryLevel(newState.state)
-          : vacuum.updateLinkedCleanMode(entityId, newState.state);
+          : isLinkedPower
+            ? vacuum.updateLinkedPowerSensor(newState)
+            : vacuum.updateLinkedCleanMode(entityId, newState.state);
         void update.catch((error) =>
           this.log.debug(
             `[VacuumEntity] Linked capability update failed for ${vacuumId}: ${String(error)}`,

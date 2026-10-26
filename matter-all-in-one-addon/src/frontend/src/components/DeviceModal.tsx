@@ -1554,7 +1554,11 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                             fontStyle: "italic",
                           }}
                         >
-                          Auxiliar
+                            {ent.domain === "sensor" &&
+                            ent.attributes?.device_class === "power" &&
+                            ent.primaryEntityId?.startsWith("vacuum.")
+                              ? "Incluido en RVC"
+                              : "Auxiliar"}
                         </span>
                       ) : (
                         <label className="toggle" style={{ opacity: isBusy ? 0.6 : 1, pointerEvents: isBusy ? "none" : "auto" }}>
@@ -1736,7 +1740,11 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                       ? "Este canal forma parte del accesorio unificado y está activo en Matter bajo el mismo código QR."
                       : "Activa el interruptor general arriba para publicar el accesorio (ventilador y luz juntos en 1 QR)."
                     : activeEntity?.auxiliary
-                    ? "Esta entidad es auxiliar (ej. segmento RGBIC) y se controla automáticamente a través de la luz principal."
+                    ? activeEntity.domain === "sensor" &&
+                      activeEntity.attributes?.device_class === "power" &&
+                      activeEntity.primaryEntityId?.startsWith("vacuum.")
+                      ? "La medición de potencia se sincroniza en el mismo accesorio RVC y QR. Apple Home puede no mostrar esta lectura en la ficha de la aspiradora."
+                      : "Esta entidad es auxiliar (ej. segmento RGBIC) y se controla automáticamente a través de la luz principal."
                     : isMultiSwitch
                     ? isExported
                       ? `Este ${isPlugDevice ? "enchufe" : "botón"} está activo y publicado en Matter con su propio código QR independiente.`
