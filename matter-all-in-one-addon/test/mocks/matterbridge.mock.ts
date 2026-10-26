@@ -363,7 +363,13 @@ vi.mock("matterbridge/devices", () => ({
     constructor(
       name: string,
       serial: string,
-      options: { mode?: string; supportedCleanModes?: any[] } = {},
+      options: {
+        mode?: string;
+        supportedCleanModes?: any[];
+        supportedAreas?: any[];
+        operationalState?: number;
+        currentRunMode?: number;
+      } = {},
     ) {
       super([{ code: 0x0074, name: "roboticVacuumCleaner" }], {
         id: `${name.replaceAll(" ", "")}-${serial.replaceAll(" ", "")}`,
@@ -372,6 +378,9 @@ vi.mock("matterbridge/devices", () => ({
       (this as any).deviceName = name;
       (this as any).serialNumber = serial;
       (this as any).supportedCleanModes = options.supportedCleanModes;
+      (this as any).supportedAreas = options.supportedAreas;
+      (this as any).initialOperationalState = options.operationalState;
+      (this as any).initialRunMode = options.currentRunMode;
     }
   },
   BasicVideoPlayer: class extends MockMatterbridgeEndpoint {},

@@ -1,3 +1,16 @@
+## [2.1.22] - 2026-10-26
+
+- Corrige la exportación Matter RVC (Robotic Vacuum Cleaner `0x0074`) para Apple Home e iOS 27:
+  - Elimina `supportedAreas` vacío cuando no hay mapas/habitaciones definidos en HA para evitar que Apple Home marque el dispositivo como no soportado o inválido.
+  - Soporte ampliado para modos de limpieza (`smart`, `auto`, `random`, `quick`, `wall_follow`, `edge`, `quiet`, `silent`, `spiral`, `spot`, `partial`, `deep`, `mop`, `single`, `room`, `zone`).
+  - Prioriza adecuadamente selectores de modo de limpieza (`modo_de_limpieza`, `mode`, etc.) sobre controles de dirección manual.
+  - Enlace automático y retrocompatible para batería, botón de dock/recarga y arranque/pausa desde el mismo dispositivo Tuya/HA.
+  - Inicializa el estado operacional en `Charging` (66) cuando la aspiradora reporta `chargego` o está acoplada cargando.
+- Optimización de rendimiento e interfaz web (UI):
+  - Eliminación de bloqueos y congelamientos al desvincular fabrics («Desconectar») o regenerar códigos («Desconectar todo y nuevo QR») mediante cierres asíncronos acotados (timeout) y cierre previo del storage manager antes de limpiar directorio.
+  - Eliminación de alertas nativas bloqueantes (`confirm`) en el navegador, sustituidas por retroalimentación visual fluida y preservación de estado.
+  - Visualización y mapeo completo en `DeviceModal` de todas las entidades y sensores vinculados (`select` 🎛️, `button` 🔘, batería, sensores de duración y consumibles).
+
 ## [2.1.21] - 2026-10-26
 
 - Retira Electrical Power Measurement del endpoint RVC: no forma parte de los clústeres declarados para Robotic Vacuum Cleaner y es el principal cambio sospechoso tras observar «Incompatible» en Apple Casa.

@@ -1288,6 +1288,66 @@ describe("HomeAssistantPlatform", () => {
     expect(result.manualPairingCode).toBe("98765432101");
     expect(unregSpy).toHaveBeenCalledWith(staleDevice);
   });
+
+  it("discovers all vacuum companion entities (select, button, battery/duration sensors, binary_sensor) as auxiliary RVC entities while excluding generic DPS sensors", async () => {
+    const deviceId = "device-robotina-a1";
+    platform.ha = {
+      connected: true,
+      close: vi.fn(),
+      hassDevices: new Map([[deviceId, { id: deviceId, name: "ROBOTINA", model: "A1" }]]),
+      hassEntities: new Map([
+        ["vacuum.sala_tv_robotina", { id: "e1", entity_id: "vacuum.sala_tv_robotina", device_id: deviceId }],
+        ["select.sala_tv_robotina_control_manual", { id: "e2", entity_id: "select.sala_tv_robotina_control_manual", device_id: deviceId, name: "Control manual" }],
+        ["select.sala_tv_robotina_modo_de_limpieza", { id: "e3", entity_id: "select.sala_tv_robotina_modo_de_limpieza", device_id: deviceId, name: "Modo de limpieza" }],
+        ["button.sala_tv_robotina_iniciar_limpieza", { id: "e4", entity_id: "button.sala_tv_robotina_iniciar_limpieza", device_id: deviceId, name: "Iniciar limpieza" }],
+        ["button.sala_tv_robotina_volver_a_base", { id: "e5", entity_id: "button.sala_tv_robotina_volver_a_base", device_id: deviceId, name: "Volver a base" }],
+        ["sensor.sala_tv_robotina_battery", { id: "e6", entity_id: "sensor.sala_tv_robotina_battery", device_id: deviceId, name: "Battery" }],
+        ["sensor.sala_tv_robotina_clean_time", { id: "e7", entity_id: "sensor.sala_tv_robotina_clean_time", device_id: deviceId, name: "Clean Time" }],
+        ["sensor.sala_tv_robotina_direction_control", { id: "e8", entity_id: "sensor.sala_tv_robotina_direction_control", device_id: deviceId, name: "Direction Control" }],
+        ["binary_sensor.sala_tv_robotina", { id: "e9", entity_id: "binary_sensor.sala_tv_robotina", device_id: deviceId, name: "ROBOTINA" }],
+        ["sensor.sala_tv_robotina_dps_2", { id: "e10", entity_id: "sensor.sala_tv_robotina_dps_2", device_id: deviceId, name: "DPS 2", original_name: "DPS 2" }],
+      ]),
+      hassStates: new Map(),
+    } as any;
+
+    const states = [
+      { entity_id: "vacuum.sala_tv_robotina", state: "cleaning", attributes: { friendly_name: "ROBOTINA" } },
+      { entity_id: "select.sala_tv_robotina_control_manual", state: "stop", attributes: { friendly_name: "Control manual", options: ["stop", "forward"] } },
+      { entity_id: "select.sala_tv_robotina_modo_de_limpieza", state: "chargego", attributes: { friendly_name: "Modo de limpieza", options: ["smart", "chargego"] } },
+      { entity_id: "button.sala_tv_robotina_iniciar_limpieza", state: "unknown", attributes: { friendly_name: "Iniciar limpieza" } },
+      { entity_id: "button.sala_tv_robotina_volver_a_base", state: "unknown", attributes: { friendly_name: "Volver a base" } },
+      { entity_id: "sensor.sala_tv_robotina_battery", state: "100", attributes: { friendly_name: "Battery", device_class: "battery", unit_of_measurement: "%" } },
+      { entity_id: "sensor.sala_tv_robotina_clean_time", state: "0", attributes: { friendly_name: "Clean Time", device_class: "duration", unit_of_measurement: "min" } },
+      { entity_id: "sensor.sala_tv_robotina_direction_control", state: "stop", attributes: { friendly_name: "Direction Control" } },
+      { entity_id: "binary_sensor.sala_tv_robotina", state: "on", attributes: { friendly_name: "ROBOTINA" } },
+      { entity_id: "sensor.sala_tv_robotina_dps_2", state: "False", attributes: { friendly_name: "DPS 2" } },
+    ];
+
+    for (const st of states) {
+      await (platform as any).registerHAEntity(st);
+    }
+
+    expect(platform.entities.has("vacuum.sala_tv_robotina")).toBe(true);
+    expect(platform.entities.has("select.sala_tv_robotina_control_manual")).toBe(true);
+    expect(platform.entities.has("select.sala_tv_robotina_modo_de_limpieza")).toBe(true);
+    expect(platform.entities.has("button.sala_tv_robotina_iniciar_limpieza")).toBe(true);
+    expect(platform.entities.has("button.sala_tv_robotina_volver_a_base")).toBe(true);
+    expect(platform.entities.has("sensor.sala_tv_robotina_battery")).toBe(true);
+    expect(platform.entities.has("sensor.sala_tv_robotina_clean_time")).toBe(true);
+    expect(platform.entities.has("sensor.sala_tv_robotina_direction_control")).toBe(true);
+    expect(platform.entities.has("binary_sensor.sala_tv_robotina")).toBe(true);
+    // DPS generic entity must NOT be registered
+    expect(platform.entities.has("sensor.sala_tv_robotina_dps_2")).toBe(false);
+
+    // Vacuum is primary (not auxiliary), companions are auxiliary
+    expect((platform as any).isAuxiliaryEntity("vacuum.sala_tv_robotina")).toBe(false);
+    expect((platform as any).isAuxiliaryEntity("select.sala_tv_robotina_modo_de_limpieza")).toBe(true);
+    expect((platform as any).isAuxiliaryEntity("button.sala_tv_robotina_volver_a_base")).toBe(true);
+    expect((platform as any).isAuxiliaryEntity("sensor.sala_tv_robotina_battery")).toBe(true);
+    expect((platform as any).isAuxiliaryEntity("binary_sensor.sala_tv_robotina")).toBe(true);
+    // Must not group vacuum into a composite node (RVC must be standalone server node)
+    expect((platform as any).getCompositeCandidate("vacuum.sala_tv_robotina")).toBeUndefined();
+  });
 });
 
 describe("Late accessory restoration does not restart discovery", () => {

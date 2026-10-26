@@ -52,20 +52,6 @@ function detectHapRecommendation(
 
   const domains = new Set(device.entities.map((e) => e.domain));
 
-  // A native Matter RVC is already the correct Apple Home accessory type.
-  // Do not recommend a generic HAP profile because an auxiliary entity or a
-  // room name happens to contain a media-player keyword (for example sala_tv).
-  if (domains.has("vacuum")) {
-    return {
-      isRecommended: false,
-      recommendedProfile: "humidifier",
-      categoryName: "",
-      badgeText: "",
-      reason: "",
-      appleAdvantage: "",
-    };
-  }
-
   // 1. Panel de Alarma / Security System
   if (
     domains.has("alarm_control_panel") ||
@@ -121,7 +107,7 @@ function detectHapRecommendation(
   // 4. Televisión / Reproductor Multimedia
   if (
     domains.has("media_player") ||
-    /televisi[oó]n|\btv\b|media_player|roku|appletv|apple_tv|chromecast|soundbar|kodi/i.test(
+    /televisi[oó]n|tv|media_player|roku|appletv|apple_tv|chromecast|soundbar|kodi/i.test(
       allStrings,
     )
   ) {
@@ -202,6 +188,10 @@ function getDomainIcon(domain?: string): string {
       return "🤖";
     case "humidifier":
       return "💧";
+    case "select":
+      return "🎛️";
+    case "button":
+      return "🔘";
     default:
       return "⚡";
   }
@@ -429,11 +419,13 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
         }
 
         const primaryDelta =
-          Number(b.entityId === b.compositePrimaryEntityId) -
-          Number(a.entityId === a.compositePrimaryEntityId);
+          Number(b.entityId === b.compositePrimaryEntityId || b.domain === "vacuum") -
+          Number(a.entityId === a.compositePrimaryEntityId || a.domain === "vacuum");
+        const auxDelta = Number(Boolean(a.auxiliary)) - Number(Boolean(b.auxiliary));
         return (
           primaryDelta ||
           Number(b.exported) - Number(a.exported) ||
+          auxDelta ||
           (a.name || a.attributes?.friendly_name || a.entityId).localeCompare(
             b.name || b.attributes?.friendly_name || b.entityId,
             undefined,
@@ -457,20 +449,23 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
       }
       return targetEntity || sortedEntities[0] || device.entities[0] || null;
     });
-    setMultiAdminOpen(false);
-    // In multi-switch, only clear fresh codes if THIS active entity has its own code
-    const activeExportedCode = isMultiSwitch
-      ? selectedEntity?.pairingCode
-      : device.entities.find((e) => e.exported && e.pairingCode)?.pairingCode;
-    if (activeExportedCode) {
-      setFreshPairingCode(null);
-      setFreshManualCode(null);
-    }
+    // Only clear freshPairingCode / resetFabrics once the backend device snapshot
+    // confirms the accessory is no longer commissioned and matches the new code.
     const stillCommissioned = isMultiSwitch
       ? Boolean(selectedEntity?.commissioned)
       : device.entities.some((e) => e.commissioned);
     if (!stillCommissioned) {
       setResetFabrics(false);
+      const activeExportedCode = isMultiSwitch
+        ? selectedEntity?.pairingCode
+        : device.entities.find((e) => e.exported && e.pairingCode)?.pairingCode;
+      if (
+        activeExportedCode &&
+        (!freshPairingCode || activeExportedCode === freshPairingCode)
+      ) {
+        setFreshPairingCode(null);
+        setFreshManualCode(null);
+      }
     }
   }, [device, targetEntity, activeHapFromProps, isMultiSwitch, selectedEntity?.entityId]);
 
@@ -733,24 +728,35 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
   };
 
   const handleRemoveFabric = async (fabricIndex: number | string) => {
-    if (!activeEntity) return;
-    if (!confirm("¿Desconectar este accesorio de este controlador Matter?")) return;
+    if (!activeEntity || isBusy) return;
     setIsBusy(true);
+    showToast("Desconectando fabric Matter...");
     const targetEntityId = (!isMultiSwitch && isComposite)
       ? (compositePrimary?.entityId || activeEntity.entityId)
       : activeEntity.entityId;
     try {
       const res: any = await api.removeFabric(targetEntityId, fabricIndex);
-      if (res?.remainingFabrics === 0) {
+      if (res?.remainingFabrics === 0 || res?.pairingCode) {
         setResetFabrics(true);
         if (res?.pairingCode) setFreshPairingCode(res.pairingCode);
         if (res?.manualPairingCode) setFreshManualCode(res.manualPairingCode);
         activeEntity.commissioned = false;
         activeEntity.matterFabrics = [];
+        if (res?.pairingCode) activeEntity.pairingCode = res.pairingCode;
+        if (res?.manualPairingCode) activeEntity.manualPairingCode = res.manualPairingCode;
+        setSelectedEntity({
+          ...activeEntity,
+          commissioned: false,
+          matterFabrics: [],
+          pairingCode: res?.pairingCode || activeEntity.pairingCode,
+          manualPairingCode: res?.manualPairingCode || activeEntity.manualPairingCode,
+        });
         if (!isMultiSwitch) {
           device.entities.forEach((e) => {
             e.commissioned = false;
             e.matterFabrics = [];
+            if (res?.pairingCode) e.pairingCode = res.pairingCode;
+            if (res?.manualPairingCode) e.manualPairingCode = res.manualPairingCode;
           });
         }
       } else {
@@ -822,44 +828,38 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
   };
 
   const handleResetAccessory = async () => {
-    if (!activeEntity) return;
-    if (
-      !confirm(
-        "¿Desconectar este accesorio de todas las casas y generar un nuevo código QR limpio?\n\nIMPORTANTE: Si ya agregaste este accesorio en Apple Home, primero elimínalo de la app Casa (Ajustes -> Eliminar accesorio) para evitar que Apple Home intente reconectar una sesión obsoleta."
-      )
-    )
-      return;
+    if (!activeEntity || isBusy) return;
     setIsBusy(true);
+    showToast("Desconectando fabrics y generando nuevo código QR...");
     const targetEntityId = (!isMultiSwitch && isComposite)
       ? (compositePrimary?.entityId || activeEntity.entityId)
       : activeEntity.entityId;
     try {
       const res: any = await api.resetAccessory(targetEntityId);
-      if (res?.pairingCode || res?.manualPairingCode) {
-        const newPairingCode = res?.pairingCode || activeEntity.pairingCode || null;
-        const newManualCode = res?.manualPairingCode || activeEntity.manualPairingCode || null;
-        setFreshPairingCode(newPairingCode);
-        setFreshManualCode(newManualCode);
-        setResetFabrics(true);
-        activeEntity.pairingCode = newPairingCode || undefined;
-        activeEntity.manualPairingCode = newManualCode || undefined;
-        activeEntity.commissioned = false;
-        activeEntity.matterFabrics = [];
-        setSelectedEntity({
-          ...activeEntity,
-          pairingCode: newPairingCode || undefined,
-          manualPairingCode: newManualCode || undefined,
-          commissioned: false,
-          matterFabrics: [],
+      const newPairingCode = res?.pairingCode || activeEntity.pairingCode || null;
+      const newManualCode = res?.manualPairingCode || activeEntity.manualPairingCode || null;
+      setFreshPairingCode(newPairingCode);
+      setFreshManualCode(newManualCode);
+      setResetFabrics(true);
+      setMultiAdminOpen(false);
+      activeEntity.pairingCode = newPairingCode || undefined;
+      activeEntity.manualPairingCode = newManualCode || undefined;
+      activeEntity.commissioned = false;
+      activeEntity.matterFabrics = [];
+      setSelectedEntity({
+        ...activeEntity,
+        pairingCode: newPairingCode || undefined,
+        manualPairingCode: newManualCode || undefined,
+        commissioned: false,
+        matterFabrics: [],
+      });
+      if (!isMultiSwitch) {
+        device.entities.forEach((e) => {
+          e.commissioned = false;
+          e.matterFabrics = [];
+          if (res?.pairingCode) e.pairingCode = res.pairingCode;
+          if (res?.manualPairingCode) e.manualPairingCode = res.manualPairingCode;
         });
-        if (!isMultiSwitch) {
-          device.entities.forEach((e) => {
-            e.commissioned = false;
-            e.matterFabrics = [];
-            if (res?.pairingCode) e.pairingCode = res.pairingCode;
-            if (res?.manualPairingCode) e.manualPairingCode = res.manualPairingCode;
-          });
-        }
       }
       showToast("✓ Accesorio desvinculado y nuevo QR generado");
       void onRefresh();
@@ -1412,9 +1412,12 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                         }}
                       >
                         <span
-                          className={`entity-state${ent.state === "on" ? " on" : ""}`}
+                          className={`entity-state${ent.state === "on" || ent.state === "cleaning" ? " on" : ""}`}
                         >
                           {ent.state || "desconocido"}
+                          {ent.attributes?.unit_of_measurement
+                            ? ` ${ent.attributes.unit_of_measurement}`
+                            : ""}
                         </span>
                         {buttonBadge && (
                           <span
@@ -1547,19 +1550,32 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                           </span>
                         )
                       ) : ent.auxiliary ? (
-                        <span
-                          style={{
-                            fontSize: "11px",
-                            color: "var(--muted)",
-                            fontStyle: "italic",
-                          }}
-                        >
-                            {ent.domain === "sensor" &&
-                            ent.attributes?.device_class === "power" &&
-                            ent.primaryEntityId?.startsWith("vacuum.")
-                              ? "Solo en HA (RVC Matter no admite potencia)"
-                              : "Auxiliar"}
-                        </span>
+                        ent.primaryEntityId?.startsWith("vacuum.") ? (
+                          <span
+                            className="badge"
+                            style={{
+                              fontSize: "10px",
+                              padding: "2px 7px",
+                              borderRadius: "6px",
+                              background: "rgba(59, 130, 246, 0.14)",
+                              color: "#93c5fd",
+                              border: "1px solid rgba(59, 130, 246, 0.3)",
+                              fontWeight: 550,
+                            }}
+                          >
+                            ✓ RVC Matter
+                          </span>
+                        ) : (
+                          <span
+                            style={{
+                              fontSize: "11px",
+                              color: "var(--muted)",
+                              fontStyle: "italic",
+                            }}
+                          >
+                            Auxiliar
+                          </span>
+                        )
                       ) : (
                         <label className="toggle" style={{ opacity: isBusy ? 0.6 : 1, pointerEvents: isBusy ? "none" : "auto" }}>
                           <input
@@ -1740,10 +1756,8 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                       ? "Este canal forma parte del accesorio unificado y está activo en Matter bajo el mismo código QR."
                       : "Activa el interruptor general arriba para publicar el accesorio (ventilador y luz juntos en 1 QR)."
                     : activeEntity?.auxiliary
-                    ? activeEntity.domain === "sensor" &&
-                      activeEntity.attributes?.device_class === "power" &&
-                      activeEntity.primaryEntityId?.startsWith("vacuum.")
-                      ? "La lectura sigue disponible en Home Assistant. El perfil Matter RVC no define potencia eléctrica como clúster y no se exporta dentro del QR de la aspiradora para mantener compatibilidad con Apple Home."
+                    ? activeEntity?.primaryEntityId?.startsWith("vacuum.")
+                      ? "Esta entidad forma parte de la aspiradora robot (RVC Matter 1.4) y sus estados/modos se sincronizan automáticamente con Apple Home (iOS 27)."
                       : "Esta entidad es auxiliar (ej. segmento RGBIC) y se controla automáticamente a través de la luz principal."
                     : isMultiSwitch
                     ? isExported

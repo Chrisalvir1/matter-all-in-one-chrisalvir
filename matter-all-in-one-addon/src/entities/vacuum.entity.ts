@@ -64,47 +64,86 @@ export class VacuumEntity extends BaseEntity {
     const deviceId = entityRegistry?.device_id;
 
     if (deviceId) {
-      const selectors: Array<{
+      const candidates: Array<{
         entityId: string;
         options: string[];
         state?: string;
-        name: string;
+        score: number;
       }> = [];
+
       for (const [id, reg] of this.platform.ha?.hassEntities?.entries() ?? []) {
         if (reg.device_id === deviceId && id.startsWith("select.")) {
           const stateObj = this.platform.ha?.hassStates?.get(id);
-          const options = Array.isArray(stateObj?.attributes?.options)
+          const options: string[] = Array.isArray(stateObj?.attributes?.options)
             ? stateObj.attributes.options
             : [];
-          if (options.length > 0) {
-            selectors.push({
-              entityId: id,
-              options,
-              state: stateObj?.state,
-              name: `${id} ${stateObj?.attributes?.friendly_name ?? reg.name ?? ""}`.toLowerCase(),
-            });
+          if (options.length === 0) continue;
+
+          const lowerId = id.toLowerCase();
+          const friendly = String(
+            stateObj?.attributes?.friendly_name ?? "",
+          ).toLowerCase();
+          const supportedCleanModes = getSupportedVacuumCleanModes(options);
+
+          // Skip manual directional selectors if they have no clean modes
+          const isDirectionSelector =
+            /(control_manual|direction|direccion|manual_control)/i.test(
+              `${lowerId} ${friendly}`,
+            ) ||
+            options.some((o) =>
+              ["forward", "backward", "turn_left", "turn_right"].includes(
+                String(o).toLowerCase(),
+              ),
+            );
+          if (isDirectionSelector && supportedCleanModes.length === 0) {
+            continue;
           }
+
+          let score = supportedCleanModes.length * 10;
+          if (
+            /(modo_de_limpieza|clean_mode|cleaning_mode|work_mode|_modo$|_mode$)/i.test(
+              lowerId,
+            ) ||
+            /(modo de limpieza|clean mode|cleaning mode)/i.test(friendly)
+          ) {
+            score += 50;
+          }
+          if (
+            options.some((o) =>
+              ["chargego", "smart", "spiral", "wall_follow"].includes(
+                String(o).toLowerCase(),
+              ),
+            )
+          ) {
+            score += 25;
+          }
+
+          candidates.push({
+            entityId: id,
+            options,
+            state: stateObj?.state,
+            score,
+          });
         }
       }
-      const namedMode = selectors.find((selector) =>
-        /mode|modo|clean|limp|aspir/i.test(selector.name),
-      );
-      const selected =
-        namedMode ?? (selectors.length === 1 ? selectors[0] : undefined);
-      if (selected) {
+
+      if (candidates.length > 0) {
+        candidates.sort((a, b) => b.score - a.score);
+        const best = candidates[0]!;
         return {
-          entityId: selected.entityId,
-          options: selected.options,
-          state: selected.state,
+          entityId: best.entityId,
+          options: best.options,
+          state: best.state,
         };
       }
     }
 
-    const [domain, objectId] = this.entityId.split(".");
+    const [, objectId] = this.entityId.split(".");
     const patterns = [
       `select.${objectId}_modo_de_limpieza`,
       `select.${objectId}_mode`,
       `select.${objectId}_clean_mode`,
+      `select.${objectId}_modo`,
     ];
     for (const pattern of patterns) {
       const stateObj = this.platform.ha?.hassStates?.get(pattern);
@@ -119,81 +158,114 @@ export class VacuumEntity extends BaseEntity {
     return undefined;
   }
 
-  public isLinkedCleanModeSelector(entityId: string): boolean {
-    return this.getLinkedCleanModeSelector()?.entityId === entityId;
-  }
+  /** Locate linked battery sensor entity sharing the same HA device_id or entity name. */
+  public getLinkedBatteryLevel(): number | null {
+    const entityRegistry = this.platform.ha?.hassEntities?.get(this.entityId);
+    const deviceId = entityRegistry?.device_id;
 
-  private getBatteryLevel(state: HassState): number | null {
-    const rawAttributeLevel = state.attributes?.battery_level;
-    if (
-      rawAttributeLevel !== undefined &&
-      rawAttributeLevel !== null &&
-      rawAttributeLevel !== ""
-    ) {
-      const attributeLevel = Number(rawAttributeLevel);
-      if (
-        Number.isFinite(attributeLevel) &&
-        attributeLevel >= 0 &&
-        attributeLevel <= 100
-      ) {
-        return attributeLevel;
+    const parseLevel = (stateObj: any): number | null => {
+      if (!stateObj || isUnavailable(stateObj)) return null;
+      const val = Number(stateObj.state);
+      return Number.isFinite(val)
+        ? Math.min(100, Math.max(0, Math.round(val)))
+        : null;
+    };
+
+    if (deviceId) {
+      for (const [id, reg] of this.platform.ha?.hassEntities?.entries() ?? []) {
+        if (reg.device_id === deviceId && id.startsWith("sensor.")) {
+          const stateObj = this.platform.ha?.hassStates?.get(id);
+          const dc = String(
+            stateObj?.attributes?.device_class ?? "",
+          ).toLowerCase();
+          const unit = String(stateObj?.attributes?.unit_of_measurement ?? "");
+          if (
+            dc === "battery" ||
+            (/(battery|bateria)/i.test(id) && unit === "%")
+          ) {
+            const level = parseLevel(stateObj);
+            if (level !== null) return level;
+          }
+        }
       }
     }
 
-    const deviceId = this.platform.ha?.hassEntities?.get(this.entityId)?.device_id;
-    if (!deviceId) return null;
-    for (const [entityId, registryEntry] of this.platform.ha?.hassEntities?.entries() ?? []) {
-      if (
-        registryEntry.device_id !== deviceId ||
-        !entityId.startsWith("sensor.")
-      ) continue;
-      const sensor = this.platform.ha?.hassStates?.get(entityId);
-      if (sensor?.attributes?.device_class !== "battery") continue;
-      if (
-        sensor.state === undefined ||
-        sensor.state === null ||
-        sensor.state === ""
-      ) continue;
-      const level = Number(sensor.state);
-      if (Number.isFinite(level) && level >= 0 && level <= 100) return level;
+    const [, objectId] = this.entityId.split(".");
+    for (const pattern of [
+      `sensor.${objectId}_battery`,
+      `sensor.${objectId}_bateria`,
+      `sensor.${objectId}_battery_level`,
+    ]) {
+      const level = parseLevel(this.platform.ha?.hassStates?.get(pattern));
+      if (level !== null) return level;
     }
+
     return null;
   }
 
-  public async updateLinkedBatteryLevel(value: unknown): Promise<void> {
-    if (
-      !this.endpoint ||
-      value === undefined ||
-      value === null ||
-      value === ""
-    ) return;
-    const level = Number(value);
-    if (!Number.isFinite(level) || level < 0 || level > 100) return;
-    await safeUpdateAttribute(
-      this.endpoint as any,
-      "powerSource" as any,
-      "batPercentRemaining",
-      Math.round(level * 2),
-      this.platform.log,
-    );
+  /** Locate linked return-to-base button entity sharing the same HA device_id or entity name. */
+  public getLinkedDockButton(): string | undefined {
+    const entityRegistry = this.platform.ha?.hassEntities?.get(this.entityId);
+    const deviceId = entityRegistry?.device_id;
+
+    if (deviceId) {
+      for (const [id, reg] of this.platform.ha?.hassEntities?.entries() ?? []) {
+        if (reg.device_id === deviceId && id.startsWith("button.")) {
+          const stateObj = this.platform.ha?.hassStates?.get(id);
+          const label = `${id} ${stateObj?.attributes?.friendly_name ?? ""}`;
+          if (
+            /(volver_a_base|return_to_base|chargego|dock|home|cargar|base)/i.test(
+              label,
+            )
+          ) {
+            return id;
+          }
+        }
+      }
+    }
+
+    const [, objectId] = this.entityId.split(".");
+    for (const candidate of [
+      `button.${objectId}_volver_a_base_2`,
+      `button.${objectId}_volver_a_base`,
+      `button.${objectId}_return_to_base`,
+    ]) {
+      if (this.platform.ha?.hassStates?.has(candidate)) {
+        return candidate;
+      }
+    }
+
+    return undefined;
   }
 
-  public async updateLinkedCleanMode(entityId: string, state: string): Promise<void> {
-    if (!this.endpoint || !this.isLinkedCleanModeSelector(entityId)) return;
-    const selector = this.getLinkedCleanModeSelector();
-    const selected =
-      selector &&
-      getSupportedVacuumCleanModes(selector.options).find(
-        (mode) => mode.option.toLowerCase() === String(state).toLowerCase(),
-      );
-    if (!selected) return;
-    await safeUpdateAttribute(
-      this.endpoint as any,
-      "rvcCleanMode" as any,
-      "currentMode",
-      selected.mode,
-      this.platform.log,
-    );
+  /** Locate linked start cleaning button entity sharing the same HA device_id or entity name. */
+  public getLinkedStartButton(): string | undefined {
+    const entityRegistry = this.platform.ha?.hassEntities?.get(this.entityId);
+    const deviceId = entityRegistry?.device_id;
+
+    if (deviceId) {
+      for (const [id, reg] of this.platform.ha?.hassEntities?.entries() ?? []) {
+        if (reg.device_id === deviceId && id.startsWith("button.")) {
+          const stateObj = this.platform.ha?.hassStates?.get(id);
+          const label = `${id} ${stateObj?.attributes?.friendly_name ?? ""}`;
+          if (/(iniciar_limpieza|start_cleaning|start|limpiar)/i.test(label)) {
+            return id;
+          }
+        }
+      }
+    }
+
+    const [, objectId] = this.entityId.split(".");
+    for (const candidate of [
+      `button.${objectId}_iniciar_limpieza`,
+      `button.${objectId}_start`,
+    ]) {
+      if (this.platform.ha?.hassStates?.has(candidate)) {
+        return candidate;
+      }
+    }
+
+    return undefined;
   }
 
   public override async createEndpoint(): Promise<MatterbridgeEndpoint> {
@@ -242,30 +314,58 @@ export class VacuumEntity extends BaseEntity {
         )?.mode ?? 1)
       : 1;
 
-    const rawAreas = this.state.attributes?.rooms || this.state.attributes?.zones || [];
-    const supportedAreas = Array.isArray(rawAreas)
-      ? rawAreas.map((room: string, idx: number) => ({
-          areaId: idx + 1,
-          mapId: 1,
-          areaInfo: { locationInfo: { locationName: String(room) } },
-        }))
-      : [];
+    const rawAreas =
+      this.state.attributes?.rooms || this.state.attributes?.zones || [];
+    const supportedAreas =
+      Array.isArray(rawAreas) && rawAreas.length > 0
+        ? rawAreas.map((room: string, idx: number) => ({
+            areaId: idx + 1,
+            mapId: null,
+            areaInfo: {
+              locationInfo: {
+                locationName: String(room),
+                floorNumber: 0,
+                areaType: null,
+              },
+              landmarkInfo: null,
+            },
+          }))
+        : undefined;
+
+    const initialUpdate = buildVacuumUpdate(this.state);
+    const isSelectorDocked =
+      cleanSelector?.state?.toLowerCase() === "chargego";
+    const initialOperationalState = this.isManualChargeOnly()
+      ? initialUpdate.onOff
+        ? 1
+        : 0
+      : isSelectorDocked
+        ? 66 // Docked
+        : initialUpdate.operationalState === 0 &&
+            this.state.state.toLowerCase() === "docked"
+          ? 66
+          : initialUpdate.operationalState;
+    const initialRunMode =
+      !isSelectorDocked && initialUpdate.onOff
+        ? RUN_MODE_ID_CLEANING
+        : RUN_MODE_ID_IDLE;
 
     this.endpoint = new RoboticVacuumCleaner(uniqueName, serialNumber, {
       mode: "server" as const,
-      currentRunMode: RUN_MODE_ID_IDLE,
+      currentRunMode: initialRunMode,
       supportedRunModes,
       currentCleanMode: initialCleanMode,
       supportedCleanModes,
       currentPhase: null,
       phaseList: null,
-      operationalState: 0,
+      operationalState: initialOperationalState,
       operationalStateList,
       supportedAreas: supportedAreas as any,
       selectedAreas: [],
       currentArea: null,
       supportedMaps: [],
     });
+
     this.endpoint.deviceType = this.deviceType.code;
     this.endpoint.deviceName = uniqueName;
     this.endpoint.uniqueId = stableId;
@@ -330,22 +430,32 @@ export class VacuumEntity extends BaseEntity {
     isInitialSync = false,
   ): Promise<void> {
     const update = buildVacuumUpdate(state as any);
+    const cleanSelector = this.getLinkedCleanModeSelector();
+    const isSelectorDocked =
+      cleanSelector?.state?.toLowerCase() === "chargego";
+    const isChargingOrDocked = update.isChargingOrDocked || isSelectorDocked;
+    const effectiveOperationalState = isSelectorDocked
+      ? 66 // Docked
+      : update.operationalState;
+    const effectiveOnOff = !isSelectorDocked && update.onOff;
     const syncFunc = isInitialSync ? safeSetAttribute : safeUpdateAttribute;
 
     try {
       const now = Date.now();
       const commandCooldown = now - this.lastCommandTime < 15000;
 
-      if (!commandCooldown || isInitialSync || update.isChargingOrDocked) {
+      if (!commandCooldown || isInitialSync || isChargingOrDocked) {
         await syncFunc(
           endpoint as any,
           "rvcOperationalState" as any,
           "operationalState",
-          update.operationalState,
+          effectiveOperationalState,
           this.platform.log,
         );
 
-        const runMode = update.onOff ? RUN_MODE_ID_CLEANING : RUN_MODE_ID_IDLE;
+        const runMode = effectiveOnOff
+          ? RUN_MODE_ID_CLEANING
+          : RUN_MODE_ID_IDLE;
         await syncFunc(
           endpoint as any,
           "rvcRunMode" as any,
@@ -355,7 +465,6 @@ export class VacuumEntity extends BaseEntity {
         );
       }
 
-      const cleanSelector = this.getLinkedCleanModeSelector();
       if (cleanSelector?.state) {
         const activeMatch = getSupportedVacuumCleanModes(
           cleanSelector.options,
@@ -373,7 +482,8 @@ export class VacuumEntity extends BaseEntity {
         }
       }
 
-      const batteryLevel = this.getBatteryLevel(state);
+      const batteryLevel =
+        update.batteryLevel ?? this.getLinkedBatteryLevel();
       if (batteryLevel !== null) {
         await syncFunc(
           endpoint as any,
@@ -388,7 +498,7 @@ export class VacuumEntity extends BaseEntity {
         endpoint as any,
         "powerSource" as any,
         "batChargeState",
-        update.isChargingOrDocked || state.state.toLowerCase() === "docked"
+        isChargingOrDocked || state.state.toLowerCase() === "docked"
           ? 1
           : 3,
         this.platform.log,
@@ -603,28 +713,29 @@ export class VacuumEntity extends BaseEntity {
           action = "turn_off";
         }
       } else if (service === "vacuum.return_to_base") {
+        const linkedDockBtn = this.getLinkedDockButton();
+        const linkedCleanSelect = this.getLinkedCleanModeSelector();
+        const hasChargeGoOption = linkedCleanSelect?.options?.some(
+          (o) => String(o).toLowerCase() === "chargego",
+        );
         const objectId = this.state.entity_id.split(".")[1];
-        const btnEntityId2 = `button.${objectId}_volver_a_base_2`;
-        const btnEntityId = `button.${objectId}_volver_a_base`;
         const selectEntityId = `select.${objectId}_modo`;
-
-        const hasBtn2 = this.platform.ha?.hassStates?.has(btnEntityId2);
-        const hasBtn = this.platform.ha?.hassStates?.has(btnEntityId);
         const hasSelect = this.platform.ha?.hassStates?.has(selectEntityId);
 
-        if (hasBtn2) {
+        if (linkedDockBtn) {
           domain = "button";
           action = "press";
-          entityId = btnEntityId2;
+          entityId = linkedDockBtn;
           this.platform.log?.info?.(
-            `[VacuumEntity] Redirecting return_to_base to button.press on ${btnEntityId2}`,
+            `[VacuumEntity] Redirecting return_to_base to button.press on ${linkedDockBtn}`,
           );
-        } else if (hasBtn) {
-          domain = "button";
-          action = "press";
-          entityId = btnEntityId;
+        } else if (linkedCleanSelect && hasChargeGoOption) {
+          domain = "select";
+          action = "select_option";
+          entityId = linkedCleanSelect.entityId;
+          serviceData = { option: "chargego" };
           this.platform.log?.info?.(
-            `[VacuumEntity] Redirecting return_to_base to button.press on ${btnEntityId}`,
+            `[VacuumEntity] Redirecting return_to_base to select.select_option on ${linkedCleanSelect.entityId} with option chargego`,
           );
         } else if (hasSelect) {
           domain = "select";

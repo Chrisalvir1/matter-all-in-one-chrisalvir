@@ -292,4 +292,112 @@ describe("VacuumEntity Apple Home topology and identity", () => {
     // Legitimate operational error reports Error (3)
     expect(endpoint.attributes.get("rvcOperationalState:operationalState")).toBe(3);
   });
+
+  it("prioritizes modo_de_limpieza over control_manual select, leaves supportedAreas undefined when no rooms exist, and reads linked battery sensor", async () => {
+    const entityId = "vacuum.sala_tv_robotina";
+    const manualSelectId = "select.sala_tv_robotina_control_manual";
+    const cleanSelectId = "select.sala_tv_robotina_modo_de_limpieza";
+    const dockButtonId = "button.sala_tv_robotina_volver_a_base";
+    const batterySensorId = "sensor.sala_tv_robotina_battery";
+
+    const platform = {
+      matterbridge: { matterbridgeVersion: "3.10.14" },
+      log: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), notice: vi.fn(), warn: vi.fn() },
+      ha: {
+        callService: vi.fn().mockResolvedValue(undefined),
+        hassEntities: new Map([
+          [entityId, { id: "reg-vac", device_id: "robotina-device" }],
+          [manualSelectId, { id: "reg-man", device_id: "robotina-device" }],
+          [cleanSelectId, { id: "reg-clean", device_id: "robotina-device" }],
+          [dockButtonId, { id: "reg-dock", device_id: "robotina-device" }],
+          [batterySensorId, { id: "reg-bat", device_id: "robotina-device" }],
+        ]),
+        hassDevices: new Map([
+          ["robotina-device", { serial_number: "bf4ae2b69ab212b227zupl" }],
+        ]),
+        hassStates: new Map([
+          [
+            manualSelectId,
+            {
+              entity_id: manualSelectId,
+              state: "stop",
+              attributes: {
+                friendly_name: "ROBOTINA Control manual",
+                options: ["stop", "forward", "backward", "turn_left", "turn_right"],
+              },
+            },
+          ],
+          [
+            cleanSelectId,
+            {
+              entity_id: cleanSelectId,
+              state: "chargego",
+              attributes: {
+                friendly_name: "ROBOTINA Modo de limpieza",
+                options: ["smart", "wall_follow", "spiral", "chargego", "random", "standby"],
+              },
+            },
+          ],
+          [
+            dockButtonId,
+            {
+              entity_id: dockButtonId,
+              state: "unknown",
+              attributes: { friendly_name: "ROBOTINA Volver a base" },
+            },
+          ],
+          [
+            batterySensorId,
+            {
+              entity_id: batterySensorId,
+              state: "100",
+              attributes: {
+                friendly_name: "ROBOTINA Battery",
+                device_class: "battery",
+                unit_of_measurement: "%",
+              },
+            },
+          ],
+        ]),
+      },
+    };
+
+    const state = {
+      entity_id: entityId,
+      state: "cleaning", // Even if Tuya leaves state at cleaning while mode is chargego
+      attributes: { friendly_name: "ROBOTINA" },
+      last_changed: "",
+      last_updated: "",
+    };
+
+    const vacuum = new VacuumEntity(
+      platform as any,
+      state as any,
+      MatterDeviceTypes.roboticVacuumCleaner,
+    );
+    const endpoint = (await vacuum.createEndpoint()) as any;
+
+    // Must leave supportedAreas undefined so Matterbridge uses valid default areas instead of []
+    expect(endpoint.supportedAreas).toBeUndefined();
+    // Must pick cleanSelectId and NOT manualSelectId
+    expect(vacuum.getLinkedCleanModeSelector()?.entityId).toBe(cleanSelectId);
+    expect(endpoint.supportedCleanModes).toHaveLength(4);
+    // Because cleanSelectId is in state 'chargego', initial operationalState is 66 (Docked)
+    expect(endpoint.initialOperationalState).toBe(66);
+    expect(endpoint.initialRunMode).toBe(1);
+
+    // Sync state and verify battery sensor fallback (100% -> 200 in Matter) and Docked state (66)
+    await vacuum.updateState(state as any, true);
+    expect(endpoint.attributes.get("powerSource:batPercentRemaining")).toBe(200);
+    expect(endpoint.attributes.get("rvcOperationalState:operationalState")).toBe(66);
+
+    // Verify goHome command uses linked dock button on same device_id
+    await endpoint.invokeCommand("RvcOperationalState.goHome", {});
+    expect(platform.ha.callService).toHaveBeenCalledWith(
+      "button",
+      "press",
+      dockButtonId,
+      {},
+    );
+  });
 });

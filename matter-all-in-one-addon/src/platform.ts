@@ -225,6 +225,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   );
   /** Exported keys whose HA entities were absent at restore time (late integrations). */
   private readonly pendingRestore = new Set<string>();
+  /** Entity IDs already evaluated by refreshDiscoveryCatalog to prevent O(N) scans on every UI poll. */
+  private readonly catalogedHaEntityIds = new Set<string>();
   /**
    * HA can emit several state_changed events for the same entity in a single
    * tick.  Coalescing those events keeps Matter attribute transactions from
@@ -2404,10 +2406,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   /** Refresh the panel catalogue from the latest HA state cache on demand. */
   private async refreshDiscoveryCatalog(): Promise<void> {
     if (!this.ha?.hassStates) return;
-    if (this.entities.size === this.ha.hassStates.size) return;
+    if (this.catalogedHaEntityIds.size >= this.ha.hassStates.size) return;
     for (const state of this.ha.hassStates.values()) {
-      if (!this.entities.has(state.entity_id)) {
-        await this.registerHAEntity(state);
+      if (!this.catalogedHaEntityIds.has(state.entity_id)) {
+        this.catalogedHaEntityIds.add(state.entity_id);
+        if (!this.entities.has(state.entity_id)) {
+          await this.registerHAEntity(state);
+        }
       }
     }
   }
@@ -2574,24 +2579,6 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       return undefined;
     }
     const compositeDeviceId = config?.device_id ?? deviceId;
-    // Matter RVC must be the root accessory. A generic composite rooted at a
-    // power/telemetry sensor is exposed to Apple Home as that sensor (often a
-    // lightning/electrical icon), even if the UI selected an RVC profile.
-    // Keep vacuum entities on their dedicated roboticVacuumCleaner publisher;
-    // VacuumEntity already attaches linked battery and clean-mode capabilities.
-    const hasVacuumEntity = Array.from(this.entities.values()).some((entity) => {
-      const hassEntry = this.ha.hassEntities.get(entity.entityId);
-      return (
-        entity.entityId.startsWith("vacuum.") &&
-        hassEntry?.device_id === compositeDeviceId
-      );
-    });
-    if (hasVacuumEntity) {
-      this.log.debug(
-        `[Composite] ${entityId}: device ${compositeDeviceId} has a vacuum entity — keeping the RVC accessory standalone`,
-      );
-      return undefined;
-    }
     const excluded = new Set(config?.exclude_entities ?? []);
     const explicitlyIncluded = config?.include_entities;
     const supported = new Set([
@@ -2622,8 +2609,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         return false;
       }
 
-      // Exclude unnamed generic Tuya DPS entities
+      // Exclude unnamed generic Tuya DPS entities and auxiliary companion entities (e.g. vacuum sensors)
       if (this.isDpsGenericEntity(entity.entityId)) return false;
+      if (this.isAuxiliaryEntity(entity.entityId)) return false;
 
       return true;
     });
@@ -2866,7 +2854,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   }
 
   private getPrimaryEntityId(entityId: string): string | undefined {
-    const deviceId = this.ha.hassEntities.get(entityId)?.device_id;
+    const deviceId = this.ha?.hassEntities?.get(entityId)?.device_id;
     if (!deviceId) return undefined;
     const priority = [
       "camera",
@@ -2883,16 +2871,40 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     const candidates = Array.from(this.entities.values())
       .filter(
         (entity) =>
-          this.ha.hassEntities.get(entity.entityId)?.device_id === deviceId,
+          this.ha?.hassEntities?.get(entity.entityId)?.device_id === deviceId,
       )
       .sort(
         (left, right) =>
           priority.indexOf(left.entityId.split(".")[0]) -
           priority.indexOf(right.entityId.split(".")[0]),
       );
-    return candidates.find((entity) =>
+    const foundInEntities = candidates.find((entity) =>
       priority.includes(entity.entityId.split(".")[0]),
     )?.entityId;
+    if (foundInEntities) return foundInEntities;
+
+    // Fallback to hassEntities if primary entity hasn't been registered yet during initial pass
+    for (const domain of priority) {
+      for (const [id, reg] of this.ha?.hassEntities?.entries() ?? []) {
+        if (reg.device_id === deviceId && id.startsWith(`${domain}.`)) {
+          return id;
+        }
+      }
+    }
+    return undefined;
+  }
+
+  /** Returns true when this entity belongs to the same physical HA device as a `vacuum.*` entity. */
+  private isVacuumCompanionEntity(entityId: string): boolean {
+    if (entityId.startsWith("vacuum.")) return false;
+    const deviceId = this.ha?.hassEntities?.get(entityId)?.device_id;
+    if (!deviceId) return false;
+    for (const [id, reg] of this.ha?.hassEntities?.entries() ?? []) {
+      if (reg.device_id === deviceId && id.startsWith("vacuum.")) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private isAuxiliaryEntity(entityId: string): boolean {
@@ -2902,21 +2914,16 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     }
     const [domain] = entityId.split(".");
     const primary = this.getPrimaryEntityId(entityId);
-    if (!primary || primary === entityId || !primary.startsWith("vacuum.")) {
-      return domain === "button" && primary !== undefined && primary !== entityId;
-    }
-    if (domain === "button") return true;
-    const state =
-      this.ha.hassStates?.get(entityId) ?? this.entities.get(entityId)?.state;
-    if (domain === "sensor" && state?.attributes?.device_class === "battery") {
+    if (!primary || primary === entityId) return false;
+
+    if (domain === "button" || domain === "select") {
       return true;
     }
-    if (domain === "sensor" && state?.attributes?.device_class === "power") {
+    if (
+      primary.startsWith("vacuum.") &&
+      (domain === "sensor" || domain === "binary_sensor")
+    ) {
       return true;
-    }
-    if (domain === "select") {
-      const vacuum = this.entities.get(primary);
-      return vacuum instanceof VacuumEntity && vacuum.isLinkedCleanModeSelector(entityId);
     }
     return false;
   }
@@ -3873,7 +3880,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       );
 
       if (states.length > 0) {
-        for (const hassState of states) await this.registerHAEntity(hassState);
+        this.catalogedHaEntityIds.clear();
+        for (const hassState of states) {
+          this.catalogedHaEntityIds.add(hassState.entity_id);
+          await this.registerHAEntity(hassState);
+        }
         const currentEntityIds = new Set(states.map((state) => state.entity_id));
         for (const entityId of [...this.entities.keys()]) {
           if (currentEntityIds.has(entityId)) continue;
@@ -3960,9 +3971,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       "humidifier",
       "siren",
     ];
+    const isVacuumCompanion =
+      !this.isDpsGenericEntity(entityId) &&
+      this.isVacuumCompanionEntity(entityId);
     if (
       !allowedDomains.includes(domain) &&
-      !(domain === "button" && override === "PetFeeder")
+      !(domain === "button" && override === "PetFeeder") &&
+      !(isVacuumCompanion && (domain === "select" || domain === "button"))
     )
       return;
 
@@ -3971,6 +3986,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     const deviceClass = state.attributes.device_class;
     if (
       domain === "sensor" &&
+      !isVacuumCompanion &&
       ![
         "temperature",
         "humidity",
@@ -3983,6 +3999,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       return;
     if (
       domain === "binary_sensor" &&
+      !isVacuumCompanion &&
       ![
         "door",
         "window",
@@ -4887,7 +4904,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
    * Matterbridge can leave unregisterDevice pending while a controller has just
    * removed its fabric. Do not leave the UI toggle blocked behind that cleanup.
    */
-  private async unregisterDeviceBounded(endpoint: any, context: string): Promise<void> {
+  private async unregisterDeviceBounded(
+    endpoint: any,
+    context: string,
+    timeoutMs = 2000,
+  ): Promise<void> {
     let completed = false;
     const operation = this.unregisterDevice(endpoint)
       .catch((error) => {
@@ -4898,21 +4919,36 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       });
     await Promise.race([
       operation,
-      new Promise<void>((resolve) => setTimeout(resolve, 5000)),
+      new Promise<void>((resolve) => setTimeout(resolve, timeoutMs)),
     ]);
     if (!completed) {
-      this.log.warn(`[Matter] ${context}: unregister is still cleaning up; export state was removed.`);
+      this.log.warn(
+        `[Matter] ${context}: unregister is still cleaning up; export state was removed.`,
+      );
     }
   }
 
   /** Stop and unregister a composite node while keeping its export selection. */
-  private async disposeCompositeNode(deviceId: string): Promise<void> {
+  private async disposeCompositeNode(
+    deviceId: string,
+    closeNode = false,
+  ): Promise<void> {
     const key = this.compositeStorageKey(deviceId);
     const endpoint =
       (this.matterbridgeDevices.get(key) as any) ||
       this.getDeviceByUniqueId(`device_${deviceId}`) ||
       this.getDeviceById(`device_${deviceId}`);
-    if (endpoint) await this.unregisterDeviceBounded(endpoint, `composite ${deviceId}`);
+    if (endpoint) {
+      if (closeNode && endpoint.serverNode?.lifecycle?.isOnline) {
+        try {
+          await Promise.race([
+            endpoint.serverNode.close(),
+            new Promise<void>((res) => setTimeout(res, 1500)),
+          ]);
+        } catch {}
+      }
+      await this.unregisterDeviceBounded(endpoint, `composite ${deviceId}`);
+    }
     this.matterbridgeDevices.delete(key);
 
     const members =
@@ -4927,11 +4963,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   }
 
   /**
-   * Factory-reset one Matter accessory. When its live ServerNode is available,
-   * use Matter.js erase() in place: it clears every fabric and reopens
-   * commissioning while preserving Matterbridge's required storedId and the
-   * selected Matter profile. Recreating a node after deleting its persist
-   * context can fail with "No value found for key storedId".
+   * Factory-reset an accessory and rebuild its endpoint tree from the latest
+   * Home Assistant capabilities. Matter descriptors are immutable after
+   * commissioning, so erasing fabrics alone cannot add ColorControl to a
+   * light that was first published as on/off-only.
    */
   public async resetMatterAccessory(entityId: string): Promise<{
     success: boolean;
@@ -4969,58 +5004,6 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     }
 
     try {
-      const hasLiveMatterState = Boolean(
-        serverNode?.state ||
-          serverNode?.behaviors?.operationalCredentials?.state ||
-          serverNode?.behaviors?.commissioning?.state,
-      );
-      if (
-        serverNode &&
-        hasLiveMatterState &&
-        typeof (serverNode as any).erase === "function"
-      ) {
-        await (serverNode as any).erase();
-        if (!serverNode.lifecycle?.isOnline) await serverNode.start();
-
-        let connection = this.getMatterConnectionInfo(endpoint);
-        for (let attempt = 0; attempt < 30; attempt++) {
-          if (
-            connection.fabricCount === 0 &&
-            (connection.pairingCode || connection.manualPairingCode)
-          ) {
-            break;
-          }
-          await new Promise((resolve) => setTimeout(resolve, 200));
-          connection = this.getMatterConnectionInfo(endpoint);
-        }
-        if (connection.fabricCount !== 0) {
-          throw new Error(
-            `Matter erase finished but ${connection.fabricCount} fabric(s) remain.`,
-          );
-        }
-        if (!connection.pairingCode && !connection.manualPairingCode) {
-          throw new Error(
-            "Matter fabric reset succeeded, but the new pairing code is not ready.",
-          );
-        }
-
-        this.clearMatterAccessoryProblems(entityId, compositeDeviceId);
-        this.recordEntityDiagnostic(
-          entityId,
-          "✓ Accesorio desvinculado de todas las casas. Nuevo código QR generado; se conservó el perfil Matter.",
-          "info",
-        );
-        this.pushEntityUpdate(entityId);
-        this.log.notice(
-          `Matter accessory erased in place; all fabrics cleared and commissioning reopened for ${compositeDeviceId ? `device:${compositeDeviceId}` : entityId}`,
-        );
-        return {
-          success: true,
-          pairingCode: connection.pairingCode ?? null,
-          manualPairingCode: connection.manualPairingCode ?? null,
-        };
-      }
-
       const friendlyName =
         entity?.state?.attributes?.friendly_name ?? entityId;
       const storeId = String(endpoint?.deviceName ?? friendlyName).replace(
@@ -5028,20 +5011,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         "",
       );
 
-      // 1. In-memory cleanup before stopping the node
-      if (serverNode) {
-        try {
-          if (typeof (serverNode as any).resetStorage === "function") {
-            await (serverNode as any).resetStorage();
-          }
-        } catch (e) {
-          this.log.debug(`[Reset] ServerNode resetStorage: ${e}`);
-        }
-      }
-
-      // 2. Shut down and unregister all matching old endpoints across all registries
+      // 1. Shut down and unregister all matching old endpoints across all registries
       if (compositeDeviceId) {
-        await this.disposeCompositeNode(compositeDeviceId);
+        await this.disposeCompositeNode(compositeDeviceId, true);
       } else {
         const uniqueId = entityId.replaceAll(".", "_");
         const endpointsToUnregister = new Set<any>();
@@ -5066,9 +5038,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           if (byUid) endpointsToUnregister.add(byUid);
         }
         if (typeof this.getDeviceByName === "function") {
-          const byNm1 = endpoint?.deviceName ? this.getDeviceByName(endpoint.deviceName) : undefined;
+          const byNm1 = endpoint?.deviceName
+            ? this.getDeviceByName(endpoint.deviceName)
+            : undefined;
           if (byNm1) endpointsToUnregister.add(byNm1);
-          const byNm2 = friendlyName ? this.getDeviceByName(friendlyName) : undefined;
+          const byNm2 = friendlyName
+            ? this.getDeviceByName(friendlyName)
+            : undefined;
           if (byNm2) endpointsToUnregister.add(byNm2);
         }
 
@@ -5078,15 +5054,40 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             try {
               await Promise.race([
                 node.close(),
-                new Promise<void>((res) => setTimeout(res, 2000)),
+                new Promise<void>((res) => setTimeout(res, 1500)),
               ]);
             } catch (e) {
               this.log.debug(`[Reset] Error closing serverNode: ${e}`);
             }
           }
-          await this.unregisterDeviceBounded(ep, `reset ${entityId}`);
+          await this.unregisterDeviceBounded(ep, `reset ${entityId}`, 1500);
         }
         this.matterbridgeDevices.delete(entityId);
+      }
+
+      // 2. Close cached storage manager BEFORE purging disk storage so Matterbridge
+      // creates a clean storage context when the new node is registered.
+      const bridgeRuntime = this.matterbridge as any;
+      const managedStorage =
+        bridgeRuntime?.serverNodeStorageManagers?.get?.(storeId);
+      if (managedStorage) {
+        try {
+          await managedStorage.createContext?.("persist")?.clearAll?.();
+          await managedStorage.createContext?.("fabrics")?.clearAll?.();
+          await managedStorage.createContext?.("commissioning")?.clearAll?.();
+          await managedStorage
+            .createContext?.("operationalCredentials")
+            ?.clearAll?.();
+        } catch (e) {
+          this.log.debug(
+            `[Reset] Storage context clear error for ${storeId}: ${e}`,
+          );
+        } finally {
+          try {
+            await managedStorage.close?.();
+          } catch {}
+          bridgeRuntime?.serverNodeStorageManagers?.delete?.(storeId);
+        }
       }
 
       // 3. Purge all persisted storage folders for this node from disk
@@ -5140,41 +5141,19 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         }
       }
 
-      // 4. Legacy storage service context clear
-      const bridgeRuntime = this.matterbridge as any;
-      const managedStorage =
-        bridgeRuntime.serverNodeStorageManagers?.get?.(storeId);
-      const storageService = bridgeRuntime.matterStorageService;
-      const storageManager =
-        managedStorage ??
-        (await storageService?.open?.(storeId).catch(() => undefined));
-      if (storageManager) {
-        try {
-          await storageManager.createContext?.("persist")?.clearAll?.();
-          await storageManager.createContext?.("fabrics")?.clearAll?.();
-          await storageManager.createContext?.("commissioning")?.clearAll?.();
-          await storageManager
-            .createContext?.("operationalCredentials")
-            ?.clearAll?.();
-        } catch (e) {
-          this.log.debug(
-            `[Reset] Storage context clear error for ${storeId}: ${e}`,
-          );
-        } finally {
-          try {
-            await storageManager.close?.();
-          } catch {}
-          bridgeRuntime.serverNodeStorageManagers?.delete?.(storeId);
-        }
-      }
-
       // Guarantee that any remaining device with the same name/uniqueId in MatterbridgePlatform is evicted before recreate
       if (typeof this.hasDeviceName === "function") {
-        for (const nameCandidate of [endpoint?.deviceName, friendlyName].filter(Boolean) as string[]) {
+        for (const nameCandidate of [endpoint?.deviceName, friendlyName].filter(
+          Boolean,
+        ) as string[]) {
           if (this.hasDeviceName(nameCandidate)) {
             const lingering = this.getDeviceByName(nameCandidate);
             if (lingering) {
-              await this.unregisterDeviceBounded(lingering, `purge lingering name ${nameCandidate}`);
+              await this.unregisterDeviceBounded(
+                lingering,
+                `purge lingering name ${nameCandidate}`,
+                1500,
+              );
             }
           }
         }
@@ -5196,8 +5175,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         ? this.getMatterConnectionInfo(newEndpoint)
         : undefined;
       if (!connection?.pairingCode && newEndpoint) {
-        for (let attempt = 0; attempt < 30; attempt++) {
-          await new Promise((r) => setTimeout(r, 200));
+        for (let attempt = 0; attempt < 10; attempt++) {
+          await new Promise((r) => setTimeout(r, 100));
           connection = this.getMatterConnectionInfo(newEndpoint);
           if (connection?.pairingCode) break;
         }
@@ -5863,9 +5842,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     if (!entity)
       return { success: false, error: "Device not found in discovery." };
     const [domain] = entityId.split(".");
-    const deviceClass = entity.state.attributes?.device_class;
     if (
-      !getExportProfile(domain, profileId, deviceClass) ||
+      !getExportProfile(domain, profileId) ||
       !(MatterDeviceTypes as any)[profileId]
     ) {
       return {
@@ -5884,8 +5862,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       const wasExported = this.exportedDevices.has(entityId);
       const state = entity.state;
       if (wasExported) await this.manualUnregister(entityId);
-      this.deviceOverrides[entityId] =
-        profileId === "energyTariff" ? "electricalSensor" : profileId;
+      this.deviceOverrides[entityId] = profileId;
       await this.saveDeviceOverrides();
       this.entities.delete(entityId);
       this.matterbridgeDevices.delete(entityId);
@@ -5924,29 +5901,6 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     // This sensor need not be exported to Matter to drive HAP/HKSV.
     this.syncLinkedCameraUiMotion(entityId, newState);
     const entity = this.entities.get(entityId);
-    const entityRegistry = this.ha?.hassEntities?.get(entityId);
-    const isLinkedBattery =
-      entityId.startsWith("sensor.") &&
-      newState.attributes?.device_class === "battery";
-    const isLinkedMode = entityId.startsWith("select.");
-    if ((isLinkedBattery || isLinkedMode) && entityRegistry?.device_id) {
-      const vacuumId = Array.from(this.entities.keys()).find((candidateId) =>
-        candidateId.startsWith("vacuum.") &&
-        this.ha?.hassEntities?.get(candidateId)?.device_id ===
-          entityRegistry.device_id,
-      );
-      const vacuum = vacuumId ? this.entities.get(vacuumId) : undefined;
-      if (vacuum instanceof VacuumEntity) {
-        const update = isLinkedBattery
-          ? vacuum.updateLinkedBatteryLevel(newState.state)
-          : vacuum.updateLinkedCleanMode(entityId, newState.state);
-        void update.catch((error) =>
-          this.log.debug(
-            `[VacuumEntity] Linked capability update failed for ${vacuumId}: ${String(error)}`,
-          ),
-        );
-      }
-    }
     if (!entity) {
       // Sensor-only HA entities are not necessarily Matter entities, but they
       // can be a live capability of a HAP accessory for the same device.
@@ -6264,15 +6218,20 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       }
     }
 
-    if (entityId.startsWith("select.")) {
-      const deviceId = this.ha.hassEntities.get(entityId)?.device_id;
+    if (
+      entityId.startsWith("select.") ||
+      entityId.startsWith("sensor.") ||
+      entityId.startsWith("binary_sensor.") ||
+      entityId.startsWith("button.")
+    ) {
+      const deviceId = this.ha?.hassEntities?.get(entityId)?.device_id;
       for (const [vId, vEntity] of this.entities.entries()) {
         if (
           vId.startsWith("vacuum.") &&
           vEntity instanceof VacuumEntity &&
           this.isEntityExported(vId)
         ) {
-          const vDeviceId = this.ha.hassEntities.get(vId)?.device_id;
+          const vDeviceId = this.ha?.hassEntities?.get(vId)?.device_id;
           if (
             (deviceId && vDeviceId === deviceId) ||
             entityId.includes(vId.split(".")[1])
@@ -7021,6 +6980,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               media_player: "Speaker",
               sensor: "Sensor",
               binary_sensor: "BinarySensor",
+              select: "Selector",
+              button: "Button",
             };
             const typeLabel =
               (e.constructor as any).matterTypeLabel ||
@@ -7042,9 +7003,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               attributes: { friendly_name: friendlyName, ...e.state.attributes },
               deviceTypeLabel: typeLabel,
               matterType:
-                domain === "sensor"
-                  ? e.deviceType.name
-                  : domain === "fan"
+                domain === "fan"
                   ? "fan"
                   : domain === "humidifier"
                     ? "humidifier"
@@ -7060,25 +7019,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               auxiliary: this.isAuxiliaryEntity(e.entityId),
               primaryEntityId: this.getPrimaryEntityId(e.entityId) ?? null,
               profileId:
-                (getExportProfile(
-                  domain,
-                  this.deviceOverrides[e.entityId],
-                  e.state.attributes?.device_class,
-                )
-                  ? this.deviceOverrides[e.entityId] === "energyTariff"
-                    ? "electricalSensor"
-                    : this.deviceOverrides[e.entityId]
-                  : undefined) ??
+                this.deviceOverrides[e.entityId] ??
                 this.getAutomaticProfile(e.entityId, e.state) ??
-                getDefaultExportProfileId(
-                  domain,
-                  e.state.attributes?.device_class,
-                ) ??
+                getDefaultExportProfileId(domain) ??
                 null,
-              profiles: getExportProfiles(
-                domain,
-                e.state.attributes?.device_class,
-              ),
+              profiles: getExportProfiles(domain),
               pairingCode: connection.pairingCode,
               manualPairingCode: connection.manualPairingCode,
               commissioned:

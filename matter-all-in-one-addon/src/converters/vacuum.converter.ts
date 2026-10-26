@@ -113,13 +113,17 @@ export function haVacuumIsActive(haState: HaVacuumState): boolean {
  * physical robot is already in its base. Prefer an explicit charging/docked
  * status from the integration over that stale activity state.
  */
-export function isVacuumChargingOrDocked(entity: HassState): boolean {
+export function isVacuumChargingOrDocked(
+  entity: HassState,
+  extraSignals: Array<string | undefined | null> = [],
+): boolean {
   const attributes = entity.attributes ?? {};
   const rawDps = attributes.raw_dps;
   const signals = [
     attributes.status,
     attributes.activity,
     attributes.state,
+    ...extraSignals,
     ...(rawDps && typeof rawDps === "object"
       ? Object.values(rawDps as Record<string, unknown>)
       : []),
@@ -131,6 +135,7 @@ export function isVacuumChargingOrDocked(entity: HassState): boolean {
     return [
       "charging",
       "charge",
+      "chargego",
       "docked",
       "on_charge",
       "in_charge",
@@ -275,15 +280,25 @@ const CLEAN_MODE_MAPPING: Record<
   smart: { mode: 1, label: "Automático", modeTag: 0x0000 }, // Auto
   auto: { mode: 1, label: "Automático", modeTag: 0x0000 },
   random: { mode: 2, label: "Aleatorio", modeTag: 0x0001 }, // Quick
+  quick: { mode: 2, label: "Rápido", modeTag: 0x0001 },
   wall_follow: { mode: 3, label: "Seguimiento de pared", modeTag: 0x0002 }, // Quiet
   edge: { mode: 3, label: "Seguimiento de pared", modeTag: 0x0002 },
-  spiral: { mode: 4, label: "Espiral", modeTag: 0x4000 },
+  quiet: { mode: 3, label: "Silencioso", modeTag: 0x0002 },
+  silent: { mode: 3, label: "Silencioso", modeTag: 0x0002 },
+  spiral: { mode: 4, label: "Espiral", modeTag: 0x4000 }, // DeepClean
   spot: { mode: 4, label: "Espiral", modeTag: 0x4000 },
+  partial: { mode: 4, label: "Puntual", modeTag: 0x4000 },
+  deep: { mode: 4, label: "Profundo", modeTag: 0x4000 },
+  mop: { mode: 5, label: "Trapeado", modeTag: 0x4002 }, // Mop
+  single: { mode: 6, label: "Habitación", modeTag: 0x0007 }, // Max
+  room: { mode: 6, label: "Habitación", modeTag: 0x0007 },
+  zone: { mode: 6, label: "Zona", modeTag: 0x0007 },
 };
 
 /**
  * Filters and maps HA clean mode selector options to valid RVC Clean Mode definitions.
- * Explicitly excludes non-clean options such as 'standby', 'chargego', 'manual', 'stop'.
+ * Explicitly excludes non-clean options such as 'standby', 'chargego', 'manual', 'stop',
+ * and directional controls ('forward', 'backward', 'turn_left', 'turn_right').
  */
 export function getSupportedVacuumCleanModes(
   options: string[],
@@ -293,7 +308,22 @@ export function getSupportedVacuumCleanModes(
 
   for (const opt of options) {
     const key = opt.toLowerCase().trim();
-    if (["standby", "chargego", "manual", "stop", "off", "idle"].includes(key))
+    if (
+      [
+        "standby",
+        "chargego",
+        "manual",
+        "stop",
+        "off",
+        "idle",
+        "forward",
+        "backward",
+        "turn_left",
+        "turn_right",
+        "left",
+        "right",
+      ].includes(key)
+    )
       continue;
 
     const mapped = CLEAN_MODE_MAPPING[key];
