@@ -4,11 +4,17 @@
   <img src="matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
 </div>
 
-> **Matter All-in-One for Home Assistant (v2.1.17)**
+> **Matter All-in-One for Home Assistant (v2.1.18)**
 > Expone entidades verificadas de Home Assistant como accesorios Matter 1.6 estables, cámaras Scrypted passthrough con HKSV y cámaras HomeKit con Live View en Apple Home.
 > **Base:** `matterbridge@3.11.0` · **Node.js:** `24.22.1-alpine3.24` · **TypeScript:** `7.0.2` · **Vitest:** `5.0.5` · **Vite:** `8.3.5` · **Spec:** Matter 1.6.1
 
 ---
+
+### Novedades de la versión 2.1.18
+
+- Restablece un accesorio Matter en el mismo `ServerNode`: elimina sus fabrics y vuelve a abrir el QR sin borrar el `storedId` persistente ni cambiar el perfil Matter seleccionado.
+- Evita el fallo `No value found for key storedId in context persist` que impedía regenerar el QR de Robotina y otros accesorios Matter.
+- No anuncia el nuevo QR ni marca el reinicio como exitoso hasta confirmar que no quedan fabrics y que Matterbridge devolvió un código de emparejamiento.
 
 ### Novedades de la versión 2.1.17
 

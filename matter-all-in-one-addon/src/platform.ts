@@ -4906,10 +4906,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   }
 
   /**
-   * Factory-reset an accessory and rebuild its endpoint tree from the latest
-   * Home Assistant capabilities. Matter descriptors are immutable after
-   * commissioning, so erasing fabrics alone cannot add ColorControl to a
-   * light that was first published as on/off-only.
+   * Factory-reset one Matter accessory. When its live ServerNode is available,
+   * use Matter.js erase() in place: it clears every fabric and reopens
+   * commissioning while preserving Matterbridge's required storedId and the
+   * selected Matter profile. Recreating a node after deleting its persist
+   * context can fail with "No value found for key storedId".
    */
   public async resetMatterAccessory(entityId: string): Promise<{
     success: boolean;
@@ -4947,6 +4948,58 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     }
 
     try {
+      const hasLiveMatterState = Boolean(
+        serverNode?.state ||
+          serverNode?.behaviors?.operationalCredentials?.state ||
+          serverNode?.behaviors?.commissioning?.state,
+      );
+      if (
+        serverNode &&
+        hasLiveMatterState &&
+        typeof (serverNode as any).erase === "function"
+      ) {
+        await (serverNode as any).erase();
+        if (!serverNode.lifecycle?.isOnline) await serverNode.start();
+
+        let connection = this.getMatterConnectionInfo(endpoint);
+        for (let attempt = 0; attempt < 30; attempt++) {
+          if (
+            connection.fabricCount === 0 &&
+            (connection.pairingCode || connection.manualPairingCode)
+          ) {
+            break;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 200));
+          connection = this.getMatterConnectionInfo(endpoint);
+        }
+        if (connection.fabricCount !== 0) {
+          throw new Error(
+            `Matter erase finished but ${connection.fabricCount} fabric(s) remain.`,
+          );
+        }
+        if (!connection.pairingCode && !connection.manualPairingCode) {
+          throw new Error(
+            "Matter fabric reset succeeded, but the new pairing code is not ready.",
+          );
+        }
+
+        this.clearMatterAccessoryProblems(entityId, compositeDeviceId);
+        this.recordEntityDiagnostic(
+          entityId,
+          "✓ Accesorio desvinculado de todas las casas. Nuevo código QR generado; se conservó el perfil Matter.",
+          "info",
+        );
+        this.pushEntityUpdate(entityId);
+        this.log.notice(
+          `Matter accessory erased in place; all fabrics cleared and commissioning reopened for ${compositeDeviceId ? `device:${compositeDeviceId}` : entityId}`,
+        );
+        return {
+          success: true,
+          pairingCode: connection.pairingCode ?? null,
+          manualPairingCode: connection.manualPairingCode ?? null,
+        };
+      }
+
       const friendlyName =
         entity?.state?.attributes?.friendly_name ?? entityId;
       const storeId = String(endpoint?.deviceName ?? friendlyName).replace(

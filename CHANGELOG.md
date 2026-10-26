@@ -1,3 +1,14 @@
+## [2.1.18] - 2026-10-25
+
+- Restablece Matter en el `ServerNode` existente mediante el factory reset nativo de Matter.js, conserva `storedId` y el perfil Matter seleccionado, y vuelve a generar el QR sin reconstruir un nodo con almacenamiento incompleto.
+- Comprueba que las fabrics hayan quedado eliminadas y que exista un nuevo código de emparejamiento antes de informar éxito a la interfaz.
+- Corrige el error de ejecución `No value found for key storedId in context persist` observado al regenerar el QR de Robotina.
+
+## [2.1.17] - 2026-10-25
+
+- Conserva las aspiradoras como Matter RVC nativo y vincula la batería y el modo de limpieza del mismo dispositivo HA cuando están disponibles.
+- Publica potencia, energía y voltaje en su perfil Electrical Sensor Matter sin clasificarlos como temperatura.
+
 ## [2.1.16] - 2026-10-23
 
 - Actualiza Matterbridge a 3.11.0 con Matter 1.6.1 y matter.js 0.18.0; revisa la conformidad de los dispositivos y conserva la configuración persistente del puente.
