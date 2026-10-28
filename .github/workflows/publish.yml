@@ -5,8 +5,14 @@ on:
     types: [created]
   workflow_dispatch:
 
+# Keep manual retries and release-triggered publishes from racing each other.
+concurrency:
+  group: npm-publish-matter-all-in-one-addon
+  cancel-in-progress: false
+
 permissions:
   contents: read
+  # npm trusted publishing uses the short-lived GitHub Actions OIDC token.
   id-token: write
 
 jobs:
@@ -27,6 +33,12 @@ jobs:
           cache: 'npm'
           cache-dependency-path: './matter-all-in-one-addon/package-lock.json'
 
+      - name: Verify npm CLI supports trusted publishing
+        run: |
+          NPM_VERSION=$(npm --version)
+          echo "npm $NPM_VERSION"
+          NPM_VERSION="$NPM_VERSION" node -e 'const [major, minor, patch] = process.env.NPM_VERSION.split(".").map(Number); if (major < 11 || (major === 11 && (minor < 5 || (minor === 5 && patch < 1)))) throw new Error("Trusted publishing requires npm >=11.5.1")'
+
       - name: Remove deprecated npm config
         run: npm config delete always-auth --location=user || true
 
@@ -42,14 +54,15 @@ jobs:
       - name: Run unit tests
         run: npm run test
 
-      - name: Publish to NPM
+      - name: Verify add-on version and release notes
+        run: node scripts/verify-ha-changelog.mjs
+
+      - name: Publish to NPM using trusted OIDC identity
         run: |
           CURRENT_VERSION=$(node -p "require('./package.json').version")
-          PUBLISHED_VERSION=$(npm view matter-all-in-one-addon version 2>/dev/null || echo "")
+          PUBLISHED_VERSION=$(npm view "matter-all-in-one-addon@$CURRENT_VERSION" version 2>/dev/null || echo "")
           if [ "$CURRENT_VERSION" = "$PUBLISHED_VERSION" ]; then
             echo "Version $CURRENT_VERSION is already published to npm. Skipping."
           else
-            npm publish
+            npm publish --provenance --access public
           fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
