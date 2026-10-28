@@ -1,168 +1,157 @@
-# matter-all-in-one-chrisalvir
+# Matter All-in-One Chrisalvir — v2.3.0
 
 <div align="center">
   <img src="matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
 </div>
 
-> **Matter All-in-One for Home Assistant (v2.1.18)**
-> Expone entidades verificadas de Home Assistant como accesorios Matter 1.6 estables, cámaras Scrypted passthrough con HKSV y cámaras HomeKit con Live View en Apple Home.
-> **Base:** `matterbridge@3.11.0` · **Node.js:** `24.22.1-alpine3.24` · **TypeScript:** `7.0.2` · **Vitest:** `5.0.5` · **Vite:** `8.3.5` · **Spec:** Matter 1.6.1
+<div align="center">
 
----
+**Un solo proyecto para integrar dispositivos de Home Assistant en Matter y cámaras en Apple Casa.**
 
-### Novedades de la versión 2.1.18
+**Versión 2.3.0** · **Preparado para Home Assistant 2026.11 (beta)** · **Matter 1.6.1** · **HomeKit HAP / HKSV**
 
-- Restablece un accesorio Matter en el mismo `ServerNode`: elimina sus fabrics y vuelve a abrir el QR sin borrar el `storedId` persistente ni cambiar el perfil Matter seleccionado.
-- Evita el fallo `No value found for key storedId in context persist` que impedía regenerar el QR de Robotina y otros accesorios Matter.
-- No anuncia el nuevo QR ni marca el reinicio como exitoso hasta confirmar que no quedan fabrics y que Matterbridge devolvió un código de emparejamiento.
+</div>
 
-### Novedades de la versión 2.1.17
+Matter All-in-One Chrisalvir (MIAO) reúne la administración de accesorios Matter, cámaras de **Omni Tuya Local**, **Camera.UI**, **Scrypted** y entidades de **Home Assistant** en una interfaz integrada. Las rutas Matter y HomeKit HAP son distintas: se utiliza la que corresponda a cada dispositivo, sin prometer que todos los tipos Matter sean compatibles con Apple Casa.
 
-- Conserva las aspiradoras como Matter RVC nativo y evita sugerir HAP como televisor por nombres de entidades que contienen `tv`.
-- Vincula al accesorio RVC la batería y el selector de modo del mismo dispositivo de Home Assistant cuando esas entidades están disponibles.
-- Publica sensores de potencia, energía y voltaje con el perfil Matter Electrical Sensor y evita clasificarlos como temperatura.
-- Apple Casa solo mostrará controles y valores compatibles con el perfil RVC y con lo que Home Assistant realmente expone; los sensores eléctricos requieren un cliente que admita ese tipo Matter.
+> [!IMPORTANT]
+> **Compatibilidad con Home Assistant 2026.11:** la v2.3.0 incorpora ajustes y pruebas automatizadas para los cambios de nombres contextuales de entidades de la **beta de 2026.11**. **No se ha validado todavía sobre una instalación real de esa beta**; la referencia operativa del proyecto sigue siendo Home Assistant 2026.10. No necesitas actualizar tu Home Assistant principal a la beta para usar estas mejoras.
 
-### Novedades de la versión 2.1.16
+## ✨ Novedades de hoy — v2.3.0 (28 de octubre de 2026)
 
-- Actualiza Matterbridge a 3.11.0 con Matter 1.6.1 y matter.js 0.18.0; revisa la conformidad de los dispositivos y conserva la configuración persistente del puente.
-- Corrige la función Lighting obligatoria de On/Off en enchufes Matter, incluidos los dispositivos compuestos, y añade pruebas con endpoints reales en modo estricto.
-- Actualiza Node.js a 24.22.1 y corrige las dependencias transitivas vulnerables follow-redirects e ip-address.
-- Actualiza MQTT, Undici, Werift, React y herramientas de construcción y pruebas; alinea las comprobaciones ARM64 con las versiones del contenedor.
-- Esta actualización no acredita la resolución de Live View ni la persistencia de clips HKSV: requieren verificación física en Apple Casa.
+### 1. Compatibilidad preparada para Home Assistant 2026.11
 
-### Novedades de la versión 2.1.15
+- **Nombres contextuales:** la detección y asociación de movimiento de cámaras conservan como identificadores principales `entity_id` y `device_id`. Cuando faltan nombres legibles, ahora consultan nombres del registro de entidades y del dispositivo.
+- **Sin migraciones de identidades:** no se cambian los identificadores persistentes HAP, el emparejamiento de Apple Casa, las fabrics Matter, los QR ni las selecciones del usuario.
+- **Sin suposiciones sobre Matter 1.5 Cameras:** que Home Assistant pueda incorporar una cámara Matter no significa que exista automáticamente un RTSP compatible con HomeKit. Una cámara nueva se debe verificar antes de exportarla.
 
-- Actualiza la base oficial de ejecución a **Matterbridge 3.10.14** sobre Node.js 24.21.0 y Alpine 3.24.
-- Normaliza los límites de memoria bajo Docker (`constrainedMemory`) en Home Assistant OS para evitar lecturas infladas de la máquina host.
-- Optimiza los contextos de almacenamiento de MatterNode omitiendo escrituras duplicadas en disco, acelerando los arranques y protegiendo el almacenamiento flash.
-- Incorpora atributos de batería de Matter 1.6.1 (`batCapacity`, `batTimeToFullCharge`, etc.) y tipo `TiltOnlyInteriorBlind` conforme para persianas.
-- Actualiza dependencias estables: `werift@0.25.1`, `undici@8.12.2`, `mqtt@5.16.1`, `react@19.3.1`, `vite@8.3.4`, `vitest@5.0.5` y `lucide-react@1.59.0`.
+### 2. Más visibilidad de la ruta Omni Tuya Local → Apple Casa
 
-### Novedades de la versión 2.1.13
+- **Métricas de asignación RTSP firmada por cámara:** intentos, éxitos, fallos, duración y resultado más reciente, sin almacenar URL firmadas ni credenciales en los contadores.
+- **Reintentos observables:** se puede distinguir un fallo inicial de asignación de una recuperación posterior.
+- **Integración conservadora:** se mantienen la renovación de la URL firmada por sesión, las rutas de audio, los sensores de movimiento asociados, Live View y HKSV. **Esta versión no reemplaza el pipeline de FFmpeg ni cambia su negociación.**
+- **Varias cámaras:** la instrumentación separa las métricas por entidad. La reproducción simultánea de varias cámaras sigue pendiente de validación física.
 
-- Durante Live View, HKSV fragmenta el fMP4 en el intervalo negociado con Casa, incluso cuando Omni tiene un GOP largo. El diagnóstico registra cuántos fragmentos se reciben y se envían a Apple.
+### 3. Diagnóstico de cámaras para automatizaciones e IA (opcional)
 
-### Novedades de la versión 2.1.12
+- Nuevo endpoint **de solo lectura**: `GET /api/custom/ai/camera-diagnostics`.
+- Ofrece estado de publicación/emparejamiento HAP, disponibilidad, audio, sensor de movimiento, estado HKSV, sesiones Live View y contadores de asignación Omni.
+- **Desactivado por defecto**; requiere `diagnostics_token` con un secreto de al menos 24 caracteres, enviado en `Authorization: Bearer`.
+- Respuesta limitada a campos permitidos: no incluye contraseñas, tokens de HA, direcciones RTSP, SDP, códigos de emparejamiento ni registros brutos.
+- Es una **fuente de datos para un adaptador MCP confiable**, no un servidor MCP autónomo ni una conexión directa pública a ChatGPT. No añade controles remotos de reinicio o modificación.
 
-- Mantiene detección y entrega de video fMP4 a HKSV durante Live View de Apple Casa usando el mismo lector RTSP activo, sin abrir otra sesión al comedero Omni.
-- Evita que HKSV quede sin fragmentos durante Live View y que la sesión de grabación cierre por `TIMEOUT`.
-- Conserva el audio AAC-LC en los clips y el emparejamiento HAP tras reinicios; cada nueva sesión renueva la URL RTSP firmada de Omni.
-- Si Omni aún no respondió después de reiniciar, el detector vuelve a intentarlo sin reutilizar una credencial caducada.
-- Ajusta el análisis para conservar cambios grandes de imagen, como el paso cercano de una mascota.
-- Las casillas de gato/perro filtran eventos clasificados por una integración externa; MIAO no ejecuta por sí solo un modelo de reconocimiento de animales.
-- Verificar Stream espera hasta cinco segundos para medir un RTSP Tuya firmado por RTSPS.
+### 4. Pruebas de regresión
 
----
+- Se añadieron pruebas para los nombres de HA 2026.11, asociación de movimiento, renovación/reintentos Omni, aislamiento de métricas por cámara, salida de diagnóstico y autenticación.
+- También se conservan las pruebas existentes de Matter, RVC, accesorios HAP, cámaras y compatibilidad de dispositivos.
+- La publicación de la imagen de esta versión queda subordinada a las verificaciones del flujo de GitHub Actions.
 
-### Novedades de la versión 2.1.8
+**Lo que ya funciona en la instalación de Chrisalvir:** una cámara **Omni Tuya Local** exportada a **Apple Casa** con **vídeo en vivo, audio, sensor de movimiento y grabaciones HKSV**. Es una confirmación del usuario en su sistema actual; no se presenta como prueba de Home Assistant 2026.11 ni de todas las cámaras.
 
-- El diagnóstico de streams HLS emitidos por Home Assistant usa el token Bearer del add-on, evitando falsos errores 401.
-- Cuando Omni no puede asignar un RTSP firmado, el registro indica el intento de asignación sin exponer URL ni credenciales.
+## 🧭 ¿Cómo funciona?
 
-### Novedades de la versión 2.1.7
+| Fuente o dispositivo | Ruta de MIAO | Destino / alcance |
+| --- | --- | --- |
+| Luces, enchufes, persianas, cerraduras, sensores, ventiladores y aspiradoras compatibles de Home Assistant | **Matterbridge → Matter 1.6.1** | Controlador Matter compatible, incluido Apple Casa cuando admite su perfil |
+| Cámara de **Omni Tuya Local** | **HA → URL RTSP Tuya renovada por sesión → HomeKit HAP/HKSV** | Apple Casa: Live View, audio, movimiento y grabación según capacidades reales |
+| Cámara de **Camera.UI** | **Camera.UI → HomeKit HAP/HKSV** | Apple Casa, con fuente y capacidades configuradas |
+| Cámara de **Scrypted** | **Scrypted → integración de cámaras de MIAO / HAP** | Apple Casa, según capacidades y compatibilidad del stream |
+| Entidad `camera.*` directa de Home Assistant | **Resolución y validación de stream → HAP**, si es utilizable | No todas las integraciones de cámara ofrecen un stream adecuado |
 
-- Live View de cámaras Omni renueva el RTSP firmado antes de iniciar HAP y reintenta la asignación si Tuya sigue creando la sesión tras un reinicio.
-- Cuando Omni no entrega una URL renovada, MIAO acepta solamente un stream HLS nuevo de Home Assistant. Se excluye `camera_proxy_stream`, que puede devolver 401 y dejar una imagen congelada.
+**Matter no es lo mismo que HomeKit HAP.** Las cámaras publicadas en Apple Casa mediante HAP/HKSV conservan su propia identidad y emparejamiento; no se convierten automáticamente en cámaras Matter. Los dispositivos Thread necesitan un Border Router Thread en la red; el puente MIAO opera a través de IP.
 
-### Novedades de la versión 2.1.5
+## 📱 Compatibilidad con Home Assistant y Apple Casa
 
-- Las cámaras Omni Tuya descubiertas mediante Camera.UI ya no dependen de una URL RTSP fija guardada. El complemento identifica su entidad `camera.*` real de Home Assistant y solicita una URL firmada nueva para cada Live View, reinicio y reconexión.
-- La renovación de audio y detección local usa la entidad real de Home Assistant, evitando que un ID interno de HAP impida renovar el stream.
-- go2rtc sigue siendo la ruta estable para cámaras IP con URL permanente. Los streams firmados de Tuya se renuevan desde Omni, ya que su autorización caduca.
+| Entorno | Estado de v2.3.0 |
+| --- | --- |
+| Home Assistant 2026.10 | Base conocida del proyecto; conservar como entorno principal mientras se valida la beta |
+| **Home Assistant 2026.11 beta** | **Preparado a nivel de código y pruebas de compatibilidad**; validación física pendiente |
+| Home Assistant 2026.11 estable | Pendiente de publicación y prueba en instalación real |
+| Matterbridge 3.11.0 | Versión del runtime del complemento |
+| Matter 1.6.1 | Especificación utilizada por el puente Matter |
+| Apple Casa — accesorios Matter | Depende del tipo de dispositivo que Apple admita |
+| Apple Casa — cámara Omni mediante HAP/HKSV | Vídeo, audio, movimiento y grabación reportados como operativos por Chrisalvir en su instalación |
+| Cámaras Matter 1.5 importadas a Home Assistant | No tienen exportación HAP/RTSP automática garantizada |
 
-### Novedades de la versión 2.1.3
+La actualización **no borra emparejamientos ni modifica intencionalmente fabrics**, pero se recomienda hacer una copia de seguridad antes de actualizar.
 
-- Conecta las cámaras de Omni Tuya Local con el Live View de HomeKit HAP mediante RTSP firmado.
-- Solicita una URL RTSP nueva por sesión HAP y evita guardar o registrar credenciales efímeras.
-- Requiere Omni Tuya Local 1.11.6 o posterior y permiso Tuya IoT Video Live Stream.
+## 🧩 Funciones principales
 
-### Novedades de la versión 2.1.2
+- Publicación de entidades compatibles como accesorios Matter, incluidos dispositivos individuales o compuestos con QR y estado de emparejamiento.
+- Aspiradoras como dispositivos Matter **RVC** con controles y batería cuando Home Assistant proporciona las entidades necesarias.
+- Accesorios HAP y cámaras independientes para Apple Casa, con soporte de Live View, audio y HKSV donde la fuente y el hub lo permitan.
+- Administración de fuentes de Scrypted y Camera.UI, comprobación de streams y detección de sensores relacionados.
+- Persistencia de la selección de accesorios y de las identidades de los dispositivos ya emparejados.
+- Interfaz web integrada con Home Assistant Ingress y conectividad IPv4/IPv6.
+- Diagnósticos opcionales sin exponer credenciales ni abrir rutas de escritura a agentes.
 
-- La cámara de Omni Tuya “DPS camera” aparece en la lista de cámaras HAP y puede publicarse como cámara independiente.
-- Los sensores/datapoints genéricos DPS no se muestran como accesorios.
-- Requiere Omni Tuya Local 1.11.4 o posterior para la renovación RTSP por sesión.
+## 🚀 Instalación y actualización
 
-### Novedades de la versión 2.1.1
+### Como aplicación / add-on de Home Assistant
 
-- Solicita una URL RTSP Tuya firmada nueva a Omni 1.11.4 al inicio de cada sesión de cámara HAP. Requiere el permiso IoT Video Live Stream y conectividad con Tuya; el stream real debe validarse en Home Assistant.
-- Actualiza Matterbridge a 3.10.13 sobre Node.js 24.21.0 y la imagen ARM64.
-- Añade duración y cuenta atrás HAP para válvulas, con recuperación de plazos y conservación de identidades existentes.
-- Valida los contratos de Home Assistant Core 2026.10 y los cambios de disponibilidad de Matterbridge.
+1. En **Ajustes → Complementos / Aplicaciones → Tienda**, abre el menú para agregar un repositorio.
+2. Agrega: `https://github.com/Chrisalvir1/matter-all-in-one-chrisalvir`.
+3. Instala **Matter All-in-one (Chrisalvir)** o actualiza a **v2.3.0** cuando la imagen publicada esté disponible.
+4. Inicia el complemento y abre su interfaz desde Home Assistant.
+5. Selecciona el dispositivo y la ruta **Matter** o **HomeKit HAP** apropiada; usa el QR de emparejamiento correspondiente.
 
-## 🌟 Key Features
+Las imágenes `amd64` y `aarch64` se generan mediante GitHub Actions y se distribuyen desde `ghcr.io/chrisalvir1/matter-all-in-one-chrisalvir`. La release de GitHub se publica después de validar que Home Assistant puede descargar la imagen.
 
-* **QR independiente por canal**: los apagadores dobles/triples y enchufes dobles se publican con un código QR único e independiente por cada canal.
-* **Modelo y marca real en HomeKit**: el campo *Model* en Apple Home muestra la Marca + Modelo real del dispositivo de HA (`Tuya CB03-SBL`), manteniendo *Manufacturer* como `Matter All-in-One Chrisalvir`.
-* **Filtro de DPS genéricos**: los datapoints de Tuya sin nombrar (`DPS 2`, `DPS 3`) se ocultan automáticamente del panel de control.
-* **Red dual-stack**: IPv4 e IPv6 permanecen habilitados y mDNS escucha las interfaces disponibles para sobrevivir cambios de ruta entre Ethernet y Wi-Fi.
-* **Liquid Glass UI Integration**: View QR codes and manual codes natively inside a custom dark-themed control panel, without leaving the page.
-* **Apple Home con tipos verificados**: luces, enchufes, persianas `windowCovering`, cerraduras, termostatos, ventiladores, RVC y sensores admitidos.
-* **Camera.UI → Apple Home estable**: H.264 conserva passthrough RTP con SPS/PPS por keyframe para aperturas rápidas; HEVC se adapta únicamente en la salida HAP; HKSV normaliza el timeline fMP4 para detección y grabación fiables. Las cámaras ya emparejadas conservan su identidad durante sincronizaciones.
-* **Thread externo**: el bridge usa IP; una red Thread requiere un Thread Border Router compatible en la LAN.
+**Antes de actualizar:** respalda Home Assistant, la configuración del add-on y sus datos persistentes. No restablezcas códigos QR, fabrics ni accesorios que actualmente funcionan por el solo hecho de instalar esta versión.
 
----
-
-## 📊 Supported Device Types
-
-| Device Type | Home Assistant Domain / Class | Apple Home |
-| :--- | :--- | :--- |
-| Luz, enchufe e interruptor | `light.*`, `switch.*` | Compatible |
-| Persiana o cortina | `cover.*` con perfil `windowCovering` | Compatible |
-| Cerradura y termostato | `lock.*`, `climate.*` | Compatible |
-| Ventilador y RVC | `fan.*`, `vacuum.*` | Compatible; RVC requiere nodo independiente |
-| Contacto, movimiento, ocupación, temperatura, humedad, luz ambiental | clases admitidas de `binary_sensor.*` y `sensor.*` | Compatible |
-| Cámara, tarifa, humo/CO, presión, caudal, alarma, calentador de agua y botón genérico | — | No se exportan por defecto hasta tener mapeo y pruebas completos |
-
----
-
-## 🛠️ Installation
-
-En Home Assistant, agrega este repositorio como repositorio de aplicaciones/add-ons e instala **Matter All-in-One Bridge**. Las actualizaciones descargan la imagen multi-arquitectura precompilada de GHCR, por lo que ya no ejecutan `npm ci` ni TypeScript dentro del equipo de Home Assistant.
-
-La primera publicación de la imagen requiere que el paquete `ghcr.io/chrisalvir1/matter-all-in-one-chrisalvir` tenga visibilidad **Public** en GitHub Packages. El workflow comprueba el acceso anónimo y falla con una instrucción clara si todavía está privado.
-
-El número 2.1.1 corresponde al add-on de Home Assistant y su imagen GHCR. El plugin NPM independiente mantiene una versión separada.
-
-Para una instalación independiente de Matterbridge:
+### Como plugin de Matterbridge (instalación independiente)
 
 ```bash
-npm install matter-all-in-one-chrisalvir
+npm install matter-all-in-one-addon@2.3.0
 ```
 
-Register the plugin in your Matterbridge configuration:
+La publicación en npm depende del flujo de release. Configura la conexión WebSocket con Home Assistant, Matterbridge y los puertos de la instancia según tu entorno. El complemento oficial de HA ya gestiona la conexión con Supervisor y la persistencia.
 
-```json
-{
-  "plugins": [
-    "matter-all-in-one-chrisalvir"
-  ]
-}
-```
+## 🎥 Cámara Omni Tuya Local: ruta recomendada
 
----
+1. Confirma que **Omni Tuya Local** muestra una entidad `camera.*` funcional en Home Assistant.
+2. En MIAO, identifica la cámara correcta y verifica la relación con su sensor de movimiento.
+3. Exporta la cámara como **HomeKit HAP** y conserva su identidad y puerto existente si ya está emparejada.
+4. Al abrir Live View, MIAO solicita a Omni una **nueva URL RTSP firmada**; no depende de reutilizar una dirección caducada de Camera.UI.
+5. En Apple Casa comprueba vídeo, audio, movimiento y un **clip HKSV real**. La grabación depende además de la configuración del hub doméstico y de iCloud.
 
-## ⚙️ Configuration
+Si la asignación RTSP falla, consulta el diagnóstico opcional y los registros del complemento sin compartir URLs firmadas ni tokens. **No desinstales ni vuelvas a emparejar una cámara funcional para probar esta actualización.**
 
-| Key | Type | Description |
-| :--- | :--- | :--- |
-| `host` | `string` | URL base de Home Assistant (por ejemplo, `http://localhost:8123`); el add-on usa Supervisor automáticamente. |
-| `token` | `string` | Token de larga duración; opcional dentro del add-on de Home Assistant. |
-| `includeEntities` | `string[]` | Optional list of specific entities to expose. |
-| `excludeEntities` | `string[]` | Optional list of entities to block/exclude. |
-| `group_by_device_id` | `boolean` | Agrupa capacidades del mismo dispositivo físico; predeterminado `true`. |
-| `mdnsinterface` | `string` | Interfaz mDNS manual; vacío usa todas las interfaces. |
-| `ipv4_only` | `boolean` | Compatibilidad con configuraciones anteriores; no desactiva IPv6 link-local de Matter. |
+## 🔐 Configuración y diagnóstico opcional
 
----
+| Opción de add-on | Uso |
+| --- | --- |
+| `host` | Dirección de Home Assistant; el complemento usa Supervisor por defecto |
+| `token` | Token de Home Assistant; el complemento aprovecha el token inyectado si no se define uno |
+| `group_by_device_id` | Agrupación de entidades del mismo dispositivo |
+| `mdnsinterface` | Interfaz mDNS opcional |
+| `ipv4_only` | Opción heredada; Matter sigue necesitando IPv6 local |
+| **`diagnostics_token`** | Secreto opcional de **24+ caracteres** para activar diagnósticos de cámara de solo lectura |
 
-## 📖 Further Documentation
+Para consultar el diagnóstico, realiza una solicitud autenticada a **`GET /api/custom/ai/camera-diagnostics`** a través de una ruta local confiable, con cabecera `Authorization: Bearer <diagnostics_token>`. **No publiques el puerto 8285 ni incluyas el token en una URL o prompt de IA**. Sin secreto configurado, el endpoint devuelve 404; con autenticación incorrecta, 401.
 
-* [Compatibilidad y topología Apple Home](docs/homekit-compatibility.md)
-* [Guía correcta de Thread](docs/thread-setup.md)
+Esta función no instala por sí sola un agente de IA ni un servidor MCP. Para usarla con un asistente se necesita un adaptador aparte, autorizado y restringido a lectura.
 
----
+## 🧪 Validación de Home Assistant 2026.11
 
-## 📜 License
+Sin tocar el servidor principal, prueba la v2.3.0 en una instancia secundaria con HA 2026.11:
 
-Apache-2.0 License.
+1. Verifica que siguen enlazados `camera.*` y el `binary_sensor.*` real de movimiento pese a cambios de nombres visibles.
+2. Reinicia MIAO y comprueba que Apple Casa conserva el accesorio y su emparejamiento.
+3. Abre y cierra Live View varias veces, confirma audio y movimiento y graba un clip HKSV.
+4. Provoca un fallo temporal de asignación Omni y confirma recuperación con nueva URL, sin reutilizar una credencial caducada.
+5. Si hay una segunda cámara, comprueba sesiones y grabaciones simultáneas y métricas independientes.
+
+Consulta la [guía de preparación para HA 2026.11](docs/home-assistant-2026-11-readiness.md) para el protocolo técnico y las limitaciones.
+
+## 📚 Documentación y soporte
+
+- [Notas completas de la release v2.3.0](docs/RELEASE_NOTES_2.3.0.md)
+- [Historial de cambios](matter-all-in-one-addon/CHANGELOG.md)
+- [Compatibilidad con Apple Casa](matter-all-in-one-addon/docs/homekit-compatibility.md)
+- [Configuración de Thread](matter-all-in-one-addon/docs/thread-setup.md)
+- [Reportar un problema](https://github.com/Chrisalvir1/matter-all-in-one-chrisalvir/issues)
+
+**Base de ejecución:** Matterbridge `3.11.0` · Node.js `24.22.1` · Matter `1.6.1` · TypeScript `7.0.2`.
+
+**Licencia:** Apache-2.0 · Proyecto mantenido por **Chrisalvir**.

@@ -45,6 +45,9 @@ import {
   getFfmpegVersion,
 } from "./camera/homekit/ffmpeg-helper.js";
 import { CameraEntity } from "./entities/camera.entity.js";
+import { getHaEntitySearchText } from "./utils/ha-entity-names.js";
+import { buildCameraAiDiagnostics } from "./camera/ai/camera-diagnostics.js";
+import { isCameraDiagnosticsAuthorized } from "./camera/ai/diagnostics-auth.js";
 import { SoilSensorEntity } from "./entities/soil_sensor.entity.js";
 import { EnergyTariffEntity } from "./entities/energy_tariff.entity.js";
 import { VacuumEntity } from "./entities/vacuum.entity.js";
@@ -5746,7 +5749,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           )
         : newState.state === "on";
       const devState = this.ha?.hassStates?.get(entityId);
-      const entityFriendlyName = devState?.attributes?.friendly_name || "";
+      const entityFriendlyName = getHaEntitySearchText(this.ha, entityId);
       const deviceClass = (
         devState?.attributes?.device_class || ""
       ).toLowerCase();
@@ -5759,7 +5762,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
       for (const cam of this.entities.values()) {
         if (cam instanceof CameraEntity && cam.homekitAccessory) {
-          const camFriendlyName = cam.state?.attributes?.friendly_name || "";
+          const camFriendlyName = getHaEntitySearchText(this.ha, cam.entityId);
 
           const isTapoC402Entity =
             /tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle|tapo[-_ ]?frente|\bc402\b/i.test(
@@ -6199,6 +6202,31 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   /**
    * Start custom HTTP server on port 8285 for Liquid Glass UI.
    */
+  private getReadOnlyCameraDiagnostics() {
+    const cameras = [...this.entities.values()]
+      .filter((entity): entity is CameraEntity => entity instanceof CameraEntity)
+      .map((camera) => {
+        const record = this.homekitCameraRecords.get(camera.entityId);
+        const accessory = camera.homekitAccessory;
+        const telemetry = accessory?.delegate?.getLiveViewTelemetry();
+        return buildCameraAiDiagnostics({
+          entityId: camera.entityId,
+          sourceType: camera.streamSource?.sourceType,
+          available: !isUnavailable(camera.state),
+          hapPublished: accessory?.isPublished ?? false,
+          hapPaired: accessory?.isPaired() ?? record?.isPaired ?? false,
+          motionEntityId: accessory?.linkedMotionEntityId,
+          audioAvailable: camera.capabilities?.hasAudio ?? false,
+          hksvState: record?.hksvState,
+          hksvVerified: record?.hksvVerified ?? false,
+          activeLiveView: telemetry?.active ?? [],
+          recentLiveView: telemetry?.recent ?? [],
+          omniAllocation: this.ha?.getOmniCameraAllocationMetrics(camera.entityId)[0],
+        });
+      });
+    return { generatedAt: new Date().toISOString(), cameras };
+  }
+
   private startUiServer(): Promise<void> {
     const server = http.createServer(async (req, res) => {
       const urlObj = new URL(
@@ -6257,6 +6285,29 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       }
 
       try {
+        // An opt-in, read-only integration point for an external MCP adapter.
+        // No diagnostics API is available until a dedicated secret is configured.
+        if (pathname === "/api/custom/ai/camera-diagnostics") {
+          if (req.method !== "GET") {
+            res.writeHead(405, { Allow: "GET" });
+            res.end();
+            return;
+          }
+          const secret = process.env.MATTER_AIO_DIAGNOSTICS_TOKEN;
+          if (!secret || secret.length < 24) {
+            res.writeHead(404);
+            res.end();
+            return;
+          }
+          if (!isCameraDiagnosticsAuthorized(secret, req.headers.authorization)) {
+            res.writeHead(401, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+            res.end(JSON.stringify({ error: "Unauthorized" }));
+            return;
+          }
+          res.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
+          res.end(JSON.stringify(this.getReadOnlyCameraDiagnostics()));
+          return;
+        }
         if (
           req.method === "GET" &&
           (pathname === "/" || pathname === "/index.html")

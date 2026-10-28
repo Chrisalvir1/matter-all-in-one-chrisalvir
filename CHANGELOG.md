@@ -1,3 +1,13 @@
+## [2.3.0] - 2026-10-28
+
+- **Preparación para Home Assistant 2026.11 beta:** los nombres contextuales utilizan como respaldo los registros de entidad y dispositivo; el emparejamiento principal sigue basado en `entity_id` y `device_id` para proteger asociaciones de sensores de movimiento.
+- **Cámara Omni Tuya Local:** nuevas métricas de asignación de URLs RTSP firmadas, intentos, reintentos, fallos y duración por cámara, sin conservar URLs ni credenciales en el diagnóstico.
+- **Ruta Apple Casa conservada:** no se modifica el pipeline HAP, HKSV, Live View, audio ni la renovación de URL por sesión; tampoco los datos persistentes, códigos QR, fabrics Matter o emparejamientos.
+- **Diagnóstico de solo lectura para herramientas de IA:** `GET /api/custom/ai/camera-diagnostics` con lista explícita de campos, token opcional de 24+ caracteres y funcionalidad desactivada por defecto. No implementa por sí solo un servidor MCP ni permisos de escritura.
+- **Pruebas de regresión nuevas:** resolución de nombres, continuidad de movimiento, reintentos y métricas Omni por cámara, privacidad de respuesta y autenticación del diagnóstico.
+- **Documentación renovada:** README principal y del complemento, guía de validación para 2026.11 y notas de publicación; se mantiene intacto el logo original.
+- **Alcance de validación:** una cámara Omni con vídeo, movimiento, audio y grabación HKSV está confirmada por Chrisalvir en su instalación actual; **la beta 2026.11 y las sesiones simultáneas de varias cámaras aún requieren pruebas físicas**. No se asume traducción automática de cámaras Matter 1.5 a HAP/RTSP.
+
 ## [2.2.1] - 2026-10-26
 
 - Corrige el descriptor Matter de la aspiradora RVC: conserva el clúster y telemetría de batería, pero anuncia a Apple Casa solo el tipo `RoboticVacuumCleaner` (`0x0074`) para evitar que aparezca como accesorio compuesto genérico.

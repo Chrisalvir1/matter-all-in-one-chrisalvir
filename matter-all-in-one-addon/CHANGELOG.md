@@ -1,3 +1,13 @@
+## [2.3.0] - 2026-10-28
+
+- Compatible a nivel de código con los nombres contextuales de Home Assistant 2026.11 beta: los nombres del registro y del dispositivo se usan como respaldo sin sustituir `entity_id` ni `device_id` y sin romper la asociación existente de sensores de movimiento.
+- Instrumentación por cámara de solicitudes RTSP firmadas a Omni Tuya Local: intentos, reintentos, éxitos, fallos, tiempo de asignación y último resultado. Los contadores no almacenan URLs ni credenciales.
+- Diagnóstico opcional **solo lectura**: `GET /api/custom/ai/camera-diagnostics` con token independiente de 24+ caracteres, autenticación Bearer y respuesta de campos permitidos (HAP, audio, HKSV, movimiento, Live View y métricas Omni). Se mantiene desactivado por defecto.
+- Mantiene la ruta probada de Omni Tuya Local → HAP/HKSV → Apple Casa: no se cambian FFmpeg, negociación de streaming, renovación de URLs, datos de emparejamiento, fabrics ni códigos QR.
+- Pruebas automatizadas nuevas: nombres de HA, movimiento, renovaciones Omni, métricas por múltiples entidades, respuesta segura y control de acceso.
+- Se documenta la compatibilidad en preparación para HA 2026.11 y el plan de pruebas físicas; no se promete que una cámara Matter 1.5 importada se traduzca automáticamente a HAP.
+- Chrisalvir confirma una cámara Omni operativa en Apple Casa con vídeo, audio, movimiento y grabación en su instalación actual. **Aún no se ha comprobado en HA 2026.11 beta ni con varias cámaras simultáneas.**
+
 ## [2.2.7] - 2026-10-26
 
 - Sincroniza el estado Matter de la aspiradora cuando cambian los sensores vinculados de batería y carga del mismo dispositivo de Home Assistant.

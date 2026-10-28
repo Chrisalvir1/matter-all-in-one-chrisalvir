@@ -34,6 +34,7 @@ import { HevcRecordingDelegate } from "./hevc/hevc-recording.js";
 import crypto from "node:crypto";
 import os from "node:os";
 import { ScryptedStorage } from "../scrypted/scrypted-storage.js";
+import { getHaEntitySearchText } from "../../utils/ha-entity-names.js";
 import {
   HAP_FIRMWARE_REVISION,
   HAP_SOFTWARE_REVISION,
@@ -916,9 +917,9 @@ export class HomeKitCameraAccessory {
       for (const cand of c120Candidates) {
         if (states.has(cand)) return cand;
       }
-      for (const [candId, candState] of states.entries()) {
+      for (const [candId] of states.entries()) {
         if (!candId.startsWith("binary_sensor.") && !candId.startsWith("event.")) continue;
-        const fn = (candState?.attributes?.friendly_name || "").toLowerCase();
+        const fn = getHaEntitySearchText(this.platform?.ha, candId).toLowerCase();
         const candIdLower = candId.toLowerCase();
         const hasC120Token =
           candIdLower.includes("c120") ||
@@ -1021,7 +1022,7 @@ export class HomeKitCameraAccessory {
           entityId.includes("auto");
         if (!isMotionClass) continue;
         const cleanEntity = clean(entityId);
-        const fn = (state?.attributes?.friendly_name || "").toLowerCase();
+        const fn = getHaEntitySearchText(this.platform?.ha, entityId).toLowerCase();
         const cleanFn = clean(fn);
         const camWords = (this.record?.name || "")
           .toLowerCase()

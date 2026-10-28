@@ -1,6 +1,6 @@
 name: "Matter All-in-one (Chrisalvir)"
 description: "Universal Matter 1.6.1 bridge for Home Assistant with Apple Home HAP live view, MQTT and BLE fan stabilization."
-version: "2.2.7"
+version: "2.3.0"
 slug: "matter_all_in_one_bridge"
 
 image: "ghcr.io/chrisalvir1/matter-all-in-one-chrisalvir"
@@ -19,6 +19,9 @@ schema:
   token: str?
   group_by_device_id: bool?
   mdnsinterface: str?
+  # Optional, read-only camera diagnostics for a locally trusted MCP adapter.
+  # Disabled unless a separate secret of at least 24 characters is configured.
+  diagnostics_token: password?
   # Kept only so existing user configuration remains valid. Matter's required
   # LAN-only IPv6 link-local transport is no longer disabled by this option.
   ipv4_only: bool?

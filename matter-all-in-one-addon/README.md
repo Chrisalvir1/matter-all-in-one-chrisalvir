@@ -1,337 +1,103 @@
-# Matter All-in-One for Home Assistant — v2.1.18
+# Matter All-in-One Chrisalvir — complemento v2.3.0
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/chrisalvir1/matter-all-in-one-chrisalvir/main/matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
 </div>
 
-> Puente Matter 1.6 para Home Assistant con código QR independiente para apagadores dobles/triples, perfiles conservadores para Apple Home y modelo/marca real en el campo Model.
-> **Base:** `matterbridge@3.11.0` · **Node.js:** `24.22.1-alpine3.24` · **TypeScript:** `7.0.2` · **Spec:** Matter 1.6.1
+**Compatible a nivel de código con Home Assistant 2026.10 y preparado para Home Assistant 2026.11 beta.** Esta última versión todavía requiere validación en una instalación real.
 
----
+Puente **Matter 1.6.1** basado en **Matterbridge 3.11.0** con publicación independiente **HomeKit HAP/HKSV** para cámaras y accesorios compatibles. Incluye integración con Omni Tuya Local, Camera.UI, Scrypted y el inventario de Home Assistant.
 
-## Release 2.1.18 (2026-10-25)
+## Novedades v2.3.0 — 28 de octubre de 2026
 
-- Restablece el accesorio Matter en el mismo `ServerNode`, borra los fabrics y vuelve a abrir commissioning sin eliminar el `storedId` ni alterar el perfil Matter elegido.
-- Corrige el error `No value found for key storedId in context persist` que impedía generar el nuevo QR de Robotina.
-- Solo confirma el reinicio cuando Matter ya no informa fabrics y hay un QR o código manual nuevo disponible.
+1. **Home Assistant 2026.11:** soporte defensivo de nombres contextuales mediante nombres del registro y del dispositivo, preservando `entity_id`, `device_id` y los vínculos con sensores de movimiento.
+2. **Omni Tuya Local:** métricas separadas por cámara para asignaciones RTSP efímeras, con intentos, reintentos, duración y errores agregados, sin guardar URLs ni credenciales.
+3. **Ruta HAP/HKSV intacta:** sin cambios en el pipeline de Live View, audio, grabación, detección, emparejamiento ni renovación del stream firmado por sesión.
+4. **Diagnóstico opcional de solo lectura:** nueva ruta `GET /api/custom/ai/camera-diagnostics`, autenticada con secreto `diagnostics_token` y deshabilitada por defecto.
+5. **Pruebas de regresión:** compatibilidad de nombres, sensores de movimiento, reintentos Omni, contadores independientes, privacidad del diagnóstico y autenticación.
+6. **Matter 1.5 cameras:** importarlas a Home Assistant no garantiza una URL compatible con HAP ni las exporta automáticamente a Apple Casa; la funcionalidad depende del dispositivo y de un stream real verificable.
 
-## Release 2.1.17 (2026-10-25)
+### Confirmación del entorno de Chrisalvir
 
-- Conserva las aspiradoras como Matter RVC nativo y evita sugerir HAP como televisor por nombres de entidades que contienen `tv`.
-- Vincula al accesorio RVC la batería y el selector de modo del mismo dispositivo de Home Assistant cuando esas entidades están disponibles.
-- Publica sensores de potencia, energía y voltaje con el perfil Matter Electrical Sensor y evita clasificarlos como temperatura.
-- Apple Casa solo mostrará controles y valores compatibles con el perfil RVC y con lo que Home Assistant realmente expone; los sensores eléctricos requieren un cliente que admita ese tipo Matter.
+Una cámara **Omni Tuya Local** ya funciona en **Apple Casa** con vídeo en vivo, movimiento, audio y grabaciones HKSV. Es una observación real del usuario en su instalación actual, **no una certificación de la beta 2026.11**.
 
-## Release 2.1.16 (2026-10-23)
+## Tabla de integración
 
-- Actualiza Matterbridge a 3.11.0 con Matter 1.6.1 y matter.js 0.18.0; revisa la conformidad de los dispositivos y conserva la configuración persistente del puente.
-- Corrige la función Lighting obligatoria de On/Off en enchufes Matter, incluidos los dispositivos compuestos, y añade pruebas con endpoints reales en modo estricto.
-- Actualiza Node.js a 24.22.1 y corrige las dependencias transitivas vulnerables follow-redirects e ip-address.
-- Actualiza MQTT, Undici, Werift, React y herramientas de construcción y pruebas; alinea las comprobaciones ARM64 con las versiones del contenedor.
-- Esta actualización no acredita la resolución de Live View ni la persistencia de clips HKSV: requieren verificación física en Apple Casa.
+| Fuente | Transporte de salida |
+| --- | --- |
+| Entidades HA compatibles (luces, sensores, persianas, cerraduras, RVC, etc.) | Matter 1.6.1; QR por accesorio según configuración |
+| Cámara Omni Tuya Local | HomeKit HAP/HKSV con URL RTSP renovada por sesión |
+| Cámaras Scrypted y Camera.UI | HomeKit HAP/HKSV, según códec, fuente y capacidades |
+| Cámara directa de Home Assistant | HAP solo si ofrece una fuente de vídeo utilizable |
 
-## Release 2.1.15 (2026-10-18)
+Las cámaras HomeKit HAP **no son cámaras Matter**. Para las funciones HKSV se necesita un hub doméstico Apple y la configuración de iCloud adecuada.
 
-- Actualiza la base oficial de ejecución a **Matterbridge 3.10.14** sobre Node.js 24.21.0 y Alpine 3.24.
-- Normaliza los límites de memoria bajo Docker (`constrainedMemory`) en Home Assistant OS para evitar lecturas infladas de la máquina host.
-- Optimiza los contextos de almacenamiento de MatterNode omitiendo escrituras duplicadas en disco, acelerando los arranques y protegiendo el almacenamiento flash.
-- Incorpora atributos de batería de Matter 1.6.1 (`batCapacity`, `batTimeToFullCharge`, etc.) y tipo `TiltOnlyInteriorBlind` conforme para persianas.
-- Actualiza dependencias estables: `werift@0.25.1`, `undici@8.12.2`, `mqtt@5.16.1`, `react@19.3.1`, `vite@8.3.4`, `vitest@5.0.5` y `lucide-react@1.59.0`.
+## Instalar o actualizar
 
-## Release 2.1.2 (2026-10-11)
+Añade este repositorio de aplicaciones en Home Assistant:
 
-- La cámara del comedero Omni Tuya, nombrada “DPS camera”, ya no se filtra como datapoint genérico y queda disponible para exportación HAP.
-- Los datapoints DPS que no sean cámaras siguen ocultos.
-- Requiere Omni Tuya Local 1.11.4 o posterior para renovar la URL RTSP firmada por sesión.
+```text
+https://github.com/Chrisalvir1/matter-all-in-one-chrisalvir
+```
 
-## Release 2.1.1 (2026-10-11)
+Instala **Matter All-in-one (Chrisalvir)** y elige la versión **2.3.0** cuando la imagen `amd64` / `aarch64` esté publicada. La distribución se realiza desde GHCR, con verificaciones previas de tipos, compilación, pruebas y disponibilidad pública de la imagen.
 
-- La ruta HAP solicita una URL RTSP firmada nueva a Omni Tuya Local al comenzar cada sesión Camera.UI.
-- Requiere Omni Tuya Local 1.11.4, permiso Tuya IoT Video Live Stream y conectividad con Tuya. La reproducción física requiere verificación en Home Assistant.
+Antes de actualizar, realiza una copia de seguridad de la configuración y el almacenamiento persistente. No es necesario ni recomendable borrar las fabrics Matter ni volver a emparejar una cámara estable.
 
-## Release 2.1.0 (2026-10-10)
+### Opciones del complemento
 
-- Matterbridge 3.10.13; Node.js 24.21.0; multi-architecture image targets `amd64` and `aarch64`.
-- HAP valves support duration and remaining time, restore timers after restart, and retain existing UUIDs and pairings.
-- Physical valve closure and Apple Home/Matter interoperability still require validation on the user’s Home Assistant instance.
+| Clave | Descripción |
+| --- | --- |
+| `host` | Endpoint HA; usa `http://supervisor/core` automáticamente en el add-on |
+| `token` | Token HA; se usa el de Supervisor si no está configurado |
+| `group_by_device_id` | Agrupa los componentes del mismo dispositivo |
+| `mdnsinterface` | Interfaz de descubrimiento mDNS opcional |
+| `ipv4_only` | Compatibilidad heredada; Matter conserva IPv6 local |
+| `diagnostics_token` | Secreto opcional de **24+ caracteres** para habilitar diagnósticos de cámara de solo lectura |
 
-## AI Agent Context (machine-readable)
+### Diagnóstico opcional
 
-This file is intentionally structured for both humans and AI agents.
+El endpoint `GET /api/custom/ai/camera-diagnostics` proporciona solo datos allowlist: `entity_id`, disponibilidad, estado HAP, audio, movimiento, estado HKSV, estado resumido Live View y asignaciones Omni. Se consulta mediante `Authorization: Bearer <diagnostics_token>` desde un acceso **local confiable**.
+
+- Sin secreto configurado: **404**; secreto incorrecto: **401**.
+- No entrega URLs RTSP, tokens de HA, SDP, contraseñas, PIN de HomeKit ni logs sin filtrar.
+- No es un servidor MCP ni ofrece acciones remotas de modificación.
+- No expongas directamente el puerto interno 8285 a Internet.
+
+## Validación pendiente de 2026.11
+
+Se requiere una prueba física separada, sin actualizar el Home Assistant principal:
+
+1. Confirmar el enlace de `camera.*` con su sensor real de movimiento después del cambio de nombres.
+2. Abrir Live View, escuchar audio, generar detección y reproducir un clip HKSV auténtico.
+3. Forzar una reasignación de RTSP Omni y comprobar una recuperación limpia.
+4. Probar varias cámaras simultáneas antes de declarar esa carga validada.
+
+## Datos de implementación
 
 ```yaml
 project: matter-all-in-one-chrisalvir
-version: "2.1.17"
+version: "2.3.0"
+home_assistant: "2026.10; 2026.11-beta contract tested, hardware validation pending"
 spec: "Matter 1.6.1"
 engine: matterbridge
 engine_version: "3.11.0"
 node_image: "node:24.22.1-alpine3.24"
-bridge_mode: server       # Each HA device = ServerNode; standalone entities keep their own QR
-plugin_mode: dynamic      # MatterbridgeDynamicPlatform
-ha_integration: websocket # WebSocket to HA supervisor API
+ha_integration: websocket
+plugin_mode: dynamic
 persistent_data: /data/.matterbridge
-config_file: /root/.matterbridge/matter-all-in-one-chrisalvir.config.json
-ui_port: 8285             # internal; proxied to 8283 via proxy.js
 ingress_port: 8283
-matterbridge_ui_port: 8284
+internal_plugin_port: 8285
+diagnostics: opt-in read-only
 ```
 
-### Matter 1.6 Feature Mapping
-
-| Matter 1.6 Feature | Status in this bridge |
-|---|---|
-| NFC Commissioning | Not implemented (requires physical NFC hardware). |
-| Joint Fabric | Not implemented (controller / fabric admin feature). |
-| Thermostat Suggestions | Supported via Matterbridge 3.10.6 (`Thermostat.Feature.ThermostatSuggestions`). |
-| Security Sensor Event History | Not yet mapped — pending HA event_log integration. |
-
-### Válvulas HAP con duración
-
-Los perfiles HAP de válvula conservan `SetDuration` y `RemainingDuration` en el registro persistente ya usado por el accesorio. La fecha límite se escribe de forma atómica y con permisos de archivo privados; al reiniciar, el complemento reanuda el temporizador si Home Assistant informa que la válvula sigue abierta. Un cierre manual o un estado confirmado como cerrado cancela la fecha límite. Ante un error explícito de Home Assistant se intentan hasta tres llamadas de cierre y se registra un diagnóstico. Si la válvula está desconectada, el temporizador queda pendiente y se reanuda al recibir un estado disponible.
-
-El temporizador solo solicita a Home Assistant el servicio de cierre. No puede confirmar que una válvula física haya cerrado ni sustituye un controlador o mecanismo de seguridad certificado; verifica el estado físico y conserva protecciones independientes para agua/riego. Las identidades, UUID y datos de emparejamiento HAP existentes no cambian.
-
-### Camera.UI / HomeKit stability
-
-Each camera uses its configured live-stream origin. Camera.UI cameras use the
-Camera.UI RTSP feed; the Tapo C402 uses the direct Home Assistant add-on RTSP
-feed. For an Omni Tuya Local camera, including cameras discovered by Camera.UI,
-each HAP live-view session resolves the real Home Assistant `camera.*` entity and
-requests a fresh signed RTSP URL from Omni through Home Assistant's authenticated
-WebSocket API. A saved Camera.UI RTSP URL is never reused as the Omni source after
-a restart. The signed URL stays in memory and the HA bearer token is not sent to
-Tuya's RTSP server. This path requires matching Omni and Matter All-in-One versions
-and active Tuya IoT Video Live Stream access; upstream Tuya or network outages can
-still prevent playback. go2rtc remains suitable for permanent camera URLs but cannot
-renew Tuya's signed authorization. The C402 remains a
-single camera card in the project UI, but its source is labeled Home Assistant
-RTSP. A Camera.UI refresh preserves existing HAP UUIDs, ports, pairings, motion
-detectors, HKSV pre-buffering, and Live View listeners. A paired camera is
-remounted only after an explicit stream-source edit or live verification.
-
----
-
-## Minimum Requirements
-
-- **Apple Home:** HomePod mini / Apple TV 4K (Matter hub); Thread router only needed for Thread accessories.
-- **Matterbridge:** `>= 3.11.0` (runtime image uses `3.11.0`)
-- **Home Assistant:** `>= 2025.1`
-
----
-
-## Supported Devices & HomeKit Compatibility
-
-| Device Type | HA Domain / Class | Apple Home |
-|---|---|---|
-| Lights, plugs, locks, thermostats, fans, RVC | `light.*`, `switch.*`, `lock.*`, `climate.*`, `fan.*`, `vacuum.*` | Supported |
-| Covers | `cover.*` with `windowCovering` profile | Supported |
-| Contact, motion, occupancy, temperature, humidity, moisture, ambient light | `binary_sensor.*`, `sensor.*` (supported classes) | Supported |
-| Media players | `media_player.*` as `onOffPlugInUnit` fallback | Supported |
-| Camera, energy tariff, smoke/CO, pressure, flow, alarm, water heater, generic button | - | Not exported by default |
-
-> **Note:** Devices marked as not exported are intentionally excluded until full cluster/transport mappings are implemented and interop-tested with Matter 1.6 controllers.
-
----
-
-## Architecture
-
-```
-Home Assistant (WebSocket API)
-        │
-        ▼
-HomeAssistantPlatform (MatterbridgeDynamicPlatform)
-        │
-        ├── VacuumEntity   → RoboticVacuumCleaner (ServerNode, own QR)
-        ├── LockEntity     → DoorLock (ServerNode, own QR)
-        ├── BaseEntity     → Light / Switch / Sensor (ServerNode, own QR)
-        └── CompositeDeviceEntity → Fan+Light grouped (ServerNode, own QR)
-        │
-        ▼
-matterbridge@3.11.0 (Matter SDK: @matter/node)
-        │
-        ▼
-Matter 1.6 Network (mDNS + BLE commissioning)
-```
-
----
-
-## Key Files for AI Agents
-
-| File | Purpose |
-|---|---|
-| `src/platform.ts` | Core `HomeAssistantPlatform`; HA→Matter routing, UI HTTP server |
-| `src/homeAssistant.ts` | WebSocket client, entity discovery, state sync |
-| `src/device-registry.ts` | Domain → MatterDeviceType mapping |
-| `src/device-profiles.ts` | UI export profiles per HA domain |
-| `src/homekit.compat.ts` | Matter 1.6 HomeKit support flags |
-| `src/entities/base.entity.ts` | Base entity with cluster registration |
-| `src/entities/vacuum.entity.ts` | RVC Matter 1.4+ (device type 0x0074) |
-| `src/entities/lock.entity.ts` | DoorLock with alarm_control_panel support |
-| `src/entities/composite-device.entity.ts` | Fan+Light grouped by HA device_id or explicit include list |
-| `src/converters/vacuum.converter.ts` | HA vacuum state → Matter RVC attributes |
-| `run.sh` | Startup: mDNS interface detection, plugin registration, proxy |
-| `Dockerfile` | Imagen multi-stage reproducible con `node:24.22.1-alpine3.24` y `matterbridge@3.11.0` |
-
----
-
-## Installation
-
-> ⚠️ **Siempre usa la última versión disponible.** Las instrucciones de abajo reflejan la versión actual del proyecto.
-
-```bash
-# 1. Instalar Matterbridge (última versión requerida)
-npm install -g matterbridge@3.11.0
-
-# 2. Instalar el plugin NPM independiente (su versión es distinta a la del add-on de HA)
-npm install -g matter-all-in-one-chrisalvir
-```
-
-En Home Assistant, el add-on usa `ghcr.io/chrisalvir1/matter-all-in-one-chrisalvir` con un manifiesto multi-arquitectura para `amd64` y `aarch64`. Una actualización solo descarga la imagen precompilada desde GHCR — no recompila dependencias en el host.
-
-Para actualizar desde una versión anterior:
-
-```bash
-npm update -g matterbridge
-npm update -g matter-all-in-one-chrisalvir
-```
-
----
-
-## Changelog Summary (latest)
-
-### v2.0.5 (2026-10-09) — renovación estable del stream de cámara
-
-- Conserva el ID real de la cámara HA al renovar streams HLS y sigue buscando cámaras Camera.UI emparejadas después de un arranque parcial.
-- Mantiene la fuente por HA para cámaras Tapo aunque Camera.UI no proporcione una URL RTSP estática.
-
-### v2.0.4 (2026-10-10) — recuperación de cámaras tras reinicios
-
-- Camera.UI reintenta automáticamente el descubrimiento cuando todavía no devuelve cámaras durante el arranque.
-- Al volver el servicio de cámaras, el complemento publica los accesorios HAP sin requerir reiniciar el add-on.
-- Restaura la identidad y el emparejamiento HAP guardados para conservar los accesorios ya agregados a Apple Home.
-
-### v2.0.3 (2026-10-10) — recuperación del video de Tapo C402
-
-- Renueva la fuente HLS de Home Assistant y autentica los streams protegidos.
-- Corrige la lectura del proxy continuo JPEG con el decodificador MJPEG de FFmpeg.
-
-### v2.0.2 (2026-10-06) — respuestas HAP/Matter y sincronización
-
-- Limita a 750 ms la espera de los comandos HAP a Home Assistant y registra fallos inmediatos y tardíos.
-- Evita nuevos snapshots completos al restaurar dispositivos pendientes por eventos de otras entidades.
-- Añade trazas HAP/HA, avisos de demora del proceso y conserva las trazas Matter para localizar latencia.
-
-### v2.0.0 (2026-10-07) — estabilidad, sincronización y respuesta Siri/HomeKit
-
-- El botón **Actualizar** obtiene el estado de Home Assistant, descubre entidades nuevas y sincroniza los accesorios exportados sin reiniciar el addon.
-- Actualiza dependencias compatibles y mantiene Node.js en la línea LTS 24.
-- Mejora la respuesta de comandos Matter y registra fallos tardíos de Home Assistant.
-- Conserva estados explícitos y disponibilidad Govee/Tuya para evitar falsos estados encendidos.
-
-### v1.8.37 (2026-09-20) — detección HKSV bajo demanda
-
-- Recupera el detector local de movimiento como respaldo cuando Camera.UI MQTT no entrega eventos al bridge.
-- El detector se abre solo tras emparejamiento real y negociación HKSV de Apple Home; no arranca para QR pendientes ni durante la carga inicial.
-
-### v1.8.36 (2026-09-20) — restaurar exportación y credenciales Camera.UI
-
-- Un restablecimiento HAP reactiva una cámara que fue eliminada de la exportación antes de generar su QR nuevo.
-- Los streams canónicos `cui_*` actualizan credenciales RTSP antiguas desde la configuración Camera.UI guardada; evita 401 sin modificar Tapo C402 ni URLs manuales.
-
-### v1.8.35 (2026-09-20) — QR individuales y Camera.UI sin lectores duplicados
-
-- Los registros Camera.UI sin emparejar migran del PIN compartido heredado a un PIN HAP individual; al restablecer, el nuevo PIN también se persiste correctamente.
-- Las cámaras Camera.UI no hacen probe ni snapshot RTSP automáticos durante el arranque. Se usa la metadata de Camera.UI y se abre el stream solo bajo petición de Casa o al verificar manualmente.
-- La acción de la interfaz muestra claramente Activar o Desactivar HomeKit para evitar invertir el estado por accidente.
-
-### v1.8.34 (2026-09-20) — HAP, Live View y arranque sin saturación
-
-- Restablecer emparejamiento conserva el PIN HAP recién generado: ya no se sobrescribe con el PIN por defecto. QR, Setup ID, MAC y puerto cambian juntos.
-- HKSV deja de abrir pre-buffers RTSP para todas las cámaras al arrancar; se activa cuando el Home Hub configura grabación o solicita un clip. Esto libera Camera.UI y protege Live View, incluida la Tapo C402.
-- Las cámaras con movimiento MQTT nativo de Camera.UI no abren un detector FFmpeg adicional; la detección nativa sigue vinculada a la misma cámara.
-- Verificar Stream usa un único probe acotado y devuelve una respuesta rápida si ya hay otra verificación activa; el diagnóstico profundo conserva las mediciones extendidas.
-
-### v1.8.33 (2026-09-20) — guardado Camera.UI inmediato
-
-- Guardar la configuración responde antes de remontar accesorios HAP, evitando que la pantalla quede bloqueada en “Guardando”.
-
-### v1.8.32 (2026-09-20) — Wyze mediante restream Camera.UI
-
-- Wyze deja de depender del RTSP físico efímero y usa el stream canónico `cui_*` de Camera.UI.
-
-### v1.8.31 (2026-09-20) — reinicio HAP real y servicios de cámara
-
-- Restablecer emparejamiento genera una identidad HAP completa y un PIN/QR nuevos.
-- Las selecciones de luz, sirena y sensores se reconstruyen como servicios del mismo accesorio de cámara en Apple Casa.
-
-### v1.8.30 (2026-09-20) — audio HKSV tolerante a discontinuidades
-
-- Normaliza únicamente la línea de tiempo del audio que HomeKit/HKSV ya recodifica; el vídeo H.264 en passthrough no se altera.
-- Añade diagnósticos explícitos de `SetupEndpoints` y `START` HAP para identificar sesiones Apple Home rechazadas o incompletas.
-
-### v1.8.25 (2026-09-20) — reintento BLE sin bloquear llamadas normales
-
-### v1.8.24 (2026-09-20) — reintentar comandos BLE/fan tras reconexión de Home Assistant
-
-### v1.8.23 (2026-09-20) — conservar RTSP y diagnosticar comandos BLE/fan
-
-- No sobrescribe streams existentes de go2rtc configurados por Camera.UI.
-- Registra errores reales de servicios HA para ventiladores BLE en lugar de ocultarlos.
-
-### v1.8.22 (2026-09-20) — sincronización HA para instalaciones grandes
-
-- Snapshot de Home Assistant con timeout de 60 s por solicitud.
-- Lectura serial de servicios, registros y estados para evitar saturar el WebSocket en instalaciones grandes.
-- Conservación del inventario anterior si el snapshot nuevo falla.
-
-### v1.8.21 (2026-09-20) — Matterbridge 3.10.10 y disponibilidad real
-
-- Matterbridge actualizado a 3.10.10, incluyendo las correcciones de Camera/WebRTC y el SDK Matter 1.6 más reciente.
-- Una caída del WebSocket de Home Assistant marca los accesorios exportados como no alcanzables sin eliminarlos ni romper su emparejamiento HAP; al reconectar vuelven a estar disponibles.
-- Se elimina el fallback incorrecto a `127.0.0.1` dentro del contenedor, que producía respuestas 404 y dejaba estados y streams congelados.
-
-### v1.8.20 (2026-09-18) — HAP Live View y HKSV fiables
-
-- H.264 mantiene copia RTP/SRTP nativa, ahora repitiendo SPS/PPS por keyframe para que Apple Home pueda decodificar inmediatamente un restream ya abierto.
-- HEVC/H.265 conserva la fuente original y se convierte a H.264 solo en el límite RTP de HAP, porque el accesorio negocia perfiles H.264; evita paquetes no negociados y «Sin respuesta».
-- HKSV conserva H.264 nativo y normaliza DTS/PTS para generar fragmentos fMP4 monotónicos y válidos para detección y grabación.
-- Las cámaras HAP ya emparejadas no se eliminan ni se vuelven a enlazar.
-
-### v1.2.62 (2026-07-24) — Estabilidad y actualización a 3.10.2
-
-- **🔧 Reconexión sin carreras de condición:** Se elimina la llamada redundante a `startReconnect()` dentro del callback `connectionTimeout`. Cuando `socket.terminate()` es invocado, Node.js siempre emite el evento `close` → `onClose()` → `startReconnect()`. La llamada duplicada podía avanzar `reconnectRetry` dos veces y producir mensajes redundantes. Ahora hay un único punto de entrada garantizado.
-- **🔇 Filtro de ruido en logs:** Las entidades de Home Assistant **no exportadas como Matter** (p. ej. Samsung TV, sensores de alarma solar, cerrojos de baño) ya no generan `WARN`/`NOTICE` cuando van a `unavailable`. Se registran a nivel `debug`. Solo los accesorios Matter activos emiten advertencias visibles.
-- **⬆️ Matterbridge 3.10.2:** `@matter/main` v0.17.6 · Closure devices con `countdownTime`, `mainState`, `overallCurrentState/TargetState`, `addPanel()` · Fix `ClosureTag` export shadowing · Frontend v3.5.4 con `@rjsf v6.7.0` y `vite v8.1.5` · Detección correcta de plugins locales.
-- **🏷️ Versión sincronizada:** `matterbridge.version` en `package.json` ahora es `1.2.62` (antes atascado en `1.2.52`). Matterbridge ya muestra la versión correcta del plugin.
-
-### v1.2.57–1.2.58 (2026-07-23) — Identidad visual
-
-- Encabezado del panel lateral: `MATTER 1.6 BRIDGE`. Título principal: `Matter All In One Chrisalvir`.
-
-### v1.2.56 (2026-07-23) — Badge de emparejamiento
-
-- Indicador numérico dinámico en el botón *Por emparejar*. Actualización en tiempo real cuando un accesorio se desempareja o se publica sin escanear. Filtro activo por accesorios pendientes de escanear.
-
-### v1.2.55 (2026-07-23) — Conteo exacto de emparejados
-
-- El contador *Emparejados* usa `matterNodeKey` como fuente de verdad en lugar de grupos de tarjetas. Dispositivos con múltiples canales independientes (apagadores/enchufes dobles/triples) suman correctamente.
-
-### v1.2.54 (2026-07-23) — Modelo y QR independiente
-
-- Campo *Model* en Apple Home muestra `Marca + Modelo real` (p. ej. `Tuya CB03-SBL`). QR independiente por canal en apagadores dobles/triples y enchufes dobles. Filtrado de entidades DPS genéricas de Tuya.
-
-### v1.2.52 (2026-07-22) — Fabric Operational Credentials
-
-- `OperationalCredentials` como fuente de verdad de fabrics. Al eliminar el último fabric desde HomeKit, el accesorio pasa automáticamente a **No emparejado**.
-
-### v1.2.51 (2026-07-22) — Luces de color
-
-- Entidades `light.*` RGB/HS/XY publican `ExtendedColorLight` con `ColorControl`. Govee RGBIC exportado correctamente.
-
-See [CHANGELOG.md](CHANGELOG.md) for full history.
-
-### Validación Raspberry Pi 5 / ARM64
-
-El complemento declara `aarch64` y `amd64`. `.github/workflows/arm64-validation.yml` construye la imagen en `ubuntu-24.04-arm`, comprueba Node.js 24.22.1, Matterbridge 3.11.0, los imports HAP/WebRTC/Scrypted y la ejecución de FFmpeg/ffprobe. Este workflow no publica imágenes ni conecta con Home Assistant o monta datos persistentes.
-
-Para reproducir el build en un equipo ARM64 de pruebas, desde `matter-all-in-one-addon/`, ejecutar `docker build --platform linux/arm64 --build-arg BUILD_ARCH=aarch64 --build-arg BUILD_VERSION=ci -t matter-arm64:ci .`. En x86_64 hace falta emulación ARM64 para ejecutar los stages. Un análisis estático del Dockerfile o tests x86_64 no validan el runtime ARM64, la Raspberry Pi, las cámaras ni los emparejamientos físicos. Antes de actualizar HA OS, conservar un backup completo descargado fuera del SSD y todo `/data` del complemento, incluyendo `.matterbridge`, `hap-persist` y los registros HAP.
+## Más información
+
+- [README principal del proyecto](../README.md)
+- [Notas de publicación v2.3.0](../docs/RELEASE_NOTES_2.3.0.md)
+- [Guía técnica de compatibilidad con HA 2026.11](../docs/home-assistant-2026-11-readiness.md)
+- [Compatibilidad HomeKit](docs/homekit-compatibility.md)
+- [Thread en Home Assistant](docs/thread-setup.md)
+- [Cambios del complemento](CHANGELOG.md)
+
+**Licencia:** Apache-2.0. **Autor:** Chrisalvir.
