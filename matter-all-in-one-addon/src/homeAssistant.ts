@@ -41,6 +41,18 @@ import WebSocket, { ErrorEvent } from "ws";
 export type DeviceId = string;
 export type EntityId = string;
 
+/** Safe, aggregate Omni allocation metrics. Signed URLs and errors are never retained. */
+export interface OmniCameraAllocationMetrics {
+  entityId: string;
+  requests: number;
+  successes: number;
+  failures: number;
+  lastAttemptCount: number;
+  lastDurationMs: number;
+  lastResult: "success" | "failure";
+  lastAt: string;
+}
+
 /**
  * Interface representing a Home Assistant device.
  */
@@ -1196,6 +1208,15 @@ interface HomeAssistantEventEmitter {
 }
 
 export class HomeAssistant extends EventEmitter {
+  private readonly omniCameraAllocations = new Map<string, OmniCameraAllocationMetrics>();
+
+  public getOmniCameraAllocationMetrics(entityId?: string): OmniCameraAllocationMetrics[] {
+    const results = entityId
+      ? [this.omniCameraAllocations.get(entityId)]
+      : [...this.omniCameraAllocations.values()];
+    return results.filter((result): result is OmniCameraAllocationMetrics => Boolean(result))
+      .map((result) => ({ ...result }));
+  }
   connected = false;
   ws: WebSocket | null = null;
   wsUrl: string;
@@ -2396,7 +2417,28 @@ export class HomeAssistant extends EventEmitter {
     // Tuya issues a short-lived, one-session URL. A reconnect can briefly race
     // its allocation, so retry the allocation before considering another source.
     // Never include the response in logs because it contains stream credentials.
+    const startedAt = Date.now();
+    let attempts = 0;
+    const recordAllocation = (success: boolean): void => {
+      const previous = this.omniCameraAllocations.get(entityId);
+      this.omniCameraAllocations.set(entityId, {
+        entityId,
+        requests: (previous?.requests ?? 0) + 1,
+        successes: (previous?.successes ?? 0) + Number(success),
+        failures: (previous?.failures ?? 0) + Number(!success),
+        lastAttemptCount: attempts,
+        lastDurationMs: Math.max(0, Date.now() - startedAt),
+        lastResult: success ? "success" : "failure",
+        lastAt: new Date().toISOString(),
+      });
+      // Bound diagnostics for installations that discover many camera entities.
+      if (this.omniCameraAllocations.size > 64) {
+        const oldest = this.omniCameraAllocations.keys().next().value;
+        if (oldest) this.omniCameraAllocations.delete(oldest);
+      }
+    };
     for (const [attempt, delayMs] of [0, 300, 900].entries()) {
+      attempts++;
       if (delayMs) await new Promise((resolve) => setTimeout(resolve, delayMs));
       try {
         const response = await this.request({
@@ -2407,7 +2449,10 @@ export class HomeAssistant extends EventEmitter {
           response.success && response.result && typeof response.result === "object"
             ? (response.result as any).url
             : undefined;
-        if (typeof url === "string" && /^rtsps?:\/\//i.test(url)) return url;
+        if (typeof url === "string" && /^rtsps?:\/\//i.test(url)) {
+          recordAllocation(true);
+          return url;
+        }
       } catch {
         // Non-Omni cameras do not implement this command. Avoid logging a response
         // that could contain a signed stream URL.
@@ -2416,6 +2461,7 @@ export class HomeAssistant extends EventEmitter {
         );
       }
     }
+    recordAllocation(false);
     return null;
   }
 

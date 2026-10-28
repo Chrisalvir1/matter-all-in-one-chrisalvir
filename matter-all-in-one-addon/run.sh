@@ -10,6 +10,12 @@ HOST=$(jq -r '.host // empty' "$OPTIONS_FILE")
 TOKEN=$(jq -r '.token // empty' "$OPTIONS_FILE")
 MDNSINTERFACE=$(jq -r '.mdnsinterface // empty' "$OPTIONS_FILE")
 GROUP_BY_DEVICE_ID=$(jq -r 'if .group_by_device_id == null then true else .group_by_device_id end' "$OPTIONS_FILE")
+DIAGNOSTICS_TOKEN=$(jq -r '.diagnostics_token // empty' "$OPTIONS_FILE")
+if [ "${#DIAGNOSTICS_TOKEN}" -ge 24 ]; then
+    export MATTER_AIO_DIAGNOSTICS_TOKEN="$DIAGNOSTICS_TOKEN"
+elif [ -n "$DIAGNOSTICS_TOKEN" ]; then
+    echo "[Warning] Read-only camera diagnostics disabled: diagnostics_token must be at least 24 characters."
+fi
 
 # Fallback to supervisor API if defaults are used
 if [ -z "$HOST" ] || [ "$HOST" = "http://supervisor/core" ]; then
