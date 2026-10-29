@@ -204,7 +204,8 @@ describe("Tapo C120 Motion Sensor Linking & HKSV Triggering (v1.9.7)", () => {
     );
 
     const ladder = acc.buildDeclaredResolutions();
-    expect(ladder).toEqual([[1920, 1080, 20]]);
+    expect(ladder[0]).toEqual([1920, 1080, 20]);
+    expect(ladder).toContainEqual([640, 360, 15]);
     // Ensure all resolutions are capped at max 20 fps (physical hardware ceiling)
     for (const [w, h, fps] of ladder) {
       expect(fps).toBeLessThanOrEqual(20);

@@ -240,7 +240,7 @@ export function resolveLiveViewFps(
     return undefined;
   }
 
-  const upperLimit = max !== undefined ? Math.min(max, 60) : 60;
+  const upperLimit = Math.min(max ?? 60, src ?? 60, 60);
   return Math.max(1, Math.min(candidate, upperLimit));
 }
 
@@ -401,7 +401,7 @@ export class HomeKitCameraStreamingDelegate
         ? Number(measured.avgFrameRate.split("/")[0]) /
           Number(measured.avgFrameRate.split("/")[1] || 1)
         : undefined,
-      fps: measured?.avgFrameRate ? measured.fps : undefined,
+      fps: measured?.fps,
       bitrateKbps: measured?.bitrateKbps,
       pixFmt: measured?.pixFmt,
       metadataSource: measured ? "ffprobe" : undefined,
@@ -1090,13 +1090,8 @@ export class HomeKitCameraStreamingDelegate
     // startup probe can therefore describe an older URL and incorrectly mark
     // its audio as absent. Probe the exact URL about to be sent to FFmpeg.
     if (this.streamSource.metadata?.isOmniTuyaDirect === true) {
-      const audioFormatKnown =
-        this.capabilities.hasAudio &&
-        this.capabilities.audioCodec !== "none" &&
-        Number.isFinite(this.capabilities.audioSampleRate) &&
-        (this.capabilities.audioSampleRate || 0) > 0;
       let probeConsumedReader = false;
-      if (!audioFormatKnown) {
+      {
         const probeStarted = performance.now();
         try {
           const adapter = new CameraSourceAdapter(
@@ -1106,12 +1101,15 @@ export class HomeKitCameraStreamingDelegate
             this.capabilities,
             this.record,
           );
+          // Re-measure SD/HD changes with recording and motion already paused.
+          adapter.invalidate();
           const { probe, performed } = await adapter.discover(sourceUrl);
           probeConsumedReader = performed;
           if (session.startup)
             session.startup.metrics.probeMs = performance.now() - probeStarted;
           if (probe.valid) {
             this.capabilities.audioProvenance = "PROBED";
+            this.emit("source-capabilities");
             this.capabilities.hasAudio = probe.hasAudio;
             this.capabilities.audioCodec = probe.hasAudio
               ? ((probe.audioCodec || "incompatible") as any)
@@ -1602,12 +1600,9 @@ export class HomeKitCameraStreamingDelegate
       this.capabilities.videoCodec === "h264"
         ? h264VideoPlan(
             this.capabilities,
-            this.capabilities.resolution.width > 1920 ||
-              this.capabilities.resolution.height > 1080 ||
-              forceTranscode
-              ? verifiedH264Encoder()
-              : undefined,
+            verifiedH264Encoder(),
             forceTranscode,
+            { width: video.width, height: video.height, fps: resolvedFps },
           )
         : undefined;
     const needsTapoVideoNormalization = h264Plan?.mode === "normalization";
@@ -1685,7 +1680,7 @@ export class HomeKitCameraStreamingDelegate
         "0:v:0",
         "-an",
         "-vf",
-        `scale=${h264Plan.width}:${h264Plan.height}:flags=fast_bilinear`,
+        `scale=${h264Plan.width}:${h264Plan.height}:force_original_aspect_ratio=decrease:flags=fast_bilinear,pad=${h264Plan.width}:${h264Plan.height}:(ow-iw)/2:(oh-ih)/2,setsar=1${h264Plan.fps ? `,fps=${h264Plan.fps}` : ""}`,
         "-c:v",
         h264Plan.encoder,
         "-pix_fmt",

@@ -6,6 +6,7 @@ import {
 import {
   h264AudioPlan,
   h264VideoPlan,
+  h264SupportedResolutions,
 } from "../src/camera/homekit/media-policy.js";
 import { HomeKitCameraStreamingDelegate } from "../src/camera/homekit/homekit-camera-stream.delegate.js";
 import {
@@ -307,5 +308,56 @@ describe("classic H264 media policy", () => {
         } as any,
       ),
     ).toThrow("validated native Opus");
+  });
+});
+
+describe("dynamic classic HAP output modes", () => {
+  it.each([15, 20, 25, 30])(
+    "supports %i FPS without announcing higher rates",
+    (fps) => {
+      for (const [width, height] of [
+        [640, 360],
+        [1920, 1080],
+      ]) {
+        const c = {
+          ...capabilities,
+          maxFps: 30,
+          measuredVideo: { width, height, fps },
+        };
+        const modes = h264SupportedResolutions(c, true);
+        expect(modes[0]).toEqual([width, height, fps]);
+        expect(
+          modes.every(
+            ([w, h, rate]) => w <= width && h <= height && rate <= fps,
+          ),
+        ).toBe(true);
+        for (const rate of [15, 20, 25, 30].filter((n) => n <= fps))
+          expect(modes).toContainEqual([width, height, rate]);
+        expect(modes).toContainEqual([320, 240, 15]);
+      }
+    },
+  );
+  it("retains native copy and normalizes an actually negotiated lower mode", () => {
+    const c = { ...capabilities, maxFps: 30 };
+    expect(
+      h264VideoPlan(c, undefined, false, { width: 1920, height: 1080, fps: 30 })
+        .mode,
+    ).toBe("copy");
+    expect(
+      h264VideoPlan(c, "libx264", false, { width: 640, height: 360, fps: 15 }),
+    ).toMatchObject({
+      mode: "normalization",
+      width: 640,
+      height: 360,
+      fps: 15,
+    });
+    expect(() =>
+      h264VideoPlan(c, undefined, false, { width: 640, height: 360, fps: 15 }),
+    ).toThrow(/verified encoder/);
+  });
+  it("does not offer resize or FPS conversion without a usable encoder", () => {
+    expect(
+      h264SupportedResolutions({ ...capabilities, maxFps: 15 }, false),
+    ).toEqual([[1920, 1080, 15]]);
   });
 });

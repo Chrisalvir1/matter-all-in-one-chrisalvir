@@ -3,7 +3,11 @@ import { SecureVideoController } from "@homebridge/hap-nodejs";
 import { MultiTierRtpDelegate } from "./hevc/multi-tier-rtp.js";
 import { WebRtcSessionManager } from "./hevc/webrtc-session.js";
 import { CameraSourceAdapter } from "../source-adapter.js";
-import { h264AudioPlan } from "./media-policy.js";
+import {
+  h264AudioPlan,
+  h264SupportedResolutions,
+  encodeH264SupportedVideo,
+} from "./media-policy.js";
 import {
   Accessory,
   AccessoryInfo,
@@ -458,6 +462,21 @@ export class HomeKitCameraAccessory {
       );
     }
 
+    this.delegate.on("source-capabilities", () => {
+      if (!(this.controller instanceof CameraController)) return;
+      const value = encodeH264SupportedVideo(this.buildDeclaredResolutions());
+      for (const stream of this.controller.streamManagements) {
+        const characteristic = stream.service.getCharacteristic(
+          Characteristic.SupportedVideoStreamConfiguration,
+        );
+        if (characteristic.value === value) continue;
+        stream.service.updateCharacteristic(
+          Characteristic.SupportedVideoStreamConfiguration,
+          value,
+        );
+        stream.service.emit("service-configurationChange");
+      }
+    });
     this.delegate.on("session-start", () => {
       this.recordingDelegate?.pausePrebuffer();
       this.localMotionDetector?.pause(
@@ -615,7 +634,7 @@ export class HomeKitCameraAccessory {
   }
 
   public buildRecordingResolutions(): [number, number, number][] {
-    return this.buildDeclaredResolutions();
+    return [this.buildDeclaredResolutions()[0]];
   }
 
   private nativeH264Profile(): H264Profile {
@@ -631,25 +650,10 @@ export class HomeKitCameraAccessory {
   }
 
   private buildDeclaredResolutions(): [number, number, number][] {
-    const c = this.capabilities;
-    const width = c.measuredVideo?.width || c.resolution.width;
-    const height = c.measuredVideo?.height || c.resolution.height;
-    const fps = c.measuredVideo?.fps || c.maxFps;
-    if (!(width > 0 && height > 0 && fps > 0))
-      throw new Error("Camera geometry is unknown");
-    if (
-      (width > 1920 ||
-        height > 1080 ||
-        this.streamSource.sourceType === "ha_proxy" ||
-        this.streamSource.sourceType === "mjpeg") &&
-      !verifiedH264Encoder()
-    )
-      throw new Error("Classic HAP normalization encoder unavailable");
-    const ratio = Math.min(1, 1920 / width, 1080 / height);
-    const w = Math.floor((width * ratio) / 2) * 2,
-      h = Math.floor((height * ratio) / 2) * 2;
-    // Passthrough supplies the measured geometry, independent of UI model aliases.
-    return [[w, h, Math.floor(fps)]];
+    return h264SupportedResolutions(
+      this.capabilities,
+      Boolean(verifiedH264Encoder()),
+    );
   }
 
   /**

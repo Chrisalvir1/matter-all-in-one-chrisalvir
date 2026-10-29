@@ -334,7 +334,7 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     expect(args).toContain("aresample=async=1:first_pts=0");
   });
 
-  it("streams C120 native 2K 2560x1440 with pure copy passthrough", () => {
+  it("normalizes an unsupported 2K request to classic HAP output", () => {
     const platform = createPlatformMock();
     const capabilities = createCapabilities({
       videoCodec: "h264",
@@ -370,10 +370,10 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
       } as any,
     );
 
-    // Native 2K passthrough via copy with zero CPU transcoding
+    // Classic HAP output remains bounded to 1080p.
     expect(args).toContain("-c:v");
-    expect(args).toContain("copy");
-    expect(args).not.toContain("libx264");
+    expect(args).toContain("libx264");
+    expect(args).toContain("-vf");
   });
 
   it("strictly preserves Tapo C402 input and audio parameters untouched", () => {
@@ -512,6 +512,7 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     const platform = createPlatformMock();
     const capabilities = createCapabilities({
       videoCodec: "h264",
+      maxFps: 20,
       audioCodec: "pcm_alaw", // Non-AAC Wyze audio
       hasAudio: true,
       audioSampleRate: 8000,
@@ -670,6 +671,7 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     const platform = createPlatformMock();
     const capabilities = createCapabilities({
       videoCodec: "h264",
+      maxFps: 20,
       audioCodec: "aac",
       audioSampleRate: 16000,
       audioChannels: 1,
@@ -780,7 +782,7 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     );
 
     const resolutions = accessory.buildRecordingResolutions();
-    expect(resolutions).toEqual([[1920, 1080, 20]]);
+    expect(resolutions[0]).toEqual([1920, 1080, 20]);
     expect(resolutions).not.toContainEqual([2560, 1440, 20]);
     expect(resolutions).toContainEqual([1920, 1080, 20]);
     expect(resolutions).not.toContainEqual([1280, 720, 20]);

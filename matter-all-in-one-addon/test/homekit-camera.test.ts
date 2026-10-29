@@ -1,3 +1,4 @@
+import { encodeH264SupportedVideo } from "../src/camera/homekit/media-policy.js";
 // Graph/unit fixture: encoder success is injected; actual encoding is exercised in ffmpeg-camera-runtime.test.ts.
 vi.mock("../src/camera/homekit/media-policy.js", async (original) => ({
   ...(await original<typeof import("../src/camera/homekit/media-policy.js")>()),
@@ -169,6 +170,13 @@ describe("HomeKitCameraAccessory production HAP graph", () => {
     expect(options.streamingOptions.video.resolutions[0]).toEqual([
       1920, 1080, 20,
     ]);
+    expect(
+      accessory.controller?.streamManagements[0].service.getCharacteristic(
+        Characteristic.SupportedVideoStreamConfiguration,
+      ).value,
+    ).toEqual(
+      encodeH264SupportedVideo(options.streamingOptions.video.resolutions),
+    );
     expect(options.streamingOptions.audio.codecs[0].type).toEqual(
       AudioStreamingCodecType.AAC_ELD,
     );
@@ -198,7 +206,8 @@ describe("HomeKitCameraAccessory production HAP graph", () => {
     );
 
     const resolutions = (c402Accessory as any).buildDeclaredResolutions();
-    expect(resolutions.length).toBe(1);
+    expect(resolutions).toContainEqual([640, 360, 15]);
+    expect(resolutions).toContainEqual([1920, 1080, 25]);
     expect(resolutions[0]).toEqual([1920, 1080, 30]);
 
     const options = (c402Accessory as any).buildControllerOptions();
@@ -210,6 +219,33 @@ describe("HomeKitCameraAccessory production HAP graph", () => {
       H264Profile.MAIN,
       H264Profile.HIGH,
     ]);
+  });
+
+  it("refreshes supported formats on the existing HAP services without changing identity", () => {
+    const c = {
+      ...capabilities,
+      measuredVideo: { width: 1920, height: 1080, fps: 30 },
+    };
+    const a = new HomeKitCameraAccessory(
+      createPlatform(),
+      "camera.fixture",
+      createRecord(),
+      c,
+      rtspSource,
+    );
+    const identity = JSON.stringify(a.record);
+    const services = [...a.accessory.services];
+    c.measuredVideo = { width: 640, height: 360, fps: 15 };
+    a.delegate!.emit("source-capabilities");
+    expect(a.accessory.services).toEqual(services);
+    expect(JSON.stringify(a.record)).toBe(identity);
+    const value = a.controller!.streamManagements[0].service.getCharacteristic(
+      Characteristic.SupportedVideoStreamConfiguration,
+    ).value;
+    expect(value).toBe(
+      encodeH264SupportedVideo((a as any).buildDeclaredResolutions()),
+    );
+    expect((a as any).buildDeclaredResolutions()[0]).toEqual([640, 360, 15]);
   });
 
   it("creates an integrated motion service for a Scrypted camera", () => {

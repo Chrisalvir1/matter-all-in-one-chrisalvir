@@ -84,7 +84,8 @@ describe("Integración Estable v1.9.5: Tapo C120 2K Level 5.0 y Aislamiento (20 
     );
 
     const resolutions = acc.buildDeclaredResolutions();
-    expect(resolutions).toEqual([[1920, 1080, 20]]);
+    expect(resolutions[0]).toEqual([1920, 1080, 20]);
+    expect(resolutions).toContainEqual([640, 360, 15]);
     expect(resolutions).toContainEqual([1920, 1080, 20]);
   });
 
@@ -194,7 +195,9 @@ describe("Integración Estable v1.9.5: Tapo C120 2K Level 5.0 y Aislamiento (20 
     const args = (delegate as any).buildStreamArgs(session, request, false);
     expect(args).toContain("-c:v");
     expect(args).toContain("libx264");
-    expect(args).toContain("scale=1920:1080:flags=fast_bilinear");
+    expect(args[args.indexOf("-vf") + 1]).toContain(
+      "scale=1920:1080:force_original_aspect_ratio=decrease",
+    );
   });
 
   // 5. C120 fallback 1080p
@@ -248,7 +251,9 @@ describe("Integración Estable v1.9.5: Tapo C120 2K Level 5.0 y Aislamiento (20 
     const args = (delegate as any).buildStreamArgs(session, request, false);
     expect(args).toContain("-c:v");
     expect(args).toContain("libx264");
-    expect(args).toContain("scale=1920:1080:flags=fast_bilinear");
+    expect(args[args.indexOf("-vf") + 1]).toContain(
+      "scale=1920:1080:force_original_aspect_ratio=decrease",
+    );
   });
 
   // 6. C120 HKSV passthrough copy
@@ -549,7 +554,7 @@ describe("Integración Estable v1.9.5: Tapo C120 2K Level 5.0 y Aislamiento (20 
   });
 
   // 14. Resolución no anunciada: normalización o fallback explícito
-  it("14. aplica fallback normalizado a 1080p ante una resolución no anunciada", () => {
+  it("14. entrega la resolución 720p solicitada por Apple", () => {
     const platform = createMockPlatform();
     const delegate = new HomeKitCameraStreamingDelegate(
       platform as any,
@@ -598,7 +603,9 @@ describe("Integración Estable v1.9.5: Tapo C120 2K Level 5.0 y Aislamiento (20 
     const args = (delegate as any).buildStreamArgs(session, request, false);
     expect(args).toContain("-c:v");
     expect(args).toContain("libx264");
-    expect(args).toContain("scale=1920:1080:flags=fast_bilinear");
+    expect(args[args.indexOf("-vf") + 1]).toContain(
+      "scale=1280:720:force_original_aspect_ratio=decrease",
+    );
   });
 
   // 15. C1200 y C210 no identificadas como C120
