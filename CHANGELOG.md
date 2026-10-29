@@ -1,3 +1,9 @@
+## [2.3.5] - 2026-10-29
+
+- Renueva el snapshot durante Live View desde el mismo proceso FFmpeg cada cinco segundos, conservando hasta 1920 píxeles de ancho sin abrir otra conexión RTSP.
+- Cancela el temporizador PREPARE al recibir START para evitar que expire durante la asignación de la fuente Omni.
+- Pendiente de verificar en Casa: snapshot actualizado, recuperación de detección/HKSV y Live View con datos móviles. Esta versión no se presenta como solución verificada del acceso remoto ni de los clips HKSV.
+
 ## [2.3.3] - 2026-10-29
 
 - Repara el perfil de audio del comedero Frienhund ACF100W: PCM μ-law observado (8 kHz, mono) se entrega a HomeKit como AAC-ELD en Live View y AAC-LC en HKSV.

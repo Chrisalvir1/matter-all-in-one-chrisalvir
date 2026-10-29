@@ -1,3 +1,9 @@
+## [2.3.5] - 2026-10-29
+
+- Renueva el snapshot durante Live View desde el mismo proceso FFmpeg cada cinco segundos, conservando hasta 1920 píxeles de ancho sin abrir otra conexión RTSP.
+- Cancela el temporizador PREPARE al recibir START para evitar que expire durante la asignación de la fuente Omni.
+- Pendiente de verificar en Casa: snapshot actualizado, recuperación de detección/HKSV y Live View con datos móviles. Esta versión no se presenta como solución verificada del acceso remoto ni de los clips HKSV.
+
 ## [2.3.4] - 2026-10-29
 
 - Restaura para Omni Tuya el envío SRTP directo a los puertos negociados por HomeKit, como en 2.3.0; evita insertar el relé RTP local en Live View.

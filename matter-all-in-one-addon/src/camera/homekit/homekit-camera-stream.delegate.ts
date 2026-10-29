@@ -1040,6 +1040,11 @@ export class HomeKitCameraStreamingDelegate
     request: StartStreamRequest,
     callback: StreamRequestCallback,
   ): Promise<void> {
+    // PREPARE expires only while awaiting START. Async source allocation must
+    // not race the orphan watchdog after START has already arrived.
+    const prepareTimer = this.prepareTimeouts.get(session.sessionId);
+    if (prepareTimer) clearTimeout(prepareTimer);
+    this.prepareTimeouts.delete(session.sessionId);
     session.startup = new StreamStartupTiming();
     session.startup.metrics.retries = 0;
     const video = request.video;
@@ -1288,7 +1293,24 @@ export class HomeKitCameraStreamingDelegate
           /^rtsps?:\/\//i.test(sourceUrl || "")
             ? "pipe"
             : "ignore",
+          "pipe",
         ],
+      });
+      // Refresh thumbnails from the already-open source, without allocating
+      // another single-use Omni URL or competing with Live View.
+      let jpegBytes = Buffer.alloc(0);
+      process.stdio[4]?.on("data", (chunk: Buffer) => {
+        jpegBytes = Buffer.concat([jpegBytes, chunk]);
+        let end: number;
+        while ((end = jpegBytes.indexOf(Buffer.from([0xff, 0xd9]))) >= 0) {
+          const image = jpegBytes.subarray(0, end + 2);
+          jpegBytes = jpegBytes.subarray(end + 2);
+          if (isJpeg(image) && image.length > 2048) {
+            this.lastSnapshotBuffer = Buffer.from(image);
+            this.lastSnapshotTime = Date.now();
+          }
+        }
+        if (jpegBytes.length > 8 * 1024 * 1024) jpegBytes = Buffer.alloc(0);
       });
       session.process = process;
       process.once("spawn", () => {
@@ -2085,6 +2107,22 @@ export class HomeKitCameraStreamingDelegate
       );
     }
 
+    if (this.streamSource.metadata?.isOmniTuyaDirect === true) {
+      args.push(
+        "-map",
+        "0:v:0",
+        "-an",
+        "-vf",
+        "fps=1/5,scale=w='min(1920,iw)':h=-2",
+        "-c:v",
+        "mjpeg",
+        "-q:v",
+        "3",
+        "-f",
+        "image2pipe",
+        "pipe:4",
+      );
+    }
     return args;
   }
 
