@@ -2413,6 +2413,12 @@ export class HomeAssistant extends EventEmitter {
    * Requests a fresh one-session Tuya RTSP URL from Omni Tuya Local.
    * The URL is a credential and must never be logged or persisted.
    */
+  public async requestOmniTuyaCameraWebRtc(entityId: string): Promise<import("./camera/tuya-webrtc-session.js").TuyaWebRtcBundle> {
+    const response = await this.request({ type: "omni_tuya_local/camera_webrtc", entity_id: entityId });
+    if (!response.success || !response.result) throw new Error("Omni WebRTC unavailable");
+    return response.result as import("./camera/tuya-webrtc-session.js").TuyaWebRtcBundle;
+  }
+
   public async requestOmniTuyaCameraStream(entityId: string): Promise<string | null> {
     // Tuya issues a short-lived, one-session URL. A reconnect can briefly race
     // its allocation, so retry the allocation before considering another source.
