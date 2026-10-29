@@ -4520,7 +4520,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           ? this.getDeviceByName(endpoint.deviceName)
           : undefined;
 
-      if (!forceRecreate && existingEndpoint?.serverNode && !existingEndpoint.lifecycle?.isGone && !existingEndpoint.serverNode.lifecycle?.isGone) {
+      if (!forceRecreate && existingEndpoint?.serverNode && !(existingEndpoint.lifecycle as any)?.isGone && !(existingEndpoint.serverNode.lifecycle as any)?.isGone) {
         entity.adoptEndpoint(existingEndpoint);
         this.installMatterCommandResponsePolicy(existingEndpoint, entityId);
         this.matterbridgeDevices.set(entityId, existingEndpoint);
@@ -4547,7 +4547,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
       await this.prepareEndpointForRegistration(endpoint, entityId);
       await this.registerDevice(endpoint);
-      if (endpoint.lifecycle?.isGone || endpoint.lifecycle?.isReady === false) {
+      if ((endpoint.lifecycle as any)?.isGone || endpoint.lifecycle?.isReady === false) {
         throw new Error(
           `Matter endpoint initialization failed for ${entityId}; refusing to publish a destroyed or unready endpoint.`,
         );
