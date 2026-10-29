@@ -70,16 +70,20 @@ export class TuyaWebRtcSession extends EventEmitter {
         try {
           const data = JSON.parse(bytes.toString()).data;
           const header = data?.header;
-          if (!header || header.sessionid !== this.sessionId || header.from !== this.bundle.deviceId) return;
+          this.emit("diagnostic", { stage: "received", type: ["answer", "candidate", "disconnect"].includes(header?.type) ? header.type : "other", sessionMatch: header?.sessionid === this.sessionId, senderMatch: header?.from === this.bundle.deviceId });
+          if (!header || header.sessionid !== this.sessionId) return;
           void this.receive(header.type, data.msg || {}).catch(() => { this.emit("failure", "Invalid Tuya signaling response"); void this.close(); });
         } catch { /* Ignore unrelated broker traffic. */ }
       });
-      await this.client.subscribeAsync(this.bundle.mqtt.source_topic.ipc, { qos: 1 });
+      const granted = await this.client.subscribeAsync(this.bundle.mqtt.source_topic.ipc, { qos: 1 });
+      if (granted.some(grant => Number(grant.qos) === 128)) throw new Error("Tuya signaling subscription rejected");
+      this.emit("diagnostic", { stage: "subscribed", grants: granted.length });
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
       if (this.stopped) return;
       await this.signal("offer", { sdp: pc.localDescription!.sdp, auth: this.bundle.auth, stream_type: 1 });
       this.offerSent = true;
+      this.emit("diagnostic", { stage: "offer-acknowledged", topicResolved: !this.topic().includes("{") });
       for (const candidate of this.localCandidates.splice(0)) await this.signal("candidate", { candidate });
       this.expiry = setTimeout(() => { void this.close(); }, Math.min(3600, Math.max(30, this.bundle.mqtt.expire_time || 120)) * 1000);
       this.expiry.unref();
