@@ -31,9 +31,9 @@ export class TuyaWebRtcSession extends EventEmitter {
   }
   private async signal(type: string, msg: Record<string, unknown>): Promise<void> {
     if (!this.client || this.stopped) return;
-    await this.client.publishAsync(this.topic(), JSON.stringify({ protocol: 302, pv: "2.2", t: Date.now(),
+    await this.client.publishAsync(this.topic(), JSON.stringify({ protocol: 302, pv: "2.2", t: Math.floor(Date.now() / 1000),
       data: { header: { from: this.bundle.mqtt.source_topic.ipc.slice("/av/u/".length), to: this.bundle.deviceId,
-        sessionid: this.sessionId, moto_id: this.bundle.motoId, type }, msg: { mode: "webrtc", ...msg } } }));
+        sessionid: this.sessionId, moto_id: this.bundle.motoId, type }, msg: { mode: "webrtc", ...msg } } }), { qos: 1 });
   }
   async start(): Promise<void> {
     if (this.stopped || this.pc) throw new Error("WebRTC session already used");
@@ -56,7 +56,7 @@ export class TuyaWebRtcSession extends EventEmitter {
       pc.onTrack.subscribe(track => track.onReceiveRtp.subscribe(packet => this.emit("rtp", track.kind, packet.serialize())));
       pc.onIceCandidate.subscribe(candidate => {
         if (!candidate) return;
-        const text = candidate.candidate;
+        const text = candidate.candidate.startsWith("a=") ? candidate.candidate : `a=${candidate.candidate}`;
         if (this.offerSent) void this.signal("candidate", { candidate: text }).catch(() => { void this.close(); });
         else this.localCandidates.push(text);
       });
@@ -74,7 +74,7 @@ export class TuyaWebRtcSession extends EventEmitter {
           void this.receive(header.type, data.msg || {}).catch(() => { this.emit("failure", "Invalid Tuya signaling response"); void this.close(); });
         } catch { /* Ignore unrelated broker traffic. */ }
       });
-      await this.client.subscribeAsync(this.bundle.mqtt.source_topic.ipc);
+      await this.client.subscribeAsync(this.bundle.mqtt.source_topic.ipc, { qos: 1 });
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
       if (this.stopped) return;
