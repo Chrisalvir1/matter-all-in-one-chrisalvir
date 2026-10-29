@@ -1,0 +1,57 @@
+[
+  {
+    "name": "@homebridge/hap-nodejs",
+    "url": "https://registry.npmjs.org/%40homebridge%2Fhap-nodejs/latest",
+    "version": "2.2.3",
+    "engines": {
+      "node": "^22 || ^24 || ^26"
+    },
+    "repository": {
+      "url": "git+https://github.com/homebridge/HAP-NodeJS.git",
+      "type": "git"
+    }
+  },
+  {
+    "name": "werift",
+    "url": "https://registry.npmjs.org/werift/latest",
+    "version": "0.25.2",
+    "engines": {
+      "node": ">=22"
+    },
+    "repository": {
+      "url": "git+https://github.com/shinyoshiaki/werift-webrtc.git",
+      "type": "git"
+    }
+  },
+  {
+    "name": "@camera.ui/sdk",
+    "url": "https://registry.npmjs.org/%40camera.ui%2Fsdk/latest",
+    "version": "1.4.4",
+    "repository": {
+      "url": "git+https://github.com/cameraui/sdk.git",
+      "type": "git"
+    }
+  },
+  {
+    "name": "@noble/ciphers",
+    "url": "https://registry.npmjs.org/%40noble%2Fciphers/latest",
+    "version": "2.4.0",
+    "engines": {
+      "node": ">= 20.19.0"
+    },
+    "repository": {
+      "url": "git+https://github.com/paulmillr/noble-ciphers.git",
+      "type": "git"
+    }
+  },
+  {
+    "name": "@scrypted/client",
+    "url": "https://registry.npmjs.org/%40scrypted%2Fclient/latest",
+    "version": "1.3.26"
+  },
+  {
+    "name": "@scrypted/types",
+    "url": "https://registry.npmjs.org/%40scrypted%2Ftypes/latest",
+    "version": "0.5.55"
+  }
+]

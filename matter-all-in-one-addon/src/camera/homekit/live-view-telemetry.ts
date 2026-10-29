@@ -49,6 +49,12 @@ export interface VideoStreamMetadata {
 }
 
 export interface LiveViewSessionTelemetry {
+  startup?: {
+    stages: Partial<
+      Record<"T0" | "T1" | "T2" | "T3" | "T4" | "T5" | "T6" | "T7", number>
+    >;
+    metrics: Record<string, number | undefined>;
+  };
   cameraId: string;
   sessionId: string;
   videoSsrc?: number;

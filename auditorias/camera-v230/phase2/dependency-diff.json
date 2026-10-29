@@ -1,0 +1,17 @@
+{
+  "changedVersions": [
+    {
+      "path": "node_modules/@homebridge/hap-nodejs",
+      "before": "2.2.3",
+      "after": null
+    }
+  ],
+  "addedEntries": [
+    "vendor/hap-nodejs"
+  ],
+  "removedEntries": [],
+  "rootVersions": [
+    "2.3.0",
+    "2.3.0"
+  ]
+}

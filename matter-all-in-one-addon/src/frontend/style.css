@@ -837,7 +837,10 @@ h2 {
   font-size: 11px;
   font-weight: 750;
   cursor: pointer;
-  transition: color 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+  transition:
+    color 0.18s ease,
+    border-color 0.18s ease,
+    background 0.18s ease;
 }
 
 .paired-protocol-filter button:hover,
@@ -4531,7 +4534,7 @@ mark {
     max-height: none;
     min-width: 0;
   }
-.device-modal-backdrop .entity-list {
+  .device-modal-backdrop .entity-list {
     flex: 0 0 auto;
     max-height: 34dvh;
   }
@@ -4783,4 +4786,239 @@ mark {
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
+}
+
+/* Camera diagnostics stay collapsed and long provider metadata can wrap. */
+.camera-advanced {
+  min-width: 0;
+  margin-block: 12px;
+}
+.camera-advanced > summary {
+  cursor: pointer;
+  padding: 12px 0;
+  font-weight: 600;
+}
+.camera-modal-layout code,
+.camera-modal-layout p {
+  overflow-wrap: anywhere;
+}
+.camera-modal-layout input,
+.camera-modal-layout select {
+  min-width: 0;
+  max-width: 100%;
+}
+@media (max-width: 430px) {
+  .camera-modal-layout .button {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .camera-modal-layout .tab-group > button {
+    flex: 1 1 110px;
+    min-height: 44px;
+  }
+  .camera-modal-specs-box > div {
+    grid-template-columns: minmax(0, 1fr) !important;
+    flex-wrap: wrap;
+  }
+}
+
+/* Six camera areas use one document flow across desktop and narrow Ingress. */
+.camera-settings-modal {
+  width: min(100%, 960px);
+  max-width: 960px;
+  box-sizing: border-box;
+  padding: 18px;
+  min-width: 0;
+}
+.camera-settings-header,
+.camera-settings-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.camera-settings-header h2 {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.camera-settings-content {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.camera-settings-content > * {
+  min-width: 0;
+}
+.camera-section {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.025);
+  overflow-wrap: anywhere;
+}
+.camera-section h3 {
+  margin: 0 0 12px;
+  font-size: 1rem;
+}
+.camera-section p {
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.camera-section small,
+.camera-note {
+  color: var(--dim);
+}
+.camera-facts {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.camera-facts dt {
+  color: var(--dim);
+  font-size: 0.8rem;
+}
+.camera-facts dd {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
+.camera-status-list {
+  display: grid;
+  gap: 12px;
+}
+.camera-status-list > div {
+  display: grid;
+  grid-template-columns: minmax(80px, 1fr) auto;
+  align-items: start;
+  gap: 5px 10px;
+}
+.camera-status-list small {
+  grid-column: 1 / -1;
+}
+.camera-control-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.camera-control-row > div {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+.camera-control-row p {
+  margin: 4px 0;
+}
+.camera-settings-modal input,
+.camera-settings-modal select {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin-block: 6px 12px;
+  padding: 10px;
+  color: var(--text);
+  background: var(--panel, #152238);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.camera-settings-modal label {
+  display: block;
+  margin-top: 12px;
+}
+.camera-settings-modal fieldset {
+  min-width: 0;
+  border: 1px solid var(--border);
+  margin: 12px 0;
+}
+.camera-settings-modal details > summary {
+  cursor: pointer;
+  padding: 12px 0;
+  font-weight: 600;
+  min-height: 44px;
+  box-sizing: border-box;
+}
+.camera-settings-modal details details {
+  border-top: 1px solid var(--border);
+  margin-top: 10px;
+}
+.camera-settings-modal pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  font-size: 0.75rem;
+  max-height: 400px;
+  overflow-y: auto;
+}
+.camera-settings-modal .button {
+  min-height: 44px;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  margin: 4px 0;
+}
+.camera-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.camera-snapshot {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.camera-settings-footer {
+  padding-top: 16px;
+  font-size: 0.8rem;
+}
+@media (max-width: 430px) {
+  .camera-settings-modal {
+    padding: 12px;
+  }
+  .camera-section {
+    padding: 12px;
+  }
+  .camera-facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .camera-settings-modal .tag {
+    white-space: normal;
+    font-size: 0.65rem;
+  }
+  .camera-settings-footer .button {
+    width: 100%;
+  }
+}
+.camera-connection-modal {
+  box-sizing: border-box;
+  min-width: 0;
+  width: min(100%, 720px);
+  overflow-wrap: anywhere;
+}
+.camera-connection-modal input {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+}
+@media (max-width: 430px) {
+  .camera-connection-modal div[style*="display: flex"] {
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+  .camera-connection-modal .button {
+    min-height: 44px;
+    white-space: normal;
+    max-width: 100%;
+  }
+}
+.camera-settings-modal .sticker-qr-canvas-wrapper canvas {
+  box-sizing: border-box;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+  max-width: 100%;
 }

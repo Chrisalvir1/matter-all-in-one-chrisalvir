@@ -59,3 +59,33 @@ describe("HA camera HAP identity", () => {
     expect(record.liveViewTelemetry).toBe(telemetry);
   });
 });
+
+describe("camera control semantics", () => {
+  it("does not treat unrelated binary sensors as motion and deduplicates IDs", () => {
+    const dev = device();
+    dev.entities.push({
+      entityId: "binary_sensor.feeder_battery_low",
+      name: "Batería baja",
+      domain: "binary_sensor",
+      state: "on",
+    } as any);
+    dev.entities.push({
+      entityId: "binary_sensor.feeder_motion",
+      name: "Movimiento",
+      domain: "binary_sensor",
+      state: "on",
+    } as any);
+    dev.entities.push(dev.entities[1]);
+    const record = adaptHaDeviceToCameraRecord(dev);
+    expect(record.sensors?.map((sensor) => sensor.sensorId)).toEqual([
+      "binary_sensor.feeder_motion",
+    ]);
+    expect(
+      record.realEntities?.find((entity) => entity.id.endsWith("battery_low"))
+        ?.type,
+    ).toBe("other");
+    expect(
+      record.realEntities?.filter((entity) => entity.id === "switch.feed"),
+    ).toHaveLength(1);
+  });
+});

@@ -1,8 +1,14 @@
+// Graph/unit fixture: encoder success is injected; actual encoding is exercised in ffmpeg-camera-runtime.test.ts.
+vi.mock("../src/camera/homekit/media-policy.js", async (original) => ({
+  ...(await original<typeof import("../src/camera/homekit/media-policy.js")>()),
+  verifiedH264Encoder: () => "libx264",
+}));
 import { describe, it, expect, vi } from "vitest";
 import { HomeKitCameraAccessory } from "../src/camera/homekit/homekit-camera.accessory.js";
 import {
   AudioRecordingSamplerate,
   CameraController,
+  SecureVideoController,
   StreamRequestTypes,
   SRTPCryptoSuites,
   uuid,
@@ -85,7 +91,7 @@ function createStreamSource(
 }
 
 describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
-  it("strictly pins Tapo C402 to CameraController and refuses HEVC/SecureVideoController", () => {
+  it("selects classic HAP by H264 capability despite a stale HEVC export preference", () => {
     const platform = createPlatformMock();
     const record = createBaseRecord("camera.tapo_c402_jardin", {
       model: "Tapo C402",
@@ -108,9 +114,6 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
 
     expect(accessory.controller).toBeInstanceOf(CameraController);
     expect(record.activeController).toBe("CameraController");
-    expect(platform.log.warn).toHaveBeenCalledWith(
-      expect.stringContaining("Tapo C402 cannot be configured for HEVC/HKSV3"),
-    );
   });
 
   it("configures CameraController exclusively for standard H.264 camera", () => {
@@ -136,7 +139,7 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     expect(record.activeController).toBe("CameraController");
   });
 
-  it("enables HEVC→H264 FFmpeg transcoding for Vimtag HEVC camera instead of blocking export", () => {
+  it("connects HEVC to the real SecureVideoController and native transport delegates", () => {
     const platform = createPlatformMock();
     const record = createBaseRecord("camera.jardin_vimtag", {
       model: "Vimtag Outdoor",
@@ -156,17 +159,17 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
       streamSource,
     );
 
-    // HEVC cameras stream in pure HEVC passthrough (-c:v copy) with AAC audio.
-    // tvOS/iOS natively supports HEVC. No video transcoding to libx264 is performed.
-    expect(accessory.controller).toBeInstanceOf(CameraController);
-    expect(record.activeController).toBe("CameraController");
+    expect(accessory.controller).toBeInstanceOf(SecureVideoController);
+    expect(record.activeController).toBe("SecureVideoController");
+    expect(accessory.secureRtp).toBeDefined();
+    expect(accessory.secureWebRtc).toBeDefined();
     expect(accessory.capabilities.videoCodec).toBe("hevc");
     expect(accessory.capabilities.requiresTranscoding).toBe(false);
     expect(accessory.capabilities.strategy).toBe("passthrough_hevc");
     expect(accessory.recordingDelegate).toBeInstanceOf(HevcRecordingDelegate);
   });
 
-  it("passes HEVC through without re-encoding (-c:v copy) in streaming delegate", () => {
+  it("rejects HEVC in the classic streaming delegate", () => {
     const platform = createPlatformMock();
     const capabilities = createCapabilities({
       videoCodec: "hevc",
@@ -182,29 +185,27 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
       streamSource,
     );
 
-    const args = delegate.buildStreamArgs(
-      {
-        sessionId: "test-sess",
-        targetAddress: "192.168.1.50",
-        videoPort: 5000,
-        localVideoPort: 5001,
-        videoCryptoSuite: SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
-        videoKeySalt: Buffer.alloc(30, 1),
-        videoSsrc: 1111,
-      },
-      {
-        sessionID: "test-sess",
-        type: StreamRequestTypes.START,
-        video: { fps: 30, width: 1920, height: 1080, pt: 99 } as any,
-      } as any,
-    );
-    // HEVC stream must be copied directly (-c:v copy) for pure native passthrough
-    expect(args).toContain("-c:v");
-    expect(args).toContain("copy");
-    expect(args).not.toContain("libx264");
+    expect(() =>
+      delegate.buildStreamArgs(
+        {
+          sessionId: "test-sess",
+          targetAddress: "192.168.1.50",
+          videoPort: 5000,
+          localVideoPort: 5001,
+          videoCryptoSuite: SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
+          videoKeySalt: Buffer.alloc(30, 1),
+          videoSsrc: 1111,
+        },
+        {
+          sessionID: "test-sess",
+          type: StreamRequestTypes.START,
+          video: { fps: 30, width: 1920, height: 1080, pt: 99 } as any,
+        } as any,
+      ),
+    ).toThrow("HEVC requires SecureVideoController");
   });
 
-  it("produces passthrough stream args (-c:v copy) without re-encoding video or audio filters when audio is native aac_eld", () => {
+  it("preserves video copy and normalizes legacy 16 kHz AAC-ELD to 24 kHz/480 samples", () => {
     const platform = createPlatformMock();
     const capabilities = createCapabilities({
       videoCodec: "h264",
@@ -257,10 +258,13 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     expect(args).not.toContain("libx264");
     expect(args).not.toContain("libx265");
     expect(args).not.toContain("-vf");
-    // Ensure zero audio transcoding
+    // Live policy normalizes non-Opus audio to 24 kHz AAC-ELD.
     expect(args).not.toContain("libopus");
-    expect(args).not.toContain("libfdk_aac");
-    expect(args).not.toContain("aresample");
+    expect(args).toContain("libfdk_aac");
+    expect(args).toContain("24000");
+    expect(args).toContain("-frame_length");
+    expect(args).toContain("480");
+    expect(args).toContain("aresample=async=1:first_pts=0");
   });
 
   it("streams C120 video with pure passthrough copy and transcodes its PCMA audio to AAC", () => {
@@ -319,9 +323,9 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     expect(args).not.toContain("libx265");
     // C120 uses optimized 128KB probesize and 200ms analyze duration for instant low-latency startup
     expect(args).toContain("-probesize");
-    expect(args).toContain("131072");
+    expect(args).toContain("2097152");
     expect(args).toContain("-analyzeduration");
-    expect(args).toContain("200000");
+    expect(args).toContain("3000000");
     // Audio is transcoded to AAC/AAC-ELD to prevent CoreAudio clock stall
     expect(args).toContain("-c:a");
     const audioCodecIdx = args.indexOf("-c:a");
@@ -498,9 +502,9 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     );
 
     const recordingRes = accessory.buildRecordingResolutions();
-    expect(recordingRes).toContainEqual([2560, 1440, 15]);
+    expect(recordingRes).toEqual([[1920, 1080, 15]]);
     expect(recordingRes).toContainEqual([1920, 1080, 15]);
-    expect(recordingRes).toContainEqual([1280, 720, 15]);
+    expect(recordingRes).not.toContainEqual([1280, 720, 15]);
     expect(recordingRes).not.toContainEqual([3840, 2160, 30]);
   });
 
@@ -595,7 +599,9 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     expect(args).toContain("-c:a");
     expect(args).toContain("aac");
     expect(args).toContain("-af");
-    expect(args).toContain("aresample=async=1:first_pts=0");
+    expect(args).toContain(
+      "asetpts=N/SR/TB,aresample=async=1:min_hard_comp=0.100:first_pts=0",
+    );
     expect(args).not.toContain("-an");
   });
 
@@ -604,9 +610,9 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     const record = createBaseRecord("camera.tapo_c402");
     const capabilities = createCapabilities({
       videoCodec: "h264",
-      audioCodec: "aac",
+      audioCodec: "aac_lc",
       hasAudio: true,
-      audioSampleRate: 16000,
+      audioSampleRate: 48000,
       audioChannels: 1,
     });
     const streamSource = createStreamSource();
@@ -620,7 +626,7 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     );
     (delegate as any).selectedConfiguration = {
       audioCodec: {
-        samplerate: AudioRecordingSamplerate.KHZ_16,
+        samplerate: AudioRecordingSamplerate.KHZ_48,
         audioChannels: 1,
       },
     };
@@ -630,7 +636,9 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     expect(args).toContain("copy");
     expect(args).toContain("-c:a");
     expect(args).toContain("copy");
-    expect(args).not.toContain("aresample=async=1:first_pts=0");
+    expect(args).not.toContain(
+      "asetpts=N/SR/TB,aresample=async=1:min_hard_comp=0.100:first_pts=0",
+    );
     expect(args).not.toContain("-an");
   });
 
@@ -708,10 +716,10 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     );
 
     expect(args).toContain("-probesize");
-    expect(args).toContain("65536");
+    expect(args).toContain("2097152");
     expect(args).toContain("-analyzeduration");
-    expect(args).toContain("100000");
-    expect(args).toContain("+nobuffer+flush_packets+genpts+discardcorrupt");
+    expect(args).toContain("3000000");
+    expect(args).toContain("+genpts+discardcorrupt");
     expect(args).toContain("-c:v");
     expect(args).toContain("copy");
     expect(args).toContain("low_delay");
@@ -772,10 +780,10 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     );
 
     const resolutions = accessory.buildRecordingResolutions();
-    expect(resolutions).toContainEqual([3840, 2160, 20]);
-    expect(resolutions).toContainEqual([2560, 1440, 20]);
+    expect(resolutions).toEqual([[1920, 1080, 20]]);
+    expect(resolutions).not.toContainEqual([2560, 1440, 20]);
     expect(resolutions).toContainEqual([1920, 1080, 20]);
-    expect(resolutions).toContainEqual([1280, 720, 20]);
+    expect(resolutions).not.toContainEqual([1280, 720, 20]);
     // Verifies none of them incorrectly hardcoded 30 fps
     for (const [_, __, fps] of resolutions) {
       expect(fps).toBe(20);

@@ -1,0 +1,59 @@
+ M .gitignore
+ M matter-all-in-one-addon/Dockerfile
+ M matter-all-in-one-addon/package-lock.json
+ M matter-all-in-one-addon/package.json
+ M matter-all-in-one-addon/src/camera/ai/camera-ai-detector.ts
+ M matter-all-in-one-addon/src/camera/camera-types.ts
+ M matter-all-in-one-addon/src/camera/homekit/ffmpeg-helper.ts
+ M matter-all-in-one-addon/src/camera/homekit/hevc/hevc-recording.ts
+ M matter-all-in-one-addon/src/camera/homekit/hevc/multi-tier-rtp.ts
+ M matter-all-in-one-addon/src/camera/homekit/hevc/sframe-rtp.ts
+ M matter-all-in-one-addon/src/camera/homekit/hevc/sframe.ts
+ M matter-all-in-one-addon/src/camera/homekit/hevc/webrtc-session.ts
+ M matter-all-in-one-addon/src/camera/homekit/homekit-camera-recording.delegate.ts
+ M matter-all-in-one-addon/src/camera/homekit/homekit-camera-stream.delegate.ts
+ M matter-all-in-one-addon/src/camera/homekit/homekit-camera.accessory.ts
+ M matter-all-in-one-addon/src/camera/homekit/live-view-telemetry.ts
+ M matter-all-in-one-addon/src/frontend/src/api/client.ts
+ M matter-all-in-one-addon/src/frontend/src/components/CameraCard.tsx
+ M matter-all-in-one-addon/src/frontend/src/components/CameraConfigModal.tsx
+ M matter-all-in-one-addon/src/frontend/src/components/CameraUiModal.tsx
+ M matter-all-in-one-addon/src/frontend/src/components/CameraUiPairingModal.tsx
+ M matter-all-in-one-addon/src/frontend/src/components/ScryptedModal.tsx
+ M matter-all-in-one-addon/src/frontend/src/types.ts
+ M matter-all-in-one-addon/src/frontend/src/utils/ha-camera-record.ts
+ M matter-all-in-one-addon/src/frontend/style.css
+ M matter-all-in-one-addon/src/platform.ts
+ M matter-all-in-one-addon/test/c120-2k-stable-integration.test.ts
+ M matter-all-in-one-addon/test/c120-level5-poc.test.ts
+ M matter-all-in-one-addon/test/c120-motion-linking.test.ts
+ M matter-all-in-one-addon/test/camera-passthrough-hevc.test.ts
+ M matter-all-in-one-addon/test/ffmpeg-helper.test.ts
+ M matter-all-in-one-addon/test/frontend.test.ts
+ M matter-all-in-one-addon/test/ha-camera-record.test.ts
+ M matter-all-in-one-addon/test/homekit-camera-recording.test.ts
+ M matter-all-in-one-addon/test/homekit-camera.test.ts
+?? auditorias/
+?? matter-all-in-one-addon/src/camera/camera-entity-control.ts
+?? matter-all-in-one-addon/src/camera/homekit/hevc/bootstrap.ts
+?? matter-all-in-one-addon/src/camera/homekit/hevc/recording-output.ts
+?? matter-all-in-one-addon/src/camera/homekit/media-policy.ts
+?? matter-all-in-one-addon/src/camera/homekit/route-address.ts
+?? matter-all-in-one-addon/src/camera/homekit/rtp-relay.ts
+?? matter-all-in-one-addon/src/camera/homekit/startup-timing.ts
+?? matter-all-in-one-addon/src/camera/source-adapter.ts
+?? matter-all-in-one-addon/src/frontend/src/components/camera/
+?? matter-all-in-one-addon/src/frontend/src/utils/camera-control-presentation.ts
+?? matter-all-in-one-addon/src/frontend/src/utils/camera-view.ts
+?? matter-all-in-one-addon/src/frontend/src/utils/rtsp-url.ts
+?? matter-all-in-one-addon/test/camera-control-presentation.test.ts
+?? matter-all-in-one-addon/test/camera-phase1.test.ts
+?? matter-all-in-one-addon/test/camera-source-policy.test.ts
+?? matter-all-in-one-addon/test/camera-transport-contracts.test.ts
+?? matter-all-in-one-addon/test/ffmpeg-camera-runtime.test.ts
+?? matter-all-in-one-addon/test/fixtures/
+?? matter-all-in-one-addon/test/hap-runtime-compat.test.ts
+?? matter-all-in-one-addon/test/hevc-ffmpeg-runtime.test.ts
+?? matter-all-in-one-addon/test/hevc-hds-lifecycle.test.ts
+?? matter-all-in-one-addon/test/secure-video-contracts.test.ts
+?? matter-all-in-one-addon/vendor/

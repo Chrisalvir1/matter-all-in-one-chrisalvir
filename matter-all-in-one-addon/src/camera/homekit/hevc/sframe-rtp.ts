@@ -20,19 +20,37 @@ export interface AccessUnitAssembler {
   push(packet: RtpPacket): AccessUnit | undefined;
 }
 
-export function createAccessUnitAssembler(codec: SecureVideoCodec): AccessUnitAssembler {
-  return codec === "h264" ? new H264AccessUnitAssembler() : new HevcAccessUnitAssembler();
+export function createAccessUnitAssembler(
+  codec: SecureVideoCodec,
+): AccessUnitAssembler {
+  return codec === "h264"
+    ? new H264AccessUnitAssembler()
+    : new HevcAccessUnitAssembler();
 }
 
 abstract class NalAccessUnitAssembler implements AccessUnitAssembler {
   protected nalUnits: Buffer[] = [];
   protected fragment?: Buffer[];
   private timestamp?: number;
+  private expectedSequence?: number;
+  private damaged = false;
 
   public push(packet: RtpPacket): AccessUnit | undefined {
-    if (this.timestamp !== undefined && packet.header.timestamp !== this.timestamp) {
+    if (
+      this.timestamp !== undefined &&
+      packet.header.timestamp !== this.timestamp
+    ) {
       this.reset();
     }
+    if (
+      this.expectedSequence !== undefined &&
+      packet.header.sequenceNumber !== this.expectedSequence
+    ) {
+      this.nalUnits = [];
+      this.fragment = undefined;
+      this.damaged = true;
+    }
+    this.expectedSequence = (packet.header.sequenceNumber + 1) & 65535;
     this.timestamp = packet.header.timestamp;
 
     this.depacketize(packet.payload);
@@ -40,8 +58,14 @@ abstract class NalAccessUnitAssembler implements AccessUnitAssembler {
     if (!packet.header.marker) {
       return undefined;
     }
+    if (this.fragment || this.damaged) {
+      this.reset();
+      return;
+    }
     const unit: AccessUnit = {
-      data: Buffer.concat(this.nalUnits.flatMap((nal) => [nalLength(nal), nal])),
+      data: Buffer.concat(
+        this.nalUnits.flatMap((nal) => [nalLength(nal), nal]),
+      ),
       timestamp: packet.header.timestamp,
       marker: true,
     };
@@ -56,12 +80,21 @@ abstract class NalAccessUnitAssembler implements AccessUnitAssembler {
     while (offset + 2 <= payload.length) {
       const length = payload.readUInt16BE(offset);
       offset += 2;
+      if (length === 0 || offset + length > payload.length) {
+        this.damaged = true;
+        return;
+      }
       this.nalUnits.push(payload.subarray(offset, offset + length));
       offset += length;
     }
+    if (offset !== payload.length) this.damaged = true;
   }
 
-  protected fragmentUnit(fuHeader: number, nalHeader: Buffer, data: Buffer): void {
+  protected fragmentUnit(
+    fuHeader: number,
+    nalHeader: Buffer,
+    data: Buffer,
+  ): void {
     if (fuHeader & 0x80) {
       this.fragment = [nalHeader, data];
     } else if (this.fragment) {
@@ -77,6 +110,8 @@ abstract class NalAccessUnitAssembler implements AccessUnitAssembler {
     this.nalUnits = [];
     this.fragment = undefined;
     this.timestamp = undefined;
+    this.expectedSequence = undefined;
+    this.damaged = false;
   }
 }
 
@@ -96,7 +131,10 @@ export class HevcAccessUnitAssembler extends NalAccessUnitAssembler {
       const fuHeader = payload[2];
       this.fragmentUnit(
         fuHeader,
-        Buffer.from([(payload[0] & 0x81) | ((fuHeader & 0x3f) << 1), payload[1]]),
+        Buffer.from([
+          (payload[0] & 0x81) | ((fuHeader & 0x3f) << 1),
+          payload[1],
+        ]),
         payload.subarray(3),
       );
     } else {
@@ -116,7 +154,11 @@ export class H264AccessUnitAssembler extends NalAccessUnitAssembler {
       this.aggregate(payload, 1);
     } else if (type === H264_NAL_FU_A) {
       const fuHeader = payload[1];
-      this.fragmentUnit(fuHeader, Buffer.from([(payload[0] & 0xe0) | (fuHeader & 0x1f)]), payload.subarray(2));
+      this.fragmentUnit(
+        fuHeader,
+        Buffer.from([(payload[0] & 0xe0) | (fuHeader & 0x1f)]),
+        payload.subarray(2),
+      );
     } else if (type >= 1 && type <= 23) {
       this.nalUnits.push(payload);
     }
@@ -138,14 +180,26 @@ export interface SFramePacketizerOptions {
 export class SFrameRtpPacketizer {
   private sequenceNumber = Math.floor(Math.random() * 0x10000);
 
-  constructor(private options: SFramePacketizerOptions) {}
+  constructor(private options: SFramePacketizerOptions) {
+    if (
+      !Number.isInteger(options.maxPayload) ||
+      options.maxPayload < 64 ||
+      options.maxPayload > 65507
+    )
+      throw new Error("Invalid SFrame MTU");
+  }
 
-  public packetize(ciphertext: Buffer, timestamp: number, marker: boolean): RtpPacket[] {
+  public packetize(
+    ciphertext: Buffer,
+    timestamp: number,
+    marker: boolean,
+  ): RtpPacket[] {
     const chunk = Math.max(1, this.options.maxPayload - 1);
     const packets: RtpPacket[] = [];
     for (let offset = 0; offset < ciphertext.length; offset += chunk) {
       const last = offset + chunk >= ciphertext.length;
-      const descriptor = (offset === 0 ? DESCRIPTOR_START : 0) | (last ? DESCRIPTOR_END : 0);
+      const descriptor =
+        (offset === 0 ? DESCRIPTOR_START : 0) | (last ? DESCRIPTOR_END : 0);
       const header = new RtpHeader({
         version: 2,
         marker: marker && last,
@@ -158,7 +212,10 @@ export class SFrameRtpPacketizer {
       packets.push(
         new RtpPacket(
           header,
-          Buffer.concat([Buffer.from([descriptor]), ciphertext.subarray(offset, offset + chunk)]),
+          Buffer.concat([
+            Buffer.from([descriptor]),
+            ciphertext.subarray(offset, offset + chunk),
+          ]),
         ),
       );
     }

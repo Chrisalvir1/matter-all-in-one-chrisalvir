@@ -1,0 +1,24 @@
+{
+  "weriftOffer": {
+    "gatheringMs": 101,
+    "candidateCount": 8
+  },
+  "syntheticHevcStartup": {
+    "stages": {
+      "T0": 0,
+      "T1": 0.19,
+      "T2": 0.19,
+      "T7": 1.4,
+      "T3": 38.22,
+      "T4": 40.59,
+      "T6": 44.57,
+      "T5": 59.62
+    },
+    "metrics": {
+      "allocation1Ms": 0.0646670000000995,
+      "ffmpegSpawnMs": 1.0427910000000793,
+      "firstPacketMs": 59.62
+    }
+  },
+  "scope": "Local synthetic source and local peer only. Not camera/Omni/Apple Home latency."
+}

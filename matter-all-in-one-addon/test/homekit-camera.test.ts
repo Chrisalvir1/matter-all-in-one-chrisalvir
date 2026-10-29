@@ -1,3 +1,9 @@
+// Graph/unit fixture: encoder success is injected; actual encoding is exercised in ffmpeg-camera-runtime.test.ts.
+vi.mock("../src/camera/homekit/media-policy.js", async (original) => ({
+  ...(await original<typeof import("../src/camera/homekit/media-policy.js")>()),
+  verifiedH264Encoder: () => "libx264",
+}));
+import { routeAddress } from "../src/camera/homekit/route-address.js";
 import { describe, expect, it, vi } from "vitest";
 import {
   Characteristic,
@@ -157,11 +163,11 @@ describe("HomeKitCameraAccessory production HAP graph", () => {
     );
 
     expect((accessory as any).buildDeclaredResolutions()[0]).toEqual([
-      2560, 1440, 20,
+      1920, 1080, 20,
     ]);
     const options = (accessory as any).buildControllerOptions();
     expect(options.streamingOptions.video.resolutions[0]).toEqual([
-      2560, 1440, 20,
+      1920, 1080, 20,
     ]);
     expect(options.streamingOptions.audio.codecs[0].type).toEqual(
       AudioStreamingCodecType.AAC_ELD,
@@ -192,8 +198,8 @@ describe("HomeKitCameraAccessory production HAP graph", () => {
     );
 
     const resolutions = (c402Accessory as any).buildDeclaredResolutions();
-    expect(resolutions.length).toBeGreaterThan(1);
-    expect(resolutions[0]).toEqual([2560, 1440, 30]);
+    expect(resolutions.length).toBe(1);
+    expect(resolutions[0]).toEqual([1920, 1080, 30]);
 
     const options = (c402Accessory as any).buildControllerOptions();
     expect(options.streamingOptions.audio.codecs[0].type).toEqual(
@@ -315,7 +321,9 @@ describe("HomeKitCameraStreamingDelegate", () => {
         (error, result) => (error ? reject(error) : resolve(result)),
       );
     });
-    expect(response.addressOverride).toBe("192.168.1.100");
+    expect(response.addressOverride).toBe(
+      await routeAddress("192.168.1.50", 5000),
+    );
     expect(response.video.port).not.toBe(5000);
     expect(response.video.port).toBeGreaterThan(0);
     expect(response.video.ssrc).toBeGreaterThan(0);
@@ -460,26 +468,24 @@ describe("HomeKitCameraStreamingDelegate", () => {
       } as any,
       { ...rtspSource, supportsPassthrough: true },
     );
-    const args = delegate.buildStreamArgs(
-      {
-        sessionId: "hevc-session",
-        targetAddress: "192.168.1.50",
-        videoPort: 5000,
-        localVideoPort: 5001,
-        videoCryptoSuite: SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
-        videoKeySalt: Buffer.alloc(30, 1),
-        videoSsrc: 1111,
-      },
-      {
-        sessionID: "hevc-session",
-        type: StreamRequestTypes.START,
-        video: { fps: 30, width: 1920, height: 1080, pt: 99 } as any,
-      } as any,
-    );
-    // HEVC is passed directly without transcoding
-    expect(args).toContain("-c:v");
-    expect(args).toContain("copy");
-    expect(args).not.toContain("libx264");
+    expect(() =>
+      delegate.buildStreamArgs(
+        {
+          sessionId: "hevc-session",
+          targetAddress: "192.168.1.50",
+          videoPort: 5000,
+          localVideoPort: 5001,
+          videoCryptoSuite: SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
+          videoKeySalt: Buffer.alloc(30, 1),
+          videoSsrc: 1111,
+        },
+        {
+          sessionID: "hevc-session",
+          type: StreamRequestTypes.START,
+          video: { fps: 30, width: 1920, height: 1080, pt: 99 } as any,
+        } as any,
+      ),
+    ).toThrow("HEVC requires SecureVideoController");
   });
 
   it("builds low-latency RTSP passthrough args for Tapo C402 Live View", () => {
@@ -525,7 +531,11 @@ describe("HomeKitCameraStreamingDelegate", () => {
     const delegate = new HomeKitCameraStreamingDelegate(
       createPlatform(),
       "camera.omni_feeder",
-      { ...capabilities, strategy: "passthrough_h264", requiresTranscoding: false },
+      {
+        ...capabilities,
+        strategy: "passthrough_h264",
+        requiresTranscoding: false,
+      },
       {
         ...rtspSource,
         url: "rtsps://tuya.example/signed",

@@ -34,3 +34,7 @@ matter-all-in-one-addon/cameraui-config.json
 ptz-zones-store.json
 matter-all-in-one-addon/ptz-zones-store.json
 
+
+# Audited pinned HAP runtime is a production dependency, not generated app output.
+!matter-all-in-one-addon/vendor/hap-nodejs/dist/
+!matter-all-in-one-addon/vendor/hap-nodejs/dist/**

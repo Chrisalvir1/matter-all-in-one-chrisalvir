@@ -1,0 +1,120 @@
+{
+  "node": "v24.22.1",
+  "files": [
+    "src/camera/ai/camera-ai-detector.ts",
+    "src/camera/camera-entity-control.ts",
+    "src/camera/camera-types.ts",
+    "src/camera/homekit/ffmpeg-helper.ts",
+    "src/camera/homekit/hevc/bootstrap.ts",
+    "src/camera/homekit/hevc/hevc-recording.ts",
+    "src/camera/homekit/hevc/multi-tier-rtp.ts",
+    "src/camera/homekit/hevc/recording-output.ts",
+    "src/camera/homekit/hevc/sframe-rtp.ts",
+    "src/camera/homekit/hevc/sframe.ts",
+    "src/camera/homekit/hevc/webrtc-session.ts",
+    "src/camera/homekit/homekit-camera-recording.delegate.ts",
+    "src/camera/homekit/homekit-camera-stream.delegate.ts",
+    "src/camera/homekit/homekit-camera.accessory.ts",
+    "src/camera/homekit/live-view-telemetry.ts",
+    "src/camera/homekit/media-policy.ts",
+    "src/camera/homekit/route-address.ts",
+    "src/camera/homekit/rtp-relay.ts",
+    "src/camera/homekit/startup-timing.ts",
+    "src/camera/source-adapter.ts",
+    "src/frontend/src/api/client.ts",
+    "src/frontend/src/components/CameraCard.tsx",
+    "src/frontend/src/components/CameraConfigModal.tsx",
+    "src/frontend/src/components/CameraUiModal.tsx",
+    "src/frontend/src/components/CameraUiPairingModal.tsx",
+    "src/frontend/src/components/ScryptedModal.tsx",
+    "src/frontend/src/components/camera/CameraAppleHomeStatus.tsx",
+    "src/frontend/src/components/camera/CameraControls.tsx",
+    "src/frontend/src/components/camera/CameraDiagnostics.tsx",
+    "src/frontend/src/components/camera/CameraExport.tsx",
+    "src/frontend/src/components/camera/CameraOverview.tsx",
+    "src/frontend/src/components/camera/CameraPerformance.tsx",
+    "src/frontend/src/types.ts",
+    "src/frontend/src/utils/camera-control-presentation.ts",
+    "src/frontend/src/utils/camera-view.ts",
+    "src/frontend/src/utils/ha-camera-record.ts",
+    "src/frontend/src/utils/rtsp-url.ts",
+    "src/frontend/style.css",
+    "src/platform.ts",
+    "test/c120-2k-stable-integration.test.ts",
+    "test/c120-level5-poc.test.ts",
+    "test/c120-motion-linking.test.ts",
+    "test/camera-control-presentation.test.ts",
+    "test/camera-passthrough-hevc.test.ts",
+    "test/camera-phase1.test.ts",
+    "test/camera-source-policy.test.ts",
+    "test/camera-transport-contracts.test.ts",
+    "test/ffmpeg-camera-runtime.test.ts",
+    "test/ffmpeg-helper.test.ts",
+    "test/frontend.test.ts",
+    "test/ha-camera-record.test.ts",
+    "test/hap-runtime-compat.test.ts",
+    "test/hevc-ffmpeg-runtime.test.ts",
+    "test/hevc-hds-lifecycle.test.ts",
+    "test/homekit-camera-recording.test.ts",
+    "test/homekit-camera.test.ts",
+    "test/secure-video-contracts.test.ts"
+  ],
+  "rows": [
+    {
+      "name": "typecheck backend",
+      "exit": 0,
+      "ms": 396,
+      "summary": []
+    },
+    {
+      "name": "typecheck frontend",
+      "exit": 0,
+      "ms": 163,
+      "summary": []
+    },
+    {
+      "name": "backend build",
+      "exit": 0,
+      "ms": 465,
+      "summary": []
+    },
+    {
+      "name": "frontend build",
+      "exit": 0,
+      "ms": 177,
+      "summary": [
+        "✓ built in 76ms"
+      ]
+    },
+    {
+      "name": "full tests",
+      "exit": 0,
+      "ms": 9163,
+      "summary": [
+        " Test Files  87 passed (87)",
+        "      Tests  765 passed (765)",
+        "   Duration  8.99s (import 75%, tests 21%, transform 2%, setup 2%, worker 1%)"
+      ]
+    },
+    {
+      "name": "modified lint",
+      "exit": 0,
+      "ms": 1241,
+      "summary": [
+        "All matched files use Prettier code style!"
+      ]
+    },
+    {
+      "name": "HA changelog",
+      "exit": 0,
+      "ms": 31,
+      "summary": [
+        "Home Assistant changelog and package metadata match 2.3.0."
+      ]
+    },
+    {
+      "name": "git diff --check",
+      "exit": 0
+    }
+  ]
+}
