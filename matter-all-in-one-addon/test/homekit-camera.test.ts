@@ -17,6 +17,8 @@ import {
 } from "@homebridge/hap-nodejs";
 import { EventEmitter } from "node:events";
 import * as ffmpegHelper from "../src/camera/homekit/ffmpeg-helper.js";
+import { createSessionTelemetry } from "../src/camera/homekit/live-view-telemetry.js";
+import { CameraSourceAdapter } from "../src/camera/source-adapter.js";
 import { HomeKitCameraAccessory } from "../src/camera/homekit/homekit-camera.accessory.js";
 import {
   HomeKitCameraStreamingDelegate,
@@ -405,6 +407,149 @@ describe("HomeKitCameraStreamingDelegate", () => {
     expect(response.video.port).toBeGreaterThan(0);
     expect(response.video.ssrc).toBeGreaterThan(0);
     expect(response.video.ssrc).not.toBe(1);
+  });
+
+  it("keeps Omni SRTP on the direct HomeKit RTP path without a local relay", async () => {
+    const delegate = new HomeKitCameraStreamingDelegate(
+      createPlatform(),
+      "camera.omni_feeder",
+      {
+        ...capabilities,
+        audioCodec: "pcm" as any,
+        audioSampleRate: 8000,
+        audioChannels: 1,
+        audioProvenance: "OBSERVED" as any,
+      },
+      {
+        ...rtspSource,
+        metadata: {
+          isOmniTuyaDirect: true,
+          sourceCameraEntityId: "camera.omni_feeder",
+        },
+      },
+    );
+    const response = await new Promise<any>((resolve, reject) => {
+      delegate.prepareStream(
+        {
+          sessionID: "omni-direct-session",
+          targetAddress: "192.168.1.50",
+          video: {
+            port: 5000,
+            srtpCryptoSuite: SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
+            srtp_key: Buffer.alloc(16, 1),
+            srtp_salt: Buffer.alloc(14, 2),
+          },
+          audio: {
+            port: 5002,
+            srtpCryptoSuite: SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
+            srtp_key: Buffer.alloc(16, 3),
+            srtp_salt: Buffer.alloc(14, 4),
+          },
+          addressVersion: "ipv4",
+        } as any,
+        (error, result) => (error ? reject(error) : resolve(result)),
+      );
+    });
+    const session = (delegate as any).activeSessions.get("omni-direct-session");
+    expect(session.videoRelay).toBeUndefined();
+    expect(session.audioRelay).toBeUndefined();
+    expect(response.video.port).toBe(session.localVideoPort);
+    expect(response.audio.port).toBe(session.localAudioPort);
+    delegate.cleanupAllSessions();
+  });
+
+  it("keeps motion-analysis output out of the negotiated Live View telemetry", () => {
+    const delegate = new HomeKitCameraStreamingDelegate(
+      createPlatform(),
+      "camera.omni_feeder",
+      capabilities,
+      rtspSource,
+    );
+    const session: any = {
+      sessionId: "telemetry-session",
+      telemetry: createSessionTelemetry({
+        cameraId: "camera.omni_feeder",
+        sessionId: "telemetry-session",
+        effectiveMode: "copy",
+        output: { codec: "h264", width: 640, height: 360 },
+      }),
+    };
+    const record = (line: string) =>
+      (delegate as any).recordFfmpegProgress(session, line);
+    record("Output #0, rtp, to srtp://[redacted]");
+    record("Stream #0:0: Video: h264 (High), yuv420p, 640x360, 15 fps");
+    record("Output #1, rtp, to srtp://[redacted]");
+    record("Output #2, null, to pipe:");
+    record("Stream #0:0: Video: wrapped_avframe, gray, 160x90, 200 fps");
+    record("fps=29.32");
+
+    expect(session.telemetry.output).toMatchObject({
+      codec: "h264",
+      width: 640,
+      height: 360,
+      metadataSource: "ffmpeg-header",
+    });
+    expect(session.telemetry.output.observedFps).toBeUndefined();
+  });
+
+  it("uses one fresh Omni allocation when the observed microphone format is already known", async () => {
+    const platform: any = createPlatform();
+    platform.ha.requestOmniTuyaCameraStream = vi
+      .fn()
+      .mockResolvedValue("rtsps://stream.invalid/fresh");
+    const omniCapabilities = {
+      ...capabilities,
+      maxFps: 15,
+      audioCodec: "pcm" as any,
+      audioSampleRate: 8000,
+      audioChannels: 1,
+      audioProvenance: "OBSERVED" as any,
+    };
+    const omniSource = {
+      ...rtspSource,
+      metadata: {
+        isOmniTuyaDirect: true,
+        sourceCameraEntityId: "camera.omni_feeder",
+      },
+    };
+    const delegate = new HomeKitCameraStreamingDelegate(
+      platform,
+      "camera.omni_feeder",
+      omniCapabilities,
+      omniSource,
+    );
+    const session: any = {
+      sessionId: "known-audio-session",
+      targetAddress: "192.168.1.50",
+      videoPort: 5000,
+      localVideoPort: 5001,
+      videoSsrc: 1234,
+      videoCryptoSuite: SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
+      videoKeySalt: Buffer.alloc(30, 1),
+    };
+    (delegate as any).activeSessions.set(session.sessionId, session);
+    const discover = vi
+      .spyOn(CameraSourceAdapter.prototype, "discover")
+      .mockRejectedValue(new Error("unexpected probe"));
+    const spawn = vi
+      .spyOn(delegate as any, "spawnFfmpegProcess")
+      .mockImplementation((_session, _request, settle) => settle());
+    vi.spyOn(ffmpegHelper, "resolveFfmpegPath").mockReturnValue("/fake/ffmpeg");
+    const request: any = {
+      sessionID: session.sessionId,
+      video: { width: 640, height: 360, fps: 15, max_bit_rate: 132 },
+    };
+    await new Promise<void>((resolve, reject) => {
+      (delegate as any).startStream(session, request, (error?: Error) =>
+        error ? reject(error) : resolve(),
+      );
+    });
+
+    expect(platform.ha.requestOmniTuyaCameraStream).toHaveBeenCalledTimes(1);
+    expect(discover).not.toHaveBeenCalled();
+    expect(spawn).toHaveBeenCalledOnce();
+    vi.restoreAllMocks();
+    delegate.cleanupAllSessions();
   });
 
   it("allocates unique local ports and SSRCs for concurrent sessions", async () => {

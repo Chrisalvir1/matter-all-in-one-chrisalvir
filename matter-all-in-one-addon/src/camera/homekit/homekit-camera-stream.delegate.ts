@@ -80,10 +80,13 @@ export interface HomeKitStreamSession {
   audioCryptoSuite?: SRTPCryptoSuites;
   audioKeySalt?: Buffer;
   retried?: boolean;
+  omniUrlRetried?: boolean;
   pipeController?: AbortController;
   telemetry?: LiveViewSessionTelemetry;
   /** FFmpeg writes input and output headers alike; observe only output fields. */
   ffmpegOutputHeaderSeen?: boolean;
+  ffmpegCurrentOutputIndex?: number;
+  ffmpegHasMultipleOutputs?: boolean;
 }
 
 export const FALLBACK_JPEG_BUFFER = Buffer.from(
@@ -473,13 +476,29 @@ export class HomeKitCameraStreamingDelegate
     line: string,
   ): void {
     if (!session.telemetry) return;
-    if (/^Output #\d+/i.test(line.trim())) {
+    const outputHeader = /^Output #(\d+)/i.exec(line.trim());
+    if (outputHeader) {
+      const outputIndex = Number(outputHeader[1]);
+      if (Number.isFinite(outputIndex)) {
+        session.ffmpegCurrentOutputIndex = outputIndex;
+        if (outputIndex > 0) session.ffmpegHasMultipleOutputs = true;
+      }
       session.ffmpegOutputHeaderSeen = true;
       session.startup?.mark("T4");
       return;
     }
-    const progress = mergeFfmpegProgress(session.telemetry.output, line);
-    const output = session.ffmpegOutputHeaderSeen
+    // FFmpeg writes an output header per destination. The motion-analysis
+    // output (#2) is intentionally tiny grayscale video; never let it replace
+    // the negotiated HAP RTP video (#0) in user-facing diagnostics.
+    const isVideoHeader = /Stream #\d+:\d+(?:\[[^\]]+\])?: Video:/i.test(line);
+    if (isVideoHeader && session.ffmpegCurrentOutputIndex !== 0) return;
+    // With several output destinations, progress records are process-global
+    // and cannot be attributed to the RTP stream. Do not report them as live
+    // output measurements.
+    const progress = session.ffmpegHasMultipleOutputs
+      ? session.telemetry.output
+      : mergeFfmpegProgress(session.telemetry.output, line);
+    const output = isVideoHeader
       ? mergeFfmpegStreamHeader(progress, line)
       : progress;
     if (output) session.telemetry.output = output;
@@ -840,17 +859,19 @@ export class HomeKitCameraStreamingDelegate
       this.activeSessions.set(request.sessionID, session);
 
       try {
-        session.videoRelay = await RtpDatagramRelay.create(
-          request.targetAddress,
-          request.video.port,
-          () => session.startup?.mark("T5"),
-        );
-        if (request.audio)
-          session.audioRelay = await RtpDatagramRelay.create(
+        if (this.streamSource.metadata?.isOmniTuyaDirect !== true) {
+          session.videoRelay = await RtpDatagramRelay.create(
             request.targetAddress,
-            request.audio.port,
-            () => session.startup?.mark("T6"),
+            request.video.port,
+            () => session.startup?.mark("T5"),
           );
+          if (request.audio)
+            session.audioRelay = await RtpDatagramRelay.create(
+              request.targetAddress,
+              request.audio.port,
+              () => session.startup?.mark("T6"),
+            );
+        }
       } catch (error) {
         session.videoRelay?.close();
         session.audioRelay?.close();
@@ -1090,8 +1111,13 @@ export class HomeKitCameraStreamingDelegate
     // startup probe can therefore describe an older URL and incorrectly mark
     // its audio as absent. Probe the exact URL about to be sent to FFmpeg.
     if (this.streamSource.metadata?.isOmniTuyaDirect === true) {
+      const audioFormatKnown =
+        this.capabilities.hasAudio &&
+        this.capabilities.audioCodec !== "none" &&
+        Number.isFinite(this.capabilities.audioSampleRate) &&
+        (this.capabilities.audioSampleRate || 0) > 0;
       let probeConsumedReader = false;
-      {
+      if (!audioFormatKnown) {
         const probeStarted = performance.now();
         try {
           const adapter = new CameraSourceAdapter(
@@ -1290,7 +1316,7 @@ export class HomeKitCameraStreamingDelegate
       });
       process.stderr?.on("data", (chunk: Buffer) => {
         const text = chunk.toString();
-        if (/Input #|Stream #0/.test(text)) session.startup?.mark("T3");
+        if (/Input #\d+/.test(text)) session.startup?.mark("T3");
         for (const line of text.split(/\r?\n/)) {
           this.recordFfmpegProgress(session, line);
           if (/pblack:\d+/.test(line)) {
@@ -1306,6 +1332,44 @@ export class HomeKitCameraStreamingDelegate
         if (process.exitCode === null && !process.killed) settle();
         else settle(new Error("FFmpeg exited during HAP startup"));
       }, 400);
+      const tryOmniFallback = async (): Promise<void> => {
+        const sourceEntityId =
+          this.streamSource.metadata?.sourceCameraEntityId || this.entityId;
+        try {
+          const state = this.platform?.ha?.hassStates?.get(sourceEntityId);
+          const fallback = await CameraSourceResolver.resolveOmniTuyaFallback(
+            this.platform,
+            sourceEntityId,
+            state,
+            { allowCameraProxy: false },
+          );
+          if (
+            fallback?.url &&
+            this.activeSessions.get(session.sessionId) === session
+          ) {
+            this.streamSource = fallback;
+            this.platform?.log?.warn?.(
+              `[HomeKitCamera][${this.entityId}] Omni RTSP remained unavailable after URL renewal; retrying through Home Assistant's stream route.`,
+            );
+            this.spawnFfmpegProcess(session, request, settle, false);
+            return;
+          }
+          this.platform?.log?.error?.(
+            `[HomeKitCamera][${this.entityId}] Omni RTSP failed and Home Assistant could not provide a fallback stream.`,
+          );
+          settle(new Error("Omni RTSP unavailable; HA fallback unavailable"));
+        } catch (error) {
+          this.platform?.log?.warn?.(
+            `[HomeKitCamera][${this.entityId}] Could not switch Omni Live View to Home Assistant fallback: ${sanitizeDiagnosticText(error instanceof Error ? error.message : "unknown error")}`,
+          );
+          settle(new Error("Omni RTSP fallback failed"));
+        }
+        session.videoRelay?.close();
+        session.audioRelay?.close();
+        session.releaseReader?.();
+        this.activeSessions.delete(session.sessionId);
+        if (this.activeSessions.size === 0) this.emit("session-end");
+      };
       process.once("error", (error) => {
         clearTimeout(guard);
         if (startupTimer) clearTimeout(startupTimer);
@@ -1352,51 +1416,48 @@ export class HomeKitCameraStreamingDelegate
           const isOmniStreamNotFound =
             this.streamSource.metadata?.isOmniTuyaDirect === true &&
             /(?:DESCRIBE failed:\s*404|404\s+Stream Not Found)/i.test(stderr);
-          if (isOmniStreamNotFound) {
+          const isOmniInputFailure =
+            this.streamSource.metadata?.isOmniTuyaDirect === true &&
+            /(?:DESCRIBE failed:\s*404|404\s+Stream Not Found|Error opening input|Operation timed out|Connection refused|Server returned)/i.test(
+              stderr,
+            );
+          if (isOmniInputFailure && !session.omniUrlRetried) {
+            session.omniUrlRetried = true;
             const sourceEntityId =
               this.streamSource.metadata?.sourceCameraEntityId || this.entityId;
             void (async () => {
-              const state = this.platform?.ha?.hassStates?.get(sourceEntityId);
-              const fallback =
-                await CameraSourceResolver.resolveOmniTuyaFallback(
-                  this.platform,
-                  sourceEntityId,
-                  state,
-                  { allowCameraProxy: false },
-                );
-              if (fallback?.url) {
-                this.streamSource = fallback;
-                this.platform?.log?.warn?.(
-                  `[HomeKitCamera][${this.entityId}] Omni RTSP returned 404 Stream Not Found; retrying Live View through Home Assistant's stream/proxy route.`,
-                );
-                this.spawnFfmpegProcess(session, request, settle, false);
-                return;
+              try {
+                const freshUrl =
+                  await this.platform?.ha?.requestOmniTuyaCameraStream?.(
+                    sourceEntityId,
+                  );
+                if (
+                  freshUrl &&
+                  this.activeSessions.get(session.sessionId) === session
+                ) {
+                  this.streamSource = { ...this.streamSource, url: freshUrl };
+                  this.platform?.log?.warn?.(
+                    `[HomeKitCamera][${this.entityId}] Omni RTSP startup failed; retrying once with a newly allocated stream URL.`,
+                  );
+                  this.spawnFfmpegProcess(session, request, settle, false);
+                  return;
+                }
+              } catch {
+                // Never log signed URL allocation errors or credentials.
               }
-
-              this.platform?.log?.error?.(
-                `[HomeKitCamera][${this.entityId}] Omni RTSP returned 404 and Home Assistant could not provide a fallback stream.`,
-              );
-              settle(
-                new Error(
-                  "Omni RTSP stream not found; HA fallback unavailable",
-                ),
-              );
-              session.videoRelay?.close();
-              session.audioRelay?.close();
-              session.releaseReader?.();
-              this.activeSessions.delete(session.sessionId);
-              if (this.activeSessions.size === 0) this.emit("session-end");
-            })().catch((error) => {
-              this.platform?.log?.warn?.(
-                `[HomeKitCamera][${this.entityId}] Could not switch Omni Live View to Home Assistant fallback: ${sanitizeDiagnosticText(error instanceof Error ? error.message : "unknown error")}`,
-              );
-              settle(new Error("Omni RTSP fallback failed"));
+              await tryOmniFallback();
+            })().catch(() => {
+              settle(new Error("Omni RTSP startup retry failed"));
               session.videoRelay?.close();
               session.audioRelay?.close();
               session.releaseReader?.();
               this.activeSessions.delete(session.sessionId);
               if (this.activeSessions.size === 0) this.emit("session-end");
             });
+            return;
+          }
+          if (isOmniStreamNotFound) {
+            void tryOmniFallback();
             return;
           }
 
@@ -1428,6 +1489,16 @@ export class HomeKitCameraStreamingDelegate
             `[HomeKitCamera][${this.entityId}] Retrying stream with safe fallback: forceTranscode=${retryTranscode} hasAudio=${this.capabilities.hasAudio}`,
           );
           this.spawnFfmpegProcess(session, request, settle, retryTranscode);
+          return;
+        }
+
+        if (
+          code !== 0 &&
+          session.omniUrlRetried &&
+          this.streamSource.metadata?.isOmniTuyaDirect === true &&
+          this.activeSessions.get(session.sessionId) === session
+        ) {
+          void tryOmniFallback();
           return;
         }
 

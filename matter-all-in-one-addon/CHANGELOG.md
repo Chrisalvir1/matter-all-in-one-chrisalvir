@@ -1,3 +1,11 @@
+## [2.3.4] - 2026-10-29
+
+- Restaura para Omni Tuya el envío SRTP directo a los puertos negociados por HomeKit, como en 2.3.0; evita insertar el relé RTP local en Live View.
+- Omite la sonda RTSP adicional al iniciar Live View cuando el audio de la cámara ya tiene formato medido. Esto evita consumir una asignación de un solo lector y reduce el retraso antes de iniciar FFmpeg.
+- Si Omni devuelve 404 o falla al abrir RTSP, solicita una URL de sesión nueva y reintenta una vez antes de cambiar a la ruta de Home Assistant.
+- Corrige la telemetría de FFmpeg para no presentar el flujo de movimiento 160×90 en escala de grises ni estadísticas globales como el vídeo recibido por HomeKit.
+- Mantiene AAC-ELD para Live View y AAC-LC para HKSV; la reproducción real en Apple Casa y la persistencia de clips deben verificarse en la instalación después de actualizar.
+
 ## [2.3.3] - 2026-10-29
 
 - Restablece el perfil de micrófono PCMU/8 kHz/mono observado en la Frienhund ACF100W cuando Omni Tuya entrega video pero su sonda RTSP omite la pista de audio; FFmpeg convierte Live View a AAC-ELD y HKSV a AAC-LC.

@@ -1,0 +1,3 @@
+La versión 2.3.4 corrige la ruta de Live View de cámaras Omni Tuya. Restaura el envío SRTP directo negociado por HomeKit, evita una sonda RTSP redundante cuando el formato de audio ya está medido y renueva la URL de Omni una vez ante fallos 404 o de apertura. La telemetría ahora distingue el vídeo RTP de HomeKit del flujo reducido usado para analizar movimiento.
+
+Se conserva AAC-ELD para el audio de Live View y AAC-LC para HKSV. Tras instalar, hace falta abrir la cámara en Apple Casa para confirmar vídeo y audio en reproducción; también debe comprobarse que Casa guarda y reproduce un clip HKSV antes de considerar validada la grabación.
