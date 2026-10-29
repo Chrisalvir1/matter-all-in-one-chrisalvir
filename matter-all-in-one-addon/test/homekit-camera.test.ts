@@ -11,6 +11,8 @@ import {
   SRTPCryptoSuites,
   StreamRequestTypes,
   AudioStreamingCodecType,
+  AudioRecordingCodecType,
+  AudioRecordingSamplerate,
   H264Profile,
 } from "@homebridge/hap-nodejs";
 import { EventEmitter } from "node:events";
@@ -218,6 +220,45 @@ describe("HomeKitCameraAccessory production HAP graph", () => {
       H264Profile.BASELINE,
       H264Profile.MAIN,
       H264Profile.HIGH,
+    ]);
+  });
+
+  it("keeps the ACF100W microphone enabled for AAC-ELD Live View and AAC-LC HKSV", () => {
+    const cameraId = "camera.comedero_michi";
+    const accessory = new HomeKitCameraAccessory(
+      createPlatform(),
+      cameraId,
+      {
+        ...createRecord(cameraId),
+        name: "Comedero Michi",
+        model: "Frienhund ACF100W",
+      } as any,
+      {
+        ...capabilities,
+        hasAudio: true,
+        audioCodec: "pcm",
+        audioSampleRate: 8000,
+        audioChannels: 1,
+        audioProvenance: "OBSERVED",
+      } as any,
+      {
+        sourceType: "rtsp",
+        url: "rtsps://camera.local/live",
+        supportsPassthrough: true,
+        requiresBridge: false,
+        metadata: { isOmniTuyaDirect: true },
+      },
+    );
+
+    const options = (accessory as any).buildControllerOptions();
+    expect(options.streamingOptions.audio.codecs[0].type).toEqual(
+      AudioStreamingCodecType.AAC_ELD,
+    );
+    expect(options.recording.options.audio.codecs.type).toBe(
+      AudioRecordingCodecType.AAC_LC,
+    );
+    expect(options.recording.options.audio.codecs.samplerate).toEqual([
+      AudioRecordingSamplerate.KHZ_48,
     ]);
   });
 

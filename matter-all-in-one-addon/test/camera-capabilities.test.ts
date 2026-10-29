@@ -62,7 +62,7 @@ describe("detectCameraCapabilities", () => {
 
   it("does not invent audio for Omni's RTSP source before a probe confirms a track", () => {
     const state = makeState("idle", {
-      friendly_name: "COMEDERO MICHI",
+      friendly_name: "Other Omni camera",
       supported_features: 0,
     });
     const cap = detectCameraCapabilities(state, {
@@ -174,6 +174,58 @@ describe("detectCameraCapabilities", () => {
     // Must be passthrough_h264 even with PCM — delegate handles re-encoding to AAC-ELD
     expect(cap.strategy).toBe("passthrough_h264");
     expect(cap.requiresTranscoding).toBe(false);
+  });
+
+  it("keeps the observed ACF100W PCMU profile when a fresh Omni RTSP probe sees video but omits audio", () => {
+    const state = makeState("streaming", {
+      friendly_name: "Comedero Michi",
+      has_audio: true,
+    });
+    const cap = detectCameraCapabilities(
+      state,
+      {
+        sourceType: "rtsp",
+        url: "rtsps://camera.invalid/live",
+        snapshotUrl: "/api/camera_proxy/camera.test_camera",
+        supportsPassthrough: true,
+        requiresBridge: false,
+        metadata: { isOmniTuyaDirect: true },
+      },
+      {
+        valid: true,
+        hasAudio: false,
+        videoCodec: "h264",
+        width: 640,
+        height: 360,
+        fps: 15,
+      },
+    );
+
+    expect(cap.hasAudio).toBe(true);
+    expect(cap.audioCodec).toBe("pcm");
+    expect(cap.audioSampleRate).toBe(8000);
+    expect(cap.audioChannels).toBe(1);
+    expect(cap.audioProvenance).toBe("OBSERVED");
+  });
+
+  it("uses the observed ACF100W PCMU profile when the startup Omni probe times out", () => {
+    const state = makeState("streaming", {
+      friendly_name: "Comedero Michi",
+      has_audio: true,
+    });
+    const cap = detectCameraCapabilities(state, {
+      sourceType: "rtsp",
+      url: "rtsps://camera.invalid/live",
+      snapshotUrl: "/api/camera_proxy/camera.test_camera",
+      supportsPassthrough: true,
+      requiresBridge: false,
+      metadata: { isOmniTuyaDirect: true },
+    });
+
+    expect(cap.hasAudio).toBe(true);
+    expect(cap.audioCodec).toBe("pcm");
+    expect(cap.audioSampleRate).toBe(8000);
+    expect(cap.audioProvenance).toBe("OBSERVED");
   });
 
   it("v1.6.3: WebRTC camera WITH go2rtc RTSP URL → passthrough_h264 (Nest via go2rtc bridge)", () => {

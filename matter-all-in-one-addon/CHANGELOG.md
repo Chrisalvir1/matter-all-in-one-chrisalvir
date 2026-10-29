@@ -1,3 +1,10 @@
+## [2.3.3] - 2026-10-29
+
+- Restablece el perfil de micrófono PCMU/8 kHz/mono observado en la Frienhund ACF100W cuando Omni Tuya entrega video pero su sonda RTSP omite la pista de audio; FFmpeg convierte Live View a AAC-ELD y HKSV a AAC-LC.
+- Mantiene el audio basado en evidencia del modelo sin inventar paquetes: las asignaciones de audio FFmpeg siguen siendo opcionales si la sesión RTSP actual no contiene una pista.
+- Amplía la sonda inicial de Omni y registra fallos de medición sin mostrar URLs firmadas ni credenciales.
+- Actualiza capacidades de audio después de aplicar el resultado de la sonda de Live View.
+
 ## [2.3.2] - 2026-10-29
 
 - Restaura la negociación clásica HAP con varias resoluciones y FPS dinámicos de 15, 20, 25 y 30, limitados al perfil de fuente medido. No presenta los valores de respaldo como mediciones del dispositivo.

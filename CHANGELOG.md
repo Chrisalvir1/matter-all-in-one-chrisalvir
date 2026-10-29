@@ -1,3 +1,9 @@
+## [2.3.3] - 2026-10-29
+
+- Repara el perfil de audio del comedero Frienhund ACF100W: PCM μ-law observado (8 kHz, mono) se entrega a HomeKit como AAC-ELD en Live View y AAC-LC en HKSV.
+- Aumenta el tiempo de medición de fuentes Omni y registra el resultado sin exponer credenciales.
+- La reproducción y el audio de los clips todavía requieren confirmación en Apple Casa tras actualizar.
+
 ## [2.3.2] - 2026-10-29
 
 - Restaura la negociación clásica HAP con varias resoluciones y FPS dinámicos de 15, 20, 25 y 30, limitados al perfil de fuente medido. No presenta los valores de respaldo como mediciones del dispositivo.

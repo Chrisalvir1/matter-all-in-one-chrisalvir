@@ -107,6 +107,44 @@ function createMockConfiguration(): CameraRecordingConfiguration {
 }
 
 describe("HomeKitCameraRecordingDelegate", () => {
+  it("encodes an observed PCMU feeder microphone as AAC-LC/48 kHz for HKSV", () => {
+    const record = {
+      ...createMockRecord(),
+      entityId: "camera.comedero_michi",
+      name: "Comedero Michi",
+      model: "Frienhund ACF100W",
+    };
+    const capabilities = {
+      ...createMockCapabilities(),
+      audioCodec: "pcm" as const,
+      audioSampleRate: 8000,
+      audioChannels: 1,
+      audioProvenance: "OBSERVED" as const,
+    };
+    const delegate = new HomeKitCameraRecordingDelegate(
+      mockPlatform,
+      record.entityId,
+      record as any,
+      capabilities,
+      {
+        sourceType: "rtsp",
+        url: "rtsps://camera.local/stream",
+        supportsPassthrough: true,
+        requiresBridge: false,
+        metadata: { isOmniTuyaDirect: true },
+      },
+    );
+    delegate.updateRecordingConfiguration(createMockConfiguration());
+    const args = delegate.buildPrebufferArgs("rtsps://camera.local/stream");
+
+    expect(args).toContain("-c:a");
+    expect(args?.[args.indexOf("-c:a") + 1]).toBe("aac");
+    expect(args).toContain("aac_low");
+    expect(args?.[args.indexOf("-ar") + 1]).toBe("48k");
+    expect(args).not.toContain("-an");
+    delegate.destroy();
+  });
+
   it("uses bounded SPS/PPS probing and regular fragments for Omni feeder HKSV", () => {
     const record = {
       ...createMockRecord(),

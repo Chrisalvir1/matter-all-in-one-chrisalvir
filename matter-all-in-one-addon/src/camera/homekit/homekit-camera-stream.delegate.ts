@@ -1108,16 +1108,24 @@ export class HomeKitCameraStreamingDelegate
           if (session.startup)
             session.startup.metrics.probeMs = performance.now() - probeStarted;
           if (probe.valid) {
-            this.capabilities.audioProvenance = "PROBED";
+            const keepObservedModelAudio =
+              !probe.hasAudio &&
+              this.capabilities.audioProvenance === "OBSERVED" &&
+              this.capabilities.audioCodec === "pcm" &&
+              this.capabilities.audioSampleRate === 8000 &&
+              this.capabilities.audioChannels === 1;
+            if (!keepObservedModelAudio) {
+              this.capabilities.audioProvenance = "PROBED";
+              this.capabilities.hasAudio = probe.hasAudio;
+              this.capabilities.audioCodec = probe.hasAudio
+                ? ((probe.audioCodec || "incompatible") as any)
+                : "none";
+              this.capabilities.audioSampleRate = probe.audioSampleRate;
+              this.capabilities.audioChannels = probe.audioChannels;
+            }
             this.emit("source-capabilities");
-            this.capabilities.hasAudio = probe.hasAudio;
-            this.capabilities.audioCodec = probe.hasAudio
-              ? ((probe.audioCodec || "incompatible") as any)
-              : "none";
-            this.capabilities.audioSampleRate = probe.audioSampleRate;
-            this.capabilities.audioChannels = probe.audioChannels;
             this.platform?.log?.notice?.(
-              `[HomeKitCamera][${this.entityId}] Fresh Omni stream probe: audio=${probe.hasAudio ? `${probe.audioCodec || "present"}/${probe.audioSampleRate || "unknown"}Hz` : "absent"}`,
+              `[HomeKitCamera][${this.entityId}] Fresh Omni stream probe: audio=${probe.hasAudio ? `${probe.audioCodec || "present"}/${probe.audioSampleRate || "unknown"}Hz` : keepObservedModelAudio ? "PCMU/8000Hz (model-validated profile retained)" : "absent"}`,
             );
           }
         } catch {
