@@ -1,3 +1,5 @@
+import { TuyaHapTalkback } from "../homekit/tuya-hap-talkback.js";
+import { AudioStreamingCodecType } from "@homebridge/hap-nodejs";
 import { spawn } from "node:child_process";
 import dgram from "node:dgram";
 import {
@@ -15,15 +17,8 @@ import {
   MatterActiveSession,
 } from "./camera-session-manager.js";
 
-function sanitizeUrlForLog(rawUrl?: string): string {
-  if (!rawUrl) return "<empty>";
-  try {
-    const parsed = new URL(rawUrl);
-    if (parsed.password) parsed.password = "******";
-    return parsed.toString();
-  } catch {
-    return rawUrl.replace(/\/\/[^:]+:[^@]+@/, "//***:***@");
-  }
+function sanitizeUrlForLog(_rawUrl?: string): string {
+  return "[camera source]";
 }
 
 export class CameraWebRtcAdapter {
@@ -234,7 +229,10 @@ export class CameraWebRtcAdapter {
         `[MatterCameraWebRtc][${this.entityId}] DPTZSetViewport applied: ${JSON.stringify(this.currentViewport)}`,
       );
       for (const s of this.sessionManager.getActiveSessions()) {
-        this.sessionManager.setSessionViewport(s.sessionId, this.currentViewport);
+        this.sessionManager.setSessionViewport(
+          s.sessionId,
+          this.currentViewport,
+        );
       }
     }
   }
@@ -344,7 +342,38 @@ export class CameraWebRtcAdapter {
     let audioTrack: MediaStreamTrack | undefined;
     if (hasAudio) {
       audioTrack = new MediaStreamTrack({ kind: "audio" });
-      pc.addTrack(audioTrack);
+      const twoWay = this.streamSource.metadata?.omniTwoWayAudio === true;
+      pc.addTransceiver(audioTrack, {
+        direction: twoWay ? "sendrecv" : "sendonly",
+      });
+      if (twoWay)
+        pc.onTrack.subscribe((track) => {
+          if (track.kind !== "audio") return;
+          const backchannel = new TuyaHapTalkback(
+            "127.0.0.1",
+            Buffer.alloc(0),
+            () => this.platform.ha.requestOmniTuyaCameraWebRtc(this.entityId),
+            (message) =>
+              this.platform?.log?.notice?.(`[MatterCamera] ${message}`),
+          );
+          session.returnAudioCleanup = () => backchannel.close();
+          const ready = backchannel.prepare().catch(() => {
+            backchannel.close();
+          });
+          track.onReceiveRtp.subscribe((packet) => {
+            void ready.then(() => {
+              if (session.state !== "active") return;
+              backchannel.configure({
+                codec: AudioStreamingCodecType.OPUS,
+                sample_rate: 48,
+                channel: 2,
+                pt: packet.header.payloadType,
+              } as any);
+              backchannel.pushRtp(packet.serialize());
+              this.sessionManager.touchSession(session.sessionId);
+            });
+          });
+        });
       session.audioStreamId = session.videoStreamId
         ? session.videoStreamId + 1
         : 2;
@@ -437,8 +466,7 @@ export class CameraWebRtcAdapter {
 
     const vp = session.viewport || this.currentViewport;
     const hasDptzCrop =
-      vp &&
-      (vp.width < 0.98 || vp.height < 0.98 || vp.x > 0.02 || vp.y > 0.02);
+      vp && (vp.width < 0.98 || vp.height < 0.98 || vp.x > 0.02 || vp.y > 0.02);
 
     // Video output parameters
     ffmpegArgs.push("-map", "0:v:0");

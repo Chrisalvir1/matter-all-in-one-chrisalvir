@@ -183,12 +183,13 @@ export class CameraEndpointBuilder {
         supportedBitDepths: [16],
       };
       // Matter 1.6.1 Two-Way Talkback (Speaker / Backchannel)
-      avState.speakerCapabilities = {
-        maxNumberOfChannels: 1,
-        supportedCodecs: [0, 1], // AudioCodec.Opus = 0, AAC = 1
-        supportedSampleRates: [16000, 24000, 48000],
-        supportedBitDepths: [16],
-      };
+      if (streamSource.metadata?.omniTwoWayAudio === true)
+        avState.speakerCapabilities = {
+          maxNumberOfChannels: 1,
+          supportedCodecs: [0], // The implemented Matter return path accepts Opus.
+          supportedSampleRates: [48000],
+          supportedBitDepths: [16],
+        };
       avState.allocatedAudioStreams = [];
     }
 
@@ -201,26 +202,44 @@ export class CameraEndpointBuilder {
     });
 
     // Register PTZ / DPTZ Command Handlers for controller invocations
-    (endpoint as any).addCommandHandler?.("DPTZSetViewport", async (data: any) => {
-      await adapter.handleDptzSetViewport(data?.request ?? data);
-    });
-    (endpoint as any).addCommandHandler?.("DPTZRelativeMove", async (data: any) => {
-      await adapter.handleDptzRelativeMove(data?.request ?? data);
-    });
-    (endpoint as any).addCommandHandler?.("MPTZMoveToPreset", async (data: any) => {
-      await adapter.handleMptzMoveToPreset(data?.request ?? data);
-    });
+    (endpoint as any).addCommandHandler?.(
+      "DPTZSetViewport",
+      async (data: any) => {
+        await adapter.handleDptzSetViewport(data?.request ?? data);
+      },
+    );
+    (endpoint as any).addCommandHandler?.(
+      "DPTZRelativeMove",
+      async (data: any) => {
+        await adapter.handleDptzRelativeMove(data?.request ?? data);
+      },
+    );
+    (endpoint as any).addCommandHandler?.(
+      "MPTZMoveToPreset",
+      async (data: any) => {
+        await adapter.handleMptzMoveToPreset(data?.request ?? data);
+      },
+    );
 
     // Matter 1.6.1 Snapshot on demand (Cluster 0x0552)
-    (endpoint as any).addCommandHandler?.("TakeSnapshot", async (_data: any) => {
-      const snapUrl = streamSource?.metadata?.snapshotUrl || `/api/camera_proxy/${entityId}`;
-      platform?.log?.info?.(`[MatterCamera][${entityId}] TakeSnapshot requested: ${snapUrl}`);
-      return { success: true, url: snapUrl, timestamp: Date.now() };
-    });
+    (endpoint as any).addCommandHandler?.(
+      "TakeSnapshot",
+      async (_data: any) => {
+        const snapUrl =
+          streamSource?.metadata?.snapshotUrl ||
+          `/api/camera_proxy/${entityId}`;
+        platform?.log?.info?.(
+          `[MatterCamera][${entityId}] TakeSnapshot requested: ${snapUrl}`,
+        );
+        return { success: true, url: snapUrl, timestamp: Date.now() };
+      },
+    );
 
     // Matter 1.6.1 Doorbell Chime notification (Cluster 0x0555)
     (endpoint as any).addCommandHandler?.("Chime", async (_data: any) => {
-      platform?.log?.info?.(`[MatterDoorbell][${entityId}] Doorbell chime triggered`);
+      platform?.log?.info?.(
+        `[MatterDoorbell][${entityId}] Doorbell chime triggered`,
+      );
       return { success: true };
     });
 

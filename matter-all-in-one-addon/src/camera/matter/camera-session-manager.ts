@@ -25,6 +25,7 @@ export interface MatterActiveSession {
 
   // Real resources managed per active WebRTC session
   peerConnection?: RTCPeerConnection;
+  returnAudioCleanup?: () => void;
   ffmpegProcess?: ChildProcess;
   videoSocket?: Socket;
   audioSocket?: Socket;
@@ -113,6 +114,8 @@ export class CameraSessionManager {
     if (!session) return;
 
     session.state = "ended";
+    session.returnAudioCleanup?.();
+    session.returnAudioCleanup = undefined;
     this.sessions.delete(sessionId);
 
     if (session.inactivityTimer) {

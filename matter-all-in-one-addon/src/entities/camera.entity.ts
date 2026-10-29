@@ -102,6 +102,19 @@ export class CameraEntity extends BaseEntity {
       this.streamSource,
       probeResult,
     );
+    if (this.streamSource.metadata?.isOmniTuyaDirect) {
+      this.omniTalkbackCapability ??= Promise.resolve()
+        .then(() => this.platform.ha.requestOmniTuyaCameraWebRtc(this.entityId))
+        .then((bundle) =>
+          Boolean(
+            bundle.audioAttributes?.call_mode?.includes(2) &&
+            bundle.audioAttributes?.hardware_capability?.includes(2),
+          ),
+        )
+        .catch(() => false);
+      this.streamSource.metadata.omniTwoWayAudio =
+        await this.omniTalkbackCapability;
+    }
     this.webrtcAdapter = new CameraWebRtcAdapter(
       this.platform,
       this.entityId,
@@ -160,6 +173,8 @@ export class CameraEntity extends BaseEntity {
   /**
    * Sets up or updates the HomeKit standalone accessory for Apple Home live streaming.
    */
+  private omniTalkbackCapability?: Promise<boolean>;
+
   public async setupHomeKitAccessory(
     record: HomeKitCameraStorageRecord,
   ): Promise<HomeKitCameraAccessory> {
@@ -171,11 +186,22 @@ export class CameraEntity extends BaseEntity {
     const { capabilities, streamSource } = await this.refreshCapabilities();
 
     if (NestCameraAdapter.isNestCamera(this.entityId, this.state)) {
-      const nestMeta = NestCameraAdapter.getNestMetadata(this.entityId, this.state);
-      if (!record.manufacturer || record.manufacturer === "Home Assistant" || record.manufacturer === "Matter all in one Chrisalvir") {
+      const nestMeta = NestCameraAdapter.getNestMetadata(
+        this.entityId,
+        this.state,
+      );
+      if (
+        !record.manufacturer ||
+        record.manufacturer === "Home Assistant" ||
+        record.manufacturer === "Matter all in one Chrisalvir"
+      ) {
         record.manufacturer = nestMeta.manufacturer;
       }
-      if (!record.model || record.model === "Modelo no identificado" || record.model === "Camera") {
+      if (
+        !record.model ||
+        record.model === "Modelo no identificado" ||
+        record.model === "Camera"
+      ) {
         record.model = nestMeta.model;
       }
     }

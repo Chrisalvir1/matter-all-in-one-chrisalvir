@@ -76,8 +76,7 @@ export class HomeKitCameraAccessory {
   public controller?: CameraController;
   public delegate?: HomeKitCameraStreamingDelegate;
   public recordingDelegate?:
-    | HomeKitCameraRecordingDelegate
-    | HevcRecordingDelegate;
+    HomeKitCameraRecordingDelegate | HevcRecordingDelegate;
   public motionService?: Service;
   public lightService?: Service;
   public sirenService?: Service;
@@ -139,7 +138,10 @@ export class HomeKitCameraAccessory {
       this.streamSource.metadata?.hasCameraMotion,
     );
     const isC120 = this.isTapoC120();
-    if (isC120 && (!this.capabilities.maxFps || this.capabilities.maxFps <= 0)) {
+    if (
+      isC120 &&
+      (!this.capabilities.maxFps || this.capabilities.maxFps <= 0)
+    ) {
       this.capabilities.maxFps = 15;
     }
     const isC402 = this.isTapoC402();
@@ -333,7 +335,6 @@ export class HomeKitCameraAccessory {
     this.configureClassicCameraController();
   }
 
-
   private configureClassicCameraController(): void {
     this.record.activeController = "CameraController";
     this.delegate = new HomeKitCameraStreamingDelegate(
@@ -372,7 +373,10 @@ export class HomeKitCameraAccessory {
 
     this.delegate.on("session-start", () => {
       this.recordingDelegate?.pausePrebuffer();
-      this.localMotionDetector?.pause(this.platform?.log, "Apple Home Live View");
+      this.localMotionDetector?.pause(
+        this.platform?.log,
+        "Apple Home Live View",
+      );
     });
     this.delegate.on("motion-analysis-line", (line: string) => {
       this.localMotionDetector?.observeLiveStreamLine(line, this.platform?.log);
@@ -394,7 +398,10 @@ export class HomeKitCameraAccessory {
         return;
       }
       this.recordingDelegate?.resumePrebuffer();
-      this.localMotionDetector?.resume(this.platform?.log, "Apple Home Live View ended");
+      this.localMotionDetector?.resume(
+        this.platform?.log,
+        "Apple Home Live View ended",
+      );
     });
 
     this.controller = new CameraController(this.buildControllerOptions());
@@ -402,6 +409,52 @@ export class HomeKitCameraAccessory {
     this.platform?.log?.notice?.(
       `[HomeKitCamera][${this.entityId}] Configured classic CameraController (${isHevc ? "HEVC/HKSV3 passthrough" : "H.264 passthrough"})`,
     );
+  }
+
+  private previewBusy = false;
+  public async acquireBrowserPreview(
+    stop: () => void,
+  ): Promise<{ url: string; release(): void }> {
+    if (this.previewBusy || this.delegate?.hasActiveSessions())
+      throw new Error("Casa está usando la cámara");
+    this.previewBusy = true;
+    let released = false;
+    const release = () => {
+      if (released) return;
+      released = true;
+      this.previewBusy = false;
+      this.delegate?.off("session-start", stop);
+      if (!this.delegate?.hasActiveSessions()) {
+        this.recordingDelegate?.resumePrebuffer();
+        this.localMotionDetector?.resume(
+          this.platform?.log,
+          "Preview terminada",
+        );
+      }
+    };
+    this.delegate?.once("session-start", stop);
+    this.recordingDelegate?.pausePrebuffer();
+    this.localMotionDetector?.pause(this.platform?.log, "Preview temporal");
+    try {
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      const sourceId =
+        this.streamSource.metadata?.sourceCameraEntityId || this.entityId;
+      const url = this.streamSource.metadata?.isOmniTuyaDirect
+        ? await this.platform?.ha?.requestOmniTuyaCameraStream?.(sourceId)
+        : this.streamSource.url;
+      this.recordingDelegate?.pausePrebuffer();
+      this.localMotionDetector?.pause(this.platform?.log, "Preview temporal");
+      if (
+        !url ||
+        !/^rtsps?:\/\//i.test(url) ||
+        this.delegate?.hasActiveSessions()
+      )
+        throw new Error("Fuente ocupada o no compatible");
+      return { url, release };
+    } catch (error) {
+      release();
+      throw error;
+    }
   }
 
   private configureAccessoryInformation(): void {
@@ -481,11 +534,14 @@ export class HomeKitCameraAccessory {
         // startup URL may have expired before its audio SDP can be measured.
         // Offer the standard audio codecs for Omni and validate the fresh URL
         // immediately before spawning FFmpeg in the streaming delegate.
-        audio: (this.capabilities.hasAudio || this.streamSource.metadata?.isOmniTuyaDirect)
-          ? {
-              codecs: audioCodecs,
-            }
-          : undefined,
+        audio:
+          this.capabilities.hasAudio ||
+          this.streamSource.metadata?.isOmniTuyaDirect
+            ? {
+                codecs: audioCodecs,
+              twoWayAudio: this.streamSource.metadata?.omniTwoWayAudio === true,
+              }
+            : undefined,
       },
       sensors: this.motionService ? { motion: this.motionService } : undefined,
     };
@@ -551,8 +607,12 @@ export class HomeKitCameraAccessory {
     const dynamicFps = cameraMax;
     const candidates: [number, number, number][] = [
       [width, height, dynamicFps],
-      ...(width >= 3840 ? ([[2560, 1440, dynamicFps]] as [number, number, number][]) : []),
-      ...(width > 1920 && width < 3840 ? ([[2560, 1440, dynamicFps]] as [number, number, number][]) : []),
+      ...(width >= 3840
+        ? ([[2560, 1440, dynamicFps]] as [number, number, number][])
+        : []),
+      ...(width > 1920 && width < 3840
+        ? ([[2560, 1440, dynamicFps]] as [number, number, number][])
+        : []),
       [1920, 1080, dynamicFps],
       [1280, 720, dynamicFps],
     ];
@@ -621,7 +681,9 @@ export class HomeKitCameraAccessory {
 
     const ladder: [number, number, number][] = [
       [width, height, dynamicFps],
-      ...(width > 1920 ? ([[2560, 1440, dynamicFps]] as [number, number, number][]) : []),
+      ...(width > 1920
+        ? ([[2560, 1440, dynamicFps]] as [number, number, number][])
+        : []),
       [1920, 1080, dynamicFps],
       [1280, 720, dynamicFps],
       [640, 360, Math.min(dynamicFps, 30)],
@@ -918,8 +980,15 @@ export class HomeKitCameraAccessory {
         if (states.has(cand)) return cand;
       }
       for (const [candId] of states.entries()) {
-        if (!candId.startsWith("binary_sensor.") && !candId.startsWith("event.")) continue;
-        const fn = getHaEntitySearchText(this.platform?.ha, candId).toLowerCase();
+        if (
+          !candId.startsWith("binary_sensor.") &&
+          !candId.startsWith("event.")
+        )
+          continue;
+        const fn = getHaEntitySearchText(
+          this.platform?.ha,
+          candId,
+        ).toLowerCase();
         const candIdLower = candId.toLowerCase();
         const hasC120Token =
           candIdLower.includes("c120") ||
@@ -980,7 +1049,8 @@ export class HomeKitCameraAccessory {
       for (const [entityId, entry] of registry.entries()) {
         if (
           entry.device_id !== deviceId ||
-          (!entityId.startsWith("binary_sensor.") && !entityId.startsWith("event."))
+          (!entityId.startsWith("binary_sensor.") &&
+            !entityId.startsWith("event."))
         )
           continue;
         const state = states?.get(entityId);
@@ -1022,7 +1092,10 @@ export class HomeKitCameraAccessory {
           entityId.includes("auto");
         if (!isMotionClass) continue;
         const cleanEntity = clean(entityId);
-        const fn = getHaEntitySearchText(this.platform?.ha, entityId).toLowerCase();
+        const fn = getHaEntitySearchText(
+          this.platform?.ha,
+          entityId,
+        ).toLowerCase();
         const cleanFn = clean(fn);
         const camWords = (this.record?.name || "")
           .toLowerCase()
@@ -1203,7 +1276,8 @@ export class HomeKitCameraAccessory {
       this.linkedMotionEntityId ||
       !this.streamSource.metadata?.isOmniTuyaDirect ||
       !this.platform?.ha?.requestOmniTuyaCameraStream
-    ) return;
+    )
+      return;
 
     const sourceCameraEntityId =
       this.streamSource.metadata?.sourceCameraEntityId || this.entityId;
@@ -1214,7 +1288,9 @@ export class HomeKitCameraAccessory {
       fps: 1,
       reportAllFrameChanges: true,
       resolveRtspUrl: async () =>
-        await this.platform.ha.requestOmniTuyaCameraStream(sourceCameraEntityId),
+        await this.platform.ha.requestOmniTuyaCameraStream(
+          sourceCameraEntityId,
+        ),
     });
     this.localMotionDetector.on("motion", (detected: boolean) => {
       this.updateMotionState(detected);
@@ -1233,7 +1309,9 @@ export class HomeKitCameraAccessory {
       const sourceCameraEntityId =
         this.streamSource.metadata?.sourceCameraEntityId || this.entityId;
       const probeUrl = this.streamSource.metadata?.isOmniTuyaDirect
-        ? await this.platform?.ha?.requestOmniTuyaCameraStream?.(sourceCameraEntityId)
+        ? await this.platform?.ha?.requestOmniTuyaCameraStream?.(
+            sourceCameraEntityId,
+          )
         : this.streamSource.url;
       if (!probeUrl) return;
       const probe = await probeCameraSource(probeUrl, {
@@ -1290,9 +1368,11 @@ export class HomeKitCameraAccessory {
         );
 
         if (this.entityId.includes("cameraui")) {
-          const cuiId = this.record.cameraUiCameraId || this.entityId
-            .replace(/^camera\.cameraui_/, "")
-            .replace(/^camera\./, "");
+          const cuiId =
+            this.record.cameraUiCameraId ||
+            this.entityId
+              .replace(/^camera\.cameraui_/, "")
+              .replace(/^camera\./, "");
           void CameraUiStorage.updateCamera(cuiId, (cam) => {
             cam.videoCodec = this.capabilities.videoCodec;
             cam.strategy = this.capabilities.strategy as any;
@@ -1325,9 +1405,11 @@ export class HomeKitCameraAccessory {
       }
 
       // Update Camera.UI storage if applicable
-      const cuiId = this.record.cameraUiCameraId || this.entityId
-        .replace(/^camera\.cameraui_/, "")
-        .replace(/^camera\./, "");
+      const cuiId =
+        this.record.cameraUiCameraId ||
+        this.entityId
+          .replace(/^camera\.cameraui_/, "")
+          .replace(/^camera\./, "");
       void CameraUiStorage.updateCamera(cuiId, (cam) => {
         cam.isPaired = paired;
         return cam;
