@@ -30,8 +30,6 @@ export interface CameraCapabilitiesInfo {
   videoCodec: VideoCodecType;
   /** True if audio is available and compatible with HomeKit / Matter. */
   hasAudio: boolean;
-  audioProvenance?:
-    "DECLARED" | "PROBED" | "OBSERVED" | "CACHED" | "INFERRED" | "UNKNOWN";
   /** Detected audio codec. */
   audioCodec: AudioCodecType;
   /** Audio sample rate in Hz. */
@@ -52,7 +50,6 @@ export interface CameraCapabilitiesInfo {
     fps?: number;
     bitrateKbps?: number;
     pixFmt?: string;
-    metadataSource?: string;
   };
   /** Target resolution width and height. */
   resolution: { width: number; height: number };

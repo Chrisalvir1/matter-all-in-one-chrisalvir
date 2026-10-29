@@ -10,19 +10,12 @@ import {
 const API_BASE = "./api/custom";
 
 // Base request wrapper with relative prefix (handles Home Assistant Ingress automatically)
-export async function request<T = any>(
-  endpoint: string,
-  options: RequestInit = {},
-): Promise<T> {
+export async function request<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
   const url = `${API_BASE}${cleanEndpoint}`;
   const res = await fetch(url, {
     ...options,
-    signal:
-      options.signal ??
-      (!options.method || options.method === "GET"
-        ? AbortSignal.timeout(15000)
-        : undefined),
+    signal: options.signal ?? ((!options.method || options.method === "GET") ? AbortSignal.timeout(15000) : undefined),
     headers: {
       "Content-Type": "application/json",
       ...(options.headers || {}),
@@ -47,101 +40,64 @@ export const api = {
   getStatus: () => request<StatusResponse>("/status"),
   getDevices: () => request<EntityRecord[]>("/devices"),
   syncDevices: () =>
-    request<{ success: boolean; entities: number }>("/sync-devices", {
-      method: "POST",
-    }),
+    request<{ success: boolean; entities: number }>("/sync-devices", { method: "POST" }),
   getCameras: () => request<CameraRecord[]>("/cameras"),
   getScryptedConfig: () => request<ScryptedConfigResponse>("/scrypted/config"),
-  saveScryptedConfig: (data: any) =>
-    request("/scrypted/config", { method: "POST", body: JSON.stringify(data) }),
+  saveScryptedConfig: (data: any) => request("/scrypted/config", { method: "POST", body: JSON.stringify(data) }),
   deleteScryptedConfig: () => request("/scrypted/config", { method: "DELETE" }),
-  testScryptedConnection: (data: any) =>
-    request("/scrypted/connection-test", {
-      method: "POST",
-      body: JSON.stringify(data),
-    }),
-  syncCameras: () =>
-    request<CameraRecord[]>("/scrypted/load-cameras", { method: "POST" }),
+  testScryptedConnection: (data: any) => request("/scrypted/connection-test", { method: "POST", body: JSON.stringify(data) }),
+  syncCameras: () => request<CameraRecord[]>("/scrypted/load-cameras", { method: "POST" }),
 
   // Camera.UI endpoints
   getCameraUiConfig: () => request<CameraUiConfigResponse>("/cameraui/config"),
-  saveCameraUiConfig: (data: any) =>
-    request("/cameraui/config", { method: "POST", body: JSON.stringify(data) }),
-  testCameraUiConnection: (data: any) =>
-    request("/cameraui/test-connection", {
-      method: "POST",
-      body: JSON.stringify(data),
-    }),
+  saveCameraUiConfig: (data: any) => request("/cameraui/config", { method: "POST", body: JSON.stringify(data) }),
+  testCameraUiConnection: (data: any) => request("/cameraui/test-connection", { method: "POST", body: JSON.stringify(data) }),
   syncCameraUiCameras: (data?: any) =>
-    request<{
-      success: boolean;
-      totalCameras: number;
-      newCameras: number;
-      cameras: CameraUiCameraItem[];
-    }>(
+    request<{ success: boolean; totalCameras: number; newCameras: number; cameras: CameraUiCameraItem[] }>(
       "/cameraui/sync",
-      data
-        ? { method: "POST", body: JSON.stringify(data) }
-        : { method: "POST" },
+      data ? { method: "POST", body: JSON.stringify(data) } : { method: "POST" },
     ),
   getCameraUiCameras: () => request<CameraUiCameraItem[]>("/cameraui/cameras"),
   toggleCameraUiHomeKit: (cameraId: string) =>
-    request(
-      `/cameraui/cameras/${encodeURIComponent(cameraId)}/toggle-homekit`,
-      { method: "POST" },
-    ),
+    request(`/cameraui/cameras/${encodeURIComponent(cameraId)}/toggle-homekit`, { method: "POST" }),
   toggleCameraHomeKit: (cameraId: string) =>
     request<{ success: boolean; homeKitEnabled?: boolean; error?: string }>(
       `/cameras/${encodeURIComponent(cameraId)}/toggle-homekit`,
       { method: "POST" },
     ),
   resetCameraUiPairing: (cameraId: string) =>
-    request<{ success: boolean }>(
-      `/cameraui/cameras/${encodeURIComponent(cameraId)}/reset-pairing`,
-      {
-        method: "POST",
-      },
-    ),
+    request<{ success: boolean }>(`/cameraui/cameras/${encodeURIComponent(cameraId)}/reset-pairing`, {
+      method: "POST",
+    }),
 
-  verifyCameraStream: (
-    cameraId: string,
-    streamUrl: string,
-    transport?: string,
-  ) =>
+  verifyCameraStream: (cameraId: string, streamUrl: string, transport?: string) =>
     request<{ ok: boolean; status: string; validation?: any }>(
       `/cameras/${encodeURIComponent(cameraId)}/verify-stream`,
       {
         method: "POST",
         body: JSON.stringify({ streamUrl, transport, timeoutMs: 5000 }),
-      },
+      }
     ),
 
-  diagnoseCameraStream: (
-    cameraId: string,
-    streamUrl: string,
-    transport?: string,
-  ) =>
+  diagnoseCameraStream: (cameraId: string, streamUrl: string, transport?: string) =>
     request<{ success: boolean; metrics?: any; camera?: any }>(
       `/cameras/${encodeURIComponent(cameraId)}/diagnose-stream`,
       {
         method: "POST",
         body: JSON.stringify({ streamUrl, transport, timeoutMs: 8000 }),
-      },
+      }
     ),
 
   getCameraSnapshotUrl: (cameraId: string) =>
     `${API_BASE}/cameras/${encodeURIComponent(cameraId)}/snapshot?t=${Date.now()}`,
 
-  updateCameraIdentity: (
-    cameraId: string,
-    data: { manufacturer?: string; model?: string; clear?: boolean },
-  ) =>
+  updateCameraIdentity: (cameraId: string, data: { manufacturer?: string; model?: string; clear?: boolean }) =>
     request<{ success: boolean; message?: string }>(
       `/cameras/${encodeURIComponent(cameraId)}/identity-override`,
       {
         method: "PUT",
         body: JSON.stringify(data),
-      },
+      }
     ),
 
   saveCameraStreamUrl: (cameraId: string, streamUrl: string) =>
@@ -157,32 +113,26 @@ export const api = {
     }),
 
   resetCameraPairing: (scopedId: string) =>
-    request<{
-      success: boolean;
-      setupUri?: string;
-      record?: any;
-      error?: string;
-    }>(`/reset-camera-pairing/${encodeURIComponent(scopedId)}`, {
-      method: "POST",
-    }),
+    request<{ success: boolean; setupUri?: string; record?: any; error?: string }>(
+      `/reset-camera-pairing/${encodeURIComponent(scopedId)}`,
+      { method: "POST" }
+    ),
 
   controlCameraEntity: (
     entityId: string,
-    action: "turn_on" | "turn_off" | "toggle" | "press",
+    action: "turn_on" | "turn_off" | "toggle"
   ) =>
-    request<{
-      success: boolean;
-      entityId?: string;
-      state?: boolean;
-      error?: string;
-    }>(`/cameras/control-entity`, {
-      method: "POST",
-      body: JSON.stringify({ entityId, action }),
-    }),
+    request<{ success: boolean; entityId?: string; state?: boolean; error?: string }>(
+      `/cameras/control-entity`,
+      {
+        method: "POST",
+        body: JSON.stringify({ entityId, action }),
+      }
+    ),
 
   getCameraAiConfig: (cameraId: string) =>
     request<{ success: boolean; config: any; active?: any; error?: string }>(
-      `/cameras/ai-config?cameraId=${encodeURIComponent(cameraId)}`,
+      `/cameras/ai-config?cameraId=${encodeURIComponent(cameraId)}`
     ),
 
   saveCameraAiConfig: (cameraId: string, config: any) =>
@@ -191,19 +141,16 @@ export const api = {
       {
         method: "POST",
         body: JSON.stringify({ cameraId, config }),
-      },
+      }
     ),
 
   removeCamera: (cameraId: string) =>
     request(`/cameras/${encodeURIComponent(cameraId)}`, { method: "DELETE" }),
 
   toggleExport: (entityId: string, exported: boolean) =>
-    request(
-      `/${exported ? "register" : "unregister"}/${encodeURIComponent(entityId)}`,
-      {
-        method: "POST",
-      },
-    ),
+    request(`/${exported ? "register" : "unregister"}/${encodeURIComponent(entityId)}`, {
+      method: "POST",
+    }),
 
   setDeviceProfile: (entityId: string, profile: string) =>
     request(`/device-profile/${encodeURIComponent(entityId)}`, {
@@ -212,9 +159,7 @@ export const api = {
     }),
 
   reconnectAccessory: (nodeId: string) =>
-    request(`/refresh-accessory/${encodeURIComponent(nodeId)}`, {
-      method: "POST",
-    }),
+    request(`/refresh-accessory/${encodeURIComponent(nodeId)}`, { method: "POST" }),
 
   removeFabric: (entityId: string, fabricIndex: number | string) =>
     request(`/remove-fabric/${encodeURIComponent(entityId)}/${fabricIndex}`, {
@@ -222,22 +167,15 @@ export const api = {
     }),
 
   openCommissioning: (entityId: string) =>
-    request(`/open-commissioning/${encodeURIComponent(entityId)}`, {
-      method: "POST",
-    }),
+    request(`/open-commissioning/${encodeURIComponent(entityId)}`, { method: "POST" }),
 
   resetAccessory: (entityId: string) =>
-    request(`/reset-accessory/${encodeURIComponent(entityId)}`, {
-      method: "POST",
-    }),
+    request(`/reset-accessory/${encodeURIComponent(entityId)}`, { method: "POST" }),
 
   clearEntityDiagnostics: (entityId: string) =>
-    request<{ success: boolean }>(
-      `/diagnostics/${encodeURIComponent(entityId)}`,
-      {
-        method: "DELETE",
-      },
-    ),
+    request<{ success: boolean }>(`/diagnostics/${encodeURIComponent(entityId)}`, {
+      method: "DELETE",
+    }),
 
   getMqttConfig: () => request<any>("/mqtt-config"),
 
@@ -253,8 +191,7 @@ export const api = {
 
   getLogs: () => request<{ logs: string[] }>("/logs"),
 
-  clearLogs: () =>
-    request<{ success: boolean }>("/logs/clear", { method: "POST" }),
+  clearLogs: () => request<{ success: boolean }>("/logs/clear", { method: "POST" }),
 
   // ── HAP Generic Accessory endpoints ──────────────────────────────────────
   getHapProfiles: () =>
@@ -268,15 +205,18 @@ export const api = {
       setupUri?: string;
       setupId?: string;
       error?: string;
-    }>(`/register-hap/${encodeURIComponent(entityId)}`, {
-      method: "POST",
-      body: JSON.stringify({ hapProfile }),
-    }),
+    }>(
+      `/register-hap/${encodeURIComponent(entityId)}`,
+      {
+        method: "POST",
+        body: JSON.stringify({ hapProfile }),
+      }
+    ),
 
   unregisterHap: (entityId: string) =>
     request<{ success: boolean; error?: string }>(
       `/unregister-hap/${encodeURIComponent(entityId)}`,
-      { method: "POST" },
+      { method: "POST" }
     ),
 
   setHapAlarmCode: (entityId: string, alarmCode: string) =>
@@ -286,11 +226,9 @@ export const api = {
     ),
 
   // ── Matter 1.6.1 & MatterBridge 3.10.11 Dynamic System Info & PTZ ─────────
-  getSystemInfo: () =>
-    request<import("../types").SystemInfoResponse>("/system-info"),
+  getSystemInfo: () => request<import("../types").SystemInfoResponse>("/system-info"),
 
-  getCamerasPtzInfo: () =>
-    request<import("../types").CameraPtzInfo[]>("/cameras/ptz-info"),
+  getCamerasPtzInfo: () => request<import("../types").CameraPtzInfo[]>("/cameras/ptz-info"),
 
   sendPtzCommand: (entityId: string, command: Record<string, any>) =>
     request<{ success: boolean; result?: any }>(
@@ -306,13 +244,7 @@ export const api = {
       `/cameras/${encodeURIComponent(entityId)}/ptz/zones`,
     ),
 
-  saveCameraPtzZones: (
-    entityId: string,
-    payload: {
-      zones?: import("../types").PtzZone[];
-      zone?: Partial<import("../types").PtzZone>;
-    },
-  ) =>
+  saveCameraPtzZones: (entityId: string, payload: { zones?: import("../types").PtzZone[]; zone?: Partial<import("../types").PtzZone> }) =>
     request<{ success: boolean; zones: import("../types").PtzZone[] }>(
       `/cameras/${encodeURIComponent(entityId)}/ptz/zones`,
       {
@@ -322,10 +254,7 @@ export const api = {
     ),
 
   generateMatterPtzExport: () =>
-    request<{ success: boolean; exportData: any }>(
-      "/cameras/generate-matter-export",
-      {
-        method: "POST",
-      },
-    ),
+    request<{ success: boolean; exportData: any }>("/cameras/generate-matter-export", {
+      method: "POST",
+    }),
 };

@@ -1,12 +1,3 @@
-import { RtpDatagramRelay } from "./rtp-relay.js";
-import { StreamStartupTiming } from "./startup-timing.js";
-import { routeAddress } from "./route-address.js";
-import { CameraSourceAdapter } from "../source-adapter.js";
-import {
-  h264AudioPlan,
-  h264VideoPlan,
-  verifiedH264Encoder,
-} from "./media-policy.js";
 import { EventEmitter } from "node:events";
 import fs from "node:fs/promises";
 import fsSync from "node:fs";
@@ -63,14 +54,9 @@ import {
 export interface HomeKitStreamSession {
   sessionId: string;
   process?: ChildProcess;
-  releaseReader?: () => void;
   targetAddress: string;
   videoPort: number;
   localVideoPort: number;
-  localAddress?: string;
-  videoRelay?: RtpDatagramRelay;
-  audioRelay?: RtpDatagramRelay;
-  startup?: StreamStartupTiming;
   videoSsrc: number;
   videoCryptoSuite: SRTPCryptoSuites;
   videoKeySalt: Buffer;
@@ -80,13 +66,10 @@ export interface HomeKitStreamSession {
   audioCryptoSuite?: SRTPCryptoSuites;
   audioKeySalt?: Buffer;
   retried?: boolean;
-  omniUrlRetried?: boolean;
   pipeController?: AbortController;
   telemetry?: LiveViewSessionTelemetry;
   /** FFmpeg writes input and output headers alike; observe only output fields. */
   ffmpegOutputHeaderSeen?: boolean;
-  ffmpegCurrentOutputIndex?: number;
-  ffmpegHasMultipleOutputs?: boolean;
 }
 
 export const FALLBACK_JPEG_BUFFER = Buffer.from(
@@ -243,7 +226,7 @@ export function resolveLiveViewFps(
     return undefined;
   }
 
-  const upperLimit = Math.min(max ?? 60, src ?? 60, 60);
+  const upperLimit = max !== undefined ? Math.min(max, 60) : 60;
   return Math.max(1, Math.min(candidate, upperLimit));
 }
 
@@ -336,38 +319,21 @@ export class HomeKitCameraStreamingDelegate
   public isEzviz(): boolean {
     const sourceUrl = (this.getCleanSourceUrl() || "").toLowerCase();
     const name = String(this.streamSource?.metadata?.name || "").toLowerCase();
-    const model = String(
-      this.streamSource?.metadata?.model || "",
-    ).toLowerCase();
+    const model = String(this.streamSource?.metadata?.model || "").toLowerCase();
     const entityId = this.entityId.toLowerCase();
     const fullText = `${model} ${entityId} ${name} ${sourceUrl}`;
     if (/wyze/i.test(fullText)) return false;
-    const isEzvizToken = (s: string) =>
-      /(?:\bezviz\b|\bh6c\b|4661fae4|patio[-_ ]?trasero|ezviz[-_ ]?patio)/i.test(
-        s,
-      );
-    return (
-      isEzvizToken(model) ||
-      isEzvizToken(entityId) ||
-      isEzvizToken(name) ||
-      isEzvizToken(sourceUrl)
-    );
+    const isEzvizToken = (s: string) => /(?:\bezviz\b|\bh6c\b|4661fae4|patio[-_ ]?trasero|ezviz[-_ ]?patio)/i.test(s);
+    return isEzvizToken(model) || isEzvizToken(entityId) || isEzvizToken(name) || isEzvizToken(sourceUrl);
   }
 
   public isWyze(): boolean {
     const sourceUrl = (this.getCleanSourceUrl() || "").toLowerCase();
     const name = String(this.streamSource?.metadata?.name || "").toLowerCase();
-    const model = String(
-      this.streamSource?.metadata?.model || "",
-    ).toLowerCase();
+    const model = String(this.streamSource?.metadata?.model || "").toLowerCase();
     const entityId = this.entityId.toLowerCase();
     const isWyzeToken = (s: string) => /(?:\bwyze\b|cba17b87)/i.test(s);
-    return (
-      isWyzeToken(model) ||
-      isWyzeToken(entityId) ||
-      isWyzeToken(name) ||
-      isWyzeToken(sourceUrl)
-    );
+    return isWyzeToken(model) || isWyzeToken(entityId) || isWyzeToken(name) || isWyzeToken(sourceUrl);
   }
 
   /** Diagnostics only: never returns URLs, FFmpeg arguments, tokens, or SRTP material. */
@@ -404,7 +370,7 @@ export class HomeKitCameraStreamingDelegate
         ? Number(measured.avgFrameRate.split("/")[0]) /
           Number(measured.avgFrameRate.split("/")[1] || 1)
         : undefined,
-      fps: measured?.fps,
+      fps: measured?.avgFrameRate ? measured.fps : undefined,
       bitrateKbps: measured?.bitrateKbps,
       pixFmt: measured?.pixFmt,
       metadataSource: measured ? "ffprobe" : undefined,
@@ -449,7 +415,6 @@ export class HomeKitCameraStreamingDelegate
       output,
       fallbackReason,
     });
-    if (session.startup) session.telemetry.startup = session.startup;
   }
 
   private finishTelemetry(
@@ -476,29 +441,12 @@ export class HomeKitCameraStreamingDelegate
     line: string,
   ): void {
     if (!session.telemetry) return;
-    const outputHeader = /^Output #(\d+)/i.exec(line.trim());
-    if (outputHeader) {
-      const outputIndex = Number(outputHeader[1]);
-      if (Number.isFinite(outputIndex)) {
-        session.ffmpegCurrentOutputIndex = outputIndex;
-        if (outputIndex > 0) session.ffmpegHasMultipleOutputs = true;
-      }
+    if (/^Output #\d+/i.test(line.trim())) {
       session.ffmpegOutputHeaderSeen = true;
-      session.startup?.mark("T4");
       return;
     }
-    // FFmpeg writes an output header per destination. The motion-analysis
-    // output (#2) is intentionally tiny grayscale video; never let it replace
-    // the negotiated HAP RTP video (#0) in user-facing diagnostics.
-    const isVideoHeader = /Stream #\d+:\d+(?:\[[^\]]+\])?: Video:/i.test(line);
-    if (isVideoHeader && session.ffmpegCurrentOutputIndex !== 0) return;
-    // With several output destinations, progress records are process-global
-    // and cannot be attributed to the RTP stream. Do not report them as live
-    // output measurements.
-    const progress = session.ffmpegHasMultipleOutputs
-      ? session.telemetry.output
-      : mergeFfmpegProgress(session.telemetry.output, line);
-    const output = isVideoHeader
+    const progress = mergeFfmpegProgress(session.telemetry.output, line);
+    const output = session.ffmpegOutputHeaderSeen
       ? mergeFfmpegStreamHeader(progress, line)
       : progress;
     if (output) session.telemetry.output = output;
@@ -696,7 +644,7 @@ export class HomeKitCameraStreamingDelegate
           }
         } catch (error) {
           this.platform?.log?.debug?.(
-            `[HomeKitCamera][${this.entityId}] Snapshot HTTP failed: ${sanitizeDiagnosticText(error)}`,
+            `[HomeKitCamera][${this.entityId}] Snapshot HTTP failed: ${String(error)}`,
           );
         }
       }
@@ -709,12 +657,16 @@ export class HomeKitCameraStreamingDelegate
       }
 
       const args = ["-hide_banner", "-loglevel", "error"];
-      if (/^rtsps?:\/\//.test(sourceUrl)) {
+      if (sourceUrl.startsWith("rtsp://")) {
+        const isDemandingCam =
+          this.isTapoC402() ||
+          this.isWyze() ||
+          this.isEzviz();
         args.push(
           "-probesize",
-          "2097152",
+          isDemandingCam ? "1048576" : this.isTapoC120() ? "131072" : "65536",
           "-analyzeduration",
-          "3000000",
+          isDemandingCam ? "1000000" : "0",
           "-rtsp_transport",
           "tcp",
           "-timeout",
@@ -786,7 +738,7 @@ export class HomeKitCameraStreamingDelegate
       });
     } catch (error) {
       this.platform?.log?.warn?.(
-        `[HomeKitCamera][${this.entityId}] Snapshot fatal error: ${sanitizeDiagnosticText(error)}`,
+        `[HomeKitCamera][${this.entityId}] Snapshot fatal error: ${String(error)}`,
       );
       finish("fatal-error", this.lastSnapshotBuffer);
     }
@@ -808,7 +760,7 @@ export class HomeKitCameraStreamingDelegate
       // Purge any zombie sessions (process died but Map entry survived) before
       // setting up a new one — otherwise the old dead entry corrupts cleanup.
       for (const [sid, s] of [...this.activeSessions.entries()]) {
-        if (s.process && (s.process.killed || s.process.exitCode !== null)) {
+        if (!s.process || s.process.killed || s.process.exitCode !== null) {
           this.platform?.log?.notice?.(
             `[HomeKitCamera][${this.entityId}] Purging zombie session=${sid} before new prepare`,
           );
@@ -822,9 +774,6 @@ export class HomeKitCameraStreamingDelegate
               s.process.kill("SIGKILL");
             } catch {}
           }
-          s.releaseReader?.();
-          s.videoRelay?.close();
-          s.audioRelay?.close();
           this.activeSessions.delete(sid);
         }
       }
@@ -846,7 +795,7 @@ export class HomeKitCameraStreamingDelegate
         ]),
       };
       if (request.audio) {
-        const audioPort = localAudioPort || localVideoPort + 1;
+        const audioPort = localAudioPort || (localVideoPort + 1);
         session.audioPort = request.audio.port;
         session.localAudioPort = audioPort;
         session.audioSsrc = CameraController.generateSynchronisationSource();
@@ -858,27 +807,6 @@ export class HomeKitCameraStreamingDelegate
       }
       this.activeSessions.set(request.sessionID, session);
 
-      try {
-        if (this.streamSource.metadata?.isOmniTuyaDirect !== true) {
-          session.videoRelay = await RtpDatagramRelay.create(
-            request.targetAddress,
-            request.video.port,
-            () => session.startup?.mark("T5"),
-          );
-          if (request.audio)
-            session.audioRelay = await RtpDatagramRelay.create(
-              request.targetAddress,
-              request.audio.port,
-              () => session.startup?.mark("T6"),
-            );
-        }
-      } catch (error) {
-        session.videoRelay?.close();
-        session.audioRelay?.close();
-        session.releaseReader?.();
-        this.activeSessions.delete(session.sessionId);
-        throw error;
-      }
       // Install watchdog timer: if startStream is never called by iOS (e.g. user cancelled
       // live view before connection established), auto-clean the orphaned session after 45s.
       const zombieTimer = setTimeout(() => {
@@ -888,9 +816,6 @@ export class HomeKitCameraStreamingDelegate
           this.platform?.log?.warn?.(
             `[HomeKitCamera][${this.entityId}] [Session][${request.sessionID}] session-timeout: prepareStream completed but startStream was not called after ${HomeKitCameraStreamingDelegate.PREPARE_TIMEOUT_MS / 1000}s — clearing orphan session`,
           );
-          s.releaseReader?.();
-          s.videoRelay?.close();
-          s.audioRelay?.close();
           this.activeSessions.delete(request.sessionID);
           if (this.activeSessions.size === 0) {
             this.platform?.log?.notice?.(
@@ -911,23 +836,25 @@ export class HomeKitCameraStreamingDelegate
         request.sourceAddress.startsWith("::ffff:")
           ? request.sourceAddress.slice("::ffff:".length)
           : request.sourceAddress;
-      const addressOverride = await routeAddress(
-        request.targetAddress,
-        request.video.port,
-      );
-      session.localAddress = addressOverride;
+      const addressOverride =
+        request.addressVersion === "ipv4"
+          ? isIPv4(sourceAddress || "")
+            ? sourceAddress
+            : detectPrimaryNetworkInterface()?.ip
+          : isIPv6(sourceAddress || "")
+            ? sourceAddress
+            : undefined;
       const response: PrepareStreamResponse = {
         ...(addressOverride ? { addressOverride } : {}),
         video: {
-          port: session.videoRelay?.outputPort || localVideoPort,
+          port: localVideoPort,
           ssrc: session.videoSsrc,
           srtp_key: request.video.srtp_key,
           srtp_salt: request.video.srtp_salt,
         },
       };
       if (request.audio) {
-        const audioPort =
-          session.localAudioPort || localAudioPort || localVideoPort + 1;
+        const audioPort = session.localAudioPort || localAudioPort || (localVideoPort + 1);
         response.audio = {
           port: audioPort,
           ssrc: session.audioSsrc!,
@@ -942,7 +869,7 @@ export class HomeKitCameraStreamingDelegate
       callback(undefined, response);
     } catch (error) {
       this.platform?.log?.warn?.(
-        `[HomeKitCamera][${this.entityId}] HAP SetupEndpoints failed: ${sanitizeDiagnosticText(error)}`,
+        `[HomeKitCamera][${this.entityId}] HAP SetupEndpoints failed: ${String(error)}`,
       );
       if (!callbackCompleted) {
         callbackCompleted = true;
@@ -987,25 +914,7 @@ export class HomeKitCameraStreamingDelegate
         callback(new Error(`Session ${request.sessionID} was not prepared`));
         return;
       }
-      let completed = false;
-      const done: StreamRequestCallback = (error) => {
-        if (completed) return;
-        completed = true;
-        callback(error);
-      };
-      void this.startStream(session, request as StartStreamRequest, done).catch(
-        (error) => {
-          if (this.activeSessions.get(request.sessionID) === session)
-            this.stopStream(request.sessionID);
-          done(
-            new Error(
-              sanitizeDiagnosticText(
-                error instanceof Error ? error.message : String(error),
-              ) || "Camera session failed",
-            ),
-          );
-        },
-      );
+      void this.startStream(session, request as StartStreamRequest, callback);
       return;
     }
     if (request.type === StreamRequestTypes.RECONFIGURE) {
@@ -1040,24 +949,16 @@ export class HomeKitCameraStreamingDelegate
     request: StartStreamRequest,
     callback: StreamRequestCallback,
   ): Promise<void> {
-    // PREPARE expires only while awaiting START. Async source allocation must
-    // not race the orphan watchdog after START has already arrived.
-    const prepareTimer = this.prepareTimeouts.get(session.sessionId);
-    if (prepareTimer) clearTimeout(prepareTimer);
-    this.prepareTimeouts.delete(session.sessionId);
-    session.startup = new StreamStartupTiming();
-    session.startup.metrics.retries = 0;
     const video = request.video;
+    const isC120 = this.isTapoC120();
     const measuredFps = this.capabilities.measuredVideo?.fps;
     const declaredFps =
       this.capabilities.maxFps ||
-      (measuredFps && measuredFps > 0 ? Math.round(measuredFps) : 30);
+      (measuredFps && measuredFps > 0 ? Math.round(measuredFps) : isC120 ? 15 : 30);
     const requestedFps = video?.fps;
     const cameraMaxFps =
       this.capabilities.maxFps ||
-      (measuredFps && measuredFps > 0
-        ? Math.max(15, Math.round(measuredFps))
-        : 30);
+      (measuredFps && measuredFps > 0 ? Math.max(15, Math.round(measuredFps)) : isC120 ? 20 : 30);
     const effectiveFps = resolveLiveViewFps(
       requestedFps,
       measuredFps,
@@ -1066,50 +967,184 @@ export class HomeKitCameraStreamingDelegate
     );
 
     const ffmpegPath = resolveFfmpegPath();
-    const readerAdapter = new CameraSourceAdapter(
-      this.platform,
-      this.entityId,
-      this.streamSource,
-      this.capabilities,
-      this.record,
-    );
-    if (readerAdapter.provider === "omni_tuya")
-      session.releaseReader = readerAdapter.acquireReader(session);
     // Pause recording/motion readers BEFORE allocating an Omni session.
     // Tuya allocation by a competing reader can invalidate the live URL.
     this.emit("session-start", session.sessionId);
     await new Promise((resolve) => setImmediate(resolve));
-    const allocationStarted = performance.now();
-    const adapter = new CameraSourceAdapter(
-      this.platform,
-      this.entityId,
-      this.streamSource,
-      this.capabilities,
-      this.record,
+    let sourceUrl = this.getCleanSourceUrl();
+    // An already-paired HAP camera may have been created before Omni metadata
+    // was persisted. Its durable record still contains the real HA camera
+    // entity. Treat a Tuya record with that entity as renewable; a saved RTSP
+    // URL is only a stale diagnostic value and must never decide Live View.
+    const recordedHaCameraEntityId = (this.record as any)?.sourceCameraEntityId;
+    const isRecordedTuyaCamera = /tuya/i.test(
+      `${this.record?.manufacturer || ""} ${this.record?.model || ""} ${this.record?.name || ""}`,
     );
-    let sourceUrl: string | undefined;
-    try {
-      this.streamSource = await adapter.resolveSession();
-      sourceUrl = this.getCleanSourceUrl();
-    } catch {
-      sourceUrl = undefined;
+    const isRenewableOmniCandidate = Boolean(
+      this.streamSource.metadata?.isOmniTuyaDirect === true ||
+        (isRecordedTuyaCamera && /^camera\.[a-z0-9_]+$/.test(recordedHaCameraEntityId || "")),
+    );
+
+    // Dynamically refresh ephemeral HA stream URLs (e.g. C402 HLS tokens or missing URLs)
+    if (
+      !sourceUrl ||
+      this.streamSource.sourceType === "hls" ||
+      this.streamSource.sourceType === "ha_proxy" ||
+      this.streamSource.metadata?.isOmniTuyaDirect === true ||
+      isRenewableOmniCandidate ||
+      this.isTapoC402() ||
+      this.isTapoC120()
+    ) {
+      let haEntityId =
+        (this.streamSource.metadata as any)?.sourceCameraEntityId ||
+        recordedHaCameraEntityId ||
+        this.entityId;
+      if (
+        this.streamSource.metadata?.isCameraUi ||
+        this.entityId.startsWith("cameraui_")
+      ) {
+        const realCam = (this.streamSource.metadata as any)?.realEntities?.find(
+          (e: any) =>
+            /^camera\.[a-z0-9_]+$/.test(e.id || "") &&
+            this.platform?.ha?.hassStates?.has(e.id),
+        );
+        if (realCam?.id) {
+          haEntityId = realCam.id;
+        } else if (this.isTapoC402()) {
+          haEntityId = this.platform?.ha?.hassStates?.has("camera.tapo_frente_de_calle")
+            ? "camera.tapo_frente_de_calle"
+            : this.platform?.ha?.hassStates?.has("camera.tapo_c402")
+            ? "camera.tapo_c402"
+            : haEntityId;
+        } else if (this.isTapoC120()) {
+          haEntityId = this.platform?.ha?.hassStates?.has("camera.tapo_c120")
+            ? "camera.tapo_c120"
+            : this.platform?.ha?.hassStates?.has("camera.tapo_spot")
+            ? "camera.tapo_spot"
+            : this.platform?.ha?.hassStates?.has("camera.c120")
+            ? "camera.c120"
+            : this.platform?.ha?.hassStates?.has("camera.tapo_c120_hd")
+            ? "camera.tapo_c120_hd"
+            : haEntityId;
+        }
+      }
+      const hasKnownHaCamera = Boolean(
+        (this.streamSource.metadata as any)?.sourceCameraEntityId ||
+          this.streamSource.metadata?.isOmniTuyaDirect === true,
+      );
+      if (
+        !/^camera\.[a-z0-9_]+$/.test(haEntityId) ||
+        (!this.platform?.ha?.hassStates?.has(haEntityId) && !hasKnownHaCamera)
+      ) {
+        haEntityId = "";
+      }
+      if (!haEntityId && this.streamSource.sourceType === "ha_proxy") {
+        sourceUrl = "";
+      }
+      if (this.platform?.ha) {
+        const state = haEntityId
+          ? this.platform.ha.hassStates?.get(haEntityId)
+          : undefined;
+        const wasOmniTuyaSource = isRenewableOmniCandidate;
+        let renewedOmniSource = false;
+        if (haEntityId && this.platform.ha.requestOmniTuyaCameraStream) {
+          try {
+            const freshTuyaUrl =
+              await this.platform.ha.requestOmniTuyaCameraStream(haEntityId);
+            if (freshTuyaUrl) {
+              this.streamSource = {
+                ...this.streamSource,
+                sourceType: "rtsp",
+                url: freshTuyaUrl,
+                metadata: {
+                  ...this.streamSource.metadata,
+                  sourceCameraEntityId: haEntityId,
+                  isOmniTuyaDirect: true,
+                },
+              };
+              sourceUrl = this.getCleanSourceUrl();
+              renewedOmniSource = true;
+            }
+          } catch {
+            // The signed Tuya URL must not enter Home Assistant or add-on logs.
+          }
+        }
+        if (wasOmniTuyaSource && !renewedOmniSource) {
+          // Never reuse an expired signed URL. Ask HA for a fresh camera
+          // stream (which may be backed by go2rtc), then fall back to HA's
+          // authenticated camera proxy. A later HomeKit open tries Omni again.
+          const fallback = state
+            ? await CameraSourceResolver.resolveOmniTuyaFallback(
+                this.platform,
+                haEntityId,
+                state,
+                { allowCameraProxy: false },
+              )
+            : undefined;
+          if (fallback?.url) {
+            this.streamSource = fallback;
+            sourceUrl = this.getCleanSourceUrl();
+          } else {
+            sourceUrl = "";
+          }
+        } else if (!renewedOmniSource && state) {
+          try {
+            const fresh = await CameraSourceResolver.resolve(
+              this.platform,
+              haEntityId,
+              state,
+            );
+            if (fresh && fresh.url) {
+              this.streamSource = {
+                ...fresh,
+                metadata: {
+                  ...this.streamSource.metadata,
+                  ...fresh.metadata,
+                  sourceCameraEntityId:
+                    (fresh.metadata as any)?.sourceCameraEntityId || haEntityId,
+                },
+              };
+              sourceUrl = this.getCleanSourceUrl();
+            }
+          } catch {}
+        }
+        if (
+          !wasOmniTuyaSource &&
+          haEntityId &&
+          (!sourceUrl || this.streamSource.sourceType === "ha_proxy") &&
+          this.platform.ha.requestCameraStream
+        ) {
+          try {
+            const freshUrl = await this.platform.ha.requestCameraStream(haEntityId);
+            if (freshUrl) {
+              this.streamSource.url = freshUrl;
+              this.streamSource.sourceType = "hls";
+              sourceUrl = this.getCleanSourceUrl();
+            }
+          } catch {}
+        }
+        if (
+          !wasOmniTuyaSource &&
+          haEntityId &&
+          !sourceUrl &&
+          this.platform.ha.getCameraProxyStreamUrl
+        ) {
+          const proxyUrl = this.platform.ha.getCameraProxyStreamUrl(haEntityId);
+          if (proxyUrl) {
+            this.streamSource.url = proxyUrl;
+            this.streamSource.sourceType = "ha_proxy";
+            sourceUrl = this.getCleanSourceUrl();
+          }
+        }
+      }
     }
 
-    if (this.activeSessions.get(session.sessionId) !== session) {
-      session.releaseReader?.();
-      callback(new Error("HAP session ended during source resolution"));
-      return;
-    }
-    session.startup?.mark("T1");
-    if (session.startup)
-      session.startup.metrics.allocation1Ms =
-        performance.now() - allocationStarted;
     if (!ffmpegPath || !sourceUrl) {
       this.platform?.log?.warn?.(
         `[HomeKitCamera][${this.entityId}] HAP START rejected: ${!ffmpegPath ? "FFmpeg unavailable" : "stream source unavailable"}`,
       );
       callback(new Error("FFmpeg or RTSP source is unavailable"));
-      this.stopStream(session.sessionId);
+      this.emit("session-end", session.sessionId);
       return;
     }
     // Omni issues a new single-session RTSP URL for each HomeKit open. The
@@ -1121,42 +1156,22 @@ export class HomeKitCameraStreamingDelegate
         this.capabilities.audioCodec !== "none" &&
         Number.isFinite(this.capabilities.audioSampleRate) &&
         (this.capabilities.audioSampleRate || 0) > 0;
-      let probeConsumedReader = false;
       if (!audioFormatKnown) {
-        const probeStarted = performance.now();
         try {
-          const adapter = new CameraSourceAdapter(
-            this.platform,
-            this.entityId,
-            this.streamSource,
-            this.capabilities,
-            this.record,
-          );
-          // Re-measure SD/HD changes with recording and motion already paused.
-          adapter.invalidate();
-          const { probe, performed } = await adapter.discover(sourceUrl);
-          probeConsumedReader = performed;
-          if (session.startup)
-            session.startup.metrics.probeMs = performance.now() - probeStarted;
+          const probe = await probeCameraSource(sourceUrl, {
+            timeoutMs: 4000,
+            transport: "tcp",
+            allowFallback: false,
+          });
           if (probe.valid) {
-            const keepObservedModelAudio =
-              !probe.hasAudio &&
-              this.capabilities.audioProvenance === "OBSERVED" &&
-              this.capabilities.audioCodec === "pcm" &&
-              this.capabilities.audioSampleRate === 8000 &&
-              this.capabilities.audioChannels === 1;
-            if (!keepObservedModelAudio) {
-              this.capabilities.audioProvenance = "PROBED";
-              this.capabilities.hasAudio = probe.hasAudio;
-              this.capabilities.audioCodec = probe.hasAudio
-                ? ((probe.audioCodec || "incompatible") as any)
-                : "none";
-              this.capabilities.audioSampleRate = probe.audioSampleRate;
-              this.capabilities.audioChannels = probe.audioChannels;
-            }
-            this.emit("source-capabilities");
+            this.capabilities.hasAudio = probe.hasAudio;
+            this.capabilities.audioCodec = probe.hasAudio
+              ? (probe.audioCodec || "incompatible") as any
+              : "none";
+            this.capabilities.audioSampleRate = probe.audioSampleRate;
+            this.capabilities.audioChannels = probe.audioChannels;
             this.platform?.log?.notice?.(
-              `[HomeKitCamera][${this.entityId}] Fresh Omni stream probe: audio=${probe.hasAudio ? `${probe.audioCodec || "present"}/${probe.audioSampleRate || "unknown"}Hz` : keepObservedModelAudio ? "PCMU/8000Hz (model-validated profile retained)" : "absent"}`,
+              `[HomeKitCamera][${this.entityId}] Fresh Omni stream probe: audio=${probe.hasAudio ? `${probe.audioCodec || "present"}/${probe.audioSampleRate || "unknown"}Hz` : "absent"}`,
             );
           }
         } catch {
@@ -1166,31 +1181,19 @@ export class HomeKitCameraStreamingDelegate
       }
       // Metadata probing is a separate RTSP reader. Allocate another signed
       // URL for the actual live process instead of reopening the probe URL.
-      if (probeConsumedReader) {
-        const allocation2Started = performance.now();
+      if (!audioFormatKnown) {
         const freshUrl = await this.platform?.ha?.requestOmniTuyaCameraStream?.(
           this.streamSource.metadata?.sourceCameraEntityId || this.entityId,
         );
         if (!freshUrl) {
-          callback(
-            new Error("Omni could not renew the live stream after probing"),
-          );
-          this.stopStream(session.sessionId);
+          callback(new Error("Omni could not renew the live stream after probing"));
+          this.emit("session-end", session.sessionId);
           return;
         }
         this.streamSource.url = freshUrl;
         sourceUrl = this.getCleanSourceUrl();
-        if (session.startup)
-          session.startup.metrics.allocation2Ms =
-            performance.now() - allocation2Started;
       }
     }
-    if (this.activeSessions.get(session.sessionId) !== session) {
-      session.releaseReader?.();
-      callback(new Error("HAP session ended during source resolution"));
-      return;
-    }
-    session.startup?.mark("T2");
     // HomeKit on iOS can request default low bitrates (e.g. 299k).
     // Ensure a high-fidelity floor: at least 3500k-5000k for 2K (Tapo/Wyze), 6000k-8000k for 4K.
     const qualityFloor =
@@ -1230,14 +1233,8 @@ export class HomeKitCameraStreamingDelegate
     const settle = (error?: Error): void => {
       if (callbackSettled) return;
       callbackSettled = true;
-      session.startup?.mark("T7");
       callback(error);
     };
-    if (this.activeSessions.get(session.sessionId) !== session) {
-      session.releaseReader?.();
-      settle(new Error("HAP session ended before media spawn"));
-      return;
-    }
     this.spawnFfmpegProcess(session, request, settle, false);
   }
 
@@ -1250,16 +1247,15 @@ export class HomeKitCameraStreamingDelegate
     const ffmpegPath = resolveFfmpegPath() || "ffmpeg";
     const sourceUrl = this.getCleanSourceUrl();
     const video = request.video;
+    const isTapoC120 = this.isTapoC120();
     const measuredFps = this.capabilities.measuredVideo?.fps;
     const declaredFps =
       this.capabilities.maxFps ||
-      (measuredFps && measuredFps > 0 ? Math.round(measuredFps) : 30);
+      (measuredFps && measuredFps > 0 ? Math.round(measuredFps) : isTapoC120 ? 15 : 30);
     const requestedFps = video?.fps;
     const cameraMaxFps =
       this.capabilities.maxFps ||
-      (measuredFps && measuredFps > 0
-        ? Math.max(15, Math.round(measuredFps))
-        : 30);
+      (measuredFps && measuredFps > 0 ? Math.max(15, Math.round(measuredFps)) : isTapoC120 ? 20 : 30);
     const effectiveFps = resolveLiveViewFps(
       requestedFps,
       measuredFps,
@@ -1269,9 +1265,11 @@ export class HomeKitCameraStreamingDelegate
     const mtu = video.mtu || 1378;
 
     const args = this.buildStreamArgs(session, request, forceTranscode);
+    const isTapoC402 = this.isTapoC402();
+    const isTapoCamera = isTapoC402 || isTapoC120;
 
     this.platform?.log?.notice?.(
-      `[HomeKitCamera][${this.entityId}] HAP START ${video.width}x${video.height} forceTranscode=${forceTranscode} profile=${h264Profile(video.profile)} level=${h264Level(video.level)} mtu=${mtu} fps[declarado=${declaredFps}, solicitado=${requestedFps ?? "omitted"}, medido=${measuredFps ?? "unmeasured"}, efectivo=${effectiveFps ?? "auto"}] source=[camera-source] ffmpeg=${ffmpegPath} ${getFfmpegVersion(ffmpegPath) || "unknown"}`,
+      `[HomeKitCamera][${this.entityId}] HAP START ${video.width}x${video.height} forceTranscode=${forceTranscode} profile=${h264Profile(video.profile)} level=${h264Level(video.level)} mtu=${mtu} fps[declarado=${declaredFps}, solicitado=${requestedFps ?? "omitted"}, medido=${measuredFps ?? "unmeasured"}, efectivo=${effectiveFps ?? "auto"}] source=${sanitizeUrlCredentials(sourceUrl || "")} ffmpeg=${ffmpegPath} ${getFfmpegVersion(ffmpegPath) || "unknown"}`,
     );
 
     const isHaProxyStream =
@@ -1283,41 +1281,18 @@ export class HomeKitCameraStreamingDelegate
           sourceUrl.includes("/api/camera_proxy/")),
       );
     try {
-      const spawnStarted = performance.now();
       const process = spawn(ffmpegPath, args, {
         stdio: [
           isHaProxyStream ? "pipe" : "ignore",
-          "pipe",
+          (isTapoC402 || isTapoC120) ? "pipe" : "ignore",
           "pipe",
           this.streamSource.metadata?.isOmniTuyaDirect === true &&
           /^rtsps?:\/\//i.test(sourceUrl || "")
             ? "pipe"
             : "ignore",
-          "pipe",
         ],
       });
-      // Refresh thumbnails from the already-open source, without allocating
-      // another single-use Omni URL or competing with Live View.
-      let jpegBytes = Buffer.alloc(0);
-      process.stdio[4]?.on("data", (chunk: Buffer) => {
-        jpegBytes = Buffer.concat([jpegBytes, chunk]);
-        let end: number;
-        while ((end = jpegBytes.indexOf(Buffer.from([0xff, 0xd9]))) >= 0) {
-          const image = jpegBytes.subarray(0, end + 2);
-          jpegBytes = jpegBytes.subarray(end + 2);
-          if (isJpeg(image) && image.length > 2048) {
-            this.lastSnapshotBuffer = Buffer.from(image);
-            this.lastSnapshotTime = Date.now();
-          }
-        }
-        if (jpegBytes.length > 8 * 1024 * 1024) jpegBytes = Buffer.alloc(0);
-      });
       session.process = process;
-      process.once("spawn", () => {
-        if (session.startup)
-          session.startup.metrics.ffmpegSpawnMs =
-            performance.now() - spawnStarted;
-      });
       const recordingPipe = process.stdio[3];
       if (recordingPipe && typeof recordingPipe !== "string") {
         recordingPipe.on("data", (chunk: Buffer) => {
@@ -1335,10 +1310,22 @@ export class HomeKitCameraStreamingDelegate
         for (const line of chunk.toString().split(/\r?\n/)) {
           this.recordFfmpegProgress(session, line);
         }
+        if ((!isTapoC402 && !isTapoC120) || startupConfirmed) return;
+        progress = `${progress}${chunk.toString()}`.slice(-2048);
+        for (const match of progress.matchAll(/(?:^|\n)frame=\s*(\d+)/g)) {
+          if (Number(match[1]) > 0) {
+            startupConfirmed = true;
+            if (startupTimer) clearTimeout(startupTimer);
+            this.platform?.log?.notice?.(
+              `[HomeKitCamera][${this.entityId}] ${isTapoC402 ? "C402" : "C120"} HAP startup confirmed by first video frame`,
+            );
+            settle();
+            break;
+          }
+        }
       });
       process.stderr?.on("data", (chunk: Buffer) => {
         const text = chunk.toString();
-        if (/Input #\d+/.test(text)) session.startup?.mark("T3");
         for (const line of text.split(/\r?\n/)) {
           this.recordFfmpegProgress(session, line);
           if (/pblack:\d+/.test(line)) {
@@ -1350,70 +1337,38 @@ export class HomeKitCameraStreamingDelegate
         const safe = sanitizeDiagnosticText(text);
         if (safe) stderr = `${stderr}\n${safe}`.slice(-1200);
       });
-      const guard = setTimeout(() => {
-        if (process.exitCode === null && !process.killed) settle();
-        else settle(new Error("FFmpeg exited during HAP startup"));
-      }, 400);
-      const tryOmniFallback = async (): Promise<void> => {
-        const sourceEntityId =
-          this.streamSource.metadata?.sourceCameraEntityId || this.entityId;
-        try {
-          const state = this.platform?.ha?.hassStates?.get(sourceEntityId);
-          const fallback = await CameraSourceResolver.resolveOmniTuyaFallback(
-            this.platform,
-            sourceEntityId,
-            state,
-            { allowCameraProxy: false },
-          );
-          if (
-            fallback?.url &&
-            this.activeSessions.get(session.sessionId) === session
-          ) {
-            this.streamSource = fallback;
-            this.platform?.log?.warn?.(
-              `[HomeKitCamera][${this.entityId}] Omni RTSP remained unavailable after URL renewal; retrying through Home Assistant's stream route.`,
+      const guard = setTimeout(
+        () => {
+          if (!isTapoC402 && !isTapoC120 && process.exitCode === null && !process.killed) {
+            this.platform?.log?.notice?.(
+              `[HomeKitCamera][${this.entityId}] HAP START callback success; FFmpeg active session=${session.sessionId}`,
             );
-            this.spawnFfmpegProcess(session, request, settle, false);
-            return;
+            settle();
+          } else if (!isTapoC402 && !isTapoC120) {
+            settle(new Error("FFmpeg exited during HAP startup"));
           }
-          this.platform?.log?.error?.(
-            `[HomeKitCamera][${this.entityId}] Omni RTSP failed and Home Assistant could not provide a fallback stream.`,
-          );
-          settle(new Error("Omni RTSP unavailable; HA fallback unavailable"));
-        } catch (error) {
+        },
+        400,
+      );
+      if (isTapoC402 || isTapoC120) {
+        clearTimeout(guard);
+        startupTimer = setTimeout(() => {
+          if (startupConfirmed) return;
           this.platform?.log?.warn?.(
-            `[HomeKitCamera][${this.entityId}] Could not switch Omni Live View to Home Assistant fallback: ${sanitizeDiagnosticText(error instanceof Error ? error.message : "unknown error")}`,
+            `[HomeKitCamera][${this.entityId}] ${isTapoC402 ? "C402" : "C120"} timeout waiting for first video frame (6s); settling callback`,
           );
-          settle(new Error("Omni RTSP fallback failed"));
-        }
-        session.videoRelay?.close();
-        session.audioRelay?.close();
-        session.releaseReader?.();
-        this.activeSessions.delete(session.sessionId);
-        if (this.activeSessions.size === 0) this.emit("session-end");
-      };
+          settle();
+        }, 6000);
+      }
       process.once("error", (error) => {
         clearTimeout(guard);
         if (startupTimer) clearTimeout(startupTimer);
         settle(error);
       });
       process.once("close", (code) => {
-        if (
-          this.activeSessions.get(session.sessionId) !== session ||
-          session.process !== process
-        )
-          return;
         clearTimeout(guard);
         if (startupTimer) clearTimeout(startupTimer);
         session.process = undefined;
-        if (code !== 0)
-          new CameraSourceAdapter(
-            this.platform,
-            this.entityId,
-            this.streamSource,
-            this.capabilities,
-            this.record,
-          ).invalidate();
         this.platform?.log?.warn?.(
           `[HomeKitCamera][${this.entityId}] FFmpeg closed code=${code} ${stderr.trim()}`,
         );
@@ -1426,9 +1381,6 @@ export class HomeKitCameraStreamingDelegate
           this.activeSessions.has(session.sessionId)
         ) {
           session.retried = true;
-          if (session.startup)
-            session.startup.metrics.retries =
-              (session.startup.metrics.retries || 0) + 1;
           this.finishTelemetry(
             session,
             "failed",
@@ -1438,48 +1390,40 @@ export class HomeKitCameraStreamingDelegate
           const isOmniStreamNotFound =
             this.streamSource.metadata?.isOmniTuyaDirect === true &&
             /(?:DESCRIBE failed:\s*404|404\s+Stream Not Found)/i.test(stderr);
-          const isOmniInputFailure =
-            this.streamSource.metadata?.isOmniTuyaDirect === true &&
-            /(?:DESCRIBE failed:\s*404|404\s+Stream Not Found|Error opening input|Operation timed out|Connection refused|Server returned)/i.test(
-              stderr,
-            );
-          if (isOmniInputFailure && !session.omniUrlRetried) {
-            session.omniUrlRetried = true;
+          if (isOmniStreamNotFound) {
             const sourceEntityId =
               this.streamSource.metadata?.sourceCameraEntityId || this.entityId;
             void (async () => {
-              try {
-                const freshUrl =
-                  await this.platform?.ha?.requestOmniTuyaCameraStream?.(
-                    sourceEntityId,
-                  );
-                if (
-                  freshUrl &&
-                  this.activeSessions.get(session.sessionId) === session
-                ) {
-                  this.streamSource = { ...this.streamSource, url: freshUrl };
-                  this.platform?.log?.warn?.(
-                    `[HomeKitCamera][${this.entityId}] Omni RTSP startup failed; retrying once with a newly allocated stream URL.`,
-                  );
-                  this.spawnFfmpegProcess(session, request, settle, false);
-                  return;
-                }
-              } catch {
-                // Never log signed URL allocation errors or credentials.
+              const state = this.platform?.ha?.hassStates?.get(sourceEntityId);
+              const fallback = await CameraSourceResolver.resolveOmniTuyaFallback(
+                this.platform,
+                sourceEntityId,
+                state,
+                { allowCameraProxy: false },
+              );
+              if (fallback?.url) {
+                this.streamSource = fallback;
+                this.platform?.log?.warn?.(
+                  `[HomeKitCamera][${this.entityId}] Omni RTSP returned 404 Stream Not Found; retrying Live View through Home Assistant's stream/proxy route.`,
+                );
+                this.spawnFfmpegProcess(session, request, settle, false);
+                return;
               }
-              await tryOmniFallback();
-            })().catch(() => {
-              settle(new Error("Omni RTSP startup retry failed"));
-              session.videoRelay?.close();
-              session.audioRelay?.close();
-              session.releaseReader?.();
+
+              this.platform?.log?.error?.(
+                `[HomeKitCamera][${this.entityId}] Omni RTSP returned 404 and Home Assistant could not provide a fallback stream.`,
+              );
+              settle(new Error("Omni RTSP stream not found; HA fallback unavailable"));
+              this.activeSessions.delete(session.sessionId);
+              if (this.activeSessions.size === 0) this.emit("session-end");
+            })().catch((error) => {
+              this.platform?.log?.warn?.(
+                `[HomeKitCamera][${this.entityId}] Could not switch Omni Live View to Home Assistant fallback: ${error instanceof Error ? error.message : "unknown error"}`,
+              );
+              settle(new Error("Omni RTSP fallback failed"));
               this.activeSessions.delete(session.sessionId);
               if (this.activeSessions.size === 0) this.emit("session-end");
             });
-            return;
-          }
-          if (isOmniStreamNotFound) {
-            void tryOmniFallback();
             return;
           }
 
@@ -1514,16 +1458,6 @@ export class HomeKitCameraStreamingDelegate
           return;
         }
 
-        if (
-          code !== 0 &&
-          session.omniUrlRetried &&
-          this.streamSource.metadata?.isOmniTuyaDirect === true &&
-          this.activeSessions.get(session.sessionId) === session
-        ) {
-          void tryOmniFallback();
-          return;
-        }
-
         this.finishTelemetry(
           session,
           code === 0 ? "finished" : "failed",
@@ -1533,9 +1467,6 @@ export class HomeKitCameraStreamingDelegate
         // Clean up the ghost session entry so the next HomeKit reconnect
         // finds a clean Map — otherwise stopStream() later can't properly
         // emit session-end and activeSessions grows with stale entries.
-        session.videoRelay?.close();
-        session.audioRelay?.close();
-        session.releaseReader?.();
         this.activeSessions.delete(session.sessionId);
         if (this.activeSessions.size === 0) {
           this.emit("session-end");
@@ -1551,23 +1482,20 @@ export class HomeKitCameraStreamingDelegate
     request: StartStreamRequest,
     forceTranscode = false,
   ): string[] {
-    if (["hevc", "h265"].includes(this.capabilities.videoCodec))
-      throw new Error("HEVC requires SecureVideoController");
     const sourceUrl = this.getCleanSourceUrl();
     if (!sourceUrl) {
       return [];
     }
     const video = request.video;
+    const isTapoC120 = this.isTapoC120();
     const measuredFps = this.capabilities.measuredVideo?.fps;
     const declaredFps =
       this.capabilities.maxFps ||
-      (measuredFps && measuredFps > 0 ? Math.round(measuredFps) : 30);
+      (measuredFps && measuredFps > 0 ? Math.round(measuredFps) : isTapoC120 ? 15 : 30);
     const requestedFps = video.fps;
     const cameraMaxFps =
       this.capabilities.maxFps ||
-      (measuredFps && measuredFps > 0
-        ? Math.max(15, Math.round(measuredFps))
-        : 30);
+      (measuredFps && measuredFps > 0 ? Math.max(15, Math.round(measuredFps)) : isTapoC120 ? 20 : 30);
     const resolvedFps = resolveLiveViewFps(
       requestedFps,
       measuredFps,
@@ -1576,10 +1504,9 @@ export class HomeKitCameraStreamingDelegate
     );
     const mtu = video.mtu || 1378;
     const host = formatHost(session.targetAddress);
-    const videoUrl = session.videoRelay
-      ? `srtp://127.0.0.1:${session.videoRelay.inputPort}?rtcpport=${session.videoRelay.inputPort}&pkt_size=${mtu}`
-      : `srtp://${host}:${session.videoPort}` +
-        `?rtcpport=${session.videoPort}&localrtcpport=${session.localVideoPort}&pkt_size=${mtu}&buffer_size=1048576${session.localAddress ? `&localaddr=${encodeURIComponent(session.localAddress)}` : ""}`;
+    const videoUrl =
+      `srtp://${host}:${session.videoPort}` +
+      `?rtcpport=${session.videoPort}&localrtcpport=${session.localVideoPort}&pkt_size=${mtu}&buffer_size=1048576`;
 
     const isHaProxyStream =
       this.streamSource.sourceType === "ha_proxy" ||
@@ -1589,6 +1516,12 @@ export class HomeKitCameraStreamingDelegate
         (sourceUrl.includes("/api/camera_proxy_stream/") ||
           sourceUrl.includes("/api/camera_proxy/")),
       );
+    // Camera.UI/go2rtc can accept RTSP before its next keyframe is available.
+    // A 32 KiB / zero-duration probe then exits with "non-existing PPS" after
+    // HAP has already accepted the Live View request.  C402 needs a complete
+    // GOP to join reliably; video remains strict H.264 passthrough.
+    const isTapoC402 = this.isTapoC402();
+
     const args: string[] = [
       "-hide_banner",
       "-loglevel",
@@ -1598,22 +1531,18 @@ export class HomeKitCameraStreamingDelegate
       "-protocol_whitelist",
       "pipe,udp,rtp,file,crypto,srtp,tcp,tls,http,https,lavfi,rtsp,rtsps",
     ];
-    args.push("-progress", "pipe:1", "-stats_period", "0.25");
+    if (isTapoC402 || isTapoC120) {
+      args.push("-progress", "pipe:1", "-stats_period", "0.25");
+    } else {
+      // Progress is diagnostics only. It does not alter RTP/SRTP, codecs, or media flow.
+      args.push("-progress", "pipe:2", "-stats_period", "0.5");
+    }
 
     if (isHaProxyStream) {
       // Home Assistant's continuous camera proxy emits multipart JPEG frames.
       // The old PNG decoder rejected those frames, so HAP published but never
       // received video when the C402 fell back from HLS to camera_proxy_stream.
-      args.push(
-        "-f",
-        "image2pipe",
-        "-c:v",
-        "mjpeg",
-        "-r",
-        "15",
-        "-i",
-        "pipe:0",
-      );
+      args.push("-f", "image2pipe", "-c:v", "mjpeg", "-r", "15", "-i", "pipe:0");
     } else if (
       sourceUrl.startsWith("rtsp://") ||
       sourceUrl.startsWith("rtsps://")
@@ -1623,16 +1552,38 @@ export class HomeKitCameraStreamingDelegate
         "tcp",
         "-timeout",
         "10000000",
+        // C402 needs 2MB for its long GOP analysis.
+        // C120 at 1080p passthrough uses 128KB and 200ms for instant start.
+        // EZVIZ 1080p uses 128KB and 200ms analyze duration for instant startup without waiting.
+        // Wyze and other network RTSP cameras use 64KB-128KB for fast startup.
         "-probesize",
-        "2097152",
+        isTapoC402 ? "2097152" : (isTapoC120 || this.isEzviz()) ? "131072" : "65536",
         "-analyzeduration",
-        "3000000",
-        "-fflags",
-        "+genpts+discardcorrupt",
-        "-flags",
-        "low_delay",
+        isTapoC402 ? "3000000" : (isTapoC120 || this.isEzviz()) ? "200000" : "100000",
+      );
+      if (isTapoC402) {
+        args.push("-fflags", "+genpts+discardcorrupt", "-flags", "low_delay");
+      } else if (isTapoC120) {
+        // C120: Wallclock timestamping to eliminate RTP jitter buffer drops and 3-10s jumping
+        args.push(
+          "-use_wallclock_as_timestamps",
+          "1",
+          "-fflags",
+          "+nobuffer+flush_packets+genpts+discardcorrupt",
+          "-flags",
+          "low_delay",
+        );
+      } else {
+        args.push(
+          "-fflags",
+          "+nobuffer+flush_packets+genpts+discardcorrupt",
+          "-flags",
+          "low_delay",
+        );
+      }
+      args.push(
         "-thread_queue_size",
-        "512",
+        isTapoC120 ? "1024" : "512",
         "-i",
         sourceUrl,
       );
@@ -1665,31 +1616,61 @@ export class HomeKitCameraStreamingDelegate
       if (sourceUrl.startsWith("https://")) {
         args.push("-tls_verify", "0");
       }
-      args.push(
-        ...new CameraSourceAdapter(
-          this.platform,
-          this.entityId,
-          this.streamSource,
-          this.capabilities,
-          this.record,
-        ).inputArguments(),
-      );
+      if (this.streamSource.metadata?.scryptedToken) {
+        const sToken = String(this.streamSource.metadata.scryptedToken).trim();
+        if (sToken) {
+          args.push(
+            "-headers",
+            `Authorization: ${sToken.startsWith("Bearer ") ? sToken : `Bearer ${sToken}`}\r\n`,
+          );
+        }
+      } else if (
+        this.entityId.startsWith("camera.") ||
+        this.streamSource.metadata?.sourceCameraEntityId ||
+        this.streamSource.metadata?.isDirectHa
+      ) {
+        // HA's camera/stream URLs are protected by the HA API token. Refreshing
+        // the URL per HomeKit session is insufficient if FFmpeg omits auth.
+        const token =
+          this.platform?.ha?.getAccessToken?.() ||
+          this.platform?.ha?.wsAccessToken;
+        if (token) {
+          args.push("-headers", `Authorization: Bearer ${token}\r\n`);
+        }
+      }
       args.push("-i", sourceUrl);
     } else {
       args.push("-i", sourceUrl);
     }
 
-    const audioPlan = h264AudioPlan(this.capabilities);
     const hasAudioRequested = Boolean(
       request.audio &&
       session.audioPort &&
       session.localAudioPort &&
       session.audioSsrc &&
-      session.audioKeySalt &&
-      audioPlan.codec !== "unavailable",
+      session.audioKeySalt,
     );
+    const needsSilentAudio =
+      hasAudioRequested &&
+      (isHaProxyStream ||
+        this.capabilities.hasAudio === false ||
+        this.capabilities.audioCodec === "none");
+
     const sampleRate =
-      audioPlan.codec === "unavailable" ? 24000 : audioPlan.sampleRate;
+      request.audio?.sample_rate === AudioStreamingSamplerate.KHZ_24
+        ? 24000
+        : 16000;
+
+    if (needsSilentAudio) {
+      args.push(
+        "-re",
+        "-f",
+        "lavfi",
+        "-i",
+        `anullsrc=channel_layout=mono:sample_rate=${sampleRate}`,
+      );
+    }
+
     const codec = (this.capabilities.videoCodec || "h264").toLowerCase();
     // HAP's RTP VideoStream service advertises H.264 profiles only.  Copying
     // HEVC into that RTP session makes FFmpeg appear healthy while Apple Home
@@ -1697,16 +1678,7 @@ export class HomeKitCameraStreamingDelegate
     // remains native up to this output boundary, then is converted solely for
     // Both Tapo C402 and C120 are native 1080p H.264 streams; they use pure copy passthrough
     // (-c:v copy) with zero software transcoding and zero CPU load.
-    const h264Plan =
-      this.capabilities.videoCodec === "h264"
-        ? h264VideoPlan(
-            this.capabilities,
-            verifiedH264Encoder(),
-            forceTranscode,
-            { width: video.width, height: video.height, fps: resolvedFps },
-          )
-        : undefined;
-    const needsTapoVideoNormalization = h264Plan?.mode === "normalization";
+    const needsTapoVideoNormalization = false;
     const isHevc =
       codec === "hevc" ||
       codec === "h265" ||
@@ -1720,6 +1692,7 @@ export class HomeKitCameraStreamingDelegate
           (this.capabilities.strategy === "passthrough_h264" ||
             this.streamSource.supportsPassthrough ||
             !this.capabilities.requiresTranscoding)));
+
 
     if (canPassthrough) {
       const passOutput = this.sourceOutputMetadata();
@@ -1739,7 +1712,13 @@ export class HomeKitCameraStreamingDelegate
       );
       // Pure passthrough remuxing without transcoding CPU overhead (native 4K, 2K, 1080p, 720p @ max fps)
       // Preserve the native H.264 or HEVC stream negotiated by Apple Home.
-      const videoPassArgs: string[] = ["-map", "0:v:0", "-an", "-c:v", "copy"];
+      const videoPassArgs: string[] = [
+        "-map",
+        "0:v:0",
+        "-an",
+        "-c:v",
+        "copy",
+      ];
       // Only apply H.264 bitstream filter to H.264 streams; HEVC streams do not use dump_extra
       if (!isHevc) {
         videoPassArgs.push("-bsf:v", "dump_extra=freq=keyframe");
@@ -1764,37 +1743,87 @@ export class HomeKitCameraStreamingDelegate
         videoUrl,
       );
       args.push(...videoPassArgs);
-    } else if (
-      needsTapoVideoNormalization &&
-      h264Plan?.mode === "normalization"
-    ) {
-      this.startTelemetry(session, request, "normalization", {
-        codec: "h264",
-        width: h264Plan.width,
-        height: h264Plan.height,
-        fps: resolvedFps,
-        pixFmt: "yuv420p",
-        metadataSource: "effective-command",
-      });
+
+    } else if (needsTapoVideoNormalization) {
+      // HAP supports H.264 only through level 4.0, whose maximum frame size
+      // is 1920x1080. Clamp a cached 2K request as well, so an existing Home
+      // pairing recovers before it receives the refreshed capabilities.
+      const targetWidth = Math.min(
+        1920,
+        Math.max(2, Math.floor((video.width || 1920) / 2) * 2),
+      );
+      const targetHeight = Math.min(
+        1080,
+        Math.max(2, Math.floor((video.height || 1080) / 2) * 2),
+      );
+      const tapoFps = Math.min(resolvedFps ?? 15, isTapoC120 ? 20 : 15);
+      const keyframeInterval = Math.max(15, tapoFps * 2);
+      this.startTelemetry(
+        session,
+        request,
+        session.retried ? "fallback" : "normalization",
+        {
+          codec: "h264",
+          profile: "high",
+          level: "4.0",
+          width: targetWidth,
+          height: targetHeight,
+          declaredFps,
+          requestedFps,
+          measuredFps,
+          effectiveFps: tapoFps,
+          configuredFps: tapoFps,
+          bitrateKbps: 4500,
+          pixFmt: "yuv420p",
+          metadataSource: "effective-command",
+        },
+        session.retried
+          ? "FFmpeg restarted after an initial stream failure"
+          : isTapoC120 && video.width === 1920
+            ? "Apple Home solicitó 1080p; normalizando flujo 2K C120 a HAP High L4.0"
+            : undefined,
+      );
+      this.platform?.log?.notice?.(
+        `[Stream][${this.entityId}] Normalizando Tapo ${isTapoC402 ? "C402" : "C120"} H.264 a HAP High L4.0 ${targetWidth}x${targetHeight}@${tapoFps} (declarado=${declaredFps}, solicitado=${requestedFps ?? "omitted"}, medido=${measuredFps ?? "unmeasured"}, efectivo=${tapoFps})`,
+      );
       args.push(
         "-map",
         "0:v:0",
         "-an",
         "-vf",
-        `scale=${h264Plan.width}:${h264Plan.height}:force_original_aspect_ratio=decrease:flags=fast_bilinear,pad=${h264Plan.width}:${h264Plan.height}:(ow-iw)/2:(oh-ih)/2,setsar=1${h264Plan.fps ? `,fps=${h264Plan.fps}` : ""}`,
+        `scale=${targetWidth}:${targetHeight}:flags=fast_bilinear`,
         "-c:v",
-        h264Plan.encoder,
-        "-pix_fmt",
-        "yuv420p",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-tune",
+        "zerolatency",
         "-profile:v",
         "high",
         "-level:v",
         "4.0",
-        ...(h264Plan.encoder === "libx264"
-          ? ["-preset", "veryfast", "-tune", "zerolatency"]
-          : ["-realtime", "1"]),
+        "-pix_fmt",
+        "yuv420p",
+        "-r",
+        String(tapoFps),
+        "-g",
+        String(keyframeInterval),
+        "-keyint_min",
+        String(tapoFps),
+        "-sc_threshold",
+        "0",
+        "-b:v",
+        "4500k",
+        "-maxrate",
+        "5000k",
+        "-bufsize",
+        "5000k",
         "-f",
         "rtp",
+        "-fflags",
+        "+nobuffer+flush_packets",
+        "-max_delay",
+        "0",
         "-payload_type",
         String(video.pt || 99),
         "-ssrc",
@@ -1806,28 +1835,16 @@ export class HomeKitCameraStreamingDelegate
         videoUrl,
       );
     } else {
-      const encoder = verifiedH264Encoder();
-      if (!encoder)
-        throw new Error("No verified H264 encoder for source normalization");
-      const sourceWidth =
-        this.capabilities.resolution?.width || video.width || 1920;
-      const sourceHeight =
-        this.capabilities.resolution?.height || video.height || 1080;
-      const scale = Math.min(1, 1920 / sourceWidth, 1080 / sourceHeight);
-      const targetWidth = Math.max(
-        2,
-        Math.floor((sourceWidth * scale) / 2) * 2,
-      );
-      const targetHeight = Math.max(
-        2,
-        Math.floor((sourceHeight * scale) / 2) * 2,
-      );
+      // HEVC source or requiresTranscoding=true: transcode to H.264 for HAP.
+      // Apple Home only accepts H.264 RTP. HEVC cameras (Vimtag PTZ, any camera
+      // whose stored strategy was passthrough_hevc) must go through libx264.
+      const targetWidth = Math.max(2, Math.floor((video.width || 1920) / 2) * 2);
+      const targetHeight = Math.max(2, Math.floor((video.height || 1080) / 2) * 2);
       const hevcFps = resolvedFps ?? this.capabilities.maxFps ?? 20;
       const keyframeInterval = Math.max(15, hevcFps * 2);
-      const targetBitrate =
-        targetWidth >= 2560 ? 4500 : targetWidth >= 1920 ? 3500 : 2000;
+      const targetBitrate = targetWidth >= 2560 ? 4500 : targetWidth >= 1920 ? 3500 : 2000;
       this.platform?.log?.notice?.(
-        `[Stream][${this.entityId}] Source normalization to H.264 ${targetWidth}x${targetHeight}@${hevcFps}fps bitrate=${targetBitrate}k (source codec: ${this.capabilities.videoCodec || "unknown"})`,
+        `[Stream][${this.entityId}] HEVC→H.264 transcoding ${targetWidth}x${targetHeight}@${hevcFps}fps bitrate=${targetBitrate}k (source codec: ${this.capabilities.videoCodec || "unknown"})`,
       );
       this.startTelemetry(
         session,
@@ -1848,9 +1865,7 @@ export class HomeKitCameraStreamingDelegate
           pixFmt: "yuv420p",
           metadataSource: "effective-command",
         },
-        session.retried
-          ? "FFmpeg restarted after an initial stream failure"
-          : undefined,
+        session.retried ? "FFmpeg restarted after an initial stream failure" : undefined,
       );
       args.push(
         "-map",
@@ -1859,10 +1874,11 @@ export class HomeKitCameraStreamingDelegate
         "-vf",
         `scale=${targetWidth}:${targetHeight}:flags=fast_bilinear`,
         "-c:v",
-        encoder,
-        ...(encoder === "libx264"
-          ? ["-preset", "veryfast", "-tune", "zerolatency"]
-          : ["-realtime", "1"]),
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-tune",
+        "zerolatency",
         "-profile:v",
         "high",
         "-level:v",
@@ -1875,7 +1891,8 @@ export class HomeKitCameraStreamingDelegate
         String(keyframeInterval),
         "-keyint_min",
         String(hevcFps),
-        ...(encoder === "libx264" ? ["-sc_threshold", "0"] : []),
+        "-sc_threshold",
+        "0",
         "-b:v",
         `${targetBitrate}k`,
         "-maxrate",
@@ -1900,28 +1917,19 @@ export class HomeKitCameraStreamingDelegate
       );
     }
 
+
     if (
       hasAudioRequested &&
       session.audioKeySalt &&
       session.audioSsrc &&
       request.audio
     ) {
-      const localAudioPort =
-        session.localAudioPort || session.localVideoPort + 1;
-      const audioUrl = session.audioRelay
-        ? `srtp://127.0.0.1:${session.audioRelay.inputPort}?rtcpport=${session.audioRelay.inputPort}&pkt_size=188`
-        : `srtp://${host}:${session.audioPort}` +
-          `?rtcpport=${session.audioPort}&localrtcpport=${localAudioPort}&pkt_size=188`;
+      const localAudioPort = session.localAudioPort || (session.localVideoPort + 1);
+      const audioUrl =
+        `srtp://${host}:${session.audioPort}` +
+        `?rtcpport=${session.audioPort}&localrtcpport=${localAudioPort}&pkt_size=188`;
 
-      const isOpus =
-        audioPlan.codec === "opus" &&
-        request.audio.codec === AudioStreamingCodecType.OPUS;
-      if (request.audio.codec === AudioStreamingCodecType.OPUS && !isOpus)
-        throw new Error("Opus requires a validated native Opus source");
-      if (audioPlan.codec === "opus" && !isOpus)
-        throw new Error(
-          "Audio codec was not advertised for this native Opus source",
-        );
+      const isOpus = request.audio.codec === AudioStreamingCodecType.OPUS;
       const targetCodec = isOpus ? "opus" : "aac_eld";
 
       // Apple HomeKit RTP Live View expects AAC-ELD (or Opus) audio packets.
@@ -1940,9 +1948,9 @@ export class HomeKitCameraStreamingDelegate
         targetReq,
       );
 
-      if (isOpus && audioCompat.compatible) {
+      if (audioCompat.compatible) {
         this.platform?.log?.notice?.(
-          `[Stream][${this.entityId}] Audio fuente es Opus nativo compatible: transmitiendo con passthrough (-c:a copy)`,
+          `[Stream][${this.entityId}] Audio fuente es AAC compatible: transmitiendo con passthrough (-c:a copy)`,
         );
         args.push(
           "-map",
@@ -1966,25 +1974,39 @@ export class HomeKitCameraStreamingDelegate
           session.audioKeySalt.toString("base64"),
           audioUrl,
         );
-      } else if (!isOpus && supportsFdkAac()) {
+      } else if (isOpus || supportsFdkAac()) {
         this.platform?.log?.notice?.(
-          `[Stream][${this.entityId}] Transcodificando exclusivamente audio fuente (${this.capabilities.audioCodec || "desconocido"}) a AAC-ELD para Apple Home`,
+          `[Stream][${this.entityId}] Transcodificando exclusivamente audio fuente (${this.capabilities.audioCodec || "desconocido"}) a ${isOpus ? "Opus" : "AAC-ELD"} para Apple Home`,
         );
         const audioBitrate = Math.min(request.audio.max_bit_rate || 24, 24);
 
-        args.push(
-          "-map",
-          "0:a:0?",
-          "-vn",
-          "-c:a",
-          "libfdk_aac",
-          "-profile:a",
-          "aac_eld",
-          "-frame_length",
-          "480",
-          "-flags",
-          "+global_header",
-        );
+        if (needsSilentAudio) {
+          args.push("-map", "1:a:0", "-vn");
+        } else {
+          args.push("-map", "0:a:0?", "-vn");
+        }
+
+        if (isOpus) {
+          args.push(
+            "-c:a",
+            "libopus",
+            "-application",
+            "lowdelay",
+            "-frame_duration",
+            "20",
+            "-packet_loss",
+            "5",
+          );
+        } else {
+          args.push(
+            "-c:a",
+            "libfdk_aac",
+            "-profile:a",
+            "aac_eld",
+            "-flags",
+            "+global_header",
+          );
+        }
 
         args.push(
           "-af",
@@ -2015,7 +2037,8 @@ export class HomeKitCameraStreamingDelegate
         );
       } else {
         // Never send AAC-LC to a HomeKit session that negotiated AAC-ELD.
-        // Audio remains unavailable when the negotiated codec cannot be produced.
+        // The accessory advertises Opus instead when libfdk_aac is missing;
+        // this guard also protects an older pairing with cached capabilities.
         this.platform?.log?.warn?.(
           `[Stream][${this.entityId}] Omitiendo audio AAC-ELD: FFmpeg no incluye libfdk_aac; se conserva el video para HomeKit`,
         );
@@ -2051,10 +2074,15 @@ export class HomeKitCameraStreamingDelegate
         "dump_extra=freq=keyframe",
       );
       if (this.capabilities.hasAudio) {
-        const recordingAudio = (this.record as any)?.hksvRecordingConfiguration
-          ?.audioCodec;
-        const sampleRate = 48000;
-        const channels = 1;
+        const recordingAudio = (this.record as any)?.hksvRecordingConfiguration?.audioCodec;
+        const requestedSampleRate = recordingAudio?.samplerate;
+        const sampleRate =
+          requestedSampleRate === AudioRecordingSamplerate.KHZ_8 ? 8000 :
+          requestedSampleRate === AudioRecordingSamplerate.KHZ_16 ? 16000 :
+          requestedSampleRate === AudioRecordingSamplerate.KHZ_24 ? 24000 :
+          requestedSampleRate === AudioRecordingSamplerate.KHZ_44_1 ? 44100 :
+          requestedSampleRate === AudioRecordingSamplerate.KHZ_48 ? 48000 : 32000;
+        const channels = Math.max(1, Math.min(2, Number(recordingAudio?.audioChannels) || 1));
         args.push(
           "-map",
           "0:a:0?",
@@ -2107,22 +2135,6 @@ export class HomeKitCameraStreamingDelegate
       );
     }
 
-    if (this.streamSource.metadata?.isOmniTuyaDirect === true) {
-      args.push(
-        "-map",
-        "0:v:0",
-        "-an",
-        "-vf",
-        "fps=1/5,scale=w='min(1920,iw)':h=-2",
-        "-c:v",
-        "mjpeg",
-        "-q:v",
-        "3",
-        "-f",
-        "image2pipe",
-        "pipe:4",
-      );
-    }
     return args;
   }
 
@@ -2226,10 +2238,7 @@ export class HomeKitCameraStreamingDelegate
 
   private stopStream(sessionId: string): void {
     const session = this.activeSessions.get(sessionId);
-    session?.videoRelay?.close();
-    session?.audioRelay?.close();
     if (!session) return;
-    session.releaseReader?.();
 
     // Clear prepare watchdog timer if still pending
     const timer = this.prepareTimeouts.get(sessionId);

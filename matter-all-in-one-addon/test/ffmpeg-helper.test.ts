@@ -13,14 +13,10 @@ describe("FFmpeg Helper", () => {
   it("uses TCP for signed RTSPS input and does not send the HA token", () => {
     const args = buildFfmpegStreamArgs({
       sourceUrl: "rtsps://example.invalid/live?signature=private",
-      targetAddress: "127.0.0.1",
-      videoPort: 5000,
-      videoSsrc: 1,
-      videoPayloadType: 99,
-      videoCryptoSuite: SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
+      targetAddress: "127.0.0.1", videoPort: 5000, videoSsrc: 1,
+      videoPayloadType: 99, videoCryptoSuite: SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
       videoKeySaltBase64: Buffer.alloc(30).toString("base64"),
-      strategy: "passthrough_h264",
-      httpBearerToken: "HA_SECRET",
+      strategy: "passthrough_h264", httpBearerToken: "HA_SECRET",
     });
     expect(args[args.indexOf("-rtsp_transport") + 1]).toBe("tcp");
     expect(args).not.toContain("-headers");
@@ -31,7 +27,7 @@ describe("FFmpeg Helper", () => {
       "rtsp://admin:P@ssw0rd123!@192.168.1.50:554/h264Preview_01_main";
     const clean = sanitizeUrlCredentials(raw);
     expect(clean).not.toContain("P@ssw0rd123!");
-    expect(clean).toBe("rtsp://***:***@192.168.1.50:554/h264Preview_01_main");
+    expect(clean).toBe("rtsp://admin:***@192.168.1.50:554/h264Preview_01_main");
   });
 
   it("sanitizes query parameters (token, auth, secret, api_key)", () => {
@@ -43,10 +39,9 @@ describe("FFmpeg Helper", () => {
   });
 
   it("removes vendor-signed camera query strings from logs", () => {
-    const raw =
-      "rtsps://echo:secret@stream.example/v1/camera?signInfo=SIGNED_TUYA_VALUE&device=private";
+    const raw = "rtsps://echo:secret@stream.example/v1/camera?signInfo=SIGNED_TUYA_VALUE&device=private";
     const clean = sanitizeUrlCredentials(raw);
-    expect(clean).toBe("rtsps://***:***@stream.example/v1/camera?***");
+    expect(clean).toBe("rtsps://echo:***@stream.example/v1/camera?***");
     expect(clean).not.toContain("SIGNED_TUYA_VALUE");
     expect(clean).not.toContain("private");
   });

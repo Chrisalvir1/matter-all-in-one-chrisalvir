@@ -62,7 +62,6 @@ export class CameraAiDetector extends EventEmitter {
   private static instance?: CameraAiDetector;
   private configs = new Map<string, CameraAiConfig>();
   private activeDetections = new Map<string, CameraAiDetectionEvent>();
-  private homekitMotionTimers = new Map<string, NodeJS.Timeout>();
   private motionTimers = new Map<string, NodeJS.Timeout>();
   private configFilePath = "";
 
@@ -103,11 +102,7 @@ export class CameraAiDetector extends EventEmitter {
       for (const [key, val] of this.configs.entries()) {
         obj[key] = val;
       }
-      fs.writeFileSync(
-        this.configFilePath,
-        JSON.stringify(obj, null, 2),
-        "utf-8",
-      );
+      fs.writeFileSync(this.configFilePath, JSON.stringify(obj, null, 2), "utf-8");
     } catch {}
   }
 
@@ -127,10 +122,7 @@ export class CameraAiDetector extends EventEmitter {
     return defaultConfig;
   }
 
-  public setConfig(
-    cameraId: string,
-    config: Partial<CameraAiConfig>,
-  ): CameraAiConfig {
+  public setConfig(cameraId: string, config: Partial<CameraAiConfig>): CameraAiConfig {
     const current = this.getConfig(cameraId);
     const updated: CameraAiConfig = {
       ...current,
@@ -216,7 +208,19 @@ export class CameraAiDetector extends EventEmitter {
         labels.push(TARGET_LABELS_ES.cat);
       }
 
-      // A generic pet label does not establish dog/cat; retain no invented class.
+      // Generic pet mapping if specific dog/cat not differentiated
+      if (
+        (lowerId.includes("pet") || lowerId.includes("mascota")) &&
+        detectedTargets.length === 0
+      ) {
+        if (config.targets.includes("dog")) {
+          detectedTargets.push("dog");
+          labels.push(TARGET_LABELS_ES.dog);
+        } else if (config.targets.includes("cat")) {
+          detectedTargets.push("cat");
+          labels.push(TARGET_LABELS_ES.cat);
+        }
+      }
 
       // Check Bird / Ave
       if (
@@ -287,67 +291,6 @@ export class CameraAiDetector extends EventEmitter {
     options: { updateHomeKitMotion?: boolean } = {},
   ): void {
     const config = this.getConfig(cameraId);
-    // 1. Resolve camera accessory (Home Assistant entity or Camera.UI / Scrypted mounted accessory)
-    let hkAccessory: any = undefined;
-    const cameraEntity = platform?.entities?.get?.(cameraId);
-    if (cameraEntity?.homekitAccessory) {
-      hkAccessory = cameraEntity.homekitAccessory;
-    } else {
-      try {
-        const bridge =
-          (globalThis as any).__camerauiBridge || platform?.cameraUiBridge;
-        if (bridge?.getAllAccessories) {
-          const cuiAccessories = bridge.getAllAccessories();
-          for (const [id, acc] of cuiAccessories) {
-            if (
-              id === cameraId ||
-              id.replace(/^cameraui_/, "") ===
-                cameraId.replace(/^cameraui_/, "")
-            ) {
-              hkAccessory = acc;
-              break;
-            }
-          }
-        }
-      } catch {}
-    }
-
-    if (options.updateHomeKitMotion === false) hkAccessory = undefined;
-    if (hkAccessory) {
-      const previous = this.homekitMotionTimers.get(cameraId);
-      if (previous) clearTimeout(previous);
-      const timer = setTimeout(
-        () => {
-          try {
-            if (typeof hkAccessory.updateMotionState === "function")
-              hkAccessory.updateMotionState(false);
-            else
-              hkAccessory.motionService?.setCharacteristic(
-                platform?.Characteristic?.MotionDetected || "MotionDetected",
-                false,
-              );
-          } catch {
-          } finally {
-            this.homekitMotionTimers.delete(cameraId);
-          }
-        },
-        (config.motionTimeoutSeconds || 15) * 1000,
-      );
-      timer.unref?.();
-      this.homekitMotionTimers.set(cameraId, timer);
-      try {
-        if (typeof hkAccessory.updateMotionState === "function") {
-          hkAccessory.updateMotionState(true);
-        } else if (hkAccessory.motionService?.setCharacteristic) {
-          const Characteristic = platform?.Characteristic;
-          hkAccessory.motionService.setCharacteristic(
-            Characteristic?.MotionDetected || "MotionDetected",
-            true,
-          );
-        }
-      } catch {}
-    }
-
     if (!config.enabled) return;
 
     // Apply the user's target selection to every source, including Camera.UI
@@ -378,6 +321,46 @@ export class CameraAiDetector extends EventEmitter {
       `[CameraAI][${cameraId}] Detección confirmada: ${event.labels.join(", ")} (Confianza: ${(event.confidence * 100).toFixed(0)}%)`,
     );
 
+    // 1. Resolve camera accessory (Home Assistant entity or Camera.UI / Scrypted mounted accessory)
+    let hkAccessory: any = undefined;
+    const cameraEntity = platform?.entities?.get?.(cameraId);
+    if (cameraEntity?.homekitAccessory) {
+      hkAccessory = cameraEntity.homekitAccessory;
+    } else {
+      try {
+        const bridge = (globalThis as any).__camerauiBridge || platform?.cameraUiBridge;
+        if (bridge?.getAllAccessories) {
+          const cuiAccessories = bridge.getAllAccessories();
+          for (const [id, acc] of cuiAccessories) {
+            if (
+              id === cameraId ||
+              id.replace(/^cameraui_/, "") === cameraId.replace(/^cameraui_/, "") ||
+              cuiAccessories.size === 1
+            ) {
+              hkAccessory = acc;
+              break;
+            }
+          }
+        }
+      } catch {}
+    }
+
+    if (options.updateHomeKitMotion === false) hkAccessory = undefined;
+    if (hkAccessory) {
+      try {
+        if (typeof hkAccessory.updateMotionState === "function") {
+          hkAccessory.updateMotionState(true);
+        }
+        if (hkAccessory.motionService?.setCharacteristic) {
+          const Characteristic = platform?.Characteristic;
+          hkAccessory.motionService.setCharacteristic(
+            Characteristic?.MotionDetected || "MotionDetected",
+            true,
+          );
+        }
+      } catch {}
+    }
+
     // 2. Publish real-time MQTT message
     if (config.publishMqtt && platform?.mqttHandler?.publish) {
       try {
@@ -403,6 +386,20 @@ export class CameraAiDetector extends EventEmitter {
     const timeout = (config.motionTimeoutSeconds || 15) * 1000;
     const timer = setTimeout(() => {
       this.activeDetections.delete(cameraId);
+      if (hkAccessory) {
+        try {
+          if (typeof hkAccessory.updateMotionState === "function") {
+            hkAccessory.updateMotionState(false);
+          }
+          if (hkAccessory.motionService?.setCharacteristic) {
+            const Characteristic = platform?.Characteristic;
+            hkAccessory.motionService.setCharacteristic(
+              Characteristic?.MotionDetected || "MotionDetected",
+              false,
+            );
+          }
+        } catch {}
+      }
       this.motionTimers.delete(cameraId);
       this.emit("motion-cleared", cameraId);
     }, timeout);
@@ -410,18 +407,7 @@ export class CameraAiDetector extends EventEmitter {
     this.motionTimers.set(cameraId, timer);
   }
 
-  public dispose(): void {
-    for (const timer of this.motionTimers.values()) clearTimeout(timer);
-    for (const timer of this.homekitMotionTimers.values()) clearTimeout(timer);
-    this.motionTimers.clear();
-    this.homekitMotionTimers.clear();
-    this.activeDetections.clear();
-    this.removeAllListeners();
-  }
-
-  public getActiveDetection(
-    cameraId: string,
-  ): CameraAiDetectionEvent | undefined {
+  public getActiveDetection(cameraId: string): CameraAiDetectionEvent | undefined {
     return this.activeDetections.get(cameraId);
   }
 }

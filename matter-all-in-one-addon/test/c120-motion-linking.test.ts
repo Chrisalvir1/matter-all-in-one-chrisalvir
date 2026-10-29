@@ -1,8 +1,3 @@
-// Graph/unit fixture: encoder success is injected; actual encoding is exercised in ffmpeg-camera-runtime.test.ts.
-vi.mock("../src/camera/homekit/media-policy.js", async (original) => ({
-  ...(await original<typeof import("../src/camera/homekit/media-policy.js")>()),
-  verifiedH264Encoder: () => "libx264",
-}));
 import { describe, expect, it, vi } from "vitest";
 import { Characteristic, Service } from "@homebridge/hap-nodejs";
 import { HomeKitCameraAccessory } from "../src/camera/homekit/homekit-camera.accessory.js";
@@ -204,8 +199,12 @@ describe("Tapo C120 Motion Sensor Linking & HKSV Triggering (v1.9.7)", () => {
     );
 
     const ladder = acc.buildDeclaredResolutions();
-    expect(ladder[0]).toEqual([1920, 1080, 20]);
-    expect(ladder).toContainEqual([640, 360, 15]);
+    expect(ladder.length).toBeGreaterThanOrEqual(4);
+    expect(ladder).toContainEqual([2560, 1440, 20]);
+    expect(ladder).toContainEqual([1920, 1080, 20]);
+    expect(ladder).toContainEqual([1280, 720, 20]);
+    expect(ladder).toContainEqual([640, 360, 20]);
+    expect(ladder).toContainEqual([320, 180, 20]);
     // Ensure all resolutions are capped at max 20 fps (physical hardware ceiling)
     for (const [w, h, fps] of ladder) {
       expect(fps).toBeLessThanOrEqual(20);

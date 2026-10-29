@@ -16,7 +16,6 @@ import {
 import type { CameraUiCameraRecord } from "./cameraui-types.js";
 import { CameraUiStorage } from "./cameraui-storage.js";
 import { resolveHaCameraEntityId } from "./ha-camera-entity.js";
-import { CameraSourceAdapter } from "../source-adapter.js";
 import { CameraSourceResolver } from "../camera-source-resolver.js";
 import {
   probeCameraSource,
@@ -140,11 +139,7 @@ export class CameraUiHomeKitBridge {
         if (this.hasUsableMotionEntity(platform, cand)) return cand;
       }
       for (const [candId, candState] of states.entries()) {
-        if (
-          !candId.startsWith("binary_sensor.") &&
-          !candId.startsWith("event.")
-        )
-          continue;
+        if (!candId.startsWith("binary_sensor.") && !candId.startsWith("event.")) continue;
         const fn = (candState?.attributes?.friendly_name || "").toLowerCase();
         const candIdLower = candId.toLowerCase();
         const hasC120Token =
@@ -165,21 +160,16 @@ export class CameraUiHomeKitBridge {
           fn.includes("persona") ||
           fn.includes("celda") ||
           fn.includes("detect");
-        if (
-          hasC120Token &&
-          hasMotionToken &&
-          this.hasUsableMotionEntity(platform, candId)
-        ) {
+        if (hasC120Token && hasMotionToken && this.hasUsableMotionEntity(platform, candId)) {
           return candId;
         }
       }
     }
 
     // Direct check for Tapo C402 known sensor candidates
-    const isC402 =
-      /(?:\bc402\b|tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle)/i.test(
-        `${camera.id} ${camera.name || ""}`,
-      );
+    const isC402 = /(?:\bc402\b|tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle)/i.test(
+      `${camera.id} ${camera.name || ""}`,
+    );
     if (isC402 && states) {
       const c402Candidates = [
         "binary_sensor.tapo_frente_de_calle_motion",
@@ -249,10 +239,7 @@ export class CameraUiHomeKitBridge {
   }
 
   /** A stale HA entity must not suppress the local RTSP motion fallback. */
-  private static hasUsableMotionEntity(
-    platform: any,
-    entityId?: string,
-  ): boolean {
+  private static hasUsableMotionEntity(platform: any, entityId?: string): boolean {
     if (!entityId || entityId === "none" || entityId === "auto") return false;
     const state = platform?.ha?.hassStates?.get(entityId);
     if (typeof state?.state !== "string") return false;
@@ -269,10 +256,9 @@ export class CameraUiHomeKitBridge {
     // HA-backed cameras (including Tapo models) resolve their source when
     // HomeKit requests video and may not have a static RTSP URL in storage.
     const cameraIdentity = `${camera.id} ${camera.name || ""}`;
-    const isC402 =
-      /(?:\bc402\b|tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle)/i.test(
-        cameraIdentity,
-      );
+    const isC402 = /(?:\bc402\b|tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle)/i.test(
+      cameraIdentity,
+    );
     const isC120 = /(?:\bc120\b|tapo[-_ ]?c120|tapo[-_ ]?spot|\bspot\b)/i.test(
       cameraIdentity,
     );
@@ -286,8 +272,8 @@ export class CameraUiHomeKitBridge {
     );
     const isOmniTuyaCamera = Boolean(
       discoveredHaEntityId &&
-      platform.ha?.hassEntities?.get?.(discoveredHaEntityId)?.platform ===
-        "omni_tuya_local",
+        platform.ha?.hassEntities?.get?.(discoveredHaEntityId)?.platform ===
+          "omni_tuya_local",
     );
     const isHaSourceCamera =
       camera.sourceProvider === "home_assistant" ||
@@ -317,16 +303,16 @@ export class CameraUiHomeKitBridge {
     const isHomeAssistantSource = isHaSourceCamera;
     const hasSource = Boolean(camera.rtspUrl) || isHomeAssistantSource;
 
+
     // C120 source metadata is measured from RTSP. The existing classic-HAP Live
     // View path can normalize its 2K source to a negotiated 1080p output; do not
     // present source dimensions as the output delivered to Apple Home.
     // This camera currently delivers 15 fps even though its physical maximum is
     // 20 fps. Advertising a hard-coded 30 fps made Apple Home negotiate a rate
     // that the copied stream cannot satisfy, which appeared as choppy Live View.
-    const isTapoC120Mount =
-      /(?:\bc120\b|tapo[-_ ]?c120|tapo[-_ ]?spot|\bspot\b)/i.test(
-        `${camera.id} ${camera.name || ""}`,
-      );
+    const isTapoC120Mount = /(?:\bc120\b|tapo[-_ ]?c120|tapo[-_ ]?spot|\bspot\b)/i.test(
+      `${camera.id} ${camera.name || ""}`,
+    );
     if (isTapoC120Mount) {
       camera.width = 1920;
       camera.height = 1080;
@@ -361,7 +347,7 @@ export class CameraUiHomeKitBridge {
       }
     }
 
-    if (isHomeAssistantSource && !isOmniTuyaCamera && camera.rtspUrl) {
+    if (isHomeAssistantSource && camera.rtspUrl) {
       try {
         const probe = await probeCameraSource(camera.rtspUrl, {
           timeoutMs: 4000,
@@ -467,11 +453,7 @@ export class CameraUiHomeKitBridge {
       // binary_sensors are linked entities and must never be sent to the
       // camera proxy (that endpoint returns 404 for them).
       try {
-        if (
-          haEntityId &&
-          !resolvedSourceUrl &&
-          platform.ha?.requestCameraStream
-        ) {
+        if (haEntityId && !resolvedSourceUrl && platform.ha?.requestCameraStream) {
           resolvedSourceUrl = await platform.ha.requestCameraStream(haEntityId);
           if (resolvedSourceUrl) {
             resolvedSourceType = "hls";
@@ -482,11 +464,7 @@ export class CameraUiHomeKitBridge {
           `[CameraUiHomeKitBridge] requestCameraStream note for ${haEntityId}: ${err}`,
         );
       }
-      if (
-        haEntityId &&
-        !resolvedSourceUrl &&
-        platform.ha?.getCameraProxyStreamUrl
-      ) {
+      if (haEntityId && !resolvedSourceUrl && platform.ha?.getCameraProxyStreamUrl) {
         resolvedSourceUrl = platform.ha.getCameraProxyStreamUrl(haEntityId);
         if (resolvedSourceUrl) {
           resolvedSourceType = "ha_proxy";
@@ -507,7 +485,7 @@ export class CameraUiHomeKitBridge {
         isCameraUi: true,
         isOmniTuyaDirect: isOmniTuyaCamera,
         hasCameraMotion: true,
-        capabilitiesProbedBeforePublish: false,
+        capabilitiesProbedBeforePublish: isHomeAssistantSource,
         streamProvider: camera.sourceProvider || "camera_ui",
         camerauiCameraId: camera.id,
         sourceCameraEntityId: haEntityId,
@@ -517,49 +495,19 @@ export class CameraUiHomeKitBridge {
       },
     };
 
-    // Probe the fresh allocation, never the expired URL retained by Camera.UI.
-    // This runs before HAP/prebuffer/motion starts, so there is no competing reader.
-    if (isOmniTuyaCamera && source.url && haEntityId) {
-      try {
-        const adapter = new CameraSourceAdapter(
-          platform,
-          haEntityId,
-          source,
-          capabilities,
-        );
-        adapter.invalidate();
-        const { probe } = await adapter.discover();
-        source.metadata!.capabilitiesProbedBeforePublish = true;
-        platform.log?.notice?.(
-          `[Camera.UI][${camera.name}] Fresh Omni source measured before HAP: ${probe.width}x${probe.height}@${probe.fps}fps ${probe.videoCodec}`,
-        );
-        // The probe consumed its one-session URL; allocate another for the reader.
-        source.url =
-          (await platform.ha.requestOmniTuyaCameraStream(haEntityId)) ||
-          undefined;
-      } catch {
-        platform.log?.warn?.(
-          `[Camera.UI][${camera.name}] Fresh Omni measurement unavailable; source properties remain unverified`,
-        );
-      }
-    }
 
     const cameraEntityId = `camera.${camera.id.replace(/[^a-z0-9_]/gi, "_").toLowerCase()}`;
     const savedHomeKitRecord = platform?.homekitCameraRecords
-      ? (
-          Array.from(
-            platform.homekitCameraRecords.values(),
-          ) as HomeKitCameraStorageRecord[]
-        )
+      ? (Array.from(
+          platform.homekitCameraRecords.values(),
+        ) as HomeKitCameraStorageRecord[])
           .filter(
             (saved) =>
               saved.entityId === cameraEntityId ||
               saved.cameraUiCameraId === camera.id ||
               Boolean(haEntityId && saved.sourceCameraEntityId === haEntityId),
           )
-          .sort(
-            (a, b) => Number(Boolean(b.isPaired)) - Number(Boolean(a.isPaired)),
-          )[0]
+          .sort((a, b) => Number(Boolean(b.isPaired)) - Number(Boolean(a.isPaired)))[0]
       : undefined;
 
     // Camera.UI can temporarily lose its inventory while its service restarts.

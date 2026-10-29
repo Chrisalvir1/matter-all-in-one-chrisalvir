@@ -1,3 +1,8 @@
+## [2.3.6] - 2026-10-29
+
+- Restaura el código completo del add-on y las dependencias de 2.3.0, incluida HAP-NodeJS 2.2.3, para retirar los cambios posteriores de cámara, Live View, movimiento y HKSV.
+- Conserva los datos persistentes y emparejamientos existentes. Requiere comprobar Live View local/remoto y nuevos clips HKSV después de instalar; no se afirma recuperación física antes de esa prueba.
+
 ## [2.3.5] - 2026-10-29
 
 - Renueva el snapshot durante Live View desde el mismo proceso FFmpeg cada cinco segundos, conservando hasta 1920 píxeles de ancho sin abrir otra conexión RTSP.

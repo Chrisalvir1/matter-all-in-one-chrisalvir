@@ -1,13 +1,3 @@
-import { verifiedH264Encoder } from "./media-policy.js";
-import { SecureVideoController } from "@homebridge/hap-nodejs";
-import { MultiTierRtpDelegate } from "./hevc/multi-tier-rtp.js";
-import { WebRtcSessionManager } from "./hevc/webrtc-session.js";
-import { CameraSourceAdapter } from "../source-adapter.js";
-import {
-  h264AudioPlan,
-  h264SupportedResolutions,
-  encodeH264SupportedVideo,
-} from "./media-policy.js";
 import {
   Accessory,
   AccessoryInfo,
@@ -83,12 +73,11 @@ export function generateFreshHomeKitPin(previous?: string): string {
 
 export class HomeKitCameraAccessory {
   public accessory: Accessory;
-  public controller?: CameraController | SecureVideoController;
-  public secureRtp?: MultiTierRtpDelegate;
-  public secureWebRtc?: WebRtcSessionManager;
+  public controller?: CameraController;
   public delegate?: HomeKitCameraStreamingDelegate;
   public recordingDelegate?:
-    HomeKitCameraRecordingDelegate | HevcRecordingDelegate;
+    | HomeKitCameraRecordingDelegate
+    | HevcRecordingDelegate;
   public motionService?: Service;
   public lightService?: Service;
   public sirenService?: Service;
@@ -150,6 +139,9 @@ export class HomeKitCameraAccessory {
       this.streamSource.metadata?.hasCameraMotion,
     );
     const isC120 = this.isTapoC120();
+    if (isC120 && (!this.capabilities.maxFps || this.capabilities.maxFps <= 0)) {
+      this.capabilities.maxFps = 15;
+    }
     const isC402 = this.isTapoC402();
     if (
       this.linkedMotionEntityId ||
@@ -281,20 +273,46 @@ export class HomeKitCameraAccessory {
     }
     const isStreamingUsable =
       Boolean(this.streamSource.url) ||
+      this.isTapoC402() ||
+      this.isTapoC120() ||
       Boolean(this.streamSource.metadata?.isCameraUi) ||
       Boolean(this.streamSource.metadata?.isHaProxyStream);
-    this.record.hksvEnabled ??= isStreamingUsable;
+    this.record.hksvEnabled = isStreamingUsable;
     this.record.hksvCapable = isStreamingUsable;
     this.record.hksvState = isStreamingUsable ? "waiting_hub" : "not_capable";
 
+    const isTapoC402 = this.isTapoC402();
+
     const configuredMode = this.record.exportMode || "auto";
-    const codec = this.capabilities.videoCodec;
-    const effectiveMode =
-      configuredMode === "disabled"
-        ? "disabled"
-        : codec === "hevc" || codec === "h265"
-          ? "passthrough_hevc"
-          : "passthrough_h264";
+    let effectiveMode: "passthrough_h264" | "passthrough_hevc" | "disabled" =
+      "passthrough_h264";
+
+    if (configuredMode === "disabled") {
+      effectiveMode = "disabled";
+    } else if (isTapoC402) {
+      effectiveMode = "passthrough_h264";
+      if (configuredMode === "passthrough_hevc") {
+        this.platform?.log?.warn?.(
+          `[HomeKitCamera][${this.entityId}] Tapo C402 cannot be configured for HEVC/HKSV3. Forcing passthrough_h264 on classic CameraController.`,
+        );
+      }
+    } else if (configuredMode === "passthrough_hevc") {
+      effectiveMode = "passthrough_hevc";
+    } else if (configuredMode === "passthrough_h264") {
+      effectiveMode = "passthrough_h264";
+    } else {
+      const rawCodec = (
+        this.capabilities.videoCodec ||
+        this.streamSource.metadata?.videoCodec ||
+        ""
+      ).toLowerCase();
+      const isHevc =
+        rawCodec.includes("hevc") ||
+        rawCodec.includes("265") ||
+        rawCodec.includes("hvc1");
+      effectiveMode = isHevc ? "passthrough_hevc" : "passthrough_h264";
+    }
+
     if (effectiveMode === "disabled") {
       this.record.activeController = undefined;
       this.platform?.log?.notice?.(
@@ -312,119 +330,9 @@ export class HomeKitCameraAccessory {
       this.capabilities.strategy = "passthrough_hevc";
     }
 
-    if (effectiveMode === "passthrough_hevc")
-      this.configureSecureCameraController();
-    else this.configureClassicCameraController();
+    this.configureClassicCameraController();
   }
 
-  private configureSecureCameraController(): void {
-    const c = this.capabilities;
-    const width = c.measuredVideo?.width || c.resolution.width,
-      height = c.measuredVideo?.height || c.resolution.height,
-      fps = c.measuredVideo?.fps || c.maxFps;
-    if (!(width > 0 && height > 0 && fps > 0))
-      throw new Error("Secure Video needs known source dimensions and FPS");
-    const videoTiers = [
-      {
-        identifier: 1,
-        quality: 2,
-        width,
-        height,
-        frameRate: fps,
-        targetAverageBitrate: c.measuredVideo?.bitrateKbps || 1800,
-        peakBitrate: c.measuredVideo?.bitrateKbps || 2000,
-      },
-    ];
-    const audioTier = {
-      identifier: 1,
-      targetAverageBitrate: 24000,
-      sampleRate: 4,
-      bitDepth: 2,
-      packetTime: 20,
-      channels: 1,
-    };
-    this.recordingDelegate = new HevcRecordingDelegate(
-      this.platform,
-      this.entityId,
-      this.record,
-      c,
-      this.streamSource,
-    );
-    this.secureRtp = new MultiTierRtpDelegate(
-      this.platform,
-      this.entityId,
-      c,
-      this.streamSource,
-      { videoTiers, audioTier, videoPayloadType: 99, audioPayloadType: 110 },
-    );
-    this.secureWebRtc = new WebRtcSessionManager(
-      this.platform,
-      this.entityId,
-      c,
-      this.streamSource,
-      videoTiers,
-    );
-    const snapshotDelegate = new HomeKitCameraStreamingDelegate(
-      this.platform,
-      this.entityId,
-      c,
-      this.streamSource,
-      this.record,
-    );
-    this.delegate = snapshotDelegate;
-    this.controller = new SecureVideoController({
-      sensor: { uuid: this.record.uuid, width, height, type: 1, intent: 1 },
-      video: { codec: 2, payloadType: 99, tiers: videoTiers },
-      ...(c.hasAudio
-        ? { audio: { payloadType: 110, tier: audioTier, twoWayAudio: false } }
-        : {}),
-      rtp: { delegate: this.secureRtp },
-      webrtc: { delegate: this.secureWebRtc, maxSessions: 6 },
-      recording: {
-        delegate: this.recordingDelegate,
-        options: {
-          prebufferLength: 8000,
-          mediaContainerConfiguration: { type: 0, fragmentLength: 4000 },
-          video: {
-            type: 0,
-            parameters: { profiles: [1], levels: [0, 1, 2] },
-            resolutions: [[width, height, fps]],
-          },
-          audio: { codecs: { type: 0, audioChannels: 1, samplerate: [5] } },
-        },
-      },
-      ...(this.motionService ? { motionService: this.motionService } : {}),
-      snapshot: (request) =>
-        new Promise((resolve, reject) =>
-          snapshotDelegate.handleSnapshotRequest(
-            {
-              width: request?.width || width,
-              height: request?.height || height,
-            },
-            (error, data) => (error ? reject(error) : resolve(data!)),
-          ),
-        ),
-    });
-    for (const delegate of [this.secureRtp, this.secureWebRtc]) {
-      delegate.on("session-start", () =>
-        this.recordingDelegate?.pausePrebuffer(),
-      );
-      delegate.on("recording-data", (chunk: Buffer) => {
-        const recording = this.recordingDelegate;
-        if (recording && "ingestLiveViewRecordingChunk" in recording)
-          recording.ingestLiveViewRecordingChunk(chunk);
-      });
-      delegate.on("session-end", () => {
-        if (
-          !this.secureRtp?.hasActiveReader &&
-          !this.secureWebRtc?.hasActiveReader
-        )
-          this.recordingDelegate?.resumePrebuffer();
-      });
-    }
-    this.accessory.configureController(this.controller);
-    this.record.activeController = "SecureVideoController";
-  }
 
   private configureClassicCameraController(): void {
     this.record.activeController = "CameraController";
@@ -462,27 +370,9 @@ export class HomeKitCameraAccessory {
       );
     }
 
-    this.delegate.on("source-capabilities", () => {
-      if (!(this.controller instanceof CameraController)) return;
-      const value = encodeH264SupportedVideo(this.buildDeclaredResolutions());
-      for (const stream of this.controller.streamManagements) {
-        const characteristic = stream.service.getCharacteristic(
-          Characteristic.SupportedVideoStreamConfiguration,
-        );
-        if (characteristic.value === value) continue;
-        stream.service.updateCharacteristic(
-          Characteristic.SupportedVideoStreamConfiguration,
-          value,
-        );
-        stream.service.emit("service-configurationChange");
-      }
-    });
     this.delegate.on("session-start", () => {
       this.recordingDelegate?.pausePrebuffer();
-      this.localMotionDetector?.pause(
-        this.platform?.log,
-        "Apple Home Live View",
-      );
+      this.localMotionDetector?.pause(this.platform?.log, "Apple Home Live View");
     });
     this.delegate.on("motion-analysis-line", (line: string) => {
       this.localMotionDetector?.observeLiveStreamLine(line, this.platform?.log);
@@ -504,10 +394,7 @@ export class HomeKitCameraAccessory {
         return;
       }
       this.recordingDelegate?.resumePrebuffer();
-      this.localMotionDetector?.resume(
-        this.platform?.log,
-        "Apple Home Live View ended",
-      );
+      this.localMotionDetector?.resume(this.platform?.log, "Apple Home Live View ended");
     });
 
     this.controller = new CameraController(this.buildControllerOptions());
@@ -544,24 +431,35 @@ export class HomeKitCameraAccessory {
   private buildControllerOptions(): CameraControllerOptions {
     const isStreamingUsable =
       Boolean(this.streamSource.url) ||
+      this.isTapoC402() ||
+      this.isTapoC120() ||
       Boolean(this.streamSource.metadata?.isCameraUi) ||
       Boolean(this.streamSource.metadata?.isHaProxyStream);
     // Do not negotiate AAC-ELD unless this exact FFmpeg binary can encode it.
     // The native FFmpeg `aac` encoder only emits AAC-LC; advertising AAC-ELD
     // and then sending AAC-LC makes HomeKit reject the audio RTP stream.
-    const audioPlan = h264AudioPlan(this.capabilities);
-    const audioCodecs =
-      audioPlan.codec === "unavailable"
-        ? []
-        : [
+    const audioCodecs = [
+      ...(supportsFdkAac()
+        ? [
             {
-              type:
-                audioPlan.codec === "opus"
-                  ? AudioStreamingCodecType.OPUS
-                  : AudioStreamingCodecType.AAC_ELD,
+              type: AudioStreamingCodecType.AAC_ELD,
+              samplerate: AudioStreamingSamplerate.KHZ_16,
+            },
+            {
+              type: AudioStreamingCodecType.AAC_ELD,
               samplerate: AudioStreamingSamplerate.KHZ_24,
             },
-          ];
+          ]
+        : []),
+      {
+        type: AudioStreamingCodecType.OPUS,
+        samplerate: AudioStreamingSamplerate.KHZ_16,
+      },
+      {
+        type: AudioStreamingCodecType.OPUS,
+        samplerate: AudioStreamingSamplerate.KHZ_24,
+      },
+    ];
 
     const options: CameraControllerOptions = {
       cameraStreamCount: 2,
@@ -583,12 +481,11 @@ export class HomeKitCameraAccessory {
         // startup URL may have expired before its audio SDP can be measured.
         // Offer the standard audio codecs for Omni and validate the fresh URL
         // immediately before spawning FFmpeg in the streaming delegate.
-        audio:
-          audioCodecs.length > 0
-            ? {
-                codecs: audioCodecs,
-              }
-            : undefined,
+        audio: (this.capabilities.hasAudio || this.streamSource.metadata?.isOmniTuyaDirect)
+          ? {
+              codecs: audioCodecs,
+            }
+          : undefined,
       },
       sensors: this.motionService ? { motion: this.motionService } : undefined,
     };
@@ -596,7 +493,7 @@ export class HomeKitCameraAccessory {
     if (isStreamingUsable && this.recordingDelegate) {
       options.recording = {
         options: {
-          prebufferLength: 8000,
+          prebufferLength: 4000,
           overrideEventTriggerOptions: [EventTriggerOption.MOTION],
           mediaContainerConfiguration: {
             type: MediaContainerType.FRAGMENTED_MP4,
@@ -622,7 +519,10 @@ export class HomeKitCameraAccessory {
             codecs: {
               type: AudioRecordingCodecType.AAC_LC,
               audioChannels: 1,
-              samplerate: [AudioRecordingSamplerate.KHZ_48],
+              samplerate: [
+                AudioRecordingSamplerate.KHZ_16,
+                AudioRecordingSamplerate.KHZ_32,
+              ],
             },
           },
         },
@@ -634,7 +534,38 @@ export class HomeKitCameraAccessory {
   }
 
   public buildRecordingResolutions(): [number, number, number][] {
-    return [this.buildDeclaredResolutions()[0]];
+    const isC120 = this.isTapoC120();
+    const source = this.capabilities.resolution || {
+      width: 1920,
+      height: 1080,
+    };
+    const width = isC120 ? 1920 : source.width || 1920;
+    const height = isC120 ? 1080 : source.height || 1080;
+    const measured = this.capabilities.measuredVideo?.fps;
+    const detectedFps =
+      (measured && measured > 0 ? Math.round(measured) : undefined) ??
+      this.capabilities.maxFps ??
+      (this.record as any)?.fps ??
+      (isC120 ? 15 : 30);
+    const cameraMax = Math.max(10, Math.min(detectedFps, 60));
+    const dynamicFps = cameraMax;
+    const candidates: [number, number, number][] = [
+      [width, height, dynamicFps],
+      ...(width >= 3840 ? ([[2560, 1440, dynamicFps]] as [number, number, number][]) : []),
+      ...(width > 1920 && width < 3840 ? ([[2560, 1440, dynamicFps]] as [number, number, number][]) : []),
+      [1920, 1080, dynamicFps],
+      [1280, 720, dynamicFps],
+    ];
+    const seen = new Set<string>();
+    const res: [number, number, number][] = [];
+    for (const [w, h, f] of candidates) {
+      const key = `${w}x${h}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        res.push([w, h, f]);
+      }
+    }
+    return res;
   }
 
   private nativeH264Profile(): H264Profile {
@@ -650,10 +581,64 @@ export class HomeKitCameraAccessory {
   }
 
   private buildDeclaredResolutions(): [number, number, number][] {
-    return h264SupportedResolutions(
-      this.capabilities,
-      Boolean(verifiedH264Encoder()),
+    const isC120 = this.isTapoC120();
+    const source = this.capabilities.resolution || {
+      width: 1920,
+      height: 1080,
+    };
+    const width = source.width || 1920;
+    const height = source.height || 1080;
+    const cameraMax = isC120 ? 20 : this.capabilities.maxFps || 30;
+    const sourceFps = Math.max(
+      15,
+      Math.min(this.capabilities.maxFps || cameraMax, isC120 ? 20 : 60),
     );
+    const dynamicFps = Math.min(sourceFps, cameraMax);
+
+    // Tapo C120: Advertises native ladder matching stream capabilities.
+    // Uses real measured/configured FPS dynamically (typically 15-20fps).
+    if (isC120) {
+      const measured = this.capabilities.measuredVideo?.fps;
+      const detectedFps =
+        (measured && measured > 0 ? Math.round(measured) : undefined) ??
+        this.capabilities.maxFps ??
+        (this.record as any)?.fps ??
+        15;
+      const dynamicC120Fps = Math.max(10, Math.min(detectedFps, 30));
+      const resList: [number, number, number][] = [];
+      if (width > 1920) {
+        resList.push([2560, 1440, dynamicC120Fps]);
+      }
+      resList.push(
+        [1920, 1080, dynamicC120Fps],
+        [1280, 720, dynamicC120Fps],
+        [640, 360, dynamicC120Fps],
+        [480, 270, dynamicC120Fps],
+        [320, 180, dynamicC120Fps],
+      );
+      return resList;
+    }
+
+    const ladder: [number, number, number][] = [
+      [width, height, dynamicFps],
+      ...(width > 1920 ? ([[2560, 1440, dynamicFps]] as [number, number, number][]) : []),
+      [1920, 1080, dynamicFps],
+      [1280, 720, dynamicFps],
+      [640, 360, Math.min(dynamicFps, 30)],
+      [480, 270, Math.min(dynamicFps, 30)],
+      [320, 180, Math.min(dynamicFps, 30)],
+    ];
+
+    const seen = new Set<string>();
+    const unique: [number, number, number][] = [];
+    for (const res of ladder) {
+      const key = `${res[0]}x${res[1]}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        unique.push(res);
+      }
+    }
+    return unique;
   }
 
   /**
@@ -666,28 +651,11 @@ export class HomeKitCameraAccessory {
 
   /** Read-only description of Live View capabilities advertised by this accessory. */
   public getLiveViewCapabilitiesDiagnostic(): {
-    codec: "h264" | "hevc";
+    codec: "h264";
     profiles: string[];
     levels: string[];
     resolutions: [number, number, number][];
   } {
-    if (this.record.activeController === "SecureVideoController")
-      return {
-        codec: "hevc",
-        profiles: this.capabilities.videoProfile
-          ? [this.capabilities.videoProfile]
-          : [],
-        levels: this.capabilities.measuredVideo?.level
-          ? [this.capabilities.measuredVideo.level]
-          : [],
-        resolutions: [
-          [
-            this.capabilities.resolution.width,
-            this.capabilities.resolution.height,
-            this.capabilities.maxFps,
-          ],
-        ],
-      };
     return {
       codec: "h264",
       profiles: ["baseline", "main", "high"],
@@ -950,15 +918,8 @@ export class HomeKitCameraAccessory {
         if (states.has(cand)) return cand;
       }
       for (const [candId] of states.entries()) {
-        if (
-          !candId.startsWith("binary_sensor.") &&
-          !candId.startsWith("event.")
-        )
-          continue;
-        const fn = getHaEntitySearchText(
-          this.platform?.ha,
-          candId,
-        ).toLowerCase();
+        if (!candId.startsWith("binary_sensor.") && !candId.startsWith("event.")) continue;
+        const fn = getHaEntitySearchText(this.platform?.ha, candId).toLowerCase();
         const candIdLower = candId.toLowerCase();
         const hasC120Token =
           candIdLower.includes("c120") ||
@@ -1019,8 +980,7 @@ export class HomeKitCameraAccessory {
       for (const [entityId, entry] of registry.entries()) {
         if (
           entry.device_id !== deviceId ||
-          (!entityId.startsWith("binary_sensor.") &&
-            !entityId.startsWith("event."))
+          (!entityId.startsWith("binary_sensor.") && !entityId.startsWith("event."))
         )
           continue;
         const state = states?.get(entityId);
@@ -1062,10 +1022,7 @@ export class HomeKitCameraAccessory {
           entityId.includes("auto");
         if (!isMotionClass) continue;
         const cleanEntity = clean(entityId);
-        const fn = getHaEntitySearchText(
-          this.platform?.ha,
-          entityId,
-        ).toLowerCase();
+        const fn = getHaEntitySearchText(this.platform?.ha, entityId).toLowerCase();
         const cleanFn = clean(fn);
         const camWords = (this.record?.name || "")
           .toLowerCase()
@@ -1196,8 +1153,6 @@ export class HomeKitCameraAccessory {
       );
       this.recordingDelegate?.updateRecordingActive(false);
       this.delegate?.cleanupAllSessions();
-      void this.secureRtp?.stopAll();
-      void this.secureWebRtc?.closeAll();
       void this.platform?.saveHomeKitCameraRecords?.();
       this.notifyPairingStateChanged(false);
     });
@@ -1227,6 +1182,12 @@ export class HomeKitCameraAccessory {
       !this.streamSource.metadata?.capabilitiesProbedBeforePublish
     ) {
       void this.probeAndAdaptCapabilities();
+      setTimeout(() => {
+        void this.delegate?.handleSnapshotRequest(
+          { width: 1280, height: 720 },
+          () => {},
+        );
+      }, 1500);
     }
   }
 
@@ -1242,8 +1203,7 @@ export class HomeKitCameraAccessory {
       this.linkedMotionEntityId ||
       !this.streamSource.metadata?.isOmniTuyaDirect ||
       !this.platform?.ha?.requestOmniTuyaCameraStream
-    )
-      return;
+    ) return;
 
     const sourceCameraEntityId =
       this.streamSource.metadata?.sourceCameraEntityId || this.entityId;
@@ -1254,9 +1214,7 @@ export class HomeKitCameraAccessory {
       fps: 1,
       reportAllFrameChanges: true,
       resolveRtspUrl: async () =>
-        await this.platform.ha.requestOmniTuyaCameraStream(
-          sourceCameraEntityId,
-        ),
+        await this.platform.ha.requestOmniTuyaCameraStream(sourceCameraEntityId),
     });
     this.localMotionDetector.on("motion", (detected: boolean) => {
       this.updateMotionState(detected);
@@ -1268,38 +1226,21 @@ export class HomeKitCameraAccessory {
   }
 
   public async probeAndAdaptCapabilities(): Promise<void> {
-    if (
-      !this.streamSource.url ||
-      this.isStreaming ||
-      this.streamSource.metadata?.isOmniTuyaDirect
-    )
-      return;
+    if (!this.streamSource.url) return;
     try {
       // Omni Tuya URLs are single-session signed RTSP credentials. Probe a
       // freshly allocated URL instead of the resolver's expired startup URL.
       const sourceCameraEntityId =
         this.streamSource.metadata?.sourceCameraEntityId || this.entityId;
       const probeUrl = this.streamSource.metadata?.isOmniTuyaDirect
-        ? await this.platform?.ha?.requestOmniTuyaCameraStream?.(
-            sourceCameraEntityId,
-          )
+        ? await this.platform?.ha?.requestOmniTuyaCameraStream?.(sourceCameraEntityId)
         : this.streamSource.url;
       if (!probeUrl) return;
-      const adapter = new CameraSourceAdapter(
-        this.platform,
-        this.entityId,
-        this.streamSource,
-        this.capabilities,
-        this.record,
-      );
-      const { probe } = await adapter.discover(probeUrl);
+      const probe = await probeCameraSource(probeUrl, {
+        timeoutMs: 4000,
+      });
       if (probe.valid && probe.videoCodec) {
-        this.capabilities.audioProvenance = "PROBED";
         const codec = probe.videoCodec.toLowerCase();
-        if (!["hevc", "h265", "h264"].includes(codec)) {
-          this.capabilities.hasLiveStream = false;
-          return;
-        }
         const isHevc = codec.includes("hevc") || codec.includes("265");
         this.capabilities.videoCodec = isHevc ? "hevc" : "h264";
         this.capabilities.requiresTranscoding = false;
@@ -1311,8 +1252,11 @@ export class HomeKitCameraAccessory {
         }
         if (probe.hasAudio && probe.audioCodec) {
           const audioCodec = probe.audioCodec.toLowerCase();
-          this.capabilities.audioCodec =
-            audioCodec as CameraCapabilitiesInfo["audioCodec"];
+          this.capabilities.audioCodec = audioCodec.includes("aac")
+            ? "aac_lc"
+            : audioCodec.includes("opus")
+              ? "opus"
+              : "pcm";
           this.capabilities.audioSampleRate = probe.audioSampleRate;
           this.capabilities.audioChannels = probe.audioChannels;
         } else if (probe.hasAudio === false) {
@@ -1340,18 +1284,15 @@ export class HomeKitCameraAccessory {
           fps: probe.fps,
           bitrateKbps: probe.bitrateKbps,
           pixFmt: probe.pixFmt,
-          metadataSource: "ffprobe",
         };
         this.platform?.log?.notice?.(
           `[HomeKitCamera][${this.entityId}] Probed capabilities: codec=${probe.videoCodec} ${probe.width}x${probe.height}@${probe.fps}fps hasAudio=${probe.hasAudio} -> strategy=${this.capabilities.strategy}`,
         );
 
         if (this.entityId.includes("cameraui")) {
-          const cuiId =
-            this.record.cameraUiCameraId ||
-            this.entityId
-              .replace(/^camera\.cameraui_/, "")
-              .replace(/^camera\./, "");
+          const cuiId = this.record.cameraUiCameraId || this.entityId
+            .replace(/^camera\.cameraui_/, "")
+            .replace(/^camera\./, "");
           void CameraUiStorage.updateCamera(cuiId, (cam) => {
             cam.videoCodec = this.capabilities.videoCodec;
             cam.strategy = this.capabilities.strategy as any;
@@ -1384,11 +1325,9 @@ export class HomeKitCameraAccessory {
       }
 
       // Update Camera.UI storage if applicable
-      const cuiId =
-        this.record.cameraUiCameraId ||
-        this.entityId
-          .replace(/^camera\.cameraui_/, "")
-          .replace(/^camera\./, "");
+      const cuiId = this.record.cameraUiCameraId || this.entityId
+        .replace(/^camera\.cameraui_/, "")
+        .replace(/^camera\./, "");
       void CameraUiStorage.updateCamera(cuiId, (cam) => {
         cam.isPaired = paired;
         return cam;
@@ -1451,27 +1390,11 @@ export class HomeKitCameraAccessory {
     return this.getPairingState() === "paired";
   }
 
-  public getLiveViewTelemetry() {
-    return {
-      ...(this.delegate?.getLiveViewTelemetry() || { active: [], recent: [] }),
-      secure: {
-        rtp: this.secureRtp?.getStartupDiagnostics(),
-        webRTC: this.secureWebRtc?.getStartupDiagnostics(),
-      },
-    };
-  }
-
   public get isStreaming(): boolean {
-    return Boolean(
-      this.delegate?.isStreaming ||
-      this.secureRtp?.isStreaming ||
-      this.secureWebRtc?.isStreaming,
-    );
+    return this.delegate?.isStreaming ?? false;
   }
 
   public async unpublish(): Promise<void> {
-    await this.secureRtp?.stopAll();
-    await this.secureWebRtc?.closeAll();
     this.delegate?.cleanupAllSessions();
     this.recordingDelegate?.updateRecordingActive(false);
     this.localMotionDetector?.stop(this.platform?.log);

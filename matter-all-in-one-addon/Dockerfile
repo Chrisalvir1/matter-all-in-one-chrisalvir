@@ -3,7 +3,6 @@ FROM ${BUILD_FROM} AS builder
 
 WORKDIR /app
 COPY package.json package-lock.json ./
-COPY vendor/hap-nodejs/ ./vendor/hap-nodejs/
 RUN npm ci --legacy-peer-deps --no-fund --no-audit
 COPY tsconfig*.json vite.config.ts ./
 COPY scripts/clean-dist.mjs ./scripts/clean-dist.mjs
@@ -35,11 +34,9 @@ RUN set -eu; apk add --no-cache curl jq ffmpeg; ARCH=$(uname -m); \
 
 WORKDIR /app
 COPY package.json package-lock.json ./
-COPY vendor/hap-nodejs/ ./vendor/hap-nodejs/
 RUN npm ci --omit=dev --omit=peer --legacy-peer-deps --no-fund --no-audit \
   && { test -e /app/node_modules/matterbridge || ln -s /usr/local/lib/node_modules/matterbridge /app/node_modules/matterbridge; } \
-  && node --input-type=module -e "const { DescriptorServer } = await import('matterbridge/matter/behaviors'); if (!DescriptorServer || !('BasicInformationServer' in await import('matterbridge/matter/behaviors'))) throw new Error('Matter behavior exports missing')" \
-  && node --input-type=module -e "const hap = await import('@homebridge/hap-nodejs'); if (!hap.CameraController || !hap.SecureVideoController || !hap.Service.CameraWebRTCStreamManagement || !hap.Service.CameraMultiTierRTPStreamManagement) throw new Error('HAP runtime incomplete')"
+  && node --input-type=module -e "const { DescriptorServer } = await import('matterbridge/matter/behaviors'); if (!DescriptorServer || !('BasicInformationServer' in await import('matterbridge/matter/behaviors'))) throw new Error('Matter behavior exports missing')"
 RUN jq 'del(.devDependencies, .peerDependencies)' package.json > package.json.tmp \
   && mv package.json.tmp package.json
 

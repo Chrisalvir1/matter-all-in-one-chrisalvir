@@ -56,7 +56,7 @@ export function sanitizeUrlCredentials(url: string): string {
       const userInfo = authority.substring(0, atIdx);
       const hostPort = authority.substring(atIdx + 1);
       const user = userInfo.includes(":") ? userInfo.split(":")[0] : userInfo;
-      sanitized = `${proto}***:***@${hostPort}${pathAndQuery}`;
+      sanitized = `${proto}${user}:***@${hostPort}${pathAndQuery}`;
     }
   }
 
@@ -128,48 +128,29 @@ export function resolveFfmpegPath(): string | null {
   return null;
 }
 
-const cachedFdkSupport = new Map<string, boolean>();
+let cachedFdkSupport: boolean | null = null;
 
 /**
  * Checks if the available FFmpeg binary supports the Fraunhofer FDK AAC encoder
  * (libfdk_aac), which is required for Apple HomeKit native AAC-ELD real-time audio.
  */
 export function supportsFdkAac(): boolean {
+  if (cachedFdkSupport !== null) return cachedFdkSupport;
   const ffmpeg = resolveFfmpegPath();
-  if (!ffmpeg) return false;
-  if (cachedFdkSupport.has(ffmpeg)) return cachedFdkSupport.get(ffmpeg)!;
-  let supported = false;
+  if (!ffmpeg) {
+    cachedFdkSupport = false;
+    return false;
+  }
   try {
-    supported =
-      spawnSync(
-        ffmpeg,
-        [
-          "-hide_banner",
-          "-loglevel",
-          "error",
-          "-f",
-          "lavfi",
-          "-i",
-          "anullsrc=r=24000:cl=mono",
-          "-t",
-          "0.04",
-          "-c:a",
-          "libfdk_aac",
-          "-profile:a",
-          "aac_eld",
-          "-frame_length",
-          "480",
-          "-flags:a",
-          "+global_header",
-          "-f",
-          "null",
-          "-",
-        ],
-        { timeout: 3000, stdio: "ignore" },
-      ).status === 0;
-  } catch {}
-  cachedFdkSupport.set(ffmpeg, supported);
-  return supported;
+    const probe = spawnSync(ffmpeg, ["-encoders"], {
+      timeout: 5000,
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    cachedFdkSupport = probe.stdout?.toString().includes("libfdk_aac") ?? false;
+  } catch {
+    cachedFdkSupport = false;
+  }
+  return cachedFdkSupport;
 }
 
 /**
@@ -229,8 +210,7 @@ const ffmpegVersionCache = new Map<string, string | null>();
 export function getFfmpegVersion(customPath?: string): string | null {
   const ffmpegPath = customPath || resolveFfmpegPath();
   if (!ffmpegPath) return null;
-  if (ffmpegVersionCache.has(ffmpegPath))
-    return ffmpegVersionCache.get(ffmpegPath) ?? null;
+  if (ffmpegVersionCache.has(ffmpegPath)) return ffmpegVersionCache.get(ffmpegPath) ?? null;
 
   try {
     const res = spawnSync(ffmpegPath, ["-version"], {
@@ -421,9 +401,7 @@ export function parseFfprobeJson(
     avgFrameRate,
     videoProfile: video.profile || undefined,
     videoLevel: Number.isFinite(numericLevel)
-      ? video.codec_name === "h264"
-        ? `${Math.floor(numericLevel / 10)}.${numericLevel % 10}`
-        : String(numericLevel)
+      ? `${Math.floor(numericLevel / 10)}.${numericLevel % 10}`
       : undefined,
     bitrateKbps:
       Number(video.bit_rate) > 0

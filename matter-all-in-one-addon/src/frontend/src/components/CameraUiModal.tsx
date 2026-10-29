@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
 import { CameraUiCameraItem, CameraUiConfigResponse } from "../types";
-import { CameraConfigModal } from "./CameraConfigModal";
 import { api } from "../api/client";
 
 interface CameraUiModalProps {
@@ -28,16 +27,9 @@ export const CameraUiModal: React.FC<CameraUiModalProps> = ({
   const [isTesting, setIsTesting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [testResult, setTestResult] = useState<{
-    text: string;
-    isError?: boolean;
-  } | null>(null);
-  const [selectedCamera, setSelectedCamera] =
-    useState<CameraUiCameraItem | null>(null);
+  const [testResult, setTestResult] = useState<{ text: string; isError?: boolean } | null>(null);
   const [cameras, setCameras] = useState<CameraUiCameraItem[]>([]);
-  const [activeTab, setActiveTab] = useState<"settings" | "cameras">(
-    "settings",
-  );
+  const [activeTab, setActiveTab] = useState<"settings" | "cameras">("settings");
   const hasInitializedRef = useRef(false);
 
   useEffect(() => {
@@ -63,13 +55,9 @@ export const CameraUiModal: React.FC<CameraUiModalProps> = ({
   };
 
   const handleTest = async () => {
-    const effectiveUrl =
-      serverUrl.trim() || config?.serverUrl || "http://127.0.0.1:8181";
+    const effectiveUrl = serverUrl.trim() || config?.serverUrl || "http://127.0.0.1:8181";
     if (!effectiveUrl) {
-      showToast(
-        "Ingresa la URL del servidor Camera.UI (ej. http://192.168.1.100:8181)",
-        true,
-      );
+      showToast("Ingresa la URL del servidor Camera.UI (ej. http://192.168.1.100:8181)", true);
       return;
     }
     setIsTesting(true);
@@ -94,13 +82,9 @@ export const CameraUiModal: React.FC<CameraUiModalProps> = ({
   };
 
   const handleSync = async () => {
-    const effectiveUrl =
-      serverUrl.trim() || config?.serverUrl || "http://127.0.0.1:8181";
+    const effectiveUrl = serverUrl.trim() || config?.serverUrl || "http://127.0.0.1:8181";
     if (!effectiveUrl) {
-      showToast(
-        "Ingresa la URL del servidor Camera.UI (ej. http://192.168.1.100:8181)",
-        true,
-      );
+      showToast("Ingresa la URL del servidor Camera.UI (ej. http://192.168.1.100:8181)", true);
       return;
     }
     setIsSyncing(true);
@@ -112,9 +96,7 @@ export const CameraUiModal: React.FC<CameraUiModalProps> = ({
         allowSelfSignedCertificate: allowSelfSigned,
       });
       if (res.success) {
-        showToast(
-          `✓ Sincronización completa: ${res.totalCameras} cámaras detectadas (${res.newCameras} nuevas).`,
-        );
+        showToast(`✓ Sincronización completa: ${res.totalCameras} cámaras detectadas (${res.newCameras} nuevas).`);
         setCameras(res.cameras || []);
         onRefresh();
       } else {
@@ -124,6 +106,32 @@ export const CameraUiModal: React.FC<CameraUiModalProps> = ({
       showToast(err.message || "Error al sincronizar", true);
     } finally {
       setIsSyncing(false);
+    }
+  };
+
+  const handleToggleHomeKit = async (cameraId: string) => {
+    try {
+      await api.toggleCameraUiHomeKit(cameraId);
+      await loadCameras();
+      showToast("✓ Estado de HomeKit actualizado.");
+      onRefresh();
+    } catch (err: any) {
+      showToast(`Error: ${err.message}`, true);
+    }
+  };
+
+  const handleResetPairing = async (cameraId: string) => {
+    try {
+      const res = await api.resetCameraUiPairing(cameraId);
+      if (res.success) {
+        showToast("✓ Emparejamiento HomeKit restablecido. Listo para escanear en Apple Home.");
+        await loadCameras();
+        onRefresh();
+      } else {
+        showToast("No se pudo restablecer el emparejamiento", true);
+      }
+    } catch (err: any) {
+      showToast(`Error: ${err.message}`, true);
     }
   };
 
@@ -156,66 +164,22 @@ export const CameraUiModal: React.FC<CameraUiModalProps> = ({
     }
   };
 
-  if (selectedCamera)
-    return (
-      <CameraConfigModal
-        camera={selectedCamera}
-        onClose={() => setSelectedCamera(null)}
-        onRefresh={() => {
-          onRefresh();
-          void api
-            .getCameraUiCameras()
-            .then((list) => {
-              setCameras(list);
-              setSelectedCamera((current) =>
-                current
-                  ? list.find((item) => item.id === current.id) || current
-                  : null,
-              );
-            })
-            .catch(() => {});
-        }}
-        showToast={showToast}
-      />
-    );
-
   return (
     <div className="modal-backdrop open" role="dialog" aria-modal="true">
-      <section
-        className="modal camera-connection-modal"
-        style={{ maxWidth: 620, maxHeight: "90vh", overflowY: "auto" }}
-      >
-        <button
-          className="icon-button"
-          type="button"
-          aria-label="Cerrar"
-          onClick={onClose}
-        >
+      <section className="modal" style={{ maxWidth: 620, maxHeight: "90vh", overflowY: "auto" }}>
+        <button className="icon-button" type="button" aria-label="Cerrar" onClick={onClose}>
           ×
         </button>
         <header className="modal-header">
-          <span className="modal-icon" style={{ fontSize: "1.8rem" }}>
-            🎥
-          </span>
+          <span className="modal-icon" style={{ fontSize: "1.8rem" }}>🎥</span>
           <div>
             <p className="eyebrow">INTEGRACIÓN DE CÁMARAS Y MQTT</p>
             <h2>Camera.UI / Homebridge Camera.UI</h2>
-            <p className="entity-id">
-              Descubrimiento RTSP, eventos MQTT (movimiento/timbre) y puente
-              directo HomeKit HAP
-            </p>
+            <p className="entity-id">Descubrimiento RTSP, eventos MQTT (movimiento/timbre) y puente directo HomeKit HAP</p>
           </div>
         </header>
 
-        <div
-          style={{
-            display: "flex",
-            gap: 10,
-            margin: "12px 0 16px",
-            borderBottom: "1px solid rgba(255,255,255,0.1)",
-            paddingBottom: 8,
-          }}
-        >
+        <div style={{ display: "flex", gap: 10, margin: "12px 0 16px", borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: 8 }}>
           <button
             type="button"
             className={`button ${activeTab === "settings" ? "button-primary" : "button-secondary"}`}
@@ -238,20 +202,8 @@ export const CameraUiModal: React.FC<CameraUiModalProps> = ({
         </div>
 
         {activeTab === "settings" ? (
-          <form
-            onSubmit={handleSave}
-            style={{ display: "flex", flexDirection: "column", gap: 12 }}
-          >
-            <label
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                cursor: "pointer",
-                fontSize: "0.9rem",
-                fontWeight: 600,
-              }}
-            >
+          <form onSubmit={handleSave} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", fontSize: "0.9rem", fontWeight: 600 }}>
               <input
                 type="checkbox"
                 checked={enabled}
@@ -261,14 +213,7 @@ export const CameraUiModal: React.FC<CameraUiModalProps> = ({
             </label>
 
             <div>
-              <label
-                style={{
-                  display: "block",
-                  fontSize: "0.8rem",
-                  color: "var(--dim)",
-                  marginBottom: 4,
-                }}
-              >
+              <label style={{ display: "block", fontSize: "0.8rem", color: "var(--dim)", marginBottom: 4 }}>
                 URL del Servidor Camera.UI
               </label>
               <input
@@ -277,121 +222,37 @@ export const CameraUiModal: React.FC<CameraUiModalProps> = ({
                 onChange={(e) => setServerUrl(e.target.value)}
                 placeholder="http://192.168.1.100:8181 o https://camera-ui.example"
                 required
-                style={{
-                  width: "100%",
-                  padding: "8px 12px",
-                  borderRadius: 8,
-                  background: "rgba(0,0,0,0.2)",
-                  border: "1px solid rgba(255,255,255,0.1)",
-                  color: "#fff",
-                }}
+                style={{ width: "100%", padding: "8px 12px", borderRadius: 8, background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff" }}
               />
               <span style={{ fontSize: "0.75rem", color: "var(--dim)" }}>
-                Puerto REST por defecto de Camera.UI: 8181 (o HTTPS en 3543). El
-                RTSP nativo de esta instalación usa el puerto 2101.
+                Puerto REST por defecto de Camera.UI: 8181 (o HTTPS en 3543). El RTSP nativo de esta instalación usa el puerto 2101.
               </span>
               <div style={{ marginTop: 8 }}>
-                <label
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    cursor: "pointer",
-                    fontSize: "0.8rem",
-                    color: "var(--dim)",
-                  }}
-                >
+                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: "0.8rem", color: "var(--dim)" }}>
                   <input
                     type="checkbox"
                     checked={allowSelfSigned}
                     onChange={(e) => setAllowSelfSigned(e.target.checked)}
                   />
-                  <span>
-                    Permitir certificados SSL autofirmados (HTTPS local)
-                  </span>
+                  <span>Permitir certificados SSL autofirmados (HTTPS local)</span>
                 </label>
               </div>
             </div>
 
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: 10,
-              }}
-            >
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "0.8rem",
-                    color: "var(--dim)",
-                    marginBottom: 4,
-                  }}
-                >
-                  Usuario RTSP de Camera.UI
-                </label>
-                <input
-                  type="text"
-                  value={rtspUsername}
-                  onChange={(e) => setRtspUsername(e.target.value)}
-                  placeholder="admin"
-                  style={{
-                    width: "100%",
-                    padding: "8px 12px",
-                    borderRadius: 8,
-                    background: "rgba(0,0,0,0.2)",
-                    border: "1px solid rgba(255,255,255,0.1)",
-                    color: "#fff",
-                  }}
-                />
+                <label style={{ display: "block", fontSize: "0.8rem", color: "var(--dim)", marginBottom: 4 }}>Usuario RTSP de Camera.UI</label>
+                <input type="text" value={rtspUsername} onChange={(e) => setRtspUsername(e.target.value)} placeholder="admin" style={{ width: "100%", padding: "8px 12px", borderRadius: 8, background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff" }} />
               </div>
               <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "0.8rem",
-                    color: "var(--dim)",
-                    marginBottom: 4,
-                  }}
-                >
-                  Contraseña RTSP
-                </label>
-                <input
-                  type="password"
-                  value={rtspPassword}
-                  onChange={(e) => setRtspPassword(e.target.value)}
-                  placeholder={
-                    config?.hasRtspPassword ? "•••••••• (guardada)" : "••••••••"
-                  }
-                  style={{
-                    width: "100%",
-                    padding: "8px 12px",
-                    borderRadius: 8,
-                    background: "rgba(0,0,0,0.2)",
-                    border: "1px solid rgba(255,255,255,0.1)",
-                    color: "#fff",
-                  }}
-                />
+                <label style={{ display: "block", fontSize: "0.8rem", color: "var(--dim)", marginBottom: 4 }}>Contraseña RTSP</label>
+                <input type="password" value={rtspPassword} onChange={(e) => setRtspPassword(e.target.value)} placeholder={config?.hasRtspPassword ? "•••••••• (guardada)" : "••••••••"} style={{ width: "100%", padding: "8px 12px", borderRadius: 8, background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff" }} />
               </div>
             </div>
 
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: 10,
-              }}
-            >
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "0.8rem",
-                    color: "var(--dim)",
-                    marginBottom: 4,
-                  }}
-                >
+                <label style={{ display: "block", fontSize: "0.8rem", color: "var(--dim)", marginBottom: 4 }}>
                   Usuario (opcional)
                 </label>
                 <input
@@ -399,85 +260,37 @@ export const CameraUiModal: React.FC<CameraUiModalProps> = ({
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   placeholder="admin"
-                  style={{
-                    width: "100%",
-                    padding: "8px 12px",
-                    borderRadius: 8,
-                    background: "rgba(0,0,0,0.2)",
-                    border: "1px solid rgba(255,255,255,0.1)",
-                    color: "#fff",
-                  }}
+                  style={{ width: "100%", padding: "8px 12px", borderRadius: 8, background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff" }}
                 />
               </div>
 
               <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "0.8rem",
-                    color: "var(--dim)",
-                    marginBottom: 4,
-                  }}
-                >
+                <label style={{ display: "block", fontSize: "0.8rem", color: "var(--dim)", marginBottom: 4 }}>
                   Contraseña (opcional)
                 </label>
                 <input
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder={
-                    config?.hasPassword ? "•••••••• (guardada)" : "••••••••"
-                  }
-                  style={{
-                    width: "100%",
-                    padding: "8px 12px",
-                    borderRadius: 8,
-                    background: "rgba(0,0,0,0.2)",
-                    border: "1px solid rgba(255,255,255,0.1)",
-                    color: "#fff",
-                  }}
+                  placeholder={config?.hasPassword ? "•••••••• (guardada)" : "••••••••"}
+                  style={{ width: "100%", padding: "8px 12px", borderRadius: 8, background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff" }}
                 />
               </div>
             </div>
 
-            <div
-              style={{
-                padding: "10px 12px",
-                borderRadius: 8,
-                background: "rgba(255,255,255,0.03)",
-                border: "1px solid rgba(255,255,255,0.08)",
-              }}
-            >
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  cursor: "pointer",
-                  fontSize: "0.85rem",
-                  fontWeight: 500,
-                }}
-              >
+            <div style={{ padding: "10px 12px", borderRadius: 8, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: "0.85rem", fontWeight: 500 }}>
                 <input
                   type="checkbox"
                   checked={mqttEnabled}
                   onChange={(e) => setMqttEnabled(e.target.checked)}
                 />
-                <span>
-                  Escuchar tópicos MQTT de Camera.UI para Movimiento y Timbre
-                </span>
+                <span>Escuchar tópicos MQTT de Camera.UI para Movimiento y Timbre</span>
               </label>
 
               {mqttEnabled && (
                 <div style={{ marginTop: 8 }}>
-                  <label
-                    style={{
-                      display: "block",
-                      fontSize: "0.75rem",
-                      color: "var(--dim)",
-                      marginBottom: 4,
-                    }}
-                  >
+                  <label style={{ display: "block", fontSize: "0.75rem", color: "var(--dim)", marginBottom: 4 }}>
                     Prefijo de Tópicos MQTT
                   </label>
                   <input
@@ -485,27 +298,10 @@ export const CameraUiModal: React.FC<CameraUiModalProps> = ({
                     value={mqttTopicPrefix}
                     onChange={(e) => setMqttTopicPrefix(e.target.value)}
                     placeholder="camera.ui"
-                    style={{
-                      width: "100%",
-                      padding: "6px 10px",
-                      borderRadius: 6,
-                      background: "rgba(0,0,0,0.2)",
-                      border: "1px solid rgba(255,255,255,0.1)",
-                      color: "#fff",
-                      fontSize: "0.85rem",
-                    }}
+                    style={{ width: "100%", padding: "6px 10px", borderRadius: 6, background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff", fontSize: "0.85rem" }}
                   />
-                  <span
-                    style={{
-                      fontSize: "0.75rem",
-                      color: "var(--dim)",
-                      display: "block",
-                      marginTop: 4,
-                    }}
-                  >
-                    Se suscribe automáticamente a <code>camera.ui/#</code> y{" "}
-                    <code>cameraui/#</code> para disparar notificaciones de
-                    movimiento y timbres en Apple Home.
+                  <span style={{ fontSize: "0.75rem", color: "var(--dim)", display: "block", marginTop: 4 }}>
+                    Se suscribe automáticamente a <code>camera.ui/#</code> y <code>cameraui/#</code> para disparar notificaciones de movimiento y timbres en Apple Home.
                   </span>
                 </div>
               )}
@@ -517,9 +313,7 @@ export const CameraUiModal: React.FC<CameraUiModalProps> = ({
                   padding: "8px 12px",
                   borderRadius: 8,
                   fontSize: "0.8rem",
-                  background: testResult.isError
-                    ? "rgba(239,68,68,0.15)"
-                    : "rgba(16,185,129,0.15)",
+                  background: testResult.isError ? "rgba(239,68,68,0.15)" : "rgba(16,185,129,0.15)",
                   color: testResult.isError ? "#fca5a5" : "#6ee7b7",
                 }}
               >
@@ -527,14 +321,7 @@ export const CameraUiModal: React.FC<CameraUiModalProps> = ({
               </div>
             )}
 
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                gap: 8,
-                marginTop: 12,
-              }}
-            >
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginTop: 12 }}>
               <div style={{ display: "flex", gap: 8 }}>
                 <button
                   className="button button-secondary"
@@ -554,18 +341,10 @@ export const CameraUiModal: React.FC<CameraUiModalProps> = ({
                 </button>
               </div>
               <div style={{ display: "flex", gap: 8 }}>
-                <button
-                  className="button button-secondary"
-                  type="button"
-                  onClick={onClose}
-                >
+                <button className="button button-secondary" type="button" onClick={onClose}>
                   Cancelar
                 </button>
-                <button
-                  className="button button-primary"
-                  type="submit"
-                  disabled={isSaving}
-                >
+                <button className="button button-primary" type="submit" disabled={isSaving}>
                   {isSaving ? "Guardando..." : "Guardar"}
                 </button>
               </div>
@@ -573,13 +352,7 @@ export const CameraUiModal: React.FC<CameraUiModalProps> = ({
           </form>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <span style={{ fontSize: "0.85rem", color: "var(--dim)" }}>
                 {cameras.length === 0
                   ? "No se han sincronizado cámaras aún."
@@ -597,51 +370,90 @@ export const CameraUiModal: React.FC<CameraUiModalProps> = ({
             </div>
 
             {cameras.length === 0 ? (
-              <div
-                style={{
-                  padding: "24px 16px",
-                  textAlign: "center",
-                  background: "rgba(255,255,255,0.02)",
-                  borderRadius: 8,
-                  border: "1px dashed rgba(255,255,255,0.1)",
-                }}
-              >
-                <p
-                  style={{ margin: 0, color: "var(--dim)", fontSize: "0.9rem" }}
-                >
-                  Asegúrate de que la URL del servidor sea correcta y presiona{" "}
-                  <strong>Sincronizar Ahora</strong>.
+              <div style={{ padding: "24px 16px", textAlign: "center", background: "rgba(255,255,255,0.02)", borderRadius: 8, border: "1px dashed rgba(255,255,255,0.1)" }}>
+                <p style={{ margin: 0, color: "var(--dim)", fontSize: "0.9rem" }}>
+                  Asegúrate de que la URL del servidor sea correcta y presiona <strong>Sincronizar Ahora</strong>.
                 </p>
               </div>
             ) : (
-              <div
-                style={{ display: "flex", flexDirection: "column", gap: 10 }}
-              >
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {cameras.map((cam) => (
-                  <article className="camera-control-row" key={cam.id}>
-                    <div>
-                      <strong>{cam.name}</strong>
-                      <p>
-                        {cam.status === "online"
-                          ? "En línea según el proveedor"
-                          : cam.status === "offline"
-                            ? "Fuera de línea según el proveedor"
-                            : "Disponibilidad no verificada"}
-                      </p>
-                      <small>
-                        {cam.isPaired
-                          ? "Emparejamiento informado por el backend"
-                          : "Sin emparejamiento confirmado"}
-                      </small>
+                  <div
+                    key={cam.id}
+                    style={{
+                      padding: "12px",
+                      borderRadius: 8,
+                      background: "rgba(255,255,255,0.03)",
+                      border: "1px solid rgba(255,255,255,0.08)",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 8,
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                      <div>
+                        <strong style={{ fontSize: "0.95rem" }}>{cam.name}</strong>
+                        <div style={{ fontSize: "0.75rem", color: "var(--dim)", marginTop: 2 }}>
+                          ID: <code>{cam.id}</code> · Puerto HAP: <code>{cam.port || "Pendiente"}</code> · Firmware: <code>{cam.firmwareRevision || "HAP-NodeJS 2.2.3"}</code>
+                        </div>
+                      </div>
+                      <span
+                        style={{
+                          fontSize: "0.75rem",
+                          padding: "2px 8px",
+                          borderRadius: 6,
+                          background: cam.isPaired ? "rgba(16,185,129,0.2)" : "rgba(245,158,11,0.2)",
+                          color: cam.isPaired ? "#6ee7b7" : "#fde68a",
+                        }}
+                      >
+                        {cam.isPaired ? "✓ Vinculada en Apple Home" : "⚠️ Lista para vincular"}
+                      </span>
                     </div>
-                    <button
-                      type="button"
-                      className="button button-secondary"
-                      onClick={() => setSelectedCamera(cam)}
-                    >
-                      Configurar cámara
-                    </button>
-                  </article>
+
+                    <div style={{ fontSize: "0.8rem", color: "var(--dim)", wordBreak: "break-all" }}>
+                      RTSP: <code>{cam.rtspUrl}</code>
+                    </div>
+
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 4, paddingTop: 8, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                        <span style={{ fontSize: "0.8rem" }}>
+                          PIN: <strong>{cam.pincode || "031-45-154"}</strong>
+                        </span>
+                        {cam.setupUri && !cam.isPaired && (
+                          <a
+                            href={cam.setupUri}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="button button-secondary"
+                            style={{ fontSize: "0.75rem", padding: "2px 8px", textDecoration: "none" }}
+                          >
+                            🔗 Código HomeKit
+                          </a>
+                        )}
+                      </div>
+
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button
+                          type="button"
+                          className="button button-secondary"
+                          style={{ fontSize: "0.75rem", padding: "3px 8px" }}
+                          onClick={() => handleResetPairing(cam.id)}
+                          title="Restablece el ID y genera nuevo PIN si Apple Home no la encuentra"
+                        >
+                          Restablecer PIN
+                        </button>
+                        <button
+                          type="button"
+                          className={`button ${cam.homeKitEnabled ? "button-primary" : "button-secondary"}`}
+                          style={{ fontSize: "0.75rem", padding: "3px 8px" }}
+                          onClick={() => handleToggleHomeKit(cam.id)}
+                          title={cam.homeKitEnabled ? "Desactiva la exportación HAP de esta cámara" : "Activa y publica esta cámara para Apple Home"}
+                        >
+                          {cam.homeKitEnabled ? "Desactivar HomeKit" : "Activar HomeKit"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 ))}
               </div>
             )}

@@ -77,7 +77,7 @@ export class CameraEntity extends BaseEntity {
       } else {
         try {
           const measured = await probeCameraSource(this.streamSource.url, {
-            timeoutMs: 12000,
+            timeoutMs: 4000,
           });
           if (measured.valid) {
             this.omniTuyaProbeResult = measured;
@@ -89,10 +89,6 @@ export class CameraEntity extends BaseEntity {
             };
             this.platform?.log?.notice?.(
               `[CameraEntity][${this.entityId}] Measured Omni Tuya stream before HAP setup: video=${measured.videoCodec || "unknown"}, audio=${measured.hasAudio ? measured.audioCodec || "present" : "no audio track"}`,
-            );
-          } else {
-            this.platform?.log?.warn?.(
-              `[CameraEntity][${this.entityId}] Omni stream probe did not return usable video metadata; using model-validated audio fallback when available`,
             );
           }
         } catch {

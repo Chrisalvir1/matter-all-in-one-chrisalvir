@@ -8,22 +8,10 @@ interface CameraCardProps {
   onConfigure: () => void;
 }
 
-export function extractCameraBrand(
-  item: CameraRecord | DeviceRecord | CameraUiCameraItem,
-): string {
+export function extractCameraBrand(item: CameraRecord | DeviceRecord | CameraUiCameraItem): string {
   const name = ("name" in item ? item.name : "") || "";
-  const model =
-    ("displayModel" in item
-      ? item.displayModel
-      : "model" in item
-        ? item.model
-        : "") || "";
-  const mfr =
-    ("displayManufacturer" in item
-      ? item.displayManufacturer
-      : "manufacturer" in item
-        ? item.manufacturer
-        : "") || "";
+  const model = ("displayModel" in item ? item.displayModel : "model" in item ? item.model : "") || "";
+  const mfr = ("displayManufacturer" in item ? item.displayManufacturer : "manufacturer" in item ? item.manufacturer : "") || "";
 
   const knownBrands = [
     "EZVIZ",
@@ -67,17 +55,12 @@ export const CameraCard: React.FC<CameraCardProps> = ({
   onConfigure,
 }) => {
   if (camera) {
-    const isOnline =
-      camera.status?.connection === "online" &&
-      camera.status?.isOnline === true;
+    const isOnline = camera.status?.connection === "online" && camera.status?.isOnline === true;
     const isHapPaired = camera.identity?.homeKitPairingState === "paired";
     const isMatterPaired = camera.bindingState?.matterCommissioned === true;
     const brand = extractCameraBrand(camera);
     const modelDisplay = camera.displayModel || camera.model || "";
-    const sn =
-      camera.displaySerialNumber ||
-      camera.serialNumber ||
-      (camera.cameraId ? `CAM-${camera.cameraId}` : "");
+    const sn = camera.displaySerialNumber || camera.serialNumber || (camera.cameraId ? `CAM-${camera.cameraId}` : "");
 
     const realSensors = (camera.sensors || []).filter(
       (s) =>
@@ -85,7 +68,7 @@ export const CameraCard: React.FC<CameraCardProps> = ({
         s.type === "doorbell" ||
         s.name?.toLowerCase().includes("movimiento") ||
         s.name?.toLowerCase().includes("timbre") ||
-        s.name?.toLowerCase().includes("motion"),
+        s.name?.toLowerCase().includes("motion")
     );
 
     const entitiesCount = 1 + realSensors.length;
@@ -96,13 +79,8 @@ export const CameraCard: React.FC<CameraCardProps> = ({
         onClick={onConfigure}
       >
         <div className="card-top">
-          <span className="device-icon" style={{ fontSize: "1.2rem" }}>
-            📹
-          </span>
-          <div
-            className="card-pills-group"
-            style={{ display: "flex", gap: 5, flexWrap: "wrap" }}
-          >
+          <span className="device-icon" style={{ fontSize: "1.2rem" }}>📹</span>
+          <div className="card-pills-group" style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
             <span className="badge-scrypted-tag">SCRYPTED</span>
             {isHapPaired ? (
               <span
@@ -115,8 +93,7 @@ export const CameraCard: React.FC<CameraCardProps> = ({
                   fontWeight: 600,
                 }}
               >
-                🍏 Enlazada a Casa ·{" "}
-                {camera.firmwareRevision || "HAP-NodeJS 2.2.3"}
+                🍏 Enlazada a Casa · {camera.firmwareRevision || "HAP-NodeJS 2.2.3"}
               </span>
             ) : (
               <span
@@ -150,13 +127,9 @@ export const CameraCard: React.FC<CameraCardProps> = ({
               className="tag"
               style={{
                 fontSize: "0.68rem",
-                background: isOnline
-                  ? "rgba(16, 185, 129, 0.15)"
-                  : "rgba(239, 68, 68, 0.15)",
+                background: isOnline ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.15)",
                 color: isOnline ? "#6ee7b7" : "#fca5a5",
-                borderColor: isOnline
-                  ? "rgba(52, 211, 153, 0.4)"
-                  : "rgba(239, 68, 68, 0.4)",
+                borderColor: isOnline ? "rgba(52, 211, 153, 0.4)" : "rgba(239, 68, 68, 0.4)",
               }}
             >
               {isOnline ? "🟢 En línea" : "🔴 Desconectada"}
@@ -166,28 +139,17 @@ export const CameraCard: React.FC<CameraCardProps> = ({
         <h3 title={camera.name}>{camera.name}</h3>
         <p className="device-meta">
           {brand}
-          {modelDisplay && modelDisplay !== "Modelo no identificado"
-            ? ` (${modelDisplay})`
-            : ""}
+          {modelDisplay && modelDisplay !== "Modelo no identificado" ? ` (${modelDisplay})` : ""}
           {sn ? ` · SN: ${sn}` : ""}
         </p>
         <div className="tags">
           {realSensors.map((s, idx) => (
             <span className="tag" key={idx}>
-              {s.type === "doorbell" || s.name?.toLowerCase().includes("timbre")
-                ? "🔔 Timbre"
-                : "🏃 Movimiento"}
+              {s.type === "doorbell" || s.name?.toLowerCase().includes("timbre") ? "🔔 Timbre" : "🏃 Movimiento"}
             </span>
           ))}
         </div>
-        <div
-          className="card-footer"
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
+        <div className="card-footer" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span className="entity-summary">
             {entitiesCount} entidad{entitiesCount === 1 ? "" : "es"}
           </span>
@@ -222,35 +184,26 @@ export const CameraCard: React.FC<CameraCardProps> = ({
   }
 
   if (cameraUiCamera) {
-    const isOnline = cameraUiCamera.status === "online";
+    const isOnline = cameraUiCamera.status === "online" && cameraUiCamera.homeKitEnabled !== false;
     const isHapPaired = cameraUiCamera.isPaired === true;
     const brand = extractCameraBrand(cameraUiCamera);
-    const modelDisplay =
-      cameraUiCamera.model && cameraUiCamera.model !== "Cámara RTSP"
-        ? cameraUiCamera.model
-        : "";
-    const sn =
-      cameraUiCamera.serialNumber ||
-      (cameraUiCamera.id.startsWith("cameraui_") ? "" : cameraUiCamera.id);
+    const modelDisplay = cameraUiCamera.model && cameraUiCamera.model !== "Cámara RTSP" ? cameraUiCamera.model : "";
+    const sn = cameraUiCamera.serialNumber || (cameraUiCamera.id.startsWith("cameraui_") ? "" : cameraUiCamera.id);
 
     // Only real sensors and entities verified from hardware or Home Assistant
     const realSensors: string[] = [];
     if (cameraUiCamera.realEntities && cameraUiCamera.realEntities.length > 0) {
       for (const ent of cameraUiCamera.realEntities) {
-        if (ent.type === "motion" && !realSensors.includes("🏃 Movimiento"))
-          realSensors.push("🏃 Movimiento");
-        if (ent.type === "light" && !realSensors.includes("💡 Luz"))
-          realSensors.push("💡 Luz");
-        if (ent.type === "siren" && !realSensors.includes("🚨 Sirena"))
-          realSensors.push("🚨 Sirena");
-        if (ent.type === "doorbell" && !realSensors.includes("🔔 Timbre"))
-          realSensors.push("🔔 Timbre");
+        if (ent.type === "motion" && !realSensors.includes("🏃 Movimiento")) realSensors.push("🏃 Movimiento");
+        if (ent.type === "light" && !realSensors.includes("💡 Luz")) realSensors.push("💡 Luz");
+        if (ent.type === "siren" && !realSensors.includes("🚨 Sirena")) realSensors.push("🚨 Sirena");
+        if (ent.type === "doorbell" && !realSensors.includes("🔔 Timbre")) realSensors.push("🔔 Timbre");
       }
     } else {
-      if (cameraUiCamera.motionTopic || cameraUiCamera.motionActive)
-        realSensors.push("🏃 Movimiento");
-      if (cameraUiCamera.doorbellTopic || cameraUiCamera.doorbellActive)
-        realSensors.push("🔔 Timbre");
+      if (cameraUiCamera.motionTopic || cameraUiCamera.motionActive) realSensors.push("🏃 Movimiento");
+      if (cameraUiCamera.hasLight) realSensors.push("💡 Luz");
+      if (cameraUiCamera.hasSiren) realSensors.push("🚨 Sirena");
+      if (cameraUiCamera.doorbellTopic || cameraUiCamera.doorbellActive) realSensors.push("🔔 Timbre");
     }
 
     const entitiesCount = 1 + realSensors.length;
@@ -262,17 +215,10 @@ export const CameraCard: React.FC<CameraCardProps> = ({
         style={{ borderLeft: "3px solid #a855f7" }}
       >
         <div className="card-top">
-          <span className="device-icon" style={{ fontSize: "1.2rem" }}>
-            🎥
-          </span>
-          <div
-            className="card-pills-group"
-            style={{ display: "flex", gap: 5, flexWrap: "wrap" }}
-          >
+          <span className="device-icon" style={{ fontSize: "1.2rem" }}>🎥</span>
+          <div className="card-pills-group" style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
             <span className="badge-cameraui-tag">
-              {cameraUiCamera.sourceProvider === "home_assistant"
-                ? "HOME ASSISTANT RTSP"
-                : "CAMERA.UI"}
+              {cameraUiCamera.sourceProvider === "home_assistant" ? "HOME ASSISTANT RTSP" : "CAMERA.UI"}
             </span>
             {isHapPaired ? (
               <span
@@ -285,8 +231,7 @@ export const CameraCard: React.FC<CameraCardProps> = ({
                   fontWeight: 600,
                 }}
               >
-                🍏 Enlazada a Casa ·{" "}
-                {cameraUiCamera.firmwareRevision || "HAP-NodeJS 2.2.3"}
+                🍏 Enlazada a Casa · {cameraUiCamera.firmwareRevision || "HAP-NodeJS 2.2.3"}
               </span>
             ) : (
               <span
@@ -299,8 +244,7 @@ export const CameraCard: React.FC<CameraCardProps> = ({
                   fontWeight: 600,
                 }}
               >
-                ⚠️ No enlazada ·{" "}
-                {cameraUiCamera.firmwareRevision || "HAP-NodeJS 2.2.3"}
+                ⚠️ No enlazada · {cameraUiCamera.firmwareRevision || "HAP-NodeJS 2.2.3"}
               </span>
             )}
             <span
@@ -341,24 +285,20 @@ export const CameraCard: React.FC<CameraCardProps> = ({
         </p>
 
         <div className="tags">
-          {cameraUiCamera.motionActive &&
-            cameraUiCamera.status === "online" && (
-              <span
-                className="tag"
-                style={{
-                  fontSize: "0.72rem",
-                  background: "rgba(239, 68, 68, 0.25)",
-                  color: "#ef4444",
-                  border: "1px solid #ef4444",
-                  fontWeight: 700,
-                }}
-              >
-                Movimiento informado por la fuente
-                {cameraUiCamera.motionSource
-                  ? ` (${cameraUiCamera.motionSource.split(" ")[0]})`
-                  : ""}
-              </span>
-            )}
+          {cameraUiCamera.motionActive && (
+            <span
+              className="tag"
+              style={{
+                fontSize: "0.72rem",
+                background: "rgba(239, 68, 68, 0.25)",
+                color: "#ef4444",
+                border: "1px solid #ef4444",
+                fontWeight: 700,
+              }}
+            >
+              🚨 ¡MOVIMIENTO DETECTADO!{cameraUiCamera.motionSource ? ` (${cameraUiCamera.motionSource.split(' ')[0]})` : ""}
+            </span>
+          )}
           {realSensors.map((s, idx) => (
             <span className="tag" key={idx}>
               {s}
@@ -366,14 +306,7 @@ export const CameraCard: React.FC<CameraCardProps> = ({
           ))}
         </div>
 
-        <div
-          className="card-footer"
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
+        <div className="card-footer" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span className="entity-summary">
             {entitiesCount} entidad{entitiesCount === 1 ? "" : "es"}
           </span>
@@ -416,19 +349,13 @@ export const CameraCard: React.FC<CameraCardProps> = ({
         (e.entityId.includes("motion") ||
           e.entityId.includes("doorbell") ||
           e.entityId.includes("movimiento") ||
-          e.entityId.includes("timbre")),
+          e.entityId.includes("timbre"))
     );
     const entitiesCount = camEntities.length + realSensors.length;
     const isExported = haDevice.entities.some((e) => e.exported);
-    const isCommissioned = haDevice.entities.some(
-      (e) => e.exported && e.commissioned,
-    );
-    const isHapPaired = haDevice.entities.some(
-      (e) => e.homekitCamera?.isPaired,
-    );
-    const isHapPublished = haDevice.entities.some(
-      (e) => e.homekitCamera?.published,
-    );
+    const isCommissioned = haDevice.entities.some((e) => e.exported && e.commissioned);
+    const isHapPaired = haDevice.entities.some((e) => e.homekitCamera?.isPaired);
+    const isHapPublished = haDevice.entities.some((e) => e.homekitCamera?.published);
     const isPaired = isCommissioned || isHapPaired;
 
     // Detect Google Nest cameras that need go2rtc configuration
@@ -436,24 +363,16 @@ export const CameraCard: React.FC<CameraCardProps> = ({
       brand === "GOOGLE" ||
       brand === "NEST" ||
       haDevice.entities.some(
-        (e) =>
-          e.domain === "camera" &&
-          (e.entityId.includes("nest") || e.entityId.includes("google")),
+        (e) => e.domain === "camera" && (e.entityId.includes("nest") || e.entityId.includes("google"))
       );
-    const streamStrategy = (haDevice as any).streamStrategy as
-      string | undefined;
+    const streamStrategy = (haDevice as any).streamStrategy as string | undefined;
     const needsGo2rtc = isNestCamera && streamStrategy === "unsupported";
 
     return (
       <article className="device-card ha-camera-card" onClick={onConfigure}>
         <div className="card-top">
-          <span className="device-icon" style={{ fontSize: "1.2rem" }}>
-            📹
-          </span>
-          <div
-            className="card-pills-group"
-            style={{ display: "flex", gap: 5, flexWrap: "wrap" }}
-          >
+          <span className="device-icon" style={{ fontSize: "1.2rem" }}>📹</span>
+          <div className="card-pills-group" style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
             <span className="badge-ha-tag">HOME ASSISTANT</span>
             {isCommissioned && (
               <span
@@ -483,14 +402,8 @@ export const CameraCard: React.FC<CameraCardProps> = ({
                 🍏 Enlazada a Casa · HAP-NodeJS 2.2.3
               </span>
             )}
-            {!isPaired && isExported && (
-              <span className="tag tag-mqtt">EN MATTER</span>
-            )}
-            {!isPaired && !isExported && isHapPublished && (
-              <span className="tag tag-mqtt">
-                EN HOMEKIT · HAP-NodeJS 2.2.3
-              </span>
-            )}
+            {!isPaired && isExported && <span className="tag tag-mqtt">EN MATTER</span>}
+            {!isPaired && !isExported && isHapPublished && <span className="tag tag-mqtt">EN HOMEKIT · HAP-NodeJS 2.2.3</span>}
             {needsGo2rtc && (
               <span
                 className="tag"
@@ -518,20 +431,11 @@ export const CameraCard: React.FC<CameraCardProps> = ({
         <div className="tags">
           {realSensors.map((s, idx) => (
             <span className="tag" key={idx}>
-              {s.entityId.includes("doorbell") || s.entityId.includes("timbre")
-                ? "🔔 Timbre"
-                : "🏃 Movimiento"}
+              {s.entityId.includes("doorbell") || s.entityId.includes("timbre") ? "🔔 Timbre" : "🏃 Movimiento"}
             </span>
           ))}
         </div>
-        <div
-          className="card-footer"
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
+        <div className="card-footer" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span className="entity-summary">
             {entitiesCount} entidad{entitiesCount === 1 ? "" : "es"}
           </span>

@@ -29,26 +29,6 @@ export function detectCameraCapabilities(
   const attrs = state.attributes || {};
   const isAvailable =
     state.state !== "unavailable" && state.state !== "unknown";
-  const sourceIdentity = [
-    state.entity_id,
-    attrs.friendly_name,
-    attrs.model,
-    attrs.manufacturer,
-    resolvedSource?.metadata?.model,
-  ]
-    .filter((value) => typeof value === "string")
-    .join(" ");
-  // The Frienhund ACF100W reports H.264 video with PCMU/8 kHz mono in the
-  // supplied WebRTC capture. Omni's short-lived RTSP URL can time out during
-  // HA startup, so retain that model-specific, observed microphone profile
-  // when a probe returns video but omits the audio SDP. FFmpeg still maps the
-  // audio stream as optional, so a genuinely video-only RTSP response remains
-  // playable without fabricating audio packets.
-  const hasObservedAcf100wAudio =
-    resolvedSource?.metadata?.isOmniTuyaDirect === true &&
-    /(?:acf[-_ ]?100w|frienhund|comedero\s+michi)/i.test(sourceIdentity) &&
-    attrs.has_audio !== false &&
-    (attrs.audio_codec || "").toLowerCase() !== "none";
 
   // Determine Source Protocol
   let streamSourceType: StreamSourceType = "unknown";
@@ -170,11 +150,6 @@ export function detectCameraCapabilities(
     }
   }
 
-  if (!hasAudio && hasObservedAcf100wAudio) {
-    hasAudio = true;
-    audioCodec = "pcm";
-  }
-
   // Determine Dimensions & FPS
   const width =
     probeResult?.width || Number(attrs.video_width || attrs.width || 1920);
@@ -236,23 +211,6 @@ export function detectCameraCapabilities(
     videoCodec,
     audioCodec,
     hasAudio,
-    audioProvenance: probeResult?.hasAudio
-      ? "PROBED"
-      : hasObservedAcf100wAudio
-        ? "OBSERVED"
-        : probeResult
-          ? "PROBED"
-          : "UNKNOWN",
-    audioSampleRate: probeResult?.hasAudio
-      ? probeResult.audioSampleRate
-      : hasObservedAcf100wAudio
-        ? 8000
-        : undefined,
-    audioChannels: probeResult?.hasAudio
-      ? probeResult.audioChannels
-      : hasObservedAcf100wAudio
-        ? 1
-        : undefined,
     resolution: { width, height },
     maxFps,
     strategy,

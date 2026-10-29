@@ -201,7 +201,7 @@ export interface CameraRecord {
   fps?: number;
   resolution?: { width: number; height: number };
   status?: {
-    connection?: "online" | "offline" | "unknown";
+    connection?: "online" | "offline";
     isOnline?: boolean;
     cache?: "fresh" | "stale" | "expired";
     lastError?: string;
@@ -266,13 +266,6 @@ export interface CameraRecord {
     matterCommissioned?: boolean;
     fabrics?: Array<{ label?: string; fabricIndex?: number }>;
   };
-  homekitStatus?: {
-    hksvEnabled?: boolean;
-    hksvVerified?: boolean;
-    hksvState?: string;
-    motionSensorSupported?: boolean;
-    motionSensorEntityId?: string;
-  };
   liveViewCapabilities?: LiveViewCapabilities;
   liveViewTelemetry?: LiveViewTelemetry;
   hksvConfiguration?: {
@@ -331,21 +324,10 @@ export interface CameraUiConfigResponse {
 
 export interface CameraRealEntity {
   id: string;
-  domain:
-    | "binary_sensor"
-    | "light"
-    | "siren"
-    | "switch"
-    | "event"
-    | "button"
-    | "sensor"
-    | "select"
-    | "number";
-  type: "motion" | "light" | "siren" | "doorbell" | "switch" | "other";
+  domain: "binary_sensor" | "light" | "siren" | "switch" | "event";
+  type: "motion" | "light" | "siren" | "doorbell" | "switch";
   name: string;
   state: boolean;
-  rawState?: string;
-  availability?: "available" | "unavailable" | "unknown" | "stale";
   matterExported?: boolean;
   matterPairingCode?: string;
   matterManualCode?: string;
@@ -402,13 +384,6 @@ export interface CameraUiCameraItem {
   lightEntityId?: string;
   sirenEntityId?: string;
   motionEntityId?: string;
-  homekitStatus?: {
-    hksvEnabled?: boolean;
-    hksvVerified?: boolean;
-    hksvState?: string;
-    motionSensorSupported?: boolean;
-    motionSensorEntityId?: string;
-  };
   liveViewCapabilities?: LiveViewCapabilities;
   liveViewTelemetry?: LiveViewTelemetry;
   hksvConfiguration?: {

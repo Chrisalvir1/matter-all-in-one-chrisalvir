@@ -7,11 +7,6 @@ vi.mock("../src/camera/homekit/ffmpeg-helper.js", () => ({
   getFfmpegVersion: () => "6.1.1",
 }));
 
-vi.mock("../src/camera/homekit/media-policy.js", async (original) => ({
-  ...(await original<typeof import("../src/camera/homekit/media-policy.js")>()),
-  verifiedH264Encoder: () => "libx264",
-}));
-
 import {
   HomeKitCameraRecordingDelegate,
   resolveCameraSourceFps,
@@ -100,51 +95,13 @@ function createMockConfiguration(): CameraRecordingConfiguration {
       type: AudioRecordingCodecType.AAC_LC,
       audioChannels: 1,
       bitrate: 32,
-      samplerate: AudioRecordingSamplerate.KHZ_48,
+      samplerate: AudioRecordingSamplerate.KHZ_32,
       bitrateMode: AudioBitrate.VARIABLE,
     },
   };
 }
 
 describe("HomeKitCameraRecordingDelegate", () => {
-  it("encodes an observed PCMU feeder microphone as AAC-LC/48 kHz for HKSV", () => {
-    const record = {
-      ...createMockRecord(),
-      entityId: "camera.comedero_michi",
-      name: "Comedero Michi",
-      model: "Frienhund ACF100W",
-    };
-    const capabilities = {
-      ...createMockCapabilities(),
-      audioCodec: "pcm" as const,
-      audioSampleRate: 8000,
-      audioChannels: 1,
-      audioProvenance: "OBSERVED" as const,
-    };
-    const delegate = new HomeKitCameraRecordingDelegate(
-      mockPlatform,
-      record.entityId,
-      record as any,
-      capabilities,
-      {
-        sourceType: "rtsp",
-        url: "rtsps://camera.local/stream",
-        supportsPassthrough: true,
-        requiresBridge: false,
-        metadata: { isOmniTuyaDirect: true },
-      },
-    );
-    delegate.updateRecordingConfiguration(createMockConfiguration());
-    const args = delegate.buildPrebufferArgs("rtsps://camera.local/stream");
-
-    expect(args).toContain("-c:a");
-    expect(args?.[args.indexOf("-c:a") + 1]).toBe("aac");
-    expect(args).toContain("aac_low");
-    expect(args?.[args.indexOf("-ar") + 1]).toBe("48k");
-    expect(args).not.toContain("-an");
-    delegate.destroy();
-  });
-
   it("uses bounded SPS/PPS probing and regular fragments for Omni feeder HKSV", () => {
     const record = {
       ...createMockRecord(),
@@ -342,8 +299,8 @@ describe("HomeKitCameraRecordingDelegate", () => {
   it("copies AAC only when its exact sample rate and channel layout match Home Hub", () => {
     const capabilities = {
       ...createMockCapabilities(),
-      audioCodec: "aac_lc",
-      audioSampleRate: 48000,
+      audioCodec: "aac",
+      audioSampleRate: 32000,
       audioChannels: 1,
     };
     const delegate = new HomeKitCameraRecordingDelegate(
@@ -463,8 +420,8 @@ describe("HomeKitCameraRecordingDelegate", () => {
     );
     (delegate as any).selectedConfiguration = createMockConfiguration();
     const args = delegate.buildPrebufferArgs("rtsp://camera.local/ezviz");
-    expect(args).toContain("2097152");
-    expect(args).toContain("3000000");
+    expect(args).toContain("524288");
+    expect(args).toContain("500000");
     expect(args).toContain("+genpts+discardcorrupt");
     expect(args).toContain("-copyts");
     expect(args).toContain("-start_at_zero");
@@ -498,9 +455,8 @@ describe("HomeKitCameraRecordingDelegate", () => {
     (delegate as any).selectedConfiguration = createMockConfiguration();
     const args = delegate.buildPrebufferArgs("rtsp://camera.local/c120");
     // C120 keeps -vcodec copy with zero CPU transcoding
-    expect(args?.[args.indexOf("-c:v") + 1]).toBe("libx264");
-    expect(args).toContain("scale=1920:1080");
-    expect(args).toContain("libx264");
+    expect(args?.[args.indexOf("-vcodec") + 1]).toBe("copy");
+    expect(args).not.toContain("libx264");
     expect(args).toContain("+genpts+discardcorrupt");
     expect(args).toContain("-copyts");
     expect(args).toContain("-start_at_zero");
@@ -599,11 +555,8 @@ describe("HomeKitCameraRecordingDelegate — pause/resume symmetric cycle", () =
 
   it("does not spawn a reader when Live View pauses during Omni allocation", async () => {
     let finishAllocation!: (source: any) => void;
-    const allocation = new Promise<any>((resolve) => {
-      finishAllocation = resolve;
-    });
-    const resolver = vi
-      .spyOn(CameraSourceResolver, "resolveOmniTuyaRecordingSource")
+    const allocation = new Promise<any>((resolve) => { finishAllocation = resolve; });
+    const resolver = vi.spyOn(CameraSourceResolver, "resolveOmniTuyaRecordingSource")
       .mockReturnValueOnce(allocation);
     const notice = vi.fn();
     const platform = {
@@ -612,32 +565,18 @@ describe("HomeKitCameraRecordingDelegate — pause/resume symmetric cycle", () =
       ha: { hassStates: new Map([["camera.driveway", { attributes: {} }]]) },
     };
     const delegate = new HomeKitCameraRecordingDelegate(
-      platform as any,
-      "camera.driveway",
-      createMockRecord() as any,
+      platform as any, "camera.driveway", createMockRecord() as any,
       { videoCodec: "h264", hasAudio: true } as any,
-      {
-        sourceType: "rtsp",
-        url: "rtsps://example.invalid/old",
-        metadata: {
-          isOmniTuyaDirect: true,
-          sourceCameraEntityId: "camera.driveway",
-        },
-      } as any,
+      { sourceType: "rtsp", url: "rtsps://example.invalid/old", metadata: {
+        isOmniTuyaDirect: true, sourceCameraEntityId: "camera.driveway",
+      } } as any,
     );
     (delegate as any).recordingActive = true;
     const starting = (delegate as any).startPrebufferPipeline();
     delegate.pausePrebuffer();
-    finishAllocation({
-      sourceType: "rtsp",
-      url: "rtsps://example.invalid/new",
-    });
+    finishAllocation({ sourceType: "rtsp", url: "rtsps://example.invalid/new" });
     await starting;
-    expect(
-      notice.mock.calls.some(([message]) =>
-        String(message).includes("Spawning HKSV"),
-      ),
-    ).toBe(false);
+    expect(notice.mock.calls.some(([message]) => String(message).includes("Spawning HKSV"))).toBe(false);
     expect((delegate as any).ffmpegProcess).toBeFalsy();
     resolver.mockRestore();
   });
@@ -775,10 +714,9 @@ describe("HomeKitCameraRecordingDelegate — structured C120 identification & fa
     );
     (delegate as any).selectedConfiguration = createMockConfiguration();
     const args = delegate.buildPrebufferArgs("rtsp://192.168.1.100/stream1");
-    expect(args?.[args.indexOf("-c:v") + 1]).toBe("libx264");
-    expect(args).toContain("scale=1920:1080");
-    expect(args).toContain("libx264");
-    expect(args).toContain("2097152");
+    expect(args?.[args.indexOf("-vcodec") + 1]).toBe("copy");
+    expect(args).not.toContain("libx264");
+    expect(args).toContain("524288");
     delegate.destroy();
   });
 
@@ -808,10 +746,9 @@ describe("HomeKitCameraRecordingDelegate — structured C120 identification & fa
     );
     (delegate as any).selectedConfiguration = createMockConfiguration();
     const args = delegate.buildPrebufferArgs("rtsp://192.168.1.100/stream1");
-    expect(args?.[args.indexOf("-c:v") + 1]).toBe("libx264");
-    expect(args).toContain("scale=1920:1080");
-    expect(args).toContain("libx264");
-    expect(args).toContain("2097152");
+    expect(args?.[args.indexOf("-vcodec") + 1]).toBe("copy");
+    expect(args).not.toContain("libx264");
+    expect(args).toContain("524288");
     delegate.destroy();
   });
 
@@ -1014,9 +951,8 @@ describe("HomeKitCameraRecordingDelegate — resolveCameraSourceFps & dynamic fr
     (delegate as any).selectedConfiguration = createMockConfiguration();
 
     const args = delegate.buildPrebufferArgs("rtsp://192.168.1.100/c120");
-    expect(args?.[args.indexOf("-c:v") + 1]).toBe("libx264");
-    expect(args).toContain("scale=1920:1080");
-    expect(args).toContain("libx264");
+    expect(args?.[args.indexOf("-vcodec") + 1]).toBe("copy");
+    expect(args).not.toContain("libx264");
     delegate.destroy();
   });
 
@@ -1049,9 +985,8 @@ describe("HomeKitCameraRecordingDelegate — resolveCameraSourceFps & dynamic fr
 
       const args = delegate.buildPrebufferArgs("rtsp://192.168.1.100/stream")!;
       expect(args).not.toBeNull();
-      expect(args?.[args.indexOf("-c:v") + 1]).toBe("libx264");
-      expect(args).toContain("scale=1920:1080");
-      expect(args).toContain("libx264");
+      expect(args?.[args.indexOf("-vcodec") + 1]).toBe("copy");
+      expect(args).not.toContain("libx264");
       delegate.destroy();
     }
   });
@@ -1086,9 +1021,8 @@ describe("HomeKitCameraRecordingDelegate — resolveCameraSourceFps & dynamic fr
     const args = delegate.buildPrebufferArgs("rtsp://192.168.1.120/main")!;
     expect(args).not.toBeNull();
     expect(args).not.toContain("-r");
-    expect(args).toContain("libx264");
-    expect(args[args.indexOf("-c:v") + 1]).toBe("libx264");
-    expect(args).toContain("scale=1920:1080");
+    expect(args).not.toContain("libx264");
+    expect(args[args.indexOf("-vcodec") + 1]).toBe("copy");
     delegate.destroy();
   });
 });

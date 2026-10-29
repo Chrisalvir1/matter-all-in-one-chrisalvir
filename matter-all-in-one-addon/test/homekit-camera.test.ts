@@ -1,24 +1,13 @@
-import { encodeH264SupportedVideo } from "../src/camera/homekit/media-policy.js";
-// Graph/unit fixture: encoder success is injected; actual encoding is exercised in ffmpeg-camera-runtime.test.ts.
-vi.mock("../src/camera/homekit/media-policy.js", async (original) => ({
-  ...(await original<typeof import("../src/camera/homekit/media-policy.js")>()),
-  verifiedH264Encoder: () => "libx264",
-}));
-import { routeAddress } from "../src/camera/homekit/route-address.js";
 import { describe, expect, it, vi } from "vitest";
 import {
   Characteristic,
   SRTPCryptoSuites,
   StreamRequestTypes,
   AudioStreamingCodecType,
-  AudioRecordingCodecType,
-  AudioRecordingSamplerate,
   H264Profile,
 } from "@homebridge/hap-nodejs";
 import { EventEmitter } from "node:events";
 import * as ffmpegHelper from "../src/camera/homekit/ffmpeg-helper.js";
-import { createSessionTelemetry } from "../src/camera/homekit/live-view-telemetry.js";
-import { CameraSourceAdapter } from "../src/camera/source-adapter.js";
 import { HomeKitCameraAccessory } from "../src/camera/homekit/homekit-camera.accessory.js";
 import {
   HomeKitCameraStreamingDelegate,
@@ -168,19 +157,12 @@ describe("HomeKitCameraAccessory production HAP graph", () => {
     );
 
     expect((accessory as any).buildDeclaredResolutions()[0]).toEqual([
-      1920, 1080, 20,
+      2560, 1440, 20,
     ]);
     const options = (accessory as any).buildControllerOptions();
     expect(options.streamingOptions.video.resolutions[0]).toEqual([
-      1920, 1080, 20,
+      2560, 1440, 20,
     ]);
-    expect(
-      accessory.controller?.streamManagements[0].service.getCharacteristic(
-        Characteristic.SupportedVideoStreamConfiguration,
-      ).value,
-    ).toEqual(
-      encodeH264SupportedVideo(options.streamingOptions.video.resolutions),
-    );
     expect(options.streamingOptions.audio.codecs[0].type).toEqual(
       AudioStreamingCodecType.AAC_ELD,
     );
@@ -210,9 +192,8 @@ describe("HomeKitCameraAccessory production HAP graph", () => {
     );
 
     const resolutions = (c402Accessory as any).buildDeclaredResolutions();
-    expect(resolutions).toContainEqual([640, 360, 15]);
-    expect(resolutions).toContainEqual([1920, 1080, 25]);
-    expect(resolutions[0]).toEqual([1920, 1080, 30]);
+    expect(resolutions.length).toBeGreaterThan(1);
+    expect(resolutions[0]).toEqual([2560, 1440, 30]);
 
     const options = (c402Accessory as any).buildControllerOptions();
     expect(options.streamingOptions.audio.codecs[0].type).toEqual(
@@ -223,72 +204,6 @@ describe("HomeKitCameraAccessory production HAP graph", () => {
       H264Profile.MAIN,
       H264Profile.HIGH,
     ]);
-  });
-
-  it("keeps the ACF100W microphone enabled for AAC-ELD Live View and AAC-LC HKSV", () => {
-    const cameraId = "camera.comedero_michi";
-    const accessory = new HomeKitCameraAccessory(
-      createPlatform(),
-      cameraId,
-      {
-        ...createRecord(cameraId),
-        name: "Comedero Michi",
-        model: "Frienhund ACF100W",
-      } as any,
-      {
-        ...capabilities,
-        hasAudio: true,
-        audioCodec: "pcm",
-        audioSampleRate: 8000,
-        audioChannels: 1,
-        audioProvenance: "OBSERVED",
-      } as any,
-      {
-        sourceType: "rtsp",
-        url: "rtsps://camera.local/live",
-        supportsPassthrough: true,
-        requiresBridge: false,
-        metadata: { isOmniTuyaDirect: true },
-      },
-    );
-
-    const options = (accessory as any).buildControllerOptions();
-    expect(options.streamingOptions.audio.codecs[0].type).toEqual(
-      AudioStreamingCodecType.AAC_ELD,
-    );
-    expect(options.recording.options.audio.codecs.type).toBe(
-      AudioRecordingCodecType.AAC_LC,
-    );
-    expect(options.recording.options.audio.codecs.samplerate).toEqual([
-      AudioRecordingSamplerate.KHZ_48,
-    ]);
-  });
-
-  it("refreshes supported formats on the existing HAP services without changing identity", () => {
-    const c = {
-      ...capabilities,
-      measuredVideo: { width: 1920, height: 1080, fps: 30 },
-    };
-    const a = new HomeKitCameraAccessory(
-      createPlatform(),
-      "camera.fixture",
-      createRecord(),
-      c,
-      rtspSource,
-    );
-    const identity = JSON.stringify(a.record);
-    const services = [...a.accessory.services];
-    c.measuredVideo = { width: 640, height: 360, fps: 15 };
-    a.delegate!.emit("source-capabilities");
-    expect(a.accessory.services).toEqual(services);
-    expect(JSON.stringify(a.record)).toBe(identity);
-    const value = a.controller!.streamManagements[0].service.getCharacteristic(
-      Characteristic.SupportedVideoStreamConfiguration,
-    ).value;
-    expect(value).toBe(
-      encodeH264SupportedVideo((a as any).buildDeclaredResolutions()),
-    );
-    expect((a as any).buildDeclaredResolutions()[0]).toEqual([640, 360, 15]);
   });
 
   it("creates an integrated motion service for a Scrypted camera", () => {
@@ -400,156 +315,11 @@ describe("HomeKitCameraStreamingDelegate", () => {
         (error, result) => (error ? reject(error) : resolve(result)),
       );
     });
-    expect(response.addressOverride).toBe(
-      await routeAddress("192.168.1.50", 5000),
-    );
+    expect(response.addressOverride).toBe("192.168.1.100");
     expect(response.video.port).not.toBe(5000);
     expect(response.video.port).toBeGreaterThan(0);
     expect(response.video.ssrc).toBeGreaterThan(0);
     expect(response.video.ssrc).not.toBe(1);
-  });
-
-  it("keeps Omni SRTP on the direct HomeKit RTP path without a local relay", async () => {
-    const delegate = new HomeKitCameraStreamingDelegate(
-      createPlatform(),
-      "camera.omni_feeder",
-      {
-        ...capabilities,
-        audioCodec: "pcm" as any,
-        audioSampleRate: 8000,
-        audioChannels: 1,
-        audioProvenance: "OBSERVED" as any,
-      },
-      {
-        ...rtspSource,
-        metadata: {
-          isOmniTuyaDirect: true,
-          sourceCameraEntityId: "camera.omni_feeder",
-        },
-      },
-    );
-    const response = await new Promise<any>((resolve, reject) => {
-      delegate.prepareStream(
-        {
-          sessionID: "omni-direct-session",
-          targetAddress: "192.168.1.50",
-          video: {
-            port: 5000,
-            srtpCryptoSuite: SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
-            srtp_key: Buffer.alloc(16, 1),
-            srtp_salt: Buffer.alloc(14, 2),
-          },
-          audio: {
-            port: 5002,
-            srtpCryptoSuite: SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
-            srtp_key: Buffer.alloc(16, 3),
-            srtp_salt: Buffer.alloc(14, 4),
-          },
-          addressVersion: "ipv4",
-        } as any,
-        (error, result) => (error ? reject(error) : resolve(result)),
-      );
-    });
-    const session = (delegate as any).activeSessions.get("omni-direct-session");
-    expect(session.videoRelay).toBeUndefined();
-    expect(session.audioRelay).toBeUndefined();
-    expect(response.video.port).toBe(session.localVideoPort);
-    expect(response.audio.port).toBe(session.localAudioPort);
-    delegate.cleanupAllSessions();
-  });
-
-  it("keeps motion-analysis output out of the negotiated Live View telemetry", () => {
-    const delegate = new HomeKitCameraStreamingDelegate(
-      createPlatform(),
-      "camera.omni_feeder",
-      capabilities,
-      rtspSource,
-    );
-    const session: any = {
-      sessionId: "telemetry-session",
-      telemetry: createSessionTelemetry({
-        cameraId: "camera.omni_feeder",
-        sessionId: "telemetry-session",
-        effectiveMode: "copy",
-        output: { codec: "h264", width: 640, height: 360 },
-      }),
-    };
-    const record = (line: string) =>
-      (delegate as any).recordFfmpegProgress(session, line);
-    record("Output #0, rtp, to srtp://[redacted]");
-    record("Stream #0:0: Video: h264 (High), yuv420p, 640x360, 15 fps");
-    record("Output #1, rtp, to srtp://[redacted]");
-    record("Output #2, null, to pipe:");
-    record("Stream #0:0: Video: wrapped_avframe, gray, 160x90, 200 fps");
-    record("fps=29.32");
-
-    expect(session.telemetry.output).toMatchObject({
-      codec: "h264",
-      width: 640,
-      height: 360,
-      metadataSource: "ffmpeg-header",
-    });
-    expect(session.telemetry.output.observedFps).toBeUndefined();
-  });
-
-  it("uses one fresh Omni allocation when the observed microphone format is already known", async () => {
-    const platform: any = createPlatform();
-    platform.ha.requestOmniTuyaCameraStream = vi
-      .fn()
-      .mockResolvedValue("rtsps://stream.invalid/fresh");
-    const omniCapabilities = {
-      ...capabilities,
-      maxFps: 15,
-      audioCodec: "pcm" as any,
-      audioSampleRate: 8000,
-      audioChannels: 1,
-      audioProvenance: "OBSERVED" as any,
-    };
-    const omniSource = {
-      ...rtspSource,
-      metadata: {
-        isOmniTuyaDirect: true,
-        sourceCameraEntityId: "camera.omni_feeder",
-      },
-    };
-    const delegate = new HomeKitCameraStreamingDelegate(
-      platform,
-      "camera.omni_feeder",
-      omniCapabilities,
-      omniSource,
-    );
-    const session: any = {
-      sessionId: "known-audio-session",
-      targetAddress: "192.168.1.50",
-      videoPort: 5000,
-      localVideoPort: 5001,
-      videoSsrc: 1234,
-      videoCryptoSuite: SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
-      videoKeySalt: Buffer.alloc(30, 1),
-    };
-    (delegate as any).activeSessions.set(session.sessionId, session);
-    const discover = vi
-      .spyOn(CameraSourceAdapter.prototype, "discover")
-      .mockRejectedValue(new Error("unexpected probe"));
-    const spawn = vi
-      .spyOn(delegate as any, "spawnFfmpegProcess")
-      .mockImplementation((_session, _request, settle) => settle());
-    vi.spyOn(ffmpegHelper, "resolveFfmpegPath").mockReturnValue("/fake/ffmpeg");
-    const request: any = {
-      sessionID: session.sessionId,
-      video: { width: 640, height: 360, fps: 15, max_bit_rate: 132 },
-    };
-    await new Promise<void>((resolve, reject) => {
-      (delegate as any).startStream(session, request, (error?: Error) =>
-        error ? reject(error) : resolve(),
-      );
-    });
-
-    expect(platform.ha.requestOmniTuyaCameraStream).toHaveBeenCalledTimes(1);
-    expect(discover).not.toHaveBeenCalled();
-    expect(spawn).toHaveBeenCalledOnce();
-    vi.restoreAllMocks();
-    delegate.cleanupAllSessions();
   });
 
   it("allocates unique local ports and SSRCs for concurrent sessions", async () => {
@@ -690,24 +460,26 @@ describe("HomeKitCameraStreamingDelegate", () => {
       } as any,
       { ...rtspSource, supportsPassthrough: true },
     );
-    expect(() =>
-      delegate.buildStreamArgs(
-        {
-          sessionId: "hevc-session",
-          targetAddress: "192.168.1.50",
-          videoPort: 5000,
-          localVideoPort: 5001,
-          videoCryptoSuite: SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
-          videoKeySalt: Buffer.alloc(30, 1),
-          videoSsrc: 1111,
-        },
-        {
-          sessionID: "hevc-session",
-          type: StreamRequestTypes.START,
-          video: { fps: 30, width: 1920, height: 1080, pt: 99 } as any,
-        } as any,
-      ),
-    ).toThrow("HEVC requires SecureVideoController");
+    const args = delegate.buildStreamArgs(
+      {
+        sessionId: "hevc-session",
+        targetAddress: "192.168.1.50",
+        videoPort: 5000,
+        localVideoPort: 5001,
+        videoCryptoSuite: SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
+        videoKeySalt: Buffer.alloc(30, 1),
+        videoSsrc: 1111,
+      },
+      {
+        sessionID: "hevc-session",
+        type: StreamRequestTypes.START,
+        video: { fps: 30, width: 1920, height: 1080, pt: 99 } as any,
+      } as any,
+    );
+    // HEVC is passed directly without transcoding
+    expect(args).toContain("-c:v");
+    expect(args).toContain("copy");
+    expect(args).not.toContain("libx264");
   });
 
   it("builds low-latency RTSP passthrough args for Tapo C402 Live View", () => {
@@ -753,11 +525,7 @@ describe("HomeKitCameraStreamingDelegate", () => {
     const delegate = new HomeKitCameraStreamingDelegate(
       createPlatform(),
       "camera.omni_feeder",
-      {
-        ...capabilities,
-        strategy: "passthrough_h264",
-        requiresTranscoding: false,
-      },
+      { ...capabilities, strategy: "passthrough_h264", requiresTranscoding: false },
       {
         ...rtspSource,
         url: "rtsps://tuya.example/signed",
