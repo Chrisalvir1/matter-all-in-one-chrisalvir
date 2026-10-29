@@ -100,7 +100,7 @@ export class TuyaWebRtcSession extends EventEmitter {
       else this.remoteCandidates.push(candidate);
     } else if (type === "disconnect") await this.close();
   }
-  sendAudioRtp(packet: Buffer): void { if (!this.stopped && this.pc?.connectionState === "connected") this.track?.writeRtp(packet); }
+  sendAudioRtp(packet: Buffer): boolean { if (!this.stopped && this.pc?.connectionState === "connected" && this.track) { this.track.writeRtp(packet); return true; } return false; }
   async close(): Promise<void> {
     if (this.stopped || this.closing) return;
     this.closing = true;
