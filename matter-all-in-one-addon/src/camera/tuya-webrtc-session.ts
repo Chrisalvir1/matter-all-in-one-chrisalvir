@@ -27,7 +27,7 @@ export class TuyaWebRtcSession extends EventEmitter {
   constructor(private readonly bundle: TuyaWebRtcBundle) { super(); }
 
   private topic(): string {
-    return this.bundle.mqtt.sink_topic.ipc.replaceAll("{device_id}", this.bundle.deviceId).replaceAll("{moto_id}", this.bundle.motoId);
+    return this.bundle.mqtt.sink_topic.ipc.replaceAll("{device_id}", this.bundle.deviceId).replaceAll("{moto_id}", this.bundle.motoId).replace("/moto/moto_id/", `/moto/${this.bundle.motoId}/`);
   }
   private async signal(type: string, msg: Record<string, unknown>): Promise<void> {
     if (!this.client || this.stopped) return;

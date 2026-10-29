@@ -18,7 +18,7 @@ vi.mock("werift", () => {
   };
 });
 import { TuyaWebRtcSession, type TuyaWebRtcBundle } from "../src/camera/tuya-webrtc-session.js";
-const bundle: TuyaWebRtcBundle = { deviceId: "device", auth: "secret", motoId: "moto", audioAttributes: { call_mode: [1,2], hardware_capability: [1,2] }, iceServers: [], mqtt: { url: "ssl://broker.invalid:8883", username: "user", password: "secret", client_id: "id", source_topic: { ipc: "/av/u/controller" }, sink_topic: { ipc: "/av/moto/{moto_id}/u/{device_id}" }, expire_time: 120 } };
+const bundle: TuyaWebRtcBundle = { deviceId: "device", auth: "secret", motoId: "moto", audioAttributes: { call_mode: [1,2], hardware_capability: [1,2] }, iceServers: [], mqtt: { url: "ssl://broker.invalid:8883", username: "user", password: "secret", client_id: "id", source_topic: { ipc: "/av/u/controller" }, sink_topic: { ipc: "/av/moto/moto_id/u/{device_id}" }, expire_time: 120 } };
 function broker() {
   const client = new EventEmitter() as any;
   client.publishAsync = vi.fn(async () => {}); client.subscribeAsync = vi.fn(async () => [{ qos: 1 }]); client.end = vi.fn();
