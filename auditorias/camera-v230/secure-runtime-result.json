@@ -1,0 +1,1 @@
+{"scope":"reference fork only; NOT the MIAO production runtime","version":"2.2.3-homekit4k.2","services":[{"name":"CameraOperatingMode","present":true},{"name":"DataStreamTransportManagement","present":true},{"name":"CameraWebRTCStreamManagement","present":true},{"name":"CameraMultiTierRTPStreamManagement","present":true}],"speakerAdvertised":false,"published":false}

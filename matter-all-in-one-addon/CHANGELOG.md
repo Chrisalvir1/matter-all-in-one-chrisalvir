@@ -1,3 +1,12 @@
+## [2.3.1] - 2026-10-29
+
+- Integra un motor común de cámara HAP con adaptadores de fuente para Home Assistant, Camera.UI, Scrypted, Omni Tuya y RTSP, conservando la renovación de URLs Omni y la protección de secretos.
+- Mantiene H.264 en CameraController clásico, aplica política de vídeo/audio según capacidades medidas y enlaza el audio de Live View y la grabación HKSV con sus formatos negociados.
+- Añade la ruta Secure Video para HEVC con SecureVideoController, Multi-Tier RTP, WebRTC/SFrame y salida HDS/fMP4 para HKSV3.
+- Añade relés RTP/SRTP, movimiento sin clasificación obligatoria de objetos y telemetría de arranque T0–T7; el audio bidireccional permanece desactivado cuando la fuente no demuestra backchannel.
+- Conserva identidad y persistencia HAP/Matter mediante compatibilidad automatizada; no modifica UUID, PIN, fabrics ni datos de emparejamiento.
+- Validación local previa a publicación: 765 pruebas pasan en dos ejecuciones, con typechecks y builds backend/frontend aprobados. El build Docker y la validación física en Apple Casa, Live View, audio y clips HKSV/HKSV3 quedan pendientes de CI y hardware; no se declara verificación física.
+
 ## [2.3.0] - 2026-10-28
 
 - Compatible a nivel de código con los nombres contextuales de Home Assistant 2026.11 beta: los nombres del registro y del dispositivo se usan como respaldo sin sustituir `entity_id` ni `device_id` y sin romper la asociación existente de sensores de movimiento.

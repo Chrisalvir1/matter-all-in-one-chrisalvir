@@ -1,0 +1,68 @@
+{
+  "node": "v24.22.1",
+  "files": [
+    "src/camera/ai/camera-ai-detector.ts",
+    "src/frontend/src/api/client.ts",
+    "src/frontend/src/components/CameraCard.tsx",
+    "src/frontend/src/components/CameraConfigModal.tsx",
+    "src/frontend/src/components/CameraUiModal.tsx",
+    "src/frontend/src/components/CameraUiPairingModal.tsx",
+    "src/frontend/src/components/ScryptedModal.tsx",
+    "src/frontend/src/types.ts",
+    "src/frontend/src/utils/ha-camera-record.ts",
+    "src/frontend/style.css",
+    "src/platform.ts",
+    "test/frontend.test.ts",
+    "test/ha-camera-record.test.ts"
+  ],
+  "rows": [
+    {
+      "name": "typecheck backend",
+      "exit": 0,
+      "ms": 608,
+      "summary": []
+    },
+    {
+      "name": "typecheck frontend",
+      "exit": 0,
+      "ms": 188,
+      "summary": []
+    },
+    {
+      "name": "backend build",
+      "exit": 0,
+      "ms": 551,
+      "summary": []
+    },
+    {
+      "name": "frontend build",
+      "exit": 0,
+      "ms": 357,
+      "summary": [
+        "✓ built in 110ms"
+      ]
+    },
+    {
+      "name": "full tests",
+      "exit": 0,
+      "ms": 11006,
+      "summary": [
+        " Test Files  80 passed (80)",
+        "      Tests  708 passed (708)",
+        "   Duration  10.80s (import 81%, tests 15%, transform 2%, setup 1%, worker 1%)"
+      ]
+    },
+    {
+      "name": "modified lint",
+      "exit": 0,
+      "ms": 928,
+      "summary": [
+        "All matched files use Prettier code style!"
+      ]
+    },
+    {
+      "name": "git diff --check",
+      "exit": 0
+    }
+  ]
+}

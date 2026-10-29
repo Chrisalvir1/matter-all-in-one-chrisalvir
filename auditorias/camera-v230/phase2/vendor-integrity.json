@@ -1,0 +1,13 @@
+{
+  "referenceCommit": "3a8142296e3769ce775d9d6f059d3801efe56a3a",
+  "verifiedUnchangedFiles": 288,
+  "packagingDifferences": [
+    {
+      "file": "package.json",
+      "sourceSha256": "bc1d870fc43cb45c6e8418f67af1409b11b49d07990a761d05bcfa9aa8d60e61",
+      "packagedSha256": "bda382065cbe41779372338f8982da2e3634f96640b2da46465ef352735d09e9"
+    }
+  ],
+  "addedPackagingDocumentation": "MIAO.md",
+  "runtimeIntegrityPassed": true
+}

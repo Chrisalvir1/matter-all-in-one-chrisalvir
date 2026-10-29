@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import hap from "@homebridge/hap-nodejs";
+import { createRequire } from "node:module";
 
 import {
   C120_HARDWARE_LIMITS,
@@ -13,7 +13,11 @@ import {
   sanitizeUrl,
 } from "../scripts/poc-c120-2k-lab.mjs";
 
-const { H264Profile, RTPStreamManagement } = hap;
+// Exercise the production CommonJS export directly; Vite materializes a partial
+// namespace for this linked CJS fork during circular export-star evaluation.
+const { H264Profile, RTPStreamManagement } = createRequire(import.meta.url)(
+  "@homebridge/hap-nodejs",
+);
 
 describe("Tapo C120 2K Lab PoC: Variantes TLV y Fallo Cerrado Estricto", () => {
   it("enforces isolated configuration parameters and hardware limits", () => {

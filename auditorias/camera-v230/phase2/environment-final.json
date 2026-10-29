@@ -1,0 +1,20 @@
+{
+  "branch": "codex/v230-camera-phase1-phase2",
+  "head": "9741d81145d88f9dad6b101e294ec714e93ce354",
+  "rootVersion": "2.3.0",
+  "lockVersion": "2.3.0",
+  "lockPackageVersion": "2.3.0",
+  "configurationVersion": "\"2.3.0\"",
+  "node": "v24.22.1",
+  "nodeModulesIsSymlink": false,
+  "hapRuntime": "2.2.3-homekit4k.2",
+  "hapRuntimePath": "/Users/chrisalvir/Documents/ChatGPT/Matter all in one HA/miao-v230-camera/matter-all-in-one-addon/vendor/hap-nodejs",
+  "werift": "0.25.2",
+  "productionExports": {
+    "CameraController": true,
+    "SecureVideoController": true,
+    "MultiTierService": true,
+    "WebRtcService": true
+  },
+  "dockerAvailable": false
+}

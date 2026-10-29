@@ -1,3 +1,10 @@
+## [2.3.1] - 2026-10-29
+
+- Completa el motor común de cámaras HAP/HKSV: adaptadores de fuente, política H.264/audio basada en capacidades, Secure Video HEVC, Multi-Tier RTP, WebRTC/SFrame y HDS/fMP4.
+- Añade telemetría T0–T7, protección de secretos y detección de movimiento sin exigir clasificación local. No anuncia audio bidireccional sin backchannel probado.
+- Preserva identidades y persistencia existentes; no cambia UUID, PIN, fabrics ni datos de emparejamiento.
+- Las 765 pruebas locales pasan dos veces y los typechecks/builds están aprobados. El build de imagen queda a cargo del flujo de release; Live View, audio, HKSV/HKSV3 y emparejamiento físico en Apple Casa requieren validación en hardware.
+
 ## [2.3.0] - 2026-10-28
 
 - **Preparación para Home Assistant 2026.11 beta:** los nombres contextuales utilizan como respaldo los registros de entidad y dispositivo; el emparejamiento principal sigue basado en `entity_id` y `device_id` para proteger asociaciones de sensores de movimiento.

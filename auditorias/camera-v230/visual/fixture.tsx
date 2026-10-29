@@ -1,0 +1,11 @@
+import React from "react";
+import { createRoot } from "react-dom/client";
+import { CameraConfigModal } from "./src/components/CameraConfigModal";
+import { CameraUiModal } from "./src/components/CameraUiModal";
+import { ScryptedModal } from "./src/components/ScryptedModal";
+import "./style.css";
+const camera: any = { provider: "home_assistant", cameraId: "camera.michi", name: "COMEDERO MICHI", model: "Fuente de prueba local", status: { connection: "online", isOnline: true }, homekitStatus: { hksvEnabled: true, motionSensorSupported: true }, exportConfig: { homeKitEnabled: true }, identity: { homeKitPairingState: "paired" }, realEntities: [{ id: "switch.alimentador_michi_alimentar_ahora", name: "Alimentar ahora", domain: "switch", type: "switch", state: false, rawState: "off" }, { id: "button.michi_posicion", name: "Posición nativa del proveedor", domain: "button", type: "other", rawState: "idle", state: false }, { id: "binary_sensor.michi_motion", name: "Movimiento", domain: "binary_sensor", type: "motion", state: true, rawState: "unavailable" }, { id: "sensor.michi_battery", name: "Batería", domain: "sensor", type: "other", state: false, rawState: "100" }], liveViewTelemetry: { active: [], recent: [] }, source: { streamReference: { directUrl: "rtsp://example.invalid/" + "long-source-segment".repeat(40) } } };
+const mode = new URLSearchParams(location.search).get("mode");
+if (mode === "unpaired") camera.identity = { homeKitPairingState: "not_paired", homeKitSetupUri: "X-HM://TESTFIXTURE", homeKitPincode: "111-22-333" };
+const common = { onClose() {}, onRefresh() {}, showToast() {} };
+createRoot(document.getElementById("root")!).render((mode === "cameraui" || mode === "discovered") ? <CameraUiModal {...common} config={null} /> : mode === "scrypted" ? <ScryptedModal {...common} config={null} /> : <CameraConfigModal {...common} camera={camera} />);

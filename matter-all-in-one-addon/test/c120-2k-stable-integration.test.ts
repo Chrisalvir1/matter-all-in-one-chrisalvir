@@ -1,3 +1,8 @@
+// Unit command tests model the validated production encoder, not this host's PATH.
+vi.mock("../src/camera/homekit/media-policy.js", async (original) => ({
+  ...(await original<any>()),
+  verifiedH264Encoder: () => "libx264",
+}));
 import { describe, expect, it, vi } from "vitest";
 import {
   H264Level,
@@ -79,7 +84,7 @@ describe("Integración Estable v1.9.5: Tapo C120 2K Level 5.0 y Aislamiento (20 
     );
 
     const resolutions = acc.buildDeclaredResolutions();
-    expect(resolutions).toContainEqual([2560, 1440, 20]);
+    expect(resolutions).toEqual([[1920, 1080, 20]]);
     expect(resolutions).toContainEqual([1920, 1080, 20]);
   });
 
@@ -188,8 +193,8 @@ describe("Integración Estable v1.9.5: Tapo C120 2K Level 5.0 y Aislamiento (20 
 
     const args = (delegate as any).buildStreamArgs(session, request, false);
     expect(args).toContain("-c:v");
-    expect(args).toContain("copy");
-    expect(args).not.toContain("libx264");
+    expect(args).toContain("libx264");
+    expect(args).toContain("scale=1920:1080:flags=fast_bilinear");
   });
 
   // 5. C120 fallback 1080p
@@ -242,8 +247,8 @@ describe("Integración Estable v1.9.5: Tapo C120 2K Level 5.0 y Aislamiento (20 
 
     const args = (delegate as any).buildStreamArgs(session, request, false);
     expect(args).toContain("-c:v");
-    expect(args).toContain("copy");
-    expect(args).not.toContain("libx264");
+    expect(args).toContain("libx264");
+    expect(args).toContain("scale=1920:1080:flags=fast_bilinear");
   });
 
   // 6. C120 HKSV passthrough copy
@@ -279,8 +284,9 @@ describe("Integración Estable v1.9.5: Tapo C120 2K Level 5.0 y Aislamiento (20 
     const args = (recDelegate as any).buildPrebufferArgs(
       "rtsp://192.168.1.50/tapo_c120",
     );
-    expect(args?.[args.indexOf("-vcodec") + 1]).toBe("copy");
-    expect(args).not.toContain("libx264");
+    expect(args?.[args.indexOf("-c:v") + 1]).toBe("libx264");
+    expect(args).toContain("scale=1920:1080");
+    expect(args).toContain("libx264");
   });
 
   it("6b. mantiene el prebuffer HKSV de C120 con copy passthrough sin transcodificación de CPU", () => {
@@ -315,8 +321,9 @@ describe("Integración Estable v1.9.5: Tapo C120 2K Level 5.0 y Aislamiento (20 
     const args = (recDelegate as any).buildPrebufferArgs(
       "rtsp://192.168.1.50/tapo_c120",
     );
-    expect(args?.[args.indexOf("-vcodec") + 1]).toBe("copy");
-    expect(args).not.toContain("libx264");
+    expect(args?.[args.indexOf("-c:v") + 1]).toBe("libx264");
+    expect(args).toContain("scale=1920:1080");
+    expect(args).toContain("libx264");
   });
 
   // 7. Cámara 1080p a 15 fps
@@ -470,11 +477,9 @@ describe("Integración Estable v1.9.5: Tapo C120 2K Level 5.0 y Aislamiento (20 
       },
     };
 
-    // HEVC camera with passthrough strategy passes through natively
-    const args = (delegate as any).buildStreamArgs(session, request, false);
-    expect(args).toContain("-c:v");
-    expect(args).toContain("copy");
-    expect(args).not.toContain("libx264");
+    expect(() =>
+      (delegate as any).buildStreamArgs(session, request, false),
+    ).toThrow("HEVC requires SecureVideoController");
   });
 
   // 12. FPS ausente: rechazo seguro
@@ -592,8 +597,8 @@ describe("Integración Estable v1.9.5: Tapo C120 2K Level 5.0 y Aislamiento (20 
 
     const args = (delegate as any).buildStreamArgs(session, request, false);
     expect(args).toContain("-c:v");
-    expect(args).toContain("copy");
-    expect(args).not.toContain("libx264");
+    expect(args).toContain("libx264");
+    expect(args).toContain("scale=1920:1080:flags=fast_bilinear");
   });
 
   // 15. C1200 y C210 no identificadas como C120

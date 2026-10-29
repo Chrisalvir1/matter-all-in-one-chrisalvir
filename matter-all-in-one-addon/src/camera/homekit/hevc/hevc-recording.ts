@@ -1,3 +1,5 @@
+import { CameraSourceAdapter } from "../../source-adapter.js";
+import { sanitizeDiagnosticText } from "../live-view-telemetry.js";
 import { EventEmitter } from "node:events";
 import { spawn, type ChildProcess } from "node:child_process";
 import {
@@ -7,7 +9,11 @@ import {
   HDSProtocolSpecificErrorReason,
 } from "@homebridge/hap-nodejs";
 import { Fmp4Segmenter, type Fmp4MediaFragment } from "../fmp4-parser.js";
-import { prependProducerReferenceTime, normalizeFragmentTfdt, type TfdtOffsets } from "./fmp4-hevc.js";
+import {
+  prependProducerReferenceTime,
+  normalizeFragmentTfdt,
+  type TfdtOffsets,
+} from "./fmp4-hevc.js";
 import { resolveFfmpegPath, sanitizeUrlCredentials } from "../ffmpeg-helper.js";
 import type {
   CameraCapabilitiesInfo,
@@ -15,7 +21,10 @@ import type {
   HomeKitCameraStorageRecord,
 } from "../../camera-types.js";
 
-export class HevcRecordingDelegate extends EventEmitter implements CameraRecordingDelegate {
+export class HevcRecordingDelegate
+  extends EventEmitter
+  implements CameraRecordingDelegate
+{
   private recordingActive = false;
   public selectedConfiguration?: CameraRecordingConfiguration;
   private prebuffer: Fmp4MediaFragment[] = [];
@@ -31,6 +40,7 @@ export class HevcRecordingDelegate extends EventEmitter implements CameraRecordi
   private deliveredFragmentsInSession = 0;
   private deliveredInitInSession = false;
   private sessionHadProtocolError = false;
+  private sessionAcknowledged = false;
 
   constructor(
     private readonly platform: any,
@@ -85,12 +95,15 @@ export class HevcRecordingDelegate extends EventEmitter implements CameraRecordi
     this.emit("recording-active", active);
   }
 
-  public updateRecordingConfiguration(configuration: CameraRecordingConfiguration | undefined): void {
+  public updateRecordingConfiguration(
+    configuration: CameraRecordingConfiguration | undefined,
+  ): void {
     this.selectedConfiguration = configuration;
     if (configuration) {
       this.record.hksvState = this.recordingActive ? "ready" : "configurable";
       const res = configuration.videoCodec.resolution;
-      const fragLen = configuration.mediaContainerConfiguration.fragmentLength || 4000;
+      const fragLen =
+        configuration.mediaContainerConfiguration.fragmentLength || 4000;
       this.platform?.log?.notice?.(
         `[HKSV3][${this.entityId}] Negotiated HKSV3 Configuration: ${res[0]}x${res[1]}@${res[2]}fps, fragmentLength=${fragLen}ms`,
       );
@@ -113,6 +126,7 @@ export class HevcRecordingDelegate extends EventEmitter implements CameraRecordi
       `[HKSV3][${this.entityId}] Pausing HKSV3 prebuffer for Live View session`,
     );
     this.stopPrebufferPipeline();
+    this.segmenter.reset();
   }
 
   public resumePrebuffer(): void {
@@ -122,6 +136,11 @@ export class HevcRecordingDelegate extends EventEmitter implements CameraRecordi
       `[HKSV3][${this.entityId}] Live View ended; resuming HKSV3 prebuffer pipeline`,
     );
     this.startPrebufferPipeline();
+  }
+
+  public ingestLiveViewRecordingChunk(chunk: Buffer): void {
+    if (this.recordingActive && this.isPausedByLiveStream)
+      this.segmenter.push(chunk);
   }
 
   public handleMotionDetected(detected: boolean): void {
@@ -135,10 +154,12 @@ export class HevcRecordingDelegate extends EventEmitter implements CameraRecordi
     streamId: number,
     signal?: AbortSignal,
   ): AsyncGenerator<RecordingPacket> {
+    if (signal?.aborted) return;
     this.currentStreamId = streamId;
     this.deliveredFragmentsInSession = 0;
     this.deliveredInitInSession = false;
     this.sessionHadProtocolError = false;
+    this.sessionAcknowledged = false;
     this.recordingActive = true;
     this.tfdtOffsets.clear();
 
@@ -152,7 +173,7 @@ export class HevcRecordingDelegate extends EventEmitter implements CameraRecordi
 
     // 1. Deliver initialization segment
     if (!this.initializationSegment) {
-      await this.waitForInitialization(5000);
+      await this.waitForInitialization(10000, signal);
     }
 
     if (this.initializationSegment) {
@@ -202,8 +223,10 @@ export class HevcRecordingDelegate extends EventEmitter implements CameraRecordi
   }
 
   public acknowledgeStream(streamId: number): void {
+    if (this.currentStreamId !== streamId) return;
+    this.sessionAcknowledged = true;
     this.platform?.log?.notice?.(
-      `[HKSV3][${this.record.name || this.entityId}] ✅ GRABACIÓN CONFIRMADA: Apple Home Hub guardó clip HEVC en iCloud (streamId ${streamId})`,
+      `[HKSV3][${this.record.name || this.entityId}] Apple Home Hub confirmó recepción del stream HEVC; clip en Casa pendiente de comprobación (streamId ${streamId})`,
     );
     this.checkVerificationSuccess();
   }
@@ -233,6 +256,7 @@ export class HevcRecordingDelegate extends EventEmitter implements CameraRecordi
 
   private checkVerificationSuccess(): void {
     if (
+      this.sessionAcknowledged &&
       this.selectedConfiguration &&
       this.recordingActive &&
       this.deliveredInitInSession &&
@@ -243,7 +267,7 @@ export class HevcRecordingDelegate extends EventEmitter implements CameraRecordi
         this.record.hksvVerified = true;
         this.record.hksvState = "verified";
         this.platform?.log?.notice?.(
-          `[HKSV3][${this.entityId}] ✅ HKSV3 REAL VERIFIED: Multi-fragment HEVC iCloud recording confirmed!`,
+          `[HKSV3][${this.entityId}] HKSV3 HDS acknowledged with multiple fragments; saved clip requires Apple Home verification.`,
         );
         if (this.platform?.saveHomeKitCameraRecords) {
           this.platform.saveHomeKitCameraRecords();
@@ -256,7 +280,16 @@ export class HevcRecordingDelegate extends EventEmitter implements CameraRecordi
   private handleNewFragment(fragment: Fmp4MediaFragment): void {
     if (fragment.isKeyframe) {
       this.prebuffer.push(fragment);
-      while (this.prebuffer.length > 4) {
+      const length =
+        this.selectedConfiguration?.mediaContainerConfiguration
+          .fragmentLength || 4000;
+      const count = Math.max(
+        1,
+        Math.ceil(
+          (this.selectedConfiguration?.prebufferLength || 8000) / length,
+        ),
+      );
+      while (this.prebuffer.length > count) {
         this.prebuffer.shift();
       }
     }
@@ -264,12 +297,25 @@ export class HevcRecordingDelegate extends EventEmitter implements CameraRecordi
   }
 
   private async startPrebufferPipeline(): Promise<void> {
-    if (this.ffmpegProcess || this.isStartingPipeline || this.isPausedByLiveStream) return;
+    if (
+      this.ffmpegProcess ||
+      this.isStartingPipeline ||
+      this.isPausedByLiveStream
+    )
+      return;
     this.isStartingPipeline = true;
 
     try {
       const ffmpegPath = resolveFfmpegPath();
-      let sourceUrl = (this.streamSource.url || "")
+      const source = await new CameraSourceAdapter(
+        this.platform,
+        this.entityId,
+        this.streamSource,
+        this.capabilities,
+        this.record,
+      ).resolveSession();
+      if (this.isPausedByLiveStream || !this.recordingActive) return;
+      let sourceUrl = (source.url || "")
         .replace("://localhost:", "://127.0.0.1:")
         .replace("://localhost/", "://127.0.0.1/");
       if (!ffmpegPath || !sourceUrl) {
@@ -278,64 +324,86 @@ export class HevcRecordingDelegate extends EventEmitter implements CameraRecordi
       }
 
       // FFmpeg pipeline: STRICT HEVC Passthrough (-c:v copy) with -tag:v hvc1
-      const args: string[] = [
-        "-hide_banner",
-        "-loglevel", "warning",
-      ];
+      const args: string[] = ["-hide_banner", "-loglevel", "warning"];
 
       if (sourceUrl.startsWith("rtsp://") || sourceUrl.startsWith("rtsps://")) {
         args.push(
-          "-rtsp_transport", "tcp",
-          "-timeout", "5000000",
-          "-probesize", "65536",
-          "-analyzeduration", "100000",
-          "-fflags", "+nobuffer+flush_packets+genpts+igndts",
-          "-use_wallclock_as_timestamps", "1",
-          "-flags", "low_delay",
+          "-rtsp_transport",
+          "tcp",
+          "-timeout",
+          "5000000",
+          "-probesize",
+          "2097152",
+          "-analyzeduration",
+          "3000000",
+          "-fflags",
+          "+nobuffer+flush_packets+genpts+igndts",
+          "-use_wallclock_as_timestamps",
+          "1",
+          "-flags",
+          "low_delay",
         );
       } else {
         args.push(
-          "-probesize", "65536",
-          "-analyzeduration", "100000",
-          "-fflags", "+nobuffer+flush_packets+genpts+igndts",
-          "-flags", "low_delay",
+          "-probesize",
+          "2097152",
+          "-analyzeduration",
+          "3000000",
+          "-fflags",
+          "+nobuffer+flush_packets+genpts+igndts",
+          "-flags",
+          "low_delay",
         );
       }
 
-      args.push("-i", sourceUrl);
-
-      // Video: STRICT COPY + Apple-required hvc1 tag
       args.push(
-        "-map", "0:v:0",
-        "-c:v", "copy",
-        "-tag:v", "hvc1",
+        ...new CameraSourceAdapter(
+          this.platform,
+          this.entityId,
+          source,
+          this.capabilities,
+          this.record,
+        ).inputArguments(source),
+        "-i",
+        sourceUrl,
       );
 
-      // Audio: AAC passthrough copy if already AAC, otherwise adapt to AAC-LC 16kHz mono for iCloud
+      // Video: STRICT COPY + Apple-required hvc1 tag
+      args.push("-map", "0:v:0", "-c:v", "copy", "-tag:v", "hvc1");
+
+      // Audio: AAC passthrough copy if already AAC, otherwise adapt to AAC-LC 48kHz mono for iCloud
       const hasAudioSource =
         this.capabilities.hasAudio !== false &&
         this.capabilities.audioCodec !== "none";
       const audioCodec = this.capabilities.audioCodec?.toLowerCase();
 
       if (hasAudioSource) {
-        if (audioCodec === "aac") {
+        if (
+          audioCodec === "aac_lc" &&
+          this.capabilities.audioSampleRate === 48000 &&
+          this.capabilities.audioChannels === 1
+        ) {
           this.platform?.log?.notice?.(
             `[HKSV3][${this.entityId}] Grabación HKSV3: preservando audio AAC de fuente con passthrough (-c:a copy)`,
           );
-          args.push(
-            "-map", "0:a:0?",
-            "-c:a", "copy",
-          );
+          args.push("-map", "0:a:0?", "-c:a", "copy");
         } else {
           this.platform?.log?.notice?.(
-            `[HKSV3][${this.entityId}] Grabación HKSV3: adaptando audio fuente (${audioCodec || "desconocido"}) a AAC-LC 16kHz mono para iCloud`,
+            `[HKSV3][${this.entityId}] Grabación HKSV3: adaptando audio fuente (${audioCodec || "desconocido"}) a AAC-LC 48kHz mono para iCloud`,
           );
           args.push(
-            "-map", "0:a:0?",
-            "-c:a", "aac",
-            "-b:a", "32k",
-            "-ar", "16000",
-            "-ac", "1",
+            "-map",
+            "0:a:0?",
+            "-c:a",
+            "aac",
+            "-profile:a",
+            "aac_low",
+            "-b:a",
+            "32k",
+            "-ar",
+            "48000",
+            "-ac",
+            "1",
           );
         }
       } else {
@@ -344,43 +412,70 @@ export class HevcRecordingDelegate extends EventEmitter implements CameraRecordi
 
       // fMP4 output container
       args.push(
-        "-avoid_negative_ts", "make_zero",
-        "-max_interleave_delta", "0",
-        "-muxdelay", "0",
-        "-muxpreload", "0",
-        "-f", "mp4",
-        "-movflags", "frag_keyframe+empty_moov+default_base_moof+skip_sidx+skip_trailer",
+        "-avoid_negative_ts",
+        "make_zero",
+        "-max_interleave_delta",
+        "0",
+        "-muxdelay",
+        "0",
+        "-muxpreload",
+        "0",
+        "-f",
+        "mp4",
+        "-movflags",
+        "frag_keyframe+empty_moov+default_base_moof+skip_sidx+skip_trailer",
+        "-frag_duration",
+        String(
+          (this.selectedConfiguration?.mediaContainerConfiguration
+            .fragmentLength || 4000) * 1000,
+        ),
         "pipe:1",
       );
 
       const sanitizedUrl = sanitizeUrlCredentials(sourceUrl);
       this.platform?.log?.notice?.(
-        `[HKSV3][${this.entityId}] Spawning HKSV3 HEVC prebuffer pipeline (-c:v copy, tag: hvc1): ${sanitizedUrl}`,
+        `[HKSV3][${this.entityId}] Spawning HKSV3 HEVC prebuffer pipeline (-c:v copy, tag: hvc1): [camera-source]`,
       );
 
       this.segmenter.reset();
-      this.ffmpegProcess = spawn(ffmpegPath, args, { stdio: ["ignore", "pipe", "pipe"] });
+      this.ffmpegProcess = spawn(ffmpegPath, args, {
+        stdio: ["ignore", "pipe", "pipe"],
+      });
 
+      const child = this.ffmpegProcess;
       this.ffmpegProcess.stdout?.on("data", (chunk: Buffer) => {
-        this.segmenter.push(chunk);
+        if (this.ffmpegProcess === child) this.segmenter.push(chunk);
       });
 
       this.ffmpegProcess.stderr?.on("data", (chunk: Buffer) => {
-        const msg = chunk.toString().trim();
+        const msg = sanitizeDiagnosticText(chunk.toString().trim());
         if (msg) {
-          this.platform?.log?.debug?.(`[HKSV3][${this.entityId}][stderr] ${msg}`);
+          this.platform?.log?.debug?.(
+            `[HKSV3][${this.entityId}][stderr] ${msg}`,
+          );
         }
       });
 
       this.ffmpegProcess.once("close", (code) => {
-        this.platform?.log?.notice?.(`[HKSV3][${this.entityId}] Prebuffer FFmpeg closed (code ${code})`);
+        if (this.ffmpegProcess !== child) return;
+        this.platform?.log?.notice?.(
+          `[HKSV3][${this.entityId}] Prebuffer FFmpeg closed (code ${code})`,
+        );
         this.ffmpegProcess = undefined;
       });
 
       this.ffmpegProcess.once("error", (err) => {
-        this.platform?.log?.error?.(`[HKSV3][${this.entityId}] Prebuffer FFmpeg error: ${err.message}`);
+        if (this.ffmpegProcess !== child) return;
+        this.platform?.log?.error?.(
+          `[HKSV3][${this.entityId}] Prebuffer FFmpeg error: ${sanitizeDiagnosticText(err.message)}`,
+        );
         this.ffmpegProcess = undefined;
       });
+    } catch {
+      this.record.hksvState = "error" as any;
+      this.platform?.log?.warn?.(
+        `[HKSV3][${this.entityId}] Prebuffer source unavailable`,
+      );
     } finally {
       this.isStartingPipeline = false;
     }
@@ -401,22 +496,29 @@ export class HevcRecordingDelegate extends EventEmitter implements CameraRecordi
     this.segmenter.reset();
   }
 
-  private waitForInitialization(timeoutMs: number): Promise<void> {
-    if (this.initializationSegment) return Promise.resolve();
+  private waitForInitialization(
+    timeoutMs: number,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    if (this.initializationSegment || signal?.aborted) return Promise.resolve();
     return new Promise((resolve) => {
-      const timer = setTimeout(() => {
-        this.removeListener("initialization", onInit);
-        resolve();
-      }, timeoutMs);
-      const onInit = () => {
+      const finish = () => {
         clearTimeout(timer);
+        this.removeListener("initialization", finish);
+        signal?.removeEventListener("abort", finish);
         resolve();
       };
-      this.once("initialization", onInit);
+      const timer = setTimeout(finish, timeoutMs);
+      this.once("initialization", finish);
+      signal?.addEventListener("abort", finish, { once: true });
     });
   }
 
-  private waitForNextFragment(signal?: AbortSignal, timeoutMs = 15000): Promise<Fmp4MediaFragment | null> {
+  private waitForNextFragment(
+    signal?: AbortSignal,
+    timeoutMs = 15000,
+  ): Promise<Fmp4MediaFragment | null> {
+    if (signal?.aborted) return Promise.resolve(null);
     return new Promise((resolve) => {
       const timer = setTimeout(() => {
         cleanup();

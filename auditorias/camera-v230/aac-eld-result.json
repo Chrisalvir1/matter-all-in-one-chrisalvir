@@ -1,0 +1,1 @@
+{"scope":"synthetic local Camera.UI FFmpeg encode/decode; NOT MIAO Docker/HA/Apple Home","encoder":"libfdk_aac","profile":"aac_eld","sampleRate":24000,"channels":1,"frameLengthRequested":480,"encodedBytes":13531,"decodedDurationSeconds":1.02,"measuredToneHz":447.05882352941177,"exit":0}
