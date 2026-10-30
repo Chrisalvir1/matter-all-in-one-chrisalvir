@@ -1,3 +1,10 @@
+## [2.3.9] - 2026-10-29
+
+- Evita perder los primeros paquetes de Talk cuando FFmpeg/WebRTC aún están iniciando: mantiene hasta 2 s de RTP cifrado entrante y audio PCMU decodificado hasta que Omni confirma conexión.
+- Añade resumen por sesión con paquetes recibidos, decodificados, enviados, descartados y resultado del decodificador; no registra audio, SDP, claves, tokens ni URLs firmadas.
+- Analiza movimiento del comedero a 2 FPS tanto en reposo como durante Live View, reutilizando la misma lectura RTSP para reducir la posibilidad de perder cruces breves sin abrir otra conexión.
+- No cambia la ruta de vídeo ni afirma que el clip HKSV se guardó o que el Talk se oye físicamente; ambos resultados requieren comprobación en Apple Casa/comedero.
+
 ## [2.3.8] - 2026-10-29
 
 - Añade audio bidireccional real para cámaras Omni Tuya compatibles: HomeKit anuncia el servicio de altavoz y el audio del micrófono AAC-ELD se cifra/descifra y se devuelve al dispositivo mediante WebRTC.

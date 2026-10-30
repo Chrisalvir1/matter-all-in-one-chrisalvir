@@ -13,13 +13,23 @@ import {
 
 /** SRTP from Casa -> in-memory SDP/FFmpeg -> PCMU RTP -> Tuya WebRTC. */
 export class TuyaHapTalkback {
+  private static readonly MAX_QUEUED_RTP_PACKETS = 100;
+  private static readonly MAX_QUEUED_RTP_AGE_MS = 2000;
   private input?: Socket;
   private output?: Socket;
   private decoder?: ChildProcess;
   private peer?: TuyaWebRtcSession;
   private stopped = false;
   private starting = false;
+  private outboundFlushTimer?: NodeJS.Timeout;
+  private lastOutboundTimestamp?: number;
   private audio?: StartStreamRequest["audio"];
+  private inboundQueue: Array<{ packet: Buffer; receivedAt: number }> = [];
+  private outboundQueue: Array<{ packet: Buffer; receivedAt: number }> = [];
+  private inboundDropped = 0;
+  private outboundDropped = 0;
+  private decoderOutputPackets = 0;
+  private decoderExitCode?: number | null;
   receivedPackets = 0;
   forwardedPackets = 0;
   constructor(
@@ -83,8 +93,15 @@ export class TuyaHapTalkback {
         this.close();
       });
     }
-    if (this.decoderPort)
-      this.input?.send(bytes, this.decoderPort, "127.0.0.1");
+    if (this.decoderPort) {
+      this.sendToDecoder(bytes);
+    } else {
+      this.inboundQueue.push({
+        packet: Buffer.from(bytes),
+        receivedAt: Date.now(),
+      });
+      this.trimQueue(this.inboundQueue, "inbound");
+    }
   }
   configure(audio: StartStreamRequest["audio"]): void {
     this.audio = audio;
@@ -101,7 +118,10 @@ export class TuyaHapTalkback {
       this.close();
     });
     peer.on("state", (state) => {
-      if (state === "connected") this.notice("Tuya return audio connected");
+      if (state === "connected") {
+        this.notice("Tuya return audio connected");
+        this.flushOutboundQueue();
+      }
     });
     const output = createSocket("udp4");
     this.output = output;
@@ -112,9 +132,21 @@ export class TuyaHapTalkback {
       return;
     }
     output.on("message", (bytes) => {
-      if (!this.stopped) {
-        if (peer.sendAudioRtp(bytes)) this.forwardedPackets++;
+      if (this.stopped) return;
+      this.decoderOutputPackets++;
+      if (
+        !this.outboundQueue.length &&
+        !this.outboundFlushTimer &&
+        peer.sendAudioRtp(bytes)
+      ) {
+        this.forwardedPackets++;
+        return;
       }
+      this.outboundQueue.push({
+        packet: Buffer.from(bytes),
+        receivedAt: Date.now(),
+      });
+      this.trimQueue(this.outboundQueue, "outbound");
     });
     const outAddress = output.address();
     if (typeof outAddress === "string")
@@ -184,21 +216,102 @@ export class TuyaHapTalkback {
         "rtp",
         `rtp://127.0.0.1:${outAddress.port}?pkt_size=200`,
       ],
-      { stdio: ["pipe", "ignore", "ignore"] },
+      { stdio: ["pipe", "ignore", "pipe"] },
     );
-    this.decoder.on("error", () => {
-      this.notice("Return audio decoder failed");
+    let decoderError = "";
+    this.decoder.stderr?.on("data", (chunk: Buffer) => {
+      // Keep diagnostics useful without ever exposing an SDP key or a source URL.
+      decoderError = `${decoderError}${chunk.toString()}`.slice(-512);
+    });
+    this.decoder.on("error", (error) => {
+      this.notice(`Return audio decoder failed (${error.name})`);
       this.close();
     });
-    this.decoder.on("close", () => this.close());
+    this.decoder.on("close", (code) => {
+      this.decoderExitCode = code;
+      if (!this.stopped && code !== 0) {
+        const reason = /decoder|codec|invalid|error/i.test(decoderError)
+          ? "decode-error"
+          : "process-exit";
+        this.notice(`Return audio decoder stopped (${reason}, exit=${code})`);
+      }
+      this.close();
+    });
     this.decoder.stdin?.on("error", () => this.close());
     this.decoder.stdin?.end(lines.join("\r\n") + "\r\n");
     this.decoderPort = local.port;
+    this.flushInboundQueue();
     await peer.start();
   }
+
+  private sendToDecoder(packet: Buffer): void {
+    if (!this.decoderPort || this.stopped) return;
+    this.input?.send(packet, this.decoderPort, "127.0.0.1");
+  }
+
+  private trimQueue(
+    queue: Array<{ packet: Buffer; receivedAt: number }>,
+    direction: "inbound" | "outbound",
+  ): void {
+    const cutoff = Date.now() - TuyaHapTalkback.MAX_QUEUED_RTP_AGE_MS;
+    while (
+      queue.length &&
+      (queue[0].receivedAt < cutoff ||
+        queue.length > TuyaHapTalkback.MAX_QUEUED_RTP_PACKETS)
+    ) {
+      queue.shift();
+      if (direction === "inbound") this.inboundDropped++;
+      else this.outboundDropped++;
+    }
+  }
+
+  private flushInboundQueue(): void {
+    this.trimQueue(this.inboundQueue, "inbound");
+    for (const entry of this.inboundQueue) this.sendToDecoder(entry.packet);
+    this.inboundQueue = [];
+  }
+
+  private flushOutboundQueue(): void {
+    const peer = this.peer;
+    if (!peer || this.stopped || this.outboundFlushTimer) return;
+    this.trimQueue(this.outboundQueue, "outbound");
+    const entry = this.outboundQueue.shift();
+    if (!entry) return;
+    const timestamp = entry.packet.length >= 8
+      ? entry.packet.readUInt32BE(4)
+      : undefined;
+    const timestampDelta =
+      timestamp === undefined || this.lastOutboundTimestamp === undefined
+        ? 0
+        : (timestamp - this.lastOutboundTimestamp) >>> 0;
+    const delayMs = timestampDelta
+      ? Math.max(10, Math.min(60, Math.round((timestampDelta / 8000) * 1000)))
+      : 0;
+    const send = () => {
+      this.outboundFlushTimer = undefined;
+      if (this.stopped) return;
+      if (peer.sendAudioRtp(entry.packet)) this.forwardedPackets++;
+      else this.outboundDropped++;
+      if (timestamp !== undefined) this.lastOutboundTimestamp = timestamp;
+      this.flushOutboundQueue();
+    };
+    if (delayMs === 0) send();
+    else {
+      this.outboundFlushTimer = setTimeout(send, delayMs);
+      this.outboundFlushTimer.unref?.();
+    }
+  }
+
   close(): void {
     if (this.stopped) return;
     this.stopped = true;
+    this.notice(
+      `Tuya return audio summary received=${this.receivedPackets} decoded=${this.decoderOutputPackets} forwarded=${this.forwardedPackets} dropped=${this.inboundDropped + this.outboundDropped}${this.decoderExitCode === undefined ? "" : ` decoderExit=${this.decoderExitCode}`}`,
+    );
+    this.inboundQueue = [];
+    this.outboundQueue = [];
+    if (this.outboundFlushTimer) clearTimeout(this.outboundFlushTimer);
+    this.outboundFlushTimer = undefined;
     this.decoderPort = undefined;
     this.decoder?.kill("SIGKILL");
     try {

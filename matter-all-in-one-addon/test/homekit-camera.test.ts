@@ -553,7 +553,7 @@ describe("HomeKitCameraStreamingDelegate", () => {
     expect(args.filter((arg) => arg === "-i")).toHaveLength(1);
     expect(args).toContain("-map");
     expect(args).toContain(
-      "fps=1,scale=160:90,format=gray,tblend=all_mode=difference,blackframe=amount=0:thresh=12",
+      "fps=2,scale=160:90,format=gray,tblend=all_mode=difference,blackframe=amount=0:thresh=12",
     );
     expect(args).toContain("pipe:3");
     expect(args).toContain("0:a:0?");

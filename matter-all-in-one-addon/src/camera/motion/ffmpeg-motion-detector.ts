@@ -281,7 +281,7 @@ export class FfmpegMotionDetector extends EventEmitter {
     if (now - this.lastHeartbeatAt > 30000) {
       this.lastHeartbeatAt = now;
       log?.notice?.(
-        `[MotionDetector][${this.opts.cameraName}] 👁️ Analizando flujo activo a 1 FPS (cambio=${changedPct}%, pblack=${pblack}%, reposo)`,
+        `[MotionDetector][${this.opts.cameraName}] 👁️ Analizando flujo activo a ${Math.max(1, Math.min(this.opts.fps ?? 1, 5))} FPS (cambio=${changedPct}%, pblack=${pblack}%, reposo)`,
       );
     }
 

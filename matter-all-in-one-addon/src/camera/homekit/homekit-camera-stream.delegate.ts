@@ -2152,7 +2152,7 @@ export class HomeKitCameraStreamingDelegate
         "-map",
         "0:v:0",
         "-vf",
-        "fps=1,scale=160:90,format=gray,tblend=all_mode=difference,blackframe=amount=0:thresh=12",
+        "fps=2,scale=160:90,format=gray,tblend=all_mode=difference,blackframe=amount=0:thresh=12",
         "-an",
         "-f",
         "null",

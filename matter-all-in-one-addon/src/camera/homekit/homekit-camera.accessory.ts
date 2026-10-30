@@ -1285,7 +1285,10 @@ export class HomeKitCameraAccessory {
       cameraId: this.entityId,
       cameraName: this.record.name || this.entityId,
       rtspUrl: this.streamSource.url || "",
-      fps: 1,
+      // A feeder animal can cross this close, narrow frame between 1 FPS
+      // samples. Two frames per second improves trigger coverage at the same
+      // small 160x90 analysis size without opening another RTSP reader.
+      fps: 2,
       reportAllFrameChanges: true,
       resolveRtspUrl: async () =>
         await this.platform.ha.requestOmniTuyaCameraStream(
