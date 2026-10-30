@@ -6,6 +6,12 @@
 - Incluye una vista previa temporal de vídeo y audio con información medida de la fuente y de la salida, además de controles reales disponibles para cámaras/comederos Omni y exportación de botones Matter.
 - La recepción/retorno SRTP fue verificada con paquetes AAC-ELD sintéticos (564 recibidos, 466 enviados por WebRTC conectado); Chris no estaba junto al comedero para confirmar sonido físico. El botón debe verificarse en Casa después de actualizar Omni Tuya Local a 1.12.2 y el add-on a 2.3.8; no requiere restablecer el emparejamiento.
 
+## [2.3.7] - 2026-10-29
+
+- Corrige la selección de entidad principal en dispositivos de televisión compuestos: `DeviceModal` ahora prioriza `media_player` sobre interruptores auxiliares (`switch.*_mute`).
+- Resuelve automáticamente la entidad `media_player` correspondiente en `HapGenericAccessory` para televisores exportados vía HomeKit HAP, permitiendo encendido, apagado, selector de entradas HDMI y control de volumen real.
+- Agrega soporte para el mando a distancia de Apple TV/Centro de Control en iOS mediante `Characteristic.RemoteKey`.
+
 ## [2.3.6] - 2026-10-29
 
 - Restaura el código completo del add-on y las dependencias de 2.3.0, incluida HAP-NodeJS 2.2.3, para retirar los cambios posteriores de cámara, Live View, movimiento y HKSV.

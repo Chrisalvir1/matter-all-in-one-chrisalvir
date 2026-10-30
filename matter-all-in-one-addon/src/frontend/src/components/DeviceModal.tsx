@@ -503,6 +503,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
 
   const compositePrimary =
     device.entities.find((e) => e.entityId === e.compositePrimaryEntityId) ||
+    device.entities.find((e) => e.domain === "media_player") ||
     device.entities.find((e) => e.domain === "fan") ||
     device.entities.find((e) => e.domain === "humidifier") ||
     device.entities[0];
@@ -658,7 +659,10 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
 
   // Direct HAP publish handler with 0ms optimistic UI update
   const handlePublishHapDirect = async () => {
-    const targetId = compositePrimary?.entityId || activeEntity?.entityId || device.entities[0].entityId;
+    const mediaEntity = device.entities.find((e) => e.domain === "media_player");
+    const targetId = (selectedHapProfile === "television" && mediaEntity)
+      ? mediaEntity.entityId
+      : (compositePrimary?.entityId || activeEntity?.entityId || device.entities[0].entityId);
     setIsHapBusy(true);
     setIsBusy(true);
     try {
@@ -703,7 +707,10 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
 
   // Direct HAP unregister handler with 0ms optimistic UI update
   const handleUnregisterHapDirect = async () => {
-    const targetId = compositePrimary?.entityId || activeEntity?.entityId || device.entities[0].entityId;
+    const mediaEntity = device.entities.find((e) => e.domain === "media_player");
+    const targetId = (selectedHapProfile === "television" && mediaEntity)
+      ? mediaEntity.entityId
+      : (compositePrimary?.entityId || activeEntity?.entityId || device.entities[0].entityId);
     const previousAccessory = localHapAccessory;
     // Reflect the requested action immediately; restore the QR state if the
     // server cannot stop the accessory.
@@ -1750,7 +1757,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                 <dl className="selection-meta" id="selection-meta">
                   <div>
                     <dt>Entidad Principal</dt>
-                    <dd>{compositePrimary?.entityId || activeEntity?.entityId || device.entities[0]?.entityId}</dd>
+                    <dd>{(selectedHapProfile === "television" ? device.entities.find((e) => e.domain === "media_player")?.entityId : undefined) || compositePrimary?.entityId || activeEntity?.entityId || device.entities[0]?.entityId}</dd>
                   </div>
                   <div>
                     <dt>Fabricante</dt>

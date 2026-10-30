@@ -378,19 +378,38 @@ export class HapGenericAccessory {
     return Number.isFinite(value) && value >= 0 && value <= 100 ? value : undefined;
   }
 
+  private getMediaEntityId(): string {
+    if (this.entityId.startsWith("media_player.")) return this.entityId;
+    const devId = (this.platform.entities.get(this.entityId) as any)?.haDeviceInfo?.id;
+    if (devId) {
+      for (const [id, ent] of this.platform.entities.entries()) {
+        if (id.startsWith("media_player.") && (ent as any)?.haDeviceInfo?.id === devId) {
+          return id;
+        }
+      }
+    }
+    const base = this.entityId.replace(/^[^.]+\./, "").split("_")[0];
+    for (const id of this.platform.entities.keys()) {
+      if (id.startsWith("media_player.") && id.includes(base)) return id;
+    }
+    return this.entityId;
+  }
+
   private async callHaWithResponseBudget(
     domain: string,
     service: string,
     data?: Record<string, unknown>,
+    targetEntityId?: string,
   ): Promise<void> {
+    const target = targetEntityId || this.entityId;
     const startedAt = Date.now();
     const command = `${domain}.${service}`;
-    this.platform.log?.info?.(`[HAPCommandTrace][${this.entityId}] start service=${command}`);
+    this.platform.log?.info?.(`[HAPCommandTrace][${target}] start service=${command}`);
     if (!this.platform.ha?.callService || this.platform.ha.connected === false) {
       throw -70402; // HAP SERVICE_COMMUNICATION_FAILURE
     }
     const operation = Promise.resolve()
-      .then(() => this.platform.ha.callService(domain, service, this.entityId, data))
+      .then(() => this.platform.ha.callService(domain, service, target, data))
       .then(
         () => ({ failed: false as const }),
         (error: unknown) => ({ failed: true as const, error }),
@@ -404,14 +423,14 @@ export class HapGenericAccessory {
     ]);
     if (timer) clearTimeout(timer);
     const report = (failed: boolean, late: boolean) => {
-      this.platform.log?.info?.(`[HAPCommandTrace][${this.entityId}] ${late ? "ha_finished_after_handler" : "handler_returned"} service=${command} elapsed_ms=${Date.now() - startedAt} outcome=${failed ? "failed" : "completed"}`);
+      this.platform.log?.info?.(`[HAPCommandTrace][${target}] ${late ? "ha_finished_after_handler" : "handler_returned"} service=${command} elapsed_ms=${Date.now() - startedAt} outcome=${failed ? "failed" : "completed"}`);
       if (failed) {
         this.setReachability(false);
-        this.platform.recordEntityCommandFailure?.(this.entityId, `HAP: Home Assistant failed to execute ${command}.`);
+        this.platform.recordEntityCommandFailure?.(target, `HAP: Home Assistant failed to execute ${command}.`);
       }
     };
     if (outcome === undefined) {
-      this.platform.log?.info?.(`[HAPCommandTrace][${this.entityId}] handler_returned_pending service=${command} elapsed_ms=${Date.now() - startedAt}`);
+      this.platform.log?.info?.(`[HAPCommandTrace][${target}] handler_returned_pending service=${command} elapsed_ms=${Date.now() - startedAt}`);
       void operation.then((result) => report(result.failed, true)).catch(() => undefined);
       return;
     }
@@ -609,12 +628,16 @@ export class HapGenericAccessory {
       // ── Televisor ─────────────────────────────────────────────────────────
       case "television": {
         const tv = this.accessory.addService(Service.Television, this.record.name);
-        const mediaState = () => this.platform.entities.get(this.entityId)?.state;
+        const targetMediaId = this.getMediaEntityId();
+        const mediaState = () => this.platform.entities.get(targetMediaId)?.state ?? this.platform.entities.get(this.entityId)?.state;
         tv.setCharacteristic(Characteristic.ConfiguredName, this.record.name);
         tv.setCharacteristic(Characteristic.SleepDiscoveryMode, Characteristic.SleepDiscoveryMode.ALWAYS_DISCOVERABLE);
         tv.getCharacteristic(Characteristic.Active)
-          .onGet(() => mediaState()?.state === "off" ? 0 : 1)
-          .onSet(async (value: any) => this.callHaWithResponseBudget("media_player", value ? "turn_on" : "turn_off"));
+          .onGet(() => {
+            const st = String(mediaState()?.state ?? "off");
+            return ["off", "standby", "unavailable", "unknown"].includes(st) ? 0 : 1;
+          })
+          .onSet(async (value: any) => this.callHaWithResponseBudget("media_player", value ? "turn_on" : "turn_off", undefined, targetMediaId));
 
         const sources = Array.isArray(mediaState()?.attributes?.source_list)
           ? mediaState().attributes.source_list as string[]
@@ -624,17 +647,42 @@ export class HapGenericAccessory {
           .onGet(() => Math.max(1, sources.indexOf(activeSource()) + 1))
           .onSet(async (value: any) => {
             const source = sources[Number(value) - 1];
-            if (source) await this.callHaWithResponseBudget("media_player", "select_source", { source });
+            if (source) await this.callHaWithResponseBudget("media_player", "select_source", { source }, targetMediaId);
           });
+
+        // RemoteKey characteristic for Control Center TV Remote
+        tv.getCharacteristic(Characteristic.RemoteKey).onSet(async (value: any) => {
+          const RemoteKey = Characteristic.RemoteKey;
+          switch (value) {
+            case RemoteKey.PLAY_PAUSE:
+              await this.callHaWithResponseBudget("media_player", "media_play_pause", undefined, targetMediaId);
+              break;
+            case RemoteKey.BACK:
+            case RemoteKey.EXIT:
+              await this.callHaWithResponseBudget("media_player", "media_stop", undefined, targetMediaId);
+              break;
+            case RemoteKey.NEXT_TRACK:
+              await this.callHaWithResponseBudget("media_player", "media_next_track", undefined, targetMediaId);
+              break;
+            case RemoteKey.PREVIOUS_TRACK:
+              await this.callHaWithResponseBudget("media_player", "media_previous_track", undefined, targetMediaId);
+              break;
+          }
+        });
 
         const speaker = this.accessory.addService(Service.TelevisionSpeaker, `${this.record.name} Audio`);
         speaker.setCharacteristic(Characteristic.VolumeControlType, Characteristic.VolumeControlType.ABSOLUTE);
         speaker.getCharacteristic(Characteristic.Mute)
           .onGet(() => Boolean(mediaState()?.attributes?.is_volume_muted))
-          .onSet(async (value: any) => this.callHaWithResponseBudget("media_player", "volume_mute", { is_volume_muted: Boolean(value) }));
+          .onSet(async (value: any) => this.callHaWithResponseBudget("media_player", "volume_mute", { is_volume_muted: Boolean(value) }, targetMediaId));
         speaker.getCharacteristic(Characteristic.Volume)
           .onGet(() => Math.round((Number(mediaState()?.attributes?.volume_level) || 0) * 100))
-          .onSet(async (value: any) => this.callHaWithResponseBudget("media_player", "volume_set", { volume_level: Number(value) / 100 }));
+          .onSet(async (value: any) => this.callHaWithResponseBudget("media_player", "volume_set", { volume_level: Number(value) / 100 }, targetMediaId));
+        speaker.getCharacteristic(Characteristic.VolumeSelector)
+          .onSet(async (value: any) => {
+            const inc = value === Characteristic.VolumeSelector.INCREMENT;
+            await this.callHaWithResponseBudget("media_player", inc ? "volume_up" : "volume_down", undefined, targetMediaId);
+          });
         tv.addLinkedService(speaker);
 
         sources.forEach((source, index) => {
@@ -1207,9 +1255,14 @@ export class HapGenericAccessory {
           break;
         }
         case "television": {
-          this.accessory.getService(Service.Television)?.updateCharacteristic(Characteristic.Active, state?.state === "off" ? 0 : 1);
-          this.accessory.getService(Service.TelevisionSpeaker)?.updateCharacteristic(Characteristic.Mute, Boolean(state?.attributes?.is_volume_muted));
-          if (state?.attributes?.volume_level !== undefined) this.accessory.getService(Service.TelevisionSpeaker)?.updateCharacteristic(Characteristic.Volume, Math.round(Number(state.attributes.volume_level) * 100));
+          const targetMediaId = this.getMediaEntityId();
+          const targetState = targetMediaId === this.entityId ? state : this.platform.entities.get(targetMediaId)?.state;
+          const isOn = targetState?.state && !["off", "standby", "unavailable", "unknown"].includes(targetState.state);
+          this.accessory.getService(Service.Television)?.updateCharacteristic(Characteristic.Active, isOn ? 1 : 0);
+          this.accessory.getService(Service.TelevisionSpeaker)?.updateCharacteristic(Characteristic.Mute, Boolean(targetState?.attributes?.is_volume_muted));
+          if (targetState?.attributes?.volume_level !== undefined) {
+            this.accessory.getService(Service.TelevisionSpeaker)?.updateCharacteristic(Characteristic.Volume, Math.round(Number(targetState.attributes.volume_level) * 100));
+          }
           break;
         }
       }
