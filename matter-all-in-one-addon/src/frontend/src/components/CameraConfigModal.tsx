@@ -39,11 +39,7 @@ export function normalizeRtspUrlInput(url: string): string {
   const slashIdx = rest.indexOf("/");
   const questionIdx = rest.indexOf("?");
   const pathStart =
-    slashIdx !== -1
-      ? slashIdx
-      : questionIdx !== -1
-        ? questionIdx
-        : rest.length;
+    slashIdx !== -1 ? slashIdx : questionIdx !== -1 ? questionIdx : rest.length;
   const authority = rest.substring(0, pathStart);
   const pathAndQuery = rest.substring(pathStart);
 
@@ -66,7 +62,6 @@ export function normalizeRtspUrlInput(url: string): string {
 
   return `${proto}${safeUser}:${safePass}@${hostPort}${pathAndQuery}`;
 }
-
 
 export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
   camera,
@@ -125,9 +120,34 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
   });
   const [activeAiDetection, setActiveAiDetection] = useState<any>(null);
   const [isSavingAi, setIsSavingAi] = useState(false);
-  const [snapshotUrl, setSnapshotUrl] = useState<string | null>(null);
-  const [isLoadingSnapshot, setIsLoadingSnapshot] = useState(false);
-  const [snapshotLoaded, setSnapshotLoaded] = useState(false);
+  const [previewPlaying, setPreviewPlaying] = useState(false);
+  const [previewSession, setPreviewSession] = useState<string | null>(null);
+  const [previewStats, setPreviewStats] = useState<any>(null);
+  useEffect(() => {
+    setPreviewSession(null);
+    setPreviewStats(null);
+  }, [camera?.name]);
+  useEffect(() => {
+    if (!previewSession || !camera) return;
+    const id = "cameraId" in camera ? camera.cameraId : camera.id;
+    const controller = new AbortController();
+    const timer = setTimeout(() => setPreviewSession(null), 90000);
+    const poll = setInterval(() => {
+      fetch(
+        `./api/custom/cameras/${encodeURIComponent(id)}/preview/status?session=${previewSession}`,
+        { signal: controller.signal },
+      )
+        .then((r) => r.json())
+        .then(setPreviewStats)
+        .catch(() => {});
+    }, 1000);
+    return () => {
+      clearTimeout(timer);
+      clearInterval(poll);
+      controller.abort();
+      setPreviewStats(null);
+    };
+  }, [previewSession, camera]);
   const [selectedLightId, setSelectedLightId] = useState<string>("auto");
   const [selectedSirenId, setSelectedSirenId] = useState<string>("auto");
   const [selectedMotionId, setSelectedMotionId] = useState<string>("auto");
@@ -225,14 +245,14 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
         (sc.source?.streamReference as any)?.validationStatus === "verified";
       if (isVerified && observed) {
         setStreamVerified(true);
-        const w = observed.resolution?.width || 1920;
-        const h = observed.resolution?.height || 1080;
-        const codec = (observed.videoCodec || "H.264").toUpperCase();
-        const fpsVal = observed.fps || 30;
+        const w = observed.resolution?.width || "No medido";
+        const h = observed.resolution?.height || "No medido";
+        const codec = (observed.videoCodec || "No medido").toUpperCase();
+        const fpsVal = observed.fps || "No medido";
         const audioStr =
           observed.hasAudio !== false ? "Con Audio" : "Sin Audio";
         setStreamResult({
-          text: `✓ Stream verificado y activo (${codec} ${w}x${h} @ ${fpsVal}fps, ${audioStr}). Live View listo para Apple Home.`,
+          text: `✓ Medición anterior de la fuente (${codec} ${w}x${h} @ ${fpsVal}fps, ${audioStr}). Esta medición no confirma reproducción actual en Casa.`,
         });
       } else if (initialUrl) {
         setStreamVerified(false);
@@ -242,17 +262,16 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
       } else {
         setStreamVerified(false);
         setStreamResult({
-          text: sc.provider === "home_assistant"
-            ? "Pulsa Verificar Stream para obtener y probar automáticamente la fuente de Home Assistant / Omni."
-            : "ℹ️ Sin URL de stream configurada. Ingresa una URL RTSP directa para activar Live View.",
+          text:
+            sc.provider === "home_assistant"
+              ? "Pulsa Verificar Stream para obtener y probar automáticamente la fuente de Home Assistant / Omni."
+              : "ℹ️ Sin URL de stream configurada. Ingresa una URL RTSP directa para activar Live View.",
           isError: sc.provider !== "home_assistant",
         });
       }
     }
 
     if (cameraId) {
-      setSnapshotUrl(api.getCameraSnapshotUrl(cameraId));
-      setSnapshotLoaded(false);
       api
         .getCameraAiConfig(cameraId)
         .then((res) => {
@@ -262,13 +281,6 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
         .catch(() => {});
     }
   }, [cameraId, isCameraUi]);
-
-  const handleRefreshSnapshot = () => {
-    if (!cameraId) return;
-    setIsLoadingSnapshot(true);
-    setSnapshotUrl(api.getCameraSnapshotUrl(cameraId));
-    setTimeout(() => setIsLoadingSnapshot(false), 800);
-  };
 
   const handleSaveAiConfig = async () => {
     if (!cameraId) return;
@@ -366,7 +378,9 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
     }
     const sc = camera as CameraRecord;
     if (sc.provider === "home_assistant") {
-      return sc.exportConfig?.homeKitEnabled === true ? sc.identity?.homeKitSetupUri || "" : "";
+      return sc.exportConfig?.homeKitEnabled === true
+        ? sc.identity?.homeKitSetupUri || ""
+        : "";
     }
     if (sc.identity?.homeKitSetupUri) return sc.identity.homeKitSetupUri;
     return computeHapSetupUri(pinCode, setupId);
@@ -689,11 +703,7 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
       text: "Verificando stream RTSP/HTTP (ffprobe en vivo)...",
     });
     try {
-      const res = await api.verifyCameraStream(
-        cameraId,
-        target,
-        transport,
-      );
+      const res = await api.verifyCameraStream(cameraId, target, transport);
       if (res.ok && res.status === "verified") {
         setStreamVerified(true);
         setLatestProbe({ ...res.validation, sourceUrl: target });
@@ -721,9 +731,8 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
         ).toUpperCase();
         const fpsVal = res.validation?.fps || "—";
         setStreamResult({
-          text: `✓ Stream verificado con éxito (${codec} ${w}x${h} @ ${fpsVal}fps). Live View listo para Apple Home.`,
+          text: `✓ Stream verificado con éxito (${codec} ${w}x${h} @ ${fpsVal}fps). Esta medición no confirma reproducción actual en Casa.`,
         });
-        handleRefreshSnapshot();
       } else {
         setStreamVerified(false);
         setStreamResult({
@@ -751,11 +760,7 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
       text: "Midiendo conexión RTSP y analizando codec, FPS y GOP...",
     });
     try {
-      const res = await api.diagnoseCameraStream(
-        cameraId,
-        target,
-        transport,
-      );
+      const res = await api.diagnoseCameraStream(cameraId, target, transport);
       if (res.success && res.metrics) {
         const probeMs = res.metrics.timeToDescribeMs?.value ?? "—";
         const fpsVal = res.metrics.observedFps?.value ?? "—";
@@ -826,7 +831,8 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
   // Interactive toggle for real physical entity (light, siren)
   const handleToggleEntity = async (ent: CameraRealEntity) => {
     setControllingEntityId(ent.id);
-    const nextAction = ent.state ? "turn_off" : "turn_on";
+    const nextAction =
+      ent.domain === "button" ? "press" : ent.state ? "turn_off" : "turn_on";
     try {
       const res = await api.controlCameraEntity(ent.id, nextAction);
       if (res.success) {
@@ -974,8 +980,7 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                   · Puerto HAP:{" "}
                   <code>{(camera as CameraUiCameraItem).port}</code>
                 </>
-              )}
-              {" "}
+              )}{" "}
               · Firmware HAP: <code>HAP-NodeJS 2.2.3</code>
             </p>
           </div>
@@ -998,7 +1003,8 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                 type="button"
                 onClick={() => setActiveTab("homekit")}
               >
-                Apple Home (HAP) {isCameraHapActive ? (isPaired ? "✓" : "") : "⚪"}
+                Apple Home (HAP){" "}
+                {isCameraHapActive ? (isPaired ? "✓" : "") : "⚪"}
               </button>
               <button
                 className={`button button-sm ${activeTab === "matter" ? "button-primary" : "button-secondary"}`}
@@ -1635,124 +1641,133 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                         lineHeight: 1.4,
                       }}
                     >
-                      Esta cámara no está exportada a HomeKit HAP. Los procesos de
-                      streaming, prebuffer de grabación y puertos mDNS están
+                      Esta cámara no está exportada a HomeKit HAP. Los procesos
+                      de streaming, prebuffer de grabación y puertos mDNS están
                       apagados para ahorrar CPU. Activa el interruptor superior
                       cuando desees vincularla en Apple Home.
                     </p>
                   </div>
                 ) : isPaired ? (
-              <div
-                className="paired-success-glass-card"
-                id="paired-camera-card"
-              >
-                <div className="paired-apple-home-badge">
-                  <AppleHomeModernIcon variant="color" size={56} />
-                </div>
-                <h4 className="paired-card-title">
-                  ¡Cámara vinculada en Apple Home!
-                </h4>
-                <p className="paired-card-desc">
-                  Esta cámara ya está configurada en Apple Home para Live View
-                  HAP{isHevcCamera ? " (HEVC / HKSV3 Nativo)" : ""}. El código QR se oculta para proteger la sesión activa.
-                </p>
-                <div
-                  style={{
-                    marginTop: 12,
-                    padding: "10px 14px",
-                    background: "rgba(59, 130, 246, 0.12)",
-                    borderRadius: 8,
-                    border: "1px solid rgba(59, 130, 246, 0.3)",
-                    fontSize: "0.82rem",
-                    textAlign: "left",
-                  }}
-                >
-                  <strong style={{ color: "#93c5fd" }}>
-                    💡 IMPORTANTE PARA GRABAR EN ICLOUD (HKSV):
-                  </strong>
                   <div
-                    style={{ marginTop: 6, color: "#bfdbfe", lineHeight: 1.4 }}
+                    className="paired-success-glass-card"
+                    id="paired-camera-card"
                   >
-                    Apple Home desactiva la grabación por defecto. En tu
-                    iPhone/iPad:
-                    <ol style={{ margin: "4px 0 0 16px", padding: 0 }}>
-                      <li>
-                        Abre la app <strong>Casa</strong> y toca esta cámara.
-                      </li>
-                      <li>
-                        Toca ⚙️ <strong>Ajustes de la cámara</strong> →{" "}
-                        <strong>Opciones de grabación</strong>.
-                      </li>
-                      <li>
-                        Selecciona{" "}
-                        <strong>«Transmitir y permitir la grabación»</strong>{" "}
-                        (tanto En casa como Fuera de casa).
-                      </li>
-                    </ol>
+                    <div className="paired-apple-home-badge">
+                      <AppleHomeModernIcon variant="color" size={56} />
+                    </div>
+                    <h4 className="paired-card-title">
+                      ¡Cámara vinculada en Apple Home!
+                    </h4>
+                    <p className="paired-card-desc">
+                      Esta cámara ya está configurada en Apple Home para Live
+                      View HAP{isHevcCamera ? " (HEVC / HKSV3 Nativo)" : ""}. El
+                      código QR se oculta para proteger la sesión activa.
+                    </p>
+                    <div
+                      style={{
+                        marginTop: 12,
+                        padding: "10px 14px",
+                        background: "rgba(59, 130, 246, 0.12)",
+                        borderRadius: 8,
+                        border: "1px solid rgba(59, 130, 246, 0.3)",
+                        fontSize: "0.82rem",
+                        textAlign: "left",
+                      }}
+                    >
+                      <strong style={{ color: "#93c5fd" }}>
+                        💡 IMPORTANTE PARA GRABAR EN ICLOUD (HKSV):
+                      </strong>
+                      <div
+                        style={{
+                          marginTop: 6,
+                          color: "#bfdbfe",
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        Apple Home desactiva la grabación por defecto. En tu
+                        iPhone/iPad:
+                        <ol style={{ margin: "4px 0 0 16px", padding: 0 }}>
+                          <li>
+                            Abre la app <strong>Casa</strong> y toca esta
+                            cámara.
+                          </li>
+                          <li>
+                            Toca ⚙️ <strong>Ajustes de la cámara</strong> →{" "}
+                            <strong>Opciones de grabación</strong>.
+                          </li>
+                          <li>
+                            Selecciona{" "}
+                            <strong>
+                              «Transmitir y permitir la grabación»
+                            </strong>{" "}
+                            (tanto En casa como Fuera de casa).
+                          </li>
+                        </ol>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-            ) : (
-              <>
-                <QRCodeDisplay
-                  pairingCode={pairingPayload}
-                  manualCode={pinCode}
-                  pinCode={activeTab === "homekit" ? pinCode : undefined}
-                  variant={
-                    activeTab === "homekit" ? "hap-homekit" : "matter-badge"
-                  }
-                  entityName={cameraName}
-                  elementId="cam-modal-qr-code"
-                  noteText={
-                    isHevcCamera
-                      ? "Escanea con la app Casa de Apple para HAP HEVC / HKSV3"
-                      : "Escanea con la app Casa de Apple para Live View HAP"
-                  }
-                  videoCodec={
-                    (camera as any)?.videoCodec ||
-                    (camera as any)?.capabilities?.observed?.videoCodec
-                  }
-                  isHevc={isHevcCamera}
-                />
-                <div
-                  style={{
-                    marginTop: 10,
-                    padding: "10px 12px",
-                    background: "rgba(245, 158, 11, 0.1)",
-                    borderRadius: 8,
-                    border: "1px solid rgba(245, 158, 11, 0.3)",
-                    fontSize: "0.78rem",
-                    textAlign: "left",
-                  }}
-                >
-                  <strong style={{ color: "#fcd34d" }}>
-                    📲 Cómo vincular en Apple Casa:
-                  </strong>
-                  <ol
-                    style={{
-                      margin: "4px 0 0 16px",
-                      padding: 0,
-                      color: "#fef08a",
-                    }}
-                  >
-                    <li>
-                      Abre la app <strong>Casa</strong> en tu iPhone o iPad.
-                    </li>
-                    <li>
-                      Toca <strong>+</strong> →{" "}
-                      <strong>Agregar accesorio</strong> y escanea el código QR.
-                    </li>
-                    <li>
-                      O toca <em>«Más opciones...»</em>, elige{" "}
-                      <strong>{cameraName}</strong> e introduce el PIN:{" "}
-                      <strong>{pinCode}</strong>.
-                    </li>
-                  </ol>
-                </div>
+                ) : (
+                  <>
+                    <QRCodeDisplay
+                      pairingCode={pairingPayload}
+                      manualCode={pinCode}
+                      pinCode={activeTab === "homekit" ? pinCode : undefined}
+                      variant={
+                        activeTab === "homekit" ? "hap-homekit" : "matter-badge"
+                      }
+                      entityName={cameraName}
+                      elementId="cam-modal-qr-code"
+                      noteText={
+                        isHevcCamera
+                          ? "Escanea con la app Casa de Apple para HAP HEVC / HKSV3"
+                          : "Escanea con la app Casa de Apple para Live View HAP"
+                      }
+                      videoCodec={
+                        (camera as any)?.videoCodec ||
+                        (camera as any)?.capabilities?.observed?.videoCodec
+                      }
+                      isHevc={isHevcCamera}
+                    />
+                    <div
+                      style={{
+                        marginTop: 10,
+                        padding: "10px 12px",
+                        background: "rgba(245, 158, 11, 0.1)",
+                        borderRadius: 8,
+                        border: "1px solid rgba(245, 158, 11, 0.3)",
+                        fontSize: "0.78rem",
+                        textAlign: "left",
+                      }}
+                    >
+                      <strong style={{ color: "#fcd34d" }}>
+                        📲 Cómo vincular en Apple Casa:
+                      </strong>
+                      <ol
+                        style={{
+                          margin: "4px 0 0 16px",
+                          padding: 0,
+                          color: "#fef08a",
+                        }}
+                      >
+                        <li>
+                          Abre la app <strong>Casa</strong> en tu iPhone o iPad.
+                        </li>
+                        <li>
+                          Toca <strong>+</strong> →{" "}
+                          <strong>Agregar accesorio</strong> y escanea el código
+                          QR.
+                        </li>
+                        <li>
+                          O toca <em>«Más opciones...»</em>, elige{" "}
+                          <strong>{cameraName}</strong> e introduce el PIN:{" "}
+                          <strong>{pinCode}</strong>.
+                        </li>
+                      </ol>
+                    </div>
+                  </>
+                )}
               </>
-            )}
-            </>
-          ) : null}
+            ) : null}
 
             <div
               className="qr-actions"
@@ -1954,7 +1969,8 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                   marginBottom: 6,
                 }}
               >
-                URL DIRECTA DEL STREAM RTSP {isHevcCamera ? "(HEVC / H.265)" : "(H.264)"}
+                URL DIRECTA DEL STREAM RTSP{" "}
+                {isHevcCamera ? "(HEVC / H.265)" : "(H.264)"}
               </span>
               <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
                 <input
@@ -2103,16 +2119,21 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                       gap: 6,
                     }}
                   >
-                    📺 Vista Previa del Stream (Snapshot / Live)
+                    Vista previa temporal · hasta 90 segundos
                   </span>
                   <button
                     className="button button-sm button-secondary"
                     type="button"
-                    onClick={handleRefreshSnapshot}
-                    disabled={isLoadingSnapshot}
+                    onClick={() => {
+                      setPreviewStats(null);
+                      setPreviewPlaying(false);
+                      setPreviewSession(
+                        previewSession ? null : crypto.randomUUID(),
+                      );
+                    }}
                     style={{ fontSize: "0.72rem", padding: "2px 8px" }}
                   >
-                    {isLoadingSnapshot ? "Cargando..." : "🔄 Actualizar Frame"}
+                    {previewSession ? "Detener preview" : "Ver stream"}
                   </button>
                 </div>
 
@@ -2130,22 +2151,33 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                     border: "1px solid rgba(255, 255, 255, 0.05)",
                   }}
                 >
-                  {snapshotUrl ? (
-                    <img
-                      src={snapshotUrl}
-                      alt="Vista previa de la cámara"
+                  {previewSession ? (
+                    <video
+                      autoPlay
+                      controls
+                      playsInline
+                      onPlaying={() => setPreviewPlaying(true)}
+                      onWaiting={() => setPreviewPlaying(false)}
+                      key={previewSession}
+                      src={`./api/custom/cameras/${encodeURIComponent(cameraId)}/preview?session=${previewSession}`}
+                      aria-label="Vista previa con vídeo y sonido"
                       style={{
                         width: "100%",
                         height: "100%",
                         objectFit: "contain",
-                        display: snapshotLoaded ? "block" : "none",
+                        display: "block",
                       }}
-                      onLoad={() => setSnapshotLoaded(true)}
-                      onError={() => setSnapshotLoaded(false)}
+                      onError={() => {
+                        setPreviewSession(null);
+                        showToast(
+                          "No se pudo abrir la preview; cierra Live View en Casa e inténtalo de nuevo",
+                          true,
+                        );
+                      }}
                     />
                   ) : null}
 
-                  {!snapshotLoaded && (
+                  {!previewSession && (
                     <div
                       style={{
                         color: "var(--text-muted)",
@@ -2154,142 +2186,66 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                         padding: 16,
                       }}
                     >
-                      {isLoadingSnapshot
-                        ? "🔄 Capturando frame de la cámara en vivo..."
-                        : "ℹ️ Pulsa 'Verificar Stream' o 'Actualizar Frame' para cargar la vista previa."}
+                      Pulsa Ver stream para abrir una preview temporal. Se
+                      detiene al cerrar este modal.
                     </div>
                   )}
                 </div>
 
-                {/* Diagnóstico Apple Home / HAP en 4 secciones requeridas */}
-                <div
-                  style={{
-                    marginTop: 10,
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 8,
-                    fontSize: "0.75rem",
-                  }}
-                >
-                  {/* 1. Fuente detectada */}
-                  <div
-                    style={{
-                      padding: "10px 12px",
-                      background: "rgba(255, 255, 255, 0.03)",
-                      borderRadius: 6,
-                      border: "1px solid rgba(255, 255, 255, 0.08)",
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontWeight: 700,
-                        color: "#38bdf8",
-                        marginBottom: 4,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 6,
-                      }}
-                    >
-                      <span>🔍 1. Fuente detectada</span>
-                    </div>
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "1fr 1fr",
-                        gap: "4px 8px",
-                        color: "#cbd5e1",
-                      }}
-                    >
-                      <div>
-                        Vídeo:{" "}
-                        <strong style={{ color: "#f8fafc" }}>
-                          {videoCodec}
-                        </strong>{" "}
-                        ({resDisplay})
-                      </div>
-                      <div>
-                        FPS:{" "}
-                        <strong style={{ color: "#f8fafc" }}>
-                          {fpsDisplay}
-                        </strong>
-                      </div>
-                      <div>
-                        Perfil / Nivel:{" "}
-                        <strong style={{ color: "#f8fafc" }}>
-                          {sourceProfile || "No medido"} /{" "}
-                          {sourceLevel || "No medido"}
-                        </strong>
-                      </div>
-                      <div>
-                        Bitrate / Pix fmt:{" "}
-                        <strong style={{ color: "#f8fafc" }}>
-                          {sourceBitrate
-                            ? `${sourceBitrate} kb/s`
-                            : "No medido"}{" "}
-                          / {sourcePixFmt || "No medido"}
-                        </strong>
-                      </div>
-                      <div>
-                        r/avg frame rate:{" "}
-                        <strong style={{ color: "#f8fafc" }}>
-                          {sourceRates}
-                        </strong>
-                      </div>
-                      <div>
-                        Audio:{" "}
-                        <strong style={{ color: "#f8fafc" }}>
-                          {audioDisplay}
-                        </strong>
-                      </div>
-                      <div>
-                        Muestreo / Ch:{" "}
-                        <strong style={{ color: "#f8fafc" }}>
-                          {isCameraUi &&
-                          latestProbe?.sourceUrl === rtspUrl &&
-                          latestProbe?.audioSampleRate
-                            ? `${latestProbe.audioSampleRate} Hz / ${latestProbe.audioChannels || "—"} ch`
-                            : storedProbe?.audioSampleRate
-                              ? `${storedProbe.audioSampleRate} Hz / ${storedProbe.audioChannels || "—"} ch`
-                              : "No medido"}
-                        </strong>
-                      </div>
-                    </div>
-                    <div style={{ color: "#94a3b8", marginTop: 6 }}>
-                      Evidencia: {probeEvidence}
-                    </div>
-                    {configuredSource &&
-                      (configuredSource.resolution || configuredSource.fps) && (
-                        <div style={{ color: "#94a3b8", marginTop: 4 }}>
-                          Configuración declarada, no medida:{" "}
-                          {configuredSource.resolution
-                            ? `${configuredSource.resolution.width}×${configuredSource.resolution.height}`
-                            : "resolución no indicada"}
-                          {configuredSource.fps
-                            ? ` @ ${configuredSource.fps} fps`
-                            : ""}
-                        </div>
-                      )}
+                {previewSession && previewPlaying && (
+                  <div role="status" style={{ padding: 12 }}>
+                    Fuente: {previewStats.videoCodec || "No medido"} ·{" "}
+                    {previewStats.width || "?"}×{previewStats.height || "?"} ·{" "}
+                    {previewStats.sourceFps ?? "No medido"} fps
+                    <br />
+                    Audio fuente: {previewStats.audioCodec || "No medido"}{" "}
+                    {previewStats.sampleRate
+                      ? `${previewStats.sampleRate} Hz`
+                      : ""}
+                    <br />
+                    Preview: vídeo original sin recodificar · audio AAC-LC mono
+                    24 kHz si la fuente contiene audio. Esta salida no mide el
+                    codec negociado por Casa.
                   </div>
-
-                  {/* 2. Live View announced capabilities */}
+                )}
+                <p style={{ color: "var(--text-muted)" }}>
+                  HomeKit muestra Talk solo cuando Omni confirma el retorno de
+                  audio para esta cámara. La audibilidad en el altavoz físico
+                  aún requiere una prueba junto al dispositivo.
+                </p>
+                <details>
+                  <summary>Diagnóstico avanzado de Apple Casa</summary>
+                  {/* Diagnóstico Apple Home / HAP en 4 secciones requeridas */}
                   <div
                     style={{
-                      padding: "10px 12px",
-                      background: "rgba(255, 255, 255, 0.03)",
-                      borderRadius: 6,
-                      border: "1px solid rgba(255, 255, 255, 0.08)",
+                      marginTop: 10,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 8,
+                      fontSize: "0.75rem",
                     }}
                   >
+                    {/* 1. Fuente detectada */}
                     <div
                       style={{
-                        fontWeight: 700,
-                        color: "#a78bfa",
-                        marginBottom: 4,
+                        padding: "10px 12px",
+                        background: "rgba(255, 255, 255, 0.03)",
+                        borderRadius: 6,
+                        border: "1px solid rgba(255, 255, 255, 0.08)",
                       }}
                     >
-                      📢 2. Live View anunciado a Apple Home
-                    </div>
-                    {liveViewCapabilities ? (
+                      <div
+                        style={{
+                          fontWeight: 700,
+                          color: "#38bdf8",
+                          marginBottom: 4,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6,
+                        }}
+                      >
+                        <span>🔍 1. Fuente detectada</span>
+                      </div>
                       <div
                         style={{
                           display: "grid",
@@ -2299,248 +2255,347 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                         }}
                       >
                         <div>
-                          Codec:{" "}
+                          Vídeo:{" "}
                           <strong style={{ color: "#f8fafc" }}>
-                            {liveViewCapabilities.codec.toUpperCase()}
+                            {videoCodec}
+                          </strong>{" "}
+                          ({resDisplay})
+                        </div>
+                        <div>
+                          FPS:{" "}
+                          <strong style={{ color: "#f8fafc" }}>
+                            {fpsDisplay}
                           </strong>
                         </div>
                         <div>
                           Perfil / Nivel:{" "}
                           <strong style={{ color: "#f8fafc" }}>
-                            {liveViewCapabilities.profiles.join(", ")} /{" "}
-                            {liveViewCapabilities.levels.join(", ")}
-                          </strong>
-                        </div>
-                        <div style={{ gridColumn: "1 / -1" }}>
-                          Resoluciones:{" "}
-                          <strong style={{ color: "#f8fafc" }}>
-                            {liveViewCapabilities.resolutions
-                              .map(
-                                (r: [number, number, number]) =>
-                                  `${r[0]}×${r[1]}@${r[2]}`,
-                              )
-                              .join(", ")}
-                          </strong>
-                        </div>
-                      </div>
-                    ) : (
-                      <div style={{ color: "#94a3b8" }}>
-                        Accesorio HomeKit no activo; no hay capacidades Live
-                        View disponibles.
-                      </div>
-                    )}
-                  </div>
-
-                  {/* 3. Actual StartStreamRequest, never HKSV configuration */}
-                  <div
-                    style={{
-                      padding: "10px 12px",
-                      background: "rgba(255, 255, 255, 0.03)",
-                      borderRadius: 6,
-                      border: "1px solid rgba(255, 255, 255, 0.08)",
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontWeight: 700,
-                        color: "#f59e0b",
-                        marginBottom: 4,
-                      }}
-                    >
-                      🤝 3. Solicitud Live View de Apple Home
-                    </div>
-                    {liveSession ? (
-                      <div
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "1fr 1fr",
-                          gap: "4px 8px",
-                          color: "#cbd5e1",
-                        }}
-                      >
-                        <div>
-                          Sesión / SSRC:{" "}
-                          <strong style={{ color: "#f8fafc" }}>
-                            {liveSession.sessionId} /{" "}
-                            {liveSession.videoSsrc ?? "—"}
-                          </strong>
-                        </div>
-                        <div>
-                          Estado:{" "}
-                          <strong style={{ color: "#f8fafc" }}>
-                            {liveSession.state}
-                          </strong>
-                        </div>
-                        <div>
-                          Vídeo pedido:{" "}
-                          <strong style={{ color: "#f8fafc" }}>
-                            {liveSession.requestedVideo.width}×
-                            {liveSession.requestedVideo.height}@
-                            {liveSession.requestedVideo.fps} fps
-                          </strong>
-                        </div>
-                        <div>
-                          Perfil / Nivel:{" "}
-                          <strong style={{ color: "#f8fafc" }}>
-                            {liveSession.requestedVideo.profile} /{" "}
-                            {liveSession.requestedVideo.level}
-                          </strong>
-                        </div>
-                        <div>
-                          Audio pedido:{" "}
-                          <strong style={{ color: "#f8fafc" }}>
-                            {liveSession.requestedAudio
-                              ? `${liveSession.requestedAudio.codec} ${liveSession.requestedAudio.sampleRate || "—"} Hz`
-                              : "Sin audio"}
-                          </strong>
-                        </div>
-                        <div>
-                          Duración:{" "}
-                          <strong style={{ color: "#f8fafc" }}>
-                            {liveSession.durationMs !== undefined
-                              ? `${liveSession.durationMs} ms`
-                              : "Activa"}
-                          </strong>
-                        </div>
-                      </div>
-                    ) : (
-                      <div style={{ color: "#94a3b8" }}>
-                        Aún no hay una sesión Live View de Apple Home.
-                      </div>
-                    )}
-                  </div>
-
-                  {/* 4. Effective process output, separate from the source and HKSV */}
-                  <div
-                    style={{
-                      padding: "10px 12px",
-                      background: "rgba(255, 255, 255, 0.03)",
-                      borderRadius: 6,
-                      border: "1px solid rgba(255, 255, 255, 0.08)",
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontWeight: 700,
-                        color: "#34d399",
-                        marginBottom: 4,
-                      }}
-                    >
-                      🎞️ 4. Salida efectiva de FFmpeg
-                    </div>
-                    {liveSession?.output ? (
-                      <div
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "1fr 1fr",
-                          gap: "4px 8px",
-                          color: "#cbd5e1",
-                        }}
-                      >
-                        <div>
-                          Procesamiento:{" "}
-                          <strong style={{ color: "#f8fafc" }}>
-                            {processingLabel[liveSession.effectiveMode]}
-                          </strong>
-                        </div>
-                        <div>
-                          Salida:{" "}
-                          <strong style={{ color: "#f8fafc" }}>
-                            {liveSession.output.width}×
-                            {liveSession.output.height}@{liveSession.output.fps}{" "}
-                            fps
-                          </strong>
-                        </div>
-                        <div>
-                          Codec / Perfil / Nivel:{" "}
-                          <strong style={{ color: "#f8fafc" }}>
-                            {liveSession.output.codec} /{" "}
-                            {liveSession.output.profile || "—"} /{" "}
-                            {liveSession.output.level || "—"}
+                            {sourceProfile || "No medido"} /{" "}
+                            {sourceLevel || "No medido"}
                           </strong>
                         </div>
                         <div>
                           Bitrate / Pix fmt:{" "}
                           <strong style={{ color: "#f8fafc" }}>
-                            {liveSession.output.bitrateKbps
-                              ? `${liveSession.output.bitrateKbps} kb/s`
-                              : "—"}{" "}
-                            / {liveSession.output.pixFmt || "—"}
+                            {sourceBitrate
+                              ? `${sourceBitrate} kb/s`
+                              : "No medido"}{" "}
+                            / {sourcePixFmt || "No medido"}
                           </strong>
                         </div>
-                        {liveSession.effectiveMode === "normalization" && (
-                          <div
-                            style={{ gridColumn: "1 / -1", color: "#fcd34d" }}
-                          >
-                            La fuente 2K se reduce a 1080p antes de enviarse a
-                            HomeKit.
-                          </div>
-                        )}
-                        {liveSession.fallbackReason && (
-                          <div
-                            style={{ gridColumn: "1 / -1", color: "#fcd34d" }}
-                          >
-                            Fallback: {liveSession.fallbackReason}
-                          </div>
-                        )}
-                        {liveSession.error && (
-                          <div
-                            style={{ gridColumn: "1 / -1", color: "#fca5a5" }}
-                          >
-                            Error: {liveSession.error}
-                          </div>
-                        )}
+                        <div>
+                          r/avg frame rate:{" "}
+                          <strong style={{ color: "#f8fafc" }}>
+                            {sourceRates}
+                          </strong>
+                        </div>
+                        <div>
+                          Audio:{" "}
+                          <strong style={{ color: "#f8fafc" }}>
+                            {audioDisplay}
+                          </strong>
+                        </div>
+                        <div>
+                          Muestreo / Ch:{" "}
+                          <strong style={{ color: "#f8fafc" }}>
+                            {isCameraUi &&
+                            latestProbe?.sourceUrl === rtspUrl &&
+                            latestProbe?.audioSampleRate
+                              ? `${latestProbe.audioSampleRate} Hz / ${latestProbe.audioChannels || "—"} ch`
+                              : storedProbe?.audioSampleRate
+                                ? `${storedProbe.audioSampleRate} Hz / ${storedProbe.audioChannels || "—"} ch`
+                                : "No medido"}
+                          </strong>
+                        </div>
                       </div>
-                    ) : (
-                      <div style={{ color: "#94a3b8" }}>
-                        La salida aparecerá al iniciar Live View.
+                      <div style={{ color: "#94a3b8", marginTop: 6 }}>
+                        Evidencia: {probeEvidence}
                       </div>
-                    )}
-                  </div>
+                      {configuredSource &&
+                        (configuredSource.resolution ||
+                          configuredSource.fps) && (
+                          <div style={{ color: "#94a3b8", marginTop: 4 }}>
+                            Configuración declarada, no medida:{" "}
+                            {configuredSource.resolution
+                              ? `${configuredSource.resolution.width}×${configuredSource.resolution.height}`
+                              : "resolución no indicada"}
+                            {configuredSource.fps
+                              ? ` @ ${configuredSource.fps} fps`
+                              : ""}
+                          </div>
+                        )}
+                    </div>
 
-                  {/* 5. HKSV remains a recording-only section */}
-                  <div
-                    style={{
-                      padding: "10px 12px",
-                      background: (camera as any)?.hksvVerified
-                        ? "rgba(16, 185, 129, 0.12)"
-                        : "rgba(255, 255, 255, 0.03)",
-                      borderRadius: 6,
-                      border: (camera as any)?.hksvVerified
-                        ? "1px solid rgba(16, 185, 129, 0.4)"
-                        : "1px solid rgba(255, 255, 255, 0.08)",
-                    }}
-                  >
+                    {/* 2. Live View announced capabilities */}
                     <div
                       style={{
-                        fontWeight: 700,
-                        color: (camera as any)?.hksvVerified
-                          ? "#34d399"
-                          : "#94a3b8",
-                        marginBottom: 4,
+                        padding: "10px 12px",
+                        background: "rgba(255, 255, 255, 0.03)",
+                        borderRadius: 6,
+                        border: "1px solid rgba(255, 255, 255, 0.08)",
                       }}
                     >
-                      🎬 5. Grabación HKSV
+                      <div
+                        style={{
+                          fontWeight: 700,
+                          color: "#a78bfa",
+                          marginBottom: 4,
+                        }}
+                      >
+                        📢 2. Live View anunciado a Apple Home
+                      </div>
+                      {liveViewCapabilities ? (
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "1fr 1fr",
+                            gap: "4px 8px",
+                            color: "#cbd5e1",
+                          }}
+                        >
+                          <div>
+                            Codec:{" "}
+                            <strong style={{ color: "#f8fafc" }}>
+                              {liveViewCapabilities.codec.toUpperCase()}
+                            </strong>
+                          </div>
+                          <div>
+                            Perfil / Nivel:{" "}
+                            <strong style={{ color: "#f8fafc" }}>
+                              {liveViewCapabilities.profiles.join(", ")} /{" "}
+                              {liveViewCapabilities.levels.join(", ")}
+                            </strong>
+                          </div>
+                          <div style={{ gridColumn: "1 / -1" }}>
+                            Resoluciones:{" "}
+                            <strong style={{ color: "#f8fafc" }}>
+                              {liveViewCapabilities.resolutions
+                                .map(
+                                  (r: [number, number, number]) =>
+                                    `${r[0]}×${r[1]}@${r[2]}`,
+                                )
+                                .join(", ")}
+                            </strong>
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{ color: "#94a3b8" }}>
+                          Accesorio HomeKit no activo; no hay capacidades Live
+                          View disponibles.
+                        </div>
+                      )}
                     </div>
-                    {hksvConfiguration ? (
-                      <div style={{ color: "#cbd5e1" }}>
-                        Configuración del Hub:{" "}
-                        <strong>
-                          {hksvConfiguration.resolution[0]}×
-                          {hksvConfiguration.resolution[1]}@
-                          {hksvConfiguration.resolution[2]} fps
-                        </strong>{" "}
-                        · Fragmentos {hksvConfiguration.fragmentLength} ms ·
-                        Prebuffer {hksvConfiguration.prebufferLength} ms
-                      </div>
-                    ) : (
-                      <div style={{ color: "#94a3b8" }}>
-                        Sin configuración HKSV seleccionada por el Hub.
-                      </div>
-                    )}
-                  </div>
-                </div>
 
+                    {/* 3. Actual StartStreamRequest, never HKSV configuration */}
+                    <div
+                      style={{
+                        padding: "10px 12px",
+                        background: "rgba(255, 255, 255, 0.03)",
+                        borderRadius: 6,
+                        border: "1px solid rgba(255, 255, 255, 0.08)",
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontWeight: 700,
+                          color: "#f59e0b",
+                          marginBottom: 4,
+                        }}
+                      >
+                        🤝 3. Solicitud Live View de Apple Home
+                      </div>
+                      {liveSession ? (
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "1fr 1fr",
+                            gap: "4px 8px",
+                            color: "#cbd5e1",
+                          }}
+                        >
+                          <div>
+                            Sesión / SSRC:{" "}
+                            <strong style={{ color: "#f8fafc" }}>
+                              {liveSession.sessionId} /{" "}
+                              {liveSession.videoSsrc ?? "—"}
+                            </strong>
+                          </div>
+                          <div>
+                            Estado:{" "}
+                            <strong style={{ color: "#f8fafc" }}>
+                              {liveSession.state}
+                            </strong>
+                          </div>
+                          <div>
+                            Vídeo pedido:{" "}
+                            <strong style={{ color: "#f8fafc" }}>
+                              {liveSession.requestedVideo.width}×
+                              {liveSession.requestedVideo.height}@
+                              {liveSession.requestedVideo.fps} fps
+                            </strong>
+                          </div>
+                          <div>
+                            Perfil / Nivel:{" "}
+                            <strong style={{ color: "#f8fafc" }}>
+                              {liveSession.requestedVideo.profile} /{" "}
+                              {liveSession.requestedVideo.level}
+                            </strong>
+                          </div>
+                          <div>
+                            Audio pedido:{" "}
+                            <strong style={{ color: "#f8fafc" }}>
+                              {liveSession.requestedAudio
+                                ? `${liveSession.requestedAudio.codec} ${liveSession.requestedAudio.sampleRate || "—"} Hz`
+                                : "Sin audio"}
+                            </strong>
+                          </div>
+                          <div>
+                            Duración:{" "}
+                            <strong style={{ color: "#f8fafc" }}>
+                              {liveSession.durationMs !== undefined
+                                ? `${liveSession.durationMs} ms`
+                                : "Activa"}
+                            </strong>
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{ color: "#94a3b8" }}>
+                          Aún no hay una sesión Live View de Apple Home.
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 4. Effective process output, separate from the source and HKSV */}
+                    <div
+                      style={{
+                        padding: "10px 12px",
+                        background: "rgba(255, 255, 255, 0.03)",
+                        borderRadius: 6,
+                        border: "1px solid rgba(255, 255, 255, 0.08)",
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontWeight: 700,
+                          color: "#34d399",
+                          marginBottom: 4,
+                        }}
+                      >
+                        🎞️ 4. Salida efectiva de FFmpeg
+                      </div>
+                      {liveSession?.output ? (
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "1fr 1fr",
+                            gap: "4px 8px",
+                            color: "#cbd5e1",
+                          }}
+                        >
+                          <div>
+                            Procesamiento:{" "}
+                            <strong style={{ color: "#f8fafc" }}>
+                              {processingLabel[liveSession.effectiveMode]}
+                            </strong>
+                          </div>
+                          <div>
+                            Salida:{" "}
+                            <strong style={{ color: "#f8fafc" }}>
+                              {liveSession.output.width}×
+                              {liveSession.output.height}@
+                              {liveSession.output.fps} fps
+                            </strong>
+                          </div>
+                          <div>
+                            Codec / Perfil / Nivel:{" "}
+                            <strong style={{ color: "#f8fafc" }}>
+                              {liveSession.output.codec} /{" "}
+                              {liveSession.output.profile || "—"} /{" "}
+                              {liveSession.output.level || "—"}
+                            </strong>
+                          </div>
+                          <div>
+                            Bitrate / Pix fmt:{" "}
+                            <strong style={{ color: "#f8fafc" }}>
+                              {liveSession.output.bitrateKbps
+                                ? `${liveSession.output.bitrateKbps} kb/s`
+                                : "—"}{" "}
+                              / {liveSession.output.pixFmt || "—"}
+                            </strong>
+                          </div>
+                          {liveSession.effectiveMode === "normalization" && (
+                            <div
+                              style={{ gridColumn: "1 / -1", color: "#fcd34d" }}
+                            >
+                              La fuente 2K se reduce a 1080p antes de enviarse a
+                              HomeKit.
+                            </div>
+                          )}
+                          {liveSession.fallbackReason && (
+                            <div
+                              style={{ gridColumn: "1 / -1", color: "#fcd34d" }}
+                            >
+                              Fallback: {liveSession.fallbackReason}
+                            </div>
+                          )}
+                          {liveSession.error && (
+                            <div
+                              style={{ gridColumn: "1 / -1", color: "#fca5a5" }}
+                            >
+                              Error: {liveSession.error}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div style={{ color: "#94a3b8" }}>
+                          La salida aparecerá al iniciar Live View.
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 5. HKSV remains a recording-only section */}
+                    <div
+                      style={{
+                        padding: "10px 12px",
+                        background: (camera as any)?.hksvVerified
+                          ? "rgba(16, 185, 129, 0.12)"
+                          : "rgba(255, 255, 255, 0.03)",
+                        borderRadius: 6,
+                        border: (camera as any)?.hksvVerified
+                          ? "1px solid rgba(16, 185, 129, 0.4)"
+                          : "1px solid rgba(255, 255, 255, 0.08)",
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontWeight: 700,
+                          color: (camera as any)?.hksvVerified
+                            ? "#34d399"
+                            : "#94a3b8",
+                          marginBottom: 4,
+                        }}
+                      >
+                        🎬 5. Grabación HKSV
+                      </div>
+                      {hksvConfiguration ? (
+                        <div style={{ color: "#cbd5e1" }}>
+                          Configuración del Hub:{" "}
+                          <strong>
+                            {hksvConfiguration.resolution[0]}×
+                            {hksvConfiguration.resolution[1]}@
+                            {hksvConfiguration.resolution[2]} fps
+                          </strong>{" "}
+                          · Fragmentos {hksvConfiguration.fragmentLength} ms ·
+                          Prebuffer {hksvConfiguration.prebufferLength} ms
+                        </div>
+                      ) : (
+                        <div style={{ color: "#94a3b8" }}>
+                          Sin configuración HKSV seleccionada por el Hub.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </details>
                 {/* Selector: Modo de exportación Apple Home */}
                 <div
                   style={{
@@ -2573,7 +2628,9 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                         borderRadius: 4,
                       }}
                     >
-                      💜 <strong>HEVC / HKSV3 Nativo:</strong> Vídeo passthrough puro (-c:v copy). Audio remuestreado a AAC-LC/ELD. Cumple con iOS 27 y Apple HomeKit.
+                      💜 <strong>HEVC / HKSV3 Nativo:</strong> Vídeo passthrough
+                      puro (-c:v copy). Audio remuestreado a AAC-LC/ELD. Cumple
+                      con iOS 27 y Apple HomeKit.
                     </div>
                   ) : (
                     <>
@@ -2766,16 +2823,25 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                         : null);
 
                     const icon =
-                      ent.type === "light"
-                        ? "💡"
-                        : ent.type === "siren"
-                          ? "🚨"
-                          : ent.type === "doorbell"
-                            ? "🔔"
-                            : "🏃";
+                      ent.domain === "number"
+                        ? "🥣"
+                        : ent.domain === "button"
+                          ? "▶"
+                          : ent.type === "switch"
+                            ? "⏻"
+                            : ent.type === "light"
+                              ? "💡"
+                              : ent.type === "siren"
+                                ? "🚨"
+                                : ent.type === "doorbell"
+                                  ? "🔔"
+                                  : "🏃";
 
-                    const desc =
-                      ent.type === "light"
+                    const desc = ["number", "button", "switch"].includes(
+                      ent.type,
+                    )
+                      ? "Control real de Home Assistant / Omni"
+                      : ent.type === "light"
                         ? "Reflector / Foco físico integrado. Control directo y exportable a Matter."
                         : ent.type === "siren"
                           ? "Sirena de alarma integrada. Activación disuasoria en tiempo real."
@@ -2784,21 +2850,29 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                             : "Sensor de presencia y movimiento con detección instantánea.";
 
                     const stateLabel =
-                      ent.type === "light"
-                        ? ent.state
-                          ? "🟢 Encendida"
-                          : "⚪ Apagada"
-                        : ent.type === "siren"
-                          ? ent.state
-                            ? "🚨 Activada"
-                            : "⚪ Silenciada"
-                          : ent.type === "doorbell"
+                      ent.domain === "number"
+                        ? String(ent.value ?? "No medido")
+                        : ent.domain === "button"
+                          ? "Acción puntual"
+                          : ent.type === "switch"
                             ? ent.state
-                              ? "🔔 Activo"
-                              : "⚪ En reposo"
-                            : ent.state
-                              ? "🟢 Movimiento"
-                              : "⚪ En reposo";
+                              ? "Activo"
+                              : "Apagado"
+                            : ent.type === "light"
+                              ? ent.state
+                                ? "🟢 Encendida"
+                                : "⚪ Apagada"
+                              : ent.type === "siren"
+                                ? ent.state
+                                  ? "🚨 Activada"
+                                  : "⚪ Silenciada"
+                                : ent.type === "doorbell"
+                                  ? ent.state
+                                    ? "🔔 Activo"
+                                    : "⚪ En reposo"
+                                  : ent.state
+                                    ? "🟢 Movimiento"
+                                    : "⚪ En reposo";
 
                     return (
                       <div
@@ -2902,7 +2976,8 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                             {/* Real Interactive Control Button for Light and Siren */}
                             {(ent.type === "light" ||
                               ent.type === "siren" ||
-                              ent.type === "switch") && (
+                              ent.type === "switch" ||
+                              ent.type === "button") && (
                               <button
                                 className={`button button-sm ${ent.state ? "button-danger" : "button-primary"}`}
                                 type="button"
@@ -2915,26 +2990,57 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                               >
                                 {isControlling
                                   ? "..."
-                                  : ent.type === "light"
-                                    ? ent.state
-                                      ? "💡 Apagar Luz"
-                                      : "💡 Encender Luz"
-                                    : ent.type === "siren"
+                                  : ent.domain === "button"
+                                    ? "Ejecutar"
+                                    : ent.type === "light"
                                       ? ent.state
-                                        ? "🚨 Silenciar"
-                                        : "🚨 Activar Sirena"
-                                      : ent.state
-                                        ? "Apagar"
-                                        : "Encender"}
+                                        ? "💡 Apagar Luz"
+                                        : "💡 Encender Luz"
+                                      : ent.type === "siren"
+                                        ? ent.state
+                                          ? "🚨 Silenciar"
+                                          : "🚨 Activar Sirena"
+                                        : ent.state
+                                          ? "Apagar"
+                                          : "Encender"}
                               </button>
                             )}
 
+                            {ent.domain === "number" && (
+                              <label>
+                                Porciones / valor
+                                <input
+                                  type="number"
+                                  aria-label={ent.name}
+                                  defaultValue={ent.value}
+                                  min={ent.min}
+                                  max={ent.max}
+                                  step={ent.step || 1}
+                                  onBlur={async (event) => {
+                                    const value = Number(
+                                      event.currentTarget.value,
+                                    );
+                                    try {
+                                      await api.controlCameraEntity(
+                                        ent.id,
+                                        "set_value",
+                                        value,
+                                      );
+                                      onRefresh();
+                                      showToast("Valor guardado en Omni");
+                                    } catch (error: any) {
+                                      showToast(error.message, true);
+                                    }
+                                  }}
+                                />
+                              </label>
+                            )}
                             {/* Separate Matter QR Code Button */}
                             <button
                               className={`button button-sm ${isMatterDrawerOpen ? "button-primary" : "button-secondary"}`}
                               type="button"
                               onClick={() => handleOpenEntityMatter(ent)}
-                              disabled={isGenerating}
+                              disabled={isGenerating || ent.domain === "number"}
                               style={{
                                 fontSize: "0.76rem",
                                 padding: "4px 10px",
@@ -3013,7 +3119,9 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                                   onClick={() =>
                                     handleReopenEntityCommissioning(ent)
                                   }
-                                  disabled={isGenerating}
+                                  disabled={
+                                    isGenerating || ent.domain === "number"
+                                  }
                                   style={{ fontSize: "0.74rem" }}
                                 >
                                   {isGenerating
@@ -3042,7 +3150,9 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                                   className="button button-primary button-sm"
                                   type="button"
                                   onClick={() => handleOpenEntityMatter(ent)}
-                                  disabled={isGenerating}
+                                  disabled={
+                                    isGenerating || ent.domain === "number"
+                                  }
                                   style={{ fontSize: "0.78rem" }}
                                 >
                                   {isGenerating

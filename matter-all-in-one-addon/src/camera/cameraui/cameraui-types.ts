@@ -21,10 +21,22 @@ export interface CameraUiConfig {
 
 export interface CameraRealEntity {
   id: string;
-  domain: "binary_sensor" | "light" | "siren" | "switch" | "event";
-  type: "motion" | "light" | "siren" | "doorbell" | "switch";
+  domain:
+    | "binary_sensor"
+    | "light"
+    | "siren"
+    | "switch"
+    | "event"
+    | "button"
+    | "number";
+  type:
+    "motion" | "light" | "siren" | "doorbell" | "switch" | "button" | "number";
   name: string;
   state: boolean;
+  value?: number;
+  min?: number;
+  max?: number;
+  step?: number;
   matterExported?: boolean;
   matterPairingCode?: string;
   matterManualCode?: string;

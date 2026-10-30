@@ -269,6 +269,7 @@ export class HomeKitCameraStreamingDelegate
     return this.activeSessions.size;
   }
 
+  private readonly twoWayAudioSupported: boolean;
   private isTakingSnapshot = false;
   private lastSnapshotTime = 0;
 
@@ -280,6 +281,8 @@ export class HomeKitCameraStreamingDelegate
     private readonly record?: HomeKitCameraStorageRecord,
   ) {
     super();
+    this.twoWayAudioSupported =
+      this.streamSource.metadata?.omniTwoWayAudio === true;
     this.loadPersistedSnapshot();
   }
 
@@ -824,11 +827,7 @@ export class HomeKitCameraStreamingDelegate
           request.audio.srtp_salt,
         ]);
       }
-      if (
-        request.audio &&
-        this.streamSource.metadata?.omniTwoWayAudio === true &&
-        session.audioKeySalt
-      ) {
+      if (request.audio && this.twoWayAudioSupported && session.audioKeySalt) {
         session.talkback = new TuyaHapTalkback(
           request.targetAddress,
           session.audioKeySalt,

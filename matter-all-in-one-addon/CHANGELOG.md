@@ -1,3 +1,11 @@
+## [2.3.8] - 2026-10-29
+
+- Añade audio bidireccional real para cámaras Omni Tuya compatibles: HomeKit anuncia el servicio de altavoz y el audio del micrófono AAC-ELD se cifra/descifra y se devuelve al dispositivo mediante WebRTC.
+- Consulta a Omni Tuya Local las capacidades y credenciales efímeras solo cuando el dispositivo soporta hablar; no persiste ni registra claves, SDP, ICE, tokens MQTT ni URL RTSP firmadas.
+- Añade exclusión de una sesión de altavoz simultánea por cámara y cierre limitado para no dejar bloqueadas sesiones cuando el broker no responde.
+- Incluye una vista previa temporal de vídeo y audio con información medida de la fuente y de la salida, además de controles reales disponibles para cámaras/comederos Omni y exportación de botones Matter.
+- La recepción/retorno SRTP fue verificada con paquetes AAC-ELD sintéticos (564 recibidos, 466 enviados por WebRTC conectado); Chris no estaba junto al comedero para confirmar sonido físico. El botón debe verificarse en Casa después de actualizar Omni Tuya Local a 1.12.2 y el add-on a 2.3.8; no requiere restablecer el emparejamiento.
+
 ## [2.3.6] - 2026-10-29
 
 - Restaura el código completo del add-on y las dependencias de 2.3.0, incluida HAP-NodeJS 2.2.3, para retirar los cambios posteriores de cámara, Live View, movimiento y HKSV.

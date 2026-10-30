@@ -1,3 +1,4 @@
+import { BrowserPreview } from "./camera/browser-preview.js";
 /**
  * Core platform class for matter-all-in-one-chrisalvir.
  */
@@ -185,6 +186,7 @@ const MATTER_CONTROLLER_VENDORS: Record<number, string> = {
 };
 
 export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
+  private browserPreview = new BrowserPreview();
   public ha!: HomeAssistant;
   public entities = new Map<string, BaseEntity>();
   public matterbridgeDevices = new Map<string, MatterbridgeEndpoint>();
@@ -1176,6 +1178,18 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         (isMqtt
           ? `homeassistant/${domain}/${entityId.split(".")[1]}`
           : undefined);
+
+      // Keep genuine controls on the camera's HA device distinct from lights.
+      // A feeder's dispense switch must never be classified as a spotlight.
+      if (isSameDevice && ["button", "number", "switch"].includes(domain) &&
+          !/spotlight|floodlight|reflector|status_light|indicador|luz|light|siren|alarm/i.test(`${entityId} ${fn}`)) {
+        entities.push({ id: entityId, domain: domain as any, type: domain as any,
+          name: state.attributes?.friendly_name || entityId, state: isStateOn,
+          value: domain === "number" && Number.isFinite(Number(state.state)) ? Number(state.state) : undefined,
+          min: (state.attributes as any)?.min, max: (state.attributes as any)?.max, step: (state.attributes as any)?.step,
+          matterExported: isExported, matterPairingCode: matterCode, matterManualCode: manualCode });
+        continue;
+      }
 
       if (
         !explicitMotionId &&
@@ -4034,6 +4048,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       "media_player",
       "humidifier",
       "siren",
+      "button",
     ];
     const isVacuumCompanion =
       !this.isDpsGenericEntity(entityId) &&
@@ -4170,7 +4185,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       effectiveProfile === "basicVideoPlayer"
     ) {
       entityInstance = new MediaPlayerEntity(this, state, deviceType);
-    } else if (override === "PetFeeder") {
+    } else if (override === "PetFeeder" || domain === "button") {
       entityInstance = new PetFeederEntity(this, state, deviceType);
     } else if (override === "Oven" || deviceType.name === "Oven") {
       entityInstance = new OvenEntity(this, state, deviceType);
@@ -8928,6 +8943,20 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           return;
         }
 
+        const previewMatch = pathname.match(/\/cameras\/([^/]+)\/preview(?:\/(status))?$/);
+        if (req.method === "GET" && previewMatch) {
+          const id = urlObj.searchParams.get("session") || "";
+          if (previewMatch[2]) {
+            res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+            res.end(JSON.stringify(this.browserPreview.sessions.get(id) || { frames: 0 }));
+          } else {
+            const entity = this.entities.get(decodeURIComponent(previewMatch[1]));
+            if (!(entity instanceof CameraEntity) || !entity.homekitAccessory) { res.writeHead(404); res.end(); return; }
+            await this.browserPreview.stream(id, req, res, (stop) => entity.homekitAccessory!.acquireBrowserPreview(stop));
+          }
+          return;
+        }
+
         // GET /api/custom/cameras/:id/snapshot or /api/cameras/:id/snapshot
         const snapshotMatch = pathname.match(/\/cameras\/([^/]+)\/snapshot$/);
         if (req.method === "GET" && snapshotMatch) {
@@ -9989,7 +10018,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           try {
             const rawBody = await this.readRequestBody(req);
             const body = rawBody ? JSON.parse(rawBody) : {};
-            const { entityId, action } = body;
+            const { entityId, action, value } = body;
             if (!entityId) {
               res.writeHead(400, {
                 "Content-Type": "application/json; charset=utf-8",
@@ -10000,13 +10029,17 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
               return;
             }
             const domain = entityId.split(".")[0];
-            const service =
-              action === "turn_on"
-                ? "turn_on"
-                : action === "turn_off"
-                  ? "turn_off"
-                  : "toggle";
-            await this.ha?.callService(domain, service, entityId);
+            const state = this.ha?.hassStates?.get(entityId);
+            if (!state || ["unavailable", "unknown"].includes(state.state)) throw new Error("Entidad no disponible");
+            if (domain === "button" && action === "press") {
+              await this.ha!.callService("button", "press", entityId);
+            } else if (domain === "number" && action === "set_value") {
+              const n = Number(value);
+              if (typeof value !== "number" || !Number.isFinite(n) || n < Number((state.attributes as any)?.min ?? -Infinity) || n > Number((state.attributes as any)?.max ?? Infinity)) throw new Error("Valor fuera del rango de la entidad");
+              await this.ha!.callService("number", "set_value", entityId, { value: n });
+            } else if (["switch", "light", "siren"].includes(domain) && ["turn_on", "turn_off", "toggle"].includes(action)) {
+              await this.ha!.callService(domain, action, entityId);
+            } else throw new Error("Acción incompatible con la entidad");
             const newState = this.ha?.hassStates?.get(entityId)?.state === "on";
             this.broadcastSseMessage("entity_state_changed", {
               entityId,

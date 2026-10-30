@@ -24,6 +24,7 @@ import type { HassState } from "../utils/ha-state.js";
 import { safeUpdateAttribute } from "../utils/matter-attributes.js";
 
 export class PetFeederEntity extends BaseEntity {
+  private inFlight = false;
   constructor(
     platform: any,
     state: HassState,
@@ -60,8 +61,17 @@ export class PetFeederEntity extends BaseEntity {
 
     endpoint.addCommandHandler("on", async () => {
       this.assertOnline();
+      if (this.inFlight) return;
+      this.inFlight = true;
       try {
         if (domain === "button") {
+          await safeUpdateAttribute(
+            endpoint!,
+            "onOff" as any,
+            "onOff",
+            true,
+            this.platform.log,
+          );
           await this.platform.ha?.callService("button", "press", this.entityId);
         } else {
           await this.platform.ha?.callService(
@@ -78,6 +88,18 @@ export class PetFeederEntity extends BaseEntity {
           `[PetFeederEntity] Failed to trigger feed: ${err}`,
         );
         throw err instanceof Error ? err : new Error(String(err));
+      } finally {
+        if (domain === "button") {
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+          await safeUpdateAttribute(
+            endpoint!,
+            "onOff" as any,
+            "onOff",
+            false,
+            this.platform.log,
+          );
+        }
+        this.inFlight = false;
       }
     });
 

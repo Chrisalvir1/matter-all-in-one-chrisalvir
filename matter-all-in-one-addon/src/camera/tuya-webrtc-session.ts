@@ -29,6 +29,8 @@ export interface TuyaWebRtcBundle {
 }
 /** One transient peer. No SDP, ICE credentials, MQTT secrets or payloads are logged. */
 export class TuyaWebRtcSession extends EventEmitter {
+  private static readonly speakers = new Set<string>();
+  private ownsSpeaker = false;
   private client?: MqttClient;
   private pc?: RTCPeerConnection;
   private track?: MediaStreamTrack;
@@ -84,6 +86,10 @@ export class TuyaWebRtcSession extends EventEmitter {
     const broker = this.bundle.mqtt.url.replace(/^ssl:\/\//, "mqtts://");
     if (!broker.startsWith("mqtts://"))
       throw new Error("Tuya signaling requires TLS");
+    if (TuyaWebRtcSession.speakers.has(this.bundle.deviceId))
+      throw new Error("Tuya speaker is already in use");
+    TuyaWebRtcSession.speakers.add(this.bundle.deviceId);
+    this.ownsSpeaker = true;
     try {
       this.client = await connectAsync(broker, {
         username: this.bundle.mqtt.username,
@@ -254,8 +260,21 @@ export class TuyaWebRtcSession extends EventEmitter {
     if (this.stopped || this.closing) return;
     this.closing = true;
     clearTimeout(this.negotiationTimeout);
-    if (this.offerSent) await this.signal("disconnect", {}).catch(() => {});
+    if (this.offerSent && this.client?.connected) {
+      let timeout: NodeJS.Timeout | undefined;
+      await Promise.race([
+        this.signal("disconnect", {}).catch(() => {}),
+        new Promise<void>((resolve) => {
+          timeout = setTimeout(resolve, 1500);
+          timeout.unref();
+        }),
+      ]);
+      if (timeout) clearTimeout(timeout);
+    }
     this.stopped = true;
+    if (this.ownsSpeaker)
+      TuyaWebRtcSession.speakers.delete(this.bundle.deviceId);
+    this.ownsSpeaker = false;
     clearTimeout(this.expiry);
     this.track?.stop();
     await this.pc?.close();

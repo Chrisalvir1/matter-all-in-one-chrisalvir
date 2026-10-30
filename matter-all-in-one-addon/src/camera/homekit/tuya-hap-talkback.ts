@@ -95,6 +95,7 @@ export class TuyaHapTalkback {
     if (this.stopped) return;
     const peer = new TuyaWebRtcSession(bundle);
     this.peer = peer;
+    peer.on("closed", () => this.close());
     peer.on("failure", () => {
       this.notice("Tuya return audio connection failed");
       this.close();
