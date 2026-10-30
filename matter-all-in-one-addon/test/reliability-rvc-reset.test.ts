@@ -81,6 +81,6 @@ it("inspect and initialize actual RVC implementation under strict validation", a
   } finally {
     if (server?.lifecycle?.isReady) await server.close();
     await destroyTestEnvironment();
-    resetTest();
+    (resetTest as any)?.();
   }
 }, 15000);

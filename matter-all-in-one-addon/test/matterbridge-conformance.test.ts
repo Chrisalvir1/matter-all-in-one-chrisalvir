@@ -6,7 +6,7 @@ import {
   destroyTestEnvironment,
   createServerNode,
   flushServerNode,
-  addBridgedDevice,
+  addBridgedEndpoint,
 } from "matterbridge/test-utils/vitest";
 import { BaseEntity } from "../src/entities/base.entity.js";
 import { ClosureEntity } from "../src/entities/closure.entity.js";
@@ -35,7 +35,7 @@ describe("Matterbridge 3.11 real bridged endpoint conformance", () => {
   afterAll(async () => {
     await flushServerNode();
     await destroyTestEnvironment();
-    resetTest();
+    (resetTest as any)?.();
   });
 
   it.each([
@@ -106,7 +106,7 @@ describe("Matterbridge 3.11 real bridged endpoint conformance", () => {
           : BaseEntity;
       const entity = new Entity(platform, state, deviceType);
       const endpoint = await entity.createEndpoint();
-      expect(await addBridgedDevice(aggregator, endpoint)).toBe(true);
+      expect(await addBridgedEndpoint(aggregator, endpoint)).toBe(true);
       expect(endpoint.lifecycle.isReady).toBe(true);
     },
   );
@@ -135,7 +135,7 @@ describe("Matterbridge 3.11 real bridged endpoint conformance", () => {
       ],
     );
     expect(
-      await addBridgedDevice(aggregator, await composite.createEndpoint()),
+      await addBridgedEndpoint(aggregator, await composite.createEndpoint()),
     ).toBe(true);
   });
 });
