@@ -1,3 +1,8 @@
+## [2.3.12] - 2026-10-29
+
+- Corrige la decodificación del audio Talk que Apple Casa envía al altavoz del comedero: selecciona explícitamente `libfdk_aac` para AAC-ELD y limita el sondeo de FFmpeg para que interprete el SDP de retorno sin quedarse esperando datos.
+- Conserva la ruta de salida hacia Omni Tuya por WebRTC y las mejoras de Talk de 2.3.11. Chris confirmó que ahora se escucha la voz en el dispositivo; no cambia el audio de escucha ni la ruta de vídeo.
+
 ## [2.3.11] - 2026-10-29
 
 - Repara el mando a distancia de Apple TV / Centro de Control iOS para televisores HAP: implementa navegación completa del touchpad/D-pad (`ARROW_UP`, `ARROW_DOWN`, `ARROW_LEFT`, `ARROW_RIGHT`, `SELECT`), botón de regreso (`BACK`), botón de inicio (`EXIT`), menú/información (`INFORMATION`) y botones de reproducción mediante `remote.send_command` y entidades de botón.
