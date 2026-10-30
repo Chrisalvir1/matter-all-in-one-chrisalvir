@@ -13,10 +13,11 @@ import {
 
 /** SRTP from Casa -> in-memory SDP/FFmpeg -> PCMU RTP -> Tuya WebRTC. */
 export class TuyaHapTalkback {
-  private static readonly MAX_QUEUED_RTP_PACKETS = 100;
-  private static readonly MAX_QUEUED_RTP_AGE_MS = 2000;
+  private static readonly MAX_QUEUED_RTP_PACKETS = 300;
+  private static readonly MAX_QUEUED_RTP_AGE_MS = 6000;
   private input?: Socket;
   private output?: Socket;
+  private loopbackSender = createSocket("udp4");
   private decoder?: ChildProcess;
   private peer?: TuyaWebRtcSession;
   private stopped = false;
@@ -61,14 +62,8 @@ export class TuyaHapTalkback {
         },
       );
     });
-    input.on("message", (bytes, remote) => {
-      if (
-        this.stopped ||
-        !this.audio ||
-        remote.address.replace(/^::ffff:/, "") !==
-          this.address.replace(/^::ffff:/, "")
-      )
-        return;
+    input.on("message", (bytes) => {
+      if (this.stopped || !this.audio) return;
       this.pushRtp(bytes);
     });
     const local = input.address();
@@ -88,8 +83,8 @@ export class TuyaHapTalkback {
     this.receivedPackets++;
     if (!this.starting) {
       this.starting = true;
-      void this.start().catch(() => {
-        this.notice("Tuya return audio could not start");
+      void this.start().catch((err) => {
+        this.notice(`Tuya return audio could not start: ${err?.message || err}`);
         this.close();
       });
     }
@@ -105,6 +100,13 @@ export class TuyaHapTalkback {
   }
   configure(audio: StartStreamRequest["audio"]): void {
     this.audio = audio;
+    if (!this.starting && !this.stopped) {
+      this.starting = true;
+      void this.start().catch((err) => {
+        this.notice(`Tuya return audio could not start: ${err?.message || err}`);
+        this.close();
+      });
+    }
   }
   private decoderPort?: number;
   private async start(): Promise<void> {
@@ -200,7 +202,6 @@ export class TuyaHapTalkback {
         "pipe,udp,rtp,crypto",
         "-f",
         "sdp",
-        ...(opus ? [] : ["-c:a", "libfdk_aac"]),
         "-i",
         "pipe:0",
         "-vn",
@@ -246,7 +247,9 @@ export class TuyaHapTalkback {
 
   private sendToDecoder(packet: Buffer): void {
     if (!this.decoderPort || this.stopped) return;
-    this.input?.send(packet, this.decoderPort, "127.0.0.1");
+    this.loopbackSender.send(packet, this.decoderPort, "127.0.0.1", (err) => {
+      if (err) this.notice(`Loopback send failed: ${err.message}`);
+    });
   }
 
   private trimQueue(
@@ -316,6 +319,9 @@ export class TuyaHapTalkback {
     this.decoder?.kill("SIGKILL");
     try {
       this.input?.close();
+    } catch {}
+    try {
+      this.loopbackSender?.close();
     } catch {}
     try {
       this.output?.close();

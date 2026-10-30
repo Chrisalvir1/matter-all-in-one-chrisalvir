@@ -81,7 +81,9 @@ export class TuyaWebRtcSession extends EventEmitter {
   async start(): Promise<void> {
     if (this.stopped || this.pc) throw new Error("WebRTC session already used");
     const a = this.bundle.audioAttributes;
-    if (!a?.call_mode?.includes(2) || !a?.hardware_capability?.includes(2))
+    const hasMode = !a?.call_mode?.length || a.call_mode.includes(1) || a.call_mode.includes(2);
+    const hasHw = !a?.hardware_capability?.length || a.hardware_capability.includes(1) || a.hardware_capability.includes(2);
+    if (!hasMode || !hasHw)
       throw new Error("Tuya did not advertise two-way audio");
     const broker = this.bundle.mqtt.url.replace(/^ssl:\/\//, "mqtts://");
     if (!broker.startsWith("mqtts://"))

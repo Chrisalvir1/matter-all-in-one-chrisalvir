@@ -281,8 +281,12 @@ export class HomeKitCameraStreamingDelegate
     private readonly record?: HomeKitCameraStorageRecord,
   ) {
     super();
+    const cameraIdentity = `${this.entityId} ${String(this.streamSource.metadata?.name || "")} ${String(this.streamSource.metadata?.model || "")}`;
+    const isTuyaOrFeeder =
+      this.streamSource.metadata?.isOmniTuyaDirect === true ||
+      /(?:\bomni\b|\btuya\b|comedero|feeder|acf100)/i.test(cameraIdentity);
     this.twoWayAudioSupported =
-      this.streamSource.metadata?.omniTwoWayAudio === true;
+      this.streamSource.metadata?.omniTwoWayAudio === true || isTuyaOrFeeder;
     this.loadPersistedSnapshot();
   }
 

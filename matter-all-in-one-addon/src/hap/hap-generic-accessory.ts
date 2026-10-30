@@ -395,6 +395,62 @@ export class HapGenericAccessory {
     return this.entityId;
   }
 
+  private getRemoteEntityId(): string | undefined {
+    const deviceId = this.platform.ha?.hassEntities?.get(this.entityId)?.device_id
+      ?? (this.platform.entities.get(this.entityId) as any)?.haDeviceInfo?.id;
+    if (deviceId && this.platform.ha?.hassEntities) {
+      for (const entity of this.platform.ha.hassEntities.values()) {
+        if (entity.device_id === deviceId && entity.entity_id.startsWith("remote.")) {
+          return entity.entity_id;
+        }
+      }
+    }
+    const members = this.getDeviceMembers();
+    const remote = members.find((m: any) => m.entityId.startsWith("remote."));
+    if (remote) return remote.entityId;
+    const base = this.entityId.replace(/^[^.]+\./, "").split("_")[0];
+    for (const id of (this.platform.ha?.hassStates?.keys() ?? this.platform.entities.keys())) {
+      if (id.startsWith("remote.") && id.includes(base)) return id;
+    }
+    return undefined;
+  }
+
+  private getMuteSwitchEntityId(): string | undefined {
+    const deviceId = this.platform.ha?.hassEntities?.get(this.entityId)?.device_id
+      ?? (this.platform.entities.get(this.entityId) as any)?.haDeviceInfo?.id;
+    if (deviceId && this.platform.ha?.hassEntities) {
+      for (const entity of this.platform.ha.hassEntities.values()) {
+        if (entity.device_id === deviceId && entity.entity_id.startsWith("switch.") && entity.entity_id.toLowerCase().includes("mute")) {
+          return entity.entity_id;
+        }
+      }
+    }
+    const members = this.getDeviceMembers();
+    const sw = members.find((m: any) => m.entityId.startsWith("switch.") && m.entityId.toLowerCase().includes("mute"));
+    if (sw) return sw.entityId;
+    const base = this.entityId.replace(/^[^.]+\./, "").split("_")[0];
+    for (const id of (this.platform.ha?.hassStates?.keys() ?? this.platform.entities.keys())) {
+      if (id.startsWith("switch.") && id.toLowerCase().includes("mute") && id.includes(base)) return id;
+    }
+    return undefined;
+  }
+
+  private getDeviceButton(action: string): string | undefined {
+    const deviceId = this.platform.ha?.hassEntities?.get(this.entityId)?.device_id
+      ?? (this.platform.entities.get(this.entityId) as any)?.haDeviceInfo?.id;
+    if (deviceId && this.platform.ha?.hassEntities) {
+      for (const entity of this.platform.ha.hassEntities.values()) {
+        if (entity.device_id === deviceId && entity.entity_id.startsWith("button.")) {
+          const lower = entity.entity_id.toLowerCase();
+          if (lower.endsWith(`_${action}`) || lower.endsWith(`.${action}`)) {
+            return entity.entity_id;
+          }
+        }
+      }
+    }
+    return undefined;
+  }
+
   private async callHaWithResponseBudget(
     domain: string,
     service: string,
@@ -650,38 +706,132 @@ export class HapGenericAccessory {
             if (source) await this.callHaWithResponseBudget("media_player", "select_source", { source }, targetMediaId);
           });
 
-        // RemoteKey characteristic for Control Center TV Remote
+        // RemoteKey characteristic for Control Center TV Remote (touchpad, buttons, playback)
         tv.getCharacteristic(Characteristic.RemoteKey).onSet(async (value: any) => {
           const RemoteKey = Characteristic.RemoteKey;
+          const remoteId = this.getRemoteEntityId();
+          const sendRemote = async (cmd: string, fallback?: () => Promise<void>) => {
+            if (remoteId) {
+              try {
+                await this.callHaWithResponseBudget("remote", "send_command", { command: [cmd] }, remoteId);
+                return;
+              } catch (err) {
+                this.platform.log?.warn?.(`[HAP][${this.entityId}] remote.send_command ${cmd} failed: ${err}`);
+              }
+            }
+            if (fallback) await fallback();
+          };
+
           switch (value) {
-            case RemoteKey.PLAY_PAUSE:
-              await this.callHaWithResponseBudget("media_player", "media_play_pause", undefined, targetMediaId);
+            case RemoteKey.REWIND:
+              await sendRemote("REWIND", () =>
+                this.callHaWithResponseBudget("media_player", "media_previous_track", undefined, targetMediaId).catch(() => {})
+              );
               break;
-            case RemoteKey.BACK:
-            case RemoteKey.EXIT:
-              await this.callHaWithResponseBudget("media_player", "media_stop", undefined, targetMediaId);
+            case RemoteKey.FAST_FORWARD:
+              await sendRemote("FAST_FORWARD", () =>
+                this.callHaWithResponseBudget("media_player", "media_next_track", undefined, targetMediaId).catch(() => {})
+              );
               break;
             case RemoteKey.NEXT_TRACK:
-              await this.callHaWithResponseBudget("media_player", "media_next_track", undefined, targetMediaId);
+              await sendRemote("MEDIA_NEXT", () =>
+                this.callHaWithResponseBudget("media_player", "media_next_track", undefined, targetMediaId)
+              );
               break;
             case RemoteKey.PREVIOUS_TRACK:
-              await this.callHaWithResponseBudget("media_player", "media_previous_track", undefined, targetMediaId);
+              await sendRemote("MEDIA_PREVIOUS", () =>
+                this.callHaWithResponseBudget("media_player", "media_previous_track", undefined, targetMediaId)
+              );
+              break;
+            case RemoteKey.ARROW_UP:
+              await sendRemote("DPAD_UP", async () => {
+                const btn = this.getDeviceButton("up");
+                if (btn) await this.callHaWithResponseBudget("button", "press", undefined, btn);
+              });
+              break;
+            case RemoteKey.ARROW_DOWN:
+              await sendRemote("DPAD_DOWN", async () => {
+                const btn = this.getDeviceButton("down");
+                if (btn) await this.callHaWithResponseBudget("button", "press", undefined, btn);
+              });
+              break;
+            case RemoteKey.ARROW_LEFT:
+              await sendRemote("DPAD_LEFT", async () => {
+                const btn = this.getDeviceButton("left");
+                if (btn) await this.callHaWithResponseBudget("button", "press", undefined, btn);
+              });
+              break;
+            case RemoteKey.ARROW_RIGHT:
+              await sendRemote("DPAD_RIGHT", async () => {
+                const btn = this.getDeviceButton("right");
+                if (btn) await this.callHaWithResponseBudget("button", "press", undefined, btn);
+              });
+              break;
+            case RemoteKey.SELECT:
+              await sendRemote("DPAD_CENTER", async () => {
+                const btn = this.getDeviceButton("select") || this.getDeviceButton("enter");
+                if (btn) await this.callHaWithResponseBudget("button", "press", undefined, btn);
+              });
+              break;
+            case RemoteKey.BACK:
+              await sendRemote("BACK", async () => {
+                const btn = this.getDeviceButton("back") || this.getDeviceButton("return");
+                if (btn) await this.callHaWithResponseBudget("button", "press", undefined, btn);
+              });
+              break;
+            case RemoteKey.EXIT:
+              await sendRemote("HOME", async () => {
+                const btn = this.getDeviceButton("home") || this.getDeviceButton("exit");
+                if (btn) await this.callHaWithResponseBudget("button", "press", undefined, btn);
+              });
+              break;
+            case RemoteKey.PLAY_PAUSE:
+              await this.callHaWithResponseBudget("media_player", "media_play_pause", undefined, targetMediaId).catch(() =>
+                sendRemote("MEDIA_PLAY_PAUSE")
+              );
+              break;
+            case RemoteKey.INFORMATION:
+              await sendRemote("MENU", async () => {
+                const btn = this.getDeviceButton("menu") || this.getDeviceButton("info");
+                if (btn) await this.callHaWithResponseBudget("button", "press", undefined, btn);
+              });
               break;
           }
         });
 
         const speaker = this.accessory.addService(Service.TelevisionSpeaker, `${this.record.name} Audio`);
-        speaker.setCharacteristic(Characteristic.VolumeControlType, Characteristic.VolumeControlType.ABSOLUTE);
+        speaker.setCharacteristic(Characteristic.Active, Characteristic.Active.ACTIVE);
+        speaker.setCharacteristic(Characteristic.VolumeControlType, Characteristic.VolumeControlType.RELATIVE_WITH_CURRENT);
+        const muteSwitchId = this.getMuteSwitchEntityId();
         speaker.getCharacteristic(Characteristic.Mute)
-          .onGet(() => Boolean(mediaState()?.attributes?.is_volume_muted))
-          .onSet(async (value: any) => this.callHaWithResponseBudget("media_player", "volume_mute", { is_volume_muted: Boolean(value) }, targetMediaId));
+          .onGet(() => {
+            const isMediaMuted = Boolean(mediaState()?.attributes?.is_volume_muted);
+            const isSwitchMuted = muteSwitchId ? this.getHomeAssistantState(muteSwitchId)?.state === "on" : false;
+            return isMediaMuted || isSwitchMuted;
+          })
+          .onSet(async (value: any) => {
+            const isMuted = Boolean(value);
+            if (muteSwitchId) {
+              await this.callHaWithResponseBudget("switch", isMuted ? "turn_on" : "turn_off", undefined, muteSwitchId).catch(() => {});
+            }
+            await this.callHaWithResponseBudget("media_player", "volume_mute", { is_volume_muted: isMuted }, targetMediaId).catch(() => {});
+          });
         speaker.getCharacteristic(Characteristic.Volume)
           .onGet(() => Math.round((Number(mediaState()?.attributes?.volume_level) || 0) * 100))
           .onSet(async (value: any) => this.callHaWithResponseBudget("media_player", "volume_set", { volume_level: Number(value) / 100 }, targetMediaId));
         speaker.getCharacteristic(Characteristic.VolumeSelector)
           .onSet(async (value: any) => {
             const inc = value === Characteristic.VolumeSelector.INCREMENT;
-            await this.callHaWithResponseBudget("media_player", inc ? "volume_up" : "volume_down", undefined, targetMediaId);
+            const remoteId = this.getRemoteEntityId();
+            try {
+              await this.callHaWithResponseBudget("media_player", inc ? "volume_up" : "volume_down", undefined, targetMediaId);
+            } catch {
+              if (remoteId) {
+                await this.callHaWithResponseBudget("remote", "send_command", {
+                  command: [inc ? "VOLUME_UP" : "VOLUME_DOWN"],
+                }, remoteId).catch(() => {});
+              }
+            }
           });
         tv.addLinkedService(speaker);
 
@@ -1201,6 +1351,21 @@ export class HapGenericAccessory {
             );
           }
         }
+        if (this.record.hapProfile === "television") {
+          const muteSwitchId = this.getMuteSwitchEntityId();
+          const targetMediaId = this.getMediaEntityId();
+          if (sourceEntityId === muteSwitchId) {
+            const isMuted = state?.state === "on";
+            this.accessory.getService(Service.TelevisionSpeaker)?.updateCharacteristic(Characteristic.Mute, isMuted);
+          } else if (sourceEntityId === targetMediaId) {
+            const isOn = state?.state && !["off", "standby", "unavailable", "unknown"].includes(state.state);
+            this.accessory.getService(Service.Television)?.updateCharacteristic(Characteristic.Active, isOn ? 1 : 0);
+            this.accessory.getService(Service.TelevisionSpeaker)?.updateCharacteristic(Characteristic.Mute, Boolean(state?.attributes?.is_volume_muted));
+            if (state?.attributes?.volume_level !== undefined) {
+              this.accessory.getService(Service.TelevisionSpeaker)?.updateCharacteristic(Characteristic.Volume, Math.round(Number(state.attributes.volume_level) * 100));
+            }
+          }
+        }
         const binding = this.discoveredSensorBindings.get(sourceEntityId);
         if (binding) {
           binding.service.updateCharacteristic(
@@ -1259,7 +1424,9 @@ export class HapGenericAccessory {
           const targetState = targetMediaId === this.entityId ? state : this.platform.entities.get(targetMediaId)?.state;
           const isOn = targetState?.state && !["off", "standby", "unavailable", "unknown"].includes(targetState.state);
           this.accessory.getService(Service.Television)?.updateCharacteristic(Characteristic.Active, isOn ? 1 : 0);
-          this.accessory.getService(Service.TelevisionSpeaker)?.updateCharacteristic(Characteristic.Mute, Boolean(targetState?.attributes?.is_volume_muted));
+          const muteSwitchId = this.getMuteSwitchEntityId();
+          const isSwitchMuted = muteSwitchId ? this.getHomeAssistantState(muteSwitchId)?.state === "on" : false;
+          this.accessory.getService(Service.TelevisionSpeaker)?.updateCharacteristic(Characteristic.Mute, Boolean(targetState?.attributes?.is_volume_muted || isSwitchMuted));
           if (targetState?.attributes?.volume_level !== undefined) {
             this.accessory.getService(Service.TelevisionSpeaker)?.updateCharacteristic(Characteristic.Volume, Math.round(Number(targetState.attributes.volume_level) * 100));
           }

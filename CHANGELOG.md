@@ -1,3 +1,10 @@
+## [2.3.11] - 2026-10-29
+
+- Repara el mando a distancia de Apple TV / Centro de Control iOS para televisores HAP: implementa navegación completa del touchpad/D-pad (`ARROW_UP`, `ARROW_DOWN`, `ARROW_LEFT`, `ARROW_RIGHT`, `SELECT`), botón de regreso (`BACK`), botón de inicio (`EXIT`), menú/información (`INFORMATION`) y botones de reproducción mediante `remote.send_command` y entidades de botón.
+- Habilita los botones de volumen físicos de iOS en el control remoto cambiando el tipo de altavoz HAP a `RELATIVE_WITH_CURRENT` con servicio activo; sincroniza el estado de silencio bidireccionalmente con `switch.*_mute`.
+- Corrige el audio bidireccional (Talkback) del comedero Frienhund ACF100W / Omni Tuya: resuelve el fallo de envío UDP en redes IPv6 usando un socket de retransmisión IPv4 dedicado, elimina el filtrado estricto de IP de origen y acepta modos de intercomunicación half-duplex (`call_mode: 1`).
+- Pre-conecta la sesión WebRTC Tuya al iniciar el stream en vivo para eliminar latencia y pérdida de paquetes cuando el usuario presiona "Hablar" en Apple Casa.
+
 ## [2.3.7] - 2026-10-29
 
 - Corrige la selección de entidad principal en dispositivos de televisión compuestos: `DeviceModal` ahora prioriza `media_player` sobre interruptores auxiliares (`switch.*_mute`).

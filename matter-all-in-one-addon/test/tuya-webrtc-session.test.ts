@@ -130,9 +130,18 @@ describe("Tuya WebRTC signaling", () => {
   it("refuses to promise return audio without the actual capability", async () => {
     const session = new TuyaWebRtcSession({
       ...bundle,
-      audioAttributes: { call_mode: [1], hardware_capability: [1] },
+      audioAttributes: { call_mode: [0], hardware_capability: [0] },
     });
     await expect(session.start()).rejects.toThrow("two-way audio");
+  });
+  it("accepts half-duplex talkback mode used by pet feeders and cameras", async () => {
+    broker();
+    const session = new TuyaWebRtcSession({
+      ...bundle,
+      audioAttributes: { call_mode: [1], hardware_capability: [1] },
+    });
+    await expect(session.start()).resolves.toBeUndefined();
+    await session.close();
   });
   it("bounds close when the Tuya broker is already disconnected", async () => {
     const client = broker();
