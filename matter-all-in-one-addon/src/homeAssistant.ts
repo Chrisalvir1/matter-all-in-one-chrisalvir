@@ -2482,7 +2482,10 @@ export class HomeAssistant extends EventEmitter {
       if (this.wsAccessToken) {
         headers["Authorization"] = `Bearer ${this.wsAccessToken}`;
       }
-      const response = await fetch(url, { headers });
+      const response = await fetch(url, {
+        headers,
+        signal: AbortSignal.timeout(1200),
+      });
       if (response.ok) {
         const arrayBuf = await response.arrayBuffer();
         return Buffer.from(arrayBuf);

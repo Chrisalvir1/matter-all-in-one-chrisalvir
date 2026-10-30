@@ -242,6 +242,37 @@ describe("HomeKitCameraAccessory production HAP graph", () => {
 });
 
 describe("HomeKitCameraStreamingDelegate", () => {
+  it("waits for a delayed fresh HA snapshot instead of returning the stale cache", async () => {
+    const freshJpeg = Buffer.concat([
+      Buffer.from([0xff, 0xd8]),
+      Buffer.alloc(3000, 7),
+      Buffer.from([0xff, 0xd9]),
+    ]);
+    const platform = createPlatform();
+    (platform.ha as any).fetchSnapshot = async () => {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      return freshJpeg;
+    };
+    const delegate = new HomeKitCameraStreamingDelegate(
+      platform,
+      "camera.backyard",
+      capabilities,
+      rtspSource,
+    );
+
+    const result = await new Promise<Buffer>((resolve, reject) => {
+      void delegate.handleSnapshotRequest(
+        { width: 320, height: 240, reason: 0 },
+        (error, buffer) => (error ? reject(error) : resolve(buffer!)),
+      );
+    });
+
+    expect(result).toBe(freshJpeg);
+    expect(platform.log.notice).toHaveBeenCalledWith(
+      expect.stringContaining("Snapshot source=ha-fetch-snapshot"),
+    );
+  });
+
   it("does not refresh the age of a cached snapshot when protecting an active stream", async () => {
     const delegate = new HomeKitCameraStreamingDelegate(
       createPlatform(),

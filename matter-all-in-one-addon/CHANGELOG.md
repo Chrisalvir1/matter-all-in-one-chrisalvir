@@ -1,3 +1,8 @@
+## [2.3.10] - 2026-10-29
+
+- Corrige el snapshot viejo de HomeKit: la consulta al proxy de cámara de Home Assistant ahora vence en 1.2 s y el fallback cacheado espera hasta 5.2 s para dar oportunidad a las rutas actuales de HA, HTTP y FFmpeg.
+- Mantiene la protección que evita abrir otra conexión RTSP mientras hay Live View activo. El snapshot se considera actual solo cuando se obtiene una imagen nueva; el fallback conserva su antigüedad real.
+
 ## [2.3.9] - 2026-10-29
 
 - Evita perder los primeros paquetes de Talk cuando FFmpeg/WebRTC aún están iniciando: mantiene hasta 2 s de RTP cifrado entrante y audio PCMU decodificado hasta que Omni confirma conexión.

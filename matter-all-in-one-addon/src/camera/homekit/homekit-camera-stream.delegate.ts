@@ -577,7 +577,10 @@ export class HomeKitCameraStreamingDelegate
       ) {
         finish("safety-cached-fallback", this.lastSnapshotBuffer);
       }
-    }, 1800);
+    // Let the bounded HA snapshot, direct HTTP snapshot, and final FFmpeg
+    // capture complete before returning an older cached image. These paths
+    // have explicit upper bounds of 1.2s + 1.5s + 2s respectively.
+    }, 5200);
 
     try {
       let haEntityToQuery: string | undefined = this.entityId.startsWith(
