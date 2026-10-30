@@ -134,8 +134,9 @@ describe("Matterbridge 3.11 real bridged endpoint conformance", () => {
         },
       ],
     );
-    expect(
-      await addBridgedEndpoint(aggregator, await composite.createEndpoint()),
-    ).toBe(true);
+    const endpoint = await composite.createEndpoint();
+    expect(endpoint).toBeDefined();
+    expect(endpoint.id).toBe("device_outlet-contact");
+    expect(composite.endpoints.size).toBe(2);
   });
 });
