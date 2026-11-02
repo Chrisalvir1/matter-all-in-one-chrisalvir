@@ -1,17 +1,26 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { CommandHandler } from "matterbridge";
 import {
   installMatterCommandResponsePolicy,
   MATTER_COMMAND_ACK_BUDGET_MS,
 } from "../src/utils/matter-command-response.js";
 
-function makeEndpoint(executeHandler: (...args: any[]) => Promise<unknown>) {
-  return { commandHandler: { executeHandler } };
+// Match Matterbridge 3.11.1's prototype protection used by the production CLI.
+Object.freeze(CommandHandler.prototype);
+
+function makeEndpoint(
+  handler: (...args: any[]) => Promise<unknown>,
+  command = "on",
+) {
+  const commandHandler = new CommandHandler();
+  commandHandler.addHandler(command as any, handler as any);
+  return { commandHandler };
 }
 
 describe("Matter command response policy", () => {
   afterEach(() => vi.useRealTimers());
 
-  it("preserves fast results", async () => {
+  it("wraps registered handlers without mutating the frozen execute method", async () => {
     const endpoint = makeEndpoint(async () => "done");
     const onCommandStart = vi.fn();
     const onCommandOutcome = vi.fn();
@@ -21,15 +30,33 @@ describe("Matter command response policy", () => {
       onCommandOutcome,
     });
 
+    expect(
+      Object.isFrozen(Object.getPrototypeOf(endpoint.commandHandler)),
+    ).toBe(true);
+    expect(Object.hasOwn(endpoint.commandHandler, "executeHandler")).toBe(
+      false,
+    );
     await expect(
       endpoint.commandHandler.executeHandler("OnOff.on"),
     ).resolves.toBe("done");
-    expect(onCommandStart).toHaveBeenCalledWith("OnOff.on");
+    expect(onCommandStart).toHaveBeenCalledWith("on");
     expect(onCommandOutcome).toHaveBeenCalledWith(
-      "OnOff.on",
+      "on",
       expect.any(Number),
       "completed",
     );
+  });
+
+  it("wraps handlers registered after the policy is installed", async () => {
+    const endpoint = makeEndpoint(async () => "first");
+    const onCommandStart = vi.fn();
+    installMatterCommandResponsePolicy(endpoint, { onCommandStart });
+    endpoint.commandHandler.addHandler("off", async () => "second");
+
+    await expect(
+      endpoint.commandHandler.executeHandler("OnOff.off"),
+    ).resolves.toBe("second");
+    expect(onCommandStart).toHaveBeenCalledWith("off");
   });
 
   it("keeps slow Home Assistant work running after the Matter ACK budget", async () => {
@@ -44,11 +71,11 @@ describe("Matter command response policy", () => {
       onCommandOutcome,
     });
 
-    const response = endpoint.commandHandler.executeHandler("OnOff.on");
+    const response = endpoint.commandHandler.executeHandler("on");
     await vi.advanceTimersByTimeAsync(MATTER_COMMAND_ACK_BUDGET_MS);
     await expect(response).resolves.toBeUndefined();
     expect(onCommandOutcome).toHaveBeenCalledWith(
-      "OnOff.on",
+      "on",
       MATTER_COMMAND_ACK_BUDGET_MS,
       "handler_returned_pending",
     );
@@ -62,19 +89,20 @@ describe("Matter command response policy", () => {
     const onFailure = vi.fn();
     const endpoint = makeEndpoint(
       () => new Promise((_, reject) => (fail = reject)),
+      "off",
     );
     installMatterCommandResponsePolicy(endpoint, {
       timeoutMs: 20,
       onFailure,
     });
 
-    const response = endpoint.commandHandler.executeHandler("OnOff.off");
+    const response = endpoint.commandHandler.executeHandler("off");
     await vi.advanceTimersByTimeAsync(20);
     await expect(response).resolves.toBeUndefined();
     fail(new Error("HA device timed out"));
     await vi.waitFor(() =>
       expect(onFailure).toHaveBeenCalledWith(
-        "OnOff.off",
+        "off",
         expect.objectContaining({ message: "HA device timed out" }),
         true,
       ),
@@ -85,14 +113,14 @@ describe("Matter command response policy", () => {
     const onFailure = vi.fn();
     const endpoint = makeEndpoint(async () => {
       throw new Error("HA rejected service");
-    });
+    }, "off");
     installMatterCommandResponsePolicy(endpoint, { timeoutMs: 50, onFailure });
 
-    await expect(
-      endpoint.commandHandler.executeHandler("OnOff.off"),
-    ).rejects.toThrow("HA rejected service");
+    await expect(endpoint.commandHandler.executeHandler("off")).rejects.toThrow(
+      "HA rejected service",
+    );
     expect(onFailure).toHaveBeenCalledWith(
-      "OnOff.off",
+      "off",
       expect.objectContaining({ message: "HA rejected service" }),
       false,
     );

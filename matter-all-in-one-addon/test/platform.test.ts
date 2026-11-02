@@ -296,9 +296,25 @@ describe("HomeAssistantPlatform", () => {
     const recordFailure = vi.spyOn(platform, "recordEntityCommandFailure");
     const endpoint = {
       commandHandler: {
-        executeHandler: vi
-          .fn()
-          .mockRejectedValue(new Error("HA rejected command")),
+        handler: [
+          {
+            command: "off",
+            handler: vi
+              .fn()
+              .mockRejectedValue(new Error("HA rejected command")),
+          },
+        ],
+        addHandler(command: string, handler: (...args: any[]) => unknown) {
+          this.handler.push({ command, handler });
+        },
+        async executeHandler(command: string, ...args: unknown[]) {
+          const registered = this.handler.find(
+            (entry) =>
+              entry.command === command ||
+              entry.command === command.split(".").pop(),
+          );
+          return registered?.handler(...args);
+        },
       },
     };
     (platform as any).installMatterCommandResponsePolicy(endpoint, entityId);

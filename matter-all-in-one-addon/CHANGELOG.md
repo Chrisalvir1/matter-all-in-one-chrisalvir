@@ -1,3 +1,9 @@
+## [2.3.14] - 2026-11-02
+
+- Repara la restauración de accesorios Matter en Matterbridge 3.11.1: ese runtime congela `CommandHandler.prototype`, y el add-on intentaba reemplazar `executeHandler`, lo que provocaba `Cannot assign to read only property` y dejaba los accesorios sin iniciar. La política ahora envuelve los callbacks registrados mediante la instancia de `CommandHandler`, sin modificar el prototipo congelado.
+- Mantiene la respuesta Matter dentro del presupuesto de 750 ms y el seguimiento de fallos tardíos de Home Assistant. También procesa handlers existentes y los registrados después de instalar la política.
+- No borra datos ni fabrics y no requiere restablecer o volver a enlazar accesorios. Verificación local en Node 26.13.0: 82 suites/708 pruebas, typecheck backend y frontend. La recuperación física en Home Assistant y Apple Casa se verifica después de instalar la imagen.
+
 ## [2.3.13] - 2026-11-02
 
 - Actualiza Node.js 26.13.0 LTS, npm 12.2.1, Matterbridge 3.11.1, HAP-NodeJS 2.3.0, werift 0.26.0 y dependencias compatibles; fija imágenes base por digest y GitHub Actions por SHA.
