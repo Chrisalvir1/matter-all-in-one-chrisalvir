@@ -1,6 +1,15 @@
 # Publicación npm segura — Matter All-in-One Chrisalvir
 
-## Estado y objetivo
+## Estado actual (2026-11-02)
+
+`matter-all-in-one-addon@2.3.13` está publicado en npm y es la etiqueta
+`latest`. El workflow manual #225 de `main` terminó correctamente con Trusted
+Publishing y provenance: https://github.com/Chrisalvir1/matter-all-in-one-chrisalvir/actions/runs/41512016121.
+El primer intento (#224) falló al encontrar una entrada Sigstore equivalente;
+el reintento generó una entrada nueva y publicó correctamente. La instrucción
+histórica de abajo sobre v2.3.0 ya no representa el estado actual.
+
+## Antecedente: publicación de v2.3.0
 
 La imagen para Home Assistant **v2.3.0** y su GitHub Release ya están
 publicadas. El flujo npm de la release falló al intentar subir
@@ -36,7 +45,7 @@ conversaciones. Esta configuración sustituye la necesidad de mantener un
 recién creado tenga éxito en un plazo de **dos días**. Conviene configurar la
 conexión cuando se pueda ejecutar el workflow seguidamente.
 
-## Reintentar la v2.3.0
+### Pasos que se usaron entonces
 
 1. Comprueba que la configuración de Trusted Publisher quedó guardada en npm.
 2. Ve a GitHub → **Actions → Publish to NPM → Run workflow**.
@@ -51,7 +60,7 @@ El workflow es idempotente: comprueba si **esa versión exacta** ya existe
 antes de publicar. No requiere volver a crear la GitHub Release ni modificar
 los datos de las cámaras.
 
-## Requisitos de seguridad
+### Requisitos que aplicaban al workflow histórico de v2.3.0
 
 - GitHub-hosted runner `ubuntu-latest`.
 - Node.js `24.22.1` y npm CLI `11.5.1` o superior.
