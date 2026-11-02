@@ -89,4 +89,5 @@ jobs:
           uv pip install --system -r requirements.txt -r requirements_test.txt
           uv pip install --system -e . --no-deps
       - name: Verify websocket API contract
-        run: python -m pytest -q tests_core
+        # HA 2026.11 must install its httpx2 alias before pytest auto-loads plugins.
+        run: python -c 'import homeassistant; import pytest; raise SystemExit(pytest.main(["-q", "tests_core"]))'
