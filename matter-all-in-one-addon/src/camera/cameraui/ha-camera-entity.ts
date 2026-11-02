@@ -2,10 +2,7 @@ import type { CameraUiCameraRecord } from "./cameraui-types.js";
 
 /** Resolve a Camera.UI record to a real Home Assistant camera entity. */
 export function resolveHaCameraEntityId(
-  camera: Pick<
-    CameraUiCameraRecord,
-    "id" | "name" | "realEntities"
-  >,
+  camera: Pick<CameraUiCameraRecord, "id" | "name" | "realEntities">,
   hassStates?: Map<string, any>,
 ): string | undefined {
   if (!hassStates) return undefined;
@@ -49,14 +46,14 @@ export function resolveHaCameraEntityId(
     }
   }
 
-  const isVimtag = /(?:\bvimtag\b)/i.test(
-    `${camera.id} ${cameraName}`,
-  );
+  const isVimtag = /(?:\bvimtag\b)/i.test(`${camera.id} ${cameraName}`);
   if (isVimtag) {
     for (const [id, state] of hassStates) {
       if (!isStreamCameraEntityId(id)) continue;
       const idLower = id.toLowerCase();
-      const fnLower = String(state?.attributes?.friendly_name || "").toLowerCase();
+      const fnLower = String(
+        state?.attributes?.friendly_name || "",
+      ).toLowerCase();
       if (idLower.includes("vimtag") || fnLower.includes("vimtag")) {
         candidates.push(id);
       }
@@ -69,7 +66,9 @@ export function resolveHaCameraEntityId(
 
   // Match an HA camera by its friendly name or entity ID tokens when Camera.UI did not retain the
   // linked entity ID. Never synthesize an entity from Camera.UI's UUID.
-  const normalizedName = stripAccents(cameraName).replace(/[^a-z0-9]+/g, " ").trim();
+  const normalizedName = stripAccents(cameraName)
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
   if (normalizedName) {
     const nameTokens = normalizedName
       .split(/\s+/)
@@ -79,18 +78,24 @@ export function resolveHaCameraEntityId(
       );
     for (const [id, state] of hassStates) {
       if (!isStreamCameraEntityId(id)) continue;
-      const friendlyName = stripAccents(String(state?.attributes?.friendly_name || ""))
+      const friendlyName = stripAccents(
+        String(state?.attributes?.friendly_name || ""),
+      )
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, " ")
         .trim();
       if (/\b(?:snapshot|still image|image)\b/i.test(friendlyName)) continue;
-      const idClean = stripAccents(id.toLowerCase()).replace(/[^a-z0-9]+/g, " ");
+      const idClean = stripAccents(id.toLowerCase()).replace(
+        /[^a-z0-9]+/g,
+        " ",
+      );
       if (
         friendlyName &&
         (friendlyName === normalizedName ||
           friendlyName.includes(normalizedName) ||
           normalizedName.includes(friendlyName) ||
-          (nameTokens.length > 0 && nameTokens.every((token) => friendlyName.includes(token))))
+          (nameTokens.length > 0 &&
+            nameTokens.every((token) => friendlyName.includes(token))))
       ) {
         return id;
       }

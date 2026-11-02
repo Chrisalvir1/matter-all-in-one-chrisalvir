@@ -324,7 +324,11 @@ vi.mock("matterbridge", () => {
     pressureSensor: makeMockDeviceType(0x0305, "pressureSensor", [0x3, 0x403]),
     flowSensor: makeMockDeviceType(0x0306, "flowSensor", [0x3, 0x404]),
     lightSensor: makeMockDeviceType(0x0106, "lightSensor", [0x3, 0x400]),
-    electricalSensor: makeMockDeviceType(0x0510, "electricalSensor", [0x3, 0x009c]),
+    electricalSensor: makeMockDeviceType(
+      0x0510,
+      "electricalSensor",
+      [0x3, 0x009c],
+    ),
     roboticVacuumCleaner: makeMockDeviceType(
       0x0074,
       "roboticVacuumCleaner",
@@ -345,7 +349,11 @@ vi.mock("matterbridge", () => {
     // In tests, requiredServerClusters is empty because the mock addRequiredClusterServers() is a no-op.
     camera: makeMockDeviceType(0x0510, "camera", []),
     snapshotCamera: makeMockDeviceType(0x0145, "snapshotCamera", []),
-    airQualitySensor: makeMockDeviceType(0x002c, "airQualitySensor", [0x3, 0x5b]),
+    airQualitySensor: makeMockDeviceType(
+      0x002c,
+      "airQualitySensor",
+      [0x3, 0x5b],
+    ),
     waterValve: makeMockDeviceType(0x0042, "waterValve", [0x3, 0x81]),
     batteryStorage: makeMockDeviceType(0x0018, "batteryStorage", [0x3]),
     solarPower: makeMockDeviceType(0x0017, "solarPower", [0x3]),

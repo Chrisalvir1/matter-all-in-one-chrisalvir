@@ -107,8 +107,14 @@ export class CameraEntity extends BaseEntity {
         .then(() => this.platform.ha.requestOmniTuyaCameraWebRtc(this.entityId))
         .then((bundle) => {
           const a = bundle.audioAttributes;
-          const hasMode = !a?.call_mode?.length || a.call_mode.includes(1) || a.call_mode.includes(2);
-          const hasHw = !a?.hardware_capability?.length || a.hardware_capability.includes(1) || a.hardware_capability.includes(2);
+          const hasMode =
+            !a?.call_mode?.length ||
+            a.call_mode.includes(1) ||
+            a.call_mode.includes(2);
+          const hasHw =
+            !a?.hardware_capability?.length ||
+            a.hardware_capability.includes(1) ||
+            a.hardware_capability.includes(2);
           return hasMode && hasHw;
         })
         .catch(() => false);

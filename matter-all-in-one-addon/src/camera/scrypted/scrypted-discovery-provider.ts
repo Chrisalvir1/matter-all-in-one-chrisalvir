@@ -13,8 +13,7 @@ import {
 } from "./scrypted-runtime-connector.js";
 
 export type ScryptedDiscoverySource =
-  | ScryptedRuntimeFetcher
-  | ScryptedRuntimeConnection;
+  ScryptedRuntimeFetcher | ScryptedRuntimeConnection;
 
 export class ScryptedDiscoveryProvider {
   public readonly connection: ScryptedRuntimeConnection;

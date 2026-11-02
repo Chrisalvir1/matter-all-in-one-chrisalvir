@@ -184,7 +184,8 @@ export class VacuumEntity extends BaseEntity {
           const label = `${id} ${stateObj?.attributes?.friendly_name ?? ""}`;
           if (
             dc === "battery" ||
-            (/(battery|bateria|electricity[_ ]left)/i.test(label) && unit === "%")
+            (/(battery|bateria|electricity[_ ]left)/i.test(label) &&
+              unit === "%")
           ) {
             const level = parseLevel(stateObj);
             if (level !== null) return level;
@@ -215,7 +216,8 @@ export class VacuumEntity extends BaseEntity {
       for (const [id, reg] of this.platform.ha?.hassEntities?.entries() ?? []) {
         if (reg.device_id === deviceId && id.startsWith("button.")) {
           const stateObj = this.platform.ha?.hassStates?.get(id);
-          if (!stateObj || stateObj.state?.toLowerCase() === "unavailable") continue;
+          if (!stateObj || stateObj.state?.toLowerCase() === "unavailable")
+            continue;
           const label = `${id} ${stateObj?.attributes?.friendly_name ?? ""}`;
           if (
             /(volver_a_base|return_to_base|chargego|dock|home|cargar|base)/i.test(
@@ -244,21 +246,43 @@ export class VacuumEntity extends BaseEntity {
   }
 
   private getBatteryChargeState(state: HassState): number {
-    const deviceId = this.platform.ha?.hassEntities?.get(this.entityId)?.device_id;
-    const signals = [state.state, state.attributes?.status, state.attributes?.battery_status];
+    const deviceId = this.platform.ha?.hassEntities?.get(
+      this.entityId,
+    )?.device_id;
+    const signals = [
+      state.state,
+      state.attributes?.status,
+      state.attributes?.battery_status,
+    ];
     if (deviceId) {
       for (const [id, reg] of this.platform.ha?.hassEntities?.entries() ?? []) {
         if (reg.device_id !== deviceId || !id.startsWith("sensor.")) continue;
         const linked = this.platform.ha?.hassStates?.get(id);
         if (!linked || isUnavailable(linked)) continue;
         const label = `${id} ${linked.attributes?.friendly_name ?? ""}`;
-        if (/(?:status|charging|charge_state)/i.test(label)) signals.push(linked.state);
+        if (/(?:status|charging|charge_state)/i.test(label))
+          signals.push(linked.state);
       }
     }
-    const values = signals.map((s) => String(s ?? "").trim().toLowerCase());
-    if (values.some((s) => ["charge_done", "charging_completed", "fully_charged"].includes(s))) return 2;
-    if (values.some((s) => ["charge", "charging", "on_charge", "in_charge"].includes(s))) return 1;
-    if (values.some((s) => ["cleaning", "returning", "paused"].includes(s))) return 3;
+    const values = signals.map((s) =>
+      String(s ?? "")
+        .trim()
+        .toLowerCase(),
+    );
+    if (
+      values.some((s) =>
+        ["charge_done", "charging_completed", "fully_charged"].includes(s),
+      )
+    )
+      return 2;
+    if (
+      values.some((s) =>
+        ["charge", "charging", "on_charge", "in_charge"].includes(s),
+      )
+    )
+      return 1;
+    if (values.some((s) => ["cleaning", "returning", "paused"].includes(s)))
+      return 3;
     return 0;
   }
 
@@ -400,14 +424,16 @@ export class VacuumEntity extends BaseEntity {
         ? 65 // Charging
         : this.state.state.toLowerCase() === "returning"
           ? 64 // SeekingCharger
-          : isSelectorDocked && this.state.state.toLowerCase() !== "docked" && this.getBatteryChargeState(this.state) !== 2
+          : isSelectorDocked &&
+              this.state.state.toLowerCase() !== "docked" &&
+              this.getBatteryChargeState(this.state) !== 2
             ? 64 // A return command does not prove the robot is docked.
             : isSelectorDocked
               ? 66 // Docked
-        : initialUpdate.operationalState === 0 &&
-            this.state.state.toLowerCase() === "docked"
-          ? 66
-          : initialUpdate.operationalState;
+              : initialUpdate.operationalState === 0 &&
+                  this.state.state.toLowerCase() === "docked"
+                ? 66
+                : initialUpdate.operationalState;
     const initialRunMode =
       !isSelectorDocked && initialUpdate.onOff
         ? RUN_MODE_ID_CLEANING
@@ -545,15 +571,18 @@ export class VacuumEntity extends BaseEntity {
     const isSelectorDocked = cleanSelector?.state?.toLowerCase() === "chargego";
     const isChargingOrDocked = update.isChargingOrDocked || isSelectorDocked;
     const chargeState = this.getBatteryChargeState(state);
-    const effectiveOperationalState = chargeState === 1
-      ? 65
-      : state.state.toLowerCase() === "returning"
-        ? 64
-        : isSelectorDocked && state.state.toLowerCase() !== "docked" && chargeState !== 2
+    const effectiveOperationalState =
+      chargeState === 1
+        ? 65
+        : state.state.toLowerCase() === "returning"
           ? 64
-          : isSelectorDocked
-            ? 66
-            : update.operationalState;
+          : isSelectorDocked &&
+              state.state.toLowerCase() !== "docked" &&
+              chargeState !== 2
+            ? 64
+            : isSelectorDocked
+              ? 66
+              : update.operationalState;
     const effectiveOnOff = !isSelectorDocked && update.onOff;
     const syncFunc = isInitialSync ? safeSetAttribute : safeUpdateAttribute;
 

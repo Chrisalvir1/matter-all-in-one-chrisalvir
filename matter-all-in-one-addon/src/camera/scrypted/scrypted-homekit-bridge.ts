@@ -84,13 +84,14 @@ export class ScryptedHomeKitBridge {
       camera.name ||
       "Scrypted Camera";
     const rawSerial =
-      camera.identityOverride?.serialNumber ||
-      camera.serialNumber;
+      camera.identityOverride?.serialNumber || camera.serialNumber;
     // Use the real manufacturer serial when available; otherwise fall back to
     // a stable deterministic identifier derived from the Scrypted device ID.
     // 'Serial no disponible' is stripped so HomeKit shows something meaningful.
     const serial =
-      (rawSerial && !rawSerial.startsWith("SCRYPTED-") && rawSerial !== "Serial no disponible"
+      (rawSerial &&
+      !rawSerial.startsWith("SCRYPTED-") &&
+      rawSerial !== "Serial no disponible"
         ? rawSerial
         : undefined) ||
       resolveDisplaySerialNumber(camera).replace("Serial no disponible", "") ||
@@ -178,7 +179,8 @@ export class ScryptedHomeKitBridge {
     record.hksvEnabled = false;
     record.pincode = record.pincode || "031-45-154";
     record.setupId = record.setupId || this.generateSetupId(camera.cameraId);
-    record.username = record.username || this.generateMacAddress(camera.cameraId);
+    record.username =
+      record.username || this.generateMacAddress(camera.cameraId);
 
     const accessory = new HomeKitCameraAccessory(
       platform,

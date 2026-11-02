@@ -2,7 +2,7 @@ name: Build and Test
 
 on:
   push:
-    branches: [main]
+    branches: [main, codex/stable-dependencies-node26]
     paths-ignore:
       - "**/*.md"
   pull_request:
@@ -21,26 +21,35 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node-version: [24.22.1]
+        node-version: [26.13.0]
         os: [ubuntu-24.04]
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ matrix.node-version }}
 
+      - name: Install validated npm
+        run: npm install --global npm@12.2.1 --no-fund --no-audit
+
       - name: Install dependencies
         run: npm ci --legacy-peer-deps --no-fund --no-audit
+
+      - name: Verify synchronized toolchain
+        run: npm run check:toolchain
 
       - name: Audit production dependencies
         run: npm audit --omit=dev
 
       - name: Typecheck
         run: npm run typecheck
+
+      - name: Check formatting
+        run: npm run lint
 
       - name: Build plugin
         run: npm run build
@@ -53,25 +62,29 @@ jobs:
 
       - name: Build add-on container
         if: matrix.os == 'ubuntu-24.04'
-        run: docker build --tag matter-all-in-one:test .
+        run: |
+          docker build --tag matter-all-in-one:test .
+          docker run --rm --network none --entrypoint node matter-all-in-one:test scripts/verify-runtime.mjs
+          docker run --rm --network none --entrypoint /usr/local/bin/ffmpeg matter-all-in-one:test -version
+          docker run --rm --network none --entrypoint ffprobe matter-all-in-one:test -version
 
   home-assistant-core-compatibility:
-    name: Home Assistant Core 2026.10.0 websocket contract
+    name: Home Assistant Core 2026.11.0b3 websocket contract
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: home-assistant/core
-          ref: 2026.10.0
+          ref: 2026.11.0b3
           path: home-assistant-core
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
-          python-version: '3.14.2'
-      - name: Install Home Assistant Core 2026.10.0 test dependencies
+          python-version: '3.14.10'
+      - name: Install Home Assistant Core 2026.11.0b3 test dependencies
         run: |
-          python -m pip install uv==0.12.19
+          python -m pip install uv==0.13.6
           cd home-assistant-core
           uv pip install --system -r requirements.txt -r requirements_test.txt
           uv pip install --system -e . --no-deps

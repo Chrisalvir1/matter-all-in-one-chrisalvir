@@ -1,6 +1,12 @@
 #!/usr/bin/env sh
 set -eu
 
+# Publishing is intentionally unavailable from audit/feature branches.
+if [ "$(git branch --show-current)" != "main" ]; then
+  echo "Release helper requires main; this branch will not be pushed or tagged." >&2
+  exit 1
+fi
+
 VERSION=$(python3 -c "import json; print(json.load(open('./matter-all-in-one-addon/package.json'))['version'])")
 TAG="v$VERSION"
 MESSAGE=${1:-"release: $TAG"}
@@ -12,5 +18,4 @@ git add README.md push_update.sh matter-all-in-one-addon .github/workflows repos
 git commit -m "$MESSAGE"
 git tag -a "$TAG" -m "$TAG"
 git push origin HEAD
-git push origin HEAD:main
 git push origin "$TAG"

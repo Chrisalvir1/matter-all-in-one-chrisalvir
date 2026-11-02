@@ -227,15 +227,11 @@ export class MqttClientManager {
     this.onDeviceRemovedCallback = callback;
   }
 
-  public onStateChanged(
-    callback: (topic: string, payload: string) => void,
-  ) {
+  public onStateChanged(callback: (topic: string, payload: string) => void) {
     this.onStateChangedCallback = callback;
   }
 
-  public onCameraUiMessage(
-    callback: (topic: string, payload: string) => void,
-  ) {
+  public onCameraUiMessage(callback: (topic: string, payload: string) => void) {
     this.onCameraUiMessageCallback = callback;
   }
 
@@ -285,7 +281,10 @@ export class MqttClientManager {
           "+/+/motion",
         ],
         (err) => {
-          if (err) this.log.error(`[MQTT] Camera / AI topic subscription error: ${err}`);
+          if (err)
+            this.log.error(
+              `[MQTT] Camera / AI topic subscription error: ${err}`,
+            );
           else
             this.log.info(
               "[MQTT] Subscribed to camera.ui/#, cameraui/#, omni_ai_mac/#, and tapo topics for camera & AI detection events",
@@ -421,7 +420,10 @@ export class MqttClientManager {
     this.discoveredDevices.delete(topic);
     if (!this.client?.connected) return;
     this.client.publish(topic, "", { retain: true, qos: 1 }, (err) => {
-      if (err) this.log.error(`[MQTT] Could not remove discovery config ${topic}: ${err}`);
+      if (err)
+        this.log.error(
+          `[MQTT] Could not remove discovery config ${topic}: ${err}`,
+        );
       else this.log.notice(`[MQTT] Removed stale discovery config ${topic}`);
     });
   }

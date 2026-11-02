@@ -20,8 +20,12 @@ export interface AccessUnitAssembler {
   push(packet: RtpPacket): AccessUnit | undefined;
 }
 
-export function createAccessUnitAssembler(codec: SecureVideoCodec): AccessUnitAssembler {
-  return codec === "h264" ? new H264AccessUnitAssembler() : new HevcAccessUnitAssembler();
+export function createAccessUnitAssembler(
+  codec: SecureVideoCodec,
+): AccessUnitAssembler {
+  return codec === "h264"
+    ? new H264AccessUnitAssembler()
+    : new HevcAccessUnitAssembler();
 }
 
 abstract class NalAccessUnitAssembler implements AccessUnitAssembler {
@@ -30,7 +34,10 @@ abstract class NalAccessUnitAssembler implements AccessUnitAssembler {
   private timestamp?: number;
 
   public push(packet: RtpPacket): AccessUnit | undefined {
-    if (this.timestamp !== undefined && packet.header.timestamp !== this.timestamp) {
+    if (
+      this.timestamp !== undefined &&
+      packet.header.timestamp !== this.timestamp
+    ) {
       this.reset();
     }
     this.timestamp = packet.header.timestamp;
@@ -41,7 +48,9 @@ abstract class NalAccessUnitAssembler implements AccessUnitAssembler {
       return undefined;
     }
     const unit: AccessUnit = {
-      data: Buffer.concat(this.nalUnits.flatMap((nal) => [nalLength(nal), nal])),
+      data: Buffer.concat(
+        this.nalUnits.flatMap((nal) => [nalLength(nal), nal]),
+      ),
       timestamp: packet.header.timestamp,
       marker: true,
     };
@@ -61,7 +70,11 @@ abstract class NalAccessUnitAssembler implements AccessUnitAssembler {
     }
   }
 
-  protected fragmentUnit(fuHeader: number, nalHeader: Buffer, data: Buffer): void {
+  protected fragmentUnit(
+    fuHeader: number,
+    nalHeader: Buffer,
+    data: Buffer,
+  ): void {
     if (fuHeader & 0x80) {
       this.fragment = [nalHeader, data];
     } else if (this.fragment) {
@@ -96,7 +109,10 @@ export class HevcAccessUnitAssembler extends NalAccessUnitAssembler {
       const fuHeader = payload[2];
       this.fragmentUnit(
         fuHeader,
-        Buffer.from([(payload[0] & 0x81) | ((fuHeader & 0x3f) << 1), payload[1]]),
+        Buffer.from([
+          (payload[0] & 0x81) | ((fuHeader & 0x3f) << 1),
+          payload[1],
+        ]),
         payload.subarray(3),
       );
     } else {
@@ -116,7 +132,11 @@ export class H264AccessUnitAssembler extends NalAccessUnitAssembler {
       this.aggregate(payload, 1);
     } else if (type === H264_NAL_FU_A) {
       const fuHeader = payload[1];
-      this.fragmentUnit(fuHeader, Buffer.from([(payload[0] & 0xe0) | (fuHeader & 0x1f)]), payload.subarray(2));
+      this.fragmentUnit(
+        fuHeader,
+        Buffer.from([(payload[0] & 0xe0) | (fuHeader & 0x1f)]),
+        payload.subarray(2),
+      );
     } else if (type >= 1 && type <= 23) {
       this.nalUnits.push(payload);
     }
@@ -140,12 +160,17 @@ export class SFrameRtpPacketizer {
 
   constructor(private options: SFramePacketizerOptions) {}
 
-  public packetize(ciphertext: Buffer, timestamp: number, marker: boolean): RtpPacket[] {
+  public packetize(
+    ciphertext: Buffer,
+    timestamp: number,
+    marker: boolean,
+  ): RtpPacket[] {
     const chunk = Math.max(1, this.options.maxPayload - 1);
     const packets: RtpPacket[] = [];
     for (let offset = 0; offset < ciphertext.length; offset += chunk) {
       const last = offset + chunk >= ciphertext.length;
-      const descriptor = (offset === 0 ? DESCRIPTOR_START : 0) | (last ? DESCRIPTOR_END : 0);
+      const descriptor =
+        (offset === 0 ? DESCRIPTOR_START : 0) | (last ? DESCRIPTOR_END : 0);
       const header = new RtpHeader({
         version: 2,
         marker: marker && last,
@@ -158,7 +183,10 @@ export class SFrameRtpPacketizer {
       packets.push(
         new RtpPacket(
           header,
-          Buffer.concat([Buffer.from([descriptor]), ciphertext.subarray(offset, offset + chunk)]),
+          Buffer.concat([
+            Buffer.from([descriptor]),
+            ciphertext.subarray(offset, offset + chunk),
+          ]),
         ),
       );
     }

@@ -1,5 +1,7 @@
-ARG BUILD_FROM=node:24.22.1-alpine3.24
+ARG BUILD_FROM=node:26.13.0-alpine3.24@sha256:c6ad9e9c1d80f6eb607c26b4b0a132ff7a2344fad1c78ea3baa2a7d4c8de6d94
 FROM ${BUILD_FROM} AS builder
+
+RUN npm install --global npm@12.2.1 --no-fund --no-audit
 
 WORKDIR /app
 COPY package.json package-lock.json ./
@@ -30,7 +32,9 @@ RUN set -eu; apk add --no-cache curl jq ffmpeg; ARCH=$(uname -m); \
      echo "${FFMPEG_SHA256}  /tmp/ffmpeg-homebridge.tar.gz" | sha256sum -c -; \
      tar xzf /tmp/ffmpeg-homebridge.tar.gz -C / --no-same-owner; \
      rm /tmp/ffmpeg-homebridge.tar.gz; chmod 0755 /usr/local/bin/ffmpeg; \
-     npm install -g matterbridge@3.11.0 --omit=dev --no-fund --no-audit
+     npm install -g matterbridge@3.11.1 --omit=dev --no-fund --no-audit
+
+RUN npm install --global npm@12.2.1 --no-fund --no-audit
 
 WORKDIR /app
 COPY package.json package-lock.json ./
@@ -40,7 +44,9 @@ RUN npm ci --omit=dev --omit=peer --legacy-peer-deps --no-fund --no-audit \
 RUN jq 'del(.devDependencies, .peerDependencies)' package.json > package.json.tmp \
   && mv package.json.tmp package.json
 
+COPY scripts/verify-runtime.mjs ./scripts/verify-runtime.mjs
 COPY --from=builder /app/dist ./dist
+RUN node scripts/verify-runtime.mjs
 COPY run.sh /run.sh
 RUN chmod 0755 /run.sh
 

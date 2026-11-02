@@ -45,7 +45,9 @@ describe("CameraSourceResolver", () => {
         requestCameraStream: vi.fn().mockResolvedValue(null),
         getCameraProxyStreamUrl: vi
           .fn()
-          .mockReturnValue("http://ha.local/api/camera_proxy_stream/camera.feeder"),
+          .mockReturnValue(
+            "http://ha.local/api/camera_proxy_stream/camera.feeder",
+          ),
       },
     };
 
@@ -64,9 +66,9 @@ describe("CameraSourceResolver", () => {
   });
 
   it("does not use the HTTP camera proxy when Live View requires an Omni renewal", async () => {
-    const getCameraProxyStreamUrl = vi.fn().mockReturnValue(
-      "http://ha.local/api/camera_proxy_stream/camera.feeder",
-    );
+    const getCameraProxyStreamUrl = vi
+      .fn()
+      .mockReturnValue("http://ha.local/api/camera_proxy_stream/camera.feeder");
     const fallback = await CameraSourceResolver.resolveOmniTuyaFallback(
       {
         ha: {
@@ -163,7 +165,8 @@ describe("CameraSourceResolver", () => {
       "camera.feeder",
       makeState({
         supported_features: 2,
-        stream_source: "http://ha.local/api/hls/stale-token/master_playlist.m3u8",
+        stream_source:
+          "http://ha.local/api/hls/stale-token/master_playlist.m3u8",
       }),
     );
 
@@ -213,9 +216,7 @@ describe("CameraSourceResolver", () => {
     const requestOmniTuyaCameraStream = vi.fn();
     const mockPlatform = {
       ha: {
-        hassEntities: new Map([
-          ["camera.generic", { platform: "generic" }],
-        ]),
+        hassEntities: new Map([["camera.generic", { platform: "generic" }]]),
         requestOmniTuyaCameraStream,
         requestCameraStream: vi
           .fn()

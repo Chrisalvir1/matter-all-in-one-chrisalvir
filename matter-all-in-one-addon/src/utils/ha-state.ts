@@ -47,7 +47,9 @@ export interface HassEvent {
  */
 export function isUnavailable(state: HassState | null | undefined): boolean {
   if (!state) return true;
-  const s = String(state.state ?? "").trim().toLowerCase();
+  const s = String(state.state ?? "")
+    .trim()
+    .toLowerCase();
   if (
     s === "" ||
     s === "unavailable" ||

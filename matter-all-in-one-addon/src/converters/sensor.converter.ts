@@ -80,7 +80,13 @@ export const sensorConverter = {
   toAirQuality(state: HassState): number | null {
     const s = state.state.toLowerCase();
     if (s === "good" || s === "buena") return 1;
-    if (s === "fair" || s === "aceptable" || s === "moderate" || s === "moderada") return 2;
+    if (
+      s === "fair" ||
+      s === "aceptable" ||
+      s === "moderate" ||
+      s === "moderada"
+    )
+      return 2;
     if (s === "poor" || s === "mala") return 4;
     if (s === "very_poor" || s === "muy mala") return 5;
     if (s === "hazardous" || s === "peligrosa") return 6;

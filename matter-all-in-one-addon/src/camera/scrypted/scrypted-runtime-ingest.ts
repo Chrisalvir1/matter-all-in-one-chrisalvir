@@ -1,5 +1,8 @@
 import type { ScryptedDiscoveryDevice } from "./scrypted-camera-discovery-adapter.js";
-import { ScryptedRuntimeFacade, type ScryptedRuntimeSnapshot } from "./scrypted-runtime-facade.js";
+import {
+  ScryptedRuntimeFacade,
+  type ScryptedRuntimeSnapshot,
+} from "./scrypted-runtime-facade.js";
 
 export type ScryptedDiscoveryPayload = {
   devices?: unknown;
@@ -34,7 +37,9 @@ function toDevice(value: unknown): ScryptedDiscoveryDevice | null {
         ? value.homeKitEnabled
         : undefined,
     matterEnabled:
-      typeof value.matterEnabled === "boolean" ? value.matterEnabled : undefined,
+      typeof value.matterEnabled === "boolean"
+        ? value.matterEnabled
+        : undefined,
     type: typeof value.type === "string" ? value.type : undefined,
     deviceType:
       typeof value.deviceType === "string" ? value.deviceType : undefined,
@@ -46,7 +51,8 @@ function toDevice(value: unknown): ScryptedDiscoveryDevice | null {
           : typeof value.rtspUrl === "string"
             ? value.rtspUrl
             : undefined,
-    streamUrl: typeof value.streamUrl === "string" ? value.streamUrl : undefined,
+    streamUrl:
+      typeof value.streamUrl === "string" ? value.streamUrl : undefined,
     rtspUrl: typeof value.rtspUrl === "string" ? value.rtspUrl : undefined,
     streamReference: isRecord(value.streamReference)
       ? value.streamReference

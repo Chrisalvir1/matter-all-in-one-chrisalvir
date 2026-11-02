@@ -27,10 +27,13 @@ export async function isCameraStreamReachable(
       else port = 554;
     }
     return await new Promise<boolean>((resolve) => {
-      const socket = net.createConnection({ host, port, timeout: timeoutMs }, () => {
-        socket.destroy();
-        resolve(true);
-      });
+      const socket = net.createConnection(
+        { host, port, timeout: timeoutMs },
+        () => {
+          socket.destroy();
+          resolve(true);
+        },
+      );
       socket.on("error", () => {
         socket.destroy();
         resolve(false);
@@ -68,7 +71,11 @@ export function extractRawCameras(json: any): any[] {
   if (Array.isArray(json.items)) return json.items;
 
   // Check dictionary inside json.cameras
-  if (json.cameras && typeof json.cameras === "object" && !Array.isArray(json.cameras)) {
+  if (
+    json.cameras &&
+    typeof json.cameras === "object" &&
+    !Array.isArray(json.cameras)
+  ) {
     const dictValues = Object.entries(json.cameras)
       .map(([key, val]: [string, any]) => {
         if (val && typeof val === "object") {
@@ -81,7 +88,11 @@ export function extractRawCameras(json: any): any[] {
   }
 
   // Check dictionary inside json.result
-  if (json.result && typeof json.result === "object" && !Array.isArray(json.result)) {
+  if (
+    json.result &&
+    typeof json.result === "object" &&
+    !Array.isArray(json.result)
+  ) {
     const dictValues = Object.entries(json.result)
       .map(([key, val]: [string, any]) => {
         if (val && typeof val === "object") {
@@ -99,7 +110,12 @@ export function extractRawCameras(json: any): any[] {
       if (
         val &&
         typeof val === "object" &&
-        (val.sources || val.videoConfig || val.name || val.id || val._id || val.uuid)
+        (val.sources ||
+          val.videoConfig ||
+          val.name ||
+          val.id ||
+          val._id ||
+          val.uuid)
       ) {
         return { name: val.name || key, ...val };
       }
@@ -193,64 +209,72 @@ export class CameraUiClient {
    * Modern Camera.UI may use POST /api/auth/login or session auth.
    * Universal HTTP Basic Auth is also handled transparently via getHeaders().
    */
-  public async login(targetBaseUrl?: string): Promise<{ ok: boolean; message?: string; skipped?: boolean }> {
+  public async login(
+    targetBaseUrl?: string,
+  ): Promise<{ ok: boolean; message?: string; skipped?: boolean }> {
     if (!this.config.username || !this.config.password) {
       return { ok: true, skipped: true };
     }
 
     const baseUrl = targetBaseUrl || this.getBaseUrl();
     if (!baseUrl) {
-      return { ok: false, message: "URL del servidor Camera.UI no configurada" };
+      return {
+        ok: false,
+        message: "URL del servidor Camera.UI no configurada",
+      };
     }
 
     const authEndpoints = ["/api/auth/login", "/api/login", "/auth/login"];
     const pwd = this.config.password;
     for (const ep of authEndpoints) {
-        try {
-          const creds = Buffer.from(
-            `${this.config.username}:${pwd}`,
-          ).toString("base64");
-          const headers: Record<string, string> = {
-            "Content-Type": "application/json",
-            Accept: "application/json",
-            Authorization: `Basic ${creds}`,
-          };
-          if (this.accessToken) {
-            headers["Authorization"] = `Bearer ${this.accessToken}`;
-          }
+      try {
+        const creds = Buffer.from(`${this.config.username}:${pwd}`).toString(
+          "base64",
+        );
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          Authorization: `Basic ${creds}`,
+        };
+        if (this.accessToken) {
+          headers["Authorization"] = `Bearer ${this.accessToken}`;
+        }
 
-          const res = await this.request(`${baseUrl}${ep}`, {
-            method: "POST",
-            headers,
-            body: JSON.stringify({
-              username: this.config.username,
-              password: pwd,
-              kind: "web",
-              persistent: true,
-              device: { id: "matter-all-in-one", name: "Matter All-in-One Bridge" },
-            }),
-            signal: AbortSignal.timeout(5000),
-          });
+        const res = await this.request(`${baseUrl}${ep}`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            username: this.config.username,
+            password: pwd,
+            kind: "web",
+            persistent: true,
+            device: {
+              id: "matter-all-in-one",
+              name: "Matter All-in-One Bridge",
+            },
+          }),
+          signal: AbortSignal.timeout(5000),
+        });
 
-          if (res.ok) {
-            const data = await res.json();
-            const token =
-              data?.access_token ||
-              data?.tokens?.access ||
-              data?.tokens?.access_token ||
-              data?.token ||
-              data?.accessToken;
-            if (token) {
-              this.accessToken = String(token);
-              this.loginError = undefined;
-              return { ok: true };
-            }
+        if (res.ok) {
+          const data = await res.json();
+          const token =
+            data?.access_token ||
+            data?.tokens?.access ||
+            data?.tokens?.access_token ||
+            data?.token ||
+            data?.accessToken;
+          if (token) {
+            this.accessToken = String(token);
+            this.loginError = undefined;
+            return { ok: true };
           }
+        }
 
-          if (res.status === 401 || res.status === 403) {
-            this.loginError = `Credenciales incorrectas: usuario o contraseña rechazados por Camera.UI en ${baseUrl} (HTTP ${res.status}).`;
-          }
-        } catch {}
+        if (res.status === 401 || res.status === 403) {
+          this.loginError = `Credenciales incorrectas: usuario o contraseña rechazados por Camera.UI en ${baseUrl} (HTTP ${res.status}).`;
+        }
+      } catch {}
     }
 
     return { ok: true, skipped: true };
@@ -259,10 +283,18 @@ export class CameraUiClient {
   /**
    * Tests connection to the Camera.UI instance across candidate endpoints and hosts.
    */
-  public async testConnection(): Promise<{ ok: boolean; message: string; version?: string; activeUrl?: string }> {
+  public async testConnection(): Promise<{
+    ok: boolean;
+    message: string;
+    version?: string;
+    activeUrl?: string;
+  }> {
     const candidates = this.getCandidateUrls();
     if (candidates.length === 0) {
-      return { ok: false, message: "URL del servidor Camera.UI no configurada" };
+      return {
+        ok: false,
+        message: "URL del servidor Camera.UI no configurada",
+      };
     }
 
     let lastError = "";
@@ -301,7 +333,8 @@ export class CameraUiClient {
             try {
               const data = await res.json();
               if (data?.version) version = String(data.version);
-              else if (data?.system?.version) version = String(data.system.version);
+              else if (data?.system?.version)
+                version = String(data.system.version);
 
               const discovered = extractRawCameras(data);
               if (discovered.length > 0) {
@@ -310,7 +343,10 @@ export class CameraUiClient {
             } catch {}
 
             this.resolvedBaseUrl = baseUrl;
-            const countMsg = count > 0 ? ` (${count} cámara${count === 1 ? "" : "s"} detectada${count === 1 ? "" : "s"})` : "";
+            const countMsg =
+              count > 0
+                ? ` (${count} cámara${count === 1 ? "" : "s"} detectada${count === 1 ? "" : "s"})`
+                : "";
             return {
               ok: true,
               message: `Conexión exitosa con Camera.UI en ${baseUrl}${countMsg}`,
@@ -381,7 +417,11 @@ export class CameraUiClient {
           });
 
           // If 401, token might have expired, re-login once and retry
-          if (res.status === 401 && this.config.username && this.config.password) {
+          if (
+            res.status === 401 &&
+            this.config.username &&
+            this.config.password
+          ) {
             const loginRes = await this.login(baseUrl);
             if (loginRes.ok) {
               res = await this.request(`${baseUrl}${ep}`, {
@@ -409,7 +449,8 @@ export class CameraUiClient {
 
     if (rawList.length === 0) return [];
 
-    const effectiveBaseUrl = successfulBaseUrl || this.getBaseUrl() || candidates[0];
+    const effectiveBaseUrl =
+      successfulBaseUrl || this.getBaseUrl() || candidates[0];
     const results: CameraUiCameraRecord[] = [];
     let parsedHostname = "localhost";
     try {
@@ -420,8 +461,11 @@ export class CameraUiClient {
       const item = rawList[i];
       if (!item) continue;
 
-      const name = String(item.name || item.camera || item.title || `Camera-${i + 1}`).trim();
-      const rawId = item._id || item.id || item.uuid || item.name || `cam_${i + 1}`;
+      const name = String(
+        item.name || item.camera || item.title || `Camera-${i + 1}`,
+      ).trim();
+      const rawId =
+        item._id || item.id || item.uuid || item.name || `cam_${i + 1}`;
       const safeId = String(rawId)
         .toLowerCase()
         .replace(/[^a-z0-9_-]/g, "_");
@@ -444,13 +488,19 @@ export class CameraUiClient {
               s.role === "high" ||
               s.role === "main" ||
               s.role === "stream1" ||
-              (typeof s.name === "string" && /main|stream1|hq|primary/i.test(s.name)),
+              (typeof s.name === "string" &&
+                /main|stream1|hq|primary/i.test(s.name)),
           ) ||
           sources.find((s) => {
-            const u = Array.isArray(s.urls) ? s.urls[0] : s.url || s.stream || "";
+            const u = Array.isArray(s.urls)
+              ? s.urls[0]
+              : s.url || s.stream || "";
             return /stream1|main|ch0|h264preview.*main/i.test(u);
           }) ||
-          sources.find((s) => s.role !== "sub" && s.role !== "low" && s.role !== "snapshot") ||
+          sources.find(
+            (s) =>
+              s.role !== "sub" && s.role !== "low" && s.role !== "snapshot",
+          ) ||
           sources[0];
         if (highRes) {
           if (Array.isArray(highRes.urls) && highRes.urls.length > 0) {
@@ -489,7 +539,9 @@ export class CameraUiClient {
         }
 
         // Snapshot source
-        const snap = sources.find((s) => s.role === "snapshot" || s.useForSnapshot === true);
+        const snap = sources.find(
+          (s) => s.role === "snapshot" || s.useForSnapshot === true,
+        );
         if (snap) {
           if (Array.isArray(snap.urls) && snap.urls.length > 0) {
             snapshotSourceUrl = this.cleanStreamUrl(snap.urls[0]);
@@ -500,14 +552,19 @@ export class CameraUiClient {
       }
 
       // Legacy fallback to videoConfig
-      let rtspUrl = mainSourceUrl || this.cleanStreamUrl(videoConfig.source) ||
-        this.cleanStreamUrl(videoConfig.rtspUrl) || this.cleanStreamUrl(item.rtspUrl) ||
-        this.cleanStreamUrl(item.streamUrl) || this.cleanStreamUrl(item.stream);
-      let subRtspUrl = subSourceUrl || this.cleanStreamUrl(videoConfig.subSource) ||
+      let rtspUrl =
+        mainSourceUrl ||
+        this.cleanStreamUrl(videoConfig.source) ||
+        this.cleanStreamUrl(videoConfig.rtspUrl) ||
+        this.cleanStreamUrl(item.rtspUrl) ||
+        this.cleanStreamUrl(item.streamUrl) ||
+        this.cleanStreamUrl(item.stream);
+      let subRtspUrl =
+        subSourceUrl ||
+        this.cleanStreamUrl(videoConfig.subSource) ||
         this.cleanStreamUrl(videoConfig.subRtspUrl);
       let snapshotUrl =
-        snapshotSourceUrl ||
-        this.cleanStreamUrl(videoConfig.stillImageSource);
+        snapshotSourceUrl || this.cleanStreamUrl(videoConfig.stillImageSource);
 
       // Ensure rtspUrl strictly prioritizes Stream 1 / Main (Full 100% Quality / Native Max Stream)
       if (rtspUrl) {
@@ -526,7 +583,11 @@ export class CameraUiClient {
           if (rtspUrl.includes("/stream1")) {
             rtspUrl = rtspUrl.replace("/stream1", "/stream0");
           }
-          if (subRtspUrl && subRtspUrl.includes("/stream0") && !rtspUrl.includes("/stream0")) {
+          if (
+            subRtspUrl &&
+            subRtspUrl.includes("/stream0") &&
+            !rtspUrl.includes("/stream0")
+          ) {
             const temp = rtspUrl;
             rtspUrl = subRtspUrl;
             subRtspUrl = temp;
@@ -534,26 +595,40 @@ export class CameraUiClient {
         } else if (isVimtag) {
           // Vimtag cameras: /live/ch0, /onvif1 or /ch0 is High Quality main stream; /live/ch1, /onvif2 or /ch1 is sub
           if (
-            (rtspUrl.includes("/live/ch1") || rtspUrl.includes("/ch1") || rtspUrl.includes("/onvif2")) &&
+            (rtspUrl.includes("/live/ch1") ||
+              rtspUrl.includes("/ch1") ||
+              rtspUrl.includes("/onvif2")) &&
             subRtspUrl &&
-            (subRtspUrl.includes("/live/ch0") || subRtspUrl.includes("/ch0") || subRtspUrl.includes("/onvif1"))
+            (subRtspUrl.includes("/live/ch0") ||
+              subRtspUrl.includes("/ch0") ||
+              subRtspUrl.includes("/onvif1"))
           ) {
             const temp = rtspUrl;
             rtspUrl = subRtspUrl;
             subRtspUrl = temp;
-          } else if (rtspUrl.includes("/stream1") || rtspUrl.includes("/stream2")) {
+          } else if (
+            rtspUrl.includes("/stream1") ||
+            rtspUrl.includes("/stream2")
+          ) {
             // Replace invalid generic /stream1 or /stream2 with Vimtag native /live/ch0
             rtspUrl = rtspUrl.replace(/\/stream[12]/, "/live/ch0");
-          } else if (/:\d+\/?$/.test(rtspUrl) || !rtspUrl.split("://")[1]?.includes("/")) {
+          } else if (
+            /:\d+\/?$/.test(rtspUrl) ||
+            !rtspUrl.split("://")[1]?.includes("/")
+          ) {
             // No path specified for Vimtag: append default /live/ch0
             rtspUrl = rtspUrl.replace(/\/?$/, "/live/ch0");
           }
         } else {
           // Standard cameras (Tapo, ONVIF, Reolink): /stream1, /main, /ch0 is High Quality, /stream2 or /sub is 360p
           if (
-            (rtspUrl.includes("/stream2") || rtspUrl.includes("_sub") || rtspUrl.includes("/sub/")) &&
+            (rtspUrl.includes("/stream2") ||
+              rtspUrl.includes("_sub") ||
+              rtspUrl.includes("/sub/")) &&
             subRtspUrl &&
-            (subRtspUrl.includes("/stream1") || subRtspUrl.includes("_main") || subRtspUrl.includes("/main/"))
+            (subRtspUrl.includes("/stream1") ||
+              subRtspUrl.includes("_main") ||
+              subRtspUrl.includes("/main/"))
           ) {
             const temp = rtspUrl;
             rtspUrl = subRtspUrl;
@@ -605,19 +680,40 @@ export class CameraUiClient {
       }
 
       // Extract width & height from sources, videoConfig, resolution string, or model heuristics
-      let width = Number(videoConfig.maxWidth || videoConfig.width || item.width || (sources[0] && sources[0].width) || 0);
-      let height = Number(videoConfig.maxHeight || videoConfig.height || item.height || (sources[0] && sources[0].height) || 0);
+      let width = Number(
+        videoConfig.maxWidth ||
+          videoConfig.width ||
+          item.width ||
+          (sources[0] && sources[0].width) ||
+          0,
+      );
+      let height = Number(
+        videoConfig.maxHeight ||
+          videoConfig.height ||
+          item.height ||
+          (sources[0] && sources[0].height) ||
+          0,
+      );
 
-      const resString = String(sources[0]?.resolution || item.resolution || videoConfig.resolution || "");
+      const resString = String(
+        sources[0]?.resolution ||
+          item.resolution ||
+          videoConfig.resolution ||
+          "",
+      );
       if ((!width || !height) && resString.includes("x")) {
-        const [rw, rh] = resString.split("x").map((s: string) => Number(s.trim()));
+        const [rw, rh] = resString
+          .split("x")
+          .map((s: string) => Number(s.trim()));
         if (rw && rh) {
           width = rw;
           height = rh;
         }
       }
 
-      const modelName = String(item.info?.model || item.model || "").toLowerCase();
+      const modelName = String(
+        item.info?.model || item.model || "",
+      ).toLowerCase();
       const cameraTitle = name.toLowerCase();
       const combinedTitleAndModel = `${cameraTitle} ${modelName}`;
 
@@ -625,7 +721,11 @@ export class CameraUiClient {
         if (/4k|uhd|8mp/i.test(combinedTitleAndModel)) {
           width = 3840;
           height = 2160;
-        } else if (/2k|qhd|c420|c425|c520|c325|tc72|3mp|4mp|5mp/i.test(combinedTitleAndModel)) {
+        } else if (
+          /2k|qhd|c420|c425|c520|c325|tc72|3mp|4mp|5mp/i.test(
+            combinedTitleAndModel,
+          )
+        ) {
           width = 2560;
           height = 1440;
         } else {
@@ -635,8 +735,11 @@ export class CameraUiClient {
       }
       if (!height) height = Math.round((width * 9) / 16);
 
-      const fps = Number(videoConfig.maxFPS || item.fps || (sources[0] && sources[0].fps) || 30);
-      const hasAudio = !isMuted && videoConfig.audio !== false && item.muted !== true;
+      const fps = Number(
+        videoConfig.maxFPS || item.fps || (sources[0] && sources[0].fps) || 30,
+      );
+      const hasAudio =
+        !isMuted && videoConfig.audio !== false && item.muted !== true;
 
       // MQTT topics & OpenCV detection support
       const mqttConfig = item.mqtt || {};
@@ -655,23 +758,32 @@ export class CameraUiClient {
       // resolution: an HEVC-capable camera may deliberately publish H.264.
       const rawCodec = String(
         videoConfig.vcodec ||
-        videoConfig.codec ||
-        item.vcodec ||
-        item.codec ||
-        (sources[0] && (sources[0].codec || sources[0].vcodec)) ||
-        "",
+          videoConfig.codec ||
+          item.vcodec ||
+          item.codec ||
+          (sources[0] && (sources[0].codec || sources[0].vcodec)) ||
+          "",
       ).toLowerCase();
 
-      const isHevcDetected = rawCodec.includes("hevc") || rawCodec.includes("265");
-      const videoCodec = isHevcDetected ? "hevc" : rawCodec.includes("h264") ? "h264" : undefined;
+      const isHevcDetected =
+        rawCodec.includes("hevc") || rawCodec.includes("265");
+      const videoCodec = isHevcDetected
+        ? "hevc"
+        : rawCodec.includes("h264")
+          ? "h264"
+          : undefined;
       const strategy = isHevcDetected ? "passthrough_hevc" : "passthrough_h264";
 
       results.push({
         id: `cameraui_${safeId}`,
         name,
-        manufacturer: item.info?.manufacturer || item.manufacturer || "Camera.UI",
+        manufacturer:
+          item.info?.manufacturer || item.manufacturer || "Camera.UI",
         model: item.info?.model || item.model || "Network Camera",
-        serialNumber: item.info?.serialNumber || item.serialNumber || `CUI-${safeId.toUpperCase()}`,
+        serialNumber:
+          item.info?.serialNumber ||
+          item.serialNumber ||
+          `CUI-${safeId.toUpperCase()}`,
         rtspUrl,
         subRtspUrl,
         snapshotUrl,
@@ -771,7 +883,11 @@ export class CameraUiClient {
           });
 
           // If unauthorized, attempt re-login once with baseUrl
-          if (res.status === 401 && this.config.username && this.config.password) {
+          if (
+            res.status === 401 &&
+            this.config.username &&
+            this.config.password
+          ) {
             const loginRes = await this.login(baseUrl);
             if (loginRes.ok) {
               res = await this.request(`${baseUrl}${ep}`, {

@@ -1,0 +1,382 @@
+[
+  {
+    "package": "",
+    "before": "2.3.12",
+    "after": "2.3.13"
+  },
+  {
+    "package": "node_modules/@babel/helper-string-parser",
+    "before": "7.29.7",
+    "after": "7.29.11"
+  },
+  {
+    "package": "node_modules/@babel/parser",
+    "before": "7.29.9",
+    "after": "7.29.12"
+  },
+  {
+    "package": "node_modules/@babel/runtime",
+    "before": "7.29.7",
+    "after": "7.29.10"
+  },
+  {
+    "package": "node_modules/@babel/types",
+    "before": "7.29.8",
+    "after": "7.29.11"
+  },
+  {
+    "package": "node_modules/@homebridge/ciao",
+    "before": "1.3.12",
+    "after": "1.4.0"
+  },
+  {
+    "package": "node_modules/@homebridge/hap-nodejs",
+    "before": "2.2.3",
+    "after": "2.3.0"
+  },
+  {
+    "package": "node_modules/@leichtgewicht/ip-codec",
+    "before": "2.1.1",
+    "after": "2.0.5"
+  },
+  {
+    "package": "node_modules/@matterbridge/core",
+    "before": "3.11.0",
+    "after": "3.11.1"
+  },
+  {
+    "package": "node_modules/@matterbridge/core/node_modules/werift",
+    "before": "0.25.0",
+    "after": "0.25.2"
+  },
+  {
+    "package": "node_modules/@matterbridge/dgram",
+    "before": "3.11.0",
+    "after": "3.11.1"
+  },
+  {
+    "package": "node_modules/@matterbridge/test-utils",
+    "before": "3.11.0",
+    "after": "3.11.1"
+  },
+  {
+    "package": "node_modules/@matterbridge/thread",
+    "before": "3.11.0",
+    "after": "3.11.1"
+  },
+  {
+    "package": "node_modules/@matterbridge/types",
+    "before": "3.11.0",
+    "after": "3.11.1"
+  },
+  {
+    "package": "node_modules/@matterbridge/utils",
+    "before": "3.11.0",
+    "after": "3.11.1"
+  },
+  {
+    "package": "node_modules/@oxc-project/types",
+    "before": "0.155.0",
+    "after": "0.156.0"
+  },
+  {
+    "package": "node_modules/@peculiar/asn1-cms",
+    "before": "2.9.4",
+    "after": "2.11.1"
+  },
+  {
+    "package": "node_modules/@peculiar/asn1-csr",
+    "before": "2.9.4",
+    "after": "2.11.1"
+  },
+  {
+    "package": "node_modules/@peculiar/asn1-ecc",
+    "before": "2.9.4",
+    "after": "2.11.1"
+  },
+  {
+    "package": "node_modules/@peculiar/asn1-pfx",
+    "before": "2.9.4",
+    "after": "2.11.1"
+  },
+  {
+    "package": "node_modules/@peculiar/asn1-pkcs8",
+    "before": "2.9.4",
+    "after": "2.11.1"
+  },
+  {
+    "package": "node_modules/@peculiar/asn1-pkcs9",
+    "before": "2.9.4",
+    "after": "2.11.1"
+  },
+  {
+    "package": "node_modules/@peculiar/asn1-rsa",
+    "before": "2.9.4",
+    "after": "2.11.1"
+  },
+  {
+    "package": "node_modules/@peculiar/asn1-schema",
+    "before": "2.9.4",
+    "after": "2.11.1"
+  },
+  {
+    "package": "node_modules/@peculiar/asn1-x509",
+    "before": "2.9.4",
+    "after": "2.11.1"
+  },
+  {
+    "package": "node_modules/@peculiar/asn1-x509-attr",
+    "before": "2.9.4",
+    "after": "2.11.1"
+  },
+  {
+    "package": "node_modules/@rolldown/binding-android-arm-eabi",
+    "before": "1.2.15",
+    "after": "1.2.16"
+  },
+  {
+    "package": "node_modules/@rolldown/binding-android-arm64",
+    "before": "1.2.15",
+    "after": "1.2.16"
+  },
+  {
+    "package": "node_modules/@rolldown/binding-darwin-arm64",
+    "before": "1.2.15",
+    "after": "1.2.16"
+  },
+  {
+    "package": "node_modules/@rolldown/binding-darwin-x64",
+    "before": "1.2.15",
+    "after": "1.2.16"
+  },
+  {
+    "package": "node_modules/@rolldown/binding-freebsd-x64",
+    "before": "1.2.15",
+    "after": "1.2.16"
+  },
+  {
+    "package": "node_modules/@rolldown/binding-linux-arm-gnueabihf",
+    "before": "1.2.15",
+    "after": "1.2.16"
+  },
+  {
+    "package": "node_modules/@rolldown/binding-linux-arm64-gnu",
+    "before": "1.2.15",
+    "after": "1.2.16"
+  },
+  {
+    "package": "node_modules/@rolldown/binding-linux-arm64-musl",
+    "before": "1.2.15",
+    "after": "1.2.16"
+  },
+  {
+    "package": "node_modules/@rolldown/binding-linux-ppc64-gnu",
+    "before": "1.2.15",
+    "after": "1.2.16"
+  },
+  {
+    "package": "node_modules/@rolldown/binding-linux-s390x-gnu",
+    "before": "1.2.15",
+    "after": "1.2.16"
+  },
+  {
+    "package": "node_modules/@rolldown/binding-linux-x64-gnu",
+    "before": "1.2.15",
+    "after": "1.2.16"
+  },
+  {
+    "package": "node_modules/@rolldown/binding-linux-x64-musl",
+    "before": "1.2.15",
+    "after": "1.2.16"
+  },
+  {
+    "package": "node_modules/@rolldown/binding-openharmony-arm64",
+    "before": "1.2.15",
+    "after": "1.2.16"
+  },
+  {
+    "package": "node_modules/@rolldown/binding-win32-arm64-msvc",
+    "before": "1.2.15",
+    "after": "1.2.16"
+  },
+  {
+    "package": "node_modules/@rolldown/binding-win32-x64-msvc",
+    "before": "1.2.15",
+    "after": "1.2.16"
+  },
+  {
+    "package": "node_modules/@types/estree",
+    "before": "1.0.9",
+    "after": "1.0.10"
+  },
+  {
+    "package": "node_modules/@types/node",
+    "before": "24.19.2",
+    "after": "26.6.6"
+  },
+  {
+    "package": "node_modules/@types/readable-stream",
+    "before": "4.0.24",
+    "after": "4.0.25"
+  },
+  {
+    "package": "node_modules/@vitejs/plugin-react",
+    "before": "6.1.2",
+    "after": "6.2.1"
+  },
+  {
+    "package": "node_modules/@vitest/coverage-v8",
+    "before": "5.0.5",
+    "after": "5.1.0"
+  },
+  {
+    "package": "node_modules/@vitest/istanbul-lib-coverage",
+    "before": "1.0.2",
+    "after": "2.1.0"
+  },
+  {
+    "package": "node_modules/@vitest/istanbul-lib-report",
+    "before": "1.0.2",
+    "after": "2.1.0"
+  },
+  {
+    "package": "node_modules/@vitest/mocker",
+    "before": "5.0.5",
+    "after": "5.1.0"
+  },
+  {
+    "package": "node_modules/@vitest/spy",
+    "before": "5.0.5",
+    "after": "5.1.0"
+  },
+  {
+    "package": "node_modules/asn1js",
+    "before": "3.0.10",
+    "after": "3.1.0"
+  },
+  {
+    "package": "node_modules/bonjour-hap",
+    "before": "3.10.5",
+    "after": "3.11.0"
+  },
+  {
+    "package": "node_modules/encodeurl",
+    "before": "2.0.0",
+    "after": "2.0.1"
+  },
+  {
+    "package": "node_modules/engine.io-client",
+    "before": "6.6.6",
+    "after": "6.6.7"
+  },
+  {
+    "package": "node_modules/follow-redirects",
+    "before": "1.16.1",
+    "after": "1.16.2"
+  },
+  {
+    "package": "node_modules/get-caller-file",
+    "before": "2.1.1",
+    "after": "2.0.5"
+  },
+  {
+    "package": "node_modules/glob",
+    "before": "13.0.6",
+    "after": "14.0.3"
+  },
+  {
+    "package": "node_modules/ip-address",
+    "before": "10.7.4",
+    "after": "10.7.5"
+  },
+  {
+    "package": "node_modules/lucide-react",
+    "before": "1.61.0",
+    "after": "1.66.0"
+  },
+  {
+    "package": "node_modules/magic-string",
+    "before": "1.4.3",
+    "after": "1.4.5"
+  },
+  {
+    "package": "node_modules/matterbridge",
+    "before": "3.11.0",
+    "after": "3.11.1"
+  },
+  {
+    "package": "node_modules/mediabunny",
+    "before": "1.55.5",
+    "after": "1.65.0"
+  },
+  {
+    "package": "node_modules/minimatch",
+    "before": "10.2.6",
+    "after": "11.0.4"
+  },
+  {
+    "package": "node_modules/path-scurry",
+    "before": "2.0.2",
+    "after": "3.0.0"
+  },
+  {
+    "package": "node_modules/path-scurry/node_modules/lru-cache",
+    "before": "11.5.2",
+    "after": "11.5.3"
+  },
+  {
+    "package": "node_modules/postcss",
+    "before": "8.5.31",
+    "after": "8.5.32"
+  },
+  {
+    "package": "node_modules/qs",
+    "before": "6.16.1",
+    "after": "6.17.1"
+  },
+  {
+    "package": "node_modules/readable-stream",
+    "before": "3.6.2",
+    "after": "4.8.0"
+  },
+  {
+    "package": "node_modules/rolldown",
+    "before": "1.2.15",
+    "after": "1.2.16"
+  },
+  {
+    "package": "node_modules/socks",
+    "before": "2.8.9",
+    "after": "2.8.10"
+  },
+  {
+    "package": "node_modules/tinybench",
+    "before": "6.2.2",
+    "after": "6.2.3"
+  },
+  {
+    "package": "node_modules/tslib",
+    "before": "2.8.1",
+    "after": "2.9.1"
+  },
+  {
+    "package": "node_modules/undici-types",
+    "before": "7.24.6",
+    "after": "8.9.0"
+  },
+  {
+    "package": "node_modules/vitest",
+    "before": "5.0.5",
+    "after": "5.1.0"
+  },
+  {
+    "package": "node_modules/werift",
+    "before": "0.25.2",
+    "after": "0.26.0"
+  },
+  {
+    "package": "node_modules/ws",
+    "before": "8.22.0",
+    "after": "8.22.1"
+  }
+]

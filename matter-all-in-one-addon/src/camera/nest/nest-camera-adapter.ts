@@ -38,7 +38,8 @@ export class NestCameraAdapter {
     const brand = String(attrs.brand || "").toLowerCase();
     const manufacturer = String(attrs.manufacturer || "").toLowerCase();
     if (brand.includes("google") || brand.includes("nest")) return true;
-    if (manufacturer.includes("google") || manufacturer.includes("nest")) return true;
+    if (manufacturer.includes("google") || manufacturer.includes("nest"))
+      return true;
 
     // 3. Entity ID naming convention
     const lowerId = entityId.toLowerCase();
@@ -63,7 +64,8 @@ export class NestCameraAdapter {
     cameraEntityId: string,
   ): LinkedNestEntities {
     const result: LinkedNestEntities = {};
-    const hassStates: Map<string, HassState> | undefined = platform?.ha?.hassStates;
+    const hassStates: Map<string, HassState> | undefined =
+      platform?.ha?.hassStates;
     if (!hassStates) return result;
 
     const baseName = cameraEntityId.replace(/^camera\./, "");
@@ -72,9 +74,7 @@ export class NestCameraAdapter {
 
     for (const [entityId, state] of hassStates.entries()) {
       const lower = entityId.toLowerCase();
-      const isRelated =
-        lower.includes(baseName) ||
-        lower.includes(cleanBase);
+      const isRelated = lower.includes(baseName) || lower.includes(cleanBase);
 
       if (!isRelated) continue;
 
@@ -99,8 +99,11 @@ export class NestCameraAdapter {
 
       // 3. Doorbell event / press
       const isDoorbellEntity =
-        (suffix.includes("doorbell") || suffix.includes("timbre") || suffix.includes("chime")) ||
-        (lower.includes("doorbell") && (entityId.startsWith("event.") || entityId.startsWith("button.")));
+        suffix.includes("doorbell") ||
+        suffix.includes("timbre") ||
+        suffix.includes("chime") ||
+        (lower.includes("doorbell") &&
+          (entityId.startsWith("event.") || entityId.startsWith("button.")));
       if (
         isDoorbellEntity &&
         !suffix.includes("motion") &&
@@ -114,7 +117,9 @@ export class NestCameraAdapter {
 
       // 4. Sound detection
       if (
-        (suffix.includes("sound") || suffix.includes("sonido") || suffix.includes("noise")) &&
+        (suffix.includes("sound") ||
+          suffix.includes("sonido") ||
+          suffix.includes("noise")) &&
         entityId.startsWith("binary_sensor.")
       ) {
         result.sound = entityId;

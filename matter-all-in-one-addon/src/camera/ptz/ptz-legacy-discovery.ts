@@ -4,7 +4,8 @@
  * IDs are namespaced (for example camera_front_door) and remain untouched.
  */
 export function isLegacyNumberedPtzDiscovery(config: any): boolean {
-  const uniqueId = typeof config?.unique_id === "string" ? config.unique_id : "";
+  const uniqueId =
+    typeof config?.unique_id === "string" ? config.unique_id : "";
   const suffix = [
     "_ptz_zone_sensor",
     "_ptz_zone_selector",
@@ -21,6 +22,8 @@ export function isLegacyNumberedPtzDiscovery(config: any): boolean {
     : [String(device.identifiers || "")];
   return (
     identifiers.includes(`matter_aio_${safeId}`) &&
-    new RegExp(`^${safeId}\\s+PTZ$`, "i").test(String(device.name || config.name || ""))
+    new RegExp(`^${safeId}\\s+PTZ$`, "i").test(
+      String(device.name || config.name || ""),
+    )
   );
 }

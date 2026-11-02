@@ -9,10 +9,19 @@ export class AtomicJsonStore {
   async write(file: string, value: unknown): Promise<void> {
     const contents = JSON.stringify(value, null, 2);
     const previous = this.pending.get(file);
-    const operation = (previous ? previous.catch(() => undefined) : Promise.resolve()).then(async () => {
-      const temporary = path.join(path.dirname(file), `.${path.basename(file)}.${process.pid}.${randomUUID()}.tmp`);
+    const operation = (
+      previous ? previous.catch(() => undefined) : Promise.resolve()
+    ).then(async () => {
+      const temporary = path.join(
+        path.dirname(file),
+        `.${path.basename(file)}.${process.pid}.${randomUUID()}.tmp`,
+      );
       try {
-        await fs.writeFile(temporary, contents, { encoding: "utf8", mode: 0o600, flag: "wx" });
+        await fs.writeFile(temporary, contents, {
+          encoding: "utf8",
+          mode: 0o600,
+          flag: "wx",
+        });
         await fs.rename(temporary, file);
       } catch (error) {
         await fs.rm(temporary, { force: true }).catch(() => undefined);
@@ -20,7 +29,10 @@ export class AtomicJsonStore {
       }
     });
     this.pending.set(file, operation);
-    try { await operation; }
-    finally { if (this.pending.get(file) === operation) this.pending.delete(file); }
+    try {
+      await operation;
+    } finally {
+      if (this.pending.get(file) === operation) this.pending.delete(file);
+    }
   }
 }

@@ -410,7 +410,9 @@ export class ScryptedReconnectManager extends EventEmitter {
           void ScryptedClient.disconnect(this.activeSession);
           this.activeSession = null;
         }
-        await ScryptedStorage.updateConnectionStatus("disconnected_using_cache");
+        await ScryptedStorage.updateConnectionStatus(
+          "disconnected_using_cache",
+        );
         this.emitStatus(
           "disconnected_using_cache",
           "Scrypted no responde (servidor detenido o apagado).",

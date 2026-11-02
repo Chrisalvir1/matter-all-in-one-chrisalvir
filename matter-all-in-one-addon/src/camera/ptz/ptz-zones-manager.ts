@@ -235,7 +235,8 @@ export class PtzZonesManager extends EventEmitter {
    */
   public async moveDirection(
     entityId: string,
-    direction: "up" | "down" | "left" | "right" | "zoom_in" | "zoom_out" | "center",
+    direction:
+      "up" | "down" | "left" | "right" | "zoom_in" | "zoom_out" | "center",
     step = 0.1,
   ): Promise<CameraPtzInfo | undefined> {
     const info = this.cameraInfos.get(entityId);
@@ -293,7 +294,12 @@ export class PtzZonesManager extends EventEmitter {
     };
 
     await this.saveToDisk();
-    this.emit("cameraMoved", { entityId, direction, viewport: currentZone.viewport, info });
+    this.emit("cameraMoved", {
+      entityId,
+      direction,
+      viewport: currentZone.viewport,
+      info,
+    });
     return info;
   }
 }

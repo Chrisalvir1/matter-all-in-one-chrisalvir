@@ -115,7 +115,12 @@ export function detectCameraPtzCapabilities(
   // are never evidence of PTZ: fixed cameras often contain "pan" or "ptz"
   // in marketing names and created phantom exports in the dashboard.
   const attrs = state?.attributes || {};
-  if (attrs.ptz === true || attrs.has_ptz === true || attrs.pan_tilt_zoom === true) supportsHardwarePtz = true;
+  if (
+    attrs.ptz === true ||
+    attrs.has_ptz === true ||
+    attrs.pan_tilt_zoom === true
+  )
+    supportsHardwarePtz = true;
 
   // 2. Digital PTZ (DPTZ) Detection
   // DPTZ is supported when video stream is active and either hardware PTZ is available

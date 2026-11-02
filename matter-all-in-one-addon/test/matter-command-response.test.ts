@@ -72,11 +72,13 @@ describe("Matter command response policy", () => {
     await vi.advanceTimersByTimeAsync(20);
     await expect(response).resolves.toBeUndefined();
     fail(new Error("HA device timed out"));
-    await vi.waitFor(() => expect(onFailure).toHaveBeenCalledWith(
-      "OnOff.off",
-      expect.objectContaining({ message: "HA device timed out" }),
-      true,
-    ));
+    await vi.waitFor(() =>
+      expect(onFailure).toHaveBeenCalledWith(
+        "OnOff.off",
+        expect.objectContaining({ message: "HA device timed out" }),
+        true,
+      ),
+    );
   });
 
   it("preserves fast failures for Matter and starts diagnostics", async () => {

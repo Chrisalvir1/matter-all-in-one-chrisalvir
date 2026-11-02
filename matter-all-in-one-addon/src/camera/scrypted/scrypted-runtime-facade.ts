@@ -1,5 +1,12 @@
-import { adaptScryptedDiscovery, type ScryptedDiscoveryDevice, type ScryptedDiscoveryResult } from "./scrypted-camera-discovery-adapter.js";
-import { DEFAULT_SCRYPTED_CAMERA_POLICY, type ScryptedCameraPolicy } from "./scrypted-camera-policy.js";
+import {
+  adaptScryptedDiscovery,
+  type ScryptedDiscoveryDevice,
+  type ScryptedDiscoveryResult,
+} from "./scrypted-camera-discovery-adapter.js";
+import {
+  DEFAULT_SCRYPTED_CAMERA_POLICY,
+  type ScryptedCameraPolicy,
+} from "./scrypted-camera-policy.js";
 
 export type ScryptedRuntimeSnapshot = {
   connected: boolean;

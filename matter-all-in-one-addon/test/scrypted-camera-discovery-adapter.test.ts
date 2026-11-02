@@ -23,7 +23,9 @@ describe("Scrypted discovery adapter", () => {
   });
 
   it("accepts devices without a reported type as camera candidates", () => {
-    const result = adaptScryptedDiscovery([{ id: "cam-unknown", name: "Cámara" }]);
+    const result = adaptScryptedDiscovery([
+      { id: "cam-unknown", name: "Cámara" },
+    ]);
     expect(result.cameras).toHaveLength(1);
   });
 });

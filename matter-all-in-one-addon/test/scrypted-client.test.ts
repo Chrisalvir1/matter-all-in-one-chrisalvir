@@ -868,7 +868,8 @@ describe("ScryptedClient — Real HTTP Client", () => {
       const fakeSession: any = {
         sdk: {
           systemManager: {
-            getDeviceById: (id: string) => (id === "cam-10" ? fakeDevice : null),
+            getDeviceById: (id: string) =>
+              id === "cam-10" ? fakeDevice : null,
           },
           mediaManager: {
             convertMediaObjectToUrl: vi
@@ -911,7 +912,9 @@ describe("ScryptedClient — Real HTTP Client", () => {
             video: { codec: "h264", width: 1920, height: 1080 },
           },
         ]),
-        getVideoStream: vi.fn().mockRejectedValue(new Error("Cannot create stream")),
+        getVideoStream: vi
+          .fn()
+          .mockRejectedValue(new Error("Cannot create stream")),
       };
 
       const fakeSession: any = {
@@ -1046,7 +1049,9 @@ describe("ScryptedClient — Real HTTP Client", () => {
       const client = new ScryptedClient("http://192.168.1.55:10443", SECRET);
 
       vi.spyOn(globalThis, "fetch").mockImplementationOnce(() => {
-        const err = new Error("Connection refused to http://192.168.1.55:10443");
+        const err = new Error(
+          "Connection refused to http://192.168.1.55:10443",
+        );
         return Promise.reject(err);
       });
 

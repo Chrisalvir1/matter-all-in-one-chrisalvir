@@ -555,8 +555,11 @@ describe("HomeKitCameraRecordingDelegate — pause/resume symmetric cycle", () =
 
   it("does not spawn a reader when Live View pauses during Omni allocation", async () => {
     let finishAllocation!: (source: any) => void;
-    const allocation = new Promise<any>((resolve) => { finishAllocation = resolve; });
-    const resolver = vi.spyOn(CameraSourceResolver, "resolveOmniTuyaRecordingSource")
+    const allocation = new Promise<any>((resolve) => {
+      finishAllocation = resolve;
+    });
+    const resolver = vi
+      .spyOn(CameraSourceResolver, "resolveOmniTuyaRecordingSource")
       .mockReturnValueOnce(allocation);
     const notice = vi.fn();
     const platform = {
@@ -565,18 +568,32 @@ describe("HomeKitCameraRecordingDelegate — pause/resume symmetric cycle", () =
       ha: { hassStates: new Map([["camera.driveway", { attributes: {} }]]) },
     };
     const delegate = new HomeKitCameraRecordingDelegate(
-      platform as any, "camera.driveway", createMockRecord() as any,
+      platform as any,
+      "camera.driveway",
+      createMockRecord() as any,
       { videoCodec: "h264", hasAudio: true } as any,
-      { sourceType: "rtsp", url: "rtsps://example.invalid/old", metadata: {
-        isOmniTuyaDirect: true, sourceCameraEntityId: "camera.driveway",
-      } } as any,
+      {
+        sourceType: "rtsp",
+        url: "rtsps://example.invalid/old",
+        metadata: {
+          isOmniTuyaDirect: true,
+          sourceCameraEntityId: "camera.driveway",
+        },
+      } as any,
     );
     (delegate as any).recordingActive = true;
     const starting = (delegate as any).startPrebufferPipeline();
     delegate.pausePrebuffer();
-    finishAllocation({ sourceType: "rtsp", url: "rtsps://example.invalid/new" });
+    finishAllocation({
+      sourceType: "rtsp",
+      url: "rtsps://example.invalid/new",
+    });
     await starting;
-    expect(notice.mock.calls.some(([message]) => String(message).includes("Spawning HKSV"))).toBe(false);
+    expect(
+      notice.mock.calls.some(([message]) =>
+        String(message).includes("Spawning HKSV"),
+      ),
+    ).toBe(false);
     expect((delegate as any).ffmpegProcess).toBeFalsy();
     resolver.mockRestore();
   });

@@ -210,7 +210,8 @@ const ffmpegVersionCache = new Map<string, string | null>();
 export function getFfmpegVersion(customPath?: string): string | null {
   const ffmpegPath = customPath || resolveFfmpegPath();
   if (!ffmpegPath) return null;
-  if (ffmpegVersionCache.has(ffmpegPath)) return ffmpegVersionCache.get(ffmpegPath) ?? null;
+  if (ffmpegVersionCache.has(ffmpegPath))
+    return ffmpegVersionCache.get(ffmpegPath) ?? null;
 
   try {
     const res = spawnSync(ffmpegPath, ["-version"], {

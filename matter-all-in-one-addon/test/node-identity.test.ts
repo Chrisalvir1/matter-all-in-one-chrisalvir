@@ -16,8 +16,12 @@ describe("NodeIdentityStore", () => {
 
   it("adopts the name that already has a matter storage folder", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ni-"));
-    fs.mkdirSync(path.join(dir, "matterstorage", "NEONSALA"), { recursive: true });
+    fs.mkdirSync(path.join(dir, "matterstorage", "NEONSALA"), {
+      recursive: true,
+    });
     const s = new NodeIdentityStore(path.join(dir, "ids.json"), () => [dir]);
-    expect(s.pin("switch.x", "NEON SALA Toma 1", ["NEON SALA"])).toBe("NEON SALA");
+    expect(s.pin("switch.x", "NEON SALA Toma 1", ["NEON SALA"])).toBe(
+      "NEON SALA",
+    );
   });
 });

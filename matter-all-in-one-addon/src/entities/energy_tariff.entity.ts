@@ -35,7 +35,9 @@ export class EnergyTariffEntity extends BaseEntity {
     if (value === null || !this.endpoint) return;
 
     const deviceClass = state.attributes?.device_class;
-    const unit = String(state.attributes?.unit_of_measurement ?? "").toLowerCase();
+    const unit = String(
+      state.attributes?.unit_of_measurement ?? "",
+    ).toLowerCase();
     if (deviceClass === "power") {
       const multiplier = unit === "kw" ? 1_000_000 : unit === "mw" ? 1 : 1000;
       const milliWatts = Math.round(value * multiplier);

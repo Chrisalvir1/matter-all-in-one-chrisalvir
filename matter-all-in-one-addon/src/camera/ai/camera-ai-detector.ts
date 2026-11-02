@@ -102,7 +102,11 @@ export class CameraAiDetector extends EventEmitter {
       for (const [key, val] of this.configs.entries()) {
         obj[key] = val;
       }
-      fs.writeFileSync(this.configFilePath, JSON.stringify(obj, null, 2), "utf-8");
+      fs.writeFileSync(
+        this.configFilePath,
+        JSON.stringify(obj, null, 2),
+        "utf-8",
+      );
     } catch {}
   }
 
@@ -122,7 +126,10 @@ export class CameraAiDetector extends EventEmitter {
     return defaultConfig;
   }
 
-  public setConfig(cameraId: string, config: Partial<CameraAiConfig>): CameraAiConfig {
+  public setConfig(
+    cameraId: string,
+    config: Partial<CameraAiConfig>,
+  ): CameraAiConfig {
     const current = this.getConfig(cameraId);
     const updated: CameraAiConfig = {
       ...current,
@@ -328,13 +335,15 @@ export class CameraAiDetector extends EventEmitter {
       hkAccessory = cameraEntity.homekitAccessory;
     } else {
       try {
-        const bridge = (globalThis as any).__camerauiBridge || platform?.cameraUiBridge;
+        const bridge =
+          (globalThis as any).__camerauiBridge || platform?.cameraUiBridge;
         if (bridge?.getAllAccessories) {
           const cuiAccessories = bridge.getAllAccessories();
           for (const [id, acc] of cuiAccessories) {
             if (
               id === cameraId ||
-              id.replace(/^cameraui_/, "") === cameraId.replace(/^cameraui_/, "") ||
+              id.replace(/^cameraui_/, "") ===
+                cameraId.replace(/^cameraui_/, "") ||
               cuiAccessories.size === 1
             ) {
               hkAccessory = acc;
@@ -407,7 +416,9 @@ export class CameraAiDetector extends EventEmitter {
     this.motionTimers.set(cameraId, timer);
   }
 
-  public getActiveDetection(cameraId: string): CameraAiDetectionEvent | undefined {
+  public getActiveDetection(
+    cameraId: string,
+  ): CameraAiDetectionEvent | undefined {
     return this.activeDetections.get(cameraId);
   }
 }

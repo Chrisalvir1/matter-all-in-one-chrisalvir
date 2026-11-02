@@ -215,7 +215,9 @@ describe("Camera.UI Client and Storage Integration", () => {
   });
 
   it("preserves configured go2rtc streams and identifies only obsolete local aliases", () => {
-    expect(isLegacyBridgeStreamUrl("rtsp://192.168.110.147:8554/jardin")).toBe(false);
+    expect(isLegacyBridgeStreamUrl("rtsp://192.168.110.147:8554/jardin")).toBe(
+      false,
+    );
     expect(
       isLegacyBridgeStreamUrl("rtsp://192.168.110.46:8554/tapo_c120"),
     ).toBe(false);
@@ -442,7 +444,9 @@ describe("Camera.UI Client and Storage Integration", () => {
       },
     ]);
 
-    expect(result.cameras[0].rtspUrl).toBe("rtsp://camera-lan.invalid:554/stream0");
+    expect(result.cameras[0].rtspUrl).toBe(
+      "rtsp://camera-lan.invalid:554/stream0",
+    );
   });
 
   it("keeps an exported paired camera when a Camera.UI sync is partial", async () => {

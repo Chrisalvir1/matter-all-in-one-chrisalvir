@@ -6,7 +6,7 @@
 
 **Compatible a nivel de código con Home Assistant 2026.10 y preparado para Home Assistant 2026.11 beta.** Esta última versión todavía requiere validación en una instalación real.
 
-Puente **Matter 1.6.1** basado en **Matterbridge 3.11.0** con publicación independiente **HomeKit HAP/HKSV** para cámaras y accesorios compatibles. Incluye integración con Omni Tuya Local, Camera.UI, Scrypted y el inventario de Home Assistant.
+Puente **Matter 1.6.1** basado en **Matterbridge 3.11.1** con publicación independiente **HomeKit HAP/HKSV** para cámaras y accesorios compatibles. Incluye integración con Omni Tuya Local, Camera.UI, Scrypted y el inventario de Home Assistant.
 
 ## Novedades v2.3.0 — 28 de octubre de 2026
 
@@ -81,8 +81,8 @@ version: "2.3.0"
 home_assistant: "2026.10; 2026.11-beta contract tested, hardware validation pending"
 spec: "Matter 1.6.1"
 engine: matterbridge
-engine_version: "3.11.0"
-node_image: "node:24.22.1-alpine3.24"
+engine_version: "3.11.1"
+node_image: "node:26.13.0-alpine3.24"
 ha_integration: websocket
 plugin_mode: dynamic
 persistent_data: /data/.matterbridge
@@ -101,3 +101,11 @@ diagnostics: opt-in read-only
 - [Cambios del complemento](CHANGELOG.md)
 
 **Licencia:** Apache-2.0. **Autor:** Chrisalvir.
+
+### Entorno reproducible de desarrollo
+
+La candidata 2.3.13 valida Node **26.13.0 LTS**, npm **12.2.1** y Matterbridge **3.11.1**. Las versiones Node están en `.node-version` y `.nvmrc`; después de cambiar de runtime, reinstalar con `npm ci --legacy-peer-deps` en `matter-all-in-one-addon`. No reutilizar `node_modules` de Node 24, de otra arquitectura o de macOS dentro de Alpine Linux.
+
+`npm run check:toolchain` comprueba sincronía entre runtime local, npm, Docker, build.yaml y CI; `npm run check:runtime` comprueba imports y versiones reales contra el lockfile. Las imágenes base están fijadas por digest. El devcontainer usa la rama estable npm fijada de Matterbridge, no `dev`, y falla si su imagen Node 26 cambia a una versión distinta a la validada. No arranca ni registra el puente automáticamente. Docker ejecuta el chequeo de producción durante la compilación; CI añade ejecución aislada sin red y FFmpeg/ffprobe en amd64/arm64.
+
+No hace falta cambiar el Node de Home Assistant Core: el add-on lleva su runtime dentro del contenedor. Tras publicar en otro paso habrá que recrear el contenedor con la imagen nueva, conservando `/data` y fabrics. Reconstruir y verificar primero; no actualizar Alpine/FFmpeg, targets TypeScript o HA Core solo por cambiar el major de Node.

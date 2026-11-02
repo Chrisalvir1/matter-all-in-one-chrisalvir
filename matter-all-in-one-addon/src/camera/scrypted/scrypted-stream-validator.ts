@@ -152,9 +152,15 @@ export class ScryptedStreamValidator {
           let effectiveUrl = trimmedUrl;
           const isVimtag = /vimtag/i.test(`${cameraId || ""} ${trimmedUrl}`);
           if (isVimtag && effectiveUrl.startsWith("rtsp://")) {
-            if (effectiveUrl.includes("/stream1") || effectiveUrl.includes("/stream2")) {
+            if (
+              effectiveUrl.includes("/stream1") ||
+              effectiveUrl.includes("/stream2")
+            ) {
               effectiveUrl = effectiveUrl.replace(/\/stream[12]/, "/live/ch0");
-            } else if (/:\d+\/?$/.test(effectiveUrl) || !effectiveUrl.split("://")[1]?.includes("/")) {
+            } else if (
+              /:\d+\/?$/.test(effectiveUrl) ||
+              !effectiveUrl.split("://")[1]?.includes("/")
+            ) {
               effectiveUrl = effectiveUrl.replace(/\/?$/, "/live/ch0");
             }
           }
@@ -169,8 +175,18 @@ export class ScryptedStreamValidator {
               allowFallback: false,
             });
 
-            if (!probe.valid && isVimtag && effectiveUrl.startsWith("rtsp://")) {
-              const altPaths = ["/live/ch0", "/onvif1", "/ch0", "/live/ch1", "/onvif2"];
+            if (
+              !probe.valid &&
+              isVimtag &&
+              effectiveUrl.startsWith("rtsp://")
+            ) {
+              const altPaths = [
+                "/live/ch0",
+                "/onvif1",
+                "/ch0",
+                "/live/ch1",
+                "/onvif2",
+              ];
               for (const altPath of altPaths) {
                 const candidateUrl = effectiveUrl.replace(/\/[^/]*$/, altPath);
                 if (candidateUrl === effectiveUrl) continue;
@@ -426,9 +442,15 @@ export class ScryptedStreamValidator {
     let effectiveUrl = trimmed;
     const isVimtag = /vimtag/i.test(`${cameraId} ${trimmed}`);
     if (isVimtag && effectiveUrl.startsWith("rtsp://")) {
-      if (effectiveUrl.includes("/stream1") || effectiveUrl.includes("/stream2")) {
+      if (
+        effectiveUrl.includes("/stream1") ||
+        effectiveUrl.includes("/stream2")
+      ) {
         effectiveUrl = effectiveUrl.replace(/\/stream[12]/, "/live/ch0");
-      } else if (/:\d+\/?$/.test(effectiveUrl) || !effectiveUrl.split("://")[1]?.includes("/")) {
+      } else if (
+        /:\d+\/?$/.test(effectiveUrl) ||
+        !effectiveUrl.split("://")[1]?.includes("/")
+      ) {
         effectiveUrl = effectiveUrl.replace(/\/?$/, "/live/ch0");
       }
     }
@@ -440,7 +462,13 @@ export class ScryptedStreamValidator {
         httpBearerToken,
       });
       if (!probe.valid && isVimtag && effectiveUrl.startsWith("rtsp://")) {
-        const altPaths = ["/live/ch0", "/onvif1", "/ch0", "/live/ch1", "/onvif2"];
+        const altPaths = [
+          "/live/ch0",
+          "/onvif1",
+          "/ch0",
+          "/live/ch1",
+          "/onvif2",
+        ];
         for (const altPath of altPaths) {
           const candidateUrl = effectiveUrl.replace(/\/[^/]*$/, altPath);
           if (candidateUrl === effectiveUrl) continue;

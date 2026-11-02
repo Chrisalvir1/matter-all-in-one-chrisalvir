@@ -67,7 +67,7 @@ Matter All-in-One Chrisalvir (MIAO) reúne la administración de accesorios Matt
 | Home Assistant 2026.10 | Base conocida del proyecto; conservar como entorno principal mientras se valida la beta |
 | **Home Assistant 2026.11 beta** | **Preparado a nivel de código y pruebas de compatibilidad**; validación física pendiente |
 | Home Assistant 2026.11 estable | Pendiente de publicación y prueba en instalación real |
-| Matterbridge 3.11.0 | Versión del runtime del complemento |
+| Matterbridge 3.11.1 | Versión del runtime del complemento |
 | Matter 1.6.1 | Especificación utilizada por el puente Matter |
 | Apple Casa — accesorios Matter | Depende del tipo de dispositivo que Apple admita |
 | Apple Casa — cámara Omni mediante HAP/HKSV | Vídeo, audio, movimiento y grabación reportados como operativos por Chrisalvir en su instalación |
@@ -152,6 +152,6 @@ Consulta la [guía de preparación para HA 2026.11](docs/home-assistant-2026-11-
 - [Configuración de Thread](matter-all-in-one-addon/docs/thread-setup.md)
 - [Reportar un problema](https://github.com/Chrisalvir1/matter-all-in-one-chrisalvir/issues)
 
-**Base de ejecución:** Matterbridge `3.11.0` · Node.js `24.22.1` · Matter `1.6.1` · TypeScript `7.0.2`.
+**Base de ejecución:** Matterbridge `3.11.1` · Node.js `26.13.0` · Matter `1.6.1` · TypeScript `7.0.2`.
 
 **Licencia:** Apache-2.0 · Proyecto mantenido por **Chrisalvir**.

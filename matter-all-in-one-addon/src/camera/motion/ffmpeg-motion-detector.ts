@@ -123,10 +123,18 @@ export class FfmpegMotionDetector extends EventEmitter {
   }
 
   private killProcess(): void {
-    if (this.resetTimer) { clearTimeout(this.resetTimer); this.resetTimer = undefined; }
-    if (this.restartTimer) { clearTimeout(this.restartTimer); this.restartTimer = undefined; }
+    if (this.resetTimer) {
+      clearTimeout(this.resetTimer);
+      this.resetTimer = undefined;
+    }
+    if (this.restartTimer) {
+      clearTimeout(this.restartTimer);
+      this.restartTimer = undefined;
+    }
     if (this.proc) {
-      try { this.proc.kill("SIGKILL"); } catch {}
+      try {
+        this.proc.kill("SIGKILL");
+      } catch {}
       this.proc = undefined;
     }
   }
@@ -153,7 +161,9 @@ export class FfmpegMotionDetector extends EventEmitter {
       },
       (err) => {
         this.spawning = false;
-        log?.debug?.(`[MotionDetector][${this.opts.cameraName}] source renewal failed: ${err instanceof Error ? err.message : String(err)}`);
+        log?.debug?.(
+          `[MotionDetector][${this.opts.cameraName}] source renewal failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
         this.scheduleRestart(log);
       },
     );
@@ -162,109 +172,141 @@ export class FfmpegMotionDetector extends EventEmitter {
   private spawnProcessForUrl(sourceUrl: string, log?: any): void {
     if (!this.running || this.paused) return;
     try {
-    const ffmpegPath = resolveFfmpegPath();
-    if (!ffmpegPath) return;
+      const ffmpegPath = resolveFfmpegPath();
+      if (!ffmpegPath) return;
 
-    // Normalize URL for FFmpeg compatibility
-    let url = (sourceUrl || "")
-      .replace(/^(rtsps?):\/\/localhost(?=[:/])/i, "$1://127.0.0.1");
-    const hashIdx = url.indexOf("#");
-    if (hashIdx !== -1) url = url.substring(0, hashIdx);
-
-    // Determine change threshold percentage (default 4% changed pixels triggers motion)
-    let minChangedPercent = this.opts.changeThresholdPercent;
-    if (minChangedPercent === undefined) {
-      if (typeof this.opts.sensitivity === "number" && this.opts.sensitivity > 0 && this.opts.sensitivity < 100) {
-        // Sensitivity 1-99: 99 -> 1% change, 75 -> 3% change, 50 -> 5% change, 15 -> 8% change
-        minChangedPercent = Math.max(1, Math.round(10 - (this.opts.sensitivity / 100) * 8));
-      } else {
-        minChangedPercent = 4;
-      }
-    }
-    // pblack = % of pixels with luminance difference <= 12 (i.e. static/unchanged)
-    // Motion: pblack drops to <= (100 - minChangedPercent), e.g. <= 96%
-    const pblackThreshold = 100 - minChangedPercent;
-
-    /**
-     * Pipeline:
-     *  fps=1        — 1 frame/sec, minimal CPU
-     *  scale=160:90 — downscale for speed
-     *  format=gray  — luma only, drop chroma
-     *  tblend=all_mode=difference — absolute pixel difference |frame_N - frame_N-1| (0 = no motion)
-     *  blackframe=amount=95:thresh=12 — measures percentage of black pixels (pblack)
-     *    outputs at info level: "[Parsed_blackframe...] frame:N pblack:P pts:..."
-     *    pblack <= threshold → significant pixel changes → MOTION
-     */
-    const analysisWidth = Math.max(64, Math.min(this.opts.analysisWidth ?? 160, 640));
-    const analysisHeight = Math.max(36, Math.min(this.opts.analysisHeight ?? 90, 360));
-    const pixelDifferenceThreshold = Math.max(
-      1,
-      Math.min(this.opts.pixelDifferenceThreshold ?? 12, 255),
-    );
-    // Cameras that opt in report every difference frame so large nearby
-    // subjects are not filtered before the motion threshold can evaluate them.
-    const reportAmount = this.opts.reportAllFrameChanges ? 0 : 95;
-    const analysisFps = Math.max(1, Math.min(this.opts.fps ?? 1, 5));
-    const vf = `fps=${analysisFps},scale=${analysisWidth}:${analysisHeight},format=gray,tblend=all_mode=difference,blackframe=amount=${reportAmount}:thresh=${pixelDifferenceThreshold}`;
-
-    const isTapoC402 =
-      /(?:\bc402\b|tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle|tapo[-_ ]?frente)/i.test(
-        this.opts.cameraName || "",
-      ) ||
-      /(?:\bc402\b|tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle|tapo[-_ ]?frente)/i.test(
-        this.opts.cameraId || "",
-      ) ||
-      /(?:\bc402\b|tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle|tapo[-_ ]?frente)/i.test(
-        this.opts.rtspUrl || "",
+      // Normalize URL for FFmpeg compatibility
+      let url = (sourceUrl || "").replace(
+        /^(rtsps?):\/\/localhost(?=[:/])/i,
+        "$1://127.0.0.1",
       );
+      const hashIdx = url.indexOf("#");
+      if (hashIdx !== -1) url = url.substring(0, hashIdx);
 
-    const probeSize = isTapoC402 ? "2097152" : "524288";
-    const analyzeDuration = isTapoC402 ? "3000000" : "500000";
-
-    const args = [
-      "-hide_banner",
-      "-loglevel", "info",
-      "-rtsp_transport", "tcp",
-      "-timeout", "10000000",
-      "-probesize", probeSize,
-      "-analyzeduration", analyzeDuration,
-      "-fflags", "+genpts+igndts+discardcorrupt",
-      "-i", url,
-      "-vf", vf,
-      "-an", "-f", "null", "-",
-    ];
-
-    const proc = spawn(ffmpegPath, args, { stdio: ["ignore", "ignore", "pipe"] });
-    this.proc = proc;
-
-    let stderrBuf = "";
-    proc.stderr?.on("data", (chunk: Buffer) => {
-      stderrBuf = (stderrBuf + chunk.toString()).slice(-4000);
-      const lines = stderrBuf.split("\n");
-      stderrBuf = lines.pop() ?? "";
-      for (const line of lines) {
-        this.parseLine(line, pblackThreshold, log);
+      // Determine change threshold percentage (default 4% changed pixels triggers motion)
+      let minChangedPercent = this.opts.changeThresholdPercent;
+      if (minChangedPercent === undefined) {
+        if (
+          typeof this.opts.sensitivity === "number" &&
+          this.opts.sensitivity > 0 &&
+          this.opts.sensitivity < 100
+        ) {
+          // Sensitivity 1-99: 99 -> 1% change, 75 -> 3% change, 50 -> 5% change, 15 -> 8% change
+          minChangedPercent = Math.max(
+            1,
+            Math.round(10 - (this.opts.sensitivity / 100) * 8),
+          );
+        } else {
+          minChangedPercent = 4;
+        }
       }
-    });
+      // pblack = % of pixels with luminance difference <= 12 (i.e. static/unchanged)
+      // Motion: pblack drops to <= (100 - minChangedPercent), e.g. <= 96%
+      const pblackThreshold = 100 - minChangedPercent;
 
-    proc.once("error", (err) => {
-      this.proc = undefined;
-      log?.debug?.(`[MotionDetector][${this.opts.cameraName}] error: ${err.message}`);
-      this.scheduleRestart(log);
-    });
+      /**
+       * Pipeline:
+       *  fps=1        — 1 frame/sec, minimal CPU
+       *  scale=160:90 — downscale for speed
+       *  format=gray  — luma only, drop chroma
+       *  tblend=all_mode=difference — absolute pixel difference |frame_N - frame_N-1| (0 = no motion)
+       *  blackframe=amount=95:thresh=12 — measures percentage of black pixels (pblack)
+       *    outputs at info level: "[Parsed_blackframe...] frame:N pblack:P pts:..."
+       *    pblack <= threshold → significant pixel changes → MOTION
+       */
+      const analysisWidth = Math.max(
+        64,
+        Math.min(this.opts.analysisWidth ?? 160, 640),
+      );
+      const analysisHeight = Math.max(
+        36,
+        Math.min(this.opts.analysisHeight ?? 90, 360),
+      );
+      const pixelDifferenceThreshold = Math.max(
+        1,
+        Math.min(this.opts.pixelDifferenceThreshold ?? 12, 255),
+      );
+      // Cameras that opt in report every difference frame so large nearby
+      // subjects are not filtered before the motion threshold can evaluate them.
+      const reportAmount = this.opts.reportAllFrameChanges ? 0 : 95;
+      const analysisFps = Math.max(1, Math.min(this.opts.fps ?? 1, 5));
+      const vf = `fps=${analysisFps},scale=${analysisWidth}:${analysisHeight},format=gray,tblend=all_mode=difference,blackframe=amount=${reportAmount}:thresh=${pixelDifferenceThreshold}`;
 
-    proc.once("close", (code) => {
-      this.proc = undefined;
-      if (this.running) {
-        this.consecutiveErrors = code !== 0 ? this.consecutiveErrors + 1 : 0;
+      const isTapoC402 =
+        /(?:\bc402\b|tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle|tapo[-_ ]?frente)/i.test(
+          this.opts.cameraName || "",
+        ) ||
+        /(?:\bc402\b|tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle|tapo[-_ ]?frente)/i.test(
+          this.opts.cameraId || "",
+        ) ||
+        /(?:\bc402\b|tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle|tapo[-_ ]?frente)/i.test(
+          this.opts.rtspUrl || "",
+        );
+
+      const probeSize = isTapoC402 ? "2097152" : "524288";
+      const analyzeDuration = isTapoC402 ? "3000000" : "500000";
+
+      const args = [
+        "-hide_banner",
+        "-loglevel",
+        "info",
+        "-rtsp_transport",
+        "tcp",
+        "-timeout",
+        "10000000",
+        "-probesize",
+        probeSize,
+        "-analyzeduration",
+        analyzeDuration,
+        "-fflags",
+        "+genpts+igndts+discardcorrupt",
+        "-i",
+        url,
+        "-vf",
+        vf,
+        "-an",
+        "-f",
+        "null",
+        "-",
+      ];
+
+      const proc = spawn(ffmpegPath, args, {
+        stdio: ["ignore", "ignore", "pipe"],
+      });
+      this.proc = proc;
+
+      let stderrBuf = "";
+      proc.stderr?.on("data", (chunk: Buffer) => {
+        stderrBuf = (stderrBuf + chunk.toString()).slice(-4000);
+        const lines = stderrBuf.split("\n");
+        stderrBuf = lines.pop() ?? "";
+        for (const line of lines) {
+          this.parseLine(line, pblackThreshold, log);
+        }
+      });
+
+      proc.once("error", (err) => {
+        this.proc = undefined;
         log?.debug?.(
-          `[MotionDetector][${this.opts.cameraName}] closed code=${code} errors=${this.consecutiveErrors}`,
+          `[MotionDetector][${this.opts.cameraName}] error: ${err.message}`,
         );
         this.scheduleRestart(log);
-      }
-    });
+      });
+
+      proc.once("close", (code) => {
+        this.proc = undefined;
+        if (this.running) {
+          this.consecutiveErrors = code !== 0 ? this.consecutiveErrors + 1 : 0;
+          log?.debug?.(
+            `[MotionDetector][${this.opts.cameraName}] closed code=${code} errors=${this.consecutiveErrors}`,
+          );
+          this.scheduleRestart(log);
+        }
+      });
     } catch (err) {
-      log?.debug?.(`[MotionDetector][${this.opts.cameraName}] source renewal failed: ${err instanceof Error ? err.message : String(err)}`);
+      log?.debug?.(
+        `[MotionDetector][${this.opts.cameraName}] source renewal failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
       this.scheduleRestart(log);
     }
   }
@@ -290,7 +332,11 @@ export class FfmpegMotionDetector extends EventEmitter {
     }
   }
 
-  private onMotionDetected(pblack: number, changedPct: number, log?: any): void {
+  private onMotionDetected(
+    pblack: number,
+    changedPct: number,
+    log?: any,
+  ): void {
     const now = Date.now();
     if (now - this.lastTriggerAt < (this.opts.cooldownMs ?? 4000)) return;
     this.lastTriggerAt = now;
@@ -308,7 +354,9 @@ export class FfmpegMotionDetector extends EventEmitter {
       this.resetTimer = undefined;
       if (this.motionActive) {
         this.motionActive = false;
-        log?.notice?.(`[MotionDetector][${this.opts.cameraName}] Movimiento finalizado (reposo)`);
+        log?.notice?.(
+          `[MotionDetector][${this.opts.cameraName}] Movimiento finalizado (reposo)`,
+        );
         this.emit("motion", false);
       }
     }, this.opts.resetMs ?? 15000);
@@ -316,7 +364,10 @@ export class FfmpegMotionDetector extends EventEmitter {
 
   private scheduleRestart(log?: any): void {
     if (!this.running || this.paused) return;
-    const delayMs = Math.min(3000 * Math.pow(2, Math.min(this.consecutiveErrors, 3)), 30_000);
+    const delayMs = Math.min(
+      3000 * Math.pow(2, Math.min(this.consecutiveErrors, 3)),
+      30_000,
+    );
     this.restartTimer = setTimeout(() => {
       this.restartTimer = undefined;
       this.spawnProcess(log);

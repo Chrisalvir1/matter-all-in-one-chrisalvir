@@ -123,10 +123,15 @@ export class MqttEntity {
     let name = this.config.name;
     if (!name && devName) {
       name = devName;
-    } else if (name && devName && !name.toLowerCase().includes(devName.toLowerCase())) {
+    } else if (
+      name &&
+      devName &&
+      !name.toLowerCase().includes(devName.toLowerCase())
+    ) {
       name = `${devName} ${name}`;
     }
-    this.friendlyName = name || entry.objectId || this.config.unique_id || this.domain;
+    this.friendlyName =
+      name || entry.objectId || this.config.unique_id || this.domain;
     this.name = this.friendlyName;
 
     const rawId =
@@ -141,8 +146,8 @@ export class MqttEntity {
       Array.isArray(device.identifiers) && device.identifiers[0]
         ? device.identifiers[0]
         : typeof device.identifiers === "string"
-        ? device.identifiers
-        : rawId;
+          ? device.identifiers
+          : rawId;
     this.deviceId = `mqtt:${devId}`;
     this.deviceName = devName || this.friendlyName;
     this.manufacturer = device.manufacturer || "MQTT";
@@ -306,18 +311,38 @@ export class MqttEntity {
     try {
       if (typeof ep.setAttribute === "function") {
         if (ep.hasAttributeServer?.(0x0028, "reachable")) {
-          await ep.setAttribute(0x0028, "reachable", reachable, this.platform.log);
+          await ep.setAttribute(
+            0x0028,
+            "reachable",
+            reachable,
+            this.platform.log,
+          );
         }
         if (ep.hasAttributeServer?.(0x0039, "reachable")) {
-          await ep.setAttribute(0x0039, "reachable", reachable, this.platform.log);
+          await ep.setAttribute(
+            0x0039,
+            "reachable",
+            reachable,
+            this.platform.log,
+          );
         }
       }
       if (typeof ep.updateAttribute === "function") {
         if (ep.hasAttributeServer?.(0x0039, "reachable")) {
-          await ep.updateAttribute(0x0039, "reachable", reachable, this.platform.log);
+          await ep.updateAttribute(
+            0x0039,
+            "reachable",
+            reachable,
+            this.platform.log,
+          );
         }
         if (ep.hasAttributeServer?.(0x0028, "reachable")) {
-          await ep.updateAttribute(0x0028, "reachable", reachable, this.platform.log);
+          await ep.updateAttribute(
+            0x0028,
+            "reachable",
+            reachable,
+            this.platform.log,
+          );
         }
       }
     } catch {}
@@ -399,16 +424,30 @@ export class MqttEntity {
           const propVal = propMatch ? parsed[propMatch[1]] : undefined;
           if (typeof propVal === "boolean") {
             isOn = propVal;
-          } else if (typeof propVal === "string" || typeof propVal === "number") {
+          } else if (
+            typeof propVal === "string" ||
+            typeof propVal === "number"
+          ) {
             const normVal = String(propVal).toUpperCase();
             const normOn = String(this.config.payload_on ?? "ON").toUpperCase();
-            isOn = normVal === normOn || normVal === "1" || normVal === "TRUE" || normVal === "ON";
+            isOn =
+              normVal === normOn ||
+              normVal === "1" ||
+              normVal === "TRUE" ||
+              normVal === "ON";
           } else if (typeof parsed.state === "boolean") {
             isOn = parsed.state;
-          } else if (typeof parsed.state === "string" || typeof parsed.state === "number") {
+          } else if (
+            typeof parsed.state === "string" ||
+            typeof parsed.state === "number"
+          ) {
             const normState = String(parsed.state).toUpperCase();
             const normOn = String(this.config.payload_on ?? "ON").toUpperCase();
-            isOn = normState === normOn || normState === "1" || normState === "TRUE" || normState === "ON";
+            isOn =
+              normState === normOn ||
+              normState === "1" ||
+              normState === "TRUE" ||
+              normState === "ON";
           }
         } else {
           const normPayload = String(payload).toUpperCase();
@@ -420,8 +459,8 @@ export class MqttEntity {
             normPayload === "ON";
         }
         this.currentState = isOn
-          ? this.config.payload_on ?? "ON"
-          : this.config.payload_off ?? "OFF";
+          ? (this.config.payload_on ?? "ON")
+          : (this.config.payload_off ?? "OFF");
 
         if (this.endpoint) {
           safeSetAttribute(
@@ -449,12 +488,13 @@ export class MqttEntity {
           }
         }
       } else if (this.domain === "lock") {
-        const normLocked = String(this.config.state_locked ?? "LOCKED").toUpperCase();
-        const isLocked =
-          String(payload).toUpperCase() === normLocked;
+        const normLocked = String(
+          this.config.state_locked ?? "LOCKED",
+        ).toUpperCase();
+        const isLocked = String(payload).toUpperCase() === normLocked;
         this.currentState = isLocked
-          ? this.config.state_locked ?? "LOCKED"
-          : this.config.state_unlocked ?? "UNLOCKED";
+          ? (this.config.state_locked ?? "LOCKED")
+          : (this.config.state_unlocked ?? "UNLOCKED");
 
         if (this.endpoint) {
           safeSetAttribute(
@@ -475,9 +515,16 @@ export class MqttEntity {
           const normOn = String(this.config.payload_on ?? "ON").toUpperCase();
           if (typeof propVal === "boolean") {
             isOn = propVal;
-          } else if (typeof propVal === "string" || typeof propVal === "number") {
+          } else if (
+            typeof propVal === "string" ||
+            typeof propVal === "number"
+          ) {
             const normVal = String(propVal).toUpperCase();
-            isOn = normVal === normOn || normVal === "1" || normVal === "TRUE" || normVal === "ON";
+            isOn =
+              normVal === normOn ||
+              normVal === "1" ||
+              normVal === "TRUE" ||
+              normVal === "ON";
           } else if (typeof parsed.contact === "boolean") {
             isOn = !parsed.contact;
           } else if (typeof parsed.occupancy === "boolean") {
@@ -492,9 +539,16 @@ export class MqttEntity {
             isOn = parsed.smoke;
           } else if (typeof parsed.state === "boolean") {
             isOn = parsed.state;
-          } else if (typeof parsed.state === "string" || typeof parsed.state === "number") {
+          } else if (
+            typeof parsed.state === "string" ||
+            typeof parsed.state === "number"
+          ) {
             const normState = String(parsed.state).toUpperCase();
-            isOn = normState === normOn || normState === "1" || normState === "TRUE" || normState === "ON";
+            isOn =
+              normState === normOn ||
+              normState === "1" ||
+              normState === "TRUE" ||
+              normState === "ON";
           }
         } else {
           const normPayload = String(payload).toUpperCase();
@@ -507,8 +561,8 @@ export class MqttEntity {
         }
 
         this.currentState = isOn
-          ? this.config.payload_on ?? "on"
-          : this.config.payload_off ?? "off";
+          ? (this.config.payload_on ?? "on")
+          : (this.config.payload_off ?? "off");
 
         if (this.endpoint) {
           if (this.deviceType === contactSensor) {
@@ -530,7 +584,10 @@ export class MqttEntity {
           }
         }
 
-        if (typeof (this.platform as any)?.handleMqttBinarySensorState === "function") {
+        if (
+          typeof (this.platform as any)?.handleMqttBinarySensorState ===
+          "function"
+        ) {
           (this.platform as any).handleMqttBinarySensorState(
             this.entityId,
             isOn,

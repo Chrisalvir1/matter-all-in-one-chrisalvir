@@ -1,0 +1,954 @@
+[
+  {
+    "name": "@babel/helper-string-parser",
+    "current": "7.29.11",
+    "wanted": "7.29.11",
+    "latest": "8.0.8",
+    "dependent": "@babel/types"
+  },
+  {
+    "name": "@babel/helper-validator-identifier",
+    "current": "7.29.7",
+    "wanted": "7.29.7",
+    "latest": "8.0.6",
+    "dependent": "@babel/types"
+  },
+  {
+    "name": "@babel/parser",
+    "current": "7.29.12",
+    "wanted": "7.29.12",
+    "latest": "8.1.0",
+    "dependent": "magicast"
+  },
+  {
+    "name": "@babel/runtime",
+    "current": "7.29.10",
+    "wanted": "7.29.10",
+    "latest": "8.1.0",
+    "dependent": "broker-factory"
+  },
+  {
+    "name": "@babel/runtime",
+    "current": "7.29.10",
+    "wanted": "7.29.10",
+    "latest": "8.1.0",
+    "dependent": "fast-unique-numbers"
+  },
+  {
+    "name": "@babel/runtime",
+    "current": "7.29.10",
+    "wanted": "7.29.10",
+    "latest": "8.1.0",
+    "dependent": "worker-factory"
+  },
+  {
+    "name": "@babel/runtime",
+    "current": "7.29.10",
+    "wanted": "7.29.10",
+    "latest": "8.1.0",
+    "dependent": "worker-timers"
+  },
+  {
+    "name": "@babel/runtime",
+    "current": "7.29.10",
+    "wanted": "7.29.10",
+    "latest": "8.1.0",
+    "dependent": "worker-timers-broker"
+  },
+  {
+    "name": "@babel/runtime",
+    "current": "7.29.10",
+    "wanted": "7.29.10",
+    "latest": "8.1.0",
+    "dependent": "worker-timers-worker"
+  },
+  {
+    "name": "@babel/types",
+    "current": "7.29.11",
+    "wanted": "7.29.11",
+    "latest": "8.1.0",
+    "dependent": "@babel/parser"
+  },
+  {
+    "name": "@babel/types",
+    "current": "7.29.11",
+    "wanted": "7.29.11",
+    "latest": "8.1.0",
+    "dependent": "magicast"
+  },
+  {
+    "name": "@noble/curves",
+    "current": "1.9.7",
+    "wanted": "1.9.7",
+    "latest": "2.4.0",
+    "dependent": "werift"
+  },
+  {
+    "name": "@noble/hashes",
+    "current": "1.8.0",
+    "wanted": "1.8.0",
+    "latest": "2.4.0",
+    "dependent": "@noble/curves"
+  },
+  {
+    "name": "@peculiar/asn1-cms",
+    "current": "2.11.1",
+    "wanted": "2.11.1",
+    "latest": "3.0.0",
+    "dependent": "@peculiar/asn1-pfx"
+  },
+  {
+    "name": "@peculiar/asn1-cms",
+    "current": "2.11.1",
+    "wanted": "2.11.1",
+    "latest": "3.0.0",
+    "dependent": "@peculiar/asn1-pkcs9"
+  },
+  {
+    "name": "@peculiar/asn1-cms",
+    "current": "2.11.1",
+    "wanted": "2.11.1",
+    "latest": "3.0.0",
+    "dependent": "@peculiar/x509"
+  },
+  {
+    "name": "@peculiar/asn1-csr",
+    "current": "2.11.1",
+    "wanted": "2.11.1",
+    "latest": "3.0.0",
+    "dependent": "@peculiar/x509"
+  },
+  {
+    "name": "@peculiar/asn1-ecc",
+    "current": "2.11.1",
+    "wanted": "2.11.1",
+    "latest": "3.0.0",
+    "dependent": "@peculiar/x509"
+  },
+  {
+    "name": "@peculiar/asn1-pfx",
+    "current": "2.11.1",
+    "wanted": "2.11.1",
+    "latest": "3.0.0",
+    "dependent": "@peculiar/asn1-pkcs9"
+  },
+  {
+    "name": "@peculiar/asn1-pkcs8",
+    "current": "2.11.1",
+    "wanted": "2.11.1",
+    "latest": "3.0.0",
+    "dependent": "@peculiar/asn1-pfx"
+  },
+  {
+    "name": "@peculiar/asn1-pkcs8",
+    "current": "2.11.1",
+    "wanted": "2.11.1",
+    "latest": "3.0.0",
+    "dependent": "@peculiar/asn1-pkcs9"
+  },
+  {
+    "name": "@peculiar/asn1-pkcs9",
+    "current": "2.11.1",
+    "wanted": "2.11.1",
+    "latest": "3.0.0",
+    "dependent": "@peculiar/x509"
+  },
+  {
+    "name": "@peculiar/asn1-rsa",
+    "current": "2.11.1",
+    "wanted": "2.11.1",
+    "latest": "3.0.0",
+    "dependent": "@peculiar/asn1-pfx"
+  },
+  {
+    "name": "@peculiar/asn1-rsa",
+    "current": "2.11.1",
+    "wanted": "2.11.1",
+    "latest": "3.0.0",
+    "dependent": "@peculiar/x509"
+  },
+  {
+    "name": "@peculiar/asn1-schema",
+    "current": "2.11.1",
+    "wanted": "2.11.1",
+    "latest": "3.0.0",
+    "dependent": "@peculiar/asn1-cms"
+  },
+  {
+    "name": "@peculiar/asn1-schema",
+    "current": "2.11.1",
+    "wanted": "2.11.1",
+    "latest": "3.0.0",
+    "dependent": "@peculiar/asn1-csr"
+  },
+  {
+    "name": "@peculiar/asn1-schema",
+    "current": "2.11.1",
+    "wanted": "2.11.1",
+    "latest": "3.0.0",
+    "dependent": "@peculiar/asn1-ecc"
+  },
+  {
+    "name": "@peculiar/asn1-schema",
+    "current": "2.11.1",
+    "wanted": "2.11.1",
+    "latest": "3.0.0",
+    "dependent": "@peculiar/asn1-pfx"
+  },
+  {
+    "name": "@peculiar/asn1-schema",
+    "current": "2.11.1",
+    "wanted": "2.11.1",
+    "latest": "3.0.0",
+    "dependent": "@peculiar/asn1-pkcs8"
+  },
+  {
+    "name": "@peculiar/asn1-schema",
+    "current": "2.11.1",
+    "wanted": "2.11.1",
+    "latest": "3.0.0",
+    "dependent": "@peculiar/asn1-pkcs9"
+  },
+  {
+    "name": "@peculiar/asn1-schema",
+    "current": "2.11.1",
+    "wanted": "2.11.1",
+    "latest": "3.0.0",
+    "dependent": "@peculiar/asn1-rsa"
+  },
+  {
+    "name": "@peculiar/asn1-schema",
+    "current": "2.11.1",
+    "wanted": "2.11.1",
+    "latest": "3.0.0",
+    "dependent": "@peculiar/asn1-x509"
+  },
+  {
+    "name": "@peculiar/asn1-schema",
+    "current": "2.11.1",
+    "wanted": "2.11.1",
+    "latest": "3.0.0",
+    "dependent": "@peculiar/asn1-x509-attr"
+  },
+  {
+    "name": "@peculiar/asn1-schema",
+    "current": "2.11.1",
+    "wanted": "2.11.1",
+    "latest": "3.0.0",
+    "dependent": "@peculiar/x509"
+  },
+  {
+    "name": "@peculiar/asn1-x509",
+    "current": "2.11.1",
+    "wanted": "2.11.1",
+    "latest": "3.0.0",
+    "dependent": "@peculiar/asn1-cms"
+  },
+  {
+    "name": "@peculiar/asn1-x509",
+    "current": "2.11.1",
+    "wanted": "2.11.1",
+    "latest": "3.0.0",
+    "dependent": "@peculiar/asn1-csr"
+  },
+  {
+    "name": "@peculiar/asn1-x509",
+    "current": "2.11.1",
+    "wanted": "2.11.1",
+    "latest": "3.0.0",
+    "dependent": "@peculiar/asn1-ecc"
+  },
+  {
+    "name": "@peculiar/asn1-x509",
+    "current": "2.11.1",
+    "wanted": "2.11.1",
+    "latest": "3.0.0",
+    "dependent": "@peculiar/asn1-pkcs8"
+  },
+  {
+    "name": "@peculiar/asn1-x509",
+    "current": "2.11.1",
+    "wanted": "2.11.1",
+    "latest": "3.0.0",
+    "dependent": "@peculiar/asn1-pkcs9"
+  },
+  {
+    "name": "@peculiar/asn1-x509",
+    "current": "2.11.1",
+    "wanted": "2.11.1",
+    "latest": "3.0.0",
+    "dependent": "@peculiar/asn1-rsa"
+  },
+  {
+    "name": "@peculiar/asn1-x509",
+    "current": "2.11.1",
+    "wanted": "2.11.1",
+    "latest": "3.0.0",
+    "dependent": "@peculiar/asn1-x509-attr"
+  },
+  {
+    "name": "@peculiar/asn1-x509",
+    "current": "2.11.1",
+    "wanted": "2.11.1",
+    "latest": "3.0.0",
+    "dependent": "@peculiar/x509"
+  },
+  {
+    "name": "@peculiar/asn1-x509-attr",
+    "current": "2.11.1",
+    "wanted": "2.11.1",
+    "latest": "3.0.0",
+    "dependent": "@peculiar/asn1-cms"
+  },
+  {
+    "name": "@peculiar/asn1-x509-attr",
+    "current": "2.11.1",
+    "wanted": "2.11.1",
+    "latest": "3.0.0",
+    "dependent": "@peculiar/asn1-pkcs9"
+  },
+  {
+    "name": "@peculiar/utils",
+    "current": "2.0.3",
+    "wanted": "2.0.3",
+    "latest": "4.1.0",
+    "dependent": "@peculiar/asn1-schema"
+  },
+  {
+    "name": "@peculiar/utils",
+    "current": "2.0.3",
+    "wanted": "2.0.3",
+    "latest": "4.1.0",
+    "dependent": "@peculiar/asn1-x509"
+  },
+  {
+    "name": "@peculiar/x509",
+    "current": "1.14.3",
+    "wanted": "1.14.3",
+    "latest": "3.1.0",
+    "dependent": "werift"
+  },
+  {
+    "name": "@types/dom-webcodecs",
+    "current": "0.1.13",
+    "wanted": "0.1.19",
+    "latest": "0.1.19",
+    "dependent": "@types/dom-mediacapture-transform"
+  },
+  {
+    "name": "@types/dom-webcodecs",
+    "current": "0.1.13",
+    "wanted": "0.1.13",
+    "latest": "0.1.19",
+    "dependent": "mediabunny"
+  },
+  {
+    "name": "accepts",
+    "current": "2.0.0",
+    "wanted": "2.0.0",
+    "latest": "1.3.8",
+    "dependent": "express"
+  },
+  {
+    "name": "ansi-regex",
+    "current": "5.0.1",
+    "wanted": "5.0.1",
+    "latest": "6.5.0",
+    "dependent": "strip-ansi"
+  },
+  {
+    "name": "ansi-styles",
+    "current": "4.3.0",
+    "wanted": "4.3.0",
+    "latest": "7.0.0",
+    "dependent": "wrap-ansi"
+  },
+  {
+    "name": "append-field",
+    "current": "1.0.0",
+    "wanted": "1.0.0",
+    "latest": "2.0.0",
+    "dependent": "multer"
+  },
+  {
+    "name": "asn1js",
+    "current": "3.1.0",
+    "wanted": "3.1.0",
+    "latest": "4.0.0",
+    "dependent": "@peculiar/asn1-cms"
+  },
+  {
+    "name": "asn1js",
+    "current": "3.1.0",
+    "wanted": "3.1.0",
+    "latest": "4.0.0",
+    "dependent": "@peculiar/asn1-csr"
+  },
+  {
+    "name": "asn1js",
+    "current": "3.1.0",
+    "wanted": "3.1.0",
+    "latest": "4.0.0",
+    "dependent": "@peculiar/asn1-ecc"
+  },
+  {
+    "name": "asn1js",
+    "current": "3.1.0",
+    "wanted": "3.1.0",
+    "latest": "4.0.0",
+    "dependent": "@peculiar/asn1-pfx"
+  },
+  {
+    "name": "asn1js",
+    "current": "3.1.0",
+    "wanted": "3.1.0",
+    "latest": "4.0.0",
+    "dependent": "@peculiar/asn1-pkcs8"
+  },
+  {
+    "name": "asn1js",
+    "current": "3.1.0",
+    "wanted": "3.1.0",
+    "latest": "4.0.0",
+    "dependent": "@peculiar/asn1-pkcs9"
+  },
+  {
+    "name": "asn1js",
+    "current": "3.1.0",
+    "wanted": "3.1.0",
+    "latest": "4.0.0",
+    "dependent": "@peculiar/asn1-rsa"
+  },
+  {
+    "name": "asn1js",
+    "current": "3.1.0",
+    "wanted": "3.1.0",
+    "latest": "4.0.0",
+    "dependent": "@peculiar/asn1-schema"
+  },
+  {
+    "name": "asn1js",
+    "current": "3.1.0",
+    "wanted": "3.1.0",
+    "latest": "4.0.0",
+    "dependent": "@peculiar/asn1-x509"
+  },
+  {
+    "name": "asn1js",
+    "current": "3.1.0",
+    "wanted": "3.1.0",
+    "latest": "4.0.0",
+    "dependent": "@peculiar/asn1-x509-attr"
+  },
+  {
+    "name": "balanced-match",
+    "current": "4.0.4",
+    "wanted": "4.0.4",
+    "latest": "5.0.0",
+    "dependent": "brace-expansion"
+  },
+  {
+    "name": "bl",
+    "current": "6.1.6",
+    "wanted": "6.1.6",
+    "latest": "7.0.14",
+    "dependent": "mqtt-packet"
+  },
+  {
+    "name": "camelcase",
+    "current": "5.3.1",
+    "wanted": "5.3.1",
+    "latest": "10.0.0",
+    "dependent": "yargs-parser"
+  },
+  {
+    "name": "cliui",
+    "current": "6.0.0",
+    "wanted": "6.0.0",
+    "latest": "9.0.1",
+    "dependent": "yargs"
+  },
+  {
+    "name": "color-convert",
+    "current": "2.0.1",
+    "wanted": "2.0.1",
+    "latest": "3.1.3",
+    "dependent": "ansi-styles"
+  },
+  {
+    "name": "color-name",
+    "current": "1.1.4",
+    "wanted": "1.1.4",
+    "latest": "2.1.1",
+    "dependent": "color-convert"
+  },
+  {
+    "name": "content-disposition",
+    "current": "2.0.1",
+    "wanted": "2.0.1",
+    "latest": "3.0.0",
+    "dependent": "express"
+  },
+  {
+    "name": "content-type",
+    "current": "2.1.0",
+    "wanted": "2.1.0",
+    "latest": "3.1.1",
+    "dependent": "body-parser"
+  },
+  {
+    "name": "content-type",
+    "current": "2.1.0",
+    "wanted": "2.1.0",
+    "latest": "3.1.1",
+    "dependent": "express"
+  },
+  {
+    "name": "content-type",
+    "current": "2.1.0",
+    "wanted": "2.1.0",
+    "latest": "3.1.1",
+    "dependent": "negotiator"
+  },
+  {
+    "name": "content-type",
+    "current": "2.1.0",
+    "wanted": "2.1.0",
+    "latest": "3.1.1",
+    "dependent": "type-is"
+  },
+  {
+    "name": "cookie",
+    "current": "0.7.2",
+    "wanted": "0.7.2",
+    "latest": "2.0.1",
+    "dependent": "express"
+  },
+  {
+    "name": "debug",
+    "current": "4.4.0",
+    "wanted": "4.4.0",
+    "latest": "4.4.3",
+    "dependent": "werift"
+  },
+  {
+    "name": "decamelize",
+    "current": "1.2.0",
+    "wanted": "1.2.0",
+    "latest": "7.0.0",
+    "dependent": "yargs"
+  },
+  {
+    "name": "decamelize",
+    "current": "1.2.0",
+    "wanted": "1.2.0",
+    "latest": "7.0.0",
+    "dependent": "yargs-parser"
+  },
+  {
+    "name": "emoji-regex",
+    "current": "8.0.0",
+    "wanted": "8.0.0",
+    "latest": "11.0.0",
+    "dependent": "string-width"
+  },
+  {
+    "name": "encodeurl",
+    "current": "2.0.1",
+    "wanted": "2.0.1",
+    "latest": "3.0.0",
+    "dependent": "express"
+  },
+  {
+    "name": "encodeurl",
+    "current": "2.0.1",
+    "wanted": "2.0.1",
+    "latest": "3.0.0",
+    "dependent": "finalhandler"
+  },
+  {
+    "name": "encodeurl",
+    "current": "2.0.1",
+    "wanted": "2.0.1",
+    "latest": "3.0.0",
+    "dependent": "send"
+  },
+  {
+    "name": "encodeurl",
+    "current": "2.0.1",
+    "wanted": "2.0.1",
+    "latest": "3.0.0",
+    "dependent": "serve-static"
+  },
+  {
+    "name": "es-module-lexer",
+    "current": "2.3.2",
+    "wanted": "2.3.2",
+    "latest": "3.0.4",
+    "dependent": "vitest"
+  },
+  {
+    "name": "event-target-shim",
+    "current": "5.0.1",
+    "wanted": "5.0.1",
+    "latest": "6.0.2",
+    "dependent": "abort-controller"
+  },
+  {
+    "name": "express-rate-limit",
+    "current": "8.7.1",
+    "wanted": "8.7.1",
+    "latest": "8.7.3",
+    "dependent": "@matterbridge/core"
+  },
+  {
+    "name": "fast-unique-numbers",
+    "current": "9.0.27",
+    "wanted": "9.0.27",
+    "latest": "10.0.1",
+    "dependent": "broker-factory"
+  },
+  {
+    "name": "fast-unique-numbers",
+    "current": "9.0.27",
+    "wanted": "9.0.27",
+    "latest": "10.0.1",
+    "dependent": "worker-factory"
+  },
+  {
+    "name": "fast-unique-numbers",
+    "current": "9.0.27",
+    "wanted": "9.0.27",
+    "latest": "10.0.1",
+    "dependent": "worker-timers-broker"
+  },
+  {
+    "name": "find-up",
+    "current": "4.1.0",
+    "wanted": "4.1.0",
+    "latest": "8.0.0",
+    "dependent": "yargs"
+  },
+  {
+    "name": "fresh",
+    "current": "2.0.0",
+    "wanted": "2.0.0",
+    "latest": "0.5.2",
+    "dependent": "express"
+  },
+  {
+    "name": "fresh",
+    "current": "2.0.0",
+    "wanted": "2.0.0",
+    "latest": "0.5.2",
+    "dependent": "send"
+  },
+  {
+    "name": "ipaddr.js",
+    "current": "1.9.1",
+    "wanted": "1.9.1",
+    "latest": "2.5.0",
+    "dependent": "proxy-addr"
+  },
+  {
+    "name": "is-fullwidth-code-point",
+    "current": "3.0.0",
+    "wanted": "3.0.0",
+    "latest": "5.1.0",
+    "dependent": "string-width"
+  },
+  {
+    "name": "locate-path",
+    "current": "5.0.0",
+    "wanted": "5.0.0",
+    "latest": "8.0.0",
+    "dependent": "find-up"
+  },
+  {
+    "name": "lru-cache",
+    "current": "10.4.3",
+    "wanted": "10.4.3",
+    "latest": "11.5.3",
+    "dependent": "mqtt"
+  },
+  {
+    "name": "media-typer",
+    "current": "0.3.0",
+    "wanted": "0.3.0",
+    "latest": "2.0.0",
+    "dependent": "type-is"
+  },
+  {
+    "name": "media-typer",
+    "current": "1.1.1",
+    "wanted": "1.1.1",
+    "latest": "2.0.0",
+    "dependent": "type-is"
+  },
+  {
+    "name": "mime-db",
+    "current": "1.52.0",
+    "wanted": "1.52.0",
+    "latest": "1.54.0",
+    "dependent": "mime-types"
+  },
+  {
+    "name": "mime-types",
+    "current": "2.1.35",
+    "wanted": "2.1.35",
+    "latest": "3.0.2",
+    "dependent": "type-is"
+  },
+  {
+    "name": "nanoid",
+    "current": "3.3.20",
+    "wanted": "3.3.20",
+    "latest": "6.0.2",
+    "dependent": "postcss"
+  },
+  {
+    "name": "openai",
+    "current": "6.49.0",
+    "wanted": "6.49.0",
+    "latest": "7.47.0",
+    "dependent": "@scrypted/types"
+  },
+  {
+    "name": "p-limit",
+    "current": "3.1.0",
+    "wanted": "3.1.0",
+    "latest": "7.3.3",
+    "dependent": "node-persist"
+  },
+  {
+    "name": "p-limit",
+    "current": "2.3.0",
+    "wanted": "2.3.0",
+    "latest": "7.3.3",
+    "dependent": "p-locate"
+  },
+  {
+    "name": "p-locate",
+    "current": "4.1.0",
+    "wanted": "4.1.0",
+    "latest": "7.0.0",
+    "dependent": "locate-path"
+  },
+  {
+    "name": "p-try",
+    "current": "2.2.0",
+    "wanted": "2.2.0",
+    "latest": "3.0.0",
+    "dependent": "p-limit"
+  },
+  {
+    "name": "path-exists",
+    "current": "4.0.0",
+    "wanted": "4.0.0",
+    "latest": "5.0.0",
+    "dependent": "find-up"
+  },
+  {
+    "name": "path-to-regexp",
+    "current": "8.4.2",
+    "wanted": "8.4.2",
+    "latest": "9.0.0",
+    "dependent": "router"
+  },
+  {
+    "name": "pngjs",
+    "current": "5.0.0",
+    "wanted": "5.0.0",
+    "latest": "7.0.0",
+    "dependent": "qrcode"
+  },
+  {
+    "name": "pvutils",
+    "current": "1.2.0",
+    "wanted": "1.2.0",
+    "latest": "2.0.0",
+    "dependent": "asn1js"
+  },
+  {
+    "name": "raw-body",
+    "current": "3.0.2",
+    "wanted": "3.0.2",
+    "latest": "4.0.0",
+    "dependent": "body-parser"
+  },
+  {
+    "name": "readable-stream",
+    "current": "3.6.2",
+    "wanted": "3.6.2",
+    "latest": "4.8.0",
+    "dependent": "concat-stream"
+  },
+  {
+    "name": "source-map",
+    "current": "0.6.1",
+    "wanted": "0.6.1",
+    "latest": "0.8.0",
+    "dependent": "source-map-support"
+  },
+  {
+    "name": "string-width",
+    "current": "4.2.3",
+    "wanted": "4.2.3",
+    "latest": "8.3.0",
+    "dependent": "cliui"
+  },
+  {
+    "name": "string-width",
+    "current": "4.2.3",
+    "wanted": "4.2.3",
+    "latest": "8.3.0",
+    "dependent": "wrap-ansi"
+  },
+  {
+    "name": "string-width",
+    "current": "4.2.3",
+    "wanted": "4.2.3",
+    "latest": "8.3.0",
+    "dependent": "yargs"
+  },
+  {
+    "name": "strip-ansi",
+    "current": "6.0.1",
+    "wanted": "6.0.1",
+    "latest": "7.2.0",
+    "dependent": "cliui"
+  },
+  {
+    "name": "strip-ansi",
+    "current": "6.0.1",
+    "wanted": "6.0.1",
+    "latest": "7.2.0",
+    "dependent": "string-width"
+  },
+  {
+    "name": "strip-ansi",
+    "current": "6.0.1",
+    "wanted": "6.0.1",
+    "latest": "7.2.0",
+    "dependent": "wrap-ansi"
+  },
+  {
+    "name": "tslib",
+    "current": "1.14.1",
+    "wanted": "1.14.1",
+    "latest": "2.9.1",
+    "dependent": "tsyringe"
+  },
+  {
+    "name": "type-is",
+    "current": "2.1.0",
+    "wanted": "2.1.0",
+    "latest": "3.0.0",
+    "dependent": "body-parser"
+  },
+  {
+    "name": "type-is",
+    "current": "2.1.0",
+    "wanted": "2.1.0",
+    "latest": "3.0.0",
+    "dependent": "express"
+  },
+  {
+    "name": "type-is",
+    "current": "1.6.18",
+    "wanted": "1.6.18",
+    "latest": "3.0.0",
+    "dependent": "multer"
+  },
+  {
+    "name": "typedarray",
+    "current": "0.0.6",
+    "wanted": "0.0.6",
+    "latest": "0.0.7",
+    "dependent": "concat-stream"
+  },
+  {
+    "name": "undici-types",
+    "current": "8.9.0",
+    "wanted": "8.9.0",
+    "latest": "8.12.3",
+    "dependent": "@types/node"
+  },
+  {
+    "name": "werift",
+    "current": "0.25.2",
+    "wanted": "0.25.2",
+    "latest": "0.26.0",
+    "dependent": "@matterbridge/core"
+  },
+  {
+    "name": "why-is-node-running",
+    "current": "3.2.1",
+    "wanted": "3.2.1",
+    "latest": "3.2.3",
+    "dependent": "vitest"
+  },
+  {
+    "name": "wrap-ansi",
+    "current": "6.2.0",
+    "wanted": "6.2.0",
+    "latest": "10.0.2",
+    "dependent": "cliui"
+  },
+  {
+    "name": "ws",
+    "current": "8.22.0",
+    "wanted": "8.22.0",
+    "latest": "8.22.1",
+    "dependent": "@matterbridge/core"
+  },
+  {
+    "name": "ws",
+    "current": "8.21.3",
+    "wanted": "8.21.3",
+    "latest": "8.22.1",
+    "dependent": "engine.io-client"
+  },
+  {
+    "name": "xmlbuilder",
+    "current": "11.0.1",
+    "wanted": "11.0.1",
+    "latest": "15.1.1",
+    "dependent": "xml2js"
+  },
+  {
+    "name": "xmlhttprequest-ssl",
+    "current": "2.1.2",
+    "wanted": "2.1.2",
+    "latest": "4.0.0",
+    "dependent": "engine.io-client"
+  },
+  {
+    "name": "y18n",
+    "current": "4.0.3",
+    "wanted": "4.0.3",
+    "latest": "5.0.8",
+    "dependent": "yargs"
+  },
+  {
+    "name": "yargs",
+    "current": "15.4.1",
+    "wanted": "15.4.1",
+    "latest": "18.2.0",
+    "dependent": "qrcode"
+  },
+  {
+    "name": "yargs-parser",
+    "current": "18.1.3",
+    "wanted": "18.1.3",
+    "latest": "22.0.0",
+    "dependent": "yargs"
+  },
+  {
+    "name": "yocto-queue",
+    "current": "0.1.0",
+    "wanted": "0.1.0",
+    "latest": "1.2.2",
+    "dependent": "p-limit"
+  }
+]

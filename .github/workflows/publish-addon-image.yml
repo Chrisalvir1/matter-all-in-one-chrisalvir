@@ -22,25 +22,61 @@ jobs:
       run:
         working-directory: matter-all-in-one-addon
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: '24.22.1'
+          node-version: '26.13.0'
+      - name: Install validated npm
+        run: npm install --global npm@12.2.1 --no-fund --no-audit
+
       - run: npm ci --legacy-peer-deps --no-fund --no-audit
+
+      - name: Verify synchronized toolchain
+        run: npm run check:toolchain
       - run: node scripts/verify-ha-changelog.mjs
       - run: npm run typecheck
       - run: npm run build
       - run: npm test
 
-  build-and-publish:
+  native-container-smoke:
     needs: validate-tag
+    name: Native container validation (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: amd64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Build without publishing
+        working-directory: matter-all-in-one-addon
+        run: docker build --pull --platform linux/${{ matrix.arch }} --tag matter-native:ci .
+      - name: Verify image and production services
+        run: |
+          test "$(docker image inspect matter-native:ci --format '{{.Architecture}}')" = '${{ matrix.arch }}'
+          docker run --rm --network none --entrypoint node matter-native:ci scripts/verify-runtime.mjs
+          docker run --rm --network none --entrypoint /usr/local/bin/ffmpeg matter-native:ci -version
+          docker run --rm --network none --entrypoint ffprobe matter-native:ci -version
+
+  build-and-publish:
+    needs: [validate-tag, native-container-smoke]
     name: Build multi-arch image and publish to GHCR
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.metadata.outputs.version }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up validated Node runtime
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '26.13.0'
 
       - name: Read add-on version
         id: metadata
@@ -54,20 +90,20 @@ jobs:
         run: node scripts/verify-ha-changelog.mjs
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@288220e341e5c445ddb6d73e19a57a9012ceca88
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@af63523ba5f55733d817da0fdb813e660152c72c
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push multi-arch Docker image
-        uses: docker/build-push-action@2ca78c6bec76527009825f31aae0532b4d40d820
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: ./matter-all-in-one-addon
           platforms: linux/amd64,linux/arm64
@@ -109,7 +145,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout release notes
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}

@@ -5,7 +5,10 @@
  */
 export async function copyToClipboard(text: string): Promise<boolean> {
   // Try modern Clipboard API if supported and in secure context
-  if (navigator?.clipboard && typeof navigator.clipboard.writeText === "function") {
+  if (
+    navigator?.clipboard &&
+    typeof navigator.clipboard.writeText === "function"
+  ) {
     try {
       await navigator.clipboard.writeText(text);
       return true;

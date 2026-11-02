@@ -24,6 +24,5 @@ export function applyMatterFirmware(
     0xffffffff,
     major * 1_000_000 + minor * 1_000 + patch,
   );
-  endpoint.softwareVersionString =
-    `Matter ${MATTER_PROTOCOL_VERSION} · Matterbridge ${matterbridgeVersion}`;
+  endpoint.softwareVersionString = `Matter ${MATTER_PROTOCOL_VERSION} · Matterbridge ${matterbridgeVersion}`;
 }

@@ -194,5 +194,4 @@ describe("HomeAssistant connection recovery", () => {
       ha.requestOmniTuyaCameraStream("camera.comedero_michi"),
     ).resolves.toBeNull();
   });
-
 });

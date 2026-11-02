@@ -57,8 +57,16 @@ describe("HomeAssistantPlatform", () => {
   });
 
   it("refreshes an exported vacuum when its linked battery sensor changes", async () => {
-    const robot = { entity_id: "vacuum.robotina", state: "docked", attributes: {} };
-    const battery = { entity_id: "sensor.robotina_battery", state: "73", attributes: {} };
+    const robot = {
+      entity_id: "vacuum.robotina",
+      state: "docked",
+      attributes: {},
+    };
+    const battery = {
+      entity_id: "sensor.robotina_battery",
+      state: "73",
+      attributes: {},
+    };
     const updateState = vi.fn().mockResolvedValue(undefined);
     (platform as any).ha = {
       close: vi.fn(),
@@ -66,11 +74,19 @@ describe("HomeAssistantPlatform", () => {
         [robot.entity_id, { device_id: "robot" }],
         [battery.entity_id, { device_id: "robot" }],
       ]),
-      hassStates: new Map([[robot.entity_id, robot], [battery.entity_id, battery]]),
+      hassStates: new Map([
+        [robot.entity_id, robot],
+        [battery.entity_id, battery],
+      ]),
     };
-    (platform as any).entities.set(robot.entity_id, { state: robot, updateState });
+    (platform as any).entities.set(robot.entity_id, {
+      state: robot,
+      updateState,
+    });
     vi.spyOn(platform as any, "isEntityExported").mockReturnValue(true);
-    vi.spyOn(platform as any, "clearEntityProblem").mockImplementation(() => {});
+    vi.spyOn(platform as any, "clearEntityProblem").mockImplementation(
+      () => {},
+    );
     (platform as any).pendingStateUpdates.set(battery.entity_id, battery);
     await (platform as any).flushStateUpdates();
     expect(updateState).toHaveBeenCalledWith(robot);
@@ -81,23 +97,60 @@ describe("HomeAssistantPlatform", () => {
     (platform as any).ha = {
       close: vi.fn(),
       hassEntities: new Map([
-        ["vacuum.robotina", { entity_id: "vacuum.robotina", device_id: deviceId }],
-        ["sensor.robotina_power", { entity_id: "sensor.robotina_power", device_id: deviceId }],
-        ["sensor.robotina_battery", { entity_id: "sensor.robotina_battery", device_id: deviceId }],
+        [
+          "vacuum.robotina",
+          { entity_id: "vacuum.robotina", device_id: deviceId },
+        ],
+        [
+          "sensor.robotina_power",
+          { entity_id: "sensor.robotina_power", device_id: deviceId },
+        ],
+        [
+          "sensor.robotina_battery",
+          { entity_id: "sensor.robotina_battery", device_id: deviceId },
+        ],
       ]),
       hassStates: new Map([
-        ["sensor.robotina_power", { entity_id: "sensor.robotina_power", state: "0.1", attributes: { device_class: "power", unit_of_measurement: "W" } }],
-        ["sensor.robotina_battery", { entity_id: "sensor.robotina_battery", state: "73", attributes: { device_class: "battery" } }],
+        [
+          "sensor.robotina_power",
+          {
+            entity_id: "sensor.robotina_power",
+            state: "0.1",
+            attributes: { device_class: "power", unit_of_measurement: "W" },
+          },
+        ],
+        [
+          "sensor.robotina_battery",
+          {
+            entity_id: "sensor.robotina_battery",
+            state: "73",
+            attributes: { device_class: "battery" },
+          },
+        ],
       ]),
     };
-    platform.entities.set("vacuum.robotina", { entityId: "vacuum.robotina" } as any);
-    platform.entities.set("sensor.robotina_power", { entityId: "sensor.robotina_power" } as any);
-    platform.entities.set("sensor.robotina_battery", { entityId: "sensor.robotina_battery" } as any);
+    platform.entities.set("vacuum.robotina", {
+      entityId: "vacuum.robotina",
+    } as any);
+    platform.entities.set("sensor.robotina_power", {
+      entityId: "sensor.robotina_power",
+    } as any);
+    platform.entities.set("sensor.robotina_battery", {
+      entityId: "sensor.robotina_battery",
+    } as any);
 
-    expect((platform as any).getCompositeCandidate("sensor.robotina_power")).toBeUndefined();
-    expect((platform as any).getCompositeCandidate("vacuum.robotina")).toBeUndefined();
-    expect((platform as any).isAuxiliaryEntity("sensor.robotina_power")).toBe(true);
-    expect((platform as any).getPrimaryEntityId("sensor.robotina_power")).toBe("vacuum.robotina");
+    expect(
+      (platform as any).getCompositeCandidate("sensor.robotina_power"),
+    ).toBeUndefined();
+    expect(
+      (platform as any).getCompositeCandidate("vacuum.robotina"),
+    ).toBeUndefined();
+    expect((platform as any).isAuxiliaryEntity("sensor.robotina_power")).toBe(
+      true,
+    );
+    expect((platform as any).getPrimaryEntityId("sensor.robotina_power")).toBe(
+      "vacuum.robotina",
+    );
   });
 
   it("should initialize and connect to Home Assistant", async (ctx) => {
@@ -161,7 +214,9 @@ describe("HomeAssistantPlatform", () => {
     const forceSync = vi
       .spyOn(platform as any, "forceSyncAllEntities")
       .mockResolvedValue(undefined);
-    vi.spyOn(platform as any, "broadcastSseMessage").mockImplementation(() => {});
+    vi.spyOn(platform as any, "broadcastSseMessage").mockImplementation(
+      () => {},
+    );
 
     const result = await platform.refreshHomeAssistantDevices();
 
@@ -193,15 +248,21 @@ describe("HomeAssistantPlatform", () => {
     const unregister = vi
       .spyOn(platform as any, "unregisterDevice")
       .mockResolvedValue(undefined);
-    vi.spyOn(platform as any, "saveExportedDevices").mockResolvedValue(undefined);
+    vi.spyOn(platform as any, "saveExportedDevices").mockResolvedValue(
+      undefined,
+    );
 
-    await expect(platform.manualUnregister("light.lifecycle_test")).resolves.toEqual({
+    await expect(
+      platform.manualUnregister("light.lifecycle_test"),
+    ).resolves.toEqual({
       success: true,
     });
 
     expect(unregister).toHaveBeenCalledWith(endpoint);
     expect(endpoint.serverNode.close).not.toHaveBeenCalled();
-    expect((platform as any).matterbridgeDevices.has("light.lifecycle_test")).toBe(false);
+    expect(
+      (platform as any).matterbridgeDevices.has("light.lifecycle_test"),
+    ).toBe(false);
   });
 
   it("preserves and queues an accessory when unregister finishes after its timeout", async () => {
@@ -210,12 +271,16 @@ describe("HomeAssistantPlatform", () => {
     const entityId = "light.late_cleanup";
     (platform as any).matterbridgeDevices.set(entityId, endpoint);
     (platform as any).exportedDevices.add(entityId);
-    vi.spyOn(platform as any, "unregisterDevice").mockImplementation(() =>
-      new Promise<void>((resolve) => { finish = resolve; }),
+    vi.spyOn(platform as any, "unregisterDevice").mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
     );
 
-    await expect((platform as any).unregisterDeviceBounded(endpoint, "test", 1))
-      .rejects.toThrow("cleanup is still running");
+    await expect(
+      (platform as any).unregisterDeviceBounded(endpoint, "test", 1),
+    ).rejects.toThrow("cleanup is still running");
     finish();
     await new Promise((resolve) => setImmediate(resolve));
 
@@ -231,7 +296,9 @@ describe("HomeAssistantPlatform", () => {
     const recordFailure = vi.spyOn(platform, "recordEntityCommandFailure");
     const endpoint = {
       commandHandler: {
-        executeHandler: vi.fn().mockRejectedValue(new Error("HA rejected command")),
+        executeHandler: vi
+          .fn()
+          .mockRejectedValue(new Error("HA rejected command")),
       },
     };
     (platform as any).installMatterCommandResponsePolicy(endpoint, entityId);
@@ -525,7 +592,10 @@ describe("HomeAssistantPlatform", () => {
     const existingEndpoint = {
       uniqueId: "light_living_room",
       deviceName: "Living Room Lamp",
-      serverNode: { lifecycle: { isOnline: true }, state: { commissioning: { commissioned: true } } },
+      serverNode: {
+        lifecycle: { isOnline: true },
+        state: { commissioning: { commissioned: true } },
+      },
     };
     (platform as any).getDeviceByUniqueId = vi
       .fn()
@@ -543,9 +613,25 @@ describe("HomeAssistantPlatform", () => {
 
   it("does not reuse a destroyed Matter endpoint", async () => {
     const id = "light.dead";
-    const dead = { uniqueId: "light_dead", deviceName: "Dead", lifecycle: { isGone: true }, serverNode: { lifecycle: { isGone: true } } };
-    const fresh: any = { uniqueId: "light_dead", deviceName: "Dead", serverNode: { lifecycle: { isOnline: true } } };
-    const entity: any = { entityId: id, state: { state: "off", attributes: {} }, createEndpoint: vi.fn().mockResolvedValue(fresh), adoptEndpoint: vi.fn(), syncInitialState: vi.fn().mockResolvedValue(undefined), setReachability: vi.fn() };
+    const dead = {
+      uniqueId: "light_dead",
+      deviceName: "Dead",
+      lifecycle: { isGone: true },
+      serverNode: { lifecycle: { isGone: true } },
+    };
+    const fresh: any = {
+      uniqueId: "light_dead",
+      deviceName: "Dead",
+      serverNode: { lifecycle: { isOnline: true } },
+    };
+    const entity: any = {
+      entityId: id,
+      state: { state: "off", attributes: {} },
+      createEndpoint: vi.fn().mockResolvedValue(fresh),
+      adoptEndpoint: vi.fn(),
+      syncInitialState: vi.fn().mockResolvedValue(undefined),
+      setReachability: vi.fn(),
+    };
     platform.entities.set(id, entity);
     (platform as any).matterbridgeDevices.set(id, dead);
     (platform as any).getDeviceByUniqueId = vi.fn().mockReturnValue(dead);
@@ -809,8 +895,14 @@ describe("HomeAssistantPlatform", () => {
     const entity: any = { state: { state: "arming", attributes: {} } };
     const updateFromHassState = vi.fn();
     platform.entities.set(entityId, entity);
-    platform.hapAccessories.set(entityId, { entityId, updateFromHassState } as any);
-    vi.spyOn(platform as any, "observeHomeAssistantAvailability").mockReturnValue(false);
+    platform.hapAccessories.set(entityId, {
+      entityId,
+      updateFromHassState,
+    } as any);
+    vi.spyOn(
+      platform as any,
+      "observeHomeAssistantAvailability",
+    ).mockReturnValue(false);
     vi.spyOn(platform as any, "isEntityExported").mockReturnValue(false);
 
     const state = {
@@ -1066,9 +1158,19 @@ describe("HomeAssistantPlatform", () => {
     }
 
     // Segments must be classified as auxiliary
-    expect((platform as any).isAuxiliaryEntity("light.tira_larga_navidad_2_segment_1")).toBe(true);
-    expect((platform as any).isAuxiliaryEntity("light.tira_larga_navidad_2_segment_16")).toBe(true);
-    expect((platform as any).isAuxiliaryEntity("light.tira_larga_navidad_2")).toBe(false);
+    expect(
+      (platform as any).isAuxiliaryEntity(
+        "light.tira_larga_navidad_2_segment_1",
+      ),
+    ).toBe(true);
+    expect(
+      (platform as any).isAuxiliaryEntity(
+        "light.tira_larga_navidad_2_segment_16",
+      ),
+    ).toBe(true);
+    expect(
+      (platform as any).isAuxiliaryEntity("light.tira_larga_navidad_2"),
+    ).toBe(false);
 
     // Light strip must NOT be treated as a multi-switch device
     expect(platform.isMultiSwitchDevice("device-govee-strip")).toBe(false);
@@ -1091,7 +1193,9 @@ describe("HomeAssistantPlatform", () => {
       state: "off",
       attributes: { friendly_name: "Fan Switch" },
     });
-    vi.spyOn(platform as any, "saveDeviceOverrides").mockResolvedValue(undefined);
+    vi.spyOn(platform as any, "saveDeviceOverrides").mockResolvedValue(
+      undefined,
+    );
 
     const result = await platform.setDeviceProfile(
       "switch.living_room_fan_switch",
@@ -1196,22 +1300,49 @@ describe("HomeAssistantPlatform", () => {
   });
 
   it("resets only the requested live node and returns verified commissioning codes", async (ctx) => {
-    if (!networkAvailable) { ctx.skip(); return; }
+    if (!networkAvailable) {
+      ctx.skip();
+      return;
+    }
     await platform.onStart();
     const erase = vi.fn().mockResolvedValue(undefined);
-    const endpoint = { deviceName: "test_fan", serverNode: { erase, lifecycle: { isOnline: true }, state: { commissioning: { fabrics: [], pairingCodes: { qrPairingCode: "MT:Y.K90TEST001", manualPairingCode: "12345678901" } } } } };
+    const endpoint = {
+      deviceName: "test_fan",
+      serverNode: {
+        erase,
+        lifecycle: { isOnline: true },
+        state: {
+          commissioning: {
+            fabrics: [],
+            pairingCodes: {
+              qrPairingCode: "MT:Y.K90TEST001",
+              manualPairingCode: "12345678901",
+            },
+          },
+        },
+      },
+    };
     (platform as any).matterbridgeDevices.set("fan.test_fan", endpoint);
     const unregister = vi.spyOn(platform as any, "unregisterDevice");
-    const res = await fetch(`http://127.0.0.1:${platform.uiServerPort}/api/custom/reset-accessory/fan.test_fan`, { method: "POST" });
+    const res = await fetch(
+      `http://127.0.0.1:${platform.uiServerPort}/api/custom/reset-accessory/fan.test_fan`,
+      { method: "POST" },
+    );
     expect(res.status).toBe(200);
-    expect(await res.json()).toMatchObject({ success: true, pairingCode: "MT:Y.K90TEST001" });
+    expect(await res.json()).toMatchObject({
+      success: true,
+      pairingCode: "MT:Y.K90TEST001",
+    });
     expect(erase).toHaveBeenCalledOnce();
     expect(unregister).not.toHaveBeenCalled();
   });
 
   it("refuses to erase storage for an unavailable node", async () => {
     const id = "switch.unavailable";
-    platform.entities.set(id, { entityId: id, state: { attributes: { friendly_name: "Same name" } } } as any);
+    platform.entities.set(id, {
+      entityId: id,
+      state: { attributes: { friendly_name: "Same name" } },
+    } as any);
     const unregister = vi.spyOn(platform as any, "unregisterDevice");
     const result = await platform.resetMatterAccessory(id);
     expect(result.success).toBe(false);
@@ -1219,11 +1350,23 @@ describe("HomeAssistantPlatform", () => {
   });
 
   it("preserves other nodes when names or physical serial numbers match", async () => {
-    const existing = { deviceName: "PASILLO", uniqueId: "switch.old", serialNumber: "SHARED" };
-    const unregister = vi.spyOn(platform as any, "unregisterDevice").mockResolvedValue(undefined);
+    const existing = {
+      deviceName: "PASILLO",
+      uniqueId: "switch.old",
+      serialNumber: "SHARED",
+    };
+    const unregister = vi
+      .spyOn(platform as any, "unregisterDevice")
+      .mockResolvedValue(undefined);
     (platform as any).getDevices = vi.fn().mockReturnValue([existing]);
-    (platform as any).hasDeviceName = vi.fn().mockImplementation((name: string) => name === "PASILLO");
-    const next = { deviceName: "PASILLO", uniqueId: "switch.new", serialNumber: "SHARED" };
+    (platform as any).hasDeviceName = vi
+      .fn()
+      .mockImplementation((name: string) => name === "PASILLO");
+    const next = {
+      deviceName: "PASILLO",
+      uniqueId: "switch.new",
+      serialNumber: "SHARED",
+    };
     await (platform as any).prepareEndpointForRegistration(next, "switch.new");
     expect(unregister).not.toHaveBeenCalled();
     expect(next.deviceName).not.toBe("PASILLO");
@@ -1231,8 +1374,14 @@ describe("HomeAssistantPlatform", () => {
 
   it("does not return success when the reset node provides no commissioning codes", async () => {
     vi.useFakeTimers();
-    const node = { erase: vi.fn().mockResolvedValue(undefined), lifecycle: { isOnline: true }, state: { commissioning: { fabrics: [] } } };
-    (platform as any).matterbridgeDevices.set("switch.test", { serverNode: node });
+    const node = {
+      erase: vi.fn().mockResolvedValue(undefined),
+      lifecycle: { isOnline: true },
+      state: { commissioning: { fabrics: [] } },
+    };
+    (platform as any).matterbridgeDevices.set("switch.test", {
+      serverNode: node,
+    });
     const result = platform.resetMatterAccessory("switch.test");
     await vi.advanceTimersByTimeAsync(6100);
     expect((await result).success).toBe(false);
@@ -1241,7 +1390,16 @@ describe("HomeAssistantPlatform", () => {
 
   it("never resets other fabrics when the requested fabric is absent", async () => {
     const erase = vi.fn();
-    (platform as any).matterbridgeDevices.set("switch.test", { serverNode: { erase, state: { operationalCredentials: { fabrics: [{ fabricIndex: 1 }, { fabricIndex: 2 }] } } } });
+    (platform as any).matterbridgeDevices.set("switch.test", {
+      serverNode: {
+        erase,
+        state: {
+          operationalCredentials: {
+            fabrics: [{ fabricIndex: 1 }, { fabricIndex: 2 }],
+          },
+        },
+      },
+    });
     const result = await platform.removeMatterFabric("switch.test", "99");
     expect(result.success).toBe(false);
     expect(erase).not.toHaveBeenCalled();
@@ -1250,7 +1408,10 @@ describe("HomeAssistantPlatform", () => {
   it("keeps a previously exported composite when a multi-channel device is registered", async () => {
     const id = "switch.channel";
     platform.entities.set(id, { entityId: id } as any);
-    (platform as any).ha = { hassEntities: new Map([[id, { device_id: "shared" }]]), close: vi.fn() };
+    (platform as any).ha = {
+      hassEntities: new Map([[id, { device_id: "shared" }]]),
+      close: vi.fn(),
+    };
     (platform as any).exportedDevices.add("device:shared");
     vi.spyOn(platform as any, "isMultiSwitchDevice").mockReturnValue(true);
     vi.spyOn(platform as any, "isAuxiliaryEntity").mockReturnValue(false);
@@ -1263,12 +1424,24 @@ describe("HomeAssistantPlatform", () => {
 
   it("restores a previously exported multi-channel composite without deleting it", async () => {
     const id = "switch.channel";
-    platform.entities.set(id, { entityId: id, state: { attributes: {} }, deviceType: { name: "Switch" } } as any);
-    (platform as any).ha = { hassEntities: new Map([[id, { device_id: "shared" }]]), close: vi.fn() };
+    platform.entities.set(id, {
+      entityId: id,
+      state: { attributes: {} },
+      deviceType: { name: "Switch" },
+    } as any);
+    (platform as any).ha = {
+      hassEntities: new Map([[id, { device_id: "shared" }]]),
+      close: vi.fn(),
+    };
     (platform as any).exportedDevices.add("device:shared");
     vi.spyOn(platform as any, "isMultiSwitchDevice").mockReturnValue(true);
-    vi.spyOn(platform as any, "getCompositeCandidate").mockReturnValue({ deviceId: "shared", members: [{ entityId: id }] });
-    const activate = vi.spyOn(platform as any, "activateComposite").mockResolvedValue(undefined);
+    vi.spyOn(platform as any, "getCompositeCandidate").mockReturnValue({
+      deviceId: "shared",
+      members: [{ entityId: id }],
+    });
+    const activate = vi
+      .spyOn(platform as any, "activateComposite")
+      .mockResolvedValue(undefined);
     const dispose = vi.spyOn(platform as any, "disposeCompositeNode");
     await (platform as any).restoreExportedDevices();
     expect(activate).toHaveBeenCalledWith(id);
@@ -1279,13 +1452,25 @@ describe("HomeAssistantPlatform", () => {
   it("refuses to recreate the same identity while its timed-out cleanup is running", async () => {
     vi.useFakeTimers();
     let finish!: () => void;
-    vi.spyOn(platform as any, "unregisterDevice").mockReturnValue(new Promise<void>((resolve) => { finish = resolve; }));
+    vi.spyOn(platform as any, "unregisterDevice").mockReturnValue(
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      }),
+    );
     const old = { uniqueId: "switch.test" };
     const cleaning = (platform as any).unregisterDeviceBounded(old, "test", 10);
     const timedOut = expect(cleaning).rejects.toThrow("still running");
-    await vi.advanceTimersByTimeAsync(10); await timedOut;
-    await expect((platform as any).prepareEndpointForRegistration({ uniqueId: "switch.test", deviceName: "test" }, "switch.test")).rejects.toThrow("still running");
-    finish(); await Promise.resolve(); await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(10);
+    await timedOut;
+    await expect(
+      (platform as any).prepareEndpointForRegistration(
+        { uniqueId: "switch.test", deviceName: "test" },
+        "switch.test",
+      ),
+    ).rejects.toThrow("still running");
+    finish();
+    await Promise.resolve();
+    await Promise.resolve();
     vi.useRealTimers();
   });
 
@@ -1294,33 +1479,169 @@ describe("HomeAssistantPlatform", () => {
     platform.ha = {
       connected: true,
       close: vi.fn(),
-      hassDevices: new Map([[deviceId, { id: deviceId, name: "ROBOTINA", model: "A1" }]]),
+      hassDevices: new Map([
+        [deviceId, { id: deviceId, name: "ROBOTINA", model: "A1" }],
+      ]),
       hassEntities: new Map([
-        ["vacuum.sala_tv_robotina", { id: "e1", entity_id: "vacuum.sala_tv_robotina", device_id: deviceId }],
-        ["select.sala_tv_robotina_control_manual", { id: "e2", entity_id: "select.sala_tv_robotina_control_manual", device_id: deviceId, name: "Control manual" }],
-        ["select.sala_tv_robotina_modo_de_limpieza", { id: "e3", entity_id: "select.sala_tv_robotina_modo_de_limpieza", device_id: deviceId, name: "Modo de limpieza" }],
-        ["button.sala_tv_robotina_iniciar_limpieza", { id: "e4", entity_id: "button.sala_tv_robotina_iniciar_limpieza", device_id: deviceId, name: "Iniciar limpieza" }],
-        ["button.sala_tv_robotina_volver_a_base", { id: "e5", entity_id: "button.sala_tv_robotina_volver_a_base", device_id: deviceId, name: "Volver a base" }],
-        ["sensor.sala_tv_robotina_battery", { id: "e6", entity_id: "sensor.sala_tv_robotina_battery", device_id: deviceId, name: "Battery" }],
-        ["sensor.sala_tv_robotina_clean_time", { id: "e7", entity_id: "sensor.sala_tv_robotina_clean_time", device_id: deviceId, name: "Clean Time" }],
-        ["sensor.sala_tv_robotina_direction_control", { id: "e8", entity_id: "sensor.sala_tv_robotina_direction_control", device_id: deviceId, name: "Direction Control" }],
-        ["binary_sensor.sala_tv_robotina", { id: "e9", entity_id: "binary_sensor.sala_tv_robotina", device_id: deviceId, name: "ROBOTINA" }],
-        ["sensor.sala_tv_robotina_dps_2", { id: "e10", entity_id: "sensor.sala_tv_robotina_dps_2", device_id: deviceId, name: "DPS 2", original_name: "DPS 2" }],
+        [
+          "vacuum.sala_tv_robotina",
+          {
+            id: "e1",
+            entity_id: "vacuum.sala_tv_robotina",
+            device_id: deviceId,
+          },
+        ],
+        [
+          "select.sala_tv_robotina_control_manual",
+          {
+            id: "e2",
+            entity_id: "select.sala_tv_robotina_control_manual",
+            device_id: deviceId,
+            name: "Control manual",
+          },
+        ],
+        [
+          "select.sala_tv_robotina_modo_de_limpieza",
+          {
+            id: "e3",
+            entity_id: "select.sala_tv_robotina_modo_de_limpieza",
+            device_id: deviceId,
+            name: "Modo de limpieza",
+          },
+        ],
+        [
+          "button.sala_tv_robotina_iniciar_limpieza",
+          {
+            id: "e4",
+            entity_id: "button.sala_tv_robotina_iniciar_limpieza",
+            device_id: deviceId,
+            name: "Iniciar limpieza",
+          },
+        ],
+        [
+          "button.sala_tv_robotina_volver_a_base",
+          {
+            id: "e5",
+            entity_id: "button.sala_tv_robotina_volver_a_base",
+            device_id: deviceId,
+            name: "Volver a base",
+          },
+        ],
+        [
+          "sensor.sala_tv_robotina_battery",
+          {
+            id: "e6",
+            entity_id: "sensor.sala_tv_robotina_battery",
+            device_id: deviceId,
+            name: "Battery",
+          },
+        ],
+        [
+          "sensor.sala_tv_robotina_clean_time",
+          {
+            id: "e7",
+            entity_id: "sensor.sala_tv_robotina_clean_time",
+            device_id: deviceId,
+            name: "Clean Time",
+          },
+        ],
+        [
+          "sensor.sala_tv_robotina_direction_control",
+          {
+            id: "e8",
+            entity_id: "sensor.sala_tv_robotina_direction_control",
+            device_id: deviceId,
+            name: "Direction Control",
+          },
+        ],
+        [
+          "binary_sensor.sala_tv_robotina",
+          {
+            id: "e9",
+            entity_id: "binary_sensor.sala_tv_robotina",
+            device_id: deviceId,
+            name: "ROBOTINA",
+          },
+        ],
+        [
+          "sensor.sala_tv_robotina_dps_2",
+          {
+            id: "e10",
+            entity_id: "sensor.sala_tv_robotina_dps_2",
+            device_id: deviceId,
+            name: "DPS 2",
+            original_name: "DPS 2",
+          },
+        ],
       ]),
       hassStates: new Map(),
     } as any;
 
     const states = [
-      { entity_id: "vacuum.sala_tv_robotina", state: "cleaning", attributes: { friendly_name: "ROBOTINA" } },
-      { entity_id: "select.sala_tv_robotina_control_manual", state: "stop", attributes: { friendly_name: "Control manual", options: ["stop", "forward"] } },
-      { entity_id: "select.sala_tv_robotina_modo_de_limpieza", state: "chargego", attributes: { friendly_name: "Modo de limpieza", options: ["smart", "chargego"] } },
-      { entity_id: "button.sala_tv_robotina_iniciar_limpieza", state: "unknown", attributes: { friendly_name: "Iniciar limpieza" } },
-      { entity_id: "button.sala_tv_robotina_volver_a_base", state: "unknown", attributes: { friendly_name: "Volver a base" } },
-      { entity_id: "sensor.sala_tv_robotina_battery", state: "100", attributes: { friendly_name: "Battery", device_class: "battery", unit_of_measurement: "%" } },
-      { entity_id: "sensor.sala_tv_robotina_clean_time", state: "0", attributes: { friendly_name: "Clean Time", device_class: "duration", unit_of_measurement: "min" } },
-      { entity_id: "sensor.sala_tv_robotina_direction_control", state: "stop", attributes: { friendly_name: "Direction Control" } },
-      { entity_id: "binary_sensor.sala_tv_robotina", state: "on", attributes: { friendly_name: "ROBOTINA" } },
-      { entity_id: "sensor.sala_tv_robotina_dps_2", state: "False", attributes: { friendly_name: "DPS 2" } },
+      {
+        entity_id: "vacuum.sala_tv_robotina",
+        state: "cleaning",
+        attributes: { friendly_name: "ROBOTINA" },
+      },
+      {
+        entity_id: "select.sala_tv_robotina_control_manual",
+        state: "stop",
+        attributes: {
+          friendly_name: "Control manual",
+          options: ["stop", "forward"],
+        },
+      },
+      {
+        entity_id: "select.sala_tv_robotina_modo_de_limpieza",
+        state: "chargego",
+        attributes: {
+          friendly_name: "Modo de limpieza",
+          options: ["smart", "chargego"],
+        },
+      },
+      {
+        entity_id: "button.sala_tv_robotina_iniciar_limpieza",
+        state: "unknown",
+        attributes: { friendly_name: "Iniciar limpieza" },
+      },
+      {
+        entity_id: "button.sala_tv_robotina_volver_a_base",
+        state: "unknown",
+        attributes: { friendly_name: "Volver a base" },
+      },
+      {
+        entity_id: "sensor.sala_tv_robotina_battery",
+        state: "100",
+        attributes: {
+          friendly_name: "Battery",
+          device_class: "battery",
+          unit_of_measurement: "%",
+        },
+      },
+      {
+        entity_id: "sensor.sala_tv_robotina_clean_time",
+        state: "0",
+        attributes: {
+          friendly_name: "Clean Time",
+          device_class: "duration",
+          unit_of_measurement: "min",
+        },
+      },
+      {
+        entity_id: "sensor.sala_tv_robotina_direction_control",
+        state: "stop",
+        attributes: { friendly_name: "Direction Control" },
+      },
+      {
+        entity_id: "binary_sensor.sala_tv_robotina",
+        state: "on",
+        attributes: { friendly_name: "ROBOTINA" },
+      },
+      {
+        entity_id: "sensor.sala_tv_robotina_dps_2",
+        state: "False",
+        attributes: { friendly_name: "DPS 2" },
+      },
     ];
 
     for (const st of states) {
@@ -1328,25 +1649,53 @@ describe("HomeAssistantPlatform", () => {
     }
 
     expect(platform.entities.has("vacuum.sala_tv_robotina")).toBe(true);
-    expect(platform.entities.has("select.sala_tv_robotina_control_manual")).toBe(true);
-    expect(platform.entities.has("select.sala_tv_robotina_modo_de_limpieza")).toBe(true);
-    expect(platform.entities.has("button.sala_tv_robotina_iniciar_limpieza")).toBe(true);
-    expect(platform.entities.has("button.sala_tv_robotina_volver_a_base")).toBe(true);
+    expect(
+      platform.entities.has("select.sala_tv_robotina_control_manual"),
+    ).toBe(true);
+    expect(
+      platform.entities.has("select.sala_tv_robotina_modo_de_limpieza"),
+    ).toBe(true);
+    expect(
+      platform.entities.has("button.sala_tv_robotina_iniciar_limpieza"),
+    ).toBe(true);
+    expect(platform.entities.has("button.sala_tv_robotina_volver_a_base")).toBe(
+      true,
+    );
     expect(platform.entities.has("sensor.sala_tv_robotina_battery")).toBe(true);
-    expect(platform.entities.has("sensor.sala_tv_robotina_clean_time")).toBe(true);
-    expect(platform.entities.has("sensor.sala_tv_robotina_direction_control")).toBe(true);
+    expect(platform.entities.has("sensor.sala_tv_robotina_clean_time")).toBe(
+      true,
+    );
+    expect(
+      platform.entities.has("sensor.sala_tv_robotina_direction_control"),
+    ).toBe(true);
     expect(platform.entities.has("binary_sensor.sala_tv_robotina")).toBe(true);
     // DPS generic entity must NOT be registered
     expect(platform.entities.has("sensor.sala_tv_robotina_dps_2")).toBe(false);
 
     // Vacuum is primary (not auxiliary), companions are auxiliary
-    expect((platform as any).isAuxiliaryEntity("vacuum.sala_tv_robotina")).toBe(false);
-    expect((platform as any).isAuxiliaryEntity("select.sala_tv_robotina_modo_de_limpieza")).toBe(true);
-    expect((platform as any).isAuxiliaryEntity("button.sala_tv_robotina_volver_a_base")).toBe(true);
-    expect((platform as any).isAuxiliaryEntity("sensor.sala_tv_robotina_battery")).toBe(true);
-    expect((platform as any).isAuxiliaryEntity("binary_sensor.sala_tv_robotina")).toBe(true);
+    expect((platform as any).isAuxiliaryEntity("vacuum.sala_tv_robotina")).toBe(
+      false,
+    );
+    expect(
+      (platform as any).isAuxiliaryEntity(
+        "select.sala_tv_robotina_modo_de_limpieza",
+      ),
+    ).toBe(true);
+    expect(
+      (platform as any).isAuxiliaryEntity(
+        "button.sala_tv_robotina_volver_a_base",
+      ),
+    ).toBe(true);
+    expect(
+      (platform as any).isAuxiliaryEntity("sensor.sala_tv_robotina_battery"),
+    ).toBe(true);
+    expect(
+      (platform as any).isAuxiliaryEntity("binary_sensor.sala_tv_robotina"),
+    ).toBe(true);
     // Must not group vacuum into a composite node (RVC must be standalone server node)
-    expect((platform as any).getCompositeCandidate("vacuum.sala_tv_robotina")).toBeUndefined();
+    expect(
+      (platform as any).getCompositeCandidate("vacuum.sala_tv_robotina"),
+    ).toBeUndefined();
   });
 });
 
@@ -1355,7 +1704,10 @@ describe("Late accessory restoration does not restart discovery", () => {
 
   function restorationFixture() {
     return {
-      entities: new Map([["switch.missing", {}], ["sensor.unrelated", {}]]),
+      entities: new Map([
+        ["switch.missing", {}],
+        ["sensor.unrelated", {}],
+      ]),
       pendingRestore: new Set(["switch.missing"]),
       ha: { connected: true, hassEntities: new Map() },
       restoreExportedDevices: vi.fn().mockResolvedValue(undefined),
@@ -1367,7 +1719,10 @@ describe("Late accessory restoration does not restart discovery", () => {
   it("ignores unrelated state events while an accessory is missing", async () => {
     vi.useFakeTimers();
     const p = restorationFixture();
-    (HomeAssistantPlatform.prototype as any).schedulePendingRestore.call(p, "sensor.unrelated");
+    (HomeAssistantPlatform.prototype as any).schedulePendingRestore.call(
+      p,
+      "sensor.unrelated",
+    );
     await vi.advanceTimersByTimeAsync(10_000);
     expect(p.restoreExportedDevices).not.toHaveBeenCalled();
     expect(p.discoverAndSync).not.toHaveBeenCalled();
@@ -1376,7 +1731,10 @@ describe("Late accessory restoration does not restart discovery", () => {
   it("restores a late accessory from the received inventory without fetching a full snapshot", async () => {
     vi.useFakeTimers();
     const p = restorationFixture();
-    (HomeAssistantPlatform.prototype as any).schedulePendingRestore.call(p, "switch.missing");
+    (HomeAssistantPlatform.prototype as any).schedulePendingRestore.call(
+      p,
+      "switch.missing",
+    );
     await vi.advanceTimersByTimeAsync(5_000);
     expect(p.restoreExportedDevices).toHaveBeenCalledOnce();
     expect(p.discoverAndSync).not.toHaveBeenCalled();

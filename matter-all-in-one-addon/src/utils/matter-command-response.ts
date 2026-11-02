@@ -15,7 +15,11 @@ export interface MatterCommandResponsePolicy {
     outcome: "completed" | "failed" | "handler_returned_pending",
     late?: boolean,
   ) => void;
-  onFailure?: (command: string, error: unknown, late: boolean) => void | Promise<void>;
+  onFailure?: (
+    command: string,
+    error: unknown,
+    late: boolean,
+  ) => void | Promise<void>;
   onSlowCompletion?: (command: string, durationMs: number) => void;
 }
 
@@ -36,7 +40,8 @@ export function installMatterCommandResponsePolicy(
   policy: MatterCommandResponsePolicy,
 ): void {
   const commandHandler = endpoint?.commandHandler;
-  if (!commandHandler || typeof commandHandler.executeHandler !== "function") return;
+  if (!commandHandler || typeof commandHandler.executeHandler !== "function")
+    return;
 
   const installed = installedPolicies.get(commandHandler);
   if (installed) {
@@ -44,11 +49,15 @@ export function installMatterCommandResponsePolicy(
     return;
   }
 
-  const originalExecuteHandler = commandHandler.executeHandler.bind(commandHandler);
+  const originalExecuteHandler =
+    commandHandler.executeHandler.bind(commandHandler);
   const installedPolicy: InstalledPolicy = { policy };
   installedPolicies.set(commandHandler, installedPolicy);
 
-  commandHandler.executeHandler = async (command: string, ...args: unknown[]) => {
+  commandHandler.executeHandler = async (
+    command: string,
+    ...args: unknown[]
+  ) => {
     const startedAt = Date.now();
     installedPolicy.policy.onCommandStart?.(command);
     const operation: Promise<CommandOutcome> = Promise.resolve()
@@ -58,7 +67,8 @@ export function installMatterCommandResponsePolicy(
         (error) => ({ kind: "error", error }),
       );
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const timeoutMs = installedPolicy.policy.timeoutMs ?? MATTER_COMMAND_ACK_BUDGET_MS;
+    const timeoutMs =
+      installedPolicy.policy.timeoutMs ?? MATTER_COMMAND_ACK_BUDGET_MS;
     const outcome = await Promise.race([
       operation,
       new Promise<CommandOutcome>((resolve) => {
@@ -82,7 +92,11 @@ export function installMatterCommandResponsePolicy(
         );
         if (lateOutcome.kind === "error") {
           try {
-            await installedPolicy.policy.onFailure?.(command, lateOutcome.error, true);
+            await installedPolicy.policy.onFailure?.(
+              command,
+              lateOutcome.error,
+              true,
+            );
           } catch {
             // A diagnostic failure must not leak into Matter's already-sent ACK.
           }
@@ -100,9 +114,9 @@ export function installMatterCommandResponsePolicy(
         Date.now() - startedAt,
         "failed",
       );
-      void Promise.resolve(installedPolicy.policy.onFailure?.(command, outcome.error, false)).catch(
-        () => undefined,
-      );
+      void Promise.resolve(
+        installedPolicy.policy.onFailure?.(command, outcome.error, false),
+      ).catch(() => undefined);
       throw outcome.error;
     }
 

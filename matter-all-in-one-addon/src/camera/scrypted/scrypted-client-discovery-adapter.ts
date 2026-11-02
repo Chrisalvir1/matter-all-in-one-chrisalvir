@@ -1,4 +1,7 @@
-import { ScryptedRuntimeFacade, type ScryptedRuntimeSnapshot } from "./scrypted-runtime-facade.js";
+import {
+  ScryptedRuntimeFacade,
+  type ScryptedRuntimeSnapshot,
+} from "./scrypted-runtime-facade.js";
 import type { ScryptedDiscoveryPayload } from "./scrypted-runtime-ingest.js";
 import { ingestScryptedDiscoveryPayload } from "./scrypted-runtime-ingest.js";
 

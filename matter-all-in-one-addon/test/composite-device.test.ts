@@ -305,7 +305,9 @@ describe("CompositeDeviceEntity", () => {
     expect(composite.endpoints.get("lock.cerrojo")).toBe(root);
     await expect(composite.syncInitialState()).resolves.toBeUndefined();
 
-    await (composite.endpoints.get("lock.cerrojo") as any).invokeCommand("unlockDoor");
+    await (composite.endpoints.get("lock.cerrojo") as any).invokeCommand(
+      "unlockDoor",
+    );
     expect(platform.ha.callService).toHaveBeenCalledWith(
       "lock",
       "unlock",
@@ -313,4 +315,3 @@ describe("CompositeDeviceEntity", () => {
     );
   });
 });
-

@@ -97,7 +97,8 @@ describe("NestCameraAdapter", () => {
     const mockPlatform = {
       ha: {
         getHttpBaseUrl: () => "http://127.0.0.1:8123",
-        getCameraProxyStreamUrl: (id: string) => `http://127.0.0.1:8123/api/camera_proxy_stream/${id}`,
+        getCameraProxyStreamUrl: (id: string) =>
+          `http://127.0.0.1:8123/api/camera_proxy_stream/${id}`,
         getAccessToken: () => "mock-token",
       },
       log: {
@@ -115,7 +116,11 @@ describe("NestCameraAdapter", () => {
       },
     };
 
-    const source = await CameraSourceResolver.resolve(mockPlatform, state.entity_id, state as any);
+    const source = await CameraSourceResolver.resolve(
+      mockPlatform,
+      state.entity_id,
+      state as any,
+    );
     expect(source.sourceType).toBe("webrtc");
     expect(source.url).toContain("/api/camera_proxy_stream/camera.nest_garden");
 

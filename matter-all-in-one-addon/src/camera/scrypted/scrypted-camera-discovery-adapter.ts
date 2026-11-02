@@ -1,7 +1,20 @@
-import { toScryptedCameraDetail, type ScryptedCameraDetail } from "./scrypted-camera-detail.js";
-import { toScryptedCameraCard, type ScryptedCameraCard, type ScryptedCameraInput } from "./scrypted-camera-card.js";
-import { toCameraPresentation, type CameraPresentation } from "./scrypted-camera-presentation.js";
-import { normalizeScryptedCamera, type NormalizedScryptedCamera } from "./scrypted-camera-normalizer.js";
+import {
+  toScryptedCameraDetail,
+  type ScryptedCameraDetail,
+} from "./scrypted-camera-detail.js";
+import {
+  toScryptedCameraCard,
+  type ScryptedCameraCard,
+  type ScryptedCameraInput,
+} from "./scrypted-camera-card.js";
+import {
+  toCameraPresentation,
+  type CameraPresentation,
+} from "./scrypted-camera-presentation.js";
+import {
+  normalizeScryptedCamera,
+  type NormalizedScryptedCamera,
+} from "./scrypted-camera-normalizer.js";
 
 export type ScryptedDiscoveryDevice = ScryptedCameraInput & {
   type?: string;
@@ -18,7 +31,9 @@ export type ScryptedDiscoveryResult = {
 };
 
 function isCamera(device: ScryptedDiscoveryDevice): boolean {
-  const type = `${device.type ?? ""} ${device.deviceType ?? ""}`.trim().toLowerCase();
+  const type = `${device.type ?? ""} ${device.deviceType ?? ""}`
+    .trim()
+    .toLowerCase();
   if (!type) return true;
   return type.includes("camera") || type.includes("doorbell");
 }

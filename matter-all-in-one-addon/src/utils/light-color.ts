@@ -289,16 +289,14 @@ export const lightColor = {
     red = red > 0.04045 ? Math.pow((red + 0.055) / 1.055, 2.4) : red / 12.92;
     green =
       green > 0.04045 ? Math.pow((green + 0.055) / 1.055, 2.4) : green / 12.92;
-    blue = blue > 0.04045 ? Math.pow((blue + 0.055) / 1.055, 2.4) : blue / 12.92;
+    blue =
+      blue > 0.04045 ? Math.pow((blue + 0.055) / 1.055, 2.4) : blue / 12.92;
     const X = red * 0.4124 + green * 0.3576 + blue * 0.1805;
     const Y = red * 0.2126 + green * 0.7152 + blue * 0.0722;
     const Z = red * 0.0193 + green * 0.1192 + blue * 0.9505;
     const sum = X + Y + Z;
     if (sum === 0) return [0, 0];
-    return [
-      Number((X / sum).toFixed(4)),
-      Number((Y / sum).toFixed(4)),
-    ];
+    return [Number((X / sum).toFixed(4)), Number((Y / sum).toFixed(4))];
   },
 
   /** Convert XY coordinates (0..1) to RGB (0..255) */

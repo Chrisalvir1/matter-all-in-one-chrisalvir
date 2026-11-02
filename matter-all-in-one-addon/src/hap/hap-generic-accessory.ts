@@ -206,10 +206,11 @@ export class HapGenericAccessory {
       accessory: HapGenericAccessory,
     ) => Promise<void>,
   ) {
-    const accUuid =
-      record.uuid || uuid.generate(`homekit:generic:${entityId}`);
+    const accUuid = record.uuid || uuid.generate(`homekit:generic:${entityId}`);
     this.record.uuid = accUuid;
-    this.valveSetDurationSeconds = this.isValidValveDuration(record.valveSetDurationSeconds)
+    this.valveSetDurationSeconds = this.isValidValveDuration(
+      record.valveSetDurationSeconds,
+    )
       ? record.valveSetDurationSeconds!
       : 0;
     this.accessory = new Accessory(record.name || entityId, accUuid);
@@ -250,7 +251,11 @@ export class HapGenericAccessory {
     const info = this.accessory.getService(Service.AccessoryInformation);
     if (!info) return;
     const mfr = "Matter All-In-One Chrisalvir";
-    const model = (this.record.model || HAP_PROFILE_LABELS[this.record.hapProfile] || "HAP Device")
+    const model = (
+      this.record.model ||
+      HAP_PROFILE_LABELS[this.record.hapProfile] ||
+      "HAP Device"
+    )
       .replace(/\s*\(HAP-NodeJS[^)]*\)/gi, "")
       .trim();
 
@@ -261,10 +266,7 @@ export class HapGenericAccessory {
         Characteristic.SerialNumber,
         this.record.serialNumber || this.entityId.replaceAll(".", "_"),
       )
-      .setCharacteristic(
-        Characteristic.Name,
-        this.record.name || this.entityId,
-      )
+      .setCharacteristic(Characteristic.Name, this.record.name || this.entityId)
       .setCharacteristic(
         Characteristic.FirmwareRevision,
         HAP_FIRMWARE_REVISION,
@@ -280,20 +282,26 @@ export class HapGenericAccessory {
   // ──────────────────────────────────────────────
 
   private getHomeAssistantState(entityId: string): any {
-    return this.platform.ha?.hassStates?.get(entityId) ??
-      this.platform.entities.get(entityId)?.state;
+    return (
+      this.platform.ha?.hassStates?.get(entityId) ??
+      this.platform.entities.get(entityId)?.state
+    );
   }
 
   private getDeviceMembers(): any[] {
     const own = { entityId: this.entityId };
-    const deviceId = this.platform.ha?.hassEntities?.get(this.entityId)?.device_id;
+    const deviceId = this.platform.ha?.hassEntities?.get(
+      this.entityId,
+    )?.device_id;
     if (deviceId) {
       // The registry contains every HA entity for the physical device. The
       // bridge entity map only contains entities it exports, which can omit a
       // real humidity/temperature sensor required by this HAP accessory.
       const members = Array.from(this.platform.ha?.hassEntities?.values() ?? [])
         .filter((entity: any) => entity.device_id === deviceId)
-        .filter((entity: any) => this.platform.ha?.hassStates?.has(entity.entity_id))
+        .filter((entity: any) =>
+          this.platform.ha?.hassStates?.has(entity.entity_id),
+        )
         .map((entity: any) => ({ entityId: entity.entity_id }));
       return members.length ? members : [own];
     }
@@ -315,10 +323,14 @@ export class HapGenericAccessory {
       `${this.record.name} ${suffix}`,
       `sensor:${entityId}`,
     );
-    service.getCharacteristic(characteristic).onGet(() =>
-      read(this.getHomeAssistantState(entityId)) as any,
-    );
-    this.discoveredSensorBindings.set(entityId, { service, characteristic, read });
+    service
+      .getCharacteristic(characteristic)
+      .onGet(() => read(this.getHomeAssistantState(entityId)) as any);
+    this.discoveredSensorBindings.set(entityId, {
+      service,
+      characteristic,
+      read,
+    });
   }
 
   private addDiscoveredSensorServices(): void {
@@ -326,7 +338,10 @@ export class HapGenericAccessory {
     const find = (domain: string, deviceClass: string) =>
       members.find((item: any) => {
         const state = this.getHomeAssistantState(item.entityId);
-        return item.entityId.startsWith(`${domain}.`) && state?.attributes?.device_class === deviceClass;
+        return (
+          item.entityId.startsWith(`${domain}.`) &&
+          state?.attributes?.device_class === deviceClass
+        );
       });
     const numeric = (
       deviceClass: string,
@@ -337,31 +352,113 @@ export class HapGenericAccessory {
     ) => {
       const member = find("sensor", deviceClass);
       if (!member) return;
-      this.bindDiscoveredSensor(member.entityId, serviceType, characteristic, suffix, (state) => {
-        const value = Number(state?.state);
-        return Number.isFinite(value) ? Math.max(minimum, value) : minimum;
-      });
+      this.bindDiscoveredSensor(
+        member.entityId,
+        serviceType,
+        characteristic,
+        suffix,
+        (state) => {
+          const value = Number(state?.state);
+          return Number.isFinite(value) ? Math.max(minimum, value) : minimum;
+        },
+      );
     };
 
     // Only device members reported by HA are exported. No guessed sensor names,
     // values, or entities are created for HAP.
-    numeric("temperature", Service.TemperatureSensor, Characteristic.CurrentTemperature, "Temperatura");
-    if (this.record.hapProfile !== "humidifier" && this.record.hapProfile !== "dehumidifier") {
-      numeric("humidity", Service.HumiditySensor, Characteristic.CurrentRelativeHumidity, "Humedad");
+    numeric(
+      "temperature",
+      Service.TemperatureSensor,
+      Characteristic.CurrentTemperature,
+      "Temperatura",
+    );
+    if (
+      this.record.hapProfile !== "humidifier" &&
+      this.record.hapProfile !== "dehumidifier"
+    ) {
+      numeric(
+        "humidity",
+        Service.HumiditySensor,
+        Characteristic.CurrentRelativeHumidity,
+        "Humedad",
+      );
     }
-    numeric("illuminance", Service.LightSensor, Characteristic.CurrentAmbientLightLevel, "Iluminación", 0.0001);
+    numeric(
+      "illuminance",
+      Service.LightSensor,
+      Characteristic.CurrentAmbientLightLevel,
+      "Iluminación",
+      0.0001,
+    );
     numeric("battery", Service.Battery, Characteristic.BatteryLevel, "Batería");
 
-    const binaryMappings: Array<[string, any, any, string, (state: any) => unknown]> = [
-      ["motion", Service.MotionSensor, Characteristic.MotionDetected, "Movimiento", (state) => state?.state === "on"],
-      ["door", Service.ContactSensor, Characteristic.ContactSensorState, "Puerta", (state) => state?.state === "on" ? Characteristic.ContactSensorState.CONTACT_NOT_DETECTED : Characteristic.ContactSensorState.CONTACT_DETECTED],
-      ["window", Service.ContactSensor, Characteristic.ContactSensorState, "Ventana", (state) => state?.state === "on" ? Characteristic.ContactSensorState.CONTACT_NOT_DETECTED : Characteristic.ContactSensorState.CONTACT_DETECTED],
-      ["moisture", Service.LeakSensor, Characteristic.LeakDetected, "Fuga", (state) => state?.state === "on" ? Characteristic.LeakDetected.LEAK_DETECTED : Characteristic.LeakDetected.LEAK_NOT_DETECTED],
-      ["smoke", Service.SmokeSensor, Characteristic.SmokeDetected, "Humo", (state) => state?.state === "on" ? Characteristic.SmokeDetected.SMOKE_DETECTED : Characteristic.SmokeDetected.SMOKE_NOT_DETECTED],
+    const binaryMappings: Array<
+      [string, any, any, string, (state: any) => unknown]
+    > = [
+      [
+        "motion",
+        Service.MotionSensor,
+        Characteristic.MotionDetected,
+        "Movimiento",
+        (state) => state?.state === "on",
+      ],
+      [
+        "door",
+        Service.ContactSensor,
+        Characteristic.ContactSensorState,
+        "Puerta",
+        (state) =>
+          state?.state === "on"
+            ? Characteristic.ContactSensorState.CONTACT_NOT_DETECTED
+            : Characteristic.ContactSensorState.CONTACT_DETECTED,
+      ],
+      [
+        "window",
+        Service.ContactSensor,
+        Characteristic.ContactSensorState,
+        "Ventana",
+        (state) =>
+          state?.state === "on"
+            ? Characteristic.ContactSensorState.CONTACT_NOT_DETECTED
+            : Characteristic.ContactSensorState.CONTACT_DETECTED,
+      ],
+      [
+        "moisture",
+        Service.LeakSensor,
+        Characteristic.LeakDetected,
+        "Fuga",
+        (state) =>
+          state?.state === "on"
+            ? Characteristic.LeakDetected.LEAK_DETECTED
+            : Characteristic.LeakDetected.LEAK_NOT_DETECTED,
+      ],
+      [
+        "smoke",
+        Service.SmokeSensor,
+        Characteristic.SmokeDetected,
+        "Humo",
+        (state) =>
+          state?.state === "on"
+            ? Characteristic.SmokeDetected.SMOKE_DETECTED
+            : Characteristic.SmokeDetected.SMOKE_NOT_DETECTED,
+      ],
     ];
-    for (const [deviceClass, serviceType, characteristic, suffix, read] of binaryMappings) {
+    for (const [
+      deviceClass,
+      serviceType,
+      characteristic,
+      suffix,
+      read,
+    ] of binaryMappings) {
       const member = find("binary_sensor", deviceClass);
-      if (member) this.bindDiscoveredSensor(member.entityId, serviceType, characteristic, suffix, read);
+      if (member)
+        this.bindDiscoveredSensor(
+          member.entityId,
+          serviceType,
+          characteristic,
+          suffix,
+          read,
+        );
     }
   }
 
@@ -369,21 +466,33 @@ export class HapGenericAccessory {
     const primary = Number(
       this.getHomeAssistantState(this.entityId)?.attributes?.current_humidity,
     );
-    if (Number.isFinite(primary) && primary >= 0 && primary <= 100) return primary;
+    if (Number.isFinite(primary) && primary >= 0 && primary <= 100)
+      return primary;
     const sensor = this.getDeviceMembers().find((member: any) => {
       const state = this.getHomeAssistantState(member.entityId);
-      return member.entityId.startsWith("sensor.") && state?.attributes?.device_class === "humidity";
+      return (
+        member.entityId.startsWith("sensor.") &&
+        state?.attributes?.device_class === "humidity"
+      );
     });
-    const value = Number(sensor && this.getHomeAssistantState(sensor.entityId)?.state);
-    return Number.isFinite(value) && value >= 0 && value <= 100 ? value : undefined;
+    const value = Number(
+      sensor && this.getHomeAssistantState(sensor.entityId)?.state,
+    );
+    return Number.isFinite(value) && value >= 0 && value <= 100
+      ? value
+      : undefined;
   }
 
   private getMediaEntityId(): string {
     if (this.entityId.startsWith("media_player.")) return this.entityId;
-    const devId = (this.platform.entities.get(this.entityId) as any)?.haDeviceInfo?.id;
+    const devId = (this.platform.entities.get(this.entityId) as any)
+      ?.haDeviceInfo?.id;
     if (devId) {
       for (const [id, ent] of this.platform.entities.entries()) {
-        if (id.startsWith("media_player.") && (ent as any)?.haDeviceInfo?.id === devId) {
+        if (
+          id.startsWith("media_player.") &&
+          (ent as any)?.haDeviceInfo?.id === devId
+        ) {
           return id;
         }
       }
@@ -396,11 +505,15 @@ export class HapGenericAccessory {
   }
 
   private getRemoteEntityId(): string | undefined {
-    const deviceId = this.platform.ha?.hassEntities?.get(this.entityId)?.device_id
-      ?? (this.platform.entities.get(this.entityId) as any)?.haDeviceInfo?.id;
+    const deviceId =
+      this.platform.ha?.hassEntities?.get(this.entityId)?.device_id ??
+      (this.platform.entities.get(this.entityId) as any)?.haDeviceInfo?.id;
     if (deviceId && this.platform.ha?.hassEntities) {
       for (const entity of this.platform.ha.hassEntities.values()) {
-        if (entity.device_id === deviceId && entity.entity_id.startsWith("remote.")) {
+        if (
+          entity.device_id === deviceId &&
+          entity.entity_id.startsWith("remote.")
+        ) {
           return entity.entity_id;
         }
       }
@@ -409,38 +522,58 @@ export class HapGenericAccessory {
     const remote = members.find((m: any) => m.entityId.startsWith("remote."));
     if (remote) return remote.entityId;
     const base = this.entityId.replace(/^[^.]+\./, "").split("_")[0];
-    for (const id of (this.platform.ha?.hassStates?.keys() ?? this.platform.entities.keys())) {
+    for (const id of this.platform.ha?.hassStates?.keys() ??
+      this.platform.entities.keys()) {
       if (id.startsWith("remote.") && id.includes(base)) return id;
     }
     return undefined;
   }
 
   private getMuteSwitchEntityId(): string | undefined {
-    const deviceId = this.platform.ha?.hassEntities?.get(this.entityId)?.device_id
-      ?? (this.platform.entities.get(this.entityId) as any)?.haDeviceInfo?.id;
+    const deviceId =
+      this.platform.ha?.hassEntities?.get(this.entityId)?.device_id ??
+      (this.platform.entities.get(this.entityId) as any)?.haDeviceInfo?.id;
     if (deviceId && this.platform.ha?.hassEntities) {
       for (const entity of this.platform.ha.hassEntities.values()) {
-        if (entity.device_id === deviceId && entity.entity_id.startsWith("switch.") && entity.entity_id.toLowerCase().includes("mute")) {
+        if (
+          entity.device_id === deviceId &&
+          entity.entity_id.startsWith("switch.") &&
+          entity.entity_id.toLowerCase().includes("mute")
+        ) {
           return entity.entity_id;
         }
       }
     }
     const members = this.getDeviceMembers();
-    const sw = members.find((m: any) => m.entityId.startsWith("switch.") && m.entityId.toLowerCase().includes("mute"));
+    const sw = members.find(
+      (m: any) =>
+        m.entityId.startsWith("switch.") &&
+        m.entityId.toLowerCase().includes("mute"),
+    );
     if (sw) return sw.entityId;
     const base = this.entityId.replace(/^[^.]+\./, "").split("_")[0];
-    for (const id of (this.platform.ha?.hassStates?.keys() ?? this.platform.entities.keys())) {
-      if (id.startsWith("switch.") && id.toLowerCase().includes("mute") && id.includes(base)) return id;
+    for (const id of this.platform.ha?.hassStates?.keys() ??
+      this.platform.entities.keys()) {
+      if (
+        id.startsWith("switch.") &&
+        id.toLowerCase().includes("mute") &&
+        id.includes(base)
+      )
+        return id;
     }
     return undefined;
   }
 
   private getDeviceButton(action: string): string | undefined {
-    const deviceId = this.platform.ha?.hassEntities?.get(this.entityId)?.device_id
-      ?? (this.platform.entities.get(this.entityId) as any)?.haDeviceInfo?.id;
+    const deviceId =
+      this.platform.ha?.hassEntities?.get(this.entityId)?.device_id ??
+      (this.platform.entities.get(this.entityId) as any)?.haDeviceInfo?.id;
     if (deviceId && this.platform.ha?.hassEntities) {
       for (const entity of this.platform.ha.hassEntities.values()) {
-        if (entity.device_id === deviceId && entity.entity_id.startsWith("button.")) {
+        if (
+          entity.device_id === deviceId &&
+          entity.entity_id.startsWith("button.")
+        ) {
           const lower = entity.entity_id.toLowerCase();
           if (lower.endsWith(`_${action}`) || lower.endsWith(`.${action}`)) {
             return entity.entity_id;
@@ -460,8 +593,13 @@ export class HapGenericAccessory {
     const target = targetEntityId || this.entityId;
     const startedAt = Date.now();
     const command = `${domain}.${service}`;
-    this.platform.log?.info?.(`[HAPCommandTrace][${target}] start service=${command}`);
-    if (!this.platform.ha?.callService || this.platform.ha.connected === false) {
+    this.platform.log?.info?.(
+      `[HAPCommandTrace][${target}] start service=${command}`,
+    );
+    if (
+      !this.platform.ha?.callService ||
+      this.platform.ha.connected === false
+    ) {
       throw -70402; // HAP SERVICE_COMMUNICATION_FAILURE
     }
     const operation = Promise.resolve()
@@ -479,15 +617,24 @@ export class HapGenericAccessory {
     ]);
     if (timer) clearTimeout(timer);
     const report = (failed: boolean, late: boolean) => {
-      this.platform.log?.info?.(`[HAPCommandTrace][${target}] ${late ? "ha_finished_after_handler" : "handler_returned"} service=${command} elapsed_ms=${Date.now() - startedAt} outcome=${failed ? "failed" : "completed"}`);
+      this.platform.log?.info?.(
+        `[HAPCommandTrace][${target}] ${late ? "ha_finished_after_handler" : "handler_returned"} service=${command} elapsed_ms=${Date.now() - startedAt} outcome=${failed ? "failed" : "completed"}`,
+      );
       if (failed) {
         this.setReachability(false);
-        this.platform.recordEntityCommandFailure?.(target, `HAP: Home Assistant failed to execute ${command}.`);
+        this.platform.recordEntityCommandFailure?.(
+          target,
+          `HAP: Home Assistant failed to execute ${command}.`,
+        );
       }
     };
     if (outcome === undefined) {
-      this.platform.log?.info?.(`[HAPCommandTrace][${target}] handler_returned_pending service=${command} elapsed_ms=${Date.now() - startedAt}`);
-      void operation.then((result) => report(result.failed, true)).catch(() => undefined);
+      this.platform.log?.info?.(
+        `[HAPCommandTrace][${target}] handler_returned_pending service=${command} elapsed_ms=${Date.now() - startedAt}`,
+      );
+      void operation
+        .then((result) => report(result.failed, true))
+        .catch(() => undefined);
       return;
     }
     report(outcome.failed, false);
@@ -498,31 +645,63 @@ export class HapGenericAccessory {
     const [domain] = this.entityId.split(".");
     const state = () => this.platform.entities.get(this.entityId)?.state;
     const bindPower = (service: any, characteristic: any) => {
-      service.getCharacteristic(characteristic)
-        .onGet(() => state()?.state === "on" ? 1 : 0)
+      service
+        .getCharacteristic(characteristic)
+        .onGet(() => (state()?.state === "on" ? 1 : 0))
         .onSet(async (value: any) => {
-          await this.callHaWithResponseBudget(domain, value ? "turn_on" : "turn_off");
+          await this.callHaWithResponseBudget(
+            domain,
+            value ? "turn_on" : "turn_off",
+          );
         });
     };
     switch (this.record.hapProfile) {
-      case "switch_hap": bindPower(this.accessory.getService(Service.Switch), Characteristic.On); break;
-      case "outlet_hap": bindPower(this.accessory.getService(Service.Outlet), Characteristic.On); break;
+      case "switch_hap":
+        bindPower(this.accessory.getService(Service.Switch), Characteristic.On);
+        break;
+      case "outlet_hap":
+        bindPower(this.accessory.getService(Service.Outlet), Characteristic.On);
+        break;
       case "lightbulb_hap": {
         const service = this.accessory.getService(Service.Lightbulb);
         if (service) {
           bindPower(service, Characteristic.On);
-          service.getCharacteristic(Characteristic.Brightness)
-            .onGet(() => Math.round((Number(state()?.attributes?.brightness) || 0) * 100 / 255))
-            .onSet(async (value: any) => this.callHaWithResponseBudget("light", "turn_on", { brightness_pct: Number(value) }));
+          service
+            .getCharacteristic(Characteristic.Brightness)
+            .onGet(() =>
+              Math.round(
+                ((Number(state()?.attributes?.brightness) || 0) * 100) / 255,
+              ),
+            )
+            .onSet(async (value: any) =>
+              this.callHaWithResponseBudget("light", "turn_on", {
+                brightness_pct: Number(value),
+              }),
+            );
           const color = () => state()?.attributes?.hs_color;
           if (Array.isArray(color())) {
-            service.getCharacteristic(Characteristic.Hue).onGet(() => Number(color()?.[0]) || 0);
-            service.getCharacteristic(Characteristic.Saturation).onGet(() => Number(color()?.[1]) || 0);
-            const setColor = async () => this.callHaWithResponseBudget("light", "turn_on", {
-              hs_color: [Number(service.getCharacteristic(Characteristic.Hue).value || 0), Number(service.getCharacteristic(Characteristic.Saturation).value || 0)],
-            });
+            service
+              .getCharacteristic(Characteristic.Hue)
+              .onGet(() => Number(color()?.[0]) || 0);
+            service
+              .getCharacteristic(Characteristic.Saturation)
+              .onGet(() => Number(color()?.[1]) || 0);
+            const setColor = async () =>
+              this.callHaWithResponseBudget("light", "turn_on", {
+                hs_color: [
+                  Number(
+                    service.getCharacteristic(Characteristic.Hue).value || 0,
+                  ),
+                  Number(
+                    service.getCharacteristic(Characteristic.Saturation)
+                      .value || 0,
+                  ),
+                ],
+              });
             service.getCharacteristic(Characteristic.Hue).onSet(setColor);
-            service.getCharacteristic(Characteristic.Saturation).onSet(setColor);
+            service
+              .getCharacteristic(Characteristic.Saturation)
+              .onSet(setColor);
           }
         }
         break;
@@ -536,22 +715,43 @@ export class HapGenericAccessory {
           const min = Number(attrs.min ?? 0);
           const max = Number(attrs.max ?? 100);
           const step = Number(attrs.step ?? 1);
-          return { min, max: max > min ? max : min + 1, step: step > 0 ? step : 1 };
+          return {
+            min,
+            max: max > min ? max : min + 1,
+            step: step > 0 ? step : 1,
+          };
         };
         const percentForValue = () => {
           const { min, max } = range();
           const value = Number(state()?.state);
-          return Math.max(0, Math.min(100, Math.round(((Number.isFinite(value) ? value : min) - min) * 100 / (max - min))));
+          return Math.max(
+            0,
+            Math.min(
+              100,
+              Math.round(
+                (((Number.isFinite(value) ? value : min) - min) * 100) /
+                  (max - min),
+              ),
+            ),
+          );
         };
-        service?.getCharacteristic(Characteristic.On)
+        service
+          ?.getCharacteristic(Characteristic.On)
           .onGet(() => 1)
           .onSet(async () => undefined);
-        service?.getCharacteristic(Characteristic.Brightness)
+        service
+          ?.getCharacteristic(Characteristic.Brightness)
           .onGet(percentForValue)
           .onSet(async (percent: any) => {
             const { min, max, step } = range();
-            const raw = min + (Math.max(0, Math.min(100, Number(percent) || 0)) / 100) * (max - min);
-            const value = Math.max(min, Math.min(max, Math.round((raw - min) / step) * step + min));
+            const raw =
+              min +
+              (Math.max(0, Math.min(100, Number(percent) || 0)) / 100) *
+                (max - min);
+            const value = Math.max(
+              min,
+              Math.min(max, Math.round((raw - min) / step) * step + min),
+            );
             await this.callHaWithResponseBudget(domain, "set_value", { value });
           });
         break;
@@ -560,9 +760,14 @@ export class HapGenericAccessory {
         const service = this.accessory.getService(Service.Fanv2);
         if (service) {
           bindPower(service, Characteristic.Active);
-          service.getCharacteristic(Characteristic.RotationSpeed)
+          service
+            .getCharacteristic(Characteristic.RotationSpeed)
             .onGet(() => Number(state()?.attributes?.percentage) || 0)
-            .onSet(async (value: any) => this.callHaWithResponseBudget(domain, "set_percentage", { percentage: Number(value) }));
+            .onSet(async (value: any) =>
+              this.callHaWithResponseBudget(domain, "set_percentage", {
+                percentage: Number(value),
+              }),
+            );
         }
         break;
       }
@@ -572,18 +777,25 @@ export class HapGenericAccessory {
         const service = this.accessory.getService(Service.Valve);
         if (!service) break;
         const active = () => this.isValveActive(state());
-        service.getCharacteristic(Characteristic.Active)
-          .onGet(() => active() ? 1 : 0)
+        service
+          .getCharacteristic(Characteristic.Active)
+          .onGet(() => (active() ? 1 : 0))
           .onSet(async (value: any) => this.setValveActive(value === 1));
-        service.getCharacteristic(Characteristic.InUse)
-          .onGet(() => active() ? 1 : 0);
-        service.getCharacteristic(Characteristic.SetDuration)
+        service
+          .getCharacteristic(Characteristic.InUse)
+          .onGet(() => (active() ? 1 : 0));
+        service
+          .getCharacteristic(Characteristic.SetDuration)
           .onGet(() => this.valveSetDurationSeconds)
           .onSet(async (value: any) => {
             const raw = Number(value);
             const seconds = Math.floor(raw);
-            const maximum = Number(service.getCharacteristic(Characteristic.SetDuration).props?.maxValue ?? 86_400);
-            if (!Number.isFinite(raw) || seconds < 0 || seconds > maximum) throw -70410;
+            const maximum = Number(
+              service.getCharacteristic(Characteristic.SetDuration).props
+                ?.maxValue ?? 86_400,
+            );
+            if (!Number.isFinite(raw) || seconds < 0 || seconds > maximum)
+              throw -70410;
             this.valveSetDurationSeconds = seconds;
             this.record.valveSetDurationSeconds = seconds;
             if (active() && seconds > 0) {
@@ -597,7 +809,8 @@ export class HapGenericAccessory {
               service.updateCharacteristic(Characteristic.RemainingDuration, 0);
             }
           });
-        service.getCharacteristic(Characteristic.RemainingDuration)
+        service
+          .getCharacteristic(Characteristic.RemainingDuration)
           .onGet(() => this.getValveRemainingDuration());
         break;
       }
@@ -618,7 +831,8 @@ export class HapGenericAccessory {
           this.record.name,
         );
 
-        svc.getCharacteristic(Characteristic.Active)
+        svc
+          .getCharacteristic(Characteristic.Active)
           .onGet(() => {
             const ent = this.platform.entities.get(this.entityId);
             this.platform.log?.info?.(
@@ -629,37 +843,58 @@ export class HapGenericAccessory {
           .onSet(async (value) => {
             const [domain] = this.entityId.split(".");
             const active = value === 1;
-            await this.callHaWithResponseBudget(domain, active ? "turn_on" : "turn_off");
+            await this.callHaWithResponseBudget(
+              domain,
+              active ? "turn_on" : "turn_off",
+            );
           });
 
-        svc.getCharacteristic(Characteristic.CurrentHumidifierDehumidifierState)
+        svc
+          .getCharacteristic(Characteristic.CurrentHumidifierDehumidifierState)
           .onGet(() => {
             const ent = this.platform.entities.get(this.entityId);
             if (ent?.state?.state !== "on") return 1; // INACTIVE
             return profile === "humidifier" ? 2 : 3; // HUMIDIFYING or DEHUMIDIFYING
           });
 
-        svc.getCharacteristic(Characteristic.TargetHumidifierDehumidifierState)
+        svc
+          .getCharacteristic(Characteristic.TargetHumidifierDehumidifierState)
           .setValue(profile === "humidifier" ? 1 : 2)
           .onGet(() => (profile === "humidifier" ? 1 : 2));
 
-        svc.getCharacteristic(Characteristic.CurrentRelativeHumidity)
+        svc
+          .getCharacteristic(Characteristic.CurrentRelativeHumidity)
           .onGet(() => {
             const current = this.getCurrentHumidity();
             if (current !== undefined) return current;
-            const target = Number(this.getHomeAssistantState(this.entityId)?.attributes?.humidity);
-            return Number.isFinite(target) && target >= 0 && target <= 100 ? target : 0;
+            const target = Number(
+              this.getHomeAssistantState(this.entityId)?.attributes?.humidity,
+            );
+            return Number.isFinite(target) && target >= 0 && target <= 100
+              ? target
+              : 0;
           });
 
-        svc.getCharacteristic(Characteristic.RelativeHumidityHumidifierThreshold)
+        svc
+          .getCharacteristic(Characteristic.RelativeHumidityHumidifierThreshold)
           .onGet(() => {
-            const value = Number(this.platform.entities.get(this.entityId)?.state?.attributes?.humidity);
-            return Number.isFinite(value) && value >= 0 && value <= 100 ? value : 0;
+            const value = Number(
+              this.platform.entities.get(this.entityId)?.state?.attributes
+                ?.humidity,
+            );
+            return Number.isFinite(value) && value >= 0 && value <= 100
+              ? value
+              : 0;
           })
           .onSet(async (value) => {
             const [domain] = this.entityId.split(".");
-            svc.updateCharacteristic(Characteristic.RelativeHumidityHumidifierThreshold, Number(value));
-            await this.callHaWithResponseBudget(domain, "set_humidity", { humidity: Number(value) });
+            svc.updateCharacteristic(
+              Characteristic.RelativeHumidityHumidifierThreshold,
+              Number(value),
+            );
+            await this.callHaWithResponseBudget(domain, "set_humidity", {
+              humidity: Number(value),
+            });
           });
 
         break;
@@ -683,164 +918,336 @@ export class HapGenericAccessory {
 
       // ── Televisor ─────────────────────────────────────────────────────────
       case "television": {
-        const tv = this.accessory.addService(Service.Television, this.record.name);
+        const tv = this.accessory.addService(
+          Service.Television,
+          this.record.name,
+        );
         const targetMediaId = this.getMediaEntityId();
-        const mediaState = () => this.platform.entities.get(targetMediaId)?.state ?? this.platform.entities.get(this.entityId)?.state;
+        const mediaState = () =>
+          this.platform.entities.get(targetMediaId)?.state ??
+          this.platform.entities.get(this.entityId)?.state;
         tv.setCharacteristic(Characteristic.ConfiguredName, this.record.name);
-        tv.setCharacteristic(Characteristic.SleepDiscoveryMode, Characteristic.SleepDiscoveryMode.ALWAYS_DISCOVERABLE);
+        tv.setCharacteristic(
+          Characteristic.SleepDiscoveryMode,
+          Characteristic.SleepDiscoveryMode.ALWAYS_DISCOVERABLE,
+        );
         tv.getCharacteristic(Characteristic.Active)
           .onGet(() => {
             const st = String(mediaState()?.state ?? "off");
-            return ["off", "standby", "unavailable", "unknown"].includes(st) ? 0 : 1;
+            return ["off", "standby", "unavailable", "unknown"].includes(st)
+              ? 0
+              : 1;
           })
-          .onSet(async (value: any) => this.callHaWithResponseBudget("media_player", value ? "turn_on" : "turn_off", undefined, targetMediaId));
+          .onSet(async (value: any) =>
+            this.callHaWithResponseBudget(
+              "media_player",
+              value ? "turn_on" : "turn_off",
+              undefined,
+              targetMediaId,
+            ),
+          );
 
         const sources = Array.isArray(mediaState()?.attributes?.source_list)
-          ? mediaState().attributes.source_list as string[]
+          ? (mediaState().attributes.source_list as string[])
           : [];
-        const activeSource = () => String(mediaState()?.attributes?.source || "");
+        const activeSource = () =>
+          String(mediaState()?.attributes?.source || "");
         tv.getCharacteristic(Characteristic.ActiveIdentifier)
           .onGet(() => Math.max(1, sources.indexOf(activeSource()) + 1))
           .onSet(async (value: any) => {
             const source = sources[Number(value) - 1];
-            if (source) await this.callHaWithResponseBudget("media_player", "select_source", { source }, targetMediaId);
+            if (source)
+              await this.callHaWithResponseBudget(
+                "media_player",
+                "select_source",
+                { source },
+                targetMediaId,
+              );
           });
 
         // RemoteKey characteristic for Control Center TV Remote (touchpad, buttons, playback)
-        tv.getCharacteristic(Characteristic.RemoteKey).onSet(async (value: any) => {
-          const RemoteKey = Characteristic.RemoteKey;
-          const remoteId = this.getRemoteEntityId();
-          const sendRemote = async (cmd: string, fallback?: () => Promise<void>) => {
-            if (remoteId) {
-              try {
-                await this.callHaWithResponseBudget("remote", "send_command", { command: [cmd] }, remoteId);
-                return;
-              } catch (err) {
-                this.platform.log?.warn?.(`[HAP][${this.entityId}] remote.send_command ${cmd} failed: ${err}`);
+        tv.getCharacteristic(Characteristic.RemoteKey).onSet(
+          async (value: any) => {
+            const RemoteKey = Characteristic.RemoteKey;
+            const remoteId = this.getRemoteEntityId();
+            const sendRemote = async (
+              cmd: string,
+              fallback?: () => Promise<void>,
+            ) => {
+              if (remoteId) {
+                try {
+                  await this.callHaWithResponseBudget(
+                    "remote",
+                    "send_command",
+                    { command: [cmd] },
+                    remoteId,
+                  );
+                  return;
+                } catch (err) {
+                  this.platform.log?.warn?.(
+                    `[HAP][${this.entityId}] remote.send_command ${cmd} failed: ${err}`,
+                  );
+                }
               }
+              if (fallback) await fallback();
+            };
+
+            switch (value) {
+              case RemoteKey.REWIND:
+                await sendRemote("REWIND", () =>
+                  this.callHaWithResponseBudget(
+                    "media_player",
+                    "media_previous_track",
+                    undefined,
+                    targetMediaId,
+                  ).catch(() => {}),
+                );
+                break;
+              case RemoteKey.FAST_FORWARD:
+                await sendRemote("FAST_FORWARD", () =>
+                  this.callHaWithResponseBudget(
+                    "media_player",
+                    "media_next_track",
+                    undefined,
+                    targetMediaId,
+                  ).catch(() => {}),
+                );
+                break;
+              case RemoteKey.NEXT_TRACK:
+                await sendRemote("MEDIA_NEXT", () =>
+                  this.callHaWithResponseBudget(
+                    "media_player",
+                    "media_next_track",
+                    undefined,
+                    targetMediaId,
+                  ),
+                );
+                break;
+              case RemoteKey.PREVIOUS_TRACK:
+                await sendRemote("MEDIA_PREVIOUS", () =>
+                  this.callHaWithResponseBudget(
+                    "media_player",
+                    "media_previous_track",
+                    undefined,
+                    targetMediaId,
+                  ),
+                );
+                break;
+              case RemoteKey.ARROW_UP:
+                await sendRemote("DPAD_UP", async () => {
+                  const btn = this.getDeviceButton("up");
+                  if (btn)
+                    await this.callHaWithResponseBudget(
+                      "button",
+                      "press",
+                      undefined,
+                      btn,
+                    );
+                });
+                break;
+              case RemoteKey.ARROW_DOWN:
+                await sendRemote("DPAD_DOWN", async () => {
+                  const btn = this.getDeviceButton("down");
+                  if (btn)
+                    await this.callHaWithResponseBudget(
+                      "button",
+                      "press",
+                      undefined,
+                      btn,
+                    );
+                });
+                break;
+              case RemoteKey.ARROW_LEFT:
+                await sendRemote("DPAD_LEFT", async () => {
+                  const btn = this.getDeviceButton("left");
+                  if (btn)
+                    await this.callHaWithResponseBudget(
+                      "button",
+                      "press",
+                      undefined,
+                      btn,
+                    );
+                });
+                break;
+              case RemoteKey.ARROW_RIGHT:
+                await sendRemote("DPAD_RIGHT", async () => {
+                  const btn = this.getDeviceButton("right");
+                  if (btn)
+                    await this.callHaWithResponseBudget(
+                      "button",
+                      "press",
+                      undefined,
+                      btn,
+                    );
+                });
+                break;
+              case RemoteKey.SELECT:
+                await sendRemote("DPAD_CENTER", async () => {
+                  const btn =
+                    this.getDeviceButton("select") ||
+                    this.getDeviceButton("enter");
+                  if (btn)
+                    await this.callHaWithResponseBudget(
+                      "button",
+                      "press",
+                      undefined,
+                      btn,
+                    );
+                });
+                break;
+              case RemoteKey.BACK:
+                await sendRemote("BACK", async () => {
+                  const btn =
+                    this.getDeviceButton("back") ||
+                    this.getDeviceButton("return");
+                  if (btn)
+                    await this.callHaWithResponseBudget(
+                      "button",
+                      "press",
+                      undefined,
+                      btn,
+                    );
+                });
+                break;
+              case RemoteKey.EXIT:
+                await sendRemote("HOME", async () => {
+                  const btn =
+                    this.getDeviceButton("home") ||
+                    this.getDeviceButton("exit");
+                  if (btn)
+                    await this.callHaWithResponseBudget(
+                      "button",
+                      "press",
+                      undefined,
+                      btn,
+                    );
+                });
+                break;
+              case RemoteKey.PLAY_PAUSE:
+                await this.callHaWithResponseBudget(
+                  "media_player",
+                  "media_play_pause",
+                  undefined,
+                  targetMediaId,
+                ).catch(() => sendRemote("MEDIA_PLAY_PAUSE"));
+                break;
+              case RemoteKey.INFORMATION:
+                await sendRemote("MENU", async () => {
+                  const btn =
+                    this.getDeviceButton("menu") ||
+                    this.getDeviceButton("info");
+                  if (btn)
+                    await this.callHaWithResponseBudget(
+                      "button",
+                      "press",
+                      undefined,
+                      btn,
+                    );
+                });
+                break;
             }
-            if (fallback) await fallback();
-          };
+          },
+        );
 
-          switch (value) {
-            case RemoteKey.REWIND:
-              await sendRemote("REWIND", () =>
-                this.callHaWithResponseBudget("media_player", "media_previous_track", undefined, targetMediaId).catch(() => {})
-              );
-              break;
-            case RemoteKey.FAST_FORWARD:
-              await sendRemote("FAST_FORWARD", () =>
-                this.callHaWithResponseBudget("media_player", "media_next_track", undefined, targetMediaId).catch(() => {})
-              );
-              break;
-            case RemoteKey.NEXT_TRACK:
-              await sendRemote("MEDIA_NEXT", () =>
-                this.callHaWithResponseBudget("media_player", "media_next_track", undefined, targetMediaId)
-              );
-              break;
-            case RemoteKey.PREVIOUS_TRACK:
-              await sendRemote("MEDIA_PREVIOUS", () =>
-                this.callHaWithResponseBudget("media_player", "media_previous_track", undefined, targetMediaId)
-              );
-              break;
-            case RemoteKey.ARROW_UP:
-              await sendRemote("DPAD_UP", async () => {
-                const btn = this.getDeviceButton("up");
-                if (btn) await this.callHaWithResponseBudget("button", "press", undefined, btn);
-              });
-              break;
-            case RemoteKey.ARROW_DOWN:
-              await sendRemote("DPAD_DOWN", async () => {
-                const btn = this.getDeviceButton("down");
-                if (btn) await this.callHaWithResponseBudget("button", "press", undefined, btn);
-              });
-              break;
-            case RemoteKey.ARROW_LEFT:
-              await sendRemote("DPAD_LEFT", async () => {
-                const btn = this.getDeviceButton("left");
-                if (btn) await this.callHaWithResponseBudget("button", "press", undefined, btn);
-              });
-              break;
-            case RemoteKey.ARROW_RIGHT:
-              await sendRemote("DPAD_RIGHT", async () => {
-                const btn = this.getDeviceButton("right");
-                if (btn) await this.callHaWithResponseBudget("button", "press", undefined, btn);
-              });
-              break;
-            case RemoteKey.SELECT:
-              await sendRemote("DPAD_CENTER", async () => {
-                const btn = this.getDeviceButton("select") || this.getDeviceButton("enter");
-                if (btn) await this.callHaWithResponseBudget("button", "press", undefined, btn);
-              });
-              break;
-            case RemoteKey.BACK:
-              await sendRemote("BACK", async () => {
-                const btn = this.getDeviceButton("back") || this.getDeviceButton("return");
-                if (btn) await this.callHaWithResponseBudget("button", "press", undefined, btn);
-              });
-              break;
-            case RemoteKey.EXIT:
-              await sendRemote("HOME", async () => {
-                const btn = this.getDeviceButton("home") || this.getDeviceButton("exit");
-                if (btn) await this.callHaWithResponseBudget("button", "press", undefined, btn);
-              });
-              break;
-            case RemoteKey.PLAY_PAUSE:
-              await this.callHaWithResponseBudget("media_player", "media_play_pause", undefined, targetMediaId).catch(() =>
-                sendRemote("MEDIA_PLAY_PAUSE")
-              );
-              break;
-            case RemoteKey.INFORMATION:
-              await sendRemote("MENU", async () => {
-                const btn = this.getDeviceButton("menu") || this.getDeviceButton("info");
-                if (btn) await this.callHaWithResponseBudget("button", "press", undefined, btn);
-              });
-              break;
-          }
-        });
-
-        const speaker = this.accessory.addService(Service.TelevisionSpeaker, `${this.record.name} Audio`);
-        speaker.setCharacteristic(Characteristic.Active, Characteristic.Active.ACTIVE);
-        speaker.setCharacteristic(Characteristic.VolumeControlType, Characteristic.VolumeControlType.RELATIVE_WITH_CURRENT);
+        const speaker = this.accessory.addService(
+          Service.TelevisionSpeaker,
+          `${this.record.name} Audio`,
+        );
+        speaker.setCharacteristic(
+          Characteristic.Active,
+          Characteristic.Active.ACTIVE,
+        );
+        speaker.setCharacteristic(
+          Characteristic.VolumeControlType,
+          Characteristic.VolumeControlType.RELATIVE_WITH_CURRENT,
+        );
         const muteSwitchId = this.getMuteSwitchEntityId();
-        speaker.getCharacteristic(Characteristic.Mute)
+        speaker
+          .getCharacteristic(Characteristic.Mute)
           .onGet(() => {
-            const isMediaMuted = Boolean(mediaState()?.attributes?.is_volume_muted);
-            const isSwitchMuted = muteSwitchId ? this.getHomeAssistantState(muteSwitchId)?.state === "on" : false;
+            const isMediaMuted = Boolean(
+              mediaState()?.attributes?.is_volume_muted,
+            );
+            const isSwitchMuted = muteSwitchId
+              ? this.getHomeAssistantState(muteSwitchId)?.state === "on"
+              : false;
             return isMediaMuted || isSwitchMuted;
           })
           .onSet(async (value: any) => {
             const isMuted = Boolean(value);
             if (muteSwitchId) {
-              await this.callHaWithResponseBudget("switch", isMuted ? "turn_on" : "turn_off", undefined, muteSwitchId).catch(() => {});
+              await this.callHaWithResponseBudget(
+                "switch",
+                isMuted ? "turn_on" : "turn_off",
+                undefined,
+                muteSwitchId,
+              ).catch(() => {});
             }
-            await this.callHaWithResponseBudget("media_player", "volume_mute", { is_volume_muted: isMuted }, targetMediaId).catch(() => {});
+            await this.callHaWithResponseBudget(
+              "media_player",
+              "volume_mute",
+              { is_volume_muted: isMuted },
+              targetMediaId,
+            ).catch(() => {});
           });
-        speaker.getCharacteristic(Characteristic.Volume)
-          .onGet(() => Math.round((Number(mediaState()?.attributes?.volume_level) || 0) * 100))
-          .onSet(async (value: any) => this.callHaWithResponseBudget("media_player", "volume_set", { volume_level: Number(value) / 100 }, targetMediaId));
-        speaker.getCharacteristic(Characteristic.VolumeSelector)
+        speaker
+          .getCharacteristic(Characteristic.Volume)
+          .onGet(() =>
+            Math.round(
+              (Number(mediaState()?.attributes?.volume_level) || 0) * 100,
+            ),
+          )
+          .onSet(async (value: any) =>
+            this.callHaWithResponseBudget(
+              "media_player",
+              "volume_set",
+              { volume_level: Number(value) / 100 },
+              targetMediaId,
+            ),
+          );
+        speaker
+          .getCharacteristic(Characteristic.VolumeSelector)
           .onSet(async (value: any) => {
             const inc = value === Characteristic.VolumeSelector.INCREMENT;
             const remoteId = this.getRemoteEntityId();
             try {
-              await this.callHaWithResponseBudget("media_player", inc ? "volume_up" : "volume_down", undefined, targetMediaId);
+              await this.callHaWithResponseBudget(
+                "media_player",
+                inc ? "volume_up" : "volume_down",
+                undefined,
+                targetMediaId,
+              );
             } catch {
               if (remoteId) {
-                await this.callHaWithResponseBudget("remote", "send_command", {
-                  command: [inc ? "VOLUME_UP" : "VOLUME_DOWN"],
-                }, remoteId).catch(() => {});
+                await this.callHaWithResponseBudget(
+                  "remote",
+                  "send_command",
+                  {
+                    command: [inc ? "VOLUME_UP" : "VOLUME_DOWN"],
+                  },
+                  remoteId,
+                ).catch(() => {});
               }
             }
           });
         tv.addLinkedService(speaker);
 
         sources.forEach((source, index) => {
-          const input = this.accessory.addService(Service.InputSource, source, `input:${index + 1}`);
+          const input = this.accessory.addService(
+            Service.InputSource,
+            source,
+            `input:${index + 1}`,
+          );
           input.setCharacteristic(Characteristic.Identifier, index + 1);
           input.setCharacteristic(Characteristic.ConfiguredName, source);
-          input.setCharacteristic(Characteristic.IsConfigured, Characteristic.IsConfigured.CONFIGURED);
-          input.setCharacteristic(Characteristic.InputSourceType, Characteristic.InputSourceType.HDMI);
+          input.setCharacteristic(
+            Characteristic.IsConfigured,
+            Characteristic.IsConfigured.CONFIGURED,
+          );
+          input.setCharacteristic(
+            Characteristic.InputSourceType,
+            Characteristic.InputSourceType.HDMI,
+          );
           tv.addLinkedService(input);
         });
         break;
@@ -870,14 +1277,15 @@ export class HapGenericAccessory {
             : profile === "valve_faucet"
               ? Characteristic.ValveType.WATER_FAUCET
               : Characteristic.ValveType.SHOWER_HEAD;
-        const svc = this.accessory.addService(
-          Service.Valve,
-          this.record.name,
-        );
+        const svc = this.accessory.addService(Service.Valve, this.record.name);
         const initialState = this.getHomeAssistantState(this.entityId);
         const initialActive = this.isValveActive(initialState);
-        svc.getCharacteristic(Characteristic.Active).setValue(initialActive ? 1 : 0);
-        svc.getCharacteristic(Characteristic.InUse).setValue(initialActive ? 1 : 0);
+        svc
+          .getCharacteristic(Characteristic.Active)
+          .setValue(initialActive ? 1 : 0);
+        svc
+          .getCharacteristic(Characteristic.InUse)
+          .setValue(initialActive ? 1 : 0);
         svc.setCharacteristic(Characteristic.ValveType, valveType);
         break;
       }
@@ -888,13 +1296,19 @@ export class HapGenericAccessory {
           Service.SecuritySystem,
           this.record.name,
         );
-        const current = svc.getCharacteristic(Characteristic.SecuritySystemCurrentState);
-        const target = svc.getCharacteristic(Characteristic.SecuritySystemTargetState);
+        const current = svc.getCharacteristic(
+          Characteristic.SecuritySystemCurrentState,
+        );
+        const target = svc.getCharacteristic(
+          Characteristic.SecuritySystemTargetState,
+        );
         current.setValue(Characteristic.SecuritySystemCurrentState.DISARMED);
         target.setValue(Characteristic.SecuritySystemTargetState.DISARM);
         target.onGet(() => this.getAlarmTargetState());
         current.onGet(() => this.getAlarmCurrentState());
-        target.onSet(async (value: any) => this.setAlarmTargetState(Number(value)));
+        target.onSet(async (value: any) =>
+          this.setAlarmTargetState(Number(value)),
+        );
         this.syncAlarmState(this.getHomeAssistantState(this.entityId));
         break;
       }
@@ -911,7 +1325,9 @@ export class HapGenericAccessory {
         svc
           .getCharacteristic(Characteristic.TargetDoorState)
           .setValue(Characteristic.TargetDoorState.CLOSED);
-        svc.getCharacteristic(Characteristic.ObstructionDetected).setValue(false);
+        svc
+          .getCharacteristic(Characteristic.ObstructionDetected)
+          .setValue(false);
         break;
       }
 
@@ -941,9 +1357,7 @@ export class HapGenericAccessory {
         svc
           .getCharacteristic(Characteristic.TargetHeaterCoolerState)
           .setValue(0);
-        svc
-          .getCharacteristic(Characteristic.CurrentTemperature)
-          .setValue(20);
+        svc.getCharacteristic(Characteristic.CurrentTemperature).setValue(20);
         break;
       }
 
@@ -953,12 +1367,8 @@ export class HapGenericAccessory {
           Service.Thermostat,
           this.record.name,
         );
-        svc
-          .getCharacteristic(Characteristic.CurrentTemperature)
-          .setValue(20);
-        svc
-          .getCharacteristic(Characteristic.TargetTemperature)
-          .setValue(21);
+        svc.getCharacteristic(Characteristic.CurrentTemperature).setValue(20);
+        svc.getCharacteristic(Characteristic.TargetTemperature).setValue(21);
         svc
           .getCharacteristic(Characteristic.CurrentHeatingCoolingState)
           .setValue(0);
@@ -981,10 +1391,7 @@ export class HapGenericAccessory {
 
       // ── Interruptor HAP ───────────────────────────────────────────────────
       case "switch_hap": {
-        const svc = this.accessory.addService(
-          Service.Switch,
-          this.record.name,
-        );
+        const svc = this.accessory.addService(Service.Switch, this.record.name);
         svc.getCharacteristic(Characteristic.On).setValue(false);
         break;
       }
@@ -999,7 +1406,10 @@ export class HapGenericAccessory {
         break;
       }
       case "number_hap": {
-        const svc = this.accessory.addService(Service.Lightbulb, this.record.name);
+        const svc = this.accessory.addService(
+          Service.Lightbulb,
+          this.record.name,
+        );
         svc.getCharacteristic(Characteristic.On).setValue(true);
         svc.getCharacteristic(Characteristic.Brightness).setValue(0);
         break;
@@ -1026,12 +1436,8 @@ export class HapGenericAccessory {
           Service.WindowCovering,
           this.record.name,
         );
-        svc
-          .getCharacteristic(Characteristic.CurrentPosition)
-          .setValue(0);
-        svc
-          .getCharacteristic(Characteristic.TargetPosition)
-          .setValue(0);
+        svc.getCharacteristic(Characteristic.CurrentPosition).setValue(0);
+        svc.getCharacteristic(Characteristic.TargetPosition).setValue(0);
         svc
           .getCharacteristic(Characteristic.PositionState)
           .setValue(Characteristic.PositionState.STOPPED);
@@ -1051,10 +1457,7 @@ export class HapGenericAccessory {
 
       // ── Ventana HAP ───────────────────────────────────────────────────────
       case "window_hap": {
-        const svc = this.accessory.addService(
-          Service.Window,
-          this.record.name,
-        );
+        const svc = this.accessory.addService(Service.Window, this.record.name);
         svc.getCharacteristic(Characteristic.CurrentPosition).setValue(0);
         svc.getCharacteristic(Characteristic.TargetPosition).setValue(0);
         svc
@@ -1069,9 +1472,7 @@ export class HapGenericAccessory {
           Service.MotionSensor,
           this.record.name,
         );
-        svc
-          .getCharacteristic(Characteristic.MotionDetected)
-          .setValue(false);
+        svc.getCharacteristic(Characteristic.MotionDetected).setValue(false);
         break;
       }
 
@@ -1083,9 +1484,7 @@ export class HapGenericAccessory {
         );
         svc
           .getCharacteristic(Characteristic.ContactSensorState)
-          .setValue(
-            Characteristic.ContactSensorState.CONTACT_DETECTED,
-          );
+          .setValue(Characteristic.ContactSensorState.CONTACT_DETECTED);
         break;
       }
 
@@ -1109,9 +1508,7 @@ export class HapGenericAccessory {
         );
         svc
           .getCharacteristic(Characteristic.CarbonMonoxideDetected)
-          .setValue(
-            Characteristic.CarbonMonoxideDetected.CO_LEVELS_NORMAL,
-          );
+          .setValue(Characteristic.CarbonMonoxideDetected.CO_LEVELS_NORMAL);
         break;
       }
 
@@ -1123,9 +1520,7 @@ export class HapGenericAccessory {
         );
         svc
           .getCharacteristic(Characteristic.CarbonDioxideDetected)
-          .setValue(
-            Characteristic.CarbonDioxideDetected.CO2_LEVELS_NORMAL,
-          );
+          .setValue(Characteristic.CarbonDioxideDetected.CO2_LEVELS_NORMAL);
         break;
       }
 
@@ -1149,9 +1544,7 @@ export class HapGenericAccessory {
         );
         svc
           .getCharacteristic(Characteristic.OccupancyDetected)
-          .setValue(
-            Characteristic.OccupancyDetected.OCCUPANCY_NOT_DETECTED,
-          );
+          .setValue(Characteristic.OccupancyDetected.OCCUPANCY_NOT_DETECTED);
         break;
       }
 
@@ -1161,9 +1554,7 @@ export class HapGenericAccessory {
           Service.TemperatureSensor,
           this.record.name,
         );
-        svc
-          .getCharacteristic(Characteristic.CurrentTemperature)
-          .setValue(20);
+        svc.getCharacteristic(Characteristic.CurrentTemperature).setValue(20);
         break;
       }
 
@@ -1304,7 +1695,8 @@ export class HapGenericAccessory {
   }
 
   public async publish(): Promise<void> {
-    const category = HAP_PROFILE_CATEGORIES[this.record.hapProfile] ?? Categories.OTHER;
+    const category =
+      HAP_PROFILE_CATEGORIES[this.record.hapProfile] ?? Categories.OTHER;
     await this.accessory.publish({
       username: this.record.username,
       pincode: this.record.pincode,
@@ -1331,8 +1723,11 @@ export class HapGenericAccessory {
   }
 
   public handlesEntityId(entityId: string): boolean {
-    return entityId === this.entityId || this.getDeviceMembers().some(
-      (member: any) => member.entityId === entityId,
+    return (
+      entityId === this.entityId ||
+      this.getDeviceMembers().some(
+        (member: any) => member.entityId === entityId,
+      )
     );
   }
 
@@ -1340,15 +1735,18 @@ export class HapGenericAccessory {
     try {
       if (sourceEntityId !== this.entityId) {
         if (
-          (this.record.hapProfile === "humidifier" || this.record.hapProfile === "dehumidifier") &&
+          (this.record.hapProfile === "humidifier" ||
+            this.record.hapProfile === "dehumidifier") &&
           state?.attributes?.device_class === "humidity"
         ) {
           const humidity = Number(state?.state);
           if (Number.isFinite(humidity) && humidity >= 0 && humidity <= 100) {
-            this.accessory.getService(Service.HumidifierDehumidifier)?.updateCharacteristic(
-              Characteristic.CurrentRelativeHumidity,
-              humidity,
-            );
+            this.accessory
+              .getService(Service.HumidifierDehumidifier)
+              ?.updateCharacteristic(
+                Characteristic.CurrentRelativeHumidity,
+                humidity,
+              );
           }
         }
         if (this.record.hapProfile === "television") {
@@ -1356,13 +1754,31 @@ export class HapGenericAccessory {
           const targetMediaId = this.getMediaEntityId();
           if (sourceEntityId === muteSwitchId) {
             const isMuted = state?.state === "on";
-            this.accessory.getService(Service.TelevisionSpeaker)?.updateCharacteristic(Characteristic.Mute, isMuted);
+            this.accessory
+              .getService(Service.TelevisionSpeaker)
+              ?.updateCharacteristic(Characteristic.Mute, isMuted);
           } else if (sourceEntityId === targetMediaId) {
-            const isOn = state?.state && !["off", "standby", "unavailable", "unknown"].includes(state.state);
-            this.accessory.getService(Service.Television)?.updateCharacteristic(Characteristic.Active, isOn ? 1 : 0);
-            this.accessory.getService(Service.TelevisionSpeaker)?.updateCharacteristic(Characteristic.Mute, Boolean(state?.attributes?.is_volume_muted));
+            const isOn =
+              state?.state &&
+              !["off", "standby", "unavailable", "unknown"].includes(
+                state.state,
+              );
+            this.accessory
+              .getService(Service.Television)
+              ?.updateCharacteristic(Characteristic.Active, isOn ? 1 : 0);
+            this.accessory
+              .getService(Service.TelevisionSpeaker)
+              ?.updateCharacteristic(
+                Characteristic.Mute,
+                Boolean(state?.attributes?.is_volume_muted),
+              );
             if (state?.attributes?.volume_level !== undefined) {
-              this.accessory.getService(Service.TelevisionSpeaker)?.updateCharacteristic(Characteristic.Volume, Math.round(Number(state.attributes.volume_level) * 100));
+              this.accessory
+                .getService(Service.TelevisionSpeaker)
+                ?.updateCharacteristic(
+                  Characteristic.Volume,
+                  Math.round(Number(state.attributes.volume_level) * 100),
+                );
             }
           }
         }
@@ -1388,15 +1804,33 @@ export class HapGenericAccessory {
       }
       const on = state?.state === "on";
       switch (this.record.hapProfile) {
-        case "switch_hap": this.accessory.getService(Service.Switch)?.updateCharacteristic(Characteristic.On, on); break;
-        case "outlet_hap": this.accessory.getService(Service.Outlet)?.updateCharacteristic(Characteristic.On, on); break;
+        case "switch_hap":
+          this.accessory
+            .getService(Service.Switch)
+            ?.updateCharacteristic(Characteristic.On, on);
+          break;
+        case "outlet_hap":
+          this.accessory
+            .getService(Service.Outlet)
+            ?.updateCharacteristic(Characteristic.On, on);
+          break;
         case "lightbulb_hap": {
           const light = this.accessory.getService(Service.Lightbulb);
           light?.updateCharacteristic(Characteristic.On, on);
-          if (state?.attributes?.brightness !== undefined) light?.updateCharacteristic(Characteristic.Brightness, Math.round(Number(state.attributes.brightness) * 100 / 255));
+          if (state?.attributes?.brightness !== undefined)
+            light?.updateCharacteristic(
+              Characteristic.Brightness,
+              Math.round((Number(state.attributes.brightness) * 100) / 255),
+            );
           if (Array.isArray(state?.attributes?.hs_color)) {
-            light?.updateCharacteristic(Characteristic.Hue, Number(state.attributes.hs_color[0]) || 0);
-            light?.updateCharacteristic(Characteristic.Saturation, Number(state.attributes.hs_color[1]) || 0);
+            light?.updateCharacteristic(
+              Characteristic.Hue,
+              Number(state.attributes.hs_color[0]) || 0,
+            );
+            light?.updateCharacteristic(
+              Characteristic.Saturation,
+              Number(state.attributes.hs_color[1]) || 0,
+            );
           }
           break;
         }
@@ -1406,9 +1840,16 @@ export class HapGenericAccessory {
           const min = Number(attrs.min ?? 0);
           const max = Number(attrs.max ?? 100);
           const value = Number(state?.state);
-          const percent = max > min && Number.isFinite(value)
-            ? Math.max(0, Math.min(100, Math.round((value - min) * 100 / (max - min))))
-            : 0;
+          const percent =
+            max > min && Number.isFinite(value)
+              ? Math.max(
+                  0,
+                  Math.min(
+                    100,
+                    Math.round(((value - min) * 100) / (max - min)),
+                  ),
+                )
+              : 0;
           light?.updateCharacteristic(Characteristic.On, true);
           light?.updateCharacteristic(Characteristic.Brightness, percent);
           break;
@@ -1416,19 +1857,46 @@ export class HapGenericAccessory {
         case "fan_hap": {
           const fan = this.accessory.getService(Service.Fanv2);
           fan?.updateCharacteristic(Characteristic.Active, on ? 1 : 0);
-          if (state?.attributes?.percentage !== undefined) fan?.updateCharacteristic(Characteristic.RotationSpeed, Number(state.attributes.percentage) || 0);
+          if (state?.attributes?.percentage !== undefined)
+            fan?.updateCharacteristic(
+              Characteristic.RotationSpeed,
+              Number(state.attributes.percentage) || 0,
+            );
           break;
         }
         case "television": {
           const targetMediaId = this.getMediaEntityId();
-          const targetState = targetMediaId === this.entityId ? state : this.platform.entities.get(targetMediaId)?.state;
-          const isOn = targetState?.state && !["off", "standby", "unavailable", "unknown"].includes(targetState.state);
-          this.accessory.getService(Service.Television)?.updateCharacteristic(Characteristic.Active, isOn ? 1 : 0);
+          const targetState =
+            targetMediaId === this.entityId
+              ? state
+              : this.platform.entities.get(targetMediaId)?.state;
+          const isOn =
+            targetState?.state &&
+            !["off", "standby", "unavailable", "unknown"].includes(
+              targetState.state,
+            );
+          this.accessory
+            .getService(Service.Television)
+            ?.updateCharacteristic(Characteristic.Active, isOn ? 1 : 0);
           const muteSwitchId = this.getMuteSwitchEntityId();
-          const isSwitchMuted = muteSwitchId ? this.getHomeAssistantState(muteSwitchId)?.state === "on" : false;
-          this.accessory.getService(Service.TelevisionSpeaker)?.updateCharacteristic(Characteristic.Mute, Boolean(targetState?.attributes?.is_volume_muted || isSwitchMuted));
+          const isSwitchMuted = muteSwitchId
+            ? this.getHomeAssistantState(muteSwitchId)?.state === "on"
+            : false;
+          this.accessory
+            .getService(Service.TelevisionSpeaker)
+            ?.updateCharacteristic(
+              Characteristic.Mute,
+              Boolean(
+                targetState?.attributes?.is_volume_muted || isSwitchMuted,
+              ),
+            );
           if (targetState?.attributes?.volume_level !== undefined) {
-            this.accessory.getService(Service.TelevisionSpeaker)?.updateCharacteristic(Characteristic.Volume, Math.round(Number(targetState.attributes.volume_level) * 100));
+            this.accessory
+              .getService(Service.TelevisionSpeaker)
+              ?.updateCharacteristic(
+                Characteristic.Volume,
+                Math.round(Number(targetState.attributes.volume_level) * 100),
+              );
           }
           break;
         }
@@ -1465,14 +1933,21 @@ export class HapGenericAccessory {
   }
 
   private isValveProfile(): boolean {
-    return this.record.hapProfile === "valve_irrigation" ||
+    return (
+      this.record.hapProfile === "valve_irrigation" ||
       this.record.hapProfile === "valve_faucet" ||
-      this.record.hapProfile === "valve_shower";
+      this.record.hapProfile === "valve_shower"
+    );
   }
 
   private isValveActive(state: any): boolean {
     const value = String(state?.state ?? "").toLowerCase();
-    return value === "open" || value === "opening" || value === "closing" || value === "on";
+    return (
+      value === "open" ||
+      value === "opening" ||
+      value === "closing" ||
+      value === "on"
+    );
   }
 
   private syncValveState(state: any): void {
@@ -1491,12 +1966,19 @@ export class HapGenericAccessory {
       if (Number(this.record.valveCloseAttempts || 0) < 3) {
         this.armValveDurationTicker(Number(this.record.valveDeadlineAt));
       }
-    } else if (active && this.valveSetDurationSeconds > 0 && this.valveDeadlineMs === undefined) {
+    } else if (
+      active &&
+      this.valveSetDurationSeconds > 0 &&
+      this.valveDeadlineMs === undefined
+    ) {
       // A configured HAP duration also applies when the valve is opened outside
       // HomeKit. Persist it before starting the close countdown.
       const deadline = Date.now() + this.valveSetDurationSeconds * 1000;
       this.valveDeadlineMs = deadline;
-      service.updateCharacteristic(Characteristic.RemainingDuration, this.getValveRemainingDuration());
+      service.updateCharacteristic(
+        Characteristic.RemainingDuration,
+        this.getValveRemainingDuration(),
+      );
       void this.persistValveDeadline(deadline).then(() => {
         if (
           this.record.valveDeadlineAt === deadline &&
@@ -1518,13 +2000,21 @@ export class HapGenericAccessory {
       throw -70402;
     }
     const domain = this.entityId.split(".")[0];
-    const service = domain === "valve"
-      ? (active ? "open_valve" : "close_valve")
-      : (active ? "turn_on" : "turn_off");
+    const service =
+      domain === "valve"
+        ? active
+          ? "open_valve"
+          : "close_valve"
+        : active
+          ? "turn_on"
+          : "turn_off";
     if (active && this.valveSetDurationSeconds > 0) {
-      await this.persistValveDeadline(Date.now() + this.valveSetDurationSeconds * 1000);
+      await this.persistValveDeadline(
+        Date.now() + this.valveSetDurationSeconds * 1000,
+      );
     } else if (!active) {
-      const scheduledCloseCallInFlight = this.valveClosePending && this.valveCloseCallStarted;
+      const scheduledCloseCallInFlight =
+        this.valveClosePending && this.valveCloseCallStarted;
       this.clearValveDurationTimer(false);
       await this.platform.saveHapAccessoryRecords?.();
       if (scheduledCloseCallInFlight) return;
@@ -1550,7 +2040,12 @@ export class HapGenericAccessory {
   }
 
   private isValidValveDuration(value: unknown): value is number {
-    return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 86_400;
+    return (
+      typeof value === "number" &&
+      Number.isInteger(value) &&
+      value >= 0 &&
+      value <= 86_400
+    );
   }
 
   private restoreValveDurationTimer(): void {
@@ -1585,7 +2080,9 @@ export class HapGenericAccessory {
   private clearValveDurationTimer(persist = true): void {
     this.stopValveDurationTicker();
     this.valveClosePending = false;
-    const hadDeadline = this.record.valveDeadlineAt !== undefined || this.record.valveCloseAttempts !== undefined;
+    const hadDeadline =
+      this.record.valveDeadlineAt !== undefined ||
+      this.record.valveCloseAttempts !== undefined;
     delete this.record.valveDeadlineAt;
     delete this.record.valveCloseAttempts;
     if (persist && hadDeadline) void this.platform.saveHapAccessoryRecords?.();
@@ -1598,7 +2095,10 @@ export class HapGenericAccessory {
     const service = this.accessory.getService(Service.Valve);
     const tick = () => {
       const remaining = this.getValveRemainingDuration();
-      service?.updateCharacteristic(Characteristic.RemainingDuration, remaining);
+      service?.updateCharacteristic(
+        Characteristic.RemainingDuration,
+        remaining,
+      );
       if (remaining > 0 || this.valveClosePending) return;
       this.valveClosePending = true;
       this.stopValveDurationTicker();
@@ -1615,35 +2115,53 @@ export class HapGenericAccessory {
     const currentValue = String(currentState?.state ?? "").toLowerCase();
     if (["closed", "off", "idle", "closing"].includes(currentValue)) {
       this.clearValveDurationTimer();
-      this.accessory.getService(Service.Valve)?.updateCharacteristic(Characteristic.RemainingDuration, 0);
+      this.accessory
+        .getService(Service.Valve)
+        ?.updateCharacteristic(Characteristic.RemainingDuration, 0);
       return;
     }
 
     let lastError: unknown;
-    let attempts = Math.max(0, Math.min(3, Number(this.record.valveCloseAttempts) || 0));
+    let attempts = Math.max(
+      0,
+      Math.min(3, Number(this.record.valveCloseAttempts) || 0),
+    );
     for (; attempts < 3; attempts++) {
       if (!this.valveClosePending) return;
       try {
         const state = this.getHomeAssistantState(this.entityId);
         const value = String(state?.state ?? "").toLowerCase();
-        if (value === "unavailable" || value === "unknown" || !value || this.platform.ha?.connected === false) {
+        if (
+          value === "unavailable" ||
+          value === "unknown" ||
+          !value ||
+          this.platform.ha?.connected === false
+        ) {
           lastError = new Error("Home Assistant valve state is unavailable");
           break;
         }
         if (["closed", "off", "idle", "closing"].includes(value)) {
           this.clearValveDurationTimer();
-          this.accessory.getService(Service.Valve)?.updateCharacteristic(Characteristic.RemainingDuration, 0);
+          this.accessory
+            .getService(Service.Valve)
+            ?.updateCharacteristic(Characteristic.RemainingDuration, 0);
           return;
         }
-        if (!this.isValveActive(state)) throw new Error("Home Assistant valve state is not active");
+        if (!this.isValveActive(state))
+          throw new Error("Home Assistant valve state is not active");
         if (!this.valveClosePending) return;
-        if (!this.platform.ha?.callService) throw new Error("Home Assistant service client is unavailable");
+        if (!this.platform.ha?.callService)
+          throw new Error("Home Assistant service client is unavailable");
         this.record.valveCloseAttempts = attempts + 1;
         await this.platform.saveHapAccessoryRecords?.();
         if (!this.valveClosePending) return;
         this.valveCloseCallStarted = true;
         try {
-          await this.platform.ha.callService(domain, serviceName, this.entityId);
+          await this.platform.ha.callService(
+            domain,
+            serviceName,
+            this.entityId,
+          );
         } finally {
           this.valveCloseCallStarted = false;
         }
@@ -1653,11 +2171,16 @@ export class HapGenericAccessory {
         this.valveClosePending = false;
         this.valveDeadlineMs = undefined;
         await this.platform.saveHapAccessoryRecords?.();
-        this.accessory.getService(Service.Valve)?.updateCharacteristic(Characteristic.RemainingDuration, 0);
+        this.accessory
+          .getService(Service.Valve)
+          ?.updateCharacteristic(Characteristic.RemainingDuration, 0);
         return;
       } catch (error) {
         lastError = error;
-        if (attempts < 2) await new Promise((resolve) => setTimeout(resolve, 500 * (attempts + 1)));
+        if (attempts < 2)
+          await new Promise((resolve) =>
+            setTimeout(resolve, 500 * (attempts + 1)),
+          );
       }
     }
 
@@ -1685,34 +2208,44 @@ export class HapGenericAccessory {
     const characteristic = this.getSecuritySystemService()?.getCharacteristic(
       Characteristic.SecuritySystemTargetState,
     );
-    return Number.isInteger(night) &&
+    return (
+      Number.isInteger(night) &&
       Array.isArray(characteristic?.props?.validValues) &&
-      characteristic.props.validValues.includes(night);
+      characteristic.props.validValues.includes(night)
+    );
   }
 
   private mapAlarmMode(value: unknown): number | undefined {
     switch (value) {
-      case "disarmed": return Characteristic.SecuritySystemCurrentState.DISARMED;
-      case "armed_home": return Characteristic.SecuritySystemCurrentState.STAY_ARM;
-      case "armed_away": return Characteristic.SecuritySystemCurrentState.AWAY_ARM;
+      case "disarmed":
+        return Characteristic.SecuritySystemCurrentState.DISARMED;
+      case "armed_home":
+        return Characteristic.SecuritySystemCurrentState.STAY_ARM;
+      case "armed_away":
+        return Characteristic.SecuritySystemCurrentState.AWAY_ARM;
       case "armed_night":
         return this.supportsAlarmNight()
           ? Characteristic.SecuritySystemCurrentState.NIGHT_ARM
           : undefined;
-      default: return undefined;
+      default:
+        return undefined;
     }
   }
 
   private mapAlarmTarget(value: unknown): number | undefined {
     switch (value) {
-      case "disarmed": return Characteristic.SecuritySystemTargetState.DISARM;
-      case "armed_home": return Characteristic.SecuritySystemTargetState.STAY_ARM;
-      case "armed_away": return Characteristic.SecuritySystemTargetState.AWAY_ARM;
+      case "disarmed":
+        return Characteristic.SecuritySystemTargetState.DISARM;
+      case "armed_home":
+        return Characteristic.SecuritySystemTargetState.STAY_ARM;
+      case "armed_away":
+        return Characteristic.SecuritySystemTargetState.AWAY_ARM;
       case "armed_night":
         return this.supportsAlarmNight()
           ? Characteristic.SecuritySystemTargetState.NIGHT_ARM
           : undefined;
-      default: return undefined;
+      default:
+        return undefined;
     }
   }
 
@@ -1753,7 +2286,10 @@ export class HapGenericAccessory {
       const target = this.mapAlarmTarget(attrs.arming_target);
       if (target !== undefined) {
         this.pendingAlarmTarget = target;
-        service.updateCharacteristic(Characteristic.SecuritySystemTargetState, target);
+        service.updateCharacteristic(
+          Characteristic.SecuritySystemTargetState,
+          target,
+        );
       } else {
         // Keep the previously confirmed mode; an incomplete/unrecognized
         // target must never be converted into a final armed state.
@@ -1775,15 +2311,22 @@ export class HapGenericAccessory {
     if (current === undefined) return;
 
     this.pendingAlarmTarget = undefined;
-    service.updateCharacteristic(Characteristic.SecuritySystemCurrentState, current);
-    const target = status === "armed_night"
-      ? Characteristic.SecuritySystemTargetState.NIGHT_ARM
-      : status === "armed_away"
-        ? Characteristic.SecuritySystemTargetState.AWAY_ARM
-        : status === "armed_home"
-          ? Characteristic.SecuritySystemTargetState.STAY_ARM
-          : Characteristic.SecuritySystemTargetState.DISARM;
-    service.updateCharacteristic(Characteristic.SecuritySystemTargetState, target);
+    service.updateCharacteristic(
+      Characteristic.SecuritySystemCurrentState,
+      current,
+    );
+    const target =
+      status === "armed_night"
+        ? Characteristic.SecuritySystemTargetState.NIGHT_ARM
+        : status === "armed_away"
+          ? Characteristic.SecuritySystemTargetState.AWAY_ARM
+          : status === "armed_home"
+            ? Characteristic.SecuritySystemTargetState.STAY_ARM
+            : Characteristic.SecuritySystemTargetState.DISARM;
+    service.updateCharacteristic(
+      Characteristic.SecuritySystemTargetState,
+      target,
+    );
   }
 
   private async setAlarmTargetState(target: number): Promise<void> {
@@ -1793,7 +2336,10 @@ export class HapGenericAccessory {
       [Characteristic.SecuritySystemTargetState.AWAY_ARM, "alarm_arm_away"],
     ]);
     if (this.supportsAlarmNight()) {
-      services.set(Characteristic.SecuritySystemTargetState.NIGHT_ARM, "alarm_arm_night");
+      services.set(
+        Characteristic.SecuritySystemTargetState.NIGHT_ARM,
+        "alarm_arm_night",
+      );
     }
     const service = services.get(target);
     if (!service) throw -70410; // HAP INVALID_VALUE_IN_REQUEST

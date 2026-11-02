@@ -84,7 +84,9 @@ export class TuyaHapTalkback {
     if (!this.starting) {
       this.starting = true;
       void this.start().catch((err) => {
-        this.notice(`Tuya return audio could not start: ${err?.message || err}`);
+        this.notice(
+          `Tuya return audio could not start: ${err?.message || err}`,
+        );
         this.close();
       });
     }
@@ -103,7 +105,9 @@ export class TuyaHapTalkback {
     if (!this.starting && !this.stopped) {
       this.starting = true;
       void this.start().catch((err) => {
-        this.notice(`Tuya return audio could not start: ${err?.message || err}`);
+        this.notice(
+          `Tuya return audio could not start: ${err?.message || err}`,
+        );
         this.close();
       });
     }
@@ -285,9 +289,8 @@ export class TuyaHapTalkback {
     this.trimQueue(this.outboundQueue, "outbound");
     const entry = this.outboundQueue.shift();
     if (!entry) return;
-    const timestamp = entry.packet.length >= 8
-      ? entry.packet.readUInt32BE(4)
-      : undefined;
+    const timestamp =
+      entry.packet.length >= 8 ? entry.packet.readUInt32BE(4) : undefined;
     const timestampDelta =
       timestamp === undefined || this.lastOutboundTimestamp === undefined
         ? 0

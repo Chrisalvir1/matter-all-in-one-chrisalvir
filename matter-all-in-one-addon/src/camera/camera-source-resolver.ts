@@ -85,9 +85,10 @@ export class CameraSourceResolver {
       }
     }
 
-    const proxyUrl = options.allowCameraProxy === false
-      ? undefined
-      : platform?.ha?.getCameraProxyStreamUrl?.(entityId);
+    const proxyUrl =
+      options.allowCameraProxy === false
+        ? undefined
+        : platform?.ha?.getCameraProxyStreamUrl?.(entityId);
     if (typeof proxyUrl === "string" && proxyUrl.length > 0) {
       platform?.log?.warn?.(
         `[CameraSourceResolver][${entityId}] Omni renewal failed; using Home Assistant camera proxy fallback`,
@@ -176,12 +177,14 @@ export class CameraSourceResolver {
     }
 
     // 0. Tapo C402 & C120: stream is served directly from Home Assistant
-    const isTapoC402 = /(?:\bc402\b|tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle|tapo[-_ ]?frente)/i.test(
-      `${entityId} ${attrs.friendly_name || ""}`,
-    );
-    const isTapoC120 = /(?:\bc120\b|tapo[-_ ]?c120|tapo[-_ ]?spot|\bspot\b)/i.test(
-      `${entityId} ${attrs.friendly_name || ""}`,
-    );
+    const isTapoC402 =
+      /(?:\bc402\b|tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle|tapo[-_ ]?frente)/i.test(
+        `${entityId} ${attrs.friendly_name || ""}`,
+      );
+    const isTapoC120 =
+      /(?:\bc120\b|tapo[-_ ]?c120|tapo[-_ ]?spot|\bspot\b)/i.test(
+        `${entityId} ${attrs.friendly_name || ""}`,
+      );
     if (isTapoC402 || isTapoC120) {
       // Some camera integrations omit CameraEntityFeature.STREAM even though
       // Home Assistant's camera/stream handler can still create a usable HLS
@@ -236,8 +239,7 @@ export class CameraSourceResolver {
     }
 
     const canAttemptStream =
-      hasStreamSupport ||
-      attrs.frontend_stream_type === "hls";
+      hasStreamSupport || attrs.frontend_stream_type === "hls";
 
     // 1. Check state.attributes.stream_source
     const streamSourceAttr = attrs.stream_source;
@@ -338,14 +340,18 @@ export class CameraSourceResolver {
       }
 
       // HA Camera continuous proxy stream fallback
-      const fallbackProxyUrl = platform?.ha?.getCameraProxyStreamUrl?.(entityId);
+      const fallbackProxyUrl =
+        platform?.ha?.getCameraProxyStreamUrl?.(entityId);
       return {
         sourceType: "webrtc",
         url: fallbackProxyUrl || undefined,
         snapshotUrl,
         supportsPassthrough: true,
         requiresBridge: false,
-        metadata: { isNest: entityId.includes("nest"), frontendStreamType: "webrtc" },
+        metadata: {
+          isNest: entityId.includes("nest"),
+          frontendStreamType: "webrtc",
+        },
       };
     }
 

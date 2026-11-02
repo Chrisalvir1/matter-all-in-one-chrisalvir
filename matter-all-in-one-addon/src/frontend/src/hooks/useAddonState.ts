@@ -24,16 +24,25 @@ export function useAddonState() {
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [entities, setEntities] = useState<EntityRecord[]>([]);
   const [cameras, setCameras] = useState<CameraRecord[]>([]);
-  const [cameraUiCameras, setCameraUiCameras] = useState<CameraUiCameraItem[]>([]);
-  const [scryptedConfig, setScryptedConfig] = useState<ScryptedConfigResponse | null>(null);
-  const [cameraUiConfig, setCameraUiConfig] = useState<CameraUiConfigResponse | null>(null);
+  const [cameraUiCameras, setCameraUiCameras] = useState<CameraUiCameraItem[]>(
+    [],
+  );
+  const [scryptedConfig, setScryptedConfig] =
+    useState<ScryptedConfigResponse | null>(null);
+  const [cameraUiConfig, setCameraUiConfig] =
+    useState<CameraUiConfigResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<FilterType>("all");
-  const [toastMessage, setToastMessage] = useState<{ text: string; isError?: boolean } | null>(null);
+  const [toastMessage, setToastMessage] = useState<{
+    text: string;
+    isError?: boolean;
+  } | null>(null);
   const refreshInFlight = useRef(false);
   const refreshRequested = useRef(false);
-  const realtimeUpdates = useRef(new Map<string, { state: string; attributes: Record<string, unknown> }>());
+  const realtimeUpdates = useRef(
+    new Map<string, { state: string; attributes: Record<string, unknown> }>(),
+  );
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const showToast = useCallback((text: string, isError = false) => {
@@ -44,7 +53,10 @@ export function useAddonState() {
   }, []);
 
   const refreshAll = useCallback(async () => {
-    if (refreshInFlight.current) { refreshRequested.current = true; return; }
+    if (refreshInFlight.current) {
+      refreshRequested.current = true;
+      return;
+    }
     refreshInFlight.current = true;
     try {
       do {
@@ -52,22 +64,56 @@ export function useAddonState() {
         realtimeUpdates.current.clear();
         const jobs = [
           api.getStatus().then(setStatus),
-          api.getDevices().then((raw) => {
-            const list = Array.isArray(raw) ? raw : Array.isArray((raw as any)?.entities) ? (raw as any).entities : [];
-            setEntities(list.map((item: EntityRecord) => {
-              const update = realtimeUpdates.current.get(item.entityId);
-              return update ? { ...item, state: update.state, attributes: { ...item.attributes, ...update.attributes } } : item;
-            }));
-            setLoadError(null);
-          }).catch((error) => setLoadError(`No se pudieron cargar los dispositivos: ${error.message || error}`)).finally(() => setLoading(false)),
-          api.getCameras().then((raw) => setCameras(Array.isArray(raw) ? raw : (raw as any)?.cameras || [])),
+          api
+            .getDevices()
+            .then((raw) => {
+              const list = Array.isArray(raw)
+                ? raw
+                : Array.isArray((raw as any)?.entities)
+                  ? (raw as any).entities
+                  : [];
+              setEntities(
+                list.map((item: EntityRecord) => {
+                  const update = realtimeUpdates.current.get(item.entityId);
+                  return update
+                    ? {
+                        ...item,
+                        state: update.state,
+                        attributes: {
+                          ...item.attributes,
+                          ...update.attributes,
+                        },
+                      }
+                    : item;
+                }),
+              );
+              setLoadError(null);
+            })
+            .catch((error) =>
+              setLoadError(
+                `No se pudieron cargar los dispositivos: ${error.message || error}`,
+              ),
+            )
+            .finally(() => setLoading(false)),
+          api
+            .getCameras()
+            .then((raw) =>
+              setCameras(
+                Array.isArray(raw) ? raw : (raw as any)?.cameras || [],
+              ),
+            ),
           api.getScryptedConfig().then(setScryptedConfig),
           api.getCameraUiConfig().then(setCameraUiConfig),
-          api.getCameraUiCameras().then((raw) => setCameraUiCameras(Array.isArray(raw) ? raw : [])),
+          api
+            .getCameraUiCameras()
+            .then((raw) => setCameraUiCameras(Array.isArray(raw) ? raw : [])),
         ];
         await Promise.allSettled(jobs);
       } while (refreshRequested.current);
-    } finally { refreshInFlight.current = false; setLoading(false); }
+    } finally {
+      refreshInFlight.current = false;
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -78,33 +124,80 @@ export function useAddonState() {
     let everConnected = false;
     let disposed = false;
     const scheduleRefresh = () => {
-      if (!refreshTimer) refreshTimer = setTimeout(() => { refreshTimer = undefined; void refreshAll(); }, 1000);
+      if (!refreshTimer)
+        refreshTimer = setTimeout(() => {
+          refreshTimer = undefined;
+          void refreshAll();
+        }, 1000);
     };
     void refreshAll();
-    const fallbackPoll = setInterval(() => { if (!sseConnected) void refreshAll(); }, 60000);
+    const fallbackPoll = setInterval(() => {
+      if (!sseConnected) void refreshAll();
+    }, 60000);
     const connectSSE = () => {
       if (disposed) return;
       try {
         es = new EventSource("./api/custom/events");
-        es.onopen = () => { sseConnected = true; if (everConnected) scheduleRefresh(); everConnected = true; };
+        es.onopen = () => {
+          sseConnected = true;
+          if (everConnected) scheduleRefresh();
+          everConnected = true;
+        };
         es.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
             if (data.type === "state_changed" && data.entityId) {
-              if (refreshInFlight.current) realtimeUpdates.current.set(data.entityId, { state: data.state, attributes: data.attributes || {} });
-              setEntities((previous) => previous.map((item) => item.entityId === data.entityId
-                ? { ...item, state: data.state, attributes: { ...item.attributes, ...data.attributes } }
-                : item));
-            } else if (["device_update", "camera_update", "cameras_updated", "state_change", "scrypted_status", "camera_pairing_updated", "cameraui_updated", "entity_state_changed"].includes(data.type)) {
+              if (refreshInFlight.current)
+                realtimeUpdates.current.set(data.entityId, {
+                  state: data.state,
+                  attributes: data.attributes || {},
+                });
+              setEntities((previous) =>
+                previous.map((item) =>
+                  item.entityId === data.entityId
+                    ? {
+                        ...item,
+                        state: data.state,
+                        attributes: { ...item.attributes, ...data.attributes },
+                      }
+                    : item,
+                ),
+              );
+            } else if (
+              [
+                "device_update",
+                "camera_update",
+                "cameras_updated",
+                "state_change",
+                "scrypted_status",
+                "camera_pairing_updated",
+                "cameraui_updated",
+                "entity_state_changed",
+              ].includes(data.type)
+            ) {
               scheduleRefresh();
             }
-          } catch { /* malformed event; next refresh reconciles state */ }
+          } catch {
+            /* malformed event; next refresh reconciles state */
+          }
         };
-        es.onerror = () => { sseConnected = false; es?.close(); timer = setTimeout(connectSSE, 5000); };
-      } catch { timer = setTimeout(connectSSE, 5000); }
+        es.onerror = () => {
+          sseConnected = false;
+          es?.close();
+          timer = setTimeout(connectSSE, 5000);
+        };
+      } catch {
+        timer = setTimeout(connectSSE, 5000);
+      }
     };
     connectSSE();
-    return () => { disposed = true; if (timer) clearTimeout(timer); if (refreshTimer) clearTimeout(refreshTimer); clearInterval(fallbackPoll); es?.close(); };
+    return () => {
+      disposed = true;
+      if (timer) clearTimeout(timer);
+      if (refreshTimer) clearTimeout(refreshTimer);
+      clearInterval(fallbackPoll);
+      es?.close();
+    };
   }, [refreshAll]);
 
   // Group entities into physical devices
@@ -118,7 +211,11 @@ export function useAddonState() {
       if (!map.has(id)) {
         map.set(id, {
           id,
-          name: entity.device_name || entity.name || entity.area_name || entity.domain,
+          name:
+            entity.device_name ||
+            entity.name ||
+            entity.area_name ||
+            entity.domain,
           area: entity.area_name || "",
           manufacturer: entity.manufacturer || "",
           model: entity.model || "",
@@ -141,20 +238,24 @@ export function useAddonState() {
       isScryptedConnected
         ? new Set(cameras.map((c) => (c.name || "").toLowerCase().trim()))
         : new Set<string>(),
-    [cameras, isScryptedConnected]
+    [cameras, isScryptedConnected],
   );
   const scryptedIds = useMemo(
     () =>
       isScryptedConnected
         ? new Set(cameras.map((c) => String(c.cameraId).toLowerCase().trim()))
         : new Set<string>(),
-    [cameras, isScryptedConnected]
+    [cameras, isScryptedConnected],
   );
 
   // Real HA Camera devices (deduplicated against both Scrypted and Camera.UI cameras)
   const realHaCameraDevices = useMemo(() => {
-    const cuiNames = new Set(cameraUiCameras.map((c) => (c.name || "").toLowerCase().trim()));
-    const cuiIds = new Set(cameraUiCameras.map((c) => String(c.id).toLowerCase().trim()));
+    const cuiNames = new Set(
+      cameraUiCameras.map((c) => (c.name || "").toLowerCase().trim()),
+    );
+    const cuiIds = new Set(
+      cameraUiCameras.map((c) => String(c.id).toLowerCase().trim()),
+    );
     const cuiEntityIds = new Set<string>();
     for (const cam of cameraUiCameras) {
       if (Array.isArray(cam.realEntities)) {
@@ -177,22 +278,33 @@ export function useAddonState() {
           !cuiNames.has((device.name || "").toLowerCase().trim()) &&
           !cuiIds.has((device.id || "").toLowerCase().trim()) &&
           !cuiEntityIds.has(entity.entityId.toLowerCase().trim()) &&
-          !cuiEntityIds.has(device.id.toLowerCase().trim())
-      )
+          !cuiEntityIds.has(device.id.toLowerCase().trim()),
+      ),
     );
   }, [allDevices, scryptedNames, scryptedIds, cameraUiCameras]);
 
   // Stats for Control Center and Filters
   const stats = useMemo(() => {
-    const matterNodeKey = (e: EntityRecord) => e.compositeDeviceId || e.entityId;
-    const exportedNodes = new Set(entities.filter((e) => e.exported).map(matterNodeKey)).size;
-    const pairedNodes = new Set(entities.filter((e) => e.exported && e.commissioned).map(matterNodeKey)).size;
-    const pendingNodes = new Set(entities.filter((e) => e.exported && !e.commissioned).map(matterNodeKey)).size;
+    const matterNodeKey = (e: EntityRecord) =>
+      e.compositeDeviceId || e.entityId;
+    const exportedNodes = new Set(
+      entities.filter((e) => e.exported).map(matterNodeKey),
+    ).size;
+    const pairedNodes = new Set(
+      entities.filter((e) => e.exported && e.commissioned).map(matterNodeKey),
+    ).size;
+    const pendingNodes = new Set(
+      entities.filter((e) => e.exported && !e.commissioned).map(matterNodeKey),
+    ).size;
     const exportedEntities = entities.filter((e) => e.exported).length;
-    const pairedEntities = entities.filter((e) => e.exported && e.commissioned).length;
+    const pairedEntities = entities.filter(
+      (e) => e.exported && e.commissioned,
+    ).length;
 
     const mqttCount = allDevices.filter((d) =>
-      d.entities.some((e) => e.origin === "mqtt" || e.entityId.startsWith("mqtt."))
+      d.entities.some(
+        (e) => e.origin === "mqtt" || e.entityId.startsWith("mqtt."),
+      ),
     ).length;
 
     const haCameraIds = new Set(realHaCameraDevices.map((d) => d.id));
@@ -229,20 +341,28 @@ export function useAddonState() {
         (e) =>
           (e.exported || e.homekitCamera?.published) &&
           !e.homekitCamera?.isPaired &&
-          !e.commissioned
-      )
+          !e.commissioned,
+      ),
     ).length;
     const scryptedPending = cameras.filter(
       (c) =>
         Boolean(c.identity?.matterPairingCode) &&
-        !(c.identity?.homeKitPairingState === "paired" || c.bindingState?.matterCommissioned === true)
+        !(
+          c.identity?.homeKitPairingState === "paired" ||
+          c.bindingState?.matterCommissioned === true
+        ),
     ).length;
-    const camerauiPending = cameraUiCameras.filter((c) => c.homeKitEnabled && !c.isPaired).length;
-    const unpairedTotal = pendingNodes + scryptedPending + camerauiPending + haCamsPending;
+    const camerauiPending = cameraUiCameras.filter(
+      (c) => c.homeKitEnabled && !c.isPaired,
+    ).length;
+    const unpairedTotal =
+      pendingNodes + scryptedPending + camerauiPending + haCamsPending;
 
     // Unactivated devices: discovered devices and cameras that are neither exported nor commissioned
     const unactivatedIotDevices = allDevices.filter(
-      (d) => !haCameraIds.has(d.id) && !d.entities.some((e) => e.exported || e.commissioned)
+      (d) =>
+        !haCameraIds.has(d.id) &&
+        !d.entities.some((e) => e.exported || e.commissioned),
     ).length;
     const unactivatedHaCameras = realHaCameraDevices.filter(
       (d) =>
@@ -251,17 +371,24 @@ export function useAddonState() {
             e.exported ||
             e.commissioned ||
             e.homekitCamera?.isPaired ||
-            e.homekitCamera?.published
-        )
+            e.homekitCamera?.published,
+        ),
     ).length;
     const unactivatedScrypted = cameras.filter(
       (c) =>
-        !(c.identity?.homeKitPairingState === "paired" || c.bindingState?.matterCommissioned === true) &&
-        !Boolean(c.identity?.matterPairingCode)
+        !(
+          c.identity?.homeKitPairingState === "paired" ||
+          c.bindingState?.matterCommissioned === true
+        ) && !Boolean(c.identity?.matterPairingCode),
     ).length;
-    const unactivatedCameraUi = cameraUiCameras.filter((c) => !c.homeKitEnabled).length;
+    const unactivatedCameraUi = cameraUiCameras.filter(
+      (c) => !c.homeKitEnabled,
+    ).length;
     const unactivatedTotal =
-      unactivatedIotDevices + unactivatedHaCameras + unactivatedScrypted + unactivatedCameraUi;
+      unactivatedIotDevices +
+      unactivatedHaCameras +
+      unactivatedScrypted +
+      unactivatedCameraUi;
 
     // Issues detection across all ACTIVE (exported) HA, MQTT devices and Cameras
     const issuesDevices = allDevices.filter((d) => {

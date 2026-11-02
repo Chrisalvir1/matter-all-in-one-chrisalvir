@@ -1208,13 +1208,21 @@ interface HomeAssistantEventEmitter {
 }
 
 export class HomeAssistant extends EventEmitter {
-  private readonly omniCameraAllocations = new Map<string, OmniCameraAllocationMetrics>();
+  private readonly omniCameraAllocations = new Map<
+    string,
+    OmniCameraAllocationMetrics
+  >();
 
-  public getOmniCameraAllocationMetrics(entityId?: string): OmniCameraAllocationMetrics[] {
+  public getOmniCameraAllocationMetrics(
+    entityId?: string,
+  ): OmniCameraAllocationMetrics[] {
     const results = entityId
       ? [this.omniCameraAllocations.get(entityId)]
       : [...this.omniCameraAllocations.values()];
-    return results.filter((result): result is OmniCameraAllocationMetrics => Boolean(result))
+    return results
+      .filter((result): result is OmniCameraAllocationMetrics =>
+        Boolean(result),
+      )
       .map((result) => ({ ...result }));
   }
   connected = false;
@@ -1625,16 +1633,32 @@ export class HomeAssistant extends EventEmitter {
         } else if (fetchId === "config/device_registry/list") {
           const devices = data as HassDevice[];
           this.log.debug(`Received ${devices.length} devices.`);
-          if (this.hasRegistryChanged(this.hassDevices, devices, (device) => device.id)) {
-            this.hassDevices = new Map(devices.map((device) => [device.id, device]));
+          if (
+            this.hasRegistryChanged(
+              this.hassDevices,
+              devices,
+              (device) => device.id,
+            )
+          ) {
+            this.hassDevices = new Map(
+              devices.map((device) => [device.id, device]),
+            );
             registryChanged = true;
           }
           this.emit("devices", devices);
         } else if (fetchId === "config/entity_registry/list") {
           const entities = data as HassEntity[];
           this.log.debug(`Received ${entities.length} entities.`);
-          if (this.hasRegistryChanged(this.hassEntities, entities, (entity) => entity.entity_id)) {
-            this.hassEntities = new Map(entities.map((entity) => [entity.entity_id, entity]));
+          if (
+            this.hasRegistryChanged(
+              this.hassEntities,
+              entities,
+              (entity) => entity.entity_id,
+            )
+          ) {
+            this.hassEntities = new Map(
+              entities.map((entity) => [entity.entity_id, entity]),
+            );
             registryChanged = true;
             entityRegistryChanged = true;
           }
@@ -1649,7 +1673,13 @@ export class HomeAssistant extends EventEmitter {
         } else if (fetchId === "config/area_registry/list") {
           const areas = data as HassArea[];
           this.log.debug(`Received ${areas.length} areas.`);
-          if (this.hasRegistryChanged(this.hassAreas, areas, (area) => area.area_id)) {
+          if (
+            this.hasRegistryChanged(
+              this.hassAreas,
+              areas,
+              (area) => area.area_id,
+            )
+          ) {
             this.hassAreas = new Map(areas.map((area) => [area.area_id, area]));
             registryChanged = true;
           }
@@ -1657,8 +1687,16 @@ export class HomeAssistant extends EventEmitter {
         } else if (fetchId === "config/label_registry/list") {
           const labels = data as HassLabel[];
           this.log.debug(`Received ${labels.length} labels.`);
-          if (this.hasRegistryChanged(this.hassLabels, labels, (label) => label.label_id)) {
-            this.hassLabels = new Map(labels.map((label) => [label.label_id, label]));
+          if (
+            this.hasRegistryChanged(
+              this.hassLabels,
+              labels,
+              (label) => label.label_id,
+            )
+          ) {
+            this.hassLabels = new Map(
+              labels.map((label) => [label.label_id, label]),
+            );
             registryChanged = true;
           }
           this.emit("labels", labels);
@@ -2035,7 +2073,11 @@ export class HomeAssistant extends EventEmitter {
    * @returns {Promise<void>} - A Promise that resolves when the connection is closed or rejects with an error if the connection could not be closed.
    */
   // eslint-disable-next-line @typescript-eslint/promise-function-async
-  close(code: number = 1000, reason: string = "Normal closure", isPermanent: boolean = true): Promise<void> {
+  close(
+    code: number = 1000,
+    reason: string = "Normal closure",
+    isPermanent: boolean = true,
+  ): Promise<void> {
     return new Promise((resolve, reject) => {
       this.log.info("Closing Home Assistant connection...");
       if (isPermanent) {
@@ -2120,7 +2162,10 @@ export class HomeAssistant extends EventEmitter {
     try {
       this.log.debug("Fetching initial data from Home Assistant...");
 
-      this.hassConfig = (await this.fetch("get_config", this.snapshotTimeout)) as HassConfig;
+      this.hassConfig = (await this.fetch(
+        "get_config",
+        this.snapshotTimeout,
+      )) as HassConfig;
       HomeAssistant.hassConfig = this.hassConfig;
       this.log.debug("Received config.");
       this.emit("config", this.hassConfig);
@@ -2133,7 +2178,10 @@ export class HomeAssistant extends EventEmitter {
         );
         retries += 1;
         await new Promise((resolve) => setTimeout(resolve, 1000));
-        this.hassConfig = (await this.fetch("get_config", this.snapshotTimeout)) as HassConfig;
+        this.hassConfig = (await this.fetch(
+          "get_config",
+          this.snapshotTimeout,
+        )) as HassConfig;
         HomeAssistant.hassConfig = this.hassConfig;
         this.emit("config", this.hassConfig);
       }
@@ -2141,12 +2189,30 @@ export class HomeAssistant extends EventEmitter {
       // Fetch the snapshot serially. Sending six large registry requests at once
       // can starve HA's WebSocket event loop and leave a large installation with
       // an incomplete inventory. Every request has its own generous timeout.
-      const services = (await this.fetch("get_services", this.snapshotTimeout)) as HassServices;
-      const devices = (await this.fetch("config/device_registry/list", this.snapshotTimeout)) as HassDevice[];
-      const entities = (await this.fetch("config/entity_registry/list", this.snapshotTimeout)) as HassEntity[];
-      const states = (await this.fetch("get_states", this.snapshotTimeout)) as HassState[];
-      const areas = (await this.fetch("config/area_registry/list", this.snapshotTimeout)) as HassArea[];
-      const labels = (await this.fetch("config/label_registry/list", this.snapshotTimeout)) as HassLabel[];
+      const services = (await this.fetch(
+        "get_services",
+        this.snapshotTimeout,
+      )) as HassServices;
+      const devices = (await this.fetch(
+        "config/device_registry/list",
+        this.snapshotTimeout,
+      )) as HassDevice[];
+      const entities = (await this.fetch(
+        "config/entity_registry/list",
+        this.snapshotTimeout,
+      )) as HassEntity[];
+      const states = (await this.fetch(
+        "get_states",
+        this.snapshotTimeout,
+      )) as HassState[];
+      const areas = (await this.fetch(
+        "config/area_registry/list",
+        this.snapshotTimeout,
+      )) as HassArea[];
+      const labels = (await this.fetch(
+        "config/label_registry/list",
+        this.snapshotTimeout,
+      )) as HassLabel[];
 
       // Replace each snapshot only after every request succeeded. A partial
       // reconnect must never mix stale and current registry data.
@@ -2284,14 +2350,18 @@ export class HomeAssistant extends EventEmitter {
     serviceData: Record<string, HomeAssistantPrimitive> = {},
   ): Promise<{ context: HassContext; response: unknown }> {
     const queuedAt = Date.now();
-    this.log.info(`[HACommandTrace][${entityId}] queued service=${domain}.${service}`);
+    this.log.info(
+      `[HACommandTrace][${entityId}] queued service=${domain}.${service}`,
+    );
     const deviceId = this.hassEntities?.get(entityId)?.device_id;
     const queueKey = deviceId ? `dev:${deviceId}` : `ent:${entityId}`;
     const prevQueue =
       this.deviceCommandQueues.get(queueKey) ?? Promise.resolve();
 
     const executeCall = async () => {
-      this.log.info(`[HACommandTrace][${entityId}] dispatch service=${domain}.${service} queue_ms=${Date.now() - queuedAt}`);
+      this.log.info(
+        `[HACommandTrace][${entityId}] dispatch service=${domain}.${service} queue_ms=${Date.now() - queuedAt}`,
+      );
       const payload = {
         type: "call_service",
         domain,
@@ -2310,14 +2380,23 @@ export class HomeAssistant extends EventEmitter {
           break;
         } catch (error) {
           lastError = error;
-          if (!/not connected to Home Assistant|WebSocket closed|WebSocket unavailable/i.test(String(error))) {
+          if (
+            !/not connected to Home Assistant|WebSocket closed|WebSocket unavailable/i.test(
+              String(error),
+            )
+          ) {
             throw error;
           }
-          await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
+          await new Promise((resolve) =>
+            setTimeout(resolve, 500 * (attempt + 1)),
+          );
         }
       }
       if (lastError || !response) {
-        throw lastError ?? new Error("Home Assistant service command produced no response");
+        throw (
+          lastError ??
+          new Error("Home Assistant service command produced no response")
+        );
       }
 
       if (!response.success) {
@@ -2339,8 +2418,14 @@ export class HomeAssistant extends EventEmitter {
     // but an unhandled cleanup promise can still terminate the bridge.
     void nextPromise
       .then(
-        () => this.log.info(`[HACommandTrace][${entityId}] completed service=${domain}.${service} total_ms=${Date.now() - queuedAt}`),
-        () => this.log.warn(`[HACommandTrace][${entityId}] failed service=${domain}.${service} total_ms=${Date.now() - queuedAt}`),
+        () =>
+          this.log.info(
+            `[HACommandTrace][${entityId}] completed service=${domain}.${service} total_ms=${Date.now() - queuedAt}`,
+          ),
+        () =>
+          this.log.warn(
+            `[HACommandTrace][${entityId}] failed service=${domain}.${service} total_ms=${Date.now() - queuedAt}`,
+          ),
       )
       .finally(() => {
         if (this.deviceCommandQueues.get(queueKey) === nextPromise) {
@@ -2354,9 +2439,15 @@ export class HomeAssistant extends EventEmitter {
 
   private async waitForConnection(timeoutMs: number): Promise<void> {
     const deadline = Date.now() + timeoutMs;
-    while (!this.connected || !this.ws || this.ws.readyState !== WebSocket.OPEN) {
+    while (
+      !this.connected ||
+      !this.ws ||
+      this.ws.readyState !== WebSocket.OPEN
+    ) {
       if (Date.now() >= deadline) {
-        throw new Error("Home Assistant WebSocket unavailable for service command");
+        throw new Error(
+          "Home Assistant WebSocket unavailable for service command",
+        );
       }
       await new Promise((resolve) => setTimeout(resolve, 250));
     }
@@ -2413,13 +2504,21 @@ export class HomeAssistant extends EventEmitter {
    * Requests a fresh one-session Tuya RTSP URL from Omni Tuya Local.
    * The URL is a credential and must never be logged or persisted.
    */
-  public async requestOmniTuyaCameraWebRtc(entityId: string): Promise<import("./camera/tuya-webrtc-session.js").TuyaWebRtcBundle> {
-    const response = await this.request({ type: "omni_tuya_local/camera_webrtc", entity_id: entityId });
-    if (!response.success || !response.result) throw new Error("Omni WebRTC unavailable");
+  public async requestOmniTuyaCameraWebRtc(
+    entityId: string,
+  ): Promise<import("./camera/tuya-webrtc-session.js").TuyaWebRtcBundle> {
+    const response = await this.request({
+      type: "omni_tuya_local/camera_webrtc",
+      entity_id: entityId,
+    });
+    if (!response.success || !response.result)
+      throw new Error("Omni WebRTC unavailable");
     return response.result as import("./camera/tuya-webrtc-session.js").TuyaWebRtcBundle;
   }
 
-  public async requestOmniTuyaCameraStream(entityId: string): Promise<string | null> {
+  public async requestOmniTuyaCameraStream(
+    entityId: string,
+  ): Promise<string | null> {
     // Tuya issues a short-lived, one-session URL. A reconnect can briefly race
     // its allocation, so retry the allocation before considering another source.
     // Never include the response in logs because it contains stream credentials.
@@ -2452,7 +2551,9 @@ export class HomeAssistant extends EventEmitter {
           entity_id: entityId,
         });
         const url =
-          response.success && response.result && typeof response.result === "object"
+          response.success &&
+          response.result &&
+          typeof response.result === "object"
             ? (response.result as any).url
             : undefined;
         if (typeof url === "string" && /^rtsps?:\/\//i.test(url)) {

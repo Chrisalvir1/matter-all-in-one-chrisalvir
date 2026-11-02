@@ -10,18 +10,37 @@ describe("CameraAiDetector", () => {
     vi.useFakeTimers();
     try {
       const detector = new CameraAiDetector();
-      const accessory = { updateMotionState: vi.fn(), motionService: { setCharacteristic: vi.fn() } };
-      const platform = { entities: new Map([["camera.c120", { homekitAccessory: accessory }]]) };
-      detector.setConfig("camera.c120", { enabled: true, motionTimeoutSeconds: 15 });
-      detector.dispatchDetection(platform, "camera.c120", {
-        cameraId: "camera.c120", timestamp: Date.now(), targets: [], labels: ["Movimiento"], confidence: 1,
-      }, { updateHomeKitMotion: false });
+      const accessory = {
+        updateMotionState: vi.fn(),
+        motionService: { setCharacteristic: vi.fn() },
+      };
+      const platform = {
+        entities: new Map([["camera.c120", { homekitAccessory: accessory }]]),
+      };
+      detector.setConfig("camera.c120", {
+        enabled: true,
+        motionTimeoutSeconds: 15,
+      });
+      detector.dispatchDetection(
+        platform,
+        "camera.c120",
+        {
+          cameraId: "camera.c120",
+          timestamp: Date.now(),
+          targets: [],
+          labels: ["Movimiento"],
+          confidence: 1,
+        },
+        { updateHomeKitMotion: false },
+      );
       expect(detector.getActiveDetection("camera.c120")).toBeDefined();
       vi.advanceTimersByTime(16_000);
       expect(detector.getActiveDetection("camera.c120")).toBeUndefined();
       expect(accessory.updateMotionState).not.toHaveBeenCalled();
       expect(accessory.motionService.setCharacteristic).not.toHaveBeenCalled();
-    } finally { vi.useRealTimers(); }
+    } finally {
+      vi.useRealTimers();
+    }
   });
   let detector: CameraAiDetector;
 
@@ -108,10 +127,14 @@ describe("CameraAiDetector", () => {
     detector.on("detection", (e) => detectionEvents.push(e));
 
     // Simulate HA person sensor turning on
-    detector.handleHaStateChange(mockPlatform, "binary_sensor.nest_patio_person", {
-      state: "on",
-      attributes: { person_detected: true },
-    });
+    detector.handleHaStateChange(
+      mockPlatform,
+      "binary_sensor.nest_patio_person",
+      {
+        state: "on",
+        attributes: { person_detected: true },
+      },
+    );
 
     expect(detectionEvents.length).toBe(1);
     expect(detectionEvents[0].targets).toContain("person");
@@ -149,20 +172,28 @@ describe("CameraAiDetector", () => {
     detector.on("detection", (e) => events.push(e));
 
     // Simulate raccoon detection event
-    detector.handleHaStateChange(mockPlatform, "binary_sensor.garden_cam_raccoon", {
-      state: "on",
-      attributes: {},
-    });
+    detector.handleHaStateChange(
+      mockPlatform,
+      "binary_sensor.garden_cam_raccoon",
+      {
+        state: "on",
+        attributes: {},
+      },
+    );
 
     expect(events.length).toBe(1);
     expect(events[0].targets).toContain("raccoon");
     expect(events[0].labels).toContain("Mapache");
 
     // Simulate snake detection event
-    detector.handleHaStateChange(mockPlatform, "binary_sensor.garden_cam_serpiente", {
-      state: "on",
-      attributes: {},
-    });
+    detector.handleHaStateChange(
+      mockPlatform,
+      "binary_sensor.garden_cam_serpiente",
+      {
+        state: "on",
+        attributes: {},
+      },
+    );
 
     expect(events.length).toBe(2);
     expect(events[1].targets).toContain("snake");

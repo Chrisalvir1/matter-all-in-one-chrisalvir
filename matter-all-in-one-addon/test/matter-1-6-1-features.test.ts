@@ -1,8 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import "./mocks/matterbridge.mock.js";
 import { sensorConverter } from "../src/converters/sensor.converter.js";
-import { ValveEntity, ValveConfigurationAndControlId } from "../src/entities/valve.entity.js";
-import { AirQualityEntity, AirQualityClusterId, CarbonDioxideConcentrationMeasurementId, Pm25ConcentrationMeasurementId } from "../src/entities/air_quality.entity.js";
+import {
+  ValveEntity,
+  ValveConfigurationAndControlId,
+} from "../src/entities/valve.entity.js";
+import {
+  AirQualityEntity,
+  AirQualityClusterId,
+  CarbonDioxideConcentrationMeasurementId,
+  Pm25ConcentrationMeasurementId,
+} from "../src/entities/air_quality.entity.js";
 import { MatterDeviceTypes } from "../src/device-registry.js";
 import type { HassState } from "../src/utils/ha-state.js";
 
@@ -74,11 +82,51 @@ describe("Matter 1.6.1 Features and Clusters", () => {
     });
 
     it("converts air quality strings and numbers to Matter AirQuality Enum (1..6)", () => {
-      expect(sensorConverter.toAirQuality({ state: "good", attributes: {}, entity_id: "", last_changed: "", last_updated: "" })).toBe(1);
-      expect(sensorConverter.toAirQuality({ state: "fair", attributes: {}, entity_id: "", last_changed: "", last_updated: "" })).toBe(2);
-      expect(sensorConverter.toAirQuality({ state: "poor", attributes: {}, entity_id: "", last_changed: "", last_updated: "" })).toBe(4);
-      expect(sensorConverter.toAirQuality({ state: "45", attributes: {}, entity_id: "", last_changed: "", last_updated: "" })).toBe(1);
-      expect(sensorConverter.toAirQuality({ state: "180", attributes: {}, entity_id: "", last_changed: "", last_updated: "" })).toBe(4);
+      expect(
+        sensorConverter.toAirQuality({
+          state: "good",
+          attributes: {},
+          entity_id: "",
+          last_changed: "",
+          last_updated: "",
+        }),
+      ).toBe(1);
+      expect(
+        sensorConverter.toAirQuality({
+          state: "fair",
+          attributes: {},
+          entity_id: "",
+          last_changed: "",
+          last_updated: "",
+        }),
+      ).toBe(2);
+      expect(
+        sensorConverter.toAirQuality({
+          state: "poor",
+          attributes: {},
+          entity_id: "",
+          last_changed: "",
+          last_updated: "",
+        }),
+      ).toBe(4);
+      expect(
+        sensorConverter.toAirQuality({
+          state: "45",
+          attributes: {},
+          entity_id: "",
+          last_changed: "",
+          last_updated: "",
+        }),
+      ).toBe(1);
+      expect(
+        sensorConverter.toAirQuality({
+          state: "180",
+          attributes: {},
+          entity_id: "",
+          last_changed: "",
+          last_updated: "",
+        }),
+      ).toBe(4);
     });
   });
 
@@ -107,8 +155,12 @@ describe("Matter 1.6.1 Features and Clusters", () => {
         last_updated: "",
       });
 
-      expect(endpoint.getAttribute(ValveConfigurationAndControlId, "currentState")).toBe(0);
-      expect(endpoint.getAttribute(ValveConfigurationAndControlId, "currentLevel")).toBe(0);
+      expect(
+        endpoint.getAttribute(ValveConfigurationAndControlId, "currentState"),
+      ).toBe(0);
+      expect(
+        endpoint.getAttribute(ValveConfigurationAndControlId, "currentLevel"),
+      ).toBe(0);
     });
   });
 
@@ -137,7 +189,12 @@ describe("Matter 1.6.1 Features and Clusters", () => {
         last_updated: "",
       });
 
-      expect(endpoint.getAttribute(CarbonDioxideConcentrationMeasurementId, "measuredValue")).toBe(1100);
+      expect(
+        endpoint.getAttribute(
+          CarbonDioxideConcentrationMeasurementId,
+          "measuredValue",
+        ),
+      ).toBe(1100);
     });
   });
 });

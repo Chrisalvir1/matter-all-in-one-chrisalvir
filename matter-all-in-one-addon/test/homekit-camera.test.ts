@@ -556,7 +556,11 @@ describe("HomeKitCameraStreamingDelegate", () => {
     const delegate = new HomeKitCameraStreamingDelegate(
       createPlatform(),
       "camera.omni_feeder",
-      { ...capabilities, strategy: "passthrough_h264", requiresTranscoding: false },
+      {
+        ...capabilities,
+        strategy: "passthrough_h264",
+        requiresTranscoding: false,
+      },
       {
         ...rtspSource,
         url: "rtsps://tuya.example/signed",

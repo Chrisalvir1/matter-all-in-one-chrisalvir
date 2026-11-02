@@ -262,9 +262,12 @@ function mapDeviceToCameraRecord(
   let resolvedModel = model ?? undefined;
   if (!resolvedModel && typeof name === "string") {
     const n = name.toLowerCase();
-    if (n.includes("pan v3") || n.includes("pan_v3")) resolvedModel = "Wyze Cam Pan v3";
-    else if (n.includes("pan v2") || n.includes("pan_v2")) resolvedModel = "Wyze Cam Pan v2";
-    else if (n.includes("cam pan") || (n.includes("pan") && n.includes("wyze"))) resolvedModel = "Wyze Cam Pan";
+    if (n.includes("pan v3") || n.includes("pan_v3"))
+      resolvedModel = "Wyze Cam Pan v3";
+    else if (n.includes("pan v2") || n.includes("pan_v2"))
+      resolvedModel = "Wyze Cam Pan v2";
+    else if (n.includes("cam pan") || (n.includes("pan") && n.includes("wyze")))
+      resolvedModel = "Wyze Cam Pan";
     else if (n.includes("c200")) resolvedModel = "Tapo C200";
     else if (n.includes("c210")) resolvedModel = "Tapo C210";
     else if (n.includes("c220")) resolvedModel = "Tapo C220";
@@ -272,8 +275,7 @@ function mapDeviceToCameraRecord(
   }
 
   const isPtz =
-    allInterfaces.includes("PanTilt") ||
-    allInterfaces.includes("PanTiltZoom");
+    allInterfaces.includes("PanTilt") || allInterfaces.includes("PanTiltZoom");
 
   if (isPtz) {
     sensors.push({
@@ -625,9 +627,8 @@ export class ScryptedClient {
 
     // 1. If an SDK session is active in ScryptedReconnectManager, use it
     try {
-      const { ScryptedReconnectManager } = await import(
-        "./scrypted-reconnect-manager.js"
-      );
+      const { ScryptedReconnectManager } =
+        await import("./scrypted-reconnect-manager.js");
       const reconnectMgr = ScryptedReconnectManager.getInstance();
       const activeSession = (reconnectMgr as any)?.activeSession;
       if (activeSession?.sdk) {
@@ -1269,14 +1270,18 @@ export class ScryptedClient {
                   mo = await dev.getVideoStream({ id: opt.id });
                 } catch {
                   try {
-                    mo = await dev.getVideoStream({ id: opt.id, destination: "local" });
+                    mo = await dev.getVideoStream({
+                      id: opt.id,
+                      destination: "local",
+                    });
                   } catch {}
                 }
                 if (mo) {
-                  const resolvedUrl = await ScryptedClient.resolveMediaObjectUri(
-                    mediaManager,
-                    mo,
-                  );
+                  const resolvedUrl =
+                    await ScryptedClient.resolveMediaObjectUri(
+                      mediaManager,
+                      mo,
+                    );
                   if (resolvedUrl) {
                     directUrl = resolvedUrl;
                   }
@@ -1344,10 +1349,7 @@ export class ScryptedClient {
             mediaManager,
             mo,
           );
-          if (
-            resolvedUrl &&
-            !isInventedRtspUrl(resolvedUrl, deviceId)
-          ) {
+          if (resolvedUrl && !isInventedRtspUrl(resolvedUrl, deviceId)) {
             profiles.push({
               id: "default",
               name: "Default Stream",

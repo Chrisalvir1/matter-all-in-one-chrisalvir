@@ -45,8 +45,13 @@ function clean(value: unknown): string | undefined {
   return result.length > 0 ? result : undefined;
 }
 
-export function toScryptedCameraCard(input: ScryptedCameraInput): ScryptedCameraCard {
-  const brand = clean(input.displayManufacturer) ?? clean(input.manufacturer) ?? UNKNOWN_BRAND;
+export function toScryptedCameraCard(
+  input: ScryptedCameraInput,
+): ScryptedCameraCard {
+  const brand =
+    clean(input.displayManufacturer) ??
+    clean(input.manufacturer) ??
+    UNKNOWN_BRAND;
   const model = clean(input.displayModel) ?? clean(input.model) ?? null;
   const sensors = Array.isArray(input.sensors) ? input.sensors.length : 0;
   const entities = Array.isArray(input.entities) ? input.entities.length : 0;
@@ -73,9 +78,12 @@ export function toScryptedCameraCard(input: ScryptedCameraInput): ScryptedCamera
 export function groupScryptedCameraCards(
   inputs: ScryptedCameraInput[] | ScryptedCameraCard[],
 ): Record<string, ScryptedCameraCard[]> {
-  return inputs.reduce<Record<string, ScryptedCameraCard[]>>((groups, input) => {
-    const card = "source" in input ? input : toScryptedCameraCard(input);
-    (groups[card.brand] ??= []).push(card);
-    return groups;
-  }, {});
+  return inputs.reduce<Record<string, ScryptedCameraCard[]>>(
+    (groups, input) => {
+      const card = "source" in input ? input : toScryptedCameraCard(input);
+      (groups[card.brand] ??= []).push(card);
+      return groups;
+    },
+    {},
+  );
 }

@@ -547,8 +547,12 @@ describe("Light Entity Comprehensive Audit (18 Requirements)", () => {
       },
     };
     platform.entities.set("light.tira_larga_segment_1", segmentEntity);
-    platform.ha.hassEntities.set("light.tira_larga_segment_1", { device_id: "device-strip" });
-    platform.ha.hassEntities.set("light.tira_larga", { device_id: "device-strip" });
+    platform.ha.hassEntities.set("light.tira_larga_segment_1", {
+      device_id: "device-strip",
+    });
+    platform.ha.hassEntities.set("light.tira_larga", {
+      device_id: "device-strip",
+    });
 
     const mainEntity = new BaseEntity(
       platform,

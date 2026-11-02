@@ -142,11 +142,14 @@ export class CompositeDeviceEntity {
   public readonly endpoints = new Map<string, MatterbridgeEndpoint>();
   public readonly states = new Map<string, HassState>();
   private lastCommands = new Map<string, { value: any; timestamp: number }>();
-  private serviceFailures = new Map<string, {
-    stateAtFailure: string;
-    desiredState?: "on" | "off";
-    sawUnavailable: boolean;
-  }>();
+  private serviceFailures = new Map<
+    string,
+    {
+      stateAtFailure: string;
+      desiredState?: "on" | "off";
+      sawUnavailable: boolean;
+    }
+  >();
   private lastSyncedFan = new Map<string, { on: boolean; pct: number }>();
 
   private isDifferent(attribute: string, requested: any, actual: any): boolean {
@@ -226,7 +229,8 @@ export class CompositeDeviceEntity {
     data?: Record<string, any>,
   ): Promise<void> {
     try {
-      if (data === undefined) await this.platform.ha.callService(domain, service, entityId);
+      if (data === undefined)
+        await this.platform.ha.callService(domain, service, entityId);
       else await this.platform.ha.callService(domain, service, entityId, data);
       this.serviceFailures.delete(entityId);
       this.platform.clearEntityCommandFailure?.(entityId);
@@ -238,7 +242,9 @@ export class CompositeDeviceEntity {
         stateAtFailure: this.states.get(entityId)?.state ?? "",
         desiredState:
           service === "turn_on" || service === "turn_off"
-            ? service === "turn_on" ? "on" : "off"
+            ? service === "turn_on"
+              ? "on"
+              : "off"
             : undefined,
         sawUnavailable: false,
       });
@@ -258,7 +264,10 @@ export class CompositeDeviceEntity {
   private lastFanCommandTimes = new Map<string, number>();
   private lastFanCommandPcts = new Map<string, number>();
 
-  private async callFanSpeed(entityId: string, percentage: number): Promise<void> {
+  private async callFanSpeed(
+    entityId: string,
+    percentage: number,
+  ): Promise<void> {
     const nextPct = Math.max(0, Math.min(100, Math.round(percentage)));
     const now = Date.now();
     const lastTime = this.lastFanCommandTimes.get(entityId) ?? 0;
@@ -291,13 +300,15 @@ export class CompositeDeviceEntity {
     this.setCommandLockout(entityId, "fan_percentage", nextPct);
 
     try {
-      await this.platform.ha.callService("fan", "set_percentage", entityId, { percentage: nextPct });
+      await this.platform.ha.callService("fan", "set_percentage", entityId, {
+        percentage: nextPct,
+      });
     } catch {
-      await this.platform.ha.callService("fan", "turn_on", entityId, { percentage: nextPct });
+      await this.platform.ha.callService("fan", "turn_on", entityId, {
+        percentage: nextPct,
+      });
     }
   }
-
-
 
   private isFanCommandLocked(
     entityId: string,
@@ -405,15 +416,18 @@ export class CompositeDeviceEntity {
     if (!ep) return;
     try {
       // 1. Root / ServerNode reachability
-      const serverNode = ep.serverNode || (this.platform as any)?.matterbridge?.serverNode;
+      const serverNode =
+        ep.serverNode || (this.platform as any)?.matterbridge?.serverNode;
       if (serverNode && typeof serverNode.setStateOf === "function") {
         try {
           await serverNode.setStateOf(BasicInformationServer, { reachable });
           serverNode.act?.((agent: any) =>
-            serverNode.eventsOf?.(BasicInformationServer)?.reachableChanged?.emit?.(
-              { reachableNewValue: reachable },
-              agent.context,
-            ),
+            serverNode
+              .eventsOf?.(BasicInformationServer)
+              ?.reachableChanged?.emit?.(
+                { reachableNewValue: reachable },
+                agent.context,
+              ),
           );
         } catch {}
       }
@@ -424,29 +438,53 @@ export class CompositeDeviceEntity {
         ep.hasClusterServer?.(BridgedDeviceBasicInformationServer)
       ) {
         try {
-          await ep.setStateOf(BridgedDeviceBasicInformationServer, { reachable });
+          await ep.setStateOf(BridgedDeviceBasicInformationServer, {
+            reachable,
+          });
           ep.act?.((agent: any) =>
-            ep.eventsOf?.(BridgedDeviceBasicInformationServer)?.reachableChanged?.emit?.(
-              { reachableNewValue: reachable },
-              agent.context,
-            ),
+            ep
+              .eventsOf?.(BridgedDeviceBasicInformationServer)
+              ?.reachableChanged?.emit?.(
+                { reachableNewValue: reachable },
+                agent.context,
+              ),
           );
         } catch {}
       }
       if (typeof ep.setAttribute === "function") {
         if (ep.hasAttributeServer?.(0x0028, "reachable")) {
-          await ep.setAttribute(0x0028, "reachable", reachable, this.platform.log);
+          await ep.setAttribute(
+            0x0028,
+            "reachable",
+            reachable,
+            this.platform.log,
+          );
         }
         if (ep.hasAttributeServer?.(0x0039, "reachable")) {
-          await ep.setAttribute(0x0039, "reachable", reachable, this.platform.log);
+          await ep.setAttribute(
+            0x0039,
+            "reachable",
+            reachable,
+            this.platform.log,
+          );
         }
       }
       if (typeof ep.updateAttribute === "function") {
         if (ep.hasAttributeServer?.(0x0028, "reachable")) {
-          await ep.updateAttribute(0x0028, "reachable", reachable, this.platform.log);
+          await ep.updateAttribute(
+            0x0028,
+            "reachable",
+            reachable,
+            this.platform.log,
+          );
         }
         if (ep.hasAttributeServer?.(0x0039, "reachable")) {
-          await ep.updateAttribute(0x0039, "reachable", reachable, this.platform.log);
+          await ep.updateAttribute(
+            0x0039,
+            "reachable",
+            reachable,
+            this.platform.log,
+          );
         }
       }
       for (const memberEntityId of this.endpoints.keys()) {
@@ -465,7 +503,10 @@ export class CompositeDeviceEntity {
     }
   }
 
-  async setMemberReachability(memberEntityId: string, reachable: boolean): Promise<void> {
+  async setMemberReachability(
+    memberEntityId: string,
+    reachable: boolean,
+  ): Promise<void> {
     const childEp = this.endpoints.get(memberEntityId) as any;
     if (!childEp) return;
     try {
@@ -474,23 +515,37 @@ export class CompositeDeviceEntity {
         childEp.hasClusterServer?.(BridgedDeviceBasicInformationServer)
       ) {
         try {
-          await childEp.setStateOf(BridgedDeviceBasicInformationServer, { reachable });
+          await childEp.setStateOf(BridgedDeviceBasicInformationServer, {
+            reachable,
+          });
           childEp.act?.((agent: any) =>
-            childEp.eventsOf?.(BridgedDeviceBasicInformationServer)?.reachableChanged?.emit?.(
-              { reachableNewValue: reachable },
-              agent.context,
-            ),
+            childEp
+              .eventsOf?.(BridgedDeviceBasicInformationServer)
+              ?.reachableChanged?.emit?.(
+                { reachableNewValue: reachable },
+                agent.context,
+              ),
           );
         } catch {}
       }
       if (typeof childEp.setAttribute === "function") {
         if (childEp.hasAttributeServer?.(0x0039, "reachable")) {
-          await childEp.setAttribute(0x0039, "reachable", reachable, this.platform.log);
+          await childEp.setAttribute(
+            0x0039,
+            "reachable",
+            reachable,
+            this.platform.log,
+          );
         }
       }
       if (typeof childEp.updateAttribute === "function") {
         if (childEp.hasAttributeServer?.(0x0039, "reachable")) {
-          await childEp.updateAttribute(0x0039, "reachable", reachable, this.platform.log);
+          await childEp.updateAttribute(
+            0x0039,
+            "reachable",
+            reachable,
+            this.platform.log,
+          );
         }
       }
       this.platform.log?.debug?.(
@@ -531,7 +586,6 @@ export class CompositeDeviceEntity {
       );
     }
   }
-
 
   async createEndpoint(): Promise<MatterbridgeEndpoint> {
     const primary = this.members.find(
@@ -743,7 +797,10 @@ export class CompositeDeviceEntity {
         const pct = on ? fanPercentage(state) : 0;
         const speed = on ? fanSpeed(pct, speedMax) : 0;
 
-        if (!initial && this.isFanCommandLocked(entityId, on, hasSpeed ? pct : undefined)) {
+        if (
+          !initial &&
+          this.isFanCommandLocked(entityId, on, hasSpeed ? pct : undefined)
+        ) {
           this.platform.log.debug(
             `[Composite][${entityId}] Ignoring stale HA fan update during lockout (on=${on}, pct=${pct})`,
           );
@@ -1440,9 +1497,13 @@ export class CompositeDeviceEntity {
         return;
       }
       if (data !== undefined) {
-        void this.callServiceTracked(entityId, domain, service, data).catch(() => undefined);
+        void this.callServiceTracked(entityId, domain, service, data).catch(
+          () => undefined,
+        );
       } else {
-        void this.callServiceTracked(entityId, domain, service).catch(() => undefined);
+        void this.callServiceTracked(entityId, domain, service).catch(
+          () => undefined,
+        );
       }
     }, delayMs);
     this.serviceDebounceTimers.set(key, timer);
@@ -1494,8 +1555,6 @@ export class CompositeDeviceEntity {
         await this.platform.ha.callService("fan", "turn_off", entityId);
       });
 
-
-
       const hasSpeed = hasFanSpeed(member.state);
       if (
         hasSpeed &&
@@ -1505,11 +1564,15 @@ export class CompositeDeviceEntity {
           if (this.isUpdatingFromHa(entityId)) return;
           const currentState = this.states.get(entityId) ?? member.state;
           const direction = data?.request?.direction ?? data?.direction;
-          const current = isFanOn(currentState) ? fanPercentage(currentState) : 0;
+          const current = isFanOn(currentState)
+            ? fanPercentage(currentState)
+            : 0;
           const speedMax = getFanSpeedCount(currentState);
           const stepSize = Math.max(1, Math.round(100 / speedMax));
           const delta =
-            direction === FanControl.StepDirection.Increase ? stepSize : -stepSize;
+            direction === FanControl.StepDirection.Increase
+              ? stepSize
+              : -stepSize;
           const next = snapToPhysicalLevel(
             Math.max(0, Math.min(100, current + delta)),
             speedMax,
@@ -1555,9 +1618,15 @@ export class CompositeDeviceEntity {
               if (newSpeed === 0) {
                 await this.callFanSpeed(entityId, 0);
               } else {
-                const targetSpeed = Math.max(1, Math.min(speedMax, Math.round(newSpeed)));
+                const targetSpeed = Math.max(
+                  1,
+                  Math.min(speedMax, Math.round(newSpeed)),
+                );
                 const step = 100 / speedMax;
-                const nextPct = snapToPhysicalLevel(Math.round(targetSpeed * step), speedMax);
+                const nextPct = snapToPhysicalLevel(
+                  Math.round(targetSpeed * step),
+                  speedMax,
+                );
                 await this.callFanSpeed(entityId, nextPct);
               }
             },
@@ -1583,7 +1652,10 @@ export class CompositeDeviceEntity {
               if (newMode === FanControl.FanMode.Off) {
                 await this.callFanSpeed(entityId, 0);
               } else if (newMode === FanControl.FanMode.Low) {
-                const targetPct = snapToPhysicalLevel(Math.round(100 / speedMax), speedMax);
+                const targetPct = snapToPhysicalLevel(
+                  Math.round(100 / speedMax),
+                  speedMax,
+                );
                 await this.callFanSpeed(entityId, targetPct);
               } else if (newMode === FanControl.FanMode.Medium) {
                 const targetPct = snapToPhysicalLevel(50, speedMax);
@@ -1667,22 +1739,46 @@ export class CompositeDeviceEntity {
         this.assertMemberOnline(entityId, member);
         this.setCommandLockout(entityId, "onOff", true);
         this.cancelDebouncedService(entityId, "light", "turn_off");
-        await this.callServiceDebounced(entityId, "light", "turn_on", undefined, 0);
+        await this.callServiceDebounced(
+          entityId,
+          "light",
+          "turn_on",
+          undefined,
+          0,
+        );
       });
       endpoint.addCommandHandler("off", async () => {
         this.assertMemberOnline(entityId, member);
         this.setCommandLockout(entityId, "onOff", false);
         this.cancelDebouncedService(entityId, "light", "turn_on");
-        await this.callServiceDebounced(entityId, "light", "turn_off", undefined, 0);
+        await this.callServiceDebounced(
+          entityId,
+          "light",
+          "turn_off",
+          undefined,
+          0,
+        );
         if (endpoint.hasAttributeServer(OnOff.id, "onOff")) {
-          void safeUpdateAttribute(endpoint, OnOff.id, "onOff", false, this.platform.log);
+          void safeUpdateAttribute(
+            endpoint,
+            OnOff.id,
+            "onOff",
+            false,
+            this.platform.log,
+          );
         }
       });
       endpoint.addCommandHandler("toggle", async () => {
         this.assertMemberOnline(entityId, member);
         const isOn = this.states.get(entityId)?.state === "on";
         this.setCommandLockout(entityId, "onOff", !isOn);
-        await this.callServiceDebounced(entityId, "light", isOn ? "turn_off" : "turn_on", undefined, 0);
+        await this.callServiceDebounced(
+          entityId,
+          "light",
+          isOn ? "turn_off" : "turn_on",
+          undefined,
+          0,
+        );
       });
 
       if (endpoint.hasAttributeServer(LevelControl.id, "currentLevel")) {
@@ -1701,13 +1797,19 @@ export class CompositeDeviceEntity {
                 0,
               );
               if (endpoint.hasAttributeServer(OnOff.id, "onOff")) {
-                void safeUpdateAttribute(endpoint, OnOff.id, "onOff", false, this.platform.log);
+                void safeUpdateAttribute(
+                  endpoint,
+                  OnOff.id,
+                  "onOff",
+                  false,
+                  this.platform.log,
+                );
               }
               return;
             }
             const haBrightness = lightConverter.toHaBrightness(level);
             this.setCommandLockout(entityId, "brightness", haBrightness);
-              await this.callServiceDebounced(
+            await this.callServiceDebounced(
               entityId,
               "light",
               "turn_on",
@@ -1733,7 +1835,13 @@ export class CompositeDeviceEntity {
                   0,
                 );
                 if (endpoint.hasAttributeServer(OnOff.id, "onOff")) {
-                  void safeUpdateAttribute(endpoint, OnOff.id, "onOff", false, this.platform.log);
+                  void safeUpdateAttribute(
+                    endpoint,
+                    OnOff.id,
+                    "onOff",
+                    false,
+                    this.platform.log,
+                  );
                 }
               } else if (level === 1) {
                 // Apple Home dimming to off sends level 1 before off. Debounce by 60ms so off can cancel it.
@@ -1791,16 +1899,14 @@ export class CompositeDeviceEntity {
                 payload.color_temp_kelvin !== undefined;
               if (usesKelvin) {
                 const kelvin = lightColor.clampKelvin(
-                  payload.color_temp_kelvin ?? lightColor.miredsToKelvin(mireds),
+                  payload.color_temp_kelvin ??
+                    lightColor.miredsToKelvin(mireds),
                   state.attributes,
                 );
                 this.setCommandLockout(entityId, "color_temp", mireds);
-                await this.callServiceTracked(
-                  entityId,
-                  "light",
-                  "turn_on",
-                  { color_temp_kelvin: kelvin },
-                );
+                await this.callServiceTracked(entityId, "light", "turn_on", {
+                  color_temp_kelvin: kelvin,
+                });
               } else {
                 await sendColor(payload);
               }

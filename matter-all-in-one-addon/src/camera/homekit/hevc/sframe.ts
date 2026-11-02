@@ -1,4 +1,10 @@
-import { createCipheriv, createDecipheriv, createHmac, hkdfSync, randomBytes } from "node:crypto";
+import {
+  createCipheriv,
+  createDecipheriv,
+  createHmac,
+  hkdfSync,
+  randomBytes,
+} from "node:crypto";
 import type { SFrameKeyData } from "./types.js";
 
 // SFrame end-to-end media protection for WebRTC remote path (RFC 9605)
@@ -25,12 +31,60 @@ interface SuiteParams {
 }
 
 const SUITES: Record<SFrameCipherSuite, SuiteParams> = {
-  [SFrameCipherSuite.AES_128_CTR_HMAC_SHA256_80]: { nk: 48, nka: 16, nn: 12, nt: 10, aead: "ctr-hmac", hash: "sha256", baseKeyLength: 16 },
-  [SFrameCipherSuite.AES_128_GCM_SHA256_128]: { nk: 16, nka: 0, nn: 12, nt: 16, aead: "gcm", hash: "sha256", baseKeyLength: 16 },
-  [SFrameCipherSuite.AES_256_GCM_SHA512_128]: { nk: 32, nka: 0, nn: 12, nt: 16, aead: "gcm", hash: "sha512", baseKeyLength: 32 },
-  [SFrameCipherSuite.AES_256_CTR_HMAC_SHA512_80]: { nk: 96, nka: 32, nn: 12, nt: 10, aead: "ctr-hmac", hash: "sha512", baseKeyLength: 32 },
-  [SFrameCipherSuite.AES_256_CTR_HMAC_SHA512_64]: { nk: 96, nka: 32, nn: 12, nt: 8, aead: "ctr-hmac", hash: "sha512", baseKeyLength: 32 },
-  [SFrameCipherSuite.AES_256_CTR_HMAC_SHA512_32]: { nk: 96, nka: 32, nn: 12, nt: 4, aead: "ctr-hmac", hash: "sha512", baseKeyLength: 32 },
+  [SFrameCipherSuite.AES_128_CTR_HMAC_SHA256_80]: {
+    nk: 48,
+    nka: 16,
+    nn: 12,
+    nt: 10,
+    aead: "ctr-hmac",
+    hash: "sha256",
+    baseKeyLength: 16,
+  },
+  [SFrameCipherSuite.AES_128_GCM_SHA256_128]: {
+    nk: 16,
+    nka: 0,
+    nn: 12,
+    nt: 16,
+    aead: "gcm",
+    hash: "sha256",
+    baseKeyLength: 16,
+  },
+  [SFrameCipherSuite.AES_256_GCM_SHA512_128]: {
+    nk: 32,
+    nka: 0,
+    nn: 12,
+    nt: 16,
+    aead: "gcm",
+    hash: "sha512",
+    baseKeyLength: 32,
+  },
+  [SFrameCipherSuite.AES_256_CTR_HMAC_SHA512_80]: {
+    nk: 96,
+    nka: 32,
+    nn: 12,
+    nt: 10,
+    aead: "ctr-hmac",
+    hash: "sha512",
+    baseKeyLength: 32,
+  },
+  [SFrameCipherSuite.AES_256_CTR_HMAC_SHA512_64]: {
+    nk: 96,
+    nka: 32,
+    nn: 12,
+    nt: 8,
+    aead: "ctr-hmac",
+    hash: "sha512",
+    baseKeyLength: 32,
+  },
+  [SFrameCipherSuite.AES_256_CTR_HMAC_SHA512_32]: {
+    nk: 96,
+    nka: 32,
+    nn: 12,
+    nt: 4,
+    aead: "ctr-hmac",
+    hash: "sha512",
+    baseKeyLength: 32,
+  },
 };
 
 export interface DerivedKeys {
@@ -69,15 +123,29 @@ export function deriveStreamBaseKey(key: Buffer, ssrc: number): Buffer {
   return Buffer.from(hkdfSync("sha512", key, salt, RTP_STREAM_LABEL, 64));
 }
 
-export function deriveKeys(baseKey: Buffer, kid: bigint, suite: SFrameCipherSuite): DerivedKeys {
+export function deriveKeys(
+  baseKey: Buffer,
+  kid: bigint,
+  suite: SFrameCipherSuite,
+): DerivedKeys {
   const params = SUITES[suite];
   const suffix = Buffer.concat([beBytes(kid, 8), beBytes(BigInt(suite), 2)]);
-  const keyLabel = Buffer.concat([Buffer.from("SFrame 1.0 Secret key "), suffix]);
-  const saltLabel = Buffer.concat([Buffer.from("SFrame 1.0 Secret salt "), suffix]);
+  const keyLabel = Buffer.concat([
+    Buffer.from("SFrame 1.0 Secret key "),
+    suffix,
+  ]);
+  const saltLabel = Buffer.concat([
+    Buffer.from("SFrame 1.0 Secret salt "),
+    suffix,
+  ]);
   const empty = Buffer.alloc(0);
   return {
-    key: Buffer.from(hkdfSync(params.hash, baseKey, empty, keyLabel, params.nk)),
-    salt: Buffer.from(hkdfSync(params.hash, baseKey, empty, saltLabel, params.nn)),
+    key: Buffer.from(
+      hkdfSync(params.hash, baseKey, empty, keyLabel, params.nk),
+    ),
+    salt: Buffer.from(
+      hkdfSync(params.hash, baseKey, empty, saltLabel, params.nn),
+    ),
   };
 }
 
@@ -113,12 +181,22 @@ function nonce(salt: Buffer, ctr: bigint): Buffer {
   return out;
 }
 
-export function seal(keys: DerivedKeys, suite: SFrameCipherSuite, header: Buffer, plaintext: Buffer, ctr: bigint): Buffer {
+export function seal(
+  keys: DerivedKeys,
+  suite: SFrameCipherSuite,
+  header: Buffer,
+  plaintext: Buffer,
+  ctr: bigint,
+): Buffer {
   const params = SUITES[suite];
   const iv = nonce(keys.salt, ctr);
 
   if (params.aead === "gcm") {
-    const cipher = createCipheriv(keys.key.length === 32 ? "aes-256-gcm" : "aes-128-gcm", keys.key, iv);
+    const cipher = createCipheriv(
+      keys.key.length === 32 ? "aes-256-gcm" : "aes-128-gcm",
+      keys.key,
+      iv,
+    );
     cipher.setAAD(header);
     const ct = Buffer.concat([cipher.update(plaintext), cipher.final()]);
     return Buffer.concat([header, ct, cipher.getAuthTag()]);
@@ -127,13 +205,23 @@ export function seal(keys: DerivedKeys, suite: SFrameCipherSuite, header: Buffer
   const encKey = keys.key.subarray(0, params.nka);
   const authKey = keys.key.subarray(params.nka);
   const counter = Buffer.concat([iv, Buffer.alloc(4)]);
-  const cipher = createCipheriv(encKey.length === 32 ? "aes-256-ctr" : "aes-128-ctr", encKey, counter);
+  const cipher = createCipheriv(
+    encKey.length === 32 ? "aes-256-ctr" : "aes-128-ctr",
+    encKey,
+    counter,
+  );
   const ct = Buffer.concat([cipher.update(plaintext), cipher.final()]);
   const tag = computeCtrTag(authKey, header, ct, iv, params);
   return Buffer.concat([header, ct, tag]);
 }
 
-function computeCtrTag(authKey: Buffer, aad: Buffer, ct: Buffer, iv: Buffer, params: SuiteParams): Buffer {
+function computeCtrTag(
+  authKey: Buffer,
+  aad: Buffer,
+  ct: Buffer,
+  iv: Buffer,
+  params: SuiteParams,
+): Buffer {
   const lengths = Buffer.alloc(24);
   lengths.writeBigUInt64BE(BigInt(aad.length), 0);
   lengths.writeBigUInt64BE(BigInt(ct.length), 8);
@@ -143,14 +231,21 @@ function computeCtrTag(authKey: Buffer, aad: Buffer, ct: Buffer, iv: Buffer, par
   return hmac.digest().subarray(0, params.nt);
 }
 
-export function decodeHeader(buffer: Buffer): { header: Buffer; kid: bigint; ctr: bigint; offset: number } {
+export function decodeHeader(buffer: Buffer): {
+  header: Buffer;
+  kid: bigint;
+  ctr: bigint;
+  offset: number;
+} {
   const config = buffer[0];
   let offset = 1;
 
   let kid: bigint;
   if (config & 0x80) {
     const len = ((config >> 4) & 0x07) + 1;
-    kid = BigInt(`0x${buffer.subarray(offset, offset + len).toString("hex") || "0"}`);
+    kid = BigInt(
+      `0x${buffer.subarray(offset, offset + len).toString("hex") || "0"}`,
+    );
     offset += len;
   } else {
     kid = BigInt((config >> 4) & 0x07);
@@ -159,7 +254,9 @@ export function decodeHeader(buffer: Buffer): { header: Buffer; kid: bigint; ctr
   let ctr: bigint;
   if (config & 0x08) {
     const len = (config & 0x07) + 1;
-    ctr = BigInt(`0x${buffer.subarray(offset, offset + len).toString("hex") || "0"}`);
+    ctr = BigInt(
+      `0x${buffer.subarray(offset, offset + len).toString("hex") || "0"}`,
+    );
     offset += len;
   } else {
     ctr = BigInt(config & 0x07);
@@ -174,7 +271,10 @@ export class SecureVideoSFrame {
 
   constructor(private enabled: boolean) {
     if (enabled) {
-      this.senderKey = { key: randomBytes(SUITES[VIDEO_SUITE].baseKeyLength), kid: 0x100n };
+      this.senderKey = {
+        key: randomBytes(SUITES[VIDEO_SUITE].baseKeyLength),
+        kid: 0x100n,
+      };
     }
   }
 
@@ -203,7 +303,11 @@ export class SecureVideoSFrame {
       return new SFrameStream();
     }
     return new SFrameStream(
-      deriveKeys(deriveStreamBaseKey(this.senderKey.key, ssrc), this.senderKey.kid, suite),
+      deriveKeys(
+        deriveStreamBaseKey(this.senderKey.key, ssrc),
+        this.senderKey.kid,
+        suite,
+      ),
       suite,
       this.senderKey.kid,
     );

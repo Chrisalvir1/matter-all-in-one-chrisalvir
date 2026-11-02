@@ -233,11 +233,13 @@ describe("ScryptedStreamValidator", () => {
     });
 
     it("passes transport option to probeCameraSource", async () => {
-      const probeSpy = vi.spyOn(ffmpegHelper, "probeCameraSource").mockResolvedValueOnce({
-        valid: true,
-        videoCodec: "h264",
-        probeMethod: "ffprobe",
-      });
+      const probeSpy = vi
+        .spyOn(ffmpegHelper, "probeCameraSource")
+        .mockResolvedValueOnce({
+          valid: true,
+          videoCodec: "h264",
+          probeMethod: "ffprobe",
+        });
 
       await ScryptedStreamValidator.diagnoseStreamUrl(
         "rtsp://192.168.1.50:8554/feed",
@@ -245,10 +247,10 @@ describe("ScryptedStreamValidator", () => {
         8000,
         "udp",
       );
-      expect(probeSpy).toHaveBeenCalledWith(
-        "rtsp://192.168.1.50:8554/feed",
-        { timeoutMs: 8000, transport: "udp" },
-      );
+      expect(probeSpy).toHaveBeenCalledWith("rtsp://192.168.1.50:8554/feed", {
+        timeoutMs: 8000,
+        transport: "udp",
+      });
     });
   });
 });

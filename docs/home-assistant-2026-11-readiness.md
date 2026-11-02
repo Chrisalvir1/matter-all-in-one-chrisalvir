@@ -1,3 +1,9 @@
+# Objetivo de pruebas actualizado — 2026-11-02
+
+La candidata local 2.3.13 fija el contrato WebSocket a **Home Assistant 2026.11.0b3** y Python **3.14.10**, según la referencia publicada. Es una **beta**, no una release estable. El job de CI prepara pruebas aisladas contra esa referencia; no se ha ejecutado todavía y no confirma compatibilidad runtime. Cuando exista 2026.11 estable, actualizar conjuntamente el ref del workflow y la aserción exacta del contrato. No se actualizó la instalación HA del usuario.
+
+---
+
 # Matter All-in-One v2.3.0 — preparación para Home Assistant 2026.11
 
 Release v2.3.0: do **not** install a Home Assistant beta on the primary

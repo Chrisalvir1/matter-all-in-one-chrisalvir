@@ -365,7 +365,8 @@ export class HomeKitCameraRecordingDelegate
       !this.isPausedByLiveStream ||
       !this.recordingActive ||
       !chunk?.length
-    ) return;
+    )
+      return;
     this.segmenter.push(chunk);
   }
 
@@ -463,13 +464,15 @@ export class HomeKitCameraRecordingDelegate
     if (!this.initializationSegment) {
       // Wait for FFmpeg to produce the fMP4 moov box. C402's direct HA
       // publisher can take longer to provide SPS/PPS after an RTSP reconnect.
-      const isTapoC402 = /(?:\bc402\b|tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle)/i.test(
-        `${this.entityId} ${this.record.name || ""} ${this.record.model || ""} ${this.streamSource.url || ""}`,
-      );
-      const isTapoC120 = /(?:\bc120\b|tapo[-_ ]?c120|tapo[-_ ]?spot|\bspot\b)/i.test(
-        `${this.entityId} ${this.record.name || ""} ${this.record.model || ""} ${this.streamSource.url || ""}`,
-      );
-      await this.waitForInitialization((isTapoC402 || isTapoC120) ? 10000 : 5000);
+      const isTapoC402 =
+        /(?:\bc402\b|tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle)/i.test(
+          `${this.entityId} ${this.record.name || ""} ${this.record.model || ""} ${this.streamSource.url || ""}`,
+        );
+      const isTapoC120 =
+        /(?:\bc120\b|tapo[-_ ]?c120|tapo[-_ ]?spot|\bspot\b)/i.test(
+          `${this.entityId} ${this.record.name || ""} ${this.record.model || ""} ${this.streamSource.url || ""}`,
+        );
+      await this.waitForInitialization(isTapoC402 || isTapoC120 ? 10000 : 5000);
     }
 
     if (this.initializationSegment) {
@@ -628,8 +631,7 @@ export class HomeKitCameraRecordingDelegate
       /(?:\bc402\b|tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle|tapo[-_ ]?frente)/i.test(
         cameraIdentity,
       );
-    const isWyzeMatch =
-      /(?:\bwyze\b|cba17b87)/i.test(cameraIdentity);
+    const isWyzeMatch = /(?:\bwyze\b|cba17b87)/i.test(cameraIdentity);
     const isEzvizMatch =
       /(?:\bezviz\b|\bh6c\b|4661fae4|patio[-_ ]?trasero)/i.test(cameraIdentity);
     const isOmniTuyaDirect =
@@ -689,7 +691,11 @@ export class HomeKitCameraRecordingDelegate
           ? "+genpts+discardcorrupt"
           : "+nobuffer+flush_packets+genpts+igndts",
         "-flags",
-        isTapoC120Match ? "low_delay" : needsAudioTimestampRepair ? "0" : "low_delay",
+        isTapoC120Match
+          ? "low_delay"
+          : needsAudioTimestampRepair
+            ? "0"
+            : "low_delay",
       );
       // Camera.UI AAC streams can restart with discontinuous DTS.  Replacing
       // them with wall-clock timestamps makes FFmpeg drop audio packets before
@@ -793,14 +799,7 @@ export class HomeKitCameraRecordingDelegate
       this.platform?.log?.notice?.(
         `[HKSV][${this.entityId}] Fuente HEVC/H.265 detectada: empaquetando grabación HKSV en passthrough puro (-c:v copy, tag: hvc1)`,
       );
-      args.push(
-        "-map",
-        "0:v:0",
-        "-c:v",
-        "copy",
-        "-tag:v",
-        "hvc1",
-      );
+      args.push("-map", "0:v:0", "-c:v", "copy", "-tag:v", "hvc1");
     }
 
     // Audio pipeline: strict passthrough (-c:a copy) if source is AAC; otherwise transcode ONLY audio to AAC
@@ -896,7 +895,10 @@ export class HomeKitCameraRecordingDelegate
           1000,
           Math.min(
             10000,
-            Number(this.selectedConfiguration?.mediaContainerConfiguration?.fragmentLength) || 4000,
+            Number(
+              this.selectedConfiguration?.mediaContainerConfiguration
+                ?.fragmentLength,
+            ) || 4000,
           ),
         ) * 1000,
       ),
@@ -945,7 +947,9 @@ export class HomeKitCameraRecordingDelegate
             `${this.entityId} ${this.record.name || ""}`,
           )
         ) {
-          if (this.platform?.ha?.hassStates?.has("camera.tapo_frente_de_calle")) {
+          if (
+            this.platform?.ha?.hassStates?.has("camera.tapo_frente_de_calle")
+          ) {
             haEntityId = "camera.tapo_frente_de_calle";
           } else if (this.platform?.ha?.hassStates?.has("camera.tapo_c402")) {
             haEntityId = "camera.tapo_c402";
@@ -961,7 +965,9 @@ export class HomeKitCameraRecordingDelegate
             haEntityId = "camera.tapo_spot";
           } else if (this.platform?.ha?.hassStates?.has("camera.c120")) {
             haEntityId = "camera.c120";
-          } else if (this.platform?.ha?.hassStates?.has("camera.tapo_c120_hd")) {
+          } else if (
+            this.platform?.ha?.hassStates?.has("camera.tapo_c120_hd")
+          ) {
             haEntityId = "camera.tapo_c120_hd";
           } else {
             haEntityId = this.record.sourceCameraEntityId || "";
@@ -985,13 +991,14 @@ export class HomeKitCameraRecordingDelegate
         this.streamSource.metadata?.isOmniTuyaFallback === true;
       if (isOmniSource && haEntityId) {
         const state = this.platform?.ha?.hassStates?.get(haEntityId);
-        const refreshed = await CameraSourceResolver.resolveOmniTuyaRecordingSource(
-          this.platform,
-          haEntityId,
-          state,
-          this.preferOmniTuyaHaFallback ||
-            this.streamSource.metadata?.isOmniTuyaFallback === true,
-        );
+        const refreshed =
+          await CameraSourceResolver.resolveOmniTuyaRecordingSource(
+            this.platform,
+            haEntityId,
+            state,
+            this.preferOmniTuyaHaFallback ||
+              this.streamSource.metadata?.isOmniTuyaFallback === true,
+          );
         this.streamSource = refreshed;
         sourceUrl = refreshed.url || "";
       } else if (
@@ -1027,7 +1034,8 @@ export class HomeKitCameraRecordingDelegate
           this.platform?.ha?.requestCameraStream
         ) {
           try {
-            const freshUrl = await this.platform.ha.requestCameraStream(haEntityId);
+            const freshUrl =
+              await this.platform.ha.requestCameraStream(haEntityId);
             if (freshUrl) {
               sourceUrl = freshUrl;
               this.streamSource.url = freshUrl;
@@ -1075,9 +1083,10 @@ export class HomeKitCameraRecordingDelegate
       const inWidth = this.capabilities.resolution?.width ?? 1920;
       const inHeight = this.capabilities.resolution?.height ?? 1080;
       const inFps = resolveCameraSourceFps(this.capabilities, this.record) ?? 0;
-      const isC402 = /(?:\bc402\b|tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle)/i.test(
-        `${this.entityId} ${this.record.name || ""} ${this.record.model || ""} ${sourceUrl}`,
-      );
+      const isC402 =
+        /(?:\bc402\b|tapo[-_ ]?c402|frente[-_ ]?de[-_ ]?calle)/i.test(
+          `${this.entityId} ${this.record.name || ""} ${this.record.model || ""} ${sourceUrl}`,
+        );
       const outWidth = isC120 || isC402 ? 1920 : inWidth;
       const outHeight = isC120 || isC402 ? 1080 : inHeight;
       const outFps =

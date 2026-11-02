@@ -11,7 +11,10 @@ import {
   type AudioStreamTier,
 } from "./types.js";
 import { resolveFfmpegPath, sanitizeUrlCredentials } from "../ffmpeg-helper.js";
-import type { ResolvedStreamSource, CameraCapabilitiesInfo } from "../../camera-types.js";
+import type {
+  ResolvedStreamSource,
+  CameraCapabilitiesInfo,
+} from "../../camera-types.js";
 
 interface ActiveSession {
   sessionIdentifier: string;
@@ -57,7 +60,9 @@ export class MultiTierRtpDelegate implements MultiTierRTPStreamingDelegate {
     return this.sessions.size > 0;
   }
 
-  public async prepareStream(request: MultiTierPrepareStreamRequest): Promise<MultiTierPrepareStreamResponse> {
+  public async prepareStream(
+    request: MultiTierPrepareStreamRequest,
+  ): Promise<MultiTierPrepareStreamResponse> {
     this.platform?.log?.notice?.(
       `[Multi-RTP][${this.entityId}] Preparing stream session ${request.sessionIdentifier.slice(0, 8)}...`,
     );
@@ -100,22 +105,28 @@ export class MultiTierRtpDelegate implements MultiTierRTPStreamingDelegate {
       videoSSRC: videoSsrc,
       audioSSRC: audioSsrc,
       video: {
-        cryptoSuite: request.video.cryptoSuite || SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
+        cryptoSuite:
+          request.video.cryptoSuite || SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
         masterKey: videoKey,
         masterSalt: videoSalt,
       },
       audio: {
-        cryptoSuite: request.audio.cryptoSuite || SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
+        cryptoSuite:
+          request.audio.cryptoSuite || SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80,
         masterKey: audioKey,
         masterSalt: audioSalt,
       },
     };
   }
 
-  public async startStream(request: MultiTierStreamStartRequest): Promise<void> {
+  public async startStream(
+    request: MultiTierStreamStartRequest,
+  ): Promise<void> {
     const session = this.sessions.get(request.sessionIdentifier);
     if (!session) {
-      throw new Error(`No prepared multi-tier session ${request.sessionIdentifier}`);
+      throw new Error(
+        `No prepared multi-tier session ${request.sessionIdentifier}`,
+      );
     }
 
     const ffmpegPath = resolveFfmpegPath();
@@ -133,30 +144,40 @@ export class MultiTierRtpDelegate implements MultiTierRTPStreamingDelegate {
     );
 
     const targetAddress = session.targetAddress || "127.0.0.1";
-    const videoOutParams = Buffer.concat([session.targetVideoKey, session.targetVideoSalt]).toString("base64");
+    const videoOutParams = Buffer.concat([
+      session.targetVideoKey,
+      session.targetVideoSalt,
+    ]).toString("base64");
     const videoUrl = `srtp://${targetAddress}:${session.controllerVideoPort}?rtcpport=${session.controllerVideoPort}&pkt_size=1316`;
 
     // Strict passthrough: Video is ALWAYS -c:v copy. No libx264, libx265, or filters.
-    const args: string[] = [
-      "-hide_banner",
-      "-loglevel", "warning",
-    ];
+    const args: string[] = ["-hide_banner", "-loglevel", "warning"];
 
     if (sourceUrl.startsWith("rtsp://") || sourceUrl.startsWith("rtsps://")) {
       args.push(
-        "-rtsp_transport", "tcp",
-        "-timeout", "5000000",
-        "-probesize", "65536",
-        "-analyzeduration", "100000",
-        "-fflags", "+nobuffer+flush_packets+genpts+igndts",
-        "-flags", "low_delay",
+        "-rtsp_transport",
+        "tcp",
+        "-timeout",
+        "5000000",
+        "-probesize",
+        "65536",
+        "-analyzeduration",
+        "100000",
+        "-fflags",
+        "+nobuffer+flush_packets+genpts+igndts",
+        "-flags",
+        "low_delay",
       );
     } else {
       args.push(
-        "-probesize", "65536",
-        "-analyzeduration", "100000",
-        "-fflags", "+nobuffer+flush_packets+genpts+igndts",
-        "-flags", "low_delay",
+        "-probesize",
+        "65536",
+        "-analyzeduration",
+        "100000",
+        "-fflags",
+        "+nobuffer+flush_packets+genpts+igndts",
+        "-flags",
+        "low_delay",
       );
     }
 
@@ -164,14 +185,21 @@ export class MultiTierRtpDelegate implements MultiTierRTPStreamingDelegate {
 
     // Video stream mapping: STRICT COPY
     args.push(
-      "-map", "0:v:0",
+      "-map",
+      "0:v:0",
       "-an",
-      "-c:v", "copy",
-      "-f", "rtp",
-      "-payload_type", String(this.config.videoPayloadType || 99),
-      "-ssrc", String(session.videoSsrc),
-      "-srtp_out_suite", "AES_CM_128_HMAC_SHA1_80",
-      "-srtp_out_params", videoOutParams,
+      "-c:v",
+      "copy",
+      "-f",
+      "rtp",
+      "-payload_type",
+      String(this.config.videoPayloadType || 99),
+      "-ssrc",
+      String(session.videoSsrc),
+      "-srtp_out_suite",
+      "AES_CM_128_HMAC_SHA1_80",
+      "-srtp_out_params",
+      videoOutParams,
       videoUrl,
     );
 
@@ -179,8 +207,15 @@ export class MultiTierRtpDelegate implements MultiTierRTPStreamingDelegate {
     const audioCodec = this.capabilities.audioCodec?.toLowerCase();
     const isOpus = audioCodec === "opus";
 
-    if (session.controllerAudioPort > 0 && this.capabilities.hasAudio !== false && audioCodec !== "none") {
-      const audioOutParams = Buffer.concat([session.targetAudioKey, session.targetAudioSalt]).toString("base64");
+    if (
+      session.controllerAudioPort > 0 &&
+      this.capabilities.hasAudio !== false &&
+      audioCodec !== "none"
+    ) {
+      const audioOutParams = Buffer.concat([
+        session.targetAudioKey,
+        session.targetAudioSalt,
+      ]).toString("base64");
       const audioUrl = `srtp://${targetAddress}:${session.controllerAudioPort}?rtcpport=${session.controllerAudioPort}&pkt_size=188`;
 
       if (isOpus) {
@@ -188,14 +223,21 @@ export class MultiTierRtpDelegate implements MultiTierRTPStreamingDelegate {
           `[Multi-RTP][${this.entityId}] Audio fuente es Opus nativo: transmitiendo con passthrough (-c:a copy)`,
         );
         args.push(
-          "-map", "0:a:0?",
+          "-map",
+          "0:a:0?",
           "-vn",
-          "-c:a", "copy",
-          "-f", "rtp",
-          "-payload_type", String(this.config.audioPayloadType || 110),
-          "-ssrc", String(session.audioSsrc),
-          "-srtp_out_suite", "AES_CM_128_HMAC_SHA1_80",
-          "-srtp_out_params", audioOutParams,
+          "-c:a",
+          "copy",
+          "-f",
+          "rtp",
+          "-payload_type",
+          String(this.config.audioPayloadType || 110),
+          "-ssrc",
+          String(session.audioSsrc),
+          "-srtp_out_suite",
+          "AES_CM_128_HMAC_SHA1_80",
+          "-srtp_out_params",
+          audioOutParams,
           audioUrl,
         );
       } else {
@@ -203,20 +245,33 @@ export class MultiTierRtpDelegate implements MultiTierRTPStreamingDelegate {
           `[Multi-RTP][${this.entityId}] Adaptando exclusivamente audio fuente (${audioCodec || "desconocido"}) a Opus 48kHz mono (20ms) conforme a especificación Apple HKSV3`,
         );
         args.push(
-          "-map", "0:a:0?",
+          "-map",
+          "0:a:0?",
           "-vn",
-          "-c:a", "libopus",
-          "-application", "lowdelay",
-          "-frame_duration", "20",
-          "-packet_loss", "5",
-          "-ar", "48000",
-          "-ac", "1",
-          "-b:a", "32k",
-          "-f", "rtp",
-          "-payload_type", String(this.config.audioPayloadType || 110),
-          "-ssrc", String(session.audioSsrc),
-          "-srtp_out_suite", "AES_CM_128_HMAC_SHA1_80",
-          "-srtp_out_params", audioOutParams,
+          "-c:a",
+          "libopus",
+          "-application",
+          "lowdelay",
+          "-frame_duration",
+          "20",
+          "-packet_loss",
+          "5",
+          "-ar",
+          "48000",
+          "-ac",
+          "1",
+          "-b:a",
+          "32k",
+          "-f",
+          "rtp",
+          "-payload_type",
+          String(this.config.audioPayloadType || 110),
+          "-ssrc",
+          String(session.audioSsrc),
+          "-srtp_out_suite",
+          "AES_CM_128_HMAC_SHA1_80",
+          "-srtp_out_params",
+          audioOutParams,
           audioUrl,
         );
       }
@@ -227,13 +282,17 @@ export class MultiTierRtpDelegate implements MultiTierRTPStreamingDelegate {
       `[Multi-RTP][${this.entityId}] Spawning FFmpeg: ${ffmpegPath} from ${sanitizedUrl}`,
     );
 
-    const proc = spawn(ffmpegPath, args, { stdio: ["ignore", "ignore", "pipe"] });
+    const proc = spawn(ffmpegPath, args, {
+      stdio: ["ignore", "ignore", "pipe"],
+    });
     session.ffmpegProcess = proc;
 
     proc.stderr?.on("data", (chunk: Buffer) => {
       const msg = chunk.toString().trim();
       if (msg) {
-        this.platform?.log?.debug?.(`[Multi-RTP][${this.entityId}][stderr] ${msg}`);
+        this.platform?.log?.debug?.(
+          `[Multi-RTP][${this.entityId}][stderr] ${msg}`,
+        );
       }
     });
 

@@ -35,11 +35,15 @@ export default function initializePlugin(
   // Supervisor restart the add-on from the persisted, stable identities.
   process.on("unhandledRejection", (reason) => {
     const detail =
-      reason instanceof Error ? (reason.stack ?? reason.message) : String(reason);
+      reason instanceof Error
+        ? (reason.stack ?? reason.message)
+        : String(reason);
     log.error(`[Runtime] Unhandled rejection: ${detail}`);
   });
   process.on("uncaughtException", (error) => {
-    log.error(`[Runtime] Uncaught exception, restarting: ${error.stack ?? error.message}`);
+    log.error(
+      `[Runtime] Uncaught exception, restarting: ${error.stack ?? error.message}`,
+    );
     setTimeout(() => process.exit(1), 500).unref();
   });
 

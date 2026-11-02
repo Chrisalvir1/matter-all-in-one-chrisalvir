@@ -212,7 +212,9 @@ export class BaseEntity {
   }
 
   public async createEndpoint(): Promise<MatterbridgeEndpoint> {
-    const hassEntry = (this.platform.ha as any)?.hassEntities?.get(this.entityId);
+    const hassEntry = (this.platform.ha as any)?.hassEntities?.get(
+      this.entityId,
+    );
     const rawName =
       this.state?.attributes?.friendly_name ||
       hassEntry?.name ||
@@ -228,15 +230,17 @@ export class BaseEntity {
       existingNamedDevice.uniqueId !== this.entityId.replaceAll(".", "_")
     ) {
       const suffix = this.entityId.split(".").pop()?.replace(/.*_/, "") || "";
-      const disambiguated = suffix ? `${uniqueName} ${suffix}` : `${uniqueName} (${this.entityId.split(".").pop()})`;
+      const disambiguated = suffix
+        ? `${uniqueName} ${suffix}`
+        : `${uniqueName} (${this.entityId.split(".").pop()})`;
       uniqueName = disambiguated.substring(0, 32).trim();
     }
 
     // Immutable identity: Matter storage is keyed by this name. Adopt the name
     // already paired on disk (entity name or HA device name) and never change it.
-    const haDeviceName = (
-      this.platform as any
-    ).getHaRegistryInfo?.(this.entityId)?.device_name;
+    const haDeviceName = (this.platform as any).getHaRegistryInfo?.(
+      this.entityId,
+    )?.device_name;
     const proposedName = uniqueName;
     uniqueName =
       this.platform.nodeIdentities?.pin(
@@ -439,7 +443,9 @@ export class BaseEntity {
 
     const timer = setTimeout(() => {
       this.serviceDebounceTimers.delete(key);
-      void this.callServiceTracked(domain, service, data).catch(() => undefined);
+      void this.callServiceTracked(domain, service, data).catch(
+        () => undefined,
+      );
     }, delayMs);
     this.serviceDebounceTimers.set(key, timer);
   }
@@ -450,19 +456,24 @@ export class BaseEntity {
     service: string,
     data?: Record<string, any>,
   ): Promise<void> {
-    const request = data === undefined
-      ? this.platform.ha.callService(domain, service, this.entityId)
-      : this.platform.ha.callService(domain, service, this.entityId, data);
-    return request.then(() => {
-      this.serviceFailure = undefined;
-      (this.platform as any).clearEntityCommandFailure?.(this.entityId);
-      if (!isUnavailable(this.state)) void this.setReachability(true);
-    }).catch(async (error) => {
+    const request =
+      data === undefined
+        ? this.platform.ha.callService(domain, service, this.entityId)
+        : this.platform.ha.callService(domain, service, this.entityId, data);
+    return request
+      .then(() => {
+        this.serviceFailure = undefined;
+        (this.platform as any).clearEntityCommandFailure?.(this.entityId);
+        if (!isUnavailable(this.state)) void this.setReachability(true);
+      })
+      .catch(async (error) => {
         this.serviceFailure = {
           stateAtFailure: this.state.state,
           desiredState:
             service === "turn_on" || service === "turn_off"
-              ? service === "turn_on" ? "on" : "off"
+              ? service === "turn_on"
+                ? "on"
+                : "off"
               : undefined,
           sawUnavailable: false,
         };
@@ -472,7 +483,10 @@ export class BaseEntity {
         }
         await this.setReachability(false);
         const message = `Matter command ${domain}.${service} failed in Home Assistant: ${String(error)}`;
-        (this.platform as any).recordEntityCommandFailure?.(this.entityId, message);
+        (this.platform as any).recordEntityCommandFailure?.(
+          this.entityId,
+          message,
+        );
         this.platform.log?.warn?.(
           `[${this.entityId}] Home Assistant ${domain}.${service} failed (BLE/fan included): ${String(error)}`,
         );
@@ -505,7 +519,12 @@ export class BaseEntity {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         if (data !== undefined) {
-          await this.platform.ha.callService(domain, service, this.entityId, data);
+          await this.platform.ha.callService(
+            domain,
+            service,
+            this.entityId,
+            data,
+          );
         } else {
           await this.platform.ha.callService(domain, service, this.entityId);
         }
@@ -529,20 +548,27 @@ export class BaseEntity {
             stateAtFailure: this.state.state,
             desiredState:
               service === "turn_on" || service === "turn_off"
-                ? service === "turn_on" ? "on" : "off"
+                ? service === "turn_on"
+                  ? "on"
+                  : "off"
                 : undefined,
             sawUnavailable: false,
           };
           this.lastCommands.delete(`${this.entityId}:onOff`);
           await this.setReachability(false);
           const message = `Matter command ${domain}.${service} failed in Home Assistant after ${attempt} attempts: ${String(err)}`;
-          (this.platform as any).recordEntityCommandFailure?.(this.entityId, message);
+          (this.platform as any).recordEntityCommandFailure?.(
+            this.entityId,
+            message,
+          );
           throw err instanceof Error ? err : new Error(String(err));
         }
       }
     }
 
-    throw new Error(`Home Assistant ${domain}.${service} failed without an error response`);
+    throw new Error(
+      `Home Assistant ${domain}.${service} failed without an error response`,
+    );
   }
 
   private lastFanCommandTime = 0;
@@ -577,10 +603,10 @@ export class BaseEntity {
     this.setCommandLockout("onOff", true);
     this.setCommandLockout("fan_percentage", nextPct);
 
-    await this.callHaServiceWithRetry("fan", "set_percentage", { percentage: nextPct });
+    await this.callHaServiceWithRetry("fan", "set_percentage", {
+      percentage: nextPct,
+    });
   }
-
-
 
   protected isFanCommandLocked(
     isOn: boolean,
@@ -635,10 +661,7 @@ export class BaseEntity {
     return false;
   }
 
-  protected isOnOffCommandLocked(
-    isOn: boolean,
-    windowMs = 4000,
-  ): boolean {
+  protected isOnOffCommandLocked(isOn: boolean, windowMs = 4000): boolean {
     const now = Date.now();
     const stateKey = `${this.entityId}:onOff`;
     const lastCmd = this.lastCommands.get(stateKey);
@@ -699,7 +722,13 @@ export class BaseEntity {
           this.cancelDebouncedService("turn_on");
           await this.callServiceDebounced(domain, "turn_off", undefined, 0);
           if (this.endpoint.hasAttributeServer(OnOff.id, "onOff")) {
-            void safeUpdateAttribute(this.endpoint, OnOff.id, "onOff", false, this.platform.log);
+            void safeUpdateAttribute(
+              this.endpoint,
+              OnOff.id,
+              "onOff",
+              false,
+              this.platform.log,
+            );
           }
         } else if (domain === "fan") {
           this.lastFanCommandTime = Date.now();
@@ -725,7 +754,12 @@ export class BaseEntity {
           const isOn = this.state.state === "on";
           if (domain === "light") {
             this.setCommandLockout("onOff", !isOn);
-            await this.callServiceDebounced(domain, isOn ? "turn_off" : "turn_on", undefined, 0);
+            await this.callServiceDebounced(
+              domain,
+              isOn ? "turn_off" : "turn_on",
+              undefined,
+              0,
+            );
           } else {
             await this.platform.ha.callService(
               domain,
@@ -735,8 +769,6 @@ export class BaseEntity {
           }
         }
       });
-
-
 
       if (
         domain === "fan" &&
@@ -754,7 +786,9 @@ export class BaseEntity {
             const speedMax = getFanSpeedCount(this.state);
             const stepSize = Math.max(1, Math.round(100 / speedMax));
             const delta =
-              direction === FanControl.StepDirection.Increase ? stepSize : -stepSize;
+              direction === FanControl.StepDirection.Increase
+                ? stepSize
+                : -stepSize;
             const next = snapToPhysicalLevel(
               Math.max(0, Math.min(100, current + delta)),
               speedMax,
@@ -797,9 +831,15 @@ export class BaseEntity {
               if (newSpeed === 0) {
                 await this.callFanSpeed(0);
               } else {
-                const targetSpeed = Math.max(1, Math.min(speedMax, Math.round(newSpeed)));
+                const targetSpeed = Math.max(
+                  1,
+                  Math.min(speedMax, Math.round(newSpeed)),
+                );
                 const step = 100 / speedMax;
-                const nextPct = snapToPhysicalLevel(Math.round(targetSpeed * step), speedMax);
+                const nextPct = snapToPhysicalLevel(
+                  Math.round(targetSpeed * step),
+                  speedMax,
+                );
                 await this.callFanSpeed(nextPct);
               }
             },
@@ -822,7 +862,10 @@ export class BaseEntity {
               if (newMode === FanControl.FanMode.Off) {
                 await this.callFanSpeed(0);
               } else if (newMode === FanControl.FanMode.Low) {
-                const targetPct = snapToPhysicalLevel(Math.round(100 / speedMax), speedMax);
+                const targetPct = snapToPhysicalLevel(
+                  Math.round(100 / speedMax),
+                  speedMax,
+                );
                 await this.callFanSpeed(targetPct);
               } else if (newMode === FanControl.FanMode.Medium) {
                 const targetPct = snapToPhysicalLevel(50, speedMax);
@@ -833,7 +876,10 @@ export class BaseEntity {
                 this.setCommandLockout("fan_state", true);
                 this.setCommandLockout("onOff", true);
                 await this.callHaServiceWithRetry("fan", "turn_on");
-              } else if (newMode === FanControl.FanMode.Auto && hasFanAuto(this.state)) {
+              } else if (
+                newMode === FanControl.FanMode.Auto &&
+                hasFanAuto(this.state)
+              ) {
                 this.setCommandLockout("fan_state", true);
                 await this.callHaServiceWithRetry("fan", "set_preset_mode", {
                   preset_mode: "auto",
@@ -897,7 +943,12 @@ export class BaseEntity {
               if (level === 0) {
                 this.setCommandLockout("onOff", false);
                 this.cancelDebouncedService("turn_on");
-                await this.callServiceDebounced(domain, "turn_off", undefined, 0);
+                await this.callServiceDebounced(
+                  domain,
+                  "turn_off",
+                  undefined,
+                  0,
+                );
               } else if (level === 1) {
                 // Apple Home dimming to off sends level 1 before off. Debounce by 60ms so off can cancel it.
                 this.setCommandLockout("brightness", 1);
@@ -1146,7 +1197,8 @@ export class BaseEntity {
                 payload.color_temp_kelvin !== undefined;
               if (usesKelvin) {
                 const kelvin = lightColor.clampKelvin(
-                  payload.color_temp_kelvin ?? lightColor.miredsToKelvin(mireds),
+                  payload.color_temp_kelvin ??
+                    lightColor.miredsToKelvin(mireds),
                   this.state.attributes,
                 );
                 this.setCommandLockout("color_temp", mireds);
@@ -1219,7 +1271,6 @@ export class BaseEntity {
     }
   }
 
-
   private clampLevel(rawLevel: number, isInitialSync = false): number {
     if (isInitialSync) return Math.min(254, Math.max(1, rawLevel));
     try {
@@ -1241,15 +1292,18 @@ export class BaseEntity {
     if (!ep) return;
     try {
       // 1. Root / ServerNode reachability (Standalone accessory in server mode)
-      const serverNode = ep.serverNode || (this.platform.matterbridge as any)?.serverNode;
+      const serverNode =
+        ep.serverNode || (this.platform.matterbridge as any)?.serverNode;
       if (serverNode && typeof serverNode.setStateOf === "function") {
         try {
           await serverNode.setStateOf(BasicInformationServer, { reachable });
           serverNode.act?.((agent: any) =>
-            serverNode.eventsOf?.(BasicInformationServer)?.reachableChanged?.emit?.(
-              { reachableNewValue: reachable },
-              agent.context,
-            ),
+            serverNode
+              .eventsOf?.(BasicInformationServer)
+              ?.reachableChanged?.emit?.(
+                { reachableNewValue: reachable },
+                agent.context,
+              ),
           );
         } catch {}
       }
@@ -1260,12 +1314,16 @@ export class BaseEntity {
         ep.hasClusterServer?.(BridgedDeviceBasicInformationServer)
       ) {
         try {
-          await ep.setStateOf(BridgedDeviceBasicInformationServer, { reachable });
+          await ep.setStateOf(BridgedDeviceBasicInformationServer, {
+            reachable,
+          });
           ep.act?.((agent: any) =>
-            ep.eventsOf?.(BridgedDeviceBasicInformationServer)?.reachableChanged?.emit?.(
-              { reachableNewValue: reachable },
-              agent.context,
-            ),
+            ep
+              .eventsOf?.(BridgedDeviceBasicInformationServer)
+              ?.reachableChanged?.emit?.(
+                { reachableNewValue: reachable },
+                agent.context,
+              ),
           );
         } catch {}
       }
@@ -1273,20 +1331,40 @@ export class BaseEntity {
       // 3. Update reachable attribute on cluster servers if present (BasicInfo 0x0028 or BridgedBasicInfo 0x0039)
       if (typeof ep.setAttribute === "function") {
         if (ep.hasAttributeServer?.(0x0028, "reachable")) {
-          await ep.setAttribute(0x0028, "reachable", reachable, this.platform.log);
+          await ep.setAttribute(
+            0x0028,
+            "reachable",
+            reachable,
+            this.platform.log,
+          );
         }
         if (ep.hasAttributeServer?.(0x0039, "reachable")) {
-          await ep.setAttribute(0x0039, "reachable", reachable, this.platform.log);
+          await ep.setAttribute(
+            0x0039,
+            "reachable",
+            reachable,
+            this.platform.log,
+          );
         }
       }
 
       // 4. Actively emit Matter subscription updates to controllers (Apple Home)
       if (typeof ep.updateAttribute === "function") {
         if (ep.hasAttributeServer?.(0x0028, "reachable")) {
-          await ep.updateAttribute(0x0028, "reachable", reachable, this.platform.log);
+          await ep.updateAttribute(
+            0x0028,
+            "reachable",
+            reachable,
+            this.platform.log,
+          );
         }
         if (ep.hasAttributeServer?.(0x0039, "reachable")) {
-          await ep.updateAttribute(0x0039, "reachable", reachable, this.platform.log);
+          await ep.updateAttribute(
+            0x0039,
+            "reachable",
+            reachable,
+            this.platform.log,
+          );
         }
       }
       this.platform.log?.debug?.(
@@ -1306,7 +1384,9 @@ export class BaseEntity {
     ) {
       return false;
     }
-    const myDeviceId = (this.platform.ha as any)?.hassEntities?.get(this.entityId)?.device_id;
+    const myDeviceId = (this.platform.ha as any)?.hassEntities?.get(
+      this.entityId,
+    )?.device_id;
     for (const [id, entity] of this.platform.entities) {
       if (id === this.entityId) continue;
       if (!id.startsWith("light.")) continue;
@@ -1317,7 +1397,8 @@ export class BaseEntity {
         id.startsWith(this.entityId + "_");
       const sameDevice =
         myDeviceId &&
-        (this.platform.ha as any)?.hassEntities?.get(id)?.device_id === myDeviceId;
+        (this.platform.ha as any)?.hassEntities?.get(id)?.device_id ===
+          myDeviceId;
 
       if ((matchesPrefix || sameDevice) && entity.state?.state === "on") {
         return true;
@@ -1405,7 +1486,11 @@ export class BaseEntity {
         )
           ? this.endpoint.getAttribute(OnOff.id, "onOff")
           : undefined;
-        if ((domain === "light" || domain === "switch") && !isInitialSync && this.isOnOffCommandLocked(isOn)) {
+        if (
+          (domain === "light" || domain === "switch") &&
+          !isInitialSync &&
+          this.isOnOffCommandLocked(isOn)
+        ) {
           this.platform.log.debug(
             `[${this.entityId}] Ignoring stale HA ${domain} onOff state update during command lockout window (HA: on=${isOn})`,
           );
@@ -1631,15 +1716,20 @@ export class BaseEntity {
         if (isInitialSync) {
           const attrs = newState.attributes as any;
           const powerOnBehavior =
-            attrs.power_on_behavior ?? attrs.startup_behavior ?? attrs.start_up_on_off;
+            attrs.power_on_behavior ??
+            attrs.startup_behavior ??
+            attrs.start_up_on_off;
           if (
             powerOnBehavior !== undefined &&
             this.endpoint.hasAttributeServer?.(OnOff.id, "startUpOnOff")
           ) {
             let startUpOnOff: number | null = null;
-            if (powerOnBehavior === "on" || powerOnBehavior === 1) startUpOnOff = 1;
-            else if (powerOnBehavior === "off" || powerOnBehavior === 0) startUpOnOff = 0;
-            else if (powerOnBehavior === "toggle" || powerOnBehavior === 2) startUpOnOff = 2;
+            if (powerOnBehavior === "on" || powerOnBehavior === 1)
+              startUpOnOff = 1;
+            else if (powerOnBehavior === "off" || powerOnBehavior === 0)
+              startUpOnOff = 0;
+            else if (powerOnBehavior === "toggle" || powerOnBehavior === 2)
+              startUpOnOff = 2;
             await safeSetAttribute(
               this.endpoint,
               OnOff.id,
@@ -1649,14 +1739,21 @@ export class BaseEntity {
             );
           }
 
-          const startUpLevel = attrs.start_up_current_level ?? attrs.startup_level;
+          const startUpLevel =
+            attrs.start_up_current_level ?? attrs.startup_level;
           if (
             startUpLevel !== undefined &&
-            this.endpoint.hasAttributeServer?.(LevelControl.id, "startUpCurrentLevel")
+            this.endpoint.hasAttributeServer?.(
+              LevelControl.id,
+              "startUpCurrentLevel",
+            )
           ) {
             const level =
               typeof startUpLevel === "number"
-                ? Math.max(1, Math.min(254, Math.round((startUpLevel * 254) / 255)))
+                ? Math.max(
+                    1,
+                    Math.min(254, Math.round((startUpLevel * 254) / 255)),
+                  )
                 : null;
             await safeSetAttribute(
               this.endpoint,
@@ -1668,13 +1765,19 @@ export class BaseEntity {
           }
 
           const startUpColorTemp =
-            attrs.start_up_color_temp ?? attrs.start_up_color_temperature_mireds;
+            attrs.start_up_color_temp ??
+            attrs.start_up_color_temperature_mireds;
           if (
             startUpColorTemp !== undefined &&
-            this.endpoint.hasAttributeServer?.(ColorControl.id, "startUpColorTemperatureMireds")
+            this.endpoint.hasAttributeServer?.(
+              ColorControl.id,
+              "startUpColorTemperatureMireds",
+            )
           ) {
             const mireds =
-              typeof startUpColorTemp === "number" ? Math.round(startUpColorTemp) : null;
+              typeof startUpColorTemp === "number"
+                ? Math.round(startUpColorTemp)
+                : null;
             await safeSetAttribute(
               this.endpoint,
               ColorControl.id,
@@ -1769,7 +1872,10 @@ export class BaseEntity {
 
             // AirflowDirection update (only when HA exposes direction)
             if (
-              this.endpoint.hasAttributeServer(FanControl.id, "airflowDirection")
+              this.endpoint.hasAttributeServer(
+                FanControl.id,
+                "airflowDirection",
+              )
             ) {
               const dir = fanDirection(newState);
               if (dir !== undefined) {

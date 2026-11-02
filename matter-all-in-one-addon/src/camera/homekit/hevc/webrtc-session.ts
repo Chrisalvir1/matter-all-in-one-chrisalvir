@@ -1,6 +1,11 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import dgram from "node:dgram";
-import { MediaStreamTrack, RTCPeerConnection, RTCRtpCodecParameters, type RtpPacket } from "werift";
+import {
+  MediaStreamTrack,
+  RTCPeerConnection,
+  RTCRtpCodecParameters,
+  type RtpPacket,
+} from "werift";
 import {
   type WebRTCStreamingDelegate,
   type WebRTCOffer,
@@ -14,7 +19,10 @@ import {
 import { SecureVideoSFrame } from "./sframe.js";
 import { HevcAccessUnitAssembler, SFrameRtpPacketizer } from "./sframe-rtp.js";
 import { resolveFfmpegPath } from "../ffmpeg-helper.js";
-import type { ResolvedStreamSource, CameraCapabilitiesInfo } from "../../camera-types.js";
+import type {
+  ResolvedStreamSource,
+  CameraCapabilitiesInfo,
+} from "../../camera-types.js";
 
 const VIDEO_PAYLOAD_TYPE = 99;
 const AUDIO_PAYLOAD_TYPE = 110;
@@ -24,7 +32,11 @@ const hevcCodec = new RTCRtpCodecParameters({
   clockRate: 90000,
   payloadType: VIDEO_PAYLOAD_TYPE,
   parameters: "profile-id=1;tier-flag=0;level-id=153;tx-mode=SRST",
-  rtcpFeedback: [{ type: "nack" }, { type: "nack", parameter: "pli" }, { type: "ccm", parameter: "fir" }],
+  rtcpFeedback: [
+    { type: "nack" },
+    { type: "nack", parameter: "pli" },
+    { type: "ccm", parameter: "fir" },
+  ],
 });
 
 interface ActiveWebRtcSession {
@@ -55,7 +67,9 @@ export class WebRtcSessionManager implements WebRTCStreamingDelegate {
     return this.sessions.size > 0;
   }
 
-  public async handleSolicitOffer(request: WebRTCSolicitOfferRequest): Promise<WebRTCOffer> {
+  public async handleSolicitOffer(
+    request: WebRTCSolicitOfferRequest,
+  ): Promise<WebRTCOffer> {
     this.platform?.log?.notice?.(
       `[WebRTC][${this.entityId}] Preparing WebRTC stream offer (session ${request.sessionIdentifier.slice(0, 8)})...`,
     );
@@ -96,13 +110,21 @@ export class WebRtcSessionManager implements WebRTCStreamingDelegate {
     this.sessions.set(request.sessionIdentifier, session);
 
     pc.connectionStateChange.subscribe((state: string) => {
-      this.platform?.log?.debug?.(`[WebRTC][${this.entityId}] Peer connection state: ${state}`);
+      this.platform?.log?.debug?.(
+        `[WebRTC][${this.entityId}] Peer connection state: ${state}`,
+      );
       if (state === "connected") {
         this.startMediaPipeline(session).catch((err) => {
-          this.platform?.log?.error?.(`[WebRTC][${this.entityId}] Failed to start media: ${err.message}`);
+          this.platform?.log?.error?.(
+            `[WebRTC][${this.entityId}] Failed to start media: ${err.message}`,
+          );
           void this.handleEndSession(request.sessionIdentifier);
         });
-      } else if (state === "failed" || state === "closed" || state === "disconnected") {
+      } else if (
+        state === "failed" ||
+        state === "closed" ||
+        state === "disconnected"
+      ) {
         void this.handleEndSession(request.sessionIdentifier);
       }
     });
@@ -117,13 +139,18 @@ export class WebRtcSessionManager implements WebRTCStreamingDelegate {
     };
   }
 
-  public async handleProvideAnswer(request: WebRTCProvideAnswerRequest): Promise<void> {
+  public async handleProvideAnswer(
+    request: WebRTCProvideAnswerRequest,
+  ): Promise<void> {
     const session = this.sessions.get(request.sessionIdentifier);
     if (!session || session.answered) {
       throw new Error("Unknown or already-answered WebRTC session");
     }
 
-    await session.pc.setRemoteDescription({ type: "answer", sdp: request.sdpAnswer } as any);
+    await session.pc.setRemoteDescription({
+      type: "answer",
+      sdp: request.sdpAnswer,
+    } as any);
     session.answered = true;
     this.platform?.log?.debug?.(
       `[WebRTC][${this.entityId}] Applied remote SDP answer for session ${request.sessionIdentifier.slice(0, 8)}`,
@@ -137,23 +164,35 @@ export class WebRtcSessionManager implements WebRTCStreamingDelegate {
           sdpMLineIndex: candidate.sdpMLineIndex,
         });
       } catch (err) {
-        this.platform?.log?.warn?.(`[WebRTC][${this.entityId}] Failed to add ICE candidate: ${err}`);
+        this.platform?.log?.warn?.(
+          `[WebRTC][${this.entityId}] Failed to add ICE candidate: ${err}`,
+        );
       }
     }
   }
 
-  public async handleReoffer(request: WebRTCReofferRequest): Promise<WebRTCReofferAnswer> {
+  public async handleReoffer(
+    request: WebRTCReofferRequest,
+  ): Promise<WebRTCReofferAnswer> {
     const session = this.sessions.get(request.sessionIdentifier);
     if (!session) {
       throw new Error("Unknown WebRTC session");
     }
-    await session.pc.setRemoteDescription({ type: "offer", sdp: request.sdpOffer } as any);
+    await session.pc.setRemoteDescription({
+      type: "offer",
+      sdp: request.sdpOffer,
+    } as any);
     const answer = await session.pc.createAnswer();
     await session.pc.setLocalDescription(answer);
-    return { sdpAnswer: (session.pc.localDescription as any)?.sdp ?? (answer as any).sdp };
+    return {
+      sdpAnswer:
+        (session.pc.localDescription as any)?.sdp ?? (answer as any).sdp,
+    };
   }
 
-  public async handleUpdateSession(request: WebRTCUpdateSessionRequest): Promise<void> {
+  public async handleUpdateSession(
+    request: WebRTCUpdateSessionRequest,
+  ): Promise<void> {
     const session = this.sessions.get(request.sessionIdentifier);
     if (!session) return;
     session.sframe.addReceiveKeys(request.receiveKeysToAdd);
@@ -193,7 +232,9 @@ export class WebRtcSessionManager implements WebRTCStreamingDelegate {
     }
   }
 
-  private async startMediaPipeline(session: ActiveWebRtcSession): Promise<void> {
+  private async startMediaPipeline(
+    session: ActiveWebRtcSession,
+  ): Promise<void> {
     const ffmpegPath = resolveFfmpegPath();
     const sourceUrl = this.streamSource.url;
     if (!ffmpegPath || !sourceUrl) {
@@ -231,11 +272,17 @@ export class WebRtcSessionManager implements WebRTCStreamingDelegate {
         if (!frame) return;
 
         const sealed = videoCryptor.protectFrame(frame.data);
-        for (const packet of packetizer.packetize(sealed, frame.timestamp, frame.marker)) {
+        for (const packet of packetizer.packetize(
+          sealed,
+          frame.timestamp,
+          frame.marker,
+        )) {
           session.vtrack.writeRtp(packet);
         }
       } catch (err: any) {
-        this.platform?.log?.error?.(`[WebRTC][${this.entityId}] RTP forward error: ${err.message}`);
+        this.platform?.log?.error?.(
+          `[WebRTC][${this.entityId}] RTP forward error: ${err.message}`,
+        );
       }
     });
 
@@ -247,16 +294,25 @@ export class WebRtcSessionManager implements WebRTCStreamingDelegate {
     // FFmpeg reads RTSP and emits standard RFC 7798 HEVC RTP packets with -c:v copy
     const args = [
       "-hide_banner",
-      "-loglevel", "warning",
-      "-rtsp_transport", "tcp",
-      "-timeout", "5000000",
-      "-i", sourceUrl,
-      "-map", "0:v:0",
+      "-loglevel",
+      "warning",
+      "-rtsp_transport",
+      "tcp",
+      "-timeout",
+      "5000000",
+      "-i",
+      sourceUrl,
+      "-map",
+      "0:v:0",
       "-an",
-      "-c:v", "copy",
-      "-f", "rtp",
-      "-payload_type", String(VIDEO_PAYLOAD_TYPE),
-      "-ssrc", String(videoSsrc),
+      "-c:v",
+      "copy",
+      "-f",
+      "rtp",
+      "-payload_type",
+      String(VIDEO_PAYLOAD_TYPE),
+      "-ssrc",
+      String(videoSsrc),
       `rtp://127.0.0.1:${localPort}`,
     ];
 
@@ -264,15 +320,21 @@ export class WebRtcSessionManager implements WebRTCStreamingDelegate {
       `[WebRTC][${this.entityId}] Spawning WebRTC HEVC Passthrough FFmpeg pipeline to 127.0.0.1:${localPort}`,
     );
 
-    const proc = spawn(ffmpegPath, args, { stdio: ["ignore", "ignore", "pipe"] });
+    const proc = spawn(ffmpegPath, args, {
+      stdio: ["ignore", "ignore", "pipe"],
+    });
     session.ffmpegProcess = proc;
 
     proc.stderr?.on("data", (chunk: Buffer) => {
-      this.platform?.log?.debug?.(`[WebRTC][${this.entityId}][stderr] ${chunk.toString().trim()}`);
+      this.platform?.log?.debug?.(
+        `[WebRTC][${this.entityId}][stderr] ${chunk.toString().trim()}`,
+      );
     });
 
     proc.once("close", (code) => {
-      this.platform?.log?.notice?.(`[WebRTC][${this.entityId}] FFmpeg process closed (code ${code})`);
+      this.platform?.log?.notice?.(
+        `[WebRTC][${this.entityId}] FFmpeg process closed (code ${code})`,
+      );
       session.ffmpegProcess = undefined;
     });
   }

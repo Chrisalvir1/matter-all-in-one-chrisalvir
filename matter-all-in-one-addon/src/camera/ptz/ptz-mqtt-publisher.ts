@@ -60,7 +60,9 @@ export class PtzMqttPublisher {
     });
 
     this.client.on("error", (err) => {
-      this.log.error?.(`[PTZ-MQTT] MQTT connection error: ${err.message || err}`);
+      this.log.error?.(
+        `[PTZ-MQTT] MQTT connection error: ${err.message || err}`,
+      );
     });
   }
 
@@ -69,9 +71,13 @@ export class PtzMqttPublisher {
     const commandTopicPattern = `${this.prefix}/camera/+/ptz/command`;
     this.client.subscribe(commandTopicPattern, (err) => {
       if (err) {
-        this.log.error?.(`[PTZ-MQTT] Failed to subscribe to ${commandTopicPattern}: ${err}`);
+        this.log.error?.(
+          `[PTZ-MQTT] Failed to subscribe to ${commandTopicPattern}: ${err}`,
+        );
       } else {
-        this.log.info?.(`[PTZ-MQTT] Subscribed to commands: ${commandTopicPattern}`);
+        this.log.info?.(
+          `[PTZ-MQTT] Subscribed to commands: ${commandTopicPattern}`,
+        );
       }
     });
   }
@@ -126,8 +132,14 @@ export class PtzMqttPublisher {
       zones: info.zones,
     };
 
-    this.client.publish(stateTopic, JSON.stringify(statePayload), { retain: true, qos: 1 });
-    this.client.publish(zonesTopic, JSON.stringify(zonesPayload), { retain: true, qos: 1 });
+    this.client.publish(stateTopic, JSON.stringify(statePayload), {
+      retain: true,
+      qos: 1,
+    });
+    this.client.publish(zonesTopic, JSON.stringify(zonesPayload), {
+      retain: true,
+      qos: 1,
+    });
 
     // Also publish Home Assistant discovery configurations for PTZ sensor and zone selector
     this.publishHaDiscovery(entityId, info);
@@ -159,11 +171,17 @@ export class PtzMqttPublisher {
 
   private subscribeToLegacyDiscovery(): void {
     if (!this.client?.connected) return;
-    this.client.subscribe(`${this.discoveryPrefix}/+/+/config`, { qos: 1 }, (err) => {
-      if (err) {
-        this.log.warn?.(`[PTZ-MQTT] Could not reconcile retained discovery: ${err}`);
-      }
-    });
+    this.client.subscribe(
+      `${this.discoveryPrefix}/+/+/config`,
+      { qos: 1 },
+      (err) => {
+        if (err) {
+          this.log.warn?.(
+            `[PTZ-MQTT] Could not reconcile retained discovery: ${err}`,
+          );
+        }
+      },
+    );
   }
 
   private removeCameraDiscovery(entityId: string): void {
@@ -180,13 +198,21 @@ export class PtzMqttPublisher {
         { retain: true, qos: 1 },
       );
     }
-    this.client.publish(`${this.prefix}/camera/${safeId}/ptz/state`, "", { retain: true, qos: 1 });
-    this.client.publish(`${this.prefix}/camera/${safeId}/ptz/zones`, "", { retain: true, qos: 1 });
+    this.client.publish(`${this.prefix}/camera/${safeId}/ptz/state`, "", {
+      retain: true,
+      qos: 1,
+    });
+    this.client.publish(`${this.prefix}/camera/${safeId}/ptz/zones`, "", {
+      retain: true,
+      qos: 1,
+    });
   }
 
   private clearStaleDiscovery(topic: string, payload: string): void {
     const topicMatch = topic.match(
-      new RegExp(`^${this.escapeRegExp(this.discoveryPrefix)}/(?:sensor|select|switch)/[^/]+/config$`),
+      new RegExp(
+        `^${this.escapeRegExp(this.discoveryPrefix)}/(?:sensor|select|switch)/[^/]+/config$`,
+      ),
     );
     if (!topicMatch || payload.length === 0) return;
 
@@ -197,9 +223,16 @@ export class PtzMqttPublisher {
       return;
     }
 
-    const uniqueId = typeof config?.unique_id === "string" ? config.unique_id : "";
-    const ownedSuffixes = ["_ptz_zone_sensor", "_ptz_zone_selector", "_dptz_mode_switch"];
-    const suffix = ownedSuffixes.find((candidate) => uniqueId.endsWith(candidate));
+    const uniqueId =
+      typeof config?.unique_id === "string" ? config.unique_id : "";
+    const ownedSuffixes = [
+      "_ptz_zone_sensor",
+      "_ptz_zone_selector",
+      "_dptz_mode_switch",
+    ];
+    const suffix = ownedSuffixes.find((candidate) =>
+      uniqueId.endsWith(candidate),
+    );
     if (!suffix) return;
 
     const safeId = uniqueId.slice(0, -suffix.length);
@@ -207,8 +240,14 @@ export class PtzMqttPublisher {
 
     // Only clear configs bearing this add-on's legacy PTZ unique_id suffixes.
     this.client?.publish(topic, "", { retain: true, qos: 1 });
-    this.client?.publish(`${this.prefix}/camera/${safeId}/ptz/state`, "", { retain: true, qos: 1 });
-    this.client?.publish(`${this.prefix}/camera/${safeId}/ptz/zones`, "", { retain: true, qos: 1 });
+    this.client?.publish(`${this.prefix}/camera/${safeId}/ptz/state`, "", {
+      retain: true,
+      qos: 1,
+    });
+    this.client?.publish(`${this.prefix}/camera/${safeId}/ptz/zones`, "", {
+      retain: true,
+      qos: 1,
+    });
     this.log.notice?.(`[PTZ-MQTT] Removed stale PTZ discovery ${safeId}`);
   }
 
@@ -243,7 +282,9 @@ export class PtzMqttPublisher {
       device,
       icon: "mdi:cctv",
     };
-    this.client.publish(sensorConfigTopic, JSON.stringify(sensorConfig), { retain: true });
+    this.client.publish(sensorConfigTopic, JSON.stringify(sensorConfig), {
+      retain: true,
+    });
 
     // 2. Select entity for Zones
     const selectConfigTopic = `${this.discoveryPrefix}/select/${safeId}_ptz_zone_select/config`;
@@ -258,7 +299,9 @@ export class PtzMqttPublisher {
       device,
       icon: "mdi:camera-control",
     };
-    this.client.publish(selectConfigTopic, JSON.stringify(selectConfig), { retain: true });
+    this.client.publish(selectConfigTopic, JSON.stringify(selectConfig), {
+      retain: true,
+    });
 
     // 3. Switch entity for DPTZ Mode
     const switchConfigTopic = `${this.discoveryPrefix}/switch/${safeId}_dptz_mode/config`;
@@ -273,20 +316,29 @@ export class PtzMqttPublisher {
       device,
       icon: "mdi:shield-search",
     };
-    this.client.publish(switchConfigTopic, JSON.stringify(switchConfig), { retain: true });
+    this.client.publish(switchConfigTopic, JSON.stringify(switchConfig), {
+      retain: true,
+    });
   }
 
-  private async handleIncomingMessage(topic: string, payloadStr: string): Promise<void> {
+  private async handleIncomingMessage(
+    topic: string,
+    payloadStr: string,
+  ): Promise<void> {
     this.clearStaleDiscovery(topic, payloadStr);
     try {
-      const match = topic.match(new RegExp(`^${this.prefix}/camera/([^/]+)/ptz/command$`));
+      const match = topic.match(
+        new RegExp(`^${this.prefix}/camera/([^/]+)/ptz/command$`),
+      );
       if (!match) return;
 
       const safeId = match[1];
       const entityId = safeId.replace(/_/g, ".");
       const cmd = JSON.parse(payloadStr);
 
-      this.log.info?.(`[PTZ-MQTT] Command received for ${entityId}: ${payloadStr}`);
+      this.log.info?.(
+        `[PTZ-MQTT] Command received for ${entityId}: ${payloadStr}`,
+      );
 
       switch (cmd.command) {
         case "move_to_preset": {
@@ -305,13 +357,27 @@ export class PtzMqttPublisher {
         }
         case "move": {
           const dir = cmd.direction;
-          if (["up", "down", "left", "right", "zoom_in", "zoom_out", "center"].includes(dir)) {
+          if (
+            [
+              "up",
+              "down",
+              "left",
+              "right",
+              "zoom_in",
+              "zoom_out",
+              "center",
+            ].includes(dir)
+          ) {
             await this.ptzManager.moveDirection(entityId, dir, cmd.step || 0.1);
           }
           break;
         }
         case "relative_move": {
-          if (cmd.pan !== undefined || cmd.tilt !== undefined || cmd.zoom !== undefined) {
+          if (
+            cmd.pan !== undefined ||
+            cmd.tilt !== undefined ||
+            cmd.zoom !== undefined
+          ) {
             const step = Math.abs(cmd.pan || cmd.tilt || 0.1);
             let dir: "up" | "down" | "left" | "right" = "right";
             if (cmd.pan > 0) dir = "right";
@@ -326,7 +392,9 @@ export class PtzMqttPublisher {
           this.log.warn?.(`[PTZ-MQTT] Unknown command: ${cmd.command}`);
       }
     } catch (err: any) {
-      this.log.error?.(`[PTZ-MQTT] Error handling incoming command on ${topic}: ${err.message || err}`);
+      this.log.error?.(
+        `[PTZ-MQTT] Error handling incoming command on ${topic}: ${err.message || err}`,
+      );
     }
   }
 

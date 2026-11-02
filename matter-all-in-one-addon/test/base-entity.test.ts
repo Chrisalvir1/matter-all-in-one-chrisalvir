@@ -262,7 +262,9 @@ describe("BaseEntity fan devices (On/Off vs MultiSpeed)", () => {
 
     entity.adoptEndpoint(endpoint);
 
-    expect(endpoint.softwareVersionString).toBe("Matter 1.6.1 · Matterbridge 3.10.14");
+    expect(endpoint.softwareVersionString).toBe(
+      "Matter 1.6.1 · Matterbridge 3.10.14",
+    );
 
     // Verify toggle handler is available and functions
     await endpoint.invokeCommand("toggle");
@@ -317,9 +319,12 @@ describe("BaseEntity fan devices (On/Off vs MultiSpeed)", () => {
       "turn_on",
       "light.govee_test",
       expect.objectContaining({
-        rgb_color: expect.arrayContaining([expect.any(Number), expect.any(Number), expect.any(Number)]),
+        rgb_color: expect.arrayContaining([
+          expect.any(Number),
+          expect.any(Number),
+          expect.any(Number),
+        ]),
       }),
     );
   });
 });
-

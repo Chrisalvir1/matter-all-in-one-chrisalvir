@@ -1,9 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import type {
-  CameraUiCameraRecord,
-  CameraUiStore,
-} from "./cameraui-types.js";
+import type { CameraUiCameraRecord, CameraUiStore } from "./cameraui-types.js";
 
 const CONFIG_PATH = "/data/cameraui-config.json";
 const FALLBACK_CONFIG_PATH = "./cameraui-config.json";
@@ -24,7 +21,11 @@ export function repairCameraRecord(cam: CameraUiCameraRecord): {
 
   // C402 and C120 use Home Assistant's stream resolver, while retaining their saved HAP
   // identity and URL. Do not synthesize sensors or rewrite them to a Camera.UI URL.
-  if (/(?:tapo[-_ ]?c402|tapo[-_ ]?c120|tapo[-_ ]?spot)/i.test(`${cam.id} ${cam.name || ""} ${cam.rtspUrl || ""}`)) {
+  if (
+    /(?:tapo[-_ ]?c402|tapo[-_ ]?c120|tapo[-_ ]?spot)/i.test(
+      `${cam.id} ${cam.name || ""} ${cam.rtspUrl || ""}`,
+    )
+  ) {
     if (cam.sourceProvider !== "home_assistant") {
       cam.sourceProvider = "home_assistant";
       modified = true;

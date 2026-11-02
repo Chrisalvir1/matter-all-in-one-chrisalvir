@@ -14,10 +14,15 @@ import os from "node:os";
 
 describe("PTZ Capabilities and Detection (Matter 1.6.1)", () => {
   it("detects hardware PTZ for cameras with Scrypted PanTiltZoom interface", () => {
-    const info = detectCameraPtzCapabilities("camera.driveway", {}, {}, {
-      name: "Tapo C210 Pan/Tilt",
-      interfaces: ["PanTiltZoom", "Camera"],
-    });
+    const info = detectCameraPtzCapabilities(
+      "camera.driveway",
+      {},
+      {},
+      {
+        name: "Tapo C210 Pan/Tilt",
+        interfaces: ["PanTiltZoom", "Camera"],
+      },
+    );
 
     expect(info.hasPtz).toBe(true);
     expect(info.ptzType).toBe("hardware");
@@ -36,12 +41,19 @@ describe("PTZ Capabilities and Detection (Matter 1.6.1)", () => {
   });
 
   it("does not invent PTZ for standard video stream cameras", () => {
-    const info = detectCameraPtzCapabilities("camera.front_door", {
-      state: "idle",
-      attributes: { friendly_name: "Timbre Principal", frontend_stream_type: "hls" },
-    }, {
-      url: "rtsp://192.168.1.100:554/live",
-    });
+    const info = detectCameraPtzCapabilities(
+      "camera.front_door",
+      {
+        state: "idle",
+        attributes: {
+          friendly_name: "Timbre Principal",
+          frontend_stream_type: "hls",
+        },
+      },
+      {
+        url: "rtsp://192.168.1.100:554/live",
+      },
+    );
 
     expect(info.hasPtz).toBe(false);
     expect(info.ptzType).toBe("none");
@@ -68,7 +80,10 @@ describe("Surveillance Zones Manager (CRUD & Movement)", () => {
   let manager: PtzZonesManager;
 
   beforeEach(() => {
-    tempStore = path.join(os.tmpdir(), `ptz-test-${Date.now()}-${Math.random()}.json`);
+    tempStore = path.join(
+      os.tmpdir(),
+      `ptz-test-${Date.now()}-${Math.random()}.json`,
+    );
     manager = new PtzZonesManager(tempStore);
   });
 
@@ -108,28 +123,42 @@ describe("Surveillance Zones Manager (CRUD & Movement)", () => {
 
     const movedRight = await manager.moveDirection(entityId, "right", 0.1);
     expect(movedRight).toBeDefined();
-    const activeZone = movedRight!.zones.find((z) => z.id === movedRight!.currentZoneId);
+    const activeZone = movedRight!.zones.find(
+      (z) => z.id === movedRight!.currentZoneId,
+    );
     expect(activeZone?.viewport?.x).toBeGreaterThan(0);
 
     const zoomedIn = await manager.moveDirection(entityId, "zoom_in", 0.1);
     expect(zoomedIn).toBeDefined();
-    const zoomedZone = zoomedIn!.zones.find((z) => z.id === zoomedIn!.currentZoneId);
+    const zoomedZone = zoomedIn!.zones.find(
+      (z) => z.id === zoomedIn!.currentZoneId,
+    );
     expect(zoomedZone?.viewport?.width).toBeLessThan(1);
   });
 });
 
 describe("Matter PTZ Exporter (Matter 1.6.1 Format)", () => {
   it("generates endpoint configuration with DPTZ clusters and Single-Switch controller", () => {
-    const info = detectCameraPtzCapabilities("camera.backyard", {
-      attributes: { friendly_name: "Patio Trasero" },
-    }, { url: "rtsp://stream" });
+    const info = detectCameraPtzCapabilities(
+      "camera.backyard",
+      {
+        attributes: { friendly_name: "Patio Trasero" },
+      },
+      { url: "rtsp://stream" },
+    );
 
     const config = MatterPtzExporter.generateEndpointConfig(info, 1920, 1080);
     expect(config.entityId).toBe("camera.backyard");
     expect(config.dptzStreams).toEqual([1]);
-    expect(config.matterbridgeServerConfig.commands).toContain("DPTZSetViewport");
-    expect(config.matterbridgeServerConfig.commands).toContain("DPTZRelativeMove");
-    expect(config.matterbridgeServerConfig.commands).toContain("MPTZMoveToPreset");
+    expect(config.matterbridgeServerConfig.commands).toContain(
+      "DPTZSetViewport",
+    );
+    expect(config.matterbridgeServerConfig.commands).toContain(
+      "DPTZRelativeMove",
+    );
+    expect(config.matterbridgeServerConfig.commands).toContain(
+      "MPTZMoveToPreset",
+    );
     expect(config.singleSwitchZoneController.enabled).toBe(true);
     expect(config.singleSwitchZoneController.presets.length).toBe(5);
   });
@@ -140,7 +169,10 @@ describe("Matter PTZ Exporter (Matter 1.6.1 Format)", () => {
     const manager = new PtzZonesManager(tempStore);
     manager.registerCamera("camera.living_room", { attributes: { ptz: true } });
 
-    const exportData = await MatterPtzExporter.exportToFile(manager, tempExport);
+    const exportData = await MatterPtzExporter.exportToFile(
+      manager,
+      tempExport,
+    );
     expect(exportData.schemaVersion).toBe("1.6.1");
     expect(exportData.camerasCount).toBe(1);
 

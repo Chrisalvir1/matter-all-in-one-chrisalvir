@@ -20,11 +20,13 @@ import {
 import { sensorConverter } from "../converters/sensor.converter.js";
 
 export const AirQualityClusterId = 0x005b as any as ClusterId;
-export const CarbonDioxideConcentrationMeasurementId = 0x040d as any as ClusterId;
+export const CarbonDioxideConcentrationMeasurementId =
+  0x040d as any as ClusterId;
 export const Pm1ConcentrationMeasurementId = 0x042a as any as ClusterId;
 export const Pm25ConcentrationMeasurementId = 0x042b as any as ClusterId;
 export const Pm10ConcentrationMeasurementId = 0x042d as any as ClusterId;
-export const TotalVolatileOrganicCompoundsConcentrationMeasurementId = 0x042f as any as ClusterId;
+export const TotalVolatileOrganicCompoundsConcentrationMeasurementId =
+  0x042f as any as ClusterId;
 export const OzoneConcentrationMeasurementId = 0x0415 as any as ClusterId;
 export const RadonConcentrationMeasurementId = 0x042e as any as ClusterId;
 
@@ -47,7 +49,11 @@ export class AirQualityEntity extends BaseEntity {
     const updateFn = isInitialSync ? safeSetAttribute : safeUpdateAttribute;
     const deviceClass = state.attributes?.device_class;
 
-    if (deviceClass === "aqi" || deviceClass === "air_quality" || !deviceClass) {
+    if (
+      deviceClass === "aqi" ||
+      deviceClass === "air_quality" ||
+      !deviceClass
+    ) {
       const aqiLevel = sensorConverter.toAirQuality(state);
       if (aqiLevel !== null) {
         await updateFn(

@@ -1,3 +1,16 @@
+## [2.3.13] - 2026-11-02
+
+- Fija npm 12.2.1 en Docker, CI y desarrollo; corrige formato y resuelve los servicios Matter desde el módulo ESM del bridge sin duplicar identidades.
+- Fija imágenes base por digest y bloquea el helper de publicación fuera de main.
+- Actualiza Node.js a 26.13.0 LTS en runtime, compilación y CI, con tipos Node 26.
+- Actualiza Matterbridge a 3.11.1: restauración segura del rango de temperatura de color y reporte correcto de fallos de backup Matter.
+- Actualiza HAP-NodeJS a 2.3.0 y werift a 0.26.0; actualiza dependencias estables de interfaz, pruebas y overrides.
+- Alinea npm, gestores de versión Node, devcontainer y tareas VS Code; añade checks de toolchain y runtime a Docker/CI (amd64/arm64).
+- Renueva transitivas dentro de sus rangos compatibles y fija GitHub Actions a releases estables con SHA.
+- Prepara pruebas aisladas contra Home Assistant 2026.11.0b3 (beta) con Python 3.14.10 y uv 0.13.6; ejecución pendiente.
+- Corrige avisos transitivos de glob/minimatch en Scrypted mediante override acotado a rimraf.
+- La actualización de Matterbridge restablece sus preferencias de interfaz por el cambio de claves de almacenamiento; conservar los datos y fabrics existentes.
+
 ## [2.3.12] - 2026-10-29
 
 - Corrige la decodificación del audio Talk que Apple Casa envía al altavoz del comedero: selecciona explícitamente `libfdk_aac` para AAC-ELD y limita el sondeo de FFmpeg para que interprete el SDP de retorno sin quedarse esperando datos.

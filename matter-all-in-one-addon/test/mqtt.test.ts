@@ -136,7 +136,9 @@ describe("MQTT Auto-Discovery and Entity Mapping", () => {
     const normalized = normalizeMqttDiscoveryConfig(rawConfig);
     expect(normalized.state_topic).toBe("zigbee2mqtt/kitchen_sensor/state");
     expect(normalized.command_topic).toBe("zigbee2mqtt/kitchen_sensor/set");
-    expect(normalized.availability_topic).toBe("zigbee2mqtt/kitchen_sensor/availability");
+    expect(normalized.availability_topic).toBe(
+      "zigbee2mqtt/kitchen_sensor/availability",
+    );
     expect(normalized.unique_id).toBe("0x00158d0001");
     expect(normalized.device.identifiers).toEqual(["0x00158d0001"]);
     expect(normalized.device.manufacturer).toBe("Xiaomi");

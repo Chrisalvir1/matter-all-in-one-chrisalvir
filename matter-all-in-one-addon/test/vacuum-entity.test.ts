@@ -9,7 +9,13 @@ describe("VacuumEntity Apple Home topology and identity", () => {
     const batteryId = "sensor.robotina_battery";
     const platform = {
       matterbridge: { matterbridgeVersion: "3.11.0" },
-      log: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), notice: vi.fn(), warn: vi.fn() },
+      log: {
+        debug: vi.fn(),
+        error: vi.fn(),
+        info: vi.fn(),
+        notice: vi.fn(),
+        warn: vi.fn(),
+      },
       ha: {
         callService: vi.fn().mockResolvedValue(undefined),
         hassEntities: new Map([
@@ -18,11 +24,14 @@ describe("VacuumEntity Apple Home topology and identity", () => {
         ]),
         hassDevices: new Map(),
         hassStates: new Map([
-          [batteryId, {
-            entity_id: batteryId,
-            state: "73",
-            attributes: { device_class: "battery", unit_of_measurement: "%" },
-          }],
+          [
+            batteryId,
+            {
+              entity_id: batteryId,
+              state: "73",
+              attributes: { device_class: "battery", unit_of_measurement: "%" },
+            },
+          ],
         ]),
       },
     };
@@ -42,7 +51,9 @@ describe("VacuumEntity Apple Home topology and identity", () => {
     await vacuum.updateState(state as any, true);
 
     expect(endpoint.deviceType).toBe(0x0074);
-    expect(endpoint.attributes.get("powerSource:batPercentRemaining")).toBe(146);
+    expect(endpoint.attributes.get("powerSource:batPercentRemaining")).toBe(
+      146,
+    );
     expect(endpoint.clusterServers.has(0x0090)).toBe(false);
   });
 
@@ -204,13 +215,17 @@ describe("VacuumEntity Apple Home topology and identity", () => {
     const endpoint = (await vacuum.createEndpoint()) as any;
     await vacuum.updateState(state as any, true);
 
-    expect(endpoint.attributes.get("rvcOperationalState:operationalState")).toBe(1); // Running
+    expect(
+      endpoint.attributes.get("rvcOperationalState:operationalState"),
+    ).toBe(1); // Running
 
     // When entity goes offline / unavailable, reachability is false
     await vacuum.setReachability(false);
 
     // CRITICAL: operationalState must be 0 (Stopped), NEVER 3 (Error)!
-    expect(endpoint.attributes.get("rvcOperationalState:operationalState")).toBe(0);
+    expect(
+      endpoint.attributes.get("rvcOperationalState:operationalState"),
+    ).toBe(0);
     expect(endpoint.attributes.get("rvcRunMode:currentMode")).toBe(1); // Idle
 
     // Commands must return a failure when Home Assistant already reports unavailable
@@ -226,14 +241,22 @@ describe("VacuumEntity Apple Home topology and identity", () => {
     // When connection is restored to docked
     vacuum.state = { ...state, state: "docked" } as any;
     await vacuum.setReachability(true);
-    expect(endpoint.attributes.get("rvcOperationalState:operationalState")).toBe(0x42); // Docked
+    expect(
+      endpoint.attributes.get("rvcOperationalState:operationalState"),
+    ).toBe(0x42); // Docked
   });
 
   it("rejects Matterbridge's advertised SkipArea command when HA has no portable skip-area service", async () => {
     const entityId = "vacuum.sala_tv_robotina_rvc";
     const platform = {
       matterbridge: { matterbridgeVersion: "3.10.14" },
-      log: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), notice: vi.fn(), warn: vi.fn() },
+      log: {
+        debug: vi.fn(),
+        error: vi.fn(),
+        info: vi.fn(),
+        notice: vi.fn(),
+        warn: vi.fn(),
+      },
       ha: {
         callService: vi.fn().mockResolvedValue(undefined),
         hassEntities: new Map(),
@@ -298,7 +321,9 @@ describe("VacuumEntity Apple Home topology and identity", () => {
     await vacuum.updateState(state as any, true);
 
     // Legitimate operational error reports Error (3)
-    expect(endpoint.attributes.get("rvcOperationalState:operationalState")).toBe(3);
+    expect(
+      endpoint.attributes.get("rvcOperationalState:operationalState"),
+    ).toBe(3);
   });
 
   it("prioritizes modo_de_limpieza over control_manual select, leaves supportedAreas undefined when no rooms exist, and reads linked battery sensor", async () => {
@@ -311,7 +336,13 @@ describe("VacuumEntity Apple Home topology and identity", () => {
 
     const platform = {
       matterbridge: { matterbridgeVersion: "3.10.14" },
-      log: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), notice: vi.fn(), warn: vi.fn() },
+      log: {
+        debug: vi.fn(),
+        error: vi.fn(),
+        info: vi.fn(),
+        notice: vi.fn(),
+        warn: vi.fn(),
+      },
       ha: {
         callService: vi.fn().mockResolvedValue(undefined),
         hassEntities: new Map([
@@ -333,7 +364,13 @@ describe("VacuumEntity Apple Home topology and identity", () => {
               state: "stop",
               attributes: {
                 friendly_name: "ROBOTINA Control manual",
-                options: ["stop", "forward", "backward", "turn_left", "turn_right"],
+                options: [
+                  "stop",
+                  "forward",
+                  "backward",
+                  "turn_left",
+                  "turn_right",
+                ],
               },
             },
           ],
@@ -344,7 +381,14 @@ describe("VacuumEntity Apple Home topology and identity", () => {
               state: "chargego",
               attributes: {
                 friendly_name: "ROBOTINA Modo de limpieza",
-                options: ["smart", "wall_follow", "spiral", "chargego", "random", "standby"],
+                options: [
+                  "smart",
+                  "wall_follow",
+                  "spiral",
+                  "chargego",
+                  "random",
+                  "standby",
+                ],
               },
             },
           ],
@@ -367,7 +411,14 @@ describe("VacuumEntity Apple Home topology and identity", () => {
               },
             },
           ],
-          [statusSensorId, { entity_id: statusSensorId, state: "charge_done", attributes: { friendly_name: "ROBOTINA Status" } }],
+          [
+            statusSensorId,
+            {
+              entity_id: statusSensorId,
+              state: "charge_done",
+              attributes: { friendly_name: "ROBOTINA Status" },
+            },
+          ],
         ]),
       },
     };
@@ -398,16 +449,24 @@ describe("VacuumEntity Apple Home topology and identity", () => {
 
     // Sync state and verify battery sensor fallback (100% -> 200 in Matter) and Docked state (66)
     await vacuum.updateState(state as any, true);
-    expect(endpoint.attributes.get("powerSource:batPercentRemaining")).toBe(200);
+    expect(endpoint.attributes.get("powerSource:batPercentRemaining")).toBe(
+      200,
+    );
     expect(endpoint.attributes.get("powerSource:batChargeState")).toBe(2);
-    expect(endpoint.attributes.get("rvcOperationalState:operationalState")).toBe(66);
+    expect(
+      endpoint.attributes.get("rvcOperationalState:operationalState"),
+    ).toBe(66);
     (platform.ha.hassStates.get(statusSensorId) as any).state = "goto_charge";
     await vacuum.updateState({ ...state, state: "returning" } as any, true);
-    expect(endpoint.attributes.get("rvcOperationalState:operationalState")).toBe(64);
+    expect(
+      endpoint.attributes.get("rvcOperationalState:operationalState"),
+    ).toBe(64);
     expect(endpoint.attributes.get("powerSource:batChargeState")).toBe(3);
     (platform.ha.hassStates.get(statusSensorId) as any).state = "charging";
     await vacuum.updateState({ ...state, state: "docked" } as any, true);
-    expect(endpoint.attributes.get("rvcOperationalState:operationalState")).toBe(65);
+    expect(
+      endpoint.attributes.get("rvcOperationalState:operationalState"),
+    ).toBe(65);
     expect(endpoint.attributes.get("powerSource:batChargeState")).toBe(1);
 
     // An unavailable button must not hide the usable chargego selector.
@@ -418,7 +477,15 @@ describe("VacuumEntity Apple Home topology and identity", () => {
       cleanSelectId,
       { option: "chargego" },
     );
-    await endpoint.invokeCommand("RvcRunMode.changeToMode", { request: { newMode: 2 }, context: { sessionId: 123n } });
-    expect(platform.ha.callService).toHaveBeenLastCalledWith("vacuum", "start", entityId, {});
+    await endpoint.invokeCommand("RvcRunMode.changeToMode", {
+      request: { newMode: 2 },
+      context: { sessionId: 123n },
+    });
+    expect(platform.ha.callService).toHaveBeenLastCalledWith(
+      "vacuum",
+      "start",
+      entityId,
+      {},
+    );
   });
 });

@@ -316,7 +316,9 @@ export function getExportProfiles(
   const profiles = profilesByDomain[domain] ?? [];
   if (domain !== "sensor") return profiles;
   const profileId = sensorProfileByDeviceClass[deviceClass ?? ""];
-  return profileId ? profiles.filter((profile) => profile.id === profileId) : [];
+  return profileId
+    ? profiles.filter((profile) => profile.id === profileId)
+    : [];
 }
 
 export function getExportProfile(

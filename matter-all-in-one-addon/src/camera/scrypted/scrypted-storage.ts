@@ -111,7 +111,10 @@ export function isInventedRtspUrl(url: string, cameraId: string): boolean {
   try {
     const u = new URL(url);
     // Prohibited: Scrypted Rebroadcast placeholder where path is exactly /<cameraId> or port 8554 with just /<digits>
-    return u.pathname === `/${cameraId}` || (u.port === "8554" && /^\/\d+$/.test(u.pathname));
+    return (
+      u.pathname === `/${cameraId}` ||
+      (u.port === "8554" && /^\/\d+$/.test(u.pathname))
+    );
   } catch {
     return false;
   }
@@ -373,7 +376,8 @@ export class ScryptedStorage {
       )?.directUrl;
 
       const effectiveDirectUrl =
-        existingDirectUrl && !isInventedRtspUrl(existingDirectUrl, fresh.cameraId)
+        existingDirectUrl &&
+        !isInventedRtspUrl(existingDirectUrl, fresh.cameraId)
           ? existingDirectUrl
           : freshDirectUrl && !isInventedRtspUrl(freshDirectUrl, fresh.cameraId)
             ? freshDirectUrl
@@ -386,9 +390,12 @@ export class ScryptedStorage {
               protocol: "rtsp",
               directUrl: effectiveDirectUrl,
               validationStatus:
-                existing?.source?.streamReference?.directUrl === effectiveDirectUrl
-                  ? (existing?.source?.streamReference?.validationStatus || "not_checked")
-                  : (fresh.source?.streamReference?.validationStatus || "not_checked"),
+                existing?.source?.streamReference?.directUrl ===
+                effectiveDirectUrl
+                  ? existing?.source?.streamReference?.validationStatus ||
+                    "not_checked"
+                  : fresh.source?.streamReference?.validationStatus ||
+                    "not_checked",
             }
           : undefined; // No URL — never fabricate one
 
@@ -433,7 +440,8 @@ export class ScryptedStorage {
           ...fresh.source,
           streamReference: effectiveStreamReference,
           snapshotReference:
-            fresh.source?.snapshotReference || existing?.source?.snapshotReference,
+            fresh.source?.snapshotReference ||
+            existing?.source?.snapshotReference,
           profiles:
             fresh.source?.profiles && fresh.source.profiles.length > 0
               ? fresh.source.profiles

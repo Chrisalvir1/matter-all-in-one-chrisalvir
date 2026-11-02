@@ -581,9 +581,9 @@ export class HomeKitCameraStreamingDelegate
       ) {
         finish("safety-cached-fallback", this.lastSnapshotBuffer);
       }
-    // Let the bounded HA snapshot, direct HTTP snapshot, and final FFmpeg
-    // capture complete before returning an older cached image. These paths
-    // have explicit upper bounds of 1.2s + 1.5s + 2s respectively.
+      // Let the bounded HA snapshot, direct HTTP snapshot, and final FFmpeg
+      // capture complete before returning an older cached image. These paths
+      // have explicit upper bounds of 1.2s + 1.5s + 2s respectively.
     }, 5200);
 
     try {
