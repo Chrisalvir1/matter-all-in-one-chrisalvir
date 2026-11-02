@@ -1,4 +1,6 @@
-# Matter All-in-One Chrisalvir — v2.3.0
+# Matter All-in-One Chrisalvir — v2.3.13
+
+> **2.3.13 · 2 de noviembre de 2026:** Node 26.13.0 LTS, npm 12.2.1 y Matterbridge 3.11.1. CI aprobó 707 pruebas y las imágenes AMD64/ARM64; también pasó el contrato WebSocket con HA 2026.11.0b3 (beta). Esto no sustituye pruebas físicas en Apple Casa/HKSV. Consulta [cambios](matter-all-in-one-addon/CHANGELOG.md), [notas](docs/RELEASE_NOTES_2.3.13.md) y [versiones](docs/RELEASES.md).
 
 <div align="center">
   <img src="matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
@@ -8,7 +10,7 @@
 
 **Un solo proyecto para integrar dispositivos de Home Assistant en Matter y cámaras en Apple Casa.**
 
-**Versión 2.3.0** · **Preparado para Home Assistant 2026.11 (beta)** · **Matter 1.6.1** · **HomeKit HAP / HKSV**
+**Versión 2.3.13** · **Preparado para Home Assistant 2026.11 (beta)** · **Matter 1.6.1** · **HomeKit HAP / HKSV**
 
 </div>
 
@@ -17,7 +19,7 @@ Matter All-in-One Chrisalvir (MIAO) reúne la administración de accesorios Matt
 > [!IMPORTANT]
 > **Compatibilidad con Home Assistant 2026.11:** la v2.3.0 incorpora ajustes y pruebas automatizadas para los cambios de nombres contextuales de entidades de la **beta de 2026.11**. **No se ha validado todavía sobre una instalación real de esa beta**; la referencia operativa del proyecto sigue siendo Home Assistant 2026.10. No necesitas actualizar tu Home Assistant principal a la beta para usar estas mejoras.
 
-## ✨ Novedades de hoy — v2.3.0 (28 de octubre de 2026)
+## Historial: novedades v2.3.0 (28 de octubre de 2026)
 
 ### 1. Compatibilidad preparada para Home Assistant 2026.11
 
@@ -91,7 +93,7 @@ La actualización **no borra emparejamientos ni modifica intencionalmente fabric
 
 1. En **Ajustes → Complementos / Aplicaciones → Tienda**, abre el menú para agregar un repositorio.
 2. Agrega: `https://github.com/Chrisalvir1/matter-all-in-one-chrisalvir`.
-3. Instala **Matter All-in-one (Chrisalvir)** o actualiza a **v2.3.0** cuando la imagen publicada esté disponible.
+3. Instala **Matter All-in-one (Chrisalvir)** o actualiza a **v2.3.13** cuando la imagen publicada esté disponible.
 4. Inicia el complemento y abre su interfaz desde Home Assistant.
 5. Selecciona el dispositivo y la ruta **Matter** o **HomeKit HAP** apropiada; usa el QR de emparejamiento correspondiente.
 
@@ -102,7 +104,7 @@ Las imágenes `amd64` y `aarch64` se generan mediante GitHub Actions y se distri
 ### Como plugin de Matterbridge (instalación independiente)
 
 ```bash
-npm install matter-all-in-one-addon@2.3.0
+npm install matter-all-in-one-addon@2.3.13
 ```
 
 La publicación en npm depende del flujo de release. Configura la conexión WebSocket con Home Assistant, Matterbridge y los puertos de la instancia según tu entorno. El complemento oficial de HA ya gestiona la conexión con Supervisor y la persistencia.

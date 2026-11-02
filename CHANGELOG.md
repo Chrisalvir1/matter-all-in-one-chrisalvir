@@ -1,3 +1,11 @@
+## [2.3.13] - 2026-11-02
+
+- Actualiza Node.js 26.13.0 LTS, npm 12.2.1, Matterbridge 3.11.1, HAP-NodeJS 2.3.0, werift 0.26.0 y dependencias compatibles; fija imágenes base por digest y GitHub Actions por SHA.
+- Corrige los fallbacks de `DeviceCommissioner` y `FabricManager` resolviendo el entrypoint ESM de `@matter/protocol` desde Matterbridge, sin duplicar las identidades del protocolo.
+- Añade comprobaciones de toolchain/runtime, smoke tests Docker AMD64/ARM64 y contrato WebSocket HA 2026.11.
+- CI aprobada en Linux AMD64/ARM64: Node/npm, TypeScript, formato, build, auditoría npm (0 vulnerabilidades), 707 pruebas y carga de Matterbridge, protocolo, FFmpeg 8.0 y ffprobe 8.1.3. Dos pruebas del contrato pasaron contra HA 2026.11.0b3 con Python 3.14.10.
+- 2026.11.0b3 es beta. Los tests de CI no certifican una instalación física, Apple Casa, Live View, Talkback ni clips HKSV. Haz backup antes de actualizar; conserva `/data` y fabrics. Matterbridge cambia las claves de preferencias de su frontend y estas vuelven al valor inicial.
+
 ## [2.3.11] - 2026-10-29
 
 - Repara el mando a distancia de Apple TV / Centro de Control iOS para televisores HAP: implementa navegación completa del touchpad/D-pad (`ARROW_UP`, `ARROW_DOWN`, `ARROW_LEFT`, `ARROW_RIGHT`, `SELECT`), botón de regreso (`BACK`), botón de inicio (`EXIT`), menú/información (`INFORMATION`) y botones de reproducción mediante `remote.send_command` y entidades de botón.

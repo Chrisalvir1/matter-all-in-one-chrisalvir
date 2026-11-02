@@ -1,15 +1,10 @@
 ## [2.3.13] - 2026-11-02
 
-- Fija npm 12.2.1 en Docker, CI y desarrollo; corrige formato y resuelve los servicios Matter desde el módulo ESM del bridge sin duplicar identidades.
-- Fija imágenes base por digest y bloquea el helper de publicación fuera de main.
-- Actualiza Node.js a 26.13.0 LTS en runtime, compilación y CI, con tipos Node 26.
-- Actualiza Matterbridge a 3.11.1: restauración segura del rango de temperatura de color y reporte correcto de fallos de backup Matter.
-- Actualiza HAP-NodeJS a 2.3.0 y werift a 0.26.0; actualiza dependencias estables de interfaz, pruebas y overrides.
-- Alinea npm, gestores de versión Node, devcontainer y tareas VS Code; añade checks de toolchain y runtime a Docker/CI (amd64/arm64).
-- Renueva transitivas dentro de sus rangos compatibles y fija GitHub Actions a releases estables con SHA.
-- Prepara pruebas aisladas contra Home Assistant 2026.11.0b3 (beta) con Python 3.14.10 y uv 0.13.6; ejecución pendiente.
-- Corrige avisos transitivos de glob/minimatch en Scrypted mediante override acotado a rimraf.
-- La actualización de Matterbridge restablece sus preferencias de interfaz por el cambio de claves de almacenamiento; conservar los datos y fabrics existentes.
+- Actualiza Node.js 26.13.0 LTS, npm 12.2.1, Matterbridge 3.11.1, HAP-NodeJS 2.3.0, werift 0.26.0 y dependencias compatibles; fija imágenes base por digest y GitHub Actions por SHA.
+- Corrige los fallbacks de `DeviceCommissioner` y `FabricManager` resolviendo el entrypoint ESM de `@matter/protocol` desde Matterbridge, sin duplicar las identidades del protocolo.
+- Añade comprobaciones de toolchain/runtime, smoke tests Docker AMD64/ARM64 y contrato WebSocket HA 2026.11.
+- CI aprobada en Linux AMD64/ARM64: Node/npm, TypeScript, formato, build, auditoría npm (0 vulnerabilidades), 707 pruebas y carga de Matterbridge, protocolo, FFmpeg 8.0 y ffprobe 8.1.3. Dos pruebas del contrato pasaron contra HA 2026.11.0b3 con Python 3.14.10.
+- 2026.11.0b3 es beta. Los tests de CI no certifican una instalación física, Apple Casa, Live View, Talkback ni clips HKSV. Haz backup antes de actualizar; conserva `/data` y fabrics. Matterbridge cambia las claves de preferencias de su frontend y estas vuelven al valor inicial.
 
 ## [2.3.12] - 2026-10-29
 
