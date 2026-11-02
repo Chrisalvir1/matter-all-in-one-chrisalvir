@@ -43,3 +43,10 @@ Chris autorizó enviar únicamente la rama y ejecutar validación, sin main/tag/
 - El primer Build and Test41508808331 falló solo en colección HA por orden httpx2/httpx; job AMD64 sí terminó success. Corregido y repetido en41509078475.
 
 No se ejecutó publish-addon-image ni publish NPM; no push main, tag, release o instalación HA. Las imágenes de prueba permanecen efímeras del runner. Todavía pendientes: escaneo CVEs/SBOM de imagen, rendimiento Pi5 e instalación/pruebas físicas Live View/audio/HKSV/Robotina; no inferir éxito físico por CI.
+
+## Publicación 2.3.13
+
+- Rama integrada por fast-forward: `main` en62c1208; tag anotado `v2.3.13` sobre el mismo commit.
+- Workflow Publish Home Assistant add-on image **success** run41509957055: validate tag, build/push multiarch GHCR, verificación de descarga pública y publicación de GitHub Release. AMD64/ARM64 nativos success, CI main + contrato HA/707 tests success.
+- **No se publicó npm**: versión `matter-all-in-one-addon@2.3.13` devuelve 404 en registry npm. No se disparó workflow Publish to NPM automáticamente con la creación bot de GitHub Release. La release list y notas distinguen el paquete npm como pendiente; no se afirma publicado.
+- No se instaló en HA ni se ejecutaron controles físicos/cámara.
