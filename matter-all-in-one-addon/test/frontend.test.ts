@@ -201,6 +201,8 @@ describe("frontend accessibility contract", () => {
     expect(deviceModal).not.toContain("computeHapSetupUri");
     expect(deviceModal).toContain("detectHapRecommendation");
     expect(deviceModal).toContain("security_system");
+    expect(deviceModal).toContain("heater_cooler");
+    expect(deviceModal).toContain("Aire Acondicionado (HeaterCooler)");
     expect(deviceModal).toContain('domains.has("vacuum")');
 
     // CSS contract for iOS 27 Liquid Glass sticker and paired success card

@@ -1,3 +1,21 @@
+## [2.3.15] - 2026-11-05
+
+- **Aire Acondicionado y Climatización HAP (HomeKit)**:
+  - Implementa el perfil HAP nativo `Service.HeaterCooler` con categoría oficial `AIR_CONDITIONER` (21) en Apple Home.
+  - Soporte completo de control de encendido/apagado (`Active`), selector de temperatura objetivo (`CoolingThresholdTemperature`, `HeatingThresholdTemperature`), temperatura actual (`CurrentTemperature`), modos operativos (`TargetHeaterCoolerState` y `CurrentHeaterCoolerState`).
+  - Control de velocidad del ventilador en porcentaje (`RotationSpeed`) integrado directamente en la tarjeta de iOS y mapeado automáticamente a los `fan_modes` de Home Assistant (`climate.set_fan_mode`).
+  - Botón de oscilación / swing (`SwingMode`) integrado en la tarjeta de Apple Casa y mapeado a `climate.set_swing_mode`.
+  - Sincronización bidireccional en tiempo real en `updateFromHassState` para estados, temperaturas, velocidades y swing.
+  - Implementa soporte completo para el perfil `thermostat_hap` con `Service.Thermostat`.
+  - Habilita la exportación HAP para el dominio `climate` y añade recomendación inteligente en `DeviceModal` para exportar aires acondicionados vía HAP HeaterCooler en Apple Home.
+- **Entidad Matter `ClimateEntity`**:
+  - Desarrolla la clase `ClimateEntity` para el dominio `climate.*` implementando `MatterbridgeThermostatServer` con clusters estándar `Thermostat` (0x0201) y `ThermostatUserInterfaceConfiguration` (0x0204).
+  - Sincronización bidireccional de `localTemperature`, `occupiedCoolingSetpoint`, `occupiedHeatingSetpoint`, `systemMode` y `thermostatRunningState`.
+  - Manejo de comandos Matter `setpointRaiseLower`, cambios de consigna de frío/calor y transiciones de modos HVAC hacia Home Assistant.
+- **Toolchain y Dependencias Estables**:
+  - Mantiene el toolchain validado con Node.js 26.13.0 LTS, npm 12.2.1, Matterbridge 3.11.1 y HAP-NodeJS 2.3.0.
+  - Sincroniza estrictamente `package.json` y `package-lock.json` para garantizar compilación determinista con `npm ci` en CI/CD.
+
 ## [2.3.14] - 2026-11-02
 
 - Repara la restauración de accesorios Matter en Matterbridge 3.11.1: ese runtime congela `CommandHandler.prototype`, y el add-on intentaba reemplazar `executeHandler`, lo que provocaba `Cannot assign to read only property` y dejaba los accesorios sin iniciar. La política ahora envuelve los callbacks registrados mediante la instancia de `CommandHandler`, sin modificar el prototipo congelado.

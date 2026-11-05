@@ -26,7 +26,6 @@ const MATTER_ONLY_DOMAINS = new Set([
   "sensor",
   "binary_sensor",
   "vacuum",
-  "climate",
 ]);
 
 /** Retorna true si el dominio debe ir sólo por Matter */
@@ -66,6 +65,7 @@ export const HapExportModal: React.FC<HapExportModalProps> = ({
           input_boolean: "switch_hap",
           input_select: "switch_hap",
           remote: "television",
+          climate: "heater_cooler",
           water_heater: "heater_cooler",
           number: "number_hap",
           select: "switch_hap",

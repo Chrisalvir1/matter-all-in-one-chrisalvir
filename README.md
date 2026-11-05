@@ -1,6 +1,6 @@
-# Matter All-in-One Chrisalvir — v2.3.14
+# Matter All-in-One Chrisalvir — v2.3.15
 
-> **2.3.14 · 2 de noviembre de 2026:** corrige la restauración de accesorios Matter con Matterbridge 3.11.1, que congeló `CommandHandler.prototype` y hacía fallar el registro de comandos. Conserva las identidades y fabrics. Validación local: 82 suites/708 pruebas y typecheck de backend/frontend; la recuperación física se verifica tras instalar. Consulta [cambios](matter-all-in-one-addon/CHANGELOG.md), [notas](docs/RELEASE_NOTES_2.3.14.md) y [versiones](docs/RELEASES.md).
+> **2.3.15 · 5 de noviembre de 2026:** añade soporte integral para Aire Acondicionado y Climatización en Apple HomeKit (HAP `Service.HeaterCooler` con Categoría 21 `AIR_CONDITIONER`, selector de temperatura, velocidad del ventilador 0-100% y oscilación swing) y Matter (`ClimateEntity` con cluster Thermostat 0x0201/0x0204). Dependencias estables actualizadas. Validación local: 84 suites/716 pruebas y typecheck de backend/frontend. Consulta [cambios](matter-all-in-one-addon/CHANGELOG.md), [notas](docs/RELEASE_NOTES_2.3.15.md) y [versiones](docs/RELEASES.md).
 
 <div align="center">
   <img src="matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
@@ -10,7 +10,7 @@
 
 **Un solo proyecto para integrar dispositivos de Home Assistant en Matter y cámaras en Apple Casa.**
 
-**Versión 2.3.14** · **Preparado para Home Assistant 2026.11 (beta)** · **Matter 1.6.1** · **HomeKit HAP / HKSV**
+**Versión 2.3.15** · **Preparado para Home Assistant 2026.11 (beta)** · **Matter 1.6.1** · **HomeKit HAP / HKSV**
 
 </div>
 

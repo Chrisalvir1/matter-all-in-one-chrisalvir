@@ -114,7 +114,7 @@ export const HAP_PROFILE_LABELS: Record<HapProfile, string> = {
   garage_door: "Puerta de Garaje",
   doorbell: "Videoportero / Timbre",
   fan_hap: "Ventilador (HAP)",
-  heater_cooler: "Calefactor / Aire",
+  heater_cooler: "Aire Acondicionado (HeaterCooler)",
   thermostat_hap: "Termostato (HAP)",
   outlet_hap: "Enchufe (HAP)",
   switch_hap: "Interruptor (HAP)",
@@ -154,7 +154,7 @@ const HAP_PROFILE_CATEGORIES: Record<HapProfile, Categories> = {
   garage_door: Categories.GARAGE_DOOR_OPENER,
   doorbell: Categories.VIDEO_DOORBELL,
   fan_hap: Categories.FAN,
-  heater_cooler: Categories.AIR_HEATER,
+  heater_cooler: Categories.AIR_CONDITIONER,
   thermostat_hap: Categories.THERMOSTAT,
   outlet_hap: Categories.OUTLET,
   switch_hap: Categories.SWITCH,
@@ -214,6 +214,8 @@ export class HapGenericAccessory {
       ? record.valveSetDurationSeconds!
       : 0;
     this.accessory = new Accessory(record.name || entityId, accUuid);
+    this.accessory.category =
+      HAP_PROFILE_CATEGORIES[record.hapProfile] ?? Categories.OTHER;
     this.configureAccessoryInformation();
     this.addServiceForProfile(record.hapProfile);
     this.bindPrimaryHomeAssistantEntity();
@@ -754,6 +756,209 @@ export class HapGenericAccessory {
             );
             await this.callHaWithResponseBudget(domain, "set_value", { value });
           });
+        break;
+      }
+      case "heater_cooler": {
+        const service = this.accessory.getService(Service.HeaterCooler);
+        if (!service) break;
+        service
+          .getCharacteristic(Characteristic.Active)
+          .onGet(() => {
+            const s = state();
+            return s?.state &&
+              s.state !== "off" &&
+              s.state !== "unavailable" &&
+              s.state !== "unknown"
+              ? 1
+              : 0;
+          })
+          .onSet(async (value: any) => {
+            if (value === 1) {
+              await this.callHaWithResponseBudget("climate", "turn_on").catch(
+                async () => {
+                  await this.callHaWithResponseBudget(
+                    "climate",
+                    "set_hvac_mode",
+                    { hvac_mode: "cool" },
+                  );
+                },
+              );
+            } else {
+              await this.callHaWithResponseBudget("climate", "set_hvac_mode", {
+                hvac_mode: "off",
+              });
+            }
+          });
+
+        service
+          .getCharacteristic(Characteristic.CurrentHeaterCoolerState)
+          .onGet(() => {
+            const s = state();
+            if (
+              !s ||
+              s.state === "off" ||
+              s.state === "unavailable" ||
+              s.state === "unknown"
+            )
+              return 0;
+            const action = s.attributes?.hvac_action;
+            if (action === "cooling") return 3;
+            if (action === "heating") return 2;
+            if (action === "idle") return 1;
+            if (s.state === "cool") return 3;
+            if (s.state === "heat") return 2;
+            return 1;
+          });
+
+        service
+          .getCharacteristic(Characteristic.TargetHeaterCoolerState)
+          .onGet(() => {
+            const s = state();
+            const mode = s?.state || s?.attributes?.hvac_mode;
+            if (mode === "heat") return 1;
+            if (mode === "cool") return 2;
+            return 0; // AUTO
+          })
+          .onSet(async (value: any) => {
+            let hvac_mode = "auto";
+            if (value === 1) hvac_mode = "heat";
+            else if (value === 2) hvac_mode = "cool";
+            await this.callHaWithResponseBudget("climate", "set_hvac_mode", {
+              hvac_mode,
+            });
+          });
+
+        service
+          .getCharacteristic(Characteristic.CurrentTemperature)
+          .onGet(() => {
+            const current = Number(state()?.attributes?.current_temperature);
+            return Number.isFinite(current) ? current : 21;
+          });
+
+        service
+          .getCharacteristic(Characteristic.CoolingThresholdTemperature)
+          .onGet(() => {
+            const temp = Number(
+              state()?.attributes?.temperature ??
+                state()?.attributes?.target_temp_low,
+            );
+            return Number.isFinite(temp) ? temp : 22;
+          })
+          .onSet(async (value: any) => {
+            await this.callHaWithResponseBudget("climate", "set_temperature", {
+              temperature: Number(value),
+            });
+          });
+
+        service
+          .getCharacteristic(Characteristic.HeatingThresholdTemperature)
+          .onGet(() => {
+            const temp = Number(
+              state()?.attributes?.temperature ??
+                state()?.attributes?.target_temp_high,
+            );
+            return Number.isFinite(temp) ? temp : 20;
+          })
+          .onSet(async (value: any) => {
+            await this.callHaWithResponseBudget("climate", "set_temperature", {
+              temperature: Number(value),
+            });
+          });
+
+        service
+          .getCharacteristic(Characteristic.TemperatureDisplayUnits)
+          .onGet(() =>
+            state()?.attributes?.temperature_unit === "°F" ? 1 : 0,
+          );
+
+        service
+          .getCharacteristic(Characteristic.RotationSpeed)
+          .onGet(() => this.getClimateFanSpeedPercentage(state()))
+          .onSet(async (value: any) => {
+            const fanMode = this.climateFanPercentageToMode(
+              Number(value),
+              state(),
+            );
+            if (fanMode) {
+              await this.callHaWithResponseBudget("climate", "set_fan_mode", {
+                fan_mode: fanMode,
+              });
+            }
+          });
+
+        service
+          .getCharacteristic(Characteristic.SwingMode)
+          .onGet(() => {
+            const swing = state()?.attributes?.swing_mode;
+            return swing && swing !== "off" && swing !== "stop" ? 1 : 0;
+          })
+          .onSet(async (value: any) => {
+            const swingMode = this.resolveClimateSwingMode(
+              value === 1,
+              state(),
+            );
+            if (swingMode) {
+              await this.callHaWithResponseBudget("climate", "set_swing_mode", {
+                swing_mode: swingMode,
+              });
+            }
+          });
+        break;
+      }
+      case "thermostat_hap": {
+        const service = this.accessory.getService(Service.Thermostat);
+        if (!service) break;
+        service
+          .getCharacteristic(Characteristic.CurrentTemperature)
+          .onGet(() => {
+            const current = Number(state()?.attributes?.current_temperature);
+            return Number.isFinite(current) ? current : 21;
+          });
+        service
+          .getCharacteristic(Characteristic.TargetTemperature)
+          .onGet(() => {
+            const temp = Number(state()?.attributes?.temperature);
+            return Number.isFinite(temp) ? temp : 22;
+          })
+          .onSet(async (value: any) => {
+            await this.callHaWithResponseBudget("climate", "set_temperature", {
+              temperature: Number(value),
+            });
+          });
+        service
+          .getCharacteristic(Characteristic.TargetHeatingCoolingState)
+          .onGet(() => {
+            const mode = state()?.state;
+            if (mode === "off") return 0;
+            if (mode === "heat") return 1;
+            if (mode === "cool") return 2;
+            return 3; // AUTO
+          })
+          .onSet(async (value: any) => {
+            let hvac_mode = "off";
+            if (value === 1) hvac_mode = "heat";
+            else if (value === 2) hvac_mode = "cool";
+            else if (value === 3) hvac_mode = "auto";
+            await this.callHaWithResponseBudget("climate", "set_hvac_mode", {
+              hvac_mode,
+            });
+          });
+        service
+          .getCharacteristic(Characteristic.CurrentHeatingCoolingState)
+          .onGet(() => {
+            const action = state()?.attributes?.hvac_action;
+            if (action === "heating") return 1;
+            if (action === "cooling") return 2;
+            const mode = state()?.state;
+            if (mode === "heat") return 1;
+            if (mode === "cool") return 2;
+            return 0; // OFF
+          });
+        service
+          .getCharacteristic(Characteristic.TemperatureDisplayUnits)
+          .onGet(() =>
+            state()?.attributes?.temperature_unit === "°F" ? 1 : 0,
+          );
         break;
       }
       case "fan_hap": {
@@ -1344,7 +1549,7 @@ export class HapGenericAccessory {
         break;
       }
 
-      // ── Calefactor / Aire ─────────────────────────────────────────────────
+      // ── Aire Acondicionado / Calefactor (HeaterCooler) ───────────────────
       case "heater_cooler": {
         const svc = this.accessory.addService(
           Service.HeaterCooler,
@@ -1358,6 +1563,35 @@ export class HapGenericAccessory {
           .getCharacteristic(Characteristic.TargetHeaterCoolerState)
           .setValue(0);
         svc.getCharacteristic(Characteristic.CurrentTemperature).setValue(20);
+
+        const cooling =
+          svc.getCharacteristic(Characteristic.CoolingThresholdTemperature) ||
+          svc.addCharacteristic(Characteristic.CoolingThresholdTemperature);
+        cooling
+          .setValue(22)
+          .setProps({ minValue: 10, maxValue: 35, minStep: 0.5 });
+
+        const heating =
+          svc.getCharacteristic(Characteristic.HeatingThresholdTemperature) ||
+          svc.addCharacteristic(Characteristic.HeatingThresholdTemperature);
+        heating
+          .setValue(20)
+          .setProps({ minValue: 0, maxValue: 35, minStep: 0.5 });
+
+        const units =
+          svc.getCharacteristic(Characteristic.TemperatureDisplayUnits) ||
+          svc.addCharacteristic(Characteristic.TemperatureDisplayUnits);
+        units.setValue(Characteristic.TemperatureDisplayUnits.CELSIUS);
+
+        const speed =
+          svc.getCharacteristic(Characteristic.RotationSpeed) ||
+          svc.addCharacteristic(Characteristic.RotationSpeed);
+        speed.setProps({ minValue: 0, maxValue: 100, minStep: 1 }).setValue(0);
+
+        const swing =
+          svc.getCharacteristic(Characteristic.SwingMode) ||
+          svc.addCharacteristic(Characteristic.SwingMode);
+        swing.setValue(Characteristic.SwingMode.SWING_DISABLED);
         break;
       }
 
@@ -1900,6 +2134,131 @@ export class HapGenericAccessory {
           }
           break;
         }
+        case "heater_cooler": {
+          const svc = this.accessory.getService(Service.HeaterCooler);
+          if (!svc) break;
+          const isActive =
+            state?.state &&
+            state.state !== "off" &&
+            state.state !== "unavailable" &&
+            state.state !== "unknown";
+          svc.updateCharacteristic(Characteristic.Active, isActive ? 1 : 0);
+
+          const action = state?.attributes?.hvac_action;
+          let currentState = 0; // INACTIVE
+          if (isActive) {
+            if (action === "cooling") currentState = 3;
+            else if (action === "heating") currentState = 2;
+            else if (action === "idle") currentState = 1;
+            else if (state.state === "cool") currentState = 3;
+            else if (state.state === "heat") currentState = 2;
+            else currentState = 1;
+          }
+          svc.updateCharacteristic(
+            Characteristic.CurrentHeaterCoolerState,
+            currentState,
+          );
+
+          const mode = state?.state || state?.attributes?.hvac_mode;
+          let targetState = 0; // AUTO
+          if (mode === "heat") targetState = 1;
+          else if (mode === "cool") targetState = 2;
+          svc.updateCharacteristic(
+            Characteristic.TargetHeaterCoolerState,
+            targetState,
+          );
+
+          const currentTemp = Number(state?.attributes?.current_temperature);
+          if (Number.isFinite(currentTemp)) {
+            svc.updateCharacteristic(
+              Characteristic.CurrentTemperature,
+              currentTemp,
+            );
+          }
+          const targetTemp = Number(state?.attributes?.temperature);
+          if (Number.isFinite(targetTemp)) {
+            svc.updateCharacteristic(
+              Characteristic.CoolingThresholdTemperature,
+              targetTemp,
+            );
+            svc.updateCharacteristic(
+              Characteristic.HeatingThresholdTemperature,
+              targetTemp,
+            );
+          } else {
+            if (Number.isFinite(Number(state?.attributes?.target_temp_low))) {
+              svc.updateCharacteristic(
+                Characteristic.CoolingThresholdTemperature,
+                Number(state.attributes.target_temp_low),
+              );
+            }
+            if (Number.isFinite(Number(state?.attributes?.target_temp_high))) {
+              svc.updateCharacteristic(
+                Characteristic.HeatingThresholdTemperature,
+                Number(state.attributes.target_temp_high),
+              );
+            }
+          }
+          svc.updateCharacteristic(
+            Characteristic.RotationSpeed,
+            this.getClimateFanSpeedPercentage(state),
+          );
+          const swing = state?.attributes?.swing_mode;
+          svc.updateCharacteristic(
+            Characteristic.SwingMode,
+            swing && swing !== "off" && swing !== "stop" ? 1 : 0,
+          );
+          break;
+        }
+        case "thermostat_hap": {
+          const svc = this.accessory.getService(Service.Thermostat);
+          if (!svc) break;
+          const isOff =
+            state?.state === "off" ||
+            state?.state === "unavailable" ||
+            state?.state === "unknown";
+          const mode = state?.state || state?.attributes?.hvac_mode;
+          let targetHeatingCooling = 0; // OFF
+          if (!isOff) {
+            if (mode === "heat") targetHeatingCooling = 1;
+            else if (mode === "cool") targetHeatingCooling = 2;
+            else if (mode === "auto" || mode === "heat_cool")
+              targetHeatingCooling = 3;
+          }
+          svc.updateCharacteristic(
+            Characteristic.TargetHeatingCoolingState,
+            targetHeatingCooling,
+          );
+
+          const action = state?.attributes?.hvac_action;
+          let currentHeatingCooling = 0;
+          if (!isOff) {
+            if (action === "heating") currentHeatingCooling = 1;
+            else if (action === "cooling") currentHeatingCooling = 2;
+            else if (mode === "heat") currentHeatingCooling = 1;
+            else if (mode === "cool") currentHeatingCooling = 2;
+          }
+          svc.updateCharacteristic(
+            Characteristic.CurrentHeatingCoolingState,
+            currentHeatingCooling,
+          );
+
+          const currentTemp = Number(state?.attributes?.current_temperature);
+          if (Number.isFinite(currentTemp)) {
+            svc.updateCharacteristic(
+              Characteristic.CurrentTemperature,
+              currentTemp,
+            );
+          }
+          const targetTemp = Number(state?.attributes?.temperature);
+          if (Number.isFinite(targetTemp)) {
+            svc.updateCharacteristic(
+              Characteristic.TargetTemperature,
+              targetTemp,
+            );
+          }
+          break;
+        }
       }
       if (
         this.record.hapProfile === "humidifier" ||
@@ -2370,6 +2729,52 @@ export class HapGenericAccessory {
       );
       throw error;
     }
+  }
+
+  private getClimateFanSpeedPercentage(s: any): number {
+    if (
+      !s ||
+      s.state === "off" ||
+      s.state === "unavailable" ||
+      s.state === "unknown"
+    )
+      return 0;
+    const currentMode = String(s.attributes?.fan_mode || "").toLowerCase();
+    const modes: string[] = s.attributes?.fan_modes || [];
+    if (modes.length === 0) {
+      if (s.attributes?.percentage !== undefined)
+        return Number(s.attributes.percentage) || 0;
+      return currentMode === "off" ? 0 : 100;
+    }
+    const idx = modes.findIndex((m) => m.toLowerCase() === currentMode);
+    if (idx === -1) return 50;
+    return Math.round(((idx + 1) / modes.length) * 100);
+  }
+
+  private climateFanPercentageToMode(
+    percentage: number,
+    s: any,
+  ): string | undefined {
+    const modes: string[] = s?.attributes?.fan_modes || [];
+    if (modes.length === 0) return undefined;
+    if (percentage <= 0) {
+      const offMode = modes.find((m) => /off/i.test(m));
+      if (offMode) return offMode;
+    }
+    const index = Math.min(
+      modes.length - 1,
+      Math.max(0, Math.floor((percentage / 100) * modes.length)),
+    );
+    return modes[index];
+  }
+
+  private resolveClimateSwingMode(enable: boolean, s: any): string | undefined {
+    const modes: string[] = s?.attributes?.swing_modes || [];
+    if (modes.length === 0) return enable ? "on" : "off";
+    if (!enable) {
+      return modes.find((m) => /off|stop/i.test(m)) || "off";
+    }
+    return modes.find((m) => !/off|stop/i.test(m)) || modes[0];
   }
 
   /**

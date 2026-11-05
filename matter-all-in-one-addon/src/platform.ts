@@ -55,6 +55,7 @@ import { EnergyTariffEntity } from "./entities/energy_tariff.entity.js";
 import { VacuumEntity } from "./entities/vacuum.entity.js";
 import { PetFeederEntity } from "./entities/pet_feeder.entity.js";
 import { HumidifierEntity } from "./entities/humidifier.entity.js";
+import { ClimateEntity } from "./entities/climate.entity.js";
 import { OvenEntity } from "./entities/oven.entity.js";
 import { CooktopEntity } from "./entities/cooktop.entity.js";
 import { MediaPlayerEntity } from "./entities/media-player.entity.js";
@@ -4303,6 +4304,14 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         deviceType.name === "RoboticVacuumCleaner")
     ) {
       entityInstance = new VacuumEntity(this, state, deviceType);
+    } else if (
+      domain === "climate" ||
+      deviceType.name === "Thermostat" ||
+      effectiveProfile === "thermostat" ||
+      override === "thermostat" ||
+      override === "Thermostat"
+    ) {
+      entityInstance = new ClimateEntity(this, state, deviceType);
     } else if (domain === "humidifier") {
       entityInstance = new HumidifierEntity(this, state, deviceType);
     } else if (

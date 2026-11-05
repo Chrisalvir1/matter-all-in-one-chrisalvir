@@ -143,8 +143,8 @@ const profilesByDomain: Record<string, DeviceExportProfile[]> = {
   climate: [
     {
       id: "thermostat",
-      label: "Termostato",
-      description: "Control HVAC.",
+      label: "Termostato / Aire Acondicionado",
+      description: "Control HVAC de temperatura, modos y climatización.",
       appleHome: "supported",
     },
   ],

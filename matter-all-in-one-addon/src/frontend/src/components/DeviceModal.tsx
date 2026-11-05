@@ -71,7 +71,27 @@ function detectHapRecommendation(
     };
   }
 
-  // 1. Panel de Alarma / Security System
+  // 1. Aire Acondicionado / Climatización
+  if (
+    domains.has("climate") ||
+    device.entities.some((e) => e.domain === "climate") ||
+    /\b(aire|ac|a\/c|air_conditioner|clima|climate|minisplit|split|hvac)\b/i.test(
+      allStrings,
+    )
+  ) {
+    return {
+      isRecommended: true,
+      recommendedProfile: "heater_cooler",
+      categoryName: "Aire Acondicionado (HeaterCooler)",
+      badgeText: "⭐ Recomendado para Apple Home (Aire Acondicionado)",
+      reason:
+        "En Matter, los aires acondicionados se exponen como termostatos básicos de pared sin control de velocidad de ventilador ni oscilación.",
+      appleAdvantage:
+        "En HomeKit HAP (HeaterCooler) se integra con la tarjeta nativa de Aire Acondicionado en Apple Casa: selector de temperatura, velocidad del ventilador (0-100%) y botón de oscilación (swing).",
+    };
+  }
+
+  // 2. Panel de Alarma / Security System
   if (
     domains.has("alarm_control_panel") ||
     /alarm|alarma|argus|seguridad|security|panel_alarma|siren|sirena/i.test(
@@ -356,10 +376,10 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
   const [hapProfiles, setHapProfiles] = useState<Array<{ id: string; label: string }>>([]);
   const [selectedHapProfile, setSelectedHapProfile] = useState<HapProfile>(() => {
     if (activeHapFromProps?.hapProfile) return activeHapFromProps.hapProfile;
+    if (hapRecDetails.isRecommended) return hapRecDetails.recommendedProfile;
     if (device?.entities.some((entity) => entity.domain === "light")) {
       return "lightbulb_hap";
     }
-    if (hapRecDetails.isRecommended) return hapRecDetails.recommendedProfile;
     return "humidifier";
   });
 
@@ -660,9 +680,13 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
   // Direct HAP publish handler with 0ms optimistic UI update
   const handlePublishHapDirect = async () => {
     const mediaEntity = device.entities.find((e) => e.domain === "media_player");
-    const targetId = (selectedHapProfile === "television" && mediaEntity)
-      ? mediaEntity.entityId
-      : (compositePrimary?.entityId || activeEntity?.entityId || device.entities[0].entityId);
+    const climateEntity = device.entities.find((e) => e.domain === "climate");
+    const targetId =
+      selectedHapProfile === "television" && mediaEntity
+        ? mediaEntity.entityId
+        : (selectedHapProfile === "heater_cooler" || selectedHapProfile === "thermostat_hap") && climateEntity
+        ? climateEntity.entityId
+        : compositePrimary?.entityId || activeEntity?.entityId || device.entities[0].entityId;
     setIsHapBusy(true);
     setIsBusy(true);
     try {
@@ -708,9 +732,13 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
   // Direct HAP unregister handler with 0ms optimistic UI update
   const handleUnregisterHapDirect = async () => {
     const mediaEntity = device.entities.find((e) => e.domain === "media_player");
-    const targetId = (selectedHapProfile === "television" && mediaEntity)
-      ? mediaEntity.entityId
-      : (compositePrimary?.entityId || activeEntity?.entityId || device.entities[0].entityId);
+    const climateEntity = device.entities.find((e) => e.domain === "climate");
+    const targetId =
+      selectedHapProfile === "television" && mediaEntity
+        ? mediaEntity.entityId
+        : (selectedHapProfile === "heater_cooler" || selectedHapProfile === "thermostat_hap") && climateEntity
+        ? climateEntity.entityId
+        : compositePrimary?.entityId || activeEntity?.entityId || device.entities[0].entityId;
     const previousAccessory = localHapAccessory;
     // Reflect the requested action immediately; restore the QR state if the
     // server cannot stop the accessory.
@@ -1738,6 +1766,10 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                   <small style={{ color: "#fef08a", fontSize: 11, lineHeight: 1.4, marginTop: 4 }}>
                     {selectedHapProfile === "security_system"
                       ? "Apple Home lo reconocerá como Panel de Alarma / Sistema de Seguridad nativo con modos En Casa, Fuera, Noche y Desarmado."
+                      : selectedHapProfile === "heater_cooler"
+                      ? "Apple Home lo reconocerá como Aire Acondicionado nativo con tarjeta dedicada en iOS: selector de temperatura, velocidad del ventilador (0-100%) y botón de oscilación (swing)."
+                      : selectedHapProfile === "thermostat_hap"
+                      ? "Apple Home lo reconocerá como Termostato HAP nativo con dial de temperatura y modos calor/frío/auto."
                       : selectedHapProfile === "humidifier"
                       ? "Apple Home lo reconocerá como Difusor / Humidificador nativo con icono de gota, porcentaje de humedad y control de niebla."
                       : selectedHapProfile === "dehumidifier"
@@ -1750,14 +1782,14 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                       ? "Apple Home lo reconocerá como Válvula / Sistema de Riego con temporizador nativo."
                       : selectedHapProfile === "garage_door"
                       ? "Apple Home lo reconocerá como Puerta de Garaje con compatibilidad Siri y CarPlay."
-                      : "Apple Home creará el accesorio con los servicios y características nativas de hap-nodejs 2.2.3."}
+                      : "Apple Home creará el accesorio con los servicios y características nativas de HomeKit HAP."}
                   </small>
                 </div>
 
                 <dl className="selection-meta" id="selection-meta">
                   <div>
                     <dt>Entidad Principal</dt>
-                    <dd>{(selectedHapProfile === "television" ? device.entities.find((e) => e.domain === "media_player")?.entityId : undefined) || compositePrimary?.entityId || activeEntity?.entityId || device.entities[0]?.entityId}</dd>
+                    <dd>{(selectedHapProfile === "television" ? device.entities.find((e) => e.domain === "media_player")?.entityId : undefined) || ((selectedHapProfile === "heater_cooler" || selectedHapProfile === "thermostat_hap") ? device.entities.find((e) => e.domain === "climate")?.entityId : undefined) || compositePrimary?.entityId || activeEntity?.entityId || device.entities[0]?.entityId}</dd>
                   </div>
                   <div>
                     <dt>Fabricante</dt>

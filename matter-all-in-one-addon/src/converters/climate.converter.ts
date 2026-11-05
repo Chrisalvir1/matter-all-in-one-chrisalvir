@@ -31,6 +31,10 @@ export const climateConverter = {
       case "auto":
       case "heat_cool":
         return 1; // Auto
+      case "fan_only":
+        return 7; // FanOnly
+      case "dry":
+        return 8; // Dry
       default:
         return 0;
     }
@@ -49,6 +53,10 @@ export const climateConverter = {
         return "cool";
       case 1:
         return "auto";
+      case 7:
+        return "fan_only";
+      case 8:
+        return "dry";
       default:
         return "off";
     }

@@ -58,6 +58,20 @@ export class MockMatterbridgeEndpoint {
     return this;
   }
 
+  public createDefaultThermostatClusterServer(
+    _localTemperature?: number,
+    _occupiedHeatingSetpoint?: number,
+    _occupiedCoolingSetpoint?: number,
+  ) {
+    this.clusterServers.add(513);
+    return this;
+  }
+
+  public createDefaultThermostatUserInterfaceConfigurationClusterServer() {
+    this.clusterServers.add(516);
+    return this;
+  }
+
   public addChildDeviceTypeWithClusterServer(
     id: string,
     deviceTypes: any[],
