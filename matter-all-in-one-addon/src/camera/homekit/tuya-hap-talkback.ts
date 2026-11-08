@@ -22,6 +22,7 @@ export class TuyaHapTalkback {
   private peer?: TuyaWebRtcSession;
   private stopped = false;
   private starting = false;
+  private retryAfter = 0;
   private outboundFlushTimer?: NodeJS.Timeout;
   private lastOutboundTimestamp?: number;
   private audio?: StartStreamRequest["audio"];
@@ -81,13 +82,20 @@ export class TuyaHapTalkback {
     )
       return;
     this.receivedPackets++;
+    if (Date.now() < this.retryAfter) return;
     if (!this.starting) {
       this.starting = true;
       void this.start().catch((err) => {
         this.notice(
           `Tuya return audio could not start: ${err?.message || err}`,
         );
-        this.close();
+        if (this.peer) {
+          this.close();
+        } else {
+          this.starting = false;
+          this.retryAfter = Date.now() + 2000;
+          this.inboundQueue = [];
+        }
       });
     }
     if (this.decoderPort) {
@@ -102,15 +110,6 @@ export class TuyaHapTalkback {
   }
   configure(audio: StartStreamRequest["audio"]): void {
     this.audio = audio;
-    if (!this.starting && !this.stopped) {
-      this.starting = true;
-      void this.start().catch((err) => {
-        this.notice(
-          `Tuya return audio could not start: ${err?.message || err}`,
-        );
-        this.close();
-      });
-    }
   }
   private decoderPort?: number;
   private async start(): Promise<void> {

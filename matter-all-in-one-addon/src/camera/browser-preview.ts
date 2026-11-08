@@ -19,12 +19,7 @@ export class BrowserPreview {
       res.end();
       return;
     }
-    const stats: Record<string, unknown> = {
-      frames: 0,
-      outputVideo: "copy",
-      outputAudio: "aac-lc",
-      audioTranscoding: true,
-    };
+    const stats: Record<string, unknown> = { frames: 0 };
     this.sessions.set(id, stats);
     let closed = false;
     let lease: PreviewLease | undefined;
@@ -102,8 +97,16 @@ export class BrowserPreview {
           if (/Output #/.test(line)) outputHeader = true;
           const frame = line.match(/^frame=(\d+)/);
           if (frame) stats.frames = Number(frame[1]);
-          if (outputHeader) continue;
           const video = line.match(/Video:\s*(\w+).*?\b(\d{2,5})x(\d{2,5})\b/);
+          const audio = line.match(/Audio:\s*([^,]+),\s*(\d+) Hz/);
+          if (outputHeader) {
+            if (video) stats.outputVideo = video[1];
+            if (audio) {
+              stats.outputAudio = audio[1].trim();
+              stats.outputSampleRate = +audio[2];
+            }
+            continue;
+          }
           if (video) {
             stats.videoCodec = video[1];
             stats.width = +video[2];
@@ -111,9 +114,8 @@ export class BrowserPreview {
           }
           const fps = line.match(/([\d.]+) fps/);
           if (video && fps) stats.sourceFps = +fps[1];
-          const audio = line.match(/Audio:\s*([^,]+),\s*(\d+) Hz/);
           if (audio) {
-            stats.audioCodec = audio[1];
+            stats.audioCodec = audio[1].trim();
             stats.sampleRate = +audio[2];
           }
         }

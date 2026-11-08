@@ -1,3 +1,5 @@
+import { EventEmitter } from "node:events";
+import mqtt from "mqtt";
 import { describe, expect, it, vi } from "vitest";
 import { getMqttDeviceType, MqttEntity } from "../src/mqtt/mqtt.entity.js";
 import {
@@ -178,4 +180,57 @@ describe("MQTT Auto-Discovery and Entity Mapping", () => {
     (entity as any).handleStateUpdate(null);
     expect(typeof entity.getStateString().toLowerCase()).toBe("string");
   });
+});
+
+it("keeps cached MQTT state while the separate availability topic is offline", async () => {
+  const log: any = { info: vi.fn(), debug: vi.fn() };
+  const manager = new MqttClientManager(log, { host: "127.0.0.1" });
+  const entity = new MqttEntity({ log } as any, manager, {
+    topic: "homeassistant/sensor/patio/config",
+    component: "sensor",
+    nodeId: "",
+    objectId: "patio",
+    config: {
+      state_topic: "patio/state",
+      availability_topic: "patio/status",
+      payload_available: "ready",
+      payload_not_available: "lost",
+    },
+  });
+  const reachable = vi.spyOn(entity, "setReachability");
+  manager.deviceStates.set("patio/state", "19");
+  manager.deviceStates.set("patio/status", "lost");
+  await entity.syncInitialState();
+  expect(entity.availabilityTopic).toBe("patio/status");
+  expect(entity.getStateString()).toBe("unavailable");
+  expect(reachable).toHaveBeenLastCalledWith(false);
+  entity.handleStateUpdate("20");
+  expect(entity.getStateString()).toBe("unavailable");
+  expect(entity.handleAvailabilityUpdate("ready")).toBe(true);
+  expect(entity.getStateString()).toBe("20");
+  expect(reachable).toHaveBeenLastCalledWith(true);
+});
+
+it("keeps retained camera state without dispatching it as a live event", () => {
+  const log: any = { info: vi.fn() };
+  const client = new EventEmitter();
+  const connect = vi.spyOn(mqtt, "connect").mockReturnValue(client as any);
+  const manager = new MqttClientManager(log, { host: "127.0.0.1" });
+  const detection = vi.fn();
+  const update = vi.fn();
+  manager.onCameraUiMessage(detection);
+  manager.onStateChanged(update);
+  try {
+    manager.connect();
+    const topic = "cameraui/patio/motion";
+    client.emit("message", topic, Buffer.from("on"), { retain: true });
+    expect(manager.deviceStates.get(topic)).toBe("on");
+    expect(update).toHaveBeenCalledWith(topic, "on");
+    expect(detection).not.toHaveBeenCalled();
+    client.emit("message", topic, Buffer.from("on"), { retain: false });
+    expect(detection).toHaveBeenCalledOnce();
+    expect(detection).toHaveBeenCalledWith(topic, "on");
+  } finally {
+    connect.mockRestore();
+  }
 });

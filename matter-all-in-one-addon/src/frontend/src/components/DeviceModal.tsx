@@ -79,6 +79,19 @@ function detectHapRecommendation(
       allStrings,
     )
   ) {
+    const climate = device.entities.find((entity) => entity.domain === "climate");
+    const modes = climate?.attributes?.hvac_modes;
+    if (Array.isArray(modes) && modes.includes("heat") &&
+        !modes.some((mode) => mode === "cool" || mode === "heat_cool")) {
+      return {
+        isRecommended: true,
+        recommendedProfile: "thermostat_hap",
+        categoryName: "Termostato HomeKit",
+        badgeText: "⭐ Recomendado para Apple Casa (Termostato)",
+        reason: "Home Assistant anuncia calefacción sin modo de frío.",
+        appleAdvantage: "Apple Casa presenta la temperatura y la consigna en el control de termostato.",
+      };
+    }
     return {
       isRecommended: true,
       recommendedProfile: "heater_cooler",
@@ -339,7 +352,12 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
   const [isHapBusy, setIsHapBusy] = useState(false);
   const [alarmCodeInput, setAlarmCodeInput] = useState("");
   const [isAlarmCodeSaving, setIsAlarmCodeSaving] = useState(false);
-  const [multiAdminOpen, setMultiAdminOpen] = useState(false);
+  const [multiAdmin, setMultiAdmin] = useState<{
+    entityId: string;
+    pairingCode: string;
+    manualCode?: string;
+    expiresAt: number;
+  } | null>(null);
   const [freshPairingCode, setFreshPairingCode] = useState<string | null>(null);
   const [freshManualCode, setFreshManualCode] = useState<string | null>(null);
   const [resetFabrics, setResetFabrics] = useState<boolean>(false);
@@ -531,8 +549,16 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
 
   const isVacuum = activeEntity?.domain === "vacuum";
 
+  const multiAdminOpen = Boolean(multiAdmin && multiAdmin.entityId === activeEntity?.entityId);
+  useEffect(() => {
+    if (!multiAdmin) return;
+    const timer = setTimeout(() => setMultiAdmin(null), Math.max(0, multiAdmin.expiresAt - Date.now()));
+    return () => clearTimeout(timer);
+  }, [multiAdmin]);
+
   // Pairing code: fresh code from reset, primary entity's code, or selected entity's code
   const pairingCode =
+    (multiAdminOpen ? multiAdmin?.pairingCode : undefined) ||
     freshPairingCode ||
     (isVacuum
       ? activeEntity?.pairingCode
@@ -543,6 +569,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
       : (activeEntity?.pairingCode || device.entities.find((e) => e.exported && e.pairingCode)?.pairingCode)) ||
     "";
   const manualCode =
+    (multiAdminOpen ? multiAdmin?.manualCode : undefined) ||
     freshManualCode ||
     (isVacuum
       ? activeEntity?.manualPairingCode
@@ -583,10 +610,6 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     setIsBusy(true);
     const nextState = !isCompositeExported;
     setLocalCompositeExported(nextState);
-    if (!nextState) {
-      setFreshPairingCode(null);
-      setFreshManualCode(null);
-    }
     device.entities.forEach((e) => {
       if (e.composite) {
         e.exported = nextState;
@@ -596,6 +619,11 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
       const res: any = await api.toggleExport(compositePrimary.entityId, nextState);
       if (res && res.success === false) {
         throw new Error(res.error || "No se pudo modificar la publicación en Matter");
+      }
+      if (!nextState) {
+        setFreshPairingCode(null);
+        setFreshManualCode(null);
+        setMultiAdmin(null);
       }
       if (nextState && (res as any)?.pairingCode) {
         setFreshPairingCode((res as any).pairingCode);
@@ -631,16 +659,17 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     if (activeEntity?.entityId === entity.entityId) {
       setSelectedEntity({ ...activeEntity, exported: nextState });
     }
-    if (!nextState) {
-      setFreshPairingCode(null);
-      setFreshManualCode(null);
-      entity.pairingCode = undefined;
-      entity.manualPairingCode = undefined;
-    }
     try {
       const res: any = await api.toggleExport(entity.entityId, nextState);
       if (res && res.success === false) {
         throw new Error(res.error || "No se pudo modificar la publicación en Matter");
+      }
+      if (!nextState) {
+        setFreshPairingCode(null);
+        setFreshManualCode(null);
+        setMultiAdmin(null);
+        entity.pairingCode = undefined;
+        entity.manualPairingCode = undefined;
       }
       if (nextState && res?.pairingCode) {
         setFreshPairingCode(res.pairingCode);
@@ -663,9 +692,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
           ? `✓ ${entity.name || entity.entityId} publicado en Matter`
           : `${entity.name || entity.entityId} retirado de Matter`
       );
-      // Delay refresh to allow backend (Matterbridge) to finish processing
-      // before pulling new state — prevents optimistic state from being overwritten
-      setTimeout(() => onRefresh(), 2000);
+      void onRefresh();
     } catch (err: any) {
       entity.exported = !nextState;
       if (activeEntity?.entityId === entity.entityId) {
@@ -733,12 +760,13 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
   const handleUnregisterHapDirect = async () => {
     const mediaEntity = device.entities.find((e) => e.domain === "media_player");
     const climateEntity = device.entities.find((e) => e.domain === "climate");
-    const targetId =
-      selectedHapProfile === "television" && mediaEntity
+    if (isBusy) return;
+    const targetId = device.entities.find((entity) => entity.hapAccessory?.published)?.entityId ??
+      (selectedHapProfile === "television" && mediaEntity
         ? mediaEntity.entityId
         : (selectedHapProfile === "heater_cooler" || selectedHapProfile === "thermostat_hap") && climateEntity
         ? climateEntity.entityId
-        : compositePrimary?.entityId || activeEntity?.entityId || device.entities[0].entityId;
+        : compositePrimary?.entityId || activeEntity?.entityId || device.entities[0].entityId);
     const previousAccessory = localHapAccessory;
     // Reflect the requested action immediately; restore the QR state if the
     // server cannot stop the accessory.
@@ -750,10 +778,11 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
       if (res?.success === false) {
         throw new Error(res.error || "No se pudo retirar el accesorio de HAP");
       }
-      device.entities.forEach((e) => {
-        e.hapAccessory = null;
-      });
-      if (activeEntity) activeEntity.hapAccessory = null;
+      const removed = device.entities.find((entity) => entity.entityId === targetId);
+      if (removed) removed.hapAccessory = null;
+      setLocalHapAccessory(
+        device.entities.find((entity) => entity.hapAccessory?.published)?.hapAccessory || null,
+      );
       showToast("Accesorio retirado de HomeKit HAP");
       void onRefresh();
     } catch (err: any) {
@@ -798,6 +827,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
     try {
       const res: any = await api.removeFabric(targetEntityId, fabricIndex);
       if (res?.remainingFabrics === 0 || res?.pairingCode) {
+        setMultiAdmin(null);
         setResetFabrics(true);
         if (res?.pairingCode) setFreshPairingCode(res.pairingCode);
         if (res?.manualPairingCode) setFreshManualCode(res.manualPairingCode);
@@ -870,14 +900,20 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
   };
 
   const handleOpenCommissioning = async () => {
-    if (!activeEntity) return;
+    if (!activeEntity || isBusy) return;
     setIsBusy(true);
     const targetEntityId = (!isMultiSwitch && isComposite)
       ? (compositePrimary?.entityId || activeEntity.entityId)
       : activeEntity.entityId;
     try {
-      await api.openCommissioning(targetEntityId);
-      setMultiAdminOpen(true);
+      const result = await api.openCommissioning(targetEntityId);
+      if (!result.pairingCode) throw new Error("El nodo no devolvió un código QR utilizable.");
+      setMultiAdmin({
+        entityId: activeEntity.entityId,
+        pairingCode: result.pairingCode,
+        manualCode: result.manualPairingCode ?? undefined,
+        expiresAt: Date.now() + (result.windowTimeout ?? 900) * 1000,
+      });
       showToast(
         "✓ Modo Multi-Admin Abierto. Puedes emparejar en una segunda plataforma."
       );
@@ -902,7 +938,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
       setFreshPairingCode(newPairingCode);
       setFreshManualCode(newManualCode);
       setResetFabrics(true);
-      setMultiAdminOpen(false);
+      setMultiAdmin(null);
       activeEntity.pairingCode = newPairingCode || undefined;
       activeEntity.manualPairingCode = newManualCode || undefined;
       activeEntity.commissioned = false;
@@ -922,7 +958,9 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
           if (newManualCode) e.manualPairingCode = newManualCode;
         });
       }
-      showToast("✓ Accesorio desvinculado; código de emparejamiento disponible");
+      showToast(newPairingCode
+        ? "✓ Accesorio desvinculado; código de emparejamiento disponible"
+        : "Accesorio desvinculado. El nodo aún no entregó el código.");
       void onRefresh();
     } catch (err: any) {
       showToast(err.message || "Error al desvincular", true);
@@ -2350,7 +2388,7 @@ export const DeviceModal: React.FC<DeviceModalProps> = ({
                         <strong>Puerto HAP:</strong> {activeHapAccessory.port}
                       </div>
                       <div style={{ marginTop: 4 }}>
-                        <strong>Firmware:</strong> <code>{activeHapAccessory.firmwareRevision || "HAP-NodeJS 2.2.3"}</code>
+                        <strong>Firmware:</strong> <code>{activeHapAccessory.firmwareRevision || "Versión HAP no disponible"}</code>
                       </div>
                     </div>
                   </div>

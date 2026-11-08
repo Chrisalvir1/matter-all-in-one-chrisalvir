@@ -121,24 +121,34 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
   const [activeAiDetection, setActiveAiDetection] = useState<any>(null);
   const [isSavingAi, setIsSavingAi] = useState(false);
   const [previewPlaying, setPreviewPlaying] = useState(false);
-  const [previewSession, setPreviewSession] = useState<string | null>(null);
+  const [preview, setPreview] = useState<{
+    cameraId: string;
+    id: string;
+  } | null>(null);
   const [previewStats, setPreviewStats] = useState<any>(null);
+  const previewCameraId =
+    camera && ("cameraId" in camera ? camera.cameraId : camera.id);
+  const previewSession =
+    preview && preview.cameraId === previewCameraId ? preview.id : null;
   useEffect(() => {
-    setPreviewSession(null);
-    setPreviewStats(null);
-  }, [camera?.name]);
+    setPreview((current) =>
+      current?.cameraId === previewCameraId ? current : null,
+    );
+  }, [previewCameraId]);
   useEffect(() => {
-    if (!previewSession || !camera) return;
-    const id = "cameraId" in camera ? camera.cameraId : camera.id;
+    if (!previewSession || !previewCameraId) return;
+    const id = previewCameraId;
     const controller = new AbortController();
-    const timer = setTimeout(() => setPreviewSession(null), 90000);
+    const timer = setTimeout(() => setPreview(null), 90000);
     const poll = setInterval(() => {
       fetch(
         `./api/custom/cameras/${encodeURIComponent(id)}/preview/status?session=${previewSession}`,
         { signal: controller.signal },
       )
         .then((r) => r.json())
-        .then(setPreviewStats)
+        .then((stats) => {
+          if (!controller.signal.aborted) setPreviewStats(stats);
+        })
         .catch(() => {});
     }, 1000);
     return () => {
@@ -146,8 +156,9 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
       clearInterval(poll);
       controller.abort();
       setPreviewStats(null);
+      setPreviewPlaying(false);
     };
-  }, [previewSession, camera]);
+  }, [previewSession, previewCameraId]);
   const [selectedLightId, setSelectedLightId] = useState<string>("auto");
   const [selectedSirenId, setSelectedSirenId] = useState<string>("auto");
   const [selectedMotionId, setSelectedMotionId] = useState<string>("auto");
@@ -981,7 +992,10 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                   <code>{(camera as CameraUiCameraItem).port}</code>
                 </>
               )}{" "}
-              · Firmware HAP: <code>HAP-NodeJS 2.2.3</code>
+              · Firmware HAP:{" "}
+              <code>
+                {camera.firmwareRevision || "Versión HAP no disponible"}
+              </code>
             </p>
           </div>
         </header>
@@ -2127,8 +2141,10 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                     onClick={() => {
                       setPreviewStats(null);
                       setPreviewPlaying(false);
-                      setPreviewSession(
-                        previewSession ? null : crypto.randomUUID(),
+                      setPreview(
+                        previewSession
+                          ? null
+                          : { cameraId, id: crypto.randomUUID() },
                       );
                     }}
                     style={{ fontSize: "0.72rem", padding: "2px 8px" }}
@@ -2168,7 +2184,7 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
                         display: "block",
                       }}
                       onError={() => {
-                        setPreviewSession(null);
+                        setPreview(null);
                         showToast(
                           "No se pudo abrir la preview; cierra Live View en Casa e inténtalo de nuevo",
                           true,
@@ -2194,18 +2210,22 @@ export const CameraConfigModal: React.FC<CameraConfigModalProps> = ({
 
                 {previewSession && previewPlaying && (
                   <div role="status" style={{ padding: 12 }}>
-                    Fuente: {previewStats.videoCodec || "No medido"} ·{" "}
-                    {previewStats.width || "?"}×{previewStats.height || "?"} ·{" "}
-                    {previewStats.sourceFps ?? "No medido"} fps
+                    Fuente: {previewStats?.videoCodec || "No medido"} ·{" "}
+                    {previewStats?.width && previewStats?.height
+                      ? `${previewStats.width}×${previewStats.height}`
+                      : "Resolución no medida"} ·{" "}
+                    {previewStats?.sourceFps
+                      ? `${previewStats.sourceFps} fps declarados`
+                      : "FPS no medidos"}
                     <br />
-                    Audio fuente: {previewStats.audioCodec || "No medido"}{" "}
-                    {previewStats.sampleRate
-                      ? `${previewStats.sampleRate} Hz`
-                      : ""}
+                    Audio fuente: {previewStats?.audioCodec || "No medido"}{" "}
+                    {previewStats?.sampleRate ? `${previewStats.sampleRate} Hz` : ""}
                     <br />
-                    Preview: vídeo original sin recodificar · audio AAC-LC mono
-                    24 kHz si la fuente contiene audio. Esta salida no mide el
-                    codec negociado por Casa.
+                    Vídeo de preview: {previewStats?.outputVideo
+                      ? `${previewStats.outputVideo} sin recodificar`
+                      : "No medido"} · Audio de preview: {previewStats?.outputAudio
+                      ? `${previewStats.outputAudio} transcodificado${previewStats.outputSampleRate ? ` · ${previewStats.outputSampleRate} Hz` : ""}`
+                      : "No medido"}
                   </div>
                 )}
                 <p style={{ color: "var(--text-muted)" }}>

@@ -223,7 +223,12 @@ export const api = {
     }),
 
   openCommissioning: (entityId: string) =>
-    request(`/open-commissioning/${encodeURIComponent(entityId)}`, {
+    request<{
+      success: boolean;
+      pairingCode?: string | null;
+      manualPairingCode?: string | null;
+      windowTimeout?: number;
+    }>(`/open-commissioning/${encodeURIComponent(entityId)}`, {
       method: "POST",
     }),
 

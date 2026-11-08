@@ -1,3 +1,4 @@
+import logoUrl from "../../logo.png";
 import React from "react";
 import { StatusResponse } from "../types";
 
@@ -14,7 +15,7 @@ export const Header: React.FC<HeaderProps> = ({ status }) => {
       <div className="brand">
         <img
           className="brand-logo"
-          src="logo.png"
+          src={logoUrl}
           alt="Logo"
           aria-hidden="true"
         />

@@ -8,7 +8,7 @@
 
 import { BaseEntity } from "./base.entity.js";
 import { ClusterId } from "matterbridge/matter/types";
-import { MatterbridgeEndpoint, waterValve } from "matterbridge";
+import { MatterbridgeEndpoint } from "matterbridge";
 import { HassState } from "../utils/ha-state.js";
 import {
   safeSetAttribute,
@@ -34,19 +34,25 @@ export class ValveEntity extends BaseEntity {
     if (!this.endpoint) return;
 
     const updateFn = isInitialSync ? safeSetAttribute : safeUpdateAttribute;
-    const isOpen = state.state === "open" || state.state === "opening";
-    const valveState = isOpen ? 1 : 0; // 0 = Closed, 1 = Open
-
-    await updateFn(
-      this.endpoint,
-      ValveConfigurationAndControlId,
-      "currentState",
-      valveState,
-      this.platform.log,
-    );
+    const valveStates: Record<string, number> = {
+      closed: 0,
+      open: 1,
+      opening: 2,
+      closing: 2,
+    };
+    const valveState = valveStates[state.state];
+    if (valveState !== undefined) {
+      await updateFn(
+        this.endpoint,
+        ValveConfigurationAndControlId,
+        "currentState",
+        valveState,
+        this.platform.log,
+      );
+    }
 
     const position = state.attributes?.current_position;
-    if (position !== undefined && position !== null) {
+    if (typeof position === "number" && Number.isFinite(position)) {
       const level = Math.max(0, Math.min(100, Math.round(Number(position))));
       await updateFn(
         this.endpoint,
@@ -67,6 +73,17 @@ export class ValveEntity extends BaseEntity {
     targetEndpoint.addCommandHandler("open", async (data: any) => {
       const position = data?.request?.targetLevel;
       if (position !== undefined && position !== null) {
+        const features = this.state.attributes?.supported_features;
+        if (typeof features === "number" && !(features & 4)) {
+          if (position !== 100)
+            throw new Error("Valve does not support positioning");
+          await this.platform.ha?.callService(
+            "valve",
+            "open_valve",
+            this.entityId,
+          );
+          return;
+        }
         await this.platform.ha?.callService(
           "valve",
           "set_valve_position",

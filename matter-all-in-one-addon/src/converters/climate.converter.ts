@@ -2,6 +2,40 @@
  * Converter utility for climate (thermostat) domain.
  */
 export const climateConverter = {
+  targetTemperature(
+    state: { state: string; attributes?: Record<string, unknown> },
+    kind: "heat" | "cool",
+    value: number,
+  ) {
+    if (!Number.isFinite(value)) throw new Error("Invalid temperature");
+    const attrs = state.attributes;
+    if (state.state === "heat_cool" || attrs?.temperature == null) {
+      const low = attrs?.target_temp_low;
+      const high = attrs?.target_temp_high;
+      if (typeof low === "number" && typeof high === "number") {
+        const target_temp_low = kind === "heat" ? value : low;
+        const target_temp_high = kind === "cool" ? value : high;
+        if (target_temp_low > target_temp_high)
+          throw new Error("Heating target exceeds cooling target");
+        return { target_temp_low, target_temp_high };
+      }
+    }
+    return { temperature: value };
+  },
+
+  supportedMode(mode: string, modes: unknown, preferred?: string): string {
+    if (!Array.isArray(modes) || !modes.length) return mode;
+    if (mode === "auto") {
+      if (preferred === "heat_cool" && modes.includes(preferred))
+        return preferred;
+      if (!modes.includes("auto") && modes.includes("heat_cool"))
+        return "heat_cool";
+    }
+    if (!modes.includes(mode))
+      throw new Error(`Unsupported HVAC mode: ${mode}`);
+    return mode;
+  },
+
   /**
    * Convert Celsius temperature to Matter value (hundredths of a degree Celsius).
    */

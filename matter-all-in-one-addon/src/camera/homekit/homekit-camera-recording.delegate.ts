@@ -219,6 +219,7 @@ export class HomeKitCameraRecordingDelegate
   private recordingActive = false;
   public selectedConfiguration?: CameraRecordingConfiguration;
   private prebuffer: Fmp4MediaFragment[] = [];
+  private lastKeyframeAt = 0;
   private initializationSegment: Buffer | null = null;
 
   private ffmpegProcess?: ChildProcess;
@@ -585,6 +586,21 @@ export class HomeKitCameraRecordingDelegate
     }
   }
 
+  public getRecentSnapshotMedia():
+    { data: Buffer; receivedAt: number } | undefined {
+    const fragment = this.prebuffer.at(-1);
+    if (
+      !this.initializationSegment ||
+      !fragment ||
+      Date.now() - this.lastKeyframeAt > 8000
+    )
+      return;
+    return {
+      data: Buffer.concat([this.initializationSegment, fragment.data]),
+      receivedAt: this.lastKeyframeAt,
+    };
+  }
+
   private handleNewFragment(fragment: Fmp4MediaFragment): void {
     if (this.isPausedByLiveStream && this.recordingActive) {
       this.platform?.log?.notice?.(
@@ -594,6 +610,7 @@ export class HomeKitCameraRecordingDelegate
 
     // Only accept keyframed fragments into prebuffer to prevent decode corruption
     if (fragment.isKeyframe) {
+      this.lastKeyframeAt = Date.now();
       this.prebuffer.push(fragment);
       this.currentPrebufferBytes += fragment.data.length;
 
@@ -1199,6 +1216,7 @@ export class HomeKitCameraRecordingDelegate
 
   private clearPrebuffer(): void {
     this.prebuffer = [];
+    this.lastKeyframeAt = 0;
     this.currentPrebufferBytes = 0;
   }
 

@@ -343,6 +343,10 @@ export class HomeKitCameraAccessory {
       this.capabilities,
       this.streamSource,
       this.record,
+      () =>
+        this.recordingDelegate instanceof HomeKitCameraRecordingDelegate
+          ? this.recordingDelegate.getRecentSnapshotMedia()
+          : undefined,
     );
 
     const isHevc =

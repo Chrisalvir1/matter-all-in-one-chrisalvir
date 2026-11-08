@@ -1,3 +1,4 @@
+import { climateConverter } from "../converters/climate.converter.js";
 /**
  * HAP Generic Accessory — expone cualquier entidad de Home Assistant como un
  * accesorio HAP nativo de hap-nodejs 2.2.3, igual que las cámaras pero sin
@@ -779,7 +780,14 @@ export class HapGenericAccessory {
                   await this.callHaWithResponseBudget(
                     "climate",
                     "set_hvac_mode",
-                    { hvac_mode: "cool" },
+                    {
+                      hvac_mode: climateConverter.supportedMode(
+                        state()?.attributes?.hvac_modes?.find(
+                          (mode: string) => mode !== "off",
+                        ) ?? "cool",
+                        state()?.attributes?.hvac_modes,
+                      ),
+                    },
                   );
                 },
               );
@@ -810,21 +818,38 @@ export class HapGenericAccessory {
             return 1;
           });
 
-        service
-          .getCharacteristic(Characteristic.TargetHeaterCoolerState)
+        const target = service.getCharacteristic(
+          Characteristic.TargetHeaterCoolerState,
+        );
+        const modes = state()?.attributes?.hvac_modes;
+        if (Array.isArray(modes)) {
+          const supported = [
+            ...(modes.includes("auto") || modes.includes("heat_cool")
+              ? [0]
+              : []),
+            ...(modes.includes("heat") ? [1] : []),
+            ...(modes.includes("cool") ? [2] : []),
+          ];
+          if (supported.length) target.setProps({ validValues: supported });
+        }
+        target
           .onGet(() => {
             const s = state();
             const mode = s?.state || s?.attributes?.hvac_mode;
             if (mode === "heat") return 1;
             if (mode === "cool") return 2;
-            return 0; // AUTO
+            return target.props.validValues?.[0] ?? 0;
           })
           .onSet(async (value: any) => {
             let hvac_mode = "auto";
             if (value === 1) hvac_mode = "heat";
             else if (value === 2) hvac_mode = "cool";
             await this.callHaWithResponseBudget("climate", "set_hvac_mode", {
-              hvac_mode,
+              hvac_mode: climateConverter.supportedMode(
+                hvac_mode,
+                state()?.attributes?.hvac_modes,
+                state()?.state,
+              ),
             });
           });
 
@@ -838,31 +863,51 @@ export class HapGenericAccessory {
         service
           .getCharacteristic(Characteristic.CoolingThresholdTemperature)
           .onGet(() => {
+            const current = state();
+            const rangeTarget = current?.attributes?.target_temp_high;
             const temp = Number(
-              state()?.attributes?.temperature ??
-                state()?.attributes?.target_temp_low,
+              current?.state === "heat_cool"
+                ? rangeTarget
+                : (current?.attributes?.temperature ?? rangeTarget),
             );
+
             return Number.isFinite(temp) ? temp : 22;
           })
           .onSet(async (value: any) => {
-            await this.callHaWithResponseBudget("climate", "set_temperature", {
-              temperature: Number(value),
-            });
+            await this.callHaWithResponseBudget(
+              "climate",
+              "set_temperature",
+              climateConverter.targetTemperature(
+                state() ?? { state: "unknown" },
+                "cool",
+                Number(value),
+              ),
+            );
           });
 
         service
           .getCharacteristic(Characteristic.HeatingThresholdTemperature)
           .onGet(() => {
+            const current = state();
+            const rangeTarget = current?.attributes?.target_temp_low;
             const temp = Number(
-              state()?.attributes?.temperature ??
-                state()?.attributes?.target_temp_high,
+              current?.state === "heat_cool"
+                ? rangeTarget
+                : (current?.attributes?.temperature ?? rangeTarget),
             );
+
             return Number.isFinite(temp) ? temp : 20;
           })
           .onSet(async (value: any) => {
-            await this.callHaWithResponseBudget("climate", "set_temperature", {
-              temperature: Number(value),
-            });
+            await this.callHaWithResponseBudget(
+              "climate",
+              "set_temperature",
+              climateConverter.targetTemperature(
+                state() ?? { state: "unknown" },
+                "heat",
+                Number(value),
+              ),
+            );
           });
 
         service
@@ -2160,7 +2205,10 @@ export class HapGenericAccessory {
           );
 
           const mode = state?.state || state?.attributes?.hvac_mode;
-          let targetState = 0; // AUTO
+          const target = svc.getCharacteristic(
+            Characteristic.TargetHeaterCoolerState,
+          );
+          let targetState = target.props.validValues?.[0] ?? 0;
           if (mode === "heat") targetState = 1;
           else if (mode === "cool") targetState = 2;
           svc.updateCharacteristic(
@@ -2175,7 +2223,10 @@ export class HapGenericAccessory {
               currentTemp,
             );
           }
-          const targetTemp = Number(state?.attributes?.temperature);
+          const targetTemp =
+            state?.state === "heat_cool"
+              ? NaN
+              : Number(state?.attributes?.temperature);
           if (Number.isFinite(targetTemp)) {
             svc.updateCharacteristic(
               Characteristic.CoolingThresholdTemperature,
@@ -2188,13 +2239,13 @@ export class HapGenericAccessory {
           } else {
             if (Number.isFinite(Number(state?.attributes?.target_temp_low))) {
               svc.updateCharacteristic(
-                Characteristic.CoolingThresholdTemperature,
+                Characteristic.HeatingThresholdTemperature,
                 Number(state.attributes.target_temp_low),
               );
             }
             if (Number.isFinite(Number(state?.attributes?.target_temp_high))) {
               svc.updateCharacteristic(
-                Characteristic.HeatingThresholdTemperature,
+                Characteristic.CoolingThresholdTemperature,
                 Number(state.attributes.target_temp_high),
               );
             }

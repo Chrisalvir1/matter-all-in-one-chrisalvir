@@ -106,6 +106,7 @@ export class MqttEntity {
   public commandTopic: string;
   public attributes: Record<string, any> = {};
   public currentState: string = "unknown";
+  private available?: boolean;
 
   constructor(
     private platform: HomeAssistantPlatform,
@@ -168,7 +169,9 @@ export class MqttEntity {
   }
 
   public getStateString(): string {
-    return String(this.currentState ?? "unknown");
+    return this.available === false
+      ? "unavailable"
+      : String(this.currentState ?? "unknown");
   }
 
   public async createEndpoint(): Promise<MatterbridgeEndpoint> {
@@ -363,11 +366,38 @@ export class MqttEntity {
     } catch {}
   }
 
+  public get availabilityTopic(): string | undefined {
+    return this.config.availability_topic;
+  }
+
+  public handleAvailabilityUpdate(payload: string): boolean {
+    const value = payload.trim().toLowerCase();
+    const offline = String(
+      this.config.payload_not_available ?? "offline",
+    ).toLowerCase();
+    const online = String(
+      this.config.payload_available ?? "online",
+    ).toLowerCase();
+    if (value === offline || value === "unavailable") {
+      this.available = false;
+      void this.setReachability(false);
+      return true;
+    }
+    if (value === online) {
+      this.available = true;
+      void this.setReachability(true);
+      return true;
+    }
+    return false;
+  }
+
   public async syncInitialState(): Promise<void> {
-    if (!this.stateTopic) return;
     const lastPayload = this.mqttManager.deviceStates.get(this.stateTopic);
-    if (lastPayload) {
-      this.handleStateUpdate(lastPayload);
+    if (lastPayload !== undefined) this.handleStateUpdate(lastPayload);
+    const availability = this.availabilityTopic;
+    if (availability && availability !== this.stateTopic) {
+      const payload = this.mqttManager.deviceStates.get(availability);
+      if (payload !== undefined) this.handleAvailabilityUpdate(payload);
     }
   }
 

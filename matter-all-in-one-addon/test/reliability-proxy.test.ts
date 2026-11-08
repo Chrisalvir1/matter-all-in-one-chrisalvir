@@ -1,3 +1,4 @@
+import { EventEmitter } from "node:events";
 import { it, expect, vi, beforeEach } from "vitest";
 const state = vi.hoisted(() => ({ handler: null as any, request: vi.fn() }));
 vi.mock("http", () => ({
@@ -12,7 +13,7 @@ vi.mock("http", () => ({
 vi.stubEnv("MATTER_AIO_ADMIN_TOKEN", "audit-token");
 await import("../src/proxy.js");
 beforeEach(() => {
-  state.request.mockReset().mockReturnValue({ on: vi.fn() });
+  state.request.mockReset().mockReturnValue({ on: vi.fn(), destroy: vi.fn() });
 });
 it.each(["192.168.1.50", "172.200.1.50"])(
   "rejects direct API traffic from %s",
@@ -38,8 +39,24 @@ it("accepts Supervisor ingress and injects only the internal token", () => {
     headers: {},
     pipe: vi.fn(),
   };
-  state.handler(req, { writeHead: vi.fn(), end: vi.fn() });
+  const request = Object.assign(new EventEmitter(), req);
+  const response = new EventEmitter();
+  state.handler(request, response);
   expect(state.request.mock.calls[0][0].headers["x-matter-aio-token"]).toBe(
     "audit-token",
   );
+});
+
+it("destroys the upstream request when an Ingress stream disconnects", () => {
+  const request = Object.assign(new EventEmitter(), {
+    socket: { remoteAddress: "172.30.32.2" },
+    url: "/api/custom/events",
+    method: "GET",
+    headers: {},
+    pipe: vi.fn(),
+  });
+  const response = new EventEmitter();
+  state.handler(request, response);
+  response.emit("close");
+  expect(state.request.mock.results[0].value.destroy).toHaveBeenCalledOnce();
 });

@@ -1,3 +1,4 @@
+import logoUrl from "../../logo.png";
 import React from "react";
 import { StatusResponse } from "../types";
 
@@ -22,7 +23,7 @@ export const TopBar: React.FC<TopBarProps> = ({
         <div className="topbar-brand">
           <img
             className="topbar-logo"
-            src="logo.png"
+            src={logoUrl}
             alt="Logo"
             aria-hidden="true"
           />

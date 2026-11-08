@@ -231,7 +231,7 @@ export const PairedModal: React.FC<PairedModalProps> = ({
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ fontWeight: 600, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.name}</div>
                                 <div style={{ fontSize: 11, color: "var(--muted)" }}>
-                                  {hapEnt?.hapAccessory?.profileLabel || "Dispositivo HAP"} · <code>{hapEnt?.hapAccessory?.firmwareRevision || "HAP-NodeJS 2.2.3"}</code>
+                                  {hapEnt?.hapAccessory?.profileLabel || "Dispositivo HAP"} · <code>{hapEnt?.hapAccessory?.firmwareRevision || "Versión HAP no disponible"}</code>
                                 </div>
                               </div>
                               <span style={{ color: "#60a5fa", fontSize: 11, fontWeight: 600 }}>✓ HAP</span>
@@ -260,7 +260,7 @@ export const PairedModal: React.FC<PairedModalProps> = ({
                             <span style={{ fontSize: 20 }}>📹</span>
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ fontWeight: 600, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</div>
-                              <div style={{ fontSize: 11, color: "var(--muted)" }}>{c.model || "Cámara HAP"} · <code>{c.firmwareRevision || "HAP-NodeJS 2.2.3"}</code></div>
+                              <div style={{ fontSize: 11, color: "var(--muted)" }}>{c.model || "Cámara HAP"} · <code>{c.firmwareRevision || "Versión HAP no disponible"}</code></div>
                             </div>
                             <span style={{ color: "#60a5fa", fontSize: 11, fontWeight: 600 }}>✓ HAP</span>
                           </button>
@@ -284,7 +284,7 @@ export const PairedModal: React.FC<PairedModalProps> = ({
                             <span style={{ fontSize: 20 }}>📹</span>
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ fontWeight: 600, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</div>
-                              <div style={{ fontSize: 11, color: "var(--muted)" }}>Scrypted · <code>{c.firmwareRevision || "HAP-NodeJS 2.2.3"}</code></div>
+                              <div style={{ fontSize: 11, color: "var(--muted)" }}>Scrypted · <code>{c.firmwareRevision || "Versión HAP no disponible"}</code></div>
                             </div>
                             <span style={{ color: "#60a5fa", fontSize: 11, fontWeight: 600 }}>✓ HAP</span>
                           </div>
@@ -310,7 +310,7 @@ export const PairedModal: React.FC<PairedModalProps> = ({
                             <span style={{ fontSize: 20 }}>📷</span>
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ fontWeight: 600, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.name}</div>
-                              <div style={{ fontSize: 11, color: "var(--muted)" }}>HA Camera · <code>HAP-NodeJS 2.2.3</code></div>
+                              <div style={{ fontSize: 11, color: "var(--muted)" }}>HA Camera · <code>Versión HAP no disponible</code></div>
                             </div>
                             <span style={{ color: "#60a5fa", fontSize: 11, fontWeight: 600 }}>✓ HAP</span>
                           </button>

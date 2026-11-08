@@ -73,6 +73,8 @@ export interface HomeKitStreamSession {
   telemetry?: LiveViewSessionTelemetry;
   /** FFmpeg writes input and output headers alike; observe only output fields. */
   ffmpegOutputHeaderSeen?: boolean;
+  firstFfmpegFrameReported?: boolean;
+  startRequestedAt?: number;
 }
 
 export const FALLBACK_JPEG_BUFFER = Buffer.from(
@@ -270,7 +272,7 @@ export class HomeKitCameraStreamingDelegate
   }
 
   private readonly twoWayAudioSupported: boolean;
-  private isTakingSnapshot = false;
+  private snapshotWaiters: SnapshotRequestCallback[] | undefined;
   private lastSnapshotTime = 0;
 
   constructor(
@@ -279,6 +281,8 @@ export class HomeKitCameraStreamingDelegate
     private readonly capabilities: CameraCapabilitiesInfo,
     private streamSource: ResolvedStreamSource,
     private readonly record?: HomeKitCameraStorageRecord,
+    private readonly recordingSnapshotMedia?: () =>
+      { data: Buffer; receivedAt: number } | undefined,
   ) {
     super();
     const cameraIdentity = `${this.entityId} ${String(this.streamSource.metadata?.name || "")} ${String(this.streamSource.metadata?.model || "")}`;
@@ -468,9 +472,17 @@ export class HomeKitCameraStreamingDelegate
     line: string,
   ): void {
     if (!session.telemetry) return;
-    if (/^Output #\d+/i.test(line.trim())) {
-      session.ffmpegOutputHeaderSeen = true;
+    const outputHeader = /^Output #(\d+)/i.exec(line.trim());
+    if (outputHeader) {
+      session.ffmpegOutputHeaderSeen = outputHeader[1] === "0";
       return;
+    }
+    const frame = /^frame=\s*(\d+)/.exec(line.trim());
+    if (frame && Number(frame[1]) > 0 && !session.firstFfmpegFrameReported) {
+      session.firstFfmpegFrameReported = true;
+      this.platform?.log?.notice?.(
+        `[HomeKitCamera][${this.entityId}] FFmpeg first output frame after ${Date.now() - (session.startRequestedAt ?? Date.parse(session.telemetry.startedAt))}ms`,
+      );
     }
     const progress = mergeFfmpegProgress(session.telemetry.output, line);
     const output = session.ffmpegOutputHeaderSeen
@@ -484,7 +496,7 @@ export class HomeKitCameraStreamingDelegate
       const snapPath = `/data/snapshots/${this.entityId.replaceAll(".", "_")}.jpg`;
       if (fsSync.existsSync(snapPath)) {
         const buf = fsSync.readFileSync(snapPath);
-        if (isJpeg(buf) && buf.length > 2048) {
+        if (isJpeg(buf)) {
           this.lastSnapshotBuffer = buf;
           // A persisted snapshot can survive an add-on restart. Preserve its
           // actual age instead of treating load time as capture time.
@@ -510,20 +522,25 @@ export class HomeKitCameraStreamingDelegate
     callback: SnapshotRequestCallback,
   ): Promise<void> {
     const started = Date.now();
+    let ownsCapture = false;
     let completed = false;
     let safetyTimer: ReturnType<typeof setTimeout> | undefined = undefined;
-    const finish = (source: string, buffer: Buffer): void => {
+    const finish = (
+      source: string,
+      buffer: Buffer,
+      receivedAt = Date.now(),
+    ): void => {
       if (safetyTimer) {
         clearTimeout(safetyTimer);
         safetyTimer = undefined;
       }
-      this.isTakingSnapshot = false;
       if (completed) return;
       completed = true;
-      const selected =
-        isJpeg(buffer) && buffer.length > 2048
-          ? buffer
-          : this.lastSnapshotBuffer;
+      if (ownsCapture && this.lastSnapshotTime > started) {
+        source = "cached-active-stream";
+        buffer = this.lastSnapshotBuffer;
+      }
+      const selected = isJpeg(buffer) ? buffer : this.lastSnapshotBuffer;
       if (isJpeg(selected) && selected !== FALLBACK_JPEG_BUFFER) {
         this.lastSnapshotBuffer = selected;
         // Cached/error fallbacks keep HomeKit responsive, but must not make
@@ -533,60 +550,65 @@ export class HomeKitCameraStreamingDelegate
           source === "ha-fetch-png-converted" ||
           source === "http-snapshot" ||
           source === "http-png-converted" ||
+          source === "recording-prebuffer" ||
           source === "ffmpeg"
         ) {
-          this.lastSnapshotTime = Date.now();
+          this.lastSnapshotTime = receivedAt;
           void this.persistSnapshotToDisk(selected);
         }
       }
       this.platform?.log?.notice?.(
-        `[HomeKitCamera][${this.entityId}] Snapshot source=${source} bytes=${selected.length} duration=${Date.now() - started}ms validJpeg=${isJpeg(selected)}`,
+        `[HomeKitCamera][${this.entityId}] Snapshot source=${source} bytes=${selected.length} duration=${Date.now() - started}ms cacheAgeMs=${this.lastSnapshotTime ? Date.now() - this.lastSnapshotTime : "unknown"} validJpeg=${isJpeg(selected)}`,
       );
+      const waiters = ownsCapture ? this.snapshotWaiters : undefined;
+      if (ownsCapture) this.snapshotWaiters = undefined;
       callback(undefined, selected);
+      waiters?.forEach((waiter) => waiter(undefined, selected));
     };
 
-    // NEVER open a competing RTSP connection while live viewing is active.
-    // Cameras like Tapo allow max 2 RTSP connections; opening a 3rd connection kills the live stream.
+    const cacheAge = Date.now() - this.lastSnapshotTime;
     if (this.activeSessions.size > 0) {
-      finish("active-session-protect", this.lastSnapshotBuffer);
+      finish(
+        cacheAge < 10000 ? "cached-active-stream" : "active-session-protect",
+        this.lastSnapshotBuffer,
+      );
       return;
     }
-
-    // If a live stream is actively running, reuse last snapshot immediately to avoid RTSP socket contention
-    if (
-      this.activeSessions.size > 0 &&
-      this.lastSnapshotBuffer &&
-      this.lastSnapshotBuffer !== FALLBACK_JPEG_BUFFER
-    ) {
-      finish("cached-active-stream", this.lastSnapshotBuffer);
+    if (this.lastSnapshotBuffer !== FALLBACK_JPEG_BUFFER && cacheAge < 8000) {
+      finish("cached-recent", this.lastSnapshotBuffer);
       return;
     }
-
-    const now = Date.now();
-    if (
-      this.lastSnapshotBuffer &&
-      this.lastSnapshotBuffer !== FALLBACK_JPEG_BUFFER &&
-      (this.isTakingSnapshot || now - this.lastSnapshotTime < 8000)
-    ) {
-      finish("cached-session-guard", this.lastSnapshotBuffer);
+    if (this.snapshotWaiters) {
+      this.snapshotWaiters.push(callback);
       return;
     }
-
-    this.isTakingSnapshot = true;
+    ownsCapture = true;
+    this.snapshotWaiters = [];
     safetyTimer = setTimeout(() => {
-      if (
-        !completed &&
-        this.lastSnapshotBuffer &&
-        this.lastSnapshotBuffer !== FALLBACK_JPEG_BUFFER
-      ) {
-        finish("safety-cached-fallback", this.lastSnapshotBuffer);
-      }
-      // Let the bounded HA snapshot, direct HTTP snapshot, and final FFmpeg
-      // capture complete before returning an older cached image. These paths
-      // have explicit upper bounds of 1.2s + 1.5s + 2s respectively.
+      finish("safety-cached-fallback", this.lastSnapshotBuffer);
     }, 5200);
 
     try {
+      const media = this.streamSource.metadata?.isOmniTuyaDirect
+        ? this.recordingSnapshotMedia?.()
+        : undefined;
+      if (media) {
+        const jpeg = await convertImageToJpeg(
+          media.data,
+          request.width,
+          request.height,
+        );
+        if (completed) return;
+        if (jpeg) {
+          finish("recording-prebuffer", jpeg, media.receivedAt);
+          return;
+        }
+        if (this.activeSessions.size > 0) {
+          finish("active-session-protect", this.lastSnapshotBuffer);
+          return;
+        }
+      }
+
       let haEntityToQuery: string | undefined = this.entityId.startsWith(
         "camera.",
       )
@@ -621,7 +643,7 @@ export class HomeKitCameraStreamingDelegate
       ) {
         try {
           const buffer = await this.platform.ha.fetchSnapshot(haEntityToQuery);
-          if (buffer && isJpeg(buffer) && buffer.length > 512) {
+          if (buffer && isJpeg(buffer)) {
             finish("ha-fetch-snapshot", buffer);
             return;
           } else if (buffer && isPng(buffer)) {
@@ -657,7 +679,7 @@ export class HomeKitCameraStreamingDelegate
           });
           if (response.ok) {
             const buffer = Buffer.from(await response.arrayBuffer());
-            if (isJpeg(buffer) && buffer.length > 512) {
+            if (isJpeg(buffer)) {
               finish("http-snapshot", buffer);
               return;
             } else if (isPng(buffer)) {
@@ -679,6 +701,16 @@ export class HomeKitCameraStreamingDelegate
         }
       }
 
+      // A live request may have arrived while awaiting the HA image.
+      // Omni's saved source URL is signed and already used by the prebuffer.
+      if (completed) return;
+      if (
+        this.activeSessions.size ||
+        this.streamSource.metadata?.isOmniTuyaDirect
+      ) {
+        finish("shared-reader-cache", this.lastSnapshotBuffer);
+        return;
+      }
       const ffmpegPath = resolveFfmpegPath();
       const sourceUrl = this.getCleanSourceUrl();
       if (!ffmpegPath || !sourceUrl) {
@@ -687,7 +719,7 @@ export class HomeKitCameraStreamingDelegate
       }
 
       const args = ["-hide_banner", "-loglevel", "error"];
-      if (sourceUrl.startsWith("rtsp://")) {
+      if (/^rtsps?:\/\//i.test(sourceUrl)) {
         const isDemandingCam =
           this.isTapoC402() || this.isWyze() || this.isEzviz();
         args.push(
@@ -757,12 +789,7 @@ export class HomeKitCameraStreamingDelegate
       process.once("close", () => {
         clearTimeout(timer);
         const buffer = Buffer.concat(chunks);
-        finish(
-          isJpeg(buffer) && buffer.length > 2048
-            ? "ffmpeg"
-            : "fallback-invalid-jpeg",
-          buffer,
-        );
+        finish(isJpeg(buffer) ? "ffmpeg" : "fallback-invalid-jpeg", buffer);
       });
     } catch (error) {
       this.platform?.log?.warn?.(
@@ -958,7 +985,22 @@ export class HomeKitCameraStreamingDelegate
         callback(new Error(`Session ${request.sessionID} was not prepared`));
         return;
       }
-      void this.startStream(session, request as StartStreamRequest, callback);
+      if (session.startRequestedAt !== undefined) {
+        callback(new Error("Stream already starting or active"));
+        return;
+      }
+      session.startRequestedAt = Date.now();
+      const timer = this.prepareTimeouts.get(session.sessionId);
+      if (timer !== undefined) clearTimeout(timer);
+      this.prepareTimeouts.delete(session.sessionId);
+      void this.startStream(
+        session,
+        request as StartStreamRequest,
+        callback,
+      ).catch(() => {
+        this.stopStream(session.sessionId);
+        callback(new Error("Could not start HomeKit stream"));
+      });
       return;
     }
     if (request.type === StreamRequestTypes.RECONFIGURE) {
@@ -1201,7 +1243,7 @@ export class HomeKitCameraStreamingDelegate
         `[HomeKitCamera][${this.entityId}] HAP START rejected: ${!ffmpegPath ? "FFmpeg unavailable" : "stream source unavailable"}`,
       );
       callback(new Error("FFmpeg or RTSP source is unavailable"));
-      this.emit("session-end", session.sessionId);
+      this.stopStream(session.sessionId);
       return;
     }
     // Omni issues a new single-session RTSP URL for each HomeKit open. The
@@ -1239,6 +1281,10 @@ export class HomeKitCameraStreamingDelegate
       // Metadata probing is a separate RTSP reader. Allocate another signed
       // URL for the actual live process instead of reopening the probe URL.
       if (!audioFormatKnown) {
+        if (this.activeSessions.get(session.sessionId) !== session) {
+          callback(new Error("HomeKit stream stopped during setup"));
+          return;
+        }
         const freshUrl = await this.platform?.ha?.requestOmniTuyaCameraStream?.(
           this.streamSource.metadata?.sourceCameraEntityId || this.entityId,
         );
@@ -1246,7 +1292,7 @@ export class HomeKitCameraStreamingDelegate
           callback(
             new Error("Omni could not renew the live stream after probing"),
           );
-          this.emit("session-end", session.sessionId);
+          this.stopStream(session.sessionId);
           return;
         }
         this.streamSource.url = freshUrl;
@@ -1275,12 +1321,6 @@ export class HomeKitCameraStreamingDelegate
       qualityFloor,
       Math.min(video.max_bit_rate || 2500, maxBitrateCap),
     );
-    // Cancel the prepare watchdog timer because stream has legitimately started
-    const timer = this.prepareTimeouts.get(session.sessionId);
-    if (timer !== undefined) {
-      clearTimeout(timer);
-      this.prepareTimeouts.delete(session.sessionId);
-    }
     this.platform?.log?.notice?.(
       `[HomeKitCamera][${this.entityId}] [Session][${session.sessionId}] session-start ${video.width}x${video.height} | FPS[declarado=${declaredFps}, solicitado=${requestedFps ?? "omitted"}, medido=${measuredFps ?? "unmeasured"}, efectivo=${effectiveFps ?? "auto"}]`,
     );
@@ -1294,6 +1334,10 @@ export class HomeKitCameraStreamingDelegate
       callbackSettled = true;
       callback(error);
     };
+    if (this.activeSessions.get(session.sessionId) !== session) {
+      settle(new Error("HomeKit stream stopped during setup"));
+      return;
+    }
     this.spawnFfmpegProcess(session, request, settle, false);
   }
 
@@ -1357,6 +1401,10 @@ export class HomeKitCameraStreamingDelegate
           /^rtsps?:\/\//i.test(sourceUrl || "")
             ? "pipe"
             : "ignore",
+          this.streamSource.metadata?.isOmniTuyaDirect === true &&
+          /^rtsps?:\/\//i.test(sourceUrl || "")
+            ? "pipe"
+            : "ignore",
         ],
       });
       session.process = process;
@@ -1364,6 +1412,25 @@ export class HomeKitCameraStreamingDelegate
       if (recordingPipe && typeof recordingPipe !== "string") {
         recordingPipe.on("data", (chunk: Buffer) => {
           this.emit("recording-analysis-data", chunk);
+        });
+      }
+      const snapshotPipe = process.stdio[4];
+      if (snapshotPipe && typeof snapshotPipe !== "string") {
+        let pending = Buffer.alloc(0);
+        snapshotPipe.on("data", (chunk: Buffer) => {
+          if (this.activeSessions.get(request.sessionID)?.process !== process)
+            return;
+          pending = Buffer.concat([pending, chunk]);
+          let end: number;
+          while ((end = pending.indexOf(Buffer.from([0xff, 0xd9]), 2)) >= 0) {
+            const jpeg = pending.subarray(0, end + 2);
+            pending = pending.subarray(end + 2);
+            if (isJpeg(jpeg)) {
+              this.lastSnapshotBuffer = jpeg;
+              this.lastSnapshotTime = Date.now();
+            }
+          }
+          if (pending.length > 2 * 1024 * 1024) pending = Buffer.alloc(0);
         });
       }
       if (isHaProxyStream && sourceUrl) {
@@ -2245,6 +2312,22 @@ export class HomeKitCameraStreamingDelegate
         "-movflags",
         "frag_keyframe+empty_moov+default_base_moof+skip_sidx+skip_trailer",
         "pipe:3",
+      );
+      args.push(
+        "-map",
+        "0:v:0",
+        "-vf",
+        "select='isnan(prev_selected_t)+gte(t-prev_selected_t,5)',scale=w='min(1280,iw)':h=-2",
+        "-an",
+        "-c:v",
+        "mjpeg",
+        "-q:v",
+        "4",
+        "-fps_mode",
+        "vfr",
+        "-f",
+        "image2pipe",
+        "pipe:4",
       );
     }
 

@@ -13,7 +13,6 @@ const ALLOWED_INGRESS_CLIENTS = new Set([
 
 const server = http.createServer((req, res) => {
   const remoteAddress = req.socket.remoteAddress ?? "";
-  const url = req.url || "";
   if (!ALLOWED_INGRESS_CLIENTS.has(remoteAddress)) {
     res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
     res.end("Forbidden");
@@ -34,12 +33,24 @@ const server = http.createServer((req, res) => {
     (proxyRes) => {
       // Set the response headers and status from the target response
       res.writeHead(proxyRes.statusCode ?? 200, proxyRes.headers);
+      proxyRes.on("error", () => res.destroy());
       proxyRes.pipe(res);
     },
   );
 
+  // A closed browser tab must also release SSE subscribers and preview streams.
+  res.once("close", () => {
+    if (!res.writableFinished) proxyReq.destroy();
+  });
+  req.once("error", () => proxyReq.destroy());
+
   // Handle errors (e.g. target server not started yet)
   proxyReq.on("error", () => {
+    if (res.destroyed || res.writableEnded) return;
+    if (res.headersSent) {
+      res.destroy();
+      return;
+    }
     const url = req.url || "";
     if (req.method !== "GET" || url.includes("/api/")) {
       res.writeHead(503, { "Content-Type": "application/json; charset=utf-8" });

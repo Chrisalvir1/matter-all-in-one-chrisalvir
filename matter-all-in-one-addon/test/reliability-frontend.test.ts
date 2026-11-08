@@ -44,6 +44,10 @@ beforeEach(() => {
   ctx.effects = [];
   ctx.setters = [];
   vi.stubGlobal("EventSource", FakeEventSource);
+  vi.stubGlobal("requestAnimationFrame", (callback: () => void) =>
+    setTimeout(callback, 16),
+  );
+  vi.stubGlobal("cancelAnimationFrame", clearTimeout);
   Object.values(ctx.api).forEach((f: any) =>
     f.mockReset().mockResolvedValue([]),
   );
@@ -82,6 +86,16 @@ describe("frontend inventory synchronization", () => {
         attributes: { brightness: 10 },
       }),
     });
+    es.onmessage({
+      data: JSON.stringify({
+        type: "state_changed",
+        entityId: "light.audit",
+        state: "on",
+        attributes: { color_mode: "brightness" },
+      }),
+    });
+    await vi.advanceTimersByTimeAsync(16);
+    expect(ctx.setters[1]).toHaveBeenCalledTimes(2);
     const updater = ctx.setters[1].mock.calls.at(-1)[0];
     expect(
       updater([
@@ -95,7 +109,11 @@ describe("frontend inventory synchronization", () => {
       {
         entityId: "light.audit",
         state: "on",
-        attributes: { friendly_name: "Audit", brightness: 10 },
+        attributes: {
+          friendly_name: "Audit",
+          brightness: 10,
+          color_mode: "brightness",
+        },
       },
     ]);
     await vi.advanceTimersByTimeAsync(2000);

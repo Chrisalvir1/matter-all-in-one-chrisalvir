@@ -161,6 +161,19 @@ describe("Matter 1.6.1 Features and Clusters", () => {
       expect(
         endpoint.getAttribute(ValveConfigurationAndControlId, "currentLevel"),
       ).toBe(0);
+
+      for (const state of ["opening", "closing", "unavailable"]) {
+        await valve.updateState({
+          entity_id: "valve.garden_sprinkler",
+          state,
+          attributes: {},
+          last_changed: "",
+          last_updated: "",
+        });
+        expect(
+          endpoint.getAttribute(ValveConfigurationAndControlId, "currentState"),
+        ).toBe(2);
+      }
     });
   });
 

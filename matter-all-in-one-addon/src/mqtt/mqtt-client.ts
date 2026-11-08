@@ -293,7 +293,7 @@ export class MqttClientManager {
       );
     });
 
-    this.client.on("message", (topic, message) => {
+    this.client.on("message", (topic, message, packet) => {
       const payload = message.toString();
 
       // Auto-Discovery Topics format: homeassistant/<component>/[<node_id>/]<object_id>/config
@@ -387,7 +387,7 @@ export class MqttClientManager {
           topic.includes("motion") ||
           topic === "camera.ui"
         ) {
-          if (this.onCameraUiMessageCallback) {
+          if (!packet?.retain && this.onCameraUiMessageCallback) {
             this.onCameraUiMessageCallback(topic, payload);
           }
         }

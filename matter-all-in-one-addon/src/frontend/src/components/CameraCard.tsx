@@ -1,3 +1,4 @@
+import { entityIssue } from "../utils/accessory-issues";
 import React from "react";
 import { CameraRecord, CameraUiCameraItem, DeviceRecord } from "../types";
 
@@ -93,7 +94,7 @@ export const CameraCard: React.FC<CameraCardProps> = ({
                   fontWeight: 600,
                 }}
               >
-                🍏 Enlazada a Casa · {camera.firmwareRevision || "HAP-NodeJS 2.2.3"}
+                🍏 Enlazada a Casa · {camera.firmwareRevision || "Versión HAP no disponible"}
               </span>
             ) : (
               <span
@@ -106,7 +107,7 @@ export const CameraCard: React.FC<CameraCardProps> = ({
                   fontWeight: 600,
                 }}
               >
-                ⚠️ No enlazada · {camera.firmwareRevision || "HAP-NodeJS 2.2.3"}
+                ⚠️ No enlazada · {camera.firmwareRevision || "Versión HAP no disponible"}
               </span>
             )}
             {isMatterPaired && (
@@ -231,7 +232,7 @@ export const CameraCard: React.FC<CameraCardProps> = ({
                   fontWeight: 600,
                 }}
               >
-                🍏 Enlazada a Casa · {cameraUiCamera.firmwareRevision || "HAP-NodeJS 2.2.3"}
+                🍏 Enlazada a Casa · {cameraUiCamera.firmwareRevision || "Versión HAP no disponible"}
               </span>
             ) : (
               <span
@@ -244,7 +245,7 @@ export const CameraCard: React.FC<CameraCardProps> = ({
                   fontWeight: 600,
                 }}
               >
-                ⚠️ No enlazada · {cameraUiCamera.firmwareRevision || "HAP-NodeJS 2.2.3"}
+                ⚠️ No enlazada · {cameraUiCamera.firmwareRevision || "Versión HAP no disponible"}
               </span>
             )}
             <span
@@ -399,11 +400,11 @@ export const CameraCard: React.FC<CameraCardProps> = ({
                   fontWeight: 600,
                 }}
               >
-                🍏 Enlazada a Casa · HAP-NodeJS 2.2.3
+                🍏 Enlazada a Casa · Versión HAP no disponible
               </span>
             )}
             {!isPaired && isExported && <span className="tag tag-mqtt">EN MATTER</span>}
-            {!isPaired && !isExported && isHapPublished && <span className="tag tag-mqtt">EN HOMEKIT · HAP-NodeJS 2.2.3</span>}
+            {!isPaired && !isExported && isHapPublished && <span className="tag tag-mqtt">EN HOMEKIT · Versión HAP no disponible</span>}
             {needsGo2rtc && (
               <span
                 className="tag"
@@ -423,6 +424,9 @@ export const CameraCard: React.FC<CameraCardProps> = ({
           </div>
         </div>
         <h3 title={haDevice.name}>{haDevice.name}</h3>
+        {haDevice.entities.map(entityIssue).filter(Boolean).slice(0, 1).map((reason) => (
+          <p key={reason} className="error-message" role="status">{reason}</p>
+        ))}
         <p className="device-meta">
           {brand}
           {haDevice.model ? ` (${haDevice.model})` : ""}

@@ -204,8 +204,8 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({ device, searchQuery, onC
             }}
           >
             {isHapPaired
-              ? `🍏 Enlazada a Casa · ${hapEntity?.hapAccessory?.firmwareRevision || "HAP-NodeJS 2.2.3"}`
-              : `🏠 HomeKit HAP · ${hapEntity?.hapAccessory?.firmwareRevision || "HAP-NodeJS 2.2.3"}`}
+              ? `🍏 Enlazada a Casa · ${hapEntity?.hapAccessory?.firmwareRevision || "Versión HAP no disponible"}`
+              : `🏠 HomeKit HAP · ${hapEntity?.hapAccessory?.firmwareRevision || "Versión HAP no disponible"}`}
           </span>
         )}
         {device.manufacturer && <span className="tag tag-brand">{device.manufacturer}</span>}

@@ -1,16 +1,12 @@
+import { cameraUiNeedsAttention, deviceNeedsAttention, scryptedNeedsAttention } from "./utils/accessory-issues";
 import { adaptHaDeviceToCameraRecord } from "./utils/ha-camera-record";
-import React, { useState, useEffect, useMemo } from "react";
+import React, { lazy, Suspense, useState, useEffect, useMemo } from "react";
 import { useAddonState, FilterType } from "./hooks/useAddonState";
 import { TopBar } from "./components/TopBar";
 import { ControlCenter } from "./components/ControlCenter";
 import { FilterBar } from "./components/FilterBar";
 import { CameraBrandGroup } from "./components/CameraBrandGroup";
 import { DeviceCard } from "./components/DeviceCard";
-import { CameraConfigModal } from "./components/CameraConfigModal";
-import { DeviceModal } from "./components/DeviceModal";
-import { ScryptedModal } from "./components/ScryptedModal";
-import { CameraUiModal } from "./components/CameraUiModal";
-import { SettingsModal } from "./components/SettingsModal";
 import { extractCameraBrand } from "./components/CameraCard";
 import {
   CameraRecord,
@@ -21,10 +17,37 @@ import {
 } from "./types";
 import { api } from "./api/client";
 
+const CameraConfigModal = lazy(() =>
+  import("./components/CameraConfigModal").then((module) => ({
+    default: module.CameraConfigModal,
+  })),
+);
+const DeviceModal = lazy(() =>
+  import("./components/DeviceModal").then((module) => ({
+    default: module.DeviceModal,
+  })),
+);
+const ScryptedModal = lazy(() =>
+  import("./components/ScryptedModal").then((module) => ({
+    default: module.ScryptedModal,
+  })),
+);
+const CameraUiModal = lazy(() =>
+  import("./components/CameraUiModal").then((module) => ({
+    default: module.CameraUiModal,
+  })),
+);
+const SettingsModal = lazy(() =>
+  import("./components/SettingsModal").then((module) => ({
+    default: module.SettingsModal,
+  })),
+);
+
 export const App: React.FC = () => {
   const {
     status,
     allDevices,
+    iotDevices,
     cameras,
     cameraUiCameras,
     realHaCameraDevices,
@@ -32,6 +55,7 @@ export const App: React.FC = () => {
     cameraUiConfig,
     loading,
     loadError,
+    partialLoadErrors,
     searchQuery,
     setSearchQuery,
     activeFilter,
@@ -114,11 +138,11 @@ export const App: React.FC = () => {
 
   // Filter devices based on search and active tab
   const filteredDevices = useMemo(() => {
-    let list = allDevices;
+    let iotOnlyList = iotDevices;
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
-      list = list.filter(
+      iotOnlyList = iotOnlyList.filter(
         (d) =>
           d.name.toLowerCase().includes(q) ||
           (d.manufacturer && d.manufacturer.toLowerCase().includes(q)) ||
@@ -131,9 +155,6 @@ export const App: React.FC = () => {
           )
       );
     }
-
-    const haCameraIds = new Set(realHaCameraDevices.map((d) => d.id));
-    const iotOnlyList = list.filter((d) => !haCameraIds.has(d.id));
 
     switch (activeFilter) {
       case "all":
@@ -170,21 +191,11 @@ export const App: React.FC = () => {
           d.entities.some((e) => e.origin === "mqtt" || e.entityId.startsWith("mqtt."))
         );
       case "issues":
-        return iotOnlyList.filter((d) => {
-          return d.entities.some((e) => {
-            if (!e.exported) return false;
-            return (
-              e.hasIssue ||
-              e.state === "unavailable" ||
-              e.state === "unknown" ||
-              e.state === "offline"
-            );
-          });
-        });
+        return iotOnlyList.filter(deviceNeedsAttention);
       default:
         return iotOnlyList;
     }
-  }, [allDevices, realHaCameraDevices, searchQuery, activeFilter, pairedProtocolFilter]);
+  }, [iotDevices, searchQuery, activeFilter, pairedProtocolFilter]);
 
   // Group cameras by brand when relevant to active tab
   const cameraBrandGroups = useMemo(() => {
@@ -221,19 +232,7 @@ export const App: React.FC = () => {
           !Boolean(c.identity?.matterPairingCode)
       );
     } else if (activeFilter === "issues") {
-      scryptedList = scryptedList.filter((c) => {
-        const isCameraActive =
-          c.identity?.homeKitPairingState === "paired" ||
-          c.bindingState?.matterCommissioned === true ||
-          Boolean(c.identity?.matterPairingCode);
-        if (!isCameraActive) return false;
-        return (
-          c.status?.connection === "offline" ||
-          c.status?.isOnline === false ||
-          Boolean(c.status?.lastError) ||
-          (c as any).hasIssue === true
-        );
-      });
+      scryptedList = scryptedList.filter(scryptedNeedsAttention);
     }
 
     for (const cam of scryptedList) {
@@ -257,7 +256,7 @@ export const App: React.FC = () => {
     } else if (activeFilter === "unactivated") {
       cuiList = cuiList.filter((c) => !c.homeKitEnabled);
     } else if (activeFilter === "issues") {
-      cuiList = cuiList.filter((c) => c.status === "offline");
+      cuiList = cuiList.filter(cameraUiNeedsAttention);
     }
 
     for (const cam of cuiList) {
@@ -303,26 +302,7 @@ export const App: React.FC = () => {
           )
       );
     } else if (activeFilter === "issues") {
-      haList = haList.filter((d) => {
-        const isCameraActive = d.entities.some(
-          (e) =>
-            e.exported ||
-            e.commissioned ||
-            e.homekitCamera?.published ||
-            e.homekitCamera?.isPaired
-        );
-        if (!isCameraActive) return false;
-        return d.entities.some(
-          (e) =>
-            e.hasIssue ||
-            e.state === "unavailable" ||
-            e.state === "unknown" ||
-            e.state === "offline" ||
-            (Array.isArray(e.logs) &&
-              e.logs.length > 0 &&
-              (e.exported || e.homekitCamera?.published))
-        );
-      });
+      haList = haList.filter(deviceNeedsAttention);
     }
 
     for (const dev of haList) {
@@ -437,6 +417,8 @@ export const App: React.FC = () => {
           {/* Liquid Glass Interactive Control Center */}
           <ControlCenter
             stats={stats}
+            connectionStatus={status?.haStatus}
+            partialLoad={partialLoadErrors.length > 0}
             activeFilter={activeFilter}
             onFilterChange={(filter) => {
               setActiveFilter(filter);
@@ -461,6 +443,11 @@ export const App: React.FC = () => {
           />
 
           {loadError && <p role="alert" className="error-message">{loadError}</p>}
+          {partialLoadErrors.length > 0 && (
+            <p role="alert" className="error-message">
+              Datos sin actualizar · {partialLoadErrors.join(", ")}
+            </p>
+          )}
           {/* Device / Camera Grid */}
           <section className="device-grid" id="device-list" aria-live="polite" aria-busy={loading}>
             {loading ? (
@@ -517,58 +504,68 @@ export const App: React.FC = () => {
         </main>
       </div>
 
-      {/* Unified Camera Configuration Modal (Scrypted & Camera.UI) */}
-      {(selectedCamera || selectedCameraUiCamera) && (
-        <CameraConfigModal
-          camera={selectedCamera || selectedCameraUiCamera}
-          onClose={() => {
-            setSelectedCamera(null);
-            setSelectedCameraUiCamera(null);
-          }}
-          onRefresh={refreshAll}
-          showToast={showToast}
-        />
-      )}
+      <Suspense
+        fallback={
+          <p className="toast show" role="status">
+            Cargando configuración…
+          </p>
+        }
+      >
+        {/* Unified Camera Configuration Modal (Scrypted & Camera.UI) */}
+        {(selectedCamera || selectedCameraUiCamera) && (
+          <CameraConfigModal
+            camera={selectedCamera || selectedCameraUiCamera}
+            onClose={() => {
+              setSelectedCamera(null);
+              setSelectedCameraUiCamera(null);
+            }}
+            onRefresh={refreshAll}
+            showToast={showToast}
+          />
+        )}
 
-      {/* Device Configuration Modal */}
-      {selectedDevice && (
-        <DeviceModal
-          device={selectedDevice}
-          onClose={() => setSelectedDevice(null)}
-          onRefresh={refreshAll}
-          showToast={showToast}
-        />
-      )}
+        {/* Device Configuration Modal */}
+        {selectedDevice && (
+          <DeviceModal
+            device={selectedDevice}
+            onClose={() => setSelectedDevice(null)}
+            onRefresh={refreshAll}
+            showToast={showToast}
+          />
+        )}
 
-      {/* Scrypted Connection Modal */}
-      {isScryptedModalOpen && (
-        <ScryptedModal
-          config={scryptedConfig}
-          onClose={() => setIsScryptedModalOpen(false)}
-          onRefresh={refreshAll}
-          showToast={showToast}
-        />
-      )}
+        {/* Scrypted Connection Modal */}
+        {isScryptedModalOpen && (
+          <ScryptedModal
+            config={scryptedConfig}
+            onClose={() => setIsScryptedModalOpen(false)}
+            onRefresh={refreshAll}
+            showToast={showToast}
+          />
+        )}
 
-      {/* Camera.UI Connection Modal */}
-      {isCameraUiModalOpen && (
-        <CameraUiModal
-          config={cameraUiConfig}
-          onClose={() => setIsCameraUiModalOpen(false)}
-          onRefresh={refreshAll}
-          showToast={showToast}
-        />
-      )}
+        {/* Camera.UI Connection Modal */}
+        {isCameraUiModalOpen && (
+          <CameraUiModal
+            config={cameraUiConfig}
+            onClose={() => setIsCameraUiModalOpen(false)}
+            onRefresh={refreshAll}
+            showToast={showToast}
+          />
+        )}
 
-      {/* General Settings Modal (MQTT, Restart, Reset, Live Console) */}
-      <SettingsModal
-        isOpen={isSettingsModalOpen}
-        onClose={() => setIsSettingsModalOpen(false)}
-        showToast={showToast}
-        status={status}
-        stats={stats}
-        onRefresh={refreshAll}
-      />
+        {/* General Settings Modal (MQTT, Restart, Reset, Live Console) */}
+        {isSettingsModalOpen && (
+          <SettingsModal
+            isOpen
+            onClose={() => setIsSettingsModalOpen(false)}
+            showToast={showToast}
+            status={status}
+            stats={stats}
+            onRefresh={refreshAll}
+          />
+        )}
+      </Suspense>
 
       {/* Toast Notification */}
       {toastMessage && (

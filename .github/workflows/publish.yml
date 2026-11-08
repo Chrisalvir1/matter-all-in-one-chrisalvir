@@ -43,7 +43,7 @@ jobs:
         run: npm config delete always-auth --location=user || true
 
       - name: Install validated npm
-        run: npm install --global npm@12.2.1 --no-fund --no-audit
+        run: npm install --global npm@12.2.2 --no-fund --no-audit
 
       - name: Install dependencies
         run: npm ci --legacy-peer-deps --no-fund --no-audit

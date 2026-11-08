@@ -233,3 +233,47 @@ describe("HAP HeaterCooler & Thermostat for Air Conditioners", () => {
     ).toBe(1); // HEAT
   });
 });
+
+it("preserves separate heating and cooling thresholds in HAP range mode", async () => {
+  const callService = vi.fn().mockResolvedValue(undefined);
+  const { platform, accessory, entityId, state } = acFixture(callService);
+  const { temperature: _temperature, ...attributes } = state.attributes;
+  const range = {
+    ...state,
+    state: "heat_cool",
+    attributes: {
+      ...attributes,
+      hvac_modes: ["off", "heat_cool"],
+      target_temp_low: 19,
+      target_temp_high: 26,
+    },
+  };
+  platform.ha.hassStates.set(entityId, range);
+  platform.entities.set(entityId, { state: range });
+  accessory.updateFromHassState(range);
+  const service = accessory.accessory.getService(Service.HeaterCooler)!;
+  const heat = service.getCharacteristic(
+    Characteristic.HeatingThresholdTemperature,
+  );
+  const cool = service.getCharacteristic(
+    Characteristic.CoolingThresholdTemperature,
+  );
+  expect(heat.value).toBe(19);
+  expect(cool.value).toBe(26);
+  await cool.handleSetRequest(25);
+  expect(callService).toHaveBeenLastCalledWith(
+    "climate",
+    "set_temperature",
+    entityId,
+    { target_temp_low: 19, target_temp_high: 25 },
+  );
+  await service
+    .getCharacteristic(Characteristic.TargetHeaterCoolerState)
+    .handleSetRequest(0);
+  expect(callService).toHaveBeenLastCalledWith(
+    "climate",
+    "set_hvac_mode",
+    entityId,
+    { hvac_mode: "heat_cool" },
+  );
+});

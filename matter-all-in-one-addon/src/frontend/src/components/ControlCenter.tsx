@@ -26,6 +26,8 @@ interface ControlCenterProps {
   activeFilter: FilterType;
   onFilterChange: (filter: FilterType) => void;
   loading: boolean;
+  connectionStatus?: "conectado" | "desconectado" | "error";
+  partialLoad: boolean;
   onRefresh: () => void;
   filteredCount?: number;
   pairedProtocolFilter: "all" | "matter" | "hap";
@@ -37,6 +39,8 @@ export const ControlCenter: React.FC<ControlCenterProps> = ({
   activeFilter,
   onFilterChange,
   loading,
+  connectionStatus,
+  partialLoad,
   onRefresh,
   filteredCount,
   pairedProtocolFilter,
@@ -122,7 +126,7 @@ export const ControlCenter: React.FC<ControlCenterProps> = ({
       icon: "⚠️",
       label: "NECESITA ATENCIÓN",
       count: stats.issues,
-      subtext: stats.issues > 0 ? `${stats.issues} con incidencias` : "Red saludable",
+      subtext: stats.issues > 0 ? `${stats.issues} con incidencias` : "Sin incidencias detectadas",
       variant: stats.issues > 0 ? "warning" : "default",
     },
   ];
@@ -139,10 +143,18 @@ export const ControlCenter: React.FC<ControlCenterProps> = ({
             <div className="control-center-badge-row">
               <span className="control-center-label">CENTRO DE CONTROL MATTER & HAP</span>
               <span className="control-center-status-pill">
-                {stats.issues > 0 ? (
+                {partialLoad || connectionStatus !== "conectado" ? (
+                  <span className="pill-warning">
+                    {partialLoad
+                      ? "Datos incompletos"
+                      : connectionStatus
+                        ? "Home Assistant desconectado"
+                        : "Estado pendiente"}
+                  </span>
+                ) : stats.issues > 0 ? (
                   <span className="pill-warning">⚠️ {stats.issues} requieren atención</span>
                 ) : (
-                  <span className="pill-healthy">✓ Red 100% operativa</span>
+                  <span className="pill-healthy">✓ Sin incidencias detectadas</span>
                 )}
               </span>
             </div>

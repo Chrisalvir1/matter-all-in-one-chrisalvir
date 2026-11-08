@@ -34,7 +34,7 @@ jobs:
           node-version: ${{ matrix.node-version }}
 
       - name: Install validated npm
-        run: npm install --global npm@12.2.1 --no-fund --no-audit
+        run: npm install --global npm@12.2.2 --no-fund --no-audit
 
       - name: Install dependencies
         run: npm ci --legacy-peer-deps --no-fund --no-audit
@@ -69,25 +69,18 @@ jobs:
           docker run --rm --network none --entrypoint ffprobe matter-all-in-one:test -version
 
   home-assistant-core-compatibility:
-    name: Home Assistant Core 2026.11.0b3 websocket contract
+    name: Home Assistant Core 2026.11.0 websocket contract
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: home-assistant/core
-          ref: 2026.11.0b3
-          path: home-assistant-core
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.14.10'
-      - name: Install Home Assistant Core 2026.11.0b3 test dependencies
+      - name: Install Home Assistant Core 2026.11.0 test dependencies
         run: |
           python -m pip install uv==0.13.6
-          cd home-assistant-core
-          uv pip install --system -r requirements.txt -r requirements_test.txt
-          uv pip install --system -e . --no-deps
+          uv pip install --system homeassistant==2026.11.0 pytest==9.2.0
       - name: Verify websocket API contract
         # HA 2026.11 must install its httpx2 alias before pytest auto-loads plugins.
         run: python -c 'import homeassistant; import pytest; raise SystemExit(pytest.main(["-q", "tests_core"]))'

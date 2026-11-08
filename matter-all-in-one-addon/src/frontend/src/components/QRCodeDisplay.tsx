@@ -214,20 +214,16 @@ export const QRCodeDisplay: React.FC<QRCodeDisplayProps> = ({
     if (!pairingCode || !canvasRef.current) return;
     setQrError(null);
 
-    // Multi-admin glass uses High error correction for center logo. Clean badges use Medium.
     QRCode.toCanvas(canvasRef.current, pairingCode, {
       width: 180,
-      margin: 1,
-      color: {
-        dark: isMultiAdmin ? "#09101f" : "#000000",
-        light: "#ffffff",
-      },
-      errorCorrectionLevel: isMultiAdmin ? "H" : "M",
+      margin: 4,
+      color: { dark: "#000000", light: "#ffffff" },
+      errorCorrectionLevel: "M",
     }).catch((err) => {
       console.error("Error al renderizar código QR:", err);
       setQrError("Error al generar código QR");
     });
-  }, [pairingCode, isMultiAdmin, isHevcCodec]);
+  }, [pairingCode, variant]);
 
   const handleCopyCode = async (codeToCopy?: string) => {
     const text = codeToCopy || manualCode || pinCode || pairingCode;
@@ -248,63 +244,21 @@ export const QRCodeDisplay: React.FC<QRCodeDisplayProps> = ({
     }
   };
 
-  const handleDownloadQr = () => {
+  const handleDownloadQr = async () => {
     if (!pairingCode) return;
     const filename = `${entityName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-qr.png`;
-
     try {
-      const canvas = document.createElement("canvas");
-      canvas.width = 1024;
-      canvas.height = 1024;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-
-      QRCode.toCanvas(canvas, pairingCode, {
+      const href = await QRCode.toDataURL(pairingCode, {
         width: 920,
-        margin: 2,
-        errorCorrectionLevel: isMultiAdmin ? "H" : "M",
-        color: { dark: isMultiAdmin ? "#09101f" : "#000000", light: "#ffffff" },
-      })
-        .then(() => {
-          if (isMultiAdmin) {
-            const logoImg = new Image();
-            logoImg.onload = () => {
-              const logoSize = 180;
-              const pos = (1024 - logoSize) / 2;
-              ctx.fillStyle = "#ffffff";
-              ctx.beginPath();
-              if (typeof (ctx as any).roundRect === "function") {
-                (ctx as any).roundRect(pos - 12, pos - 12, logoSize + 24, logoSize + 24, 28);
-              } else {
-                ctx.rect(pos - 12, pos - 12, logoSize + 24, logoSize + 24);
-              }
-              ctx.fill();
-              ctx.shadowColor = "rgba(0,0,0,0.25)";
-              ctx.shadowBlur = 12;
-              ctx.drawImage(logoImg, pos, pos, logoSize, logoSize);
-
-              const a = document.createElement("a");
-              a.download = filename;
-              a.href = canvas.toDataURL("image/png");
-              a.click();
-            };
-            logoImg.onerror = () => {
-              const a = document.createElement("a");
-              a.download = filename;
-              a.href = canvas.toDataURL("image/png");
-              a.click();
-            };
-            logoImg.src = "logo.png";
-          } else {
-            const a = document.createElement("a");
-            a.download = filename;
-            a.href = canvas.toDataURL("image/png");
-            a.click();
-          }
-        })
-        .catch((err) => console.error("Error al descargar QR:", err));
-    } catch (err) {
-      console.error("Error en descarga de QR:", err);
+        margin: 4,
+        errorCorrectionLevel: "M",
+      });
+      const link = document.createElement("a");
+      link.download = filename;
+      link.href = href;
+      link.click();
+    } catch {
+      setQrError("No se pudo descargar el código QR");
     }
   };
 
@@ -384,9 +338,7 @@ export const QRCodeDisplay: React.FC<QRCodeDisplayProps> = ({
               <div id={elementId}>
                 <canvas ref={canvasRef} style={{ width: "100%", height: "100%", display: "block" }} />
               </div>
-              <div className="qr-center-logo" aria-hidden="true">
-                <img src="logo.png" alt="Matter Logo" className="qr-logo-img" />
-              </div>
+
             </div>
           </div>
 

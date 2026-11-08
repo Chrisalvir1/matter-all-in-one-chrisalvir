@@ -1,6 +1,6 @@
-# Matter All-in-One Chrisalvir — v2.3.15
+# Matter All-in-One Chrisalvir — v2.3.16
 
-> **2.3.15 · 5 de noviembre de 2026:** añade soporte integral para Aire Acondicionado y Climatización en Apple HomeKit (HAP `Service.HeaterCooler` con Categoría 21 `AIR_CONDITIONER`, selector de temperatura, velocidad del ventilador 0-100% y oscilación swing) y Matter (`ClimateEntity` con cluster Thermostat 0x0201/0x0204). Dependencias estables actualizadas. Validación local: 84 suites/716 pruebas y typecheck de backend/frontend. Consulta [cambios](matter-all-in-one-addon/CHANGELOG.md), [notas](docs/RELEASE_NOTES_2.3.15.md) y [versiones](docs/RELEASES.md).
+> **2.3.16 · 8 de noviembre de 2026.** Actualiza Matterbridge a 3.11.2 y corrige los flujos de QR y desvinculación, el panel de incidencias, la climatización, MQTT e Ingress. Mejora la captura de snapshots Omni y añade mediciones del arranque de vídeo. Consulta [cambios](matter-all-in-one-addon/CHANGELOG.md), [notas](docs/RELEASE_NOTES_2.3.16.md) y [versiones](docs/RELEASES.md).
 
 <div align="center">
   <img src="matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
@@ -10,14 +10,14 @@
 
 **Un solo proyecto para integrar dispositivos de Home Assistant en Matter y cámaras en Apple Casa.**
 
-**Versión 2.3.15** · **Preparado para Home Assistant 2026.11 (beta)** · **Matter 1.6.1** · **HomeKit HAP / HKSV**
+**Versión 2.3.16** · **Contrato WebSocket probado con Home Assistant 2026.11.0** · **Matter 1.6.1** · **HomeKit HAP / HKSV**
 
 </div>
 
 Matter All-in-One Chrisalvir (MIAO) reúne la administración de accesorios Matter, cámaras de **Omni Tuya Local**, **Camera.UI**, **Scrypted** y entidades de **Home Assistant** en una interfaz integrada. Las rutas Matter y HomeKit HAP son distintas: se utiliza la que corresponda a cada dispositivo, sin prometer que todos los tipos Matter sean compatibles con Apple Casa.
 
 > [!IMPORTANT]
-> **Compatibilidad con Home Assistant 2026.11:** la v2.3.0 incorpora ajustes y pruebas automatizadas para los cambios de nombres contextuales de entidades de la **beta de 2026.11**. **No se ha validado todavía sobre una instalación real de esa beta**; la referencia operativa del proyecto sigue siendo Home Assistant 2026.10. No necesitas actualizar tu Home Assistant principal a la beta para usar estas mejoras.
+> **Home Assistant 2026.11.0.** Las pruebas de contrato WebSocket se ejecutan contra Core estable. La comprobación de 2.3.16 en una instalación real, con los accesorios emparejados y Apple Casa, queda pendiente.
 
 ## Historial: novedades v2.3.0 (28 de octubre de 2026)
 
@@ -67,9 +67,9 @@ Matter All-in-One Chrisalvir (MIAO) reúne la administración de accesorios Matt
 | Entorno | Estado de v2.3.0 |
 | --- | --- |
 | Home Assistant 2026.10 | Base conocida del proyecto; conservar como entorno principal mientras se valida la beta |
-| **Home Assistant 2026.11 beta** | **Preparado a nivel de código y pruebas de compatibilidad**; validación física pendiente |
+| **Home Assistant 2026.11.0** | Contrato WebSocket verificado; validación física de 2.3.16 pendiente |
 | Home Assistant 2026.11 estable | Pendiente de publicación y prueba en instalación real |
-| Matterbridge 3.11.1 | Versión del runtime del complemento |
+| Matterbridge 3.11.2 | Versión del runtime del complemento |
 | Matter 1.6.1 | Especificación utilizada por el puente Matter |
 | Apple Casa — accesorios Matter | Depende del tipo de dispositivo que Apple admita |
 | Apple Casa — cámara Omni mediante HAP/HKSV | Vídeo, audio, movimiento y grabación reportados como operativos por Chrisalvir en su instalación |
@@ -154,6 +154,6 @@ Consulta la [guía de preparación para HA 2026.11](docs/home-assistant-2026-11-
 - [Configuración de Thread](matter-all-in-one-addon/docs/thread-setup.md)
 - [Reportar un problema](https://github.com/Chrisalvir1/matter-all-in-one-chrisalvir/issues)
 
-**Base de ejecución:** Matterbridge `3.11.1` · Node.js `26.13.0` · Matter `1.6.1` · TypeScript `7.0.2`.
+**Base de ejecución:** Matterbridge `3.11.2` · Node.js `26.13.0` · Matter `1.6.1` · TypeScript `7.0.2`.
 
 **Licencia:** Apache-2.0 · Proyecto mantenido por **Chrisalvir**.

@@ -1,3 +1,17 @@
+## [2.3.16] - 2026-11-08
+
+- Unifica el contador y el filtro de incidencias. Los registros históricos de cámaras quedan en el diagnóstico, mientras las incidencias activas muestran su motivo.
+- Mejora la lectura del QR Matter/HAP y usa el código de la ventana Multi-Admin para el accesorio correspondiente. Conserva los códigos si retirar una publicación falla.
+- Reutiliza fotogramas del Live View y fragmentos recientes del prebuffer para snapshots Omni. Cancela el temporizador de preparación al recibir START, mide el primer fotograma emitido por FFmpeg y aplaza la solicitud WebRTC de retorno hasta recibir audio HAP.
+- Actualiza Matterbridge a 3.11.2 en el motor y en las pruebas. La versión conserva estados operativos del fabricante al pausar/reanudar y corrige el cierre de sesiones WebRTC del motor al reemplazar un transporte DTLS.
+- Corrige los umbrales HAP de frío/calor y envía a Home Assistant las dos consignas cuando el equipo trabaja con rango.
+- Cierra las conexiones internas de Ingress cuando el cliente se desconecta. La preview queda vinculada al identificador de cámara y muestra los códecs observados en esa sesión.
+- Separa disponibilidad y estado MQTT. Los mensajes retenidos de cámara actualizan estado sin disparar una detección nueva por la ruta MQTT de eventos.
+- El reset Matter confirma el resultado tras apartar los datos activos y restaura los archivos ya apartados si falla la preparación.
+- El panel señala cargas parciales, distingue cámaras homónimas y carga los modales bajo demanda. Elimina los textos fijos de versiones HAP antiguas.
+- Representa apertura y cierre de válvulas como transiciones y valida el soporte de posicionamiento.
+- Actualiza npm a 12.2.2, lucide-react a 1.70.0, undici a 8.12.4, Vite a 8.3.6 y ws a 8.22.2. Mantiene Node 26.13.0 LTS.
+
 ## [2.3.15] - 2026-11-05
 
 - **Aire Acondicionado y Climatización HAP (HomeKit)**:

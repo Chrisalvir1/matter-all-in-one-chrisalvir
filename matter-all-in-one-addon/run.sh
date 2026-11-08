@@ -32,6 +32,9 @@ if [ -z "$TOKEN" ]; then
     exit 1
 fi
 
+# Restore any reset interrupted before its storage changes were committed.
+node --input-type=module -e 'import { recoverMatterReset } from "/app/dist/utils/matter-reset-storage.js"; await recoverMatterReset("/data")'
+
 # Ensure Matterbridge persistent config directory exists in HA data volume
 mkdir -p /data/.matterbridge
 

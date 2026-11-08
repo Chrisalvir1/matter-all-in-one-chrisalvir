@@ -1,12 +1,12 @@
-# Matter All-in-One Chrisalvir — complemento v2.3.15
+# Matter All-in-One Chrisalvir — complemento v2.3.16
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/chrisalvir1/matter-all-in-one-chrisalvir/main/matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
 </div>
 
-**Compatible a nivel de código con Home Assistant 2026.10 y preparado para Home Assistant 2026.11 beta.** Esta última versión todavía requiere validación en una instalación real.
+**Contrato WebSocket verificado con Home Assistant Core 2026.11.0.** La comprobación de esta versión con accesorios físicos queda pendiente.
 
-Puente **Matter 1.6.1** basado en **Matterbridge 3.11.1** con publicación independiente **HomeKit HAP/HKSV** para cámaras y accesorios compatibles. Incluye integración con Omni Tuya Local, Camera.UI, Scrypted y el inventario de Home Assistant.
+Puente **Matter 1.6.1** basado en **Matterbridge 3.11.2** con publicación independiente **HomeKit HAP/HKSV** para cámaras y accesorios compatibles. Incluye integración con Omni Tuya Local, Camera.UI, Scrypted y el inventario de Home Assistant.
 
 ## Historial v2.3.0 — 28 de octubre de 2026
 
@@ -17,9 +17,9 @@ Puente **Matter 1.6.1** basado en **Matterbridge 3.11.1** con publicación indep
 5. **Pruebas de regresión:** compatibilidad de nombres, sensores de movimiento, reintentos Omni, contadores independientes, privacidad del diagnóstico y autenticación.
 6. **Matter 1.5 cameras:** importarlas a Home Assistant no garantiza una URL compatible con HAP ni las exporta automáticamente a Apple Casa; la funcionalidad depende del dispositivo y de un stream real verificable.
 
-### Confirmación del entorno de Chrisalvir
+### Verificación del Comedero Michi
 
-Una cámara **Omni Tuya Local** ya funciona en **Apple Casa** con vídeo en vivo, movimiento, audio y grabaciones HKSV. Es una observación real del usuario en su instalación actual, **no una certificación de la beta 2026.11**.
+En la instalación 2.3.15 se observó vídeo en vivo en Apple Casa para Mac. El snapshot recurrió a una imagen de respaldo, el retorno de audio agotó el tiempo de espera de Omni y una solicitud HKSV terminó sin fragmentos. Quedan pendientes la comprobación de estas rutas en 2.3.16 y un clip nuevo reproducible.
 
 ## Tabla de integración
 
@@ -77,11 +77,11 @@ Se requiere una prueba física separada, sin actualizar el Home Assistant princi
 
 ```yaml
 project: matter-all-in-one-chrisalvir
-version: "2.3.14"
-home_assistant: "2026.10; 2026.11-beta contract tested, hardware validation pending"
+version: "2.3.16"
+home_assistant: "2026.11.0 WebSocket contract tested, hardware validation pending"
 spec: "Matter 1.6.1"
 engine: matterbridge
-engine_version: "3.11.1"
+engine_version: "3.11.2"
 node_image: "node:26.13.0-alpine3.24"
 ha_integration: websocket
 plugin_mode: dynamic
@@ -94,7 +94,7 @@ diagnostics: opt-in read-only
 ## Más información
 
 - [README principal del proyecto](../README.md)
-- [Notas de publicación v2.3.14](../docs/RELEASE_NOTES_2.3.14.md)
+- [Notas de publicación v2.3.16](../docs/RELEASE_NOTES_2.3.16.md)
 - [Guía técnica de compatibilidad con HA 2026.11](../docs/home-assistant-2026-11-readiness.md)
 - [Compatibilidad HomeKit](docs/homekit-compatibility.md)
 - [Thread en Home Assistant](docs/thread-setup.md)
@@ -104,7 +104,7 @@ diagnostics: opt-in read-only
 
 ### Entorno reproducible de desarrollo
 
-La versión 2.3.14 conserva Node **26.13.0 LTS**, npm **12.2.1** y Matterbridge **3.11.1**. También corrige la integración con el `CommandHandler` congelado por Matterbridge 3.11.1, sin borrar las fabrics guardadas. Las versiones Node están en `.node-version` y `.nvmrc`; después de cambiar de runtime, reinstalar con `npm ci --legacy-peer-deps` en `matter-all-in-one-addon`. No reutilizar `node_modules` de Node 24, de otra arquitectura o de macOS dentro de Alpine Linux.
+La versión 2.3.16 usa Node **26.13.0 LTS**, npm **12.2.2** y Matterbridge **3.11.2**. Conserva la adaptación de `CommandHandler` introducida en 2.3.14. Las versiones Node están en `.node-version` y `.nvmrc`; después de cambiar de runtime, reinstalar con `npm ci --legacy-peer-deps` en `matter-all-in-one-addon`. No reutilizar `node_modules` de Node 24, de otra arquitectura o de macOS dentro de Alpine Linux.
 
 `npm run check:toolchain` comprueba sincronía entre runtime local, npm, Docker, build.yaml y CI; `npm run check:runtime` comprueba imports y versiones reales contra el lockfile. Las imágenes base están fijadas por digest. El devcontainer usa la rama estable npm fijada de Matterbridge, no `dev`, y falla si su imagen Node 26 cambia a una versión distinta a la validada. No arranca ni registra el puente automáticamente. Docker ejecuta el chequeo de producción durante la compilación; CI añade ejecución aislada sin red y FFmpeg/ffprobe en amd64/arm64.
 

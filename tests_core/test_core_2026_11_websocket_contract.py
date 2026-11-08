@@ -12,7 +12,7 @@ CLIENT_SOURCE = REPO_ROOT / "matter-all-in-one-addon" / "src" / "homeAssistant.t
 
 
 def test_exact_core_target():
-    assert (const.MAJOR_VERSION, const.MINOR_VERSION, str(const.PATCH_VERSION)) == (2026, 11, "0b3")
+    assert (const.MAJOR_VERSION, const.MINOR_VERSION, str(const.PATCH_VERSION)) == (2026, 11, "0")
 
 
 def test_client_commands_are_registered_by_core():

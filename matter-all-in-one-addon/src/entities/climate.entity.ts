@@ -25,6 +25,12 @@ export class ClimateEntity extends BaseEntity {
     super(platform, state, deviceType);
   }
 
+  private syncingFromHa = 0;
+
+  protected override get isUpdatingFromHa(): boolean {
+    return this.syncingFromHa > 0 || super.isUpdatingFromHa;
+  }
+
   protected override getRequiredClusterIds(): ClusterId[] {
     return [Thermostat.id];
   }
@@ -45,8 +51,8 @@ export class ClimateEntity extends BaseEntity {
 
     this.endpoint.createDefaultThermostatClusterServer(
       currentTemp,
-      targetTemp,
-      targetTemp,
+      Number(this.state.attributes?.target_temp_low ?? targetTemp),
+      Number(this.state.attributes?.target_temp_high ?? targetTemp),
       0, // minSetpointDeadBand
       minTemp,
       maxTemp,
@@ -83,9 +89,15 @@ export class ClimateEntity extends BaseEntity {
           if (this.isUpdatingFromHa) return;
           const celsius = climateConverter.toCelsius(newValue);
           this.setCommandLockout("temperature", celsius);
-          void this.callServiceTracked(domain, "set_temperature", {
-            temperature: celsius,
-          }).catch(() => undefined);
+          void Promise.resolve()
+            .then(() =>
+              this.callServiceTracked(
+                domain,
+                "set_temperature",
+                climateConverter.targetTemperature(this.state, "cool", celsius),
+              ),
+            )
+            .catch(() => undefined);
         },
       );
     }
@@ -106,9 +118,15 @@ export class ClimateEntity extends BaseEntity {
           if (this.isUpdatingFromHa) return;
           const celsius = climateConverter.toCelsius(newValue);
           this.setCommandLockout("temperature", celsius);
-          void this.callServiceTracked(domain, "set_temperature", {
-            temperature: celsius,
-          }).catch(() => undefined);
+          void Promise.resolve()
+            .then(() =>
+              this.callServiceTracked(
+                domain,
+                "set_temperature",
+                climateConverter.targetTemperature(this.state, "heat", celsius),
+              ),
+            )
+            .catch(() => undefined);
         },
       );
     }
@@ -124,9 +142,17 @@ export class ClimateEntity extends BaseEntity {
           if (this.isUpdatingFromHa) return;
           const haMode = climateConverter.toHaHvacMode(newValue);
           this.setCommandLockout("hvac_mode", haMode);
-          void this.callServiceTracked(domain, "set_hvac_mode", {
-            hvac_mode: haMode,
-          }).catch(() => undefined);
+          void Promise.resolve()
+            .then(() =>
+              this.callServiceTracked(domain, "set_hvac_mode", {
+                hvac_mode: climateConverter.supportedMode(
+                  haMode,
+                  this.state.attributes?.hvac_modes,
+                  this.state.state,
+                ),
+              }),
+            )
+            .catch(() => undefined);
         },
       );
     }
@@ -136,15 +162,35 @@ export class ClimateEntity extends BaseEntity {
       async ({ request }: any) => {
         this.assertOnline();
         const amount = (Number(request?.amount) || 0) / 10;
-        const currentTarget = Number(
-          this.state.attributes?.temperature ??
-            this.state.attributes?.target_temp_low ??
-            22,
-        );
-        const nextTemp = Math.round((currentTarget + amount) * 2) / 2;
-        this.platform.log.debug(
-          `[${this.entityId}] setpointRaiseLower: delta=${amount}, target=${nextTemp}`,
-        );
+        const attrs = this.state.attributes;
+        const kind =
+          request?.mode === 1 ||
+          (request?.mode == null && this.state.state === "cool")
+            ? "cool"
+            : "heat";
+        const low = attrs?.target_temp_low;
+        const high = attrs?.target_temp_high;
+        const shifted = (value: number) => Math.round((value + amount) * 2) / 2;
+        if (
+          typeof low === "number" &&
+          typeof high === "number" &&
+          (this.state.state === "heat_cool" || attrs?.temperature == null)
+        ) {
+          const target =
+            request?.mode === 2 || request?.mode == null
+              ? {
+                  target_temp_low: shifted(low),
+                  target_temp_high: shifted(high),
+                }
+              : climateConverter.targetTemperature(
+                  this.state,
+                  kind,
+                  shifted(kind === "cool" ? high : low),
+                );
+          await this.callServiceTracked(domain, "set_temperature", target);
+          return;
+        }
+        const nextTemp = shifted(Number(attrs?.temperature ?? 22));
         this.setCommandLockout("temperature", nextTemp);
         await this.callServiceTracked(domain, "set_temperature", {
           temperature: nextTemp,
@@ -154,8 +200,7 @@ export class ClimateEntity extends BaseEntity {
   }
 
   public override async syncInitialState(): Promise<void> {
-    if (!this.endpoint) return;
-    await this.syncState(this.endpoint, this.state, true);
+    await this.updateState(this.state, true);
   }
 
   public override async updateState(
@@ -163,8 +208,13 @@ export class ClimateEntity extends BaseEntity {
     isInitialSync = false,
   ): Promise<void> {
     if (!this.endpoint) return;
-    await this.syncState(this.endpoint, newState, isInitialSync);
-    this.state = newState;
+    this.syncingFromHa++;
+    try {
+      this.state = newState;
+      await this.syncState(this.endpoint, newState, isInitialSync);
+    } finally {
+      this.syncingFromHa--;
+    }
   }
 
   private async syncState(
@@ -188,7 +238,8 @@ export class ClimateEntity extends BaseEntity {
       }
     }
 
-    const targetTemp = state.attributes?.temperature;
+    const targetTemp =
+      state.state === "heat_cool" ? undefined : state.attributes?.temperature;
     if (targetTemp !== undefined && targetTemp !== null) {
       const matterTarget = climateConverter.toMatterTemperature(
         Number(targetTemp),

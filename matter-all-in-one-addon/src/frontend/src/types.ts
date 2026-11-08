@@ -180,6 +180,7 @@ export interface LiveViewCapabilities {
 }
 
 export interface CameraRecord {
+  hasIssue?: boolean;
   provider?: "home_assistant";
 
   cameraId: string;

@@ -159,12 +159,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const handleFactoryReset = async () => {
     const ok = confirm(
-      "¿Estás seguro de que deseas restablecer de fábrica el plugin? Se eliminarán todos los accesorios Matter y requerirá volver a emparejar."
+      "¿Restablecer todos los accesorios Matter de este add-on? Se borrarán sus vínculos con los controladores y tendrás que volver a emparejarlos."
     );
     if (!ok) return;
     try {
-      await api.factoryReset();
-      showToast("Restablecimiento de fábrica iniciado...");
+      const result = await api.factoryReset();
+      showToast(result.message || "Matter restablecido.");
       onClose();
     } catch (err: any) {
       showToast(err.message || "Error al restablecer", true);

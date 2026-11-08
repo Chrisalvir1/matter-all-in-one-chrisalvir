@@ -54,10 +54,11 @@ describe("temporary browser preview", () => {
       url: "rtsp://secret.invalid",
       release,
     }));
+    expect(p.sessions.get("test-session")).toEqual({ frames: 0 });
     child.stderr.emit(
       "data",
       Buffer.from(
-        "Stream #0:0: Video: h264, yuv420p, 1920x1080, 15 fps\nStream #0:1: Audio: pcm_mulaw, 8000 Hz, mono\nOutput #0\nStream #0:0: Video: mjpeg, 640x360, 5 fps\n",
+        "Stream #0:0: Video: h264, yuv420p, 1920x1080, 15 fps\nStream #0:1: Audio: pcm_mulaw, 8000 Hz, mono\nOutput #0\nStream #0:0: Video: h264, 1920x1080, 15 fps\nStream #0:1: Audio: aac (LC), 24000 Hz, mono\n",
       ),
     );
     child.stderr.emit("data", Buffer.from("frame=1\n"));
@@ -66,7 +67,9 @@ describe("temporary browser preview", () => {
       videoCodec: "h264",
       width: 1920,
       sourceFps: 15,
-      outputVideo: "copy",
+      outputVideo: "h264",
+      outputAudio: "aac (LC)",
+      outputSampleRate: 24000,
       audioCodec: "pcm_mulaw",
       frames: 1,
     });

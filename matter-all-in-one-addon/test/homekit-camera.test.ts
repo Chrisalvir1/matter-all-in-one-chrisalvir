@@ -273,6 +273,41 @@ describe("HomeKitCameraStreamingDelegate", () => {
     );
   });
 
+  it("coalesces simultaneous snapshot requests and accepts a small valid JPEG", async () => {
+    const jpeg = Buffer.concat([
+      Buffer.from([0xff, 0xd8]),
+      Buffer.alloc(512),
+      Buffer.from([0xff, 0xd9]),
+    ]);
+    const platform = createPlatform();
+    let complete!: (image: Buffer) => void;
+    const fetchSnapshot = vi.fn(
+      () =>
+        new Promise<Buffer>((resolve) => {
+          complete = resolve;
+        }),
+    );
+    (platform.ha as any).fetchSnapshot = fetchSnapshot;
+    const delegate = new HomeKitCameraStreamingDelegate(
+      platform,
+      "camera.backyard",
+      capabilities,
+      rtspSource,
+    );
+    const snapshot = () =>
+      new Promise<Buffer | undefined>((resolve) => {
+        void delegate.handleSnapshotRequest(
+          { width: 320, height: 240, reason: 0 },
+          (_, buffer) => resolve(buffer),
+        );
+      });
+    const first = snapshot();
+    const second = snapshot();
+    expect(fetchSnapshot).toHaveBeenCalledOnce();
+    complete(jpeg);
+    await expect(Promise.all([first, second])).resolves.toEqual([jpeg, jpeg]);
+  });
+
   it("does not refresh the age of a cached snapshot when protecting an active stream", async () => {
     const delegate = new HomeKitCameraStreamingDelegate(
       createPlatform(),
@@ -591,6 +626,7 @@ describe("HomeKitCameraStreamingDelegate", () => {
       "fps=2,scale=160:90,format=gray,tblend=all_mode=difference,blackframe=amount=0:thresh=12",
     );
     expect(args).toContain("pipe:3");
+    expect(args).toContain("pipe:4");
     expect(args).toContain("0:a:0?");
     expect(args).toContain("aac");
     expect(args).toContain("-frag_duration");
@@ -602,6 +638,34 @@ describe("HomeKitCameraStreamingDelegate", () => {
 });
 
 describe("HomeKitCameraStreamingDelegate — session lifecycle and zombie watchdog", () => {
+  it("cancels the prepare watchdog before asynchronous stream allocation", () => {
+    const delegate = new HomeKitCameraStreamingDelegate(
+      createPlatform(),
+      "camera.omni_feeder",
+      capabilities,
+      rtspSource,
+    );
+    const session = { sessionId: "pending" };
+    (delegate as any).activeSessions.set("pending", session);
+    const timer = setTimeout(() => {}, 10000);
+    (delegate as any).prepareTimeouts.set("pending", timer);
+    const start = vi
+      .spyOn(delegate as any, "startStream")
+      .mockResolvedValue(undefined);
+    const request = {
+      sessionID: "pending",
+      type: StreamRequestTypes.START,
+    } as any;
+    delegate.handleStreamRequest(request, vi.fn());
+    expect((delegate as any).prepareTimeouts.has("pending")).toBe(false);
+    expect(start).toHaveBeenCalledOnce();
+    const duplicate = vi.fn();
+    delegate.handleStreamRequest(request, duplicate);
+    expect(duplicate).toHaveBeenCalledWith(expect.any(Error));
+    expect(start).toHaveBeenCalledOnce();
+    delegate.cleanupAllSessions();
+  });
+
   it("hasActiveSessions() returns false before any prepareStream", () => {
     const delegate = new HomeKitCameraStreamingDelegate(
       createPlatform(),

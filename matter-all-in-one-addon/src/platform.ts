@@ -1,3 +1,4 @@
+import { stageMatterReset } from "./utils/matter-reset-storage.js";
 import { loadBridgeProtocol } from "./utils/matter-protocol.js";
 import { BrowserPreview } from "./camera/browser-preview.js";
 /**
@@ -3506,12 +3507,22 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
     this.mqttManager.onStateChanged((topic, payload) => {
       for (const entity of this.mqttEntities.values()) {
-        if (entity.stateTopic === topic) {
+        if (
+          entity.availabilityTopic === topic &&
+          entity.availabilityTopic !== entity.stateTopic
+        ) {
+          if (entity.handleAvailabilityUpdate(payload)) {
+            this.broadcastSseMessage("state_changed", {
+              entityId: entity.entityId,
+              state: entity.getStateString(),
+            });
+          }
+        } else if (entity.stateTopic === topic) {
           entity.handleStateUpdate(payload);
-          this.broadcastSseMessage("state_change", {
-            origin: "mqtt",
+          this.broadcastSseMessage("state_changed", {
             entityId: entity.entityId,
-            state: payload,
+            state: entity.getStateString(),
+            attributes: entity.attributes,
           });
         }
       }
@@ -6573,6 +6584,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   }
 
   private startUiServer(): Promise<void> {
+    let resettingMatter = false;
     const server = http.createServer(async (req, res) => {
       const urlObj = new URL(
         req.url ?? "",
@@ -6617,8 +6629,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       );
 
       const adminToken = process.env.MATTER_AIO_ADMIN_TOKEN;
+      const isMutation = ["POST", "PUT", "PATCH", "DELETE"].includes(
+        req.method ?? "",
+      );
       if (
-        ["POST", "PUT", "PATCH", "DELETE"].includes(req.method ?? "") &&
+        isMutation &&
         adminToken &&
         req.headers["x-matter-aio-token"] !== adminToken
       ) {
@@ -6626,6 +6641,14 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           "Content-Type": "application/json; charset=utf-8",
         });
         res.end(JSON.stringify({ success: false, error: "Forbidden" }));
+        return;
+      }
+
+      if (resettingMatter && isMutation) {
+        res.writeHead(409, { "Content-Type": "application/json" });
+        res.end(
+          JSON.stringify({ error: "Ya hay un restablecimiento en curso." }),
+        );
         return;
       }
 
@@ -10589,33 +10612,38 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         }
 
         if (req.method === "POST" && pathname === "/api/custom/factoryreset") {
-          res.writeHead(200, {
-            "Content-Type": "application/json; charset=utf-8",
-          });
+          resettingMatter = true;
+          let staging: string;
+          try {
+            staging = await stageMatterReset("/data");
+          } catch (error) {
+            resettingMatter = false;
+            this.log.error(`Matter reset failed: ${error}`);
+            res.writeHead(500, { "Content-Type": "application/json" });
+            res.end(
+              JSON.stringify({
+                error: "No se pudo restablecer Matter. Revisa los registros.",
+              }),
+            );
+            return;
+          }
+          let cleanupPending = false;
+          try {
+            await fs.rm(staging, { recursive: true, force: true });
+          } catch (error) {
+            cleanupPending = true;
+            this.log.error(`Matter reset cleanup failed: ${error}`);
+          }
+          res.writeHead(200, { "Content-Type": "application/json" });
           res.end(
             JSON.stringify({
               success: true,
-              message: "Restableciendo de fábrica...",
+              message: cleanupPending
+                ? "Matter restablecido. Hay archivos pendientes de limpiar."
+                : "Matter restablecido. Reiniciando el servicio…",
             }),
           );
-          this.log.warn(
-            "[UI Server] Factory reset requested, wiping plugin overrides and exiting...",
-          );
-          setTimeout(async () => {
-            try {
-              const { rm } = await import("fs/promises");
-              await rm("/data/device-overrides.json", { force: true });
-              await rm("/data/exported-devices.json", { force: true });
-              // A Matter factory reset must also remove Matterbridge's
-              // persistent fabrics and commissioning data. Leaving this
-              // directory behind makes a failed pairing look commissioned
-              // and causes the old QR/node identity to be reused.
-              await rm("/data/.matterbridge", { recursive: true, force: true });
-            } catch (err) {
-              this.log.error(`Failed to wipe storage: ${err}`);
-            }
-            process.exit(0);
-          }, 1000);
+          setTimeout(() => process.exit(0), 250);
           return;
         }
 

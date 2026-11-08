@@ -144,3 +144,43 @@ describe("ClimateEntity (Matter AC / Thermostat)", () => {
     );
   });
 });
+
+it("sends both HA setpoints when changing a Matter range", async () => {
+  const entity = new ClimateEntity(
+    platform as any,
+    acState(
+      { temperature: undefined, target_temp_low: 19, target_temp_high: 26 },
+      "heat_cool",
+    ),
+    MatterDeviceTypes.thermostat,
+  );
+  const endpoint = (await entity.createEndpoint()) as any;
+  await entity.syncInitialState();
+  expect(endpoint.getAttribute(Thermostat.id, "occupiedHeatingSetpoint")).toBe(
+    1900,
+  );
+  expect(endpoint.getAttribute(Thermostat.id, "occupiedCoolingSetpoint")).toBe(
+    2600,
+  );
+  await endpoint.invokeAttributeChange(
+    Thermostat.id,
+    "occupiedCoolingSetpoint",
+    2500,
+  );
+  expect(platform.ha.callService).toHaveBeenLastCalledWith(
+    "climate",
+    "set_temperature",
+    "climate.living_room_ac",
+    { target_temp_low: 19, target_temp_high: 25 },
+  );
+  const handler = endpoint.commandHandlers.get("setpointRaiseLower");
+  await handler({
+    request: { mode: Thermostat.SetpointRaiseLowerMode.Both, amount: 10 },
+  });
+  expect(platform.ha.callService).toHaveBeenLastCalledWith(
+    "climate",
+    "set_temperature",
+    "climate.living_room_ac",
+    { target_temp_low: 20, target_temp_high: 27 },
+  );
+});
