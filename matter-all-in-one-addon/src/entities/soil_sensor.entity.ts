@@ -1,3 +1,4 @@
+import { toCelsius } from "../utils/measurements.js";
 import { BaseEntity } from "./base.entity.js";
 import { ClusterId } from "matterbridge/matter/types";
 import { HassState } from "../utils/ha-state.js";
@@ -49,7 +50,9 @@ export class SoilSensorEntity extends BaseEntity {
       }
     } else if (deviceClass === "temperature") {
       // Matter uses hundredths of a degree Celsius
-      const mappedTemp = Math.round(rawValue * 100);
+      const mappedTemp = Math.round(
+        toCelsius(rawValue, state.attributes.unit_of_measurement) * 100,
+      );
       if (isInitialSync) {
         await safeSetAttribute(
           this.endpoint,

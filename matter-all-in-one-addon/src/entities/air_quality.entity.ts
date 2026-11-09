@@ -36,7 +36,22 @@ export class AirQualityEntity extends BaseEntity {
   protected override getRequiredClusterIds(): ClusterId[] {
     const clusters = super.getRequiredClusterIds();
     clusters.push(AirQualityClusterId);
-    return clusters;
+    const dc = this.state.attributes?.device_class ?? "";
+    const ids: Record<string, ClusterId> = {
+      carbon_dioxide: CarbonDioxideConcentrationMeasurementId,
+      co2: CarbonDioxideConcentrationMeasurementId,
+      pm1: Pm1ConcentrationMeasurementId,
+      pm25: Pm25ConcentrationMeasurementId,
+      pm10: Pm10ConcentrationMeasurementId,
+      volatile_organic_compounds:
+        TotalVolatileOrganicCompoundsConcentrationMeasurementId,
+      voc: TotalVolatileOrganicCompoundsConcentrationMeasurementId,
+      tvoc: TotalVolatileOrganicCompoundsConcentrationMeasurementId,
+      ozone: OzoneConcentrationMeasurementId,
+      radon: RadonConcentrationMeasurementId,
+    };
+    if (ids[dc]) clusters.push(ids[dc]);
+    return [...new Set(clusters)];
   }
 
   public override async updateState(
@@ -49,6 +64,20 @@ export class AirQualityEntity extends BaseEntity {
     const updateFn = isInitialSync ? safeSetAttribute : safeUpdateAttribute;
     const deviceClass = state.attributes?.device_class;
 
+    if (["ozone", "radon"].includes(deviceClass ?? "")) {
+      const value = Number(state.state);
+      if (Number.isFinite(value))
+        await updateFn(
+          this.endpoint,
+          deviceClass === "ozone"
+            ? OzoneConcentrationMeasurementId
+            : RadonConcentrationMeasurementId,
+          "measuredValue",
+          value,
+          this.platform.log,
+        );
+      return;
+    }
     if (
       deviceClass === "aqi" ||
       deviceClass === "air_quality" ||

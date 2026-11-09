@@ -15,7 +15,7 @@ const state = (value: string, attributes: Record<string, unknown> = {}) =>
 describe("core converters", () => {
   it("maps binary sensor states to Matter booleans", () => {
     expect(binarySensorConverter.toBooleanState(state("on"))).toBe(true);
-    expect(binarySensorConverter.toContactState(state("off"))).toBe(false);
+    expect(binarySensorConverter.toContactState(state("off"))).toBe(true);
     expect(binarySensorConverter.toOccupancyState(state("on"))).toBe(true);
   });
 

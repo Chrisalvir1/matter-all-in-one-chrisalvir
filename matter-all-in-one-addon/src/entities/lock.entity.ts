@@ -23,13 +23,14 @@ export class LockEntity extends BaseEntity {
   }
 
   protected override async addCustomClusterServers(): Promise<void> {
-    const isLocked =
-      this.state.state === "locked" || this.state.state === "locking";
-
     // Create DoorLock cluster server with mandatory features for Apple HomeKit
     // Apple HomeKit requires ActuatorEnabled and OperatingMode to be set.
     this.endpoint.createDefaultDoorLockClusterServer(
-      isLocked ? DoorLock.LockState.Locked : DoorLock.LockState.Unlocked,
+      this.state.state === "locked"
+        ? DoorLock.LockState.Locked
+        : ["unlocked", "open"].includes(this.state.state)
+          ? DoorLock.LockState.Unlocked
+          : DoorLock.LockState.NotFullyLocked,
       DoorLock.LockType.DeadBolt,
     );
 
@@ -64,11 +65,12 @@ export class LockEntity extends BaseEntity {
   ): Promise<void> {
     this.state = newState;
 
-    const isLocked =
-      newState.state === "locked" || newState.state === "locking";
-    const matterState = isLocked
-      ? DoorLock.LockState.Locked
-      : DoorLock.LockState.Unlocked;
+    const matterState =
+      newState.state === "locked"
+        ? DoorLock.LockState.Locked
+        : newState.state === "unlocked" || newState.state === "open"
+          ? DoorLock.LockState.Unlocked
+          : DoorLock.LockState.NotFullyLocked;
 
     if (isInitialSync) {
       await safeSetAttribute(

@@ -17,6 +17,22 @@ import {
 
 export class HumidifierEntity extends BaseEntity {
   static readonly matterTypeLabel = "Humidifier";
+  private syncing = 0;
+  protected override get isUpdatingFromHa(): boolean {
+    return this.syncing > 0 || super.isUpdatingFromHa;
+  }
+  protected override async callServiceTracked(
+    domain: string,
+    service: string,
+    data?: Record<string, any>,
+  ): Promise<void> {
+    if (
+      ["set_mode", "set_humidity"].includes(service) &&
+      this.state.state === "off"
+    )
+      await super.callServiceTracked(domain, "turn_on");
+    await super.callServiceTracked(domain, service, data);
+  }
 
   constructor(
     platform: any,
@@ -189,80 +205,84 @@ export class HumidifierEntity extends BaseEntity {
   ): Promise<void> {
     this.state = newState;
     if (!this.endpoint) return;
+    this.syncing++;
+    try {
+      const syncFunc = isInitialSync ? safeSetAttribute : safeUpdateAttribute;
+      const isOn = newState.state === "on";
 
-    const syncFunc = isInitialSync ? safeSetAttribute : safeUpdateAttribute;
-    const isOn = newState.state === "on";
+      // Update OnOff
+      await syncFunc(this.endpoint, OnOff.id, "onOff", isOn, this.platform.log);
 
-    // Update OnOff
-    await syncFunc(this.endpoint, OnOff.id, "onOff", isOn, this.platform.log);
+      // Update FanControl attributes
+      if (this.endpoint.hasAttributeServer(FanControl.id, "percentSetting")) {
+        const minHum = newState.attributes.min_humidity ?? 40;
+        const maxHum = newState.attributes.max_humidity ?? 80;
+        const currentTarget = newState.attributes.humidity;
+        const mode = (newState.attributes.mode || "").toLowerCase();
 
-    // Update FanControl attributes
-    if (this.endpoint.hasAttributeServer(FanControl.id, "percentSetting")) {
-      const minHum = newState.attributes.min_humidity ?? 40;
-      const maxHum = newState.attributes.max_humidity ?? 80;
-      const currentTarget = newState.attributes.humidity;
-      const mode = (newState.attributes.mode || "").toLowerCase();
-
-      let percent = 0;
-      if (isOn) {
-        if (typeof currentTarget === "number" && maxHum > minHum) {
-          percent = Math.round(
-            ((currentTarget - minHum) / (maxHum - minHum)) * 100,
-          );
-        } else if (
-          mode.includes("high") ||
-          mode.includes("alto") ||
-          mode === "3"
-        ) {
-          percent = 100;
-        } else if (
-          mode.includes("med") ||
-          mode.includes("medio") ||
-          mode === "2"
-        ) {
-          percent = 66;
-        } else if (
-          mode.includes("low") ||
-          mode.includes("bajo") ||
-          mode === "1"
-        ) {
-          percent = 33;
-        } else {
-          percent = 50;
+        let percent = 0;
+        if (isOn) {
+          if (typeof currentTarget === "number" && maxHum > minHum) {
+            percent = Math.round(
+              ((currentTarget - minHum) / (maxHum - minHum)) * 100,
+            );
+          } else if (
+            mode.includes("high") ||
+            mode.includes("alto") ||
+            mode === "3"
+          ) {
+            percent = 100;
+          } else if (
+            mode.includes("med") ||
+            mode.includes("medio") ||
+            mode === "2"
+          ) {
+            percent = 66;
+          } else if (
+            mode.includes("low") ||
+            mode.includes("bajo") ||
+            mode === "1"
+          ) {
+            percent = 33;
+          } else {
+            percent = 50;
+          }
+          percent = Math.min(100, Math.max(1, percent));
         }
-        percent = Math.min(100, Math.max(1, percent));
-      }
 
-      await syncFunc(
-        this.endpoint,
-        FanControl.id,
-        "percentSetting",
-        percent,
-        this.platform.log,
-      );
-      await syncFunc(
-        this.endpoint,
-        FanControl.id,
-        "percentCurrent",
-        percent,
-        this.platform.log,
-      );
-      const fanMode = isOn
-        ? mode.includes("auto")
-          ? 5
-          : percent > 66
-            ? 3
-            : percent > 33
-              ? 2
-              : 1
-        : 0;
-      await syncFunc(
-        this.endpoint,
-        FanControl.id,
-        "fanMode",
-        fanMode,
-        this.platform.log,
-      );
+        await syncFunc(
+          this.endpoint,
+          FanControl.id,
+          "percentSetting",
+          percent,
+          this.platform.log,
+        );
+        await syncFunc(
+          this.endpoint,
+          FanControl.id,
+          "percentCurrent",
+          percent,
+          this.platform.log,
+        );
+        const fanMode = isOn
+          ? mode.includes("auto")
+            ? 5
+            : percent > 66
+              ? 3
+              : percent > 33
+                ? 2
+                : 1
+          : 0;
+        await syncFunc(
+          this.endpoint,
+          FanControl.id,
+          "fanMode",
+          fanMode,
+          this.platform.log,
+        );
+      }
+    } finally {
+      this.syncing--;
     }
   }
 }

@@ -18,12 +18,13 @@ import type { HassState } from "../src/utils/ha-state.js";
 
 // Deliberately use real Matterbridge endpoints, not the unit-test mock.
 const platform = {
-  matterbridge: { matterbridgeVersion: "3.11.0" },
+  matterbridge: { matterbridgeVersion: "3.11.2" },
   log: Object.fromEntries(
     ["debug", "info", "notice", "warn", "error"].map((key) => [key, vi.fn()]),
   ),
   ha: { callService: vi.fn(), hassEntities: new Map(), hassDevices: new Map() },
 } as unknown as HomeAssistantPlatform;
+const realEntities = new Map<string, BaseEntity>();
 let aggregator: Awaited<ReturnType<typeof createServerNode>>[1];
 
 describe("Matterbridge 3.11 real bridged endpoint conformance", () => {
@@ -106,10 +107,82 @@ describe("Matterbridge 3.11 real bridged endpoint conformance", () => {
           : BaseEntity;
       const entity = new Entity(platform, state, deviceType);
       const endpoint = await entity.createEndpoint();
+      realEntities.set(entityId, entity);
       expect(await addBridgedEndpoint(aggregator, endpoint)).toBe(true);
       expect(endpoint.lifecycle.isReady).toBe(true);
     },
   );
+  it.each([
+    [
+      "sensor.pressure_audit",
+      MatterDeviceTypes.pressureSensor,
+      "pressure",
+      "hPa",
+      "1012",
+      0x0403,
+      1012,
+    ],
+    [
+      "sensor.lux_audit",
+      MatterDeviceTypes.lightSensor,
+      "illuminance",
+      "lx",
+      "100",
+      0x0400,
+      20001,
+    ],
+    [
+      "sensor.fahrenheit_audit",
+      MatterDeviceTypes.temperatureSensor,
+      "temperature",
+      "°F",
+      "68",
+      0x0402,
+      2000,
+    ],
+  ] as const)(
+    "reports the correct real Matter measurement for %s",
+    async (id, type, dc, unit, value, cluster, expected) => {
+      const state = {
+        entity_id: id,
+        state: value,
+        attributes: {
+          friendly_name: id,
+          device_class: dc,
+          unit_of_measurement: unit,
+        },
+      } as HassState;
+      const entity =
+        realEntities.get("sensor.temperature") && dc === "temperature"
+          ? realEntities.get("sensor.temperature")!
+          : new BaseEntity(platform, state, type);
+      const fresh = !entity.endpoint;
+      const endpoint = fresh ? await entity.createEndpoint() : entity.endpoint;
+      if (fresh)
+        expect(await addBridgedEndpoint(aggregator, endpoint)).toBe(true);
+      await entity.updateState(state, true);
+      expect(endpoint.getAttribute(cluster as any, "measuredValue")).toBe(
+        expected,
+      );
+    },
+  );
+  it("uses hundredths for the position reported to a real Matter cover", async () => {
+    const state = {
+      entity_id: "cover.position_audit",
+      state: "open",
+      attributes: {
+        friendly_name: "Cover audit",
+        current_position: 70,
+        supported_features: 15,
+      },
+    } as HassState;
+    const entity = realEntities.get("cover.blind")!;
+    const endpoint = entity.endpoint;
+    await entity.updateState(state, true);
+    expect(
+      endpoint.getAttribute(0x0102 as any, "currentPositionLiftPercent100ths"),
+    ).toBe(3000);
+  });
   it("initializes a composite outlet and contact sensor under strict validation", async () => {
     const composite = new CompositeDeviceEntity(
       platform,

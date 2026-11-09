@@ -14,6 +14,7 @@ import {
   safeUpdateAttribute,
 } from "../utils/matter-attributes.js";
 import {
+  getHaDeviceModel,
   MATTER_BRIDGE_VENDOR_ID,
   MATTER_BRIDGE_VENDOR_NAME,
 } from "../utils/matter-device-identity.js";
@@ -45,7 +46,11 @@ export class CooktopEntity extends BaseEntity {
     this.endpoint.vendorId = MATTER_BRIDGE_VENDOR_ID;
     this.endpoint.vendorName = MATTER_BRIDGE_VENDOR_NAME;
     this.endpoint.productId = 0x8000;
-    this.endpoint.productName = "Samsung Cooktop";
+    this.endpoint.productName = getHaDeviceModel(
+      this.platform,
+      this.entityId,
+      "Cooktop",
+    );
     this.applyMatterbridgeFirmware();
 
     // Add a single cooking surface representing the hotplate/burner
@@ -57,6 +62,18 @@ export class CooktopEntity extends BaseEntity {
     this.registerCommandHandlers();
 
     return this.endpoint as unknown as MatterbridgeEndpoint;
+  }
+
+  public override adoptEndpoint(endpoint: MatterbridgeEndpoint): void {
+    const child =
+      endpoint.getChildEndpointById("Hélices") ??
+      endpoint.getChildEndpointByOriginalId("Hélices");
+    if (!child)
+      throw new Error(
+        "Retained appliance node is missing its child endpoint; preserving its pairing",
+      );
+    this.surface = child;
+    super.adoptEndpoint(endpoint);
   }
 
   override async updateState(
@@ -99,7 +116,14 @@ export class CooktopEntity extends BaseEntity {
   protected override registerCommandHandlers(
     _endpoint?: MatterbridgeEndpoint,
   ): void {
-    // Cooktops are OffOnly in Matter for safety, no write command handlers needed
+    // Keep OffOnly: never enable remote ignition through this bridge.
+    this.surface?.addCommandHandler("off", async () => {
+      this.assertOnline();
+      const domain = this.entityId.split(".")[0];
+      if (!["switch", "climate"].includes(domain))
+        throw new Error("This cooktop has no HA power control");
+      await this.platform.ha.callService(domain, "turn_off", this.entityId);
+    });
   }
 
   static matterTypeLabel = "Cooktop" as const;

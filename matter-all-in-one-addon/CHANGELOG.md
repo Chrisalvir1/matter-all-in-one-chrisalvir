@@ -1,3 +1,14 @@
+## [2.3.17] - 2026-11-09
+
+- Corrige la cola de mandos continuos de Home Assistant: agrupa solo los valores aún no enviados de dimmers y controles de nivel, conserva el orden del apagado y de acciones discretas, y aísla dispositivos.
+- Completa la conexión de lecturas y mandos HAP con Home Assistant para sensores, cerraduras, cubiertas, garajes, purificadores, altavoces e irrigación; conserva los servicios e identidades de accesorios ya enlazados.
+- Corrige polaridad Matter de contactos, conversiones Fahrenheit/Celsius y unidades de presión/caudal; sincroniza sensores ambientales, calidad de aire, baterías y estados compuestos según las capacidades disponibles.
+- Endurece MQTT: espera confirmación del broker, informa fallos reales, repone manejadores al restaurar nodos y añade rutas de brillo, cubiertas, ventiladores y mediciones compatibles.
+- Ajusta cerraduras, válvulas, climatización, humidificadores, hornos, placas y aspiradoras para reflejar estados y capacidades reales de Home Assistant; rechaza acciones no implementadas en lugar de simular éxito.
+- Libera sesiones de vídeo/audio Matter correctamente y rechaza capturas Matter cuando el endpoint no negoció Snapshot; se conserva la ruta de snapshots HAP existente.
+- Añade regresiones sobre Matterbridge 3.11.2. Verificación local: 88 suites/754 pruebas; tras los dos últimos ajustes, 5 suites/44 pruebas afectadas; compilación backend/frontend correcta.
+- La verificación automatizada no certifica accesorios físicos, Apple Casa ni iOS 27. No se modifican fabrics ni se requiere volver a enlazar; faltan las comprobaciones en la instalación real.
+
 ## [2.3.16] - 2026-11-08
 
 - Unifica el contador y el filtro de incidencias. Los registros históricos de cámaras quedan en el diagnóstico, mientras las incidencias activas muestran su motivo.

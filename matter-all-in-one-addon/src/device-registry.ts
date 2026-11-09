@@ -300,6 +300,18 @@ export const DEVICE_CLASS_REGISTRY: Record<
     },
   },
   sensor: {
+    pressure: {
+      matterType: MatterDeviceTypes.pressureSensor,
+      homekitSupported: false,
+    },
+    atmospheric_pressure: {
+      matterType: MatterDeviceTypes.pressureSensor,
+      homekitSupported: false,
+    },
+    volume_flow_rate: {
+      matterType: MatterDeviceTypes.flowSensor,
+      homekitSupported: false,
+    },
     temperature: {
       matterType: MatterDeviceTypes.temperatureSensor,
       homekitSupported: homekitSupported.temperatureSensor,

@@ -1,3 +1,4 @@
+import { sensorMeasurement } from "../utils/measurements.js";
 import { MatterbridgeEndpoint, DeviceTypeDefinition } from "matterbridge";
 import {
   OnOff,
@@ -90,6 +91,51 @@ export function getMqttDeviceType(
 
 export class MqttEntity {
   public endpoint!: MatterbridgeEndpoint;
+  private readonly commandBindings = new Map<string, (data: any) => any>();
+  private readonly attributeBindings = new Map<
+    string,
+    { cluster: any; attribute: string; callback: (value: any) => void }
+  >();
+  private static readonly subscriptions = new WeakMap<
+    object,
+    Map<string, (value: any) => void>
+  >();
+  private bindAttribute(
+    cluster: any,
+    attribute: string,
+    callback: (value: any) => void,
+  ): void {
+    const key = `${cluster}:${attribute}`;
+    this.attributeBindings.set(key, { cluster, attribute, callback });
+    let handlers = MqttEntity.subscriptions.get(this.endpoint);
+    if (!handlers) {
+      handlers = new Map();
+      MqttEntity.subscriptions.set(this.endpoint, handlers);
+    }
+    const installed = handlers.has(key);
+    handlers.set(key, callback);
+    if (!installed) {
+      const delegate = handlers;
+      this.endpoint.subscribeAttribute(cluster, attribute, (value) => {
+        void Promise.resolve()
+          .then(() => delegate.get(key)?.(value))
+          .catch((error) => {
+            this.platform.log.warn(
+              `MQTT attribute command failed for ${this.entityId}: ${String(error)}`,
+            );
+            void this.setReachability(false);
+            this.platform.recordEntityCommandFailure?.(
+              this.entityId,
+              String(error),
+            );
+          });
+      });
+    }
+  }
+  private bindCommand(command: string, callback: (data: any) => any): void {
+    this.commandBindings.set(command, callback);
+    this.endpoint.addCommandHandler(command as any, callback);
+  }
   public entityId: string;
   public discoveryTopic: string;
   public domain: string;
@@ -222,61 +268,145 @@ export class MqttEntity {
       );
 
       // Matter Command Handlers -> MQTT Publish
-      this.endpoint.addCommandHandler("on", async () => {
+      this.bindCommand("on", async () => {
+        this.assertAvailable();
+        if (!this.commandTopic)
+          throw new Error("MQTT device has no command topic");
         if (this.commandTopic) {
           const payload =
             this.config.payload_on !== undefined
               ? String(this.config.payload_on)
               : "ON";
-          this.mqttManager.publish(this.commandTopic, payload);
-          this.handleStateUpdate(payload);
+          await this.mqttManager.publishCommand(
+            this.commandTopic,
+            this.domain === "light" && this.config.schema === "json"
+              ? JSON.stringify({ state: payload })
+              : String(payload),
+          );
         }
       });
 
-      this.endpoint.addCommandHandler("off", async () => {
+      this.bindCommand("off", async () => {
+        this.assertAvailable();
+        if (!this.commandTopic)
+          throw new Error("MQTT device has no command topic");
         if (this.commandTopic) {
           const payload =
             this.config.payload_off !== undefined
               ? String(this.config.payload_off)
               : "OFF";
-          this.mqttManager.publish(this.commandTopic, payload);
-          this.handleStateUpdate(payload);
+          await this.mqttManager.publishCommand(
+            this.commandTopic,
+            this.domain === "light" && this.config.schema === "json"
+              ? JSON.stringify({ state: payload })
+              : String(payload),
+          );
         }
       });
 
       if (
-        this.config.brightness_command_topic &&
+        (this.config.brightness_command_topic ||
+          (this.config.schema === "json" &&
+            this.config.brightness &&
+            this.commandTopic)) &&
         this.deviceType === dimmableLight
       ) {
         this.endpoint.addClusterServers([LevelControl.id]);
-        this.endpoint.addCommandHandler("moveToLevel", async (data: any) => {
+        const levelCommand = async (data: any, withOnOff = false) => {
+          this.assertAvailable();
           const level = data?.request?.level ?? data?.level;
-          if (typeof level === "number") {
-            const scale = this.config.brightness_scale || 255;
-            const brightness = Math.round((level / 254) * scale);
-            this.mqttManager.publish(
+          if (!Number.isFinite(level) || level < 0 || level > 254)
+            throw new Error("Invalid brightness");
+          const brightness = Math.round(
+            (level / 254) * (this.config.brightness_scale || 255),
+          );
+          if (this.config.schema === "json") {
+            await this.mqttManager.publishCommand(
+              this.commandTopic,
+              JSON.stringify({
+                brightness,
+                ...(withOnOff ? { state: level === 0 ? "OFF" : "ON" } : {}),
+              }),
+            );
+          } else {
+            await this.mqttManager.publishCommand(
               this.config.brightness_command_topic,
               String(brightness),
             );
+            if (withOnOff && this.commandTopic)
+              await this.mqttManager.publishCommand(
+                this.commandTopic,
+                String(
+                  level === 0
+                    ? (this.config.payload_off ?? "OFF")
+                    : (this.config.payload_on ?? "ON"),
+                ),
+              );
           }
+        };
+        this.bindCommand("moveToLevel", (d) => levelCommand(d));
+        this.bindCommand("moveToLevelWithOnOff", (d) => levelCommand(d, true));
+      }
+    } else if (this.domain === "cover") {
+      for (const [cmd, field, fallback] of [
+        ["upOrOpen", "payload_open", "OPEN"],
+        ["downOrClose", "payload_close", "CLOSE"],
+        ["stopMotion", "payload_stop", "STOP"],
+      ]) {
+        this.bindCommand(cmd as any, async () => {
+          this.assertAvailable();
+          if (!this.commandTopic) throw new Error("Missing MQTT command topic");
+          await this.mqttManager.publishCommand(
+            this.commandTopic,
+            String(this.config[field] ?? fallback),
+          );
         });
       }
+      this.bindCommand("goToLiftPercentage", async (data: any) => {
+        this.assertAvailable();
+        const r = data?.request ?? data;
+        const p = r.liftPercent100thsValue / 100;
+        if (!Number.isFinite(p) || p < 0 || p > 100)
+          throw new Error("Invalid cover position");
+        if (!this.config.set_position_topic)
+          throw new Error("MQTT cover does not support positioning");
+        const closed = Number(this.config.position_closed ?? 0),
+          open = Number(this.config.position_open ?? 100);
+        await this.mqttManager.publishCommand(
+          this.config.set_position_topic,
+          String(Math.round(closed + (1 - p / 100) * (open - closed))),
+        );
+      });
     } else if (this.domain === "lock") {
       this.endpoint.behaviors.require(MatterbridgeDoorLockServer.with());
 
-      this.endpoint.addCommandHandler("lockDoor", async () => {
+      this.bindCommand("lockDoor", async () => {
+        this.assertAvailable();
+        if (!this.commandTopic)
+          throw new Error("MQTT device has no command topic");
         if (this.commandTopic) {
           const payload = this.config.payload_lock || "LOCK";
-          this.mqttManager.publish(this.commandTopic, payload);
-          this.handleStateUpdate(payload);
+          await this.mqttManager.publishCommand(
+            this.commandTopic,
+            this.domain === "light" && this.config.schema === "json"
+              ? JSON.stringify({ state: payload })
+              : String(payload),
+          );
         }
       });
 
-      this.endpoint.addCommandHandler("unlockDoor", async () => {
+      this.bindCommand("unlockDoor", async () => {
+        this.assertAvailable();
+        if (!this.commandTopic)
+          throw new Error("MQTT device has no command topic");
         if (this.commandTopic) {
           const payload = this.config.payload_unlock || "UNLOCK";
-          this.mqttManager.publish(this.commandTopic, payload);
-          this.handleStateUpdate(payload);
+          await this.mqttManager.publishCommand(
+            this.commandTopic,
+            this.domain === "light" && this.config.schema === "json"
+              ? JSON.stringify({ state: payload })
+              : String(payload),
+          );
         }
       });
     } else if (this.domain === "sensor") {
@@ -299,13 +429,90 @@ export class MqttEntity {
       }
     }
 
+    if (this.domain === "fan" && this.config.percentage_command_topic) {
+      this.bindAttribute(FanControl.id, "percentSetting", async (v: number) => {
+        this.assertAvailable();
+        const low = Number(this.config.speed_range_min ?? 1),
+          high = Number(this.config.speed_range_max ?? 100);
+        await this.mqttManager.publishCommand(
+          this.config.percentage_command_topic,
+          String(v === 0 ? 0 : Math.round(low + ((v - 1) / 99) * (high - low))),
+        );
+      });
+    }
     this.endpoint.addRequiredClusterServers();
 
     return this.endpoint;
   }
 
+  private assertAvailable(): void {
+    if (this.available === false) throw new Error("MQTT device unavailable");
+  }
+
+  public handleTopicState(topic: string, payload: string): void {
+    if (
+      topic === this.config.brightness_state_topic &&
+      topic !== this.stateTopic
+    ) {
+      const n = Number(payload);
+      if (Number.isFinite(n))
+        void safeSetAttribute(
+          this.endpoint,
+          LevelControl.id,
+          "currentLevel",
+          Math.max(
+            0,
+            Math.min(
+              254,
+              Math.round((n / (this.config.brightness_scale || 255)) * 254),
+            ),
+          ),
+          this.platform.log,
+        );
+    } else if (
+      topic === this.config.position_topic &&
+      topic !== this.stateTopic
+    ) {
+      const n = Number(payload),
+        closed = Number(this.config.position_closed ?? 0),
+        open = Number(this.config.position_open ?? 100);
+      if (Number.isFinite(n) && open !== closed)
+        void safeSetAttribute(
+          this.endpoint,
+          0x0102 as any,
+          "currentPositionLiftPercent100ths",
+          Math.round((1 - (n - closed) / (open - closed)) * 10000),
+          this.platform.log,
+        );
+    } else if (
+      topic === this.config.percentage_state_topic &&
+      topic !== this.stateTopic
+    ) {
+      const n = Number(payload);
+      if (Number.isFinite(n))
+        void safeSetAttribute(
+          this.endpoint,
+          FanControl.id,
+          "percentCurrent",
+          n,
+          this.platform.log,
+        );
+    }
+  }
+
   public adoptEndpoint(endpoint: MatterbridgeEndpoint) {
     this.endpoint = endpoint;
+    applyMatterFirmware(endpoint, this.platform);
+    for (const binding of this.attributeBindings.values())
+      this.bindAttribute(binding.cluster, binding.attribute, binding.callback);
+    const handler = (endpoint as any).commandHandler;
+    for (const [command, callback] of this.commandBindings) {
+      for (const old of [...(handler?.handler ?? [])]) {
+        if (old.command === command)
+          handler.removeHandler(old.command, old.handler);
+      }
+      endpoint.addCommandHandler(command as any, callback);
+    }
   }
 
   public async setReachability(reachable: boolean): Promise<void> {
@@ -430,7 +637,6 @@ export class MqttEntity {
       ) {
         this.currentState = "unavailable";
         void this.setReachability(false);
-        void this.setInactiveState();
         return;
       }
       if (
@@ -521,7 +727,14 @@ export class MqttEntity {
         const normLocked = String(
           this.config.state_locked ?? "LOCKED",
         ).toUpperCase();
-        const isLocked = String(payload).toUpperCase() === normLocked;
+        const normalized = String(payload).toUpperCase();
+        const isLocked = normalized === normLocked;
+        if (
+          !isLocked &&
+          normalized !==
+            String(this.config.state_unlocked ?? "UNLOCKED").toUpperCase()
+        )
+          return;
         this.currentState = isLocked
           ? (this.config.state_locked ?? "LOCKED")
           : (this.config.state_unlocked ?? "UNLOCKED");
@@ -644,6 +857,20 @@ export class MqttEntity {
         }
         const val = parseFloat(String(rawVal));
         if (this.endpoint && !isNaN(val)) {
+          const measurement = sensorMeasurement({
+            state: String(val),
+            attributes: this.config,
+          });
+          if (measurement) {
+            void safeSetAttribute(
+              this.endpoint,
+              measurement.cluster as any,
+              "measuredValue",
+              measurement.value,
+              this.platform.log,
+            );
+            return;
+          }
           if (this.deviceType === temperatureSensor) {
             safeSetAttribute(
               this.endpoint,

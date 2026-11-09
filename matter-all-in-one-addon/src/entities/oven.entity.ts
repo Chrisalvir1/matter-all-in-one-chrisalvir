@@ -14,6 +14,7 @@ import {
   safeUpdateAttribute,
 } from "../utils/matter-attributes.js";
 import {
+  getHaDeviceModel,
   MATTER_BRIDGE_VENDOR_ID,
   MATTER_BRIDGE_VENDOR_NAME,
 } from "../utils/matter-device-identity.js";
@@ -50,7 +51,11 @@ export class OvenEntity extends BaseEntity {
     this.endpoint.vendorId = MATTER_BRIDGE_VENDOR_ID;
     this.endpoint.vendorName = MATTER_BRIDGE_VENDOR_NAME;
     this.endpoint.productId = 0x8000;
-    this.endpoint.productName = "Samsung Cooker";
+    this.endpoint.productName = getHaDeviceModel(
+      this.platform,
+      this.entityId,
+      "Oven",
+    );
     this.applyMatterbridgeFirmware();
 
     // Add a single cavity cabinet to control the oven
@@ -75,6 +80,18 @@ export class OvenEntity extends BaseEntity {
     return this.endpoint as unknown as MatterbridgeEndpoint;
   }
 
+  public override adoptEndpoint(endpoint: MatterbridgeEndpoint): void {
+    const child =
+      endpoint.getChildEndpointById("Horno") ??
+      endpoint.getChildEndpointByOriginalId("Horno");
+    if (!child)
+      throw new Error(
+        "Retained appliance node is missing its child endpoint; preserving its pairing",
+      );
+    this.cabinet = child;
+    super.adoptEndpoint(endpoint);
+  }
+
   override async updateState(
     newState: HassState,
     isInitialSync = false,
@@ -96,7 +113,8 @@ export class OvenEntity extends BaseEntity {
       const isRunning =
         state.state === "on" ||
         state.state === "cooking" ||
-        state.state === "running";
+        state.state === "running" ||
+        state.state === "heat";
 
       await syncFunc(
         this.cabinet,
@@ -149,16 +167,39 @@ export class OvenEntity extends BaseEntity {
     this.cabinet.addCommandHandler(
       "OvenMode.changeToMode",
       async (data: any) => {
-        this.platform.log?.info?.(
-          `[OvenEntity] OvenMode.changeToMode commanded: ${JSON.stringify(data)}`,
+        this.assertOnline();
+        const mode = (data?.request ?? data)?.newMode;
+        const names: Record<number, string[]> = {
+          1: ["bake"],
+          2: ["convection"],
+        };
+        const select = this.relatedEntity("select", (s: any) =>
+          s.attributes?.options?.some((v: string) =>
+            names[mode]?.includes(v.toLowerCase()),
+          ),
         );
+        if (!select)
+          throw new Error("Oven mode is not supported by the HA device");
+        const option = select.attributes.options.find((v: string) =>
+          names[mode]?.includes(v.toLowerCase()),
+        );
+        await this.platform.ha.callService(
+          "select",
+          "select_option",
+          select.entity_id,
+          { option },
+        );
+        return { status: 0 };
       },
     );
 
     this.cabinet.addCommandHandler(
       "TemperatureControl.setTargetTemperature",
       async (data: any) => {
-        const { targetTemperature } = data; // in hundredths of C
+        this.assertOnline();
+        const { targetTemperature } = data?.request ?? data;
+        if (!Number.isFinite(targetTemperature))
+          throw new Error("Invalid oven target temperature");
         const targetC = Math.round(targetTemperature / 100);
         this.platform.log?.info?.(
           `[OvenEntity] setTargetTemperature commanded: ${targetC}C`,
@@ -177,9 +218,22 @@ export class OvenEntity extends BaseEntity {
             );
           } else {
             // Check for a target temperature number helper matching the oven ID
-            const objectId = this.entityId.split(".")[1];
-            const numEntityId = `number.${objectId}_target_temperature`;
-            if (this.platform.ha?.hassStates?.has(numEntityId)) {
+            const related = this.relatedEntity(
+              "number",
+              (s: any) => s.attributes?.device_class === "temperature",
+            );
+            if (!related)
+              throw new Error(
+                "No target temperature control is associated with this oven",
+              );
+            const numEntityId = related.entity_id;
+            const attrs = related.attributes;
+            if (
+              targetC < Number(attrs.min ?? -Infinity) ||
+              targetC > Number(attrs.max ?? Infinity)
+            )
+              throw new Error("Oven temperature outside device limits");
+            if (related) {
               await this.platform.ha?.callService(
                 "number",
                 "set_value",
@@ -200,5 +254,19 @@ export class OvenEntity extends BaseEntity {
     );
   }
 
+  private relatedEntity(domain: string, predicate: (s: any) => boolean): any {
+    const id = this.platform.ha?.hassEntities?.get(this.entityId)?.device_id;
+    if (!id) return;
+    for (const [entityId, entry] of this.platform.ha?.hassEntities ?? []) {
+      const st = this.platform.ha?.hassStates?.get(entityId);
+      if (
+        entry.device_id === id &&
+        entityId.startsWith(domain + ".") &&
+        st &&
+        predicate(st)
+      )
+        return st;
+    }
+  }
   static matterTypeLabel = "Oven" as const;
 }

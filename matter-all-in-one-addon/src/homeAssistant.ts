@@ -1260,6 +1260,10 @@ export class HomeAssistant extends EventEmitter {
   /** Large HA installations can take longer than the realtime command timeout to build a snapshot. */
   private readonly snapshotTimeout = 60000;
   private _serviceTimeout: number = 25000; // Dedicated timeout for call_service to accommodate BLE and slow integrations
+  private readonly pendingContinuous = new Map<
+    string,
+    { data: Record<string, HomeAssistantPrimitive>; promise: Promise<any> }
+  >();
   private readonly deviceCommandQueues = new Map<string, Promise<any>>();
   private readonly certificatePath: string | undefined = undefined; // Full path to the CA certificate for secure connections
   private readonly rejectUnauthorized: boolean | undefined = undefined; // Whether the WebSocket has to reject unauthorized certificates
@@ -2355,10 +2359,47 @@ export class HomeAssistant extends EventEmitter {
     );
     const deviceId = this.hassEntities?.get(entityId)?.device_id;
     const queueKey = deviceId ? `dev:${deviceId}` : `ent:${entityId}`;
+    // Replace only the last queued continuous value, never discrete actions or
+    // requests already sent to HA. A discrete command closes the merge window.
+    const fields = Object.keys(serviceData).sort();
+    const continuous =
+      fields.length > 0 &&
+      fields.every((k) =>
+        [
+          "brightness",
+          "brightness_pct",
+          "hs_color",
+          "xy_color",
+          "color_temp_kelvin",
+          "color_temp",
+          "percentage",
+          "position",
+          "volume_level",
+        ].includes(k),
+      );
+    const mergeKey = `${queueKey}:${entityId}:${domain}.${service}:${fields.join(",")}`;
+    if (!continuous) {
+      for (const key of this.pendingContinuous.keys()) {
+        if (key.startsWith(`${queueKey}:`)) this.pendingContinuous.delete(key);
+      }
+    }
+    const existing = continuous
+      ? this.pendingContinuous.get(mergeKey)
+      : undefined;
+    if (existing) {
+      existing.data = { ...serviceData };
+      return existing.promise;
+    }
+    const slot = {
+      data: { ...serviceData },
+      promise: undefined as unknown as Promise<any>,
+    };
     const prevQueue =
       this.deviceCommandQueues.get(queueKey) ?? Promise.resolve();
 
     const executeCall = async () => {
+      if (this.pendingContinuous.get(mergeKey) === slot)
+        this.pendingContinuous.delete(mergeKey);
       this.log.info(
         `[HACommandTrace][${entityId}] dispatch service=${domain}.${service} queue_ms=${Date.now() - queuedAt}`,
       );
@@ -2366,7 +2407,7 @@ export class HomeAssistant extends EventEmitter {
         type: "call_service",
         domain,
         service,
-        service_data: { ...serviceData },
+        service_data: { ...slot.data },
         target: { entity_id: entityId },
       };
 
@@ -2412,6 +2453,8 @@ export class HomeAssistant extends EventEmitter {
 
     const nextPromise = prevQueue.catch(() => {}).then(executeCall);
     this.deviceCommandQueues.set(queueKey, nextPromise);
+    slot.promise = nextPromise;
+    if (continuous) this.pendingContinuous.set(mergeKey, slot);
 
     // Do not leave the promise returned by finally() rejected. This is most
     // visible with BLE devices: a service timeout is handled by the caller,

@@ -82,20 +82,34 @@ export class CameraEndpointBuilder {
         );
         return { videoStreamId: session.videoStreamId || 1 };
       }
-      async videoStreamDeallocate(_request: any) {
-        // Safe deallocate
+      async videoStreamDeallocate(request: any) {
+        for (const session of sessionManager.getActiveSessions()) {
+          if (session.videoStreamId === request.videoStreamId)
+            await sessionManager.cleanupSession(session.sessionId);
+        }
       }
       async audioStreamAllocate(request: any) {
         const session = sessionManager.allocateSession(
           request.streamUsage ?? 3,
         );
-        return { audioStreamId: session.audioStreamId || 2 };
+        session.audioStreamId = session.videoStreamId;
+        return { audioStreamId: session.audioStreamId };
       }
-      async audioStreamDeallocate(_request: any) {
-        // Safe deallocate
+      async audioStreamDeallocate(request: any) {
+        for (const session of sessionManager.getActiveSessions()) {
+          if (session.audioStreamId === request.audioStreamId)
+            await sessionManager.cleanupSession(session.sessionId);
+        }
       }
-      async setStreamPriorities(_request: any) {
-        // Accept stream priorities
+      async setStreamPriorities(request: any) {
+        const priorities = request.streamUsagePriorities;
+        if (
+          !Array.isArray(priorities) ||
+          priorities.length !== 1 ||
+          priorities[0] !== 3
+        )
+          throw new Error("Only Live View stream usage is supported");
+        (this.state as any).streamUsagePriorities = [3];
       }
       async dptzSetViewport(request: any) {
         await adapter.handleDptzSetViewport(request);
@@ -106,8 +120,15 @@ export class CameraEndpointBuilder {
       async mptzMoveToPreset(request: any) {
         await adapter.handleMptzMoveToPreset(request);
       }
-      async takeSnapshot(_request: any) {
-        return { success: true, timestamp: Date.now() };
+      async takeSnapshot(_request: any): Promise<never> {
+        throw new Error("Snapshot must use the CaptureSnapshot command");
+      }
+      async captureSnapshot(_request: any): Promise<never> {
+        // This endpoint advertises Video, not Snapshot. Do not invent an image
+        // or its dimensions when the source has no negotiated snapshot stream.
+        throw new Error(
+          "Snapshot is not supported by this video endpoint; use the HAP camera snapshot",
+        );
       }
     }
 
@@ -221,26 +242,17 @@ export class CameraEndpointBuilder {
       },
     );
 
-    // Matter 1.6.1 Snapshot on demand (Cluster 0x0552)
-    (endpoint as any).addCommandHandler?.(
-      "TakeSnapshot",
-      async (_data: any) => {
-        const snapUrl =
-          streamSource?.metadata?.snapshotUrl ||
-          `/api/camera_proxy/${entityId}`;
-        platform?.log?.info?.(
-          `[MatterCamera][${entityId}] TakeSnapshot requested: ${snapUrl}`,
-        );
-        return { success: true, url: snapUrl, timestamp: Date.now() };
-      },
-    );
-
-    // Matter 1.6.1 Doorbell Chime notification (Cluster 0x0555)
-    (endpoint as any).addCommandHandler?.("Chime", async (_data: any) => {
-      platform?.log?.info?.(
-        `[MatterDoorbell][${entityId}] Doorbell chime triggered`,
+    // This Video endpoint has no negotiated Snapshot or Chime feature. Do not
+    // acknowledge these legacy UI calls as executed hardware actions.
+    (endpoint as any).addCommandHandler?.("TakeSnapshot", async () => {
+      throw new Error(
+        "Use the HAP camera snapshot; this Matter video endpoint does not support snapshots",
       );
-      return { success: true };
+    });
+    (endpoint as any).addCommandHandler?.("Chime", async () => {
+      throw new Error(
+        "No physical chime control is configured for this camera",
+      );
     });
 
     // Provision standard clusters safely

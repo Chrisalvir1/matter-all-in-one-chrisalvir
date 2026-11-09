@@ -35,11 +35,16 @@ export class EnergyTariffEntity extends BaseEntity {
     if (value === null || !this.endpoint) return;
 
     const deviceClass = state.attributes?.device_class;
-    const unit = String(
-      state.attributes?.unit_of_measurement ?? "",
-    ).toLowerCase();
+    const unit = String(state.attributes?.unit_of_measurement ?? "");
     if (deviceClass === "power") {
-      const multiplier = unit === "kw" ? 1_000_000 : unit === "mw" ? 1 : 1000;
+      const multiplier =
+        unit === "kW"
+          ? 1_000_000
+          : unit === "MW"
+            ? 1_000_000_000
+            : unit === "mW"
+              ? 1
+              : 1000;
       const milliWatts = Math.round(value * multiplier);
       await updateFn(
         this.endpoint,
@@ -50,7 +55,9 @@ export class EnergyTariffEntity extends BaseEntity {
       );
     } else if (deviceClass === "voltage") {
       // ElectricalPowerMeasurement voltage is represented in millivolts.
-      const milliVolts = Math.round(value * (unit === "mv" ? 1 : 1000));
+      const milliVolts = Math.round(
+        value * (unit === "mV" ? 1 : unit === "kV" ? 1_000_000 : 1000),
+      );
       await updateFn(
         this.endpoint,
         ElectricalPowerMeasurementId,
@@ -59,7 +66,14 @@ export class EnergyTariffEntity extends BaseEntity {
         this.platform.log,
       );
     } else if (deviceClass === "energy") {
-      const multiplier = unit === "wh" ? 1000 : unit === "mwh" ? 1 : 1_000_000;
+      const multiplier =
+        unit === "Wh"
+          ? 1000
+          : unit === "mWh"
+            ? 1
+            : unit === "MWh"
+              ? 1_000_000_000
+              : 1_000_000;
       const mWh = Math.round(value * multiplier);
       await updateFn(
         this.endpoint,

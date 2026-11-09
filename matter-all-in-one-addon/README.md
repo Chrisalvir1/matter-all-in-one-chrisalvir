@@ -1,12 +1,16 @@
-# Matter All-in-One Chrisalvir — complemento v2.3.16
+# Matter All-in-One Chrisalvir — complemento v2.3.17
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/chrisalvir1/matter-all-in-one-chrisalvir/main/matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
 </div>
 
-**Contrato WebSocket verificado con Home Assistant Core 2026.11.0.** La comprobación de esta versión con accesorios físicos queda pendiente.
+**Contrato WebSocket verificado con Home Assistant Core 2026.11.0.** La comprobación de esta versión con accesorios físicos y Apple Casa/iOS 27 queda pendiente.
 
 Puente **Matter 1.6.1** basado en **Matterbridge 3.11.2** con publicación independiente **HomeKit HAP/HKSV** para cámaras y accesorios compatibles. Incluye integración con Omni Tuya Local, Camera.UI, Scrypted y el inventario de Home Assistant.
+
+## Novedades v2.3.17 — 9 de noviembre de 2026
+
+Esta versión corrige el despacho de controles deslizantes y la sincronización de estado para accesorios Matter, HAP y MQTT. Incluye conversiones de unidades y mediciones ambientales, enlaces HAP a entidades Home Assistant, confirmación MQTT, restauración de manejadores y validación explícita de operaciones no disponibles. Consulta las [notas de publicación](../docs/RELEASE_NOTES_2.3.17.md) para el alcance y los límites de verificación. No se requiere volver a emparejar.
 
 ## Historial v2.3.0 — 28 de octubre de 2026
 
@@ -19,7 +23,7 @@ Puente **Matter 1.6.1** basado en **Matterbridge 3.11.2** con publicación indep
 
 ### Verificación del Comedero Michi
 
-En la instalación 2.3.15 se observó vídeo en vivo en Apple Casa para Mac. El snapshot recurrió a una imagen de respaldo, el retorno de audio agotó el tiempo de espera de Omni y una solicitud HKSV terminó sin fragmentos. Quedan pendientes la comprobación de estas rutas en 2.3.16 y un clip nuevo reproducible.
+En la instalación 2.3.15 se observó vídeo en vivo en Apple Casa para Mac. El snapshot recurrió a una imagen de respaldo, el retorno de audio agotó el tiempo de espera de Omni y una solicitud HKSV terminó sin fragmentos. Esas rutas y un clip HKSV nuevo siguen pendientes de comprobación física en 2.3.17.
 
 ## Tabla de integración
 
@@ -40,7 +44,7 @@ Añade este repositorio de aplicaciones en Home Assistant:
 https://github.com/Chrisalvir1/matter-all-in-one-chrisalvir
 ```
 
-Instala **Matter All-in-one (Chrisalvir)** y elige la versión **2.3.14** cuando la imagen `amd64` / `aarch64` esté publicada. La distribución se realiza desde GHCR, con verificaciones previas de tipos, compilación, pruebas y disponibilidad pública de la imagen.
+Instala **Matter All-in-one (Chrisalvir)** y elige la versión **2.3.17** cuando la imagen `amd64` / `aarch64` esté publicada. La distribución se realiza desde GHCR, con verificaciones previas de tipos, compilación, pruebas y disponibilidad pública de la imagen.
 
 Antes de actualizar, realiza una copia de seguridad de la configuración y el almacenamiento persistente. No es necesario ni recomendable borrar las fabrics Matter ni volver a emparejar una cámara estable.
 
@@ -77,7 +81,7 @@ Se requiere una prueba física separada, sin actualizar el Home Assistant princi
 
 ```yaml
 project: matter-all-in-one-chrisalvir
-version: "2.3.16"
+version: "2.3.17"
 home_assistant: "2026.11.0 WebSocket contract tested, hardware validation pending"
 spec: "Matter 1.6.1"
 engine: matterbridge
@@ -94,7 +98,7 @@ diagnostics: opt-in read-only
 ## Más información
 
 - [README principal del proyecto](../README.md)
-- [Notas de publicación v2.3.16](../docs/RELEASE_NOTES_2.3.16.md)
+- [Notas de publicación v2.3.17](../docs/RELEASE_NOTES_2.3.17.md)
 - [Guía técnica de compatibilidad con HA 2026.11](../docs/home-assistant-2026-11-readiness.md)
 - [Compatibilidad HomeKit](docs/homekit-compatibility.md)
 - [Thread en Home Assistant](docs/thread-setup.md)
@@ -104,7 +108,7 @@ diagnostics: opt-in read-only
 
 ### Entorno reproducible de desarrollo
 
-La versión 2.3.16 usa Node **26.13.0 LTS**, npm **12.2.2** y Matterbridge **3.11.2**. Conserva la adaptación de `CommandHandler` introducida en 2.3.14. Las versiones Node están en `.node-version` y `.nvmrc`; después de cambiar de runtime, reinstalar con `npm ci --legacy-peer-deps` en `matter-all-in-one-addon`. No reutilizar `node_modules` de Node 24, de otra arquitectura o de macOS dentro de Alpine Linux.
+La versión 2.3.17 usa Node **26.13.0 LTS**, npm **12.2.2** y Matterbridge **3.11.2**. Conserva la adaptación de `CommandHandler` introducida en 2.3.14. Las versiones Node están en `.node-version` y `.nvmrc`; después de cambiar de runtime, reinstalar con `npm ci --legacy-peer-deps` en `matter-all-in-one-addon`. No reutilizar `node_modules` de Node 24, de otra arquitectura o de macOS dentro de Alpine Linux.
 
 `npm run check:toolchain` comprueba sincronía entre runtime local, npm, Docker, build.yaml y CI; `npm run check:runtime` comprueba imports y versiones reales contra el lockfile. Las imágenes base están fijadas por digest. El devcontainer usa la rama estable npm fijada de Matterbridge, no `dev`, y falla si su imagen Node 26 cambia a una versión distinta a la validada. No arranca ni registra el puente automáticamente. Docker ejecuta el chequeo de producción durante la compilación; CI añade ejecución aislada sin red y FFmpeg/ffprobe en amd64/arm64.
 

@@ -71,7 +71,20 @@ export class ValveEntity extends BaseEntity {
     if (!targetEndpoint) return;
 
     targetEndpoint.addCommandHandler("open", async (data: any) => {
-      const position = data?.request?.targetLevel;
+      this.assertOnline();
+      const request = data?.request ?? data ?? {};
+      // Generic HA valves cannot guarantee timed closing. HAP uses its persisted deadline.
+      if (request.openDuration !== undefined && request.openDuration !== null)
+        throw new Error(
+          "Timed opening is not supported by this HA valve endpoint",
+        );
+      const position = request.targetLevel;
+      if (
+        position !== undefined &&
+        position !== null &&
+        (!Number.isFinite(position) || position < 0 || position > 100)
+      )
+        throw new Error("Invalid valve level");
       if (position !== undefined && position !== null) {
         const features = this.state.attributes?.supported_features;
         if (typeof features === "number" && !(features & 4)) {
@@ -100,6 +113,7 @@ export class ValveEntity extends BaseEntity {
     });
 
     targetEndpoint.addCommandHandler("close", async () => {
+      this.assertOnline();
       await this.platform.ha?.callService(
         "valve",
         "close_valve",

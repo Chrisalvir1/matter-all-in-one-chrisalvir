@@ -222,6 +222,27 @@ const profilesByDomain: Record<string, DeviceExportProfile[]> = {
   ],
   sensor: [
     {
+      id: "pressureSensor",
+      label: "Sensor de presión Matter",
+      description:
+        "Presión normalizada; Apple Home no documenta este tipo como compatible.",
+      appleHome: "unsupported",
+    },
+    {
+      id: "flowSensor",
+      label: "Sensor de caudal Matter",
+      description:
+        "Caudal medido; Apple Home no documenta este tipo como compatible.",
+      appleHome: "unsupported",
+    },
+    {
+      id: "airQualitySensor",
+      label: "Sensor de calidad de aire Matter",
+      description:
+        "Mediciones de calidad de aire; disponibilidad según el controlador.",
+      appleHome: "experimental",
+    },
+    {
       id: "temperatureSensor",
       label: "Sensor de temperatura",
       description: "Medición de temperatura.",
@@ -301,6 +322,19 @@ const defaultProfileByDomain: Record<string, string> = {
 };
 
 const sensorProfileByDeviceClass: Record<string, string> = {
+  pressure: "pressureSensor",
+  atmospheric_pressure: "pressureSensor",
+  volume_flow_rate: "flowSensor",
+  moisture: "humiditySensor",
+  carbon_dioxide: "airQualitySensor",
+  co2: "airQualitySensor",
+  pm1: "airQualitySensor",
+  pm25: "airQualitySensor",
+  pm10: "airQualitySensor",
+  volatile_organic_compounds: "airQualitySensor",
+  voc: "airQualitySensor",
+  aqi: "airQualitySensor",
+  air_quality: "airQualitySensor",
   temperature: "temperatureSensor",
   humidity: "humiditySensor",
   illuminance: "lightSensor",

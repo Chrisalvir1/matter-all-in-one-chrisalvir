@@ -1,3 +1,5 @@
+import { toCelsius, fromCelsius } from "../utils/measurements.js";
+import { sensorConverter } from "../converters/sensor.converter.js";
 import { climateConverter } from "../converters/climate.converter.js";
 /**
  * HAP Generic Accessory — expone cualquier entidad de Home Assistant como un
@@ -221,6 +223,7 @@ export class HapGenericAccessory {
     this.addServiceForProfile(record.hapProfile);
     this.bindPrimaryHomeAssistantEntity();
     this.addDiscoveredSensorServices();
+    this.bindAdditionalHomeAssistantProfiles();
     this.accessory.on("characteristic-warning", (warning) => {
       this.platform.log?.warn?.(
         `[HAPCommandTrace][${this.entityId}] warning=${warning.type} characteristic=${warning.characteristic.displayName}`,
@@ -321,14 +324,21 @@ export class HapGenericAccessory {
     suffix: string,
     read: (state: any) => unknown,
   ): void {
+    const primary = this.accessory.getService(serviceType);
     const service = this.accessory.addService(
       serviceType,
       `${this.record.name} ${suffix}`,
       `sensor:${entityId}`,
     );
-    service
-      .getCharacteristic(characteristic)
-      .onGet(() => read(this.getHomeAssistantState(entityId)) as any);
+    // Keep the previously allocated service/subtype for existing pairings while
+    // presenting the now-functional primary sensor instead of two tiles.
+    if (primary && entityId === this.entityId) service.setHiddenService(true);
+    service.getCharacteristic(characteristic).onGet(() => {
+      const state = this.getHomeAssistantState(entityId);
+      if (!state || ["unknown", "unavailable"].includes(state.state))
+        throw -70402;
+      return read(state) as any;
+    });
     this.discoveredSensorBindings.set(entityId, {
       service,
       characteristic,
@@ -351,7 +361,7 @@ export class HapGenericAccessory {
       serviceType: any,
       characteristic: any,
       suffix: string,
-      minimum = 0,
+      minimum = deviceClass === "temperature" ? -273.15 : 0,
     ) => {
       const member = find("sensor", deviceClass);
       if (!member) return;
@@ -361,8 +371,13 @@ export class HapGenericAccessory {
         characteristic,
         suffix,
         (state) => {
-          const value = Number(state?.state);
-          return Number.isFinite(value) ? Math.max(minimum, value) : minimum;
+          const raw = Number(state?.state);
+          const value =
+            deviceClass === "temperature"
+              ? toCelsius(raw, state?.attributes?.unit_of_measurement)
+              : raw;
+          if (!Number.isFinite(value)) throw -70402;
+          return Math.max(minimum, value);
         },
       );
     };
@@ -644,6 +659,263 @@ export class HapGenericAccessory {
     if (outcome.failed) throw -70402;
   }
 
+  /** Attach the existing HAP service identities to HA without republishing. */
+  private bindAdditionalHomeAssistantProfiles(): void {
+    const S = Service as any,
+      C = Characteristic as any;
+    const bind = (
+      type: any,
+      characteristic: any,
+      write: (v: any) => Promise<void>,
+    ) => {
+      const service = this.accessory.getService(type);
+      service?.getCharacteristic(characteristic).onSet(write);
+    };
+    const call = (service: string, data?: Record<string, unknown>) => {
+      const domain = this.entityId.split(".")[0];
+      const targetService =
+        domain === "valve"
+          ? service === "turn_on"
+            ? "open_valve"
+            : service === "turn_off"
+              ? "close_valve"
+              : service
+          : service;
+      return this.callHaWithResponseBudget(domain, targetService, data);
+    };
+    switch (this.record.hapProfile) {
+      case "lock_hap":
+        bind(S.LockMechanism, C.LockTargetState, (v) =>
+          call(v === 1 ? "lock" : "unlock"),
+        );
+        break;
+      case "window_covering_hap":
+      case "door_hap":
+      case "window_hap": {
+        const type =
+          this.record.hapProfile === "door_hap"
+            ? S.Door
+            : this.record.hapProfile === "window_hap"
+              ? S.Window
+              : S.WindowCovering;
+        bind(type, C.TargetPosition, (v) =>
+          call("set_cover_position", { position: Number(v) }),
+        );
+        bind(type, C.HoldPosition, async (v) => {
+          if (v) await call("stop_cover");
+        });
+        break;
+      }
+      case "garage_door":
+        bind(S.GarageDoorOpener, C.TargetDoorState, (v) =>
+          call(v === 0 ? "open_cover" : "close_cover"),
+        );
+        break;
+      case "air_purifier":
+        bind(S.AirPurifier, C.Active, (v) => call(v ? "turn_on" : "turn_off"));
+        break;
+      case "speaker_hap":
+      case "television_speaker": {
+        const type =
+          this.record.hapProfile === "speaker_hap"
+            ? S.Speaker
+            : S.TelevisionSpeaker;
+        bind(type, C.Mute, (v) =>
+          call("volume_mute", { is_volume_muted: Boolean(v) }),
+        );
+        bind(type, C.Volume, (v) =>
+          call("volume_set", { volume_level: Number(v) / 100 }),
+        );
+        break;
+      }
+      case "irrigation_system":
+        bind(S.IrrigationSystem, C.Active, (v) =>
+          call(v ? "turn_on" : "turn_off"),
+        );
+        break;
+      case "dehumidifier": {
+        const svc = this.accessory.getService(S.HumidifierDehumidifier);
+        svc
+          ?.getCharacteristic(C.RelativeHumidityDehumidifierThreshold)
+          .onGet(
+            () =>
+              Number(
+                this.getHomeAssistantState(this.entityId)?.attributes?.humidity,
+              ) || 0,
+          )
+          .onSet((v) => call("set_humidity", { humidity: Number(v) }));
+        break;
+      }
+    }
+    this.syncAdditionalHomeAssistantState(
+      this.getHomeAssistantState(this.entityId),
+    );
+  }
+
+  private syncAdditionalHomeAssistantState(state: any): void {
+    if (!state || ["unknown", "unavailable"].includes(state.state)) return;
+    const S = Service as any,
+      C = Characteristic as any;
+    const set = (type: any, characteristic: any, value: any) =>
+      this.accessory
+        .getService(type)
+        ?.updateCharacteristic(characteristic, value);
+    const on = state.state === "on",
+      n = Number(state.state),
+      attrs = state.attributes ?? {};
+    switch (this.record.hapProfile) {
+      case "lock_hap":
+        set(
+          S.LockMechanism,
+          C.LockCurrentState,
+          state.state === "locked"
+            ? 1
+            : state.state === "unlocked" || state.state === "open"
+              ? 0
+              : state.state === "jammed"
+                ? 2
+                : 3,
+        );
+        if (state.state === "locked" || state.state === "unlocked")
+          set(
+            S.LockMechanism,
+            C.LockTargetState,
+            state.state === "locked" ? 1 : 0,
+          );
+        break;
+      case "window_covering_hap":
+      case "door_hap":
+      case "window_hap": {
+        const type =
+          this.record.hapProfile === "door_hap"
+            ? S.Door
+            : this.record.hapProfile === "window_hap"
+              ? S.Window
+              : S.WindowCovering;
+        const pos = Number(attrs.current_position);
+        if (Number.isFinite(pos)) {
+          set(type, C.CurrentPosition, pos);
+          if (!["opening", "closing"].includes(state.state))
+            set(type, C.TargetPosition, pos);
+        }
+        set(
+          type,
+          C.PositionState,
+          state.state === "opening" ? 1 : state.state === "closing" ? 0 : 2,
+        );
+        break;
+      }
+      case "garage_door":
+        set(
+          S.GarageDoorOpener,
+          C.CurrentDoorState,
+          ({ open: 0, closed: 1, opening: 2, closing: 3 } as any)[
+            state.state
+          ] ?? 4,
+        );
+        if (["open", "closed"].includes(state.state))
+          set(
+            S.GarageDoorOpener,
+            C.TargetDoorState,
+            state.state === "open" ? 0 : 1,
+          );
+        set(
+          S.GarageDoorOpener,
+          C.ObstructionDetected,
+          Boolean(attrs.obstruction_detected),
+        );
+        break;
+      case "air_purifier":
+        set(S.AirPurifier, C.Active, on ? 1 : 0);
+        set(S.AirPurifier, C.CurrentAirPurifierState, on ? 2 : 0);
+        break;
+      case "irrigation_system":
+        set(
+          S.IrrigationSystem,
+          C.Active,
+          on || ["open", "opening"].includes(state.state) ? 1 : 0,
+        );
+        set(S.IrrigationSystem, C.InUse, on || state.state === "open" ? 1 : 0);
+        break;
+      case "speaker_hap":
+      case "television_speaker": {
+        const type =
+          this.record.hapProfile === "speaker_hap"
+            ? S.Speaker
+            : S.TelevisionSpeaker;
+        set(type, C.Mute, Boolean(attrs.is_volume_muted));
+        if (Number.isFinite(attrs.volume_level))
+          set(type, C.Volume, Math.round(attrs.volume_level * 100));
+        break;
+      }
+      case "temperature_sensor_hap":
+        if (Number.isFinite(n))
+          set(
+            S.TemperatureSensor,
+            C.CurrentTemperature,
+            toCelsius(n, attrs.unit_of_measurement),
+          );
+        break;
+      case "humidity_sensor_hap":
+        if (Number.isFinite(n))
+          set(S.HumiditySensor, C.CurrentRelativeHumidity, n);
+        break;
+      case "light_sensor_hap":
+        if (Number.isFinite(n))
+          set(S.LightSensor, C.CurrentAmbientLightLevel, Math.max(0.0001, n));
+        break;
+      case "motion_sensor_hap":
+        set(S.MotionSensor, C.MotionDetected, on);
+        break;
+      case "contact_sensor_hap":
+        set(S.ContactSensor, C.ContactSensorState, on ? 1 : 0);
+        break;
+      case "occupancy_sensor_hap":
+        set(S.OccupancySensor, C.OccupancyDetected, on ? 1 : 0);
+        break;
+      case "smoke_sensor_hap":
+        set(S.SmokeSensor, C.SmokeDetected, on ? 1 : 0);
+        break;
+      case "carbon_monoxide_sensor_hap":
+        set(S.CarbonMonoxideSensor, C.CarbonMonoxideDetected, on ? 1 : 0);
+        break;
+      case "carbon_dioxide_sensor_hap":
+        if (Number.isFinite(n)) {
+          set(S.CarbonDioxideSensor, C.CarbonDioxideLevel, n);
+          set(S.CarbonDioxideSensor, C.CarbonDioxideDetected, n > 1000 ? 1 : 0);
+        }
+        break;
+      case "leak_sensor_hap":
+        set(S.LeakSensor, C.LeakDetected, on ? 1 : 0);
+        break;
+      case "air_quality_sensor_hap":
+        set(
+          S.AirQualitySensor,
+          C.AirQuality,
+          sensorConverter.toAirQuality(state),
+        );
+        break;
+      case "battery_hap":
+        if (Number.isFinite(n)) {
+          set(S.Battery, C.BatteryLevel, Math.max(0, Math.min(100, n)));
+          set(S.Battery, C.StatusLowBattery, n <= 20 ? 1 : 0);
+        }
+        break;
+      case "doorbell":
+        if (on) set(S.Doorbell, C.ProgrammableSwitchEvent, 0);
+        break;
+    }
+    if (
+      this.record.hapProfile === "dehumidifier" &&
+      Number.isFinite(attrs.humidity)
+    )
+      set(
+        S.HumidifierDehumidifier,
+        C.RelativeHumidityDehumidifierThreshold,
+        attrs.humidity,
+      );
+  }
+
   private bindPrimaryHomeAssistantEntity(): void {
     const [domain] = this.entityId.split(".");
     const state = () => this.platform.entities.get(this.entityId)?.state;
@@ -681,6 +953,40 @@ export class HapGenericAccessory {
                 brightness_pct: Number(value),
               }),
             );
+          const attrs = state()?.attributes ?? {};
+          if (
+            attrs.supported_color_modes?.includes("color_temp") ||
+            attrs.color_temp_kelvin !== undefined
+          ) {
+            const temperature = service.getCharacteristic(
+              Characteristic.ColorTemperature,
+            );
+            const minimum = Math.ceil(
+              1_000_000 / Number(attrs.max_color_temp_kelvin ?? 6500),
+            );
+            const maximum = Math.floor(
+              1_000_000 / Number(attrs.min_color_temp_kelvin ?? 2000),
+            );
+            temperature.setProps({
+              minValue: minimum,
+              maxValue: maximum,
+              minStep: 1,
+            });
+            temperature
+              .onGet(() => {
+                const a = state()?.attributes ?? {};
+                const mireds = a.color_temp_kelvin
+                  ? Math.round(1_000_000 / a.color_temp_kelvin)
+                  : a.color_temp;
+                if (!Number.isFinite(mireds)) throw -70402;
+                return mireds;
+              })
+              .onSet(async (value) =>
+                this.callHaWithResponseBudget("light", "turn_on", {
+                  color_temp_kelvin: Math.round(1_000_000 / Number(value)),
+                }),
+              );
+          }
           const color = () => state()?.attributes?.hs_color;
           if (Array.isArray(color())) {
             service
@@ -689,22 +995,20 @@ export class HapGenericAccessory {
             service
               .getCharacteristic(Characteristic.Saturation)
               .onGet(() => Number(color()?.[1]) || 0);
-            const setColor = async () =>
-              this.callHaWithResponseBudget("light", "turn_on", {
-                hs_color: [
-                  Number(
-                    service.getCharacteristic(Characteristic.Hue).value || 0,
-                  ),
-                  Number(
-                    service.getCharacteristic(Characteristic.Saturation)
-                      .value || 0,
-                  ),
-                ],
+            let lastHs = [Number(color()?.[0]) || 0, Number(color()?.[1]) || 0];
+            const writeHs = async (index: number, value: any) => {
+              lastHs = [...lastHs];
+              lastHs[index] = Number(value);
+              await this.callHaWithResponseBudget("light", "turn_on", {
+                hs_color: [...lastHs],
               });
-            service.getCharacteristic(Characteristic.Hue).onSet(setColor);
+            };
+            service
+              .getCharacteristic(Characteristic.Hue)
+              .onSet((value) => writeHs(0, value));
             service
               .getCharacteristic(Characteristic.Saturation)
-              .onSet(setColor);
+              .onSet((value) => writeHs(1, value));
           }
         }
         break;
@@ -857,7 +1161,9 @@ export class HapGenericAccessory {
           .getCharacteristic(Characteristic.CurrentTemperature)
           .onGet(() => {
             const current = Number(state()?.attributes?.current_temperature);
-            return Number.isFinite(current) ? current : 21;
+            return Number.isFinite(current)
+              ? toCelsius(current, state()?.attributes?.temperature_unit)
+              : 21;
           });
 
         service
@@ -871,7 +1177,9 @@ export class HapGenericAccessory {
                 : (current?.attributes?.temperature ?? rangeTarget),
             );
 
-            return Number.isFinite(temp) ? temp : 22;
+            return Number.isFinite(temp)
+              ? toCelsius(temp, state()?.attributes?.temperature_unit)
+              : 22;
           })
           .onSet(async (value: any) => {
             await this.callHaWithResponseBudget(
@@ -896,7 +1204,9 @@ export class HapGenericAccessory {
                 : (current?.attributes?.temperature ?? rangeTarget),
             );
 
-            return Number.isFinite(temp) ? temp : 20;
+            return Number.isFinite(temp)
+              ? toCelsius(temp, state()?.attributes?.temperature_unit)
+              : 20;
           })
           .onSet(async (value: any) => {
             await this.callHaWithResponseBudget(
@@ -957,17 +1267,24 @@ export class HapGenericAccessory {
           .getCharacteristic(Characteristic.CurrentTemperature)
           .onGet(() => {
             const current = Number(state()?.attributes?.current_temperature);
-            return Number.isFinite(current) ? current : 21;
+            return Number.isFinite(current)
+              ? toCelsius(current, state()?.attributes?.temperature_unit)
+              : 21;
           });
         service
           .getCharacteristic(Characteristic.TargetTemperature)
           .onGet(() => {
             const temp = Number(state()?.attributes?.temperature);
-            return Number.isFinite(temp) ? temp : 22;
+            return Number.isFinite(temp)
+              ? toCelsius(temp, state()?.attributes?.temperature_unit)
+              : 22;
           })
           .onSet(async (value: any) => {
             await this.callHaWithResponseBudget("climate", "set_temperature", {
-              temperature: Number(value),
+              temperature: fromCelsius(
+                Number(value),
+                state()?.attributes?.temperature_unit,
+              ),
             });
           });
         service
@@ -985,7 +1302,11 @@ export class HapGenericAccessory {
             else if (value === 2) hvac_mode = "cool";
             else if (value === 3) hvac_mode = "auto";
             await this.callHaWithResponseBudget("climate", "set_hvac_mode", {
-              hvac_mode,
+              hvac_mode: climateConverter.supportedMode(
+                hvac_mode,
+                state()?.attributes?.hvac_modes,
+                state()?.state,
+              ),
             });
           });
         service
@@ -1117,16 +1438,15 @@ export class HapGenericAccessory {
           .onGet(() => {
             const current = this.getCurrentHumidity();
             if (current !== undefined) return current;
-            const target = Number(
-              this.getHomeAssistantState(this.entityId)?.attributes?.humidity,
-            );
-            return Number.isFinite(target) && target >= 0 && target <= 100
-              ? target
-              : 0;
+            throw -70402; // A target is not a measured humidity value.
           });
 
         svc
-          .getCharacteristic(Characteristic.RelativeHumidityHumidifierThreshold)
+          .getCharacteristic(
+            profile === "dehumidifier"
+              ? Characteristic.RelativeHumidityDehumidifierThreshold
+              : Characteristic.RelativeHumidityHumidifierThreshold,
+          )
           .onGet(() => {
             const value = Number(
               this.platform.entities.get(this.entityId)?.state?.attributes
@@ -1139,7 +1459,9 @@ export class HapGenericAccessory {
           .onSet(async (value) => {
             const [domain] = this.entityId.split(".");
             svc.updateCharacteristic(
-              Characteristic.RelativeHumidityHumidifierThreshold,
+              profile === "dehumidifier"
+                ? Characteristic.RelativeHumidityDehumidifierThreshold
+                : Characteristic.RelativeHumidityHumidifierThreshold,
               Number(value),
             );
             await this.callHaWithResponseBudget(domain, "set_humidity", {
@@ -2062,7 +2384,7 @@ export class HapGenericAccessory {
           }
         }
         const binding = this.discoveredSensorBindings.get(sourceEntityId);
-        if (binding) {
+        if (binding && !["unknown", "unavailable"].includes(state?.state)) {
           binding.service.updateCharacteristic(
             binding.characteristic,
             binding.read(state),
@@ -2073,6 +2395,7 @@ export class HapGenericAccessory {
       this.setReachability(
         state?.state !== "unavailable" && state?.state !== "unknown",
       );
+      if (!state || ["unknown", "unavailable"].includes(state.state)) return;
       if (this.record.hapProfile === "security_system") {
         this.syncAlarmState(state);
         return;
@@ -2081,6 +2404,7 @@ export class HapGenericAccessory {
         this.syncValveState(state);
         return;
       }
+      this.syncAdditionalHomeAssistantState(state);
       const on = state?.state === "on";
       switch (this.record.hapProfile) {
         case "switch_hap":
@@ -2100,6 +2424,14 @@ export class HapGenericAccessory {
             light?.updateCharacteristic(
               Characteristic.Brightness,
               Math.round((Number(state.attributes.brightness) * 100) / 255),
+            );
+          if (
+            state?.attributes?.color_temp_kelvin &&
+            light?.testCharacteristic(Characteristic.ColorTemperature)
+          )
+            light.updateCharacteristic(
+              Characteristic.ColorTemperature,
+              Math.round(1_000_000 / state.attributes.color_temp_kelvin),
             );
           if (Array.isArray(state?.attributes?.hs_color)) {
             light?.updateCharacteristic(
@@ -2216,7 +2548,10 @@ export class HapGenericAccessory {
             targetState,
           );
 
-          const currentTemp = Number(state?.attributes?.current_temperature);
+          const currentTemp = toCelsius(
+            Number(state?.attributes?.current_temperature),
+            state?.attributes?.temperature_unit,
+          );
           if (Number.isFinite(currentTemp)) {
             svc.updateCharacteristic(
               Characteristic.CurrentTemperature,
@@ -2230,23 +2565,29 @@ export class HapGenericAccessory {
           if (Number.isFinite(targetTemp)) {
             svc.updateCharacteristic(
               Characteristic.CoolingThresholdTemperature,
-              targetTemp,
+              toCelsius(targetTemp, state?.attributes?.temperature_unit),
             );
             svc.updateCharacteristic(
               Characteristic.HeatingThresholdTemperature,
-              targetTemp,
+              toCelsius(targetTemp, state?.attributes?.temperature_unit),
             );
           } else {
             if (Number.isFinite(Number(state?.attributes?.target_temp_low))) {
               svc.updateCharacteristic(
                 Characteristic.HeatingThresholdTemperature,
-                Number(state.attributes.target_temp_low),
+                toCelsius(
+                  Number(state.attributes.target_temp_low),
+                  state.attributes.temperature_unit,
+                ),
               );
             }
             if (Number.isFinite(Number(state?.attributes?.target_temp_high))) {
               svc.updateCharacteristic(
                 Characteristic.CoolingThresholdTemperature,
-                Number(state.attributes.target_temp_high),
+                toCelsius(
+                  Number(state.attributes.target_temp_high),
+                  state.attributes.temperature_unit,
+                ),
               );
             }
           }
@@ -2294,7 +2635,10 @@ export class HapGenericAccessory {
             currentHeatingCooling,
           );
 
-          const currentTemp = Number(state?.attributes?.current_temperature);
+          const currentTemp = toCelsius(
+            Number(state?.attributes?.current_temperature),
+            state?.attributes?.temperature_unit,
+          );
           if (Number.isFinite(currentTemp)) {
             svc.updateCharacteristic(
               Characteristic.CurrentTemperature,
@@ -2305,7 +2649,7 @@ export class HapGenericAccessory {
           if (Number.isFinite(targetTemp)) {
             svc.updateCharacteristic(
               Characteristic.TargetTemperature,
-              targetTemp,
+              toCelsius(targetTemp, state?.attributes?.temperature_unit),
             );
           }
           break;
@@ -2333,7 +2677,9 @@ export class HapGenericAccessory {
           const targetHum = Number(state?.attributes?.humidity);
           if (!isNaN(targetHum) && targetHum >= 0 && targetHum <= 100) {
             svc.updateCharacteristic(
-              Characteristic.RelativeHumidityHumidifierThreshold,
+              this.record.hapProfile === "dehumidifier"
+                ? Characteristic.RelativeHumidityDehumidifierThreshold
+                : Characteristic.RelativeHumidityHumidifierThreshold,
               targetHum,
             );
           }

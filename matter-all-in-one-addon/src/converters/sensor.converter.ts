@@ -1,3 +1,4 @@
+import { toCelsius } from "../utils/measurements.js";
 /**
  * Converter utility for sensor domain.
  */
@@ -10,7 +11,9 @@ export const sensorConverter = {
   toTemperature(state: HassState): number | null {
     const val = parseFloat(state.state);
     if (isNaN(val)) return null;
-    return Math.round(val * 100); // Matter Temp is in 0.01 C
+    return Math.round(
+      toCelsius(val, state.attributes.unit_of_measurement) * 100,
+    ); // Matter Temp is in 0.01 C
   },
 
   /**
@@ -80,13 +83,8 @@ export const sensorConverter = {
   toAirQuality(state: HassState): number | null {
     const s = state.state.toLowerCase();
     if (s === "good" || s === "buena") return 1;
-    if (
-      s === "fair" ||
-      s === "aceptable" ||
-      s === "moderate" ||
-      s === "moderada"
-    )
-      return 2;
+    if (s === "fair" || s === "aceptable") return 2;
+    if (s === "moderate" || s === "moderada") return 3;
     if (s === "poor" || s === "mala") return 4;
     if (s === "very_poor" || s === "muy mala") return 5;
     if (s === "hazardous" || s === "peligrosa") return 6;
@@ -100,7 +98,7 @@ export const sensorConverter = {
       if (num <= 300) return 5;
       return 6;
     }
-    return 1;
+    return 0;
   },
 
   /**

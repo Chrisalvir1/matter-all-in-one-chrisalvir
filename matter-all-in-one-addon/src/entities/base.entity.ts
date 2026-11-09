@@ -1,9 +1,11 @@
+import { sensorMeasurement } from "../utils/measurements.js";
 /**
  * Base entity class for exposing Home Assistant entities to Matter.
  */
 import { DeviceTypeDefinition, MatterbridgeEndpoint } from "matterbridge";
 import {
   OnOff,
+  SmokeCoAlarm,
   LevelControl,
   ColorControl,
   FanControl,
@@ -378,7 +380,11 @@ export class BaseEntity {
           softwareVersion: endpoint.softwareVersion,
           softwareVersionString: endpoint.softwareVersionString,
         })
-        .catch(() => undefined);
+        .catch((error: unknown) =>
+          this.platform.log.warn(
+            `Matter firmware metadata update failed: ${String(error)}`,
+          ),
+        );
     }
     const serverNode = (endpoint as any).serverNode;
     if (serverNode && typeof serverNode.setStateOf === "function") {
@@ -387,7 +393,11 @@ export class BaseEntity {
           softwareVersion: endpoint.softwareVersion,
           softwareVersionString: endpoint.softwareVersionString,
         })
-        .catch(() => undefined);
+        .catch((error: unknown) =>
+          this.platform.log.warn(
+            `Matter firmware metadata update failed: ${String(error)}`,
+          ),
+        );
     }
     if (typeof (endpoint as any).addCommandHandler === "function") {
       this.registerCommandHandlers(endpoint);
@@ -1925,6 +1935,21 @@ export class BaseEntity {
           );
         }
       } else if (domain === "binary_sensor") {
+        const alarmClass = newState.attributes.device_class ?? "";
+        if (
+          ["smoke", "carbon_monoxide"].includes(alarmClass) &&
+          this.endpoint.hasClusterServer(SmokeCoAlarm)
+        ) {
+          const active = newState.state === "on";
+          await updateFn(
+            this.endpoint,
+            0x005c as ClusterId,
+            alarmClass === "smoke" ? "smokeState" : "coState",
+            active ? 2 : 0,
+            this.platform.log,
+          );
+          return;
+        }
         const active = ["on", "open", "detected", "true"].includes(
           newState.state.toLowerCase(),
         );
@@ -1948,7 +1973,7 @@ export class BaseEntity {
               this.endpoint,
               BooleanState.id,
               "stateValue",
-              isActive,
+              this.deviceType.code === 0x0015 ? !isActive : isActive,
               this.platform.log,
             );
           }
@@ -1961,7 +1986,12 @@ export class BaseEntity {
           }
           await updateMatter(true);
         } else {
-          if (isInitialSync) {
+          if (
+            isInitialSync ||
+            !["motion", "occupancy", "presence"].includes(
+              newState.attributes.device_class ?? "",
+            )
+          ) {
             await updateMatter(false);
           } else {
             if (!this.binarySensorLatchTimeout) {
@@ -1973,6 +2003,29 @@ export class BaseEntity {
           }
         }
       } else if (domain === "sensor") {
+        if (newState.attributes.device_class === "battery") {
+          const value = Number(newState.state);
+          if (Number.isFinite(value))
+            await updateFn(
+              this.endpoint,
+              0x002f as ClusterId,
+              "batPercentRemaining",
+              Math.round(Math.max(0, Math.min(100, value)) * 2),
+              this.platform.log,
+            );
+          return;
+        }
+        const measurement = sensorMeasurement(newState);
+        if (measurement) {
+          await updateFn(
+            this.endpoint,
+            measurement.cluster as ClusterId,
+            "measuredValue",
+            measurement.value,
+            this.platform.log,
+          );
+          return;
+        }
         const numeric = parseFloat(newState.state);
         if (!isNaN(numeric) && this.endpoint) {
           if (

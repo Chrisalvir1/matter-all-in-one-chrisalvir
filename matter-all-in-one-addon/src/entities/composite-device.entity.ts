@@ -1,3 +1,4 @@
+import { sensorMeasurement } from "../utils/measurements.js";
 /**
  * One Matter ServerNode containing multiple endpoints that belong to the same
  * Home Assistant device registry entry.  The root endpoint is the primary
@@ -685,7 +686,11 @@ export class CompositeDeviceEntity {
           softwareVersion: endpoint.softwareVersion,
           softwareVersionString: endpoint.softwareVersionString,
         })
-        .catch(() => undefined);
+        .catch((error: unknown) =>
+          this.platform.log.warn(
+            `Matter firmware metadata update failed: ${String(error)}`,
+          ),
+        );
     }
     const serverNode = (endpoint as any).serverNode;
     if (serverNode && typeof serverNode.setStateOf === "function") {
@@ -694,7 +699,11 @@ export class CompositeDeviceEntity {
           softwareVersion: endpoint.softwareVersion,
           softwareVersionString: endpoint.softwareVersionString,
         })
-        .catch(() => undefined);
+        .catch((error: unknown) =>
+          this.platform.log.warn(
+            `Matter firmware metadata update failed: ${String(error)}`,
+          ),
+        );
     }
 
     this.endpoints.clear();
@@ -721,7 +730,11 @@ export class CompositeDeviceEntity {
             softwareVersion: memberEndpoint.softwareVersion,
             softwareVersionString: memberEndpoint.softwareVersionString,
           })
-          .catch(() => undefined);
+          .catch((error: unknown) =>
+            this.platform.log.warn(
+              `Matter firmware metadata update failed: ${String(error)}`,
+            ),
+          );
       }
       this.addCommandHandlers(memberEndpoint, member);
     }
@@ -1206,6 +1219,17 @@ export class CompositeDeviceEntity {
 
       const deviceClass = state.attributes.device_class;
       if (domain === "sensor") {
+        const measurement = sensorMeasurement(state);
+        if (measurement) {
+          await update(
+            endpoint,
+            measurement.cluster as any,
+            "measuredValue",
+            measurement.value,
+            this.platform.log,
+          );
+          return;
+        }
         const numeric = Number(state.state);
         if (!Number.isFinite(numeric)) return;
         if (deviceClass === "temperature") {
@@ -1232,7 +1256,11 @@ export class CompositeDeviceEntity {
         const active = ["on", "open", "detected", "true"].includes(
           state.state.toLowerCase(),
         );
-        if (deviceClass === "motion" || deviceClass === "occupancy") {
+        if (
+          deviceClass === "motion" ||
+          deviceClass === "occupancy" ||
+          deviceClass === "presence"
+        ) {
           await update(
             endpoint,
             OccupancySensing.id,
@@ -1245,7 +1273,7 @@ export class CompositeDeviceEntity {
             endpoint,
             BooleanState.id,
             "stateValue",
-            active,
+            endpoint.deviceType === 0x0015 ? !active : active,
             this.platform.log,
           );
         }
@@ -1293,10 +1321,18 @@ export class CompositeDeviceEntity {
       const deviceClass = member.state.attributes.device_class;
       if (deviceClass === "temperature") return [TemperatureMeasurement.id];
       if (deviceClass === "humidity") return [RelativeHumidityMeasurement.id];
+      if (deviceClass === "illuminance") return [0x0400 as ClusterId];
+      if (deviceClass === "pressure" || deviceClass === "atmospheric_pressure")
+        return [0x0403 as ClusterId];
+      if (deviceClass === "volume_flow_rate") return [0x0404 as ClusterId];
     }
     if (domain === "binary_sensor") {
       const deviceClass = member.state.attributes.device_class;
-      if (deviceClass === "motion" || deviceClass === "occupancy")
+      if (
+        deviceClass === "motion" ||
+        deviceClass === "occupancy" ||
+        deviceClass === "presence"
+      )
         return [OccupancySensing.id];
       return [BooleanState.id];
     }
@@ -1856,7 +1892,7 @@ export class CompositeDeviceEntity {
               } else {
                 const haBrightness = lightConverter.toHaBrightness(level);
                 this.setCommandLockout(entityId, "brightness", haBrightness);
-                this.callServiceDebounced(
+                await this.callServiceDebounced(
                   entityId,
                   "light",
                   "turn_on",

@@ -12,10 +12,10 @@ export const binarySensorConverter = {
   },
 
   /**
-   * Map to contact sensor state (true means open, false means closed).
+   * Matter contact sensor state: true is closed/contact, false is open.
    */
   toContactState(state: HassState): boolean {
-    return state.state === "on";
+    return state.state !== "on";
   },
 
   /**

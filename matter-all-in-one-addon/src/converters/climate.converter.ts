@@ -1,3 +1,4 @@
+import { toCelsius, fromCelsius } from "../utils/measurements.js";
 /**
  * Converter utility for climate (thermostat) domain.
  */
@@ -9,6 +10,7 @@ export const climateConverter = {
   ) {
     if (!Number.isFinite(value)) throw new Error("Invalid temperature");
     const attrs = state.attributes;
+    value = fromCelsius(value, attrs?.temperature_unit);
     if (state.state === "heat_cool" || attrs?.temperature == null) {
       const low = attrs?.target_temp_low;
       const high = attrs?.target_temp_high;
@@ -39,9 +41,14 @@ export const climateConverter = {
   /**
    * Convert Celsius temperature to Matter value (hundredths of a degree Celsius).
    */
-  toMatterTemperature(celsius: number | undefined | null): number | null {
+  toMatterTemperature(
+    celsius: number | undefined | null,
+    unit?: unknown,
+  ): number | null {
     if (celsius === undefined || celsius === null) return null;
-    return Math.round(celsius * 100);
+    return Number.isFinite(celsius)
+      ? Math.round(toCelsius(celsius, unit) * 100)
+      : null;
   },
 
   /**

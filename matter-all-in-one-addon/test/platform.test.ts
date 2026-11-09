@@ -856,11 +856,6 @@ describe("HomeAssistantPlatform", () => {
         attributes: { device_class: "connectivity" },
       },
       {
-        entity_id: "sensor.water_pressure",
-        state: "1013",
-        attributes: { device_class: "pressure" },
-      },
-      {
         entity_id: "sensor.energy_price",
         state: "0.25",
         attributes: { device_class: "monetary" },
@@ -877,6 +872,13 @@ describe("HomeAssistantPlatform", () => {
 
     for (const state of unsafeStates)
       expect(platform.entities.has(state.entity_id)).toBe(false);
+    const pressure = {
+      entity_id: "sensor.water_pressure",
+      state: "1013",
+      attributes: { device_class: "pressure", unit_of_measurement: "hPa" },
+    };
+    await (platform as any).registerHAEntity(pressure);
+    expect(platform.entities.has(pressure.entity_id)).toBe(true);
   });
 
   it("should update entities state when a HA event occurs", async (ctx) => {

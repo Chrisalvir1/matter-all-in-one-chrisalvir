@@ -2,6 +2,7 @@
 
 | Versión | Fecha | Cambios | Verificación |
 |---|---|---|---|
+| [2.3.17](RELEASE_NOTES_2.3.17.md) | 2026-11-09 | Correcciones Matter/HAP/MQTT para controles, estados, unidades y sensores en familias de accesorios | 88 suites/754 pruebas; 5 suites/44 pruebas afectadas tras ajustes finales; build correcto; Apple Casa/iOS 27 físico pendiente |
 | [2.3.16](RELEASE_NOTES_2.3.16.md) | 2026-11-08 | Matterbridge 3.11.2, QR y desvinculación, incidencias, snapshots Omni, climatización, MQTT e Ingress | 87 suites/728 pruebas y 2 de contrato con HA 2026.11.0; verificación física pendiente |
 | [2.3.15](RELEASE_NOTES_2.3.15.md) | 2026-11-05 | Soporte nativo de Aire Acondicionado HAP (HeaterCooler con velocidad y swing) y Matter (ClimateEntity); dependencias estables | 84 suites/716 pruebas y typechecks; build correcto |
 | [2.3.14](RELEASE_NOTES_2.3.14.md) | 2026-11-02 | Recupera el alta de accesorios con `CommandHandler` congelado en Matterbridge 3.11.1; conserva fabrics | 82 suites/708 pruebas locales y typechecks; despliegue HA/Casa pendiente |

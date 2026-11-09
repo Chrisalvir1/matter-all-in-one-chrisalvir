@@ -232,7 +232,14 @@ export class HomeKitCameraAccessory {
                   service,
                   this.linkedLightEntityId,
                 );
-              } catch {}
+              } catch (error) {
+                this.platform.log?.warn?.(
+                  `HomeKit camera accessory command failed: ${String(error)}`,
+                );
+                throw -70402;
+              }
+            } else {
+              throw -70402;
             }
           });
       } catch {}
@@ -268,7 +275,14 @@ export class HomeKitCameraAccessory {
                   service,
                   this.linkedSirenEntityId,
                 );
-              } catch {}
+              } catch (error) {
+                this.platform.log?.warn?.(
+                  `HomeKit camera accessory command failed: ${String(error)}`,
+                );
+                throw -70402;
+              }
+            } else {
+              throw -70402;
             }
           });
       } catch {}

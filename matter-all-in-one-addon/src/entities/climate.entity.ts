@@ -1,3 +1,4 @@
+import { toCelsius, fromCelsius } from "../utils/measurements.js";
 /**
  * climate.entity.ts
  *
@@ -50,14 +51,20 @@ export class ClimateEntity extends BaseEntity {
     const maxTemp = Number(this.state.attributes?.max_temp ?? 35);
 
     this.endpoint.createDefaultThermostatClusterServer(
-      currentTemp,
-      Number(this.state.attributes?.target_temp_low ?? targetTemp),
-      Number(this.state.attributes?.target_temp_high ?? targetTemp),
+      toCelsius(currentTemp, this.state.attributes?.temperature_unit),
+      toCelsius(
+        Number(this.state.attributes?.target_temp_low ?? targetTemp),
+        this.state.attributes?.temperature_unit,
+      ),
+      toCelsius(
+        Number(this.state.attributes?.target_temp_high ?? targetTemp),
+        this.state.attributes?.temperature_unit,
+      ),
       0, // minSetpointDeadBand
-      minTemp,
-      maxTemp,
-      minTemp,
-      maxTemp,
+      toCelsius(minTemp, this.state.attributes?.temperature_unit),
+      toCelsius(maxTemp, this.state.attributes?.temperature_unit),
+      toCelsius(minTemp, this.state.attributes?.temperature_unit),
+      toCelsius(maxTemp, this.state.attributes?.temperature_unit),
     );
     this.endpoint.createDefaultThermostatUserInterfaceConfigurationClusterServer();
 
@@ -161,7 +168,12 @@ export class ClimateEntity extends BaseEntity {
       "setpointRaiseLower",
       async ({ request }: any) => {
         this.assertOnline();
-        const amount = (Number(request?.amount) || 0) / 10;
+        const amountC = (Number(request?.amount) || 0) / 10;
+        const amount = String(
+          this.state.attributes?.temperature_unit ?? "",
+        ).includes("F")
+          ? (amountC * 9) / 5
+          : amountC;
         const attrs = this.state.attributes;
         const kind =
           request?.mode === 1 ||
@@ -185,7 +197,10 @@ export class ClimateEntity extends BaseEntity {
               : climateConverter.targetTemperature(
                   this.state,
                   kind,
-                  shifted(kind === "cool" ? high : low),
+                  toCelsius(
+                    shifted(kind === "cool" ? high : low),
+                    this.state.attributes?.temperature_unit,
+                  ),
                 );
           await this.callServiceTracked(domain, "set_temperature", target);
           return;
@@ -226,6 +241,7 @@ export class ClimateEntity extends BaseEntity {
     if (currentTemp !== undefined && currentTemp !== null) {
       const matterTemp = climateConverter.toMatterTemperature(
         Number(currentTemp),
+        state.attributes?.temperature_unit,
       );
       if (matterTemp !== null) {
         await safeUpdateAttribute(
@@ -243,6 +259,7 @@ export class ClimateEntity extends BaseEntity {
     if (targetTemp !== undefined && targetTemp !== null) {
       const matterTarget = climateConverter.toMatterTemperature(
         Number(targetTemp),
+        state.attributes?.temperature_unit,
       );
       if (matterTarget !== null) {
         await safeUpdateAttribute(
@@ -264,6 +281,7 @@ export class ClimateEntity extends BaseEntity {
       if (state.attributes?.target_temp_low !== undefined) {
         const low = climateConverter.toMatterTemperature(
           Number(state.attributes.target_temp_low),
+          state.attributes?.temperature_unit,
         );
         if (low !== null) {
           await safeUpdateAttribute(
@@ -278,6 +296,7 @@ export class ClimateEntity extends BaseEntity {
       if (state.attributes?.target_temp_high !== undefined) {
         const high = climateConverter.toMatterTemperature(
           Number(state.attributes.target_temp_high),
+          state.attributes?.temperature_unit,
         );
         if (high !== null) {
           await safeUpdateAttribute(

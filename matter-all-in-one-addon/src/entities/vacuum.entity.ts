@@ -24,6 +24,7 @@ import {
   safeUpdateAttribute,
 } from "../utils/matter-attributes.js";
 import {
+  getHaDeviceModel,
   MATTER_BRIDGE_VENDOR_ID,
   MATTER_BRIDGE_VENDOR_NAME,
 } from "../utils/matter-device-identity.js";
@@ -513,7 +514,11 @@ export class VacuumEntity extends BaseEntity {
     // These properties populate the standalone ServerNode Basic Information
     // cluster that Apple Home reads. Setting only the endpoint cluster below is
     // insufficient because Matterbridge creates the node before attaching it.
-    this.endpoint.productName = ROPVOCNIC_MODEL;
+    this.endpoint.productName = getHaDeviceModel(
+      this.platform,
+      this.entityId,
+      ROPVOCNIC_MODEL,
+    );
     this.applyMatterbridgeFirmware();
 
     safeSetAttribute(
@@ -527,7 +532,7 @@ export class VacuumEntity extends BaseEntity {
       this.endpoint as any,
       "basicInformation" as any,
       "productName",
-      ROPVOCNIC_MODEL,
+      this.endpoint.productName,
       this.platform.log,
     );
     safeSetAttribute(
@@ -541,7 +546,7 @@ export class VacuumEntity extends BaseEntity {
       this.endpoint as any,
       "basicInformation" as any,
       "softwareVersionString",
-      "Matterbridge bridge endpoint",
+      this.endpoint.softwareVersionString,
       this.platform.log,
     );
 

@@ -350,6 +350,13 @@ export class MqttClientManager {
 
           this.discoveredDevices.set(topic, entry);
 
+          for (const key of [
+            "brightness_state_topic",
+            "position_topic",
+            "percentage_state_topic",
+          ]) {
+            if (config[key]) this.client?.subscribe(config[key]);
+          }
           if (config.state_topic) {
             this.client?.subscribe(config.state_topic);
           }
@@ -399,6 +406,30 @@ export class MqttClientManager {
 
     this.client.on("error", (err) => {
       this.log.error(`[MQTT] Broker connection error: ${err.message || err}`);
+    });
+  }
+
+  /** Command delivery requires a broker acknowledgement; it is not a device state confirmation. */
+  public publishCommand(topic: string, message: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (!topic || !this.client?.connected) {
+        reject(new Error("MQTT broker unavailable or command topic missing"));
+        return;
+      }
+      const timer = setTimeout(
+        () => reject(new Error("MQTT command acknowledgement timed out")),
+        5000,
+      );
+      try {
+        this.client.publish(topic, message, { qos: 1 }, (error) => {
+          clearTimeout(timer);
+          if (error) reject(error);
+          else resolve();
+        });
+      } catch (error) {
+        clearTimeout(timer);
+        reject(error);
+      }
     });
   }
 

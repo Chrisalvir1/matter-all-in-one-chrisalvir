@@ -3507,6 +3507,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
     this.mqttManager.onStateChanged((topic, payload) => {
       for (const entity of this.mqttEntities.values()) {
+        entity.handleTopicState(topic, payload);
         if (
           entity.availabilityTopic === topic &&
           entity.availabilityTopic !== entity.stateTopic
@@ -4208,6 +4209,19 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         "moisture",
         "power",
         "energy",
+        "voltage",
+        "pressure",
+        "atmospheric_pressure",
+        "volume_flow_rate",
+        "carbon_dioxide",
+        "co2",
+        "pm1",
+        "pm25",
+        "pm10",
+        "volatile_organic_compounds",
+        "voc",
+        "aqi",
+        "air_quality",
       ].includes(deviceClass ?? "")
     )
       return;
@@ -4271,9 +4285,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     // Instantiation based on mapped device type
     if (
       domain === "cover" &&
-      ["garage_door", "gate", "blind", "shade", "curtain", "awning"].includes(
-        deviceClass ?? "",
-      )
+      [
+        MatterDeviceTypes.windowCovering.code,
+        MatterDeviceTypes.closure.code,
+      ].includes(deviceType.code)
     ) {
       entityInstance = new ClosureEntity(this, state, deviceType);
     } else if (domain === "lock") {
@@ -4286,7 +4301,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       domain === "sensor" &&
       (deviceClass === "monetary" ||
         deviceClass === "power" ||
-        deviceClass === "energy")
+        deviceClass === "energy" ||
+        deviceClass === "voltage")
     ) {
       entityInstance = new EnergyTariffEntity(this, state, deviceType);
     } else if (domain === "valve" || deviceType.name === "WaterValve") {
@@ -4304,6 +4320,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         "voc",
         "aqi",
         "air_quality",
+        "tvoc",
+        "ozone",
+        "radon",
       ].includes(deviceClass ?? "")
     ) {
       entityInstance = new AirQualityEntity(this, state, deviceType);
@@ -4315,6 +4334,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         deviceType.name === "RoboticVacuumCleaner")
     ) {
       entityInstance = new VacuumEntity(this, state, deviceType);
+    } else if (override === "Oven" || deviceType.name === "Oven") {
+      entityInstance = new OvenEntity(this, state, deviceType);
+    } else if (override === "Cooktop" || deviceType.name === "Cooktop") {
+      entityInstance = new CooktopEntity(this, state, deviceType);
     } else if (
       domain === "climate" ||
       deviceType.name === "Thermostat" ||
@@ -4332,10 +4355,6 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       entityInstance = new MediaPlayerEntity(this, state, deviceType);
     } else if (override === "PetFeeder" || domain === "button") {
       entityInstance = new PetFeederEntity(this, state, deviceType);
-    } else if (override === "Oven" || deviceType.name === "Oven") {
-      entityInstance = new OvenEntity(this, state, deviceType);
-    } else if (override === "Cooktop" || deviceType.name === "Cooktop") {
-      entityInstance = new CooktopEntity(this, state, deviceType);
     } else {
       // General base fallback or standard converters will wrap this
       entityInstance = new BaseEntity(this, state, deviceType);
@@ -5895,7 +5914,11 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       return { success: false, error: "Device not found in discovery." };
     const [domain] = entityId.split(".");
     if (
-      !getExportProfile(domain, profileId) ||
+      !getExportProfile(
+        domain,
+        profileId,
+        entity.state.attributes?.device_class,
+      ) ||
       !(MatterDeviceTypes as any)[profileId]
     ) {
       return {
