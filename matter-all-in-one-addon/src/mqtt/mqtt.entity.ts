@@ -267,42 +267,8 @@ export class MqttEntity {
           : MatterbridgeOnOffServer.with(),
       );
 
-      // Matter Command Handlers -> MQTT Publish
-      this.bindCommand("on", async () => {
-        this.assertAvailable();
-        if (!this.commandTopic)
-          throw new Error("MQTT device has no command topic");
-        if (this.commandTopic) {
-          const payload =
-            this.config.payload_on !== undefined
-              ? String(this.config.payload_on)
-              : "ON";
-          await this.mqttManager.publishCommand(
-            this.commandTopic,
-            this.domain === "light" && this.config.schema === "json"
-              ? JSON.stringify({ state: payload })
-              : String(payload),
-          );
-        }
-      });
-
-      this.bindCommand("off", async () => {
-        this.assertAvailable();
-        if (!this.commandTopic)
-          throw new Error("MQTT device has no command topic");
-        if (this.commandTopic) {
-          const payload =
-            this.config.payload_off !== undefined
-              ? String(this.config.payload_off)
-              : "OFF";
-          await this.mqttManager.publishCommand(
-            this.commandTopic,
-            this.domain === "light" && this.config.schema === "json"
-              ? JSON.stringify({ state: payload })
-              : String(payload),
-          );
-        }
-      });
+      this.bindCommand("on", () => this.publishPowerCommand(true));
+      this.bindCommand("off", () => this.publishPowerCommand(false));
 
       if (
         (this.config.brightness_command_topic ||
@@ -443,6 +409,57 @@ export class MqttEntity {
     this.endpoint.addRequiredClusterServers();
 
     return this.endpoint;
+  }
+
+  private async publishPowerCommand(isOn: boolean): Promise<void> {
+    this.assertAvailable();
+    if (!this.commandTopic) throw new Error("MQTT device has no command topic");
+    const payload = String(
+      isOn
+        ? (this.config.payload_on ?? "ON")
+        : (this.config.payload_off ?? "OFF"),
+    );
+    await this.mqttManager.publishCommand(
+      this.commandTopic,
+      this.domain === "light" && this.config.schema === "json"
+        ? JSON.stringify({ state: payload })
+        : payload,
+    );
+    this.platform.log.debug(
+      `[MQTT] ${this.entityId} broker acknowledged power ${isOn ? "on" : "off"}`,
+    );
+  }
+
+  private readPowerState(
+    raw: string,
+    parsed: Record<string, unknown> | null,
+  ): boolean | undefined {
+    const template =
+      this.config.state_value_template ?? this.config.value_template;
+    const property =
+      typeof template === "string"
+        ? template.match(/value_json\.([a-zA-Z0-9_]+)/)?.[1]
+        : undefined;
+    const value = parsed ? parsed[property ?? "state"] : raw;
+    if (
+      typeof value !== "string" &&
+      typeof value !== "number" &&
+      typeof value !== "boolean"
+    )
+      return;
+    const token = String(value).trim().toUpperCase();
+    const on = String(this.config.state_on ?? this.config.payload_on ?? "ON")
+      .trim()
+      .toUpperCase();
+    const off = String(
+      this.config.state_off ?? this.config.payload_off ?? "OFF",
+    )
+      .trim()
+      .toUpperCase();
+    if (token === on) return true;
+    if (token === off) return false;
+    if (["ON", "TRUE", "1"].includes(token)) return true;
+    if (["OFF", "FALSE", "0"].includes(token)) return false;
   }
 
   private assertAvailable(): void {
@@ -615,6 +632,7 @@ export class MqttEntity {
         : payload !== null && payload !== undefined
           ? String(payload)
           : "";
+    const previousState = this.currentState;
     this.currentState = rawPayload;
 
     try {
@@ -652,60 +670,29 @@ export class MqttEntity {
         this.domain === "light" ||
         this.domain === "fan"
       ) {
-        let isOn = false;
-        if (parsed) {
-          const propMatch = this.config.value_template?.match(
-            /value_json\.([a-zA-Z0-9_]+)/,
-          );
-          const propVal = propMatch ? parsed[propMatch[1]] : undefined;
-          if (typeof propVal === "boolean") {
-            isOn = propVal;
-          } else if (
-            typeof propVal === "string" ||
-            typeof propVal === "number"
-          ) {
-            const normVal = String(propVal).toUpperCase();
-            const normOn = String(this.config.payload_on ?? "ON").toUpperCase();
-            isOn =
-              normVal === normOn ||
-              normVal === "1" ||
-              normVal === "TRUE" ||
-              normVal === "ON";
-          } else if (typeof parsed.state === "boolean") {
-            isOn = parsed.state;
-          } else if (
-            typeof parsed.state === "string" ||
-            typeof parsed.state === "number"
-          ) {
-            const normState = String(parsed.state).toUpperCase();
-            const normOn = String(this.config.payload_on ?? "ON").toUpperCase();
-            isOn =
-              normState === normOn ||
-              normState === "1" ||
-              normState === "TRUE" ||
-              normState === "ON";
-          }
-        } else {
-          const normPayload = String(payload).toUpperCase();
-          const normOn = String(this.config.payload_on ?? "ON").toUpperCase();
-          isOn =
-            normPayload === normOn ||
-            normPayload === "1" ||
-            normPayload === "TRUE" ||
-            normPayload === "ON";
-        }
-        this.currentState = isOn
-          ? (this.config.payload_on ?? "ON")
-          : (this.config.payload_off ?? "OFF");
+        const isOn = this.readPowerState(rawPayload, parsed);
+        this.currentState =
+          isOn === undefined
+            ? previousState
+            : String(
+                isOn
+                  ? (this.config.payload_on ?? "ON")
+                  : (this.config.payload_off ?? "OFF"),
+              );
 
         if (this.endpoint) {
-          safeSetAttribute(
-            this.endpoint,
-            OnOff.Cluster.id,
-            "onOff",
-            isOn,
-            this.platform.log,
-          );
+          if (isOn !== undefined) {
+            this.platform.log.debug(
+              `[MQTT] ${this.entityId} reported power ${isOn ? "on" : "off"}`,
+            );
+            void safeSetAttribute(
+              this.endpoint,
+              OnOff.Cluster.id,
+              "onOff",
+              isOn,
+              this.platform.log,
+            );
+          }
 
           if (
             parsed &&

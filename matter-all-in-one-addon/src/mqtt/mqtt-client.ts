@@ -20,6 +20,18 @@ export function normalizeMqttDiscoveryConfig(rawConfig: any): any {
   if (!rawConfig || typeof rawConfig !== "object") return rawConfig;
   const config = { ...rawConfig };
 
+  // Camera.UI and other publishers use a one-entry availability array.
+  const availability = config.availability ?? config.avty;
+  if (Array.isArray(availability) && availability.length === 1) {
+    const [entry] = availability;
+    if (entry && !(entry.value_template ?? entry.val_tpl)) {
+      config.availability_topic ??= entry.topic ?? entry.t;
+      config.payload_available ??= entry.payload_available ?? entry.pl_avail;
+      config.payload_not_available ??=
+        entry.payload_not_available ?? entry.pl_not_avail;
+    }
+  }
+
   // 1. Expand ~ (base topic prefix in HA discovery)
   const baseTopic = config["~"];
   if (typeof baseTopic === "string") {

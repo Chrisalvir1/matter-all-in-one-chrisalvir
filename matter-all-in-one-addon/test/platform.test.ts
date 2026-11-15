@@ -10,6 +10,8 @@ import {
 import net from "node:net";
 import "./mocks/matterbridge.mock.js";
 import "./mocks/ha-api.mock.js";
+import { MqttEntity } from "../src/mqtt/mqtt.entity.js";
+import { normalizeMqttDiscoveryConfig } from "../src/mqtt/mqtt-client.js";
 import { HomeAssistantPlatform } from "../src/platform.js";
 import { mockMatterbridge, mockLog } from "./mocks/matterbridge.mock.js";
 import { CameraUiStorage } from "../src/camera/cameraui/cameraui-storage.js";
@@ -54,6 +56,53 @@ describe("HomeAssistantPlatform", () => {
 
   afterEach(async () => {
     await platform.onShutdown("test-teardown");
+  });
+
+  it("reattaches a rediscovered Camera.UI light to its paired endpoint", async () => {
+    const publishCommand = vi.fn().mockResolvedValue(undefined);
+    const manager = { publishCommand, deviceStates: new Map<string, string>() };
+    const makeLight = (stateTopic: string, commandTopic: string) =>
+      new MqttEntity(platform, manager as any, {
+        topic: "homeassistant/light/patio/config",
+        component: "light",
+        config: normalizeMqttDiscoveryConfig({
+          unique_id: "cameraui_sensor_patio",
+          name: "Patio light",
+          command_topic: commandTopic,
+          state_topic: stateTopic,
+          state_value_template: "{{ value }}",
+          payload_on: "true",
+          payload_off: "false",
+          availability: [{ topic: "cameraui/status" }],
+        }),
+      });
+
+    const oldLight = makeLight("old/state", "old/set");
+    const endpoint = await oldLight.createEndpoint();
+    platform.matterbridgeDevices.set(oldLight.entityId, endpoint);
+    const light = makeLight("new/state", "new/set");
+    platform.mqttEntities.set(light.entityId, light);
+    manager.deviceStates.set("new/state", "true");
+    await Promise.all([
+      platform.activateMqttEntity(light.entityId),
+      platform.activateMqttEntity(light.entityId),
+    ]);
+
+    expect(light.endpoint).toBe(endpoint);
+    expect(light.availabilityTopic).toBe("cameraui/status");
+    expect(light.getStateString()).toBe("true");
+    expect(endpoint.getAttribute(0x0006 as any, "onOff")).toBe(true);
+    light.handleStateUpdate("null");
+    expect(endpoint.getAttribute(0x0006 as any, "onOff")).toBe(true);
+    await (endpoint as any).invokeCommand("off", {});
+    expect(publishCommand).toHaveBeenNthCalledWith(1, "new/set", "false");
+    expect(light.getStateString()).toBe("true");
+    light.handleStateUpdate("false");
+    expect(endpoint.getAttribute(0x0006 as any, "onOff")).toBe(false);
+    await (endpoint as any).invokeCommand("on", {});
+    expect(publishCommand).toHaveBeenNthCalledWith(2, "new/set", "true");
+    light.handleStateUpdate("true");
+    expect(endpoint.getAttribute(0x0006 as any, "onOff")).toBe(true);
   });
 
   it("refreshes an exported vacuum when its linked battery sensor changes", async () => {

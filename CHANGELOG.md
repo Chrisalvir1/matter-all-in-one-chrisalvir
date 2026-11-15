@@ -1,3 +1,9 @@
+## [2.3.18] - 2026-11-15
+
+- Actualiza Matterbridge a 3.11.3 y aplica el parche de seguridad de Node.js 26.13.1 LTS en amd64 y arm64.
+- Actualiza Werift a 0.27.0, `ws` a 8.23.0 y las dependencias de interfaz y compilación.
+- Conserva la publicación MQTT emparejada al volver a descubrir un accesorio y aplica el estado del dispositivo al endpoint activo. Las luces conservan su último estado válido cuando llega un mensaje sin estado de encendido.
+
 ## [2.3.16] - 2026-11-08
 
 - Unifica el contador y el filtro de incidencias. Los registros históricos de cámaras quedan en el diagnóstico, mientras las incidencias activas muestran su motivo.

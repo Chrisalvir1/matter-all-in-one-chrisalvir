@@ -200,6 +200,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   public deviceGroupingConfigs: CompositeDeviceConfig[] = [];
   public mqttManager?: MqttClientManager;
   public mqttEntities = new Map<string, MqttEntity>();
+  private readonly mqttActivations = new Map<string, Promise<void>>();
   public ptzManager: PtzZonesManager = PtzZonesManager.getInstance();
   public ptzMqttPublisher: PtzMqttPublisher | null = null;
   private uiServer?: http.Server;
@@ -4839,12 +4840,33 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
   /** Create an MQTT bridged endpoint and let Matterbridge own its lifecycle. */
   public async activateMqttEntity(entityId: string): Promise<void> {
-    if (this.matterbridgeDevices.has(entityId)) return;
+    const previous = this.mqttActivations.get(entityId);
+    const activation = (previous ?? Promise.resolve())
+      .catch(() => undefined)
+      .then(() => this.activateDiscoveredMqttEntity(entityId));
+    this.mqttActivations.set(entityId, activation);
+    try {
+      await activation;
+    } finally {
+      if (this.mqttActivations.get(entityId) === activation) {
+        this.mqttActivations.delete(entityId);
+      }
+    }
+  }
+
+  private async activateDiscoveredMqttEntity(entityId: string): Promise<void> {
     const entity = this.mqttEntities.get(entityId);
     if (!entity) throw new Error(`MQTT Entity ${entityId} was not discovered.`);
+    const activeEndpoint = this.matterbridgeDevices.get(entityId);
+    if (activeEndpoint && activeEndpoint === entity.endpoint) return;
 
     try {
       const endpoint = await entity.createEndpoint();
+      if (activeEndpoint) {
+        entity.adoptEndpoint(activeEndpoint);
+        await entity.syncInitialState();
+        return;
+      }
       this.installMatterCommandResponsePolicy(endpoint, entityId);
       const existingEndpoint = endpoint.uniqueId
         ? this.getDeviceByUniqueId(endpoint.uniqueId)
