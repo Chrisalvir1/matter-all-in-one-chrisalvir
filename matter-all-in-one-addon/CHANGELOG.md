@@ -1,8 +1,10 @@
 ## [2.3.18] - 2026-11-15
 
-- Actualiza Matterbridge a 3.11.3 y aplica el parche de seguridad de Node.js 26.13.1 LTS en amd64 y arm64.
-- Actualiza Werift a 0.27.0, `ws` a 8.23.0 y las dependencias de interfaz y compilación.
-- Conserva la publicación MQTT emparejada al volver a descubrir un accesorio y aplica el estado del dispositivo al endpoint activo. Las luces conservan su último estado válido cuando llega un mensaje sin estado de encendido.
+- Actualiza el motor a Matterbridge 3.11.3. Corrige el registro de clústeres con identificadores coincidentes, incluido `ClosureDimension`, que usa el complemento para cubiertas compatibles.
+- Incorpora las mejoras del motor en inventario por plugin, recarga al arrancar el puente y copias de seguridad con perfiles. Matterbridge añade sincronización horaria y gestión de certificados TLS para cámaras Matter mediante la opción `--root-camera`.
+- Aplica el parche de seguridad de Node.js 26.13.1 LTS a las imágenes Linux amd64 y arm64.
+- Actualiza Werift a 0.27.0 y `ws` a 8.23.0 para WebRTC y WebSocket. Actualiza Vite a 8.3.8, su plugin de React a 6.3.0, Lucide a 1.73.0, Prettier a 3.10.1 y dependencias transitivas.
+- Verifica 755 pruebas, el contrato WebSocket con Home Assistant Core 2026.11.0 y la ejecución de ambos contenedores.
 
 ## [2.3.17] - 2026-11-09
 

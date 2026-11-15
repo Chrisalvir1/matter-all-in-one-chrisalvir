@@ -2,6 +2,7 @@
 
 | Versión | Fecha | Cambios | Verificación |
 |---|---|---|---|
+| [2.3.18](RELEASE_NOTES_2.3.18.md) | 2026-11-15 | Matterbridge 3.11.3, parche de seguridad de Node.js 26.13.1 LTS y dependencias de red e interfaz | 88 suites/755 pruebas, 2 pruebas de contrato con HA Core 2026.11.0 y validación Linux amd64/arm64 |
 | [2.3.17](RELEASE_NOTES_2.3.17.md) | 2026-11-09 | Correcciones Matter/HAP/MQTT para controles, estados, unidades y sensores en familias de accesorios | 88 suites/754 pruebas; 5 suites/44 pruebas afectadas tras ajustes finales; build correcto; Apple Casa/iOS 27 físico pendiente |
 | [2.3.16](RELEASE_NOTES_2.3.16.md) | 2026-11-08 | Matterbridge 3.11.2, QR y desvinculación, incidencias, snapshots Omni, climatización, MQTT e Ingress | 87 suites/728 pruebas y 2 de contrato con HA 2026.11.0; verificación física pendiente |
 | [2.3.15](RELEASE_NOTES_2.3.15.md) | 2026-11-05 | Soporte nativo de Aire Acondicionado HAP (HeaterCooler con velocidad y swing) y Matter (ClimateEntity); dependencias estables | 84 suites/716 pruebas y typechecks; build correcto |

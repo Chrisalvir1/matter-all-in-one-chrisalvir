@@ -1,6 +1,6 @@
-# Matter All-in-One Chrisalvir — v2.3.17
+# Matter All-in-One Chrisalvir — v2.3.18
 
-> **2.3.17 · 9 de noviembre de 2026.** Corrige el despacho de dimmers y mandos deslizantes, estados y mediciones de accesorios Matter/HAP/MQTT. Consulta [cambios](matter-all-in-one-addon/CHANGELOG.md), [notas](docs/RELEASE_NOTES_2.3.17.md) y [versiones](docs/RELEASES.md).
+> **2.3.18 · 15 de noviembre de 2026.** Actualiza Matterbridge a 3.11.3, aplica el parche de seguridad de Node.js 26.13.1 LTS y renueva las dependencias de red, interfaz y compilación. Consulta [cambios](matter-all-in-one-addon/CHANGELOG.md), [notas](docs/RELEASE_NOTES_2.3.18.md) y [versiones](docs/RELEASES.md).
 
 <div align="center">
   <img src="matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
@@ -10,21 +10,21 @@
 
 **Un solo proyecto para integrar dispositivos de Home Assistant en Matter y cámaras en Apple Casa.**
 
-**Versión 2.3.17** · **Contrato WebSocket probado con Home Assistant 2026.11.0** · **Matter 1.6.1** · **HomeKit HAP / HKSV**
+**Versión 2.3.18** · **Contrato WebSocket probado con Home Assistant 2026.11.0** · **Matter 1.6.1** · **HomeKit HAP / HKSV**
 
 </div>
 
 Matter All-in-One Chrisalvir (MIAO) reúne la administración de accesorios Matter, cámaras de **Omni Tuya Local**, **Camera.UI**, **Scrypted** y entidades de **Home Assistant** en una interfaz integrada. Las rutas Matter y HomeKit HAP son distintas: se utiliza la que corresponda a cada dispositivo, sin prometer que todos los tipos Matter sean compatibles con Apple Casa.
 
 > [!IMPORTANT]
-> **Verificación 2.3.17.** Las pruebas locales cubren Matterbridge 3.11.2, pero la comprobación en la instalación real, con accesorios emparejados y Apple Casa/iOS 27, queda pendiente.
+> **Verificación 2.3.18.** Pasaron 755 pruebas, el contrato WebSocket con Home Assistant Core 2026.11.0 y la validación de los contenedores Linux amd64 y arm64. La prueba con accesorios físicos en Apple Casa queda pendiente.
 
-## Novedades v2.3.17
+## Novedades v2.3.18
 
-- Reduce el retardo de los dimmers agrupando solo valores que aún no se enviaron; mantiene el orden de apagado y aísla accesorios.
-- Corrige lecturas, controles y unidades para accesorios Matter, HomeKit HAP y MQTT en sensores, cerraduras, cubiertas, climatización, ventiladores, electrodomésticos y otros perfiles compatibles.
-- Añade confirmación y manejo explícito de errores MQTT, restablece manejadores al recuperar nodos y rechaza operaciones físicas que el dispositivo o el controlador no ofrecen.
-- Conserva identidades Matter/HAP y fabrics existentes. La cobertura automática no certifica iOS 27 ni el hardware físico.
+- Matterbridge 3.11.3 corrige el registro de clústeres con IDs coincidentes, incluido `ClosureDimension`, utilizado en el perfil de cubiertas del complemento.
+- El motor actualiza su inventario por plugin, recarga la tabla de dispositivos al arrancar el puente y corrige el respaldo cuando se usa un perfil. Los clústeres de tiempo y TLS para cámaras Matter están disponibles mediante la opción `--root-camera` del motor.
+- Node.js 26.13.1 LTS corrige vulnerabilidades de TLS y HTTP/2. El parche se incorpora en las dos arquitecturas del complemento.
+- Werift 0.27.0 y `ws` 8.23.0 actualizan las capas WebRTC y WebSocket. Vite, su plugin de React, Lucide y Prettier actualizan la compilación, los iconos y el formato del código.
 
 ## Capacidades incorporadas en v2.3.0 (28 de octubre de 2026)
 
@@ -71,12 +71,12 @@ Matter All-in-One Chrisalvir (MIAO) reúne la administración de accesorios Matt
 
 ## 📱 Compatibilidad con Home Assistant y Apple Casa
 
-| Entorno | Estado de v2.3.17 |
+| Entorno | Estado de v2.3.18 |
 | --- | --- |
 | Home Assistant 2026.10 | Base conocida del proyecto; conservar como entorno principal mientras se valida la beta |
-| **Home Assistant 2026.11.0** | Contrato WebSocket verificado; validación física de 2.3.17 pendiente |
+| **Home Assistant 2026.11.0** | Contrato WebSocket verificado; validación física de 2.3.18 pendiente |
 | Home Assistant 2026.11 estable | Contrato WebSocket probado; prueba física del add-on y los accesorios en la instalación real pendiente |
-| Matterbridge 3.11.2 | Versión del runtime del complemento |
+| Matterbridge 3.11.3 | Versión del runtime del complemento |
 | Matter 1.6.1 | Especificación utilizada por el puente Matter |
 | Apple Casa — accesorios Matter | Depende del tipo de dispositivo que Apple admita |
 | Apple Casa — cámara Omni mediante HAP/HKSV | Vídeo, audio, movimiento y grabación reportados como operativos por Chrisalvir en su instalación |
@@ -100,7 +100,7 @@ La actualización **no borra emparejamientos ni modifica intencionalmente fabric
 
 1. En **Ajustes → Complementos / Aplicaciones → Tienda**, abre el menú para agregar un repositorio.
 2. Agrega: `https://github.com/Chrisalvir1/matter-all-in-one-chrisalvir`.
-3. Instala **Matter All-in-one (Chrisalvir)** o actualiza a **v2.3.17** cuando la imagen publicada esté disponible.
+3. Instala **Matter All-in-one (Chrisalvir)** o actualiza a **v2.3.18** cuando la imagen publicada esté disponible.
 4. Inicia el complemento y abre su interfaz desde Home Assistant.
 5. Selecciona el dispositivo y la ruta **Matter** o **HomeKit HAP** apropiada; usa el QR de emparejamiento correspondiente.
 
@@ -111,7 +111,7 @@ Las imágenes `amd64` y `aarch64` se generan mediante GitHub Actions y se distri
 ### Como plugin de Matterbridge (instalación independiente)
 
 ```bash
-npm install matter-all-in-one-addon@2.3.17
+npm install matter-all-in-one-addon@2.3.18
 ```
 
 La publicación en npm depende del flujo de release. Configura la conexión WebSocket con Home Assistant, Matterbridge y los puertos de la instancia según tu entorno. El complemento oficial de HA ya gestiona la conexión con Supervisor y la persistencia.
@@ -161,6 +161,6 @@ Consulta la [guía de preparación para HA 2026.11](docs/home-assistant-2026-11-
 - [Configuración de Thread](matter-all-in-one-addon/docs/thread-setup.md)
 - [Reportar un problema](https://github.com/Chrisalvir1/matter-all-in-one-chrisalvir/issues)
 
-**Base de ejecución:** Matterbridge `3.11.2` · Node.js `26.13.0` · Matter `1.6.1` · TypeScript `7.0.2`.
+**Base de ejecución:** Matterbridge `3.11.3` · Node.js `26.13.1` · Matter `1.6.1` · TypeScript `7.0.2`.
 
 **Licencia:** Apache-2.0 · Proyecto mantenido por **Chrisalvir**.
