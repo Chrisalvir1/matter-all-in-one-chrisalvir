@@ -13,6 +13,7 @@ concurrency:
 permissions:
   contents: write
   packages: write
+  actions: write
 
 jobs:
   validate-tag:
@@ -27,7 +28,7 @@ jobs:
         with:
           node-version: '26.13.1'
       - name: Install validated npm
-        run: npm install --global npm@12.2.2 --no-fund --no-audit
+        run: npm install --global npm@12.2.3 --no-fund --no-audit
 
       - run: npm ci --legacy-peer-deps --no-fund --no-audit
 
@@ -158,4 +159,13 @@ jobs:
             gh release create "$GITHUB_REF_NAME" --title "Matter All-in-One $GITHUB_REF_NAME" --notes-file "$NOTES"
           else
             gh release create "$GITHUB_REF_NAME" --title "Matter All-in-One $GITHUB_REF_NAME" --generate-notes
+          fi
+
+      - name: Dispatch npm publication for the verified release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          if ! npm view "matter-all-in-one-addon@${version}" version --registry=https://registry.npmjs.org/ >/dev/null 2>&1; then
+            gh workflow run publish.yml --ref "$GITHUB_REF_NAME"
           fi

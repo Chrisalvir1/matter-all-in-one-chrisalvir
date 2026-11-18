@@ -1,6 +1,6 @@
-# Matter All-in-One Chrisalvir — v2.3.18
+# Matter All-in-One Chrisalvir — v2.3.19
 
-> **2.3.18 · 15 de noviembre de 2026.** Actualiza Matterbridge a 3.11.3, aplica el parche de seguridad de Node.js 26.13.1 LTS y renueva las dependencias de red, interfaz y compilación. Consulta [cambios](matter-all-in-one-addon/CHANGELOG.md), [notas](docs/RELEASE_NOTES_2.3.18.md) y [versiones](docs/RELEASES.md).
+> **2.3.19 · 17 de noviembre de 2026.** Actualiza Matterbridge a 3.11.3, aplica el parche de seguridad de Node.js 26.13.1 LTS y renueva las dependencias de red, interfaz y compilación. Consulta [cambios](matter-all-in-one-addon/CHANGELOG.md), [notas](docs/RELEASE_NOTES_2.3.19.md) y [versiones](docs/RELEASES.md).
 
 <div align="center">
   <img src="matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
@@ -10,14 +10,19 @@
 
 **Un solo proyecto para integrar dispositivos de Home Assistant en Matter y cámaras en Apple Casa.**
 
-**Versión 2.3.18** · **Contrato WebSocket probado con Home Assistant 2026.11.0** · **Matter 1.6.1** · **HomeKit HAP / HKSV**
+**Versión 2.3.19** · **Contrato WebSocket probado con Home Assistant 2026.11.2** · **Matter 1.6.1** · **HomeKit HAP / HKSV**
 
 </div>
 
 Matter All-in-One Chrisalvir (MIAO) reúne la administración de accesorios Matter, cámaras de **Omni Tuya Local**, **Camera.UI**, **Scrypted** y entidades de **Home Assistant** en una interfaz integrada. Las rutas Matter y HomeKit HAP son distintas: se utiliza la que corresponda a cada dispositivo, sin prometer que todos los tipos Matter sean compatibles con Apple Casa.
 
 > [!IMPORTANT]
-> **Verificación 2.3.18.** Pasaron 755 pruebas, el contrato WebSocket con Home Assistant Core 2026.11.0 y la validación de los contenedores Linux amd64 y arm64. La prueba con accesorios físicos en Apple Casa queda pendiente.
+> **Verificación 2.3.19.** Pasaron 755 pruebas, el contrato WebSocket con Home Assistant Core 2026.11.2 y el build de aplicación. Las imágenes Linux amd64 y arm64 deben superar los controles de GitHub Actions antes de publicarse. La prueba con accesorios físicos en Apple Casa queda pendiente.
+
+## Actualización v2.3.19
+
+Actualiza Lucide React a 1.74.0 y npm a 12.2.3 en el proyecto, las imágenes y los workflows. Actualiza uv y el objetivo de pruebas a Home Assistant 2026.11.2; conserva Node 26.13.1, Matterbridge 3.11.3 y HAP 2.3.0. Regenera el lockfile y conserva la validación nativa amd64/arm64 antes de publicar la imagen y el release. [Notas de versión](docs/RELEASE_NOTES_2.3.19.md).
+
 
 ## Novedades v2.3.18
 

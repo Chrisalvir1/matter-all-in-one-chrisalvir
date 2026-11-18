@@ -1,12 +1,16 @@
-# Matter All-in-One Chrisalvir — complemento v2.3.18
+# Matter All-in-One Chrisalvir — complemento v2.3.19
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/chrisalvir1/matter-all-in-one-chrisalvir/main/matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
 </div>
 
-**Contrato WebSocket verificado con Home Assistant Core 2026.11.0.** La comprobación de esta versión con accesorios físicos y Apple Casa/iOS 27 queda pendiente.
+**Contrato WebSocket verificado con Home Assistant Core 2026.11.2.** La comprobación de esta versión con accesorios físicos y Apple Casa/iOS 27 queda pendiente.
 
 Puente **Matter 1.6.1** basado en **Matterbridge 3.11.3** con publicación independiente **HomeKit HAP/HKSV** para cámaras y accesorios compatibles. Incluye integración con Omni Tuya Local, Camera.UI, Scrypted y el inventario de Home Assistant.
+
+## Novedades v2.3.19
+
+Actualización de dependencias estables y npm 12.2.3. Consulta las [notas de versión](../docs/RELEASE_NOTES_2.3.19.md).
 
 ## Novedades v2.3.18 (15 de noviembre de 2026)
 

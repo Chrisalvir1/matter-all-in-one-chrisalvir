@@ -1,5 +1,7 @@
 # Historial de versiones
 
+- [v2.3.19](https://github.com/Chrisalvir1/matter-all-in-one-chrisalvir/releases/tag/v2.3.19) — actualización de dependencias estables.
+
 | Versión | Fecha | Cambios | Verificación |
 |---|---|---|---|
 | [2.3.18](RELEASE_NOTES_2.3.18.md) | 2026-11-15 | Matterbridge 3.11.3, parche de seguridad de Node.js 26.13.1 LTS y dependencias de red e interfaz | 88 suites/755 pruebas, 2 pruebas de contrato con HA Core 2026.11.0 y validación Linux amd64/arm64 |

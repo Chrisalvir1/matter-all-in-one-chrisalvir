@@ -1,3 +1,9 @@
+## [2.3.19] - 2026-11-17
+
+- Actualiza Lucide React a 1.74.0 y npm a 12.2.3 en el proyecto, las imágenes y los workflows.
+- Actualiza uv y el objetivo de pruebas a Home Assistant 2026.11.2; conserva Node 26.13.1, Matterbridge 3.11.3 y HAP 2.3.0.
+- Regenera el lockfile y conserva la validación nativa amd64/arm64 antes de publicar la imagen y el release.
+
 ## [2.3.18] - 2026-11-15
 
 - Actualiza el motor a Matterbridge 3.11.3. Corrige el registro de clústeres con identificadores coincidentes, incluido `ClosureDimension`, que usa el complemento para cubiertas compatibles.
