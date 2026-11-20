@@ -80,6 +80,47 @@ export class CameraUiHomeKitBridge {
   >();
   /** Last state prevents duplicate HA/MQTT paths from retriggering HKSV. */
   private static motionStates = new Map<string, boolean>();
+  private static motionEpisodeTimers = new Map<string, NodeJS.Timeout>();
+
+  private static clearMotionEpisode(cameraId: string): void {
+    const timer = this.motionEpisodeTimers.get(cameraId);
+    if (timer) clearTimeout(timer);
+    this.motionEpisodeTimers.delete(cameraId);
+  }
+
+  private static armMotionEpisode(
+    cameraId: string,
+    accessory: HomeKitCameraAccessory,
+  ): void {
+    this.clearMotionEpisode(cameraId);
+    this.motionEpisodeTimers.set(
+      cameraId,
+      setTimeout(() => {
+        if (
+          this.activeAccessories.get(cameraId) !== accessory ||
+          !this.motionStates.get(cameraId)
+        ) {
+          this.clearMotionEpisode(cameraId);
+          return;
+        }
+        accessory.updateMotionState(false);
+        this.motionEpisodeTimers.set(
+          cameraId,
+          setTimeout(() => {
+            if (
+              this.activeAccessories.get(cameraId) !== accessory ||
+              !this.motionStates.get(cameraId)
+            ) {
+              this.clearMotionEpisode(cameraId);
+              return;
+            }
+            accessory.updateMotionState(true);
+            this.armMotionEpisode(cameraId, accessory);
+          }, 2000).unref(),
+        );
+      }, 45000).unref(),
+    );
+  }
 
   public static getAccessory(
     cameraId: string,
@@ -770,6 +811,7 @@ export class CameraUiHomeKitBridge {
     cameraId: string,
     platform?: any,
   ): Promise<void> {
+    this.clearMotionEpisode(cameraId);
     const accessory = this.activeAccessories.get(cameraId);
     if (accessory) {
       await accessory.unpublish();
@@ -809,6 +851,8 @@ export class CameraUiHomeKitBridge {
       const stateKey = accessory.record.cameraUiCameraId || cameraId;
       if (this.motionStates.get(stateKey) === active) return true;
       this.motionStates.set(stateKey, active);
+      if (active) this.armMotionEpisode(stateKey, accessory);
+      else this.clearMotionEpisode(stateKey);
       accessory.updateMotionState(active);
       platform?.log?.notice?.(
         `[Detección][${camName}] 🎯 ${active ? `MOVIMIENTO CONFIRMADO${triggerSource ? ` [Origen: ${triggerSource}]` : ""}` : "MOVIMIENTO FINALIZADO"} → Disparando HomeKit MotionDetected, HKSV iCloud y Matter Occupancy (active=${active})`,

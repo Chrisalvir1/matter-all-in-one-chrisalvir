@@ -191,6 +191,10 @@ export class HevcRecordingDelegate
 
     // 3. Deliver live fragments
     let postRollFragmentsRemaining = 2;
+    const episodeDeadline =
+      this.streamSource.metadata?.isCameraUi === true
+        ? Date.now() + 45000
+        : Infinity;
     while (!signal?.aborted) {
       const nextFragment = await this.waitForNextFragment(signal, 15000);
       if (!nextFragment || signal?.aborted) {
@@ -199,7 +203,9 @@ export class HevcRecordingDelegate
       }
 
       this.deliveredFragmentsInSession++;
-      const isLast = !this.isMotionActive && postRollFragmentsRemaining-- <= 0;
+      const isLast =
+        Date.now() >= episodeDeadline ||
+        (!this.isMotionActive && postRollFragmentsRemaining-- <= 0);
       const processedData = this.processFragmentForDelivery(nextFragment.data);
 
       yield {
@@ -213,7 +219,7 @@ export class HevcRecordingDelegate
 
   public acknowledgeStream(streamId: number): void {
     this.platform?.log?.notice?.(
-      `[HKSV3][${this.record.name || this.entityId}] ✅ GRABACIÓN CONFIRMADA: Apple Home Hub guardó clip HEVC en iCloud (streamId ${streamId})`,
+      `[HKSV3][${this.record.name || this.entityId}] ✅ Apple Home Hub confirmó el final del streaming HEVC por HDS (streamId ${streamId})`,
     );
     this.checkVerificationSuccess();
   }
@@ -230,8 +236,6 @@ export class HevcRecordingDelegate
     if (reason && !isNormal) {
       this.sessionHadProtocolError = true;
       this.record.hksvState = "error";
-    } else {
-      this.checkVerificationSuccess();
     }
     this.currentStreamId = undefined;
   }
@@ -330,35 +334,24 @@ export class HevcRecordingDelegate
       // Video: STRICT COPY + Apple-required hvc1 tag
       args.push("-map", "0:v:0", "-c:v", "copy", "-tag:v", "hvc1");
 
-      // Audio: AAC passthrough copy if already AAC, otherwise adapt to AAC-LC 16kHz mono for iCloud
+      // Match the HKSV3 HDS audio configuration advertised by the controller.
       const hasAudioSource =
-        this.capabilities.hasAudio !== false &&
-        this.capabilities.audioCodec !== "none";
-      const audioCodec = this.capabilities.audioCodec?.toLowerCase();
-
+        this.capabilities.hasAudio && this.capabilities.audioCodec !== "none";
       if (hasAudioSource) {
-        if (audioCodec === "aac") {
-          this.platform?.log?.notice?.(
-            `[HKSV3][${this.entityId}] Grabación HKSV3: preservando audio AAC de fuente con passthrough (-c:a copy)`,
-          );
-          args.push("-map", "0:a:0?", "-c:a", "copy");
-        } else {
-          this.platform?.log?.notice?.(
-            `[HKSV3][${this.entityId}] Grabación HKSV3: adaptando audio fuente (${audioCodec || "desconocido"}) a AAC-LC 16kHz mono para iCloud`,
-          );
-          args.push(
-            "-map",
-            "0:a:0?",
-            "-c:a",
-            "aac",
-            "-b:a",
-            "32k",
-            "-ar",
-            "16000",
-            "-ac",
-            "1",
-          );
-        }
+        args.push(
+          "-map",
+          "0:a:0?",
+          "-c:a",
+          "aac",
+          "-profile:a",
+          "aac_low",
+          "-b:a",
+          "32k",
+          "-ar",
+          "48000",
+          "-ac",
+          "1",
+        );
       } else {
         args.push("-an");
       }

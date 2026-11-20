@@ -1,3 +1,11 @@
+## [2.3.21] - 2026-11-20
+
+- Integra la variante HAP-NodeJS de Camera.UI HomeKit 4K 0.6.64-beta.3 para cámaras RTSP que reportan HEVC. Añade negociación HEVC por WebRTC y RTP multinivel y grabación HDS con vídeo hvc1 y AAC-LC mono a 48 kHz.
+- Conserva H.264 en RTP clásico. Si una fuente Camera.UI H.264 cambia de resolución, recupera el prebuffer a la geometría negociada sin relanzar la sonda.
+- Acota los episodios de movimiento de Camera.UI a 45 s y rearma tras 2 s cuando la señal de origen continúa activa.
+- Consulta el altavoz de cámaras Omni antes de anunciar Talk. Acepta conversación por turnos con altavoz y asigna las credenciales al iniciar el retorno.
+- Mantiene las versiones de Matterbridge, Werift, MQTT y las demás dependencias de la aplicación.
+
 ## [2.3.20] - 2026-11-20
 
 - Publica los accesorios HomeKit HAP genéricos por la interfaz LAN seleccionada. Conserva su identidad, puerto y emparejamiento existentes.

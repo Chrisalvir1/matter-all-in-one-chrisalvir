@@ -4,7 +4,7 @@ import {
   MediaStreamTrack,
   RTCPeerConnection,
   RTCRtpCodecParameters,
-  type RtpPacket,
+  RtpPacket,
 } from "werift";
 import {
   type WebRTCStreamingDelegate,
@@ -19,13 +19,14 @@ import {
 import { SecureVideoSFrame } from "./sframe.js";
 import { HevcAccessUnitAssembler, SFrameRtpPacketizer } from "./sframe-rtp.js";
 import { resolveFfmpegPath } from "../ffmpeg-helper.js";
+import { sanitizeDiagnosticText } from "../live-view-telemetry.js";
 import type {
   ResolvedStreamSource,
   CameraCapabilitiesInfo,
 } from "../../camera-types.js";
 
 const VIDEO_PAYLOAD_TYPE = 99;
-const AUDIO_PAYLOAD_TYPE = 110;
+const AUDIO_PAYLOAD_TYPE = 111;
 
 const hevcCodec = new RTCRtpCodecParameters({
   mimeType: "video/H265",
@@ -43,7 +44,11 @@ interface ActiveWebRtcSession {
   sessionIdentifier: string;
   pc: RTCPeerConnection;
   vtrack: MediaStreamTrack;
-  atrack: MediaStreamTrack;
+  videoSsrc: number;
+  audioSsrc?: number;
+  atrack?: MediaStreamTrack;
+  audioSocket?: dgram.Socket;
+  mediaStarted?: boolean;
   sframe: SecureVideoSFrame;
   ffmpegProcess?: ChildProcess;
   rtpSocket?: dgram.Socket;
@@ -61,6 +66,7 @@ export class WebRtcSessionManager implements WebRTCStreamingDelegate {
     private readonly capabilities: CameraCapabilitiesInfo,
     private readonly streamSource: ResolvedStreamSource,
     private readonly videoTiers: SecureVideoVideoTier[],
+    private readonly onMedia: (id: string, active: boolean) => void,
   ) {}
 
   public get isStreaming(): boolean {
@@ -74,15 +80,34 @@ export class WebRtcSessionManager implements WebRTCStreamingDelegate {
       `[WebRTC][${this.entityId}] Preparing WebRTC stream offer (session ${request.sessionIdentifier.slice(0, 8)})...`,
     );
 
+    await this.handleEndSession(request.sessionIdentifier);
+    const hasAudio = this.capabilities.hasAudio;
     const pc = new RTCPeerConnection({
-      codecs: { video: [hevcCodec] },
+      codecs: {
+        video: [hevcCodec],
+        audio: hasAudio
+          ? [
+              new RTCRtpCodecParameters({
+                mimeType: "audio/opus",
+                clockRate: 48000,
+                channels: 2,
+                payloadType: AUDIO_PAYLOAD_TYPE,
+              }),
+            ]
+          : [],
+      },
       iceUseIpv6: false,
     });
 
     const vtrack = new MediaStreamTrack({ kind: "video" });
-    const atrack = new MediaStreamTrack({ kind: "audio" });
-    pc.addTransceiver(vtrack, { direction: "sendonly" });
-    pc.addTransceiver(atrack, { direction: "sendonly" });
+    const atrack = hasAudio
+      ? new MediaStreamTrack({ kind: "audio" })
+      : undefined;
+    const videoSender = pc.addTransceiver(vtrack, {
+      direction: "sendonly",
+    }).sender;
+    const audioSender =
+      atrack && pc.addTransceiver(atrack, { direction: "sendonly" }).sender;
 
     const candidates: WebRTCOffer["candidates"] = [];
     pc.onIceCandidate.subscribe((candidate: any) => {
@@ -101,6 +126,8 @@ export class WebRtcSessionManager implements WebRTCStreamingDelegate {
       sessionIdentifier: request.sessionIdentifier,
       pc,
       vtrack,
+      videoSsrc: videoSender.ssrc,
+      audioSsrc: audioSender?.ssrc,
       atrack,
       sframe,
       answered: false,
@@ -113,7 +140,9 @@ export class WebRtcSessionManager implements WebRTCStreamingDelegate {
       this.platform?.log?.debug?.(
         `[WebRTC][${this.entityId}] Peer connection state: ${state}`,
       );
-      if (state === "connected") {
+      if (state === "connected" && !session.mediaStarted && !session.closed) {
+        session.mediaStarted = true;
+        this.onMedia(session.sessionIdentifier, true);
         this.startMediaPipeline(session).catch((err) => {
           this.platform?.log?.error?.(
             `[WebRTC][${this.entityId}] Failed to start media: ${err.message}`,
@@ -129,14 +158,18 @@ export class WebRtcSessionManager implements WebRTCStreamingDelegate {
       }
     });
 
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-
-    return {
-      sdpOffer: pc.localDescription?.sdp ?? offer.sdp,
-      candidates,
-      sframe: sframe.senderKey,
-    };
+    try {
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      return {
+        sdpOffer: pc.localDescription?.sdp ?? offer.sdp,
+        candidates,
+        sframe: sframe.senderKey,
+      };
+    } catch (error) {
+      await this.handleEndSession(request.sessionIdentifier);
+      throw error;
+    }
   }
 
   public async handleProvideAnswer(
@@ -223,6 +256,10 @@ export class WebRtcSessionManager implements WebRTCStreamingDelegate {
       session.rtpSocket = undefined;
     }
 
+    try {
+      session.audioSocket?.close();
+    } catch {}
+    if (session.mediaStarted) this.onMedia(sessionIdentifier, false);
     await session.pc.close().catch(() => undefined);
   }
 
@@ -241,11 +278,10 @@ export class WebRtcSessionManager implements WebRTCStreamingDelegate {
       throw new Error("FFmpeg or stream URL unavailable");
     }
 
-    const localPort = await this.allocatePort();
     const rtpSocket = dgram.createSocket("udp4");
     session.rtpSocket = rtpSocket;
 
-    const videoSsrc = 10001;
+    const videoSsrc = session.videoSsrc;
     const videoCryptor = session.sframe.videoStream(videoSsrc);
     const assembler = new HevcAccessUnitAssembler();
     const packetizer = new SFrameRtpPacketizer({
@@ -286,10 +322,30 @@ export class WebRtcSessionManager implements WebRTCStreamingDelegate {
       }
     });
 
-    await new Promise<void>((resolve, reject) => {
-      rtpSocket.once("error", reject);
-      rtpSocket.bind(localPort, "127.0.0.1", () => resolve());
-    });
+    const localPort = await this.bindLoopback(rtpSocket);
+    let audioPort: number | undefined;
+    const audioSsrc = session.audioSsrc;
+    if (session.atrack && audioSsrc !== undefined && !session.closed) {
+      const track = session.atrack;
+      const audioCryptor = session.sframe.audioStream(audioSsrc);
+      const socket = dgram.createSocket("udp4");
+      session.audioSocket = socket;
+      socket.on("message", (bytes) => {
+        if (session.closed) return;
+        try {
+          const packet = RtpPacket.deSerialize(bytes);
+          if (
+            packet.header.payloadType !== AUDIO_PAYLOAD_TYPE ||
+            packet.header.ssrc !== audioSsrc
+          )
+            return;
+          packet.payload = audioCryptor.protectFrame(packet.payload);
+          track.writeRtp(packet);
+        } catch {}
+      });
+      audioPort = await this.bindLoopback(socket);
+    }
+    if (session.closed) return;
 
     // FFmpeg reads RTSP and emits standard RFC 7798 HEVC RTP packets with -c:v copy
     const args = [
@@ -316,6 +372,29 @@ export class WebRtcSessionManager implements WebRTCStreamingDelegate {
       `rtp://127.0.0.1:${localPort}`,
     ];
 
+    if (audioPort)
+      args.push(
+        "-map",
+        "0:a:0",
+        "-vn",
+        "-c:a",
+        "libopus",
+        "-ar",
+        "48000",
+        "-ac",
+        "1",
+        "-frame_duration",
+        "20",
+        "-b:a",
+        "24k",
+        "-f",
+        "rtp",
+        "-payload_type",
+        String(AUDIO_PAYLOAD_TYPE),
+        "-ssrc",
+        String(audioSsrc),
+        `rtp://127.0.0.1:${audioPort}`,
+      );
     this.platform?.log?.notice?.(
       `[WebRTC][${this.entityId}] Spawning WebRTC HEVC Passthrough FFmpeg pipeline to 127.0.0.1:${localPort}`,
     );
@@ -327,7 +406,7 @@ export class WebRtcSessionManager implements WebRTCStreamingDelegate {
 
     proc.stderr?.on("data", (chunk: Buffer) => {
       this.platform?.log?.debug?.(
-        `[WebRTC][${this.entityId}][stderr] ${chunk.toString().trim()}`,
+        `[WebRTC][${this.entityId}][stderr] ${sanitizeDiagnosticText(chunk.toString().trim())}`,
       );
     });
 
@@ -336,17 +415,21 @@ export class WebRtcSessionManager implements WebRTCStreamingDelegate {
         `[WebRTC][${this.entityId}] FFmpeg process closed (code ${code})`,
       );
       session.ffmpegProcess = undefined;
+      if (this.sessions.get(session.sessionIdentifier) === session)
+        void this.handleEndSession(session.sessionIdentifier);
+    });
+    proc.once("error", () => {
+      if (this.sessions.get(session.sessionIdentifier) === session)
+        void this.handleEndSession(session.sessionIdentifier);
     });
   }
 
-  private allocatePort(): Promise<number> {
+  private bindLoopback(socket: dgram.Socket): Promise<number> {
     return new Promise((resolve, reject) => {
-      const socket = dgram.createSocket("udp4");
       socket.once("error", reject);
       socket.bind(0, "127.0.0.1", () => {
-        const addr = socket.address();
-        const port = typeof addr === "object" ? addr.port : 0;
-        socket.close(() => resolve(port));
+        const address = socket.address();
+        resolve(address.port);
       });
     });
   }

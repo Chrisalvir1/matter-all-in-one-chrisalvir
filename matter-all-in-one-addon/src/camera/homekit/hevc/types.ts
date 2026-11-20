@@ -9,47 +9,23 @@ import type {
   Service,
 } from "@homebridge/hap-nodejs";
 
-export enum StreamTierVideoCodec {
-  H264 = 1,
-  H265 = 2,
-}
-
-export enum StreamTierAudioCodec {
-  OPUS = 3,
-}
-
-export enum CameraVideoQuality {
-  HIGHEST = 1,
-  HIGH = 2,
-  MEDIUM = 3,
-  LOW = 4,
-}
-
-export enum StreamTierAudioSampleRate {
-  KHZ_16 = 1,
-  KHZ_24 = 2,
-  KHZ_32 = 3,
-  KHZ_48 = 4,
-}
-
-export enum StreamTierAudioBitDepth {
-  BITS_8 = 1,
-  BITS_16 = 2,
-  BITS_24 = 3,
-}
-
-export enum CameraSensorType {
-  UNKNOWN = 0,
-  PRIMARY = 1,
-  GENERIC = 255,
-}
-
-export enum CameraSensorIntent {
-  UNKNOWN = 0,
-  MAIN = 1,
-  PACKAGE = 2,
-  GENERIC = 255,
-}
+import {
+  CameraSensorIntent,
+  CameraSensorType,
+  CameraVideoQuality,
+  StreamTierAudioBitDepth,
+  StreamTierAudioSampleRate,
+  StreamTierVideoCodec,
+} from "@homebridge/hap-nodejs/dist/lib/camera/SecureVideoTypes.js";
+export {
+  CameraSensorIntent,
+  CameraSensorType,
+  CameraVideoQuality,
+  StreamTierAudioBitDepth,
+  StreamTierAudioCodec,
+  StreamTierAudioSampleRate,
+  StreamTierVideoCodec,
+} from "@homebridge/hap-nodejs/dist/lib/camera/SecureVideoTypes.js";
 
 export interface RTPSRTPParameters {
   cryptoSuite: number;

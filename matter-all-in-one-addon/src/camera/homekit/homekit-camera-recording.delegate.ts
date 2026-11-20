@@ -258,6 +258,7 @@ export class HomeKitCameraRecordingDelegate
     private readonly record: HomeKitCameraStorageRecord,
     private readonly capabilities: CameraCapabilitiesInfo,
     private streamSource: ResolvedStreamSource,
+    private readonly normalizeHevcForClassic = false,
   ) {
     super();
 
@@ -552,6 +553,10 @@ export class HomeKitCameraRecordingDelegate
 
     // 3. Stream ongoing live fragments while motion is active or until Home Hub closes
     let postRollFragmentsRemaining = 2; // At least 2 post-roll fragments after motion clears
+    const episodeDeadline =
+      this.streamSource.metadata?.isCameraUi === true
+        ? Date.now() + 45000
+        : Infinity;
     while (!signal?.aborted) {
       const nextFragment = await this.waitForNextFragment(signal, 15000);
       if (signal?.aborted || this.initializationSegment !== streamInit) return;
@@ -565,7 +570,9 @@ export class HomeKitCameraRecordingDelegate
 
       this.deliveredFragmentsInSession++;
 
-      const isLast = !this.isMotionActive && postRollFragmentsRemaining-- <= 0;
+      const isLast =
+        Date.now() >= episodeDeadline ||
+        (!this.isMotionActive && postRollFragmentsRemaining-- <= 0);
       yield {
         data: nextFragment.data,
         isLast,
@@ -820,7 +827,11 @@ export class HomeKitCameraRecordingDelegate
     const isTapoC120 = isC120Model || isC120Entity || isC120Name || isC120Regex;
 
     const selected = this.selectedConfiguration?.videoCodec;
-    if (isH264 && this.normalizeH264Recording && selected) {
+    if (
+      ((isH264 && this.normalizeH264Recording) ||
+        this.normalizeHevcForClassic) &&
+      selected
+    ) {
       const [width, height, fps] = selected.resolution;
       const bitrate = Math.max(64, selected.parameters.bitRate || 1000);
       const seconds = Math.max(
@@ -859,7 +870,7 @@ export class HomeKitCameraRecordingDelegate
         "-bsf:v",
         "dump_extra=freq=keyframe",
       );
-    } else if (isHaProxy) {
+    } else if (isHaProxy || this.normalizeHevcForClassic) {
       this.platform?.log?.notice?.(
         `[HKSV][${this.entityId}] Fuente ha_proxy MJPEG detectada — transcodificando a H.264 1080p para grabación HKSV`,
       );

@@ -1,6 +1,6 @@
 {
   "name": "matter-all-in-one-addon",
-  "version": "2.3.20",
+  "version": "2.3.21",
   "description": "Matterbridge all-in-one addon with local storage, web UI and Home Assistant Ingress support with complete Scrypted, BLE, Smart Dimmers, Vacuum, AC, Climate, Lock and Multi-Platform ecosystem compatibility",
   "author": "chrisalvir",
   "license": "Apache-2.0",
@@ -16,11 +16,12 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "bundleDependencies": ["@homebridge/hap-nodejs"],
   "files": [
     "dist"
   ],
   "dependencies": {
-    "@homebridge/hap-nodejs": "2.3.0",
+    "@homebridge/hap-nodejs": "file:vendor/homebridge-hap-nodejs-2.3.0-homekit4k.1.tgz",
     "@scrypted/client": "^1.3.26",
     "@scrypted/types": "^0.5.57",
     "lucide-react": "^1.77.0",
@@ -78,7 +79,7 @@
   ],
   "matterbridge": {
     "name": "matter-all-in-one-chrisalvir",
-    "version": "2.3.20",
+    "version": "2.3.21",
     "author": "chrisalvir",
     "description": "Standards-based Matter 1.6.1 bridge for Home Assistant"
   },

@@ -10,7 +10,8 @@ import {
   type SecureVideoVideoTier,
   type AudioStreamTier,
 } from "./types.js";
-import { resolveFfmpegPath, sanitizeUrlCredentials } from "../ffmpeg-helper.js";
+import { resolveFfmpegPath } from "../ffmpeg-helper.js";
+import { sanitizeDiagnosticText } from "../live-view-telemetry.js";
 import type {
   ResolvedStreamSource,
   CameraCapabilitiesInfo,
@@ -54,6 +55,7 @@ export class MultiTierRtpDelegate implements MultiTierRTPStreamingDelegate {
     private readonly capabilities: CameraCapabilitiesInfo,
     private readonly streamSource: ResolvedStreamSource,
     private readonly config: MultiTierConfig,
+    private readonly onMedia: (id: string, active: boolean) => void,
   ) {}
 
   public get isStreaming(): boolean {
@@ -67,6 +69,7 @@ export class MultiTierRtpDelegate implements MultiTierRTPStreamingDelegate {
       `[Multi-RTP][${this.entityId}] Preparing stream session ${request.sessionIdentifier.slice(0, 8)}...`,
     );
 
+    await this.stopStream(request.sessionIdentifier);
     const videoPort = await this.allocatePort();
     const audioPort = await this.allocatePort();
 
@@ -129,6 +132,13 @@ export class MultiTierRtpDelegate implements MultiTierRTPStreamingDelegate {
       );
     }
 
+    if (session.ffmpegProcess) return;
+    if (
+      !this.config.videoTiers.some(
+        (tier) => tier.identifier === request.videoTier,
+      )
+    )
+      throw new Error("Unadvertised HEVC video tier");
     const ffmpegPath = resolveFfmpegPath();
     if (!ffmpegPath) {
       throw new Error("FFmpeg not found for Multi-Tier RTP stream");
@@ -143,12 +153,14 @@ export class MultiTierRtpDelegate implements MultiTierRTPStreamingDelegate {
       `[Multi-RTP][${this.entityId}] Starting REAL HEVC Passthrough stream (-c:v copy) to Apple Home`,
     );
 
-    const targetAddress = session.targetAddress || "127.0.0.1";
+    const targetAddress = session.targetAddress.includes(":")
+      ? `[${session.targetAddress}]`
+      : session.targetAddress;
     const videoOutParams = Buffer.concat([
       session.targetVideoKey,
       session.targetVideoSalt,
     ]).toString("base64");
-    const videoUrl = `srtp://${targetAddress}:${session.controllerVideoPort}?rtcpport=${session.controllerVideoPort}&pkt_size=1316`;
+    const videoUrl = `srtp://${targetAddress}:${session.controllerVideoPort}?rtcpport=${session.controllerVideoPort}&localrtpport=${session.videoPort}&pkt_size=1316`;
 
     // Strict passthrough: Video is ALWAYS -c:v copy. No libx264, libx265, or filters.
     const args: string[] = ["-hide_banner", "-loglevel", "warning"];
@@ -195,7 +207,7 @@ export class MultiTierRtpDelegate implements MultiTierRTPStreamingDelegate {
       "-payload_type",
       String(this.config.videoPayloadType || 99),
       "-ssrc",
-      String(session.videoSsrc),
+      String(request.videoSSRC || session.videoSsrc),
       "-srtp_out_suite",
       "AES_CM_128_HMAC_SHA1_80",
       "-srtp_out_params",
@@ -216,7 +228,7 @@ export class MultiTierRtpDelegate implements MultiTierRTPStreamingDelegate {
         session.targetAudioKey,
         session.targetAudioSalt,
       ]).toString("base64");
-      const audioUrl = `srtp://${targetAddress}:${session.controllerAudioPort}?rtcpport=${session.controllerAudioPort}&pkt_size=188`;
+      const audioUrl = `srtp://${targetAddress}:${session.controllerAudioPort}?rtcpport=${session.controllerAudioPort}&localrtpport=${session.audioPort}&pkt_size=188`;
 
       if (isOpus) {
         this.platform?.log?.notice?.(
@@ -233,7 +245,7 @@ export class MultiTierRtpDelegate implements MultiTierRTPStreamingDelegate {
           "-payload_type",
           String(this.config.audioPayloadType || 110),
           "-ssrc",
-          String(session.audioSsrc),
+          String(request.audioSSRC || session.audioSsrc),
           "-srtp_out_suite",
           "AES_CM_128_HMAC_SHA1_80",
           "-srtp_out_params",
@@ -267,7 +279,7 @@ export class MultiTierRtpDelegate implements MultiTierRTPStreamingDelegate {
           "-payload_type",
           String(this.config.audioPayloadType || 110),
           "-ssrc",
-          String(session.audioSsrc),
+          String(request.audioSSRC || session.audioSsrc),
           "-srtp_out_suite",
           "AES_CM_128_HMAC_SHA1_80",
           "-srtp_out_params",
@@ -277,18 +289,14 @@ export class MultiTierRtpDelegate implements MultiTierRTPStreamingDelegate {
       }
     }
 
-    const sanitizedUrl = sanitizeUrlCredentials(sourceUrl);
-    this.platform?.log?.debug?.(
-      `[Multi-RTP][${this.entityId}] Spawning FFmpeg: ${ffmpegPath} from ${sanitizedUrl}`,
-    );
-
+    this.onMedia(request.sessionIdentifier, true);
     const proc = spawn(ffmpegPath, args, {
       stdio: ["ignore", "ignore", "pipe"],
     });
     session.ffmpegProcess = proc;
 
     proc.stderr?.on("data", (chunk: Buffer) => {
-      const msg = chunk.toString().trim();
+      const msg = sanitizeDiagnosticText(chunk.toString().trim());
       if (msg) {
         this.platform?.log?.debug?.(
           `[Multi-RTP][${this.entityId}][stderr] ${msg}`,
@@ -300,13 +308,16 @@ export class MultiTierRtpDelegate implements MultiTierRTPStreamingDelegate {
       this.platform?.log?.notice?.(
         `[Multi-RTP][${this.entityId}] FFmpeg process closed with code ${code}`,
       );
-      session.ffmpegProcess = undefined;
+      if (this.sessions.get(request.sessionIdentifier) === session)
+        void this.stopStream(request.sessionIdentifier);
     });
 
     proc.once("error", (err) => {
       this.platform?.log?.error?.(
-        `[Multi-RTP][${this.entityId}] FFmpeg process error: ${err.message}`,
+        `[Multi-RTP][${this.entityId}] FFmpeg process error: ${err.name}`,
       );
+      if (this.sessions.get(request.sessionIdentifier) === session)
+        void this.stopStream(request.sessionIdentifier);
     });
   }
 
@@ -320,6 +331,7 @@ export class MultiTierRtpDelegate implements MultiTierRTPStreamingDelegate {
     );
 
     if (session.ffmpegProcess) {
+      this.onMedia(sessionIdentifier, false);
       try {
         session.ffmpegProcess.kill("SIGKILL");
       } catch {}

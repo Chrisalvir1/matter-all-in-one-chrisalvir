@@ -514,7 +514,7 @@ describe("HomeKitCameraStreamingDelegate", () => {
     expect(capturedArgs.join(" ")).toContain("localrtcpport=5003");
   });
 
-  it("passes HEVC source through natively using -c:v copy in streaming delegate", () => {
+  it("encodes HEVC source as H.264 on the classic RTP streaming delegate", () => {
     const delegate = new HomeKitCameraStreamingDelegate(
       createPlatform(),
       "camera.hevc",
@@ -544,8 +544,8 @@ describe("HomeKitCameraStreamingDelegate", () => {
     );
     // HEVC is passed directly without transcoding
     expect(args).toContain("-c:v");
-    expect(args).toContain("copy");
-    expect(args).not.toContain("libx264");
+    expect(args).not.toContain("copy");
+    expect(args).toContain("libx264");
   });
 
   it("builds low-latency RTSP passthrough args for Tapo C402 Live View", () => {

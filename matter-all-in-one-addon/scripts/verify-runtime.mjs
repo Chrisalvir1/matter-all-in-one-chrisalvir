@@ -29,6 +29,9 @@ for (const name of ["matterbridge", "@homebridge/hap-nodejs", "werift", "@scrypt
   if (expected) assert.equal(installed, expected, `${name} runtime differs from validated version`);
   console.log(`${name}: ${installed}`);
 }
+const { CameraController, SecureVideoController } = await import("@homebridge/hap-nodejs");
+assert.equal(typeof CameraController, "function", "Classic HAP camera controller is missing");
+assert.equal(typeof SecureVideoController, "function", "HEVC Secure Video controller is missing");
 const { DescriptorServer, BasicInformationServer } = await import("matterbridge/matter/behaviors");
 assert.ok(DescriptorServer && BasicInformationServer, "Required Matter behaviors missing");
 const { loadBridgeProtocol } = await import("../dist/utils/matter-protocol.js");

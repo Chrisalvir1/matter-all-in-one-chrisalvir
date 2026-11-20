@@ -7,6 +7,7 @@ import {
   AudioStreamingCodecType,
   AudioStreamingSamplerate,
   CameraController,
+  SecureVideoController,
   type CameraControllerOptions,
   Categories,
   Characteristic,
@@ -31,6 +32,14 @@ import {
   resolveCameraSourceFps,
 } from "./homekit-camera-recording.delegate.js";
 import { HevcRecordingDelegate } from "./hevc/hevc-recording.js";
+import { MultiTierRtpDelegate } from "./hevc/multi-tier-rtp.js";
+import { WebRtcSessionManager } from "./hevc/webrtc-session.js";
+import {
+  CameraVideoQuality,
+  StreamTierAudioBitDepth,
+  StreamTierAudioSampleRate,
+  StreamTierVideoCodec,
+} from "./hevc/types.js";
 import crypto from "node:crypto";
 import os from "node:os";
 import { ScryptedStorage } from "../scrypted/scrypted-storage.js";
@@ -73,7 +82,11 @@ export function generateFreshHomeKitPin(previous?: string): string {
 
 export class HomeKitCameraAccessory {
   public accessory: Accessory;
-  public controller?: CameraController;
+  public controller?: CameraController | SecureVideoController;
+  private nativeRtp?: MultiTierRtpDelegate;
+  private nativeWebRtc?: WebRtcSessionManager;
+  private readonly nativeSessions = new Set<string>();
+  private stopNativePreview?: () => void;
   public delegate?: HomeKitCameraStreamingDelegate;
   public recordingDelegate?:
     HomeKitCameraRecordingDelegate | HevcRecordingDelegate;
@@ -337,19 +350,18 @@ export class HomeKitCameraAccessory {
       return;
     }
 
-    if (effectiveMode === "passthrough_hevc") {
-      this.platform?.log?.notice?.(
-        `[HomeKitCamera][${this.entityId}] HEVC native source detected — configuring pure HEVC passthrough with AAC audio for Apple Home`,
-      );
-      this.capabilities.videoCodec = "hevc";
-      this.capabilities.requiresTranscoding = false;
-      this.capabilities.strategy = "passthrough_hevc";
-    }
-
-    this.configureClassicCameraController();
+    const nativeHevc =
+      effectiveMode === "passthrough_hevc" &&
+      /^(hevc|h265|h\.265|hvc1)$/i.test(this.capabilities.videoCodec || "") &&
+      /^rtsps?:\/\//i.test(this.streamSource.url || "") &&
+      this.streamSource.metadata?.isOmniTuyaDirect !== true &&
+      this.capabilities.resolution?.width > 0 &&
+      this.capabilities.resolution?.height > 0 &&
+      !!resolveCameraSourceFps(this.capabilities, this.record);
+    this.configureCameraController(nativeHevc);
   }
 
-  private configureClassicCameraController(): void {
+  private configureCameraController(nativeHevc: boolean): void {
     this.record.activeController = "CameraController";
     this.delegate = new HomeKitCameraStreamingDelegate(
       this.platform,
@@ -363,12 +375,7 @@ export class HomeKitCameraAccessory {
           : undefined,
     );
 
-    const isHevc =
-      this.capabilities.videoCodec === "hevc" ||
-      this.capabilities.videoCodec === "h265" ||
-      this.capabilities.strategy === "passthrough_hevc";
-
-    if (isHevc) {
+    if (nativeHevc) {
       this.platform?.log?.notice?.(
         `[HomeKitCamera][${this.entityId}] Configurando HevcRecordingDelegate nativo para HKSV3 / HEVC (-c:v copy)`,
       );
@@ -386,6 +393,7 @@ export class HomeKitCameraAccessory {
         this.record,
         this.capabilities,
         this.streamSource,
+        /^(hevc|h265|h\.265|hvc1)$/i.test(this.capabilities.videoCodec || ""),
       );
     }
 
@@ -409,9 +417,9 @@ export class HomeKitCameraAccessory {
       }
     });
     this.delegate.on("session-end", () => {
-      if (this.delegate?.hasActiveSessions()) {
+      if (this.hasLiveSessions()) {
         this.platform?.log?.debug?.(
-          `[HomeKitCamera][${this.entityId}] session-end recibido pero aún quedan ${this.delegate.activeSessionCount()} sesión(es) activa(s) — manteniendo prebuffer pausado`,
+          `[HomeKitCamera][${this.entityId}] session-end recibido pero aún quedan ${(this.delegate?.activeSessionCount() ?? 0) + this.nativeSessions.size} sesión(es) activa(s) — manteniendo prebuffer pausado`,
         );
         return;
       }
@@ -422,18 +430,129 @@ export class HomeKitCameraAccessory {
       );
     });
 
-    this.controller = new CameraController(this.buildControllerOptions());
+    const classic = this.buildControllerOptions();
+    if (nativeHevc && classic.recording) {
+      const { width, height } = this.capabilities.resolution;
+      const frameRate = resolveCameraSourceFps(this.capabilities, this.record)!;
+      const bitrate = this.capabilities.measuredVideo?.bitrateKbps || 1600;
+      const tiers = [
+        {
+          identifier: 1,
+          quality: CameraVideoQuality.HIGH,
+          width,
+          height,
+          frameRate: Math.round(frameRate),
+          targetAverageBitrate: Math.round(bitrate),
+          peakBitrate: Math.round(bitrate),
+        },
+      ];
+      const audioTier = {
+        identifier: 1,
+        targetAverageBitrate: 24000,
+        sampleRate: StreamTierAudioSampleRate.KHZ_48,
+        bitDepth: StreamTierAudioBitDepth.BITS_16,
+        packetTime: 20,
+        channels: 1,
+      };
+      this.nativeRtp = new MultiTierRtpDelegate(
+        this.platform,
+        this.entityId,
+        this.capabilities,
+        this.streamSource,
+        {
+          videoTiers: tiers,
+          audioTier,
+          videoPayloadType: 99,
+          audioPayloadType: 111,
+        },
+        (id, active) => this.updateNativeLiveState(`rtp:${id}`, active),
+      );
+      this.nativeWebRtc = new WebRtcSessionManager(
+        this.platform,
+        this.entityId,
+        this.capabilities,
+        this.streamSource,
+        tiers,
+        (id, active) => this.updateNativeLiveState(`webrtc:${id}`, active),
+      );
+      this.controller = new SecureVideoController({
+        sensor: { uuid: this.record.uuid, width, height },
+        video: { codec: StreamTierVideoCodec.H265, payloadType: 99, tiers },
+        audio: this.capabilities.hasAudio
+          ? { tier: audioTier, payloadType: 111 }
+          : undefined,
+        recording: {
+          delegate: classic.recording.delegate,
+          options: {
+            ...classic.recording.options,
+            prebufferLength: 8000,
+            audio: {
+              codecs: {
+                type: AudioRecordingCodecType.AAC_LC,
+                audioChannels: 1,
+                samplerate: AudioRecordingSamplerate.KHZ_48,
+              },
+            },
+          },
+        },
+        streamingOptions: classic.streamingOptions,
+        streamingDelegate: this.delegate,
+        motionService: this.motionService,
+        rtp: { delegate: this.nativeRtp },
+        webrtc: { delegate: this.nativeWebRtc, maxSessions: 2 },
+        snapshot: (request) =>
+          new Promise((resolve, reject) => {
+            void this.delegate!.handleSnapshotRequest(
+              request ?? { width, height },
+              (error, result) => {
+                if (error || !result)
+                  reject(error ?? new Error("Snapshot unavailable"));
+                else resolve(result);
+              },
+            ).catch(reject);
+          }),
+      });
+      this.record.activeController = "SecureVideoController";
+      this.accessory.configureController(this.controller);
+      return;
+    }
+    this.controller = new CameraController(classic);
     this.accessory.configureController(this.controller);
-    this.platform?.log?.notice?.(
-      `[HomeKitCamera][${this.entityId}] Configured classic CameraController (${isHevc ? "HEVC/HKSV3 passthrough" : "H.264 passthrough"})`,
+  }
+
+  private hasLiveSessions(): boolean {
+    return (
+      this.nativeSessions.size > 0 ||
+      this.delegate?.hasActiveSessions() === true
     );
+  }
+
+  private updateNativeLiveState(id: string, active: boolean): void {
+    if (active) {
+      this.nativeSessions.add(id);
+      this.stopNativePreview?.();
+      this.recordingDelegate?.pausePrebuffer();
+      this.localMotionDetector?.pause(
+        this.platform?.log,
+        "Apple Home HEVC Live View",
+      );
+    } else {
+      this.nativeSessions.delete(id);
+      if (!this.hasLiveSessions() && !this.previewBusy) {
+        this.recordingDelegate?.resumePrebuffer();
+        this.localMotionDetector?.resume(
+          this.platform?.log,
+          "Apple Home HEVC Live View ended",
+        );
+      }
+    }
   }
 
   private previewBusy = false;
   public async acquireBrowserPreview(
     stop: () => void,
   ): Promise<{ url: string; release(): void }> {
-    if (this.previewBusy || this.delegate?.hasActiveSessions())
+    if (this.previewBusy || this.hasLiveSessions())
       throw new Error("Casa está usando la cámara");
     this.previewBusy = true;
     let released = false;
@@ -441,8 +560,9 @@ export class HomeKitCameraAccessory {
       if (released) return;
       released = true;
       this.previewBusy = false;
+      this.stopNativePreview = undefined;
       this.delegate?.off("session-start", stop);
-      if (!this.delegate?.hasActiveSessions()) {
+      if (!this.hasLiveSessions()) {
         this.recordingDelegate?.resumePrebuffer();
         this.localMotionDetector?.resume(
           this.platform?.log,
@@ -450,6 +570,7 @@ export class HomeKitCameraAccessory {
         );
       }
     };
+    this.stopNativePreview = stop;
     this.delegate?.once("session-start", stop);
     this.recordingDelegate?.pausePrebuffer();
     this.localMotionDetector?.pause(this.platform?.log, "Preview temporal");
@@ -462,11 +583,7 @@ export class HomeKitCameraAccessory {
         : this.streamSource.url;
       this.recordingDelegate?.pausePrebuffer();
       this.localMotionDetector?.pause(this.platform?.log, "Preview temporal");
-      if (
-        !url ||
-        !/^rtsps?:\/\//i.test(url) ||
-        this.delegate?.hasActiveSessions()
-      )
+      if (!url || !/^rtsps?:\/\//i.test(url) || this.hasLiveSessions())
         throw new Error("Fuente ocupada o no compatible");
       return { url, release };
     } catch (error) {
@@ -1499,8 +1616,10 @@ export class HomeKitCameraAccessory {
   }
 
   public async unpublish(): Promise<void> {
-    this.delegate?.cleanupAllSessions();
     this.recordingDelegate?.updateRecordingActive(false);
+    this.nativeWebRtc?.closeAll();
+    await this.nativeRtp?.stopAll();
+    this.delegate?.cleanupAllSessions();
     this.localMotionDetector?.stop(this.platform?.log);
     this.localMotionDetector = undefined;
     if (!this.isPublished) return;

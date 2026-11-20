@@ -3,6 +3,7 @@ import { HomeKitCameraAccessory } from "../src/camera/homekit/homekit-camera.acc
 import {
   AudioRecordingSamplerate,
   CameraController,
+  SecureVideoController,
   StreamRequestTypes,
   SRTPCryptoSuites,
   uuid,
@@ -136,7 +137,7 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
     expect(record.activeController).toBe("CameraController");
   });
 
-  it("enables HEVC→H264 FFmpeg transcoding for Vimtag HEVC camera instead of blocking export", () => {
+  it("advertises the SecureVideoController for a native HEVC source", () => {
     const platform = createPlatformMock();
     const record = createBaseRecord("camera.jardin_vimtag", {
       model: "Vimtag Outdoor",
@@ -156,17 +157,16 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
       streamSource,
     );
 
-    // HEVC cameras stream in pure HEVC passthrough (-c:v copy) with AAC audio.
-    // tvOS/iOS natively supports HEVC. No video transcoding to libx264 is performed.
-    expect(accessory.controller).toBeInstanceOf(CameraController);
-    expect(record.activeController).toBe("CameraController");
+    expect(accessory.controller).toBeInstanceOf(SecureVideoController);
+    expect(record.activeController).toBe("SecureVideoController");
+    expect(accessory.accessory.UUID).toBe(record.uuid);
     expect(accessory.capabilities.videoCodec).toBe("hevc");
     expect(accessory.capabilities.requiresTranscoding).toBe(false);
     expect(accessory.capabilities.strategy).toBe("passthrough_hevc");
     expect(accessory.recordingDelegate).toBeInstanceOf(HevcRecordingDelegate);
   });
 
-  it("passes HEVC through without re-encoding (-c:v copy) in streaming delegate", () => {
+  it("converts HEVC to H.264 only for the classic RTP fallback", () => {
     const platform = createPlatformMock();
     const capabilities = createCapabilities({
       videoCodec: "hevc",
@@ -198,10 +198,9 @@ describe("Apple Home / HAP Passthrough and HEVC Exclusivity", () => {
         video: { fps: 30, width: 1920, height: 1080, pt: 99 } as any,
       } as any,
     );
-    // HEVC stream must be copied directly (-c:v copy) for pure native passthrough
     expect(args).toContain("-c:v");
-    expect(args).toContain("copy");
-    expect(args).not.toContain("libx264");
+    expect(args).not.toContain("copy");
+    expect(args).toContain("libx264");
   });
 
   it("produces passthrough stream args (-c:v copy) without re-encoding video or audio filters when audio is native aac_eld", () => {

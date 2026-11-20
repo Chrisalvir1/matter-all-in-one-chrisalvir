@@ -5,6 +5,7 @@ RUN npm install --global npm@12.2.3 --no-fund --no-audit
 
 WORKDIR /app
 COPY package.json package-lock.json ./
+COPY vendor/ ./vendor/
 RUN npm ci --legacy-peer-deps --no-fund --no-audit
 COPY tsconfig*.json vite.config.ts ./
 COPY scripts/clean-dist.mjs ./scripts/clean-dist.mjs
@@ -38,6 +39,7 @@ RUN npm install --global npm@12.2.3 --no-fund --no-audit
 
 WORKDIR /app
 COPY package.json package-lock.json ./
+COPY vendor/ ./vendor/
 RUN npm ci --omit=dev --omit=peer --legacy-peer-deps --no-fund --no-audit \
   && { test -e /app/node_modules/matterbridge || ln -s /usr/local/lib/node_modules/matterbridge /app/node_modules/matterbridge; } \
   && node --input-type=module -e "const { DescriptorServer } = await import('matterbridge/matter/behaviors'); if (!DescriptorServer || !('BasicInformationServer' in await import('matterbridge/matter/behaviors'))) throw new Error('Matter behavior exports missing')"

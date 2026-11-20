@@ -425,7 +425,7 @@ describe("Integración Estable v1.9.5: Tapo C120 2K Level 5.0 y Aislamiento (20 
   });
 
   // 11. Cámara HEVC no modificada
-  it("11. mantiene cámaras HEVC con codec intacto y sin aplicar passthrough C120", () => {
+  it("11. usa H.264 cuando una cámara HEVC negocia RTP clásico", () => {
     const platform = createMockPlatform();
     const delegate = new HomeKitCameraStreamingDelegate(
       platform as any,
@@ -473,8 +473,8 @@ describe("Integración Estable v1.9.5: Tapo C120 2K Level 5.0 y Aislamiento (20 
     // HEVC camera with passthrough strategy passes through natively
     const args = (delegate as any).buildStreamArgs(session, request, false);
     expect(args).toContain("-c:v");
-    expect(args).toContain("copy");
-    expect(args).not.toContain("libx264");
+    expect(args).not.toContain("copy");
+    expect(args).toContain("libx264");
   });
 
   // 12. FPS ausente: rechazo seguro

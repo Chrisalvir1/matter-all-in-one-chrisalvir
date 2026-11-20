@@ -1845,18 +1845,17 @@ export class HomeKitCameraStreamingDelegate
     // (-c:v copy) with zero software transcoding and zero CPU load.
     const needsTapoVideoNormalization = false;
     const isHevc =
-      codec === "hevc" ||
-      codec === "h265" ||
+      /^(hevc|h265|h\.265|hvc1)$/.test(codec) ||
       this.capabilities.strategy === "passthrough_hevc";
     const canPassthrough =
       !forceTranscode &&
       !needsTapoVideoNormalization &&
       !isHaProxyStream &&
-      (isHevc ||
-        (codec === "h264" &&
-          (this.capabilities.strategy === "passthrough_h264" ||
-            this.streamSource.supportsPassthrough ||
-            !this.capabilities.requiresTranscoding)));
+      !isHevc &&
+      codec === "h264" &&
+      (this.capabilities.strategy === "passthrough_h264" ||
+        this.streamSource.supportsPassthrough ||
+        !this.capabilities.requiresTranscoding);
 
     if (canPassthrough) {
       const passOutput = this.sourceOutputMetadata();
