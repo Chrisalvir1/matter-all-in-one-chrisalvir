@@ -19,7 +19,11 @@ import type {
   ResolvedStreamSource,
   HomeKitCameraStorageRecord,
 } from "../camera-types.js";
-import { Fmp4Segmenter, Fmp4MediaFragment } from "./fmp4-parser.js";
+import {
+  Fmp4Segmenter,
+  Fmp4MediaFragment,
+  readAvcDimensions,
+} from "./fmp4-parser.js";
 import { resolveFfmpegPath, sanitizeUrlCredentials } from "./ffmpeg-helper.js";
 import { CameraSourceResolver } from "../camera-source-resolver.js";
 import { sanitizeDiagnosticText } from "./live-view-telemetry.js";
@@ -220,6 +224,8 @@ export class HomeKitCameraRecordingDelegate
   public selectedConfiguration?: CameraRecordingConfiguration;
   private prebuffer: Fmp4MediaFragment[] = [];
   private lastKeyframeAt = 0;
+  private normalizeH264Recording = false;
+  private recoveringH264Process?: ChildProcess;
   private initializationSegment: Buffer | null = null;
 
   private ffmpegProcess?: ChildProcess;
@@ -266,6 +272,7 @@ export class HomeKitCameraRecordingDelegate
     }
 
     this.segmenter.on("initialization", (initSeg: Buffer) => {
+      if (this.recoverH264Resolution(initSeg)) return;
       this.initializationSegment = initSeg;
       // A valid fMP4 init segment proves that the recovered reader is healthy;
       // a later transient disconnect should begin its backoff from the first
@@ -278,7 +285,7 @@ export class HomeKitCameraRecordingDelegate
     });
 
     this.segmenter.on("fragment", (fragment: Fmp4MediaFragment) => {
-      this.handleNewFragment(fragment);
+      if (this.initializationSegment) this.handleNewFragment(fragment);
     });
 
     // A capable/configured camera is not the same as active HKSV recording.
@@ -289,6 +296,41 @@ export class HomeKitCameraRecordingDelegate
     this.recordingActive = false;
     this.record.hksvState =
       this.record.hksvEnabled === false ? "not_capable" : "waiting_hub";
+  }
+
+  private recoverH264Resolution(init: Buffer): boolean {
+    const expected = this.selectedConfiguration?.videoCodec.resolution;
+    const process = this.ffmpegProcess;
+    if (
+      !process ||
+      !expected ||
+      this.normalizeH264Recording ||
+      this.streamSource.metadata?.isCameraUi !== true ||
+      this.streamSource.metadata?.isOmniTuyaDirect ||
+      this.streamSource.metadata?.isOmniTuyaFallback ||
+      this.capabilities.videoCodec !== "h264"
+    )
+      return false;
+
+    const actual = readAvcDimensions(init);
+    if (!actual || (actual[0] === expected[0] && actual[1] === expected[1])) {
+      return false;
+    }
+    this.normalizeH264Recording = true;
+    this.initializationSegment = null;
+    this.clearPrebuffer();
+    this.platform?.log?.notice?.(
+      `[HKSV][${this.entityId}] H.264 ${actual.join("x")} → ${expected.slice(0, 2).join("x")}: normalizing to Home Hub selection`,
+    );
+    this.recoveringH264Process = process;
+    process.once("close", () => {
+      this.recoveringH264Process = undefined;
+      if (this.recordingActive && this.selectedConfiguration) {
+        void this.startPrebufferPipeline();
+      }
+    });
+    this.stopPrebufferPipeline();
+    return true;
   }
 
   /**
@@ -416,8 +458,11 @@ export class HomeKitCameraRecordingDelegate
         `[HKSV][${this.entityId}] Negotiated HKSV Configuration: ${res[0]}x${res[1]}@${res[2]}fps, fragmentLength=${fragLen}ms, prebuffer=${configuration.prebufferLength}ms`,
       );
 
-      // Keep running prebuffer pipeline if already active; only spawn if missing
-      if (this.recordingActive && !this.ffmpegProcess) {
+      // A new selection can arrive after the reader has produced its init.
+      const recovering =
+        this.initializationSegment &&
+        this.recoverH264Resolution(this.initializationSegment);
+      if (!recovering && this.recordingActive && !this.ffmpegProcess) {
         this.startPrebufferPipeline();
       }
       this.emit("recording-configured");
@@ -476,16 +521,18 @@ export class HomeKitCameraRecordingDelegate
       await this.waitForInitialization(isTapoC402 || isTapoC120 ? 10000 : 5000);
     }
 
-    if (this.initializationSegment) {
+    const streamInit = this.initializationSegment;
+    if (streamInit) {
       this.deliveredInitInSession = true;
       yield {
-        data: this.initializationSegment,
+        data: streamInit,
         isLast: false,
       };
     } else {
       this.platform?.log?.warn?.(
-        `[HKSV][${this.record.name || this.entityId}] Initialization segment missing; stream may be rejected`,
+        `[HKSV][${this.record.name || this.entityId}] Initialization segment missing; recording stream stopped`,
       );
+      return;
     }
 
     // 2. Deliver pre-buffer fragments (pre-roll before motion trigger)
@@ -495,7 +542,7 @@ export class HomeKitCameraRecordingDelegate
     );
 
     for (const fragment of prebufferSnapshot) {
-      if (signal?.aborted) return;
+      if (signal?.aborted || this.initializationSegment !== streamInit) return;
       this.deliveredFragmentsInSession++;
       yield {
         data: fragment.data,
@@ -507,7 +554,8 @@ export class HomeKitCameraRecordingDelegate
     let postRollFragmentsRemaining = 2; // At least 2 post-roll fragments after motion clears
     while (!signal?.aborted) {
       const nextFragment = await this.waitForNextFragment(signal, 15000);
-      if (!nextFragment || signal?.aborted) {
+      if (signal?.aborted || this.initializationSegment !== streamInit) return;
+      if (!nextFragment) {
         yield {
           data: Buffer.alloc(0),
           isLast: true,
@@ -771,7 +819,37 @@ export class HomeKitCameraRecordingDelegate
     const isC120Regex = isC120Token(sourceUrl);
     const isTapoC120 = isC120Model || isC120Entity || isC120Name || isC120Regex;
 
-    if (isH264) {
+    const selected = this.selectedConfiguration?.videoCodec;
+    if (isH264 && this.normalizeH264Recording && selected) {
+      const [width, height, fps] = selected.resolution;
+      const bitrate = Math.max(64, selected.parameters.bitRate || 1000);
+      const seconds = Math.max(
+        1,
+        (selected.parameters.iFrameInterval || 4000) / 1000,
+      );
+      args.push(
+        "-map",
+        "0:v:0",
+        "-c:v",
+        "libx264",
+        "-vf",
+        `scale=${width}:${height}:force_original_aspect_ratio=decrease:force_divisible_by=2,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,setsar=1`,
+        "-pix_fmt",
+        "yuv420p",
+        "-preset",
+        "ultrafast",
+        "-tune",
+        "zerolatency",
+        "-r",
+        String(fps),
+        "-g",
+        String(Math.max(1, Math.round(fps * seconds))),
+        "-sc_threshold",
+        "0",
+        "-b:v",
+        `${bitrate}k`,
+      );
+    } else if (isH264) {
       // Native H.264 1080p cameras (including C402, C120, Ezviz, Wyze): zero transcoding overhead, pure passthrough copy
       args.push(
         "-map",
@@ -928,6 +1006,7 @@ export class HomeKitCameraRecordingDelegate
   private async startPrebufferPipeline(): Promise<void> {
     if (
       this.ffmpegProcess ||
+      this.recoveringH264Process ||
       this.isStartingPipeline ||
       this.isPausedByLiveStream
     )

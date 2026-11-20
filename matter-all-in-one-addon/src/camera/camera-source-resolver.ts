@@ -152,8 +152,10 @@ export class CameraSourceResolver {
       platform?.ha?.requestOmniTuyaCameraStream
     ) {
       try {
-        const streamUrl =
-          await platform.ha.requestOmniTuyaCameraStream(entityId);
+        const [streamUrl, talkback] = await Promise.all([
+          platform.ha.requestOmniTuyaCameraStream(entityId),
+          platform.ha.supportsOmniTuyaCameraTalkback?.(entityId),
+        ]);
         if (
           typeof streamUrl === "string" &&
           (streamUrl.startsWith("rtsp://") || streamUrl.startsWith("rtsps://"))
@@ -166,6 +168,7 @@ export class CameraSourceResolver {
             requiresBridge: false,
             metadata: {
               isOmniTuyaDirect: true,
+              omniTwoWayAudio: talkback === true,
               sourceCameraEntityId: entityId,
             },
           };

@@ -85,10 +85,8 @@ export class TuyaHapTalkback {
     if (Date.now() < this.retryAfter) return;
     if (!this.starting) {
       this.starting = true;
-      void this.start().catch((err) => {
-        this.notice(
-          `Tuya return audio could not start: ${err?.message || err}`,
-        );
+      void this.start().catch(() => {
+        this.notice("Tuya return audio could not start");
         if (this.peer) {
           this.close();
         } else {
@@ -180,7 +178,7 @@ export class TuyaHapTalkback {
       "c=IN IP4 127.0.0.1",
       "t=0 0",
       `m=audio ${local.port} ${this.keySalt.length ? "RTP/SAVP" : "RTP/AVP"} ${audio.pt}`,
-      `a=rtpmap:${audio.pt} ${opus ? "opus" : "MPEG4-GENERIC"}/${sampleRate}/${audio.channel || 1}`,
+      `a=rtpmap:${audio.pt} ${opus ? "opus/48000/2" : `MPEG4-GENERIC/${sampleRate}/1`}`,
       "a=rtcp-mux",
       ...(opus
         ? []

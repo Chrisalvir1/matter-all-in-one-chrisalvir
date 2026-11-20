@@ -505,11 +505,11 @@ export class CameraUiHomeKitBridge {
       metadata: {
         isCameraUi: true,
         isOmniTuyaDirect: isOmniTuyaCamera,
-        omniTwoWayAudio:
-          isOmniTuyaCamera ||
-          /(?:\bomni\b|\btuya\b|comedero|feeder|acf100)/i.test(
-            `${camera.id} ${camera.name || ""} ${camera.model || ""}`,
-          ),
+        omniTwoWayAudio: Boolean(
+          isOmniTuyaCamera &&
+          haEntityId &&
+          (await platform.ha?.supportsOmniTuyaCameraTalkback?.(haEntityId)),
+        ),
         hasCameraMotion: true,
         capabilitiesProbedBeforePublish: isHomeAssistantSource,
         streamProvider: camera.sourceProvider || "camera_ui",

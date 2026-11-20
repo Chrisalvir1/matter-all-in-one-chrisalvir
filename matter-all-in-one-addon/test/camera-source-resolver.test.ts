@@ -13,6 +13,38 @@ function makeState(attrs: Record<string, any> = {}) {
 }
 
 describe("CameraSourceResolver", () => {
+  it.each([false, true])(
+    "uses verified Omni speaker capability %s",
+    async (supported) => {
+      const supportsOmniTuyaCameraTalkback = vi
+        .fn()
+        .mockResolvedValue(supported);
+      const platform = {
+        ha: {
+          hassEntities: new Map([
+            ["camera.feeder", { platform: "omni_tuya_local" }],
+          ]),
+          requestOmniTuyaCameraStream: vi
+            .fn()
+            .mockResolvedValue("rtsps://camera.local/live"),
+          supportsOmniTuyaCameraTalkback,
+        },
+      };
+      const source = await CameraSourceResolver.resolve(
+        platform,
+        "camera.feeder",
+        makeState(),
+      );
+      expect(supportsOmniTuyaCameraTalkback).toHaveBeenCalledWith(
+        "camera.feeder",
+      );
+      expect(source.metadata).toMatchObject({
+        isOmniTuyaDirect: true,
+        omniTwoWayAudio: supported,
+      });
+    },
+  );
+
   it("uses a fresh HA stream when Omni Tuya cannot renew its signed URL", async () => {
     const requestCameraStream = vi
       .fn()

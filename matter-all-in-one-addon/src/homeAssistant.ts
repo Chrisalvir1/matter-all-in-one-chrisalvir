@@ -2543,10 +2543,33 @@ export class HomeAssistant extends EventEmitter {
     return null;
   }
 
-  /**
-   * Requests a fresh one-session Tuya RTSP URL from Omni Tuya Local.
-   * The URL is a credential and must never be logged or persisted.
-   */
+  /** Check camera capability without opening a session or obtaining credentials. */
+  public async supportsOmniTuyaCameraTalkback(
+    entityId: string,
+  ): Promise<boolean> {
+    try {
+      const response = await this.request(
+        {
+          type: "omni_tuya_local/camera_webrtc",
+          entity_id: entityId,
+          capabilities_only: true,
+        },
+        4000,
+      );
+      const result: unknown = response.result;
+      return (
+        response.success === true &&
+        typeof result === "object" &&
+        result !== null &&
+        "twoWayAudio" in result &&
+        result.twoWayAudio === true
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  /** Requests transient WebRTC credentials for one Tuya speaker session. */
   public async requestOmniTuyaCameraWebRtc(
     entityId: string,
   ): Promise<import("./camera/tuya-webrtc-session.js").TuyaWebRtcBundle> {

@@ -22,6 +22,41 @@ export interface Fmp4MediaFragment {
   durationMs?: number;
 }
 
+/** Read the coded dimensions from the AVC visual sample entry in a moov box. */
+export function readAvcDimensions(data: Buffer): [number, number] | undefined {
+  function* boxes(bytes: Buffer) {
+    for (let offset = 0; offset + 8 <= bytes.length;) {
+      const size = bytes.readUInt32BE(offset);
+      if (size < 8 || offset + size > bytes.length) return;
+      yield {
+        type: bytes.toString("ascii", offset + 4, offset + 8),
+        body: bytes.subarray(offset + 8, offset + size),
+      };
+      offset += size;
+    }
+  }
+  function read(bytes: Buffer): [number, number] | undefined {
+    for (const { type, body } of boxes(bytes)) {
+      if (type === "avc1" || type === "avc3") {
+        if (body.length < 28) continue;
+        const width = body.readUInt16BE(24);
+        const height = body.readUInt16BE(26);
+        if (width && height) return [width, height];
+      }
+      const children =
+        type === "stsd"
+          ? body.subarray(8)
+          : ["moov", "trak", "mdia", "minf", "stbl"].includes(type)
+            ? body
+            : undefined;
+      const dimensions = children && read(children);
+      if (dimensions) return dimensions;
+    }
+    return undefined;
+  }
+  return read(data);
+}
+
 export class Fmp4Segmenter extends EventEmitter {
   private buffer: Buffer = Buffer.alloc(0);
   private initSegment: Buffer | null = null;

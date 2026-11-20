@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { Fmp4Segmenter } from "../src/camera/homekit/fmp4-parser.js";
+import {
+  Fmp4Segmenter,
+  readAvcDimensions,
+} from "../src/camera/homekit/fmp4-parser.js";
 
 function createBox(type: string, payload: Buffer): Buffer {
   const size = payload.length + 8;
@@ -31,6 +34,23 @@ function createMoofBox(seq = 1): Buffer {
   const trafBox = createTrafBox();
   return createBox("moof", Buffer.concat([mfhdBox, trafBox]));
 }
+
+it("reads the coded dimensions from an AVC sample entry", () => {
+  const entry = Buffer.alloc(78);
+  entry.writeUInt16BE(640, 24);
+  entry.writeUInt16BE(360, 26);
+  const init = (codec: string) => {
+    let data = Buffer.concat([Buffer.alloc(8), createBox(codec, entry)]);
+    for (const type of ["stsd", "stbl", "minf", "mdia", "trak", "moov"]) {
+      data = createBox(type, data);
+    }
+    return data;
+  };
+  expect(readAvcDimensions(init("avc1"))).toEqual([640, 360]);
+  expect(readAvcDimensions(init("avc3"))).toEqual([640, 360]);
+  expect(readAvcDimensions(init("hvc1"))).toBeUndefined();
+  expect(readAvcDimensions(init("avc1").subarray(0, -1))).toBeUndefined();
+});
 
 describe("Fmp4Segmenter", () => {
   it("parses initialization segment (ftyp + moov) and emits initialization event", async () => {

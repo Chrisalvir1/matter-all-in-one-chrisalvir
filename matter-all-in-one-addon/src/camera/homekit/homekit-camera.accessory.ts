@@ -558,11 +558,7 @@ export class HomeKitCameraAccessory {
             ? {
                 codecs: audioCodecs,
                 twoWayAudio:
-                  this.streamSource.metadata?.omniTwoWayAudio === true ||
-                  this.streamSource.metadata?.isOmniTuyaDirect === true ||
-                  /(?:\bomni\b|\btuya\b|comedero|feeder|acf100)/i.test(
-                    `${this.entityId} ${String(this.record?.name || "")} ${String(this.record?.model || "")}`,
-                  ),
+                  this.streamSource.metadata?.omniTwoWayAudio === true,
               }
             : undefined,
       },
