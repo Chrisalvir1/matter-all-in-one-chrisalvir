@@ -35,7 +35,8 @@ function readHumidity(value: unknown): number | undefined {
   if (
     typeof value !== "number" &&
     !(typeof value === "string" && value.trim() !== "")
-  ) return undefined;
+  )
+    return undefined;
   const humidity = Number(value);
   return Number.isFinite(humidity) && humidity >= 0 && humidity <= 100
     ? humidity
@@ -2656,7 +2657,9 @@ export class HapGenericAccessory {
           svc.updateCharacteristic(
             Characteristic.CurrentHumidifierDehumidifierState,
             isOn
-              ? (this.record.hapProfile === "humidifier" ? 2 : 3)
+              ? this.record.hapProfile === "humidifier"
+                ? 2
+                : 3
               : Characteristic.CurrentHumidifierDehumidifierState.INACTIVE,
           );
           const curHum = this.getCurrentHumidity(state);
