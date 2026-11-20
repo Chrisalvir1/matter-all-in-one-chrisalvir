@@ -1,3 +1,19 @@
+## [2.3.21] - 2026-11-20
+
+- Integra la variante HAP-NodeJS de Camera.UI HomeKit 4K 0.6.64-beta.3 para cámaras RTSP que reportan HEVC. Añade negociación HEVC por WebRTC y RTP multinivel y grabación HDS con vídeo hvc1 y AAC-LC mono a 48 kHz.
+- Conserva H.264 en RTP clásico. Si una fuente Camera.UI H.264 cambia de resolución, recupera el prebuffer a la geometría negociada sin relanzar la sonda.
+- Acota los episodios de movimiento de Camera.UI a 45 s y rearma tras 2 s cuando la señal de origen continúa activa.
+- Consulta el altavoz de cámaras Omni antes de anunciar Talk. Acepta conversación por turnos con altavoz y asigna las credenciales al iniciar el retorno.
+- Mantiene las versiones de Matterbridge, Werift, MQTT y las demás dependencias de la aplicación.
+- Validación local con 760 pruebas y muestras multimedia H.264 y HEVC. La comprobación en Apple Casa con cámaras físicas sigue pendiente.
+
+## [2.3.20] - 2026-11-20
+
+- Publica los accesorios HomeKit HAP genéricos por la interfaz LAN seleccionada. Conserva su identidad, puerto y emparejamiento existentes.
+- Mantiene la humedad medida y el objetivo separados. Usa un sensor de humedad del mismo dispositivo cuando esté disponible y conserva un 0 % si es una medición real.
+- Corrige el estado inactivo de humidificadores y deshumidificadores en HomeKit y elimina la actualización anticipada del objetivo antes de enviar el cambio a Home Assistant.
+- Actualiza Matterbridge a 3.11.4, Werift a 0.28.0, Undici a 8.13.1, Lucide a 1.77.0, los tipos de Scrypted a 0.5.57 y Vitest/cobertura a 5.1.1.
+
 ## [2.3.19] - 2026-11-17
 
 - Actualiza Lucide React a 1.74.0 y npm a 12.2.3 en el proyecto, las imágenes y los workflows.

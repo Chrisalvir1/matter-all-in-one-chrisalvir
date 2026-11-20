@@ -5,6 +5,7 @@
 - Acota los episodios de movimiento de Camera.UI a 45 s y rearma tras 2 s cuando la señal de origen continúa activa.
 - Consulta el altavoz de cámaras Omni antes de anunciar Talk. Acepta conversación por turnos con altavoz y asigna las credenciales al iniciar el retorno.
 - Mantiene las versiones de Matterbridge, Werift, MQTT y las demás dependencias de la aplicación.
+- Validación local con 760 pruebas y muestras multimedia H.264 y HEVC. La comprobación en Apple Casa con cámaras físicas sigue pendiente.
 
 ## [2.3.20] - 2026-11-20
 

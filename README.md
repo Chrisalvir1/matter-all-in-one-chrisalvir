@@ -1,6 +1,6 @@
-# Matter All-in-One Chrisalvir — v2.3.19
+# Matter All-in-One Chrisalvir — v2.3.21
 
-> **2.3.19 · 17 de noviembre de 2026.** Actualiza Matterbridge a 3.11.3, aplica el parche de seguridad de Node.js 26.13.1 LTS y renueva las dependencias de red, interfaz y compilación. Consulta [cambios](matter-all-in-one-addon/CHANGELOG.md), [notas](docs/RELEASE_NOTES_2.3.19.md) y [versiones](docs/RELEASES.md).
+> **2.3.21 · 20 de noviembre de 2026.** Integra la ruta HEVC de Camera.UI 4K, recupera grabaciones H.264 al cambiar de resolución y consulta la capacidad de Talk de las cámaras Omni. [Cambios](matter-all-in-one-addon/CHANGELOG.md) · [Notas](docs/RELEASE_NOTES_2.3.21.md) · [Versiones](docs/RELEASES.md).
 
 <div align="center">
   <img src="matter-all-in-one-addon/logo.png" alt="Matter All In One Logo" width="300" />
@@ -10,19 +10,21 @@
 
 **Un solo proyecto para integrar dispositivos de Home Assistant en Matter y cámaras en Apple Casa.**
 
-**Versión 2.3.19** · **Contrato WebSocket probado con Home Assistant 2026.11.2** · **Matter 1.6.1** · **HomeKit HAP / HKSV**
+**Versión 2.3.21** · **Contrato WebSocket probado con Home Assistant 2026.11.2** · **Matter 1.6.1** · **HomeKit HAP / HKSV**
 
 </div>
 
 Matter All-in-One Chrisalvir (MIAO) reúne la administración de accesorios Matter, cámaras de **Omni Tuya Local**, **Camera.UI**, **Scrypted** y entidades de **Home Assistant** en una interfaz integrada. Las rutas Matter y HomeKit HAP son distintas: se utiliza la que corresponda a cada dispositivo, sin prometer que todos los tipos Matter sean compatibles con Apple Casa.
 
 > [!IMPORTANT]
-> **Verificación 2.3.19.** Pasaron 755 pruebas, el contrato WebSocket con Home Assistant Core 2026.11.2 y el build de aplicación. Las imágenes Linux amd64 y arm64 deben superar los controles de GitHub Actions antes de publicarse. La prueba con accesorios físicos en Apple Casa queda pendiente.
+> **Verificación 2.3.21.** Pasaron 760 pruebas del puente, la compilación y la comprobación del paquete HAP. El vídeo en vivo, los clips guardados y el altavoz de cámara siguen pendientes de validación física en Apple Casa.
 
-## Actualización v2.3.19
+## Actualización v2.3.21
 
-Actualiza Lucide React a 1.74.0 y npm a 12.2.3 en el proyecto, las imágenes y los workflows. Actualiza uv y el objetivo de pruebas a Home Assistant 2026.11.2; conserva Node 26.13.1, Matterbridge 3.11.3 y HAP 2.3.0. Regenera el lockfile y conserva la validación nativa amd64/arm64 antes de publicar la imagen y el release. [Notas de versión](docs/RELEASE_NOTES_2.3.19.md).
-
+- **H.264.** Conserva RTP clásico y recupera el prebuffer si una fuente Camera.UI cambia de resolución.
+- **HEVC y HKSV3.** Usa HAP-NodeJS `2.3.0-homekit4k.1` para negociar WebRTC o RTP con una fuente HEVC y grabar vídeo `hvc1` por HDS. Esta versión anuncia un nivel nativo por fuente.
+- **Talk de cámaras Tuya.** Requiere Omni Tuya Local 1.12.6 para consultar si la cámara anuncia altavoz. La sesión de retorno se abre al usar el micrófono.
+- Conserva Matterbridge 3.11.4, Werift 0.28.0 y Node.js 26.13.1. [Notas de versión](docs/RELEASE_NOTES_2.3.21.md).
 
 ## Novedades v2.3.18
 
@@ -81,7 +83,7 @@ Actualiza Lucide React a 1.74.0 y npm a 12.2.3 en el proyecto, las imágenes y l
 | Home Assistant 2026.10 | Base conocida del proyecto; conservar como entorno principal mientras se valida la beta |
 | **Home Assistant 2026.11.0** | Contrato WebSocket verificado; validación física de 2.3.18 pendiente |
 | Home Assistant 2026.11 estable | Contrato WebSocket probado; prueba física del add-on y los accesorios en la instalación real pendiente |
-| Matterbridge 3.11.3 | Versión del runtime del complemento |
+| Matterbridge 3.11.4 | Versión del runtime del complemento |
 | Matter 1.6.1 | Especificación utilizada por el puente Matter |
 | Apple Casa — accesorios Matter | Depende del tipo de dispositivo que Apple admita |
 | Apple Casa — cámara Omni mediante HAP/HKSV | Vídeo, audio, movimiento y grabación reportados como operativos por Chrisalvir en su instalación |
@@ -166,6 +168,6 @@ Consulta la [guía de preparación para HA 2026.11](docs/home-assistant-2026-11-
 - [Configuración de Thread](matter-all-in-one-addon/docs/thread-setup.md)
 - [Reportar un problema](https://github.com/Chrisalvir1/matter-all-in-one-chrisalvir/issues)
 
-**Base de ejecución:** Matterbridge `3.11.3` · Node.js `26.13.1` · Matter `1.6.1` · TypeScript `7.0.2`.
+**Base de ejecución:** Matterbridge `3.11.4` · Node.js `26.13.1` · Matter `1.6.1` · TypeScript `7.0.2`.
 
 **Licencia:** Apache-2.0 · Proyecto mantenido por **Chrisalvir**.

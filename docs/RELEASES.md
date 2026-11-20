@@ -1,5 +1,7 @@
 # Historial de versiones
 
+- [v2.3.21](https://github.com/Chrisalvir1/matter-all-in-one-chrisalvir/releases/tag/v2.3.21) · HEVC/HKSV3, recuperación H.264 y Talk de Omni. [Notas](RELEASE_NOTES_2.3.21.md).
+- [v2.3.20](https://github.com/Chrisalvir1/matter-all-in-one-chrisalvir/releases/tag/v2.3.20) · Descubrimiento HAP por LAN, corrección de humedad y Matterbridge 3.11.4.
 - [v2.3.19](https://github.com/Chrisalvir1/matter-all-in-one-chrisalvir/releases/tag/v2.3.19) — actualización de dependencias estables.
 
 | Versión | Fecha | Cambios | Verificación |
