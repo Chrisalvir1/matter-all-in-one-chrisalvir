@@ -39,7 +39,7 @@ function fixture(
   const characteristic = service.getCharacteristic(
     profile === "humidifier" ? Characteristic.Active : Characteristic.On,
   );
-  return { platform, accessory, characteristic, entityId };
+  return { platform, accessory, characteristic, entityId, service, state };
 }
 
 describe("HAP command response", () => {
@@ -71,6 +71,34 @@ describe("HAP command response", () => {
       expect(f.platform.recordEntityCommandFailure).toHaveBeenCalled();
     },
   );
+
+  it("keeps missing humidity distinct from the setpoint and a real zero", async () => {
+    const f = fixture(vi.fn());
+    const humidity = f.service.getCharacteristic(Characteristic.CurrentRelativeHumidity);
+    Object.assign(f.state.attributes, { current_humidity: null, humidity: 40 });
+    await expect(humidity.handleGetRequest()).rejects.toBe(-70402);
+    await expect(f.service.getCharacteristic(
+      Characteristic.RelativeHumidityHumidifierThreshold,
+    ).handleGetRequest()).resolves.toBe(40);
+    Object.assign(f.state.attributes, { current_humidity: 0 });
+    await expect(humidity.handleGetRequest()).resolves.toBe(0);
+  });
+
+  it("publishes the existing HAP identity only on the selected LAN interface", async () => {
+    const f = fixture(vi.fn());
+    const publish = vi.spyOn(f.accessory.accessory, "publish").mockResolvedValue();
+    vi.stubEnv("MATTER_AIO_MDNS_IFACE", "end0");
+    try {
+      await f.accessory.publish();
+      expect(publish).toHaveBeenCalledWith(expect.objectContaining({
+        bind: "end0",
+        port: 52124,
+        username: "AA:BB:CC:DD:EE:12",
+      }));
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
 
   it("returns communication failure when HA immediately rejects the command", async () => {
     const f = fixture(vi.fn().mockRejectedValue(new Error("offline")));

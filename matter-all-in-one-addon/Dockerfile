@@ -32,7 +32,7 @@ RUN set -eu; apk add --no-cache curl jq ffmpeg; ARCH=$(uname -m); \
      echo "${FFMPEG_SHA256}  /tmp/ffmpeg-homebridge.tar.gz" | sha256sum -c -; \
      tar xzf /tmp/ffmpeg-homebridge.tar.gz -C / --no-same-owner; \
      rm /tmp/ffmpeg-homebridge.tar.gz; chmod 0755 /usr/local/bin/ffmpeg; \
-     npm install -g matterbridge@3.11.3 --omit=dev --no-fund --no-audit
+     npm install -g matterbridge@3.11.4 --omit=dev --no-fund --no-audit
 
 RUN npm install --global npm@12.2.3 --no-fund --no-audit
 

@@ -1,3 +1,10 @@
+## [2.3.20] - 2026-11-20
+
+- Publica los accesorios HomeKit HAP genéricos por la interfaz LAN seleccionada. Conserva su identidad, puerto y emparejamiento existentes.
+- Mantiene la humedad medida y el objetivo separados. Usa un sensor de humedad del mismo dispositivo cuando esté disponible y conserva un 0 % si es una medición real.
+- Corrige el estado inactivo de humidificadores y deshumidificadores en HomeKit y elimina la actualización anticipada del objetivo antes de enviar el cambio a Home Assistant.
+- Actualiza Matterbridge a 3.11.4, Werift a 0.28.0, Undici a 8.13.1, Lucide a 1.77.0, los tipos de Scrypted a 0.5.57 y Vitest/cobertura a 5.1.1.
+
 ## [2.3.19] - 2026-11-17
 
 - Actualiza Lucide React a 1.74.0 y npm a 12.2.3 en el proyecto, las imágenes y los workflows.

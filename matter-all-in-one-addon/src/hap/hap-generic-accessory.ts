@@ -31,6 +31,17 @@ import {
 // Tipos exportados
 // ─────────────────────────────────────────────────────────────────────────────
 
+function readHumidity(value: unknown): number | undefined {
+  if (
+    typeof value !== "number" &&
+    !(typeof value === "string" && value.trim() !== "")
+  ) return undefined;
+  const humidity = Number(value);
+  return Number.isFinite(humidity) && humidity >= 0 && humidity <= 100
+    ? humidity
+    : undefined;
+}
+
 export interface HapAccessoryRecord {
   entityId: string;
   hapProfile: HapProfile;
@@ -480,25 +491,19 @@ export class HapGenericAccessory {
     }
   }
 
-  private getCurrentHumidity(): number | undefined {
-    const primary = Number(
-      this.getHomeAssistantState(this.entityId)?.attributes?.current_humidity,
-    );
-    if (Number.isFinite(primary) && primary >= 0 && primary <= 100)
-      return primary;
-    const sensor = this.getDeviceMembers().find((member: any) => {
-      const state = this.getHomeAssistantState(member.entityId);
-      return (
-        member.entityId.startsWith("sensor.") &&
-        state?.attributes?.device_class === "humidity"
-      );
-    });
-    const value = Number(
-      sensor && this.getHomeAssistantState(sensor.entityId)?.state,
-    );
-    return Number.isFinite(value) && value >= 0 && value <= 100
-      ? value
-      : undefined;
+  private getCurrentHumidity(
+    state = this.getHomeAssistantState(this.entityId),
+  ): number | undefined {
+    const primary = readHumidity(state?.attributes?.current_humidity);
+    if (primary !== undefined) return primary;
+    for (const member of this.getDeviceMembers()) {
+      if (!member.entityId.startsWith("sensor.")) continue;
+      const sensor = this.getHomeAssistantState(member.entityId);
+      if (sensor?.attributes?.device_class !== "humidity") continue;
+      const humidity = readHumidity(sensor.state);
+      if (humidity !== undefined) return humidity;
+    }
+    return undefined;
   }
 
   private getMediaEntityId(): string {
@@ -733,19 +738,6 @@ export class HapGenericAccessory {
           call(v ? "turn_on" : "turn_off"),
         );
         break;
-      case "dehumidifier": {
-        const svc = this.accessory.getService(S.HumidifierDehumidifier);
-        svc
-          ?.getCharacteristic(C.RelativeHumidityDehumidifierThreshold)
-          .onGet(
-            () =>
-              Number(
-                this.getHomeAssistantState(this.entityId)?.attributes?.humidity,
-              ) || 0,
-          )
-          .onSet((v) => call("set_humidity", { humidity: Number(v) }));
-        break;
-      }
     }
     this.syncAdditionalHomeAssistantState(
       this.getHomeAssistantState(this.entityId),
@@ -1424,7 +1416,8 @@ export class HapGenericAccessory {
           .getCharacteristic(Characteristic.CurrentHumidifierDehumidifierState)
           .onGet(() => {
             const ent = this.platform.entities.get(this.entityId);
-            if (ent?.state?.state !== "on") return 1; // INACTIVE
+            if (ent?.state?.state !== "on")
+              return Characteristic.CurrentHumidifierDehumidifierState.INACTIVE;
             return profile === "humidifier" ? 2 : 3; // HUMIDIFYING or DEHUMIDIFYING
           });
 
@@ -1448,22 +1441,14 @@ export class HapGenericAccessory {
               : Characteristic.RelativeHumidityHumidifierThreshold,
           )
           .onGet(() => {
-            const value = Number(
-              this.platform.entities.get(this.entityId)?.state?.attributes
-                ?.humidity,
+            const humidity = readHumidity(
+              this.getHomeAssistantState(this.entityId)?.attributes?.humidity,
             );
-            return Number.isFinite(value) && value >= 0 && value <= 100
-              ? value
-              : 0;
+            if (humidity === undefined) throw -70402;
+            return humidity;
           })
           .onSet(async (value) => {
             const [domain] = this.entityId.split(".");
-            svc.updateCharacteristic(
-              profile === "dehumidifier"
-                ? Characteristic.RelativeHumidityDehumidifierThreshold
-                : Characteristic.RelativeHumidityHumidifierThreshold,
-              Number(value),
-            );
             await this.callHaWithResponseBudget(domain, "set_humidity", {
               humidity: Number(value),
             });
@@ -2298,6 +2283,11 @@ export class HapGenericAccessory {
   public async publish(): Promise<void> {
     const category =
       HAP_PROFILE_CATEGORIES[this.record.hapProfile] ?? Categories.OTHER;
+    const configuredInterface = process.env.MATTER_AIO_MDNS_IFACE;
+    const bind =
+      configuredInterface && configuredInterface !== "auto"
+        ? configuredInterface
+        : HapGenericAccessory.detectPrimaryNetworkInterface()?.name;
     await this.accessory.publish({
       username: this.record.username,
       pincode: this.record.pincode,
@@ -2305,7 +2295,7 @@ export class HapGenericAccessory {
       port: this.record.port,
       category,
       advertiser: MDNSAdvertiser.CIAO,
-      bind: undefined,
+      bind,
     });
     this.isPublished = true;
     try {
@@ -2665,17 +2655,19 @@ export class HapGenericAccessory {
           svc.updateCharacteristic(Characteristic.Active, isOn ? 1 : 0);
           svc.updateCharacteristic(
             Characteristic.CurrentHumidifierDehumidifierState,
-            isOn ? (this.record.hapProfile === "humidifier" ? 2 : 3) : 1,
+            isOn
+              ? (this.record.hapProfile === "humidifier" ? 2 : 3)
+              : Characteristic.CurrentHumidifierDehumidifierState.INACTIVE,
           );
-          const curHum = Number(state?.attributes?.current_humidity);
-          if (!isNaN(curHum) && curHum >= 0 && curHum <= 100) {
+          const curHum = this.getCurrentHumidity(state);
+          if (curHum !== undefined) {
             svc.updateCharacteristic(
               Characteristic.CurrentRelativeHumidity,
               curHum,
             );
           }
-          const targetHum = Number(state?.attributes?.humidity);
-          if (!isNaN(targetHum) && targetHum >= 0 && targetHum <= 100) {
+          const targetHum = readHumidity(state?.attributes?.humidity);
+          if (targetHum !== undefined) {
             svc.updateCharacteristic(
               this.record.hapProfile === "dehumidifier"
                 ? Characteristic.RelativeHumidityDehumidifierThreshold
